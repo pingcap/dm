@@ -28,13 +28,13 @@ import (
 // NewBreakDDLLockCmd creates a BreakDDLLock command
 func NewBreakDDLLockCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "break-ddl-lock <-w worker ...> <task-name> [--remove-id] [--exec] [--skip]",
+		Use:   "break-ddl-lock <-s source ...> <task-name> [--remove-id] [--exec] [--skip]",
 		Short: "forcefully break DM-worker's DDL lock",
 		Run:   breakDDLLockFunc,
 	}
 	cmd.Flags().StringP("remove-id", "i", "", "DDLLockInfo's ID which need to remove")
-	cmd.Flags().BoolP("exec", "e", false, "whether execute DDL which is blocking")
-	cmd.Flags().BoolP("skip", "s", false, "whether skip DDL which in blocking")
+	cmd.Flags().BoolP("exec", "", false, "whether execute DDL which is blocking")
+	cmd.Flags().BoolP("skip", "", false, "whether skip DDL which in blocking")
 	return cmd
 }
 
@@ -47,13 +47,13 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 	}
 	taskName := cmd.Flags().Arg(0)
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		fmt.Println(errors.ErrorStack(err))
 		return
 	}
-	if len(workers) == 0 {
-		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
+	if len(sources) == 0 {
+		fmt.Println("must specify at least one source (`-s` / `--source`)")
 		return
 	}
 
@@ -89,14 +89,14 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 	cli := common.MasterClient()
 	resp, err := cli.BreakWorkerDDLLock(ctx, &pb.BreakWorkerDDLLockRequest{
-		Workers:      workers,
+		Sources:      sources,
 		Task:         taskName,
 		RemoveLockID: removeLockID,
 		ExecDDL:      exec,
 		SkipDDL:      skip,
 	})
 	if err != nil {
-		common.PrintLines("can not break DDL lock (in workers %v):\n%s", workers, errors.ErrorStack(err))
+		common.PrintLines("can not break DDL lock (in sources %v):\n%s", sources, errors.ErrorStack(err))
 		return
 	}
 

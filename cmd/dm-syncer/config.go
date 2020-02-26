@@ -314,11 +314,10 @@ func (oc *syncerConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 		return nil, errors.Trace(err)
 	}
 	newTask := &config.SubTaskConfig{
-		Name:             oc.Name,
-		SourceID:         fmt.Sprintf("%s:%d", oc.From.Host, oc.From.Port),
-		DisableHeartbeat: true,
-		Mode:             config.ModeIncrement,
-		Meta:             meta,
+		Name:     oc.Name,
+		SourceID: fmt.Sprintf("%s:%d", oc.From.Host, oc.From.Port),
+		Mode:     config.ModeIncrement,
+		Meta:     meta,
 
 		LogLevel:  oc.LogLevel,
 		LogFile:   oc.LogFile,

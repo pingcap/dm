@@ -62,13 +62,17 @@ func main() {
 		syscall.SIGQUIT)
 
 	s := worker.NewServer(cfg)
+	err = s.JoinMaster(worker.GetJoinURLs(cfg.Join))
+	if err != nil {
+		log.L().Info("join the cluster meet error %v", zap.Error(err))
+		os.Exit(2)
+	}
 
 	go func() {
 		sig := <-sc
 		log.L().Info("got signal to exit", zap.Stringer("signal", sig))
 		s.Close()
 	}()
-
 	err = s.Start()
 	if err != nil {
 		log.L().Error("fail to start dm-worker", zap.Error(err))

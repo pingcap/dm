@@ -28,7 +28,7 @@ import (
 // NewSQLInjectCmd creates a SQLInject command
 func NewSQLInjectCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "sql-inject <-w worker> <task-name> <sql1;sql2;>",
+		Use:   "sql-inject <-s source> <task-name> <sql1;sql2;>",
 		Short: "inject (limited) SQLs into binlog replication unit as binlog events",
 		Run:   sqlInjectFunc,
 	}
@@ -43,13 +43,13 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
 	}
-	if len(workers) != 1 {
-		common.PrintLines("want only one worker, but got %v", workers)
+	if len(sources) != 1 {
+		common.PrintLines("want only one source, but got %v", sources)
 		return
 	}
 
@@ -84,7 +84,7 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 		Name:   taskName,
 		Op:     pb.SQLOp_INJECT,
 		Args:   realSQLs,
-		Worker: workers[0],
+		Source: sources[0],
 	})
 	if err != nil {
 		common.PrintLines("can not inject sql:\n%v", errors.ErrorStack(err))

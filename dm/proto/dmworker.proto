@@ -4,26 +4,14 @@ package pb;
 
 
 service Worker {
-    rpc StartSubTask (StartSubTaskRequest) returns (OperateSubTaskResponse) {}
+    rpc StartSubTask (StartSubTaskRequest) returns (CommonWorkerResponse) {}
     rpc OperateSubTask (OperateSubTaskRequest) returns (OperateSubTaskResponse) {}
-    rpc UpdateSubTask (UpdateSubTaskRequest) returns (OperateSubTaskResponse) {}
+    rpc UpdateSubTask (UpdateSubTaskRequest) returns (CommonWorkerResponse) {}
 
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
     rpc QueryError (QueryErrorRequest) returns (QueryErrorResponse) {}
-    rpc QueryTaskOperation(QueryTaskOperationRequest) returns (QueryTaskOperationResponse) {}
 
     rpc HandleSQLs (HandleSubTaskSQLsRequest) returns (CommonWorkerResponse) {}
-    // FetchDDLInfo fetches DDL info from dm-worker by dm-master
-    // and sends the relevant DDL lock info back to dm-worker
-    // NOTE: split to two RPCs if needed
-    rpc FetchDDLInfo (stream DDLLockInfo) returns (stream DDLInfo) {}
-
-    // ExecuteDDL request a dm-worker to execute or ignore (skip) a DDL
-    rpc ExecuteDDL (ExecDDLRequest) returns (CommonWorkerResponse) {}
-
-    // BreakDDLLock request a dm-worker to break a DDL lock
-    // including remove DDLLockInfo and/or execute/skip DDL
-    rpc BreakDDLLock (BreakDDLLockRequest) returns (CommonWorkerResponse) {}
 
     // SwitchRelayMaster request a dm-worker's relay unit switching to another master server
     rpc SwitchRelayMaster (SwitchRelayMasterRequest) returns (CommonWorkerResponse) {}
@@ -71,19 +59,10 @@ message OperateSubTaskRequest {
 }
 
 message OperateSubTaskResponse {
-    CommonWorkerResponse meta = 1;
-    TaskOp op = 2;
-    int64 logID = 3;
-}
-
-message QueryTaskOperationRequest {
-    string name = 1; // sub task's name
-	int64 logID = 2; // operation log ID
-}
-
-message QueryTaskOperationResponse {
-    CommonWorkerResponse meta = 1;
-    TaskLog log = 2; // sub task's operation log
+    TaskOp op = 1;
+    bool result = 2;
+    string source = 3; // source ID, set by dm-master
+    string msg = 4;
 }
 
 message UpdateSubTaskRequest {
@@ -115,28 +94,26 @@ message HandleSubTaskSQLsRequest {
 
 message CommonWorkerResponse {
     bool result = 1;
-    string worker = 2; // worker name, set by dm-master
-    string msg = 3; // when result is true, msg is empty
+    string msg = 2; // when result is true, msg is empty
+    string source = 3; // source ID, set by dm-master
+    string worker = 4; // worker name, set by dm-worker config
 }
 
 // QueryStatusResponse represents status response for query on a dm-worker
 // status: dm-worker's current sub tasks' status
 message QueryStatusResponse {
     bool result = 1;
-    string worker = 2; // worker name, set by dm-master
-    string msg = 3;
+    string msg = 2;
+    SourceStatus sourceStatus = 3;
     repeated SubTaskStatus subTaskStatus = 4;
-    RelayStatus relayStatus = 5;
-    string sourceID = 6;
 }
 
 // QueryErrorResponse represents response for query on a dm-worker
 message QueryErrorResponse {
     bool result = 1;
-    string worker = 2; // worker name, set by dm-master
-    string msg = 3;
+    string msg = 2;
+    SourceError SourceError = 3;
     repeated SubTaskError subTaskError = 4;
-    RelayError RelayError = 5;
 }
 
 // Stage represents current stage for a (sub) task
@@ -224,6 +201,14 @@ message SyncStatus {
     string binlogType = 11;
 }
 
+// SourceStatus represents status for source runing on dm-worker
+message SourceStatus {
+    string source = 1; // sourceID, set by dm-master
+    string worker = 2; // bounded worker name for this source
+    ProcessResult result = 3;
+    RelayStatus relayStatus = 4;
+}
+
 // RelayStatus represents status for relay unit.
 message RelayStatus {
     string masterBinlog = 1;
@@ -293,6 +278,14 @@ message SyncSQLError {
 // SyncError represents error list for sync unit
 message SyncError {
     repeated SyncSQLError errors = 1;
+}
+
+// SourceError represents error for start/stop source on dm-worker
+message SourceError {
+    string source = 1;
+    string worker = 2;
+    string SourceError = 3;
+    RelayError RelayError = 4; // RelayError represents error for relay unit.
 }
 
 // RelayError represents error for relay unit.
@@ -372,47 +365,6 @@ message ProcessError {
     TError error = 3;
 }
 
-// DDLInfo represents a occurred DDL in a sub task
-// it been sent from dm-worker to dm-master
-// dm-master uses it to contruct a DDL lock and do syncing with other dm-workers
-// add more fields if needed
-message DDLInfo {
-    string task = 1; // sub task's name
-    string schema = 2; // DDL's schema
-    string table = 3; // DDL's table
-    repeated string DDLs = 4; // DDL statement
-}
-
-// DDLLockInfo represents a DDL lock
-// it been sent from dm-master to dm-worker
-// add more fields if needed
-message DDLLockInfo {
-    string task = 1; // sub task's name
-    string ID = 2; // DDL lock ID
-}
-
-// ExecDDLRequest represents a request for a dm-worker to execute (or ignore) a DDL
-message ExecDDLRequest {
-    string task = 1; // sub task's name
-    string lockID = 2; // DDL lock ID
-    bool exec = 3; // true for execute, false for ignore (skip)
-    string traceGID = 4; // trace group ID
-    repeated string DDLs = 5; // DDL statement
-}
-
-// BreakDDLLockRequest represents a request for a dm-worker to force to break the DDL lock
-// task: sub task's name
-// removeLockID: DDLLockInfo's ID which need to remove
-// execDDL: execute DDL which is blocking
-// skipDDL: skip DDL which is blocking
-// execDDL and skipDDL can not specify both at the same time, but can specify neither
-message BreakDDLLockRequest {
-    string task = 1;
-    string removeLockID = 2;
-    bool execDDL = 3;
-    bool skipDDL = 4;
-}
-
 // SwitchRelayMasterRequest represents a request for switching a dm-worker's relay unit to another master server
 message SwitchRelayMasterRequest {
 }
@@ -433,7 +385,7 @@ message OperateRelayRequest {
 message OperateRelayResponse {
     RelayOp op = 1;
     bool result = 2;
-    string worker = 3; // worker name, set by dm-master
+    string source = 3; // source ID, set by dm-master
     string msg = 4;
 }
 
@@ -454,24 +406,7 @@ message QueryWorkerConfigRequest {
 
 message QueryWorkerConfigResponse {
     bool result = 1;
-    string worker = 2; // worker name, set by dm-master
+    string source = 2; // source ID, set by dm-master
     string msg = 3; // when result is true, msg is empty
-    string sourceID = 4; // source ID
-    string content = 5; // marshaled config content
-}
-
-message TaskMeta {
-    TaskOp op = 1;
-    Stage stage = 2; // the stage of sub-task after we apply some operations
-    string name = 3; // sub task's name
-    bytes task = 4; // (sub) task's configuration
-}
-
-message TaskLog {
-    int64 id = 1;
-    TaskMeta task = 2;
-    int64 ts = 3;
-    // true means this log is applied successfully
-    bool success = 4;
-    string message = 5;
+    string content = 4; // marshaled config content
 }

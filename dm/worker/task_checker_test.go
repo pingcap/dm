@@ -20,10 +20,12 @@ import (
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -58,13 +60,13 @@ func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false}}, now, -2 * time.Millisecond, 1 * time.Millisecond, ResumeDispatch},
 	}
 
-	tsc := NewRealTaskStatusChecker(CheckerConfig{
+	tsc := NewRealTaskStatusChecker(config.CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   duration{Duration: DefaultCheckInterval},
-		BackoffRollback: duration{Duration: DefaultBackoffRollback},
-		BackoffMin:      duration{Duration: DefaultBackoffMin},
-		BackoffMax:      duration{Duration: DefaultBackoffMax},
-		BackoffFactor:   DefaultBackoffFactor,
+		CheckInterval:   config.Duration{Duration: config.DefaultCheckInterval},
+		BackoffRollback: config.Duration{Duration: config.DefaultBackoffRollback},
+		BackoffMin:      config.Duration{Duration: config.DefaultBackoffMin},
+		BackoffMax:      config.Duration{Duration: config.DefaultBackoffMax},
+		BackoffFactor:   config.DefaultBackoffFactor,
 	}, nil)
 	for _, tc := range testCases {
 		rtsc, ok := tsc.(*realTaskStatusChecker)
@@ -85,20 +87,20 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 
 	NewRelayHolder = NewDummyRelayHolder
 	dir := c.MkDir()
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), check.IsNil)
+	cfg := loadSourceConfigWithoutPassword(c)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
-	w, err := NewWorker(cfg)
+	w, err := NewWorker(&cfg, nil)
 	c.Assert(err, check.IsNil)
+	w.closed.Set(closedFalse)
 
-	tsc := NewRealTaskStatusChecker(CheckerConfig{
+	tsc := NewRealTaskStatusChecker(config.CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   duration{Duration: DefaultCheckInterval},
-		BackoffRollback: duration{Duration: 200 * time.Millisecond},
-		BackoffMin:      duration{Duration: 1 * time.Millisecond},
-		BackoffMax:      duration{Duration: 1 * time.Second},
-		BackoffFactor:   DefaultBackoffFactor,
+		CheckInterval:   config.Duration{Duration: config.DefaultCheckInterval},
+		BackoffRollback: config.Duration{Duration: 200 * time.Millisecond},
+		BackoffMin:      config.Duration{Duration: 1 * time.Millisecond},
+		BackoffMax:      config.Duration{Duration: 1 * time.Second},
+		BackoffFactor:   config.DefaultBackoffFactor,
 	}, nil)
 	c.Assert(tsc.Init(), check.IsNil)
 	rtsc, ok := tsc.(*realTaskStatusChecker)
@@ -108,6 +110,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	st := &SubTask{
 		cfg:   &config.SubTaskConfig{Name: taskName},
 		stage: pb.Stage_Running,
+		l:     log.With(zap.String("subtask", taskName)),
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st)
 	rtsc.check()
@@ -127,19 +130,12 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	time.Sleep(4 * time.Millisecond)
 	rtsc.check()
 	c.Assert(bf.Current(), check.Equals, 8*time.Millisecond)
-	c.Assert(w.meta.logs, check.HasLen, 3)
-	for _, tl := range w.meta.logs {
-		c.Assert(tl.Task, check.NotNil)
-		c.Assert(tl.Task.Op, check.Equals, pb.TaskOp_AutoResume)
-	}
 
 	// test backoff rollback at least once, as well as resume ignore strategy
 	st.result = &pb.ProcessResult{IsCanceled: true}
-	w.meta.logs = []*pb.TaskLog{}
 	time.Sleep(200 * time.Millisecond)
 	rtsc.check()
 	c.Assert(bf.Current() <= 4*time.Millisecond, check.IsTrue)
-	c.Assert(w.meta.logs, check.HasLen, 0)
 	current := bf.Current()
 
 	// test no sense strategy
@@ -156,16 +152,15 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	rtsc.check()
 	c.Assert(rtsc.bc.latestBlockTime[taskName], check.Equals, latestBlockTime)
 	c.Assert(bf.Current(), check.Equals, current)
-	c.Assert(w.meta.logs, check.HasLen, 0)
 
 	// test resume skip strategy
-	tsc = NewRealTaskStatusChecker(CheckerConfig{
+	tsc = NewRealTaskStatusChecker(config.CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   duration{Duration: DefaultCheckInterval},
-		BackoffRollback: duration{Duration: 200 * time.Millisecond},
-		BackoffMin:      duration{Duration: 10 * time.Second},
-		BackoffMax:      duration{Duration: 100 * time.Second},
-		BackoffFactor:   DefaultBackoffFactor,
+		CheckInterval:   config.Duration{Duration: config.DefaultCheckInterval},
+		BackoffRollback: config.Duration{Duration: 200 * time.Millisecond},
+		BackoffMin:      config.Duration{Duration: 10 * time.Second},
+		BackoffMax:      config.Duration{Duration: 100 * time.Second},
+		BackoffFactor:   config.DefaultBackoffFactor,
 	}, w)
 	c.Assert(tsc.Init(), check.IsNil)
 	rtsc, ok = tsc.(*realTaskStatusChecker)
@@ -174,6 +169,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	st = &SubTask{
 		cfg:   &config.SubTaskConfig{Name: taskName},
 		stage: pb.Stage_Running,
+		l:     log.With(zap.String("subtask", taskName)),
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st)
 	rtsc.check()
@@ -189,14 +185,12 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	latestResumeTime = rtsc.bc.latestResumeTime[taskName]
 	latestPausedTime = rtsc.bc.latestPausedTime[taskName]
 	c.Assert(bf.Current(), check.Equals, 10*time.Second)
-	c.Assert(w.meta.logs, check.HasLen, 0)
 	for i := 0; i < 10; i++ {
 		rtsc.check()
 		c.Assert(latestResumeTime, check.Equals, rtsc.bc.latestResumeTime[taskName])
 		c.Assert(latestPausedTime.Before(rtsc.bc.latestPausedTime[taskName]), check.IsTrue)
 		latestPausedTime = rtsc.bc.latestPausedTime[taskName]
 	}
-	c.Assert(w.meta.logs, check.HasLen, 0)
 }
 
 func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
@@ -210,19 +204,19 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 
 	NewRelayHolder = NewDummyRelayHolder
 	dir := c.MkDir()
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), check.IsNil)
+	cfg := loadSourceConfigWithoutPassword(c)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
-	w, err := NewWorker(cfg)
+	w, err := NewWorker(&cfg, nil)
 	c.Assert(err, check.IsNil)
+	w.closed.Set(closedFalse)
 
-	tsc := NewRealTaskStatusChecker(CheckerConfig{
+	tsc := NewRealTaskStatusChecker(config.CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   duration{Duration: DefaultCheckInterval},
-		BackoffRollback: duration{Duration: 200 * time.Millisecond},
-		BackoffMin:      duration{Duration: backoffMin},
-		BackoffMax:      duration{Duration: 10 * time.Second},
+		CheckInterval:   config.Duration{Duration: config.DefaultCheckInterval},
+		BackoffRollback: config.Duration{Duration: 200 * time.Millisecond},
+		BackoffMin:      config.Duration{Duration: backoffMin},
+		BackoffMax:      config.Duration{Duration: 10 * time.Second},
 		BackoffFactor:   1.0,
 	}, nil)
 	c.Assert(tsc.Init(), check.IsNil)
@@ -233,11 +227,13 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 	st1 := &SubTask{
 		cfg:   &config.SubTaskConfig{Name: task1},
 		stage: pb.Stage_Running,
+		l:     log.With(zap.String("subtask", task1)),
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st1)
 	st2 := &SubTask{
 		cfg:   &config.SubTaskConfig{Name: task2},
 		stage: pb.Stage_Running,
+		l:     log.With(zap.String("subtask", task2)),
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st2)
 	rtsc.check()
@@ -254,6 +250,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 			IsCanceled: false,
 			Errors:     []*pb.ProcessError{unsupporteModifyColumnError},
 		},
+		l: log.With(zap.String("subtask", task1)),
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st1)
 	st2 = &SubTask{
@@ -263,6 +260,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 			IsCanceled: false,
 			Errors:     []*pb.ProcessError{unknownProcessError},
 		},
+		l: log.With(zap.String("subtask", task2)),
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st2)
 
@@ -275,7 +273,6 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 		c.Assert(task2LatestResumeTime.Before(rtsc.bc.latestResumeTime[task2]), check.IsTrue)
 		c.Assert(len(rtsc.bc.latestBlockTime), check.Equals, 1)
 		task2LatestResumeTime = rtsc.bc.latestResumeTime[task2]
-		c.Assert(w.meta.logs, check.HasLen, i+1)
 	}
 
 	// test task information cleanup in task status checker
@@ -283,7 +280,6 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 	time.Sleep(backoffMin)
 	rtsc.check()
 	c.Assert(task2LatestResumeTime.Before(rtsc.bc.latestResumeTime[task2]), check.IsTrue)
-	c.Assert(w.meta.logs, check.HasLen, 11)
 	c.Assert(len(rtsc.bc.backoffs), check.Equals, 1)
 	c.Assert(len(rtsc.bc.latestPausedTime), check.Equals, 1)
 	c.Assert(len(rtsc.bc.latestResumeTime), check.Equals, 1)

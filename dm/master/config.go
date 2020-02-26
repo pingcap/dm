@@ -50,6 +50,7 @@ var SampleConfigFile string
 // NewConfig creates a config for dm-master
 func NewConfig() *Config {
 	cfg := &Config{}
+	cfg.Debug = false
 	cfg.FlagSet = flag.NewFlagSet("dm-master", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
@@ -57,6 +58,7 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.printSampleConfig, "print-sample-config", false, "print sample config file of dm-worker")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server and status addr")
+	fs.StringVar(&cfg.AdvertiseAddr, "advertise-addr", "", `advertise address for client traffic (default "${master-addr}")`)
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	//fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
@@ -100,9 +102,11 @@ type Config struct {
 	RPCRateLimit  float64       `toml:"rpc-rate-limit" json:"rpc-rate-limit"`
 	RPCRateBurst  int           `toml:"rpc-rate-burst" json:"rpc-rate-burst"`
 
-	MasterAddr string `toml:"master-addr" json:"master-addr"`
+	MasterAddr    string `toml:"master-addr" json:"master-addr"`
+	AdvertiseAddr string `toml:"advertise-addr" json:"advertise-addr"`
 
-	Deploy    []*DeployMapper   `toml:"deploy" json:"-"`
+	Deploy []*DeployMapper `toml:"deploy" json:"-"`
+	// TODO: remove
 	DeployMap map[string]string `json:"deploy"`
 
 	ConfigFile string `json:"config-file"`
@@ -116,7 +120,8 @@ type Config struct {
 	AdvertisePeerUrls   string `toml:"advertise-peer-urls" json:"advertise-peer-urls"`
 	InitialCluster      string `toml:"initial-cluster" json:"initial-cluster"`
 	InitialClusterState string `toml:"initial-cluster-state" json:"initial-cluster-state"`
-	Join                string `toml:"join" json:"join"` // cluster's client address (endpoints), not peer address
+	Join                string `toml:"join" json:"join"`   // cluster's client address (endpoints), not peer address
+	Debug               bool   `toml:"debug" json:"debug"` // only use for test
 
 	printVersion      bool
 	printSampleConfig bool
@@ -198,9 +203,25 @@ func (c *Config) configFromFile(path string) error {
 // adjust adjusts configs
 func (c *Config) adjust() error {
 	// MasterAddr's format may be "host:port" or ":port"
-	_, _, err := net.SplitHostPort(c.MasterAddr)
+	host, port, err := net.SplitHostPort(c.MasterAddr)
 	if err != nil {
 		return terror.ErrMasterHostPortNotValid.Delegate(err, c.MasterAddr)
+	}
+
+	if c.AdvertiseAddr == "" {
+		if host == "" || host == "0.0.0.0" || len(port) == 0 {
+			return terror.ErrMasterHostPortNotValid.Generatef("master-addr (%s) must include the 'host' part (should not be '0.0.0.0') when advertise-addr is not set", c.MasterAddr)
+		}
+		c.AdvertiseAddr = c.MasterAddr
+	} else {
+		// AdvertiseAddr's format must be "host:port"
+		host, port, err = net.SplitHostPort(c.AdvertiseAddr)
+		if err != nil {
+			return terror.ErrMasterAdvertiseAddrNotValid.Delegate(err, c.AdvertiseAddr)
+		}
+		if len(host) == 0 || host == "0.0.0.0" || len(port) == 0 {
+			return terror.ErrMasterAdvertiseAddrNotValid.Generate(c.AdvertiseAddr)
+		}
 	}
 
 	c.DeployMap = make(map[string]string)

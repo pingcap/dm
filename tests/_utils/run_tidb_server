@@ -1,9 +1,11 @@
 #!/bin/sh
 # parameter 1: tidb port
+# parameter 2: tidb password
 
 set -eu
 
 PORT=$1
+PASSWORD=$2
 TEST_DIR=/tmp/dm_test
 
 echo "Starting TiDB on port ${PORT}"
@@ -22,3 +24,7 @@ while ! mysql -uroot -h127.0.0.1 -P${PORT} --default-character-set utf8 -e 'sele
     fi
     sleep 2
 done
+
+# if user test is already exist, add || true to avoid exit with 2
+mysql -uroot -h127.0.0.1 -P${PORT} --default-character-set utf8 -e "CREATE USER 'test'@'%' IDENTIFIED BY '$PASSWORD';" || true
+mysql -uroot -h127.0.0.1 -P${PORT} --default-character-set utf8 -e "GRANT ALL PRIVILEGES ON *.* TO 'test'@'%' WITH GRANT OPTION;" || true

@@ -52,37 +52,42 @@ service Master {
     // PurgeWorkerRelay purges relay log files for some dm-workers
     rpc PurgeWorkerRelay(PurgeWorkerRelayRequest) returns (PurgeWorkerRelayResponse) {}
 
-    // used by dmctl, to force refresh the task -> workers mapper
-    // it should be used rarely only when task -> workers mapper corrupted
-    rpc RefreshWorkerTasks (RefreshWorkerTasksRequest) returns (RefreshWorkerTasksResponse) {}
-
     // MigrateRelay request migrate old dm-woker to a new one. 
     rpc MigrateWorkerRelay(MigrateWorkerRelayRequest) returns (CommonWorkerResponse) {}
 
     // CheckTask checks legality of task configuration
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
+
+    // Operate an upstream MySQL source.
+    rpc OperateSource(OperateSourceRequest) returns (OperateSourceResponse) {}
+
+    // RegisterWorker register the dm-workers.
+    rpc RegisterWorker(RegisterWorkerRequest) returns(RegisterWorkerResponse) {}
+
+    // OfflineWorker offline the dm-workers.
+    rpc OfflineWorker(OfflineWorkerRequest) returns(OfflineWorkerResponse) {}
 }
 
 message MigrateWorkerRelayRequest {
     string BinlogName = 1;
     uint32 BinlogPos = 2;
-    string worker = 3;
+    string source = 3;
 }
 
 message UpdateWorkerRelayConfigRequest {
     string config = 1;
-    string worker = 2;
+    string source = 2;
 }
 
 message StartTaskRequest {
     string task = 1; // task's configuration, yaml format
-    repeated string workers = 2; // workers need to do start task, empty for all matched workers in deployment
+    repeated string sources = 2; // mysql source need to do start task, empty for all matched workers in deployment
 }
 
 message StartTaskResponse {
     bool result = 1;
     string msg = 2;
-    repeated CommonWorkerResponse workers = 3;
+    repeated CommonWorkerResponse sources = 3;
 }
 
 message UpdateMasterConfigRequest {
@@ -92,20 +97,20 @@ message UpdateMasterConfigRequest {
 message UpdateMasterConfigResponse {
     bool result = 1;
     string msg = 2;
-    repeated QueryStatusResponse workers = 3;
+    repeated QueryStatusResponse sources = 3;
 }
 
 message OperateTaskRequest {
     TaskOp op = 1; // Stop / Pause / Resume
     string name = 2; // task's name
-    repeated string workers = 3; // workers need to do operation, empty for matched workers in processing the task
+    repeated string sources = 3; // sources need to do operation, empty for matched sources in processing the task
 }
 
 message OperateTaskResponse {
     TaskOp op = 1;
     bool result = 2;
     string msg = 3;
-    repeated OperateSubTaskResponse workers = 4;
+    repeated CommonWorkerResponse sources = 4;
 }
 
 
@@ -113,49 +118,49 @@ message OperateTaskResponse {
 // task: task's configuration, yaml format
 //       now, only support to update config for routes, filters, column-mappings, black-white-list
 //       support update partial config for syncer, loader, etc later
-// workers need to do update, empty for all workers in processing the task
+// sources need to do update, empty for all sources in processing the task
 message UpdateTaskRequest {
     string task = 1;
-    repeated string workers = 2;
+    repeated string sources = 2;
 }
 
 message UpdateTaskResponse {
     bool result = 1;
     string msg = 2;
-    repeated CommonWorkerResponse workers = 3;
+    repeated CommonWorkerResponse sources = 3;
 }
 
 
 message QueryStatusListRequest {
     string name = 1; // task's name, empty for all tasks
-    repeated string workers = 2; // workers need to query, empty for all workers
+    repeated string sources = 2; // sources need to query, empty for all sources
 }
 
 message QueryStatusListResponse {
     bool result = 1;
     string msg = 2;
-    repeated QueryStatusResponse workers = 3;
+    repeated QueryStatusResponse sources = 3;
 }
 
 message QueryErrorListRequest {
     string name = 1;             // task's name, empty for all tasks
-    repeated string workers = 2; // workers need to query, empty for all workers
+    repeated string sources = 2; // sources need to query, empty for all sources
 }
 
 message QueryErrorListResponse {
     bool result = 1;
     string msg = 2;
-    repeated QueryErrorResponse workers = 3;
+    repeated QueryErrorResponse sources = 3;
 }
 
 // ShowDDLLocksRequest used to query DDL locks which are un-resolved
 // task: task's name, empty for all tasks
-// workers: worker need to query, empty for all workers
-//          any DDL lock in which the worker is synced or unsynced will return
-// if specify task and workers both, and workers not doing the task , it will return empty DDL locks
+// sources: source need to query, empty for all sources
+//          any DDL lock in which the source is synced or unsynced will return
+// if specify task and sources both, and sources not doing the task , it will return empty DDL locks
 message ShowDDLLocksRequest {
     string task = 1;
-    repeated string workers = 2; // workers need to query, empty for all workers
+    repeated string sources = 2; // sources need to query, empty for all sources
 }
 
 // DDLLock represents a DDL lock info (I known the name confused with DDLLockInfo, any suggestion?)
@@ -190,7 +195,7 @@ message ShowDDLLocksResponse {
 message UnlockDDLLockRequest {
     string ID = 1;
     string replaceOwner = 2;
-    repeated string workers = 3;
+    repeated string sources = 3;
     bool forceRemove = 4;
 }
 
@@ -208,7 +213,7 @@ message UnlockDDLLockResponse {
 // skipDDL: skip DDL which is blocking
 //   execDDL and skipDDL can not specify both at the same time, but can specify neither
 message BreakWorkerDDLLockRequest {
-    repeated string workers = 1;
+    repeated string sources = 1;
     string task = 2;
     string removeLockID = 3;
     bool execDDL = 4;
@@ -218,46 +223,32 @@ message BreakWorkerDDLLockRequest {
 message BreakWorkerDDLLockResponse {
     bool result = 1;
     string msg = 2;
-    repeated CommonWorkerResponse workers = 3;
+    repeated CommonWorkerResponse sources = 3;
 }
 
 // SwitchWorkerRelayMasterRequest represents a request for some dm-workers to switch relay unit's master server
 // workers: relay unit in these dm-workers need to switch master server
 message SwitchWorkerRelayMasterRequest {
-    repeated string workers = 1;
+    repeated string sources = 1;
 }
 
 message SwitchWorkerRelayMasterResponse {
     bool result = 1;
     string msg = 2;
-    repeated CommonWorkerResponse workers = 3;
+    repeated CommonWorkerResponse sources = 3;
 }
 
 // OperateWorkerRelayRequest represents a request for some dm-workers to operate relay unit
 message OperateWorkerRelayRequest {
     RelayOp op = 1; // Stop / Pause / Resume
-    repeated string workers = 2;
+    repeated string sources = 2;
 }
 
 message OperateWorkerRelayResponse {
     RelayOp op = 1;
     bool result = 2;
     string msg = 3;
-    repeated OperateRelayResponse workers = 4;
-}
-
-
-message RefreshWorkerTasksRequest {
-}
-
-message RefreshWorkerTasksMsg {
-    string worker = 1;
-    string msg = 2;
-}
-
-message RefreshWorkerTasksResponse {
-    bool result = 1;
-    repeated RefreshWorkerTasksMsg workers = 2;
+    repeated CommonWorkerResponse sources = 4;
 }
 
 message HandleSQLsRequest {
@@ -265,7 +256,7 @@ message HandleSQLsRequest {
     SQLOp op = 2; // operation type
     repeated string args = 3; // args for operation
     string binlogPos = 4; // binlog-pos (that's file:pos format)
-    string worker = 5; // worker
+    string source = 5; // source
     string sqlPattern = 6; // sql-pattern (for regexp, starts with ~)
     bool sharding = 7; // whether are handing sharding DDL, which will only take effect on DDL lock's owner
 }
@@ -273,7 +264,7 @@ message HandleSQLsRequest {
 message HandleSQLsResponse {
     bool result = 1;
     string msg = 2;
-    repeated CommonWorkerResponse workers = 3;
+    repeated CommonWorkerResponse sources = 3;
 }
 
 // PurgeWorkerRelayRequest represents a request to purge relay log files for some dm-workers
@@ -283,7 +274,7 @@ message HandleSQLsResponse {
 // filename: whether purge relay log files before this filename
 // subDir: specify relay sub directory for @filename
 message PurgeWorkerRelayRequest {
-    repeated string workers = 1;
+    repeated string sources = 1;
     bool inactive = 2;
     int64 time = 3;
     string filename = 4;
@@ -293,7 +284,7 @@ message PurgeWorkerRelayRequest {
 message PurgeWorkerRelayResponse {
     bool result = 1;
     string msg = 2;
-    repeated CommonWorkerResponse workers = 3;
+    repeated CommonWorkerResponse sources = 3;
 }
 
 message CheckTaskRequest {
@@ -301,6 +292,44 @@ message CheckTaskRequest {
 }
 
 message CheckTaskResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+enum SourceOp {
+    InvalidSourceOp = 0;
+    StartSource = 1;
+    UpdateSource = 2;
+    StopSource = 3;
+}
+
+message OperateSourceRequest {
+    SourceOp op = 1;
+    string config = 2;
+}
+
+message OperateSourceResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated CommonWorkerResponse sources = 3;
+}
+
+message RegisterWorkerRequest {
+    string name = 1;
+    string address = 2;
+}
+
+message RegisterWorkerResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+message OfflineWorkerRequest {
+    string name = 1;
+    string address = 2;
+}
+
+message OfflineWorkerResponse {
     bool result = 1;
     string msg = 2;
 }

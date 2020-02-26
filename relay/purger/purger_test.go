@@ -26,6 +26,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go/ioutil2"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
@@ -79,7 +80,7 @@ func (t *testPurgerSuite) TestPurgeManuallyInactive(c *C) {
 	err = t.genUUIDIndexFile(baseDir)
 	c.Assert(err, IsNil)
 
-	cfg := Config{
+	cfg := config.PurgeConfig{
 		Interval: 0, // disable automatically
 	}
 
@@ -118,7 +119,7 @@ func (t *testPurgerSuite) TestPurgeManuallyTime(c *C) {
 	err = t.genUUIDIndexFile(baseDir)
 	c.Assert(err, IsNil)
 
-	cfg := Config{
+	cfg := config.PurgeConfig{
 		Interval: 0, // disable automatically
 	}
 
@@ -157,7 +158,7 @@ func (t *testPurgerSuite) TestPurgeManuallyFilename(c *C) {
 	err = t.genUUIDIndexFile(baseDir)
 	c.Assert(err, IsNil)
 
-	cfg := Config{
+	cfg := config.PurgeConfig{
 		Interval: 0, // disable automatically
 	}
 
@@ -200,7 +201,7 @@ func (t *testPurgerSuite) TestPurgeAutomaticallyTime(c *C) {
 	err = t.genUUIDIndexFile(baseDir)
 	c.Assert(err, IsNil)
 
-	cfg := Config{
+	cfg := config.PurgeConfig{
 		Interval: 1, // enable automatically
 		Expires:  1,
 	}
@@ -250,7 +251,7 @@ func (t *testPurgerSuite) TestPurgeAutomaticallySpace(c *C) {
 	storageSize, err := utils.GetStorageSize(baseDir)
 	c.Assert(err, IsNil)
 
-	cfg := Config{
+	cfg := config.PurgeConfig{
 		Interval:    1,                                                  // enable automatically
 		RemainSpace: int64(storageSize.Available)/1024/1024/1024 + 1024, // always trigger purge
 	}
@@ -334,7 +335,7 @@ func (i *fakeInterceptor) ForbidPurge() (bool, string) {
 }
 
 func (t *testPurgerSuite) TestPurgerInterceptor(c *C) {
-	cfg := Config{}
+	cfg := config.PurgeConfig{}
 	interceptor := newFakeInterceptor()
 
 	purger := NewPurger(cfg, "", []RelayOperator{t}, []PurgeInterceptor{interceptor})

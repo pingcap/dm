@@ -1,18 +1,2 @@
-# Worker Configuration.
-
-source-id = "mysql-replica-01"
-flavor = ""
-enable-gtid = false
-relay-binlog-name = ""
-relay-binlog-gtid = ""
-
-[from]
-host = "127.0.0.1"
-user = "root"
-password = ""
-port = 3306
-
-[checker]
-check-enable = true
-backoff-rollback = "5m"
-backoff-max = "5m"
+name = "worker1"
+join = "127.0.0.1:8261"

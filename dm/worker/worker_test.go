@@ -17,8 +17,9 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -32,8 +33,7 @@ import (
 var emptyWorkerStatusInfoJSONLength = 25
 
 func (t *testServer) testWorker(c *C) {
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg := loadSourceConfigWithoutPassword(c)
 
 	dir := c.MkDir()
 	cfg.EnableRelay = true
@@ -45,14 +45,17 @@ func (t *testServer) testWorker(c *C) {
 		NewRelayHolder = NewRealRelayHolder
 	}()
 
-	_, err := NewWorker(cfg)
+	_, err := NewWorker(&cfg, nil)
 	c.Assert(err, ErrorMatches, "init error")
 
 	NewRelayHolder = NewDummyRelayHolder
-	w, err := NewWorker(cfg)
+	w, err := NewWorker(&cfg, nil)
 	c.Assert(err, IsNil)
 	c.Assert(w.StatusJSON(""), HasLen, emptyWorkerStatusInfoJSONLength)
-	c.Assert(w.closed.Get(), Equals, closedFalse)
+	//c.Assert(w.closed.Get(), Equals, closedFalse)
+	//go func() {
+	//	w.Start()
+	//}()
 
 	// close twice
 	w.Close()
@@ -61,64 +64,22 @@ func (t *testServer) testWorker(c *C) {
 	w.Close()
 	c.Assert(w.closed.Get(), Equals, closedTrue)
 	c.Assert(w.subTaskHolder.getAllSubTasks(), HasLen, 0)
+	c.Assert(w.closed.Get(), Equals, closedTrue)
 
-	_, err = w.StartSubTask(&config.SubTaskConfig{
+	w.StartSubTask(&config.SubTaskConfig{
+		Name: "testStartTask",
+	})
+	task := w.subTaskHolder.findSubTask("testStartTask")
+	c.Assert(task, NotNil)
+	c.Assert(task.Result().String(), Matches, ".*worker already closed.*")
+
+	err = w.UpdateSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",
 	})
 	c.Assert(err, ErrorMatches, ".*worker already closed.*")
 
-	_, err = w.UpdateSubTask(&config.SubTaskConfig{
-		Name: "testStartTask",
-	})
+	err = w.OperateSubTask("testSubTask", pb.TaskOp_Stop)
 	c.Assert(err, ErrorMatches, ".*worker already closed.*")
-
-	_, err = w.OperateSubTask("testSubTask", pb.TaskOp_Stop)
-	c.Assert(err, ErrorMatches, ".*worker already closed.*")
-}
-
-func (t *testServer) testWorkerHandleTask(c *C) {
-	var (
-		wg       sync.WaitGroup
-		taskName = "test"
-	)
-
-	NewRelayHolder = NewDummyRelayHolder
-	dir := c.MkDir()
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
-	cfg.RelayDir = dir
-	cfg.MetaDir = dir
-	cfg.EnableRelay = true
-	w, err := NewWorker(cfg)
-	c.Assert(err, IsNil)
-
-	tasks := []*pb.TaskMeta{
-		{Op: pb.TaskOp_Stop, Name: taskName, Stage: pb.Stage_New},
-		{Op: pb.TaskOp_Pause, Name: taskName, Stage: pb.Stage_New},
-		{Op: pb.TaskOp_Resume, Name: taskName, Stage: pb.Stage_New},
-	}
-	for _, task := range tasks {
-		_, err := w.meta.AppendOperation(task)
-		c.Assert(err, IsNil)
-	}
-	c.Assert(len(w.meta.logs), Equals, len(tasks))
-
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/handleTaskInterval", `return(10)`), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/handleTaskInterval")
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		w.handleTask()
-	}()
-
-	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
-		w.meta.Lock()
-		defer w.meta.Unlock()
-		return len(w.meta.logs) == 0
-	}), IsTrue)
-
-	w.Close()
-	wg.Wait()
 }
 
 func (t *testServer) TestTaskAutoResume(c *C) {
@@ -126,17 +87,26 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		taskName = "sub-task-name"
 		port     = 8263
 	)
+	hostName := "127.0.0.1:8291"
+	etcdDir := c.MkDir()
+	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
+	c.Assert(err, IsNil)
+	defer ETCD.Close()
+
 	cfg := NewConfig()
+	sourceConfig := loadSourceConfigWithoutPassword(c)
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
-	cfg.Checker.CheckInterval = duration{Duration: 40 * time.Millisecond}
-	cfg.Checker.BackoffMin = duration{Duration: 20 * time.Millisecond}
-	cfg.Checker.BackoffMax = duration{Duration: 1 * time.Second}
+	sourceConfig.Checker.CheckEnable = true
+	sourceConfig.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}
+	sourceConfig.Checker.BackoffMin = config.Duration{Duration: 20 * time.Millisecond}
+	sourceConfig.Checker.BackoffMax = config.Duration{Duration: 1 * time.Second}
+
 	cfg.WorkerAddr = fmt.Sprintf(":%d", port)
 
 	dir := c.MkDir()
-	cfg.RelayDir = dir
-	cfg.MetaDir = dir
-	cfg.EnableRelay = true
+	sourceConfig.RelayDir = dir
+	sourceConfig.MetaDir = dir
+	sourceConfig.EnableRelay = true
 
 	NewRelayHolder = NewDummyRelayHolder
 	defer func() {
@@ -147,10 +117,10 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/mydumper/dumpUnitProcessForever")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/mydumper/dumpUnitProcessWithError", `2*return("test auto resume inject error")`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/mydumper/dumpUnitProcessWithError")
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/handleTaskInterval", `return(10)`), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/handleTaskInterval")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly", `return(true)`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/loader/ignoreLoadCheckpointErr", `return()`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/loader/ignoreLoadCheckpointErr")
 
 	s := NewServer(cfg)
 
@@ -159,9 +129,12 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		c.Assert(s.Start(), IsNil)
 	}()
 	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
-		return !s.closed.Get()
+		if s.closed.Get() {
+			return false
+		}
+		c.Assert(s.startWorker(&sourceConfig), IsNil)
+		return true
 	}), IsTrue)
-
 	// start task
 	cli := t.createClient(c, fmt.Sprintf("127.0.0.1:%d", port))
 	subtaskCfgBytes, err := ioutil.ReadFile("./subtask.toml")
@@ -171,7 +144,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 
 	// check task in paused state
 	c.Assert(utils.WaitSomething(100, 100*time.Millisecond, func() bool {
-		for _, st := range s.worker.QueryStatus(taskName) {
+		for _, st := range s.getWorker(true).QueryStatus(taskName) {
 			if st.Name == taskName && st.Stage == pb.Stage_Paused {
 				return true
 			}
@@ -179,7 +152,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		return false
 	}), IsTrue)
 
-	rtsc, ok := s.worker.taskStatusChecker.(*realTaskStatusChecker)
+	rtsc, ok := s.getWorker(true).taskStatusChecker.(*realTaskStatusChecker)
 	c.Assert(ok, IsTrue)
 	defer func() {
 		// close multiple time
@@ -189,7 +162,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 
 	// check task will be auto resumed
 	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
-		sts := s.worker.QueryStatus(taskName)
+		sts := s.getWorker(true).QueryStatus(taskName)
 		for _, st := range sts {
 			if st.Name == taskName && st.Stage == pb.Stage_Running {
 				return true
@@ -198,4 +171,29 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		c.Log(sts)
 		return false
 	}), IsTrue)
+}
+
+func (t *testServer) TestPurgeRelayDir(c *C) {
+	cfg := loadSourceConfigWithoutPassword(c)
+	cfg.EnableRelay = true
+	dir := c.MkDir()
+	cfg.RelayDir = dir
+
+	dirs := filepath.Join(dir, `f889521f-e994-11e9-94e9-0242ac110002.000001`)
+	c.Assert(os.MkdirAll(dirs, 0777), IsNil)
+	file := filepath.Join(dir, `server-uuid.index`)
+	f, err := os.Create(file)
+	c.Assert(err, IsNil)
+	c.Assert(f.Close(), IsNil)
+	file = filepath.Join(dirs, `relay.meta`)
+	f, err = os.Create(file)
+	c.Assert(err, IsNil)
+	c.Assert(f.Close(), IsNil)
+
+	w, err := NewWorker(&cfg, nil)
+	c.Assert(err, IsNil)
+	c.Assert(w.purgeRelayDir(), IsNil)
+	files, err := ioutil.ReadDir(cfg.RelayDir)
+	c.Assert(err, IsNil)
+	c.Assert(files, HasLen, 0)
 }

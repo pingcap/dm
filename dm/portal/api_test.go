@@ -126,15 +126,18 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	req := httptest.NewRequest("POST", "/check", bytes.NewReader(dbCfgBytes))
 	resp := httptest.NewRecorder()
 
+	// will connection to database failed
 	t.portalHandler.Check(resp, req)
+	c.Log("resp", resp)
 	c.Assert(resp.Code, Equals, http.StatusBadRequest)
 
 	checkResult := &CheckResult{}
 	err := readJSON(resp.Body, checkResult)
 	c.Assert(err, IsNil)
 	c.Assert(checkResult.Result, Equals, failed)
-	c.Assert(checkResult.Error, Matches, `Error 1045: Access denied for user.*`)
+	c.Assert(checkResult.Error, Matches, "Error 1045: Access denied for user 'root'.*")
 
+	// don't need connection to database, and will return StatusOK
 	getDBConnFunc = t.getMockDB
 	defer func() {
 		getDBConnFunc = getDBConnFromReq
@@ -156,13 +159,14 @@ func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 	resp := httptest.NewRecorder()
 
 	t.portalHandler.GetSchemaInfo(resp, req)
+	c.Log("resp", resp)
 	c.Assert(resp.Code, Equals, http.StatusBadRequest)
 
 	schemaInfoResult := new(SchemaInfoResult)
 	err := readJSON(resp.Body, schemaInfoResult)
 	c.Assert(err, IsNil)
 	c.Assert(schemaInfoResult.Result, Equals, failed)
-	c.Assert(schemaInfoResult.Error, Matches, `Error 1045: Access denied for user.*`)
+	c.Assert(schemaInfoResult.Error, Matches, "Error 1045: Access denied for user 'root'@.*")
 	c.Assert(schemaInfoResult.Tables, IsNil)
 
 	getDBConnFunc = t.getMockDB
@@ -367,7 +371,7 @@ func getTestDBCfgBytes(c *C) []byte {
 		Host:     "127.0.0.1",
 		Port:     3306,
 		User:     "root",
-		Password: "123456",
+		Password: "wrong_password",
 	}
 	dbCfgBytes, err := json.Marshal(dbCfg)
 	c.Assert(err, IsNil)

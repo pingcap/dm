@@ -13,7 +13,7 @@ function run() {
     $PWD/bin/dmctl.test DEVEL > $WORK_DIR/help.log
     help_msg=$(cat $WORK_DIR/help.log)
     help_msg_cnt=$(echo "${help_msg}" | wc -l |xargs)
-    if [ "$help_msg_cnt" != 34 ]; then
+    if [ "$help_msg_cnt" != 35 ]; then
         echo "dmctl case 1 help failed: $help_msg"
         echo $help_msg_cnt
         exit 1
@@ -24,7 +24,7 @@ function run() {
     $PWD/bin/dmctl.test DEVEL --help > $WORK_DIR/help.log
     help_msg=$(cat $WORK_DIR/help.log)
     help_msg_cnt=$(echo "${help_msg}" | wc -l |xargs)
-    if [ "$help_msg_cnt" != 34 ]; then
+    if [ "$help_msg_cnt" != 35 ]; then
         echo "dmctl case 2 help failed: $help_msg"
         exit 1
     fi
@@ -76,17 +76,24 @@ function run() {
     fi
 
     # run normal task with command
-    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
-    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_contains 'Query OK, 3 rows affected'
 
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    # operate mysql config to worker
+    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
+    cp $cur/conf/source2.toml $WORK_DIR/source2.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
+    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
     # start DM task with command mode
     $PWD/bin/dmctl.test DEVEL --master-addr=:$MASTER_PORT start-task $cur/conf/dm-task.yaml

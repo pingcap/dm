@@ -1,9 +1,3 @@
 # Master Configuration.
-
-[[deploy]]
-source-id = "mysql-replica-01"
-dm-worker = "127.0.0.1:8262"
-
-[[deploy]]
-source-id = "mysql-replica-02"
-dm-worker = "127.0.0.1:8263"
+master-addr = ":8261"
+advertise-addr = "127.0.0.1:8261"

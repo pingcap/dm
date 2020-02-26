@@ -29,11 +29,9 @@ type ConditionHub struct {
 
 // InitConditionHub inits the singleton instance of ConditionHub
 func InitConditionHub(w *Worker) {
-	once.Do(func() {
-		conditionHub = &ConditionHub{
-			w: w,
-		}
-	})
+	conditionHub = &ConditionHub{
+		w: w,
+	}
 }
 
 // GetConditionHub returns singleton instance of ConditionHub

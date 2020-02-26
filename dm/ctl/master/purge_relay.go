@@ -41,14 +41,14 @@ func NewPurgeRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		//Use:   "purge-relay <-w worker> [--inactive] [--time] [--filename] [--sub-dir]",
 		//Short: "purge dm-worker's relay log files, choose 1 of 2 methods",
-		Use:   "purge-relay <-w worker> [--filename] [--sub-dir]",
+		Use:   "purge-relay <-s source> [--filename] [--sub-dir]",
 		Short: "purge relay log files of the DM-worker according to the specified filename",
 		Run:   purgeRelayFunc,
 	}
 	//cmd.Flags().BoolP("inactive", "i", false, "whether try to purge all inactive relay log files")
 	//cmd.Flags().StringP("time", "t", "", fmt.Sprintf("whether try to purge relay log files before this time, the format is \"%s\"(_ between date and time)", timeFormat))
 	cmd.Flags().StringP("filename", "f", "", "name of the terminal file before which to purge relay log files. Sample format: \"mysql-bin.000006\"")
-	cmd.Flags().StringP("sub-dir", "s", "", "specify relay sub directory for --filename. If not specified, the latest one will be used. Sample format: \"2ae76434-f79f-11e8-bde2-0242ac130008.000001\"")
+	cmd.Flags().StringP("sub-dir", "", "", "specify relay sub directory for --filename. If not specified, the latest one will be used. Sample format: \"2ae76434-f79f-11e8-bde2-0242ac130008.000001\"")
 
 	return cmd
 }
@@ -61,13 +61,13 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		fmt.Println(errors.ErrorStack(err))
 		return
 	}
-	if len(workers) == 0 {
-		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
+	if len(sources) == 0 {
+		fmt.Println("must specify at least one source (`-s` / `--source`)")
 		return
 	}
 
@@ -122,8 +122,8 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 	//	}
 	//}
 
-	if len(filename) > 0 && len(workers) > 1 {
-		fmt.Println("for --filename, can only specify one DM-worker per time")
+	if len(filename) > 0 && len(sources) > 1 {
+		fmt.Println("for --filename, can only specify one source per time")
 		return
 	}
 	if len(subDir) > 0 {
@@ -138,7 +138,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 
 	resp, err := cli.PurgeWorkerRelay(ctx, &pb.PurgeWorkerRelayRequest{
-		Workers: workers,
+		Sources: sources,
 		//Inactive: inactive,
 		//Time:     time2.Unix(),
 		Filename: filename,

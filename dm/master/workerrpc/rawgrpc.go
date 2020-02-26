@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
@@ -42,7 +43,16 @@ func NewGRPCClientWrap(conn *grpc.ClientConn, client pb.WorkerClient) (*GRPCClie
 
 // NewGRPCClient initializes a new grpc client from worker address
 func NewGRPCClient(addr string) (*GRPCClient, error) {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			Backoff: backoff.Config{
+				BaseDelay:  100 * time.Millisecond,
+				Multiplier: 1.6, // Default
+				Jitter:     0.2, // Default
+				MaxDelay:   3 * time.Second,
+			},
+			MinConnectTimeout: 3 * time.Second,
+		}))
 	if err != nil {
 		return nil, terror.ErrMasterGRPCCreateConn.Delegate(err)
 	}
@@ -95,16 +105,10 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.QueryStatus, err = client.QueryStatus(ctx, req.QueryStatus)
 	case CmdQueryError:
 		resp.QueryError, err = client.QueryError(ctx, req.QueryError)
-	case CmdQueryTaskOperation:
-		resp.QueryTaskOperation, err = client.QueryTaskOperation(ctx, req.QueryTaskOperation)
 	case CmdQueryWorkerConfig:
 		resp.QueryWorkerConfig, err = client.QueryWorkerConfig(ctx, req.QueryWorkerConfig)
 	case CmdHandleSubTaskSQLs:
 		resp.HandleSubTaskSQLs, err = client.HandleSQLs(ctx, req.HandleSubTaskSQLs)
-	case CmdExecDDL:
-		resp.ExecDDL, err = client.ExecuteDDL(ctx, req.ExecDDL)
-	case CmdBreakDDLLock:
-		resp.BreakDDLLock, err = client.BreakDDLLock(ctx, req.BreakDDLLock)
 	case CmdSwitchRelayMaster:
 		resp.SwitchRelayMaster, err = client.SwitchRelayMaster(ctx, req.SwitchRelayMaster)
 	case CmdOperateRelay:
@@ -115,8 +119,6 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.UpdateRelay, err = client.UpdateRelayConfig(ctx, req.UpdateRelay)
 	case CmdMigrateRelay:
 		resp.MigrateRelay, err = client.MigrateRelay(ctx, req.MigrateRelay)
-	case CmdFetchDDLInfo:
-		resp.FetchDDLInfo, err = client.FetchDDLInfo(ctx)
 	default:
 		return nil, terror.ErrMasterGRPCInvalidReqType.Generate(req.Type)
 	}

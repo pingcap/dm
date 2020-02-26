@@ -15,41 +15,24 @@ package worker
 
 import (
 	"bytes"
-	"context"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"net"
 	"strings"
-	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/siddontang/go-mysql/mysql"
-
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/binlog"
-	"github.com/pingcap/dm/pkg/conn"
-	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/dm/relay/purger"
-)
-
-const (
-	// dbReadTimeout is readTimeout for DB connection in adjust
-	dbReadTimeout = "30s"
-	// dbGetTimeout is timeout for getting some information from DB
-	dbGetTimeout = 30 * time.Second
 )
 
 // SampleConfigFile is sample config file of dm-worker
 // later we can read it from dm/worker/dm-worker.toml
 // and assign it to SampleConfigFile while we build dm-worker
 var SampleConfigFile string
+var defaultKeepAliveTTL = int64(10)
 
 var (
 	getRandomServerIDFunc = utils.GetRandomServerID
@@ -64,61 +47,34 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 	fs.BoolVar(&cfg.printSampleConfig, "print-sample-config", false, "print sample config file of dm-worker")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
-	fs.StringVar(&cfg.WorkerAddr, "worker-addr", "", "worker API server and status addr")
+	fs.StringVar(&cfg.WorkerAddr, "worker-addr", "", "listen address for client traffic")
+	fs.StringVar(&cfg.AdvertiseAddr, "advertise-addr", "", `advertise address for client traffic (default "${worker-addr}")`)
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	//fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
-	fs.StringVar(&cfg.RelayDir, "relay-dir", "./relay_log", "relay log directory")
-	fs.Int64Var(&cfg.Purge.Interval, "purge-interval", 60*60, "interval (seconds) try to check whether needing to purge relay log files")
-	fs.Int64Var(&cfg.Purge.Expires, "purge-expires", 0, "try to purge relay log files if their modified time is older than this (hours)")
-	fs.Int64Var(&cfg.Purge.RemainSpace, "purge-remain-space", 15, "try to purge relay log files if remain space is less than this (GB)")
-	fs.BoolVar(&cfg.Checker.CheckEnable, "checker-check-enable", true, "whether enable task status checker")
-	fs.DurationVar(&cfg.Checker.BackoffRollback.Duration, "checker-backoff-rollback", DefaultBackoffRollback, "task status checker backoff rollback interval")
-	fs.DurationVar(&cfg.Checker.BackoffMax.Duration, "checker-backoff-max", DefaultBackoffMax, "task status checker backoff max delay duration")
-	fs.BoolVar(&cfg.Tracer.Enable, "tracer-enable", false, "whether to enable tracing")
-	fs.StringVar(&cfg.Tracer.TracerAddr, "tracer-server-addr", "", "tracing service rpc address")
-	fs.IntVar(&cfg.Tracer.BatchSize, "tracer-batch-size", 20, "upload to tracing service batch size")
-	fs.BoolVar(&cfg.Tracer.Checksum, "tracer-checksum", false, "whether to calculate checksum of some data")
-
+	// NOTE: add `advertise-addr` for dm-master if needed.
+	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: dm-master cluster's "${master-addr}")`)
+	fs.StringVar(&cfg.Name, "name", "", "human-readable name for DM-worker member")
+	fs.Int64Var(&cfg.KeepAliveTTL, "keepalive-ttl", defaultKeepAliveTTL, "dm-worker's TTL for keepalive with etcd (in seconds)")
 	return cfg
 }
 
 // Config is the configuration.
 type Config struct {
 	flagSet *flag.FlagSet
+	Name    string `toml:"name" json:"name"`
 
 	LogLevel  string `toml:"log-level" json:"log-level"`
 	LogFile   string `toml:"log-file" json:"log-file"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
-	WorkerAddr string `toml:"worker-addr" json:"worker-addr"`
-
-	EnableGTID  bool   `toml:"enable-gtid" json:"enable-gtid"`
-	AutoFixGTID bool   `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
-	RelayDir    string `toml:"relay-dir" json:"relay-dir"`
-	MetaDir     string `toml:"meta-dir" json:"meta-dir"`
-	ServerID    uint32 `toml:"server-id" json:"server-id"`
-	Flavor      string `toml:"flavor" json:"flavor"`
-	Charset     string `toml:"charset" json:"charset"`
-
-	EnableRelay bool `toml:"enable-relay" json:"enable-relay"`
-	// relay synchronous starting point (if specified)
-	RelayBinLogName string `toml:"relay-binlog-name" json:"relay-binlog-name"`
-	RelayBinlogGTID string `toml:"relay-binlog-gtid" json:"relay-binlog-gtid"`
-
-	SourceID string          `toml:"source-id" json:"source-id"`
-	From     config.DBConfig `toml:"from" json:"from"`
-
-	// config items for purger
-	Purge purger.Config `toml:"purge" json:"purge"`
-
-	// config items for task status checker
-	Checker CheckerConfig `toml:"checker" json:"checker"`
-
-	// config items for tracer
-	Tracer tracing.Config `toml:"tracer" json:"tracer"`
+	Join          string `toml:"join" json:"join" `
+	WorkerAddr    string `toml:"worker-addr" json:"worker-addr"`
+	AdvertiseAddr string `toml:"advertise-addr" json:"advertise-addr"`
 
 	ConfigFile string `json:"config-file"`
+	// TODO: in the future dm-workers should share a same ttl from dm-master
+	KeepAliveTTL int64 `toml:"keepalive-ttl" json:"keepalive-ttl"`
 
 	printVersion      bool
 	printSampleConfig bool
@@ -196,47 +152,34 @@ func (c *Config) Parse(arguments []string) error {
 		return terror.ErrWorkerInvalidFlag.Generate(c.flagSet.Arg(0))
 	}
 
-	if len(c.MetaDir) == 0 {
-		c.MetaDir = "./dm_worker_meta"
-	}
-
-	// assign tracer id to source id
-	c.Tracer.Source = c.SourceID
-
-	err = c.adjust()
-	if err != nil {
-		return err
-	}
-	return c.verify()
+	return c.adjust()
 }
 
-// verify verifies the config
-func (c *Config) verify() error {
-	if len(c.SourceID) == 0 {
-		return terror.ErrWorkerNeedSourceID.Generate()
-	}
-	if len(c.SourceID) > config.MaxSourceIDLength {
-		return terror.ErrWorkerTooLongSourceID.Generate(c.SourceID, config.MaxSourceIDLength)
-	}
-
-	var err error
-	if c.EnableRelay {
-		if len(c.RelayBinLogName) > 0 {
-			if !binlog.VerifyFilename(c.RelayBinLogName) {
-				return terror.ErrWorkerRelayBinlogName.Generate(c.RelayBinLogName)
-			}
-		}
-		if len(c.RelayBinlogGTID) > 0 {
-			_, err = gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
-			if err != nil {
-				return terror.WithClass(terror.Annotatef(err, "relay-binlog-gtid %s", c.RelayBinlogGTID), terror.ClassDMWorker)
-			}
-		}
-	}
-
-	_, err = c.DecryptPassword()
+// adjust adjusts the config.
+func (c *Config) adjust() error {
+	host, port, err := net.SplitHostPort(c.WorkerAddr)
 	if err != nil {
-		return err
+		return terror.ErrWorkerHostPortNotValid.Delegate(err, c.WorkerAddr)
+	}
+
+	if c.AdvertiseAddr == "" {
+		if host == "" || host == "0.0.0.0" {
+			return terror.ErrWorkerHostPortNotValid.Generatef("worker-addr (%s) must include the 'host' part (should not be '0.0.0.0') when advertise-addr is not set", c.WorkerAddr)
+		}
+		c.AdvertiseAddr = c.WorkerAddr
+	} else {
+		host, port, err = net.SplitHostPort(c.AdvertiseAddr)
+		if err != nil {
+			return terror.ErrWorkerHostPortNotValid.Delegate(err, c.AdvertiseAddr)
+		}
+		if host == "" || host == "0.0.0.0" || len(port) == 0 {
+			return terror.ErrWorkerHostPortNotValid.Generate("advertise-addr (%s) must include the 'host' part and should not be '0.0.0.0'", c.AdvertiseAddr)
+		}
+	}
+
+	if c.Name == "" {
+		fmt.Printf("worker name is not given, we will set AdvertiseAddr %s as the worker name\n", c.AdvertiseAddr)
+		c.Name = c.AdvertiseAddr
 	}
 
 	return nil
@@ -256,95 +199,6 @@ func (c *Config) configFromFile(path string) error {
 		}
 		return terror.ErrWorkerUndecodedItemFromFile.Generate(strings.Join(undecodedItems, ","))
 	}
-
-	return c.verify()
-}
-
-func (c *Config) adjust() error {
-	c.From.Adjust()
-	c.Checker.adjust()
-
-	if c.Flavor == "" || c.ServerID == 0 {
-		fromDB, err := c.createFromDB()
-		if err != nil {
-			return err
-		}
-		defer fromDB.Close()
-
-		ctx, cancel := context.WithTimeout(context.Background(), dbGetTimeout)
-		defer cancel()
-
-		err = c.adjustFlavor(ctx, fromDB.DB)
-		if err != nil {
-			return err
-		}
-
-		err = c.adjustServerID(ctx, fromDB.DB)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (c *Config) createFromDB() (*conn.BaseDB, error) {
-	// decrypt password
-	clone, err := c.DecryptPassword()
-	if err != nil {
-		return nil, err
-	}
-	from := clone.From
-	from.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(dbReadTimeout)
-	fromDB, err := conn.DefaultDBProvider.Apply(from)
-	if err != nil {
-		return nil, terror.WithScope(err, terror.ScopeUpstream)
-	}
-
-	return fromDB, nil
-}
-
-// adjustFlavor adjusts flavor through querying from given database
-func (c *Config) adjustFlavor(ctx context.Context, db *sql.DB) (err error) {
-	if c.Flavor != "" {
-		switch c.Flavor {
-		case mysql.MariaDBFlavor, mysql.MySQLFlavor:
-			return nil
-		default:
-			return terror.ErrNotSupportedFlavor.Generate(c.Flavor)
-		}
-	}
-
-	c.Flavor, err = utils.GetFlavor(ctx, db)
-	if ctx.Err() != nil {
-		err = terror.Annotatef(err, "time cost to get flavor info exceeds %s", dbGetTimeout)
-	}
-	return terror.WithScope(err, terror.ScopeUpstream)
-}
-
-func (c *Config) adjustServerID(ctx context.Context, db *sql.DB) error {
-	if c.ServerID != 0 {
-		return nil
-	}
-
-	serverID, err := getRandomServerIDFunc(ctx, db)
-	if err != nil {
-		return err
-	}
-
-	c.ServerID = serverID
-	return nil
-}
-
-// UpdateConfigFile write configure to local file
-func (c *Config) UpdateConfigFile(content string) error {
-	if c.ConfigFile == "" {
-		c.ConfigFile = "dm-worker-config.bak"
-	}
-	err := ioutil.WriteFile(c.ConfigFile, []byte(content), 0666)
-	if err != nil {
-		return terror.ErrWorkerWriteConfigFile.Delegate(err)
-	}
 	return nil
 }
 
@@ -360,21 +214,4 @@ func (c *Config) Reload() error {
 	}
 
 	return nil
-}
-
-// DecryptPassword returns a decrypted config replica in config
-func (c *Config) DecryptPassword() (*Config, error) {
-	clone := c.Clone()
-	var (
-		pswdFrom string
-		err      error
-	)
-	if len(clone.From.Password) > 0 {
-		pswdFrom, err = utils.Decrypt(clone.From.Password)
-		if err != nil {
-			return nil, terror.WithClass(err, terror.ClassDMWorker)
-		}
-	}
-	clone.From.Password = pswdFrom
-	return clone, nil
 }

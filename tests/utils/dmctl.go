@@ -41,7 +41,7 @@ func StartTask(ctx context.Context, cli pb.MasterClient, configFile string, work
 
 	resp, err := cli.StartTask(ctx, &pb.StartTaskRequest{
 		Task:    string(content),
-		Workers: workers,
+		Sources: workers,
 	})
 	if err != nil {
 		return errors.Trace(err)
@@ -51,7 +51,7 @@ func StartTask(ctx context.Context, cli pb.MasterClient, configFile string, work
 		return errors.Errorf("start task resp error: %s", resp.GetMsg())
 	}
 
-	for _, wp := range resp.GetWorkers() {
+	for _, wp := range resp.GetSources() {
 		if !wp.GetResult() && !strings.Contains(wp.GetMsg(), "request is timeout, but request may be successful") {
 			return errors.Errorf("fail to start task %v: %s", string(content), wp.GetMsg())
 		}
@@ -64,15 +64,15 @@ func OperateTask(ctx context.Context, cli pb.MasterClient, op pb.TaskOp, name st
 	resp, err := cli.OperateTask(ctx, &pb.OperateTaskRequest{
 		Op:      op,
 		Name:    name,
-		Workers: workers,
+		Sources: workers,
 	})
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	for _, wp := range resp.GetWorkers() {
-		if !wp.GetMeta().GetResult() {
-			return errors.Errorf("fail to do %v operate on task %s: %s", op, name, wp.Meta.GetMsg())
+	for _, wp := range resp.GetSources() {
+		if !wp.GetResult() {
+			return errors.Errorf("fail to do %v operate on task %s: %s", op, name, wp.GetMsg())
 		}
 	}
 

@@ -134,14 +134,13 @@ func (t *testRelay) TestRelay(c *C) {
 		purger.NewPurger = originNewPurger
 	}()
 
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg := loadSourceConfigWithoutPassword(c)
 
 	dir := c.MkDir()
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
 
-	relayHolder := NewRealRelayHolder(cfg)
+	relayHolder := NewRealRelayHolder(&cfg)
 	c.Assert(relayHolder, NotNil)
 
 	holder, ok := relayHolder.(*realRelayHolder)
@@ -271,7 +270,7 @@ func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 }
 
 func (t *testRelay) testUpdate(c *C, holder *realRelayHolder) {
-	cfg := &Config{
+	cfg := &config.SourceConfig{
 		From: config.DBConfig{
 			Host:     "127.0.0.1",
 			Port:     3306,

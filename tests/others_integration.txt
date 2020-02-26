@@ -1,4 +1,5 @@
+ha
+ha_master
 full_mode
-retry_cancel
 start_task
 dm_syncer

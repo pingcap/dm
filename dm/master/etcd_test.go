@@ -45,6 +45,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	cfgCluster.Name = "dm-master-1"
 	cfgCluster.DataDir = c.MkDir()
 	cfgCluster.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfgCluster.AdvertiseAddr = tempurl.Alloc()[len("http://"):]
 	cfgCluster.PeerUrls = tempurl.Alloc()
 	c.Assert(cfgCluster.adjust(), check.IsNil)
 	cfgClusterEtcd, err := cfgCluster.genEmbedEtcdConfig()

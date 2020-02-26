@@ -4,7 +4,7 @@ task-mode: "full"
 is-sharding: false
 meta-schema: "dm_meta"
 remove-meta: true
-enable-heartbeat: true
+# enable-heartbeat: true
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1
 timezone: "Asia/Shanghai"
@@ -12,8 +12,8 @@ timezone: "Asia/Shanghai"
 target-database:
   host: "127.0.0.1"
   port: 4000
-  user: "root"
-  password: ""
+  user: "test"
+  password: "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs="
 
 mysql-instances:
   - source-id: "mysql-replica-01"

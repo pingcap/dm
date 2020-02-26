@@ -28,7 +28,7 @@ import (
 // NewUpdateRelayCmd creates a UpdateRelay command
 func NewUpdateRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "update-relay [-w worker ...] <config-file>",
+		Use:   "update-relay [-s source ...] <config-file>",
 		Short: "update the relay unit config of the DM-worker",
 		Run:   updateRelayFunc,
 	}
@@ -49,9 +49,9 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	workers, _ := common.GetWorkerArgs(cmd)
-	if len(workers) != 1 {
-		fmt.Println("must specify one DM-worker (`-w` / `--worker`)")
+	sources, _ := common.GetSourceArgs(cmd)
+	if len(sources) != 1 {
+		fmt.Println("must specify one source (`-s` / `--source`)")
 		return
 	}
 
@@ -61,7 +61,7 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	resp, err := cli.UpdateWorkerRelayConfig(ctx, &pb.UpdateWorkerRelayConfigRequest{
 		Config: string(content),
-		Worker: workers[0],
+		Source: sources[0],
 	})
 
 	if err != nil {

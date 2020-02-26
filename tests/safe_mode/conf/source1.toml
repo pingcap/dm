@@ -1,0 +1,19 @@
+# MySQL Configuration.
+
+source-id = "mysql-replica-01"
+flavor = ""
+enable-gtid = false
+relay-binlog-name = ""
+relay-binlog-gtid = ""
+
+[from]
+host = "127.0.0.1"
+user = "root"
+password = "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs="
+port = 3306
+
+#[tracer]
+#enable = true
+#tracer-addr = "127.0.0.1:8264"
+#batch-size = 1
+#checksum = true
