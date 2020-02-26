@@ -51,6 +51,7 @@ func NewPessimist(pLogger *log.Logger, taskSources func(task string) []string) *
 	}
 }
 
+// SetLockMode dynamically changes the lock mode of all new DDL locks.
 func (p *Pessimist) SetLockMode(mode pessimism.LockMode) {
 	p.mu.Lock()
 	p.lk.SetLockMode(mode)

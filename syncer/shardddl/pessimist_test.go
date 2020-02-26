@@ -66,7 +66,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 
 		logger = log.L()
 		p      = NewPessimist(&logger, etcdTestCli, task, source)
-		info   = p.ConstructInfo(schema, table, DDLs)
+		info   = p.ConstructInfo(schema, table, DDLs, nil, nil)
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())

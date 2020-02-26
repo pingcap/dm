@@ -19,6 +19,7 @@ import (
 	"github.com/pingcap/parser/model"
 )
 
+// Lock is a generic DDL lock.
 type Lock struct {
 	mu sync.RWMutex
 
@@ -31,6 +32,7 @@ type Lock struct {
 	impl LockImpl
 }
 
+// LockImpl is an interface describing the resolution algorithm of the lock.
 type LockImpl interface {
 	AddSources(sources []string)
 
@@ -43,6 +45,7 @@ type LockImpl interface {
 	Ready() map[string]bool
 }
 
+// NewLock creates a new generic DDL lock.
 func NewLock(ID, task, owner string, sources []string, impl LockImpl) *Lock {
 	lock := &Lock{
 		ID:    ID,
@@ -58,6 +61,9 @@ func NewLock(ID, task, owner string, sources []string, impl LockImpl) *Lock {
 	return lock
 }
 
+// TrySync tries to sync the lock, does decrease on remain, re-entrant.
+// new upstream sources may join when the DDL lock is in syncing,
+// so we need to merge these new sources.
 func (l *Lock) TrySync(caller string, ddls []string, newTableInfo *model.TableInfo, sources []string) (bool, int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

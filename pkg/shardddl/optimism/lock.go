@@ -26,6 +26,7 @@ type optimisticLockImpl struct {
 	synced bool // whether last call to TrySync() returns true
 }
 
+// NewLock creates a new optimistic DDL lock.
 func NewLock(ID, task, owner string, table *model.TableInfo, sources []string) *shardddl.Lock {
 	return shardddl.NewLock(ID, task, owner, sources, &optimisticLockImpl{
 		tables: make(map[string]schemacmp.Table),

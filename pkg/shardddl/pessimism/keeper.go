@@ -22,10 +22,16 @@ import (
 	"github.com/pingcap/dm/pkg/shardddl/optimism"
 )
 
+// LockMode represents the mode of a DDL lock.
 type LockMode uint32
 
 const (
+	// LockModePessimistic sets the lock mode to be pessimistic. The lock is
+	// held until all sources have executed the same DDL upstream.
 	LockModePessimistic LockMode = iota
+	// LockModeOptimistic sets the lock mode to be optimistic. The lock is
+	// released as soon as the downstream table schema is compatible with all
+	// upstream schemas.
 	LockModeOptimistic
 )
 
@@ -45,12 +51,14 @@ func NewLockKeeper() *LockKeeper {
 	}
 }
 
+// SetLockMode dynamically modify the mode for all new DDL locks.
 func (lk *LockKeeper) SetLockMode(mode LockMode) {
 	lk.mu.Lock()
 	lk.mode = mode
 	lk.mu.Unlock()
 }
 
+// LockMode returns the current mode for new DDL locks.
 func (lk *LockKeeper) LockMode() LockMode {
 	lk.mu.RLock()
 	mode := lk.mode

@@ -69,11 +69,11 @@ func (t *testPessimist) TestPessimist(c *C) {
 		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
 		ID1           = "task-1-`foo`.`bar`"
 		ID2           = "task-2-`foo`.`bar`"
-		i11           = pessimism.NewInfo(task1, source1, schema, table, DDLs)
-		i12           = pessimism.NewInfo(task1, source2, schema, table, DDLs)
-		i21           = pessimism.NewInfo(task2, source1, schema, table, DDLs)
-		i22           = pessimism.NewInfo(task2, source2, schema, table, DDLs)
-		i23           = pessimism.NewInfo(task2, source3, schema, table, DDLs)
+		i11           = pessimism.NewInfo(task1, source1, schema, table, DDLs, nil, nil)
+		i12           = pessimism.NewInfo(task1, source2, schema, table, DDLs, nil, nil)
+		i21           = pessimism.NewInfo(task2, source1, schema, table, DDLs, nil, nil)
+		i22           = pessimism.NewInfo(task2, source2, schema, table, DDLs, nil, nil)
+		i23           = pessimism.NewInfo(task2, source3, schema, table, DDLs, nil, nil)
 
 		sources = func(task string) []string {
 			switch task {

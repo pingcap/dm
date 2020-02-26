@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/dm/pkg/shardddl"
 )
 
+// Lock is an alias of `shardddl.Lock` for compatibility with existing code.
 type Lock = shardddl.Lock
 
 type pessimisticLockImpl struct {

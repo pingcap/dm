@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/tidb/meta"
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/store/mockstore"
+	"github.com/pingcap/tidb/util"
 )
 
 const (
@@ -115,8 +116,7 @@ func (tr *Tracker) Reset() error {
 	ddl := tr.dom.DDL()
 	for _, db := range allDBs {
 		dbName := model.NewCIStr(db)
-		switch dbName.L {
-		case "mysql", "performance_schema", "information_schema":
+		if util.IsMemOrSysDB(dbName.L) {
 			continue
 		}
 		if err := ddl.DropSchema(tr.se, dbName); err != nil {

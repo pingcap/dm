@@ -1576,6 +1576,7 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 	return sortCommonWorkerResults(sourceRespCh)
 }
 
+// SetDDLLockMode implements MasterClient.
 func (s *Server) SetDDLLockMode(ctx context.Context, req *pb.SetDDLLockModeRequest) (*pb.CommonWorkerResponse, error) {
 	s.pessimist.SetLockMode(pessimism.LockMode(req.LockMode))
 	return &pb.CommonWorkerResponse{Result: true}, nil
