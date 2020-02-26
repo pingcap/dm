@@ -17,6 +17,8 @@ function pause_task_success() {
     task_name=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "pause-task $task_name" \
-        "\"result\": true" 1 \
-        "\"op\": \"Pause\"" 1
+        "\"result\": true" 3 \
+        "\"op\": \"Pause\"" 1 \
+        "\"source\": \"$SOURCE_ID1\"" 1 \
+        "\"source\": \"$SOURCE_ID2\"" 1
 }

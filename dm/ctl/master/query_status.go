@@ -102,12 +102,12 @@ func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 	taskStatusMap := make(map[string]string)
 	taskCorrespondingSources := make(map[string][]string)
 	for _, source := range resp.Sources {
-		relayStatus := source.RelayStatus
+		relayStatus := source.SourceStatus.RelayStatus
 		for _, subTask := range source.SubTaskStatus {
 			subTaskName := subTask.Name
 			subTaskStage := subTask.Stage
 
-			taskCorrespondingSources[subTaskName] = append(taskCorrespondingSources[subTaskName], source.Source)
+			taskCorrespondingSources[subTaskName] = append(taskCorrespondingSources[subTaskName], source.SourceStatus.Source)
 			taskStage := taskStatusMap[subTaskName]
 			// the status of a task is decided by its subtasks, the rule is listed as follows:
 			// |                     Subtasks' status                       |                Task's status                 |
@@ -123,7 +123,7 @@ func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 			case strings.HasPrefix(taskStage, stageError):
 			case subTaskStage == pb.Stage_Paused && errorOccurred(subTask.Result):
 				taskStatusMap[subTaskName] = stageError + " - Some error occurred in subtask"
-			case subTask.Unit == pb.UnitType_Sync && subTask.Stage == pb.Stage_Running && (relayStatus.Stage == pb.Stage_Paused || relayStatus.Stage == pb.Stage_Stopped):
+			case subTask.Unit == pb.UnitType_Sync && subTask.Stage == pb.Stage_Running && relayStatus != nil && (relayStatus.Stage == pb.Stage_Paused || relayStatus.Stage == pb.Stage_Stopped):
 				taskStatusMap[subTaskName] = stageError + " - Relay status is " + getRelayStage(relayStatus)
 			case taskStage == pb.Stage_Paused.String():
 			case taskStage == "", subTaskStage == pb.Stage_Paused:
