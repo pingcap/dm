@@ -41,7 +41,7 @@ function run() {
     dmctl_stop_task $TASK_NAME
 
     # $worker1_run_source_1 > 0 means source1 is operated to worker1
-    worker1_run_source_1=$(sed "s/$SOURCE_ID1/$SOURCE_ID1\n/g" $WORK_DIR/worker1/log/dm-worker.log | grep -c "$SOURCE_ID1")
+    worker1_run_source_1=$(sed "s/$SOURCE_ID1/$SOURCE_ID1\n/g" $WORK_DIR/worker1/log/dm-worker.log | grep -c "$SOURCE_ID1") || true
     if [ $worker1_run_source_1 -gt 0 ]
     then
         name1=$(grep "Log: " $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
