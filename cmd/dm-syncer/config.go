@@ -315,7 +315,7 @@ func (oc *syncerConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 	}
 	newTask := &config.SubTaskConfig{
 		Name:     oc.Name,
-		SourceID: fmt.Sprintf("%s:%d", oc.From.Host, oc.From.Port),
+		SourceID: fmt.Sprintf("%s_source", oc.Name),
 		Mode:     config.ModeIncrement,
 		Meta:     meta,
 
