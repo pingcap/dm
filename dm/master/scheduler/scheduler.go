@@ -925,7 +925,7 @@ func (s *Scheduler) resetWorkerEv(cli *clientv3.Client) (int64, error) {
 	}
 
 	// update all registered workers status
-	for name, _ := range rwm {
+	for name := range rwm {
 		ev := ha.WorkerEvent{WorkerName: name}
 		// set the stage as Free if it's keep alive.
 		if _, ok := kam[name]; ok {
@@ -1004,7 +1004,7 @@ func (s *Scheduler) observeWorkerEvent(ctx context.Context, etcdCli *clientv3.Cl
 				case <-time.After(500 * time.Millisecond):
 					rev, err = s.resetWorkerEv(etcdCli)
 					if err != nil {
-						log.L().Error("resetWorkerEv failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
+						log.L().Error("resetWorkerEv is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
 					}
 				}
 				retryNum++
