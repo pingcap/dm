@@ -45,12 +45,10 @@ function real_run() {
     echo "start dm-worker3 and kill dm-worker2"
     ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
     check_port_offline $WORKER2_PORT 20
-    rm -rf $WORK_DIR/worker2/relay_log
 
     run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
 
-    sleep 8
     echo "wait and check task running"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
