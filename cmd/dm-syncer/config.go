@@ -102,7 +102,7 @@ func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTask
 	fs.IntVar(&cfg.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
 	fs.BoolVar(&cfg.EnableANSIQuotes, "enable-ansi-quotes", false, "enable ANSI_QUOTES sql_mode")
 	fs.StringVar(&cfg.TimezoneStr, "timezone", "", "target database timezone location string")
-	fs.BoolVar(&SyncerConfigFormat, "syncer-config-format", false, "read dyncer config format")
+	fs.BoolVar(&SyncerConfigFormat, "syncer-config-format", false, "read syncer config format")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, errors.Trace(err)
