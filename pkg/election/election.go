@@ -86,7 +86,7 @@ type Election struct {
 	infoStr string
 
 	ech      chan error
-	leaderCh chan string
+	leaderCh chan *CampaignerInfo
 	isLeader sync2.AtomicBool
 
 	closed sync2.AtomicInt32
@@ -107,7 +107,7 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 			ID:   id,
 			Addr: addr,
 		},
-		leaderCh: make(chan string, 1),
+		leaderCh: make(chan *CampaignerInfo, 1),
 		ech:      make(chan error, 1), // size 1 is enough
 		cancel:   cancel2,
 		l:        log.With(zap.String("component", "election")),
@@ -159,9 +159,9 @@ func (e *Election) LeaderInfo(ctx context.Context) (string, string, string, erro
 	return string(resp.Kvs[0].Key), leaderInfo.ID, leaderInfo.Addr, nil
 }
 
-// LeaderNotify returns a channel that can fetch notification when the member become the leader or retire from the leader, or get a new leader.
-// `true` means become the leader; `false` means retire from the leader or get a new leader.
-func (e *Election) LeaderNotify() <-chan string {
+// LeaderNotify returns a channel that can fetch the leader's information when the member become the leader or retire from the leader, or get a new leader.
+// leader's information can be nil which means this member is leader and retire.
+func (e *Election) LeaderNotify() <-chan *CampaignerInfo {
 	return e.leaderCh
 }
 
@@ -238,7 +238,10 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 			}
 		}()
 
-		var leaderKey, leaderID string
+		var (
+			leaderKey  string
+			leaderInfo *CampaignerInfo
+		)
 		eleObserveCh := elec.Observe(ctx2)
 
 	observeElection:
@@ -255,46 +258,61 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 				e.l.Info("get response from election observe", zap.String("key", string(resp.Kvs[0].Key)), zap.String("value", string(resp.Kvs[0].Value)))
 				leaderKey = string(resp.Kvs[0].Key)
-				leaderInfo, err := getCompaingerInfo(resp.Kvs[0].Value)
+				leaderInfo, err = getCompaingerInfo(resp.Kvs[0].Value)
 				if err != nil {
 					// this should never happened
 					e.l.Error("fail to get leader information", zap.String("value", string(resp.Kvs[0].Value)), zap.Error(err))
 					continue
 				}
-				leaderID = leaderInfo.ID
 
-				if oldLeaderID == leaderID {
+				if oldLeaderID == leaderInfo.ID {
 					continue
 				} else {
-					oldLeaderID = leaderID
+					oldLeaderID = leaderInfo.ID
 					break observeElection
 				}
 			}
 		}
 
-		if len(leaderID) == 0 {
+		if leaderInfo == nil || len(leaderInfo.ID) == 0 {
 			cancel2()
 			compaignWg.Wait()
 			continue
 		}
 
-		if leaderID != e.info.ID {
-			e.l.Info("current member is not the leader", zap.String("current member", e.info.ID), zap.String("leader", leaderID))
-			e.isNotLeader()
+		if leaderInfo.ID != e.info.ID {
+			e.l.Info("current member is not the leader", zap.String("current member", e.info.ID), zap.String("leader", leaderInfo.ID))
+			e.notifyLeader(leaderInfo)
 			cancel2()
 			compaignWg.Wait()
 			continue
 		}
 
-		e.toBeLeader() // become the leader now
+		e.notifyLeader(leaderInfo) // become the leader now
 		e.watchLeader(ctx, session, leaderKey)
-		e.retireLeader() // need to re-campaign
+		e.notifyLeader(nil) // need to re-campaign
 
 		cancel2()
 		compaignWg.Wait()
 	}
 }
 
+// notifyLeader notify the leader's information.
+// leader info can be nil, and this is used when retire from leader.
+func (e *Election) notifyLeader(leaderInfo *CampaignerInfo) {
+	if leaderInfo != nil && leaderInfo.ID == e.info.ID {
+		e.isLeader.Set(true)
+	} else {
+		e.isLeader.Set(false)
+	}
+
+	select {
+	case e.leaderCh <- leaderInfo:
+	default:
+	}
+}
+
+/*
 func (e *Election) toBeLeader() {
 	e.isLeader.Set(true)
 	select {
@@ -318,6 +336,7 @@ func (e *Election) isNotLeader() {
 	default:
 	}
 }
+*/
 
 func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session, key string) {
 	e.l.Debug("watch leader key", zap.String("key", key))
