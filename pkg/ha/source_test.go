@@ -66,7 +66,7 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	// no source config exist.
 	cfg1, rev1, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
-	c.Assert(rev1, Equals, int64(0))
+	c.Assert(rev1, Greater, int64(0))
 	c.Assert(cfg1, DeepEquals, emptyCfg)
 	cfgM, _, err := GetAllSourceCfg(etcdTestCli)
 	c.Assert(err, IsNil)

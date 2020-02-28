@@ -159,9 +159,6 @@ func (w *Worker) Start(startRelay bool) {
 
 // Close stops working and releases resources
 func (w *Worker) Close() {
-	w.Lock()
-	defer w.Unlock()
-
 	if w.closed.Get() == closedTrue {
 		w.l.Warn("already closed")
 		return
@@ -170,6 +167,9 @@ func (w *Worker) Close() {
 	// cancel status output ticker and wait for return
 	w.cancel()
 	w.wg.Wait()
+
+	w.Lock()
+	defer w.Unlock()
 
 	// close all sub tasks
 	w.subTaskHolder.closeAllSubTasks()

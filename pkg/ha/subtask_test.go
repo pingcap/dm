@@ -43,7 +43,7 @@ func (t *testForEtcd) TestSubTaskEtcd(c *C) {
 	// no subtask config exist.
 	tsm1, rev1, err := GetSubTaskCfg(etcdTestCli, source, taskName1, 0)
 	c.Assert(err, IsNil)
-	c.Assert(rev1, Equals, int64(0))
+	c.Assert(rev1, Greater, int64(0))
 	c.Assert(tsm1, HasLen, 0)
 
 	// put subtask configs.

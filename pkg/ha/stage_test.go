@@ -62,7 +62,7 @@ func (t *testForEtcd) TestRelayStageEtcd(c *C) {
 	// no relay stage exist.
 	st1, rev1, err := GetRelayStage(etcdTestCli, source1)
 	c.Assert(err, IsNil)
-	c.Assert(rev1, Equals, int64(0))
+	c.Assert(rev1, Greater, int64(0))
 	c.Assert(st1, DeepEquals, emptyStage)
 
 	// put two stage.
@@ -140,7 +140,7 @@ func (t *testForEtcd) TestSubTaskStageEtcd(c *C) {
 	// no stage exists.
 	st1, rev1, err := GetSubTaskStage(etcdTestCli, source, task1)
 	c.Assert(err, IsNil)
-	c.Assert(rev1, Equals, int64(0))
+	c.Assert(rev1, Greater, int64(0))
 	c.Assert(st1, HasLen, 0)
 
 	// put two stages.

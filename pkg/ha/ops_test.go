@@ -81,7 +81,7 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	// try to get them back again.
 	st2, rev5, err := GetRelayStage(etcdTestCli, source)
 	c.Assert(err, IsNil)
-	c.Assert(rev5, Equals, int64(0))
+	c.Assert(rev5, Equals, rev4)
 	c.Assert(st2, Equals, emptyStage)
 	sbm2, rev5, err := GetSourceBound(etcdTestCli, worker)
 	c.Assert(err, IsNil)
