@@ -121,7 +121,7 @@ func (t *testForEtcd) TestRelayStageEtcd(c *C) {
 	// get again, not exists now.
 	st4, rev5, err := GetRelayStage(etcdTestCli, source1)
 	c.Assert(err, IsNil)
-	c.Assert(rev5, Equals, int64(0))
+	c.Assert(rev5, Equals, rev4)
 	c.Assert(st4, DeepEquals, emptyStage)
 }
 
@@ -211,6 +211,6 @@ func (t *testForEtcd) TestSubTaskStageEtcd(c *C) {
 	// get again, not exists now.
 	stm, rev5, err := GetSubTaskStage(etcdTestCli, source, task1)
 	c.Assert(err, IsNil)
-	c.Assert(rev5, Equals, int64(0))
+	c.Assert(rev5, Equals, rev4)
 	c.Assert(stm, HasLen, 0)
 }

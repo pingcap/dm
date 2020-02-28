@@ -126,8 +126,8 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 
 	s := NewServer(cfg)
 
+	defer s.Close()
 	go func() {
-		defer s.Close()
 		c.Assert(s.Start(), IsNil)
 	}()
 	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
@@ -226,8 +226,8 @@ func (t *testServer) TestWatchSubtaskStageEtcdCompact(c *C) {
 	c.Assert(err, IsNil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	defer func() {
+	defer w.Close()
+	go func() {
 		w.Start(false)
 	}()
 	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
@@ -365,8 +365,8 @@ func (t *testServer) TestWatchRelayStageEtcdCompact(c *C) {
 	c.Assert(err, IsNil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	defer func() {
+	defer w.Close()
+	go func() {
 		w.Start(false)
 	}()
 	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
