@@ -367,7 +367,7 @@ func (t *testServer) TestWatchRelayStageEtcdCompact(c *C) {
 	defer cancel()
 	defer w.Close()
 	go func() {
-		w.Start(false)
+		w.Start(true)
 	}()
 	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
 		return w.closed.Get() == closedFalse

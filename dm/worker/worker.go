@@ -361,7 +361,7 @@ func (w *Worker) observeSubtaskStage(ctx context.Context, etcdCli *clientv3.Clie
 			}()
 			ha.WatchSubTaskStage(ctx, etcdCli, w.cfg.SourceID, rev+1, subTaskStageCh1, subTaskErrCh1)
 		}(subTaskStageCh, subTaskErrCh)
-		err := w.handleSubTaskStage(w.ctx, subTaskStageCh, subTaskErrCh)
+		err := w.handleSubTaskStage(ctx, subTaskStageCh, subTaskErrCh)
 		wg.Wait()
 
 		if errors.Cause(err) == etcdErrCompacted {

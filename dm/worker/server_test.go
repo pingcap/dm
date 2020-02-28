@@ -236,13 +236,14 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	cfg.KeepAliveTTL = keepAliveTTL
 
 	s := NewServer(cfg)
-
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:            GetJoinURLs(s.cfg.Join),
 		DialTimeout:          dialTimeout,
 		DialKeepAliveTime:    keepaliveTime,
 		DialKeepAliveTimeout: keepaliveTimeout,
 	})
+	s.etcdClient = etcdCli
+	s.closed.Set(false)
 	c.Assert(err, IsNil)
 	sourceCfg := loadSourceConfigWithoutPassword(c)
 	sourceCfg.EnableRelay = false
