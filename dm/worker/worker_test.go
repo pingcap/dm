@@ -175,7 +175,31 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	}), IsTrue)
 }
 
-func (t *testServer) TestWatchSubtaskStageEtcdCompact(c *C) {
+type testWorkerEtcdCompact struct{}
+
+var _ = Suite(&testWorkerEtcdCompact{})
+
+func (t *testWorkerEtcdCompact) SetUpSuite(c *C) {
+	NewRelayHolder = NewDummyRelayHolder
+	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
+		cfg.UseRelay = false
+		return NewRealSubTask(cfg, etcdClient)
+	}
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		mockDumper := NewMockUnit(pb.UnitType_Dump)
+		mockLoader := NewMockUnit(pb.UnitType_Load)
+		mockSync := NewMockUnit(pb.UnitType_Sync)
+		return []unit.Unit{mockDumper, mockLoader, mockSync}
+	}
+}
+
+func (t *testWorkerEtcdCompact) TearDownSuite(c *C) {
+	NewRelayHolder = NewRealRelayHolder
+	NewSubTask = NewRealSubTask
+	createUnits = createRealUnits
+}
+
+func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	var (
 		masterAddr   = "127.0.0.1:8291"
 		keepAliveTTL = int64(1)
@@ -188,28 +212,6 @@ func (t *testServer) TestWatchSubtaskStageEtcdCompact(c *C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	cfg.KeepAliveTTL = keepAliveTTL
-
-	NewRelayHolder = NewDummyRelayHolder
-	defer func() {
-		NewRelayHolder = NewRealRelayHolder
-	}()
-	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
-		cfg.UseRelay = false
-		return NewRealSubTask(cfg, etcdClient)
-	}
-	defer func() {
-		NewSubTask = NewRealSubTask
-	}()
-
-	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
-		mockDumper := NewMockUnit(pb.UnitType_Dump)
-		mockLoader := NewMockUnit(pb.UnitType_Load)
-		mockSync := NewMockUnit(pb.UnitType_Sync)
-		return []unit.Unit{mockDumper, mockLoader, mockSync}
-	}
-	defer func() {
-		createUnits = createRealUnits
-	}()
 
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:            GetJoinURLs(cfg.Join),
@@ -307,7 +309,7 @@ func (t *testServer) TestWatchSubtaskStageEtcdCompact(c *C) {
 	wg.Wait()
 }
 
-func (t *testServer) TestWatchRelayStageEtcdCompact(c *C) {
+func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	var (
 		masterAddr   = "127.0.0.1:8291"
 		keepAliveTTL = int64(1)
@@ -320,28 +322,6 @@ func (t *testServer) TestWatchRelayStageEtcdCompact(c *C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	cfg.KeepAliveTTL = keepAliveTTL
-
-	NewRelayHolder = NewDummyRelayHolder
-	defer func() {
-		NewRelayHolder = NewRealRelayHolder
-	}()
-	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
-		cfg.UseRelay = false
-		return NewRealSubTask(cfg, etcdClient)
-	}
-	defer func() {
-		NewSubTask = NewRealSubTask
-	}()
-
-	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
-		mockDumper := NewMockUnit(pb.UnitType_Dump)
-		mockLoader := NewMockUnit(pb.UnitType_Load)
-		mockSync := NewMockUnit(pb.UnitType_Sync)
-		return []unit.Unit{mockDumper, mockLoader, mockSync}
-	}
-	defer func() {
-		createUnits = createRealUnits
-	}()
 
 	subtaskCfg := config.SubTaskConfig{}
 	err = subtaskCfg.DecodeFile(subtaskSampleFile, true)
