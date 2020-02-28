@@ -104,17 +104,10 @@ func (t *testServer) TestServer(c *C) {
 	cfg.KeepAliveTTL = keepAliveTTL
 
 	NewRelayHolder = NewDummyRelayHolder
-	defer func() {
-		NewRelayHolder = NewRealRelayHolder
-	}()
 	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
 		cfg.UseRelay = false
 		return NewRealSubTask(cfg, etcdClient)
 	}
-	defer func() {
-		NewSubTask = NewRealSubTask
-	}()
-
 	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
 		mockDumper := NewMockUnit(pb.UnitType_Dump)
 		mockLoader := NewMockUnit(pb.UnitType_Load)
@@ -122,12 +115,14 @@ func (t *testServer) TestServer(c *C) {
 		return []unit.Unit{mockDumper, mockLoader, mockSync}
 	}
 	defer func() {
+		NewRelayHolder = NewRealRelayHolder
+		NewSubTask = NewRealSubTask
 		createUnits = createRealUnits
 	}()
 
 	s := NewServer(cfg)
+	defer s.Close()
 	go func() {
-		defer s.Close()
 		err1 := s.Start()
 		c.Assert(err1, IsNil)
 	}()
