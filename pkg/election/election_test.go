@@ -103,7 +103,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	// e1 should become the leader
 	select {
 	case leader := <-e1.LeaderNotify():
-		c.Assert(leader, Equals, IsLeader)
+		c.Assert(leader.ID, Equals, ID1)
 	case <-time.After(3 * time.Second):
 		c.Fatal("leader campaign timeout")
 	}
@@ -121,7 +121,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	defer e2.Close()
 	select {
 	case leader := <-e2.leaderCh:
-		c.Assert(leader, Equals, IsNotLeader)
+		c.Assert(leader.ID, Equals, ID1)
 	case <-time.After(time.Second):
 		c.Fatal("leader campaign timeout")
 	}
@@ -138,7 +138,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 		defer wg.Done()
 		select {
 		case leader := <-e1.LeaderNotify(): // e1 should retire when closing
-			c.Assert(leader, Equals, RetireFromLeader)
+			c.Assert(leader, IsNil)
 		case <-time.After(time.Second):
 			c.Fatal("leader campaign timeout")
 		}
@@ -150,7 +150,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	// e2 should become the leader
 	select {
 	case leader := <-e2.LeaderNotify():
-		c.Assert(leader, Equals, IsLeader)
+		c.Assert(leader.ID, Equals, ID2)
 	case <-time.After(3 * time.Second):
 		c.Fatal("leader campaign timeout")
 	}
@@ -206,7 +206,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	// e1 should become the leader
 	select {
 	case leader := <-e1.LeaderNotify():
-		c.Assert(leader, Equals, IsLeader)
+		c.Assert(leader.ID, Equals, ID1)
 	case <-time.After(3 * time.Second):
 		c.Fatal("leader campaign timeout")
 	}
@@ -273,7 +273,7 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 	// should become the leader
 	select {
 	case leader := <-e.LeaderNotify():
-		c.Assert(leader, Equals, IsLeader)
+		c.Assert(leader.ID, Equals, ID)
 	case <-time.After(3 * time.Second):
 		c.Fatal("leader campaign timeout")
 	}
@@ -292,7 +292,7 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 		case err2 := <-e.ErrorNotify():
 			c.Fatalf("delete the leader key should not get an error, %v", err2)
 		case leader := <-e.LeaderNotify():
-			c.Assert(leader, Equals, RetireFromLeader)
+			c.Assert(leader, IsNil)
 		}
 	}()
 	_, err = cli.Delete(ctx, leaderKey)
