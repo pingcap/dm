@@ -37,12 +37,19 @@ function run() {
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    pkill -hup dm-worker.test 2>/dev/null || true
-    wait_process_exit dm-worker.test
-
-    # restart dm-worker
+    # restart dm-worker1
+    pkill -hup dm-worker1.toml 2>/dev/null || true
+    wait_process_exit dm-worker1.toml
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    # make sure worker1 have bound a source, and the source should same with bound before
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "worker1" 1
+
+    # restart dm-worker2
+    pkill -hup dm-worker2.toml 2>/dev/null || true
+    wait_process_exit dm-worker2.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 

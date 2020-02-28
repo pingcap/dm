@@ -16,8 +16,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -310,35 +308,6 @@ func (w *Worker) QueryError(name string) []*pb.SubTaskError {
 	}
 
 	return w.Error(name)
-}
-
-// purgeRelayDir will clear all contents under w.cfg.RelayDir
-func (w *Worker) purgeRelayDir() error {
-	if !w.cfg.EnableRelay {
-		return nil
-	}
-	dir := w.cfg.RelayDir
-	d, err := os.Open(dir)
-	// fail to open dir, return directly
-	if err != nil {
-		if err == os.ErrNotExist {
-			return nil
-		}
-		return err
-	}
-	defer d.Close()
-	names, err := d.Readdirnames(-1)
-	if err != nil {
-		return err
-	}
-	for _, name := range names {
-		err = os.RemoveAll(filepath.Join(dir, name))
-		if err != nil {
-			return err
-		}
-	}
-	log.L().Info("relay dir is purged to be ready for new relay log", zap.String("relayDir", dir))
-	return nil
 }
 
 func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {

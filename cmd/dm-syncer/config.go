@@ -34,6 +34,8 @@ import (
 type commonConfig struct {
 	*flag.FlagSet `json:"-"`
 
+	// task name
+	Name         string
 	printVersion bool
 	ConfigFile   string
 	ServerID     int
@@ -54,11 +56,11 @@ type commonConfig struct {
 	EnableANSIQuotes bool
 	TimezoneStr      string
 
-	OldConfigFormat bool
+	SyncerConfigFormat bool
 }
 
-func (c *commonConfig) newConfigFromOldConfig(args []string) (*config.SubTaskConfig, error) {
-	cfg := &oldConfig{
+func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTaskConfig, error) {
+	cfg := &syncerConfig{
 		printVersion:     c.printVersion,
 		ConfigFile:       c.ConfigFile,
 		ServerID:         c.ServerID,
@@ -80,9 +82,10 @@ func (c *commonConfig) newConfigFromOldConfig(args []string) (*config.SubTaskCon
 	cfg.FlagSet = flag.NewFlagSet("dm-syncer", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
-	var OldConfigFormat bool
+	var SyncerConfigFormat bool
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
+	fs.StringVar(&cfg.Name, "name", "", "the task name")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.IntVar(&cfg.ServerID, "server-id", 101, "MySQL slave server ID")
 	fs.StringVar(&cfg.Flavor, "flavor", mysql.MySQLFlavor, "use flavor for different MySQL source versions; support \"mysql\", \"mariadb\" now; if you replicate from mariadb, please set it to \"mariadb\"")
@@ -99,7 +102,7 @@ func (c *commonConfig) newConfigFromOldConfig(args []string) (*config.SubTaskCon
 	fs.IntVar(&cfg.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
 	fs.BoolVar(&cfg.EnableANSIQuotes, "enable-ansi-quotes", false, "enable ANSI_QUOTES sql_mode")
 	fs.StringVar(&cfg.TimezoneStr, "timezone", "", "target database timezone location string")
-	fs.BoolVar(&OldConfigFormat, "old-config-format", false, "read old config format")
+	fs.BoolVar(&SyncerConfigFormat, "syncer-config-format", false, "read syncer config format")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, errors.Trace(err)
@@ -129,8 +132,8 @@ func (c *commonConfig) parse(args []string) (*config.SubTaskConfig, error) {
 		return nil, flag.ErrHelp
 	}
 
-	if c.OldConfigFormat {
-		return c.newConfigFromOldConfig(args)
+	if c.SyncerConfigFormat {
+		return c.newConfigFromSyncerConfig(args)
 	}
 
 	return c.newSubTaskConfig(args)
@@ -142,11 +145,12 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 	cfg.SetFlagSet(flag.NewFlagSet("dm-syncer", flag.ContinueOnError))
 	fs := cfg.GetFlagSet()
 
-	var oldConfigFormat bool
+	var syncerConfigFormat bool
 	var printVersion bool
 	var serverID uint
 
 	fs.BoolVar(&printVersion, "V", false, "prints version and exit")
+	fs.StringVar(&cfg.Name, "name", "", "the task name")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.UintVar(&serverID, "server-id", 101, "MySQL slave server ID")
 	fs.StringVar(&cfg.Flavor, "flavor", mysql.MySQLFlavor, "use flavor for different MySQL source versions; support \"mysql\", \"mariadb\" now; if you replicate from mariadb, please set it to \"mariadb\"")
@@ -163,7 +167,7 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 	fs.BoolVar(&cfg.EnableANSIQuotes, "enable-ansi-quotes", false, "enable ANSI_QUOTES sql_mode")
 	fs.StringVar(&cfg.Timezone, "timezone", "", "target database timezone location string")
 	fs.StringVar(&cfg.Name, "cp-table-prefix", "dm-syncer", "the prefix of the checkpoint table name")
-	fs.BoolVar(&oldConfigFormat, "old-config-format", false, "read old config format")
+	fs.BoolVar(&syncerConfigFormat, "syncer-config-format", false, "read syncer config format")
 
 	cfg.ServerID = uint32(serverID)
 
@@ -185,6 +189,7 @@ func newCommonConfig() *commonConfig {
 	fs := cfg.FlagSet
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
+	fs.StringVar(&cfg.Name, "name", "", "the task name")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.IntVar(&cfg.ServerID, "server-id", 101, "MySQL slave server ID")
 	fs.StringVar(&cfg.Flavor, "flavor", mysql.MySQLFlavor, "use flavor for different MySQL source versions; support \"mysql\", \"mariadb\" now; if you replicate from mariadb, please set it to \"mariadb\"")
@@ -201,15 +206,16 @@ func newCommonConfig() *commonConfig {
 	fs.IntVar(&cfg.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
 	fs.BoolVar(&cfg.EnableANSIQuotes, "enable-ansi-quotes", false, "enable ANSI_QUOTES sql_mode")
 	fs.StringVar(&cfg.TimezoneStr, "timezone", "", "target database timezone location string")
-	fs.BoolVar(&cfg.OldConfigFormat, "old-config-format", false, "read old config format")
+	fs.BoolVar(&cfg.SyncerConfigFormat, "syncer-config-format", false, "read syncer config format")
 
 	return cfg
 }
 
-// oldConfig is the old format of syncer tools, eventually it will be converted to new SubTaskConfig format.
-type oldConfig struct {
+// syncerConfig is the format of syncer tools, eventually it will be converted to new SubTaskConfig format.
+type syncerConfig struct {
 	*flag.FlagSet `json:"-"`
 
+	Name      string `toml:"name" json:"name"`
 	LogLevel  string `toml:"log-level" json:"log-level"`
 	LogFile   string `toml:"log-file" json:"log-file"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
@@ -302,14 +308,14 @@ func loadMetaFile(metaFile string) (*config.Meta, error) {
 	return meta, nil
 }
 
-func (oc *oldConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
+func (oc *syncerConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 	meta, err := loadMetaFile(oc.Meta)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	newTask := &config.SubTaskConfig{
-		Name:     "dm-syncer",
-		SourceID: "dm-syncer-from-old-config",
+		Name:     oc.Name,
+		SourceID: fmt.Sprintf("%s_source", oc.Name),
 		Mode:     config.ModeIncrement,
 		Meta:     meta,
 
