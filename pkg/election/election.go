@@ -282,15 +282,15 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 		if leaderInfo.ID != e.info.ID {
 			e.l.Info("current member is not the leader", zap.String("current member", e.info.ID), zap.String("leader", leaderInfo.ID))
-			e.notifyLeader(leaderInfo)
+			e.notifyLeader(ctx, leaderInfo)
 			cancel2()
 			compaignWg.Wait()
 			continue
 		}
 
-		e.notifyLeader(leaderInfo) // become the leader now
+		e.notifyLeader(ctx, leaderInfo) // become the leader now
 		e.watchLeader(ctx, session, leaderKey)
-		e.notifyLeader(nil) // need to re-campaign
+		e.notifyLeader(ctx, nil) // need to re-campaign
 
 		cancel2()
 		compaignWg.Wait()
@@ -299,7 +299,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 // notifyLeader notify the leader's information.
 // leader info can be nil, and this is used when retire from leader.
-func (e *Election) notifyLeader(leaderInfo *CampaignerInfo) {
+func (e *Election) notifyLeader(ctx context.Context, leaderInfo *CampaignerInfo) {
 	if leaderInfo != nil && leaderInfo.ID == e.info.ID {
 		e.isLeader.Set(true)
 	} else {
@@ -308,35 +308,9 @@ func (e *Election) notifyLeader(leaderInfo *CampaignerInfo) {
 
 	select {
 	case e.leaderCh <- leaderInfo:
-	default:
+	case <-ctx.Done():
 	}
 }
-
-/*
-func (e *Election) toBeLeader() {
-	e.isLeader.Set(true)
-	select {
-	case e.leaderCh <- IsLeader:
-	default:
-	}
-}
-
-func (e *Election) retireLeader() {
-	e.isLeader.Set(false)
-	select {
-	case e.leaderCh <- RetireFromLeader:
-	default:
-	}
-}
-
-func (e *Election) isNotLeader() {
-	e.isLeader.Set(false)
-	select {
-	case e.leaderCh <- IsNotLeader:
-	default:
-	}
-}
-*/
 
 func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session, key string) {
 	e.l.Debug("watch leader key", zap.String("key", key))
