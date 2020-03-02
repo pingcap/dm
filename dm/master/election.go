@@ -40,7 +40,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 					s.scheduler.Close()
 					s.leader = ""
 
-					log.L().Info("current member retire from the leader", zap.String("leader", leaderInfo.ID), zap.String("current member", s.cfg.Name))
+					log.L().Info("current member retire from the leader", zap.String("current member", s.cfg.Name))
 				}
 				s.closeLeaderClient()
 
