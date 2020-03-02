@@ -85,11 +85,13 @@ function run() {
         "query-status test" \
         "\"stage\": \"Running\"" 2
 
-    #run_dm_master $WORK_DIR/master5 $MASTER_PORT5 $cur/conf/dm-master5.toml
-    #check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
-    #run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
-    #    "query-status test" \
-    #    "\"stage\": \"Running\"" 2
+    # may join failed with error `fail to join embed etcd: add member http://127.0.0.1:8295: etcdserver: unhealthy cluster`, and dm-master will exit. so just sleep some seconds.
+    sleep 5
+    run_dm_master $WORK_DIR/master5 $MASTER_PORT5 $cur/conf/dm-master5.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 2
 
     run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2

@@ -39,6 +39,8 @@ func TestSuite(t *testing.T) {
 type testElectionSuite struct {
 	etcd     *embed.Etcd
 	endPoint string
+
+	originNotifyBlockTime time.Duration
 }
 
 func (t *testElectionSuite) SetUpTest(c *C) {
@@ -73,10 +75,15 @@ func (t *testElectionSuite) SetUpTest(c *C) {
 	case <-time.After(10 * time.Second):
 		c.Fatal("start embed etcd timeout")
 	}
+
+	// some notify leader information is not handled, just reduce the block time and ignore them
+	t.originNotifyBlockTime = NotifyBlockTime
+	NotifyBlockTime = 100 * time.Millisecond
 }
 
 func (t *testElectionSuite) TearDownTest(c *C) {
 	t.etcd.Close()
+	NotifyBlockTime = t.originNotifyBlockTime
 }
 
 func (t *testElectionSuite) TestElection2After1(c *C) {

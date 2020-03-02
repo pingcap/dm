@@ -48,6 +48,11 @@ const (
 	IsNotLeader = "isNotLeader"
 )
 
+var (
+	// NotifyBlockTime is the max block time for notify leader
+	NotifyBlockTime = 10 * time.Minute
+)
+
 // CampaignerInfo is the campaigner's information
 type CampaignerInfo struct {
 	ID string `json:"id"`
@@ -172,15 +177,15 @@ func (e *Election) ErrorNotify() <-chan error {
 
 // Close closes the election instance and release the resources.
 func (e *Election) Close() {
-	e.l.Info("election is closing")
+	e.l.Info("election is closing", zap.String("current member", e.info.ID))
 	if !e.closed.CompareAndSwap(0, 1) {
-		e.l.Info("election was already closed")
+		e.l.Info("election was already closed", zap.String("current member", e.info.ID))
 		return
 	}
 
 	e.cancel()
 	e.bgWg.Wait()
-	e.l.Info("election is closed")
+	e.l.Info("election is closed", zap.String("current member", e.info.ID))
 }
 
 func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Session) {
@@ -290,6 +295,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 		e.notifyLeader(ctx, leaderInfo) // become the leader now
 		e.watchLeader(ctx, session, leaderKey)
+		e.l.Info("retire from leader", zap.String("current member", e.info.ID))
 		e.notifyLeader(ctx, nil) // need to re-campaign
 
 		cancel2()
@@ -308,7 +314,9 @@ func (e *Election) notifyLeader(ctx context.Context, leaderInfo *CampaignerInfo)
 
 	select {
 	case e.leaderCh <- leaderInfo:
-	case <-ctx.Done():
+	case <-time.After(NotifyBlockTime):
+		// this should not happened
+		e.l.Error("ignore notify the leader's information after block a period of time", zap.String("current member", e.info.ID), zap.Stringer("leader", leaderInfo))
 	}
 }
 
