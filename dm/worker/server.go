@@ -204,6 +204,8 @@ func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Clien
 							log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
 								zap.String("source", bound.Source), zap.Error(err1))
 						}
+					} else {
+						s.stopWorker("")
 					}
 				}
 				retryNum++
