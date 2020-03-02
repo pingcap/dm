@@ -187,7 +187,6 @@ func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Clien
 				case <-ctx.Done():
 					return nil
 				case <-time.After(500 * time.Millisecond):
-					s.stopWorker("")
 					bsm, rev1, err1 := ha.GetSourceBound(s.etcdClient, s.cfg.Name)
 					if err1 != nil {
 						log.L().Error("get source bound from etcd failed, will retry later", zap.Error(err1), zap.Int("retryNum", retryNum))
@@ -195,6 +194,10 @@ func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Clien
 					}
 					rev = rev1
 					if bound, ok := bsm[s.cfg.Name]; ok {
+						if w := s.getWorker(true); w != nil && w.cfg.SourceID == bound.Source {
+							continue
+						}
+						s.stopWorker("")
 						err1 = s.operateSourceBound(bound)
 						s.setSourceStatus(bound.Source, err1, true)
 						if err1 != nil {
