@@ -119,6 +119,7 @@ func (s *Server) Start() error {
 	s.wg.Add(1)
 	go func(rev int64) {
 		defer s.wg.Done()
+		// TODO: handle fatal error from observeSourceBound
 		s.observeSourceBound(s.ctx, s.etcdClient, rev)
 	}(revBound)
 
@@ -774,6 +775,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	w.wg.Add(1)
 	go func(rev int64) {
 		defer w.wg.Done()
+		// TODO: handle fatal error from observeSubtaskStage
 		w.observeSubtaskStage(w.ctx, s.etcdClient, rev)
 	}(revSubTask)
 
@@ -781,6 +783,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		w.wg.Add(1)
 		go func(rev int64) {
 			defer w.wg.Done()
+			// TODO: handle fatal error from observeRelayStage
 			w.observeRelayStage(w.ctx, s.etcdClient, rev)
 		}(revRelay)
 	}

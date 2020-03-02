@@ -818,6 +818,15 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 		defer wg.Done()
 		c.Assert(ha.KeepAlive(ctx2, etcdTestCli, workerName3, keepAliveTTL), IsNil)
 	}()
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
+		if err != nil {
+			if _, ok := kam[workerName3]; ok {
+				return len(kam) == 1
+			}
+		}
+		return false
+	}), IsTrue)
 	// step 5.2: scheduler start to handle workerEvent
 	wg.Add(1)
 	go func() {

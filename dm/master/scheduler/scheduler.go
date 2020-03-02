@@ -181,6 +181,7 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	go func(rev1 int64) {
 		defer s.wg.Done()
 		// starting to observe status of DM-worker instances.
+		// TODO: handle fatal error from observeWorkerEvent
 		s.observeWorkerEvent(ctx, etcdCli, rev1)
 	}(rev)
 
