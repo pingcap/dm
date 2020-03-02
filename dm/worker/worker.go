@@ -27,6 +27,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -327,10 +328,11 @@ func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {
 			// TODO: right operation sequences may get error when we get etcdErrCompact, need to handle it later
 			// For example, Expect: Running -(pause)-> Paused -(resume)-> Running
 			// we get an etcd compact error at the first running. If we try to "resume" it now, we will get an error
-			err := w.operateSubTaskStage(stage, subtaskCfg)
+			err = w.operateSubTaskStage(stage, subtaskCfg)
 			if err != nil {
 				// TODO: add better metrics
-				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage), zap.Error(err))
+				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage),
+					zap.String("task", subtaskCfg.Name), zap.Error(err))
 			}
 			delete(sts, name)
 		}
@@ -340,7 +342,7 @@ func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {
 		err = w.OperateSubTask(name, pb.TaskOp_Stop)
 		if err != nil {
 			// TODO: add better metrics
-			log.L().Error("fail to stop subtask", zap.Error(err))
+			log.L().Error("fail to stop subtask", zap.String("task", name), zap.Error(err))
 		}
 	}
 	return revSubTask, nil
@@ -355,19 +357,19 @@ func (w *Worker) observeSubtaskStage(ctx context.Context, etcdCli *clientv3.Clie
 		wg.Add(1)
 		// use ctx1, cancel1 to make sure old watcher has been released
 		ctx1, cancel1 := context.WithCancel(ctx)
-		go func(subTaskStageCh1 chan ha.Stage, subTaskErrCh1 chan error) {
+		go func() {
 			defer func() {
-				close(subTaskStageCh1)
-				close(subTaskErrCh1)
+				close(subTaskStageCh)
+				close(subTaskErrCh)
 				wg.Done()
 			}()
-			ha.WatchSubTaskStage(ctx1, etcdCli, w.cfg.SourceID, rev+1, subTaskStageCh1, subTaskErrCh1)
-		}(subTaskStageCh, subTaskErrCh)
+			ha.WatchSubTaskStage(ctx1, etcdCli, w.cfg.SourceID, rev+1, subTaskStageCh, subTaskErrCh)
+		}()
 		err := w.handleSubTaskStage(ctx1, subTaskStageCh, subTaskErrCh)
 		cancel1()
 		wg.Wait()
 
-		if errors.Cause(err) == etcdErrCompacted {
+		if etcdutil.IsRetryableError(err) {
 			rev = 0
 			retryNum := 1
 			for rev == 0 {
@@ -405,7 +407,7 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 		case err := <-errCh:
 			// TODO: deal with err
 			log.L().Error("WatchSubTaskStage received an error", zap.Error(err))
-			if errors.Cause(err) == etcdErrCompacted {
+			if etcdutil.IsRetryableError(err) {
 				return err
 			}
 		}
@@ -446,19 +448,19 @@ func (w *Worker) observeRelayStage(ctx context.Context, etcdCli *clientv3.Client
 		wg.Add(1)
 		// use ctx1, cancel1 to make sure old watcher has been released
 		ctx1, cancel1 := context.WithCancel(ctx)
-		go func(relayStage1 chan ha.Stage, relayErrCh chan error) {
+		go func() {
 			defer func() {
-				close(relayStage1)
+				close(relayStageCh)
 				close(relayErrCh)
 				wg.Done()
 			}()
 			ha.WatchRelayStage(ctx1, etcdCli, w.cfg.SourceID, rev+1, relayStageCh, relayErrCh)
-		}(relayStageCh, relayErrCh)
+		}()
 		err := w.handleRelayStage(ctx1, relayStageCh, relayErrCh)
 		cancel1()
 		wg.Wait()
 
-		if errors.Cause(err) == etcdErrCompacted {
+		if etcdutil.IsRetryableError(err) {
 			rev = 0
 			retryNum := 1
 			for rev == 0 {
@@ -507,7 +509,7 @@ func (w *Worker) handleRelayStage(ctx context.Context, stageCh chan ha.Stage, er
 			}
 		case err := <-errCh:
 			log.L().Error("WatchRelayStage received an error", zap.Error(err))
-			if errors.Cause(err) == etcdErrCompacted {
+			if etcdutil.IsRetryableError(err) {
 				return err
 			}
 		}

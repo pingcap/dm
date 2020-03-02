@@ -21,6 +21,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"go.etcd.io/etcd/clientv3"
+	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/dm/config"
@@ -39,7 +40,8 @@ const (
 )
 
 var (
-	etcdTestCli *clientv3.Client
+	etcdTestCli      *clientv3.Client
+	etcdErrCompacted = v3rpc.ErrCompacted
 )
 
 func TestScheduler(t *testing.T) {
@@ -820,7 +822,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 	}()
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
-		if err != nil {
+		if err == nil {
 			if _, ok := kam[workerName3]; ok {
 				return len(kam) == 1
 			}

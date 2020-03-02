@@ -25,6 +25,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -36,7 +37,6 @@ import (
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
 	"go.etcd.io/etcd/clientv3"
-	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -48,7 +48,6 @@ var (
 	keepaliveTime           = 3 * time.Second
 	retryConnectSleepTime   = time.Second
 	getMinPosForSubTaskFunc = getMinPosForSubTask
-	etcdErrCompacted        = v3rpc.ErrCompacted
 )
 
 // Server accepts RPC requests
@@ -117,11 +116,11 @@ func (s *Server) Start() error {
 		}
 	}
 	s.wg.Add(1)
-	go func(rev int64) {
+	go func() {
 		defer s.wg.Done()
 		// TODO: handle fatal error from observeSourceBound
-		s.observeSourceBound(s.ctx, s.etcdClient, rev)
-	}(revBound)
+		s.observeSourceBound(s.ctx, s.etcdClient, revBound)
+	}()
 
 	s.wg.Add(1)
 	go func() {
@@ -168,19 +167,19 @@ func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Clien
 		wg.Add(1)
 		// use ctx1, cancel1 to make sure old watcher has been released
 		ctx1, cancel1 := context.WithCancel(ctx)
-		go func(sourceBoundCh1 chan ha.SourceBound, sourceBoundErrCh1 chan error) {
+		go func() {
 			defer func() {
-				close(sourceBoundCh1)
-				close(sourceBoundErrCh1)
+				close(sourceBoundCh)
+				close(sourceBoundErrCh)
 				wg.Done()
 			}()
-			ha.WatchSourceBound(ctx1, etcdCli, s.cfg.Name, rev+1, sourceBoundCh1, sourceBoundErrCh1)
-		}(sourceBoundCh, sourceBoundErrCh)
+			ha.WatchSourceBound(ctx1, etcdCli, s.cfg.Name, rev+1, sourceBoundCh, sourceBoundErrCh)
+		}()
 		err := s.handleSourceBound(ctx1, sourceBoundCh, sourceBoundErrCh)
 		cancel1()
 		wg.Wait()
 
-		if errors.Cause(err) == etcdErrCompacted {
+		if etcdutil.IsRetryableError(err) {
 			rev = 0
 			retryNum := 1
 			for rev == 0 {
@@ -346,7 +345,7 @@ func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBo
 		case err := <-errCh:
 			// TODO: Deal with err
 			log.L().Error("WatchSourceBound received an error", zap.Error(err))
-			if errors.Cause(err) == etcdErrCompacted {
+			if etcdutil.IsRetryableError(err) {
 				return err
 			}
 		}
@@ -773,19 +772,19 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	}
 
 	w.wg.Add(1)
-	go func(rev int64) {
+	go func() {
 		defer w.wg.Done()
 		// TODO: handle fatal error from observeSubtaskStage
-		w.observeSubtaskStage(w.ctx, s.etcdClient, rev)
-	}(revSubTask)
+		w.observeSubtaskStage(w.ctx, s.etcdClient, revSubTask)
+	}()
 
 	if cfg.EnableRelay {
 		w.wg.Add(1)
-		go func(rev int64) {
+		go func() {
 			defer w.wg.Done()
 			// TODO: handle fatal error from observeRelayStage
-			w.observeRelayStage(w.ctx, s.etcdClient, rev)
-		}(revRelay)
+			w.observeRelayStage(w.ctx, s.etcdClient, revRelay)
+		}()
 	}
 
 	return nil

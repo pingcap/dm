@@ -256,7 +256,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	subTaskErrCh := make(chan error, 10)
 	ha.WatchSubTaskStage(ctx, etcdCli, sourceCfg.SourceID, startRev, subTaskStageCh, subTaskErrCh)
 	select {
-	case err := <-subTaskErrCh:
+	case err = <-subTaskErrCh:
 		c.Assert(err, Equals, etcdErrCompacted)
 	case <-time.After(300 * time.Millisecond):
 		c.Fatal("fail to get etcd error compacted")

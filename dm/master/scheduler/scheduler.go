@@ -19,20 +19,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"go.etcd.io/etcd/clientv3"
-	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
-
-var etcdErrCompacted = v3rpc.ErrCompacted
 
 // Scheduler schedules tasks for DM-worker instances, including:
 // - register/unregister DM-worker instances.
@@ -930,14 +927,14 @@ func (s *Scheduler) resetWorkerEv(cli *clientv3.Client) (int64, error) {
 		ev := ha.WorkerEvent{WorkerName: name}
 		// set the stage as Free if it's keep alive.
 		if _, ok := kam[name]; ok {
-			err := s.handleWorkerOnline(ev, false)
+			err = s.handleWorkerOnline(ev, false)
 			if err != nil {
-				return 0, nil
+				return 0, err
 			}
 		} else {
-			err := s.handleWorkerOffline(ev, false)
+			err = s.handleWorkerOffline(ev, false)
 			if err != nil {
-				return 0, nil
+				return 0, err
 			}
 		}
 	}
@@ -971,7 +968,7 @@ func (s *Scheduler) handleWorkerEv(ctx context.Context, evCh <-chan ha.WorkerEve
 			}
 			// TODO(csuzhangxc): we only log the `err` here, but we should update metrics and do more works for it later.
 			s.logger.Error("receive error when watching worker status change event", zap.Error(err))
-			if errors.Cause(err) == etcdErrCompacted {
+			if etcdutil.IsRetryableError(err) {
 				return err
 			}
 		}
@@ -986,19 +983,19 @@ func (s *Scheduler) observeWorkerEvent(ctx context.Context, etcdCli *clientv3.Cl
 		wg.Add(1)
 		// use ctx1, cancel1 to make sure old watcher has been released
 		ctx1, cancel1 := context.WithCancel(ctx)
-		go func(workerEvCh1 chan ha.WorkerEvent, workerErrCh1 chan error) {
+		go func() {
 			defer func() {
-				close(workerEvCh1)
-				close(workerErrCh1)
+				close(workerEvCh)
+				close(workerErrCh)
 				wg.Done()
 			}()
-			ha.WatchWorkerEvent(ctx1, etcdCli, rev+1, workerEvCh1, workerErrCh1)
-		}(workerEvCh, workerErrCh)
+			ha.WatchWorkerEvent(ctx1, etcdCli, rev+1, workerEvCh, workerErrCh)
+		}()
 		err := s.handleWorkerEv(ctx1, workerEvCh, workerErrCh)
 		cancel1()
 		wg.Wait()
 
-		if errors.Cause(err) == etcdErrCompacted {
+		if etcdutil.IsRetryableError(err) {
 			rev = 0
 			retryNum := 1
 			for rev == 0 {

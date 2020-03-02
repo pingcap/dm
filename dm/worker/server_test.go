@@ -27,6 +27,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
+	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/config"
@@ -44,6 +45,8 @@ const (
 	subtaskSampleFile = "./subtask.toml"
 	mydumperPath      = "../../bin/mydumper"
 )
+
+var etcdErrCompacted = v3rpc.ErrCompacted
 
 func TestServer(t *testing.T) {
 	TestingT(t)
@@ -263,7 +266,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	sourceBoundErrCh := make(chan error, 10)
 	ha.WatchSourceBound(ctx, etcdCli, cfg.Name, startRev, sourceBoundCh, sourceBoundErrCh)
 	select {
-	case err := <-sourceBoundErrCh:
+	case err = <-sourceBoundErrCh:
 		c.Assert(err, Equals, etcdErrCompacted)
 	case <-time.After(300 * time.Millisecond):
 		c.Fatal("fail to get etcd error compacted")

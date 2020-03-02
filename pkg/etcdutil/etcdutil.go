@@ -19,7 +19,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/pingcap/errors"
 	"go.etcd.io/etcd/clientv3"
+	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 )
 
 const (
@@ -63,4 +65,9 @@ func DoOpsInOneTxn(cli *clientv3.Client, ops ...clientv3.Op) (int64, error) {
 		return 0, err
 	}
 	return resp.Header.Revision, nil
+}
+
+// IsRetryableError check whether error is retryable error for etcd to build again
+func IsRetryableError(err error) bool {
+	return errors.Cause(err) == v3rpc.ErrCompacted
 }
