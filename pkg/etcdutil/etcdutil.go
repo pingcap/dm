@@ -69,5 +69,10 @@ func DoOpsInOneTxn(cli *clientv3.Client, ops ...clientv3.Op) (int64, error) {
 
 // IsRetryableError check whether error is retryable error for etcd to build again
 func IsRetryableError(err error) bool {
-	return errors.Cause(err) == v3rpc.ErrCompacted
+	switch errors.Cause(err) {
+	case v3rpc.ErrCompacted, v3rpc.ErrNoLeader, v3rpc.ErrNoSpace:
+		return true
+	default:
+		return false
+	}
 }
