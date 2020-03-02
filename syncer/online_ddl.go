@@ -16,7 +16,6 @@ package syncer
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -87,7 +86,7 @@ type OnlineDDLStorage struct {
 	dbConn *DBConn
 	schema string // schema name, set through task config
 	table  string // table name, now it's task name
-	id     string // now it is `server-id` used as MySQL slave
+	id     string // the source ID of the upstream MySQL/MariaDB replica.
 
 	// map ghost schema => [ghost table => ghost ddl info, ...]
 	ddls map[string]map[string]*GhostDDLInfo
@@ -101,7 +100,7 @@ func NewOnlineDDLStorage(logCtx *tcontext.Context, cfg *config.SubTaskConfig) *O
 		cfg:    cfg,
 		schema: cfg.MetaSchema,
 		table:  fmt.Sprintf("%s_onlineddl", cfg.Name),
-		id:     strconv.FormatUint(uint64(cfg.ServerID), 10),
+		id:     cfg.SourceID,
 		ddls:   make(map[string]map[string]*GhostDDLInfo),
 		logCtx: logCtx,
 	}

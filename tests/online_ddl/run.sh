@@ -33,15 +33,33 @@ function real_run() {
     sed -i "s/online-ddl-scheme-placeholder/${online_ddl_scheme}/g" $WORK_DIR/dm-task-${online_ddl_scheme}.yaml
     dmctl_start_task "$WORK_DIR/dm-task-${online_ddl_scheme}.yaml"
 
-    # use sync_diff_inspector to check full dump loader
+    echo "use sync_diff_inspector to check full dump data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    # skip online ddl test
-    # run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl $online_ddl_scheme 
-    # run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl $online_ddl_scheme
+    run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl $online_ddl_scheme
+    run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl $online_ddl_scheme
 
-    # use sync_diff_inspector to check data now!
-    # check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    echo "use sync_diff_inspector to check increment data"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    echo "start dm-worker3 and kill dm-worker2"
+    ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
+    check_port_offline $WORKER2_PORT 20
+
+    run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
+
+    echo "wait and check task running"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 2
+
+    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+    sleep 2
+
+    echo "use sync_diff_inspector to check increment2 data now!"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 function run() {
