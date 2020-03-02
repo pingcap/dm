@@ -80,10 +80,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 }
 
 func (s *Server) createLeaderClient(leaderAddr string) {
-	if s.leaderGrpcConn != nil {
-		s.leaderGrpcConn.Close()
-		s.leaderGrpcConn = nil
-	}
+	s.closeLeaderClient()
 
 	conn, err := grpc.Dial(leaderAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
