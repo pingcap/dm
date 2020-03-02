@@ -353,15 +353,18 @@ func (w *Worker) observeSubtaskStage(ctx context.Context, etcdCli *clientv3.Clie
 		subTaskStageCh := make(chan ha.Stage, 10)
 		subTaskErrCh := make(chan error, 10)
 		wg.Add(1)
+		// use ctx1, cancel1 to make sure old watcher has been released
+		ctx1, cancel1 := context.WithCancel(ctx)
 		go func(subTaskStageCh1 chan ha.Stage, subTaskErrCh1 chan error) {
 			defer func() {
 				close(subTaskStageCh1)
 				close(subTaskErrCh1)
 				wg.Done()
 			}()
-			ha.WatchSubTaskStage(ctx, etcdCli, w.cfg.SourceID, rev+1, subTaskStageCh1, subTaskErrCh1)
+			ha.WatchSubTaskStage(ctx1, etcdCli, w.cfg.SourceID, rev+1, subTaskStageCh1, subTaskErrCh1)
 		}(subTaskStageCh, subTaskErrCh)
-		err := w.handleSubTaskStage(ctx, subTaskStageCh, subTaskErrCh)
+		err := w.handleSubTaskStage(ctx1, subTaskStageCh, subTaskErrCh)
+		cancel1()
 		wg.Wait()
 
 		if errors.Cause(err) == etcdErrCompacted {
@@ -441,15 +444,18 @@ func (w *Worker) observeRelayStage(ctx context.Context, etcdCli *clientv3.Client
 		relayStageCh := make(chan ha.Stage, 10)
 		relayErrCh := make(chan error, 10)
 		wg.Add(1)
+		// use ctx1, cancel1 to make sure old watcher has been released
+		ctx1, cancel1 := context.WithCancel(ctx)
 		go func(relayStage1 chan ha.Stage, relayErrCh chan error) {
 			defer func() {
 				close(relayStage1)
 				close(relayErrCh)
 				wg.Done()
 			}()
-			ha.WatchRelayStage(ctx, etcdCli, w.cfg.SourceID, rev+1, relayStageCh, relayErrCh)
+			ha.WatchRelayStage(ctx1, etcdCli, w.cfg.SourceID, rev+1, relayStageCh, relayErrCh)
 		}(relayStageCh, relayErrCh)
-		err := w.handleRelayStage(ctx, relayStageCh, relayErrCh)
+		err := w.handleRelayStage(ctx1, relayStageCh, relayErrCh)
+		cancel1()
 		wg.Wait()
 
 		if errors.Cause(err) == etcdErrCompacted {

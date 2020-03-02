@@ -983,15 +983,18 @@ func (s *Scheduler) observeWorkerEvent(ctx context.Context, etcdCli *clientv3.Cl
 		workerEvCh := make(chan ha.WorkerEvent, 10)
 		workerErrCh := make(chan error, 10)
 		wg.Add(1)
+		// use ctx1, cancel1 to make sure old watcher has been released
+		ctx1, cancel1 := context.WithCancel(ctx)
 		go func(workerEvCh1 chan ha.WorkerEvent, workerErrCh1 chan error) {
 			defer func() {
 				close(workerEvCh1)
 				close(workerErrCh1)
 				wg.Done()
 			}()
-			ha.WatchWorkerEvent(ctx, etcdCli, rev+1, workerEvCh1, workerErrCh1)
+			ha.WatchWorkerEvent(ctx1, etcdCli, rev+1, workerEvCh1, workerErrCh1)
 		}(workerEvCh, workerErrCh)
-		err := s.handleWorkerEv(ctx, workerEvCh, workerErrCh)
+		err := s.handleWorkerEv(ctx1, workerEvCh, workerErrCh)
+		cancel1()
 		wg.Wait()
 
 		if errors.Cause(err) == etcdErrCompacted {

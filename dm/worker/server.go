@@ -165,15 +165,18 @@ func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Clien
 		sourceBoundCh := make(chan ha.SourceBound, 10)
 		sourceBoundErrCh := make(chan error, 10)
 		wg.Add(1)
+		// use ctx1, cancel1 to make sure old watcher has been released
+		ctx1, cancel1 := context.WithCancel(ctx)
 		go func(sourceBoundCh1 chan ha.SourceBound, sourceBoundErrCh1 chan error) {
 			defer func() {
 				close(sourceBoundCh1)
 				close(sourceBoundErrCh1)
 				wg.Done()
 			}()
-			ha.WatchSourceBound(ctx, etcdCli, s.cfg.Name, rev+1, sourceBoundCh1, sourceBoundErrCh1)
+			ha.WatchSourceBound(ctx1, etcdCli, s.cfg.Name, rev+1, sourceBoundCh1, sourceBoundErrCh1)
 		}(sourceBoundCh, sourceBoundErrCh)
-		err := s.handleSourceBound(ctx, sourceBoundCh, sourceBoundErrCh)
+		err := s.handleSourceBound(ctx1, sourceBoundCh, sourceBoundErrCh)
+		cancel1()
 		wg.Wait()
 
 		if errors.Cause(err) == etcdErrCompacted {
