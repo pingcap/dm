@@ -406,6 +406,7 @@ ErrWorkerWaitRelayCatchupTimeout,[code=40067:class=dm-worker:scope=internal:leve
 ErrWorkerRelayIsPurging,[code=40068:class=dm-worker:scope=internal:level=high],"relay log purger is purging, cannot start sub task %s, please try again later"
 ErrWorkerHostPortNotValid,[code=40069:class=dm-worker:scope=internal:level=high],"host:port '%s' not valid"
 ErrWorkerSourceNotMatch,[code=40072:class=dm-worker:scope=internal:level=high],"source of request does not match with source in worker"
+ErrWorkerFailToGetSubtaskConfigFromEtcd,[code=40073:class=dm-worker:scope=internal:level=medium],"there is no relative subtask config for task %s in etcd"
 ErrTracerParseFlagSet,[code=42001:class=dm-tracer:scope=internal:level=medium],"parse dm-tracer config flag set"
 ErrTracerConfigTomlTransform,[code=42002:class=dm-tracer:scope=internal:level=medium],"config toml transform"
 ErrTracerConfigInvalidFlag,[code=42003:class=dm-tracer:scope=internal:level=medium],"'%s' is an invalid flag"

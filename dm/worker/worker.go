@@ -392,14 +392,13 @@ func (w *Worker) observeSubtaskStage(ctx context.Context, etcdCli *clientv3.Clie
 }
 
 func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) error {
-	var emptySubTaskCfg config.SubTaskConfig
 	for {
 		select {
 		case <-ctx.Done():
 			log.L().Info("worker is closed, handleSubTaskStage will quit now")
 			return nil
 		case stage := <-stageCh:
-			err := w.operateSubTaskStage(stage, emptySubTaskCfg)
+			err := w.operateSubTaskStageWithoutConfig(stage)
 			if err != nil {
 				// TODO: add better metrics
 				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage), zap.Error(err))
@@ -419,14 +418,6 @@ func (w *Worker) operateSubTaskStage(stage ha.Stage, subTaskCfg config.SubTaskCo
 	switch {
 	case stage.Expect == pb.Stage_Running:
 		if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
-			if !(subTaskCfg.Name == stage.Task && subTaskCfg.SourceID == stage.Source) {
-				tsm, _, err := ha.GetSubTaskCfg(w.etcdClient, stage.Source, stage.Task, stage.Revision)
-				if err != nil {
-					// TODO: need retry
-					return terror.Annotate(err, "fail to get subtask config from etcd")
-				}
-				subTaskCfg = tsm[stage.Task]
-			}
 			w.StartSubTask(&subTaskCfg)
 			log.L().Info("load subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
 			return nil
@@ -438,6 +429,24 @@ func (w *Worker) operateSubTaskStage(stage ha.Stage, subTaskCfg config.SubTaskCo
 		op = pb.TaskOp_Stop
 	}
 	return w.OperateSubTask(stage.Task, op)
+}
+
+func (w *Worker) operateSubTaskStageWithoutConfig(stage ha.Stage) error {
+	var subTaskCfg config.SubTaskConfig
+	if stage.Expect == pb.Stage_Running {
+		if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
+			tsm, _, err := ha.GetSubTaskCfg(w.etcdClient, stage.Source, stage.Task, stage.Revision)
+			if err != nil {
+				// TODO: need retry
+				return terror.Annotate(err, "fail to get subtask config from etcd")
+			}
+			var ok bool
+			if subTaskCfg, ok = tsm[stage.Task]; !ok {
+				return terror.ErrWorkerFailToGetSubtaskConfigFromEtcd.Generate(stage.Task)
+			}
+		}
+	}
+	return w.operateSubTaskStage(stage, subTaskCfg)
 }
 
 func (w *Worker) observeRelayStage(ctx context.Context, etcdCli *clientv3.Client, rev int64) error {
@@ -475,12 +484,11 @@ func (w *Worker) observeRelayStage(ctx context.Context, etcdCli *clientv3.Client
 					}
 					rev = rev1
 					var emptyStage ha.Stage
-					// emptyStage means this relay has been stopped
+					// emptyStage means this stage has been deleted and relay has been stopped
 					if emptyStage == stage {
-						err1 = w.OperateRelay(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_StopRelay})
-					} else {
-						err1 = w.operateRelayStage(ctx, stage)
+						stage.IsDeleted = true
 					}
+					err1 = w.operateRelayStage(ctx, stage)
 					if err1 != nil {
 						// TODO: add better metrics
 						log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Error(err1))

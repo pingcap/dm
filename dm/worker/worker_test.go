@@ -23,6 +23,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
 
 	"github.com/pingcap/dm/dm/config"
@@ -201,7 +202,7 @@ func (t *testWorkerEtcdCompact) TearDownSuite(c *C) {
 
 func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	var (
-		masterAddr   = "127.0.0.1:8291"
+		masterAddr   = tempurl.Alloc()[len("http://"):]
 		keepAliveTTL = int64(1)
 		startRev     = int64(1)
 	)
@@ -311,7 +312,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 
 func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	var (
-		masterAddr   = "127.0.0.1:8291"
+		masterAddr   = tempurl.Alloc()[len("http://"):]
 		keepAliveTTL = int64(1)
 		startRev     = int64(1)
 	)
@@ -322,11 +323,6 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	cfg.KeepAliveTTL = keepAliveTTL
-
-	subtaskCfg := config.SubTaskConfig{}
-	err = subtaskCfg.DecodeFile(subtaskSampleFile, true)
-	c.Assert(err, IsNil)
-	subtaskCfg.MydumperPath = mydumperPath
 
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:            GetJoinURLs(cfg.Join),
