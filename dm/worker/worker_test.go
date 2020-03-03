@@ -212,6 +212,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	defer ETCD.Close()
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.Join = masterAddr
 	cfg.KeepAliveTTL = keepAliveTTL
 
 	etcdCli, err := clientv3.New(clientv3.Config{
@@ -322,6 +323,7 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	defer ETCD.Close()
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.Join = masterAddr
 	cfg.KeepAliveTTL = keepAliveTTL
 
 	etcdCli, err := clientv3.New(clientv3.Config{
