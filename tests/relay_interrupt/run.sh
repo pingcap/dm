@@ -65,7 +65,7 @@ function run() {
             "ERROR" 1
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status -s $SOURCE_ID1" \
-            "no valid relay sub directory exists" 1 \
+            "there is no relay data under relay directory" 1 \
             "ERROR" 1
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status" \
