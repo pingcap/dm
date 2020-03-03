@@ -39,7 +39,7 @@ func (s *Syncer) Status() interface{} {
 		s.tctx.L().Warn("fail to get master status", zap.Error(err))
 	}
 
-	syncerPos := s.checkpoint.FlushedGlobalPoint()
+	syncerLocation := s.checkpoint.FlushedGlobalPoint()
 	if err != nil {
 		s.tctx.L().Warn("fail to get flushed global point", zap.Error(err))
 	}
@@ -48,11 +48,12 @@ func (s *Syncer) Status() interface{} {
 		TotalTps:     totalTps,
 		RecentTps:    tps,
 		MasterBinlog: masterPos.String(),
-		SyncerBinlog: syncerPos.String(),
+		SyncerBinlog: syncerLocation.Position.String(),
 	}
 	if masterGTIDSet != nil { // masterGTIDSet maybe a nil interface
 		st.MasterBinlogGtid = masterGTIDSet.String()
 	}
+	st.SyncerBinlogGtid = syncerLocation.GTID
 
 	st.BinlogType = "unknown"
 	if s.streamerController != nil {
@@ -62,9 +63,9 @@ func (s *Syncer) Status() interface{} {
 	// If a syncer unit is waiting for relay log catch up, it has not executed
 	// LoadMeta and will return a parsed binlog name error. As we can find mysql
 	// position in syncer status, we record this error only in debug level.
-	realPos, err := binlog.RealMySQLPos(syncerPos)
+	realPos, err := binlog.RealMySQLPos(syncerLocation.Position)
 	if err != nil {
-		s.tctx.L().Debug("fail to parse real mysql position", zap.Stringer("position", syncerPos), log.ShortError(err))
+		s.tctx.L().Debug("fail to parse real mysql position", zap.Stringer("position", syncerLocation.Position), log.ShortError(err))
 	}
 	st.Synced = utils.CompareBinlogPos(masterPos, realPos, 0) == 0
 

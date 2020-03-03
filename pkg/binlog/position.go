@@ -14,6 +14,7 @@
 package binlog
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -159,4 +160,24 @@ func ComparePosition(pos1, pos2 gmysql.Position) int {
 	}
 
 	return adjustedPos1.Compare(adjustedPos2)
+}
+
+// Location is used for save binlog's position and gtid
+type Location struct {
+	Position gmysql.Position
+
+	GTID string
+}
+
+func (p Location) String() string {
+	return fmt.Sprintf("Position: %v, GTID: %s", p.Position, p.GTID)
+}
+
+// CompareLocation returns:
+//   1 if point1 is bigger than point2
+//   0 if point1 is equal to point2
+//   -1 if point1 is less than point2
+func CompareLocation(location1, location2 Location) int {
+	// TODO: compare gtid
+	return 1
 }

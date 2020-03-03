@@ -1194,7 +1194,7 @@ func (l *Loader) checkpointID() string {
 
 func (l *Loader) getMydumpMetadata() error {
 	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
-	pos, err := utils.ParseMetaData(metafile)
+	pos, _, err := utils.ParseMetaData(metafile)
 	if err != nil {
 		l.logCtx.L().Error("fail to parse dump metadata", log.ShortError(err))
 		return err

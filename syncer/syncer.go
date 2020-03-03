@@ -268,7 +268,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
 
-	s.streamerController = NewStreamerController(tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
+	s.streamerController = NewStreamerController(tctx, s.syncCfg, s.cfg.EnableGTID, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
 
 	s.bwList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BWList)
 	if err != nil {
@@ -425,7 +425,7 @@ func (s *Syncer) initShardingGroups() error {
 func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
 	tablePoint := s.checkpoint.TablePoint()
-	return binlog.ComparePosition(globalPoint, minCheckpoint) <= 0 && len(tablePoint) == 0, nil
+	return binlog.CompareLocation(globalPoint, minLocation) <= 0 && len(tablePoint) == 0, nil
 }
 
 func (s *Syncer) reset() {
@@ -555,7 +555,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	prePos := s.checkpoint.GlobalPoint()
 	s.checkpoint.Rollback(s.schemaTracker)
 	currPos := s.checkpoint.GlobalPoint()
-	if binlog.ComparePosition(prePos, currPos) != 0 {
+	if binlog.CompareLocation(prePos, currPos) != 0 {
 		s.tctx.L().Warn("something wrong with rollback global checkpoint", zap.Stringer("previous position", prePos), zap.Stringer("current position", currPos))
 	}
 
@@ -678,16 +678,16 @@ func (s *Syncer) checkWait(job *job) bool {
 	return false
 }
 
-func (s *Syncer) saveTablePoint(db, table string, pos mysql.Position) {
+func (s *Syncer) saveTablePoint(db, table string, location binlog.Location) {
 	ti, err := s.schemaTracker.GetTable(db, table)
 	if err != nil {
 		s.tctx.L().DPanic("table info missing from schema tracker",
 			zap.String("schema", db),
 			zap.String("table", table),
-			zap.Stringer("pos", pos),
+			zap.Stringer("location", location),
 			zap.Error(err))
 	}
-	s.checkpoint.SaveTablePoint(db, table, pos, ti)
+	s.checkpoint.SaveTablePoint(db, table, location, ti)
 }
 
 func (s *Syncer) addJob(job *job) error {
@@ -696,7 +696,7 @@ func (s *Syncer) addJob(job *job) error {
 	)
 	switch job.tp {
 	case xid:
-		s.saveGlobalPoint(job.pos)
+		s.saveGlobalPoint(job.location)
 		return nil
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
@@ -730,16 +730,16 @@ func (s *Syncer) addJob(job *job) error {
 	switch job.tp {
 	case ddl:
 		// only save checkpoint for DDL and XID (see above)
-		s.saveGlobalPoint(job.pos)
+		s.saveGlobalPoint(job.location)
 		if len(job.sourceSchema) > 0 {
-			s.saveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
+			s.saveTablePoint(job.sourceSchema, job.sourceTable, job.location)
 		}
 		// reset sharding group after checkpoint saved
 		s.resetShardingGroup(job.targetSchema, job.targetTable)
 	case insert, update, del:
 		// save job's current pos for DML events
 		if len(job.sourceSchema) > 0 {
-			s.saveTablePoint(job.sourceSchema, job.sourceTable, job.currentPos)
+			s.saveTablePoint(job.sourceSchema, job.sourceTable, job.currentLocation)
 		}
 	}
 
@@ -750,11 +750,12 @@ func (s *Syncer) addJob(job *job) error {
 	return nil
 }
 
-func (s *Syncer) saveGlobalPoint(globalPoint mysql.Position) {
+func (s *Syncer) saveGlobalPoint(globalLocation binlog.Location) {
 	if s.cfg.IsSharding {
-		globalPoint = s.sgk.AdjustGlobalPoint(globalPoint)
+		// TODO: maybe need to compare GTID?
+		globalLocation.Position = s.sgk.AdjustGlobalPoint(globalLocation.Position)
 	}
-	s.checkpoint.SaveGlobalPoint(globalPoint)
+	s.checkpoint.SaveGlobalPoint(globalLocation)
 }
 
 func (s *Syncer) resetShardingGroup(schema, table string) {
@@ -807,7 +808,7 @@ func (s *Syncer) flushCheckPoints() error {
 	s.tctx.L().Info("flushed checkpoint", zap.Stringer("checkpoint", s.checkpoint))
 
 	// update current active relay log after checkpoint flushed
-	err = s.updateActiveRelayLog(s.checkpoint.GlobalPoint())
+	err = s.updateActiveRelayLog(s.checkpoint.GlobalPoint().Position)
 	if err != nil {
 		return err
 	}
@@ -838,9 +839,9 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		}
 		if err != nil {
 			s.appendExecErrors(&ExecErrorContext{
-				err:  err,
-				pos:  sqlJob.currentPos,
-				jobs: fmt.Sprintf("%v", sqlJob.ddls),
+				err:      err,
+				location: sqlJob.currentLocation,
+				jobs:     fmt.Sprintf("%v", sqlJob.ddls),
 			})
 		}
 
@@ -910,7 +911,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		}
 		affected, err := db.executeSQL(tctx, queries, args...)
 		if err != nil {
-			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}
+			errCtx := &ExecErrorContext{err, jobs[affected].currentLocation, fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
 		}
 		return err
@@ -985,13 +986,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	// we use currentPos to replace and skip binlog event of specified position and update table checkpoint in sharding ddl
 	// we use lastPos to update global checkpoint and table checkpoint
 	var (
-		currentPos = s.checkpoint.GlobalPoint() // also init to global checkpoint
-		lastPos    = s.checkpoint.GlobalPoint()
+		currentLocation = s.checkpoint.GlobalPoint() // also init to global checkpoint
+		lastLocation    = s.checkpoint.GlobalPoint()
 	)
-	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastPos))
+	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastLocation))
 
 	if s.streamerController.IsClosed() {
-		err = s.streamerController.Start(tctx, lastPos)
+		err = s.streamerController.Start(tctx, lastLocation)
 		if err != nil {
 			return terror.Annotate(err, "fail to restart streamer controller")
 		}

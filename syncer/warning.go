@@ -17,17 +17,18 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/siddontang/go-mysql/mysql"
+	//"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
 // ExecErrorContext records a failed exec SQL information
 type ExecErrorContext struct {
-	err  error
-	pos  mysql.Position
-	jobs string
+	err      error
+	location binlog.Location
+	jobs     string
 }
 
 // Error implements SubTaskUnit.Error

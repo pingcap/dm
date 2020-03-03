@@ -26,22 +26,24 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// ParseMetaData parses mydumper's output meta file and returns binlog position
-func ParseMetaData(filename string) (*mysql.Position, error) {
+// ParseMetaData parses mydumper's output meta file and returns binlog position and GTID
+func ParseMetaData(filename string) (*mysql.Position, string, error) {
 	fd, err := os.Open(filename)
 	if err != nil {
-		return nil, terror.ErrParseMydumperMeta.Generate(err)
+		return nil, "", terror.ErrParseMydumperMeta.Generate(err)
 	}
 	defer fd.Close()
 
-	var logName = ""
+	pos := new(mysql.Position)
+	gtid := ""
+
 	br := bufio.NewReader(fd)
 	for {
 		line, err := br.ReadString('\n')
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return nil, terror.ErrParseMydumperMeta.Generate(err)
+			return nil, "", terror.ErrParseMydumperMeta.Generate(err)
 		}
 		line = strings.TrimSpace(line[:len(line)-1])
 		if len(line) == 0 {
@@ -52,23 +54,30 @@ func ParseMetaData(filename string) (*mysql.Position, error) {
 			// now, we only parse log / pos for `SHOW MASTER STATUS`
 			break
 		}
-		parts := strings.Split(line, ": ")
+		parts := strings.SplitN(line, ":", 2)
 		if len(parts) != 2 {
 			continue
 		}
-		if parts[0] == "Log" {
-			logName = parts[1]
-		} else if parts[0] == "Pos" {
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		switch key {
+		case "Log":
+			pos.Name = value
+		case "Pos":
 			pos64, err := strconv.ParseUint(parts[1], 10, 32)
 			if err != nil {
-				return nil, terror.ErrParseMydumperMeta.Generate(err)
+				return nil, "", terror.ErrParseMydumperMeta.Generate(err)
 			}
-			if len(logName) > 0 {
-				return &mysql.Position{Name: logName, Pos: uint32(pos64)}, nil
-			}
-			break // Pos extracted, but no Log, error occurred
+			pos.Pos = uint32(pos64)
+		case "GTID":
+			gtid = value
 		}
 	}
 
-	return nil, terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
+	if len(pos.Name) == 0 || pos.Pos == uint32(0) {
+		return nil, "", terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
+	}
+
+	return pos, gtid, nil
 }
