@@ -19,6 +19,7 @@ import (
 	"sort"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -133,7 +134,7 @@ func (w *Worker) Error(stName string) []*pb.SubTaskError {
 		return nil // no sub task started
 	}
 
-	error := make([]*pb.SubTaskError, 0, len(sts))
+	errs := make([]*pb.SubTaskError, 0, len(sts))
 
 	// return error order by name
 	names := make([]string, 0, len(sts))
@@ -158,26 +159,33 @@ func (w *Worker) Error(stName string) []*pb.SubTaskError {
 			stError = pb.SubTaskError{
 				Name:  name,
 				Stage: st.Stage(),
-				Unit:  cu.Type(),
 			}
 
-			// oneof error
-			us := cu.Error()
-			switch cu.Type() {
-			case pb.UnitType_Check:
-				stError.Error = &pb.SubTaskError_Check{Check: us.(*pb.CheckError)}
-			case pb.UnitType_Dump:
-				stError.Error = &pb.SubTaskError_Dump{Dump: us.(*pb.DumpError)}
-			case pb.UnitType_Load:
-				stError.Error = &pb.SubTaskError_Load{Load: us.(*pb.LoadError)}
-			case pb.UnitType_Sync:
-				stError.Error = &pb.SubTaskError_Sync{Sync: us.(*pb.SyncError)}
+			if cu != nil {
+				// oneof error
+				stError.Unit = cu.Type()
+				us := cu.Error()
+				switch cu.Type() {
+				case pb.UnitType_Check:
+					stError.Error = &pb.SubTaskError_Check{Check: us.(*pb.CheckError)}
+				case pb.UnitType_Dump:
+					stError.Error = &pb.SubTaskError_Dump{Dump: us.(*pb.DumpError)}
+				case pb.UnitType_Load:
+					stError.Error = &pb.SubTaskError_Load{Load: us.(*pb.LoadError)}
+				case pb.UnitType_Sync:
+					stError.Error = &pb.SubTaskError_Sync{Sync: us.(*pb.SyncError)}
+				}
+			} else if result := st.Result(); result != nil {
+				processErrorMsg := utils.JoinProcessErrors(result.Errors)
+				if len(processErrorMsg) > 0 {
+					stError.Error = &pb.SubTaskError_Msg{Msg: processErrorMsg}
+				}
 			}
 		}
-		error = append(error, &stError)
+		errs = append(errs, &stError)
 	}
 
-	return error
+	return errs
 }
 
 // statusProcessResult returns a clone of *pb.ProcessResult, but omit the `Error` field, so no duplicated
