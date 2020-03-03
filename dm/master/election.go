@@ -38,15 +38,17 @@ func (s *Server) electionNotify(ctx context.Context) {
 			if leaderInfo == nil {
 				if s.leader == oneselfLeader {
 					s.scheduler.Close()
+
 					s.Lock()
 					s.leader = ""
+					s.closeLeaderClient()
 					s.Unlock()
 
 					log.L().Info("current member retire from the leader", zap.String("current member", s.cfg.Name))
+				} else {
+					// this should not happen
+					log.L().Error("current member is not the leader, can't retire", zap.String("current member", s.cfg.Name))
 				}
-				s.Lock()
-				s.closeLeaderClient()
-				s.Unlock()
 
 				continue
 			}
