@@ -21,6 +21,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"go.etcd.io/etcd/clientv3"
+	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/dm/config"
@@ -39,7 +40,8 @@ const (
 )
 
 var (
-	etcdTestCli *clientv3.Client
+	etcdTestCli      *clientv3.Client
+	etcdErrCompacted = v3rpc.ErrCompacted
 )
 
 func TestScheduler(t *testing.T) {
@@ -718,4 +720,148 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 	sourceBound1.Source = ""
 	sourceBound1.IsDeleted = true
 	checkSourceBoundCh()
+}
+
+func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
+	defer clearTestInfoOperation(c)
+
+	var (
+		logger       = log.L()
+		s            = NewScheduler(&logger)
+		sourceID1    = "mysql-replica-1"
+		sourceID2    = "mysql-replica-2"
+		workerName1  = "dm-worker-1"
+		workerName2  = "dm-worker-2"
+		workerName3  = "dm-worker-3"
+		workerName4  = "dm-worker-4"
+		workerAddr1  = "127.0.0.1:8262"
+		workerAddr2  = "127.0.0.1:18262"
+		workerAddr3  = "127.0.0.1:18362"
+		workerAddr4  = "127.0.0.1:18462"
+		sourceCfg1   config.SourceConfig
+		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
+	)
+	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
+	sourceCfg1.SourceID = sourceID1
+	sourceCfg2 := sourceCfg1
+	sourceCfg2.SourceID = sourceID2
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// step 1: start an empty scheduler without listening the worker event
+	s.started = true
+	s.cancel = cancel
+	s.etcdCli = etcdTestCli
+
+	// step 2: add two sources and register four workers
+	c.Assert(s.AddSourceCfg(sourceCfg1), IsNil)
+	c.Assert(s.AddSourceCfg(sourceCfg2), IsNil)
+	c.Assert(s.unbounds, HasLen, 2)
+	c.Assert(s.unbounds, HasKey, sourceID1)
+	c.Assert(s.unbounds, HasKey, sourceID2)
+
+	c.Assert(s.AddWorker(workerName1, workerAddr1), IsNil)
+	c.Assert(s.AddWorker(workerName2, workerAddr2), IsNil)
+	c.Assert(s.AddWorker(workerName3, workerAddr3), IsNil)
+	c.Assert(s.AddWorker(workerName4, workerAddr4), IsNil)
+	c.Assert(s.workers, HasLen, 4)
+	c.Assert(s.workers, HasKey, workerName1)
+	c.Assert(s.workers, HasKey, workerName2)
+	c.Assert(s.workers, HasKey, workerName3)
+	c.Assert(s.workers, HasKey, workerName4)
+
+	// step 3: add two workers, and then cancel them to simulate they have lost connection
+	var wg sync.WaitGroup
+	ctx1, cancel1 := context.WithCancel(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName1, keepAliveTTL), IsNil)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName2, keepAliveTTL), IsNil)
+	}()
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
+		return err == nil && len(kam) == 2
+	}), IsTrue)
+	cancel1()
+	wg.Wait()
+	// check whether keepalive lease is out of date
+	time.Sleep(time.Duration(keepAliveTTL) * time.Second)
+	var rev int64
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		kam, rev1, err := ha.GetKeepAliveWorkers(etcdTestCli)
+		rev = rev1
+		return err == nil && len(kam) == 0
+	}), IsTrue)
+
+	// step 4: trigger etcd compaction and check whether we can receive it through watcher
+	var startRev int64 = 1
+	_, err := etcdTestCli.Compact(ctx, rev)
+	c.Assert(err, IsNil)
+	workerEvCh := make(chan ha.WorkerEvent, 10)
+	workerErrCh := make(chan error, 10)
+	ha.WatchWorkerEvent(ctx, etcdTestCli, startRev, workerEvCh, workerErrCh)
+	select {
+	case err := <-workerErrCh:
+		c.Assert(err, Equals, etcdErrCompacted)
+	case <-time.After(300 * time.Millisecond):
+		c.Fatal("fail to get etcd error compacted")
+	}
+
+	// step 5: scheduler start to handle workerEvent from compact revision, should handle worker keepalive events correctly
+	ctx2, cancel2 := context.WithCancel(ctx)
+	// step 5.1: start one worker before scheduler start to handle workerEvent
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx2, etcdTestCli, workerName3, keepAliveTTL), IsNil)
+	}()
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
+		if err == nil {
+			if _, ok := kam[workerName3]; ok {
+				return len(kam) == 1
+			}
+		}
+		return false
+	}), IsTrue)
+	// step 5.2: scheduler start to handle workerEvent
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(s.observeWorkerEvent(ctx2, etcdTestCli, startRev), IsNil)
+	}()
+	// step 5.3: wait for scheduler to restart handleWorkerEvent, then start a new worker
+	time.Sleep(time.Second)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx2, etcdTestCli, workerName4, keepAliveTTL), IsNil)
+	}()
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		unbounds := s.UnboundSources()
+		return len(unbounds) == 0
+	}), IsTrue)
+	c.Assert(s.BoundSources(), DeepEquals, []string{sourceID1, sourceID2})
+	cancel2()
+	wg.Wait()
+
+	// step 6: restart to observe workerEvents, should unbound all sources
+	ctx3, cancel3 := context.WithCancel(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(s.observeWorkerEvent(ctx3, etcdTestCli, startRev), IsNil)
+	}()
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		bounds := s.BoundSources()
+		return len(bounds) == 0
+	}), IsTrue)
+	c.Assert(s.UnboundSources(), DeepEquals, []string{sourceID1, sourceID2})
+	cancel3()
+	wg.Wait()
 }
