@@ -48,11 +48,6 @@ const (
 	IsNotLeader = "isNotLeader"
 )
 
-var (
-	// NotifyBlockTime is the max block time for notify leader
-	NotifyBlockTime = 10 * time.Minute
-)
-
 // CampaignerInfo is the campaigner's information
 type CampaignerInfo struct {
 	ID string `json:"id"`
@@ -98,11 +93,14 @@ type Election struct {
 	cancel context.CancelFunc
 	bgWg   sync.WaitGroup
 
+	// notifyBlockTime is the max block time for notify leader
+	notifyBlockTime time.Duration
+
 	l log.Logger
 }
 
 // NewElection creates a new etcd leader Election instance and starts the campaign loop.
-func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id, addr string) (*Election, error) {
+func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id, addr string, notifyBlockTime time.Duration) (*Election, error) {
 	ctx2, cancel2 := context.WithCancel(ctx)
 	e := &Election{
 		cli:        cli,
@@ -112,10 +110,11 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 			ID:   id,
 			Addr: addr,
 		},
-		leaderCh: make(chan *CampaignerInfo, 1),
-		ech:      make(chan error, 1), // size 1 is enough
-		cancel:   cancel2,
-		l:        log.With(zap.String("component", "election")),
+		notifyBlockTime: notifyBlockTime,
+		leaderCh:        make(chan *CampaignerInfo, 1),
+		ech:             make(chan error, 1), // size 1 is enough
+		cancel:          cancel2,
+		l:               log.With(zap.String("component", "election")),
 	}
 	e.infoStr = e.info.String()
 
@@ -315,7 +314,7 @@ func (e *Election) notifyLeader(leaderInfo *CampaignerInfo) {
 
 	select {
 	case e.leaderCh <- leaderInfo:
-	case <-time.After(NotifyBlockTime):
+	case <-time.After(e.notifyBlockTime):
 		// this should not happened
 		e.l.Error("ignore notify the leader's information after block a period of time", zap.Stringer("current member", e.info), zap.Stringer("leader", leaderInfo))
 	}
