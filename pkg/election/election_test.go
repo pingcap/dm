@@ -138,19 +138,8 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	c.Assert(e2.IsLeader(), IsFalse)
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		select {
-		case leader := <-e1.LeaderNotify(): // e1 should retire when closing
-			c.Assert(leader, IsNil)
-		case <-time.After(time.Second):
-			c.Fatal("leader campaign timeout")
-		}
-	}()
 	e1.Close() // stop the campaign for e1
 	c.Assert(e1.IsLeader(), IsFalse)
-	wg.Wait()
 
 	// e2 should become the leader
 	select {

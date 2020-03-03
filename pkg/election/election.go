@@ -286,17 +286,17 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 		if leaderInfo.ID != e.info.ID {
 			e.l.Info("current member is not the leader", zap.Stringer("current member", e.info), zap.Stringer("leader", leaderInfo))
-			e.notifyLeader(leaderInfo)
+			e.notifyLeader(ctx, leaderInfo)
 			cancel2()
 			compaignWg.Wait()
 			continue
 		}
 
 		e.l.Info("become leader", zap.Stringer("current member", e.info))
-		e.notifyLeader(leaderInfo) // become the leader now
+		e.notifyLeader(ctx, leaderInfo) // become the leader now
 		e.watchLeader(ctx, session, leaderKey)
 		e.l.Info("retire from leader", zap.Stringer("current member", e.info))
-		e.notifyLeader(nil) // need to re-campaign
+		e.notifyLeader(ctx, nil) // need to re-campaign
 
 		cancel2()
 		compaignWg.Wait()
@@ -305,7 +305,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 // notifyLeader notify the leader's information.
 // leader info can be nil, and this is used when retire from leader.
-func (e *Election) notifyLeader(leaderInfo *CampaignerInfo) {
+func (e *Election) notifyLeader(ctx context.Context, leaderInfo *CampaignerInfo) {
 	if leaderInfo != nil && leaderInfo.ID == e.info.ID {
 		e.isLeader.Set(true)
 	} else {
@@ -317,6 +317,8 @@ func (e *Election) notifyLeader(leaderInfo *CampaignerInfo) {
 	case <-time.After(e.notifyBlockTime):
 		// this should not happened
 		e.l.Error("ignore notify the leader's information after block a period of time", zap.Stringer("current member", e.info), zap.Stringer("leader", leaderInfo))
+	case <-ctx.Done():
+		e.l.Warn("ignore notify the leader's information because context canceled", zap.Stringer("current member", e.info), zap.Stringer("leader", leaderInfo))
 	}
 }
 
