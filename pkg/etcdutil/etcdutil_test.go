@@ -23,9 +23,11 @@ import (
 	. "github.com/pingcap/check"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
+	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 	"go.etcd.io/etcd/etcdserver/etcdserverpb"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = Suite(&testEtcdUtilSuite{})
@@ -161,4 +163,14 @@ func (t *testEtcdUtilSuite) testMemberUtilInternal(c *C, portCount int) {
 			c.Fatalf("unknown member %v", m)
 		}
 	}
+}
+
+func (t *testEtcdUtilSuite) testIsRetryableError(c *C) {
+	c.Assert(IsRetryableError(v3rpc.ErrCompacted), IsTrue)
+	c.Assert(IsRetryableError(v3rpc.ErrNoLeader), IsTrue)
+	c.Assert(IsRetryableError(v3rpc.ErrNoSpace), IsTrue)
+
+	c.Assert(IsRetryableError(v3rpc.ErrCorrupt), IsFalse)
+	c.Assert(IsRetryableError(terror.ErrDecodeEtcdKeyFail), IsFalse)
+	c.Assert(IsRetryableError(nil), IsFalse)
 }

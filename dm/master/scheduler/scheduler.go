@@ -17,6 +17,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
@@ -24,6 +25,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -172,22 +174,13 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 
 	ctx, cancel := context.WithCancel(pCtx)
 
-	// starting to observe status of DM-worker instances.
-	workerEvCh := make(chan ha.WorkerEvent, 10)
-	workerErrCh := make(chan error, 10)
-	s.wg.Add(2)
-	go func() {
-		defer func() {
-			s.wg.Done()
-			close(workerEvCh)
-			close(workerErrCh)
-		}()
-		ha.WatchWorkerEvent(ctx, etcdCli, rev+1, workerEvCh, workerErrCh)
-	}()
-	go func() {
+	s.wg.Add(1)
+	go func(rev1 int64) {
 		defer s.wg.Done()
-		s.handleWorkerEv(ctx, workerEvCh, workerErrCh)
-	}()
+		// starting to observe status of DM-worker instances.
+		// TODO: handle fatal error from observeWorkerEvent
+		s.observeWorkerEvent(ctx, etcdCli, rev1)
+	}(rev)
 
 	s.started = true // started now
 	s.cancel = cancel
@@ -919,22 +912,51 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 	return rev, nil
 }
 
+func (s *Scheduler) resetWorkerEv(cli *clientv3.Client) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rwm := s.workers
+	kam, rev, err := ha.GetKeepAliveWorkers(cli)
+	if err != nil {
+		return 0, err
+	}
+
+	// update all registered workers status
+	for name := range rwm {
+		ev := ha.WorkerEvent{WorkerName: name}
+		// set the stage as Free if it's keep alive.
+		if _, ok := kam[name]; ok {
+			err = s.handleWorkerOnline(ev, false)
+			if err != nil {
+				return 0, err
+			}
+		} else {
+			err = s.handleWorkerOffline(ev, false)
+			if err != nil {
+				return 0, err
+			}
+		}
+	}
+	return rev, nil
+}
+
 // handleWorkerEv handles the online/offline status change event of DM-worker instances.
-func (s *Scheduler) handleWorkerEv(ctx context.Context, evCh <-chan ha.WorkerEvent, errCh <-chan error) {
+func (s *Scheduler) handleWorkerEv(ctx context.Context, evCh <-chan ha.WorkerEvent, errCh <-chan error) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case ev, ok := <-evCh:
 			if !ok {
-				return
+				return nil
 			}
 			s.logger.Info("receive worker status change event", zap.Bool("delete", ev.IsDeleted), zap.Stringer("event", ev))
 			var err error
 			if ev.IsDeleted {
-				err = s.handleWorkerOffline(ev)
+				err = s.handleWorkerOffline(ev, true)
 			} else {
-				err = s.handleWorkerOnline(ev)
+				err = s.handleWorkerOnline(ev, true)
 			}
 			if err != nil {
 				// TODO(csuzhangxc): report the error through metrics or other methods.
@@ -942,10 +964,55 @@ func (s *Scheduler) handleWorkerEv(ctx context.Context, evCh <-chan ha.WorkerEve
 			}
 		case err, ok := <-errCh:
 			if !ok {
-				return
+				return nil
 			}
 			// TODO(csuzhangxc): we only log the `err` here, but we should update metrics and do more works for it later.
 			s.logger.Error("receive error when watching worker status change event", zap.Error(err))
+			if etcdutil.IsRetryableError(err) {
+				return err
+			}
+		}
+	}
+}
+
+func (s *Scheduler) observeWorkerEvent(ctx context.Context, etcdCli *clientv3.Client, rev int64) error {
+	var wg sync.WaitGroup
+	for {
+		workerEvCh := make(chan ha.WorkerEvent, 10)
+		workerErrCh := make(chan error, 10)
+		wg.Add(1)
+		// use ctx1, cancel1 to make sure old watcher has been released
+		ctx1, cancel1 := context.WithCancel(ctx)
+		go func() {
+			defer func() {
+				close(workerEvCh)
+				close(workerErrCh)
+				wg.Done()
+			}()
+			ha.WatchWorkerEvent(ctx1, etcdCli, rev+1, workerEvCh, workerErrCh)
+		}()
+		err := s.handleWorkerEv(ctx1, workerEvCh, workerErrCh)
+		cancel1()
+		wg.Wait()
+
+		if etcdutil.IsRetryableError(err) {
+			rev = 0
+			retryNum := 1
+			for rev == 0 {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(500 * time.Millisecond):
+					rev, err = s.resetWorkerEv(etcdCli)
+					if err != nil {
+						log.L().Error("resetWorkerEv is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
+					}
+				}
+				retryNum++
+			}
+		} else {
+			log.L().Error("observeWorkerEvent is failed and will quit now", zap.Error(err))
+			return err
 		}
 	}
 }
@@ -953,9 +1020,11 @@ func (s *Scheduler) handleWorkerEv(ctx context.Context, evCh <-chan ha.WorkerEve
 // handleWorkerOnline handles the scheduler when a DM-worker become online.
 // This should try to bound an unbounded source to it.
 // NOTE: this func need to hold the mutex.
-func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent, toLock bool) error {
+	if toLock {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+	}
 
 	// 1. find the worker.
 	w, ok := s.workers[ev.WorkerName]
@@ -986,9 +1055,11 @@ func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent) error {
 // handleWorkerOffline handles the scheduler when a DM-worker become offline.
 // This should unbound any previous bounded source.
 // NOTE: this func need to hold the mutex.
-func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent, toLock bool) error {
+	if toLock {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+	}
 
 	// 1. find the worker.
 	w, ok := s.workers[ev.WorkerName]

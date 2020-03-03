@@ -115,7 +115,7 @@ func GetRelayStage(cli *clientv3.Client, source string) (Stage, int64, error) {
 	}
 
 	if resp.Count == 0 {
-		return stage, 0, nil
+		return stage, resp.Header.Revision, nil
 	} else if resp.Count > 1 {
 		// TODO(csuzhangxc): add terror.
 		// this should not happen.
@@ -176,7 +176,7 @@ func GetSubTaskStage(cli *clientv3.Client, source, task string) (map[string]Stag
 	}
 
 	if resp.Count == 0 {
-		return stm, 0, nil
+		return stm, resp.Header.Revision, nil
 	} else if task != "" && resp.Count > 1 {
 		return stm, 0, fmt.Errorf("too many stage (%d) exist for subtask {sourceID: %s, task name: %s}", resp.Count, source, task)
 	}
