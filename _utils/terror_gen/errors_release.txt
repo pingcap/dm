@@ -165,7 +165,7 @@ ErrRelayParseUUIDIndex,[code=28001:class=relay-event-lib:scope=internal:level=hi
 ErrRelayParseUUIDSuffix,[code=28002:class=relay-event-lib:scope=internal:level=high],"UUID (with suffix) %s not valid"
 ErrRelayUUIDWithSuffixNotFound,[code=28003:class=relay-event-lib:scope=internal:level=high],"no UUID (with suffix) matched %s found in %s, all UUIDs are %v"
 ErrRelayGenFakeRotateEvent,[code=28004:class=relay-event-lib:scope=internal:level=high],"generate fake rotate event"
-ErrRelayNoValidRelaySubDir,[code=28005:class=relay-event-lib:scope=internal:level=high],"there is no relay data under relay directory %s. please check relay data and status"
+ErrRelayNoValidRelaySubDir,[code=28005:class=relay-event-lib:scope=internal:level=high],"there aren't any data under relay log directory %s. please check relay log using  query-status"
 ErrRelayUUIDSuffixNotValid,[code=30001:class=relay-unit:scope=internal:level=high],"UUID %s suffix %d should be 1 larger than previous suffix %d"
 ErrRelayUUIDSuffixLessThanPrev,[code=30002:class=relay-unit:scope=internal:level=high],"previous UUID %s has suffix larger than %s"
 ErrRelayLoadMetaData,[code=30003:class=relay-unit:scope=internal:level=high],"load meta data"
