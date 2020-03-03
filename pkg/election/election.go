@@ -177,15 +177,15 @@ func (e *Election) ErrorNotify() <-chan error {
 
 // Close closes the election instance and release the resources.
 func (e *Election) Close() {
-	e.l.Info("election is closing", zap.String("current member", e.info.ID))
+	e.l.Info("election is closing", zap.Stringer("current member", e.info))
 	if !e.closed.CompareAndSwap(0, 1) {
-		e.l.Info("election was already closed", zap.String("current member", e.info.ID))
+		e.l.Info("election was already closed", zap.Stringer("current member", e.info))
 		return
 	}
 
 	e.cancel()
 	e.bgWg.Wait()
-	e.l.Info("election is closed", zap.String("current member", e.info.ID))
+	e.l.Info("election is closed", zap.Stringer("current member", e.info))
 }
 
 func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Session) {
@@ -222,7 +222,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 				return
 			}
 		case <-ctx.Done():
-			e.l.Info("break campaign loop, context is done", zap.String("id", e.info.ID), zap.Error(ctx.Err()))
+			e.l.Info("break campaign loop, context is done", zap.Stringer("current member", e.info), zap.Error(ctx.Err()))
 			return
 		default:
 		}
@@ -235,11 +235,11 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		go func() {
 			defer compaignWg.Done()
 
-			e.l.Debug("begin to compaign", zap.String("ID", e.info.ID))
+			e.l.Debug("begin to compaign", zap.Stringer("current member", e.info))
 			err2 := elec.Campaign(ctx2, e.infoStr)
 			if err2 != nil {
 				// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
-				e.l.Info("fail to campaign", zap.String("ID", e.info.ID), zap.Error(err2))
+				e.l.Info("fail to campaign", zap.Stringer("current member", e.info), zap.Error(err2))
 			}
 		}()
 
@@ -286,17 +286,18 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 
 		if leaderInfo.ID != e.info.ID {
-			e.l.Info("current member is not the leader", zap.String("current member", e.info.ID), zap.String("leader", leaderInfo.ID))
-			e.notifyLeader(ctx, leaderInfo)
+			e.l.Info("current member is not the leader", zap.Stringer("current member", e.info), zap.Stringer("leader", leaderInfo))
+			e.notifyLeader(leaderInfo)
 			cancel2()
 			compaignWg.Wait()
 			continue
 		}
 
-		e.notifyLeader(ctx, leaderInfo) // become the leader now
+		e.l.Info("become leader", zap.Stringer("current member", e.info))
+		e.notifyLeader(leaderInfo) // become the leader now
 		e.watchLeader(ctx, session, leaderKey)
-		e.l.Info("retire from leader", zap.String("current member", e.info.ID))
-		e.notifyLeader(ctx, nil) // need to re-campaign
+		e.l.Info("retire from leader", zap.Stringer("current member", e.info))
+		e.notifyLeader(nil) // need to re-campaign
 
 		cancel2()
 		compaignWg.Wait()
@@ -305,7 +306,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 // notifyLeader notify the leader's information.
 // leader info can be nil, and this is used when retire from leader.
-func (e *Election) notifyLeader(ctx context.Context, leaderInfo *CampaignerInfo) {
+func (e *Election) notifyLeader(leaderInfo *CampaignerInfo) {
 	if leaderInfo != nil && leaderInfo.ID == e.info.ID {
 		e.isLeader.Set(true)
 	} else {
@@ -316,7 +317,7 @@ func (e *Election) notifyLeader(ctx context.Context, leaderInfo *CampaignerInfo)
 	case e.leaderCh <- leaderInfo:
 	case <-time.After(NotifyBlockTime):
 		// this should not happened
-		e.l.Error("ignore notify the leader's information after block a period of time", zap.String("current member", e.info.ID), zap.Stringer("leader", leaderInfo))
+		e.l.Error("ignore notify the leader's information after block a period of time", zap.Stringer("current member", e.info), zap.Stringer("leader", leaderInfo))
 	}
 }
 
