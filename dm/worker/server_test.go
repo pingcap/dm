@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
+	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/config"
@@ -44,6 +46,8 @@ const (
 	subtaskSampleFile = "./subtask.toml"
 	mydumperPath      = "../../bin/mydumper"
 )
+
+var etcdErrCompacted = v3rpc.ErrCompacted
 
 func TestServer(t *testing.T) {
 	TestingT(t)
@@ -97,24 +101,17 @@ func (t *testServer) TestServer(c *C) {
 	)
 	etcdDir := c.MkDir()
 	ETCD, err := createMockETCD(etcdDir, "host://"+masterAddr)
-	defer ETCD.Close()
 	c.Assert(err, IsNil)
+	defer ETCD.Close()
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	cfg.KeepAliveTTL = keepAliveTTL
 
 	NewRelayHolder = NewDummyRelayHolder
-	defer func() {
-		NewRelayHolder = NewRealRelayHolder
-	}()
 	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
 		cfg.UseRelay = false
 		return NewRealSubTask(cfg, etcdClient)
 	}
-	defer func() {
-		NewSubTask = NewRealSubTask
-	}()
-
 	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
 		mockDumper := NewMockUnit(pb.UnitType_Dump)
 		mockLoader := NewMockUnit(pb.UnitType_Load)
@@ -122,12 +119,14 @@ func (t *testServer) TestServer(c *C) {
 		return []unit.Unit{mockDumper, mockLoader, mockSync}
 	}
 	defer func() {
+		NewRelayHolder = NewRealRelayHolder
+		NewSubTask = NewRealSubTask
 		createUnits = createRealUnits
 	}()
 
 	s := NewServer(cfg)
+	defer s.Close()
 	go func() {
-		defer s.Close()
 		err1 := s.Start()
 		c.Assert(err1, IsNil)
 	}()
@@ -219,6 +218,96 @@ func (t *testServer) TestServer(c *C) {
 
 	// test worker, just make sure testing sort
 	t.testWorker(c)
+}
+
+func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
+	var (
+		masterAddr   = "127.0.0.1:8291"
+		keepAliveTTL = int64(1)
+		startRev     = int64(1)
+	)
+	etcdDir := c.MkDir()
+	ETCD, err := createMockETCD(etcdDir, "host://"+masterAddr)
+	c.Assert(err, IsNil)
+	defer ETCD.Close()
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.KeepAliveTTL = keepAliveTTL
+
+	s := NewServer(cfg)
+	etcdCli, err := clientv3.New(clientv3.Config{
+		Endpoints:            GetJoinURLs(s.cfg.Join),
+		DialTimeout:          dialTimeout,
+		DialKeepAliveTime:    keepaliveTime,
+		DialKeepAliveTimeout: keepaliveTimeout,
+	})
+	s.etcdClient = etcdCli
+	s.closed.Set(false)
+	c.Assert(err, IsNil)
+	sourceCfg := loadSourceConfigWithoutPassword(c)
+	sourceCfg.EnableRelay = false
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// step 1: Put a source config and source bound to this worker, then delete it
+	_, err = ha.PutSourceCfg(etcdCli, sourceCfg)
+	c.Assert(err, IsNil)
+	sourceBound := ha.NewSourceBound(sourceCfg.SourceID, cfg.Name)
+	_, err = ha.PutSourceBound(etcdCli, sourceBound)
+	c.Assert(err, IsNil)
+	rev, err := ha.DeleteSourceBound(etcdCli, cfg.Name)
+	c.Assert(err, IsNil)
+	// step 2: start source at this worker
+	c.Assert(s.startWorker(&sourceCfg), IsNil)
+	// step 3: trigger etcd compaction and check whether we can receive it through watcher
+	_, err = etcdCli.Compact(ctx, rev)
+	c.Assert(err, IsNil)
+	sourceBoundCh := make(chan ha.SourceBound, 10)
+	sourceBoundErrCh := make(chan error, 10)
+	ha.WatchSourceBound(ctx, etcdCli, cfg.Name, startRev, sourceBoundCh, sourceBoundErrCh)
+	select {
+	case err = <-sourceBoundErrCh:
+		c.Assert(err, Equals, etcdErrCompacted)
+	case <-time.After(300 * time.Millisecond):
+		c.Fatal("fail to get etcd error compacted")
+	}
+	// step 4: watch source bound from startRev
+	var wg sync.WaitGroup
+	ctx1, cancel1 := context.WithCancel(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(s.observeSourceBound(ctx1, etcdCli, startRev), IsNil)
+	}()
+	// step 4.1: should stop the running worker, source bound has been deleted, should stop this worker
+	time.Sleep(time.Second)
+	c.Assert(s.getWorker(true), IsNil)
+	// step 4.2: put a new source bound, source should be started
+	_, err = ha.PutSourceBound(etcdCli, sourceBound)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return s.getWorker(true) != nil
+	}), IsTrue)
+	cfg2 := s.getWorker(true).cfg
+	c.Assert(*cfg2, DeepEquals, sourceCfg)
+	cancel1()
+	wg.Wait()
+	c.Assert(s.stopWorker(sourceCfg.SourceID), IsNil)
+	// step 5: start observeSourceBound from compacted revision again, should start worker
+	ctx2, cancel2 := context.WithCancel(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(s.observeSourceBound(ctx2, etcdCli, startRev), IsNil)
+	}()
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return s.getWorker(true) != nil
+	}), IsTrue)
+	cfg2 = s.getWorker(true).cfg
+	c.Assert(*cfg2, DeepEquals, sourceCfg)
+	cancel2()
+	wg.Wait()
 }
 
 func (t *testServer) testHTTPInterface(c *C, uri string) {

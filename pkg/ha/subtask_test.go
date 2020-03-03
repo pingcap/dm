@@ -43,7 +43,7 @@ func (t *testForEtcd) TestSubTaskEtcd(c *C) {
 	// no subtask config exist.
 	tsm1, rev1, err := GetSubTaskCfg(etcdTestCli, source, taskName1, 0)
 	c.Assert(err, IsNil)
-	c.Assert(rev1, Equals, int64(0))
+	c.Assert(rev1, Greater, int64(0))
 	c.Assert(tsm1, HasLen, 0)
 
 	// put subtask configs.
@@ -82,13 +82,13 @@ func (t *testForEtcd) TestSubTaskEtcd(c *C) {
 	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOps...).Commit()
 	c.Assert(err, IsNil)
 	deleteOps = deleteSubTaskCfgOp(cfg2)
-	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOps...).Commit()
+	deleteResp, err := etcdTestCli.Txn(context.Background()).Then(deleteOps...).Commit()
 	c.Assert(err, IsNil)
 
 	// get again, not exists now.
 	tsm4, rev5, err := GetSubTaskCfg(etcdTestCli, source, taskName1, 0)
 	c.Assert(err, IsNil)
-	c.Assert(rev5, Equals, int64(0))
+	c.Assert(rev5, Equals, deleteResp.Header.Revision)
 	c.Assert(tsm4, HasLen, 0)
 
 	// put subtask config.
