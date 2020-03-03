@@ -52,6 +52,9 @@ const (
 	// the DM-master leader election key prefix
 	// DM-master cluster : etcd cluster = 1 : 1 now.
 	electionKey = "/dm-master/leader"
+
+	// getLeaderBlockTime is the max block time for get leader information from election
+	getLeaderBlockTime = 10 * time.Minute
 )
 
 var (
@@ -172,7 +175,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	// start leader election
 	// TODO: s.cfg.Name -> address
-	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name, s.cfg.AdvertiseAddr)
+	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name, s.cfg.AdvertiseAddr, getLeaderBlockTime)
 	if err != nil {
 		return
 	}
