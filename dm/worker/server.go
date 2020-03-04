@@ -287,7 +287,7 @@ func (s *Server) setSourceStatus(source string, err error, needLock bool) {
 	if err != nil {
 		s.sourceStatus.Result = &pb.ProcessResult{
 			Errors: []*pb.ProcessError{
-				unit.NewProcessError(pb.ErrorType_UnknownError, err),
+				unit.NewProcessError(err),
 			},
 		}
 	}

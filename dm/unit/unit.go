@@ -63,10 +63,9 @@ type Unit interface {
 
 // NewProcessError creates a new ProcessError
 // we can refine to add error scope field if needed
-func NewProcessError(errorType pb.ErrorType, err error) *pb.ProcessError {
+func NewProcessError(err error) *pb.ProcessError {
 	result := &pb.ProcessError{
-		Type: errorType,
-		Msg:  errors.ErrorStack(err),
+		Msg: errors.ErrorStack(err),
 	}
 	if e, ok := err.(*terror.Error); ok {
 		result.Error = &pb.TError{
