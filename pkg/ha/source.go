@@ -49,7 +49,7 @@ func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (config.Source
 	}
 
 	if resp.Count == 0 {
-		return cfg, 0, nil
+		return cfg, resp.Header.Revision, nil
 	} else if resp.Count > 1 {
 		// TODO(csuzhangxc): add terror.
 		// this should not happen.

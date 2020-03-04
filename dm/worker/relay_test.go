@@ -206,7 +206,7 @@ func (t *testRelay) testClose(c *C, holder *realRelayHolder) {
 	processResult := &pb.ProcessResult{
 		IsCanceled: true,
 		Errors: []*pb.ProcessError{
-			unit.NewProcessError(pb.ErrorType_UnknownError, errors.New("process error")),
+			unit.NewProcessError(errors.New("process error")),
 		},
 	}
 	r.InjectProcessResult(*processResult)

@@ -117,7 +117,7 @@ func GetSourceBound(cli *clientv3.Client, worker string) (map[string]SourceBound
 	}
 
 	if resp.Count == 0 {
-		return sbm, 0, nil
+		return sbm, resp.Header.Revision, nil
 	} else if worker != "" && resp.Count > 1 {
 		// TODO(csuzhangxc): add terror.
 		// this should not happen.

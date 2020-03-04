@@ -583,7 +583,7 @@ func (st *SubTask) fail(err error) {
 	st.setStage(pb.Stage_Paused)
 	st.setResult(&pb.ProcessResult{
 		Errors: []*pb.ProcessError{
-			unit.NewProcessError(pb.ErrorType_UnknownError, err),
+			unit.NewProcessError(err),
 		},
 	})
 }

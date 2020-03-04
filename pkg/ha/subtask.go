@@ -59,7 +59,7 @@ func GetSubTaskCfg(cli *clientv3.Client, source, taskName string, rev int64) (ma
 	}
 
 	if resp.Count == 0 {
-		return tsm, 0, nil
+		return tsm, resp.Header.Revision, nil
 	} else if taskName != "" && resp.Count > 1 {
 		// TODO(lichunzhu): add terror.
 		// this should not happen.

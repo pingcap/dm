@@ -39,6 +39,8 @@ func TestSuite(t *testing.T) {
 type testElectionSuite struct {
 	etcd     *embed.Etcd
 	endPoint string
+
+	notifyBlockTime time.Duration
 }
 
 func (t *testElectionSuite) SetUpTest(c *C) {
@@ -73,6 +75,9 @@ func (t *testElectionSuite) SetUpTest(c *C) {
 	case <-time.After(10 * time.Second):
 		c.Fatal("start embed etcd timeout")
 	}
+
+	// some notify leader information is not handled, just reduce the block time and ignore them
+	t.notifyBlockTime = 100 * time.Millisecond
 }
 
 func (t *testElectionSuite) TearDownTest(c *C) {
@@ -96,14 +101,14 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
-	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1)
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e1.Close()
 
 	// e1 should become the leader
 	select {
 	case leader := <-e1.LeaderNotify():
-		c.Assert(leader, Equals, IsLeader)
+		c.Assert(leader.ID, Equals, ID1)
 	case <-time.After(3 * time.Second):
 		c.Fatal("leader campaign timeout")
 	}
@@ -116,12 +121,12 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, addr2)
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, addr2, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e2.Close()
 	select {
 	case leader := <-e2.leaderCh:
-		c.Assert(leader, Equals, IsNotLeader)
+		c.Assert(leader.ID, Equals, ID1)
 	case <-time.After(time.Second):
 		c.Fatal("leader campaign timeout")
 	}
@@ -133,24 +138,13 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	c.Assert(e2.IsLeader(), IsFalse)
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		select {
-		case leader := <-e1.LeaderNotify(): // e1 should retire when closing
-			c.Assert(leader, Equals, RetireFromLeader)
-		case <-time.After(time.Second):
-			c.Fatal("leader campaign timeout")
-		}
-	}()
 	e1.Close() // stop the campaign for e1
 	c.Assert(e1.IsLeader(), IsFalse)
-	wg.Wait()
 
 	// e2 should become the leader
 	select {
 	case leader := <-e2.LeaderNotify():
-		c.Assert(leader, Equals, IsLeader)
+		c.Assert(leader.ID, Equals, ID2)
 	case <-time.After(3 * time.Second):
 		c.Fatal("leader campaign timeout")
 	}
@@ -179,7 +173,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	// can not elect with closed client.
 	ctx3, cancel3 := context.WithCancel(context.Background())
 	defer cancel3()
-	_, err = NewElection(ctx3, cli, sessionTTL, key, ID3, addr3)
+	_, err = NewElection(ctx3, cli, sessionTTL, key, ID3, addr3, t.notifyBlockTime)
 	c.Assert(terror.ErrElectionCampaignFail.Equal(err), IsTrue)
 	c.Assert(err, ErrorMatches, ".*fail to campaign leader: create the initial session: context canceled.*")
 }
@@ -199,14 +193,14 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
-	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1)
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e1.Close()
 
 	// e1 should become the leader
 	select {
 	case leader := <-e1.LeaderNotify():
-		c.Assert(leader, Equals, IsLeader)
+		c.Assert(leader.ID, Equals, ID1)
 	case <-time.After(3 * time.Second):
 		c.Fatal("leader campaign timeout")
 	}
@@ -219,7 +213,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, addr2)
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, addr2, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e2.Close()
 	time.Sleep(100 * time.Millisecond) // wait 100ms to start the campaign
@@ -266,14 +260,14 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	e, err := NewElection(ctx, cli, sessionTTL, key, ID, addr)
+	e, err := NewElection(ctx, cli, sessionTTL, key, ID, addr, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e.Close()
 
 	// should become the leader
 	select {
 	case leader := <-e.LeaderNotify():
-		c.Assert(leader, Equals, IsLeader)
+		c.Assert(leader.ID, Equals, ID)
 	case <-time.After(3 * time.Second):
 		c.Fatal("leader campaign timeout")
 	}
@@ -292,7 +286,7 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 		case err2 := <-e.ErrorNotify():
 			c.Fatalf("delete the leader key should not get an error, %v", err2)
 		case leader := <-e.LeaderNotify():
-			c.Assert(leader, Equals, RetireFromLeader)
+			c.Assert(leader, IsNil)
 		}
 	}()
 	_, err = cli.Delete(ctx, leaderKey)

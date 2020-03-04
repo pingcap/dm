@@ -70,7 +70,7 @@ func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig) error {
 		r := <-pr
 		// we only want first error
 		if len(r.Errors) > 0 {
-			return terror.ErrTaskCheckSyncConfigError.Generate(ErrorMsgHeader, r.Errors[0].Type, r.Errors[0].Msg, string(r.Detail))
+			return terror.ErrTaskCheckSyncConfigError.Generate(ErrorMsgHeader, r.Errors[0].Msg, string(r.Detail))
 		}
 	}
 
