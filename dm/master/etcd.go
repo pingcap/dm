@@ -67,7 +67,7 @@ func startEtcd(etcdCfg *embed.Config,
 		// so for `ReadyNotify` timeout, we choose to only call `e.Server.Stop()` now,
 		// and we should exit the DM-master process after returned with error from this function.
 		e.Server.Stop()
-		return nil, terror.ErrMasterStartEmbedEtcdFail.Generatef("start embed etcd timeout %v", etcdStartTimeout)
+		return nil, terror.ErrMasterStartEmbedEtcdFail.Generatef("start embed etcd timeout %v", startTimeout)
 	}
 	return e, nil
 }
