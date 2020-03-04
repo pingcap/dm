@@ -28,12 +28,18 @@ import (
 
 // Status returns the status of the current sub task
 func (st *SubTask) Status() interface{} {
-	return st.CurrUnit().Status()
+	if cu := st.CurrUnit(); cu != nil {
+		return cu.Status()
+	}
+	return nil
 }
 
 // Error returns the error of the current sub task
 func (st *SubTask) Error() interface{} {
-	return st.CurrUnit().Error()
+	if cu := st.CurrUnit(); cu != nil {
+		return cu.Error()
+	}
+	return nil
 }
 
 // StatusJSON returns the status of the current sub task as json string
