@@ -337,14 +337,6 @@ message ProcessResult {
     bytes detail = 3;
 }
 
-// ErrorType represents type of error produced by a dm unit
-// NOTE: add new if needed
-enum ErrorType {
-    UnknownError = 0;
-    ExecSQL = 1;
-    CheckFailed = 2;
-}
-
 // TError represents error used in dm
 // NOTE: currently stack trace is not supported, `Message` is the `terror.Error.getMsg` result
 // and `RawCause` is the `Error` result of error from `terror.Error.Cause()`.
@@ -360,9 +352,8 @@ message TError {
 // ProcessError represents error produced by a dm unit
 // NOTE: refine later, like add error scope field
 message ProcessError {
-    ErrorType Type = 1;
-    string msg = 2;
-    TError error = 3;
+    string msg = 1;
+    TError error = 2;
 }
 
 // SwitchRelayMasterRequest represents a request for switching a dm-worker's relay unit to another master server
