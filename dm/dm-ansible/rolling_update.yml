@@ -40,7 +40,7 @@
     
     - name: wait until dm_master is available
       uri:
-        url: "http://{{ ansible_host }}:{{ dm_master_port }}/apis/v1alpha1/status"
+        url: "http://{{ ansible_host }}:{{ dm_master_port }}/apis/v1alpha1/status/"
         return_content: yes
       register: dm_master_http_result
       until: dm_master_http_result.status == 200 and 'true' in dm_master_http_result.content
