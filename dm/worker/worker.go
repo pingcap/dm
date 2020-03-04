@@ -27,6 +27,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -90,13 +91,13 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client) (w *Worker
 	if cfg.EnableRelay {
 		// initial relay holder, the cfg's password need decrypt
 		w.relayHolder = NewRelayHolder(cfg)
-		purger, err1 := w.relayHolder.Init([]purger.PurgeInterceptor{
+		purger1, err1 := w.relayHolder.Init([]purger.PurgeInterceptor{
 			w,
 		})
 		if err1 != nil {
 			return nil, err1
 		}
-		w.relayPurger = purger
+		w.relayPurger = purger1
 	}
 
 	// initial task status checker
@@ -159,9 +160,6 @@ func (w *Worker) Start(startRelay bool) {
 
 // Close stops working and releases resources
 func (w *Worker) Close() {
-	w.Lock()
-	defer w.Unlock()
-
 	if w.closed.Get() == closedTrue {
 		w.l.Warn("already closed")
 		return
@@ -170,6 +168,9 @@ func (w *Worker) Close() {
 	// cancel status output ticker and wait for return
 	w.cancel()
 	w.wg.Wait()
+
+	w.Lock()
+	defer w.Unlock()
 
 	// close all sub tasks
 	w.subTaskHolder.closeAllSubTasks()
@@ -310,14 +311,94 @@ func (w *Worker) QueryError(name string) []*pb.SubTaskError {
 	return w.Error(name)
 }
 
-func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) {
+func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {
+	subTaskStages, revSubTask, err := ha.GetSubTaskStage(etcdCli, w.cfg.SourceID, "")
+	if err != nil {
+		return 0, err
+	}
+	subTaskCfgm, _, err := ha.GetSubTaskCfg(etcdCli, w.cfg.SourceID, "", revSubTask)
+	if err != nil {
+		return 0, err
+	}
+	// use sts to check which subtask has no subtaskCfg or subtaskStage now
+	sts := w.subTaskHolder.getAllSubTasks()
+	for name, subtaskCfg := range subTaskCfgm {
+		stage, ok := subTaskStages[name]
+		if ok {
+			// TODO: right operation sequences may get error when we get etcdErrCompact, need to handle it later
+			// For example, Expect: Running -(pause)-> Paused -(resume)-> Running
+			// we get an etcd compact error at the first running. If we try to "resume" it now, we will get an error
+			err = w.operateSubTaskStage(stage, subtaskCfg)
+			if err != nil {
+				// TODO: add better metrics
+				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage),
+					zap.String("task", subtaskCfg.Name), zap.Error(err))
+			}
+			delete(sts, name)
+		}
+	}
+	// remove subtasks without subtask config or subtask stage
+	for name := range sts {
+		err = w.OperateSubTask(name, pb.TaskOp_Stop)
+		if err != nil {
+			// TODO: add better metrics
+			log.L().Error("fail to stop subtask", zap.String("task", name), zap.Error(err))
+		}
+	}
+	return revSubTask, nil
+}
+
+func (w *Worker) observeSubtaskStage(ctx context.Context, etcdCli *clientv3.Client, rev int64) error {
+	var wg sync.WaitGroup
+
+	for {
+		subTaskStageCh := make(chan ha.Stage, 10)
+		subTaskErrCh := make(chan error, 10)
+		wg.Add(1)
+		// use ctx1, cancel1 to make sure old watcher has been released
+		ctx1, cancel1 := context.WithCancel(ctx)
+		go func() {
+			defer func() {
+				close(subTaskStageCh)
+				close(subTaskErrCh)
+				wg.Done()
+			}()
+			ha.WatchSubTaskStage(ctx1, etcdCli, w.cfg.SourceID, rev+1, subTaskStageCh, subTaskErrCh)
+		}()
+		err := w.handleSubTaskStage(ctx1, subTaskStageCh, subTaskErrCh)
+		cancel1()
+		wg.Wait()
+
+		if etcdutil.IsRetryableError(err) {
+			rev = 0
+			retryNum := 1
+			for rev == 0 {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(500 * time.Millisecond):
+					rev, err = w.resetSubtaskStage(etcdCli)
+					if err != nil {
+						log.L().Error("resetSubtaskStage is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
+					}
+				}
+				retryNum++
+			}
+		} else {
+			log.L().Error("observeSubtaskStage is failed and will quit now", zap.Error(err))
+			return err
+		}
+	}
+}
+
+func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) error {
 	for {
 		select {
 		case <-ctx.Done():
 			log.L().Info("worker is closed, handleSubTaskStage will quit now")
-			return
+			return nil
 		case stage := <-stageCh:
-			err := w.operateSubTaskStage(stage)
+			err := w.operateSubTaskStageWithoutConfig(stage)
 			if err != nil {
 				// TODO: add better metrics
 				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage), zap.Error(err))
@@ -325,22 +406,20 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 		case err := <-errCh:
 			// TODO: deal with err
 			log.L().Error("WatchSubTaskStage received an error", zap.Error(err))
+			if etcdutil.IsRetryableError(err) {
+				return err
+			}
 		}
 	}
 }
 
-func (w *Worker) operateSubTaskStage(stage ha.Stage) error {
+func (w *Worker) operateSubTaskStage(stage ha.Stage, subTaskCfg config.SubTaskConfig) error {
 	var op pb.TaskOp
 	switch {
 	case stage.Expect == pb.Stage_Running:
 		if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
-			tsm, _, err := ha.GetSubTaskCfg(w.etcdClient, stage.Source, stage.Task, stage.Revision)
-			if err != nil {
-				// TODO: need retry
-				return terror.Annotate(err, "fail to get subtask config from etcd")
-			}
-			subTaskCfg := tsm[stage.Task]
 			w.StartSubTask(&subTaskCfg)
+			log.L().Info("load subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
 			return nil
 		}
 		op = pb.TaskOp_Resume
@@ -352,12 +431,84 @@ func (w *Worker) operateSubTaskStage(stage ha.Stage) error {
 	return w.OperateSubTask(stage.Task, op)
 }
 
-func (w *Worker) handleRelayStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) {
+func (w *Worker) operateSubTaskStageWithoutConfig(stage ha.Stage) error {
+	var subTaskCfg config.SubTaskConfig
+	if stage.Expect == pb.Stage_Running {
+		if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
+			tsm, _, err := ha.GetSubTaskCfg(w.etcdClient, stage.Source, stage.Task, stage.Revision)
+			if err != nil {
+				// TODO: need retry
+				return terror.Annotate(err, "fail to get subtask config from etcd")
+			}
+			var ok bool
+			if subTaskCfg, ok = tsm[stage.Task]; !ok {
+				return terror.ErrWorkerFailToGetSubtaskConfigFromEtcd.Generate(stage.Task)
+			}
+		}
+	}
+	return w.operateSubTaskStage(stage, subTaskCfg)
+}
+
+func (w *Worker) observeRelayStage(ctx context.Context, etcdCli *clientv3.Client, rev int64) error {
+	var wg sync.WaitGroup
+	for {
+		relayStageCh := make(chan ha.Stage, 10)
+		relayErrCh := make(chan error, 10)
+		wg.Add(1)
+		// use ctx1, cancel1 to make sure old watcher has been released
+		ctx1, cancel1 := context.WithCancel(ctx)
+		go func() {
+			defer func() {
+				close(relayStageCh)
+				close(relayErrCh)
+				wg.Done()
+			}()
+			ha.WatchRelayStage(ctx1, etcdCli, w.cfg.SourceID, rev+1, relayStageCh, relayErrCh)
+		}()
+		err := w.handleRelayStage(ctx1, relayStageCh, relayErrCh)
+		cancel1()
+		wg.Wait()
+
+		if etcdutil.IsRetryableError(err) {
+			rev = 0
+			retryNum := 1
+			for rev == 0 {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(500 * time.Millisecond):
+					stage, rev1, err1 := ha.GetRelayStage(etcdCli, w.cfg.SourceID)
+					if err1 != nil {
+						log.L().Error("get source bound from etcd failed, will retry later", zap.Error(err1), zap.Int("retryNum", retryNum))
+						break
+					}
+					rev = rev1
+					var emptyStage ha.Stage
+					// emptyStage means this stage has been deleted and relay has been stopped
+					if emptyStage == stage {
+						stage.IsDeleted = true
+					}
+					err1 = w.operateRelayStage(ctx, stage)
+					if err1 != nil {
+						// TODO: add better metrics
+						log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Error(err1))
+					}
+				}
+				retryNum++
+			}
+		} else {
+			log.L().Error("observeRelayStage is failed and will quit now", zap.Error(err))
+			return err
+		}
+	}
+}
+
+func (w *Worker) handleRelayStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) error {
 	for {
 		select {
 		case <-ctx.Done():
 			log.L().Info("worker is closed, handleRelayStage will quit now")
-			return
+			return nil
 		case stage := <-stageCh:
 			err := w.operateRelayStage(ctx, stage)
 			if err != nil {
@@ -366,6 +517,9 @@ func (w *Worker) handleRelayStage(ctx context.Context, stageCh chan ha.Stage, er
 			}
 		case err := <-errCh:
 			log.L().Error("WatchRelayStage received an error", zap.Error(err))
+			if etcdutil.IsRetryableError(err) {
+				return err
+			}
 		}
 	}
 }
