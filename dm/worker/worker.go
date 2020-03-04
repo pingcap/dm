@@ -91,13 +91,13 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client) (w *Worker
 	if cfg.EnableRelay {
 		// initial relay holder, the cfg's password need decrypt
 		w.relayHolder = NewRelayHolder(cfg)
-		purger, err1 := w.relayHolder.Init([]purger.PurgeInterceptor{
+		purger1, err1 := w.relayHolder.Init([]purger.PurgeInterceptor{
 			w,
 		})
 		if err1 != nil {
 			return nil, err1
 		}
-		w.relayPurger = purger
+		w.relayPurger = purger1
 	}
 
 	// initial task status checker
