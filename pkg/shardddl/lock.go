@@ -14,19 +14,29 @@
 package shardddl
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/pingcap/parser/model"
 )
 
+// NotSyncedError is returned by TrySync if the lock must be blocked because of unresolvable conflict.
+type NotSyncedError struct {
+	// Remain is the number of sources not yet synchronized.
+	Remain int
+}
+
+func (e NotSyncedError) Error() string {
+	return fmt.Sprint(e.Remain, " sources not yet synchronized")
+}
+
 // Lock is a generic DDL lock.
 type Lock struct {
 	mu sync.RWMutex
 
-	ID    string   // lock's ID
-	Task  string   // lock's corresponding task name
-	Owner string   // Owner's source ID (not DM-worker's name)
-	DDLs  []string // list of DDLs accepted for synchronization
+	ID    string // lock's ID
+	Task  string // lock's corresponding task name
+	Owner string // Owner's source ID (not DM-worker's name)
 	done  map[string]bool
 
 	impl LockImpl
@@ -37,7 +47,7 @@ type LockImpl interface {
 	AddSources(sources []string)
 
 	TrySync(caller string, ddls []string, newTableInfo *model.TableInfo) (newDDLs []string, err error)
-	// UnsyncCount returns number of sources not yet synchronized. Returns 0 if all sources are synchronized.
+	// UnsyncCount returns number of sources not yet synchronized. Returns 0 if all sources are synchronized and the lock is ready to be resolved.
 	UnsyncCount() int
 	// ForceSynced forces all sources to become synchronized.
 	ForceSynced()
@@ -64,7 +74,7 @@ func NewLock(ID, task, owner string, sources []string, impl LockImpl) *Lock {
 // TrySync tries to sync the lock, does decrease on remain, re-entrant.
 // new upstream sources may join when the DDL lock is in syncing,
 // so we need to merge these new sources.
-func (l *Lock) TrySync(caller string, ddls []string, newTableInfo *model.TableInfo, sources []string) (bool, int, error) {
+func (l *Lock) TrySync(caller string, ddls []string, newTableInfo *model.TableInfo, sources []string) (newDDLs []string, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -76,12 +86,7 @@ func (l *Lock) TrySync(caller string, ddls []string, newTableInfo *model.TableIn
 	}
 	l.impl.AddSources(sources)
 
-	newDDLs, err := l.impl.TrySync(caller, ddls, newTableInfo)
-	if err == nil {
-		l.DDLs = newDDLs
-	}
-	remain := l.impl.UnsyncCount()
-	return remain <= 0, remain, err
+	return l.impl.TrySync(caller, ddls, newTableInfo)
 }
 
 // ForceSynced forces to mark the lock as synced.

@@ -67,7 +67,7 @@ func (lk *LockKeeper) LockMode() LockMode {
 }
 
 // TrySync tries to sync the lock.
-func (lk *LockKeeper) TrySync(info Info, sources []string) (string, bool, int, error) {
+func (lk *LockKeeper) TrySync(info Info, sources []string) (string, []string, error) {
 	var (
 		lockID = genDDLLockID(info)
 		l      *Lock
@@ -88,8 +88,8 @@ func (lk *LockKeeper) TrySync(info Info, sources []string) (string, bool, int, e
 		lk.locks[lockID] = l
 	}
 
-	synced, remain, err := l.TrySync(info.Source, info.DDLs, info.TableInfoAfter, sources)
-	return lockID, synced, remain, err
+	newDDLs, err := l.TrySync(info.Source, info.DDLs, info.TableInfoAfter, sources)
+	return lockID, newDDLs, err
 }
 
 // RemoveLock removes a lock.

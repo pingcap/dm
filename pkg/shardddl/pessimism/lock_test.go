@@ -16,6 +16,7 @@ package pessimism
 import (
 	. "github.com/pingcap/check"
 
+	"github.com/pingcap/dm/pkg/shardddl"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -40,24 +41,24 @@ func (t *testLock) TestLock(c *C) {
 	l1 := NewLock(ID, task, source1, DDLs, []string{source1})
 
 	// DDLs mismatch.
-	synced, remain, err := l1.TrySync(source1, DDLs[1:], nil, []string{source1})
+	newDDLs, err := l1.TrySync(source1, DDLs[1:], nil, []string{source1})
 	c.Assert(terror.ErrMasterShardingDDLDiff.Equal(err), IsTrue)
+	c.Assert(newDDLs, HasLen, 0)
+	c.Assert(l1.Ready(), DeepEquals, map[string]bool{source1: false})
+	synced, remain := l1.IsSynced()
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
-	c.Assert(l1.Ready(), DeepEquals, map[string]bool{source1: false})
-	synced, _ = l1.IsSynced()
-	c.Assert(synced, IsFalse)
 	c.Assert(l1.IsDone(source1), IsFalse)
 	c.Assert(l1.IsResolved(), IsFalse)
 
 	// synced.
-	synced, remain, err = l1.TrySync(source1, DDLs, nil, []string{source1})
+	newDDLs, err = l1.TrySync(source1, DDLs, nil, []string{source1})
 	c.Assert(err, IsNil)
+	c.Assert(newDDLs, DeepEquals, DDLs)
+	c.Assert(l1.Ready(), DeepEquals, map[string]bool{source1: true})
+	synced, remain = l1.IsSynced()
 	c.Assert(synced, IsTrue)
 	c.Assert(remain, Equals, 0)
-	c.Assert(l1.Ready(), DeepEquals, map[string]bool{source1: true})
-	synced, _ = l1.IsSynced()
-	c.Assert(synced, IsTrue)
 	c.Assert(l1.IsDone(source1), IsFalse)
 	c.Assert(l1.IsResolved(), IsFalse)
 
@@ -70,10 +71,9 @@ func (t *testLock) TestLock(c *C) {
 	l2 := NewLock(ID, task, source1, DDLs, []string{source1, source2})
 
 	// join a new source.
-	synced, remain, err = l2.TrySync(source1, DDLs, nil, []string{source2, source3})
-	c.Assert(err, IsNil)
-	c.Assert(synced, IsFalse)
-	c.Assert(remain, Equals, 2)
+	newDDLs, err = l2.TrySync(source1, DDLs, nil, []string{source2, source3})
+	c.Assert(err, DeepEquals, shardddl.NotSyncedError{Remain: 2})
+	c.Assert(newDDLs, HasLen, 0)
 	c.Assert(l2.Ready(), DeepEquals, map[string]bool{
 		source1: true,
 		source2: false,
@@ -81,19 +81,17 @@ func (t *testLock) TestLock(c *C) {
 	})
 
 	// sync other sources.
-	synced, remain, err = l2.TrySync(source2, DDLs, nil, []string{})
-	c.Assert(err, IsNil)
-	c.Assert(synced, IsFalse)
-	c.Assert(remain, Equals, 1)
+	newDDLs, err = l2.TrySync(source2, DDLs, nil, []string{})
+	c.Assert(err, DeepEquals, shardddl.NotSyncedError{Remain: 1})
+	c.Assert(newDDLs, HasLen, 0)
 	c.Assert(l2.Ready(), DeepEquals, map[string]bool{
 		source1: true,
 		source2: true,
 		source3: false,
 	})
-	synced, remain, err = l2.TrySync(source3, DDLs, nil, nil)
+	newDDLs, err = l2.TrySync(source3, DDLs, nil, nil)
 	c.Assert(err, IsNil)
-	c.Assert(synced, IsTrue)
-	c.Assert(remain, Equals, 0)
+	c.Assert(newDDLs, DeepEquals, DDLs)
 	c.Assert(l2.Ready(), DeepEquals, map[string]bool{
 		source1: true,
 		source2: true,

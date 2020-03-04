@@ -15,6 +15,8 @@ package pessimism
 
 import (
 	. "github.com/pingcap/check"
+
+	"github.com/pingcap/dm/pkg/shardddl"
 )
 
 type testLockKeeper struct{}
@@ -37,23 +39,20 @@ func (t *testLockKeeper) TestLockKeeper(c *C) {
 	)
 
 	// lock with 2 sources.
-	lockID1, synced, remain, err := lk.TrySync(info11, []string{source1, source2})
+	lockID1, newDDLs, err := lk.TrySync(info11, []string{source1, source2})
+	c.Assert(err, Equals, shardddl.NotSyncedError{Remain: 1})
+	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
+	c.Assert(newDDLs, HasLen, 0)
+	lockID1, newDDLs, err = lk.TrySync(info12, []string{source1, source2})
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
-	c.Assert(synced, IsFalse)
-	c.Assert(remain, Equals, 1)
-	lockID1, synced, remain, err = lk.TrySync(info12, []string{source1, source2})
-	c.Assert(err, IsNil)
-	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
-	c.Assert(synced, IsTrue)
-	c.Assert(remain, Equals, 0)
+	c.Assert(newDDLs, DeepEquals, DDLs)
 
 	// lock with only 1 source.
-	lockID2, synced, remain, err := lk.TrySync(info21, []string{source1})
+	lockID2, newDDLs, err := lk.TrySync(info21, []string{source1})
 	c.Assert(err, IsNil)
 	c.Assert(lockID2, Equals, "task2-`foo`.`bar`")
-	c.Assert(synced, IsTrue)
-	c.Assert(remain, Equals, 0)
+	c.Assert(newDDLs, DeepEquals, DDLs)
 
 	// find lock.
 	lock1 := lk.FindLock(lockID1)

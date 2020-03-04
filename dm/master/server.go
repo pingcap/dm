@@ -669,10 +669,10 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 		}
 	FOUND:
 		l := &pb.DDLLock{
-			ID:       lock.ID,
-			Task:     lock.Task,
-			Owner:    lock.Owner,
-			DDLs:     lock.DDLs,
+			ID:    lock.ID,
+			Task:  lock.Task,
+			Owner: lock.Owner,
+			// DDLs:     lock.DDLs,
 			Synced:   make([]string, 0, len(ready)),
 			Unsynced: make([]string, 0, len(ready)),
 		}

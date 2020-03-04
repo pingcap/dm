@@ -72,9 +72,12 @@ func (l *optimisticLockImpl) TrySync(caller string, ddls []string, newTableInfo 
 
 	// FIXME: Compute DDLs through schema diff instead of propagating DDLs directly.
 	cmpRes, err := oldJoined.Compare(newJoined)
-	l.synced = err == nil
+	l.synced = err == nil && cmpRes == 0
 	if err != nil || cmpRes == 0 {
 		ddls = nil
+	}
+	if err != nil {
+		err = shardddl.NotSyncedError{Remain: len(l.tables)}
 	}
 	return ddls, err
 }
@@ -95,9 +98,6 @@ func (l *optimisticLockImpl) UnsyncCount() int {
 }
 
 func (l *optimisticLockImpl) Ready() map[string]bool {
-	if l.synced {
-		return make(map[string]bool)
-	}
 	ret := make(map[string]bool, len(l.tables))
 	for s := range l.tables {
 		ret[s] = false

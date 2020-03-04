@@ -30,39 +30,25 @@ You can run multiple MySQL servers by:
 
 1. Initialize two data directories.
 
+    (MySQL)
+
     ```sh
     mysqld --initialize-insecure --datadir=mysqld1
     mysqld --initialize-insecure --datadir=mysqld2
     ```
 
-2. Create a configuration file
-
-    ```ini
-    [mysqld_multi]
-    user = root
-    password =
-    tcp-ip
-    verbose
-
-    [mysqld1]
-    port = 3306
-    datadir = /absolute/path/to/c/mysqld1
-    socket = /absolute/path/to/c/mysqld1/mysql.sock
-    pid-file = /absolute/path/to/c/mysqld1/mysql.pid
-    secure-file-priv = NULL
-
-    [mysqld2]
-    port = 3306
-    datadir = /absolute/path/to/c/mysqld2
-    socket = /absolute/path/to/c/mysqld2/mysql.sock
-    pid-file = /absolute/path/to/c/mysqld2/mysql.pid
-    secure-file-priv = NULL
-    ```
-
-    then start the servers using [`mysqld_multi`](https://dev.mysql.com/doc/refman/8.0/en/mysqld-multi.html)
+    (MariaDB)
 
     ```sh
-    mysqld_multi --defaults-file=my.cnf start 1,2
+    mysql_install_db --auth-root-authentication-method=normal --datadir=/mysqld1
+    mysql_install_db --auth-root-authentication-method=normal --datadir=/mysqld2
+    ```
+
+2. Start the MySQL servers
+
+    ```sh
+    mysqld --datadir=/mysqld1 --socket=/mysqld1/mysql.sock --pid-file=/mysqld1/mysql.pid --port=3306 &
+    mysqld --datadir=/mysqld2 --socket=/mysqld2/mysql.sock --pid-file=/mysqld2/mysql.pid --port=3307 &
     ```
 
 3. Verify the connections work

@@ -173,10 +173,10 @@ func (meta *ShardingMeta) AddItem(item *DDLItem) (active bool, err error) {
 		meta.global.Items = append(meta.global.Items, item)
 	}
 
-	global, source := meta.global, meta.sources[item.Source]
-	if !source.IsPrefixSequence(global) {
-		return false, terror.ErrSyncUnitDDLWrongSequence.Generate(source.Items, global.Items)
-	}
+	// global, source := meta.global, meta.sources[item.Source]
+	// if !source.IsPrefixSequence(global) {
+	// 	return false, terror.ErrSyncUnitDDLWrongSequence.Generate(source.Items, global.Items)
+	// }
 
 	return index == meta.activeIdx, nil
 }

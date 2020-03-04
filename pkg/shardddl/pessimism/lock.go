@@ -66,6 +66,9 @@ func (l *pessimisticLockImpl) TrySync(caller string, DDLs []string, _ *model.Tab
 		l.ready[caller] = true
 	}
 
+	if l.remain > 0 {
+		return nil, shardddl.NotSyncedError{Remain: l.remain}
+	}
 	return l.DDLs, nil
 }
 

@@ -28,9 +28,9 @@ func (t *testPessimist) TestInfoSlice(c *C) {
 		schema, table = "foo", "bar"
 		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
 		ifm           = map[string]pessimism.Info{
-			source3: pessimism.NewInfo(task, source3, schema, table, DDLs),
-			source2: pessimism.NewInfo(task, source2, schema, table, DDLs),
-			source1: pessimism.NewInfo(task, source1, schema, table, DDLs),
+			source3: pessimism.NewInfo(task, source3, schema, table, DDLs, nil, nil),
+			source2: pessimism.NewInfo(task, source2, schema, table, DDLs, nil, nil),
+			source1: pessimism.NewInfo(task, source1, schema, table, DDLs, nil, nil),
 		}
 	)
 
