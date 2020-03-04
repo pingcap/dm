@@ -32,6 +32,34 @@ function test_running() {
 }
 
 
+function test_multi_task_running() {
+    echo "[$(date)] <<<<<< start test_multi_task_running >>>>>>"
+    cleanup
+    prepare_sql_multi_task
+    start_multi_tasks_cluster
+
+    echo "use sync_diff_inspector to check full dump loader"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml
+
+    echo "flush logs to force rotate binlog file"
+    run_sql "flush logs;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "flush logs;" $MYSQL_PORT2 $MYSQL_PASSWORD2
+    run_sql "flush logs;" $MYSQL_PORT3 $MYSQL_PASSWORD3
+    run_sql "flush logs;" $MYSQL_PORT4 $MYSQL_PASSWORD4
+
+    echo "apply increment data before restart dm-worker to ensure entering increment phase"
+    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST3 $MYSQL_PORT3 $MYSQL_PASSWORD3
+    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST4 $MYSQL_PORT4 $MYSQL_PASSWORD4
+
+    echo "use sync_diff_inspector to check increment data"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
+}
+
+
 function test_kill_master() {
     test_running
     echo "[$(date)] <<<<<< start test_kill_master >>>>>>"
@@ -107,8 +135,8 @@ function test_kill_worker_in_sync() {
     echo "[$(date)] <<<<<< start test_kill_worker_in_sync >>>>>>"
 
     echo "start dumping random SQLs into source"
-    pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test")
-    pocket_pid2=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3307)/ha_test")
+    pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test" 0 0)
+    pocket_pid2=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3307)/ha_test" 0 1)
 
     sleep 1
 
@@ -138,7 +166,7 @@ function test_kill_worker_in_sync() {
     sleep 1
 
     echo "kill tipocket"
-    kill $pocket_pid1 $pocket_pid2 || true
+    kill $pocket_pid1 $pocket_pid2 # if kill fails, means tipocket exited unexceptly
 
     # waiting for syncing
     sleep 1
@@ -147,51 +175,151 @@ function test_kill_worker_in_sync() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
-
+# usage: test_kill_master_in_sync leader
+# or: test_kill_master_in_sync follower (default)
 function test_kill_master_in_sync() {
+    role=false
+    if [ $1 = "leader" ]; then
+        role=true
+    fi
     test_running
-    echo "[$(date)] <<<<<< start test_kill_worker_in_sync >>>>>>"
+    echo "[$(date)] <<<<<< start test_kill_$1_in_sync >>>>>>"
 
     echo "start dumping random SQLs into source"
-    pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test")
-    pocket_pid2=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3307)/ha_test")
+    pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test" 1 0)
+    pocket_pid2=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3307)/ha_test" 1 1)
 
     sleep 1
 
-    echo "kill dm-master1"
-    ps aux | grep dm-master1 |awk '{print $2}'|xargs kill || true
+    master_ports=($MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3)
+    killed_port=0
+    for idx in ${!master_ports[@]}; do
+        master=$(etcdctl --endpoints='127.0.0.1:'${master_ports[idx]}'' endpoint status | awk -F ', ' '{print $5}')
+        if [ $master = $role ]; then
+            echo "kill dm-master$[$idx+1]"
+            ps aux | grep dm-master$[$idx+1] |awk '{print $2}'|xargs kill || true
+            killed_port=${master_ports[idx]}
+            break
+        fi
+    done
+
+    if [ $killed_port = 0 ]; then
+        echo "no process was killed"
+        exit 1
+    fi
+
+    run_dm_worker $WORK_DIR/worker4 $WORKER4_PORT $cur/conf/dm-worker4.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER4_PORT
 
     echo "wait and check task running"
-    check_http_alive 127.0.0.1:$MASTER_PORT2/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
-
-    echo "query-status from all dm-master"
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
-        "query-status test" \
-        "\"stage\": \"Running\"" 2
-
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
-        "query-status test" \
-        "\"stage\": \"Running\"" 2
-    
     sleep 1
+    for port in ${master_ports[@]}; do
+        if [ $killed_port -ne $port ]; then
+            check_http_alive 127.0.0.1:$port/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+            run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$port" \
+                "query-status test" \
+                "\"stage\": \"Running\"" 2
+        fi
+    done
 
+    sleep 1
     echo "kill tipocket"
-    kill $pocket_pid1 $pocket_pid2 || true
+    kill $pocket_pid1 $pocket_pid2
 
     # waiting for syncing
     sleep 1
     
+    # WARN: run ddl sqls spent so long
+    sleep 300
+    for port in ${master_ports[@]}; do
+        if [ $killed_port -ne $port ]; then
+            echo $(dmctl --master-addr "127.0.0.1:$port" query-status test)
+            break
+        fi
+    done
+
     echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+
+function test_standalone_running() {
+    echo "[$(date)] <<<<<< start test_running >>>>>>"
+    cleanup
+    prepare_sql
+    start_standalone_cluster
+
+    echo "use sync_diff_inspector to check full dump loader"
+    check_sync_diff $WORK_DIR $cur/conf/diff-standalone-config.toml
+
+    echo "flush logs to force rotate binlog file"
+    run_sql "flush logs;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+
+    echo "apply increment data before restart dm-worker to ensure entering increment phase"
+    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+
+    echo "use sync_diff_inspector to check increment data"
+    check_sync_diff $WORK_DIR $cur/conf/diff-standalone-config.toml
+}
+
+
+function test_pause_task() {
+    test_multi_task_running
+    echo "[$(date)] <<<<<< start test_pause_task >>>>>>"
+
+    echo "start dumping random SQLs into source"
+    pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test" 0 0)
+    pocket_pid2=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3307)/ha_test" 0 1)
+    pocket_pid3=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3308)/ha_test" 0 0)
+    pocket_pid4=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3309)/ha_test" 0 1)
+
+    task_name=(test test2)
+    for name in ${task_name[@]}; do
+        echo "pause tasks $name"
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "pause-task $name"\
+            "\"result\": true" 3
+        
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status $name"\
+            "\"stage\": \"Paused\"" 2
+    done
+
+    sleep 1
+
+    for name in ${task_name[@]}; do
+        echo "resume tasks $name"
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "resume-task $name"\
+            "\"result\": true" 3
+        
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status $name"\
+            "\"stage\": \"Running\"" 2
+    done
+
+    sleep 1
+    # stop
+    kill $pocket_pid1 $pocket_pid2 $pocket_pid3 $pocket_pid4
+    sleep 200
+
+    $(dmctl --master-addr "127.0.0.1":$MASTER_PORT query-status test > /root/dmctl.log)
+    $(dmctl --master-addr "127.0.0.1":$MASTER_PORT query-status test2 >> /root/dmctl.log)
+    echo "use sync_diff_inspector to check increment data"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
+    echo $(dmctl --master-addr "127.0.0.1":$MASTER_PORT query-status test)
+    echo $(dmctl --master-addr "127.0.0.1":$MASTER_PORT query-status test2)
 }
 
 
 function run() {
-    test_kill_master_in_sync
+    test_pause_task
 }
 
 
 cleanup_data ha_test
+cleanup_data ha_test2
 # also cleanup dm processes in case of last run failed
 cleanup_process $*
 run $*
