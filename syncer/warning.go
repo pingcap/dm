@@ -45,7 +45,7 @@ func (s *Syncer) Error() interface{} {
 		if !utils.IsContextCanceledError(ctx.err) {
 			errors = append(errors, &pb.SyncSQLError{
 				Msg:                  ctx.err.Error(),
-				FailedBinlogPosition: fmt.Sprintf("%s:%d", ctx.pos.Name, ctx.pos.Pos),
+				FailedBinlogPosition: fmt.Sprintf("%s:%d", ctx.location.Position.Name, ctx.location.Position.Pos),
 				ErrorSQL:             ctx.jobs,
 			})
 		}

@@ -32,7 +32,7 @@ const (
 	ddl
 	xid
 	flush
-	skip // used by Syncer.recordSkipSQLsPos to record global pos, but not execute SQL
+	skip // used by Syncer.recordSkipSQLsLocation to record global location, but not execute SQL
 	rotate
 )
 

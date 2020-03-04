@@ -102,8 +102,8 @@ type ShardingGroup struct {
 	sourceID string                  // associate dm-worker source ID
 	meta     *shardmeta.ShardingMeta // sharding sequence meta storage
 
-	firstPos    *mysql.Position // first DDL's binlog pos, used to restrain the global checkpoint when un-resolved
-	firstEndPos *mysql.Position // first DDL's binlog End_log_pos, used to re-direct binlog streamer after synced
+	firstLocation    *binlog.Location // first DDL's binlog pos and gtid, used to restrain the global checkpoint when un-resolved
+	firstEndLocation *binlog.Location // first DDL's binlog End_log_pos and gtid, used to re-direct binlog streamer after synced
 	ddls        []string        // DDL which current in syncing
 }
 
@@ -114,8 +114,8 @@ func NewShardingGroup(sourceID, shardMetaSchema, shardMetaTable string, sources 
 		sources:      make(map[string]bool, len(sources)),
 		IsSchemaOnly: isSchemaOnly,
 		sourceID:     sourceID,
-		firstPos:     nil,
-		firstEndPos:  nil,
+		firstLocation:     nil,
+		firstEndLocation:  nil,
 	}
 	if meta != nil {
 		sg.meta = meta
@@ -188,8 +188,8 @@ func (sg *ShardingGroup) Reset() {
 	for source := range sg.sources {
 		sg.sources[source] = false
 	}
-	sg.firstPos = nil
-	sg.firstEndPos = nil
+	sg.firstLocation = nil
+	sg.firstEndLocation = nil
 	sg.ddls = nil
 }
 
@@ -198,11 +198,11 @@ func (sg *ShardingGroup) Reset() {
 //   synced: whether the source table's sharding group synced
 //   active: whether the DDL will be processed in this round
 //   remain: remain un-synced source table's count
-func (sg *ShardingGroup) TrySync(source string, pos, endPos mysql.Position, ddls []string) (bool, bool, int, error) {
+func (sg *ShardingGroup) TrySync(source string, location, endLocation binlog.Location, ddls []string) (bool, bool, int, error) {
 	sg.Lock()
 	defer sg.Unlock()
 
-	ddlItem := shardmeta.NewDDLItem(pos, ddls, source)
+	ddlItem := shardmeta.NewDDLItem(location, ddls, source)
 	active, err := sg.meta.AddItem(ddlItem)
 	if err != nil {
 		return sg.remain <= 0, active, sg.remain, err
@@ -212,9 +212,9 @@ func (sg *ShardingGroup) TrySync(source string, pos, endPos mysql.Position, ddls
 		sg.remain--
 	}
 
-	if sg.firstPos == nil {
-		sg.firstPos = &pos // save first DDL's pos
-		sg.firstEndPos = &endPos
+	if sg.firstLocation == nil {
+		sg.firstLocation = &location // save first DDL's pos
+		sg.firstEndLocation = &endLocation
 		sg.ddls = ddls
 	}
 	return sg.remain <= 0, active, sg.remain, nil
@@ -223,14 +223,14 @@ func (sg *ShardingGroup) TrySync(source string, pos, endPos mysql.Position, ddls
 // CheckSyncing checks the source table syncing status
 // returns
 //   beforeActiveDDL: whether the position is before active DDL
-func (sg *ShardingGroup) CheckSyncing(source string, pos mysql.Position) (beforeActiveDDL bool) {
+func (sg *ShardingGroup) CheckSyncing(source string, location binlog.Location) (beforeActiveDDL bool) {
 	sg.RLock()
 	defer sg.RUnlock()
 	activeDDLItem := sg.meta.GetActiveDDLItem(source)
 	if activeDDLItem == nil {
 		return true
 	}
-	return binlog.ComparePosition(activeDDLItem.FirstPos, pos) > 0
+	return binlog.CompareLocation(activeDDLItem.FirstLocation, location) > 0
 }
 
 // UnresolvedGroupInfo returns pb.ShardingGroup if is unresolved, else returns nil
@@ -244,7 +244,7 @@ func (sg *ShardingGroup) UnresolvedGroupInfo() *pb.ShardingGroup {
 
 	group := &pb.ShardingGroup{
 		DDLs:     sg.ddls,
-		FirstPos: sg.firstPos.String(),
+		FirstLocation: sg.firstLocation.String(),
 		Synced:   make([]string, 0, len(sg.sources)-sg.remain),
 		Unsynced: make([]string, 0, sg.remain),
 	}
@@ -307,23 +307,29 @@ func (sg *ShardingGroup) UnresolvedTables() [][]string {
 	return tables
 }
 
-// FirstPosUnresolved returns the first DDL pos if un-resolved, else nil
-func (sg *ShardingGroup) FirstPosUnresolved() *mysql.Position {
+// FirstLocationUnresolved returns the first DDL pos if un-resolved, else nil
+func (sg *ShardingGroup) FirstLocationUnresolved() *binlog.Location {
 	sg.RLock()
 	defer sg.RUnlock()
-	if sg.remain < len(sg.sources) && sg.firstPos != nil {
+	if sg.remain < len(sg.sources) && sg.firstLocation != nil {
 		// create a new pos to return
-		return &mysql.Position{
-			Name: sg.firstPos.Name,
-			Pos:  sg.firstPos.Pos,
+		return &binlog.Location {
+			Position: mysql.Position{
+				Name: sg.firstLocation.Position.Name,
+				Pos:  sg.firstLocation.Position.Pos,
+			},
+			GTID: sg.firstLocation.GTID,
 		}
 	}
 	item := sg.meta.GetGlobalActiveDDL()
 	if item != nil {
 		// make a new copy
-		return &mysql.Position{
-			Name: item.FirstPos.Name,
-			Pos:  item.FirstPos.Pos,
+		return &binlog.Location {
+			Position: mysql.Position{
+				Name: item.FirstLocation.Position.Name,
+				Pos:  item.FirstLocation.Position.Pos,
+			},
+			GTID: item.FirstLocation.GTID,
 		}
 	}
 	return nil
@@ -333,11 +339,11 @@ func (sg *ShardingGroup) FirstPosUnresolved() *mysql.Position {
 func (sg *ShardingGroup) FirstEndPosUnresolved() *mysql.Position {
 	sg.RLock()
 	defer sg.RUnlock()
-	if sg.remain < len(sg.sources) && sg.firstEndPos != nil {
+	if sg.remain < len(sg.sources) && sg.firstEndLocation != nil {
 		// create a new pos to return
 		return &mysql.Position{
-			Name: sg.firstEndPos.Name,
-			Pos:  sg.firstEndPos.Pos,
+			Name: sg.firstEndLocation.Position.Name,
+			Pos:  sg.firstEndLocation.Position.Pos,
 		}
 	}
 	return nil
@@ -364,12 +370,12 @@ func (sg *ShardingGroup) ResolveShardingDDL() bool {
 	return reset
 }
 
-// ActiveDDLFirstPos returns the first binlog position of active DDL
-func (sg *ShardingGroup) ActiveDDLFirstPos() (mysql.Position, error) {
+// ActiveDDLFirstLocation returns the first binlog position of active DDL
+func (sg *ShardingGroup) ActiveDDLFirstLocation() (binlog.Location, error) {
 	sg.RLock()
 	defer sg.RUnlock()
-	pos, err := sg.meta.ActiveDDLFirstPos()
-	return pos, err
+	location, err := sg.meta.ActiveDDLFirstLocation()
+	return location, err
 }
 
 // FlushData returns sharding meta flush SQLs and args
@@ -512,7 +518,7 @@ func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sourc
 //   active: whether is active DDL in sequence sharding DDL
 //   remain: remain un-synced source table's count
 func (k *ShardingGroupKeeper) TrySync(
-	targetSchema, targetTable, source string, pos, endPos mysql.Position, ddls []string) (
+	targetSchema, targetTable, source string, location, endLocation binlog.Location, ddls []string) (
 	needShardingHandle bool, group *ShardingGroup, synced, active bool, remain int, err error) {
 
 	targetTableID, schemaOnly := GenTableID(targetSchema, targetTable)
@@ -528,17 +534,17 @@ func (k *ShardingGroupKeeper) TrySync(
 	if !ok {
 		return false, group, true, false, 0, nil
 	}
-	synced, active, remain, err = group.TrySync(source, pos, endPos, ddls)
+	synced, active, remain, err = group.TrySync(source, location, endLocation, ddls)
 	return true, group, synced, active, remain, err
 }
 
 // InSyncing checks whether the source is in sharding syncing
-func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string, pos mysql.Position) bool {
+func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string, location binlog.Location) bool {
 	group := k.Group(targetSchema, targetTable)
 	if group == nil {
 		return false
 	}
-	return !group.CheckSyncing(source, pos)
+	return !group.CheckSyncing(source, location)
 }
 
 // UnresolvedTables returns
@@ -570,32 +576,32 @@ func (k *ShardingGroupKeeper) Group(targetSchema, targetTable string) *ShardingG
 	return k.groups[targetTableID]
 }
 
-// lowestFirstPosInGroups returns the lowest pos in all groups which are unresolved
-func (k *ShardingGroupKeeper) lowestFirstPosInGroups() *mysql.Position {
+// lowestFirstLocationInGroups returns the lowest pos in all groups which are unresolved
+func (k *ShardingGroupKeeper) lowestFirstLocationInGroups() *binlog.Location {
 	k.RLock()
 	defer k.RUnlock()
-	var lowest *mysql.Position
+	var lowest *binlog.Location
 	for _, group := range k.groups {
-		pos := group.FirstPosUnresolved()
-		if pos == nil {
+		location := group.FirstLocationUnresolved()
+		if location == nil {
 			continue
 		}
 		if lowest == nil {
-			lowest = pos
-		} else if binlog.ComparePosition(*lowest, *pos) > 0 {
-			lowest = pos
+			lowest = location
+		} else if binlog.CompareLocation(*lowest, *location) > 0 {
+			lowest = location
 		}
 	}
 	return lowest
 }
 
-// AdjustGlobalPoint adjusts globalPoint with sharding groups' lowest first point
-func (k *ShardingGroupKeeper) AdjustGlobalPoint(globalPoint mysql.Position) mysql.Position {
-	lowestFirstPos := k.lowestFirstPosInGroups()
-	if lowestFirstPos != nil && binlog.ComparePosition(*lowestFirstPos, globalPoint) < 0 {
-		return *lowestFirstPos
+// AdjustGlobalLocation adjusts globalLocation with sharding groups' lowest first point
+func (k *ShardingGroupKeeper) AdjustGlobalLocation(globalLocation binlog.Location) binlog.Location {
+	lowestFirstLocation := k.lowestFirstLocationInGroups()
+	if lowestFirstLocation != nil && binlog.CompareLocation(*lowestFirstLocation, globalLocation) < 0 {
+		return *lowestFirstLocation
 	}
-	return globalPoint
+	return globalLocation
 }
 
 // Groups returns all sharding groups, often used for debug
@@ -649,16 +655,16 @@ func (k *ShardingGroupKeeper) ResolveShardingDDL(targetSchema, targetTable strin
 	return false, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetSchema, targetTable)
 }
 
-// ActiveDDLFirstPos returns the binlog position of active DDL
-func (k *ShardingGroupKeeper) ActiveDDLFirstPos(targetSchema, targetTable string) (mysql.Position, error) {
+// ActiveDDLFirstLocation returns the binlog position of active DDL
+func (k *ShardingGroupKeeper) ActiveDDLFirstLocation(targetSchema, targetTable string) (binlog.Location, error) {
 	group := k.Group(targetSchema, targetTable)
 	k.Lock()
 	defer k.Unlock()
 	if group != nil {
-		pos, err := group.ActiveDDLFirstPos()
-		return pos, err
+		location, err := group.ActiveDDLFirstLocation()
+		return location, err
 	}
-	return mysql.Position{}, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetSchema, targetTable)
+	return binlog.Location{}, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetSchema, targetTable)
 }
 
 // PrepareFlushSQLs returns all sharding meta flushed SQLs execpt for given table IDs
@@ -762,8 +768,8 @@ func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMet
 
 // ShardingReSync represents re-sync info for a sharding DDL group
 type ShardingReSync struct {
-	currPos      mysql.Position // current DDL's binlog pos, initialize to first DDL's pos
-	latestPos    mysql.Position // latest DDL's binlog pos
+	currLocation      binlog.Location // current DDL's binlog location, initialize to first DDL's location
+	latestLocation    binlog.Location // latest DDL's binlog location
 	targetSchema string
 	targetTable  string
 	allResolved  bool

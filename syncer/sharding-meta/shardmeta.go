@@ -17,7 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/siddontang/go-mysql/mysql"
+	//"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
@@ -33,15 +33,15 @@ const (
 
 // DDLItem records ddl information used in sharding sequence organization
 type DDLItem struct {
-	FirstPos mysql.Position `json:"first-pos"` // first DDL's binlog Pos, not the End_log_pos of the event
+	FirstLocation binlog.Location `json:"first-location"` // first DDL's binlog Pos, not the End_log_pos of the event
 	DDLs     []string       `json:"ddls"`      // DDLs, these ddls are in the same QueryEvent
 	Source   string         `json:"source"`    // source table ID
 }
 
 // NewDDLItem creates a new DDLItem
-func NewDDLItem(pos mysql.Position, ddls []string, source string) *DDLItem {
+func NewDDLItem(location binlog.Location, ddls []string, source string) *DDLItem {
 	return &DDLItem{
-		FirstPos: pos,
+		FirstLocation: location,
 		DDLs:     ddls,
 		Source:   source,
 	}
@@ -49,7 +49,7 @@ func NewDDLItem(pos mysql.Position, ddls []string, source string) *DDLItem {
 
 // String returns the item's format string value
 func (item *DDLItem) String() string {
-	return fmt.Sprintf("first-pos: %s ddls: %+v source: %s", item.FirstPos, item.DDLs, item.Source)
+	return fmt.Sprintf("first-location: %s ddls: %+v source: %s", item.FirstLocation, item.DDLs, item.Source)
 }
 
 // ShardingSequence records a list of DDLItem
@@ -136,7 +136,7 @@ func (meta *ShardingMeta) checkItemExists(item *DDLItem) (int, bool) {
 		return 0, false
 	}
 	for idx, ddlItem := range source.Items {
-		if binlog.ComparePosition(item.FirstPos, ddlItem.FirstPos) == 0 {
+		if binlog.CompareLocation(item.FirstLocation, ddlItem.FirstLocation) == 0 {
 			return idx, true
 		}
 	}
@@ -227,12 +227,12 @@ func (meta *ShardingMeta) ResolveShardingDDL() bool {
 	return false
 }
 
-// ActiveDDLFirstPos returns the first binlog position of active DDL
-func (meta *ShardingMeta) ActiveDDLFirstPos() (mysql.Position, error) {
+// ActiveDDLFirstLocation returns the first binlog position of active DDL
+func (meta *ShardingMeta) ActiveDDLFirstLocation() (binlog.Location, error) {
 	if meta.activeIdx >= len(meta.global.Items) {
-		return mysql.Position{}, terror.ErrSyncUnitDDLActiveIndexLarger.Generate(meta.activeIdx, meta.global.Items)
+		return binlog.Location{}, terror.ErrSyncUnitDDLActiveIndexLarger.Generate(meta.activeIdx, meta.global.Items)
 	}
-	return meta.global.Items[meta.activeIdx].FirstPos, nil
+	return meta.global.Items[meta.activeIdx].FirstLocation, nil
 }
 
 // FlushData returns sharding meta flush SQL and args
