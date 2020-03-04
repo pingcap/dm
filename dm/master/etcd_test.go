@@ -40,6 +40,28 @@ func (t *testEtcdSuite) SetUpSuite(c *check.C) {
 	log.InitLogger(&log.Config{})
 }
 
+func (t *testEtcdSuite) TestStartEtcdFail(c *check.C) {
+	cfgCluster := NewConfig()
+	cfgCluster.Name = "dm-master-1"
+	cfgCluster.DataDir = c.MkDir()
+	cfgCluster.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfgCluster.PeerUrls = tempurl.Alloc()
+	c.Assert(cfgCluster.adjust(), check.IsNil)
+
+	// add another non-existing member for bootstrapping.
+	cfgCluster.InitialCluster = fmt.Sprintf("%s=%s,%s=%s",
+		cfgCluster.Name, cfgCluster.AdvertisePeerUrls,
+		"dm-master-2", tempurl.Alloc())
+	c.Assert(cfgCluster.adjust(), check.IsNil)
+
+	// start an etcd cluster
+	cfgClusterEtcd, err := cfgCluster.genEmbedEtcdConfig()
+	c.Assert(err, check.IsNil)
+	e, err := startEtcd(cfgClusterEtcd, nil, nil, 3*time.Second)
+	c.Assert(terror.ErrMasterStartEmbedEtcdFail.Equal(err), check.IsTrue)
+	c.Assert(e, check.IsNil)
+}
+
 func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	cfgCluster := NewConfig() // used to start an etcd cluster
 	cfgCluster.Name = "dm-master-1"
@@ -103,7 +125,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	c.Assert(os.RemoveAll(memberDP), check.IsNil) // remove previous data
 
 	// start an etcd cluster
-	e1, err := startEtcd(cfgClusterEtcd, nil, nil)
+	e1, err := startEtcd(cfgClusterEtcd, nil, nil, etcdStartTimeout)
 	c.Assert(err, check.IsNil)
 	defer e1.Close()
 
@@ -156,7 +178,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	// start the joining etcd
 	cfgAfterEtcd, err := cfgAfter.genEmbedEtcdConfig()
 	c.Assert(err, check.IsNil)
-	e2, err := startEtcd(cfgAfterEtcd, nil, nil)
+	e2, err := startEtcd(cfgAfterEtcd, nil, nil, etcdStartTimeout)
 	c.Assert(err, check.IsNil)
 	defer e2.Close()
 

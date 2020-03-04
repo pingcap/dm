@@ -41,7 +41,7 @@ const (
 // startEtcd starts an embedded etcd server.
 func startEtcd(etcdCfg *embed.Config,
 	gRPCSvr func(*grpc.Server),
-	httpHandles map[string]http.Handler) (*embed.Etcd, error) {
+	httpHandles map[string]http.Handler, startTimeout time.Duration) (*embed.Etcd, error) {
 	// attach extra gRPC and HTTP server
 	if gRPCSvr != nil {
 		etcdCfg.ServiceRegister = gRPCSvr
@@ -57,9 +57,16 @@ func startEtcd(etcdCfg *embed.Config,
 
 	select {
 	case <-e.Server.ReadyNotify():
-	case <-time.After(etcdStartTimeout):
+	case <-time.After(startTimeout):
+		// if fail to startup, the etcd server may be still blocking in
+		// https://github.com/etcd-io/etcd/blob/3cf2f69b5738fb702ba1a935590f36b52b18979b/embed/serve.go#L92
+		// then `e.Close` will block in
+		// https://github.com/etcd-io/etcd/blob/3cf2f69b5738fb702ba1a935590f36b52b18979b/embed/etcd.go#L377
+		// because `close(sctx.serversC)` has not been called in
+		// https://github.com/etcd-io/etcd/blob/3cf2f69b5738fb702ba1a935590f36b52b18979b/embed/serve.go#L200.
+		// so for `ReadyNotify` timeout, we choose to only call `e.Server.Stop()` now,
+		// and we should exit the DM-master process after returned with error from this function.
 		e.Server.Stop()
-		e.Close()
 		return nil, terror.ErrMasterStartEmbedEtcdFail.Generatef("start embed etcd timeout %v", etcdStartTimeout)
 	}
 	return e, nil
