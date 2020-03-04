@@ -86,18 +86,21 @@ type Election struct {
 	infoStr string
 
 	ech      chan error
-	leaderCh chan string
+	leaderCh chan *CampaignerInfo
 	isLeader sync2.AtomicBool
 
 	closed sync2.AtomicInt32
 	cancel context.CancelFunc
 	bgWg   sync.WaitGroup
 
+	// notifyBlockTime is the max block time for notify leader
+	notifyBlockTime time.Duration
+
 	l log.Logger
 }
 
 // NewElection creates a new etcd leader Election instance and starts the campaign loop.
-func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id, addr string) (*Election, error) {
+func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id, addr string, notifyBlockTime time.Duration) (*Election, error) {
 	ctx2, cancel2 := context.WithCancel(ctx)
 	e := &Election{
 		cli:        cli,
@@ -107,10 +110,11 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 			ID:   id,
 			Addr: addr,
 		},
-		leaderCh: make(chan string, 1),
-		ech:      make(chan error, 1), // size 1 is enough
-		cancel:   cancel2,
-		l:        log.With(zap.String("component", "election")),
+		notifyBlockTime: notifyBlockTime,
+		leaderCh:        make(chan *CampaignerInfo, 1),
+		ech:             make(chan error, 1), // size 1 is enough
+		cancel:          cancel2,
+		l:               log.With(zap.String("component", "election")),
 	}
 	e.infoStr = e.info.String()
 
@@ -159,9 +163,9 @@ func (e *Election) LeaderInfo(ctx context.Context) (string, string, string, erro
 	return string(resp.Kvs[0].Key), leaderInfo.ID, leaderInfo.Addr, nil
 }
 
-// LeaderNotify returns a channel that can fetch notification when the member become the leader or retire from the leader, or get a new leader.
-// `true` means become the leader; `false` means retire from the leader or get a new leader.
-func (e *Election) LeaderNotify() <-chan string {
+// LeaderNotify returns a channel that can fetch the leader's information when the member become the leader or retire from the leader, or get a new leader.
+// leader's information can be nil which means this member is leader and retire.
+func (e *Election) LeaderNotify() <-chan *CampaignerInfo {
 	return e.leaderCh
 }
 
@@ -172,15 +176,15 @@ func (e *Election) ErrorNotify() <-chan error {
 
 // Close closes the election instance and release the resources.
 func (e *Election) Close() {
-	e.l.Info("election is closing")
+	e.l.Info("election is closing", zap.Stringer("current member", e.info))
 	if !e.closed.CompareAndSwap(0, 1) {
-		e.l.Info("election was already closed")
+		e.l.Info("election was already closed", zap.Stringer("current member", e.info))
 		return
 	}
 
 	e.cancel()
 	e.bgWg.Wait()
-	e.l.Info("election is closed")
+	e.l.Info("election is closed", zap.Stringer("current member", e.info))
 }
 
 func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Session) {
@@ -217,7 +221,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 				return
 			}
 		case <-ctx.Done():
-			e.l.Info("break campaign loop, context is done", zap.String("id", e.info.ID), zap.Error(ctx.Err()))
+			e.l.Info("break campaign loop, context is done", zap.Stringer("current member", e.info), zap.Error(ctx.Err()))
 			return
 		default:
 		}
@@ -230,15 +234,18 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		go func() {
 			defer compaignWg.Done()
 
-			e.l.Debug("begin to compaign", zap.String("ID", e.info.ID))
+			e.l.Debug("begin to compaign", zap.Stringer("current member", e.info))
 			err2 := elec.Campaign(ctx2, e.infoStr)
 			if err2 != nil {
 				// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
-				e.l.Info("fail to campaign", zap.String("ID", e.info.ID), zap.Error(err2))
+				e.l.Info("fail to campaign", zap.Stringer("current member", e.info), zap.Error(err2))
 			}
 		}()
 
-		var leaderKey, leaderID string
+		var (
+			leaderKey  string
+			leaderInfo *CampaignerInfo
+		)
 		eleObserveCh := elec.Observe(ctx2)
 
 	observeElection:
@@ -255,67 +262,63 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 				e.l.Info("get response from election observe", zap.String("key", string(resp.Kvs[0].Key)), zap.String("value", string(resp.Kvs[0].Value)))
 				leaderKey = string(resp.Kvs[0].Key)
-				leaderInfo, err := getCompaingerInfo(resp.Kvs[0].Value)
+				leaderInfo, err = getCompaingerInfo(resp.Kvs[0].Value)
 				if err != nil {
 					// this should never happened
 					e.l.Error("fail to get leader information", zap.String("value", string(resp.Kvs[0].Value)), zap.Error(err))
 					continue
 				}
-				leaderID = leaderInfo.ID
 
-				if oldLeaderID == leaderID {
+				if oldLeaderID == leaderInfo.ID {
 					continue
 				} else {
-					oldLeaderID = leaderID
+					oldLeaderID = leaderInfo.ID
 					break observeElection
 				}
 			}
 		}
 
-		if len(leaderID) == 0 {
+		if leaderInfo == nil || len(leaderInfo.ID) == 0 {
 			cancel2()
 			compaignWg.Wait()
 			continue
 		}
 
-		if leaderID != e.info.ID {
-			e.l.Info("current member is not the leader", zap.String("current member", e.info.ID), zap.String("leader", leaderID))
-			e.isNotLeader()
+		if leaderInfo.ID != e.info.ID {
+			e.l.Info("current member is not the leader", zap.Stringer("current member", e.info), zap.Stringer("leader", leaderInfo))
+			e.notifyLeader(ctx, leaderInfo)
 			cancel2()
 			compaignWg.Wait()
 			continue
 		}
 
-		e.toBeLeader() // become the leader now
+		e.l.Info("become leader", zap.Stringer("current member", e.info))
+		e.notifyLeader(ctx, leaderInfo) // become the leader now
 		e.watchLeader(ctx, session, leaderKey)
-		e.retireLeader() // need to re-campaign
+		e.l.Info("retire from leader", zap.Stringer("current member", e.info))
+		e.notifyLeader(ctx, nil) // need to re-campaign
 
 		cancel2()
 		compaignWg.Wait()
 	}
 }
 
-func (e *Election) toBeLeader() {
-	e.isLeader.Set(true)
-	select {
-	case e.leaderCh <- IsLeader:
-	default:
+// notifyLeader notify the leader's information.
+// leader info can be nil, and this is used when retire from leader.
+func (e *Election) notifyLeader(ctx context.Context, leaderInfo *CampaignerInfo) {
+	if leaderInfo != nil && leaderInfo.ID == e.info.ID {
+		e.isLeader.Set(true)
+	} else {
+		e.isLeader.Set(false)
 	}
-}
 
-func (e *Election) retireLeader() {
-	e.isLeader.Set(false)
 	select {
-	case e.leaderCh <- RetireFromLeader:
-	default:
-	}
-}
-
-func (e *Election) isNotLeader() {
-	e.isLeader.Set(false)
-	select {
-	case e.leaderCh <- IsNotLeader:
-	default:
+	case e.leaderCh <- leaderInfo:
+	case <-time.After(e.notifyBlockTime):
+		// this should not happened
+		e.l.Error("ignore notify the leader's information after block a period of time", zap.Stringer("current member", e.info), zap.Stringer("leader", leaderInfo))
+	case <-ctx.Done():
+		e.l.Warn("ignore notify the leader's information because context canceled", zap.Stringer("current member", e.info), zap.Stringer("leader", leaderInfo))
 	}
 }
 

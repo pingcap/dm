@@ -38,7 +38,7 @@ import (
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb-tools/pkg/table-router"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 )
@@ -252,9 +252,9 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	errs := make([]*pb.ProcessError, 0, 1)
 	result, err := check.Do(cctx, c.checkList)
 	if err != nil {
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, err))
+		errs = append(errs, unit.NewProcessError(err))
 	} else if !result.Summary.Passed {
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, errors.New("check was failed, please see detail")))
+		errs = append(errs, unit.NewProcessError(errors.New("check was failed, please see detail")))
 	}
 
 	c.updateInstruction(result)

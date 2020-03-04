@@ -175,7 +175,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 					// expect pause rather than exit
 					err = terror.WithScope(terror.Annotatef(err, "file %s", job.file), terror.ScopeDownstream)
 					if !utils.IsContextCanceledError(err) {
-						runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
+						runFatalChan <- unit.NewProcessError(err)
 					}
 					return
 				}
@@ -206,7 +206,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 			if err := w.restoreDataFile(ctx, filepath.Join(w.cfg.Dir, job.dataFile), job.offset, job.info); err != nil {
 				// expect pause rather than exit
 				err = terror.Annotatef(err, "restore data file (%v) failed", job.dataFile)
-				runFatalChan <- unit.NewProcessError(pb.ErrorType_UnknownError, err)
+				runFatalChan <- unit.NewProcessError(err)
 				return
 			}
 		}
@@ -469,7 +469,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	if err := l.getMydumpMetadata(); err != nil {
 		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name).Inc()
 		pr <- pb.ProcessResult{
-			Errors: []*pb.ProcessError{unit.NewProcessError(pb.ErrorType_UnknownError, err)},
+			Errors: []*pb.ProcessError{unit.NewProcessError(err)},
 		}
 		return
 	}
@@ -499,7 +499,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name).Inc()
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, err))
+		errs = append(errs, unit.NewProcessError(err))
 	}
 
 	isCanceled := false
@@ -664,7 +664,7 @@ func (l *Loader) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 		pr <- pb.ProcessResult{
 			IsCanceled: false,
 			Errors: []*pb.ProcessError{
-				unit.NewProcessError(pb.ErrorType_UnknownError, err),
+				unit.NewProcessError(err),
 			},
 		}
 		return

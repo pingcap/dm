@@ -50,7 +50,7 @@ function run() {
     cat $cur/conf/dm-syncer-2.toml > $WORK_DIR/dm-syncer-2.toml
     cat $cur/conf/old_meta_file > $WORK_DIR/old_meta_file
     # $worker1_run_source_1 > 0 means source1 is operated to worker1
-    worker1_run_source_1=$(sed "s/$SOURCE_ID1/$SOURCE_ID1\n/g" $WORK_DIR/worker1/log/dm-worker.log | grep -c "$SOURCE_ID1")
+    worker1_run_source_1=$(sed "s/$SOURCE_ID1/$SOURCE_ID1\n/g" $WORK_DIR/worker1/log/dm-worker.log | grep -c "$SOURCE_ID1") || true
     if [ $worker1_run_source_1 -gt 0 ]
     then
         name1=$(grep "Log: " $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
@@ -70,7 +70,7 @@ function run() {
     sleep 2
     run_dm_syncer $WORK_DIR/syncer1 $WORK_DIR/dm-syncer-1.toml
     meta_file=$WORK_DIR/old_meta_file
-    run_dm_syncer $WORK_DIR/syncer2 $WORK_DIR/dm-syncer-2.toml $meta_file --old-config-format
+    run_dm_syncer $WORK_DIR/syncer2 $WORK_DIR/dm-syncer-2.toml $meta_file --syncer-config-format syncer2
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }

@@ -226,7 +226,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	op21c.Done = true
 	_, err = pessimism.PutOperationDeleteInfo(etcdTestCli, op21c, i21)
 	c.Assert(err, IsNil)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return p.Locks()[ID2].IsDone(source1)
 	}), IsTrue)
 

@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/log"
 
 	"go.uber.org/zap"
@@ -34,9 +33,28 @@ func (s *Server) electionNotify(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case notify := <-s.election.LeaderNotify():
-			switch notify {
-			case election.IsLeader:
+		case leaderInfo := <-s.election.LeaderNotify():
+			// retire from leader
+			if leaderInfo == nil {
+				if s.leader == oneselfLeader {
+					s.scheduler.Close()
+
+					s.Lock()
+					s.leader = ""
+					s.closeLeaderClient()
+					s.Unlock()
+
+					log.L().Info("current member retire from the leader", zap.String("current member", s.cfg.Name))
+				} else {
+					// this should not happen
+					log.L().Error("current member is not the leader, can't retire", zap.String("current member", s.cfg.Name))
+				}
+
+				continue
+			}
+
+			if leaderInfo.ID == s.cfg.Name {
+				// this member become leader
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
 				err := s.scheduler.Start(ctx, s.etcdClient)
 				if err != nil {
@@ -47,29 +65,14 @@ func (s *Server) electionNotify(ctx context.Context) {
 				s.leader = oneselfLeader
 				s.closeLeaderClient()
 				s.Unlock()
-			case election.RetireFromLeader, election.IsNotLeader:
-				if notify == election.RetireFromLeader {
-					s.scheduler.Close()
-				}
-
-				leader, leaderID, leaderAddr, err2 := s.election.LeaderInfo(ctx)
-				if err2 != nil {
-					log.L().Warn("get leader info", zap.Error(err2))
-					continue
-				}
-
-				if notify == election.RetireFromLeader {
-					log.L().Info("current member retire from the leader", zap.String("leader", leaderID), zap.String("current member", s.cfg.Name))
-				} else {
-					log.L().Info("get new leader", zap.String("leader", leaderID), zap.String("current member", s.cfg.Name))
-				}
+			} else {
+				// this member is not leader
+				log.L().Info("get new leader", zap.String("leader", leaderInfo.ID), zap.String("current member", s.cfg.Name))
 
 				s.Lock()
-				s.leader = leader
-				s.createLeaderClient(leaderAddr)
+				s.leader = leaderInfo.ID
+				s.createLeaderClient(leaderInfo.Addr)
 				s.Unlock()
-			default:
-				log.L().Error("unknown notify type", zap.String("notify", notify))
 			}
 
 		case err := <-s.election.ErrorNotify():
@@ -83,10 +86,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 }
 
 func (s *Server) createLeaderClient(leaderAddr string) {
-	if s.leaderGrpcConn != nil {
-		s.leaderGrpcConn.Close()
-		s.leaderGrpcConn = nil
-	}
+	s.closeLeaderClient()
 
 	conn, err := grpc.Dial(leaderAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
