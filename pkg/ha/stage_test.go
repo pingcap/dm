@@ -87,7 +87,6 @@ func (t *testForEtcd) TestRelayStageEtcd(c *C) {
 	st2, rev3, err := GetRelayStage(etcdTestCli, source1)
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
-	stage1.Revision = 0
 	c.Assert(st2, DeepEquals, stage1)
 
 	// get two stages.
@@ -95,6 +94,7 @@ func (t *testForEtcd) TestRelayStageEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
 	c.Assert(stm, HasLen, 2)
+	stage2.Revision = rev2
 	c.Assert(stm[source1], DeepEquals, stage1)
 	c.Assert(stm[source2], DeepEquals, stage2)
 
@@ -163,8 +163,6 @@ func (t *testForEtcd) TestSubTaskStageEtcd(c *C) {
 	c.Assert(<-stageCh, DeepEquals, stage2)
 	c.Assert(len(errCh), Equals, 0)
 
-	stage1.Revision = 0
-	stage2.Revision = 0
 	// get stages back without specified task.
 	stm, rev3, err := GetSubTaskStage(etcdTestCli, source, "")
 	c.Assert(err, IsNil)
