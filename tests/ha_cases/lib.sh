@@ -11,9 +11,9 @@ set -eu
 # more details at https://github.com/pingcap/tipocket
 function start_random_sql_to() {
     dsn=$1
-    config_name="pocket-no-ddl.toml"
+    config_name="pocket-dml.toml"
     if [ $2 = 1 ]; then
-        config_name="pocket-with-ddl.toml"
+        config_name="pocket-hybrid.toml"
     fi
     bin="pocket"
     if [ $3 = 1 ]; then
@@ -25,7 +25,7 @@ function start_random_sql_to() {
     echo $pid
 }
 # unit test case (with ddl):
-# pid=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/pocket" 1)
+# pid=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/pocket" 0 1)
 
 
 # build tables etc.
@@ -157,4 +157,16 @@ function cleanup() {
         $(mysql -h127.1 -p123456 -P$i -e "drop database if exists ha_test;")
     done
     cleanup_process $*
+}
+
+
+function isolate_port() {
+    port=$1
+    iptables -I OUTPUT -p tcp --dport $port -j DROP
+}
+
+
+function disable_isolate_port() {
+    port=$1
+    iptables -D OUTPUT -p tcp --dport $port -j DROP
 }
