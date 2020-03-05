@@ -188,25 +188,25 @@ func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Clien
 				case <-ctx.Done():
 					return nil
 				case <-time.After(500 * time.Millisecond):
-					bsm, rev1, err1 := ha.GetSourceBound(s.etcdClient, s.cfg.Name)
+					bound, cfg, rev1, err1 := ha.GetSourceBoundConfig(s.etcdClient, s.cfg.Name)
 					if err1 != nil {
 						log.L().Error("get source bound from etcd failed, will retry later", zap.Error(err1), zap.Int("retryNum", retryNum))
 						break
 					}
 					rev = rev1
-					if bound, ok := bsm[s.cfg.Name]; ok {
+					if bound.IsEmpty() {
+						s.stopWorker("")
+					} else {
 						if w := s.getWorker(true); w != nil && w.cfg.SourceID == bound.Source {
 							continue
 						}
 						s.stopWorker("")
-						err1 = s.operateSourceBound(bound)
+						err1 = s.startWorker(&cfg)
 						s.setSourceStatus(bound.Source, err1, true)
 						if err1 != nil {
 							log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
 								zap.Stringer("bound", bound), zap.Error(err1))
 						}
-					} else {
-						s.stopWorker("")
 					}
 				}
 				retryNum++
@@ -347,6 +347,9 @@ func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBo
 				// TODO: add better metrics
 				log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
 					zap.Stringer("bound", bound), zap.Error(err))
+				if etcdutil.IsRetryableError(err) {
+					return err
+				}
 			}
 		case err := <-errCh:
 			// TODO: Deal with err

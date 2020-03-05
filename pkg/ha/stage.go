@@ -76,6 +76,12 @@ func (s Stage) toJSON() (string, error) {
 	return string(data), nil
 }
 
+// IsEmpty returns true when this Stage has no value
+func (s Stage) IsEmpty() bool {
+	var emptyStage Stage
+	return s == emptyStage
+}
+
 // stageFromJSON constructs Stage from its JSON represent.
 func stageFromJSON(str string) (s Stage, err error) {
 	err = json.Unmarshal([]byte(str), &s)

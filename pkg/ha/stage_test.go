@@ -19,6 +19,7 @@ import (
 
 	. "github.com/pingcap/check"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 )
 
@@ -211,4 +212,34 @@ func (t *testForEtcd) TestSubTaskStageEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev5, Equals, rev4)
 	c.Assert(stm, HasLen, 0)
+}
+
+func (t *testForEtcd) TestGetSubTaskStageConfigEtcd(c *C) {
+	defer clearTestInfoOperation(c)
+
+	cfg := config.SubTaskConfig{}
+	c.Assert(cfg.DecodeFile(subTaskSampleFile, true), IsNil)
+	source := cfg.SourceID
+	task := cfg.Name
+	stage := NewSubTaskStage(pb.Stage_Running, source, task)
+
+	// no subtask stage and config
+	stm, scm, rev1, err := GetSubTaskStageConfig(etcdTestCli, source)
+	c.Assert(err, IsNil)
+	c.Assert(rev1, Equals, int64(0))
+	c.Assert(stm, HasLen, 0)
+	c.Assert(scm, HasLen, 0)
+
+	// put subtask config and stage at the same time
+	rev2, err := PutSubTaskCfgStage(etcdTestCli, []config.SubTaskConfig{cfg}, []Stage{stage})
+	c.Assert(err, IsNil)
+	c.Assert(rev2, Greater, rev1)
+
+	// get subtask config and stage at the same time
+	stm, scm, rev3, err := GetSubTaskStageConfig(etcdTestCli, source)
+	c.Assert(rev3, Equals, rev2)
+	c.Assert(stm, HasLen, 1)
+	stage.Revision = rev2
+	c.Assert(stm[task], DeepEquals, stage)
+	c.Assert(scm[task], DeepEquals, cfg)
 }
