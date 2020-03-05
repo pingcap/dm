@@ -1242,6 +1242,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		case *replication.XIDEvent:
 			if shardingReSync != nil {
 				shardingReSync.currLocation.Position.Pos = e.Header.LogPos
+				// TODO：update gtid
+
+				// only need compare binlog position?
 				lastLocation = shardingReSync.currLocation
 				if binlog.CompareLocation(shardingReSync.currLocation, shardingReSync.latestLocation) >= 0 {
 					s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "XID"), zap.Reflect("re-shard", shardingReSync))
@@ -1255,6 +1258,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			latestOp = xid
 			currentLocation.Position.Pos = e.Header.LogPos
+			// TODO：update gtid
 			s.tctx.L().Debug("", zap.String("event", "XID"), zap.Stringer("last location", lastLocation), log.WrapStringerField("location", currentLocation), log.WrapStringerField("gtid set", ev.GSet))
 			lastLocation.Position.Pos = e.Header.LogPos // update lastPos
 
@@ -1473,8 +1477,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			Name: ec.lastLocation.Position.Name,
 			Pos:  ec.header.LogPos,
 		},
-		// TODO: use ev.GSet?
-		GTID: ec.lastLocation.GTID,
+		// TODO: use new ev.GSet?
+		//GTID:
 	}
 	sql := strings.TrimSpace(string(ev.Query))
 	usedSchema := string(ev.Schema)
@@ -1488,6 +1492,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
 		s.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema))
 		*ec.lastLocation = *ec.currentLocation // before record skip location, update lastLocation
+		// TODO: update GTID
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
 	}
 	if !parseResult.isDDL {
@@ -1497,6 +1502,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currLocation.Position.Pos = ec.header.LogPos
+		// TODO: update GTID?
 		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "query"), zap.String("statement", sql), zap.Reflect("re-shard", ec.shardingReSync))
 			err2 := ec.closeShardingResync()
@@ -1508,6 +1514,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			// as they have been added to sharding DDL sequence
 			// only update lastPos when the query is a real DDL
 			*ec.lastLocation = ec.shardingReSync.currLocation
+			// TODO: set gtid
 			s.tctx.L().Debug("skip event in re-replicating sharding group", zap.String("event", "query"), zap.String("statement", sql), zap.Reflect("re-shard", ec.shardingReSync))
 		}
 		return nil
