@@ -20,6 +20,7 @@ import (
 
 	gmysql "github.com/siddontang/go-mysql/mysql"
 
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -166,11 +167,11 @@ func ComparePosition(pos1, pos2 gmysql.Position) int {
 type Location struct {
 	Position gmysql.Position
 
-	GTID string
+	GTIDSet gtid.Set
 }
 
 func (p Location) String() string {
-	return fmt.Sprintf("Position: %v, GTID: %s", p.Position, p.GTID)
+	return fmt.Sprintf("Position: %v, GTID: %s", p.Position, p.GTIDSet)
 }
 
 // CompareLocation returns:

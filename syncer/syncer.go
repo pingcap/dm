@@ -1296,7 +1296,7 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 			Name: string(ev.NextLogName),
 			Pos:  uint32(ev.Position),
 		},
-		GTID: ec.currentLocation.GTID,
+		GTIDSet: ec.currentLocation.GTIDSet,
 	}
 	if binlog.CompareLocation(*ec.currentLocation, *ec.lastLocation) > 0 {
 		*ec.lastLocation = *ec.currentLocation
@@ -1332,7 +1332,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			Name: ec.lastLocation.Position.Name,
 			Pos:  ec.header.LogPos,
 		},
-		GTID: ec.lastLocation.GTID,
+		GTIDSet: ec.lastLocation.GTIDSet,
 	}
 
 	if ec.shardingReSync != nil {

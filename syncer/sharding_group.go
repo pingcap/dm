@@ -318,7 +318,7 @@ func (sg *ShardingGroup) FirstLocationUnresolved() *binlog.Location {
 				Name: sg.firstLocation.Position.Name,
 				Pos:  sg.firstLocation.Position.Pos,
 			},
-			GTID: sg.firstLocation.GTID,
+			GTIDSet: sg.firstLocation.GTIDSet,
 		}
 	}
 	item := sg.meta.GetGlobalActiveDDL()
@@ -329,7 +329,7 @@ func (sg *ShardingGroup) FirstLocationUnresolved() *binlog.Location {
 				Name: item.FirstLocation.Position.Name,
 				Pos:  item.FirstLocation.Position.Pos,
 			},
-			GTID: item.FirstLocation.GTID,
+			GTIDSet: item.FirstLocation.GTIDSet,
 		}
 	}
 	return nil
@@ -346,7 +346,7 @@ func (sg *ShardingGroup) FirstEndPosUnresolved() *binlog.Location {
 				Name: sg.firstEndLocation.Position.Name,
 				Pos:  sg.firstEndLocation.Position.Pos,
 			},
-			GTID: sg.firstEndLocation.GTID,
+			GTIDSet: sg.firstEndLocation.GTIDSet,
 		}
 	}
 	return nil

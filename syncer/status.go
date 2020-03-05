@@ -53,7 +53,7 @@ func (s *Syncer) Status() interface{} {
 	if masterGTIDSet != nil { // masterGTIDSet maybe a nil interface
 		st.MasterBinlogGtid = masterGTIDSet.String()
 	}
-	st.SyncerBinlogGtid = syncerLocation.GTID
+	st.SyncerBinlogGtid = syncerLocation.GTIDSet.String()
 
 	st.BinlogType = "unknown"
 	if s.streamerController != nil {

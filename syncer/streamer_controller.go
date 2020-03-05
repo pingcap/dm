@@ -73,22 +73,17 @@ func (r *remoteBinlogReader) generateStreamer(location binlog.Location) (streame
 	if r.EnableGTID {
 		// NOTE: our (per-table based) checkpoint does not support GTID yet
 		//return nil, terror.ErrSyncerUnitRemoteSteamerWithGTID.Generate()
-		var gtid mysql.GTIDSet
-		var err error
 		/*
-			if r.flavor == mysql.MySQLFlavor {
-				gtid, err = mysql.ParseMysqlGTIDSet(location.GTID)
+			var gtid mysql.GTIDSet
 
-			} else {
-				gtid, err = mysql.ParseMariadbGTID(location.GTID)
+			var err error
+			gtid, err = mysql.ParseGTIDSet(r.flavor, location.GTIDSet)
+			if err != nil {
+				// TODO: use terror
+				return nil, err
 			}
 		*/
-		gtid, err = mysql.ParseGTIDSet(r.flavor, location.GTID)
-		if err != nil {
-			// TODO: use terror
-			return nil, err
-		}
-		streamer, err := r.reader.StartSyncGTID(gtid)
+		streamer, err := r.reader.StartSyncGTID(location.GTIDSet.Origin())
 		if err != nil {
 			return nil, err
 		}

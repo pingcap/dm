@@ -24,6 +24,7 @@ import (
 	pbinlog "github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
@@ -619,16 +620,16 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 	// checkpoints in DB have higher priority
 	// if don't want to use checkpoint in DB, set `remove-previous-checkpoint` to `true`
 	var (
-		cpSchema   string
-		cpTable    string
-		binlogName string
-		binlogPos  uint32
-		binlogGTID string
-		tiBytes    []byte
-		isGlobal   bool
+		cpSchema      string
+		cpTable       string
+		binlogName    string
+		binlogPos     uint32
+		binlogGTIDSet gtid.Set
+		tiBytes       []byte
+		isGlobal      bool
 	)
 	for rows.Next() {
-		err := rows.Scan(&cpSchema, &cpTable, &binlogName, &binlogPos, &binlogGTID, &tiBytes, &isGlobal)
+		err := rows.Scan(&cpSchema, &cpTable, &binlogName, &binlogPos, &binlogGTIDSet, &tiBytes, &isGlobal)
 		if err != nil {
 			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
@@ -637,7 +638,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 				Name: binlogName,
 				Pos:  binlogPos,
 			},
-			GTID: binlogGTID,
+			GTIDSet: binlogGTIDSet,
 		}
 		if isGlobal {
 			if pbinlog.CompareLocation(location, minLocation) > 0 {
@@ -736,7 +737,7 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location pbin
 	if len(tiBytes) == 0 {
 		tiBytes = []byte("null")
 	}
-	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTID, tiBytes, isGlobal}
+	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSet, tiBytes, isGlobal}
 	return sql2, args
 }
 
@@ -744,13 +745,18 @@ func (cp *RemoteCheckPoint) parseMetaData() (*pbinlog.Location, error) {
 	// `metadata` is mydumper's output meta file name
 	filename := path.Join(cp.cfg.Dir, "metadata")
 	cp.logCtx.L().Info("parsing metadata from file", zap.String("file", filename))
-	pos, gtid, err := utils.ParseMetaData(filename)
+	pos, gsetStr, err := utils.ParseMetaData(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	gset, err := gtid.ParserGTID(cp.cfg.Flavor, gsetStr)
 	if err != nil {
 		return nil, err
 	}
 
 	return &pbinlog.Location{
 		Position: *pos,
-		GTID:     gtid,
+		GTIDSet:  gset,
 	}, nil
 }
