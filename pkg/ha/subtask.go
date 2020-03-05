@@ -37,19 +37,19 @@ func PutSubTaskCfg(cli *clientv3.Client, cfgs ...config.SubTaskConfig) (int64, e
 
 // GetSubTaskCfg gets the subtask config of the specified source and task name.
 // if the config for the source not exist, return with `err == nil` and `revision=0`.
-// if taskName is "", will return all the subtaskConfigs as a map{taskName: subtaskConfig} of the source
-// if taskName if given, will return a map{taskName: subtaskConfig} whose length is 1
-func GetSubTaskCfg(cli *clientv3.Client, source, taskName string, rev int64) (map[string]config.SubTaskConfig, int64, error) {
+// if task name is "", will return all the subtaskConfigs as a map{taskName: subtaskConfig} of the source
+// if task name if given, will return a map{taskName: subtaskConfig} whose length is 1
+func GetSubTaskCfg(cli *clientv3.Client, source, task string, rev int64) (map[string]config.SubTaskConfig, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
-	tsm := make(map[string]config.SubTaskConfig)
 	var (
+		tsm  = make(map[string]config.SubTaskConfig)
 		resp *clientv3.GetResponse
 		err  error
 	)
-	if taskName != "" {
-		resp, err = cli.Get(ctx, common.UpstreamSubTaskKeyAdapter.Encode(source, taskName), clientv3.WithRev(rev))
+	if task != "" {
+		resp, err = cli.Get(ctx, common.UpstreamSubTaskKeyAdapter.Encode(source, task), clientv3.WithRev(rev))
 	} else {
 		resp, err = cli.Get(ctx, common.UpstreamSubTaskKeyAdapter.Encode(source), clientv3.WithPrefix(), clientv3.WithRev(rev))
 	}
@@ -58,23 +58,11 @@ func GetSubTaskCfg(cli *clientv3.Client, source, taskName string, rev int64) (ma
 		return tsm, 0, err
 	}
 
-	if resp.Count == 0 {
-		return tsm, resp.Header.Revision, nil
-	} else if taskName != "" && resp.Count > 1 {
-		// TODO(lichunzhu): add terror.
-		// this should not happen.
-		return tsm, 0, fmt.Errorf("too many config (%d) exist for the subtask {sourceID: %s, task name: %s}", resp.Count, source, taskName)
+	cfgs, err := subTaskCfgFromResp(source, task, resp)
+	if err != nil {
+		return tsm, 0, err
 	}
-
-	for _, kvs := range resp.Kvs {
-		cfg := config.SubTaskConfig{}
-		err = cfg.Decode(string(kvs.Value), true)
-		if err != nil {
-			return tsm, 0, err
-		}
-
-		tsm[cfg.Name] = cfg
-	}
+	tsm = cfgs[source]
 
 	return tsm, resp.Header.Revision, nil
 }
@@ -91,17 +79,9 @@ func GetAllSubTaskCfg(cli *clientv3.Client) (map[string]map[string]config.SubTas
 		return nil, 0, err
 	}
 
-	cfgs := make(map[string]map[string]config.SubTaskConfig)
-	for _, kvs := range resp.Kvs {
-		cfg := config.SubTaskConfig{}
-		err = cfg.Decode(string(kvs.Value), true)
-		if err != nil {
-			return nil, 0, err
-		}
-		if _, ok := cfgs[cfg.SourceID]; !ok {
-			cfgs[cfg.SourceID] = make(map[string]config.SubTaskConfig)
-		}
-		cfgs[cfg.SourceID][cfg.Name] = cfg
+	cfgs, err := subTaskCfgFromResp("", "", resp)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	return cfgs, resp.Header.Revision, nil
@@ -128,4 +108,33 @@ func deleteSubTaskCfgOp(cfgs ...config.SubTaskConfig) []clientv3.Op {
 		ops = append(ops, clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name)))
 	}
 	return ops
+}
+
+func subTaskCfgFromResp(source, task string, resp *clientv3.GetResponse) (map[string]map[string]config.SubTaskConfig, error) {
+	cfgs := make(map[string]map[string]config.SubTaskConfig)
+	if source != "" {
+		cfgs[source] = make(map[string]config.SubTaskConfig) // avoid cfgs[source] is nil
+	}
+
+	if resp.Count == 0 {
+		return cfgs, nil
+	} else if source != "" && task != "" && resp.Count > 1 {
+		// TODO(lichunzhu): add terror.
+		// this should not happen.
+		return cfgs, fmt.Errorf("too many config (%d) exist for the subtask {sourceID: %s, task name: %s}", resp.Count, source, task)
+	}
+
+	for _, kvs := range resp.Kvs {
+		cfg := config.SubTaskConfig{}
+		err := cfg.Decode(string(kvs.Value), true)
+		if err != nil {
+			return cfgs, err
+		}
+		if _, ok := cfgs[cfg.SourceID]; !ok {
+			cfgs[cfg.SourceID] = make(map[string]config.SubTaskConfig)
+		}
+		cfgs[cfg.SourceID][cfg.Name] = cfg
+	}
+
+	return cfgs, nil
 }

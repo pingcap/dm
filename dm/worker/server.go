@@ -701,12 +701,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 
 	// we get the newest subtask stages directly which will omit the subtask stage PUT/DELETE event
 	// because triggering these events is useless now
-	subTaskStages, revSubTask, err := ha.GetSubTaskStage(s.etcdClient, cfg.SourceID, "")
-	if err != nil {
-		// TODO: need retry
-		return err
-	}
-	subTaskCfgm, _, err := ha.GetSubTaskCfg(s.etcdClient, cfg.SourceID, "", revSubTask)
+	subTaskStages, subTaskCfgm, revSubTask, err := ha.GetSubTaskStageConfig(s.etcdClient, cfg.SourceID)
 	if err != nil {
 		// TODO: need retry
 		return err

@@ -133,7 +133,7 @@ func GetSourceBound(cli *clientv3.Client, worker string) (map[string]SourceBound
 	return sbm, resp.Header.Revision, nil
 }
 
-// GetSourceBoundConfig gets the source bound relationship and relative source config at a same time
+// GetSourceBoundConfig gets the source bound relationship and relative source config at the same time
 // for the specified DM-worker. The index worker **must not be empty**:
 // if source bound is empty, will return an empty sourceBound and an empty source config
 // if source bound is not empty but sourceConfig is empty, will return an error

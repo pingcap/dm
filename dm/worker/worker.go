@@ -312,11 +312,7 @@ func (w *Worker) QueryError(name string) []*pb.SubTaskError {
 }
 
 func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {
-	subTaskStages, revSubTask, err := ha.GetSubTaskStage(etcdCli, w.cfg.SourceID, "")
-	if err != nil {
-		return 0, err
-	}
-	subTaskCfgm, _, err := ha.GetSubTaskCfg(etcdCli, w.cfg.SourceID, "", revSubTask)
+	subTaskStages, subTaskCfgm, revSubTask, err := ha.GetSubTaskStageConfig(etcdCli, w.cfg.SourceID)
 	if err != nil {
 		return 0, err
 	}
