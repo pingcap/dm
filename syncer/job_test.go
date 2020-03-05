@@ -16,7 +16,8 @@ package syncer
 import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/pkg/binlog"
 )
 
 var _ = Suite(&testJobSuite{})
@@ -86,19 +87,19 @@ func (t *testJobSuite) TestJob(c *C) {
 		jobStr string
 	}{
 		{
-			newJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", mysql.Position{}, mysql.Position{}, nil, ""),
+			newJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", binlog.Location{}, binlog.Location{}, ""),
 			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: 1, ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
-			newDDLJob(ddlInfo, []string{"create database test"}, mysql.Position{}, mysql.Position{}, nil, ""),
+			newDDLJob(ddlInfo, []string{"create database test"}, binlog.Location{}, binlog.Location{}, ""),
 			"tp: ddl, sql: , args: [], key: , ddls: [create database test], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
-			newXIDJob(mysql.Position{}, mysql.Position{}, nil, ""),
+			newXIDJob(binlog.Location{}, binlog.Location{}, ""),
 			"tp: xid, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
 			newFlushJob(),
 			"tp: flush, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
-			newSkipJob(mysql.Position{}, nil),
+			newSkipJob(binlog.Location{}),
 			"tp: skip, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		},
 	}

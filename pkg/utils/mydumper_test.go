@@ -27,8 +27,9 @@ func (t *testUtilsSuite) TestParseMetaData(c *C) {
 	defer os.Remove(f.Name())
 
 	testCases := []struct {
-		source string
-		pos    *mysql.Position
+		source  string
+		pos     *mysql.Position
+		gsetStr string
 	}{
 		{
 			`Started dump at: 2018-12-28 07:20:49
@@ -42,6 +43,7 @@ Finished dump at: 2018-12-28 07:20:51`,
 				Name: "bin.000001",
 				Pos:  2479,
 			},
+			"97b5142f-e19c-11e8-808c-0242ac110005:1-13",
 		},
 		{
 			`Started dump at: 2018-12-27 19:51:22
@@ -61,14 +63,16 @@ Finished dump at: 2018-12-27 19:51:22`,
 				Name: "mysql-bin.000003",
 				Pos:  3295817,
 			},
+			"",
 		},
 	}
 
 	for _, tc := range testCases {
 		err := ioutil.WriteFile(f.Name(), []byte(tc.source), 0644)
 		c.Assert(err, IsNil)
-		pos, err := ParseMetaData(f.Name())
+		pos, gsetStr, err := ParseMetaData(f.Name())
 		c.Assert(err, IsNil)
 		c.Assert(pos, DeepEquals, tc.pos)
+		c.Assert(gsetStr, Equals, tc.gsetStr)
 	}
 }

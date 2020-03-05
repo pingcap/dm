@@ -24,6 +24,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -98,15 +99,15 @@ type MockStreamProducer struct {
 	events []*replication.BinlogEvent
 }
 
-func (mp *MockStreamProducer) generateStreamer(pos mysql.Position) (streamer2.Streamer, error) {
-	if pos.Pos == 4 {
+func (mp *MockStreamProducer) generateStreamer(location binlog.Location) (streamer2.Streamer, error) {
+	if location.Position.Pos == 4 {
 		return &MockStreamer{mp.events, 0}, nil
 	}
 	bytesLen := 0
 	idx := uint32(0)
 	for i, e := range mp.events {
 		bytesLen += len(e.RawData)
-		if pos.Pos == uint32(bytesLen) {
+		if location.Position.Pos == uint32(bytesLen) {
 			idx = uint32(i)
 			break
 		}
@@ -953,8 +954,8 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	syncer.toDBConns = []*DBConn{{baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	syncer.reset()
 
-	syncer.streamerController = NewStreamerController(tcontext.Background(), syncer.syncCfg, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone)
-	err = syncer.streamerController.Start(tcontext.Background(), pos)
+	syncer.streamerController = NewStreamerController(tcontext.Background(), syncer.syncCfg, true, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone)
+	err = syncer.streamerController.Start(tcontext.Background(), binlog.Location{Position: pos})
 	c.Assert(err, IsNil)
 
 	for _, testCase := range testCases {
@@ -1144,7 +1145,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	mockStreamerProducer := &MockStreamProducer{s.generateEvents(events1, c)}
-	mockStreamer, err := mockStreamerProducer.generateStreamer(mysql.Position{})
+	mockStreamer, err := mockStreamerProducer.generateStreamer(binlog.Location{})
 	c.Assert(err, IsNil)
 	syncer.streamerController = &StreamerController{
 		streamerProducer: mockStreamerProducer,
@@ -1247,7 +1248,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	// simulate `syncer.Resume` here, but doesn't reset database conns
 	syncer.reset()
 	mockStreamerProducer = &MockStreamProducer{s.generateEvents(events2, c)}
-	mockStreamer, err = mockStreamerProducer.generateStreamer(mysql.Position{})
+	mockStreamer, err = mockStreamerProducer.generateStreamer(binlog.Location{})
 	c.Assert(err, IsNil)
 	syncer.streamerController = &StreamerController{
 		streamerProducer: mockStreamerProducer,

@@ -180,5 +180,17 @@ func (p Location) String() string {
 //   -1 if point1 is less than point2
 func CompareLocation(location1, location2 Location) int {
 	// TODO: compare gtid
-	return 1
+	if len(location1.String()) != 0 && len(location2.String()) != 0 {
+		contain1 := location1.GTIDSet.Contain(location2.GTIDSet)
+		if contain1 {
+			return 1
+		}
+
+		contain2 := location2.GTIDSet.Contain(location1.GTIDSet)
+		if contain2 {
+			return -1
+		}
+	}
+
+	return ComparePosition(location1.Position, location2.Position)
 }

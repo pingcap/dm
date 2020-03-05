@@ -1258,9 +1258,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			latestOp = xid
 			currentLocation.Position.Pos = e.Header.LogPos
-			// TODO：update gtid
+			currentLocation.GTIDSet.Set(ev.GSet)
 			s.tctx.L().Debug("", zap.String("event", "XID"), zap.Stringer("last location", lastLocation), log.WrapStringerField("location", currentLocation), log.WrapStringerField("gtid set", ev.GSet))
 			lastLocation.Position.Pos = e.Header.LogPos // update lastPos
+			lastLocation.GTIDSet.Set(ev.GSet)
 
 			job := newXIDJob(currentLocation, currentLocation, traceID)
 			err = s.addJobFunc(job)
@@ -1477,9 +1478,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			Name: ec.lastLocation.Position.Name,
 			Pos:  ec.header.LogPos,
 		},
-		// TODO: use new ev.GSet?
-		//GTID:
+		GTIDSet: ec.lastLocation.GTIDSet,
 	}
+	ec.currentLocation.GTIDSet.Set(ev.GSet)
+
 	sql := strings.TrimSpace(string(ev.Query))
 	usedSchema := string(ev.Schema)
 	parseResult, err := s.parseDDLSQL(sql, ec.parser2, usedSchema)

@@ -19,6 +19,8 @@ import (
 
 	"github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/pkg/binlog"
 )
 
 var _ = check.Suite(&testShardMetaSuite{})
@@ -36,7 +38,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 		err        error
 		sqls       []string
 		args       [][]interface{}
-		pos        mysql.Position
+		location   binlog.Location
 		filename   = "mysql-bin.000001"
 		table1     = "table1"
 		table2     = "table2"
@@ -47,15 +49,15 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 		tableID    = "`target_db`.`target_table`"
 		meta       = NewShardingMeta(metaSchema, metaTable)
 		items      = []*DDLItem{
-			NewDDLItem(mysql.Position{filename, 1000}, []string{"ddl1"}, table1),
-			NewDDLItem(mysql.Position{filename, 1200}, []string{"ddl2-1,ddl2-2"}, table1),
-			NewDDLItem(mysql.Position{filename, 1400}, []string{"ddl3"}, table1),
-			NewDDLItem(mysql.Position{filename, 1600}, []string{"ddl1"}, table2),
-			NewDDLItem(mysql.Position{filename, 1800}, []string{"ddl2-1,ddl2-2"}, table2),
-			NewDDLItem(mysql.Position{filename, 2000}, []string{"ddl3"}, table2),
-			NewDDLItem(mysql.Position{filename, 2200}, []string{"ddl1"}, table3),
-			NewDDLItem(mysql.Position{filename, 2400}, []string{"ddl2-1,ddl2-2"}, table3),
-			NewDDLItem(mysql.Position{filename, 2600}, []string{"ddl3"}, table3),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1000}}, []string{"ddl1"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1200}}, []string{"ddl2-1,ddl2-2"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1400}}, []string{"ddl3"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1600}}, []string{"ddl1"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1800}}, []string{"ddl2-1,ddl2-2"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 2000}}, []string{"ddl3"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 2200}}, []string{"ddl1"}, table3),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 2400}}, []string{"ddl2-1,ddl2-2"}, table3),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 2600}}, []string{"ddl3"}, table3),
 		}
 	)
 
@@ -76,9 +78,9 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.GetActiveDDLItem(table2), check.DeepEquals, items[3])
 	c.Assert(meta.GetActiveDDLItem(table3), check.DeepEquals, items[6])
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
-	pos, err = meta.ActiveDDLFirstPos()
+	location, err = meta.ActiveDDLFirstLocation()
 	c.Assert(err, check.IsNil)
-	c.Assert(pos, check.DeepEquals, items[0].FirstPos)
+	c.Assert(location.Position, check.DeepEquals, items[0].FirstLocation)
 
 	// find synced in shrading group, and call ShardingMeta.ResolveShardingDDL
 	c.Assert(meta.ResolveShardingDDL(), check.IsFalse)
@@ -88,9 +90,9 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.GetActiveDDLItem(table2), check.DeepEquals, items[4])
 	c.Assert(meta.GetActiveDDLItem(table3), check.IsNil)
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
-	pos, err = meta.ActiveDDLFirstPos()
+	location, err = meta.ActiveDDLFirstLocation()
 	c.Assert(err, check.IsNil)
-	c.Assert(pos, check.DeepEquals, items[1].FirstPos)
+	c.Assert(location.Position, check.DeepEquals, items[1].FirstLocation)
 
 	sqls, args = meta.FlushData(sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 4)
@@ -122,9 +124,9 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.GetActiveDDLItem(table2), check.DeepEquals, items[4])
 	c.Assert(meta.GetActiveDDLItem(table3), check.DeepEquals, items[7])
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
-	pos, err = meta.ActiveDDLFirstPos()
+	location, err = meta.ActiveDDLFirstLocation()
 	c.Assert(err, check.IsNil)
-	c.Assert(pos, check.DeepEquals, items[1].FirstPos)
+	c.Assert(location.Position, check.DeepEquals, items[1].FirstLocation)
 
 	// find synced in shrading group, and call ShardingMeta.ResolveShardingDDL
 	c.Assert(meta.ResolveShardingDDL(), check.IsFalse)
@@ -134,9 +136,9 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.GetActiveDDLItem(table2), check.DeepEquals, items[5])
 	c.Assert(meta.GetActiveDDLItem(table3), check.IsNil)
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
-	pos, err = meta.ActiveDDLFirstPos()
+	location, err = meta.ActiveDDLFirstLocation()
 	c.Assert(err, check.IsNil)
-	c.Assert(pos, check.DeepEquals, items[2].FirstPos)
+	c.Assert(location.Position, check.DeepEquals, items[2].FirstLocation)
 
 	sqls, args = meta.FlushData(sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 4)
@@ -167,9 +169,9 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.GetActiveDDLItem(table2), check.DeepEquals, items[5])
 	c.Assert(meta.GetActiveDDLItem(table3), check.DeepEquals, items[8])
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
-	pos, err = meta.ActiveDDLFirstPos()
+	location, err = meta.ActiveDDLFirstLocation()
 	c.Assert(err, check.IsNil)
-	c.Assert(pos, check.DeepEquals, items[2].FirstPos)
+	c.Assert(location.Position, check.DeepEquals, items[2].FirstLocation)
 
 	// find synced in shrading group, and call ShardingMeta.ResolveShardingDDL
 	c.Assert(meta.ResolveShardingDDL(), check.IsTrue)
@@ -179,7 +181,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.GetActiveDDLItem(table2), check.IsNil)
 	c.Assert(meta.GetActiveDDLItem(table3), check.IsNil)
 	c.Assert(meta.InSequenceSharding(), check.IsFalse)
-	pos, err = meta.ActiveDDLFirstPos()
+	location, err = meta.ActiveDDLFirstLocation()
 	c.Assert(err, check.ErrorMatches, fmt.Sprintf("\\[.*\\] activeIdx %d larger than length of global DDLItems: .*", meta.ActiveIdx()))
 
 	sqls, args = meta.FlushData(sourceID, tableID)
@@ -198,12 +200,12 @@ func (t *testShardMetaSuite) TestShardingMetaWrongSequence(c *check.C) {
 		table2   = "table2"
 		meta     = NewShardingMeta("", "")
 		items    = []*DDLItem{
-			NewDDLItem(mysql.Position{filename, 1000}, []string{"ddl1"}, table1),
-			NewDDLItem(mysql.Position{filename, 1200}, []string{"ddl2"}, table1),
-			NewDDLItem(mysql.Position{filename, 1400}, []string{"ddl3"}, table1),
-			NewDDLItem(mysql.Position{filename, 1600}, []string{"ddl1"}, table2),
-			NewDDLItem(mysql.Position{filename, 1800}, []string{"ddl3"}, table2),
-			NewDDLItem(mysql.Position{filename, 2000}, []string{"ddl2"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1000}}, []string{"ddl1"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1200}}, []string{"ddl2"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1400}}, []string{"ddl3"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1600}}, []string{"ddl1"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1800}}, []string{"ddl3"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 2000}}, []string{"ddl2"}, table2),
 		}
 	)
 
@@ -252,8 +254,8 @@ func (t *testShardMetaSuite) TestFlushLoadMeta(c *check.C) {
 		meta       = NewShardingMeta(metaSchema, metaTable)
 		loadedMeta = NewShardingMeta(metaSchema, metaTable)
 		items      = []*DDLItem{
-			NewDDLItem(mysql.Position{filename, 1000}, []string{"ddl1"}, table1),
-			NewDDLItem(mysql.Position{filename, 1200}, []string{"ddl1"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1000}}, []string{"ddl1"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1200}}, []string{"ddl1"}, table2),
 		}
 	)
 	for _, item := range items {

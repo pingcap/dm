@@ -69,20 +69,7 @@ func (r *remoteBinlogReader) generateStreamer(location binlog.Location) (streame
 		r.tctx.L().Info("last slave connection", zap.Uint32("connection ID", lastSlaveConnectionID))
 	}()
 
-	// FIXME: can enable GTID
 	if r.EnableGTID {
-		// NOTE: our (per-table based) checkpoint does not support GTID yet
-		//return nil, terror.ErrSyncerUnitRemoteSteamerWithGTID.Generate()
-		/*
-			var gtid mysql.GTIDSet
-
-			var err error
-			gtid, err = mysql.ParseGTIDSet(r.flavor, location.GTIDSet)
-			if err != nil {
-				// TODO: use terror
-				return nil, err
-			}
-		*/
 		streamer, err := r.reader.StartSyncGTID(location.GTIDSet.Origin())
 		if err != nil {
 			return nil, err

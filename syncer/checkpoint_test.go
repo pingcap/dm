@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/retry"
@@ -123,15 +124,15 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	tctx := tcontext.Background()
 
 	// global checkpoint init to min
-	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, minCheckpoint)
+	c.Assert(cp.GlobalPoint(), Equals, minLocation)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, minLocation)
 
 	// try load, but should load nothing
 	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
 	err := cp.Load(tctx, s.tracker)
 	c.Assert(err, IsNil)
-	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, minCheckpoint)
+	c.Assert(cp.GlobalPoint(), Equals, minLocation)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, minLocation)
 
 	oldMode := s.cfg.Mode
 	oldDir := s.cfg.Dir
@@ -160,15 +161,15 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	s.mock.ExpectQuery(loadCheckPointSQL).WithArgs(cpid).WillReturnRows(sqlmock.NewRows(nil))
 	err = cp.Load(tctx, s.tracker)
 	c.Assert(err, IsNil)
-	cp.SaveGlobalPoint(pos1)
+	cp.SaveGlobalPoint(binlog.Location{Position: pos1})
 
 	s.mock.ExpectBegin()
 	s.mock.ExpectExec("(162)?"+flushCheckPointSQL).WithArgs(cpid, "", "", pos1.Name, pos1.Pos, []byte("null"), true).WillReturnResult(sqlmock.NewResult(0, 1))
 	s.mock.ExpectCommit()
 	err = cp.FlushPointsExcept(tctx, nil, nil, nil)
 	c.Assert(err, IsNil)
-	c.Assert(cp.GlobalPoint(), Equals, pos1)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
+	c.Assert(cp.GlobalPoint().Position, Equals, pos1)
+	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos1)
 
 	// try load from config
 	pos1.Pos = 2044
@@ -176,8 +177,8 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	s.cfg.Meta = &config.Meta{BinLogName: pos1.Name, BinLogPos: pos1.Pos}
 	err = cp.LoadMeta()
 	c.Assert(err, IsNil)
-	c.Assert(cp.GlobalPoint(), Equals, pos1)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
+	c.Assert(cp.GlobalPoint().Position, Equals, pos1)
+	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos1)
 
 	s.cfg.Mode = oldMode
 	s.cfg.Meta = nil
@@ -187,19 +188,19 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 		Name: "mysql-bin.000005",
 		Pos:  2052,
 	}
-	cp.SaveGlobalPoint(pos2)
-	c.Assert(cp.GlobalPoint(), Equals, pos2)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
+	cp.SaveGlobalPoint(binlog.Location{Position: pos2})
+	c.Assert(cp.GlobalPoint().Position, Equals, pos2)
+	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos1)
 
 	// test rollback
 	cp.Rollback(s.tracker)
-	c.Assert(cp.GlobalPoint(), Equals, pos1)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
+	c.Assert(cp.GlobalPoint().Position, Equals, pos1)
+	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos1)
 
 	// save again
-	cp.SaveGlobalPoint(pos2)
-	c.Assert(cp.GlobalPoint(), Equals, pos2)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
+	cp.SaveGlobalPoint(binlog.Location{Position: pos2})
+	c.Assert(cp.GlobalPoint().Position, Equals, pos2)
+	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos1)
 
 	// flush + rollback
 	s.mock.ExpectBegin()
@@ -208,19 +209,19 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	err = cp.FlushPointsExcept(tctx, nil, nil, nil)
 	c.Assert(err, IsNil)
 	cp.Rollback(s.tracker)
-	c.Assert(cp.GlobalPoint(), Equals, pos2)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, pos2)
+	c.Assert(cp.GlobalPoint().Position, Equals, pos2)
+	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos2)
 
 	// try load from DB
 	pos3 := pos2
 	pos3.Pos = pos2.Pos + 1000 // > pos2 to enable save
-	cp.SaveGlobalPoint(pos3)
+	cp.SaveGlobalPoint(binlog.Location{Position: pos3})
 	columns := []string{"cp_schema", "cp_table", "binlog_name", "binlog_pos", "table_info", "is_global"}
 	s.mock.ExpectQuery(loadCheckPointSQL).WithArgs(cpid).WillReturnRows(sqlmock.NewRows(columns).AddRow("", "", pos2.Name, pos2.Pos, []byte("null"), true))
 	err = cp.Load(tctx, s.tracker)
 	c.Assert(err, IsNil)
-	c.Assert(cp.GlobalPoint(), Equals, pos2)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, pos2)
+	c.Assert(cp.GlobalPoint().Position, Equals, pos2)
+	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos2)
 
 	// test save older point
 	/*var buf bytes.Buffer
@@ -239,14 +240,14 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	s.mock.ExpectCommit()
 	err = cp.Clear(tctx)
 	c.Assert(err, IsNil)
-	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, minCheckpoint)
+	c.Assert(cp.GlobalPoint(), Equals, minLocation)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, minLocation)
 
 	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
 	err = cp.Load(tctx, s.tracker)
 	c.Assert(err, IsNil)
-	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, minCheckpoint)
+	c.Assert(cp.GlobalPoint(), Equals, minLocation)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, minLocation)
 }
 
 func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
@@ -266,22 +267,22 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	)
 
 	// not exist
-	newer := cp.IsNewerTablePoint(schema, table, pos1)
+	newer := cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
 	c.Assert(newer, IsTrue)
 
 	// save
-	cp.SaveTablePoint(schema, table, pos2, nil)
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
+	cp.SaveTablePoint(schema, table, binlog.Location{Position: pos2}, nil)
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
 	c.Assert(newer, IsFalse)
 
 	// rollback, to min
 	cp.Rollback(s.tracker)
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
 	c.Assert(newer, IsTrue)
 
 	// save again
-	cp.SaveTablePoint(schema, table, pos2, nil)
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
+	cp.SaveTablePoint(schema, table, binlog.Location{Position: pos2}, nil)
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
 	c.Assert(newer, IsFalse)
 
 	// flush + rollback
@@ -291,7 +292,7 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	err = cp.FlushPointsExcept(tctx, nil, nil, nil)
 	c.Assert(err, IsNil)
 	cp.Rollback(s.tracker)
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
 	c.Assert(newer, IsFalse)
 
 	// clear, to min
@@ -300,12 +301,12 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	s.mock.ExpectCommit()
 	err = cp.Clear(tctx)
 	c.Assert(err, IsNil)
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
 	c.Assert(newer, IsTrue)
 
 	// save
-	cp.SaveTablePoint(schema, table, pos2, nil)
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
+	cp.SaveTablePoint(schema, table, binlog.Location{Position: pos2}, nil)
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
 	c.Assert(newer, IsFalse)
 
 	// test save table point less than global point
@@ -316,8 +317,8 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 			matchStr = strings.ReplaceAll(strings.ReplaceAll(matchStr, "(", "\\("), ")", "\\)")
 			c.Assert(r, Matches, matchStr)
 		}()
-		cp.SaveGlobalPoint(pos2)
-		cp.SaveTablePoint(schema, table, pos1, nil)
+		cp.SaveGlobalPoint(binlog.Location{Position: pos2})
+		cp.SaveTablePoint(schema, table, binlog.Location{Position: pos1}, nil)
 	}()
 
 	// flush but except + rollback
@@ -327,6 +328,6 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	err = cp.FlushPointsExcept(tctx, [][]string{{schema, table}}, nil, nil)
 	c.Assert(err, IsNil)
 	cp.Rollback(s.tracker)
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
 	c.Assert(newer, IsTrue)
 }
