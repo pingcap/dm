@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
+	"go.etcd.io/etcd/clientv3/clientv3util"
 )
 
 // Info represents the shard DDL information.
@@ -164,4 +165,9 @@ func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64, out
 // This operation should often be sent by DM-worker.
 func deleteInfoOp(info Info) clientv3.Op {
 	return clientv3.OpDelete(common.ShardDDLPessimismInfoKeyAdapter.Encode(info.Task, info.Source))
+}
+
+// infoExistCmp returns a etcd Cmp which indicates the info exists.
+func infoExistCmp(info Info) clientv3.Cmp {
+	return clientv3util.KeyExists(common.ShardDDLPessimismInfoKeyAdapter.Encode(info.Task, info.Source))
 }

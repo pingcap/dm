@@ -22,6 +22,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // Pessimist used to coordinate the shard DDL migration in pessimism mode.
@@ -99,9 +100,11 @@ func (p *Pessimist) GetOperation(ctx context.Context, info pessimism.Info, rev i
 // DoneOperationDeleteInfo marks the shard DDL lock operation as done and delete the shard DDL info.
 func (p *Pessimist) DoneOperationDeleteInfo(op pessimism.Operation, info pessimism.Info) error {
 	op.Done = true // mark the operation as `done`.
-	_, err := pessimism.PutOperationDeleteInfo(p.cli, op, info)
+	done, _, err := pessimism.PutOperationDeleteExistInfo(p.cli, op, info)
 	if err != nil {
 		return err
+	} else if !done {
+		return terror.ErrWorkerDDLLockInfoNotFound.Generatef("DDL info for (%s, %s) not found", info.Task, info.Source)
 	}
 
 	p.mu.Lock()

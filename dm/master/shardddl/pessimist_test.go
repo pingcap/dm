@@ -136,8 +136,9 @@ func (t *testPessimist) TestPessimist(c *C) {
 	// mark exec operation for the owner as `done` (and delete the info).
 	op11c := op11
 	op11c.Done = true
-	rev2, err := pessimism.PutOperationDeleteInfo(etcdTestCli, op11c, i11)
+	done, rev2, err := pessimism.PutOperationDeleteExistInfo(etcdTestCli, op11c, i11)
 	c.Assert(err, IsNil)
+	c.Assert(done, IsTrue)
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		return p.Locks()[ID1].IsDone(source1)
 	}), IsTrue)
@@ -157,8 +158,9 @@ func (t *testPessimist) TestPessimist(c *C) {
 	// the lock should become resolved and deleted.
 	op12c := op12
 	op12c.Done = true
-	_, err = pessimism.PutOperationDeleteInfo(etcdTestCli, op12c, i12)
+	done, _, err = pessimism.PutOperationDeleteExistInfo(etcdTestCli, op12c, i12)
 	c.Assert(err, IsNil)
+	c.Assert(done, IsTrue)
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		_, ok := p.Locks()[ID1]
 		return !ok
@@ -224,8 +226,9 @@ func (t *testPessimist) TestPessimist(c *C) {
 	// mark exec operation for the owner as `done` (and delete the info).
 	op21c := op21
 	op21c.Done = true
-	_, err = pessimism.PutOperationDeleteInfo(etcdTestCli, op21c, i21)
+	done, _, err = pessimism.PutOperationDeleteExistInfo(etcdTestCli, op21c, i21)
 	c.Assert(err, IsNil)
+	c.Assert(done, IsTrue)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return p.Locks()[ID2].IsDone(source1)
 	}), IsTrue)
@@ -243,8 +246,9 @@ func (t *testPessimist) TestPessimist(c *C) {
 
 	// mark exec operation for one non-owner as `done` (and delete the info).
 	op22c := pessimism.NewOperation(ID2, task2, source2, DDLs, false, true)
-	_, err = pessimism.PutOperationDeleteInfo(etcdTestCli, op22c, i22)
+	done, _, err = pessimism.PutOperationDeleteExistInfo(etcdTestCli, op22c, i22)
 	c.Assert(err, IsNil)
+	c.Assert(done, IsTrue)
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		return p.Locks()[ID2].IsDone(source2)
 	}), IsTrue)
@@ -264,8 +268,9 @@ func (t *testPessimist) TestPessimist(c *C) {
 	// mark skip operation for the non-owner as `done` (and delete the info).
 	// the lock should become resolved and deleted.
 	op23c := pessimism.NewOperation(ID2, task2, source3, DDLs, false, true)
-	_, err = pessimism.PutOperationDeleteInfo(etcdTestCli, op23c, i23)
+	done, _, err = pessimism.PutOperationDeleteExistInfo(etcdTestCli, op23c, i23)
 	c.Assert(err, IsNil)
+	c.Assert(done, IsTrue)
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		_, ok := p.Locks()[ID2]
 		return !ok
