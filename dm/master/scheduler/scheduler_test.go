@@ -579,7 +579,7 @@ func (t *testScheduler) sourceBounds(c *C, s *Scheduler, expectBounds, expectUnb
 		c.Assert(sToB[source], NotNil)
 		c.Assert(s.GetWorkerBySource(source), NotNil)
 		c.Assert(s.GetWorkerBySource(source).Stage(), Equals, WorkerBound)
-		c.Assert(sToB[source], DeepEquals, s.GetWorkerBySource(source).Bound())
+		boundDeepEqualExcludeRev(c, sToB[source], s.GetWorkerBySource(source).Bound())
 	}
 
 	for _, source := range expectUnbounds {
@@ -587,15 +587,25 @@ func (t *testScheduler) sourceBounds(c *C, s *Scheduler, expectBounds, expectUnb
 	}
 }
 
+func boundDeepEqualExcludeRev(c *C, bound, expectBound ha.SourceBound) {
+	expectBound.Revision = bound.Revision
+	c.Assert(bound, DeepEquals, expectBound)
+}
+
+func stageDeepEqualExcludeRev(c *C, stage, expectStage ha.Stage) {
+	expectStage.Revision = stage.Revision
+	c.Assert(stage, DeepEquals, expectStage)
+}
+
 func (t *testScheduler) relayStageMatch(c *C, s *Scheduler, source string, expectStage pb.Stage) {
 	stage := ha.NewRelayStage(expectStage, source)
-	c.Assert(s.GetExpectRelayStage(source), DeepEquals, stage)
+	stageDeepEqualExcludeRev(c, s.GetExpectRelayStage(source), stage)
 
 	eStage, _, err := ha.GetRelayStage(etcdTestCli, source)
 	c.Assert(err, IsNil)
 	switch expectStage {
 	case pb.Stage_Running, pb.Stage_Paused:
-		c.Assert(eStage, DeepEquals, stage)
+		stageDeepEqualExcludeRev(c, eStage, stage)
 	default:
 		c.Assert(eStage, DeepEquals, stageEmpty)
 	}
@@ -603,14 +613,14 @@ func (t *testScheduler) relayStageMatch(c *C, s *Scheduler, source string, expec
 
 func (t *testScheduler) subTaskStageMatch(c *C, s *Scheduler, task, source string, expectStage pb.Stage) {
 	stage := ha.NewSubTaskStage(expectStage, source, task)
-	c.Assert(s.GetExpectSubTaskStage(task, source), DeepEquals, stage)
+	stageDeepEqualExcludeRev(c, s.GetExpectSubTaskStage(task, source), stage)
 
 	eStageM, _, err := ha.GetSubTaskStage(etcdTestCli, source, task)
 	c.Assert(err, IsNil)
 	switch expectStage {
 	case pb.Stage_Running, pb.Stage_Paused:
 		c.Assert(eStageM, HasLen, 1)
-		c.Assert(eStageM[task], DeepEquals, stage)
+		stageDeepEqualExcludeRev(c, eStageM[task], stage)
 	default:
 		c.Assert(eStageM, HasLen, 0)
 	}
