@@ -146,16 +146,16 @@ func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, con
 		ok       bool
 		retryNum = defaultGetSourceBoundConfigRetry
 	)
-	sbm, _, err := GetSourceBound(cli, worker)
+	sbm, rev, err := GetSourceBound(cli, worker)
 	if err != nil {
 		return bound, cfg, 0, err
 	}
 	if bound, ok = sbm[worker]; !ok {
-		return bound, cfg, 0, nil
+		return bound, cfg, rev, nil
 	}
 
 	for retryCnt := 1; retryCnt <= retryNum; retryCnt++ {
-		txnResp, rev, err2 := etcdutil.DoOpsInOneTxn(cli, clientv3.OpGet(common.UpstreamBoundWorkerKeyAdapter.Encode(worker)),
+		txnResp, rev2, err2 := etcdutil.DoOpsInOneTxn(cli, clientv3.OpGet(common.UpstreamBoundWorkerKeyAdapter.Encode(worker)),
 			clientv3.OpGet(common.UpstreamConfigKeyAdapter.Encode(bound.Source)))
 		if err2 != nil {
 			return bound, cfg, 0, err2
@@ -178,7 +178,7 @@ func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, con
 		}
 		// ok == false means this bound is deleted now, we don't need source config anymore
 		if !ok {
-			return bound, cfg, rev, nil
+			return bound, cfg, rev2, nil
 		}
 
 		cfgResp := txnResp.Responses[1].GetResponseRange()
@@ -194,7 +194,7 @@ func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, con
 			return bound, cfg, 0, fmt.Errorf("source bound %s doesn't have related source config in etcd", bound)
 		}
 
-		return bound, cfg, rev, nil
+		return bound, cfg, rev2, nil
 	}
 
 	// TODO: add terror.

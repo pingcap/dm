@@ -226,7 +226,7 @@ func (t *testForEtcd) TestGetSubTaskStageConfigEtcd(c *C) {
 	// no subtask stage and config
 	stm, scm, rev1, err := GetSubTaskStageConfig(etcdTestCli, source)
 	c.Assert(err, IsNil)
-	c.Assert(rev1, Equals, int64(0))
+	c.Assert(rev1, Greater, int64(0))
 	c.Assert(stm, HasLen, 0)
 	c.Assert(scm, HasLen, 0)
 
