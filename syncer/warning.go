@@ -37,7 +37,7 @@ func (s *Syncer) Error() interface{} {
 	defer s.execErrors.Unlock()
 
 	sort.Slice(s.execErrors.errors, func(i, j int) bool {
-		return utils.CompareBinlogPos(s.execErrors.errors[i].pos, s.execErrors.errors[j].pos, 0) == -1
+		return utils.CompareBinlogPos(s.execErrors.errors[i].location.Position, s.execErrors.errors[j].location.Position, 0) == -1
 	})
 
 	errors := make([]*pb.SyncSQLError, 0, len(s.execErrors.errors))

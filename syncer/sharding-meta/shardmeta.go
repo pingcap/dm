@@ -34,16 +34,16 @@ const (
 // DDLItem records ddl information used in sharding sequence organization
 type DDLItem struct {
 	FirstLocation binlog.Location `json:"first-location"` // first DDL's binlog Pos, not the End_log_pos of the event
-	DDLs     []string       `json:"ddls"`      // DDLs, these ddls are in the same QueryEvent
-	Source   string         `json:"source"`    // source table ID
+	DDLs          []string        `json:"ddls"`           // DDLs, these ddls are in the same QueryEvent
+	Source        string          `json:"source"`         // source table ID
 }
 
 // NewDDLItem creates a new DDLItem
 func NewDDLItem(location binlog.Location, ddls []string, source string) *DDLItem {
 	return &DDLItem{
 		FirstLocation: location,
-		DDLs:     ddls,
-		Source:   source,
+		DDLs:          ddls,
+		Source:        source,
 	}
 }
 

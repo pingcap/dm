@@ -23,9 +23,9 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/pkg/binlog"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/binlog"
 )
 
 // InjectSQLs injects ddl into syncer as binlog events while meet xid/query event

@@ -28,5 +28,6 @@ func (s *Syncer) SetSQLOperator(req *pb.HandleSubTaskSQLsRequest) error {
 // tryApplySQLOperator tries to get SQLs by applying an possible operator
 // return whether applied, and the applied SQLs
 func (s *Syncer) tryApplySQLOperator(location binlog.Location, sqls []string) (bool, []string, error) {
-	return s.sqlOperatorHolder.Apply(s.tctx, location, sqls)
+	// TODO: support GTID
+	return s.sqlOperatorHolder.Apply(s.tctx, location.Position, sqls)
 }

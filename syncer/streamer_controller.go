@@ -75,12 +75,15 @@ func (r *remoteBinlogReader) generateStreamer(location binlog.Location) (streame
 		//return nil, terror.ErrSyncerUnitRemoteSteamerWithGTID.Generate()
 		var gtid mysql.GTIDSet
 		var err error
-		if r.flavor == mysql.MySQLFlavor {
-			gtid, err := mysql.ParseMysqlGTIDSet(location.GTID)
+		/*
+			if r.flavor == mysql.MySQLFlavor {
+				gtid, err = mysql.ParseMysqlGTIDSet(location.GTID)
 
-		} else {
-			gtid, err := mysql.ParseMariadbGTID(location.GTID)
-		}
+			} else {
+				gtid, err = mysql.ParseMariadbGTID(location.GTID)
+			}
+		*/
+		gtid, err = mysql.ParseGTIDSet(r.flavor, location.GTID)
 		if err != nil {
 			// TODO: use terror
 			return nil, err
