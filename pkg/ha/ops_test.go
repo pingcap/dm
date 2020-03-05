@@ -61,7 +61,7 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	st1, rev3, err := GetRelayStage(etcdTestCli, source)
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
-	st1.Revision = rev1
+	relayStage.Revision = rev1
 	c.Assert(st1, DeepEquals, relayStage)
 	sbm1, rev3, err := GetSourceBound(etcdTestCli, worker)
 	c.Assert(err, IsNil)

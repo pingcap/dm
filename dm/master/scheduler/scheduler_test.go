@@ -552,7 +552,7 @@ func (t *testScheduler) workerFree(c *C, s *Scheduler, worker string) {
 func (t *testScheduler) workerBound(c *C, s *Scheduler, bound ha.SourceBound) {
 	w := s.GetWorkerByName(bound.Worker)
 	c.Assert(w, NotNil)
-	c.Assert(w.Bound(), DeepEquals, bound)
+	boundDeepEqualExcludeRev(c, w.Bound(), bound)
 	c.Assert(w.Stage(), Equals, WorkerBound)
 	wm, _, err := ha.GetAllWorkerInfo(etcdTestCli)
 	c.Assert(err, IsNil)
@@ -560,7 +560,7 @@ func (t *testScheduler) workerBound(c *C, s *Scheduler, bound ha.SourceBound) {
 	c.Assert(ok, IsTrue)
 	sbm, _, err := ha.GetSourceBound(etcdTestCli, bound.Worker)
 	c.Assert(err, IsNil)
-	c.Assert(sbm[bound.Worker], DeepEquals, bound)
+	boundDeepEqualExcludeRev(c, sbm[bound.Worker], bound)
 }
 
 func (t *testScheduler) sourceBounds(c *C, s *Scheduler, expectBounds, expectUnbounds []string) {
