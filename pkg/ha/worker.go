@@ -66,8 +66,8 @@ func PutWorkerInfo(cli *clientv3.Client, info WorkerInfo) (int64, error) {
 		return 0, err
 	}
 	key := common.WorkerRegisterKeyAdapter.Encode(info.Name)
-
-	return etcdutil.DoOpsInOneTxn(cli, clientv3.OpPut(key, value))
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpPut(key, value))
+	return rev, err
 }
 
 // GetAllWorkerInfo gets all DM-worker info in etcd currently.
@@ -96,5 +96,6 @@ func GetAllWorkerInfo(cli *clientv3.Client) (map[string]WorkerInfo, int64, error
 
 // DeleteWorkerInfo deletes the specified DM-worker information.
 func DeleteWorkerInfo(cli *clientv3.Client, worker string) (int64, error) {
-	return etcdutil.DoOpsInOneTxn(cli, clientv3.OpDelete(common.WorkerRegisterKeyAdapter.Encode(worker)))
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpDelete(common.WorkerRegisterKeyAdapter.Encode(worker)))
+	return rev, err
 }

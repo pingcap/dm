@@ -473,16 +473,17 @@ func (t *testScheduler) TestScheduler(c *C) {
 
 func (t *testScheduler) sourceCfgNotExist(c *C, s *Scheduler, source string) {
 	c.Assert(s.GetSourceCfgByID(source), IsNil)
-	cfg, _, err := ha.GetSourceCfg(etcdTestCli, source, 0)
+	scm, _, err := ha.GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
-	c.Assert(cfg, DeepEquals, sourceCfgEmpty)
+	c.Assert(scm, HasLen, 0)
 }
 
 func (t *testScheduler) sourceCfgExist(c *C, s *Scheduler, expectCfg config.SourceConfig) {
 	cfgP := s.GetSourceCfgByID(expectCfg.SourceID)
 	c.Assert(cfgP, DeepEquals, &expectCfg)
-	cfgV, _, err := ha.GetSourceCfg(etcdTestCli, expectCfg.SourceID, 0)
+	scm, _, err := ha.GetSourceCfg(etcdTestCli, expectCfg.SourceID, 0)
 	c.Assert(err, IsNil)
+	cfgV := scm[expectCfg.SourceID]
 	c.Assert(cfgV, DeepEquals, expectCfg)
 }
 

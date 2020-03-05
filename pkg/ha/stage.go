@@ -37,8 +37,7 @@ type Stage struct {
 	// only used to report to the caller of the watcher, do not marsh it.
 	// if it's true, it means the stage has been deleted in etcd.
 	IsDeleted bool `json:"-"`
-	// only has value in watcher, will get 0 in GetStage
-	// record the etcd revision right after putting this Stage
+	// record the etcd ModRevision of this Stage
 	Revision int64 `json:"-"`
 }
 
@@ -89,7 +88,8 @@ func PutRelayStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	return rev, err
 }
 
 // PutSubTaskStage puts the stage of the subtask into etcd.
@@ -99,7 +99,8 @@ func PutSubTaskStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	return rev, err
 }
 
 // GetRelayStage gets the relay stage for the specified upstream source.
@@ -126,6 +127,7 @@ func GetRelayStage(cli *clientv3.Client, source string) (Stage, int64, error) {
 	if err != nil {
 		return stage, 0, err
 	}
+	stage.Revision = resp.Kvs[0].ModRevision
 
 	return stage, resp.Header.Revision, nil
 }
@@ -147,6 +149,7 @@ func GetAllRelayStage(cli *clientv3.Client) (map[string]Stage, int64, error) {
 		if err2 != nil {
 			return nil, 0, err2
 		}
+		stage.Revision = kv.ModRevision
 		stages[stage.Source] = stage
 	}
 	return stages, resp.Header.Revision, nil
@@ -186,6 +189,7 @@ func GetSubTaskStage(cli *clientv3.Client, source, task string) (map[string]Stag
 		if err2 != nil {
 			return stm, 0, err2
 		}
+		stage.Revision = kvs.ModRevision
 		stm[stage.Task] = stage
 	}
 
@@ -212,6 +216,7 @@ func GetAllSubTaskStage(cli *clientv3.Client) (map[string]map[string]Stage, int6
 		if _, ok := stages[stage.Source]; !ok {
 			stages[stage.Source] = make(map[string]Stage)
 		}
+		stage.Revision = kvs.ModRevision
 		stages[stage.Source][stage.Task] = stage
 	}
 
@@ -237,7 +242,8 @@ func WatchSubTaskStage(ctx context.Context, cli *clientv3.Client,
 // DeleteSubTaskStage deletes the subtask stage.
 func DeleteSubTaskStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	ops := deleteSubTaskStageOp(stages...)
-	return etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	return rev, err
 }
 
 // relayStageFromKey constructs an incomplete relay stage from an etcd key.

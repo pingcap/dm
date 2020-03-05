@@ -101,20 +101,21 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	bsm, revBound, err := ha.GetSourceBound(s.etcdClient, s.cfg.Name)
+	bound, sourceCfg, revBound, err := ha.GetSourceBoundConfig(s.etcdClient, s.cfg.Name)
 	if err != nil {
 		// TODO: need retry
 		return err
 	}
-	if bound, ok := bsm[s.cfg.Name]; ok {
+	if !bound.IsEmpty() {
 		log.L().Warn("worker has been assigned source before keepalive")
-		err = s.operateSourceBound(bound)
+		err = s.startWorker(&sourceCfg)
 		s.setSourceStatus(bound.Source, err, true)
 		if err != nil {
 			log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
-				zap.String("source", bound.Source), zap.Error(err))
+				zap.Stringer("bound", bound), zap.Error(err))
 		}
 	}
+
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -202,7 +203,7 @@ func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Clien
 						s.setSourceStatus(bound.Source, err1, true)
 						if err1 != nil {
 							log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
-								zap.String("source", bound.Source), zap.Error(err1))
+								zap.Stringer("bound", bound), zap.Error(err1))
 						}
 					} else {
 						s.stopWorker("")
@@ -345,7 +346,7 @@ func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBo
 				// record the reason for operating source bound
 				// TODO: add better metrics
 				log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
-					zap.String("source", bound.Source), zap.Error(err))
+					zap.Stringer("bound", bound), zap.Error(err))
 			}
 		case err := <-errCh:
 			// TODO: Deal with err
@@ -361,11 +362,12 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 	if bound.IsDeleted {
 		return s.stopWorker(bound.Source)
 	}
-	sourceCfg, _, err := ha.GetSourceCfg(s.etcdClient, bound.Source, bound.Revision)
+	scm, _, err := ha.GetSourceCfg(s.etcdClient, bound.Source, bound.Revision)
 	if err != nil {
 		// TODO: need retry
 		return err
 	}
+	sourceCfg := scm[bound.Source]
 	return s.startWorker(&sourceCfg)
 }
 

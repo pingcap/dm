@@ -31,8 +31,8 @@ func PutSubTaskCfg(cli *clientv3.Client, cfgs ...config.SubTaskConfig) (int64, e
 	if err != nil {
 		return 0, err
 	}
-
-	return etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	return rev, err
 }
 
 // GetSubTaskCfg gets the subtask config of the specified source and task name.

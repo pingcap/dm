@@ -989,10 +989,9 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 		Result: true,
 		Source: sourceID,
 	}})
-	cfg, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
+	scm, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
 	c.Assert(err, check.IsNil)
-	var emptySourceCfg config.SourceConfig
-	c.Assert(cfg, check.DeepEquals, emptySourceCfg)
+	c.Assert(scm, check.HasLen, 0)
 	cancel()
 }
 
