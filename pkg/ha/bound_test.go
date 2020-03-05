@@ -17,6 +17,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/pingcap/dm/dm/config"
+
 	. "github.com/pingcap/check"
 )
 
@@ -118,4 +120,42 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev7, Equals, rev6)
 	c.Assert(sbm3, HasLen, 0)
+}
+
+func (t *testForEtcd) TestGetSourceBoundConfigEtcd(c *C) {
+	defer clearTestInfoOperation(c)
+
+	var (
+		worker   = "dm-worker-1"
+		source   = "mysql-replica-1"
+		bound    = NewSourceBound(source, worker)
+		cfg      config.SourceConfig
+		emptyCfg config.SourceConfig
+	)
+	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+	cfg.SourceID = source
+	// no source bound and config
+	bound1, cfg1, rev1, err := GetSourceBoundConfig(etcdTestCli, worker)
+	c.Assert(err, IsNil)
+	c.Assert(rev1, Equals, 0)
+	c.Assert(bound1.IsEmpty(), IsTrue)
+	c.Assert(cfg1, DeepEquals, emptyCfg)
+
+	rev2, err := PutSourceBound(etcdTestCli, bound)
+	c.Assert(err, IsNil)
+	c.Assert(rev2, Greater, rev1)
+	// get source bound and config, but config is empty
+	_, _, _, err = GetSourceBoundConfig(etcdTestCli, worker)
+	c.Assert(err, ErrorMatches, ".*doesn't have related source config in etcd.*")
+
+	rev3, err := PutSourceCfg(etcdTestCli, cfg)
+	c.Assert(err, IsNil)
+	c.Assert(rev3, Greater, rev2)
+	// get source bound and config
+	bound2, cfg2, rev4, err := GetSourceBoundConfig(etcdTestCli, worker)
+	c.Assert(err, IsNil)
+	c.Assert(rev4, Equals, rev3)
+	bound.Revision = rev3
+	c.Assert(bound2, DeepEquals, bound)
+	c.Assert(cfg2, DeepEquals, cfg)
 }
