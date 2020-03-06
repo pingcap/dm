@@ -52,8 +52,8 @@ func (h *statusHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// InitStatus initializes the HTTP status server
-func InitStatus(lis net.Listener) {
+// RegistryMetrics registries metrics for worker
+func RegistryMetrics() {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	registry.MustRegister(prometheus.NewGoCollector())
@@ -65,7 +65,10 @@ func InitStatus(lis net.Listener) {
 	loader.RegisterMetrics(registry)
 	syncer.RegisterMetrics(registry)
 	prometheus.DefaultGatherer = registry
+}
 
+// InitStatus initializes the HTTP status server
+func InitStatus(lis net.Listener) {
 	mux := http.NewServeMux()
 	mux.Handle("/status", &statusHandler{})
 	mux.Handle("/metrics", promhttp.Handler())

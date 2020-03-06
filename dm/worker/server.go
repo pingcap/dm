@@ -103,6 +103,8 @@ func (s *Server) Start() error {
 			log.L().Error("fail to start gRPC server", log.ShortError(err2))
 		}
 	}()
+
+	RegistryMetrics()
 	go InitStatus(httpL) // serve status
 
 	s.closed.Set(false)
@@ -150,7 +152,7 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 	log.L().Info("", zap.String("request", "StartSubTask"), zap.Stringer("payload", req))
 
 	cfg := config.NewSubTaskConfig()
-	err := cfg.Decode(req.Task)
+	err := cfg.Decode(req.Task, true)
 	if err != nil {
 		err = terror.Annotatef(err, "decode subtask config from request %+v", req.Task)
 		log.L().Error("fail to decode task", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
@@ -198,7 +200,7 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	log.L().Info("", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req))
 	cfg := config.NewSubTaskConfig()
-	err := cfg.Decode(req.Task)
+	err := cfg.Decode(req.Task, true)
 	if err != nil {
 		err = terror.Annotatef(err, "decode config from request %+v", req.Task)
 		log.L().Error("fail to decode subtask", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req), zap.Error(err))

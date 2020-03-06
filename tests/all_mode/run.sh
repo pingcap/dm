@@ -10,9 +10,9 @@ API_VERSION="v1alpha1"
 function run() {
     export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
 
-    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
-    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_contains 'Query OK, 3 rows affected'
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
@@ -43,8 +43,8 @@ function run() {
     pkill -hup tidb-server 2>/dev/null || true
     wait_process_exit tidb-server
 
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
-    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     sleep 2
     # dm-worker execute sql failed, and will try auto resume task
@@ -52,7 +52,7 @@ function run() {
     check_log_contains $WORK_DIR/worker2/log/dm-worker.log "dispatch auto resume task"
 
     # restart tidb, and task will recover success
-    run_tidb_server 4000
+    run_tidb_server 4000 $TIDB_PASSWORD
     sleep 2
 
     # use sync_diff_inspector to check data now!
