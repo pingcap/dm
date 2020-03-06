@@ -48,7 +48,7 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	// no bound exists.
 	sbm1, rev1, err := GetSourceBound(etcdTestCli, "")
 	c.Assert(err, IsNil)
-	c.Assert(rev1, Equals, int64(0))
+	c.Assert(rev1, Greater, int64(0))
 	c.Assert(sbm1, HasLen, 0)
 
 	// put two bounds.
@@ -114,8 +114,8 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	c.Assert(len(errCh), Equals, 0)
 
 	// get again, bound1 not exists now.
-	sbm3, rev6, err := GetSourceBound(etcdTestCli, worker1)
+	sbm3, rev7, err := GetSourceBound(etcdTestCli, worker1)
 	c.Assert(err, IsNil)
-	c.Assert(rev6, Equals, int64(0))
+	c.Assert(rev7, Equals, rev6)
 	c.Assert(sbm3, HasLen, 0)
 }

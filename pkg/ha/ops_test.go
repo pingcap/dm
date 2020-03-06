@@ -81,15 +81,15 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	// try to get them back again.
 	st2, rev5, err := GetRelayStage(etcdTestCli, source)
 	c.Assert(err, IsNil)
-	c.Assert(rev5, Equals, int64(0))
+	c.Assert(rev5, Equals, rev4)
 	c.Assert(st2, Equals, emptyStage)
 	sbm2, rev5, err := GetSourceBound(etcdTestCli, worker)
 	c.Assert(err, IsNil)
-	c.Assert(rev5, Equals, int64(0))
+	c.Assert(rev5, Equals, rev4)
 	c.Assert(sbm2, HasLen, 0)
 	soCfg2, rev5, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
-	c.Assert(rev5, Equals, int64(0))
+	c.Assert(rev5, Equals, rev4)
 	c.Assert(soCfg2, DeepEquals, emptySourceCfg)
 
 	// put subtask config and subtask stage.
@@ -119,10 +119,10 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	// try to get them back again.
 	stcm, rev9, err := GetSubTaskCfg(etcdTestCli, source, "", 0)
 	c.Assert(err, IsNil)
-	c.Assert(rev9, Equals, int64(0))
+	c.Assert(rev9, Equals, rev8)
 	c.Assert(stcm, HasLen, 0)
 	stsm, rev9, err = GetSubTaskStage(etcdTestCli, source, "")
 	c.Assert(err, IsNil)
-	c.Assert(rev9, Equals, int64(0))
+	c.Assert(rev9, Equals, rev8)
 	c.Assert(stsm, HasLen, 0)
 }

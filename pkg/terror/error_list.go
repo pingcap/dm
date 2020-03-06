@@ -485,6 +485,7 @@ const (
 	codeWorkerNoStart
 	codeWorkerAlreadyStarted
 	codeWorkerSourceNotMatch
+	codeWorkerFailToGetSubtaskConfigFromEtcd
 )
 
 // DM-tracer error code
@@ -722,7 +723,7 @@ var (
 	ErrTaskCheckFailedOpenDB     = New(codeTaskCheckFailedOpenDB, ClassTaskCheck, ScopeInternal, LevelHigh, "failed to open DSN %s:***@%s:%d")
 	ErrTaskCheckGenTableRouter   = New(codeTaskCheckGenTableRouter, ClassTaskCheck, ScopeInternal, LevelMedium, "generate table router error")
 	ErrTaskCheckGenColumnMapping = New(codeTaskCheckGenColumnMapping, ClassTaskCheck, ScopeInternal, LevelMedium, "generate column mapping error")
-	ErrTaskCheckSyncConfigError  = New(codeTaskCheckSyncConfigError, ClassTaskCheck, ScopeInternal, LevelMedium, "%s %v: %v\n detail: %v")
+	ErrTaskCheckSyncConfigError  = New(codeTaskCheckSyncConfigError, ClassTaskCheck, ScopeInternal, LevelMedium, "%s: %v\n detail: %v")
 	ErrTaskCheckGenBWList        = New(codeTaskCheckGenBWList, ClassTaskCheck, ScopeInternal, LevelMedium, "generate black white list error")
 
 	// Relay log basic API error
@@ -730,7 +731,7 @@ var (
 	ErrRelayParseUUIDSuffix        = New(codeRelayParseUUIDSuffix, ClassRelayEventLib, ScopeInternal, LevelHigh, "UUID (with suffix) %s not valid")
 	ErrRelayUUIDWithSuffixNotFound = New(codeRelayUUIDWithSuffixNotFound, ClassRelayEventLib, ScopeInternal, LevelHigh, "no UUID (with suffix) matched %s found in %s, all UUIDs are %v")
 	ErrRelayGenFakeRotateEvent     = New(codeRelayGenFakeRotateEvent, ClassRelayEventLib, ScopeInternal, LevelHigh, "generate fake rotate event")
-	ErrRelayNoValidRelaySubDir     = New(codeRelayNoValidRelaySubDir, ClassRelayEventLib, ScopeInternal, LevelHigh, "no valid relay sub directory exists")
+	ErrRelayNoValidRelaySubDir     = New(codeRelayNoValidRelaySubDir, ClassRelayEventLib, ScopeInternal, LevelHigh, "there aren't any data under relay log directory %s. please check relay log using query-status")
 
 	// Relay unit error
 	ErrRelayUUIDSuffixNotValid           = New(codeRelayUUIDSuffixNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "UUID %s suffix %d should be 1 larger than previous suffix %d")
@@ -985,6 +986,8 @@ var (
 	ErrWorkerRelayIsPurging          = New(codeWorkerRelayIsPurging, ClassDMWorker, ScopeInternal, LevelHigh, "relay log purger is purging, cannot start sub task %s, please try again later")
 	ErrWorkerHostPortNotValid        = New(codeWorkerHostPortNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "host:port '%s' not valid")
 	ErrWorkerSourceNotMatch          = New(codeWorkerSourceNotMatch, ClassDMWorker, ScopeInternal, LevelHigh, "source of request does not match with source in worker")
+
+	ErrWorkerFailToGetSubtaskConfigFromEtcd = New(codeWorkerFailToGetSubtaskConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative subtask config for task %s in etcd")
 
 	// DM-tracer error
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set")

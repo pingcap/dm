@@ -66,7 +66,7 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	// no source config exist.
 	cfg1, rev1, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
-	c.Assert(rev1, Equals, int64(0))
+	c.Assert(rev1, Greater, int64(0))
 	c.Assert(cfg1, DeepEquals, emptyCfg)
 	cfgM, _, err := GetAllSourceCfg(etcdTestCli)
 	c.Assert(err, IsNil)
@@ -96,12 +96,12 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 
 	// delete the config.
 	deleteOp := deleteSourceCfgOp(source)
-	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
+	deleteResp, err := etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
 	c.Assert(err, IsNil)
 
 	// get again, not exists now.
 	cfg3, rev4, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
-	c.Assert(rev4, Equals, int64(0))
+	c.Assert(rev4, Equals, deleteResp.Header.Revision)
 	c.Assert(cfg3, DeepEquals, emptyCfg)
 }

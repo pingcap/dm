@@ -44,7 +44,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 		return terror.Annotatef(err, "UUID index file path %s", indexPath)
 	}
 	if len(uuids) == 0 {
-		return terror.ErrRelayNoValidRelaySubDir.Generate()
+		return terror.ErrRelayNoValidRelaySubDir.Generate(s.cfg.RelayDir)
 	}
 
 	checkLocation := s.checkpoint.GlobalPoint()
@@ -101,7 +101,7 @@ func (s *Syncer) updateActiveRelayLog(pos mysql.Position) error {
 		return terror.Annotatef(err, "UUID index file path %s", indexPath)
 	}
 	if len(uuids) == 0 {
-		return terror.ErrRelayNoValidRelaySubDir.Generate()
+		return terror.ErrRelayNoValidRelaySubDir.Generate(s.cfg.RelayDir)
 	}
 
 	activeUUID, _, pos, err := binlog.ExtractPos(pos, uuids)

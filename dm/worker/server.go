@@ -25,6 +25,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -111,19 +112,14 @@ func (s *Server) Start() error {
 		s.setSourceStatus(bound.Source, err, true)
 		if err != nil {
 			log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
-				zap.String("source", bound.Source))
+				zap.String("source", bound.Source), zap.Error(err))
 		}
 	}
-	sourceBoundCh := make(chan ha.SourceBound, 10)
-	sourceBoundErrCh := make(chan error, 10)
-	s.wg.Add(2)
+	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		ha.WatchSourceBound(s.ctx, s.etcdClient, s.cfg.Name, revBound+1, sourceBoundCh, sourceBoundErrCh)
-	}()
-	go func() {
-		defer s.wg.Done()
-		s.handleSourceBound(s.ctx, sourceBoundCh, sourceBoundErrCh)
+		// TODO: handle fatal error from observeSourceBound
+		s.observeSourceBound(s.ctx, s.etcdClient, revBound)
 	}()
 
 	s.wg.Add(1)
@@ -161,6 +157,64 @@ func (s *Server) Start() error {
 		err = nil
 	}
 	return terror.ErrWorkerStartService.Delegate(err)
+}
+
+func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Client, rev int64) error {
+	var wg sync.WaitGroup
+	for {
+		sourceBoundCh := make(chan ha.SourceBound, 10)
+		sourceBoundErrCh := make(chan error, 10)
+		wg.Add(1)
+		// use ctx1, cancel1 to make sure old watcher has been released
+		ctx1, cancel1 := context.WithCancel(ctx)
+		go func() {
+			defer func() {
+				close(sourceBoundCh)
+				close(sourceBoundErrCh)
+				wg.Done()
+			}()
+			ha.WatchSourceBound(ctx1, etcdCli, s.cfg.Name, rev+1, sourceBoundCh, sourceBoundErrCh)
+		}()
+		err := s.handleSourceBound(ctx1, sourceBoundCh, sourceBoundErrCh)
+		cancel1()
+		wg.Wait()
+
+		if etcdutil.IsRetryableError(err) {
+			rev = 0
+			retryNum := 1
+			for rev == 0 {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(500 * time.Millisecond):
+					bsm, rev1, err1 := ha.GetSourceBound(s.etcdClient, s.cfg.Name)
+					if err1 != nil {
+						log.L().Error("get source bound from etcd failed, will retry later", zap.Error(err1), zap.Int("retryNum", retryNum))
+						break
+					}
+					rev = rev1
+					if bound, ok := bsm[s.cfg.Name]; ok {
+						if w := s.getWorker(true); w != nil && w.cfg.SourceID == bound.Source {
+							continue
+						}
+						s.stopWorker("")
+						err1 = s.operateSourceBound(bound)
+						s.setSourceStatus(bound.Source, err1, true)
+						if err1 != nil {
+							log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
+								zap.String("source", bound.Source), zap.Error(err1))
+						}
+					} else {
+						s.stopWorker("")
+					}
+				}
+				retryNum++
+			}
+		} else {
+			log.L().Error("observeSourceBound is failed and will quit now", zap.Error(err))
+			return err
+		}
+	}
 }
 
 func (s *Server) doClose() {
@@ -233,7 +287,7 @@ func (s *Server) setSourceStatus(source string, err error, needLock bool) {
 	if err != nil {
 		s.sourceStatus.Result = &pb.ProcessResult{
 			Errors: []*pb.ProcessError{
-				unit.NewProcessError(pb.ErrorType_UnknownError, err),
+				unit.NewProcessError(err),
 			},
 		}
 	}
@@ -278,12 +332,12 @@ func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
 	}
 }
 
-func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBound, errCh chan error) {
+func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBound, errCh chan error) error {
 	for {
 		select {
 		case <-ctx.Done():
 			log.L().Info("worker server is closed, handleSourceBound will quit now")
-			return
+			return nil
 		case bound := <-boundCh:
 			err := s.operateSourceBound(bound)
 			s.setSourceStatus(bound.Source, err, true)
@@ -296,6 +350,9 @@ func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBo
 		case err := <-errCh:
 			// TODO: Deal with err
 			log.L().Error("WatchSourceBound received an error", zap.Error(err))
+			if etcdutil.IsRetryableError(err) {
+				return err
+			}
 		}
 	}
 }
@@ -716,32 +773,22 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 			continue
 		}
 		w.StartSubTask(subTaskCfg)
-		log.L().Info("load subtask successful", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
+		log.L().Info("load subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
 	}
 
-	subTaskStageCh := make(chan ha.Stage, 10)
-	subTaskErrCh := make(chan error, 10)
-	w.wg.Add(2)
+	w.wg.Add(1)
 	go func() {
 		defer w.wg.Done()
-		ha.WatchSubTaskStage(w.ctx, s.etcdClient, cfg.SourceID, revSubTask+1, subTaskStageCh, subTaskErrCh)
-	}()
-	go func() {
-		defer w.wg.Done()
-		w.handleSubTaskStage(w.ctx, subTaskStageCh, subTaskErrCh)
+		// TODO: handle fatal error from observeSubtaskStage
+		w.observeSubtaskStage(w.ctx, s.etcdClient, revSubTask)
 	}()
 
 	if cfg.EnableRelay {
-		relayStageCh := make(chan ha.Stage, 10)
-		relayErrCh := make(chan error, 10)
-		w.wg.Add(2)
+		w.wg.Add(1)
 		go func() {
 			defer w.wg.Done()
-			ha.WatchRelayStage(w.ctx, s.etcdClient, cfg.SourceID, revRelay+1, relayStageCh, relayErrCh)
-		}()
-		go func() {
-			defer w.wg.Done()
-			w.handleRelayStage(w.ctx, relayStageCh, relayErrCh)
+			// TODO: handle fatal error from observeRelayStage
+			w.observeRelayStage(w.ctx, s.etcdClient, revRelay)
 		}()
 	}
 
