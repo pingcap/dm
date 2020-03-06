@@ -41,7 +41,7 @@ const (
 )
 
 func scan_events(offset, limit int) ([]byte, error) {
-	uri := fmt.Sprintf("http://127.0.0.1:8264/events/scan?offset=%d&limit=%d", offset, limit)
+	uri := fmt.Sprintf("http://127.0.0.1:8265/events/scan?offset=%d&limit=%d", offset, limit)
 	resp, err := http.Get(uri)
 	if err != nil {
 		return nil, errors.Trace(err)
