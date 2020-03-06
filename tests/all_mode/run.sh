@@ -52,7 +52,7 @@ function run() {
     check_log_contains $WORK_DIR/worker2/log/dm-worker.log "dispatch auto resume task"
 
     # restart tidb, and task will recover success
-    run_tidb_server 4000 $TIDB_PASSWORD
+    run_tidb_server $TIDB_PORT $TIDB_PASSWORD
     sleep 2
 
     # use sync_diff_inspector to check data now!
