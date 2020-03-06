@@ -1698,8 +1698,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			Name: ec.currentLocation.Position.Name,
 			Pos:  ec.currentLocation.Position.Pos - ec.header.EventSize,
 		},
-		// TODO: use what GTID?
-		// GTID: currentLocation
+		GTIDSet: ec.lastLocation.GTIDSet,
 	}
 	source, _ = GenTableID(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name)
 

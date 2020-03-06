@@ -586,6 +586,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 			cp_table VARCHAR(128) NOT NULL,
 			binlog_name VARCHAR(128),
 			binlog_pos INT UNSIGNED,
+			binlog_gtid VARCHAR(256),
 			table_info JSON NOT NULL,
 			is_global BOOLEAN,
 			create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -624,7 +625,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 		cpTable       string
 		binlogName    string
 		binlogPos     uint32
-		binlogGTIDSet gtid.Set
+		binlogGTIDSet string
 		tiBytes       []byte
 		isGlobal      bool
 	)
@@ -633,12 +634,16 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 		if err != nil {
 			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
+		gset, err := gtid.ParserGTID(cp.cfg.Flavor, binlogGTIDSet)
+		if err != nil {
+			return err
+		}
 		location := pbinlog.Location{
 			Position: mysql.Position{
 				Name: binlogName,
 				Pos:  binlogPos,
 			},
-			GTIDSet: binlogGTIDSet,
+			GTIDSet: gset,
 		}
 		if isGlobal {
 			if pbinlog.CompareLocation(location, minLocation) > 0 {
@@ -720,7 +725,7 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location pbin
 	// to keep `create_time`, `update_time` correctly
 	sql2 := `INSERT INTO ` + cp.tableName + `
 		(id, cp_schema, cp_table, binlog_name, binlog_pos, binlog_gtid, table_info, is_global) VALUES
-		(?, ?, ?, ?, ?, ?, ?)
+		(?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			binlog_name = VALUES(binlog_name),
 			binlog_pos = VALUES(binlog_pos),
@@ -737,7 +742,7 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location pbin
 	if len(tiBytes) == 0 {
 		tiBytes = []byte("null")
 	}
-	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSet, tiBytes, isGlobal}
+	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSet.String(), tiBytes, isGlobal}
 	return sql2, args
 }
 

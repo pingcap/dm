@@ -65,7 +65,7 @@ func ParseMetaData(filename string) (*mysql.Position, string, error) {
 		case "Log":
 			pos.Name = value
 		case "Pos":
-			pos64, err := strconv.ParseUint(parts[1], 10, 32)
+			pos64, err := strconv.ParseUint(value, 10, 32)
 			if err != nil {
 				return nil, "", terror.ErrParseMydumperMeta.Generate(err)
 			}
