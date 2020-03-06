@@ -376,13 +376,120 @@ func (t *testPessimist) TestUnlockSourceLackBeforeSynced(c *C) {
 	wg.Wait()
 
 	// 4. the lock should be removed now.
+	t.noLockExist(c, p)
+}
+
+func (t *testPessimist) TestUnlockSourceInterrupt(c *C) {
+	// operations may be done but not be deleted, and then interrupted.
+	defer clearTestInfoOperation(c)
+
+	oriUnlockWaitOwnerInterval := unlockWaitInterval
+	unlockWaitInterval = 100 * time.Millisecond
+	defer func() {
+		unlockWaitInterval = oriUnlockWaitOwnerInterval
+	}()
+
+	var (
+		watchTimeout  = 500 * time.Millisecond
+		task          = "task"
+		source1       = "mysql-replica-1"
+		source2       = "mysql-replica-2"
+		schema, table = "foo", "bar"
+		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		ID            = "task-`foo`.`bar`"
+		i11           = pessimism.NewInfo(task, source1, schema, table, DDLs)
+		i12           = pessimism.NewInfo(task, source2, schema, table, DDLs)
+
+		sources = func(task string) []string {
+			switch task {
+			case task:
+				return []string{source1, source2}
+			default:
+				c.Fatalf("unsupported task %s", task)
+			}
+			return []string{}
+		}
+		logger = log.L()
+		p      = NewPessimist(&logger, sources)
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 0. start the pessimist.
+	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
 	c.Assert(p.Locks(), HasLen, 0)
-	ifm, _, err := pessimism.GetAllInfo(etcdTestCli)
+	defer p.Close()
+
+	// CASE 1: owner interrupted.
+	// 1. PUT i11 & i12, will create a lock and synced.
+	rev1, err := pessimism.PutInfo(etcdTestCli, i11)
 	c.Assert(err, IsNil)
-	c.Assert(ifm, HasLen, 0)
-	opm, _, err := pessimism.GetAllOperations(etcdTestCli)
+	_, err = pessimism.PutInfo(etcdTestCli, i12)
 	c.Assert(err, IsNil)
-	c.Assert(opm, HasLen, 0)
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		if len(p.Locks()) != 1 {
+			return false
+		}
+		synced, remain := p.Locks()[ID].IsSynced()
+		return synced && remain == 0
+	}), IsTrue)
+	c.Assert(p.Locks(), HasKey, ID)
+	ready := p.Locks()[ID].Ready()
+	c.Assert(ready, HasLen, 2)
+	c.Assert(ready[source1], IsTrue)
+	c.Assert(ready[source2], IsTrue)
+
+	// 2. watch until get not-done operation for the owner.
+	opCh := make(chan pessimism.Operation, 10)
+	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, "", rev1, opCh)
+	cancel2()
+	close(opCh)
+	c.Assert(len(opCh), Equals, 1)
+	op := <-opCh
+	c.Assert(op.Source, Equals, source1)
+	c.Assert(op.Exec, IsTrue)
+	c.Assert(op.Done, IsFalse)
+	c.Assert(p.Locks()[ID].IsResolved(), IsFalse)
+
+	// 3. try to unlock the lock, but no `done` marked for the owner.
+	c.Assert(terror.ErrMasterOwnerExecDDL.Equal(p.UnlockLock(ctx, ID, "", false)), IsTrue)
+	c.Assert(p.Locks()[ID].IsResolved(), IsFalse)
+
+	// 4. force to remove the lock even no `done` marked for the owner.
+	c.Assert(p.UnlockLock(ctx, ID, "", true), IsNil)
+	t.noLockExist(c, p)
+
+	// CASE 2: non-owner interrupted.
+	// 1. PUT i11 & i12, will create a lock and synced.
+	rev1, err = pessimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+	_, err = pessimism.PutInfo(etcdTestCli, i12)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		if len(p.Locks()) != 1 {
+			return false
+		}
+		synced, remain := p.Locks()[ID].IsSynced()
+		return synced && remain == 0
+	}), IsTrue)
+	c.Assert(p.Locks(), HasKey, ID)
+	ready = p.Locks()[ID].Ready()
+	c.Assert(ready, HasLen, 2)
+	c.Assert(ready[source1], IsTrue)
+	c.Assert(ready[source2], IsTrue)
+
+	// 2. putDone for the owner.
+	t.putDoneForSource(ctx, task, source1, i11, true, rev1, watchTimeout, c)
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		return p.Locks()[ID].IsDone(source1)
+	}), IsTrue)
+	c.Assert(p.Locks()[ID].IsDone(source2), IsFalse)
+
+	// 3. unlock the lock.
+	c.Assert(p.UnlockLock(ctx, ID, "", false), IsNil)
+	t.noLockExist(c, p)
 }
 
 func (t *testPessimist) putDoneForSource(
@@ -419,4 +526,14 @@ func (t *testPessimist) putDoneForSource(
 		}
 	}()
 	wg.Wait()
+}
+
+func (t *testPessimist) noLockExist(c *C, p *Pessimist) {
+	c.Assert(p.Locks(), HasLen, 0)
+	ifm, _, err := pessimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(ifm, HasLen, 0)
+	opm, _, err := pessimism.GetAllOperations(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(opm, HasLen, 0)
 }

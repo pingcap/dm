@@ -44,3 +44,16 @@ func PutOperationDeleteExistInfo(cli *clientv3.Client, op Operation, info Info) 
 	}
 	return resp.Succeeded, resp.Header.Revision, nil
 }
+
+// DeleteInfosOperations deletes the shard DDL infos and operations in etcd.
+// This function should often be called by DM-master when calling UnlockDDL.
+func DeleteInfosOperations(cli *clientv3.Client, infos []Info, ops []Operation) (int64, error) {
+	opsDel := make([]clientv3.Op, 0, len(infos)+len(ops))
+	for _, info := range infos {
+		opsDel = append(opsDel, deleteInfoOp(info))
+	}
+	for _, op := range ops {
+		opsDel = append(opsDel, deleteOperationOp(op))
+	}
+	return etcdutil.DoOpsInOneTxn(cli, opsDel...)
+}

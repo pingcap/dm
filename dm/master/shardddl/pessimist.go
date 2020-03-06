@@ -224,8 +224,7 @@ func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, for
 	if err != nil {
 		revertLockSync = true
 		return err
-	} else if !done {
-		// TODO(csuzhangxc): handle `forceRemove`.
+	} else if !done && !forceRemove { // if `forceRemove==true`, we still try to complete following steps.
 		revertLockSync = true
 		return terror.ErrMasterOwnerExecDDL.Generatef(
 			"the owner %s of the lock %s has not done the operation", owner, ID)
@@ -237,14 +236,17 @@ func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, for
 	done, err = p.waitNonOwnerToBeDone(ctx, lock, owner, synced)
 	if err != nil {
 		p.logger.Error("the owner has done the exec operation, but fail to wait for some other sources done the skip operation, the lock is still removed",
-			zap.String("lock", ID), zap.String("owner", owner),
+			zap.String("lock", ID), zap.Bool("force remove", forceRemove), zap.String("owner", owner),
 			zap.Strings("un-synced", unsynced), zap.Strings("synced", synced), zap.Error(err))
 	} else if !done {
 		p.logger.Error("the owner has done the exec operation, but some other sources have not done the skip operation, the lock is still removed",
-			zap.String("lock", ID), zap.String("owner", owner),
+			zap.String("lock", ID), zap.Bool("force remove", forceRemove), zap.String("owner", owner),
 			zap.Strings("un-synced", unsynced), zap.Strings("synced", synced))
 	}
-	err2 := p.removeLock(lock)
+
+	// 8. remove or clear shard DDL lock and info.
+	p.lk.RemoveLock(ID)
+	err2 := p.deleteInfosOps(lock)
 
 	if err != nil {
 		if err2 != nil {
@@ -495,6 +497,29 @@ func (p *Pessimist) deleteOps(lock *pessimism.Lock) error {
 	}
 	p.logger.Info("delete shard DDL lock operations", zap.String("lock", lock.ID), zap.Int64("revision", rev))
 	return err
+}
+
+// deleteInfos DELETEs shard DDL lock infos and operations relative to the lock.
+func (p *Pessimist) deleteInfosOps(lock *pessimism.Lock) error {
+	ready := lock.Ready()
+	infos := make([]pessimism.Info, 0, len(ready))
+	for source := range lock.Ready() {
+		// NOTE: we rely one the `schema` and `table` not used in `DeleteInfosOperations`.
+		infos = append(infos, pessimism.NewInfo(lock.Task, source, "", "", lock.DDLs))
+	}
+	ops := make([]pessimism.Operation, 0, len(ready))
+	for source := range ready {
+		// When deleting operations, we do not verify the value of the operation now,
+		// so simply set `exec=false` and `done=true`.
+		ops = append(ops, pessimism.NewOperation(lock.ID, lock.Task, source, lock.DDLs, false, true))
+	}
+
+	rev, err := pessimism.DeleteInfosOperations(p.cli, infos, ops)
+	if err != nil {
+		return err
+	}
+	p.logger.Info("delete shard DDL infos and operations", zap.String("lock", lock.ID), zap.Int64("revision", rev))
+	return nil
 }
 
 // waitOwnerToBeDone waits for the owner of the lock to be done for the `exec` operation.

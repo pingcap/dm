@@ -134,18 +134,9 @@ func PutOperations(cli *clientv3.Client, skipDone bool, ops ...Operation) (rev i
 func DeleteOperations(cli *clientv3.Client, ops ...Operation) (int64, error) {
 	opsDel := make([]clientv3.Op, 0, len(ops))
 	for _, op := range ops {
-		key := common.ShardDDLPessimismOperationKeyAdapter.Encode(op.Task, op.Source)
-		opsDel = append(opsDel, clientv3.OpDelete(key))
+		opsDel = append(opsDel, deleteOperationOp(op))
 	}
-
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
-	resp, err := cli.Txn(ctx).Then(opsDel...).Commit()
-	if err != nil {
-		return 0, err
-	}
-	return resp.Header.Revision, nil
+	return etcdutil.DoOpsInOneTxn(cli, opsDel...)
 }
 
 // GetAllOperations gets all DDL lock operation in etcd currently.
@@ -223,4 +214,9 @@ func putOperationOp(o Operation) (clientv3.Op, error) {
 	key := common.ShardDDLPessimismOperationKeyAdapter.Encode(o.Task, o.Source)
 
 	return clientv3.OpPut(key, value), nil
+}
+
+// deleteOperationOp returns a DELETE etcd operation for Operation.
+func deleteOperationOp(op Operation) clientv3.Op {
+	return clientv3.OpDelete(common.ShardDDLPessimismOperationKeyAdapter.Encode(op.Task, op.Source))
 }
