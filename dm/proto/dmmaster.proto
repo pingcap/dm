@@ -189,20 +189,16 @@ message ShowDDLLocksResponse {
 // UnlockDDLLockRequest used to unlock (resolve) DDL lock manually
 // ID: DDL lock ID
 // replaceOwner: dm-worker used to replace the original DDL lock's owner
-// workers: dm-workers need to execute / skip DDL, empty for all dm-workers
-//   replaceOwner in or not in workers are both fine
-// forceRemove: force to remove the DDL lock even unlock fail
+// forceRemove: force to remove the DDL lock even fail to execute the DDL for the owner.
 message UnlockDDLLockRequest {
     string ID = 1;
     string replaceOwner = 2;
-    repeated string sources = 3;
-    bool forceRemove = 4;
+    bool forceRemove = 3;
 }
 
 message UnlockDDLLockResponse {
     bool result = 1;
     string msg = 2;
-    repeated CommonWorkerResponse workers = 3;
 }
 
 // BreakWorkerDDLLockRequest represents a request for some dm-workers to force to break the DDL lock

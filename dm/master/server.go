@@ -689,10 +689,25 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 // TODO(csuzhangxc): implement this later.
 func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
 	log.L().Info("", zap.String("lock ID", req.ID), zap.Stringer("payload", req), zap.String("request", "UnlockDDLLock"))
-	return &pb.UnlockDDLLockResponse{
-		Result: false,
-		Msg:    "not implement",
-	}, nil
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.UnlockDDLLock(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	resp := &pb.UnlockDDLLockResponse{
+		Result: true,
+	}
+	err := s.pessimist.UnlockLock(ctx, req.ID, req.ReplaceOwner, req.ForceRemove)
+	if err != nil {
+		resp.Result = false
+		resp.Msg = terror.Message(err)
+	}
+
+	return resp, nil
 }
 
 // BreakWorkerDDLLock implements MasterServer.BreakWorkerDDLLock
