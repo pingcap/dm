@@ -15,13 +15,22 @@ package shardddl
 
 import (
 	"context"
+	"sort"
 	"sync"
+	"time"
 
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
+	"github.com/pingcap/dm/pkg/terror"
+)
+
+var (
+	// variables to control the behavior of waiting for the operation to be done for `UnlockLock`.
+	unlockWaitInterval = time.Second
+	unlockWaitNum      = 10
 )
 
 // Pessimist used to coordinate the shard DDL migration in pessimism mode.
@@ -146,6 +155,108 @@ func (p *Pessimist) Locks() map[string]*pessimism.Lock {
 	return p.lk.Locks()
 }
 
+// UnlockLock unlocks a shard DDL lock manually when using `unlock-ddl-lock` command.
+// ID: the shard DDL lock ID.
+// replaceOwner: the new owner used to replace the original DDL for executing DDL to downstream.
+//   if the original owner is still exist, we should NOT specify any replaceOwner.
+// forceRemove: whether force to remove the DDL lock even fail to unlock it (for the owner).
+//   if specified forceRemove and then fail to unlock, we may need to use `BreakLock` later.
+// NOTE: this function has side effects, if it failed, some status can't revert anymore.
+// NOTE: this function should not be called if the lock is still in automatic resolving.
+func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, forceRemove bool) error {
+	// 1. find the lock.
+	lock := p.lk.FindLock(ID)
+	if lock == nil {
+		return terror.ErrMasterLockNotFound.Generate(ID)
+	}
+
+	// 2. check whether has resolved before (this often should not happen).
+	if lock.IsResolved() {
+		err := p.removeLock(lock)
+		if err != nil {
+			return err
+		}
+		return terror.ErrMasterLockIsResolving.Generatef("the lock %s has been resolved before", ID)
+	}
+
+	// 3. find out synced & un-synced sources.
+	ready := lock.Ready()
+	synced := make([]string, 0, len(ready))
+	unsynced := make([]string, 0, len(ready))
+	for source, isSynced := range ready {
+		if isSynced {
+			synced = append(synced, source)
+		} else {
+			unsynced = append(unsynced, source)
+		}
+	}
+	sort.Strings(synced)
+	sort.Strings(unsynced)
+	p.logger.Warn("some sources are still not synced before unlock the lock",
+		zap.Strings("un-synced", unsynced), zap.Strings("synced", synced))
+
+	// 4. check whether the owner has synced (and it must be synced if using `UnlockLock`).
+	// if no source synced yet, we should choose to use `BreakLock` instead.
+	owner := lock.Owner
+	if replaceOwner != "" {
+		p.logger.Warn("replace the owner of the lock", zap.String("lock", ID),
+			zap.String("original owner", owner), zap.String("new owner", replaceOwner))
+		owner = replaceOwner
+	}
+	if isSynced, ok := ready[owner]; !ok || !isSynced {
+		return terror.ErrMasterWorkerNotWaitLock.Generatef(
+			"owner %s is not waiting for a lock, but sources %v are waiting for the lock", owner, synced)
+	}
+
+	// 5. force to mark the lock as synced.
+	lock.ForceSynced()
+	var revertLockSync bool // revert lock's sync status if the operation for the owner is not done.
+	defer func() {
+		if revertLockSync {
+			lock.RevertSynced(unsynced)
+			p.logger.Warn("revert some sources stage to un-synced", zap.Strings("sources", unsynced))
+		}
+	}()
+
+	// 6. put `exec` operation for the owner, and wait for the owner to be done.
+	// TODO: `sql-skip`/`sql-replace` supported later.
+	done, err := p.waitOwnerToBeDone(ctx, lock, owner)
+	if err != nil {
+		revertLockSync = true
+		return err
+	} else if !done {
+		// TODO(csuzhangxc): handle `forceRemove`.
+		revertLockSync = true
+		return terror.ErrMasterOwnerExecDDL.Generatef(
+			"the owner %s of the lock %s has not done the operation", owner, ID)
+	}
+
+	// 7. put `skip` operations for other sources, and wait for them to be done.
+	// NOTE: we don't put operations for un-synced sources,
+	// because they should be not waiting for these operations.
+	done, err = p.waitNonOwnerToBeDone(ctx, lock, owner, synced)
+	if err != nil {
+		p.logger.Error("the owner has done the exec operation, but fail to wait for some other sources done the skip operation, the lock is still removed",
+			zap.String("lock", ID), zap.String("owner", owner),
+			zap.Strings("un-synced", unsynced), zap.Strings("synced", synced), zap.Error(err))
+	} else if !done {
+		p.logger.Error("the owner has done the exec operation, but some other sources have not done the skip operation, the lock is still removed",
+			zap.String("lock", ID), zap.String("owner", owner),
+			zap.Strings("un-synced", unsynced), zap.Strings("synced", synced))
+	}
+	err2 := p.removeLock(lock)
+
+	if err != nil {
+		if err2 != nil {
+			p.logger.Error("fail to remove the lock",
+				zap.String("lock", ID), zap.String("owner", owner),
+				zap.Strings("un-synced", unsynced), zap.Strings("synced", synced), zap.Error(err2))
+		}
+		return err
+	}
+	return err2
+}
+
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.
 func (p *Pessimist) recoverLocks(ifm map[string]map[string]pessimism.Info, opm map[string]map[string]pessimism.Operation) error {
 	// construct locks based on the shard DDL info.
@@ -264,12 +375,11 @@ func (p *Pessimist) handleOperationPut(ctx context.Context, opCh <-chan pessimis
 			if lock.IsResolved() {
 				p.logger.Info("the lock for the shard DDL lock operation has been resolved", zap.Stringer("operation", op))
 				// remove all operations for this shard DDL lock.
-				err := p.deleteOps(lock)
+				err := p.removeLock(lock)
 				if err != nil {
 					// TODO: add & update metrics.
 					p.logger.Error("fail to delete the shard DDL lock operations", zap.String("lock", lock.ID), log.ShortError(err))
 				}
-				p.lk.RemoveLock(lock.ID)
 				p.logger.Info("the lock info for the shard DDL lock operation has been cleared", zap.Stringer("operation", op))
 				continue
 			}
@@ -306,11 +416,10 @@ func (p *Pessimist) handleLock(lockID string) error {
 	if lock.IsResolved() {
 		// remove all operations for this shard DDL lock.
 		// this is to handle the case where dm-master exit before deleting operations for them.
-		err := p.deleteOps(lock)
+		err := p.removeLock(lock)
 		if err != nil {
 			return err
 		}
-		p.lk.RemoveLock(lock.ID)
 		return nil
 	}
 
@@ -327,12 +436,12 @@ func (p *Pessimist) handleLock(lockID string) error {
 	}
 
 	// put `exec=true` for the owner and skip it if already existing.
-	return p.putOpForOwner(lock, true)
+	return p.putOpForOwner(lock, lock.Owner, true)
 }
 
 // putOpForOwner PUTs the shard DDL lock operation for the owner into etcd.
-func (p *Pessimist) putOpForOwner(lock *pessimism.Lock, skipDone bool) error {
-	op := pessimism.NewOperation(lock.ID, lock.Task, lock.Owner, lock.DDLs, true, false)
+func (p *Pessimist) putOpForOwner(lock *pessimism.Lock, owner string, skipDone bool) error {
+	op := pessimism.NewOperation(lock.ID, lock.Task, owner, lock.DDLs, true, false)
 	rev, succ, err := pessimism.PutOperations(p.cli, skipDone, op)
 	if err != nil {
 		return err
@@ -360,6 +469,17 @@ func (p *Pessimist) putOpsForNonOwner(lock *pessimism.Lock, skipDone bool) error
 	return nil
 }
 
+// removeLock removes the lock in memory and its information in etcd.
+func (p *Pessimist) removeLock(lock *pessimism.Lock) error {
+	// remove all operations for this shard DDL lock.
+	err := p.deleteOps(lock)
+	if err != nil {
+		return err
+	}
+	p.lk.RemoveLock(lock.ID)
+	return nil
+}
+
 // deleteOps DELETEs shard DDL lock operations relative to the lock.
 func (p *Pessimist) deleteOps(lock *pessimism.Lock) error {
 	ready := lock.Ready()
@@ -375,4 +495,103 @@ func (p *Pessimist) deleteOps(lock *pessimism.Lock) error {
 	}
 	p.logger.Info("delete shard DDL lock operations", zap.String("lock", lock.ID), zap.Int64("revision", rev))
 	return err
+}
+
+// waitOwnerToBeDone waits for the owner of the lock to be done for the `exec` operation.
+func (p *Pessimist) waitOwnerToBeDone(ctx context.Context, lock *pessimism.Lock, owner string) (bool, error) {
+	if lock.IsDone(owner) {
+		p.logger.Info("the owner of the lock has been done before",
+			zap.String("owner", owner), zap.String("lock", lock.ID))
+		return true, nil // done before.
+	}
+
+	// put the `exec` operation.
+	err := p.putOpForOwner(lock, owner, true)
+	if err != nil {
+		return false, err
+	}
+
+	// wait for the owner done the operation.
+	for retryNum := 1; retryNum <= unlockWaitNum; retryNum++ {
+		var ctxDone bool
+		select {
+		case <-ctx.Done():
+			ctxDone = true
+		case <-time.After(unlockWaitInterval):
+		}
+		if ctxDone || lock.IsDone(owner) {
+			break
+		} else {
+			p.logger.Info("retry to wait for the owner done the operation",
+				zap.String("owner", owner), zap.String("lock", lock.ID), zap.Int("retry", retryNum))
+		}
+	}
+
+	return lock.IsDone(owner), nil
+}
+
+// waitNonOwnerToBeDone waits for the non-owner sources of the lock to be done for the `skip` operations.
+func (p *Pessimist) waitNonOwnerToBeDone(ctx context.Context, lock *pessimism.Lock, owner string, sources []string) (bool, error) {
+	// check whether some sources need to wait.
+	if len(sources) == 0 {
+		p.logger.Info("no non-owner sources need to wait for the operations", zap.String("lock", lock.ID))
+		return true, nil
+	}
+	waitSources := make([]string, 0, len(sources)-1)
+	for _, source := range sources {
+		if source != owner {
+			waitSources = append(waitSources, source)
+		}
+	}
+	if len(waitSources) == 0 {
+		p.logger.Info("no non-owner sources need to wait for the operations", zap.String("lock", lock.ID))
+		return true, nil
+	}
+
+	// check whether already done before.
+	allDone := func() bool {
+		for _, source := range waitSources {
+			if !lock.IsDone(source) {
+				return false
+			}
+		}
+		return true
+	}
+	if allDone() {
+		p.logger.Info("non-owner sources of the lock have been done before",
+			zap.String("lock", lock.ID), zap.Strings("sources", waitSources))
+		return true, nil
+	}
+
+	// put `skip` operations.
+	// NOTE: the auto triggered `putOpsForNonOwner` in `handleOperationPut` by the done operation of the owner
+	// may put `skip` operations for all non-owner sources, but in order to support `replace owner`,
+	// we still put `skip` operations for waitSources one more time with `skipDone=true`.
+	ops := make([]pessimism.Operation, 0, len(waitSources))
+	for _, source := range waitSources {
+		ops = append(ops, pessimism.NewOperation(lock.ID, lock.Task, source, lock.DDLs, false, false))
+	}
+	rev, succ, err := pessimism.PutOperations(p.cli, true, ops...)
+	if err != nil {
+		return false, err
+	}
+	p.logger.Info("put skip shard DDL lock operations for non-owner", zap.String("lock", lock.ID), zap.Strings("non-owner", waitSources), zap.Bool("already exist", !succ), zap.Int64("revision", rev))
+
+	// wait sources done the operations.
+	for retryNum := 1; retryNum <= unlockWaitNum; retryNum++ {
+		var ctxDone bool
+		select {
+		case <-ctx.Done():
+			ctxDone = true
+		case <-time.After(unlockWaitInterval):
+		}
+		if ctxDone || allDone() {
+			break
+		} else {
+			p.logger.Info("retry to wait for non-owner sources done the operation",
+				zap.String("lock", lock.ID), zap.Strings("sources", waitSources), zap.Int("retry", retryNum))
+		}
+	}
+
+	return allDone(), nil
 }

@@ -180,12 +180,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
-	// start the shard DDL pessimist.
-	err = s.pessimist.Start(ctx, s.etcdClient)
-	if err != nil {
-		return
-	}
-
 	s.closed.Set(false) // the server started now.
 
 	s.bgFunWg.Add(1)
@@ -225,8 +219,6 @@ func (s *Server) Close() {
 
 	s.Lock()
 	defer s.Unlock()
-
-	s.pessimist.Close()
 
 	if s.election != nil {
 		s.election.Close()
@@ -682,6 +674,8 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 				l.Unsynced = append(l.Unsynced, worker)
 			}
 		}
+		sort.Strings(l.Synced)
+		sort.Strings(l.Unsynced)
 		resp.Locks = append(resp.Locks, l)
 	}
 

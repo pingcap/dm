@@ -15,6 +15,7 @@ package shardddl
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -283,4 +285,138 @@ func (t *testPessimist) TestPessimist(c *C) {
 	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
 	c.Assert(p.Locks(), HasLen, 0)
 	p.Close() // close the Pessimist.
+}
+
+func (t *testPessimist) TestUnlockSourceLackBeforeSynced(c *C) {
+	// some sources may be deleted (lack) before the lock become synced.
+	defer clearTestInfoOperation(c)
+
+	oriUnlockWaitOwnerInterval := unlockWaitInterval
+	unlockWaitInterval = 100 * time.Millisecond
+	defer func() {
+		unlockWaitInterval = oriUnlockWaitOwnerInterval
+	}()
+
+	var (
+		watchTimeout  = 500 * time.Millisecond
+		task          = "task"
+		source1       = "mysql-replica-1"
+		source2       = "mysql-replica-2"
+		source3       = "mysql-replica-3"
+		schema, table = "foo", "bar"
+		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		ID            = "task-`foo`.`bar`"
+		i11           = pessimism.NewInfo(task, source1, schema, table, DDLs)
+		i12           = pessimism.NewInfo(task, source2, schema, table, DDLs)
+
+		sources = func(task string) []string {
+			switch task {
+			case task:
+				return []string{source1, source2, source3}
+			default:
+				c.Fatalf("unsupported task %s", task)
+			}
+			return []string{}
+		}
+		logger = log.L()
+		p      = NewPessimist(&logger, sources)
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 0. start the pessimist.
+	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(p.Locks(), HasLen, 0)
+	defer p.Close()
+
+	// no lock need to be unlock now.
+	c.Assert(terror.ErrMasterLockNotFound.Equal(p.UnlockLock(ctx, ID, "", false)), IsTrue)
+
+	// 1. PUT i11 & i12, will create a lock but now synced.
+	// not PUT info for source3 to simulate the deletion of it.
+	_, err := pessimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+	rev1, err := pessimism.PutInfo(etcdTestCli, i12)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		if len(p.Locks()) != 1 {
+			return false
+		}
+		_, remain := p.Locks()[ID].IsSynced()
+		return remain == 1
+	}), IsTrue)
+	c.Assert(p.Locks(), HasKey, ID)
+	synced, _ := p.Locks()[ID].IsSynced()
+	c.Assert(synced, IsFalse)
+	ready := p.Locks()[ID].Ready()
+	c.Assert(ready, HasLen, 3)
+	c.Assert(ready[source1], IsTrue)
+	c.Assert(ready[source2], IsTrue)
+	c.Assert(ready[source3], IsFalse)
+
+	// 2. try to unlock the lock manually, but the owner has not done the operation.
+	// this will put `exec` operation for the done.
+	c.Assert(terror.ErrMasterOwnerExecDDL.Equal(p.UnlockLock(ctx, ID, "", false)), IsTrue)
+
+	// 3. try to unlock the lock manually, and the owner done the operation.
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		// put done for the owner.
+		t.putDoneForSource(ctx, task, source1, i11, true, rev1, watchTimeout, c)
+	}()
+	go func() {
+		defer wg.Done()
+		// put done for the synced `source2`, no need to put done for the un-synced `source3`.
+		t.putDoneForSource(ctx, task, source2, i12, false, rev1, watchTimeout, c)
+	}()
+	c.Assert(p.UnlockLock(ctx, ID, "", false), IsNil)
+	wg.Wait()
+
+	// 4. the lock should be removed now.
+	c.Assert(p.Locks(), HasLen, 0)
+	ifm, _, err := pessimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(ifm, HasLen, 0)
+	opm, _, err := pessimism.GetAllOperations(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(opm, HasLen, 0)
+}
+
+func (t *testPessimist) putDoneForSource(
+	ctx context.Context, task, source string, info pessimism.Info, exec bool,
+	watchRev int64, watchTimeout time.Duration, c *C) {
+	var (
+		wg            sync.WaitGroup
+		opCh          = make(chan pessimism.Operation, 10)
+		ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
+	)
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source, watchRev, opCh)
+		close(opCh)
+	}()
+	go func() {
+		defer func() {
+			cancel2()
+			wg.Done()
+		}()
+		select {
+		case <-ctx2.Done():
+			c.Fatal("wait for the operation of the source timeout")
+		case op := <-opCh:
+			// put `done` after received non-`done`.
+			c.Assert(op.Exec, Equals, exec)
+			c.Assert(op.Done, IsFalse)
+			op.Done = true
+			done, _, err := pessimism.PutOperationDeleteExistInfo(etcdTestCli, op, info)
+			c.Assert(err, IsNil)
+			c.Assert(done, IsTrue)
+		}
+	}()
+	wg.Wait()
 }

@@ -129,4 +129,13 @@ func (t *testLock) TestLock(c *C) {
 	synced, remain = l3.IsSynced()
 	c.Assert(synced, IsTrue)
 	c.Assert(remain, Equals, 0)
+
+	// revert the synced stage.
+	l3.RevertSynced([]string{source2})
+	synced, remain = l3.IsSynced()
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+	ready := l3.Ready()
+	c.Assert(ready[source1], IsTrue)
+	c.Assert(ready[source2], IsFalse)
 }
