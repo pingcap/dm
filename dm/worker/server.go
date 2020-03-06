@@ -370,7 +370,10 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 		// TODO: need retry
 		return err
 	}
-	sourceCfg := scm[bound.Source]
+	sourceCfg, ok := scm[bound.Source]
+	if !ok {
+		return terror.ErrWorkerFailToGetSourceConfigFromEtcd.Generate(bound.Source)
+	}
 	return s.startWorker(&sourceCfg)
 }
 

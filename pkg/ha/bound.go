@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
@@ -28,7 +29,10 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 )
 
-var defaultGetSourceBoundConfigRetry = 3
+const (
+	defaultGetSourceBoundConfigRetry = 3                     // the retry time for we get two different bounds
+	retryInterval                    = 50 * time.Millisecond // retry interval when we get two different bounds
+)
 
 // SourceBound represents the bound relationship between the DM-worker instance and the upstream MySQL source.
 type SourceBound struct {
@@ -166,7 +170,10 @@ func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, con
 		if err2 != nil {
 			return bound, cfg, 0, err2
 		}
+
 		newBound, ok = sbm2[worker]
+		// when ok is false, newBound will be empty which means bound for this worker has been deleted in this turn
+		// if bound is not empty, we should wait for another turn to make sure bound is really deleted.
 		if newBound != bound {
 			log.L().Warn("source bound has been changed, will take a retry", zap.Stringer("oldBound", bound),
 				zap.Stringer("newBound", newBound), zap.Int("retryTime", retryCnt))
@@ -174,9 +181,16 @@ func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, con
 			if retryCnt != retryNum {
 				bound = newBound
 			}
+			select {
+			case <-cli.Ctx().Done():
+				retryNum = 0 // stop retry
+			case <-time.After(retryInterval):
+				// retryInterval shouldn't be too long because the longer we wait, bound is more
+				// possibly to be different from newBound
+			}
 			continue
 		}
-		// ok == false means this bound is deleted now, we don't need source config anymore
+		// ok == false and newBound == bound means this bound is truly deleted, we don't need source config anymore
 		if !ok {
 			return bound, cfg, rev2, nil
 		}

@@ -157,4 +157,29 @@ func (t *testForEtcd) TestGetSourceBoundConfigEtcd(c *C) {
 	bound.Revision = rev2
 	c.Assert(bound2, DeepEquals, bound)
 	c.Assert(cfg2, DeepEquals, cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// start a go routine to keep putting bound into etcd
+	ready := make(chan struct{})
+	go func() {
+		tick := time.NewTicker(retryInterval / 5)
+		started := false
+		for {
+			select {
+			case <-tick.C:
+				_, err := PutSourceBound(etcdTestCli, bound)
+				c.Assert(err, IsNil)
+				if !started {
+					started = true
+					close(ready)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	<-ready
+	_, _, _, err = GetSourceBoundConfig(etcdTestCli, worker)
+	c.Assert(err, ErrorMatches, ".*source bound is changed too frequently.*")
 }

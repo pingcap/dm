@@ -57,7 +57,7 @@ func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (map[string]co
 	}
 
 	if err != nil {
-		return nil, 0, err
+		return scm, 0, err
 	}
 
 	scm, err = sourceCfgFromResp(source, resp)

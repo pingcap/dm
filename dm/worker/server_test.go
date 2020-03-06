@@ -136,6 +136,8 @@ func (t *testServer) TestServer(c *C) {
 	}), IsTrue)
 	dir := c.MkDir()
 
+	t.testOperateSourceBoundWithoutConfigInEtcd(c, s)
+
 	t.testOperateWorker(c, s, dir, true)
 
 	// check worker would retry connecting master rather than stop worker directly.
@@ -323,6 +325,11 @@ func (t *testServer) createClient(c *C, addr string) pb.WorkerClient {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	c.Assert(err, IsNil)
 	return pb.NewWorkerClient(conn)
+}
+
+func (t *testServer) testOperateSourceBoundWithoutConfigInEtcd(c *C, s *Server) {
+	err := s.operateSourceBound(ha.NewSourceBound("sourceWithoutConfigInEtcd", s.cfg.Name))
+	c.Assert(terror.ErrWorkerFailToGetSourceConfigFromEtcd.Equal(err), IsTrue)
 }
 
 func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) {
