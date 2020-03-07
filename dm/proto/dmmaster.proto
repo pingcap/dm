@@ -37,10 +37,6 @@ service Master {
 
     rpc UpdateWorkerRelayConfig(UpdateWorkerRelayConfigRequest) returns (CommonWorkerResponse) {}
 
-    // BreakDDLLock request some dm-workers to break a DDL lock
-    // including remove DDLLockInfo and/or execute/skip DDL
-    rpc BreakWorkerDDLLock (BreakWorkerDDLLockRequest) returns (BreakWorkerDDLLockResponse) {}
-
     rpc HandleSQLs (HandleSQLsRequest) returns (HandleSQLsResponse) {}
 
     // SwitchWorkerRelayMaster requests some dm-workers to switch relay unit's master server
@@ -199,27 +195,6 @@ message UnlockDDLLockRequest {
 message UnlockDDLLockResponse {
     bool result = 1;
     string msg = 2;
-}
-
-// BreakWorkerDDLLockRequest represents a request for some dm-workers to force to break the DDL lock
-// workers: dm-workers need to break DDL lock
-// task: sub task's name
-// removeLockID: DDLLockInfo's ID which need to remove
-// execDDL: execute DDL which is blocking
-// skipDDL: skip DDL which is blocking
-//   execDDL and skipDDL can not specify both at the same time, but can specify neither
-message BreakWorkerDDLLockRequest {
-    repeated string sources = 1;
-    string task = 2;
-    string removeLockID = 3;
-    bool execDDL = 4;
-    bool skipDDL = 5;
-}
-
-message BreakWorkerDDLLockResponse {
-    bool result = 1;
-    string msg = 2;
-    repeated CommonWorkerResponse sources = 3;
 }
 
 // SwitchWorkerRelayMasterRequest represents a request for some dm-workers to switch relay unit's master server
