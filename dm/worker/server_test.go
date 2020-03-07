@@ -179,7 +179,7 @@ func (t *testServer) TestQueryError(c *C) {
 	w.closed.Set(closedFalse)
 
 	subtaskCfg := config.SubTaskConfig{}
-	err = subtaskCfg.DecodeFile(subtaskSampleFile)
+	err = subtaskCfg.DecodeFile(subtaskSampleFile, true)
 	c.Assert(err, IsNil)
 
 	// subtask failed just after it is started
