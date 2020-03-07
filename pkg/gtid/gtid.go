@@ -378,3 +378,12 @@ func (m *MariadbGTIDSet) String() string {
 	}
 	return m.set.String()
 }
+
+// MinGTIDSet returns the min GTID set
+func MinGTIDSet(flavor string) Set {
+	if flavor == mysql.MariaDBFlavor {
+		return &MariadbGTIDSet{}
+	}
+
+	return &MySQLGTIDSet{}
+}

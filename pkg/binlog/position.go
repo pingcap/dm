@@ -37,6 +37,11 @@ const (
 	posUUIDSuffixSeparator = "|"
 )
 
+var (
+	// MinPosition is the min binlog position
+	MinPosition = gmysql.Position{Pos: 4}
+)
+
 // PositionFromStr constructs a mysql.Position from a string representation like `mysql-bin.000001:2345`
 func PositionFromStr(s string) (gmysql.Position, error) {
 	parsed := strings.Split(s, ":")
@@ -170,6 +175,21 @@ type Location struct {
 	Position gmysql.Position
 
 	GTIDSet gtid.Set
+}
+
+// NewLocation returns a new Location
+func NewLocation(flavor string) Location {
+	if flavor == gmysql.MariaDBFlavor {
+		return Location{
+			Position: MinPosition,
+			GTIDSet:  &gtid.MariadbGTIDSet{},
+		}
+	}
+
+	return Location{
+		Position: MinPosition,
+		GTIDSet:  &gtid.MySQLGTIDSet{},
+	}
 }
 
 func (l Location) String() string {

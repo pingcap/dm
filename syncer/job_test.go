@@ -87,19 +87,19 @@ func (t *testJobSuite) TestJob(c *C) {
 		jobStr string
 	}{
 		{
-			newJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", binlog.Location{}, binlog.Location{}, ""),
+			newJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", binlog.NewLocation(""), binlog.NewLocation(""), ""),
 			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: 1, ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
-			newDDLJob(ddlInfo, []string{"create database test"}, binlog.Location{}, binlog.Location{}, ""),
+			newDDLJob(ddlInfo, []string{"create database test"}, binlog.NewLocation(""), binlog.NewLocation(""), ""),
 			"tp: ddl, sql: , args: [], key: , ddls: [create database test], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
-			newXIDJob(binlog.Location{}, binlog.Location{}, ""),
+			newXIDJob(binlog.NewLocation(""), binlog.NewLocation(""), ""),
 			"tp: xid, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
 			newFlushJob(),
 			"tp: flush, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
-			newSkipJob(binlog.Location{}),
+			newSkipJob(binlog.NewLocation("")),
 			"tp: skip, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		},
 	}

@@ -1145,7 +1145,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	mockStreamerProducer := &MockStreamProducer{s.generateEvents(events1, c)}
-	mockStreamer, err := mockStreamerProducer.generateStreamer(binlog.Location{})
+	mockStreamer, err := mockStreamerProducer.generateStreamer(binlog.NewLocation(""))
 	c.Assert(err, IsNil)
 	syncer.streamerController = &StreamerController{
 		streamerProducer: mockStreamerProducer,
@@ -1248,7 +1248,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	// simulate `syncer.Resume` here, but doesn't reset database conns
 	syncer.reset()
 	mockStreamerProducer = &MockStreamProducer{s.generateEvents(events2, c)}
-	mockStreamer, err = mockStreamerProducer.generateStreamer(binlog.Location{})
+	mockStreamer, err = mockStreamerProducer.generateStreamer(binlog.NewLocation(""))
 	c.Assert(err, IsNil)
 	syncer.streamerController = &StreamerController{
 		streamerProducer: mockStreamerProducer,

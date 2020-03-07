@@ -124,15 +124,15 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	tctx := tcontext.Background()
 
 	// global checkpoint init to min
-	c.Assert(cp.GlobalPoint(), Equals, minLocation)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, minLocation)
+	c.Assert(cp.GlobalPoint(), Equals, binlog.NewLocation(""))
+	c.Assert(cp.FlushedGlobalPoint(), Equals, binlog.NewLocation(""))
 
 	// try load, but should load nothing
 	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
 	err := cp.Load(tctx, s.tracker)
 	c.Assert(err, IsNil)
-	c.Assert(cp.GlobalPoint(), Equals, minLocation)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, minLocation)
+	c.Assert(cp.GlobalPoint(), Equals, binlog.NewLocation(""))
+	c.Assert(cp.FlushedGlobalPoint(), Equals, binlog.NewLocation(""))
 
 	oldMode := s.cfg.Mode
 	oldDir := s.cfg.Dir
@@ -240,14 +240,14 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	s.mock.ExpectCommit()
 	err = cp.Clear(tctx)
 	c.Assert(err, IsNil)
-	c.Assert(cp.GlobalPoint(), Equals, minLocation)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, minLocation)
+	c.Assert(cp.GlobalPoint(), Equals, binlog.NewLocation(""))
+	c.Assert(cp.FlushedGlobalPoint(), Equals, binlog.NewLocation(""))
 
 	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
 	err = cp.Load(tctx, s.tracker)
 	c.Assert(err, IsNil)
-	c.Assert(cp.GlobalPoint(), Equals, minLocation)
-	c.Assert(cp.FlushedGlobalPoint(), Equals, minLocation)
+	c.Assert(cp.GlobalPoint(), Equals, binlog.NewLocation(""))
+	c.Assert(cp.FlushedGlobalPoint(), Equals, binlog.NewLocation(""))
 }
 
 func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {

@@ -48,7 +48,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 	}
 
 	checkLocation := s.checkpoint.GlobalPoint()
-	if binlog.ComparePosition(checkLocation.Position, minPosition) > 0 {
+	if binlog.ComparePosition(checkLocation.Position, binlog.MinPosition) > 0 {
 		// continue from previous checkpoint
 		pos = checkLocation.Position
 		extractPos = true
