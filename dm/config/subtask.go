@@ -29,7 +29,7 @@ import (
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb-tools/pkg/table-router"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
 )
 
@@ -212,27 +212,27 @@ func (c *SubTaskConfig) Toml() (string, error) {
 }
 
 // DecodeFile loads and decodes config from file
-func (c *SubTaskConfig) DecodeFile(fpath string) error {
+func (c *SubTaskConfig) DecodeFile(fpath string, verifyDecryptPassword bool) error {
 	_, err := toml.DecodeFile(fpath, c)
 	if err != nil {
 		return terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from file")
 	}
 
-	return c.Adjust()
+	return c.Adjust(verifyDecryptPassword)
 }
 
 // Decode loads config from file data
-func (c *SubTaskConfig) Decode(data string) error {
+func (c *SubTaskConfig) Decode(data string, verifyDecryptPassword bool) error {
 	_, err := toml.Decode(data, c)
 	if err != nil {
 		return terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from data")
 	}
 
-	return c.Adjust()
+	return c.Adjust(verifyDecryptPassword)
 }
 
 // Adjust adjusts configs
-func (c *SubTaskConfig) Adjust() error {
+func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if c.Name == "" {
 		return terror.ErrConfigTaskNameEmpty.Generate()
 	}
@@ -276,12 +276,18 @@ func (c *SubTaskConfig) Adjust() error {
 	c.From.Adjust()
 	c.To.Adjust()
 
-	_, err := c.DecryptPassword()
-	return err
+	if verifyDecryptPassword {
+		_, err1 := c.DecryptPassword()
+		if err1 != nil {
+			return err1
+		}
+	}
+
+	return nil
 }
 
 // Parse parses flag definitions from the argument list.
-func (c *SubTaskConfig) Parse(arguments []string) error {
+func (c *SubTaskConfig) Parse(arguments []string, verifyDecryptPassword bool) error {
 	// Parse first to get config file.
 	err := c.flagSet.Parse(arguments)
 	if err != nil {
@@ -295,7 +301,7 @@ func (c *SubTaskConfig) Parse(arguments []string) error {
 
 	// Load config file if specified.
 	if c.ConfigFile != "" {
-		err = c.DecodeFile(c.ConfigFile)
+		err = c.DecodeFile(c.ConfigFile, verifyDecryptPassword)
 		if err != nil {
 			return err
 		}
@@ -311,7 +317,7 @@ func (c *SubTaskConfig) Parse(arguments []string) error {
 		return terror.ErrConfigParseFlagSet.Generatef("'%s' is an invalid flag", c.flagSet.Arg(0))
 	}
 
-	return c.Adjust()
+	return c.Adjust(verifyDecryptPassword)
 }
 
 // DecryptPassword tries to decrypt db password in config

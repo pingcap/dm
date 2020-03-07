@@ -54,8 +54,8 @@ type testMeta struct{}
 var _ = Suite(&testMeta{})
 
 func testSetUpDB(c *C) (*leveldb.DB, string) {
-	c.Assert(testTask1.Adjust(), IsNil)
-	c.Assert(testTask2.Adjust(), IsNil)
+	c.Assert(testTask1.Adjust(true), IsNil)
+	c.Assert(testTask2.Adjust(true), IsNil)
 
 	testTask1Str, err := testTask1.Toml()
 	c.Assert(err, IsNil)

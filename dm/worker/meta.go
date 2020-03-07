@@ -71,7 +71,7 @@ func (m *Meta) Decode(data string) error {
 func (m *Meta) adjust() error {
 	// adjust the config
 	for name, subTask := range m.SubTasks {
-		err := subTask.Adjust()
+		err := subTask.Adjust(true)
 		if err != nil {
 			return terror.Annotatef(err, "task %s", name)
 		}

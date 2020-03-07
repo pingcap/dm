@@ -73,7 +73,8 @@ type Worker struct {
 // NewWorker creates a new Worker
 func NewWorker(cfg *Config) (w *Worker, err error) {
 	w = &Worker{
-		cfg:           cfg,
+		cfg: cfg,
+		// initial relay holder, the cfg's password will be decrypted in NewRelayHolder
 		relayHolder:   NewRelayHolder(cfg),
 		tracer:        tracing.InitTracerHub(cfg.Tracer),
 		subTaskHolder: newSubTaskHolder(),
@@ -730,7 +731,7 @@ func (w *Worker) restoreSubTask() error {
 	tasks := w.meta.LoadTaskMeta()
 	for _, task := range tasks {
 		taskCfg := new(config.SubTaskConfig)
-		if err := taskCfg.Decode(string(task.Task)); err != nil {
+		if err := taskCfg.Decode(string(task.Task), true); err != nil {
 			return terror.Annotatef(err, "decode subtask config %s error in restoreSubTask", task.Task)
 		}
 
@@ -814,7 +815,7 @@ Loop:
 
 				retryCnt = 0
 				taskCfg := new(config.SubTaskConfig)
-				if err1 := taskCfg.Decode(string(opLog.Task.Task)); err1 != nil {
+				if err1 := taskCfg.Decode(string(opLog.Task.Task), true); err1 != nil {
 					err = terror.Annotate(err1, "decode subtask config error in handleTask")
 					break
 				}
@@ -838,7 +839,7 @@ Loop:
 				}
 
 				taskCfg := new(config.SubTaskConfig)
-				if err1 := taskCfg.Decode(string(opLog.Task.Task)); err1 != nil {
+				if err1 := taskCfg.Decode(string(opLog.Task.Task), true); err1 != nil {
 					err = terror.Annotate(err1, "decode subtask config error in handleTask")
 					break
 				}
