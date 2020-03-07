@@ -1697,7 +1697,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			Name: ec.currentLocation.Position.Name,
 			Pos:  ec.currentLocation.Position.Pos - ec.header.EventSize,
 		},
-		GTIDSet: ec.lastLocation.GTIDSet,
+		GTIDSet: ec.lastLocation.GTIDSet.Clone(),
 	}
 	s.tctx.L().Info("", zap.Stringer("startLocation", startLocation))
 
