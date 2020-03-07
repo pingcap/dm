@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	//"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"

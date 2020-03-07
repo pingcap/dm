@@ -14,8 +14,6 @@
 package syncer
 
 import (
-	//"github.com/siddontang/go-mysql/mysql"
-
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
 )

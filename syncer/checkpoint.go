@@ -59,14 +59,10 @@ var (
 type binlogPoint struct {
 	sync.RWMutex
 
-	//pbinlog.Location
-	//gtid string
 	location pbinlog.Location
 	ti       *model.TableInfo
 
-	//flushedPos  pbinlog.Location // pos which flushed permanently
-	//flushedGTID string         // gtid which flushed permanently
-	flushedLocation pbinlog.Location
+	flushedLocation pbinlog.Location // location which flushed permanently
 	flushedTI       *model.TableInfo
 }
 
@@ -82,13 +78,7 @@ func newBinlogPoint(location, flushedLocation pbinlog.Location, ti, flushedTI *m
 func (b *binlogPoint) save(location pbinlog.Location, ti *model.TableInfo) error {
 	b.Lock()
 	defer b.Unlock()
-	// TODO: add gtid compare
-	/*
-		if pbinlog.ComparePosition(pos, b.Position) < 0 {
-			// support to save equal pos, but not older pos
-			return terror.ErrCheckpointSaveInvalidPos.Generate(pos, b.Position)
-		}
-	*/
+
 	if pbinlog.CompareLocation(location, b.location) < 0 {
 		// support to save equal pos, but not older pos
 		return terror.ErrCheckpointSaveInvalidPos.Generate(location, b.location.Position)
@@ -119,19 +109,18 @@ func (b *binlogPoint) rollback() (isSchemaChanged bool) {
 func (b *binlogPoint) outOfDate() bool {
 	b.RLock()
 	defer b.RUnlock()
-	// TODO: add gtid compare
-	//return pbinlog.ComparePosition(b.Position, b.flushedPos) > 0
+
 	return pbinlog.CompareLocation(b.location, b.flushedLocation) > 0
 }
 
-// MySQLPoint returns point as pbinlog.Location
+// MySQLLocation returns point as pbinlog.Location
 func (b *binlogPoint) MySQLLocation() pbinlog.Location {
 	b.RLock()
 	defer b.RUnlock()
 	return b.location
 }
 
-// FlushedMySQLPoint returns flushed point as pbinlog.Location
+// FlushedMySQLLocation returns flushed point as pbinlog.Location
 func (b *binlogPoint) FlushedMySQLLocation() pbinlog.Location {
 	b.RLock()
 	defer b.RUnlock()
@@ -323,7 +312,6 @@ func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, poi
 func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, location pbinlog.Location, ti *model.TableInfo) {
 	if pbinlog.CompareLocation(cp.globalPoint.location, location) > 0 {
 		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
-		//cp.logCtx.L().Error(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
 	}
 
 	// we save table checkpoint while we meet DDL or DML

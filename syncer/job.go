@@ -16,9 +16,6 @@ package syncer
 import (
 	"fmt"
 
-	//"github.com/siddontang/go-mysql/mysql"
-
-	//"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/binlog"
 )
 
@@ -71,10 +68,9 @@ type job struct {
 	retry           bool
 	location        binlog.Location
 	currentLocation binlog.Location // exactly binlog position of current SQL
-	//gtidSet      gtid.Set
-	ddls     []string
-	traceID  string
-	traceGID string
+	ddls            []string
+	traceID         string
+	traceGID        string
 }
 
 func (j *job) String() string {

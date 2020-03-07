@@ -17,8 +17,6 @@ import (
 	"fmt"
 	"sort"
 
-	//"github.com/siddontang/go-mysql/mysql"
-
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/utils"

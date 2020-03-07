@@ -1515,7 +1515,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			// as they have been added to sharding DDL sequence
 			// only update lastPos when the query is a real DDL
 			*ec.lastLocation = ec.shardingReSync.currLocation.Clone()
-			// TODO: set gtid
 			s.tctx.L().Debug("skip event in re-replicating sharding group", zap.String("event", "query"), zap.String("statement", sql), zap.Reflect("re-shard", ec.shardingReSync))
 		}
 		return nil
@@ -1699,7 +1698,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		},
 		GTIDSet: ec.lastLocation.GTIDSet.Clone(),
 	}
-	s.tctx.L().Info("", zap.Stringer("startLocation", startLocation))
 
 	source, _ = GenTableID(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name)
 
