@@ -19,8 +19,10 @@ import (
 	"strings"
 
 	gmysql "github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -201,6 +203,9 @@ func CompareLocation(location1, location2 Location) int {
 			} else if contain2 {
 				return -1
 			}
+
+			// can't compare location by gtid, and will compare by position
+			log.L().Warn("gtidSet can't be compared", zap.Stringer("location1", location1), zap.Stringer("location2", location2))
 		}
 	}
 

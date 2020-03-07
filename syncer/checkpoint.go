@@ -117,7 +117,7 @@ func (b *binlogPoint) outOfDate() bool {
 func (b *binlogPoint) MySQLLocation() pbinlog.Location {
 	b.RLock()
 	defer b.RUnlock()
-	return b.location
+	return b.location.Clone()
 }
 
 // FlushedMySQLLocation returns flushed point as pbinlog.Location
@@ -758,7 +758,7 @@ func (cp *RemoteCheckPoint) parseMetaData() (*pbinlog.Location, error) {
 	}
 
 	return &pbinlog.Location{
-		Position: *pos,
+		Position: pos,
 		GTIDSet:  gset,
 	}, nil
 }
@@ -778,9 +778,9 @@ func minLocation(flavor string) pbinlog.Location {
 }
 
 func minGTIDSet(flavor string) gtid.Set {
-	if flavor == mysql.MySQLFlavor {
-		return &gtid.MySQLGTIDSet{}
+	if flavor == mysql.MariaDBFlavor {
+		return &gtid.MariadbGTIDSet{}
 	}
 
-	return &gtid.MariadbGTIDSet{}
+	return &gtid.MySQLGTIDSet{}
 }

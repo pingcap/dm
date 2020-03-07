@@ -318,7 +318,7 @@ func (sg *ShardingGroup) FirstLocationUnresolved() *binlog.Location {
 				Name: sg.firstLocation.Position.Name,
 				Pos:  sg.firstLocation.Position.Pos,
 			},
-			GTIDSet: sg.firstLocation.GTIDSet,
+			GTIDSet: sg.firstLocation.GTIDSet.Clone(),
 		}
 	}
 	item := sg.meta.GetGlobalActiveDDL()
@@ -329,7 +329,7 @@ func (sg *ShardingGroup) FirstLocationUnresolved() *binlog.Location {
 				Name: item.FirstLocation.Position.Name,
 				Pos:  item.FirstLocation.Position.Pos,
 			},
-			GTIDSet: item.FirstLocation.GTIDSet,
+			GTIDSet: item.FirstLocation.GTIDSet.Clone(),
 		}
 	}
 	return nil
@@ -346,7 +346,7 @@ func (sg *ShardingGroup) FirstEndPosUnresolved() *binlog.Location {
 				Name: sg.firstEndLocation.Position.Name,
 				Pos:  sg.firstEndLocation.Position.Pos,
 			},
-			GTIDSet: sg.firstEndLocation.GTIDSet,
+			GTIDSet: sg.firstEndLocation.GTIDSet.Clone(),
 		}
 	}
 	return nil
@@ -602,9 +602,9 @@ func (k *ShardingGroupKeeper) lowestFirstLocationInGroups() *binlog.Location {
 func (k *ShardingGroupKeeper) AdjustGlobalLocation(globalLocation binlog.Location) binlog.Location {
 	lowestFirstLocation := k.lowestFirstLocationInGroups()
 	if lowestFirstLocation != nil && binlog.CompareLocation(*lowestFirstLocation, globalLocation) < 0 {
-		return *lowestFirstLocation
+		return lowestFirstLocation.Clone()
 	}
-	return globalLocation
+	return globalLocation.Clone()
 }
 
 // Groups returns all sharding groups, often used for debug

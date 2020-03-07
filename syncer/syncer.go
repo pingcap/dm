@@ -752,8 +752,7 @@ func (s *Syncer) addJob(job *job) error {
 
 func (s *Syncer) saveGlobalPoint(globalLocation binlog.Location) {
 	if s.cfg.IsSharding {
-		// TODO: maybe need to compare GTID?
-		globalLocation = s.sgk.AdjustGlobalLocation(globalLocation).Clone()
+		globalLocation = s.sgk.AdjustGlobalLocation(globalLocation)
 	}
 	s.checkpoint.SaveGlobalPoint(globalLocation)
 }
@@ -986,8 +985,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	// we use currentPos to replace and skip binlog event of specified position and update table checkpoint in sharding ddl
 	// we use lastPos to update global checkpoint and table checkpoint
 	var (
-		currentLocation = s.checkpoint.GlobalPoint().Clone() // also init to global checkpoint
-		lastLocation    = s.checkpoint.GlobalPoint().Clone()
+		currentLocation = s.checkpoint.GlobalPoint() // also init to global checkpoint
+		lastLocation    = s.checkpoint.GlobalPoint()
 	)
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastLocation))
 
@@ -1259,7 +1258,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			latestOp = xid
 			currentLocation.Position.Pos = e.Header.LogPos
 			currentLocation.GTIDSet.Set(ev.GSet)
-			s.tctx.L().Debug("", zap.String("event", "XID"), zap.Stringer("last location", lastLocation), log.WrapStringerField("location", currentLocation), log.WrapStringerField("gtid set", ev.GSet))
+			s.tctx.L().Debug("", zap.String("event", "XID"), zap.Stringer("last location", lastLocation), log.WrapStringerField("location", currentLocation))
 			lastLocation.Position.Pos = e.Header.LogPos // update lastPos
 			lastLocation.GTIDSet.Set(ev.GSet)
 
@@ -1486,7 +1485,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	usedSchema := string(ev.Schema)
 	parseResult, err := s.parseDDLSQL(sql, ec.parser2, usedSchema)
 	if err != nil {
-		s.tctx.L().Error("fail to parse statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.WrapStringerField("gtid set", ev.GSet), log.ShortError(err))
+		s.tctx.L().Error("fail to parse statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
 		return err
 	}
 
@@ -1520,7 +1519,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return nil
 	}
 
-	s.tctx.L().Info("", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.WrapStringerField("gtid set", ev.GSet))
+	s.tctx.L().Info("", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation))
 	*ec.lastLocation = ec.currentLocation.Clone() // update lastLocation, because we have checked `isDDL`
 	*ec.latestOp = ddl
 
@@ -1533,10 +1532,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	// so can handle sharding cases
 	sqls, onlineDDLTableNames, err = s.resolveDDLSQL(ec.tctx, ec.parser2, parseResult.stmt, usedSchema)
 	if err != nil {
-		s.tctx.L().Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.WrapStringerField("gtid set", ev.GSet), log.ShortError(err))
+		s.tctx.L().Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
 		return err
 	}
-	s.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.String("raw statement", sql), zap.Strings("statements", sqls), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), zap.Stringer("location", ec.currentLocation), log.WrapStringerField("gtid set", ev.GSet))
+	s.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.String("raw statement", sql), zap.Strings("statements", sqls), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), zap.Stringer("location", ec.currentLocation))
 
 	if len(onlineDDLTableNames) > 1 {
 		return terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(string(ev.Query))
@@ -1770,7 +1769,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			return err2
 		}
 		*ec.shardingReSyncCh <- &ShardingReSync{
-			currLocation:   *firstEndLocation,
+			currLocation:   firstEndLocation.Clone(),
 			latestLocation: ec.currentLocation.Clone(),
 			targetSchema:   ddlInfo.tableNames[1][0].Schema,
 			targetTable:    ddlInfo.tableNames[1][0].Name,

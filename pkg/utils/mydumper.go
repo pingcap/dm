@@ -27,14 +27,14 @@ import (
 )
 
 // ParseMetaData parses mydumper's output meta file and returns binlog position and GTID
-func ParseMetaData(filename string) (*mysql.Position, string, error) {
+func ParseMetaData(filename string) (mysql.Position, string, error) {
 	fd, err := os.Open(filename)
 	if err != nil {
-		return nil, "", terror.ErrParseMydumperMeta.Generate(err)
+		return mysql.Position{}, "", terror.ErrParseMydumperMeta.Generate(err)
 	}
 	defer fd.Close()
 
-	pos := new(mysql.Position)
+	pos := mysql.Position{}
 	gtid := ""
 
 	br := bufio.NewReader(fd)
@@ -43,7 +43,7 @@ func ParseMetaData(filename string) (*mysql.Position, string, error) {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return nil, "", terror.ErrParseMydumperMeta.Generate(err)
+			return mysql.Position{}, "", terror.ErrParseMydumperMeta.Generate(err)
 		}
 		line = strings.TrimSpace(line[:len(line)-1])
 		if len(line) == 0 {
@@ -67,7 +67,7 @@ func ParseMetaData(filename string) (*mysql.Position, string, error) {
 		case "Pos":
 			pos64, err := strconv.ParseUint(value, 10, 32)
 			if err != nil {
-				return nil, "", terror.ErrParseMydumperMeta.Generate(err)
+				return mysql.Position{}, "", terror.ErrParseMydumperMeta.Generate(err)
 			}
 			pos.Pos = uint32(pos64)
 		case "GTID":
@@ -76,7 +76,7 @@ func ParseMetaData(filename string) (*mysql.Position, string, error) {
 	}
 
 	if len(pos.Name) == 0 || pos.Pos == uint32(0) {
-		return nil, "", terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
+		return mysql.Position{}, "", terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
 	}
 
 	return pos, gtid, nil

@@ -251,7 +251,7 @@ func (meta *ShardingMeta) ActiveDDLFirstLocation() (binlog.Location, error) {
 	if meta.activeIdx >= len(meta.global.Items) {
 		return binlog.Location{}, terror.ErrSyncUnitDDLActiveIndexLarger.Generate(meta.activeIdx, meta.global.Items)
 	}
-	return meta.global.Items[meta.activeIdx].FirstLocation, nil
+	return meta.global.Items[meta.activeIdx].FirstLocation.Clone(), nil
 }
 
 // FlushData returns sharding meta flush SQL and args

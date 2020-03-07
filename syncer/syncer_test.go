@@ -807,7 +807,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	_, err = db.Exec("SET GLOBAL binlog_format = 'ROW';")
 	c.Assert(err, IsNil)
 
-	pos, _, err := utils.GetMasterStatus(db, "mysql")
+	pos, gset, err := utils.GetMasterStatus(db, "mysql")
 	c.Assert(err, IsNil)
 
 	defer db.Exec("drop database if exists gctest_1")
@@ -955,7 +955,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	syncer.reset()
 
 	syncer.streamerController = NewStreamerController(tcontext.Background(), syncer.syncCfg, true, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone)
-	err = syncer.streamerController.Start(tcontext.Background(), binlog.Location{Position: pos})
+	err = syncer.streamerController.Start(tcontext.Background(), binlog.Location{Position: pos, GTIDSet: gset})
 	c.Assert(err, IsNil)
 
 	for _, testCase := range testCases {

@@ -53,7 +53,10 @@ func (s *Syncer) Status() interface{} {
 	if masterGTIDSet != nil { // masterGTIDSet maybe a nil interface
 		st.MasterBinlogGtid = masterGTIDSet.String()
 	}
-	st.SyncerBinlogGtid = syncerLocation.GTIDSet.String()
+
+	if syncerLocation.GTIDSet != nil {
+		st.SyncerBinlogGtid = syncerLocation.GTIDSet.String()
+	}
 
 	st.BinlogType = "unknown"
 	if s.streamerController != nil {
@@ -67,7 +70,13 @@ func (s *Syncer) Status() interface{} {
 	if err != nil {
 		s.tctx.L().Debug("fail to parse real mysql position", zap.Stringer("position", syncerLocation.Position), log.ShortError(err))
 	}
-	st.Synced = utils.CompareBinlogPos(masterPos, realPos, 0) == 0
+	if s.cfg.EnableGTID {
+		if masterGTIDSet != nil && syncerLocation.GTIDSet != nil && masterGTIDSet.Equal(syncerLocation.GTIDSet) {
+			st.Synced = true
+		}
+	} else {
+		st.Synced = utils.CompareBinlogPos(masterPos, realPos, 0) == 0
+	}
 
 	if s.cfg.IsSharding {
 		st.UnresolvedGroups = s.sgk.UnresolvedGroups()
