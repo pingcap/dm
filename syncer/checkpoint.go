@@ -321,14 +321,9 @@ func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, poi
 
 // saveTablePoint saves single table's checkpoint without mutex.Lock
 func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, location pbinlog.Location, ti *model.TableInfo) {
-	/*
-		if pbinlog.ComparePosition(cp.globalPoint.Position, pos) > 0 {
-			panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", pos, cp.globalPoint))
-		}
-	*/
 	if pbinlog.CompareLocation(cp.globalPoint.location, location) > 0 {
-		//panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
-		cp.logCtx.L().Error(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
+		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
+		//cp.logCtx.L().Error(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
 	}
 
 	// we save table checkpoint while we meet DDL or DML

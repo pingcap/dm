@@ -39,9 +39,9 @@ type DDLItem struct {
 }
 
 // NewDDLItem creates a new DDLItem
-func NewDDLItem(location binlog.Location, ddls []string, source string) *DDLItem {
+func NewDDLItem(location *binlog.Location, ddls []string, source string) *DDLItem {	
 	return &DDLItem{
-		FirstLocation: location,
+		FirstLocation: location.Clone(),
 		DDLs:          ddls,
 		Source:        source,
 	}
@@ -90,6 +90,17 @@ type ShardingMeta struct {
 	table     string                       // table name used in downstream meta db
 }
 
+func (s *ShardingMeta) String() string {
+	str := ""
+	str += fmt.Sprintf("activeIdx: %d, schema: %s, table: %s, global: %v, sources: {", s.activeIdx, s.schema, s.table, s.global)
+	for source, ss := range s.sources {
+		str += fmt.Sprintf("%s: %v, ", source, ss)
+	}
+
+	str += "}"
+	return str
+}
+
 // NewShardingMeta creates a new ShardingMeta
 func NewShardingMeta(schema, table string) *ShardingMeta {
 	return &ShardingMeta{
@@ -136,6 +147,8 @@ func (meta *ShardingMeta) checkItemExists(item *DDLItem) (int, bool) {
 		return 0, false
 	}
 	for idx, ddlItem := range source.Items {
+		equal := binlog.CompareLocation(item.FirstLocation, ddlItem.FirstLocation)
+		log.L().Info("checkItemExists", zap.Stringer("location1", item.FirstLocation), zap.Stringer("location2", ddlItem.FirstLocation), zap.Int("equal", equal))
 		if binlog.CompareLocation(item.FirstLocation, ddlItem.FirstLocation) == 0 {
 			return idx, true
 		}
@@ -151,6 +164,8 @@ func (meta *ShardingMeta) checkItemExists(item *DDLItem) (int, bool) {
 // returns:
 //   active: whether the DDL will be processed in this round
 func (meta *ShardingMeta) AddItem(item *DDLItem) (active bool, err error) {
+	log.L().Info("AddItem", zap.Reflect("item", item), zap.Reflect("firstLocation", item.FirstLocation), zap.Stringer("meta", meta))
+	
 	index, exists := meta.checkItemExists(item)
 	if exists {
 		return index == meta.activeIdx, nil

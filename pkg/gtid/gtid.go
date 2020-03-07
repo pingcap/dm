@@ -139,6 +139,7 @@ func (g *MySQLGTIDSet) Clone() Set {
 	if g.set == nil {
 		return &MySQLGTIDSet{}
 	}
+
 	return &MySQLGTIDSet{
 		set: g.set.Clone().(*mysql.MysqlGTIDSet),
 	}

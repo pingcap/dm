@@ -1300,12 +1300,12 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 		GTIDSet: ec.currentLocation.GTIDSet,
 	}
 	if binlog.CompareLocation(*ec.currentLocation, *ec.lastLocation) > 0 {
-		*ec.lastLocation = *ec.currentLocation
+		*ec.lastLocation = ec.currentLocation.Clone()
 	}
 
 	if ec.shardingReSync != nil {
 		if binlog.CompareLocation(*ec.currentLocation, ec.shardingReSync.currLocation) > 0 {
-			ec.shardingReSync.currLocation = *ec.currentLocation
+			ec.shardingReSync.currLocation = ec.currentLocation.Clone()
 		}
 
 		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation) >= 0 {
@@ -1333,7 +1333,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			Name: ec.lastLocation.Position.Name,
 			Pos:  ec.header.LogPos,
 		},
-		GTIDSet: ec.lastLocation.GTIDSet,
+		GTIDSet: ec.lastLocation.GTIDSet.Clone(),
 	}
 
 	if ec.shardingReSync != nil {
@@ -1478,7 +1478,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			Name: ec.lastLocation.Position.Name,
 			Pos:  ec.header.LogPos,
 		},
-		GTIDSet: ec.lastLocation.GTIDSet,
+		GTIDSet: ec.lastLocation.GTIDSet.Clone(),
 	}
 	ec.currentLocation.GTIDSet.Set(ev.GSet)
 
@@ -1493,7 +1493,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	if parseResult.ignore {
 		binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
 		s.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema))
-		*ec.lastLocation = *ec.currentLocation // before record skip location, update lastLocation
+		*ec.lastLocation = ec.currentLocation.Clone() // before record skip location, update lastLocation
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
 	}
 	if !parseResult.isDDL {
@@ -1514,7 +1514,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			// in re-syncing, we can simply skip all DDLs,
 			// as they have been added to sharding DDL sequence
 			// only update lastPos when the query is a real DDL
-			*ec.lastLocation = ec.shardingReSync.currLocation
+			*ec.lastLocation = ec.shardingReSync.currLocation.Clone()
 			// TODO: set gtid
 			s.tctx.L().Debug("skip event in re-replicating sharding group", zap.String("event", "query"), zap.String("statement", sql), zap.Reflect("re-shard", ec.shardingReSync))
 		}
@@ -1522,7 +1522,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	s.tctx.L().Info("", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.WrapStringerField("gtid set", ev.GSet))
-	*ec.lastLocation = *ec.currentLocation // update lastLocation, because we have checked `isDDL`
+	*ec.lastLocation = ec.currentLocation.Clone() // update lastLocation, because we have checked `isDDL`
 	*ec.latestOp = ddl
 
 	var (
@@ -1699,6 +1699,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		},
 		GTIDSet: ec.lastLocation.GTIDSet,
 	}
+	s.tctx.L().Info("", zap.Stringer("startLocation", startLocation))
+
 	source, _ = GenTableID(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name)
 
 	var annotate string
@@ -1771,7 +1773,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 		*ec.shardingReSyncCh <- &ShardingReSync{
 			currLocation:   *firstEndLocation,
-			latestLocation: *ec.currentLocation,
+			latestLocation: ec.currentLocation.Clone(),
 			targetSchema:   ddlInfo.tableNames[1][0].Schema,
 			targetTable:    ddlInfo.tableNames[1][0].Name,
 			allResolved:    allResolved,

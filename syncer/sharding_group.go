@@ -82,6 +82,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
 	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
+	"github.com/pingcap/dm/pkg/log"
 
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
@@ -202,7 +203,8 @@ func (sg *ShardingGroup) TrySync(source string, location, endLocation binlog.Loc
 	sg.Lock()
 	defer sg.Unlock()
 
-	ddlItem := shardmeta.NewDDLItem(location, ddls, source)
+	ddlItem := shardmeta.NewDDLItem(&location, ddls, source)
+	log.L().Info("TrySync", zap.Stringer("location", location), zap.Reflect("ddlItem", ddlItem), zap.Reflect("FirstLocation", ddlItem.FirstLocation))
 	active, err := sg.meta.AddItem(ddlItem)
 	if err != nil {
 		return sg.remain <= 0, active, sg.remain, err
