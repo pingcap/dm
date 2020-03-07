@@ -80,7 +80,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
 	location, err = meta.ActiveDDLFirstLocation()
 	c.Assert(err, check.IsNil)
-	c.Assert(location.Position, check.DeepEquals, items[0].FirstLocation)
+	c.Assert(location.Position, check.DeepEquals, items[0].FirstLocation.Position)
 
 	// find synced in shrading group, and call ShardingMeta.ResolveShardingDDL
 	c.Assert(meta.ResolveShardingDDL(), check.IsFalse)

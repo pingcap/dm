@@ -52,9 +52,6 @@ var (
 	globalCpTable        = "" // global checkpoint's cp_table
 	maxCheckPointTimeout = "1m"
 	minPosition          = mysql.Position{Pos: 4}
-	minLocation          = pbinlog.Location{
-		Position: minPosition,
-	}
 
 	maxCheckPointSaveTime = 30 * time.Second
 )
@@ -262,7 +259,7 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 		tableName:   dbutil.TableName(cfg.MetaSchema, cfg.Name+"_syncer_checkpoint"),
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
-		globalPoint: newBinlogPoint(minLocation, minLocation, nil, nil),
+		globalPoint: newBinlogPoint(minLocation(cfg.Flavor), minLocation(cfg.Flavor), nil, nil),
 		logCtx:      tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
 	}
 
@@ -308,7 +305,7 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 		return err
 	}
 
-	cp.globalPoint = newBinlogPoint(minLocation, minLocation, nil, nil)
+	cp.globalPoint = newBinlogPoint(minLocation(cp.cfg.Flavor), minLocation(cp.cfg.Flavor), nil, nil)
 
 	cp.points = make(map[string]map[string]*binlogPoint)
 
@@ -342,7 +339,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, loc
 	}
 	point, ok := mSchema[sourceTable]
 	if !ok {
-		mSchema[sourceTable] = newBinlogPoint(location, minLocation, ti, nil)
+		mSchema[sourceTable] = newBinlogPoint(location, minLocation(cp.cfg.Flavor), ti, nil)
 	} else if err := point.save(location, ti); err != nil {
 		cp.logCtx.L().Error("fail to save table point", zap.String("schema", sourceSchema), zap.String("table", sourceTable), log.ShortError(err))
 	}
@@ -646,7 +643,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			GTIDSet: gset,
 		}
 		if isGlobal {
-			if pbinlog.CompareLocation(location, minLocation) > 0 {
+			if pbinlog.CompareLocation(location, minLocation(cp.cfg.Flavor)) > 0 {
 				cp.globalPoint = newBinlogPoint(location, location, nil, nil)
 				cp.logCtx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
 			}
@@ -696,14 +693,24 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 		// load meta from task config
 		if cp.cfg.Meta == nil {
 			cp.logCtx.L().Warn("don't set meta in increment task-mode")
+			location1 := minLocation(cp.cfg.Flavor)
+			cp.globalPoint = newBinlogPoint(location1, location1, nil, nil)
 			return nil
 		}
+		gset, err := gtid.ParserGTID(cp.cfg.Flavor, cp.cfg.Meta.BinLogGTID)
+		if err != nil {
+			return err
+		}
+		if gset == nil {
+			gset = minGTIDSet(cp.cfg.Flavor)
+		}
+
 		location = &pbinlog.Location{
 			Position: mysql.Position{
 				Name: cp.cfg.Meta.BinLogName,
 				Pos:  cp.cfg.Meta.BinLogPos,
 			},
-			// GTID:   ,
+			GTIDSet: gset,
 		}
 	default:
 		// should not go here (syncer is only used in `all` or `incremental` mode)
@@ -764,4 +771,26 @@ func (cp *RemoteCheckPoint) parseMetaData() (*pbinlog.Location, error) {
 		Position: *pos,
 		GTIDSet:  gset,
 	}, nil
+}
+
+func minLocation(flavor string) pbinlog.Location {
+	if flavor == mysql.MySQLFlavor {
+		return pbinlog.Location{
+			Position: minPosition,
+			GTIDSet:  minGTIDSet(flavor),
+		}
+	}
+
+	return pbinlog.Location{
+		Position: minPosition,
+		GTIDSet:  minGTIDSet(flavor),
+	}
+}
+
+func minGTIDSet(flavor string) gtid.Set {
+	if flavor == mysql.MySQLFlavor {
+		return &gtid.MySQLGTIDSet{}
+	}
+
+	return &gtid.MariadbGTIDSet{}
 }

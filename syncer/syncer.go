@@ -425,7 +425,7 @@ func (s *Syncer) initShardingGroups() error {
 func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
 	tablePoint := s.checkpoint.TablePoint()
-	return binlog.CompareLocation(globalPoint, minLocation) <= 0 && len(tablePoint) == 0, nil
+	return binlog.CompareLocation(globalPoint, minLocation(s.cfg.Flavor)) <= 0 && len(tablePoint) == 0, nil
 }
 
 func (s *Syncer) reset() {

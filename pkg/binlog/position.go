@@ -171,7 +171,7 @@ type Location struct {
 }
 
 func (p Location) String() string {
-	return fmt.Sprintf("Position: %v, GTID: %s", p.Position, p.GTIDSet)
+	return fmt.Sprintf("Position: %v, GTIDSet: %s", p.Position, p.GTIDSet)
 }
 
 // CompareLocation returns:
@@ -179,7 +179,8 @@ func (p Location) String() string {
 //   0 if point1 is equal to point2
 //   -1 if point1 is less than point2
 func CompareLocation(location1, location2 Location) int {
-	if location1.GTIDSet != nil && location2.GTIDSet != nil {
+	if location1.GTIDSet != nil && len(location1.GTIDSet.String()) != 0 &&
+		location2.GTIDSet != nil && len(location2.GTIDSet.String()) != 0 {
 		contain1 := location1.GTIDSet.Contain(location2.GTIDSet)
 		contain2 := location2.GTIDSet.Contain(location1.GTIDSet)
 		if contain1 && contain2 {
