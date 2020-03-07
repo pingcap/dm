@@ -737,7 +737,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 }
 
 // LoadShardMeta implements CheckPoint.LoadShardMeta
-func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMeta, error) {
+func (k *ShardingGroupKeeper) LoadShardMeta(flavor string) (map[string]*shardmeta.ShardingMeta, error) {
 	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM `%s`.`%s` WHERE `source_id`='%s'", k.shardMetaSchema, k.shardMetaTable, k.cfg.SourceID)
 	rows, err := k.dbConn.querySQL(k.tctx, query)
 	if err != nil {
@@ -761,7 +761,7 @@ func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMet
 		if _, ok := meta[targetTableID]; !ok {
 			meta[targetTableID] = shardmeta.NewShardingMeta(k.shardMetaSchema, k.shardMetaTable)
 		}
-		err = meta[targetTableID].RestoreFromData(sourceTableID, activeIndex, isGlobal, []byte(data))
+		err = meta[targetTableID].RestoreFromData(sourceTableID, activeIndex, isGlobal, []byte(data), flavor)
 		if err != nil {
 			return nil, err
 		}

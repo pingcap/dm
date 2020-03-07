@@ -17,9 +17,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -32,9 +34,14 @@ const (
 
 // DDLItem records ddl information used in sharding sequence organization
 type DDLItem struct {
-	FirstLocation binlog.Location `json:"first-location"` // first DDL's binlog Pos, not the End_log_pos of the event
-	DDLs          []string        `json:"ddls"`           // DDLs, these ddls are in the same QueryEvent
-	Source        string          `json:"source"`         // source table ID
+	FirstLocation binlog.Location `json:"-"`      // first DDL's binlog Pos, not the End_log_pos of the event
+	DDLs          []string        `json:"ddls"`   // DDLs, these ddls are in the same QueryEvent
+	Source        string          `json:"source"` // source table ID
+
+	// just used for json's marshal and unmarshal, because gtid.Set in FirstLocation is interface,
+	// can't be marshal and unmarshal
+	FirstPosition mysql.Position `json:"first-position"`
+	FirstGTIDSet  string         `json:"first-gtid-set"`
 }
 
 // NewDDLItem creates a new DDLItem
@@ -100,12 +107,25 @@ func NewShardingMeta(schema, table string) *ShardingMeta {
 }
 
 // RestoreFromData restores ShardingMeta from given data
-func (meta *ShardingMeta) RestoreFromData(sourceTableID string, activeIdx int, isGlobal bool, data []byte) error {
+func (meta *ShardingMeta) RestoreFromData(sourceTableID string, activeIdx int, isGlobal bool, data []byte, flavor string) error {
 	items := make([]*DDLItem, 0)
 	err := json.Unmarshal(data, &items)
 	if err != nil {
 		return terror.ErrSyncUnitInvalidShardMeta.Delegate(err)
 	}
+
+	// set FirstLocation
+	for _, item := range items {
+		gset, err1 := gtid.ParserGTID(flavor, item.FirstGTIDSet)
+		if err1 != nil {
+			return err1
+		}
+		item.FirstLocation = binlog.Location{
+			Position: item.FirstPosition,
+			GTIDSet:  gset,
+		}
+	}
+
 	if isGlobal {
 		meta.global = &ShardingSequence{Items: items}
 	} else {
@@ -236,6 +256,12 @@ func (meta *ShardingMeta) ActiveDDLFirstLocation() (binlog.Location, error) {
 
 // FlushData returns sharding meta flush SQL and args
 func (meta *ShardingMeta) FlushData(sourceID, tableID string) ([]string, [][]interface{}) {
+	// set FirstPosition and FirstGTIDSet for json marshal
+	for _, item := range meta.global.Items {
+		item.FirstPosition = item.FirstLocation.Position
+		item.FirstGTIDSet = item.FirstLocation.GTIDSet.String()
+	}
+
 	if len(meta.global.Items) == 0 {
 		sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` where source_id=? and target_table_id=?", meta.schema, meta.table)
 		args2 := []interface{}{sourceID, tableID}

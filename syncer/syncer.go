@@ -399,7 +399,7 @@ func (s *Syncer) initShardingGroups() error {
 		}
 	}
 
-	loadMeta, err2 := s.sgk.LoadShardMeta()
+	loadMeta, err2 := s.sgk.LoadShardMeta(s.cfg.Flavor)
 	if err2 != nil {
 		return err2
 	}

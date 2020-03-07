@@ -171,7 +171,7 @@ type Location struct {
 }
 
 func (l Location) String() string {
-	return fmt.Sprintf("Position: %v, GTIDSet: %s", l.Position, l.GTIDSet)
+	return fmt.Sprintf("position: %v, gtid-set: %s", l.Position, l.GTIDSet)
 }
 
 // Clone clones a same Location
