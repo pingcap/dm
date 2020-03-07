@@ -52,12 +52,17 @@ func (t *testConfig) TestSubTask(c *C) {
 	_, err = cfg.DecryptPassword()
 	c.Assert(err, NotNil)
 
+	err = cfg.Adjust(true)
+	c.Assert(err, NotNil)
+	err = cfg.Adjust(false)
+	c.Assert(err, IsNil)
+
 	cfg.From.Password = ""
 	clone3, err := cfg.DecryptPassword()
 	c.Assert(err, IsNil)
 	c.Assert(clone3, DeepEquals, cfg)
 
-	err = cfg.Adjust()
+	err = cfg.Adjust(true)
 	c.Assert(err, IsNil)
 }
 
@@ -130,7 +135,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 
 	for _, tc := range testCases {
 		cfg := tc.genFunc()
-		err := cfg.Adjust()
+		err := cfg.Adjust(true)
 		c.Assert(err, ErrorMatches, tc.errorFormat)
 	}
 }

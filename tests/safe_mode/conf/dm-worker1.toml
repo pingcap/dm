@@ -9,11 +9,11 @@ relay-binlog-gtid = ""
 [from]
 host = "127.0.0.1"
 user = "root"
-password = ""
+password = "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs="
 port = 3306
 
 [tracer]
 enable = true
-tracer-addr = "127.0.0.1:8264"
+tracer-addr = "127.0.0.1:8265"
 batch-size = 1
 checksum = true
