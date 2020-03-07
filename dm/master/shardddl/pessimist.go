@@ -305,7 +305,7 @@ func (p *Pessimist) recoverLocks(ifm map[string]map[string]pessimism.Info, opm m
 			p.logger.Info("restored an un-synced shard DDL lock", zap.String("lock", lock.ID), zap.Int("remain", remain))
 			continue
 		}
-		err := p.handleLock(lock.ID)
+		err := p.handleLock(lock.ID, "")
 		if err != nil {
 			return err
 		}
@@ -336,7 +336,7 @@ func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.I
 			}
 			p.logger.Info("the shard DDL lock has synced", zap.String("lock", lockID))
 
-			err = p.handleLock(lockID)
+			err = p.handleLock(lockID, info.Source)
 			if err != nil {
 				// TODO: add & update metrics.
 				p.logger.Error("fail to handle the shard DDL lock", zap.String("lock", lockID), log.ShortError(err))
@@ -395,7 +395,7 @@ func (p *Pessimist) handleOperationPut(ctx context.Context, opCh <-chan pessimis
 
 			// the owner has done the operation, put `skip` operation for non-owner dm-worker instances.
 			// no need to `skipDone`, all of them should be not done just after the owner has done.
-			err := p.putOpsForNonOwner(lock, false)
+			err := p.putOpsForNonOwner(lock, "", false)
 			if err != nil {
 				// TODO: add & update metrics.
 				p.logger.Error("fail to put skip shard DDL lock operations for non-owner", zap.String("lock", lock.ID), log.ShortError(err))
@@ -405,7 +405,9 @@ func (p *Pessimist) handleOperationPut(ctx context.Context, opCh <-chan pessimis
 }
 
 // handleLock handles a single shard DDL lock.
-func (p *Pessimist) handleLock(lockID string) error {
+// if source is not empty, it means the function is triggered by an Info with the source,
+// this is often called when the source re-PUTed again after an interrupt.
+func (p *Pessimist) handleLock(lockID, source string) error {
 	lock := p.lk.FindLock(lockID)
 	if lock == nil {
 		return nil
@@ -430,7 +432,7 @@ func (p *Pessimist) handleLock(lockID string) error {
 		// try to put the skip operation for non-owner dm-worker instances,
 		// this is to handle the case where dm-master exit before putting operations for them.
 		// use `skipDone` to avoid overwriting any existing operations.
-		err := p.putOpsForNonOwner(lock, true)
+		err := p.putOpsForNonOwner(lock, source, true)
 		if err != nil {
 			return err
 		}
@@ -448,26 +450,33 @@ func (p *Pessimist) putOpForOwner(lock *pessimism.Lock, owner string, skipDone b
 	if err != nil {
 		return err
 	}
-	p.logger.Info("put exec shard DDL lock operation for the owner", zap.String("lock", lock.ID), zap.String("owner", lock.Owner), zap.Bool("already exist", !succ), zap.Int64("revision", rev))
+	p.logger.Info("put exec shard DDL lock operation for the owner", zap.String("lock", lock.ID), zap.String("owner", lock.Owner), zap.Bool("already done", !succ), zap.Int64("revision", rev))
 	return nil
 }
 
 // putOpsForNonOwner PUTs shard DDL lock operations for non-owner dm-worker instances into etcd.
-func (p *Pessimist) putOpsForNonOwner(lock *pessimism.Lock, skipDone bool) error {
-	ready := lock.Ready()
-	sources := make([]string, 0, len(ready)-1)
-	ops := make([]pessimism.Operation, 0, len(ready)-1)
-	for source := range ready {
-		if source != lock.Owner {
-			sources = append(sources, source)
-			ops = append(ops, pessimism.NewOperation(lock.ID, lock.Task, source, lock.DDLs, false, false))
+func (p *Pessimist) putOpsForNonOwner(lock *pessimism.Lock, onlySource string, skipDone bool) error {
+	var sources []string
+	if onlySource != "" {
+		sources = append(sources, onlySource)
+	} else {
+		for source := range lock.Ready() {
+			if source != lock.Owner {
+				sources = append(sources, source)
+			}
 		}
 	}
+
+	ops := make([]pessimism.Operation, 0, len(sources))
+	for _, source := range sources {
+		ops = append(ops, pessimism.NewOperation(lock.ID, lock.Task, source, lock.DDLs, false, false))
+	}
+
 	rev, succ, err := pessimism.PutOperations(p.cli, skipDone, ops...)
 	if err != nil {
 		return err
 	}
-	p.logger.Info("put skip shard DDL lock operations for non-owner", zap.String("lock", lock.ID), zap.Strings("non-owner", sources), zap.Bool("already exist", !succ), zap.Int64("revision", rev))
+	p.logger.Info("put skip shard DDL lock operations for non-owner", zap.String("lock", lock.ID), zap.Strings("non-owner", sources), zap.Bool("already done", !succ), zap.Int64("revision", rev))
 	return nil
 }
 
@@ -600,7 +609,7 @@ func (p *Pessimist) waitNonOwnerToBeDone(ctx context.Context, lock *pessimism.Lo
 	if err != nil {
 		return false, err
 	}
-	p.logger.Info("put skip shard DDL lock operations for non-owner", zap.String("lock", lock.ID), zap.Strings("non-owner", waitSources), zap.Bool("already exist", !succ), zap.Int64("revision", rev))
+	p.logger.Info("put skip shard DDL lock operations for non-owner", zap.String("lock", lock.ID), zap.Strings("non-owner", waitSources), zap.Bool("already done", !succ), zap.Int64("revision", rev))
 
 	// wait sources done the operations.
 	for retryNum := 1; retryNum <= unlockWaitNum; retryNum++ {

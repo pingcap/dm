@@ -15,6 +15,7 @@ package shardddl
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -62,15 +63,15 @@ func (t *testPessimist) TestPessimist(c *C) {
 
 	var (
 		watchTimeout  = 500 * time.Millisecond
-		task1         = "task-1"
-		task2         = "task-2"
+		task1         = "task-pessimist-1"
+		task2         = "task-pessimist-2"
 		source1       = "mysql-replica-1"
 		source2       = "mysql-replica-2"
 		source3       = "mysql-replica-3"
 		schema, table = "foo", "bar"
 		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		ID1           = "task-1-`foo`.`bar`"
-		ID2           = "task-2-`foo`.`bar`"
+		ID1           = fmt.Sprintf("%s-`%s`.`%s`", task1, schema, table)
+		ID2           = fmt.Sprintf("%s-`%s`.`%s`", task2, schema, table)
 		i11           = pessimism.NewInfo(task1, source1, schema, table, DDLs)
 		i12           = pessimism.NewInfo(task1, source2, schema, table, DDLs)
 		i21           = pessimism.NewInfo(task2, source1, schema, table, DDLs)
@@ -108,7 +109,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	// PUT i11, will create a lock but not synced.
 	_, err := pessimism.PutInfo(etcdTestCli, i11)
 	c.Assert(err, IsNil)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return len(p.Locks()) == 1
 	}), IsTrue)
 	c.Assert(p.Locks(), HasKey, ID1)
@@ -119,7 +120,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	// PUT i12, the lock will be synced, then an operation PUT for the owner will be triggered.
 	rev1, err := pessimism.PutInfo(etcdTestCli, i12)
 	c.Assert(err, IsNil)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		synced, _ = p.Locks()[ID1].IsSynced()
 		return synced
 	}), IsTrue)
@@ -141,7 +142,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	done, rev2, err := pessimism.PutOperationDeleteExistInfo(etcdTestCli, op11c, i11)
 	c.Assert(err, IsNil)
 	c.Assert(done, IsTrue)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return p.Locks()[ID1].IsDone(source1)
 	}), IsTrue)
 
@@ -163,7 +164,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	done, _, err = pessimism.PutOperationDeleteExistInfo(etcdTestCli, op12c, i12)
 	c.Assert(err, IsNil)
 	c.Assert(done, IsTrue)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		_, ok := p.Locks()[ID1]
 		return !ok
 	}), IsTrue)
@@ -174,7 +175,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	c.Assert(err, IsNil)
 	_, err = pessimism.PutInfo(etcdTestCli, i22)
 	c.Assert(err, IsNil)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		lock := p.Locks()[ID2]
 		if lock == nil {
 			return false
@@ -196,7 +197,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	// PUT i23, then the lock will become synced.
 	rev3, err := pessimism.PutInfo(etcdTestCli, i23)
 	c.Assert(err, IsNil)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		synced, _ = p.Locks()[ID2].IsSynced()
 		return synced
 	}), IsTrue)
@@ -251,7 +252,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	done, _, err = pessimism.PutOperationDeleteExistInfo(etcdTestCli, op22c, i22)
 	c.Assert(err, IsNil)
 	c.Assert(done, IsTrue)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return p.Locks()[ID2].IsDone(source2)
 	}), IsTrue)
 
@@ -273,7 +274,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	done, _, err = pessimism.PutOperationDeleteExistInfo(etcdTestCli, op23c, i23)
 	c.Assert(err, IsNil)
 	c.Assert(done, IsTrue)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		_, ok := p.Locks()[ID2]
 		return !ok
 	}), IsTrue)
@@ -285,6 +286,182 @@ func (t *testPessimist) TestPessimist(c *C) {
 	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
 	c.Assert(p.Locks(), HasLen, 0)
 	p.Close() // close the Pessimist.
+}
+
+func (t *testPessimist) TestSourceReEntrant(c *C) {
+	// sources (owner or non-owner) may be interrupted and re-run the sequence again.
+	defer clearTestInfoOperation(c)
+
+	var (
+		watchTimeout  = 500 * time.Millisecond
+		task          = "task-source-re-entrant"
+		source1       = "mysql-replica-1"
+		source2       = "mysql-replica-2"
+		source3       = "mysql-replica-3"
+		schema, table = "foo", "bar"
+		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		ID            = fmt.Sprintf("%s-`%s`.`%s`", task, schema, table)
+		i11           = pessimism.NewInfo(task, source1, schema, table, DDLs)
+		i12           = pessimism.NewInfo(task, source2, schema, table, DDLs)
+		i13           = pessimism.NewInfo(task, source3, schema, table, DDLs)
+
+		sources = func(task string) []string {
+			switch task {
+			case task:
+				return []string{source1, source2, source3}
+			default:
+				c.Fatalf("unsupported task %s", task)
+			}
+			return []string{}
+		}
+		logger = log.L()
+		p      = NewPessimist(&logger, sources)
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 0. start the pessimist.
+	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(p.Locks(), HasLen, 0)
+	defer p.Close()
+
+	// 1. PUT i11 and i12, will create a lock but not synced.
+	_, err := pessimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+	_, err = pessimism.PutInfo(etcdTestCli, i12)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		lock := p.Locks()[ID]
+		if lock == nil {
+			return false
+		}
+		_, remain := lock.IsSynced()
+		return remain == 1
+	}), IsTrue)
+
+	// 2. re-PUT i11, to simulate the re-entrant of the owner before the lock become synced.
+	rev1, err := pessimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+
+	// 3. re-PUT i12, to simulate the re-entrant of the non-owner before the lock become synced.
+	rev2, err := pessimism.PutInfo(etcdTestCli, i12)
+	c.Assert(err, IsNil)
+
+	// 4. wait exec operation for the owner become available.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		opCh := make(chan pessimism.Operation, 10)
+		ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
+		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source1, rev1, opCh)
+		cancel2()
+		close(opCh)
+		c.Assert(len(opCh), Equals, 1)
+		op := <-opCh
+		c.Assert(op.Exec, IsTrue)
+		c.Assert(op.Done, IsFalse)
+	}()
+
+	// 5. put i13, the lock will become synced, then an operation PUT for the owner will be triggered.
+	_, err = pessimism.PutInfo(etcdTestCli, i13)
+	c.Assert(err, IsNil)
+	wg.Wait()
+
+	// 6. re-PUT i11, to simulate the re-entrant of the owner after the lock become synced.
+	rev1, err = pessimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+
+	// 8. wait exec operation for the owner become available again (with new revision).
+	opCh := make(chan pessimism.Operation, 10)
+	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source1, rev1, opCh)
+	cancel2()
+	close(opCh)
+	c.Assert(len(opCh), Equals, 1)
+	op11 := <-opCh
+	c.Assert(op11.Exec, IsTrue)
+	c.Assert(op11.Done, IsFalse)
+
+	// 9. wait exec operation for the non-owner become available.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		opCh = make(chan pessimism.Operation, 10)
+		ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
+		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source2, rev2, opCh)
+		cancel2()
+		close(opCh)
+		c.Assert(len(opCh), Equals, 1)
+		op := <-opCh
+		c.Assert(op.Exec, IsFalse)
+		c.Assert(op.Done, IsFalse)
+	}()
+
+	// 10. mark exec operation for the owner as `done` (and delete the info).
+	op11c := op11
+	op11c.Done = true
+	done, _, err := pessimism.PutOperationDeleteExistInfo(etcdTestCli, op11c, i11)
+	c.Assert(err, IsNil)
+	c.Assert(done, IsTrue)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return p.Locks()[ID].IsDone(source1)
+	}), IsTrue)
+	wg.Wait()
+
+	// 11. re-PUT i12, to simulate the re-entrant of the non-owner after the lock become synced.
+	rev2, err = pessimism.PutInfo(etcdTestCli, i12)
+	c.Assert(err, IsNil)
+
+	// 12. wait skip operation for the non-owner become available again (with new revision, without existing done).
+	opCh = make(chan pessimism.Operation, 10)
+	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source2, rev2, opCh)
+	cancel2()
+	close(opCh)
+	c.Assert(len(opCh), Equals, 1)
+	op12 := <-opCh
+	c.Assert(op12.Exec, IsFalse)
+	c.Assert(op12.Done, IsFalse)
+
+	// 13. mark skip operation for the non-owner as `done` (and delete the info).
+	op12c := op12
+	op12c.Done = true
+	done, _, err = pessimism.PutOperationDeleteExistInfo(etcdTestCli, op12c, i12)
+	c.Assert(err, IsNil)
+	c.Assert(done, IsTrue)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return p.Locks()[ID].IsDone(source2)
+	}), IsTrue)
+
+	// 14. re-PUT i13, to simulate the re-entrant of the owner after the lock become synced.
+	rev3, err := pessimism.PutInfo(etcdTestCli, i13)
+	c.Assert(err, IsNil)
+
+	// 15. wait skip operation for the non-owner become available again (with new revision, with existing done).
+	opCh = make(chan pessimism.Operation, 10)
+	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source3, rev3, opCh)
+	cancel2()
+	close(opCh)
+	c.Assert(len(opCh), Equals, 1)
+	op13 := <-opCh
+	c.Assert(op13.Exec, IsFalse)
+	c.Assert(op13.Done, IsFalse)
+
+	// 16. mark skip operation for the non-owner as `done` (and delete the info).
+	// the lock should become resolved now.
+	op13c := op13
+	op13c.Done = true
+	done, _, err = pessimism.PutOperationDeleteExistInfo(etcdTestCli, op13c, i13)
+	c.Assert(err, IsNil)
+	c.Assert(done, IsTrue)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		_, ok := p.Locks()[ID]
+		return !ok
+	}), IsTrue)
+	t.noLockExist(c, p)
 }
 
 func (t *testPessimist) TestUnlockSourceLackBeforeSynced(c *C) {
@@ -299,13 +476,13 @@ func (t *testPessimist) TestUnlockSourceLackBeforeSynced(c *C) {
 
 	var (
 		watchTimeout  = 500 * time.Millisecond
-		task          = "task"
+		task          = "task-unlock-source-lack-before-synced"
 		source1       = "mysql-replica-1"
 		source2       = "mysql-replica-2"
 		source3       = "mysql-replica-3"
 		schema, table = "foo", "bar"
 		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		ID            = "task-`foo`.`bar`"
+		ID            = fmt.Sprintf("%s-`%s`.`%s`", task, schema, table)
 		i11           = pessimism.NewInfo(task, source1, schema, table, DDLs)
 		i12           = pessimism.NewInfo(task, source2, schema, table, DDLs)
 
@@ -339,7 +516,7 @@ func (t *testPessimist) TestUnlockSourceLackBeforeSynced(c *C) {
 	c.Assert(err, IsNil)
 	rev1, err := pessimism.PutInfo(etcdTestCli, i12)
 	c.Assert(err, IsNil)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		if len(p.Locks()) != 1 {
 			return false
 		}
@@ -391,12 +568,12 @@ func (t *testPessimist) TestUnlockSourceInterrupt(c *C) {
 
 	var (
 		watchTimeout  = 500 * time.Millisecond
-		task          = "task"
+		task          = "task-unlock-source-interrupt"
 		source1       = "mysql-replica-1"
 		source2       = "mysql-replica-2"
 		schema, table = "foo", "bar"
 		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		ID            = "task-`foo`.`bar`"
+		ID            = fmt.Sprintf("%s-`%s`.`%s`", task, schema, table)
 		i11           = pessimism.NewInfo(task, source1, schema, table, DDLs)
 		i12           = pessimism.NewInfo(task, source2, schema, table, DDLs)
 
@@ -427,7 +604,7 @@ func (t *testPessimist) TestUnlockSourceInterrupt(c *C) {
 	c.Assert(err, IsNil)
 	_, err = pessimism.PutInfo(etcdTestCli, i12)
 	c.Assert(err, IsNil)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		if len(p.Locks()) != 1 {
 			return false
 		}
@@ -467,7 +644,7 @@ func (t *testPessimist) TestUnlockSourceInterrupt(c *C) {
 	c.Assert(err, IsNil)
 	_, err = pessimism.PutInfo(etcdTestCli, i12)
 	c.Assert(err, IsNil)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		if len(p.Locks()) != 1 {
 			return false
 		}
@@ -482,7 +659,7 @@ func (t *testPessimist) TestUnlockSourceInterrupt(c *C) {
 
 	// 2. putDone for the owner.
 	t.putDoneForSource(ctx, task, source1, i11, true, rev1, watchTimeout, c)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return p.Locks()[ID].IsDone(source1)
 	}), IsTrue)
 	c.Assert(p.Locks()[ID].IsDone(source2), IsFalse)
@@ -504,13 +681,13 @@ func (t *testPessimist) TestUnlockSourceOwnerRemoved(c *C) {
 
 	var (
 		watchTimeout  = 500 * time.Millisecond
-		task          = "task"
+		task          = "task-unlock-source-owner-removed"
 		source1       = "mysql-replica-1"
 		source2       = "mysql-replica-2"
 		source3       = "mysql-replica-3"
 		schema, table = "foo", "bar"
 		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		ID            = "task-`foo`.`bar`"
+		ID            = fmt.Sprintf("%s-`%s`.`%s`", task, schema, table)
 		i11           = pessimism.NewInfo(task, source1, schema, table, DDLs)
 		i12           = pessimism.NewInfo(task, source2, schema, table, DDLs)
 
@@ -543,7 +720,7 @@ func (t *testPessimist) TestUnlockSourceOwnerRemoved(c *C) {
 	c.Assert(err, IsNil)
 	rev1, err := pessimism.PutInfo(etcdTestCli, i12)
 	c.Assert(err, IsNil)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		if len(p.Locks()) != 1 {
 			return false
 		}
