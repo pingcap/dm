@@ -83,12 +83,9 @@ func (j *job) String() string {
 }
 
 func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, location, cmdLocation binlog.Location, traceID string) *job {
-	/*
-		var gs gtid.Set
-		if currentGtidSet != nil {
-			gs = currentGtidSet.Clone()
-		}
-	*/
+	location1 := location.Clone()
+	cmdLocation1 := cmdLocation.Clone()
+
 	return &job{
 		tp:              tp,
 		sourceSchema:    sourceSchema,
@@ -98,19 +95,22 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 		sql:             sql,
 		args:            args,
 		key:             key,
-		location:        location,
-		currentLocation: cmdLocation,
+		location:        location1,
+		currentLocation: cmdLocation1,
 		retry:           true,
 		traceID:         traceID,
 	}
 }
 
 func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation binlog.Location, traceID string) *job {
+	location1 := location.Clone()
+	cmdLocation1 := cmdLocation.Clone()
+
 	j := &job{
 		tp:              ddl,
 		ddls:            ddls,
-		location:        location,
-		currentLocation: cmdLocation,
+		location:        location1,
+		currentLocation: cmdLocation1,
 		traceID:         traceID,
 	}
 
@@ -125,10 +125,13 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation bi
 }
 
 func newXIDJob(location, cmdLocation binlog.Location, traceID string) *job {
+	location1 := location.Clone()
+	cmdLocation1 := cmdLocation.Clone()
+
 	return &job{
 		tp:              xid,
-		location:        location,
-		currentLocation: cmdLocation,
+		location:        location1,
+		currentLocation: cmdLocation1,
 		traceID:         traceID,
 	}
 }
@@ -140,9 +143,11 @@ func newFlushJob() *job {
 }
 
 func newSkipJob(location binlog.Location) *job {
+	location1 := location.Clone()
+
 	return &job{
 		tp:       skip,
-		location: location,
+		location: location1,
 	}
 }
 

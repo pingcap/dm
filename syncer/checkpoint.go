@@ -327,7 +327,8 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, loc
 		}
 	*/
 	if pbinlog.CompareLocation(cp.globalPoint.location, location) > 0 {
-		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
+		//panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
+		cp.logCtx.L().Error(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
 	}
 
 	// we save table checkpoint while we meet DDL or DML
@@ -513,6 +514,9 @@ func (cp *RemoteCheckPoint) TablePoint() map[string]map[string]pbinlog.Location 
 
 // FlushedGlobalPoint implements CheckPoint.FlushedGlobalPoint
 func (cp *RemoteCheckPoint) FlushedGlobalPoint() pbinlog.Location {
+	cp.RLock()
+	defer cp.RUnlock()
+
 	return cp.globalPoint.FlushedMySQLLocation()
 }
 
@@ -598,6 +602,9 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 
 // Load implements CheckPoint.Load
 func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.Tracker) error {
+	cp.Lock()
+	defer cp.Unlock()
+
 	query := `SELECT cp_schema, cp_table, binlog_name, binlog_pos, binlog_gtid, table_info, is_global FROM ` + cp.tableName + ` WHERE id = ?`
 	rows, err := cp.dbConn.querySQL(tctx, query, cp.id)
 	defer func() {

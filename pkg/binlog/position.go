@@ -170,8 +170,17 @@ type Location struct {
 	GTIDSet gtid.Set
 }
 
-func (p Location) String() string {
-	return fmt.Sprintf("Position: %v, GTIDSet: %s", p.Position, p.GTIDSet)
+func (l Location) String() string {
+	return fmt.Sprintf("Position: %v, GTIDSet: %s", l.Position, l.GTIDSet)
+}
+
+// Clone clones a same Location
+func (l Location) Clone() Location {
+	newGTIDSet := l.GTIDSet.Clone()
+	return Location{
+		Position: l.Position,
+		GTIDSet:  newGTIDSet,
+	}
 }
 
 // CompareLocation returns:

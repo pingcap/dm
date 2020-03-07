@@ -92,7 +92,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
 	location, err = meta.ActiveDDLFirstLocation()
 	c.Assert(err, check.IsNil)
-	c.Assert(location.Position, check.DeepEquals, items[1].FirstLocation)
+	c.Assert(location.Position, check.DeepEquals, items[1].FirstLocation.Position)
 
 	sqls, args = meta.FlushData(sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 4)
@@ -126,7 +126,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
 	location, err = meta.ActiveDDLFirstLocation()
 	c.Assert(err, check.IsNil)
-	c.Assert(location.Position, check.DeepEquals, items[1].FirstLocation)
+	c.Assert(location.Position, check.DeepEquals, items[1].FirstLocation.Position)
 
 	// find synced in shrading group, and call ShardingMeta.ResolveShardingDDL
 	c.Assert(meta.ResolveShardingDDL(), check.IsFalse)
@@ -138,7 +138,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
 	location, err = meta.ActiveDDLFirstLocation()
 	c.Assert(err, check.IsNil)
-	c.Assert(location.Position, check.DeepEquals, items[2].FirstLocation)
+	c.Assert(location.Position, check.DeepEquals, items[2].FirstLocation.Position)
 
 	sqls, args = meta.FlushData(sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 4)
@@ -171,7 +171,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
 	location, err = meta.ActiveDDLFirstLocation()
 	c.Assert(err, check.IsNil)
-	c.Assert(location.Position, check.DeepEquals, items[2].FirstLocation)
+	c.Assert(location.Position, check.DeepEquals, items[2].FirstLocation.Position)
 
 	// find synced in shrading group, and call ShardingMeta.ResolveShardingDDL
 	c.Assert(meta.ResolveShardingDDL(), check.IsTrue)

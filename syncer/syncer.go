@@ -753,7 +753,7 @@ func (s *Syncer) addJob(job *job) error {
 func (s *Syncer) saveGlobalPoint(globalLocation binlog.Location) {
 	if s.cfg.IsSharding {
 		// TODO: maybe need to compare GTID?
-		globalLocation = s.sgk.AdjustGlobalLocation(globalLocation)
+		globalLocation = s.sgk.AdjustGlobalLocation(globalLocation).Clone()
 	}
 	s.checkpoint.SaveGlobalPoint(globalLocation)
 }
@@ -840,7 +840,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if err != nil {
 			s.appendExecErrors(&ExecErrorContext{
 				err:      err,
-				location: sqlJob.currentLocation,
+				location: sqlJob.currentLocation.Clone(),
 				jobs:     fmt.Sprintf("%v", sqlJob.ddls),
 			})
 		}
@@ -911,7 +911,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		}
 		affected, err := db.executeSQL(tctx, queries, args...)
 		if err != nil {
-			errCtx := &ExecErrorContext{err, jobs[affected].currentLocation, fmt.Sprintf("%v", jobs)}
+			errCtx := &ExecErrorContext{err, jobs[affected].currentLocation.Clone(), fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
 		}
 		return err
@@ -986,13 +986,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	// we use currentPos to replace and skip binlog event of specified position and update table checkpoint in sharding ddl
 	// we use lastPos to update global checkpoint and table checkpoint
 	var (
-		currentLocation = s.checkpoint.GlobalPoint() // also init to global checkpoint
-		lastLocation    = s.checkpoint.GlobalPoint()
+		currentLocation = s.checkpoint.GlobalPoint().Clone() // also init to global checkpoint
+		lastLocation    = s.checkpoint.GlobalPoint().Clone()
 	)
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastLocation))
 
 	if s.streamerController.IsClosed() {
-		err = s.streamerController.Start(tctx, lastLocation)
+		err = s.streamerController.Start(tctx, lastLocation.Clone())
 		if err != nil {
 			return terror.Annotate(err, "fail to restart streamer controller")
 		}
@@ -1083,24 +1083,24 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		// if remaining DDLs in sequence, redirect global stream to the next sharding DDL position
 		if !shardingReSync.allResolved {
-			nextPos, err2 := s.sgk.ActiveDDLFirstLocation(shardingReSync.targetSchema, shardingReSync.targetTable)
+			nextLocation, err2 := s.sgk.ActiveDDLFirstLocation(shardingReSync.targetSchema, shardingReSync.targetTable)
 			if err2 != nil {
 				return err2
 			}
 
-			err2 = s.streamerController.RedirectStreamer(s.tctx, nextPos)
+			err2 = s.streamerController.RedirectStreamer(s.tctx, nextLocation.Clone())
 			if err2 != nil {
 				return err2
 			}
 		}
 		shardingReSync = nil
-		lastLocation = savedGlobalLastLocation // restore global last pos
+		lastLocation = savedGlobalLastLocation.Clone() // restore global last pos
 		return nil
 	}
 
 	for {
 		s.currentLocationMu.Lock()
-		s.currentLocationMu.currentLocation = currentLocation
+		s.currentLocationMu.currentLocation = currentLocation.Clone()
 		s.currentLocationMu.Unlock()
 
 		// fetch from sharding resync channel if needed, and redirect global
@@ -1108,10 +1108,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if shardingReSync == nil && len(shardingReSyncCh) > 0 {
 			// some sharding groups need to re-syncing
 			shardingReSync = <-shardingReSyncCh
-			savedGlobalLastLocation = lastLocation // save global last location
-			lastLocation = shardingReSync.currLocation
+			savedGlobalLastLocation = lastLocation.Clone() // save global last location
+			lastLocation = shardingReSync.currLocation.Clone()
 
-			err = s.streamerController.RedirectStreamer(s.tctx, shardingReSync.currLocation)
+			err = s.streamerController.RedirectStreamer(s.tctx, shardingReSync.currLocation.Clone())
 			if err != nil {
 				return err
 			}
@@ -1126,7 +1126,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		// we only inject sqls  in global streaming to avoid DDL position confusion
 		if shardingReSync == nil {
-			e = s.tryInject(latestOp, currentLocation)
+			e = s.tryInject(latestOp, currentLocation.Clone())
 			latestOp = null
 		}
 		if e == nil {
@@ -1151,7 +1151,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			eventTimeoutCounter = 0
 			if s.needResync() {
 				s.tctx.L().Info("timeout when fetching binlog event, there must be some problems with replica connection, try to re-connect")
-				err = s.streamerController.ReopenWithRetry(tctx, lastLocation)
+				err = s.streamerController.ReopenWithRetry(tctx, lastLocation.Clone())
 				if err != nil {
 					return err
 				}
@@ -1160,7 +1160,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		} else if isDuplicateServerIDError(err) {
 			// if the server id is already used, need to use a new server id
 			tctx.L().Info("server id is already used by another slave, will change to a new server id and get event again")
-			err1 := s.streamerController.UpdateServerIDAndResetReplication(tctx, lastLocation)
+			err1 := s.streamerController.UpdateServerIDAndResetReplication(tctx, lastLocation.Clone())
 			if err1 != nil {
 				return err1
 			}
@@ -1171,7 +1171,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			s.tctx.L().Error("fail to fetch binlog", log.ShortError(err))
 
 			if s.streamerController.CanRetry() {
-				err = s.streamerController.ResetReplicationSyncer(s.tctx, lastLocation)
+				err = s.streamerController.ResetReplicationSyncer(s.tctx, lastLocation.Clone())
 				if err != nil {
 					return err
 				}
@@ -1181,7 +1181,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			// try to re-sync in gtid mode
 			if tryReSync && s.cfg.EnableGTID && isBinlogPurgedError(err) && s.cfg.AutoFixGTID {
 				time.Sleep(retryTimeout)
-				err = s.reSyncBinlog(*tctx, lastLocation)
+				err = s.reSyncBinlog(*tctx, lastLocation.Clone())
 				if err != nil {
 					return err
 				}
@@ -1242,10 +1242,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		case *replication.XIDEvent:
 			if shardingReSync != nil {
 				shardingReSync.currLocation.Position.Pos = e.Header.LogPos
-				// TODO：update gtid
+				shardingReSync.currLocation.GTIDSet.Set(ev.GSet)
 
 				// only need compare binlog position?
-				lastLocation = shardingReSync.currLocation
+				lastLocation = shardingReSync.currLocation.Clone()
 				if binlog.CompareLocation(shardingReSync.currLocation, shardingReSync.latestLocation) >= 0 {
 					s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "XID"), zap.Reflect("re-shard", shardingReSync))
 					err = closeShardingResync()
@@ -1494,7 +1494,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
 		s.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema))
 		*ec.lastLocation = *ec.currentLocation // before record skip location, update lastLocation
-		// TODO: update GTID
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
 	}
 	if !parseResult.isDDL {
@@ -1504,7 +1503,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currLocation.Position.Pos = ec.header.LogPos
-		// TODO: update GTID?
+		ec.shardingReSync.currLocation.GTIDSet.Set(ev.GSet)
 		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "query"), zap.String("statement", sql), zap.Reflect("re-shard", ec.shardingReSync))
 			err2 := ec.closeShardingResync()
@@ -2003,7 +2002,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				totalTps = total / totalSeconds
 
 				s.currentLocationMu.RLock()
-				currentLocation := s.currentLocationMu.currentLocation
+				currentLocation := s.currentLocationMu.currentLocation.Clone()
 				s.currentLocationMu.RUnlock()
 
 				remainingSize, err2 := s.fromDB.countBinaryLogsSize(currentLocation.Position)

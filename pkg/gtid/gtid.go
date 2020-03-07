@@ -136,6 +136,9 @@ func (g *MySQLGTIDSet) get(uuid string) (*mysql.UUIDSet, bool) {
 
 // Clone implements Set.Clone
 func (g *MySQLGTIDSet) Clone() Set {
+	if g.set == nil {
+		return &MySQLGTIDSet{}
+	}
 	return &MySQLGTIDSet{
 		set: g.set.Clone().(*mysql.MysqlGTIDSet),
 	}
@@ -290,6 +293,9 @@ func (m *MariadbGTIDSet) get(domainID uint32) (*mysql.MariadbGTID, bool) {
 
 // Clone implements Set.Clone
 func (m *MariadbGTIDSet) Clone() Set {
+	if m.set == nil {
+		return &MariadbGTIDSet{}
+	}
 	return &MariadbGTIDSet{
 		set: m.set.Clone().(*mysql.MariadbGTIDSet),
 	}
