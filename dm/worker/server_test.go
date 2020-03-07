@@ -174,12 +174,16 @@ func (t *testServer) TestQueryError(c *C) {
 	s := NewServer(cfg)
 	s.closed.Set(false)
 
-	w, err := NewWorker(cfg)
-	c.Assert(err, IsNil)
+	w := &Worker{
+		cfg:         cfg,
+		relayHolder: NewRelayHolder(cfg),
+		// initial relay holder, the cfg's password will be decrypted in NewRelayHolder
+		subTaskHolder: newSubTaskHolder(),
+	}
 	w.closed.Set(closedFalse)
 
 	subtaskCfg := config.SubTaskConfig{}
-	err = subtaskCfg.DecodeFile(subtaskSampleFile, true)
+	err := subtaskCfg.DecodeFile(subtaskSampleFile, true)
 	c.Assert(err, IsNil)
 
 	// subtask failed just after it is started
