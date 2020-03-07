@@ -123,7 +123,7 @@ func (b *binlogPoint) MySQLLocation() binlog.Location {
 func (b *binlogPoint) FlushedMySQLLocation() binlog.Location {
 	b.RLock()
 	defer b.RUnlock()
-	return b.flushedLocation
+	return b.flushedLocation.Clone()
 }
 
 // TableInfo returns the table schema associated at the current binlog position.
