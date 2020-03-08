@@ -620,15 +620,12 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 		if err != nil {
 			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
-		var gset gtid.Set
-		if len(binlogGTIDSet) == 0 {
-			gset = gtid.MinGTIDSet(cp.cfg.Flavor)
-		} else {
-			gset, err = gtid.ParserGTID(cp.cfg.Flavor, binlogGTIDSet)
-			if err != nil {
-				return err
-			}
+
+		gset, err := gtid.ParserGTID(cp.cfg.Flavor, binlogGTIDSet)
+		if err != nil {
+			return err
 		}
+
 		location := binlog.Location{
 			Position: mysql.Position{
 				Name: binlogName,

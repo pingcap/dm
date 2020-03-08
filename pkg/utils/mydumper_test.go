@@ -28,7 +28,7 @@ func (t *testUtilsSuite) TestParseMetaData(c *C) {
 
 	testCases := []struct {
 		source  string
-		pos     *mysql.Position
+		pos     mysql.Position
 		gsetStr string
 	}{
 		{
@@ -39,7 +39,7 @@ SHOW MASTER STATUS:
         GTID:97b5142f-e19c-11e8-808c-0242ac110005:1-13
 
 Finished dump at: 2018-12-28 07:20:51`,
-			&mysql.Position{
+			mysql.Position{
 				Name: "bin.000001",
 				Pos:  2479,
 			},
@@ -59,7 +59,7 @@ SHOW SLAVE STATUS:
         GTID:
 
 Finished dump at: 2018-12-27 19:51:22`,
-			&mysql.Position{
+			mysql.Position{
 				Name: "mysql-bin.000003",
 				Pos:  3295817,
 			},

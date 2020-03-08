@@ -88,19 +88,19 @@ func (t *testJobSuite) TestJob(c *C) {
 	}{
 		{
 			newJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", binlog.NewLocation(""), binlog.NewLocation(""), ""),
-			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: 1, ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
+			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: 1, ddls: [], last_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newDDLJob(ddlInfo, []string{"create database test"}, binlog.NewLocation(""), binlog.NewLocation(""), ""),
-			"tp: ddl, sql: , args: [], key: , ddls: [create database test], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
+			"tp: ddl, sql: , args: [], key: , ddls: [create database test], last_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newXIDJob(binlog.NewLocation(""), binlog.NewLocation(""), ""),
-			"tp: xid, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
+			"tp: xid, sql: , args: [], key: , ddls: [], last_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newFlushJob(),
-			"tp: flush, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
+			"tp: flush, sql: , args: [], key: , ddls: [], last_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newSkipJob(binlog.NewLocation("")),
-			"tp: skip, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
+			"tp: skip, sql: , args: [], key: , ddls: [], last_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		},
 	}
 

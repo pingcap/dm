@@ -68,6 +68,21 @@ func ParserGTID(flavor, gtidStr string) (Set, error) {
 	return m, err
 }
 
+// MinGTIDSet returns the min GTID set
+func MinGTIDSet(flavor string) Set {
+	// use mysql as default
+	if flavor != mysql.MariaDBFlavor && flavor != mysql.MySQLFlavor {
+		flavor = mysql.MySQLFlavor
+	}
+
+	gset, err := ParserGTID(flavor, "")
+	if err != nil {
+		// this should not happen
+		panic(err)
+	}
+	return gset
+}
+
 /************************ mysql gtid set ***************************/
 
 // MySQLGTIDSet wraps mysql.MysqlGTIDSet to implement gtidSet interface
@@ -137,7 +152,7 @@ func (g *MySQLGTIDSet) get(uuid string) (*mysql.UUIDSet, bool) {
 // Clone implements Set.Clone
 func (g *MySQLGTIDSet) Clone() Set {
 	if g.set == nil {
-		return &MySQLGTIDSet{}
+		return MinGTIDSet(mysql.MySQLFlavor)
 	}
 
 	return &MySQLGTIDSet{
@@ -147,6 +162,9 @@ func (g *MySQLGTIDSet) Clone() Set {
 
 // Origin implements Set.Origin
 func (g *MySQLGTIDSet) Origin() mysql.GTIDSet {
+	if g.set == nil {
+		return MinGTIDSet(mysql.MySQLFlavor)
+	}
 	return g.set.Clone().(*mysql.MysqlGTIDSet)
 }
 
@@ -295,7 +313,7 @@ func (m *MariadbGTIDSet) get(domainID uint32) (*mysql.MariadbGTID, bool) {
 // Clone implements Set.Clone
 func (m *MariadbGTIDSet) Clone() Set {
 	if m.set == nil {
-		return &MariadbGTIDSet{}
+		return MinGTIDSet(mysql.MariaDBFlavor)
 	}
 	return &MariadbGTIDSet{
 		set: m.set.Clone().(*mysql.MariadbGTIDSet),
@@ -304,6 +322,9 @@ func (m *MariadbGTIDSet) Clone() Set {
 
 // Origin implements Set.Origin
 func (m *MariadbGTIDSet) Origin() mysql.GTIDSet {
+	if m.set == nil {
+		return MinGTIDSet(mysql.MariaDBFlavor)
+	}
 	return m.set.Clone().(*mysql.MariadbGTIDSet)
 }
 
@@ -377,13 +398,4 @@ func (m *MariadbGTIDSet) String() string {
 		return ""
 	}
 	return m.set.String()
-}
-
-// MinGTIDSet returns the min GTID set
-func MinGTIDSet(flavor string) Set {
-	if flavor == mysql.MariaDBFlavor {
-		return &MariadbGTIDSet{}
-	}
-
-	return &MySQLGTIDSet{}
 }

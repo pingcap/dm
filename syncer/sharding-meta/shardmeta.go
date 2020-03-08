@@ -251,6 +251,7 @@ func (meta *ShardingMeta) ActiveDDLFirstLocation() (binlog.Location, error) {
 	if meta.activeIdx >= len(meta.global.Items) {
 		return binlog.Location{}, terror.ErrSyncUnitDDLActiveIndexLarger.Generate(meta.activeIdx, meta.global.Items)
 	}
+
 	return meta.global.Items[meta.activeIdx].FirstLocation.Clone(), nil
 }
 
@@ -259,7 +260,9 @@ func (meta *ShardingMeta) FlushData(sourceID, tableID string) ([]string, [][]int
 	// set FirstPosition and FirstGTIDSet for json marshal
 	for _, item := range meta.global.Items {
 		item.FirstPosition = item.FirstLocation.Position
-		item.FirstGTIDSet = item.FirstLocation.GTIDSet.String()
+		if item.FirstLocation.GTIDSet != nil {
+			item.FirstGTIDSet = item.FirstLocation.GTIDSet.String()
+		}
 	}
 
 	if len(meta.global.Items) == 0 {

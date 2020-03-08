@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -73,6 +74,21 @@ func (s *testGTIDSuite) TestGTID(c *C) {
 		c.Assert(selfGTIDSet.Origin().Equal(excepted.Origin()), IsTrue)
 		c.Assert(newGTIDSet.Origin().Equal(excepted.Origin()), IsTrue)
 	}
+}
+
+func (s *testGTIDSuite) TestMinGTIDSet(c *C) {
+	gset := MinGTIDSet(mysql.MySQLFlavor)
+	_, ok := gset.(*MySQLGTIDSet)
+	c.Assert(ok, IsTrue)
+
+	gset = MinGTIDSet(mysql.MariaDBFlavor)
+	_, ok = gset.(*MariadbGTIDSet)
+	c.Assert(ok, IsTrue)
+
+	// will treat as mysql gtid set
+	gset = MinGTIDSet("wrong flavor")
+	_, ok = gset.(*MySQLGTIDSet)
+	c.Assert(ok, IsTrue)
 }
 
 func (s *testGTIDSuite) TestMySQLGTIDEqual(c *C) {

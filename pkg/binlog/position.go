@@ -179,16 +179,9 @@ type Location struct {
 
 // NewLocation returns a new Location
 func NewLocation(flavor string) Location {
-	if flavor == gmysql.MariaDBFlavor {
-		return Location{
-			Position: MinPosition,
-			GTIDSet:  &gtid.MariadbGTIDSet{},
-		}
-	}
-
 	return Location{
 		Position: MinPosition,
-		GTIDSet:  &gtid.MySQLGTIDSet{},
+		GTIDSet:  gtid.MinGTIDSet(flavor),
 	}
 }
 
@@ -198,7 +191,11 @@ func (l Location) String() string {
 
 // Clone clones a same Location
 func (l Location) Clone() Location {
-	newGTIDSet := l.GTIDSet.Clone()
+	var newGTIDSet gtid.Set
+	if l.GTIDSet != nil {
+		newGTIDSet = l.GTIDSet.Clone()
+	}
+
 	return Location{
 		Position: l.Position,
 		GTIDSet:  newGTIDSet,
