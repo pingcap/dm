@@ -242,12 +242,13 @@ type RemoteCheckPoint struct {
 
 // NewRemoteCheckPoint creates a new RemoteCheckPoint
 func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) CheckPoint {
+	location := binlog.NewLocation(cfg.Flavor)
 	cp := &RemoteCheckPoint{
 		cfg:         cfg,
 		tableName:   dbutil.TableName(cfg.MetaSchema, cfg.Name+"_syncer_checkpoint"),
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
-		globalPoint: newBinlogPoint(binlog.NewLocation(cfg.Flavor), binlog.NewLocation(cfg.Flavor), nil, nil),
+		globalPoint: newBinlogPoint(location, location, nil, nil),
 		logCtx:      tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
 	}
 
@@ -293,8 +294,8 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 		return err
 	}
 
-	cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil)
-
+	location := binlog.NewLocation(cp.cfg.Flavor)
+	cp.globalPoint = newBinlogPoint(location, location, nil, nil)
 	cp.points = make(map[string]map[string]*binlogPoint)
 
 	return nil
@@ -691,9 +692,6 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 		gset, err := gtid.ParserGTID(cp.cfg.Flavor, cp.cfg.Meta.BinLogGTID)
 		if err != nil {
 			return err
-		}
-		if gset == nil {
-			gset = gtid.MinGTIDSet(cp.cfg.Flavor)
 		}
 
 		location = &binlog.Location{
