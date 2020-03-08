@@ -1520,6 +1520,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	s.tctx.L().Info("", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation))
+	lastGTIDSet := ec.lastLocation.GTIDSet
 	*ec.lastLocation = ec.currentLocation.Clone() // update lastLocation, because we have checked `isDDL`
 	*ec.latestOp = ddl
 
@@ -1665,7 +1666,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 		for _, tbl := range targetTbls {
 			// save checkpoint of each table
-			s.saveTablePoint(tbl.Schema, tbl.Name, *ec.currentLocation)
+			s.saveTablePoint(tbl.Schema, tbl.Name, ec.currentLocation.Clone())
 		}
 
 		for _, table := range onlineDDLTableNames {
@@ -1695,7 +1696,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			Name: ec.currentLocation.Position.Name,
 			Pos:  ec.currentLocation.Position.Pos - ec.header.EventSize,
 		},
-		GTIDSet: ec.lastLocation.GTIDSet.Clone(),
+		GTIDSet: lastGTIDSet,
 	}
 
 	source, _ = GenTableID(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name)
