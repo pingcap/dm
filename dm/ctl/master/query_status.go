@@ -42,10 +42,11 @@ type taskInfo struct {
 // NewQueryStatusCmd creates a QueryStatus command
 func NewQueryStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "query-status [-s source ...] [task-name]",
+		Use:   "query-status [-s source ...] [task-name] [--more]",
 		Short: "query task status",
 		Run:   queryStatusFunc,
 	}
+	cmd.Flags().BoolP("more", "", false, "whether print the detailed task information directly")
 	return cmd
 }
 
@@ -76,7 +77,13 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	if resp.Result && taskName == "" && len(sources) == 0 {
+	more, err := cmd.Flags().GetBool("more")
+	if err != nil {
+		common.PrintLines("%s", errors.ErrorStack(err))
+		return
+	}
+
+	if resp.Result && taskName == "" && len(sources) == 0 && !more {
 		result := wrapTaskResult(resp)
 		common.PrettyPrintInterface(result)
 	} else {
