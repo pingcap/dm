@@ -163,7 +163,7 @@ func (g *MySQLGTIDSet) Clone() Set {
 // Origin implements Set.Origin
 func (g *MySQLGTIDSet) Origin() mysql.GTIDSet {
 	if g.set == nil {
-		return MinGTIDSet(mysql.MySQLFlavor)
+		return &mysql.MysqlGTIDSet{}
 	}
 	return g.set.Clone().(*mysql.MysqlGTIDSet)
 }
@@ -323,7 +323,7 @@ func (m *MariadbGTIDSet) Clone() Set {
 // Origin implements Set.Origin
 func (m *MariadbGTIDSet) Origin() mysql.GTIDSet {
 	if m.set == nil {
-		return MinGTIDSet(mysql.MariaDBFlavor)
+		return &mysql.MariadbGTIDSet{}
 	}
 	return m.set.Clone().(*mysql.MariadbGTIDSet)
 }
