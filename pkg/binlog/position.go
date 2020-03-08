@@ -186,34 +186,42 @@ func NewLocation(flavor string) Location {
 }
 
 func (l Location) String() string {
+	return fmt.Sprintf("position: %v, gtid-set: %s", l.Position, l.GTIDSetStr())
+}
+
+// GTIDSetStr returns gtid set's string
+func (l Location) GTIDSetStr() string {
 	gsetStr := ""
 	if l.GTIDSet != nil {
 		gsetStr = l.GTIDSet.String()
 	}
-	return fmt.Sprintf("position: %v, gtid-set: %s", l.Position, gsetStr)
+
+	return gsetStr
 }
 
 // Clone clones a same Location
 func (l Location) Clone() Location {
+	return l.CloneWithFlavor("")
+}
+
+// CloneWithFlavor clones the location, and if the GTIDSet is nil, will create a GTIDSet with specified flavor.
+func (l Location) CloneWithFlavor(flavor string) Location {
 	var newGTIDSet gtid.Set
+	if len(flavor) != 0 {
+		newGTIDSet = gtid.MinGTIDSet(flavor)
+	}
+
 	if l.GTIDSet != nil {
 		newGTIDSet = l.GTIDSet.Clone()
 	}
 
 	return Location{
-		Position: l.Position,
-		GTIDSet:  newGTIDSet,
+		Position: gmysql.Position{
+			Name: l.Position.Name,
+			Pos:  l.Position.Pos,
+		},
+		GTIDSet: newGTIDSet,
 	}
-}
-
-// CloneGTIDSet clones location's gtid set
-func (l Location) CloneGTIDSet() gtid.Set {
-	if l.GTIDSet != nil {
-		return l.GTIDSet.Clone()
-	}
-
-	// return a min mysql gtid set to avoid nil pointer panic
-	return gtid.MinGTIDSet("")
 }
 
 // CompareLocation returns:

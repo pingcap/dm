@@ -79,8 +79,8 @@ func (b *binlogPoint) save(location binlog.Location, ti *model.TableInfo) error 
 	defer b.Unlock()
 
 	if binlog.CompareLocation(location, b.location) < 0 {
-		// support to save equal pos, but not older pos
-		return terror.ErrCheckpointSaveInvalidPos.Generate(location, b.location.Position)
+		// support to save equal location, but not older location
+		return terror.ErrCheckpointSaveInvalidPos.Generate(location, b.location)
 	}
 
 	b.location = location
@@ -740,11 +740,8 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location binl
 	if len(tiBytes) == 0 {
 		tiBytes = []byte("null")
 	}
-	gsetStr := ""
-	if location.GTIDSet != nil {
-		gsetStr = location.GTIDSet.String()
-	}
-	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, gsetStr, tiBytes, isGlobal}
+
+	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSetStr(), tiBytes, isGlobal}
 	return sql2, args
 }
 

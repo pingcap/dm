@@ -80,11 +80,9 @@ import (
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/terror"
 	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
 
-	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 )
 
@@ -316,34 +314,15 @@ func (sg *ShardingGroup) FirstLocationUnresolved() *binlog.Location {
 	sg.RLock()
 	defer sg.RUnlock()
 	if sg.remain < len(sg.sources) && sg.firstLocation != nil {
-		// create a new pos to return
-		gset := gtid.MinGTIDSet(sg.flavor)
-		if sg.firstLocation.GTIDSet != nil {
-			gset = sg.firstLocation.GTIDSet.Clone()
-		}
-
-		return &binlog.Location{
-			Position: mysql.Position{
-				Name: sg.firstLocation.Position.Name,
-				Pos:  sg.firstLocation.Position.Pos,
-			},
-			GTIDSet: gset,
-		}
+		// create a new location to return
+		location := sg.firstLocation.CloneWithFlavor(sg.flavor)
+		return &location
 	}
 	item := sg.meta.GetGlobalActiveDDL()
 	if item != nil {
 		// make a new copy
-		gset := gtid.MinGTIDSet(sg.flavor)
-		if item.FirstLocation.GTIDSet != nil {
-			gset = item.FirstLocation.GTIDSet.Clone()
-		}
-		return &binlog.Location{
-			Position: mysql.Position{
-				Name: item.FirstLocation.Position.Name,
-				Pos:  item.FirstLocation.Position.Pos,
-			},
-			GTIDSet: gset,
-		}
+		location := item.FirstLocation.CloneWithFlavor(sg.flavor)
+		return &location
 	}
 	return nil
 }
@@ -353,18 +332,9 @@ func (sg *ShardingGroup) FirstEndPosUnresolved() *binlog.Location {
 	sg.RLock()
 	defer sg.RUnlock()
 	if sg.remain < len(sg.sources) && sg.firstEndLocation != nil {
-		// create a new pos to return
-		gset := gtid.MinGTIDSet(sg.flavor)
-		if sg.firstEndLocation.GTIDSet != nil {
-			gset = sg.firstEndLocation.GTIDSet.Clone()
-		}
-		return &binlog.Location{
-			Position: mysql.Position{
-				Name: sg.firstEndLocation.Position.Name,
-				Pos:  sg.firstEndLocation.Position.Pos,
-			},
-			GTIDSet: gset,
-		}
+		// create a new location to return
+		location := sg.firstEndLocation.CloneWithFlavor(sg.flavor)
+		return &location
 	}
 	return nil
 }
