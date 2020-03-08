@@ -179,10 +179,6 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 					zap.String("argument", utils.TruncateInterface(arg, -1)),
 					log.ShortError(rerr))
 			}
-			fmt.Println(query)
-			fmt.Println(arg)
-			fmt.Println("_____")
-			fmt.Println(len(arg))
 			// we should return the exec err, instead of the rollback rerr.
 			return i, terror.ErrDBExecuteFailed.Delegate(err, utils.TruncateString(query, -1))
 		}
