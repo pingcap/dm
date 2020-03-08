@@ -71,10 +71,7 @@ func (r *remoteBinlogReader) generateStreamer(location binlog.Location) (streame
 
 	if r.EnableGTID {
 		streamer, err := r.reader.StartSyncGTID(location.GTIDSet.Origin())
-		if err != nil {
-			return nil, err
-		}
-		return streamer, nil
+		return streamer, terror.ErrSyncerUnitRemoteSteamerStartSync.Delegate(err)
 	}
 
 	// position's name may contain uuid, so need remove it

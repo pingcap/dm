@@ -97,10 +97,10 @@ func (t *testJobSuite) TestJob(c *C) {
 			"tp: xid, sql: , args: [], key: , ddls: [], last_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newFlushJob(),
-			"tp: flush, sql: , args: [], key: , ddls: [], last_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
+			"tp: flush, sql: , args: [], key: , ddls: [], last_location: position: (, 0), gtid-set: , current_location: position: (, 0), gtid-set: ",
 		}, {
 			newSkipJob(binlog.NewLocation("")),
-			"tp: skip, sql: , args: [], key: , ddls: [], last_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
+			"tp: skip, sql: , args: [], key: , ddls: [], last_location: position: (, 4), gtid-set: , current_location: position: (, 0), gtid-set: ",
 		},
 	}
 

@@ -80,6 +80,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/terror"
 	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
 
@@ -105,10 +106,12 @@ type ShardingGroup struct {
 	firstLocation    *binlog.Location // first DDL's binlog pos and gtid, used to restrain the global checkpoint when un-resolved
 	firstEndLocation *binlog.Location // first DDL's binlog End_log_pos and gtid, used to re-direct binlog streamer after synced
 	ddls             []string         // DDL which current in syncing
+
+	flavor string
 }
 
 // NewShardingGroup creates a new ShardingGroup
-func NewShardingGroup(sourceID, shardMetaSchema, shardMetaTable string, sources []string, meta *shardmeta.ShardingMeta, isSchemaOnly bool) *ShardingGroup {
+func NewShardingGroup(sourceID, shardMetaSchema, shardMetaTable string, sources []string, meta *shardmeta.ShardingMeta, isSchemaOnly bool, flavor string) *ShardingGroup {
 	sg := &ShardingGroup{
 		remain:           len(sources),
 		sources:          make(map[string]bool, len(sources)),
@@ -116,6 +119,7 @@ func NewShardingGroup(sourceID, shardMetaSchema, shardMetaTable string, sources 
 		sourceID:         sourceID,
 		firstLocation:    nil,
 		firstEndLocation: nil,
+		flavor:           flavor,
 	}
 	if meta != nil {
 		sg.meta = meta
@@ -313,23 +317,32 @@ func (sg *ShardingGroup) FirstLocationUnresolved() *binlog.Location {
 	defer sg.RUnlock()
 	if sg.remain < len(sg.sources) && sg.firstLocation != nil {
 		// create a new pos to return
+		gset := gtid.MinGTIDSet(sg.flavor)
+		if sg.firstLocation.GTIDSet != nil {
+			gset = sg.firstLocation.GTIDSet.Clone()
+		}
+
 		return &binlog.Location{
 			Position: mysql.Position{
 				Name: sg.firstLocation.Position.Name,
 				Pos:  sg.firstLocation.Position.Pos,
 			},
-			GTIDSet: sg.firstLocation.GTIDSet.Clone(),
+			GTIDSet: gset,
 		}
 	}
 	item := sg.meta.GetGlobalActiveDDL()
 	if item != nil {
 		// make a new copy
+		gset := gtid.MinGTIDSet(sg.flavor)
+		if item.FirstLocation.GTIDSet != nil {
+			gset = item.FirstLocation.GTIDSet.Clone()
+		}
 		return &binlog.Location{
 			Position: mysql.Position{
 				Name: item.FirstLocation.Position.Name,
 				Pos:  item.FirstLocation.Position.Pos,
 			},
-			GTIDSet: item.FirstLocation.GTIDSet.Clone(),
+			GTIDSet: gset,
 		}
 	}
 	return nil
@@ -341,12 +354,16 @@ func (sg *ShardingGroup) FirstEndPosUnresolved() *binlog.Location {
 	defer sg.RUnlock()
 	if sg.remain < len(sg.sources) && sg.firstEndLocation != nil {
 		// create a new pos to return
+		gset := gtid.MinGTIDSet(sg.flavor)
+		if sg.firstEndLocation.GTIDSet != nil {
+			gset = sg.firstEndLocation.GTIDSet.Clone()
+		}
 		return &binlog.Location{
 			Position: mysql.Position{
 				Name: sg.firstEndLocation.Position.Name,
 				Pos:  sg.firstEndLocation.Position.Pos,
 			},
-			GTIDSet: sg.firstEndLocation.GTIDSet.Clone(),
+			GTIDSet: gset,
 		}
 	}
 	return nil
@@ -442,7 +459,7 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 	defer k.Unlock()
 
 	if schemaGroup, ok := k.groups[schemaID]; !ok {
-		k.groups[schemaID] = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, true)
+		k.groups[schemaID] = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, true, k.cfg.Flavor)
 	} else {
 		_, _, _, err = schemaGroup.Merge(sourceIDs)
 		if err != nil {
@@ -452,7 +469,7 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 
 	var ok bool
 	if group, ok = k.groups[targetTableID]; !ok {
-		group = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, false)
+		group = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, false, k.cfg.Flavor)
 		k.groups[targetTableID] = group
 	} else if merge {
 		needShardingHandle, synced, remain, err = k.groups[targetTableID].Merge(sourceIDs)

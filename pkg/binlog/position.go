@@ -186,7 +186,11 @@ func NewLocation(flavor string) Location {
 }
 
 func (l Location) String() string {
-	return fmt.Sprintf("position: %v, gtid-set: %s", l.Position, l.GTIDSet)
+	gsetStr := ""
+	if l.GTIDSet != nil {
+		gsetStr = l.GTIDSet.String()
+	}
+	return fmt.Sprintf("position: %v, gtid-set: %s", l.Position, gsetStr)
 }
 
 // Clone clones a same Location
@@ -200,6 +204,16 @@ func (l Location) Clone() Location {
 		Position: l.Position,
 		GTIDSet:  newGTIDSet,
 	}
+}
+
+// CloneGTIDSet clones location's gtid set
+func (l Location) CloneGTIDSet() gtid.Set {
+	if l.GTIDSet != nil {
+		return l.GTIDSet.Clone()
+	}
+
+	// return a min mysql gtid set to avoid nil pointer panic
+	return gtid.MinGTIDSet("")
 }
 
 // CompareLocation returns:

@@ -740,7 +740,11 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location binl
 	if len(tiBytes) == 0 {
 		tiBytes = []byte("null")
 	}
-	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSet.String(), tiBytes, isGlobal}
+	gsetStr := ""
+	if location.GTIDSet != nil {
+		gsetStr = location.GTIDSet.String()
+	}
+	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, gsetStr, tiBytes, isGlobal}
 	return sql2, args
 }
 

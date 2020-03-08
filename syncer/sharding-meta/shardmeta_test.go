@@ -270,5 +270,12 @@ func (t *testShardMetaSuite) TestFlushLoadMeta(c *check.C) {
 		c.Assert(arg, check.HasLen, 8)
 		loadedMeta.RestoreFromData(arg[2].(string), arg[3].(int), arg[4].(bool), []byte(arg[5].(string)), mysql.MySQLFlavor)
 	}
-	c.Assert(loadedMeta, check.DeepEquals, meta)
+	c.Assert(loadedMeta.activeIdx, check.Equals, meta.activeIdx)
+	c.Assert(loadedMeta.global.String(), check.Equals, meta.global.String())
+	c.Assert(loadedMeta.schema, check.Equals, meta.schema)
+	c.Assert(loadedMeta.table, check.Equals, meta.table)
+	c.Assert(len(loadedMeta.sources), check.Equals, len(meta.sources))
+	for table, source := range loadedMeta.sources {
+		c.Assert(source.String(), check.Equals, meta.sources[table].String())
+	}
 }

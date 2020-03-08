@@ -29,6 +29,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap/zapcore"
@@ -124,15 +125,15 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	tctx := tcontext.Background()
 
 	// global checkpoint init to min
-	c.Assert(cp.GlobalPoint(), Equals, binlog.NewLocation(""))
-	c.Assert(cp.FlushedGlobalPoint(), Equals, binlog.NewLocation(""))
+	c.Assert(cp.GlobalPoint().Position, Equals, binlog.MinPosition)
+	c.Assert(cp.FlushedGlobalPoint().Position, Equals, binlog.MinPosition)
 
 	// try load, but should load nothing
 	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
 	err := cp.Load(tctx, s.tracker)
 	c.Assert(err, IsNil)
-	c.Assert(cp.GlobalPoint(), Equals, binlog.NewLocation(""))
-	c.Assert(cp.FlushedGlobalPoint(), Equals, binlog.NewLocation(""))
+	c.Assert(cp.GlobalPoint().Position, Equals, binlog.MinPosition)
+	c.Assert(cp.FlushedGlobalPoint().Position, Equals, binlog.MinPosition)
 
 	oldMode := s.cfg.Mode
 	oldDir := s.cfg.Dir
@@ -167,6 +168,7 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	s.mock.ExpectExec("(162)?"+flushCheckPointSQL).WithArgs(cpid, "", "", pos1.Name, pos1.Pos, []byte("null"), true).WillReturnResult(sqlmock.NewResult(0, 1))
 	s.mock.ExpectCommit()
 	err = cp.FlushPointsExcept(tctx, nil, nil, nil)
+	c.Log(errors.ErrorStack(err))
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint().Position, Equals, pos1)
 	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos1)
