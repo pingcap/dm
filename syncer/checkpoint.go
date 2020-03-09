@@ -634,7 +634,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 		}
 		if isGlobal {
 			if binlog.CompareLocation(location, binlog.NewLocation(cp.cfg.Flavor)) > 0 {
-				cp.globalPoint = newBinlogPoint(location, location, nil, nil)
+				cp.globalPoint = newBinlogPoint(location.Clone(), location.Clone(), nil, nil)
 				cp.logCtx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
 			}
 			continue // skip global checkpoint
@@ -659,7 +659,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			mSchema = make(map[string]*binlogPoint)
 			cp.points[cpSchema] = mSchema
 		}
-		mSchema[cpTable] = newBinlogPoint(location, location, &ti, &ti)
+		mSchema[cpTable] = newBinlogPoint(location.Clone(), location.Clone(), &ti, &ti)
 	}
 
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
@@ -683,8 +683,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 		// load meta from task config
 		if cp.cfg.Meta == nil {
 			cp.logCtx.L().Warn("don't set meta in increment task-mode")
-			location1 := binlog.NewLocation(cp.cfg.Flavor)
-			cp.globalPoint = newBinlogPoint(location1, location1, nil, nil)
+			cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil)
 			return nil
 		}
 		gset, err := gtid.ParserGTID(cp.cfg.Flavor, cp.cfg.Meta.BinLogGTID)
@@ -706,7 +705,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 
 	// if meta loaded, we will start syncing from meta's pos
 	if location != nil {
-		cp.globalPoint = newBinlogPoint(*location, *location, nil, nil)
+		cp.globalPoint = newBinlogPoint(location.Clone(), location.Clone(), nil, nil)
 		cp.logCtx.L().Info("loaded checkpoints from meta", log.WrapStringerField("global checkpoint", cp.globalPoint))
 	}
 
