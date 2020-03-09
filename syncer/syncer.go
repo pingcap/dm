@@ -1087,7 +1087,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return err2
 			}
 
-			currentLocation = shardingReSync.currLocation.Clone()
+			currentLocation = nextLocation.Clone()
 			err2 = s.streamerController.RedirectStreamer(s.tctx, nextLocation.Clone())
 			if err2 != nil {
 				return err2
