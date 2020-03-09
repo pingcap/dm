@@ -33,10 +33,9 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 		subtaskStage2 = NewSubTaskStage(pb.Stage_Running, source, task2)
 		bound         = NewSourceBound(source, worker)
 
-		emptyStage     Stage
-		sourceCfg      config.SourceConfig
-		emptySourceCfg config.SourceConfig
-		subtaskCfg1    config.SubTaskConfig
+		emptyStage  Stage
+		sourceCfg   config.SourceConfig
+		subtaskCfg1 config.SubTaskConfig
 	)
 
 	c.Assert(sourceCfg.LoadFromFile(sourceSampleFile), IsNil)
@@ -62,15 +61,18 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	st1, rev3, err := GetRelayStage(etcdTestCli, source)
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
+	relayStage.Revision = rev1
 	c.Assert(st1, DeepEquals, relayStage)
 	sbm1, rev3, err := GetSourceBound(etcdTestCli, worker)
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
 	c.Assert(sbm1, HasLen, 1)
+	bound.Revision = rev1
 	c.Assert(sbm1[worker], DeepEquals, bound)
-	soCfg1, rev3, err := GetSourceCfg(etcdTestCli, source, 0)
+	scm1, rev3, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
+	soCfg1 := scm1[source]
 	c.Assert(soCfg1, DeepEquals, sourceCfg)
 
 	// delete source config, relay stage and source bound.
@@ -87,10 +89,10 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev5, Equals, rev4)
 	c.Assert(sbm2, HasLen, 0)
-	soCfg2, rev5, err := GetSourceCfg(etcdTestCli, source, 0)
+	scm2, rev5, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev5, Equals, rev4)
-	c.Assert(soCfg2, DeepEquals, emptySourceCfg)
+	c.Assert(scm2, HasLen, 0)
 
 	// put subtask config and subtask stage.
 	rev6, err := PutSubTaskCfgStage(etcdTestCli, []config.SubTaskConfig{subtaskCfg1, subtaskCfg2}, []Stage{subtaskStage1, subtaskStage2})
@@ -108,6 +110,8 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev7, Equals, rev6)
 	c.Assert(stsm, HasLen, 2)
+	subtaskStage1.Revision = rev6
+	subtaskStage2.Revision = rev6
 	c.Assert(stsm[task1], DeepEquals, subtaskStage1)
 	c.Assert(stsm[task2], DeepEquals, subtaskStage2)
 

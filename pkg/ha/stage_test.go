@@ -19,6 +19,7 @@ import (
 
 	. "github.com/pingcap/check"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 )
 
@@ -87,7 +88,6 @@ func (t *testForEtcd) TestRelayStageEtcd(c *C) {
 	st2, rev3, err := GetRelayStage(etcdTestCli, source1)
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
-	stage1.Revision = 0
 	c.Assert(st2, DeepEquals, stage1)
 
 	// get two stages.
@@ -95,6 +95,7 @@ func (t *testForEtcd) TestRelayStageEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
 	c.Assert(stm, HasLen, 2)
+	stage2.Revision = rev2
 	c.Assert(stm[source1], DeepEquals, stage1)
 	c.Assert(stm[source2], DeepEquals, stage2)
 
@@ -163,8 +164,6 @@ func (t *testForEtcd) TestSubTaskStageEtcd(c *C) {
 	c.Assert(<-stageCh, DeepEquals, stage2)
 	c.Assert(len(errCh), Equals, 0)
 
-	stage1.Revision = 0
-	stage2.Revision = 0
 	// get stages back without specified task.
 	stm, rev3, err := GetSubTaskStage(etcdTestCli, source, "")
 	c.Assert(err, IsNil)
@@ -213,4 +212,34 @@ func (t *testForEtcd) TestSubTaskStageEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev5, Equals, rev4)
 	c.Assert(stm, HasLen, 0)
+}
+
+func (t *testForEtcd) TestGetSubTaskStageConfigEtcd(c *C) {
+	defer clearTestInfoOperation(c)
+
+	cfg := config.SubTaskConfig{}
+	c.Assert(cfg.DecodeFile(subTaskSampleFile, true), IsNil)
+	source := cfg.SourceID
+	task := cfg.Name
+	stage := NewSubTaskStage(pb.Stage_Running, source, task)
+
+	// no subtask stage and config
+	stm, scm, rev1, err := GetSubTaskStageConfig(etcdTestCli, source)
+	c.Assert(err, IsNil)
+	c.Assert(rev1, Greater, int64(0))
+	c.Assert(stm, HasLen, 0)
+	c.Assert(scm, HasLen, 0)
+
+	// put subtask config and stage at the same time
+	rev2, err := PutSubTaskCfgStage(etcdTestCli, []config.SubTaskConfig{cfg}, []Stage{stage})
+	c.Assert(err, IsNil)
+	c.Assert(rev2, Greater, rev1)
+
+	// get subtask config and stage at the same time
+	stm, scm, rev3, err := GetSubTaskStageConfig(etcdTestCli, source)
+	c.Assert(rev3, Equals, rev2)
+	c.Assert(stm, HasLen, 1)
+	stage.Revision = rev2
+	c.Assert(stm[task], DeepEquals, stage)
+	c.Assert(scm[task], DeepEquals, cfg)
 }

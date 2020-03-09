@@ -312,11 +312,7 @@ func (w *Worker) QueryError(name string) []*pb.SubTaskError {
 }
 
 func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {
-	subTaskStages, revSubTask, err := ha.GetSubTaskStage(etcdCli, w.cfg.SourceID, "")
-	if err != nil {
-		return 0, err
-	}
-	subTaskCfgm, _, err := ha.GetSubTaskCfg(etcdCli, w.cfg.SourceID, "", revSubTask)
+	subTaskStages, subTaskCfgm, revSubTask, err := ha.GetSubTaskStageConfig(etcdCli, w.cfg.SourceID)
 	if err != nil {
 		return 0, err
 	}
@@ -402,6 +398,9 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 			if err != nil {
 				// TODO: add better metrics
 				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage), zap.Error(err))
+				if etcdutil.IsRetryableError(err) {
+					return err
+				}
 			}
 		case err := <-errCh:
 			// TODO: deal with err
@@ -483,9 +482,7 @@ func (w *Worker) observeRelayStage(ctx context.Context, etcdCli *clientv3.Client
 						break
 					}
 					rev = rev1
-					var emptyStage ha.Stage
-					// emptyStage means this stage has been deleted and relay has been stopped
-					if emptyStage == stage {
+					if stage.IsEmpty() {
 						stage.IsDeleted = true
 					}
 					err1 = w.operateRelayStage(ctx, stage)
