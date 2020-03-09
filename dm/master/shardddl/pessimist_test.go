@@ -128,7 +128,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	// wait exec operation for the owner become available.
 	opCh := make(chan pessimism.Operation, 10)
 	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task1, source1, rev1, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task1, source1, rev1+1, opCh)
 	cancel2()
 	close(opCh)
 	c.Assert(len(opCh), Equals, 1)
@@ -149,7 +149,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	// wait skip operation for the non-owner become available.
 	opCh = make(chan pessimism.Operation, 10)
 	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task1, source2, rev2, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task1, source2, rev2+1, opCh)
 	cancel2()
 	close(opCh)
 	c.Assert(len(opCh), Equals, 1)
@@ -207,10 +207,9 @@ func (t *testPessimist) TestPessimist(c *C) {
 	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
 	// both source1 and source2 have shard DDL info exist, and neither of them have operation exist.
 	// we must ensure source1 always become the owner of the lock.
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task2, source1, rev3, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task2, source1, rev3+1, opCh)
 	cancel2()
 	close(opCh)
-	c.Logf("watch operation PUT with revision %d", rev3)
 	c.Assert(len(opCh), Equals, 1)
 	op21 := <-opCh
 	c.Assert(op21.Exec, IsTrue)
@@ -355,7 +354,7 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 		defer wg.Done()
 		opCh := make(chan pessimism.Operation, 10)
 		ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
-		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source1, rev1, opCh)
+		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source1, rev1+1, opCh)
 		cancel2()
 		close(opCh)
 		c.Assert(len(opCh), Equals, 1)
@@ -376,7 +375,7 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 	// 8. wait exec operation for the owner become available again (with new revision).
 	opCh := make(chan pessimism.Operation, 10)
 	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source1, rev1, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source1, rev1+1, opCh)
 	cancel2()
 	close(opCh)
 	c.Assert(len(opCh), Equals, 1)
@@ -390,7 +389,7 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 		defer wg.Done()
 		opCh = make(chan pessimism.Operation, 10)
 		ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source2, rev2, opCh)
+		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source2, rev2+1, opCh)
 		cancel2()
 		close(opCh)
 		c.Assert(len(opCh), Equals, 1)
@@ -417,7 +416,7 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 	// 12. wait skip operation for the non-owner become available again (with new revision, without existing done).
 	opCh = make(chan pessimism.Operation, 10)
 	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source2, rev2, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source2, rev2+1, opCh)
 	cancel2()
 	close(opCh)
 	c.Assert(len(opCh), Equals, 1)
@@ -442,7 +441,7 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 	// 15. wait skip operation for the non-owner become available again (with new revision, with existing done).
 	opCh = make(chan pessimism.Operation, 10)
 	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source3, rev3, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source3, rev3+1, opCh)
 	cancel2()
 	close(opCh)
 	c.Assert(len(opCh), Equals, 1)
@@ -464,8 +463,8 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 	t.noLockExist(c, p)
 }
 
-func (t *testPessimist) TestUnlockSourceLackBeforeSynced(c *C) {
-	// some sources may be deleted (lack) before the lock become synced.
+func (t *testPessimist) TestUnlockSourceMissBeforeSynced(c *C) {
+	// some sources may be deleted (miss) before the lock become synced.
 	defer clearTestInfoOperation(c)
 
 	oriUnlockWaitOwnerInterval := unlockWaitInterval
@@ -542,12 +541,12 @@ func (t *testPessimist) TestUnlockSourceLackBeforeSynced(c *C) {
 	go func() {
 		defer wg.Done()
 		// put done for the owner.
-		t.putDoneForSource(ctx, task, source1, i11, true, rev1, watchTimeout, c)
+		t.putDoneForSource(ctx, task, source1, i11, true, rev1+1, watchTimeout, c)
 	}()
 	go func() {
 		defer wg.Done()
 		// put done for the synced `source2`, no need to put done for the un-synced `source3`.
-		t.putDoneForSource(ctx, task, source2, i12, false, rev1, watchTimeout, c)
+		t.putDoneForSource(ctx, task, source2, i12, false, rev1+1, watchTimeout, c)
 	}()
 	c.Assert(p.UnlockLock(ctx, ID, "", false), IsNil)
 	wg.Wait()
@@ -620,7 +619,7 @@ func (t *testPessimist) TestUnlockSourceInterrupt(c *C) {
 	// 2. watch until get not-done operation for the owner.
 	opCh := make(chan pessimism.Operation, 10)
 	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, "", rev1, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, "", rev1+1, opCh)
 	cancel2()
 	close(opCh)
 	c.Assert(len(opCh), Equals, 1)
@@ -658,7 +657,7 @@ func (t *testPessimist) TestUnlockSourceInterrupt(c *C) {
 	c.Assert(ready[source2], IsTrue)
 
 	// 2. putDone for the owner.
-	t.putDoneForSource(ctx, task, source1, i11, true, rev1, watchTimeout, c)
+	t.putDoneForSource(ctx, task, source1, i11, true, rev1+1, watchTimeout, c)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return p.Locks()[ID].IsDone(source1)
 	}), IsTrue)
@@ -748,7 +747,7 @@ func (t *testPessimist) TestUnlockSourceOwnerRemoved(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		t.putDoneForSource(ctx, task, source2, i11, true, rev1, watchTimeout, c)
+		t.putDoneForSource(ctx, task, source2, i11, true, rev1+1, watchTimeout, c)
 	}()
 	c.Assert(p.UnlockLock(ctx, ID, source2, false), IsNil)
 	wg.Wait()

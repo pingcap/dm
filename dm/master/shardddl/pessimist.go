@@ -248,15 +248,15 @@ func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, for
 	p.lk.RemoveLock(ID)
 	err2 := p.deleteInfosOps(lock)
 
-	if err != nil {
-		if err2 != nil {
-			p.logger.Error("fail to remove the lock",
-				zap.String("lock", ID), zap.String("owner", owner),
-				zap.Strings("un-synced", unsynced), zap.Strings("synced", synced), zap.Error(err2))
-		}
-		return err
+	if err != nil && err2 != nil {
+		return terror.ErrMasterPartWorkerExecDDLFail.AnnotateDelegate(
+			err, "fail to wait for non-owner sources %v to skip the shard DDL and delete shard DDL infos and operations, %s", unsynced, err2.Error())
+	} else if err != nil {
+		return terror.ErrMasterPartWorkerExecDDLFail.Delegate(err, "fail to wait for non-owner sources to skip the shard DDL")
+	} else if err2 != nil {
+		return terror.ErrMasterPartWorkerExecDDLFail.Delegate(err2, "fail to delete shard DDL infos and operations")
 	}
-	return err2
+	return nil
 }
 
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.
@@ -547,13 +547,12 @@ func (p *Pessimist) waitOwnerToBeDone(ctx context.Context, lock *pessimism.Lock,
 
 	// wait for the owner done the operation.
 	for retryNum := 1; retryNum <= unlockWaitNum; retryNum++ {
-		var ctxDone bool
 		select {
 		case <-ctx.Done():
-			ctxDone = true
+			return lock.IsDone(owner), ctx.Err()
 		case <-time.After(unlockWaitInterval):
 		}
-		if ctxDone || lock.IsDone(owner) {
+		if lock.IsDone(owner) {
 			break
 		} else {
 			p.logger.Info("retry to wait for the owner done the operation",
