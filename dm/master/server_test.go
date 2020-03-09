@@ -252,7 +252,7 @@ func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sour
 			defer wg.Done()
 			c.Assert(ha.KeepAlive(ctx, etcdTestCli, workerName, keepAliveTTL), check.IsNil)
 		}(ctx1, name)
-		c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 			w := scheduler2.GetWorkerBySource(sources[i])
 			return w != nil && w.BaseInfo().Name == name
 		}), check.IsTrue)
@@ -827,7 +827,7 @@ func (t *testMaster) TestServer(c *check.C) {
 	cancel()
 	s.Close()
 
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return s.closed.Get()
 	}), check.IsTrue)
 }
@@ -861,7 +861,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	defer s1.Close()
 
 	// wait the first one become the leader
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return s1.election.IsLeader()
 	}), check.IsTrue)
 
@@ -971,7 +971,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 		defer wg.Done()
 		c.Assert(ha.KeepAlive(ctx, s1.etcdClient, workerName, keepAliveTTL), check.IsNil)
 	}(ctx1, workerName)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		w := s1.scheduler.GetWorkerBySource(sourceID)
 		return w != nil && w.BaseInfo().Name == workerName
 	}), check.IsTrue)
