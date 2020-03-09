@@ -303,7 +303,7 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, point binlog.Location, ti *model.TableInfo) {
 	cp.Lock()
 	defer cp.Unlock()
-	cp.saveTablePoint(sourceSchema, sourceTable, point, ti)
+	cp.saveTablePoint(sourceSchema, sourceTable, point.Clone(), ti)
 }
 
 // saveTablePoint saves single table's checkpoint without mutex.Lock

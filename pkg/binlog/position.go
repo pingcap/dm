@@ -207,12 +207,10 @@ func (l Location) Clone() Location {
 // CloneWithFlavor clones the location, and if the GTIDSet is nil, will create a GTIDSet with specified flavor.
 func (l Location) CloneWithFlavor(flavor string) Location {
 	var newGTIDSet gtid.Set
-	if len(flavor) != 0 {
-		newGTIDSet = gtid.MinGTIDSet(flavor)
-	}
-
 	if l.GTIDSet != nil {
 		newGTIDSet = l.GTIDSet.Clone()
+	} else if len(flavor) != 0 {
+		newGTIDSet = gtid.MinGTIDSet(flavor)
 	}
 
 	return Location{

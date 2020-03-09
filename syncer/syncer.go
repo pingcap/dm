@@ -687,7 +687,7 @@ func (s *Syncer) saveTablePoint(db, table string, location binlog.Location) {
 			zap.Stringer("location", location),
 			zap.Error(err))
 	}
-	s.checkpoint.SaveTablePoint(db, table, location, ti)
+	s.checkpoint.SaveTablePoint(db, table, location.Clone(), ti)
 }
 
 func (s *Syncer) addJob(job *job) error {
