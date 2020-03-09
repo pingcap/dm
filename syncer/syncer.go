@@ -1087,6 +1087,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return err2
 			}
 
+			currentLocation = shardingReSync.currLocation.Clone()
 			err2 = s.streamerController.RedirectStreamer(s.tctx, nextLocation.Clone())
 			if err2 != nil {
 				return err2
@@ -1110,6 +1111,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			savedGlobalLastLocation = lastLocation.Clone() // save global last location
 			lastLocation = shardingReSync.currLocation.Clone()
 
+			currentLocation = shardingReSync.currLocation.Clone()
 			err = s.streamerController.RedirectStreamer(s.tctx, shardingReSync.currLocation.Clone())
 			if err != nil {
 				return err
