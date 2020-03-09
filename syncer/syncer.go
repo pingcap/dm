@@ -1291,6 +1291,11 @@ type eventContext struct {
 // TODO: Further split into smaller functions and group common arguments into
 // a context struct.
 func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext) error {
+	if ec.header.Timestamp == 0 || ec.header.LogPos == 0 {
+		// it is fake rotate event, ignore it
+		return nil
+	}
+
 	*ec.currentLocation = binlog.Location{
 		Position: mysql.Position{
 			Name: string(ev.NextLogName),
