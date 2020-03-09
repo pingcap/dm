@@ -47,10 +47,10 @@ func (s *Syncer) setInitActiveRelayLog() error {
 		return terror.ErrRelayNoValidRelaySubDir.Generate(s.cfg.RelayDir)
 	}
 
-	checkPos := s.checkpoint.GlobalPoint()
-	if binlog.ComparePosition(checkPos, minCheckpoint) > 0 {
+	checkLocation := s.checkpoint.GlobalPoint()
+	if binlog.ComparePosition(checkLocation.Position, binlog.MinPosition) > 0 {
 		// continue from previous checkpoint
-		pos = checkPos
+		pos = checkLocation.Position
 		extractPos = true
 	} else if s.cfg.Mode == config.ModeIncrement {
 		// fresh start for task-mode increment

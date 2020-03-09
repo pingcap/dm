@@ -11,4 +11,4 @@ grafana_admin_password: "admin"
 
 grafana_exec_vars_only: false
 
-grafana_version: 4.6.3
+grafana_version: 6.1.6

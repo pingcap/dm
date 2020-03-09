@@ -14,7 +14,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "4.6.3"
+      "version": "6.1.6"
     },
     {
       "type": "panel",
@@ -39,7 +39,7 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": "-- Grafana --",
+        "datasource": "${DS_TEST-CLUSTER}",
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -51,14 +51,19 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "hideControls": false,
   "id": null,
+  "iteration": 1582881283427,
   "links": [],
-  "refresh": "30s",
-  "rows": [
+  "panels": [
     {
-      "collapse": false,
-      "height": 250,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 17,
       "panels": [
         {
           "cacheTimeout": null,
@@ -78,6 +83,12 @@
             "show": false,
             "thresholdLabels": false,
             "thresholdMarkers": true
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 0,
+            "y": 1
           },
           "id": 1,
           "interval": null,
@@ -107,7 +118,6 @@
               "to": "null"
             }
           ],
-          "span": 3,
           "sparkline": {
             "fillColor": "rgba(31, 118, 189, 0.18)",
             "full": false,
@@ -155,6 +165,12 @@
             "thresholdLabels": false,
             "thresholdMarkers": true
           },
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 6,
+            "y": 1
+          },
           "id": 2,
           "interval": null,
           "links": [],
@@ -183,7 +199,6 @@
               "to": "null"
             }
           ],
-          "span": 3,
           "sparkline": {
             "fillColor": "rgba(31, 118, 189, 0.18)",
             "full": false,
@@ -231,6 +246,12 @@
             "thresholdLabels": false,
             "thresholdMarkers": true
           },
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 12,
+            "y": 1
+          },
           "id": 3,
           "interval": null,
           "links": [],
@@ -259,7 +280,6 @@
               "to": "null"
             }
           ],
-          "span": 3,
           "sparkline": {
             "fillColor": "rgba(31, 118, 189, 0.18)",
             "full": false,
@@ -307,6 +327,12 @@
             "thresholdLabels": false,
             "thresholdMarkers": true
           },
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 18,
+            "y": 1
+          },
           "id": 4,
           "interval": null,
           "links": [],
@@ -335,7 +361,6 @@
               "to": "null"
             }
           ],
-          "span": 3,
           "sparkline": {
             "fillColor": "rgba(31, 118, 189, 0.18)",
             "full": false,
@@ -383,6 +408,12 @@
             "thresholdLabels": false,
             "thresholdMarkers": true
           },
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 0,
+            "y": 8
+          },
           "id": 5,
           "interval": null,
           "links": [],
@@ -411,7 +442,6 @@
               "to": "null"
             }
           ],
-          "span": 3,
           "sparkline": {
             "fillColor": "rgba(31, 118, 189, 0.18)",
             "full": false,
@@ -459,6 +489,12 @@
             "thresholdLabels": false,
             "thresholdMarkers": true
           },
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 6,
+            "y": 8
+          },
           "id": 6,
           "interval": null,
           "links": [],
@@ -487,7 +523,6 @@
               "to": "null"
             }
           ],
-          "span": 3,
           "sparkline": {
             "fillColor": "rgba(31, 118, 189, 0.18)",
             "full": false,
@@ -524,6 +559,12 @@
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The largest index number of relay log files. E.g. \"value = 1\" indicates \"mysql-bin.000001\"",
           "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 12,
+            "y": 8
+          },
           "id": 7,
           "legend": {
             "avg": false,
@@ -544,7 +585,6 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -557,6 +597,7 @@
           ],
           "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "binlog file index",
           "tooltip": {
@@ -591,7 +632,11 @@
               "min": null,
               "show": false
             }
-          ]
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
           "aliasColors": {},
@@ -601,6 +646,12 @@
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The number of binlog files in the relay log that are behind the upstream master",
           "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 18,
+            "y": 8
+          },
           "id": 8,
           "legend": {
             "avg": false,
@@ -621,7 +672,6 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -635,6 +685,7 @@
           ],
           "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "binlog file gap between master and relay",
           "tooltip": {
@@ -669,7 +720,11 @@
               "min": null,
               "show": false
             }
-          ]
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
           "aliasColors": {},
@@ -679,6 +734,12 @@
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The write offset of the latest relay log file",
           "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 0,
+            "y": 15
+          },
           "id": 9,
           "legend": {
             "avg": false,
@@ -699,7 +760,6 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -712,6 +772,7 @@
           ],
           "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "binlog pos",
           "tooltip": {
@@ -746,7 +807,11 @@
               "min": null,
               "show": false
             }
-          ]
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
           "aliasColors": {},
@@ -756,6 +821,12 @@
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The duration that the relay log reads binlog from the upstream MySQL (in seconds)",
           "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 6,
+            "y": 15
+          },
           "id": 10,
           "legend": {
             "avg": false,
@@ -776,7 +847,6 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -790,6 +860,7 @@
           ],
           "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "read binlog duration",
           "tooltip": {
@@ -824,7 +895,11 @@
               "min": null,
               "show": true
             }
-          ]
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
           "aliasColors": {},
@@ -834,6 +909,12 @@
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The duration that the relay log writes binlog into the disks each time (in seconds)",
           "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 12,
+            "y": 15
+          },
           "id": 11,
           "legend": {
             "avg": false,
@@ -854,7 +935,6 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -867,6 +947,7 @@
           ],
           "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "write relay log duration",
           "tooltip": {
@@ -901,7 +982,11 @@
               "min": null,
               "show": true
             }
-          ]
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
           "aliasColors": {},
@@ -911,6 +996,12 @@
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The size of a single binlog event that the relay log writes into the disks",
           "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 18,
+            "y": 15
+          },
           "id": 12,
           "legend": {
             "avg": false,
@@ -931,7 +1022,6 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -944,6 +1034,7 @@
           ],
           "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "binlog size",
           "tooltip": {
@@ -978,19 +1069,26 @@
               "min": null,
               "show": true
             }
-          ]
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         }
       ],
       "repeat": null,
-      "repeatIteration": null,
-      "repeatRowId": null,
-      "showTitle": true,
       "title": "relay log",
-      "titleSize": "h6"
+      "type": "row"
     },
     {
-      "collapse": false,
-      "height": 250,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 18,
       "panels": [
         {
           "aliasColors": {},
@@ -1000,6 +1098,12 @@
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The current state of subtasks in the instance.\n\n0: Invalid\n\n1: New\n\n2: Running\n\n3: Paused\n\n4: Stopped\n\n5: Finished",
           "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 0,
+            "y": 2
+          },
           "id": 13,
           "legend": {
             "avg": false,
@@ -1020,7 +1124,6 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -1033,6 +1136,7 @@
           ],
           "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "task state",
           "tooltip": {
@@ -1067,7 +1171,11 @@
               "min": null,
               "show": false
             }
-          ]
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
           "aliasColors": {},
@@ -1077,6 +1185,12 @@
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The data import process percentage of Loader. The value range is 0% ~ 100%",
           "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 6,
+            "y": 2
+          },
           "id": 14,
           "legend": {
             "avg": false,
@@ -1097,7 +1211,6 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -1110,6 +1223,7 @@
           ],
           "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "load progress",
           "tooltip": {
@@ -1144,7 +1258,11 @@
               "min": null,
               "show": false
             }
-          ]
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
           "aliasColors": {},
@@ -1154,6 +1272,12 @@
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The number of binlog files in Syncer that are behind the master",
           "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 12,
+            "y": 2
+          },
           "id": 15,
           "legend": {
             "avg": false,
@@ -1174,7 +1298,6 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -1187,6 +1310,7 @@
           ],
           "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "binlog file gap between master and syncer",
           "tooltip": {
@@ -1221,7 +1345,11 @@
               "min": null,
               "show": false
             }
-          ]
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
           "aliasColors": {},
@@ -1231,6 +1359,12 @@
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "Is waiting shard DDL lock to be resolved, >0 means waiting",
           "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 18,
+            "y": 2
+          },
           "id": 16,
           "legend": {
             "avg": false,
@@ -1251,7 +1385,6 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -1264,6 +1397,7 @@
           ],
           "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "shard lock resolving",
           "tooltip": {
@@ -1298,26 +1432,30 @@
               "min": null,
               "show": false
             }
-          ]
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         }
       ],
       "repeat": null,
-      "repeatIteration": null,
-      "repeatRowId": null,
-      "showTitle": true,
       "title": "task",
-      "titleSize": "h6"
+      "type": "row"
     }
   ],
-  "schemaVersion": 1,
+  "refresh": "30s",
+  "schemaVersion": 18,
   "style": "dark",
   "tags": [],
   "templating": {
     "list": [
       {
+        "allFormat": "glob",
         "allValue": null,
         "current": {},
         "datasource": "${DS_TEST-CLUSTER}",
+        "definition": "",
         "hide": 0,
         "includeAll": false,
         "label": null,
@@ -1325,8 +1463,9 @@
         "name": "instance",
         "options": [],
         "query": "label_values(dm_relay_space, instance)",
-        "refresh": 2,
+        "refresh": 1,
         "regex": "",
+        "skipUrlSync": false,
         "sort": 1,
         "tagValuesQuery": "",
         "tags": [],
@@ -1366,6 +1505,7 @@
     ]
   },
   "timezone": "",
-  "title": "DM-instance",
+  "title": "Test-Cluster-DM-worker-instances",
+  "uid": "le1FDN_Wz",
   "version": 1
 }

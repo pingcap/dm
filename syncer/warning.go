@@ -17,17 +17,16 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/siddontang/go-mysql/mysql"
-
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
 // ExecErrorContext records a failed exec SQL information
 type ExecErrorContext struct {
-	err  error
-	pos  mysql.Position
-	jobs string
+	err      error
+	location binlog.Location
+	jobs     string
 }
 
 // Error implements SubTaskUnit.Error
@@ -36,7 +35,7 @@ func (s *Syncer) Error() interface{} {
 	defer s.execErrors.Unlock()
 
 	sort.Slice(s.execErrors.errors, func(i, j int) bool {
-		return utils.CompareBinlogPos(s.execErrors.errors[i].pos, s.execErrors.errors[j].pos, 0) == -1
+		return utils.CompareBinlogPos(s.execErrors.errors[i].location.Position, s.execErrors.errors[j].location.Position, 0) == -1
 	})
 
 	errors := make([]*pb.SyncSQLError, 0, len(s.execErrors.errors))
@@ -44,7 +43,7 @@ func (s *Syncer) Error() interface{} {
 		if !utils.IsContextCanceledError(ctx.err) {
 			errors = append(errors, &pb.SyncSQLError{
 				Msg:                  ctx.err.Error(),
-				FailedBinlogPosition: fmt.Sprintf("%s:%d", ctx.pos.Name, ctx.pos.Pos),
+				FailedBinlogPosition: fmt.Sprintf("%s:%d", ctx.location.Position.Name, ctx.location.Position.Pos),
 				ErrorSQL:             ctx.jobs,
 			})
 		}

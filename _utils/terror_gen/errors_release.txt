@@ -150,7 +150,7 @@ ErrBinlogExtractPosition,[code=22001:class=binlog-op:scope=internal:level=high],
 ErrBinlogInvalidFilename,[code=22002:class=binlog-op:scope=internal:level=high],"invalid binlog filename"
 ErrBinlogParsePosFromStr,[code=22003:class=binlog-op:scope=internal:level=high],""
 ErrCheckpointInvalidTaskMode,[code=24001:class=checkpoint:scope=internal:level=medium],"invalid task mode: %s"
-ErrCheckpointSaveInvalidPos,[code=24002:class=checkpoint:scope=internal:level=high],"save point %v is older than current pos %v"
+ErrCheckpointSaveInvalidPos,[code=24002:class=checkpoint:scope=internal:level=high],"save point %s is older than current location %s"
 ErrCheckpointInvalidTableFile,[code=24003:class=checkpoint:scope=internal:level=medium],"invalid db table sql file - %s"
 ErrCheckpointDBNotExistInFile,[code=24004:class=checkpoint:scope=internal:level=medium],"db (%s) not exist in data files, but in checkpoint"
 ErrCheckpointTableNotExistInFile,[code=24005:class=checkpoint:scope=internal:level=medium],"table (%s) not exist in db (%s) data files, but in checkpoint"

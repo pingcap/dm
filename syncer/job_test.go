@@ -16,7 +16,8 @@ package syncer
 import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/pkg/binlog"
 )
 
 var _ = Suite(&testJobSuite{})
@@ -86,20 +87,20 @@ func (t *testJobSuite) TestJob(c *C) {
 		jobStr string
 	}{
 		{
-			newJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", mysql.Position{}, mysql.Position{}, nil, ""),
-			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: 1, ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
+			newJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", binlog.NewLocation(""), binlog.NewLocation(""), ""),
+			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: 1, ddls: [], last_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
-			newDDLJob(ddlInfo, []string{"create database test"}, mysql.Position{}, mysql.Position{}, nil, ""),
-			"tp: ddl, sql: , args: [], key: , ddls: [create database test], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
+			newDDLJob(ddlInfo, []string{"create database test"}, binlog.NewLocation(""), binlog.NewLocation(""), ""),
+			"tp: ddl, sql: , args: [], key: , ddls: [create database test], last_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
-			newXIDJob(mysql.Position{}, mysql.Position{}, nil, ""),
-			"tp: xid, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
+			newXIDJob(binlog.NewLocation(""), binlog.NewLocation(""), ""),
+			"tp: xid, sql: , args: [], key: , ddls: [], last_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newFlushJob(),
-			"tp: flush, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
+			"tp: flush, sql: , args: [], key: , ddls: [], last_location: position: (, 0), gtid-set: , current_location: position: (, 0), gtid-set: ",
 		}, {
-			newSkipJob(mysql.Position{}, nil),
-			"tp: skip, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
+			newSkipJob(binlog.NewLocation("")),
+			"tp: skip, sql: , args: [], key: , ddls: [], last_location: position: (, 4), gtid-set: , current_location: position: (, 0), gtid-set: ",
 		},
 	}
 
