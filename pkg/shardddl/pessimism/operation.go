@@ -136,7 +136,8 @@ func DeleteOperations(cli *clientv3.Client, ops ...Operation) (int64, error) {
 	for _, op := range ops {
 		opsDel = append(opsDel, deleteOperationOp(op))
 	}
-	return etcdutil.DoOpsInOneTxn(cli, opsDel...)
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, opsDel...)
+	return rev, err
 }
 
 // GetAllOperations gets all DDL lock operation in etcd currently.
