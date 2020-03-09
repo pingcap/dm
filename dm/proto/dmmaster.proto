@@ -37,10 +37,6 @@ service Master {
 
     rpc UpdateWorkerRelayConfig(UpdateWorkerRelayConfigRequest) returns (CommonWorkerResponse) {}
 
-    // BreakDDLLock request some dm-workers to break a DDL lock
-    // including remove DDLLockInfo and/or execute/skip DDL
-    rpc BreakWorkerDDLLock (BreakWorkerDDLLockRequest) returns (BreakWorkerDDLLockResponse) {}
-
     rpc HandleSQLs (HandleSQLsRequest) returns (HandleSQLsResponse) {}
 
     // SwitchWorkerRelayMaster requests some dm-workers to switch relay unit's master server
@@ -189,41 +185,16 @@ message ShowDDLLocksResponse {
 // UnlockDDLLockRequest used to unlock (resolve) DDL lock manually
 // ID: DDL lock ID
 // replaceOwner: dm-worker used to replace the original DDL lock's owner
-// workers: dm-workers need to execute / skip DDL, empty for all dm-workers
-//   replaceOwner in or not in workers are both fine
-// forceRemove: force to remove the DDL lock even unlock fail
+// forceRemove: force to remove the DDL lock even fail to execute the DDL for the owner.
 message UnlockDDLLockRequest {
     string ID = 1;
     string replaceOwner = 2;
-    repeated string sources = 3;
-    bool forceRemove = 4;
+    bool forceRemove = 3;
 }
 
 message UnlockDDLLockResponse {
     bool result = 1;
     string msg = 2;
-    repeated CommonWorkerResponse workers = 3;
-}
-
-// BreakWorkerDDLLockRequest represents a request for some dm-workers to force to break the DDL lock
-// workers: dm-workers need to break DDL lock
-// task: sub task's name
-// removeLockID: DDLLockInfo's ID which need to remove
-// execDDL: execute DDL which is blocking
-// skipDDL: skip DDL which is blocking
-//   execDDL and skipDDL can not specify both at the same time, but can specify neither
-message BreakWorkerDDLLockRequest {
-    repeated string sources = 1;
-    string task = 2;
-    string removeLockID = 3;
-    bool execDDL = 4;
-    bool skipDDL = 5;
-}
-
-message BreakWorkerDDLLockResponse {
-    bool result = 1;
-    string msg = 2;
-    repeated CommonWorkerResponse sources = 3;
 }
 
 // SwitchWorkerRelayMasterRequest represents a request for some dm-workers to switch relay unit's master server

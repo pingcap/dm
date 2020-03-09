@@ -23,21 +23,38 @@ import (
 
 // TODO(csuzhangxc): assign terror code before merged into the master branch.
 
-// PutOperationDeleteInfo puts an operation and deletes an info in one txn.
+// PutOperationDeleteExistInfo puts an operation and deletes an info in one txn,
+// if the info exists in etcd before.
 // This function should often be called by DM-worker.
-func PutOperationDeleteInfo(cli *clientv3.Client, op Operation, info Info) (int64, error) {
+func PutOperationDeleteExistInfo(cli *clientv3.Client, op Operation, info Info) (done bool, rev int64, err error) {
 	putOp, err := putOperationOp(op)
 	if err != nil {
-		return 0, nil
+		return false, 0, nil
 	}
 	delOp := deleteInfoOp(info)
+
+	infoCmp := infoExistCmp(info)
 
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
-	resp, err := cli.Txn(ctx).Then(putOp, delOp).Commit()
+	resp, err := cli.Txn(ctx).If(infoCmp).Then(putOp, delOp).Commit()
 	if err != nil {
-		return 0, err
+		return false, 0, err
 	}
-	return resp.Header.Revision, nil
+	return resp.Succeeded, resp.Header.Revision, nil
+}
+
+// DeleteInfosOperations deletes the shard DDL infos and operations in etcd.
+// This function should often be called by DM-master when calling UnlockDDL.
+func DeleteInfosOperations(cli *clientv3.Client, infos []Info, ops []Operation) (int64, error) {
+	opsDel := make([]clientv3.Op, 0, len(infos)+len(ops))
+	for _, info := range infos {
+		opsDel = append(opsDel, deleteInfoOp(info))
+	}
+	for _, op := range ops {
+		opsDel = append(opsDel, deleteOperationOp(op))
+	}
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, opsDel...)
+	return rev, err
 }

@@ -32,7 +32,7 @@ func NewUnlockDDLLockCmd() *cobra.Command {
 		Short: "forcefully unlock DDL lock",
 		Run:   unlockDDLLockFunc,
 	}
-	cmd.Flags().StringP("owner", "o", "", "DM-worker to replace the default owner")
+	cmd.Flags().StringP("owner", "o", "", "source to replace the default owner")
 	cmd.Flags().BoolP("force-remove", "f", false, "force to remove DDL lock")
 	return cmd
 }
@@ -52,9 +52,9 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 
 	lockID := cmd.Flags().Arg(0)
 
-	sources, err := common.GetSourceArgs(cmd)
-	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
+	sources, _ := common.GetSourceArgs(cmd)
+	if len(sources) > 0 {
+		fmt.Println("shoud not specify any sources")
 		return
 	}
 
@@ -70,11 +70,10 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 	resp, err := cli.UnlockDDLLock(ctx, &pb.UnlockDDLLockRequest{
 		ID:           lockID,
 		ReplaceOwner: owner,
-		Sources:      sources,
 		ForceRemove:  forceRemove,
 	})
 	if err != nil {
-		common.PrintLines("can not unlock DDL lock %s (in sources %v):\n%s", lockID, sources, errors.ErrorStack(err))
+		common.PrintLines("can not unlock DDL lock %s \n%s", lockID, err.Error())
 		return
 	}
 

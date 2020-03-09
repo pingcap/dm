@@ -100,6 +100,19 @@ func (l *Lock) ForceSynced() {
 	l.remain = 0
 }
 
+// RevertSynced reverts the synced stage of the sources.
+func (l *Lock) RevertSynced(sources []string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	for _, source := range sources {
+		if synced, ok := l.ready[source]; ok && synced {
+			l.ready[source] = false
+			l.remain++
+		}
+	}
+}
+
 // IsSynced returns whether the lock has synced.
 func (l *Lock) IsSynced() (bool, int) {
 	l.mu.RLock()

@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -104,6 +105,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 
 	// mark the operation as done and delete the info.
 	c.Assert(p.DoneOperationDeleteInfo(op, info), IsNil)
+	c.Assert(terror.ErrWorkerDDLLockInfoNotFound.Equal(p.DoneOperationDeleteInfo(op, info)), IsTrue)
 
 	// verify the operation and info.
 	opc := op2
