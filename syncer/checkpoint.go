@@ -393,12 +393,12 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 }
 
 // SaveGlobalPoint implements CheckPoint.SaveGlobalPoint
-func (cp *RemoteCheckPoint) SaveGlobalPoint(pos binlog.Location) {
+func (cp *RemoteCheckPoint) SaveGlobalPoint(location binlog.Location) {
 	cp.Lock()
 	defer cp.Unlock()
 
-	cp.logCtx.L().Debug("save global checkpoint", zap.Stringer("position", pos))
-	if err := cp.globalPoint.save(pos, nil); err != nil {
+	cp.logCtx.L().Debug("save global checkpoint", zap.Stringer("location", location))
+	if err := cp.globalPoint.save(location.Clone(), nil); err != nil {
 		cp.logCtx.L().Error("fail to save global checkpoint", log.ShortError(err))
 	}
 }

@@ -754,7 +754,7 @@ func (s *Syncer) saveGlobalPoint(globalLocation binlog.Location) {
 	if s.cfg.IsSharding {
 		globalLocation = s.sgk.AdjustGlobalLocation(globalLocation)
 	}
-	s.checkpoint.SaveGlobalPoint(globalLocation)
+	s.checkpoint.SaveGlobalPoint(globalLocation.Clone())
 }
 
 func (s *Syncer) resetShardingGroup(schema, table string) {
