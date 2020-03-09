@@ -12,12 +12,6 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 # used to coverage wrong usage of dmctl command
 function usage_and_arg_test() {
-    break_ddl_lock_wrong_arg
-    break_ddl_lock_without_worker
-    break_ddl_lock_shoud_specify_at_least_one
-    break_ddl_lock_exec_skip_conflict
-    break_ddl_lock_while_master_down
-
     migrate_relay_wrong_arg
     migrate_relay_without_worker
     # todo: no sense to fix

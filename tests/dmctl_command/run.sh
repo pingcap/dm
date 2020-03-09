@@ -13,7 +13,7 @@ function run() {
     $PWD/bin/dmctl.test DEVEL > $WORK_DIR/help.log
     help_msg=$(cat $WORK_DIR/help.log)
     help_msg_cnt=$(echo "${help_msg}" | wc -l |xargs)
-    if [ "$help_msg_cnt" != 35 ]; then
+    if [ "$help_msg_cnt" != 34 ]; then
         echo "dmctl case 1 help failed: $help_msg"
         echo $help_msg_cnt
         exit 1
@@ -24,7 +24,7 @@ function run() {
     $PWD/bin/dmctl.test DEVEL --help > $WORK_DIR/help.log
     help_msg=$(cat $WORK_DIR/help.log)
     help_msg_cnt=$(echo "${help_msg}" | wc -l |xargs)
-    if [ "$help_msg_cnt" != 35 ]; then
+    if [ "$help_msg_cnt" != 34 ]; then
         echo "dmctl case 2 help failed: $help_msg"
         exit 1
     fi

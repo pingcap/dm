@@ -180,12 +180,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
-	// start the shard DDL pessimist.
-	err = s.pessimist.Start(ctx, s.etcdClient)
-	if err != nil {
-		return
-	}
-
 	s.closed.Set(false) // the server started now.
 
 	s.bgFunWg.Add(1)
@@ -225,8 +219,6 @@ func (s *Server) Close() {
 
 	s.Lock()
 	defer s.Unlock()
-
-	s.pessimist.Close()
 
 	if s.election != nil {
 		s.election.Close()
@@ -682,6 +674,8 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 				l.Unsynced = append(l.Unsynced, worker)
 			}
 		}
+		sort.Strings(l.Synced)
+		sort.Strings(l.Unsynced)
 		resp.Locks = append(resp.Locks, l)
 	}
 
@@ -695,20 +689,25 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 // TODO(csuzhangxc): implement this later.
 func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
 	log.L().Info("", zap.String("lock ID", req.ID), zap.Stringer("payload", req), zap.String("request", "UnlockDDLLock"))
-	return &pb.UnlockDDLLockResponse{
-		Result: false,
-		Msg:    "not implement",
-	}, nil
-}
 
-// BreakWorkerDDLLock implements MasterServer.BreakWorkerDDLLock
-// TODO(csuzhangxc): implement this later.
-func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLLockRequest) (*pb.BreakWorkerDDLLockResponse, error) {
-	log.L().Info("", zap.String("lock ID", req.RemoveLockID), zap.Stringer("payload", req), zap.String("request", "BreakWorkerDDLLock"))
-	return &pb.BreakWorkerDDLLockResponse{
-		Result: false,
-		Msg:    "not implement",
-	}, nil
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.UnlockDDLLock(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	resp := &pb.UnlockDDLLockResponse{
+		Result: true,
+	}
+	err := s.pessimist.UnlockLock(ctx, req.ID, req.ReplaceOwner, req.ForceRemove)
+	if err != nil {
+		resp.Result = false
+		resp.Msg = terror.Message(err)
+	}
+
+	return resp, nil
 }
 
 // HandleSQLs implements MasterServer.HandleSQLs

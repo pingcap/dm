@@ -35,8 +35,6 @@ const (
 	CmdQueryWorkerConfig
 
 	CmdHandleSubTaskSQLs
-	CmdExecDDL
-	CmdBreakDDLLock
 
 	CmdSwitchRelayMaster
 	CmdOperateRelay
@@ -81,8 +79,6 @@ type Response struct {
 	QueryWorkerConfig *pb.QueryWorkerConfigResponse
 
 	HandleSubTaskSQLs *pb.CommonWorkerResponse
-	ExecDDL           *pb.CommonWorkerResponse
-	BreakDDLLock      *pb.CommonWorkerResponse
 
 	SwitchRelayMaster *pb.CommonWorkerResponse
 	OperateRelay      *pb.OperateRelayResponse

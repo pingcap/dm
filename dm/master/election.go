@@ -37,6 +37,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 			// retire from leader
 			if leaderInfo == nil {
 				if s.leader == oneselfLeader {
+					s.pessimist.Close()
 					s.scheduler.Close()
 
 					s.Lock()
@@ -59,6 +60,11 @@ func (s *Server) electionNotify(ctx context.Context) {
 				err := s.scheduler.Start(ctx, s.etcdClient)
 				if err != nil {
 					log.L().Error("scheduler do not started", zap.Error(err))
+				}
+
+				err = s.pessimist.Start(ctx, s.etcdClient)
+				if err != nil {
+					log.L().Error("pessimist do not started", zap.Error(err))
 				}
 
 				s.Lock()
