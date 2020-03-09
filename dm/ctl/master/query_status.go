@@ -46,7 +46,7 @@ func NewQueryStatusCmd() *cobra.Command {
 		Short: "query task status",
 		Run:   queryStatusFunc,
 	}
-	cmd.Flags().BoolP("more", "", false, "whether print the detailed task information directly")
+	cmd.Flags().BoolP("more", "", false, "whether to print the detailed task information")
 	return cmd
 }
 
