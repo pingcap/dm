@@ -298,6 +298,8 @@ func subTaskStageFromResp(source, task string, resp *clientv3.GetResponse) (map[
 	if resp.Count == 0 {
 		return stages, nil
 	} else if source != "" && task != "" && resp.Count > 1 {
+		// TODO: add terror.
+		// this should not happen.
 		return stages, fmt.Errorf("too many stage (%d) exist for subtask {sourceID: %s, task name: %s}", resp.Count, source, task)
 	}
 
