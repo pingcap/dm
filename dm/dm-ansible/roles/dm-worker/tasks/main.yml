@@ -1,13 +1,27 @@
 ---
 
-- include_tasks: binary_deployment.yml
+- name: create deploy directories
+  file:
+    path: '{{ item }}'
+    state: directory
+    mode: 0755
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+  become: true
+  with_items:
+    - "{{ dm_worker_log_dir }}"
 
-- name: create configuration file
-  template: src=dm-worker.toml.j2 dest={{ deploy_dir }}/conf/dm-worker.toml mode=0644 backup=yes
-  register: dm_worker_conf_st
+- name: deploy dm-worker binary
+  copy: src="{{ resources_dir }}/bin/dm-worker" dest="{{ deploy_dir }}/bin/" mode=0755
 
-- name: backup conf file
-  command: mv "{{ dm_worker_conf_st.backup_file }}" "{{ backup_dir }}"
-  when:
-    - dm_worker_conf_st.changed
-    - dm_worker_conf_st.backup_file is defined
+- name: deploy mydumper binary
+  copy: src="{{ resources_dir }}/bin/mydumper" dest="{{ deploy_dir }}/bin/" mode=0755
+
+- name: create dm-worker run script
+  template:
+    src: "run_{{ role_name }}.sh.j2"
+    dest: "{{ deploy_dir }}/scripts/run_{{ role_name }}.sh"
+    mode: "0755"
+    backup: yes
+
+- include_tasks: "systemd_deployment.yml"
