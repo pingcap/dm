@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
@@ -37,8 +38,7 @@ type Stage struct {
 	// only used to report to the caller of the watcher, do not marsh it.
 	// if it's true, it means the stage has been deleted in etcd.
 	IsDeleted bool `json:"-"`
-	// only has value in watcher, will get 0 in GetStage
-	// record the etcd revision right after putting this Stage
+	// record the etcd ModRevision of this Stage
 	Revision int64 `json:"-"`
 }
 
@@ -76,6 +76,12 @@ func (s Stage) toJSON() (string, error) {
 	return string(data), nil
 }
 
+// IsEmpty returns true when this Stage has no value
+func (s Stage) IsEmpty() bool {
+	var emptyStage Stage
+	return s == emptyStage
+}
+
 // stageFromJSON constructs Stage from its JSON represent.
 func stageFromJSON(str string) (s Stage, err error) {
 	err = json.Unmarshal([]byte(str), &s)
@@ -89,7 +95,8 @@ func PutRelayStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	return rev, err
 }
 
 // PutSubTaskStage puts the stage of the subtask into etcd.
@@ -99,7 +106,8 @@ func PutSubTaskStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	return rev, err
 }
 
 // GetRelayStage gets the relay stage for the specified upstream source.
@@ -126,6 +134,7 @@ func GetRelayStage(cli *clientv3.Client, source string) (Stage, int64, error) {
 	if err != nil {
 		return stage, 0, err
 	}
+	stage.Revision = resp.Kvs[0].ModRevision
 
 	return stage, resp.Header.Revision, nil
 }
@@ -147,6 +156,7 @@ func GetAllRelayStage(cli *clientv3.Client) (map[string]Stage, int64, error) {
 		if err2 != nil {
 			return nil, 0, err2
 		}
+		stage.Revision = kv.ModRevision
 		stages[stage.Source] = stage
 	}
 	return stages, resp.Header.Revision, nil
@@ -175,19 +185,11 @@ func GetSubTaskStage(cli *clientv3.Client, source, task string) (map[string]Stag
 		return stm, 0, err
 	}
 
-	if resp.Count == 0 {
-		return stm, resp.Header.Revision, nil
-	} else if task != "" && resp.Count > 1 {
-		return stm, 0, fmt.Errorf("too many stage (%d) exist for subtask {sourceID: %s, task name: %s}", resp.Count, source, task)
+	stages, err := subTaskStageFromResp(source, task, resp)
+	if err != nil {
+		return stm, 0, err
 	}
-
-	for _, kvs := range resp.Kvs {
-		stage, err2 := stageFromJSON(string(kvs.Value))
-		if err2 != nil {
-			return stm, 0, err2
-		}
-		stm[stage.Task] = stage
-	}
+	stm = stages[source]
 
 	return stm, resp.Header.Revision, nil
 }
@@ -203,19 +205,42 @@ func GetAllSubTaskStage(cli *clientv3.Client) (map[string]map[string]Stage, int6
 		return nil, 0, err
 	}
 
-	stages := make(map[string]map[string]Stage)
-	for _, kvs := range resp.Kvs {
-		stage, err2 := stageFromJSON(string(kvs.Value))
-		if err2 != nil {
-			return nil, 0, err2
-		}
-		if _, ok := stages[stage.Source]; !ok {
-			stages[stage.Source] = make(map[string]Stage)
-		}
-		stages[stage.Source][stage.Task] = stage
+	stages, err := subTaskStageFromResp("", "", resp)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	return stages, resp.Header.Revision, nil
+}
+
+// GetSubTaskStageConfig gets source's subtask stages and configs at the same time
+// source **must not be empty**
+// return map{task name -> subtask stage}, map{task name -> subtask config}, revision, error.
+func GetSubTaskStageConfig(cli *clientv3.Client, source string) (map[string]Stage, map[string]config.SubTaskConfig, int64, error) {
+	var (
+		stm = make(map[string]Stage)
+		scm = make(map[string]config.SubTaskConfig)
+	)
+	txnResp, rev, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpGet(common.StageSubTaskKeyAdapter.Encode(source), clientv3.WithPrefix()),
+		clientv3.OpGet(common.UpstreamSubTaskKeyAdapter.Encode(source), clientv3.WithPrefix()))
+	if err != nil {
+		return stm, scm, 0, err
+	}
+	stageResp := txnResp.Responses[0].GetResponseRange()
+	stages, err := subTaskStageFromResp(source, "", (*clientv3.GetResponse)(stageResp))
+	if err != nil {
+		return stm, scm, 0, err
+	}
+	stm = stages[source]
+
+	cfgResp := txnResp.Responses[1].GetResponseRange()
+	cfgs, err := subTaskCfgFromResp(source, "", (*clientv3.GetResponse)(cfgResp))
+	if err != nil {
+		return stm, scm, 0, err
+	}
+	scm = cfgs[source]
+
+	return stm, scm, rev, err
 }
 
 // WatchRelayStage watches PUT & DELETE operations for the relay stage.
@@ -237,7 +262,8 @@ func WatchSubTaskStage(ctx context.Context, cli *clientv3.Client,
 // DeleteSubTaskStage deletes the subtask stage.
 func DeleteSubTaskStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	ops := deleteSubTaskStageOp(stages...)
-	return etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	return rev, err
 }
 
 // relayStageFromKey constructs an incomplete relay stage from an etcd key.
@@ -261,6 +287,34 @@ func subTaskStageFromKey(key string) (Stage, error) {
 	stage.Source = ks[0]
 	stage.Task = ks[1]
 	return stage, nil
+}
+
+func subTaskStageFromResp(source, task string, resp *clientv3.GetResponse) (map[string]map[string]Stage, error) {
+	stages := make(map[string]map[string]Stage)
+	if source != "" {
+		stages[source] = make(map[string]Stage) // avoid stages[source] is nil
+	}
+
+	if resp.Count == 0 {
+		return stages, nil
+	} else if source != "" && task != "" && resp.Count > 1 {
+		// TODO: add terror.
+		// this should not happen.
+		return stages, fmt.Errorf("too many stage (%d) exist for subtask {sourceID: %s, task name: %s}", resp.Count, source, task)
+	}
+
+	for _, kvs := range resp.Kvs {
+		stage, err := stageFromJSON(string(kvs.Value))
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := stages[stage.Source]; !ok {
+			stages[stage.Source] = make(map[string]Stage)
+		}
+		stage.Revision = kvs.ModRevision
+		stages[stage.Source][stage.Task] = stage
+	}
+	return stages, nil
 }
 
 // watchStage watches PUT & DELETE operations for the stage.

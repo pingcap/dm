@@ -486,6 +486,7 @@ const (
 	codeWorkerAlreadyStarted
 	codeWorkerSourceNotMatch
 	codeWorkerFailToGetSubtaskConfigFromEtcd
+	codeWorkerFailToGetSourceConfigFromEtcd
 )
 
 // DM-tracer error code
@@ -988,6 +989,7 @@ var (
 	ErrWorkerSourceNotMatch          = New(codeWorkerSourceNotMatch, ClassDMWorker, ScopeInternal, LevelHigh, "source of request does not match with source in worker")
 
 	ErrWorkerFailToGetSubtaskConfigFromEtcd = New(codeWorkerFailToGetSubtaskConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative subtask config for task %s in etcd")
+	ErrWorkerFailToGetSourceConfigFromEtcd  = New(codeWorkerFailToGetSourceConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative source config for source %s in etcd")
 
 	// DM-tracer error
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set")

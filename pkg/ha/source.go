@@ -32,58 +32,37 @@ func PutSourceCfg(cli *clientv3.Client, cfg config.SourceConfig) (int64, error) 
 		return 0, err
 	}
 	key := common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID)
-
-	return etcdutil.DoOpsInOneTxn(cli, clientv3.OpPut(key, value))
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpPut(key, value))
+	return rev, err
 }
 
-// GetSourceCfg gets the config of the specified source.
-// if the config for the source not exist, return with `err == nil` and `revision=0`.
-func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (config.SourceConfig, int64, error) {
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
-	var cfg config.SourceConfig
-	resp, err := cli.Get(ctx, common.UpstreamConfigKeyAdapter.Encode(source), clientv3.WithRev(rev))
-	if err != nil {
-		return cfg, 0, err
-	}
-
-	if resp.Count == 0 {
-		return cfg, resp.Header.Revision, nil
-	} else if resp.Count > 1 {
-		// TODO(csuzhangxc): add terror.
-		// this should not happen.
-		return cfg, 0, fmt.Errorf("too many config (%d) exist for the source %s", resp.Count, source)
-	}
-
-	err = cfg.Parse(string(resp.Kvs[0].Value))
-	if err != nil {
-		return cfg, 0, err
-	}
-
-	return cfg, resp.Header.Revision, nil
-}
-
-// GetAllSourceCfg gets all upstream source configs.
+// GetSourceCfg gets upstream source configs.
 // k/v: source ID -> source config.
-func GetAllSourceCfg(cli *clientv3.Client) (map[string]config.SourceConfig, int64, error) {
+// if the source config for the sourceID not exist, return with `err == nil`.
+// if the source name is "", it will return all source configs as a map{sourceID: config}.
+// if the source name is given, it will return a map{sourceID: config} whose length is 1.
+func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (map[string]config.SourceConfig, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
-	resp, err := cli.Get(ctx, common.UpstreamConfigKeyAdapter.Path(), clientv3.WithPrefix())
-	if err != nil {
-		return nil, 0, err
+	var (
+		scm  = make(map[string]config.SourceConfig)
+		resp *clientv3.GetResponse
+		err  error
+	)
+	if source != "" {
+		resp, err = cli.Get(ctx, common.UpstreamConfigKeyAdapter.Encode(source), clientv3.WithRev(rev))
+	} else {
+		resp, err = cli.Get(ctx, common.UpstreamConfigKeyAdapter.Path(), clientv3.WithPrefix(), clientv3.WithRev(rev))
 	}
 
-	scm := make(map[string]config.SourceConfig)
-	for _, kv := range resp.Kvs {
-		var cfg config.SourceConfig
-		err = cfg.Parse(string(kv.Value))
-		if err != nil {
-			// TODO(csuzhangxc): add terror and including `key`.
-			return nil, 0, err
-		}
-		scm[cfg.SourceID] = cfg
+	if err != nil {
+		return scm, 0, err
+	}
+
+	scm, err = sourceCfgFromResp(source, resp)
+	if err != nil {
+		return scm, 0, err
 	}
 
 	return scm, resp.Header.Revision, nil
@@ -92,6 +71,28 @@ func GetAllSourceCfg(cli *clientv3.Client) (map[string]config.SourceConfig, int6
 // deleteSourceCfgOp returns a DELETE etcd operation for the source config.
 func deleteSourceCfgOp(source string) clientv3.Op {
 	return clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(source))
+}
+
+func sourceCfgFromResp(source string, resp *clientv3.GetResponse) (map[string]config.SourceConfig, error) {
+	scm := make(map[string]config.SourceConfig)
+	if resp.Count == 0 {
+		return scm, nil
+	} else if source != "" && resp.Count > 1 {
+		// TODO(csuzhangxc): add terror.
+		// this should not happen.
+		return scm, fmt.Errorf("too many config (%d) exist for the source %s", resp.Count, source)
+	}
+
+	for _, kv := range resp.Kvs {
+		var cfg config.SourceConfig
+		err := cfg.Parse(string(kv.Value))
+		if err != nil {
+			// TODO(csuzhangxc): add terror and including `key`.
+			return scm, err
+		}
+		scm[cfg.SourceID] = cfg
+	}
+	return scm, nil
 }
 
 // ClearTestInfoOperation is used to clear all DM-HA relative etcd keys' information
@@ -104,8 +105,7 @@ func ClearTestInfoOperation(cli *clientv3.Client) error {
 	clearBound := clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Path(), clientv3.WithPrefix())
 	clearRelayStage := clientv3.OpDelete(common.StageRelayKeyAdapter.Path(), clientv3.WithPrefix())
 	clearSubTaskStage := clientv3.OpDelete(common.StageSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
-	_, err := cli.Txn(context.Background()).Then(
-		clearSource, clearSubTask, clearWorkerInfo, clearBound, clearWorkerKeepAlive, clearRelayStage, clearSubTaskStage,
-	).Commit()
+	_, _, err := etcdutil.DoOpsInOneTxn(cli, clearSource, clearSubTask, clearWorkerInfo, clearBound,
+		clearWorkerKeepAlive, clearRelayStage, clearSubTaskStage)
 	return err
 }
