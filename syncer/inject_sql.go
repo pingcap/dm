@@ -19,10 +19,10 @@ import (
 
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
-	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/pkg/binlog"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -70,7 +70,7 @@ func (s *Syncer) InjectSQLs(ctx context.Context, sqls []string) error {
 	return nil
 }
 
-func (s *Syncer) tryInject(op opType, pos mysql.Position) *replication.BinlogEvent {
+func (s *Syncer) tryInject(op opType, location binlog.Location) *replication.BinlogEvent {
 	if op != xid && op != ddl {
 		return nil
 	}
@@ -79,7 +79,8 @@ func (s *Syncer) tryInject(op opType, pos mysql.Position) *replication.BinlogEve
 	case e := <-s.injectEventCh:
 		// try receive from extra binlog event chan
 		// NOTE: now we simply set EventSize to 0, make event's start / end pos are the same
-		e.Header.LogPos = pos.Pos
+		// TODO: support GTID
+		e.Header.LogPos = location.Position.Pos
 		e.Header.EventSize = 0
 		s.tctx.L().Info("inject binlog event from inject chan", zap.Reflect("header", e.Header), zap.Reflect("event", e.Event))
 		return e

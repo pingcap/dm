@@ -14,11 +14,15 @@
 package binlog
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
 	gmysql "github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -31,6 +35,11 @@ const (
 	// eg. mysql-bin.000003 in c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002 => mysql-bin|000002.000003
 	// where `000002` in `c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002` is the UUIDSuffix
 	posUUIDSuffixSeparator = "|"
+)
+
+var (
+	// MinPosition is the min binlog position
+	MinPosition = gmysql.Position{Pos: 4}
 )
 
 // PositionFromStr constructs a mysql.Position from a string representation like `mysql-bin.000001:2345`
@@ -159,4 +168,83 @@ func ComparePosition(pos1, pos2 gmysql.Position) int {
 	}
 
 	return adjustedPos1.Compare(adjustedPos2)
+}
+
+// Location is used for save binlog's position and gtid
+type Location struct {
+	Position gmysql.Position
+
+	GTIDSet gtid.Set
+}
+
+// NewLocation returns a new Location
+func NewLocation(flavor string) Location {
+	return Location{
+		Position: MinPosition,
+		GTIDSet:  gtid.MinGTIDSet(flavor),
+	}
+}
+
+func (l Location) String() string {
+	return fmt.Sprintf("position: %v, gtid-set: %s", l.Position, l.GTIDSetStr())
+}
+
+// GTIDSetStr returns gtid set's string
+func (l Location) GTIDSetStr() string {
+	gsetStr := ""
+	if l.GTIDSet != nil {
+		gsetStr = l.GTIDSet.String()
+	}
+
+	return gsetStr
+}
+
+// Clone clones a same Location
+func (l Location) Clone() Location {
+	return l.CloneWithFlavor("")
+}
+
+// CloneWithFlavor clones the location, and if the GTIDSet is nil, will create a GTIDSet with specified flavor.
+func (l Location) CloneWithFlavor(flavor string) Location {
+	var newGTIDSet gtid.Set
+	if l.GTIDSet != nil {
+		newGTIDSet = l.GTIDSet.Clone()
+	} else if len(flavor) != 0 {
+		newGTIDSet = gtid.MinGTIDSet(flavor)
+	}
+
+	return Location{
+		Position: gmysql.Position{
+			Name: l.Position.Name,
+			Pos:  l.Position.Pos,
+		},
+		GTIDSet: newGTIDSet,
+	}
+}
+
+// CompareLocation returns:
+//   1 if point1 is bigger than point2
+//   0 if point1 is equal to point2
+//   -1 if point1 is less than point2
+func CompareLocation(location1, location2 Location) int {
+	if location1.GTIDSet != nil && len(location1.GTIDSet.String()) != 0 &&
+		location2.GTIDSet != nil && len(location2.GTIDSet.String()) != 0 {
+		contain1 := location1.GTIDSet.Contain(location2.GTIDSet)
+		contain2 := location2.GTIDSet.Contain(location1.GTIDSet)
+		if contain1 && contain2 {
+			// gtidSet1 contains gtidSet2 and gtidSet2 contains gtidSet1 means gtidSet1 equals to gtidSet2,
+			// then need to compare by position.
+		} else {
+			if contain1 {
+				return 1
+			} else if contain2 {
+				return -1
+			}
+
+			// can't compare location by gtid, and will compare by position
+			log.L().Warn("gtidSet can't be compared", zap.Stringer("location1", location1), zap.Stringer("location2", location2))
+		}
+	}
+
+	return ComparePosition(location1.Position, location2.Position)
 }

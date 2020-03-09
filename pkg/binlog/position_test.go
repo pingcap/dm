@@ -18,6 +18,8 @@ import (
 
 	. "github.com/pingcap/check"
 	gmysql "github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/pkg/gtid"
 )
 
 var _ = Suite(&testPositionSuite{})
@@ -346,4 +348,197 @@ func (t *testPositionSuite) TestComparePosition(c *C) {
 		cmp := ComparePosition(cs.pos1, cs.pos2)
 		c.Assert(cmp, Equals, cs.cmp)
 	}
+}
+
+func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
+	testCases := []struct {
+		flavor string
+		pos1   gmysql.Position
+		gset1  string
+		pos2   gmysql.Position
+		gset2  string
+		cmp    int
+	}{
+		{
+			// pos1 = pos2
+			gmysql.MySQLFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"",
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"",
+			0,
+		}, {
+			// pos1 = pos2
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"",
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"",
+			0,
+		}, {
+			// pos1 < pos2
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"",
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  122,
+			},
+			"",
+			-1,
+		}, {
+			// pos1 > pos2
+			gmysql.MySQLFlavor,
+			gmysql.Position{
+				Name: "binlog.00003",
+				Pos:  123,
+			},
+			"",
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  122,
+			},
+			"",
+			1,
+		}, {
+			// gset1 = gset2, pos1 < pos2
+			gmysql.MySQLFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-4",
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  122,
+			},
+			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-4",
+			-1,
+		}, {
+			// compare by gtid set, gset2 contains gset1
+			gmysql.MySQLFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-2,53ea0ed1-9bf8-11e6-8bea-64006a897c74:1-2",
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  124,
+			},
+			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-4,53ea0ed1-9bf8-11e6-8bea-64006a897c74:1-3",
+			-1,
+		}, {
+			// compare by gtid set, gset1 contains gset2
+			gmysql.MySQLFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-2,53ea0ed1-9bf8-11e6-8bea-64006a897c74:1-3",
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  124,
+			},
+			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-2",
+			1,
+		}, {
+			// can't compare by gtid set, will compare by position, pos1 < pos2
+			gmysql.MySQLFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-2,53ea0ed1-9bf8-11e6-8bea-64006a897c74:2-4",
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  124,
+			},
+			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-2,53ea0ed1-9bf8-11e6-8bea-64006a897c74:1-3",
+			-1,
+		}, {
+			// gset1 = gset2, pos1 < pos2
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"1-1-1,2-2-2",
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  122,
+			},
+			"1-1-1,2-2-2",
+			-1,
+		}, {
+			// compare by gtid set, gset2 contains gset1
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"1-1-1,2-2-2",
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  124,
+			},
+			"1-1-1,2-2-2,3-3-3",
+			-1,
+		}, {
+			// compare by gtid set, gset1 contains gset2
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"1-1-1,2-2-3",
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  124,
+			},
+			"1-1-1,2-2-2",
+			1,
+		}, {
+			// can't compare by gtid set, will compare by position, pos1 < pos2
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"1-1-1,2-2-2",
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  124,
+			},
+			"2-2-2,3-3-3",
+			-1,
+		},
+	}
+
+	for _, cs := range testCases {
+		c.Log(cs)
+		gset1, err := gtid.ParserGTID(cs.flavor, cs.gset1)
+		c.Assert(err, IsNil)
+		gset2, err := gtid.ParserGTID(cs.flavor, cs.gset2)
+		c.Assert(err, IsNil)
+
+		cmp := CompareLocation(Location{cs.pos1, gset1}, Location{cs.pos2, gset2})
+		c.Assert(cmp, Equals, cs.cmp)
+	}
+
 }

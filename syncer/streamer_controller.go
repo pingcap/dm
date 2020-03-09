@@ -43,7 +43,7 @@ const (
 // For other implementations who implement StreamerProducer and Streamer can easily take place of Syncer.streamProducer
 // For test is easy to mock
 type StreamerProducer interface {
-	generateStreamer(pos mysql.Position) (streamer.Streamer, error)
+	generateStreamer(location binlog.Location) (streamer.Streamer, error)
 }
 
 // Read local relay log
@@ -51,31 +51,31 @@ type localBinlogReader struct {
 	reader *streamer.BinlogReader
 }
 
-func (l *localBinlogReader) generateStreamer(pos mysql.Position) (streamer.Streamer, error) {
-	return l.reader.StartSync(pos)
+func (l *localBinlogReader) generateStreamer(location binlog.Location) (streamer.Streamer, error) {
+	return l.reader.StartSync(location.Position)
 }
 
 // Read remote binlog
 type remoteBinlogReader struct {
 	reader     *replication.BinlogSyncer
 	tctx       *tcontext.Context
+	flavor     string
 	EnableGTID bool
 }
 
-func (r *remoteBinlogReader) generateStreamer(pos mysql.Position) (streamer.Streamer, error) {
+func (r *remoteBinlogReader) generateStreamer(location binlog.Location) (streamer.Streamer, error) {
 	defer func() {
 		lastSlaveConnectionID := r.reader.LastConnectionID()
 		r.tctx.L().Info("last slave connection", zap.Uint32("connection ID", lastSlaveConnectionID))
 	}()
 
-	// FIXME: can enable GTID
 	if r.EnableGTID {
-		// NOTE: our (per-table based) checkpoint does not support GTID yet
-		return nil, terror.ErrSyncerUnitRemoteSteamerWithGTID.Generate()
+		streamer, err := r.reader.StartSyncGTID(location.GTIDSet.Origin())
+		return streamer, terror.ErrSyncerUnitRemoteSteamerStartSync.Delegate(err)
 	}
 
 	// position's name may contain uuid, so need remove it
-	adjustedPos := binlog.AdjustPosition(pos)
+	adjustedPos := binlog.AdjustPosition(location.Position)
 	streamer, err := r.reader.StartSync(adjustedPos)
 	return streamer, terror.ErrSyncerUnitRemoteSteamerStartSync.Delegate(err)
 }
@@ -94,6 +94,7 @@ type StreamerController struct {
 	currentBinlogType BinlogType
 
 	syncCfg        replication.BinlogSyncerConfig
+	enableGTID     bool
 	localBinlogDir string
 	timezone       *time.Location
 
@@ -115,11 +116,12 @@ type StreamerController struct {
 }
 
 // NewStreamerController creates a new streamer controller
-func NewStreamerController(tctx *tcontext.Context, syncCfg replication.BinlogSyncerConfig, fromDB *UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location) *StreamerController {
+func NewStreamerController(tctx *tcontext.Context, syncCfg replication.BinlogSyncerConfig, enableGTID bool, fromDB *UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location) *StreamerController {
 	streamerController := &StreamerController{
 		initBinlogType:    binlogType,
 		currentBinlogType: binlogType,
 		syncCfg:           syncCfg,
+		enableGTID:        enableGTID,
 		localBinlogDir:    localBinlogDir,
 		timezone:          timezone,
 		fromDB:            fromDB,
@@ -130,7 +132,7 @@ func NewStreamerController(tctx *tcontext.Context, syncCfg replication.BinlogSyn
 }
 
 // Start starts streamer controller
-func (c *StreamerController) Start(tctx *tcontext.Context, pos mysql.Position) error {
+func (c *StreamerController) Start(tctx *tcontext.Context, location binlog.Location) error {
 	c.Lock()
 	defer c.Unlock()
 
@@ -140,9 +142,9 @@ func (c *StreamerController) Start(tctx *tcontext.Context, pos mysql.Position) e
 
 	var err error
 	if c.serverIDUpdated {
-		err = c.resetReplicationSyncer(tctx, pos)
+		err = c.resetReplicationSyncer(tctx, location)
 	} else {
-		err = c.updateServerIDAndResetReplication(tctx, pos)
+		err = c.updateServerIDAndResetReplication(tctx, location)
 	}
 	if err != nil {
 		c.close(tctx)
@@ -153,14 +155,14 @@ func (c *StreamerController) Start(tctx *tcontext.Context, pos mysql.Position) e
 }
 
 // ResetReplicationSyncer reset the replication
-func (c *StreamerController) ResetReplicationSyncer(tctx *tcontext.Context, pos mysql.Position) (err error) {
+func (c *StreamerController) ResetReplicationSyncer(tctx *tcontext.Context, location binlog.Location) (err error) {
 	c.Lock()
 	defer c.Unlock()
 
-	return c.resetReplicationSyncer(tctx, pos)
+	return c.resetReplicationSyncer(tctx, location)
 }
 
-func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, pos mysql.Position) (err error) {
+func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, location binlog.Location) (err error) {
 	uuidSameWithUpstream := true
 
 	// close old streamerProducer
@@ -170,14 +172,14 @@ func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, pos 
 			c.closeBinlogSyncer(tctx, t.reader)
 		case *localBinlogReader:
 			// check the uuid before close
-			uuidSameWithUpstream, err = c.checkUUIDSameWithUpstream(pos, t.reader.GetUUIDs())
+			uuidSameWithUpstream, err = c.checkUUIDSameWithUpstream(location.Position, t.reader.GetUUIDs())
 			if err != nil {
 				return err
 			}
 			t.reader.Close()
 		default:
 			// some other producers such as mockStreamerProducer, should not re-create
-			c.streamer, err = c.streamerProducer.generateStreamer(pos)
+			c.streamer, err = c.streamerProducer.generateStreamer(location)
 			return err
 		}
 	}
@@ -194,22 +196,22 @@ func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, pos 
 	}
 
 	if c.currentBinlogType == RemoteBinlog {
-		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), tctx, false}
+		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), tctx, c.syncCfg.Flavor, c.enableGTID}
 	} else {
 		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(tctx, &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
 	}
 
-	c.streamer, err = c.streamerProducer.generateStreamer(pos)
+	c.streamer, err = c.streamerProducer.generateStreamer(location)
 	return err
 }
 
 // RedirectStreamer redirects the streamer's begin position or gtid
-func (c *StreamerController) RedirectStreamer(tctx *tcontext.Context, pos mysql.Position) error {
+func (c *StreamerController) RedirectStreamer(tctx *tcontext.Context, location binlog.Location) error {
 	c.Lock()
 	defer c.Unlock()
 
-	tctx.L().Info("redirect streamer", zap.Stringer("position", pos))
-	return c.resetReplicationSyncer(tctx, pos)
+	tctx.L().Info("redirect streamer", zap.Stringer("location", location))
+	return c.resetReplicationSyncer(tctx, location)
 }
 
 // GetEvent returns binlog event, should only have one thread call this function.
@@ -265,13 +267,13 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 }
 
 // ReopenWithRetry reopens streamer with retry
-func (c *StreamerController) ReopenWithRetry(tctx *tcontext.Context, pos mysql.Position) error {
+func (c *StreamerController) ReopenWithRetry(tctx *tcontext.Context, location binlog.Location) error {
 	c.Lock()
 	defer c.Unlock()
 
 	var err error
 	for i := 0; i < maxRetryCount; i++ {
-		err = c.resetReplicationSyncer(tctx, pos)
+		err = c.resetReplicationSyncer(tctx, location)
 		if err == nil {
 			return nil
 		}
@@ -407,20 +409,20 @@ func (c *StreamerController) updateServerID(tctx *tcontext.Context) error {
 }
 
 // UpdateServerIDAndResetReplication updates the server id and reset replication
-func (c *StreamerController) UpdateServerIDAndResetReplication(tctx *tcontext.Context, pos mysql.Position) error {
+func (c *StreamerController) UpdateServerIDAndResetReplication(tctx *tcontext.Context, location binlog.Location) error {
 	c.Lock()
 	defer c.Unlock()
 
-	return c.updateServerIDAndResetReplication(tctx, pos)
+	return c.updateServerIDAndResetReplication(tctx, location)
 }
 
-func (c *StreamerController) updateServerIDAndResetReplication(tctx *tcontext.Context, pos mysql.Position) error {
+func (c *StreamerController) updateServerIDAndResetReplication(tctx *tcontext.Context, location binlog.Location) error {
 	err := c.updateServerID(tctx)
 	if err != nil {
 		return err
 	}
 
-	err = c.resetReplicationSyncer(tctx, pos)
+	err = c.resetReplicationSyncer(tctx, location)
 	if err != nil {
 		return err
 	}
