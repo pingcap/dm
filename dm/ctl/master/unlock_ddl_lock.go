@@ -53,7 +53,7 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 	lockID := cmd.Flags().Arg(0)
 
 	sources, _ := common.GetSourceArgs(cmd)
-	if len(sources) > 1 {
+	if len(sources) > 0 {
 		fmt.Println("shoud not specify any sources")
 		return
 	}
