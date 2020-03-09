@@ -17,6 +17,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/pingcap/dm/dm/config"
+
 	. "github.com/pingcap/check"
 )
 
@@ -73,7 +75,6 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	c.Assert(len(errCh), Equals, 0)
 
 	// get bound1 back.
-	bound1.Revision = 0
 	sbm2, rev4, err := GetSourceBound(etcdTestCli, worker1)
 	c.Assert(err, IsNil)
 	c.Assert(rev4, Equals, rev3)
@@ -81,12 +82,12 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	c.Assert(sbm2[worker1], DeepEquals, bound1)
 
 	// get bound1 and bound2 back.
-	bound2.Revision = 0
 	sbm2, rev4, err = GetSourceBound(etcdTestCli, "")
 	c.Assert(err, IsNil)
 	c.Assert(rev4, Equals, rev3)
 	c.Assert(sbm2, HasLen, 2)
 	c.Assert(sbm2[worker1], DeepEquals, bound1)
+	bound2.Revision = rev3
 	c.Assert(sbm2[worker2], DeepEquals, bound2)
 
 	// delete bound1.
@@ -118,4 +119,42 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev7, Equals, rev6)
 	c.Assert(sbm3, HasLen, 0)
+}
+
+func (t *testForEtcd) TestGetSourceBoundConfigEtcd(c *C) {
+	defer clearTestInfoOperation(c)
+
+	var (
+		worker   = "dm-worker-1"
+		source   = "mysql-replica-1"
+		bound    = NewSourceBound(source, worker)
+		cfg      config.SourceConfig
+		emptyCfg config.SourceConfig
+	)
+	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+	cfg.SourceID = source
+	// no source bound and config
+	bound1, cfg1, rev1, err := GetSourceBoundConfig(etcdTestCli, worker)
+	c.Assert(err, IsNil)
+	c.Assert(rev1, Greater, int64(0))
+	c.Assert(bound1.IsEmpty(), IsTrue)
+	c.Assert(cfg1, DeepEquals, emptyCfg)
+
+	rev2, err := PutSourceBound(etcdTestCli, bound)
+	c.Assert(err, IsNil)
+	c.Assert(rev2, Greater, rev1)
+	// get source bound and config, but config is empty
+	_, _, _, err = GetSourceBoundConfig(etcdTestCli, worker)
+	c.Assert(err, ErrorMatches, ".*doesn't have related source config in etcd.*")
+
+	rev3, err := PutSourceCfg(etcdTestCli, cfg)
+	c.Assert(err, IsNil)
+	c.Assert(rev3, Greater, rev2)
+	// get source bound and config
+	bound2, cfg2, rev4, err := GetSourceBoundConfig(etcdTestCli, worker)
+	c.Assert(err, IsNil)
+	c.Assert(rev4, Equals, rev3)
+	bound.Revision = rev2
+	c.Assert(bound2, DeepEquals, bound)
+	c.Assert(cfg2, DeepEquals, cfg)
 }

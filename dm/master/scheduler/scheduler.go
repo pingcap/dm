@@ -779,7 +779,7 @@ func (s *Scheduler) GetExpectSubTaskStage(task, source string) ha.Stage {
 // recoverSourceCfgs recovers history source configs and expectant relay stages from etcd.
 func (s *Scheduler) recoverSources(cli *clientv3.Client) error {
 	// get all source configs.
-	cfgM, _, err := ha.GetAllSourceCfg(cli)
+	cfgM, _, err := ha.GetSourceCfg(cli, "", 0)
 	if err != nil {
 		return err
 	}

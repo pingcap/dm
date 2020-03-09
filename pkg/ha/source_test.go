@@ -54,21 +54,19 @@ var _ = Suite(&testForEtcd{})
 func (t *testForEtcd) TestSourceEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
-	var (
-		emptyCfg config.SourceConfig
-		cfg      config.SourceConfig
-	)
+	var cfg config.SourceConfig
+
 	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
 	source := cfg.SourceID
 	cfgExtra := cfg
 	cfgExtra.SourceID = "mysql-replica-2"
 
 	// no source config exist.
-	cfg1, rev1, err := GetSourceCfg(etcdTestCli, source, 0)
+	scm1, rev1, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev1, Greater, int64(0))
-	c.Assert(cfg1, DeepEquals, emptyCfg)
-	cfgM, _, err := GetAllSourceCfg(etcdTestCli)
+	c.Assert(scm1, HasLen, 0)
+	cfgM, _, err := GetSourceCfg(etcdTestCli, "", 0)
 	c.Assert(err, IsNil)
 	c.Assert(cfgM, HasLen, 0)
 
@@ -78,9 +76,10 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	c.Assert(rev2, Greater, rev1)
 
 	// get the config back.
-	cfg2, rev3, err := GetSourceCfg(etcdTestCli, source, 0)
+	scm2, rev3, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
+	cfg2 := scm2[source]
 	c.Assert(cfg2, DeepEquals, cfg)
 
 	// put another source config.
@@ -88,7 +87,7 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	c.Assert(err, IsNil)
 
 	// get all two config.
-	cfgM, rev3, err = GetAllSourceCfg(etcdTestCli)
+	cfgM, rev3, err = GetSourceCfg(etcdTestCli, "", 0)
 	c.Assert(rev3, Equals, rev2)
 	c.Assert(cfgM, HasLen, 2)
 	c.Assert(cfgM[source], DeepEquals, cfg)
@@ -100,8 +99,8 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	c.Assert(err, IsNil)
 
 	// get again, not exists now.
-	cfg3, rev4, err := GetSourceCfg(etcdTestCli, source, 0)
+	scm3, rev4, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev4, Equals, deleteResp.Header.Revision)
-	c.Assert(cfg3, DeepEquals, emptyCfg)
+	c.Assert(scm3, HasLen, 0)
 }

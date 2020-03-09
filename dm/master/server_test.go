@@ -989,10 +989,9 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 		Result: true,
 		Source: sourceID,
 	}})
-	cfg, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
+	scm, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
 	c.Assert(err, check.IsNil)
-	var emptySourceCfg config.SourceConfig
-	c.Assert(cfg, check.DeepEquals, emptySourceCfg)
+	c.Assert(scm, check.HasLen, 0)
 	cancel()
 }
 
@@ -1043,15 +1042,20 @@ func (t *testMaster) TestOfflineWorker(c *check.C) {
 	}
 }
 
+func stageDeepEqualExcludeRev(c *check.C, stage, expectStage ha.Stage) {
+	expectStage.Revision = stage.Revision
+	c.Assert(stage, check.DeepEquals, expectStage)
+}
+
 func (t *testMaster) relayStageMatch(c *check.C, s *scheduler.Scheduler, source string, expectStage pb.Stage) {
 	stage := ha.NewRelayStage(expectStage, source)
-	c.Assert(s.GetExpectRelayStage(source), check.DeepEquals, stage)
+	stageDeepEqualExcludeRev(c, s.GetExpectRelayStage(source), stage)
 
 	eStage, _, err := ha.GetRelayStage(etcdTestCli, source)
 	c.Assert(err, check.IsNil)
 	switch expectStage {
 	case pb.Stage_Running, pb.Stage_Paused:
-		c.Assert(eStage, check.DeepEquals, stage)
+		stageDeepEqualExcludeRev(c, eStage, stage)
 	}
 }
 
@@ -1064,7 +1068,7 @@ func (t *testMaster) subTaskStageMatch(c *check.C, s *scheduler.Scheduler, task,
 	switch expectStage {
 	case pb.Stage_Running, pb.Stage_Paused:
 		c.Assert(eStageM, check.HasLen, 1)
-		c.Assert(eStageM[task], check.DeepEquals, stage)
+		stageDeepEqualExcludeRev(c, eStageM[task], stage)
 	default:
 		c.Assert(eStageM, check.HasLen, 0)
 	}
