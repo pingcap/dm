@@ -1410,7 +1410,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	// for RowsEvent, one event may have multi SQLs and multi keys, (eg. INSERT INTO t1 VALUES (11, 12), (21, 22) )
 	// to cover them dispatched to different channels, we still apply operator here
 	// ugly, but I have no better solution yet.
-	applied, sqls, err = s.tryApplySQLOperator(*ec.currentLocation, nil) // forbidden sql-pattern for DMLs
+	applied, sqls, err = s.tryApplySQLOperator(ec.currentLocation.Clone(), nil) // forbidden sql-pattern for DMLs
 	if err != nil {
 		return err
 	}
@@ -1644,7 +1644,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	if !s.cfg.IsSharding {
 		s.tctx.L().Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 		// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
-		applied, appliedSQLs, applyErr := s.tryApplySQLOperator(*ec.currentLocation, needHandleDDLs)
+		applied, appliedSQLs, applyErr := s.tryApplySQLOperator(ec.currentLocation.Clone(), needHandleDDLs)
 		if applyErr != nil {
 			return terror.Annotatef(applyErr, "try apply SQL operator on binlog-location %s with DDLs %v", ec.currentLocation, needHandleDDLs)
 		}
@@ -1720,7 +1720,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 		annotate = "add table to shard group"
 	default:
-		needShardingHandle, group, synced, active, remain, err = s.sgk.TrySync(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, source, startLocation, *ec.currentLocation, needHandleDDLs)
+		needShardingHandle, group, synced, active, remain, err = s.sgk.TrySync(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, source, startLocation.Clone(), ec.currentLocation.Clone(), needHandleDDLs)
 		if err != nil {
 			return err
 		}
@@ -1752,7 +1752,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		// for non-last sharding DDL's table, this checkpoint will be used to skip binlog event when re-syncing
 		// NOTE: when last sharding DDL executed, all this checkpoints will be flushed in the same txn
 		s.tctx.L().Info("save table checkpoint for source", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
-		s.saveTablePoint(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name, *ec.currentLocation)
+		s.saveTablePoint(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name, ec.currentLocation.Clone())
 		if !synced {
 			s.tctx.L().Info("source shard group is not synced", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
 			return nil
@@ -1832,7 +1832,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	s.tctx.L().Info("start to handle ddls in shard mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
 
 	// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
-	applied, appliedSQLs, err := s.tryApplySQLOperator(*ec.currentLocation, needHandleDDLs)
+	applied, appliedSQLs, err := s.tryApplySQLOperator(ec.currentLocation.Clone(), needHandleDDLs)
 	if err != nil {
 		return terror.Annotatef(err, "try apply SQL operator on binlog-location %s with DDLs %v", ec.currentLocation, needHandleDDLs)
 	}
