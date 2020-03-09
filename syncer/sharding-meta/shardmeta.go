@@ -46,10 +46,18 @@ type DDLItem struct {
 
 // NewDDLItem creates a new DDLItem
 func NewDDLItem(location binlog.Location, ddls []string, source string) *DDLItem {
+	gsetStr := ""
+	if location.GTIDSet != nil {
+		gsetStr = location.GTIDSet.String()
+	}
+
 	return &DDLItem{
-		FirstLocation: location,
+		FirstLocation: location.Clone(),
 		DDLs:          ddls,
 		Source:        source,
+
+		FirstPosition: location.Position,
+		FirstGTIDSet:  gsetStr,
 	}
 }
 
@@ -257,14 +265,6 @@ func (meta *ShardingMeta) ActiveDDLFirstLocation() (binlog.Location, error) {
 
 // FlushData returns sharding meta flush SQL and args
 func (meta *ShardingMeta) FlushData(sourceID, tableID string) ([]string, [][]interface{}) {
-	// set FirstPosition and FirstGTIDSet for json marshal
-	for _, item := range meta.global.Items {
-		item.FirstPosition = item.FirstLocation.Position
-		if item.FirstLocation.GTIDSet != nil {
-			item.FirstGTIDSet = item.FirstLocation.GTIDSet.String()
-		}
-	}
-
 	if len(meta.global.Items) == 0 {
 		sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` where source_id=? and target_table_id=?", meta.schema, meta.table)
 		args2 := []interface{}{sourceID, tableID}

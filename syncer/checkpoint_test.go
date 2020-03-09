@@ -45,6 +45,7 @@ var (
 
 var _ = Suite(&testCheckpointSuite{})
 
+// TODO: add test cases for GTID
 type testCheckpointSuite struct {
 	cfg     *config.SubTaskConfig
 	mock    sqlmock.Sqlmock
