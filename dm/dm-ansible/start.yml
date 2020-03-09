@@ -34,18 +34,6 @@
     - name: wait for alertmanager up
       wait_for: host={{ ansible_host }} port={{ alertmanager_port }} state=started
 
-- hosts: dm_worker_servers
-  tags:
-    - dm-worker
-  tasks:
-    - name: start dm-worker by systemd
-      become: true
-      systemd: name=dm-worker-{{ dm_worker_port }}.service state=started enabled=no
-
-    - name: wait for dm-worker up
-      wait_for: |
-        host={{ ansible_host }} port={{ dm_worker_port }} state=started
-
 - hosts: dm_master_servers
   tags:
     - dm-master
@@ -57,6 +45,36 @@
     - name: wait for dm-master up
       wait_for: |
         host={{ ansible_host }} port={{ dm_master_port }} state=started
+    
+    - name: wait until dm_master is available
+      uri:
+        url: "http://{{ ansible_host }}:{{ dm_master_port }}/apis/v1alpha1/status/"
+        return_content: yes
+      register: dm_master_http_result
+      until: dm_master_http_result.status == 200 and 'true' in dm_master_http_result.content
+      retries: 12
+      delay: 5
+
+- hosts: dm_worker_servers
+  tags:
+    - dm-worker
+  tasks:
+    - name: start dm-worker by systemd
+      become: true
+      systemd: name=dm-worker-{{ dm_worker_port }}.service state=started enabled=no
+
+    - name: wait for dm-worker up
+      wait_for: |
+        host={{ ansible_host }} port={{ dm_worker_port }} state=started
+    
+    - name: wait until dm_worker is available
+      uri:
+        url: "http://{{ ansible_host }}:{{ dm_worker_port }}/status"
+        return_content: yes
+      register: dm_worker_http_result
+      until: dm_worker_http_result.status == 200
+      retries: 12
+      delay: 5
 
 - hosts: dm_portal_servers
   tags:
