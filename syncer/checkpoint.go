@@ -21,9 +21,10 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/binlog"
+	binlog "github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
@@ -50,38 +51,39 @@ var (
 	globalCpSchema       = "" // global checkpoint's cp_schema
 	globalCpTable        = "" // global checkpoint's cp_table
 	maxCheckPointTimeout = "1m"
-	minCheckpoint        = mysql.Position{Pos: 4}
 
 	maxCheckPointSaveTime = 30 * time.Second
 )
 
-// NOTE: now we sync from relay log, so not add GTID support yet
 type binlogPoint struct {
 	sync.RWMutex
-	mysql.Position
-	ti *model.TableInfo
 
-	flushedPos mysql.Position // pos which flushed permanently
-	flushedTI  *model.TableInfo
+	location binlog.Location
+	ti       *model.TableInfo
+
+	flushedLocation binlog.Location // location which flushed permanently
+	flushedTI       *model.TableInfo
 }
 
-func newBinlogPoint(pos mysql.Position, ti *model.TableInfo, flushedPos mysql.Position, flushedTI *model.TableInfo) *binlogPoint {
+func newBinlogPoint(location, flushedLocation binlog.Location, ti, flushedTI *model.TableInfo) *binlogPoint {
 	return &binlogPoint{
-		Position:   pos,
-		ti:         ti,
-		flushedPos: flushedPos,
-		flushedTI:  flushedTI,
+		location:        location,
+		ti:              ti,
+		flushedLocation: flushedLocation,
+		flushedTI:       flushedTI,
 	}
 }
 
-func (b *binlogPoint) save(pos mysql.Position, ti *model.TableInfo) error {
+func (b *binlogPoint) save(location binlog.Location, ti *model.TableInfo) error {
 	b.Lock()
 	defer b.Unlock()
-	if binlog.ComparePosition(pos, b.Position) < 0 {
-		// support to save equal pos, but not older pos
-		return terror.ErrCheckpointSaveInvalidPos.Generate(pos, b.Position)
+
+	if binlog.CompareLocation(location, b.location) < 0 {
+		// support to save equal location, but not older location
+		return terror.ErrCheckpointSaveInvalidPos.Generate(location, b.location)
 	}
-	b.Position = pos
+
+	b.location = location
 	b.ti = ti
 	return nil
 }
@@ -89,14 +91,14 @@ func (b *binlogPoint) save(pos mysql.Position, ti *model.TableInfo) error {
 func (b *binlogPoint) flush() {
 	b.Lock()
 	defer b.Unlock()
-	b.flushedPos = b.Position
+	b.flushedLocation = b.location
 	b.flushedTI = b.ti
 }
 
 func (b *binlogPoint) rollback() (isSchemaChanged bool) {
 	b.Lock()
 	defer b.Unlock()
-	b.Position = b.flushedPos
+	b.location = b.flushedLocation
 	if isSchemaChanged = b.ti != b.flushedTI; isSchemaChanged {
 		b.ti = b.flushedTI
 	}
@@ -106,21 +108,22 @@ func (b *binlogPoint) rollback() (isSchemaChanged bool) {
 func (b *binlogPoint) outOfDate() bool {
 	b.RLock()
 	defer b.RUnlock()
-	return binlog.ComparePosition(b.Position, b.flushedPos) > 0
+
+	return binlog.CompareLocation(b.location, b.flushedLocation) > 0
 }
 
-// MySQLPos returns point as mysql.Position
-func (b *binlogPoint) MySQLPos() mysql.Position {
+// MySQLLocation returns point as binlog.Location
+func (b *binlogPoint) MySQLLocation() binlog.Location {
 	b.RLock()
 	defer b.RUnlock()
-	return b.Position
+	return b.location.Clone()
 }
 
-// FlushedMySQLPos returns flushed point as mysql.Position
-func (b *binlogPoint) FlushedMySQLPos() mysql.Position {
+// FlushedMySQLLocation returns flushed point as binlog.Location
+func (b *binlogPoint) FlushedMySQLLocation() binlog.Location {
 	b.RLock()
 	defer b.RUnlock()
-	return b.flushedPos
+	return b.flushedLocation.Clone()
 }
 
 // TableInfo returns the table schema associated at the current binlog position.
@@ -134,7 +137,7 @@ func (b *binlogPoint) String() string {
 	b.RLock()
 	defer b.RUnlock()
 
-	return fmt.Sprintf("%v(flushed %v)", b.Position, b.flushedPos)
+	return fmt.Sprintf("%v(flushed %v)", b.location, b.flushedLocation)
 }
 
 // CheckPoint represents checkpoints status for syncer
@@ -163,7 +166,7 @@ type CheckPoint interface {
 	LoadMeta() error
 
 	// SaveTablePoint saves checkpoint for specified table in memory
-	SaveTablePoint(sourceSchema, sourceTable string, pos mysql.Position, ti *model.TableInfo)
+	SaveTablePoint(sourceSchema, sourceTable string, point binlog.Location, ti *model.TableInfo)
 
 	// DeleteTablePoint deletes checkpoint for specified table in memory and storage
 	DeleteTablePoint(tctx *tcontext.Context, sourceSchema, sourceTable string) error
@@ -172,11 +175,11 @@ type CheckPoint interface {
 	DeleteSchemaPoint(tctx *tcontext.Context, sourceSchema string) error
 
 	// IsNewerTablePoint checks whether job's checkpoint is newer than previous saved checkpoint
-	IsNewerTablePoint(sourceSchema, sourceTable string, pos mysql.Position) bool
+	IsNewerTablePoint(sourceSchema, sourceTable string, point binlog.Location) bool
 
 	// SaveGlobalPoint saves the global binlog stream's checkpoint
 	// corresponding to Meta.Save
-	SaveGlobalPoint(pos mysql.Position)
+	SaveGlobalPoint(point binlog.Location)
 
 	// FlushGlobalPointsExcept flushes the global checkpoint and tables'
 	// checkpoints except exceptTables, it also flushes SQLs with Args providing
@@ -186,15 +189,15 @@ type CheckPoint interface {
 	FlushPointsExcept(tctx *tcontext.Context, exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error
 
 	// GlobalPoint returns the global binlog stream's checkpoint
-	// corresponding to to Meta.Pos
-	GlobalPoint() mysql.Position
+	// corresponding to Meta.Pos and Meta.GTID
+	GlobalPoint() binlog.Location
 
 	// TablePoint returns all table's stream checkpoint
-	TablePoint() map[string]map[string]mysql.Position
+	TablePoint() map[string]map[string]binlog.Location
 
 	// FlushedGlobalPoint returns the flushed global binlog stream's checkpoint
-	// corresponding to to Meta.Pos
-	FlushedGlobalPoint() mysql.Position
+	// corresponding to to Meta.Pos and gtid
+	FlushedGlobalPoint() binlog.Location
 
 	// CheckGlobalPoint checks whether we should save global checkpoint
 	// corresponding to Meta.Check
@@ -244,7 +247,7 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 		tableName:   dbutil.TableName(cfg.MetaSchema, cfg.Name+"_syncer_checkpoint"),
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
-		globalPoint: newBinlogPoint(minCheckpoint, nil, minCheckpoint, nil),
+		globalPoint: newBinlogPoint(binlog.NewLocation(cfg.Flavor), binlog.NewLocation(cfg.Flavor), nil, nil),
 		logCtx:      tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
 	}
 
@@ -290,28 +293,27 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 		return err
 	}
 
-	cp.globalPoint = newBinlogPoint(minCheckpoint, nil, minCheckpoint, nil)
-
+	cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil)
 	cp.points = make(map[string]map[string]*binlogPoint)
 
 	return nil
 }
 
 // SaveTablePoint implements CheckPoint.SaveTablePoint
-func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, pos mysql.Position, ti *model.TableInfo) {
+func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, point binlog.Location, ti *model.TableInfo) {
 	cp.Lock()
 	defer cp.Unlock()
-	cp.saveTablePoint(sourceSchema, sourceTable, pos, ti)
+	cp.saveTablePoint(sourceSchema, sourceTable, point.Clone(), ti)
 }
 
 // saveTablePoint saves single table's checkpoint without mutex.Lock
-func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos mysql.Position, ti *model.TableInfo) {
-	if binlog.ComparePosition(cp.globalPoint.Position, pos) > 0 {
-		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", pos, cp.globalPoint))
+func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, location binlog.Location, ti *model.TableInfo) {
+	if binlog.CompareLocation(cp.globalPoint.location, location) > 0 {
+		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
 	}
 
 	// we save table checkpoint while we meet DDL or DML
-	cp.logCtx.L().Debug("save table checkpoint", zap.Stringer("position", pos), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
+	cp.logCtx.L().Debug("save table checkpoint", zap.Stringer("loaction", location), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)
@@ -319,8 +321,8 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 	}
 	point, ok := mSchema[sourceTable]
 	if !ok {
-		mSchema[sourceTable] = newBinlogPoint(pos, ti, minCheckpoint, nil)
-	} else if err := point.save(pos, ti); err != nil {
+		mSchema[sourceTable] = newBinlogPoint(location, binlog.NewLocation(cp.cfg.Flavor), ti, nil)
+	} else if err := point.save(location, ti); err != nil {
 		cp.logCtx.L().Error("fail to save table point", zap.String("schema", sourceSchema), zap.String("table", sourceTable), log.ShortError(err))
 	}
 }
@@ -374,7 +376,7 @@ func (cp *RemoteCheckPoint) DeleteSchemaPoint(tctx *tcontext.Context, sourceSche
 }
 
 // IsNewerTablePoint implements CheckPoint.IsNewerTablePoint
-func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, pos mysql.Position) bool {
+func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, location binlog.Location) bool {
 	cp.RLock()
 	defer cp.RUnlock()
 	mSchema, ok := cp.points[sourceSchema]
@@ -385,18 +387,18 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 	if !ok {
 		return true
 	}
-	oldPos := point.MySQLPos()
+	oldLocation := point.MySQLLocation()
 
-	return binlog.ComparePosition(pos, oldPos) > 0
+	return binlog.CompareLocation(location, oldLocation) > 0
 }
 
 // SaveGlobalPoint implements CheckPoint.SaveGlobalPoint
-func (cp *RemoteCheckPoint) SaveGlobalPoint(pos mysql.Position) {
+func (cp *RemoteCheckPoint) SaveGlobalPoint(location binlog.Location) {
 	cp.Lock()
 	defer cp.Unlock()
 
-	cp.logCtx.L().Debug("save global checkpoint", zap.Stringer("position", pos))
-	if err := cp.globalPoint.save(pos, nil); err != nil {
+	cp.logCtx.L().Debug("save global checkpoint", zap.Stringer("location", location))
+	if err := cp.globalPoint.save(location.Clone(), nil); err != nil {
 		cp.logCtx.L().Error("fail to save global checkpoint", log.ShortError(err))
 	}
 }
@@ -422,8 +424,8 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 	args := make([][]interface{}, 0, 100)
 
 	if cp.globalPoint.outOfDate() {
-		posG := cp.GlobalPoint()
-		sqlG, argG := cp.genUpdateSQL(globalCpSchema, globalCpTable, posG.Name, posG.Pos, nil, true)
+		locationG := cp.GlobalPoint()
+		sqlG, argG := cp.genUpdateSQL(globalCpSchema, globalCpTable, locationG, nil, true)
 		sqls = append(sqls, sqlG)
 		args = append(args, argG)
 	}
@@ -443,8 +445,8 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 					return terror.ErrSchemaTrackerCannotSerialize.Delegate(err, schema, table)
 				}
 
-				pos := point.MySQLPos()
-				sql2, arg := cp.genUpdateSQL(schema, table, pos.Name, pos.Pos, tiBytes, false)
+				location := point.MySQLLocation()
+				sql2, arg := cp.genUpdateSQL(schema, table, location, tiBytes, false)
 				sqls = append(sqls, sql2)
 				args = append(args, arg)
 
@@ -472,28 +474,31 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 }
 
 // GlobalPoint implements CheckPoint.GlobalPoint
-func (cp *RemoteCheckPoint) GlobalPoint() mysql.Position {
-	return cp.globalPoint.MySQLPos()
+func (cp *RemoteCheckPoint) GlobalPoint() binlog.Location {
+	return cp.globalPoint.MySQLLocation()
 }
 
 // TablePoint implements CheckPoint.TablePoint
-func (cp *RemoteCheckPoint) TablePoint() map[string]map[string]mysql.Position {
+func (cp *RemoteCheckPoint) TablePoint() map[string]map[string]binlog.Location {
 	cp.RLock()
 	defer cp.RUnlock()
 
-	tablePoint := make(map[string]map[string]mysql.Position)
+	tablePoint := make(map[string]map[string]binlog.Location)
 	for schema, tables := range cp.points {
-		tablePoint[schema] = make(map[string]mysql.Position)
+		tablePoint[schema] = make(map[string]binlog.Location)
 		for table, point := range tables {
-			tablePoint[schema][table] = point.MySQLPos()
+			tablePoint[schema][table] = point.MySQLLocation()
 		}
 	}
 	return tablePoint
 }
 
 // FlushedGlobalPoint implements CheckPoint.FlushedGlobalPoint
-func (cp *RemoteCheckPoint) FlushedGlobalPoint() mysql.Position {
-	return cp.globalPoint.FlushedMySQLPos()
+func (cp *RemoteCheckPoint) FlushedGlobalPoint() binlog.Location {
+	cp.RLock()
+	defer cp.RUnlock()
+
+	return cp.globalPoint.FlushedMySQLLocation()
 }
 
 // String implements CheckPoint.String
@@ -563,6 +568,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 			cp_table VARCHAR(128) NOT NULL,
 			binlog_name VARCHAR(128),
 			binlog_pos INT UNSIGNED,
+			binlog_gtid VARCHAR(256),
 			table_info JSON NOT NULL,
 			is_global BOOLEAN,
 			create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -577,7 +583,10 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 
 // Load implements CheckPoint.Load
 func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.Tracker) error {
-	query := `SELECT cp_schema, cp_table, binlog_name, binlog_pos, table_info, is_global FROM ` + cp.tableName + ` WHERE id = ?`
+	cp.Lock()
+	defer cp.Unlock()
+
+	query := `SELECT cp_schema, cp_table, binlog_name, binlog_pos, binlog_gtid, table_info, is_global FROM ` + cp.tableName + ` WHERE id = ?`
 	rows, err := cp.dbConn.querySQL(tctx, query, cp.id)
 	defer func() {
 		if rows != nil {
@@ -597,25 +606,35 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 	// checkpoints in DB have higher priority
 	// if don't want to use checkpoint in DB, set `remove-previous-checkpoint` to `true`
 	var (
-		cpSchema   string
-		cpTable    string
-		binlogName string
-		binlogPos  uint32
-		tiBytes    []byte
-		isGlobal   bool
+		cpSchema      string
+		cpTable       string
+		binlogName    string
+		binlogPos     uint32
+		binlogGTIDSet string
+		tiBytes       []byte
+		isGlobal      bool
 	)
 	for rows.Next() {
-		err := rows.Scan(&cpSchema, &cpTable, &binlogName, &binlogPos, &tiBytes, &isGlobal)
+		err := rows.Scan(&cpSchema, &cpTable, &binlogName, &binlogPos, &binlogGTIDSet, &tiBytes, &isGlobal)
 		if err != nil {
 			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
-		pos := mysql.Position{
-			Name: binlogName,
-			Pos:  binlogPos,
+
+		gset, err := gtid.ParserGTID(cp.cfg.Flavor, binlogGTIDSet)
+		if err != nil {
+			return err
+		}
+
+		location := binlog.Location{
+			Position: mysql.Position{
+				Name: binlogName,
+				Pos:  binlogPos,
+			},
+			GTIDSet: gset,
 		}
 		if isGlobal {
-			if binlog.ComparePosition(pos, minCheckpoint) > 0 {
-				cp.globalPoint = newBinlogPoint(pos, nil, pos, nil)
+			if binlog.CompareLocation(location, binlog.NewLocation(cp.cfg.Flavor)) > 0 {
+				cp.globalPoint = newBinlogPoint(location.Clone(), location.Clone(), nil, nil)
 				cp.logCtx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
 			}
 			continue // skip global checkpoint
@@ -640,7 +659,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			mSchema = make(map[string]*binlogPoint)
 			cp.points[cpSchema] = mSchema
 		}
-		mSchema[cpTable] = newBinlogPoint(pos, &ti, pos, &ti)
+		mSchema[cpTable] = newBinlogPoint(location.Clone(), location.Clone(), &ti, &ti)
 	}
 
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
@@ -649,14 +668,14 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 // LoadMeta implements CheckPoint.LoadMeta
 func (cp *RemoteCheckPoint) LoadMeta() error {
 	var (
-		pos *mysql.Position
-		err error
+		location *binlog.Location
+		err      error
 	)
 	switch cp.cfg.Mode {
 	case config.ModeAll:
 		// NOTE: syncer must continue the syncing follow loader's tail, so we parse mydumper's output
 		// refine when master / slave switching added and checkpoint mechanism refactored
-		pos, err = cp.parseMetaData()
+		location, err = cp.parseMetaData()
 		if err != nil {
 			return err
 		}
@@ -664,11 +683,20 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 		// load meta from task config
 		if cp.cfg.Meta == nil {
 			cp.logCtx.L().Warn("don't set meta in increment task-mode")
+			cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil)
 			return nil
 		}
-		pos = &mysql.Position{
-			Name: cp.cfg.Meta.BinLogName,
-			Pos:  cp.cfg.Meta.BinLogPos,
+		gset, err := gtid.ParserGTID(cp.cfg.Flavor, cp.cfg.Meta.BinLogGTID)
+		if err != nil {
+			return err
+		}
+
+		location = &binlog.Location{
+			Position: mysql.Position{
+				Name: cp.cfg.Meta.BinLogName,
+				Pos:  cp.cfg.Meta.BinLogPos,
+			},
+			GTIDSet: gset,
 		}
 	default:
 		// should not go here (syncer is only used in `all` or `incremental` mode)
@@ -676,8 +704,8 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 	}
 
 	// if meta loaded, we will start syncing from meta's pos
-	if pos != nil {
-		cp.globalPoint = newBinlogPoint(*pos, nil, *pos, nil)
+	if location != nil {
+		cp.globalPoint = newBinlogPoint(location.Clone(), location.Clone(), nil, nil)
 		cp.logCtx.L().Info("loaded checkpoints from meta", log.WrapStringerField("global checkpoint", cp.globalPoint))
 	}
 
@@ -685,15 +713,16 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 }
 
 // genUpdateSQL generates SQL and arguments for update checkpoint
-func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, binlogName string, binlogPos uint32, tiBytes []byte, isGlobal bool) (string, []interface{}) {
+func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location binlog.Location, tiBytes []byte, isGlobal bool) (string, []interface{}) {
 	// use `INSERT INTO ... ON DUPLICATE KEY UPDATE` rather than `REPLACE INTO`
 	// to keep `create_time`, `update_time` correctly
 	sql2 := `INSERT INTO ` + cp.tableName + `
-		(id, cp_schema, cp_table, binlog_name, binlog_pos, table_info, is_global) VALUES
-		(?, ?, ?, ?, ?, ?, ?)
+		(id, cp_schema, cp_table, binlog_name, binlog_pos, binlog_gtid, table_info, is_global) VALUES
+		(?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			binlog_name = VALUES(binlog_name),
 			binlog_pos = VALUES(binlog_pos),
+			binlog_gtid = VALUES(binlog_gtid),
 			table_info = VALUES(table_info),
 			is_global = VALUES(is_global);
 	`
@@ -706,13 +735,27 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, binlogName st
 	if len(tiBytes) == 0 {
 		tiBytes = []byte("null")
 	}
-	args := []interface{}{cp.id, cpSchema, cpTable, binlogName, binlogPos, tiBytes, isGlobal}
+
+	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSetStr(), tiBytes, isGlobal}
 	return sql2, args
 }
 
-func (cp *RemoteCheckPoint) parseMetaData() (*mysql.Position, error) {
+func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, error) {
 	// `metadata` is mydumper's output meta file name
 	filename := path.Join(cp.cfg.Dir, "metadata")
 	cp.logCtx.L().Info("parsing metadata from file", zap.String("file", filename))
-	return utils.ParseMetaData(filename)
+	pos, gsetStr, err := utils.ParseMetaData(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	gset, err := gtid.ParserGTID(cp.cfg.Flavor, gsetStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &binlog.Location{
+		Position: pos,
+		GTIDSet:  gset,
+	}, nil
 }

@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -33,23 +34,36 @@ const (
 
 // DDLItem records ddl information used in sharding sequence organization
 type DDLItem struct {
-	FirstPos mysql.Position `json:"first-pos"` // first DDL's binlog Pos, not the End_log_pos of the event
-	DDLs     []string       `json:"ddls"`      // DDLs, these ddls are in the same QueryEvent
-	Source   string         `json:"source"`    // source table ID
+	FirstLocation binlog.Location `json:"-"`      // first DDL's binlog Pos, not the End_log_pos of the event
+	DDLs          []string        `json:"ddls"`   // DDLs, these ddls are in the same QueryEvent
+	Source        string          `json:"source"` // source table ID
+
+	// just used for json's marshal and unmarshal, because gtid.Set in FirstLocation is interface,
+	// can't be marshal and unmarshal
+	FirstPosition mysql.Position `json:"first-position"`
+	FirstGTIDSet  string         `json:"first-gtid-set"`
 }
 
 // NewDDLItem creates a new DDLItem
-func NewDDLItem(pos mysql.Position, ddls []string, source string) *DDLItem {
+func NewDDLItem(location binlog.Location, ddls []string, source string) *DDLItem {
+	gsetStr := ""
+	if location.GTIDSet != nil {
+		gsetStr = location.GTIDSet.String()
+	}
+
 	return &DDLItem{
-		FirstPos: pos,
-		DDLs:     ddls,
-		Source:   source,
+		FirstLocation: location.Clone(),
+		DDLs:          ddls,
+		Source:        source,
+
+		FirstPosition: location.Position,
+		FirstGTIDSet:  gsetStr,
 	}
 }
 
 // String returns the item's format string value
 func (item *DDLItem) String() string {
-	return fmt.Sprintf("first-pos: %s ddls: %+v source: %s", item.FirstPos, item.DDLs, item.Source)
+	return fmt.Sprintf("first-location: %s ddls: %+v source: %s", item.FirstLocation, item.DDLs, item.Source)
 }
 
 // ShardingSequence records a list of DDLItem
@@ -101,12 +115,25 @@ func NewShardingMeta(schema, table string) *ShardingMeta {
 }
 
 // RestoreFromData restores ShardingMeta from given data
-func (meta *ShardingMeta) RestoreFromData(sourceTableID string, activeIdx int, isGlobal bool, data []byte) error {
+func (meta *ShardingMeta) RestoreFromData(sourceTableID string, activeIdx int, isGlobal bool, data []byte, flavor string) error {
 	items := make([]*DDLItem, 0)
 	err := json.Unmarshal(data, &items)
 	if err != nil {
 		return terror.ErrSyncUnitInvalidShardMeta.Delegate(err)
 	}
+
+	// set FirstLocation
+	for _, item := range items {
+		gset, err1 := gtid.ParserGTID(flavor, item.FirstGTIDSet)
+		if err1 != nil {
+			return err1
+		}
+		item.FirstLocation = binlog.Location{
+			Position: item.FirstPosition,
+			GTIDSet:  gset,
+		}
+	}
+
 	if isGlobal {
 		meta.global = &ShardingSequence{Items: items}
 	} else {
@@ -136,7 +163,7 @@ func (meta *ShardingMeta) checkItemExists(item *DDLItem) (int, bool) {
 		return 0, false
 	}
 	for idx, ddlItem := range source.Items {
-		if binlog.ComparePosition(item.FirstPos, ddlItem.FirstPos) == 0 {
+		if binlog.CompareLocation(item.FirstLocation, ddlItem.FirstLocation) == 0 {
 			return idx, true
 		}
 	}
@@ -227,12 +254,13 @@ func (meta *ShardingMeta) ResolveShardingDDL() bool {
 	return false
 }
 
-// ActiveDDLFirstPos returns the first binlog position of active DDL
-func (meta *ShardingMeta) ActiveDDLFirstPos() (mysql.Position, error) {
+// ActiveDDLFirstLocation returns the first binlog position of active DDL
+func (meta *ShardingMeta) ActiveDDLFirstLocation() (binlog.Location, error) {
 	if meta.activeIdx >= len(meta.global.Items) {
-		return mysql.Position{}, terror.ErrSyncUnitDDLActiveIndexLarger.Generate(meta.activeIdx, meta.global.Items)
+		return binlog.Location{}, terror.ErrSyncUnitDDLActiveIndexLarger.Generate(meta.activeIdx, meta.global.Items)
 	}
-	return meta.global.Items[meta.activeIdx].FirstPos, nil
+
+	return meta.global.Items[meta.activeIdx].FirstLocation.Clone(), nil
 }
 
 // FlushData returns sharding meta flush SQL and args

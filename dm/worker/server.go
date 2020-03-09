@@ -808,6 +808,7 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 
 // all subTask in subTaskCfgs should have same source
 // this function return the min position in all subtasks, used for relay's position
+// TODO: get min gtidSet
 func getMinPosInAllSubTasks(ctx context.Context, subTaskCfgs []*config.SubTaskConfig) (minPos *mysql.Position, err error) {
 	for _, subTaskCfg := range subTaskCfgs {
 		pos, err := getMinPosForSubTaskFunc(ctx, subTaskCfg)
@@ -853,6 +854,6 @@ func getMinPosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) 
 		return nil, errors.Annotate(err, "get min position from checkpoint")
 	}
 
-	pos := checkpoint.GlobalPoint()
-	return &pos, nil
+	location := checkpoint.GlobalPoint()
+	return &location.Position, nil
 }

@@ -181,7 +181,7 @@ message LoadStatus {
 message ShardingGroup {
     string target = 1;
     repeated string DDLs = 2;
-    string firstPos = 3;
+    string firstLocation = 3;
     repeated string synced = 4;
     repeated string unsynced = 5;
 }

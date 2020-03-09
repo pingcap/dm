@@ -65,6 +65,7 @@ var (
 type Meta struct {
 	BinLogName string `toml:"binlog-name" yaml:"binlog-name"`
 	BinLogPos  uint32 `toml:"binlog-pos" yaml:"binlog-pos"`
+	BinLogGTID string `toml:"binlog-gtid" yaml:"binlog-gtid"`
 }
 
 // Verify does verification on configs
