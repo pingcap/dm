@@ -227,6 +227,17 @@ func getTxnPosGTIDs(filename string, p *parser.Parser) (int64, gtid.Set, error) 
 			// learn from: https://github.com/siddontang/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L745
 			GTID := ev.GTID
 			nextGTIDStr = fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber)
+		case *replication.PreviousGTIDsEvent:
+			// if GTID enabled, we can get a PreviousGTIDEvent after the FormatDescriptionEvent
+			// ref: https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/binlog.cc#L4549
+			// ref: https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/binlog.cc#L5161
+			var gSet gtid.Set
+			gSet, err = gtid.ParserGTID(gmysql.MySQLFlavor, ev.GTIDSets)
+			if err != nil {
+				return 0, nil, err
+			}
+			latestGSet = gSet.Origin()
+			flavor = gmysql.MySQLFlavor
 		case *replication.MariadbGTIDListEvent:
 			// a MariadbGTIDListEvent logged in every binlog to record the current replication state if GTID enabled
 			// ref: https://mariadb.com/kb/en/library/gtid_list_event/
@@ -236,18 +247,6 @@ func getTxnPosGTIDs(filename string, p *parser.Parser) (int64, gtid.Set, error) 
 			}
 			latestGSet = gSet.Origin()
 			flavor = gmysql.MariaDBFlavor
-		case *replication.GenericEvent:
-			if e.Header.EventType == replication.PREVIOUS_GTIDS_EVENT {
-				// if GTID enabled, we can get a PreviousGTIDEvent after the FormatDescriptionEvent
-				// ref: https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/binlog.cc#L4549
-				// ref: https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/binlog.cc#L5161
-				gSet, err2 := event.GTIDsFromPreviousGTIDsEvent(e)
-				if err2 != nil {
-					return 0, nil, terror.Annotatef(err2, "get GTID set from PreviousGTIDsEvent %+v", e.Header)
-				}
-				latestGSet = gSet.Origin()
-				flavor = gmysql.MySQLFlavor
-			}
 		}
 	}
 
