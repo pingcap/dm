@@ -297,6 +297,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		e.watchLeader(ctx, session, leaderKey)
 		e.l.Info("retire from leader", zap.Stringer("current member", e.info))
 		e.notifyLeader(ctx, nil) // need to re-campaign
+		oldLeaderID = ""
 
 		cancel2()
 		compaignWg.Wait()
