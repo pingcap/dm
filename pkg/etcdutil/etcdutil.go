@@ -21,7 +21,14 @@ import (
 
 	"github.com/pingcap/errors"
 	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/retry"
 )
 
 const (
@@ -32,6 +39,26 @@ const (
 	// DefaultRequestTimeout 10s is long enough for most of etcd clusters.
 	DefaultRequestTimeout = 10 * time.Second
 )
+
+var etcdDefaultTxnRetryParam = retry.Params{
+	RetryCount:         5,
+	FirstRetryDuration: time.Second,
+	BackoffStrategy:    retry.Stable,
+	IsRetryableFn: func(retryTime int, err error) bool {
+		// only retry for unavailable or resource exhausted errors
+		eErr := rpctypes.Error(err)
+		if serverErr, ok := eErr.(rpctypes.EtcdError); ok && serverErr.Code() != codes.Unavailable && serverErr.Code() != codes.ResourceExhausted {
+			return false
+		}
+		ev, ok := status.FromError(err)
+		if !ok {
+			return false
+		}
+		return ev.Code() == codes.Unavailable || ev.Code() == codes.ResourceExhausted
+	},
+}
+
+var etcdDefaultTxnStrategy = retry.FiniteRetryStrategy{}
 
 // CreateClient creates an etcd client with some default config items.
 func CreateClient(endpoints []string) (*clientv3.Client, error) {
@@ -55,15 +82,23 @@ func AddMember(client *clientv3.Client, peerAddrs []string) (*clientv3.MemberAdd
 	return client.MemberAdd(ctx, peerAddrs)
 }
 
-// DoOpsInOneTxn do multiple etcd operations in one txn.
-func DoOpsInOneTxn(cli *clientv3.Client, ops ...clientv3.Op) (*clientv3.TxnResponse, int64, error) {
+// DoOpsInOneTxnWithRetry do multiple etcd operations in one txn.
+func DoOpsInOneTxnWithRetry(cli *clientv3.Client, ops ...clientv3.Op) (*clientv3.TxnResponse, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), DefaultRequestTimeout)
 	defer cancel()
+	tctx := tcontext.NewContext(ctx, log.L())
+	ret, _, err := etcdDefaultTxnStrategy.Apply(tctx, etcdDefaultTxnRetryParam, func(t *tcontext.Context) (ret interface{}, err error) {
+		resp, err := cli.Txn(ctx).Then(ops...).Commit()
+		if err != nil {
+			return nil, err
+		}
+		return resp, nil
+	})
 
-	resp, err := cli.Txn(ctx).Then(ops...).Commit()
 	if err != nil {
 		return nil, 0, err
 	}
+	resp := ret.(*clientv3.TxnResponse)
 	return resp, resp.Header.Revision, nil
 }
 
