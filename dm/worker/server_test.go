@@ -21,12 +21,16 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	"google.golang.org/grpc"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
+
+const subtaskSampleFile = "./subtask.toml"
 
 func TestServer(t *testing.T) {
 	TestingT(t)
@@ -80,7 +84,7 @@ func (t *testServer) TestServer(c *C) {
 	c.Assert(s.worker.meta.PeekLog(), IsNil)
 
 	// start task
-	subtaskCfgBytes, err := ioutil.ReadFile("./subtask.toml")
+	subtaskCfgBytes, err := ioutil.ReadFile(subtaskSampleFile)
 	c.Assert(err, IsNil)
 
 	resp1, err := cli.StartSubTask(context.Background(), &pb.StartSubTaskRequest{
@@ -161,4 +165,40 @@ func (t *testServer) createClient(c *C, addr string) pb.WorkerClient {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	c.Assert(err, IsNil)
 	return pb.NewWorkerClient(conn)
+}
+
+func (t *testServer) TestQueryError(c *C) {
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+
+	s := NewServer(cfg)
+	s.closed.Set(false)
+
+	w := &Worker{
+		cfg:         cfg,
+		relayHolder: NewRelayHolder(cfg),
+		// initial relay holder, the cfg's password will be decrypted in NewRelayHolder
+		subTaskHolder: newSubTaskHolder(),
+	}
+	w.closed.Set(closedFalse)
+
+	subtaskCfg := config.SubTaskConfig{}
+	err := subtaskCfg.DecodeFile(subtaskSampleFile, true)
+	c.Assert(err, IsNil)
+
+	// subtask failed just after it is started
+	st := NewSubTask(&subtaskCfg)
+	st.fail(errors.New("mockSubtaskFail"))
+	w.subTaskHolder.recordSubTask(st)
+	s.worker = w
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	resp, err := s.QueryError(ctx, &pb.QueryErrorRequest{})
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(resp.Result, IsTrue)
+	c.Assert(resp.Msg, HasLen, 0)
+	c.Assert(resp.SubTaskError, HasLen, 1)
+	c.Assert(resp.SubTaskError[0].String(), Matches, `[\s\S]*mockSubtaskFail[\s\S]*`)
 }
