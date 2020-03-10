@@ -179,6 +179,13 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	dumpConfig.User = db.User
 	dumpConfig.Password = db.Password
 	dumpConfig.OutputDirPath = cfg.Dir // use LoaderConfig.Dir as output dir
+	dumpConfig.BlackWhiteList = export.BWListConf{
+		Mode: export.MySQLReplicationMode,
+		Rules: &export.MySQLReplicationConf{
+			Rules:         cfg.BWList,
+			CaseSensitive: cfg.CaseSensitive,
+		},
+	}
 
 	var ret []string
 	// TODO: support log relative configs
