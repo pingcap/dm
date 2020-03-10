@@ -21,10 +21,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"go.etcd.io/etcd/clientv3"
-	"go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
@@ -45,16 +42,17 @@ var etcdDefaultTxnRetryParam = retry.Params{
 	FirstRetryDuration: time.Second,
 	BackoffStrategy:    retry.Stable,
 	IsRetryableFn: func(retryTime int, err error) bool {
-		// only retry for unavailable or resource exhausted errors
-		eErr := rpctypes.Error(err)
-		if serverErr, ok := eErr.(rpctypes.EtcdError); ok && serverErr.Code() != codes.Unavailable && serverErr.Code() != codes.ResourceExhausted {
+		switch err {
+		// Etcd ResourceExhausted errors, may recover after some time
+		case v3rpc.ErrNoSpace, v3rpc.ErrTooManyRequests:
+			return true
+		// Etcd Unavailable errors, may be available after some time
+		case v3rpc.ErrNoLeader, v3rpc.ErrLeaderChanged, v3rpc.ErrNotCapable, v3rpc.ErrStopped, v3rpc.ErrTimeout,
+			v3rpc.ErrTimeoutDueToLeaderFail, v3rpc.ErrGRPCTimeoutDueToConnectionLost, v3rpc.ErrUnhealthy:
+			return true
+		default:
 			return false
 		}
-		ev, ok := status.FromError(err)
-		if !ok {
-			return false
-		}
-		return ev.Code() == codes.Unavailable || ev.Code() == codes.ResourceExhausted
 	},
 }
 
