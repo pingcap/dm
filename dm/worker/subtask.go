@@ -26,8 +26,8 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
-	"github.com/pingcap/dm/mydumper"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/terror"
@@ -43,18 +43,18 @@ var createUnits = createRealUnits
 func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
 	failpoint.Inject("mockCreateUnitsDumpOnly", func(_ failpoint.Value) {
 		log.L().Info("create mock worker units with dump unit only", zap.String("failpoint", "mockCreateUnitsDumpOnly"))
-		failpoint.Return([]unit.Unit{mydumper.NewMydumper(cfg)})
+		failpoint.Return([]unit.Unit{dumpling.NewDumpling(cfg)})
 	})
 
 	us := make([]unit.Unit, 0, 3)
 	switch cfg.Mode {
 	case config.ModeAll:
-		us = append(us, mydumper.NewMydumper(cfg))
+		us = append(us, dumpling.NewDumpling(cfg))
 		us = append(us, loader.NewLoader(cfg))
 		us = append(us, syncer.NewSyncer(cfg, etcdClient))
 	case config.ModeFull:
 		// NOTE: maybe need another checker in the future?
-		us = append(us, mydumper.NewMydumper(cfg))
+		us = append(us, dumpling.NewDumpling(cfg))
 		us = append(us, loader.NewLoader(cfg))
 	case config.ModeIncrement:
 		us = append(us, syncer.NewSyncer(cfg, etcdClient))
