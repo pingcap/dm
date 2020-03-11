@@ -41,14 +41,7 @@ func (t *testHelperSuite) TestGTIDsFromPreviousGTIDsEvent(c *C) {
 	queryEv, err := GenQueryEvent(header, latestPos, 0, 0, 0, nil, []byte("schema"), []byte("BEGIN"))
 	c.Assert(err, IsNil)
 	gSet, err := GTIDsFromPreviousGTIDsEvent(queryEv)
-	c.Assert(err, ErrorMatches, ".*should be a GenericEvent in go-mysql.*")
-	c.Assert(gSet, IsNil)
-
-	// invalid binlog type, USER_VAR_EVENT
-	userVarEv, err := GenDummyEvent(header, latestPos, MinUserVarEventLen)
-	c.Assert(err, IsNil)
-	gSet, err = GTIDsFromPreviousGTIDsEvent(userVarEv)
-	c.Assert(err, ErrorMatches, ".*invalid event type.*")
+	c.Assert(err, ErrorMatches, ".*should be a PreviousGTIDsEvent in go-mysql.*")
 	c.Assert(gSet, IsNil)
 
 	// valid MySQL GTIDs
