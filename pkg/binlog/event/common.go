@@ -50,7 +50,7 @@ func GenCommonFileHeader(flavor string, serverID uint32, gSet gtid.Set) ([]*repl
 			Flags:     defaultHeaderFlags,
 		}
 		latestPos   = uint32(len(replication.BinLogFileHeader))
-		prevGTIDsEv *replication.BinlogEvent // for MySQL, this will be a GenericEvent
+		prevGTIDsEv *replication.BinlogEvent
 	)
 
 	formatDescEv, err := GenFormatDescriptionEvent(header, latestPos)

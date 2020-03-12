@@ -46,7 +46,7 @@ require (
 	github.com/shopspring/decimal v0.0.0-20191125035519-b054a8dfd10d // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/siddontang/go-log v0.0.0-20190221022429-1e957dd83bed // indirect
-	github.com/siddontang/go-mysql v0.0.0-20191009015310-f66c8b344478
+	github.com/siddontang/go-mysql v0.0.0-20200222075837-12e89848f047
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/cobra v0.0.5

@@ -95,7 +95,7 @@ ErrBinlogWriterGetFileStat,[code=11088:class=functional:scope=internal:level=hig
 ErrBinlogWriterWriteDataLen,[code=11089:class=functional:scope=internal:level=high],"data length %d"
 ErrBinlogWriterFileNotOpened,[code=11090:class=functional:scope=internal:level=high],"file %s not opened"
 ErrBinlogWriterFileSync,[code=11091:class=functional:scope=internal:level=high],"sync file"
-ErrBinlogPrevGTIDEvNotValid,[code=11092:class=functional:scope=internal:level=high],"PreviousGTIDsEvent should be a GenericEvent in go-mysql, but got %T"
+ErrBinlogPrevGTIDEvNotValid,[code=11092:class=functional:scope=internal:level=high],"the event should be a PreviousGTIDsEvent in go-mysql, but got %T"
 ErrBinlogDecodeMySQLGTIDSet,[code=11093:class=functional:scope=internal:level=high],"decode from % X"
 ErrBinlogNeedMariaDBGTIDSet,[code=11094:class=functional:scope=internal:level=high],"the event should be a MariadbGTIDListEvent, but got %T"
 ErrBinlogParseMariaDBGTIDSet,[code=11095:class=functional:scope=internal:level=high],"parse MariaDB GTID set"
