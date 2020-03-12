@@ -21,6 +21,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = Suite(&testHelperSuite{})
@@ -41,14 +42,7 @@ func (t *testHelperSuite) TestGTIDsFromPreviousGTIDsEvent(c *C) {
 	queryEv, err := GenQueryEvent(header, latestPos, 0, 0, 0, nil, []byte("schema"), []byte("BEGIN"))
 	c.Assert(err, IsNil)
 	gSet, err := GTIDsFromPreviousGTIDsEvent(queryEv)
-	c.Assert(err, ErrorMatches, ".*should be a GenericEvent in go-mysql.*")
-	c.Assert(gSet, IsNil)
-
-	// invalid binlog type, USER_VAR_EVENT
-	userVarEv, err := GenDummyEvent(header, latestPos, MinUserVarEventLen)
-	c.Assert(err, IsNil)
-	gSet, err = GTIDsFromPreviousGTIDsEvent(userVarEv)
-	c.Assert(err, ErrorMatches, ".*invalid event type.*")
+	c.Assert(terror.ErrBinlogPrevGTIDEvNotValid.Equal(err), IsTrue)
 	c.Assert(gSet, IsNil)
 
 	// valid MySQL GTIDs
