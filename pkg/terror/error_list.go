@@ -585,7 +585,7 @@ var (
 	ErrBinlogWriterWriteDataLen      = New(codeBinlogWriterWriteDataLen, ClassFunctional, ScopeInternal, LevelHigh, "data length %d")
 	ErrBinlogWriterFileNotOpened     = New(codeBinlogWriterFileNotOpened, ClassFunctional, ScopeInternal, LevelHigh, "file %s not opened")
 	ErrBinlogWriterFileSync          = New(codeBinlogWriterFileSync, ClassFunctional, ScopeInternal, LevelHigh, "sync file")
-	ErrBinlogPrevGTIDEvNotValid      = New(codeBinlogPrevGTIDEvNotValid, ClassFunctional, ScopeInternal, LevelHigh, "PreviousGTIDsEvent should be a PreviousGTIDsEvent in go-mysql, but got %T")
+	ErrBinlogPrevGTIDEvNotValid      = New(codeBinlogPrevGTIDEvNotValid, ClassFunctional, ScopeInternal, LevelHigh, "the event should be a PreviousGTIDsEvent in go-mysql, but got %T")
 	ErrBinlogDecodeMySQLGTIDSet      = New(codeBinlogDecodeMySQLGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "decode from % X")
 	ErrBinlogNeedMariaDBGTIDSet      = New(codeBinlogNeedMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "the event should be a MariadbGTIDListEvent, but got %T")
 	ErrBinlogParseMariaDBGTIDSet     = New(codeBinlogParseMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "parse MariaDB GTID set")
