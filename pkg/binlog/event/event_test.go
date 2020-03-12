@@ -160,7 +160,6 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 		str              = "9f61c5f9-1eef-11e9-b6cf-0242ac140003:1-5"
 	)
 
-	// go-mysql has no PreviousGTIDsEvent struct defined, so we try to parse a binlog file.
 	// always needing a FormatDescriptionEvent in the binlog file.
 	formatDescEv, err := GenFormatDescriptionEvent(header, latestPos)
 	c.Assert(err, IsNil)
@@ -202,7 +201,8 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 			c.Assert(e.Event, DeepEquals, formatDescEv.Event)
 			c.Assert(e.RawData, DeepEquals, formatDescEv.RawData)
 		case 2: // PreviousGTIDsEvent
-			c.Assert(e.Header.EventType, Equals, replication.PREVIOUS_GTIDS_EVENT)
+			c.Assert(e.Header, DeepEquals, previousGTIDsEv.Header)
+			c.Assert(e.Event, DeepEquals, previousGTIDsEv.Event)
 			c.Assert(e.RawData, DeepEquals, previousGTIDsEv.RawData)
 		default:
 			c.Fatalf("too many binlog events got, current is %+v", e.Header)
@@ -319,7 +319,8 @@ func (t *testEventSuite) TestGenGTIDEvent(c *C) {
 			c.Assert(e.Event, DeepEquals, formatDescEv.Event)
 			c.Assert(e.RawData, DeepEquals, formatDescEv.RawData)
 		case 2: // PreviousGTIDsEvent
-			c.Assert(e.Header.EventType, Equals, replication.PREVIOUS_GTIDS_EVENT)
+			c.Assert(e.Header, DeepEquals, previousGTIDsEv.Header)
+			c.Assert(e.Event, DeepEquals, previousGTIDsEv.Event)
 			c.Assert(e.RawData, DeepEquals, previousGTIDsEv.RawData)
 		case 3: // GTIDEvent
 			c.Assert(e.Header.EventType, Equals, replication.GTID_EVENT)

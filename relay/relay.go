@@ -344,7 +344,11 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 		if result.Recovered {
 			r.tctx.L().Warn("relay log file recovered",
 				zap.Stringer("from position", latestPos), zap.Stringer("to position", result.LatestPos), log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
-			if err = latestGTID.Truncate(result.LatestGTIDs); err != nil {
+			if result.LatestGTIDs != nil && !result.LatestGTIDs.Equal(latestGTID) && result.LatestGTIDs.Contain(latestGTID) {
+				r.tctx.L().Warn("some GTIDs are missing in the meta data, this is usually due to the process was interrupted while writing the meta data. force to update GTIDs",
+					log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
+				latestGTID = result.LatestGTIDs.Clone()
+			} else if err = latestGTID.Truncate(result.LatestGTIDs); err != nil {
 				return err
 			}
 			err = r.meta.Save(result.LatestPos, latestGTID)

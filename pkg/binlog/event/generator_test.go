@@ -294,9 +294,7 @@ func (t *testGeneratorSuite) testGenerate(c *C, flavor string, serverID uint32, 
 	var count = 0
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		c.Assert(e.Header.EventType, Equals, allEventTypes[count])
-		if count != 1 { // allEvents[1] is nil for PreviousGTIDsEvent
-			c.Assert(e.RawData, DeepEquals, allEvents[count].RawData)
-		}
+		c.Assert(e.RawData, DeepEquals, allEvents[count].RawData)
 		count++
 		return nil
 	}
