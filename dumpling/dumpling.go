@@ -197,6 +197,15 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	if cfg.ChunkFilesize > 0 {
 		dumpConfig.FileSize = uint64(cfg.ChunkFilesize)
 	}
+	if cfg.StatementSize > 0 {
+		dumpConfig.StatementSize = cfg.StatementSize
+	}
+	if cfg.Rows > 0 {
+		dumpConfig.Rows = cfg.Rows
+	}
+	if len(cfg.Where) > 0 {
+		dumpConfig.Where = cfg.Where
+	}
 
 	if cfg.SkipTzUTC {
 		// TODO: support skip-tz-utc
