@@ -32,6 +32,9 @@ func (t *testUtilsSuite) TestGetAllServerID(c *C) {
 		}, {
 			2,
 			[]uint32{},
+		}, {
+			4294967295, // max server-id.
+			[]uint32{},
 		},
 	}
 
