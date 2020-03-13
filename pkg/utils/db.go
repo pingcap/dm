@@ -303,7 +303,7 @@ func GetServerID(db *sql.DB) (uint32, error) {
 		return 0, err
 	}
 
-	serverID, err := strconv.ParseInt(serverIDStr, 10, 32)
+	serverID, err := strconv.ParseUint(serverIDStr, 10, 32)
 	return uint32(serverID), terror.ErrInvalidServerID.Delegate(err, serverIDStr)
 }
 
