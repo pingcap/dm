@@ -14,7 +14,6 @@
 package event
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -60,26 +59,12 @@ func (t *testCommonSuite) TestGenCommonFileHeader(c *C) {
 	var count = 0
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		count++
-		switch count {
-		case 1: // FormatDescriptionEvent
-			c.Assert(e.Header, DeepEquals, events[0].Header)
-			c.Assert(e.Event, DeepEquals, events[0].Event)
-			c.Assert(e.RawData, DeepEquals, events[0].RawData)
-		case 2: // PreviousGTIDsEvent
-			switch flavor {
-			case gmysql.MySQLFlavor:
-				c.Assert(e.Header.EventType, Equals, replication.PREVIOUS_GTIDS_EVENT)
-				c.Assert(bytes.Contains(data, e.RawData), IsTrue)
-			case gmysql.MariaDBFlavor:
-				c.Assert(e.Header, DeepEquals, events[1].Header)
-				c.Assert(e.Event, DeepEquals, events[1].Event)
-				c.Assert(e.RawData, DeepEquals, events[1].RawData)
-			default:
-				c.Fatalf("invalid flavor %s", flavor)
-			}
-		default:
+		if count > 2 {
 			c.Fatalf("too many binlog events got, current is %+v", e.Header)
 		}
+		c.Assert(e.Header, DeepEquals, events[count-1].Header)
+		c.Assert(e.Event, DeepEquals, events[count-1].Event)
+		c.Assert(e.RawData, DeepEquals, events[count-1].RawData)
 		return nil
 	}
 

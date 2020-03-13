@@ -23,34 +23,15 @@ import (
 
 // GTIDsFromPreviousGTIDsEvent get GTID set from a PreviousGTIDsEvent.
 func GTIDsFromPreviousGTIDsEvent(e *replication.BinlogEvent) (gtid.Set, error) {
-	var payload []byte
+	var gSetStr string
 	switch ev := e.Event.(type) {
-	case *replication.GenericEvent:
-		payload = ev.Data
+	case *replication.PreviousGTIDsEvent:
+		gSetStr = ev.GTIDSets
 	default:
 		return nil, terror.ErrBinlogPrevGTIDEvNotValid.Generate(e.Event)
 	}
 
-	if e.Header.EventType != replication.PREVIOUS_GTIDS_EVENT {
-		return nil, terror.ErrBinlogEventTypeNotValid.Generatef("invalid event type %d, expect %d", e.Header.EventType, replication.PREVIOUS_GTIDS_EVENT)
-	}
-
-	set, err := gmysql.DecodeMysqlGTIDSet(payload)
-	if err != nil {
-		return nil, terror.ErrBinlogDecodeMySQLGTIDSet.Delegate(err, payload)
-	}
-
-	// always MySQL for PreviousGTIDsEvent
-	gSet, err := gtid.ParserGTID(gmysql.MySQLFlavor, "")
-	if err != nil {
-		return nil, terror.ErrBinlogEmptyGTID.Delegate(err)
-	}
-	err = gSet.Set(set)
-	if err != nil {
-		return nil, terror.Annotatef(err, "replace GTID set with set %v", set)
-	}
-
-	return gSet, nil
+	return gtid.ParserGTID(gmysql.MySQLFlavor, gSetStr)
 }
 
 // GTIDsFromMariaDBGTIDListEvent get GTID set from a MariaDBGTIDListEvent.

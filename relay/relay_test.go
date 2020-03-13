@@ -36,8 +36,8 @@ import (
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
-	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/reader"
 	"github.com/pingcap/dm/relay/retry"
@@ -52,6 +52,10 @@ func TestSuite(t *testing.T) {
 }
 
 type testRelaySuite struct {
+}
+
+func (t *testRelaySuite) SetUpSuite(c *C) {
+	log.InitLogger(&log.Config{})
 }
 
 func getDBConfigForTest() config.DBConfig {
@@ -198,16 +202,6 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	c.Assert(err, IsNil)
 	f.Close()
 
-	// GTID sets in meta data does not contain the GTID sets in relay log, invalid
-	c.Assert(terror.ErrGTIDTruncateInvalid.Equal(r.tryRecoverLatestFile(parser2)), IsTrue)
-
-	// write some invalid data into the relay log file again
-	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
-	c.Assert(err, IsNil)
-	_, err = f.Write([]byte("invalid event data"))
-	c.Assert(err, IsNil)
-	f.Close()
-
 	// write a greater GTID sets in meta
 	greaterGITDSet, err := gtid.ParserGTID(relayCfg.Flavor, greaterGITDSetStr)
 	c.Assert(err, IsNil)
@@ -229,6 +223,72 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	c.Assert(latestPos, DeepEquals, minCheckpoint)
 	_, latestGTIDs = r.meta.GTID()
 	c.Assert(latestGTIDs.Contain(g.LatestGTID), IsTrue)
+}
+
+func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
+	var (
+		uuid               = "24ecd093-8cec-11e9-aa0d-0242ac170002"
+		previousGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
+		latestGTIDStr1     = "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
+		latestGTIDStr2     = "53bfca22-690d-11e7-8a62-18ded7a37b78:495"
+		genGTIDSetStr      = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-505,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
+		filename           = "mysql-bin.000001"
+		startPos           = gmysql.Position{Name: filename, Pos: 123}
+
+		parser2  = parser.New()
+		relayCfg = &Config{
+			RelayDir: c.MkDir(),
+			Flavor:   gmysql.MySQLFlavor,
+		}
+		r = NewRelay(relayCfg).(*Relay)
+	)
+
+	genGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, genGTIDSetStr)
+	c.Assert(err, IsNil)
+
+	c.Assert(r.meta.AddDir(uuid, &startPos, nil), IsNil)
+	c.Assert(r.meta.Load(), IsNil)
+
+	// use a generator to generate some binlog events
+	previousGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, previousGTIDSetStr)
+	c.Assert(err, IsNil)
+	latestGTID1, err := gtid.ParserGTID(relayCfg.Flavor, latestGTIDStr1)
+	c.Assert(err, IsNil)
+	latestGTID2, err := gtid.ParserGTID(relayCfg.Flavor, latestGTIDStr2)
+	c.Assert(err, IsNil)
+	g, _, data := genBinlogEventsWithGTIDs(c, relayCfg.Flavor, previousGTIDSet, latestGTID1, latestGTID2)
+
+	// write events into relay log file
+	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0600)
+	c.Assert(err, IsNil)
+	// write some invalid data into the relay log file to trigger a recover.
+	f, err := os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
+	c.Assert(err, IsNil)
+	_, err = f.Write([]byte("invalid event data"))
+	c.Assert(err, IsNil)
+	f.Close()
+
+	// recover with empty GTIDs.
+	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+	_, latestPos := r.meta.Pos()
+	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})
+	_, latestGTIDs := r.meta.GTID()
+	c.Assert(latestGTIDs.Equal(genGTIDSet), IsTrue)
+
+	// write some invalid data into the relay log file again.
+	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
+	c.Assert(err, IsNil)
+	_, err = f.Write([]byte("invalid event data"))
+	c.Assert(err, IsNil)
+	f.Close()
+
+	// recover with the subset of GTIDs (previous GTID set).
+	c.Assert(r.meta.Save(startPos, previousGTIDSet), IsNil)
+	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+	_, latestPos = r.meta.Pos()
+	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})
+	_, latestGTIDs = r.meta.GTID()
+	c.Assert(latestGTIDs.Equal(genGTIDSet), IsTrue)
 }
 
 // genBinlogEventsWithGTIDs generates some binlog events used by testFileUtilSuite and testFileWriterSuite.
