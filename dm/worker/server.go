@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/dm/syncer"
 
 	"github.com/pingcap/errors"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
@@ -82,11 +83,16 @@ func NewServer(cfg *Config) *Server {
 
 // Start starts to serving
 func (s *Server) Start() error {
-	var err error
-	s.rootLis, err = net.Listen("tcp", s.cfg.WorkerAddr)
+	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
+	if err != nil {
+		return err
+	}
+
+	rootLis, err := net.Listen("tcp", s.cfg.WorkerAddr)
 	if err != nil {
 		return terror.ErrWorkerStartService.Delegate(err)
 	}
+	s.rootLis = tls.WrapListener(rootLis)
 
 	log.L().Info("Start Server")
 	s.setWorker(nil, true)
@@ -139,7 +145,7 @@ func (s *Server) Start() error {
 	grpcL := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	httpL := m.Match(cmux.HTTP1Fast())
 
-	s.svr = grpc.NewServer()
+	s.svr = grpc.NewServer(tls.ToGRPCServerOption())
 	pb.RegisterWorkerServer(s.svr, s)
 	go func() {
 		err2 := s.svr.Serve(grpcL)

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
@@ -36,9 +37,14 @@ func GetJoinURLs(addrs string) []string {
 // JoinMaster let dm-worker join the cluster with the specified master endpoints.
 func (s *Server) JoinMaster(endpoints []string) error {
 	// TODO: grpc proxy
+	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
+	if err != nil {
+		return err
+	}
+
 	var client pb.MasterClient
 	for _, endpoint := range endpoints {
-		conn, err := grpc.Dial(endpoint, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+		conn, err := grpc.Dial(endpoint, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second))
 		if err != nil {
 			return err
 		}
