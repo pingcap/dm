@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -75,6 +76,9 @@ type Config struct {
 	ConfigFile string `json:"config-file"`
 	// TODO: in the future dm-workers should share a same ttl from dm-master
 	KeepAliveTTL int64 `toml:"keepalive-ttl" json:"keepalive-ttl"`
+
+	// tls config
+	config.Security
 
 	printVersion      bool
 	printSampleConfig bool
