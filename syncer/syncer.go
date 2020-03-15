@@ -77,6 +77,9 @@ var (
 
 	adminQueueName     = "admin queue"
 	defaultBucketCount = 8
+
+	// max reconnection times for binlog syncer in go-mysql
+	maxBinlogSyncerReconnect = 60
 )
 
 // BinlogType represents binlog sync type
@@ -1166,6 +1169,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return err1
 			}
 			continue
+		} else if isConnectionRefusedError(err) {
+			tctx.L().Error("fail to get binlog event", zap.Error(err))
+			return err
 		}
 
 		if err != nil {
@@ -2430,6 +2436,7 @@ func (s *Syncer) setSyncCfg() {
 		UseDecimal:              true,
 		VerifyChecksum:          true,
 		TimestampStringLocation: s.timezone,
+		MaxReconnectAttempts:    maxBinlogSyncerReconnect,
 	}
 }
 

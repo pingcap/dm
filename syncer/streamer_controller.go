@@ -437,3 +437,11 @@ func isDuplicateServerIDError(err error) bool {
 
 	return strings.Contains(err.Error(), "A slave with the same server_uuid/server_id as this slave has connected to the master")
 }
+
+func isConnectionRefusedError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	return strings.Contains(err.Error(), "connect: connection refused")
+}
