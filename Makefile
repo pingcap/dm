@@ -69,6 +69,10 @@ dm-portal:
 debug-tools:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/binlog-event-blackhole ./debug-tools/binlog-event-blackhole
 
+dm-portal-frontend:
+	# TODO: build frontend
+	statik -src=./dm/portal/frontend/build -dest=./dm/portal/
+
 test: unit_test integration_test
 
 define run_unit_test
