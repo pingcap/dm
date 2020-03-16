@@ -91,6 +91,8 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 	if err != nil {
 		return err
 	}
+	// once we put the key successfully, we should revoke lease before we quit keepalive normally
+	defer revokeLease(cli.Ctx(), cli, lease.ID)
 	ch, err := cli.KeepAlive(ctx, lease.ID)
 	if err != nil {
 		return err
@@ -104,12 +106,15 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 			}
 		case <-ctx.Done():
 			log.L().Info("ctx is canceled, keepalive will exit now")
-			ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-			cli.Revoke(ctx, lease.ID)
-			cancel()
 			return nil
 		}
 	}
+}
+
+func revokeLease(ctx context.Context, cli *clientv3.Client, id clientv3.LeaseID) (*clientv3.LeaseRevokeResponse, error) {
+	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
+	defer cancel()
+	return cli.Revoke(ctx, id)
 }
 
 // WatchWorkerEvent watches the online and offline of workers from etcd.

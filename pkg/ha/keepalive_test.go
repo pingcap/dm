@@ -15,6 +15,7 @@ package ha
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -94,4 +95,52 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 		c.Fatal("fail to quit WatchWorkerEvent before timeout")
 	}
 	c.Assert(errCh, HasLen, 0)
+}
+
+func (t *testForEtcd) TestKeepAliveRevokeLease(c *C) {
+	defer clearTestInfoOperation(c)
+	wwm, rev, err := GetKeepAliveWorkers(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(wwm, HasLen, 0)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var (
+		finished         = int32(0)
+		hugeKeepAliveTTL = int64(100) // use a huge keepalive ttl to test whether keepalive can quit quickly
+		evCh             = make(chan WorkerEvent, 110)
+		errCh            = make(chan error, 110)
+		putEvent         = make([]string, 0, 50)
+		deleteEvent      = make([]string, 0, 50)
+		workerSet        = make([]string, 0, 50)
+	)
+
+	for i := 1; i <= 50; i++ {
+		worker := "worker" + strconv.Itoa(i)
+		workerSet = append(workerSet, worker)
+		ctx1, _ := context.WithTimeout(ctx, 3*time.Second)
+		go func(ctx context.Context) {
+			err1 := KeepAlive(ctx, etcdTestCli, worker, hugeKeepAliveTTL)
+			c.Assert(err1, IsNil)
+			atomic.AddInt32(&finished, 1)
+		}(ctx1)
+	}
+
+	ctx1, _ := context.WithTimeout(ctx, 3*time.Second)
+	WatchWorkerEvent(ctx1, etcdTestCli, rev, evCh, errCh)
+	c.Assert(evCh, HasLen, 100)
+	c.Assert(errCh, HasLen, 0)
+	c.Assert(atomic.LoadInt32(&finished), Equals, 50)
+	for len(evCh) > 0 {
+		ev := <-evCh
+		if ev.IsDeleted {
+			deleteEvent = append(deleteEvent, ev.WorkerName)
+		} else {
+			putEvent = append(putEvent, ev.WorkerName)
+		}
+	}
+	sort.Strings(putEvent)
+	sort.Strings(deleteEvent)
+	c.Assert(putEvent, DeepEquals, workerSet)
+	c.Assert(deleteEvent, DeepEquals, workerSet)
 }
