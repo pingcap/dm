@@ -47,6 +47,11 @@ var etcdDefaultTxnRetryParam = retry.Params{
 		case v3rpc.ErrNoSpace, v3rpc.ErrTooManyRequests:
 			return true
 		// Etcd Unavailable errors, may be available after some time
+		// https://github.com/etcd-io/etcd/pull/9934/files#diff-6d8785d0c9eaf96bc3e2b29c36493c04R162-R167
+		// ErrStopped:
+		// one of the etcd nodes stopped from failure injection
+		// ErrNotCapable:
+		// capability check has not been done (in the beginning)
 		case v3rpc.ErrNoLeader, v3rpc.ErrLeaderChanged, v3rpc.ErrNotCapable, v3rpc.ErrStopped, v3rpc.ErrTimeout,
 			v3rpc.ErrTimeoutDueToLeaderFail, v3rpc.ErrGRPCTimeoutDueToConnectionLost, v3rpc.ErrUnhealthy:
 			return true
