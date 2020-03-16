@@ -92,7 +92,7 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 		return err
 	}
 	// once we put the key successfully, we should revoke lease before we quit keepalive normally
-	defer revokeLease(cli.Ctx(), cli, lease.ID)
+	defer revokeLease(cli, lease.ID)
 	ch, err := cli.KeepAlive(ctx, lease.ID)
 	if err != nil {
 		return err
@@ -111,7 +111,9 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 	}
 }
 
-func revokeLease(ctx context.Context, cli *clientv3.Client, id clientv3.LeaseID) (*clientv3.LeaseRevokeResponse, error) {
+// ATTENTION!!! we must ensure cli.Ctx() not done when we are exiting worker
+// Do not set cfg.Context when creating cli or do not cancel this Context or it's parent context
+func revokeLease(cli *clientv3.Client, id clientv3.LeaseID) (*clientv3.LeaseRevokeResponse, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRevokeLeaseTimeout)
 	defer cancel()
 	return cli.Revoke(ctx, id)
