@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )
@@ -40,12 +42,16 @@ var (
 // InitUtils inits necessary dmctl utils
 func InitUtils(cfg *Config) error {
 	globalConfig = cfg
-	return errors.Trace(InitClient(cfg.MasterAddr))
+	return errors.Trace(InitClient(cfg.MasterAddr, cfg.Security))
 }
 
 // InitClient initializes dm-master client
-func InitClient(addr string) error {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+func InitClient(addr string, securityCfg config.Security) error {
+	tls, err := toolutils.NewTLS(securityCfg.SSLCA, securityCfg.SSLCert, securityCfg.SSLKey, "", securityCfg.CertAllowedCN)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	conn, err := grpc.Dial(addr, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		return errors.Trace(err)
 	}
