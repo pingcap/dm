@@ -118,7 +118,7 @@ func (t *testForEtcd) TestKeepAliveRevokeLease(c *C) {
 	for i := 1; i <= 50; i++ {
 		worker := "worker" + strconv.Itoa(i)
 		workerSet = append(workerSet, worker)
-		ctx1, _ := context.WithTimeout(ctx, 3*time.Second)
+		ctx1, _ := context.WithTimeout(ctx, 2*time.Second)
 		go func(ctx context.Context) {
 			err1 := KeepAlive(ctx, etcdTestCli, worker, hugeKeepAliveTTL)
 			c.Assert(err1, IsNil)
@@ -126,11 +126,11 @@ func (t *testForEtcd) TestKeepAliveRevokeLease(c *C) {
 		}(ctx1)
 	}
 
-	ctx1, _ := context.WithTimeout(ctx, 3*time.Second)
+	ctx1, _ := context.WithTimeout(ctx, 4*time.Second)
 	WatchWorkerEvent(ctx1, etcdTestCli, rev, evCh, errCh)
 	c.Assert(evCh, HasLen, 100)
 	c.Assert(errCh, HasLen, 0)
-	c.Assert(atomic.LoadInt32(&finished), Equals, 50)
+	c.Assert(atomic.LoadInt32(&finished), Equals, int32(50))
 	for len(evCh) > 0 {
 		ev := <-evCh
 		if ev.IsDeleted {
@@ -141,6 +141,7 @@ func (t *testForEtcd) TestKeepAliveRevokeLease(c *C) {
 	}
 	sort.Strings(putEvent)
 	sort.Strings(deleteEvent)
+	sort.Strings(workerSet)
 	c.Assert(putEvent, DeepEquals, workerSet)
 	c.Assert(deleteEvent, DeepEquals, workerSet)
 }

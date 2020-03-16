@@ -112,7 +112,7 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 }
 
 func revokeLease(ctx context.Context, cli *clientv3.Client, id clientv3.LeaseID) (*clientv3.LeaseRevokeResponse, error) {
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
+	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRevokeLeaseTimeout)
 	defer cancel()
 	return cli.Revoke(ctx, id)
 }
