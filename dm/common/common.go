@@ -53,6 +53,9 @@ var (
 	// k/v: Encode(task-name, source-id) -> shard DDL operation
 	ShardDDLPessimismOperationKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/operation/")
 
+	// ShardDDLOptimismSourceTablesKeyAdapter used to store upstream schema & table names.
+	// k/v: Encode(task-name, source-id) -> upstream schema & table names.
+	ShardDDLOptimismSourceTablesKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/source-tables/")
 	// ShardDDLOptimismInfoKeyAdapter used to store shard DDL info in optimistic model.
 	// k/v: Encode(task-name, source-id, upstream-schema-name, upstream-table-name) -> shard DDL info.
 	ShardDDLOptimismInfoKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/info/")
@@ -66,8 +69,13 @@ func keyAdapterKeysLen(s KeyAdapter) int {
 	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter,
 		WorkerKeepAliveKeyAdapter, StageRelayKeyAdapter:
 		return 1
-	case UpstreamSubTaskKeyAdapter, StageSubTaskKeyAdapter:
+	case UpstreamSubTaskKeyAdapter, StageSubTaskKeyAdapter,
+		ShardDDLPessimismInfoKeyAdapter, ShardDDLPessimismOperationKeyAdapter,
+		ShardDDLOptimismSourceTablesKeyAdapter:
 		return 2
+	case ShardDDLOptimismInfoKeyAdapter, ShardDDLOptimismOperationKeyAdapter:
+		return 4
+
 	}
 	return -1
 }

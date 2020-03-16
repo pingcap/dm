@@ -88,6 +88,7 @@ func (t *testForEtcd) TestInfoJSON(c *C) {
 
 func (t *testForEtcd) TestInfoEtcd(c *C) {
 	defer clearTestInfoOperation(c)
+
 	var (
 		source1          = "mysql-replica-1"
 		source2          = "mysql-replica-2"
