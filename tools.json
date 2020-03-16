@@ -31,6 +31,10 @@
     {
       "Repository": "github.com/golang/mock/mockgen",
       "Commit": "d74b93584564161b2de771089ee697f07d8bd5b5"
+    },
+    {
+      "Repository": "github.com/rakyll/statik",
+      "Commit": "3bac566d30cdbeddef402a80f3d6305860e59f12"
     }
   ],
   "RetoolVersion": "1.3.7"
