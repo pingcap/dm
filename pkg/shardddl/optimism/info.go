@@ -103,14 +103,8 @@ func PutInfo(cli *clientv3.Client, info Info) (int64, error) {
 	}
 	key := common.ShardDDLOptimismInfoKeyAdapter.Encode(info.Task, info.Source, info.UpSchema, info.UpTable)
 
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
-	resp, err := cli.Put(ctx, key, value)
-	if err != nil {
-		return 0, err
-	}
-	return resp.Header.Revision, nil
+	_, rev, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpPut(key, value))
+	return rev, nil
 }
 
 // GetAllInfo gets all shard DDL info in etcd currently.
@@ -118,13 +112,11 @@ func PutInfo(cli *clientv3.Client, info Info) (int64, error) {
 // k/k/k/k/v: task-name -> source-ID -> upstream-schema-name -> upstream-table-name -> shard DDL info.
 // ugly code, but have no better idea now.
 func GetAllInfo(cli *clientv3.Client) (map[string]map[string]map[string]map[string]Info, int64, error) {
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
-	resp, err := cli.Get(ctx, common.ShardDDLOptimismInfoKeyAdapter.Path(), clientv3.WithPrefix())
+	respTxn, _, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpGet(common.ShardDDLOptimismInfoKeyAdapter.Path(), clientv3.WithPrefix()))
 	if err != nil {
 		return nil, 0, err
 	}
+	resp := respTxn.Responses[0].GetResponseRange()
 
 	ifm := make(map[string]map[string]map[string]map[string]Info)
 	for _, kv := range resp.Kvs {

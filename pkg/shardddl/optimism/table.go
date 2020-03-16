@@ -99,13 +99,11 @@ func DeleteSourceTables(cli *clientv3.Client, st SourceTables) (int64, error) {
 // This function should often be called by DM-master.
 // k/k/v: task-name -> source-ID -> source tables.
 func GetAllSourceTables(cli *clientv3.Client) (map[string]map[string]SourceTables, int64, error) {
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
-	resp, err := cli.Get(ctx, common.ShardDDLOptimismSourceTablesKeyAdapter.Path(), clientv3.WithPrefix())
+	respTxn, _, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpGet(common.ShardDDLOptimismSourceTablesKeyAdapter.Path(), clientv3.WithPrefix()))
 	if err != nil {
 		return nil, 0, err
 	}
+	resp := respTxn.Responses[0].GetResponseRange()
 
 	stm := make(map[string]map[string]SourceTables)
 	for _, kv := range resp.Kvs {
