@@ -27,6 +27,7 @@ import (
 // use query status request to test DM-worker is online
 func main() {
 	addr := os.Args[1]
+	// TODO: use tls
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(2*time.Second))
 	if err != nil {
 		utils.ExitWithError(err)

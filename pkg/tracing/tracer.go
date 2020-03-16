@@ -78,6 +78,7 @@ func (t *Tracer) Enable() bool {
 
 // Start starts tracing service
 func (t *Tracer) Start() {
+	// TODO: use tls
 	conn, err := grpc.Dial(t.cfg.TracerAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		t.logger.Error("grpc dial failed", log.ShortError(err))
