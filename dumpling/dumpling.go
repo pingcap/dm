@@ -186,6 +186,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 			CaseSensitive: cfg.CaseSensitive,
 		},
 	}
+	dumpConfig.EscapeBackslash = true
 
 	var ret []string
 	// TODO: support log relative configs

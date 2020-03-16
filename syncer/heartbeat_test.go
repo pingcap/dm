@@ -17,6 +17,7 @@ import (
 	"context"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/dm/config"
 )
@@ -88,7 +89,7 @@ func (t *testHeartbeatSuite) TestHeartbeat(c *C) {
 	oldlag1 := t.lag["heartbeat_test_1"]
 	oldlag2 := t.lag["heartbeat_test_2"]
 
-	heartbeat.TryUpdateTaskTs("heartbeat_test_1", "dm_heartbeat", "heartbeat", [][]interface{}{
+	heartbeat.TryUpdateTaskTs("heartbeat_test_1", filter.DMHeartbeatSchema, filter.DMHeartbeatTable, [][]interface{}{
 		{
 			"2019-05-15 15:25:42",
 			int32(123),
