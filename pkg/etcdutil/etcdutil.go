@@ -86,6 +86,7 @@ func AddMember(client *clientv3.Client, peerAddrs []string) (*clientv3.MemberAdd
 }
 
 // DoOpsInOneTxnWithRetry do multiple etcd operations in one txn.
+// TODO: add unit test to test encountered an retryable error first but then recovered
 func DoOpsInOneTxnWithRetry(cli *clientv3.Client, ops ...clientv3.Op) (*clientv3.TxnResponse, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), DefaultRequestTimeout)
 	defer cancel()
