@@ -196,7 +196,6 @@ func GenRotateEvent(header *replication.EventHeader, latestPos uint32, nextLogNa
 }
 
 // GenPreviousGTIDsEvent generates a PreviousGTIDsEvent.
-// go-mysql has no PreviousGTIDsEvent struct defined, so return a GenericEvent instead.
 // MySQL has no internal doc for PREVIOUS_GTIDS_EVENT.
 // we ref:
 //   a. https://github.com/vitessio/vitess/blob/28e7e5503a6c3d3b18d4925d95f23ebcb6f25c8e/go/mysql/binlog_event_mysql56.go#L56
@@ -215,7 +214,7 @@ func GenPreviousGTIDsEvent(header *replication.EventHeader, latestPos uint32, gS
 	payload := origin.Encode()
 
 	buf := new(bytes.Buffer)
-	event := &replication.GenericEvent{} // no PreviousGTIDsEvent struct defined, so use a GenericEvent instead.
+	event := &replication.PreviousGTIDsEvent{}
 	ev, err := assembleEvent(buf, event, false, *header, replication.PREVIOUS_GTIDS_EVENT, latestPos, nil, payload)
 	return ev, err
 }
