@@ -63,4 +63,4 @@ require (
 
 go 1.13
 
-replace github.com/pingcap/tidb-tools v4.0.0-beta.1.0.20200315095020-6bea09b23e42+incompatible => github.com/WangXiangUSTC/tidb-tools v3.0.12-0.20200316030416-2edca86db1f2+incompatible
+replace github.com/pingcap/tidb-tools v4.0.0-beta.1.0.20200315095020-6bea09b23e42+incompatible => github.com/WangXiangUSTC/tidb-tools v3.0.13-0.20200316165904-ca836f5a71cc+incompatible

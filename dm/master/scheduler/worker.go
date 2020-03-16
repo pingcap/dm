@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/terror"
@@ -57,8 +58,8 @@ type Worker struct {
 }
 
 // NewWorker creates a new Worker instance with Offline stage.
-func NewWorker(baseInfo ha.WorkerInfo) (*Worker, error) {
-	cli, err := workerrpc.NewGRPCClient(baseInfo.Addr)
+func NewWorker(baseInfo ha.WorkerInfo, securityCfg config.Security) (*Worker, error) {
+	cli, err := workerrpc.NewGRPCClient(baseInfo.Addr, securityCfg)
 	if err != nil {
 		return nil, err
 	}

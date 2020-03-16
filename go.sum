@@ -18,6 +18,8 @@ github.com/WangXiangUSTC/tidb-tools v3.0.12-0.20200315160337-a05bc3f3d910+incomp
 github.com/WangXiangUSTC/tidb-tools v3.0.12-0.20200315160337-a05bc3f3d910+incompatible/go.mod h1:D8Ujz5RB7WTEThouaR6MlIN8LqdG+/16cMw9tjbwGFI=
 github.com/WangXiangUSTC/tidb-tools v3.0.12-0.20200316030416-2edca86db1f2+incompatible h1:pSXS1H+uSp+JGbdU+f9VWl+MKBqDQ17VQkwAmWIuzjU=
 github.com/WangXiangUSTC/tidb-tools v3.0.12-0.20200316030416-2edca86db1f2+incompatible/go.mod h1:D8Ujz5RB7WTEThouaR6MlIN8LqdG+/16cMw9tjbwGFI=
+github.com/WangXiangUSTC/tidb-tools v3.0.13-0.20200316165904-ca836f5a71cc+incompatible h1:nZysjYLf6Ao403dZ2h7998JqbA0H7F6ZMYB28RzKwrc=
+github.com/WangXiangUSTC/tidb-tools v3.0.13-0.20200316165904-ca836f5a71cc+incompatible/go.mod h1:D8Ujz5RB7WTEThouaR6MlIN8LqdG+/16cMw9tjbwGFI=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc h1:cAKDfWh5VpdgMhJosfJnn5/FoN2SRZ4p7fJNX58YPaU=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=

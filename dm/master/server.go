@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
@@ -106,7 +107,7 @@ func NewServer(cfg *Config) *Server {
 	logger := log.L()
 	server := Server{
 		cfg:               cfg,
-		scheduler:         scheduler.NewScheduler(&logger),
+		scheduler:         scheduler.NewScheduler(&logger, cfg.Security),
 		sqlOperatorHolder: operator.NewHolder(),
 		idGen:             tracing.NewIDGen(),
 		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
@@ -138,7 +139,13 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
-	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr)
+	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
+	if err != nil {
+		// TODO: use terror
+		return
+	}
+
+	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr, tls.ToGRPCDialOption())
 	if err != nil {
 		return
 	}
@@ -168,7 +175,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	// create an etcd client used in the whole server instance.
 	// NOTE: we only use the local member's address now, but we can use all endpoints of the cluster if needed.
-	s.etcdClient, err = etcdutil.CreateClient([]string{s.cfg.MasterAddr})
+	s.etcdClient, err = etcdutil.CreateClient([]string{s.cfg.MasterAddr}, tls.TLSConfig())
 	if err != nil {
 		return
 	}

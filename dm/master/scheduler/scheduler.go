@@ -129,10 +129,12 @@ type Scheduler struct {
 	// delete:
 	// - remove/stop subtask by user request (calling `RemoveSubTasks`).
 	expectSubTaskStages map[string]map[string]ha.Stage
+
+	securityCfg config.Security
 }
 
 // NewScheduler creates a new scheduler instance.
-func NewScheduler(pLogger *log.Logger) *Scheduler {
+func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 	return &Scheduler{
 		logger:              pLogger.WithFields(zap.String("component", "scheduler")),
 		sourceCfgs:          make(map[string]config.SourceConfig),
@@ -142,6 +144,7 @@ func NewScheduler(pLogger *log.Logger) *Scheduler {
 		unbounds:            make(map[string]struct{}),
 		expectRelayStages:   make(map[string]ha.Stage),
 		expectSubTaskStages: make(map[string]map[string]ha.Stage),
+		securityCfg:         securityCfg,
 	}
 }
 
@@ -1198,7 +1201,7 @@ func (s *Scheduler) boundSourceToWorker(source string, w *Worker) error {
 // this func is used when adding a new worker.
 // NOTE: trigger scheduler when the worker become online, not when added.
 func (s *Scheduler) recordWorker(info ha.WorkerInfo) (*Worker, error) {
-	w, err := NewWorker(info)
+	w, err := NewWorker(info, s.securityCfg)
 	if err != nil {
 		return nil, err
 	}

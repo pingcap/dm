@@ -29,6 +29,7 @@ import (
 	"go.etcd.io/etcd/embed"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -122,6 +123,9 @@ type Config struct {
 	InitialClusterState string `toml:"initial-cluster-state" json:"initial-cluster-state"`
 	Join                string `toml:"join" json:"join"`   // cluster's client address (endpoints), not peer address
 	Debug               bool   `toml:"debug" json:"debug"` // only use for test
+
+	// tls config
+	config.Security
 
 	printVersion      bool
 	printSampleConfig bool
@@ -355,6 +359,22 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 	err = cfg.Validate() // verify & trigger the builder
 	if err != nil {
 		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.AnnotateDelegate(err, "fail to validate embed etcd config")
+	}
+
+	// security config
+	cfg.ClientTLSInfo.ClientCertAuth = len(c.SSLCA) != 0
+	cfg.ClientTLSInfo.TrustedCAFile = c.SSLCA
+	cfg.ClientTLSInfo.CertFile = c.SSLCert
+	cfg.ClientTLSInfo.KeyFile = c.SSLKey
+	cfg.PeerTLSInfo.ClientCertAuth = len(c.SSLCA) != 0
+	cfg.PeerTLSInfo.TrustedCAFile = c.SSLCA
+	cfg.PeerTLSInfo.CertFile = c.SSLCert
+	cfg.PeerTLSInfo.KeyFile = c.SSLKey
+
+	// etcd only support one allowed CN
+	if len(c.CertAllowedCN) > 0 {
+		cfg.ClientTLSInfo.AllowedCN = c.CertAllowedCN[0]
+		cfg.PeerTLSInfo.AllowedCN = c.CertAllowedCN[0]
 	}
 
 	return cfg, nil

@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"go.etcd.io/etcd/embed"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -124,8 +125,13 @@ func prepareJoinEtcd(cfg *Config) error {
 		return nil
 	}
 
+	tlsCfg, err := toolutils.ToTLSConfig(cfg.SSLCA, cfg.SSLCert, cfg.SSLKey)
+	if err != nil {
+		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, "generate tls config")
+	}
+
 	// if without previous data, we need a client to contact with the existing cluster.
-	client, err := etcdutil.CreateClient(strings.Split(cfg.Join, ","))
+	client, err := etcdutil.CreateClient(strings.Split(cfg.Join, ","), tlsCfg)
 	if err != nil {
 		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, fmt.Sprintf("create etcd client for %s", cfg.Join))
 	}
