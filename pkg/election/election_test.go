@@ -95,7 +95,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 		addr2      = "127.0.0.1:2"
 		addr3      = "127.0.0.1:3"
 	)
-	cli, err := etcdutil.CreateClient([]string{t.endPoint})
+	cli, err := etcdutil.CreateClient([]string{t.endPoint}, nil)
 	c.Assert(err, IsNil)
 	defer cli.Close()
 
@@ -187,7 +187,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 		addr1      = "127.0.0.1:1234"
 		addr2      = "127.0.0.1:2345"
 	)
-	cli, err := etcdutil.CreateClient([]string{t.endPoint})
+	cli, err := etcdutil.CreateClient([]string{t.endPoint}, nil)
 	c.Assert(err, IsNil)
 	defer cli.Close()
 
@@ -254,7 +254,7 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 		ID         = "member"
 		addr       = "127.0.0.1:1234"
 	)
-	cli, err := etcdutil.CreateClient([]string{t.endPoint})
+	cli, err := etcdutil.CreateClient([]string{t.endPoint}, nil)
 	c.Assert(err, IsNil)
 	defer cli.Close()
 

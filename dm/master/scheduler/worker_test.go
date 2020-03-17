@@ -19,6 +19,7 @@ import (
 
 	. "github.com/pingcap/check"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/ha"
@@ -38,7 +39,7 @@ func (t *testWorker) TestWorker(c *C) {
 	)
 
 	// create a worker with Offline stage and not bound.
-	w, err := NewWorker(info)
+	w, err := NewWorker(info, config.Security{})
 	c.Assert(err, IsNil)
 	defer w.Close()
 	c.Assert(w.BaseInfo(), DeepEquals, info)

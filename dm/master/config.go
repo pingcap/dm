@@ -362,19 +362,21 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 	}
 
 	// security config
-	cfg.ClientTLSInfo.ClientCertAuth = len(c.SSLCA) != 0
-	cfg.ClientTLSInfo.TrustedCAFile = c.SSLCA
-	cfg.ClientTLSInfo.CertFile = c.SSLCert
-	cfg.ClientTLSInfo.KeyFile = c.SSLKey
-	cfg.PeerTLSInfo.ClientCertAuth = len(c.SSLCA) != 0
-	cfg.PeerTLSInfo.TrustedCAFile = c.SSLCA
-	cfg.PeerTLSInfo.CertFile = c.SSLCert
-	cfg.PeerTLSInfo.KeyFile = c.SSLKey
+	if len(c.SSLCA) != 0 {
+		cfg.ClientTLSInfo.ClientCertAuth = len(c.SSLCA) != 0
+		cfg.ClientTLSInfo.TrustedCAFile = c.SSLCA
+		cfg.ClientTLSInfo.CertFile = c.SSLCert
+		cfg.ClientTLSInfo.KeyFile = c.SSLKey
+		cfg.PeerTLSInfo.ClientCertAuth = len(c.SSLCA) != 0
+		cfg.PeerTLSInfo.TrustedCAFile = c.SSLCA
+		cfg.PeerTLSInfo.CertFile = c.SSLCert
+		cfg.PeerTLSInfo.KeyFile = c.SSLKey
 
-	// etcd only support one allowed CN
-	if len(c.CertAllowedCN) > 0 {
-		cfg.ClientTLSInfo.AllowedCN = c.CertAllowedCN[0]
-		cfg.PeerTLSInfo.AllowedCN = c.CertAllowedCN[0]
+		// etcd only support one allowed CN
+		if len(c.CertAllowedCN) > 0 {
+			cfg.ClientTLSInfo.AllowedCN = c.CertAllowedCN[0]
+			cfg.PeerTLSInfo.AllowedCN = c.CertAllowedCN[0]
+		}
 	}
 
 	return cfg, nil

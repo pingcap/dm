@@ -1,0 +1,8 @@
+# Master Configuration.
+master-addr = ":8261"
+advertise-addr = "127.0.0.1:8261"
+
+#ssl-ca = "dir-placeholer/ca.pem"
+#ssl-cert = "dir-placeholer/dm.pem"
+#ssl-key = "dir-placeholer/dm.key"
+#cert-allowed-cn = ["dm"]

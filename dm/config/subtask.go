@@ -87,6 +87,9 @@ type DBConfig struct {
 	Password         string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
 	MaxAllowedPacket *int   `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
 
+	// security config
+	Security *Security `toml:"security" json:"security" yaml:"security"`
+
 	RawDBCfg *RawDBConfig `toml:"-" json:"-" yaml:"-"`
 }
 

@@ -17,25 +17,42 @@ import (
 	"context"
 	"os"
 	"time"
+	"fmt"
 
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/tests/utils"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 // use query status request to test DM-worker is online
 func main() {
 	addr := os.Args[1]
-	// TODO: use tls
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(2*time.Second))
+
+	secureOpt := grpc.WithInsecure()
+	if len(os.Args) == 4 {
+		sslCA := os.Args[2]
+		sslCert := os.Args[3]
+		sslKey := os.Args[4]
+		tls, err := toolutils.NewTLS(sslCA, sslCert, sslKey, "", nil)
+		if err != nil {
+			fmt.Println(err)
+			utils.ExitWithError(err)
+		}
+		secureOpt = tls.ToGRPCDialOption()
+	}
+
+	conn, err := grpc.Dial(addr, secureOpt, grpc.WithBackoffMaxDelay(2*time.Second))
 	if err != nil {
+		fmt.Println(err)
 		utils.ExitWithError(err)
 	}
 	cli := pb.NewWorkerClient(conn)
 	req := &pb.QueryStatusRequest{}
 	_, err = cli.QueryStatus(context.Background(), req)
 	if err != nil {
+		fmt.Println(err)
 		utils.ExitWithError(err)
 	}
 }
