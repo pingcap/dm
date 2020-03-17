@@ -19,8 +19,8 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -45,7 +45,7 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) {
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
+		common.PrintLines("%s", terror.Message(err))
 		return
 	}
 
@@ -64,7 +64,7 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) {
 		if len(sources) > 0 {
 			common.PrintLines("sources: %v", sources)
 		}
-		common.PrintLines("error: %s", errors.ErrorStack(err))
+		common.PrintLines("error: %s", terror.Message(err))
 		return
 	}
 

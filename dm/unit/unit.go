@@ -17,8 +17,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/pingcap/errors"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
@@ -65,7 +63,7 @@ type Unit interface {
 // we can refine to add error scope field if needed
 func NewProcessError(err error) *pb.ProcessError {
 	result := &pb.ProcessError{
-		Msg: errors.ErrorStack(err),
+		Msg: terror.Message(err),
 	}
 	if e, ok := err.(*terror.Error); ok {
 		result.Error = &pb.TError{
