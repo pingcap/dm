@@ -256,7 +256,7 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 	baseFile := filepath.Base(file)
 	err = w.checkPoint.Init(w.tctx.WithContext(ctx), baseFile, finfo.Size())
 	if err != nil {
-		w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), log.ShortError(err))
+		w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), zap.Int64("offset", offset), log.ShortError(err))
 		return err
 	}
 
@@ -273,7 +273,7 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 	for {
 		select {
 		case <-ctx.Done():
-			w.tctx.L().Info("sql dispatcher is ready to quit.", zap.String("data file", file))
+			w.tctx.L().Info("sql dispatcher is ready to quit.", zap.String("data file", file), zap.Int64("offset", offset))
 			return nil
 		default:
 			// do nothing
@@ -282,7 +282,7 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 		cur += int64(len(line))
 
 		if err == io.EOF {
-			w.tctx.L().Info("data are scanned finished.", zap.String("data file", file))
+			w.tctx.L().Info("data are scanned finished.", zap.String("data file", file), zap.Int64("offset", offset))
 			break
 		}
 
