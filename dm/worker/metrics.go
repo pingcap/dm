@@ -24,7 +24,6 @@ import (
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
-	"github.com/pingcap/dm/mydumper"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay"
@@ -62,7 +61,6 @@ func RegistryMetrics() {
 	registry.MustRegister(taskState)
 
 	relay.RegisterMetrics(registry)
-	mydumper.RegisterMetrics(registry)
 	dumpling.RegisterMetrics(registry)
 	loader.RegisterMetrics(registry)
 	syncer.RegisterMetrics(registry)

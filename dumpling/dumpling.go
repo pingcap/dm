@@ -91,7 +91,6 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		m.logger.Error("fail to remove output directory", zap.String("directory", m.cfg.Dir), log.ShortError(err))
 	}
 
-	// Cmd cannot be reused, so we create a new cmd when begin processing
 	err = export.Dump(m.dumpConfig)
 
 	if err != nil {
@@ -174,6 +173,9 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	db := cfg.From
 
 	dumpConfig := export.DefaultConfig()
+	// block status addr because we already have it in DM, and if we enable it, may we need more ports for the process.
+	dumpConfig.StatusAddr = ""
+
 	dumpConfig.Host = db.Host
 	dumpConfig.Port = db.Port
 	dumpConfig.User = db.User
@@ -219,7 +221,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	}
 
 	// TODO: support String for export.Config
-	// m.logger.Info("create dumpling", zap.Stringer("config", dumpConfig))
+	m.logger.Info("create dumpling", zap.Reflect("config", dumpConfig))
 	if len(ret) > 0 {
 		m.logger.Warn("meeting some unsupported arguments", zap.Strings("argument", ret))
 	}
