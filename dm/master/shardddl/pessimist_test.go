@@ -127,11 +127,14 @@ func (t *testPessimist) TestPessimist(c *C) {
 
 	// wait exec operation for the owner become available.
 	opCh := make(chan pessimism.Operation, 10)
+	errCh := make(chan error, 10)
 	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task1, source1, rev1+1, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task1, source1, rev1+1, opCh, errCh)
 	cancel2()
 	close(opCh)
+	close(errCh)
 	c.Assert(len(opCh), Equals, 1)
+	c.Assert(len(errCh), Equals, 0)
 	op11 := <-opCh
 	c.Assert(op11.Exec, IsTrue)
 	c.Assert(op11.Done, IsFalse)
@@ -148,11 +151,14 @@ func (t *testPessimist) TestPessimist(c *C) {
 
 	// wait skip operation for the non-owner become available.
 	opCh = make(chan pessimism.Operation, 10)
+	errCh = make(chan error, 10)
 	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task1, source2, rev2+1, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task1, source2, rev2+1, opCh, errCh)
 	cancel2()
 	close(opCh)
+	close(errCh)
 	c.Assert(len(opCh), Equals, 1)
+	c.Assert(len(errCh), Equals, 0)
 	op12 := <-opCh
 	c.Assert(op12.Exec, IsFalse)
 	c.Assert(op12.Done, IsFalse)
@@ -204,13 +210,16 @@ func (t *testPessimist) TestPessimist(c *C) {
 
 	// wait exec operation for the owner become available.
 	opCh = make(chan pessimism.Operation, 10)
+	errCh = make(chan error, 10)
 	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
 	// both source1 and source2 have shard DDL info exist, and neither of them have operation exist.
 	// we must ensure source1 always become the owner of the lock.
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task2, source1, rev3+1, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task2, source1, rev3+1, opCh, errCh)
 	cancel2()
 	close(opCh)
+	close(errCh)
 	c.Assert(len(opCh), Equals, 1)
+	c.Assert(len(errCh), Equals, 0)
 	op21 := <-opCh
 	c.Assert(op21.Exec, IsTrue)
 	c.Assert(op21.Done, IsFalse)
@@ -353,11 +362,14 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 	go func() {
 		defer wg.Done()
 		opCh := make(chan pessimism.Operation, 10)
+		errCh := make(chan error, 10)
 		ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
-		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source1, rev1+1, opCh)
+		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source1, rev1+1, opCh, errCh)
 		cancel2()
 		close(opCh)
+		close(errCh)
 		c.Assert(len(opCh), Equals, 1)
+		c.Assert(len(errCh), Equals, 0)
 		op := <-opCh
 		c.Assert(op.Exec, IsTrue)
 		c.Assert(op.Done, IsFalse)
@@ -374,11 +386,14 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 
 	// 8. wait exec operation for the owner become available again (with new revision).
 	opCh := make(chan pessimism.Operation, 10)
+	errCh := make(chan error, 10)
 	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source1, rev1+1, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source1, rev1+1, opCh, errCh)
 	cancel2()
 	close(opCh)
+	close(errCh)
 	c.Assert(len(opCh), Equals, 1)
+	c.Assert(len(errCh), Equals, 0)
 	op11 := <-opCh
 	c.Assert(op11.Exec, IsTrue)
 	c.Assert(op11.Done, IsFalse)
@@ -388,11 +403,14 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 	go func() {
 		defer wg.Done()
 		opCh = make(chan pessimism.Operation, 10)
+		errCh = make(chan error, 10)
 		ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source2, rev2+1, opCh)
+		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source2, rev2+1, opCh, errCh)
 		cancel2()
 		close(opCh)
+		close(errCh)
 		c.Assert(len(opCh), Equals, 1)
+		c.Assert(len(errCh), Equals, 0)
 		op := <-opCh
 		c.Assert(op.Exec, IsFalse)
 		c.Assert(op.Done, IsFalse)
@@ -415,11 +433,14 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 
 	// 12. wait skip operation for the non-owner become available again (with new revision, without existing done).
 	opCh = make(chan pessimism.Operation, 10)
+	errCh = make(chan error, 10)
 	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source2, rev2+1, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source2, rev2+1, opCh, errCh)
 	cancel2()
 	close(opCh)
+	close(errCh)
 	c.Assert(len(opCh), Equals, 1)
+	c.Assert(len(errCh), Equals, 0)
 	op12 := <-opCh
 	c.Assert(op12.Exec, IsFalse)
 	c.Assert(op12.Done, IsFalse)
@@ -440,11 +461,14 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 
 	// 15. wait skip operation for the non-owner become available again (with new revision, with existing done).
 	opCh = make(chan pessimism.Operation, 10)
+	errCh = make(chan error, 10)
 	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source3, rev3+1, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source3, rev3+1, opCh, errCh)
 	cancel2()
 	close(opCh)
+	close(errCh)
 	c.Assert(len(opCh), Equals, 1)
+	c.Assert(len(errCh), Equals, 0)
 	op13 := <-opCh
 	c.Assert(op13.Exec, IsFalse)
 	c.Assert(op13.Done, IsFalse)
@@ -618,11 +642,14 @@ func (t *testPessimist) TestUnlockSourceInterrupt(c *C) {
 
 	// 2. watch until get not-done operation for the owner.
 	opCh := make(chan pessimism.Operation, 10)
+	errCh := make(chan error, 10)
 	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
-	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, "", rev1+1, opCh)
+	pessimism.WatchOperationPut(ctx2, etcdTestCli, task, "", rev1+1, opCh, errCh)
 	cancel2()
 	close(opCh)
+	close(errCh)
 	c.Assert(len(opCh), Equals, 1)
+	c.Assert(len(errCh), Equals, 0)
 	op := <-opCh
 	c.Assert(op.Source, Equals, source1)
 	c.Assert(op.Exec, IsTrue)
@@ -762,14 +789,16 @@ func (t *testPessimist) putDoneForSource(
 	var (
 		wg            sync.WaitGroup
 		opCh          = make(chan pessimism.Operation, 10)
+		errCh         = make(chan error, 10)
 		ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
 	)
 
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source, watchRev, opCh)
+		pessimism.WatchOperationPut(ctx2, etcdTestCli, task, source, watchRev, opCh, errCh)
 		close(opCh)
+		close(errCh)
 	}()
 	go func() {
 		defer func() {
@@ -787,6 +816,8 @@ func (t *testPessimist) putDoneForSource(
 			done, _, err := pessimism.PutOperationDeleteExistInfo(etcdTestCli, op, info)
 			c.Assert(err, IsNil)
 			c.Assert(done, IsTrue)
+		case err := <-errCh:
+			c.Fatal(err)
 		}
 	}()
 	wg.Wait()
