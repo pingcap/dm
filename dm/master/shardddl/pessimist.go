@@ -92,7 +92,8 @@ func (p *Pessimist) run(ctx context.Context, etcdCli *clientv3.Client, rev1, rev
 		err := p.watchInfoOperation(ctx, etcdCli, rev1, rev2)
 		if etcdutil.IsRetryableError(err) {
 			retryNum := 1
-			for rev1 == 0 || rev2 == 0 {
+			succeed := false
+			for !succeed {
 				select {
 				case <-ctx.Done():
 					return nil
@@ -101,6 +102,7 @@ func (p *Pessimist) run(ctx context.Context, etcdCli *clientv3.Client, rev1, rev
 					if err != nil {
 						log.L().Error("resetWorkerEv is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
 					}
+					succeed = true
 				}
 				retryNum++
 			}

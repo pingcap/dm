@@ -825,6 +825,7 @@ func (t *testPessimist) TestMeetEtcdCompactError(c *C) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	p.cli = etcdTestCli
 
 	for i := 0; i <= 1; i++ {
 		// i == 0, watch info is compacted; i == 1, watch operation is compacted
@@ -867,6 +868,7 @@ func (t *testPessimist) TestMeetEtcdCompactError(c *C) {
 		// step 2: start running, i11 and i12 should be handled successfully
 		ctx2, cancel2 := context.WithCancel(ctx)
 		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			rev1, rev2 := revCompacted, revThreshold
@@ -876,7 +878,6 @@ func (t *testPessimist) TestMeetEtcdCompactError(c *C) {
 			// TODO: handle fatal error from run
 			p.run(ctx2, etcdTestCli, rev1, rev2)
 		}()
-
 		// PUT i11, will create a lock but not synced.
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 			return len(p.Locks()) == 1
