@@ -1,4 +1,4 @@
-// Copyright 2019 PingCAP, Inc.
+// Copyright 2020 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -76,7 +76,6 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	begin := time.Now()
 	errs := make([]*pb.ProcessError, 0, 1)
-	isCanceled := false
 
 	failpoint.Inject("dumpUnitProcessForever", func() {
 		m.logger.Info("dump unit runs forever", zap.String("failpoint", "dumpUnitProcessForever"))
@@ -89,25 +88,26 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	err := os.RemoveAll(m.cfg.Dir)
 	if err != nil {
 		m.logger.Error("fail to remove output directory", zap.String("directory", m.cfg.Dir), log.ShortError(err))
+		errs = append(errs, unit.NewProcessError(err))
+		pr <- pb.ProcessResult{
+			IsCanceled: false,
+			Errors:     errs,
+		}
+		return
 	}
 
+	// TODO: dumpling can't be canceled now, we may add that in the future
 	err = export.Dump(m.dumpConfig)
 
 	if err != nil {
 		dumplingExitWithErrorCounter.WithLabelValues(m.cfg.Name).Inc()
 		errs = append(errs, unit.NewProcessError(err))
-	} else {
-		select {
-		case <-ctx.Done():
-			isCanceled = true
-		default:
-		}
 	}
 
 	m.logger.Info("dump data finished", zap.Duration("cost time", time.Since(begin)))
 
 	pr <- pb.ProcessResult{
-		IsCanceled: isCanceled,
+		IsCanceled: false,
 		Errors:     errs,
 	}
 }
@@ -173,6 +173,16 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	db := cfg.From
 
 	dumpConfig := export.DefaultConfig()
+	// ret is used to record the unsupported arguments for dumpling
+	var ret []string
+	extraArgs := strings.Fields(cfg.ExtraArgs)
+	if len(extraArgs) > 0 {
+		err := parseExtraArgs(dumpConfig, extraArgs)
+		if err != nil {
+			m.logger.Warn("parsed some unsupported arguments", zap.Error(err))
+			ret = append(ret, extraArgs...)
+		}
+	}
 	// block status addr because we already have it in DM, and if we enable it, may we need more ports for the process.
 	dumpConfig.StatusAddr = ""
 
@@ -207,15 +217,9 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		dumpConfig.Where = cfg.Where
 	}
 
-	var ret []string
 	if cfg.SkipTzUTC {
 		// TODO: support skip-tz-utc
 		ret = append(ret, "--skip-tz-utc")
-	}
-
-	extraArgs := strings.Fields(cfg.ExtraArgs)
-	if len(extraArgs) > 0 {
-		ret = append(ret, ParseArgLikeBash(extraArgs)...)
 	}
 
 	// TODO: support String for export.Config
