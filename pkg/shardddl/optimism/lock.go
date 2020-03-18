@@ -157,10 +157,19 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		// do nothing except the last table.
 		return emptyDDLs, nil
 	}
-	// nothing need to do,
-	// but in order to be uniform with the previous case `newJoined.Compare(oldJoined)`,
-	// we still return the DDLs (or maybe we can return empty DDLs for both of them later).
-	return ddls, nil
+
+	// compare the current table's info with joined info.
+	cmp, err = newTable.Compare(newJoined)
+	if err != nil {
+		return emptyDDLs, err // NOTE: this should not happen.
+	}
+	if cmp < 0 {
+		// no need to replicate DDLs, because has a larger joined schema (in the downstream).
+		// FIXME: if the previous tables reached the joined schema has not replicated to the downstream,
+		// now, they should re-try until replicated successfully, try to implement better strategy later.
+		return emptyDDLs, nil
+	}
+	return ddls, nil // this should not happen.
 }
 
 // IsSynced returns whether the lock has synced.
