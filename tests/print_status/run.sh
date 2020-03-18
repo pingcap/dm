@@ -60,7 +60,7 @@ function check_print_status() {
     echo "checking print status"
     # check load unit print status
     status_file=$WORK_DIR/worker1/log/loader_status.log
-    grep -oP "\[unit=load\] \[finished_bytes=[0-9]+\] \[total_bytes=59568\] \[total_file_count=3\] \[progress=.*\]" $WORK_DIR/worker1/log/dm-worker.log > $status_file
+    grep -oP "\[unit=load\] \[finished_bytes=[0-9]+\] \[total_bytes=58128\] \[total_file_count=3\] \[progress=.*\]" $WORK_DIR/worker1/log/dm-worker.log > $status_file
     #grep -oP "loader.*\Kfinished_bytes = [0-9]+, total_bytes = [0-9]+, total_file_count = [0-9]+, progress = .*" $WORK_DIR/worker1/log/dm-worker.log > $status_file
     status_count=$(wc -l $status_file|awk '{print $1}')
     [ $status_count -ge 2 ]
