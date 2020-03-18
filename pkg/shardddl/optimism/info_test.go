@@ -58,7 +58,11 @@ func createTableInfo(c *C, p *parser.Parser, se sessionctx.Context, tableID int6
 	if err != nil {
 		c.Fatalf("fail to parse stmt, %v", err)
 	}
-	info, err := tiddl.MockTableInfo(se, node.(*ast.CreateTableStmt), tableID)
+	createStmtNode, ok := node.(*ast.CreateTableStmt)
+	if !ok {
+		c.Fatalf("%s is not a CREATE TABLE statement", sql)
+	}
+	info, err := tiddl.MockTableInfo(se, createStmtNode, tableID)
 	if err != nil {
 		c.Fatalf("fail to create table info, %v", err)
 	}
