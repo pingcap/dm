@@ -17,8 +17,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pingcap/dm/dm/config"
+
 	. "github.com/pingcap/check"
-	"github.com/pingcap/dumpling/v4/export"
 )
 
 var _ = Suite(&testDumplingSuite{})
@@ -31,16 +32,17 @@ type testDumplingSuite struct {
 }
 
 func (m *testDumplingSuite) TestParseArgs(c *C) {
-	extraArgs := `--statement-size=100 --where "t > 10" --threads 8 -F 50`
-	cfg := export.DefaultConfig()
-	err := parseExtraArgs(cfg, strings.Fields(extraArgs))
+	cfg := &config.SubTaskConfig{}
+	cfg.ExtraArgs = `--statement-size=100 --where "t>10" --threads 8 -F 50`
+	d := NewDumpling(cfg)
+	exportCfg, err := d.constructArgs()
 	c.Assert(err, IsNil)
-	c.Assert(cfg.StatementSize, Equals, uint64(100))
-	c.Assert(cfg.Where, Equals, "t > 10")
-	c.Assert(cfg.Threads, Equals, 8)
-	c.Assert(cfg.FileSize, Equals, uint64(50))
+	c.Assert(exportCfg.StatementSize, Equals, uint64(100))
+	c.Assert(exportCfg.Where, Equals, "t>10")
+	c.Assert(exportCfg.Threads, Equals, 8)
+	c.Assert(exportCfg.FileSize, Equals, uint64(50))
 
-	extraArgs = `--statement-size=100 --skip-tz-utc`
-	err = parseExtraArgs(cfg, strings.Fields(extraArgs))
+	extraArgs := `--statement-size=100 --skip-tz-utc`
+	err = parseExtraArgs(exportCfg, strings.Fields(extraArgs))
 	c.Assert(err, NotNil)
 }

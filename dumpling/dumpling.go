@@ -177,7 +177,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	var ret []string
 	extraArgs := strings.Fields(cfg.ExtraArgs)
 	if len(extraArgs) > 0 {
-		err := parseExtraArgs(dumpConfig, extraArgs)
+		err := parseExtraArgs(dumpConfig, ParseArgLikeBash(extraArgs))
 		if err != nil {
 			m.logger.Warn("parsed some unsupported arguments", zap.Error(err))
 			ret = append(ret, extraArgs...)
