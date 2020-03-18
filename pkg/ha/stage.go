@@ -95,7 +95,7 @@ func PutRelayStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
 }
 
@@ -106,7 +106,7 @@ func PutSubTaskStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
 }
 
@@ -221,7 +221,7 @@ func GetSubTaskStageConfig(cli *clientv3.Client, source string) (map[string]Stag
 		stm = make(map[string]Stage)
 		scm = make(map[string]config.SubTaskConfig)
 	)
-	txnResp, rev, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpGet(common.StageSubTaskKeyAdapter.Encode(source), clientv3.WithPrefix()),
+	txnResp, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clientv3.OpGet(common.StageSubTaskKeyAdapter.Encode(source), clientv3.WithPrefix()),
 		clientv3.OpGet(common.UpstreamSubTaskKeyAdapter.Encode(source), clientv3.WithPrefix()))
 	if err != nil {
 		return stm, scm, 0, err
@@ -262,7 +262,7 @@ func WatchSubTaskStage(ctx context.Context, cli *clientv3.Client,
 // DeleteSubTaskStage deletes the subtask stage.
 func DeleteSubTaskStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	ops := deleteSubTaskStageOp(stages...)
-	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
 }
 

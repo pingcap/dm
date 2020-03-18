@@ -32,7 +32,7 @@ func PutSourceCfg(cli *clientv3.Client, cfg config.SourceConfig) (int64, error) 
 		return 0, err
 	}
 	key := common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID)
-	_, rev, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpPut(key, value))
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clientv3.OpPut(key, value))
 	return rev, err
 }
 
@@ -105,7 +105,7 @@ func ClearTestInfoOperation(cli *clientv3.Client) error {
 	clearBound := clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Path(), clientv3.WithPrefix())
 	clearRelayStage := clientv3.OpDelete(common.StageRelayKeyAdapter.Path(), clientv3.WithPrefix())
 	clearSubTaskStage := clientv3.OpDelete(common.StageSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
-	_, _, err := etcdutil.DoOpsInOneTxn(cli, clearSource, clearSubTask, clearWorkerInfo, clearBound,
+	_, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clearSource, clearSubTask, clearWorkerInfo, clearBound,
 		clearWorkerKeepAlive, clearRelayStage, clearSubTaskStage)
 	return err
 }
