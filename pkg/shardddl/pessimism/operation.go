@@ -134,7 +134,7 @@ func DeleteOperations(cli *clientv3.Client, ops ...Operation) (int64, error) {
 	for _, op := range ops {
 		opsDel = append(opsDel, deleteOperationOp(op))
 	}
-	_, rev, err := etcdutil.DoOpsInOneTxn(cli, opsDel...)
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, opsDel...)
 	return rev, err
 }
 
