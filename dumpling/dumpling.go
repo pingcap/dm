@@ -189,10 +189,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		},
 	}
 	dumpConfig.EscapeBackslash = true
-
-	var ret []string
-	// TODO: support log relative configs
-	ret = append(ret, m.logArgs(cfg)...)
+	dumpConfig.Logger = m.logger.Logger
 
 	if cfg.Threads > 0 {
 		dumpConfig.Threads = cfg.Threads
@@ -210,6 +207,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		dumpConfig.Where = cfg.Where
 	}
 
+	var ret []string
 	if cfg.SkipTzUTC {
 		// TODO: support skip-tz-utc
 		ret = append(ret, "--skip-tz-utc")
@@ -227,22 +225,4 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	}
 
 	return dumpConfig, nil
-}
-
-// logArgs constructs arguments for log from SubTaskConfig
-func (m *Dumpling) logArgs(cfg *config.SubTaskConfig) []string {
-	args := make([]string, 0, 4)
-	if len(cfg.LogFile) > 0 {
-		// for writing mydumper output into stderr (fixme: won't work on Windows, if anyone cares)
-		args = append(args, "--logfile", "/dev/stderr")
-	}
-	switch strings.ToLower(cfg.LogLevel) {
-	case "fatal", "error":
-		args = append(args, "--verbose", "1")
-	case "warn", "warning":
-		args = append(args, "--verbose", "2")
-	case "info", "debug":
-		args = append(args, "--verbose", "3")
-	}
-	return args
 }
