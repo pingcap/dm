@@ -25,7 +25,8 @@ update t1 set name = 'gentestxxxxxx' where gen_id = 124;
 delete from t1 where gen_id > 124;
 
 -- test alter database
-alter database ha_master_test CHARACTER SET = utf8mb4;
+-- tidb doesn't support alter character set from latin1 to utf8m64 so we comment this now
+-- alter database ha_master_test CHARACTER SET = utf8mb4;
 
 -- test decimal type
 alter table t1 add column lat decimal(9,6) default '0.000000';

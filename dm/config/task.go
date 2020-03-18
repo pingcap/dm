@@ -135,8 +135,12 @@ type MydumperConfig struct {
 	MydumperPath  string `yaml:"mydumper-path" toml:"mydumper-path" json:"mydumper-path"`    // mydumper binary path
 	Threads       int    `yaml:"threads" toml:"threads" json:"threads"`                      // -t, --threads
 	ChunkFilesize int64  `yaml:"chunk-filesize" toml:"chunk-filesize" json:"chunk-filesize"` // -F, --chunk-filesize
-	SkipTzUTC     bool   `yaml:"skip-tz-utc" toml:"skip-tz-utc" json:"skip-tz-utc"`          // --skip-tz-utc
-	ExtraArgs     string `yaml:"extra-args" toml:"extra-args" json:"extra-args"`             // other extra args
+	StatementSize uint64 `yaml:"statement-size" toml:"statement-size" json:"statement-size"` // -S, --statement-size
+	Rows          uint64 `yaml:"rows" toml:"rows" json:"rows"`                               // -r, --rows
+	Where         string `yaml:"where" toml:"where" json:"where"`                            // --where
+
+	SkipTzUTC bool   `yaml:"skip-tz-utc" toml:"skip-tz-utc" json:"skip-tz-utc"` // --skip-tz-utc
+	ExtraArgs string `yaml:"extra-args" toml:"extra-args" json:"extra-args"`    // other extra args
 	// NOTE: use LoaderConfig.Dir as --outputdir
 	// TODO zxc: combine -B -T --regex with filter rules?
 }
