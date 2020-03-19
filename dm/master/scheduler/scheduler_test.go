@@ -794,7 +794,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 		defer wg.Done()
 		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName2, keepAliveTTL), IsNil)
 	}()
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
 		return err == nil && len(kam) == 2
 	}), IsTrue)
@@ -803,7 +803,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 	// check whether keepalive lease is out of date
 	time.Sleep(time.Duration(keepAliveTTL) * time.Second)
 	var rev int64
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		kam, rev1, err := ha.GetKeepAliveWorkers(etcdTestCli)
 		rev = rev1
 		return err == nil && len(kam) == 0
