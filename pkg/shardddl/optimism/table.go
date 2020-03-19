@@ -37,7 +37,7 @@ import (
 type SourceTables struct {
 	Task   string                         `json:"task"`   // data migration task name
 	Source string                         `json:"source"` // upstream source ID
-	Tables map[string]map[string]struct{} `json:"tables"` // table names, schema name -> table names.
+	Tables map[string]map[string]struct{} `json:"tables"` // schema name -> table name -> struct{}.
 
 	// only used to report to the caller of the watcher, do not marsh it.
 	// if it's true, it means the bound has been deleted in etcd.
