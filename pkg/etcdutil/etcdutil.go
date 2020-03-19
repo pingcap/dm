@@ -22,6 +22,10 @@ import (
 	"github.com/pingcap/errors"
 	"go.etcd.io/etcd/clientv3"
 	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
+
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/retry"
 )
 
 const (
@@ -35,6 +39,32 @@ const (
 	// DefaultRevokeLeaseTimeout is the maximum amount of time waiting for revoke etcd lease.
 	DefaultRevokeLeaseTimeout = 3 * time.Second
 )
+
+var etcdDefaultTxnRetryParam = retry.Params{
+	RetryCount:         5,
+	FirstRetryDuration: time.Second,
+	BackoffStrategy:    retry.Stable,
+	IsRetryableFn: func(retryTime int, err error) bool {
+		switch err {
+		// Etcd ResourceExhausted errors, may recover after some time
+		case v3rpc.ErrNoSpace, v3rpc.ErrTooManyRequests:
+			return true
+		// Etcd Unavailable errors, may be available after some time
+		// https://github.com/etcd-io/etcd/pull/9934/files#diff-6d8785d0c9eaf96bc3e2b29c36493c04R162-R167
+		// ErrStopped:
+		// one of the etcd nodes stopped from failure injection
+		// ErrNotCapable:
+		// capability check has not been done (in the beginning)
+		case v3rpc.ErrNoLeader, v3rpc.ErrLeaderChanged, v3rpc.ErrNotCapable, v3rpc.ErrStopped, v3rpc.ErrTimeout,
+			v3rpc.ErrTimeoutDueToLeaderFail, v3rpc.ErrGRPCTimeoutDueToConnectionLost, v3rpc.ErrUnhealthy:
+			return true
+		default:
+			return false
+		}
+	},
+}
+
+var etcdDefaultTxnStrategy = retry.FiniteRetryStrategy{}
 
 // CreateClient creates an etcd client with some default config items.
 func CreateClient(endpoints []string) (*clientv3.Client, error) {
@@ -58,15 +88,24 @@ func AddMember(client *clientv3.Client, peerAddrs []string) (*clientv3.MemberAdd
 	return client.MemberAdd(ctx, peerAddrs)
 }
 
-// DoOpsInOneTxn do multiple etcd operations in one txn.
-func DoOpsInOneTxn(cli *clientv3.Client, ops ...clientv3.Op) (*clientv3.TxnResponse, int64, error) {
+// DoOpsInOneTxnWithRetry do multiple etcd operations in one txn.
+// TODO: add unit test to test encountered an retryable error first but then recovered
+func DoOpsInOneTxnWithRetry(cli *clientv3.Client, ops ...clientv3.Op) (*clientv3.TxnResponse, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), DefaultRequestTimeout)
 	defer cancel()
+	tctx := tcontext.NewContext(ctx, log.L())
+	ret, _, err := etcdDefaultTxnStrategy.Apply(tctx, etcdDefaultTxnRetryParam, func(t *tcontext.Context) (ret interface{}, err error) {
+		resp, err := cli.Txn(ctx).Then(ops...).Commit()
+		if err != nil {
+			return nil, err
+		}
+		return resp, nil
+	})
 
-	resp, err := cli.Txn(ctx).Then(ops...).Commit()
 	if err != nil {
 		return nil, 0, err
 	}
+	resp := ret.(*clientv3.TxnResponse)
 	return resp, resp.Header.Revision, nil
 }
 
