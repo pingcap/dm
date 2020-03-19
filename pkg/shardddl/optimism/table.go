@@ -83,7 +83,7 @@ func PutSourceTables(cli *clientv3.Client, st SourceTables) (int64, error) {
 	}
 	key := common.ShardDDLOptimismSourceTablesKeyAdapter.Encode(st.Task, st.Source)
 
-	_, rev, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpPut(key, value))
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clientv3.OpPut(key, value))
 	return rev, err
 }
 
@@ -91,7 +91,7 @@ func PutSourceTables(cli *clientv3.Client, st SourceTables) (int64, error) {
 // This function should often be called by DM-worker.
 func DeleteSourceTables(cli *clientv3.Client, st SourceTables) (int64, error) {
 	key := common.ShardDDLOptimismSourceTablesKeyAdapter.Encode(st.Task, st.Source)
-	_, rev, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpDelete(key))
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clientv3.OpDelete(key))
 	return rev, err
 }
 
@@ -99,7 +99,7 @@ func DeleteSourceTables(cli *clientv3.Client, st SourceTables) (int64, error) {
 // This function should often be called by DM-master.
 // k/k/v: task-name -> source-ID -> source tables.
 func GetAllSourceTables(cli *clientv3.Client) (map[string]map[string]SourceTables, int64, error) {
-	respTxn, _, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpGet(common.ShardDDLOptimismSourceTablesKeyAdapter.Path(), clientv3.WithPrefix()))
+	respTxn, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clientv3.OpGet(common.ShardDDLOptimismSourceTablesKeyAdapter.Path(), clientv3.WithPrefix()))
 	if err != nil {
 		return nil, 0, err
 	}

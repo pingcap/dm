@@ -103,7 +103,7 @@ func PutInfo(cli *clientv3.Client, info Info) (int64, error) {
 	}
 	key := common.ShardDDLOptimismInfoKeyAdapter.Encode(info.Task, info.Source, info.UpSchema, info.UpTable)
 
-	_, rev, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpPut(key, value))
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clientv3.OpPut(key, value))
 	return rev, nil
 }
 
@@ -112,7 +112,7 @@ func PutInfo(cli *clientv3.Client, info Info) (int64, error) {
 // k/k/k/k/v: task-name -> source-ID -> upstream-schema-name -> upstream-table-name -> shard DDL info.
 // ugly code, but have no better idea now.
 func GetAllInfo(cli *clientv3.Client) (map[string]map[string]map[string]map[string]Info, int64, error) {
-	respTxn, _, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpGet(common.ShardDDLOptimismInfoKeyAdapter.Path(), clientv3.WithPrefix()))
+	respTxn, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clientv3.OpGet(common.ShardDDLOptimismInfoKeyAdapter.Path(), clientv3.WithPrefix()))
 	if err != nil {
 		return nil, 0, err
 	}

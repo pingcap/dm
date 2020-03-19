@@ -142,7 +142,7 @@ func PutOperation(cli *clientv3.Client, skipDone bool, op Operation) (rev int64,
 // This function should often be called by DM-master.
 // k/k/k/k/v: task-name -> source-ID -> upstream-schema-name -> upstream-table-name -> shard DDL operation.
 func GetAllOperations(cli *clientv3.Client) (map[string]map[string]map[string]map[string]Operation, int64, error) {
-	respTxn, _, err := etcdutil.DoOpsInOneTxn(cli, clientv3.OpGet(common.ShardDDLOptimismOperationKeyAdapter.Path(), clientv3.WithPrefix()))
+	respTxn, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clientv3.OpGet(common.ShardDDLOptimismOperationKeyAdapter.Path(), clientv3.WithPrefix()))
 	if err != nil {
 		return nil, 0, err
 	}
