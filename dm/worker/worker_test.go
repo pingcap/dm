@@ -23,7 +23,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/pd/pkg/tempurl"
+	"github.com/pingcap/pd/v4/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
 
 	"github.com/pingcap/dm/dm/config"
@@ -116,10 +116,10 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		NewRelayHolder = NewRealRelayHolder
 	}()
 
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/mydumper/dumpUnitProcessForever", `return(true)`), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/mydumper/dumpUnitProcessForever")
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/mydumper/dumpUnitProcessWithError", `2*return("test auto resume inject error")`), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/mydumper/dumpUnitProcessWithError")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever", `return(true)`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError", `2*return("test auto resume inject error")`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly", `return(true)`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/loader/ignoreLoadCheckpointErr", `return()`), IsNil)

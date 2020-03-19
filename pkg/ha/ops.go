@@ -36,7 +36,7 @@ func PutRelayStageSourceBound(cli *clientv3.Client, stage Stage, bound SourceBou
 	ops := make([]clientv3.Op, 0, 2)
 	ops = append(ops, ops1...)
 	ops = append(ops, op2)
-	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
 }
 
@@ -48,7 +48,7 @@ func DeleteSourceCfgRelayStageSourceBound(cli *clientv3.Client, source, worker s
 	sourceCfgOp := deleteSourceCfgOp(source)
 	relayStageOp := deleteRelayStageOp(source)
 	sourceBoundOp := deleteSourceBoundOp(worker)
-	_, rev, err := etcdutil.DoOpsInOneTxn(cli, sourceCfgOp, relayStageOp, sourceBoundOp)
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, sourceCfgOp, relayStageOp, sourceBoundOp)
 	return rev, err
 }
 
@@ -94,6 +94,6 @@ func opSubTaskCfgStage(cli *clientv3.Client, evType mvccpb.Event_EventType,
 	ops := make([]clientv3.Op, 0, len(ops1)+len(ops2))
 	ops = append(ops, ops1...)
 	ops = append(ops, ops2...)
-	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
 }
