@@ -60,6 +60,8 @@ func NewLock(ID, task string, ti *model.TableInfo, sts []SourceTables) *Lock {
 // TrySync tries to sync the lock, re-entrant.
 // new upstream sources may join when the DDL lock is in syncing,
 // so we need to merge these new sources.
+// NOTE: now, any error returned, we treat it as conflict detected.
+// NOTE: now, DDLs (not empty) returned when resolved the conflict, but in fact these DDLs should not be replicated to the downstream.
 func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	ddls []string, newTI *model.TableInfo, sts ...SourceTables) (newDDLs []string, err error) {
 	l.mu.Lock()

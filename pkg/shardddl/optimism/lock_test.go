@@ -30,10 +30,10 @@ func (t *testLock) SetUpSuite(c *C) {
 	log.InitLogger(&log.Config{})
 }
 
-func (t *testLock) TestLock(c *C) {
+func (t *testLock) TestLockTrySyncNormal(c *C) {
 	var (
-		ID               = "test_lock-`foo`.`bar`"
-		task             = "test_lock"
+		ID               = "test_lock_try_sync_normal-`foo`.`bar`"
+		task             = "test_lock_try_sync_normal"
 		sources          = []string{"mysql-replica-1", "mysql-replica-2"}
 		dbs              = []string{"db1", "db2"}
 		tbls             = []string{"tbl1", "tbl2"}
@@ -269,6 +269,167 @@ func (t *testLock) TestLock(c *C) {
 			}
 		}
 	}
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+}
+
+func (t *testLock) TestLockTrySyncConflict(c *C) {
+	var (
+		ID           = "test_lock_try_sync_conflict-`foo`.`bar`"
+		task         = "test_lock_try_sync_conflict"
+		source       = "mysql-replica-1"
+		db           = "foo"
+		tbls         = []string{"tbl1", "tbl2"}
+		p            = parser.New()
+		se           = mock.NewContext()
+		tblID  int64 = 111
+		DDLs1        = []string{"ALTER TABLE ADD COLUMN c1 TEXT"}
+		DDLs2        = []string{"ALTER TABLE ADD COLUMN c1 DATETIME", "ALTER TABLE ADD COLUMN c2 INT"}
+		DDLs3        = []string{"ALTER TABLE DROP COLUMN c2"}
+		DDLs4        = []string{"ALTER TABLE DROP COLUMN c1"}
+		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
+		ti3          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
+		ti4          = ti0
+
+		DDLs5   = []string{"ALTER TABLE ADD COLUMN c2 TEXT"}
+		DDLs6   = []string{"ALTER TABLE ADD COLUMN c2 DATETIME", "ALTER TABLE ADD COLUMN c3 INT"}
+		DDLs7   = []string{"ALTER TABLE DROP COLUMN c2"}
+		DDLs8_1 = []string{"ALTER TABLE ADD COLUMN c3 INT"}
+		DDLs8_2 = []string{"ALTER TABLE ADD COLUMN c2 TEXT"}
+		ti5     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 TEXT)`)
+		ti6     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 DATETIME, c3 INT)`)
+		ti7     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c3 INT)`)
+		ti8     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 TEXT, c3 INT)`)
+
+		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
+		sts    = []SourceTables{NewSourceTables(task, source, tables)}
+		l      = NewLock(ID, task, ti0, sts)
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// CASE: conflict happen, revert all changes to resolve the conflict.
+	// TrySync for the first table, construct the joined schema.
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	ready := l.Ready()
+	c.Assert(ready[source][db][tbls[0]], IsTrue)
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+	cmp, err := l.tables[source][db][tbls[0]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+
+	// TrySync for the second table with another schema (add two columns, one of them will cause conflict).
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts...)
+	c.Assert(err, ErrorMatches, ".*at tuple index.*")
+	c.Assert(DDLs, DeepEquals, []string{})
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, ErrorMatches, ".*at tuple index.*")
+	c.Assert(cmp, Equals, 0)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+
+	// TrySync again.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts...)
+	c.Assert(err, ErrorMatches, ".*at tuple index.*")
+	c.Assert(DDLs, DeepEquals, []string{})
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, ErrorMatches, ".*at tuple index.*")
+	c.Assert(cmp, Equals, 0)
+
+	// TrySync for the second table to drop the non-conflict column, the conflict should still exist.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs3, ti3, sts...)
+	c.Assert(err, ErrorMatches, ".*at tuple index.*")
+	c.Assert(DDLs, DeepEquals, []string{})
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, ErrorMatches, ".*at tuple index.*")
+	c.Assert(cmp, Equals, 0)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+
+	// TrySync for the second table to drop the conflict column, the conflict should be resolved.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs4, ti4, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, []string{})
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+
+	// TrySync for the second table as we did for the first table, the lock should be synced.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// CASE: conflict happen, revert part of changes to resolve the conflict.
+	// TrySync for the first table, construct the joined schema.
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs5, ti5, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs5)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[0]], IsTrue)
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+	cmp, err = l.tables[source][db][tbls[0]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+
+	// TrySync for the second table with another schema (add two columns, one of them will cause conflict).
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs6, ti6, sts...)
+	c.Assert(err, ErrorMatches, ".*at tuple index.*")
+	c.Assert(DDLs, DeepEquals, []string{})
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, ErrorMatches, ".*at tuple index.*")
+	c.Assert(cmp, Equals, 0)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+
+	// TrySync for the second table to drop the conflict column, the conflict should be resolved.
+	// but both of tables are not synced now.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs7, ti7, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs7) // special case: these DDLs should not be replicated to the downstream.
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[0]], IsFalse)
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+	cmp, err = l.tables[source][db][tbls[0]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+
+	// TrySync for the first table to become synced.
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs8_1, ti8, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs8_1)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[0]], IsTrue)
+
+	// TrySync for the second table to become synced.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs8_2, ti8, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs8_2)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[1]], IsTrue)
+
+	// all tables synced now.
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
 }
