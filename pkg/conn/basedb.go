@@ -52,7 +52,8 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&maxAllowedPacket=%d",
 		config.User, config.Password, config.Host, config.Port, *config.MaxAllowedPacket)
 
-	if len(config.Security.SSLCA) != 0 && len(config.Security.SSLCert) != 0 && len(config.Security.SSLKey) != 0 {
+	if config.Security != nil && len(config.Security.SSLCA) != 0 &&
+		len(config.Security.SSLCert) != 0 && len(config.Security.SSLKey) != 0 {
 		tlsConfig, err := toolutils.ToTLSConfig(config.Security.SSLCA, config.Security.SSLCert, config.Security.SSLKey)
 		if err != nil {
 			// TODO: use terror

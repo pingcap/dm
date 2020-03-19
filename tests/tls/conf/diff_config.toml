@@ -28,6 +28,6 @@ instance-id = "source-1"
 
 [target-db]
 host = "127.0.0.1"
-port = 4000
-user = "test"
-password = "123456"
+port = 4400
+user = "root"
+password = ""

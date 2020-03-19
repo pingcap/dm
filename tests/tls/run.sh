@@ -11,8 +11,12 @@ API_VERSION="v1alpha1"
 
 function run_tidb_with_tls() {
 cat - > "$WORK_DIR/tidb-tls-config.toml" <<EOF
+status-port = 10090
 [security]
 # set the path for certificates. Empty string means disabling secure connectoins.
+ssl-ca = "$cur/conf/ca.pem"
+ssl-cert = "$cur/conf/dm.pem"
+ssl-key = "$cur/conf/dm.key"
 cluster-ssl-ca = "$cur/conf/ca.pem"
 cluster-ssl-cert = "$cur/conf/dm.pem"
 cluster-ssl-key = "$cur/conf/dm.key"
@@ -24,6 +28,11 @@ EOF
     --store mocktikv \
     --config $WORK_DIR/tidb-tls-config.toml \
     --log-file "$WORK_DIR/tidb.log" &
+
+    sleep 3
+    mysql -uroot -h127.0.0.1 -P4400 --default-character-set utf8 -E -e "drop database if exists tls"
+    mysql -uroot -h127.0.0.1 -P4400 --default-character-set utf8 -E -e "drop database if exists dm_meta"
+
 }
 
 function prepare_data() {
@@ -60,7 +69,7 @@ function run() {
     echo "start task and check stage"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "start-task $WORK_DIR/dm-task.yaml" \
-            "\"result\": true" 1
+            "\"result\": true" 2
 
 	sleep 1
     curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
