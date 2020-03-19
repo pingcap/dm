@@ -273,31 +273,238 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	t.checkLockNoDone(c, l)
 }
 
-func (t *testLock) TestLockTrySyncConflict(c *C) {
+func (t *testLock) TestLockTrySyncRevert(c *C) {
 	var (
-		ID           = "test_lock_try_sync_conflict-`foo`.`bar`"
-		task         = "test_lock_try_sync_conflict"
+		ID           = "test_lock_try_sync_revert-`foo`.`bar`"
+		task         = "test_lock_try_sync_revert"
 		source       = "mysql-replica-1"
 		db           = "foo"
 		tbls         = []string{"tbl1", "tbl2"}
 		p            = parser.New()
 		se           = mock.NewContext()
 		tblID  int64 = 111
-		DDLs1        = []string{"ALTER TABLE ADD COLUMN c1 TEXT"}
-		DDLs2        = []string{"ALTER TABLE ADD COLUMN c1 DATETIME", "ALTER TABLE ADD COLUMN c2 INT"}
-		DDLs3        = []string{"ALTER TABLE DROP COLUMN c2"}
-		DDLs4        = []string{"ALTER TABLE DROP COLUMN c1"}
+
+		DDLs1 = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		DDLs2 = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		ti0   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2   = ti0
+
+		DDLs3 = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT", "ALTER TABLE ADD COLUMN c2 INT"}
+		DDLs4 = []string{"ALTER TABLE bar DROP COLUMN c2"}
+		DDLs5 = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		ti3   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 INT)`)
+		ti4   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti5   = ti0
+
+		DDLs6 = DDLs3
+		DDLs7 = DDLs4
+		DDLs8 = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		ti6   = ti3
+		ti7   = ti4
+		ti8   = ti4
+
+		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
+		sts    = []SourceTables{NewSourceTables(task, source, tables)}
+		l      = NewLock(ID, task, ti0, sts)
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// CASE: revert for single DDL.
+	// TrySync for one table.
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	ready := l.Ready()
+	c.Assert(ready[source][db][tbls[0]], IsTrue)
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+	cmp, err := l.tables[source][db][tbls[0]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+
+	// revert for the table, become synced again.
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs2)
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// CASE: revert for multiple DDLs.
+	// TrySync for one table.
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs3)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[0]], IsTrue)
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+	cmp, err = l.tables[source][db][tbls[0]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+
+	// revert part of the DDLs.
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs4, ti4, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs4)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+	cmp, err = l.tables[source][db][tbls[0]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+
+	// revert the reset part of the DDLs.
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs5, ti5, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs5)
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// CASE: revert part of multiple DDLs.
+	// TrySync for one table.
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs6, ti6, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs6)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+	cmp, err = l.tables[source][db][tbls[0]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+
+	// revert part of the DDLs.
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs7, ti7, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs7)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+	cmp, err = l.tables[source][db][tbls[0]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+
+	// TrySync for another table.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs8, ti8, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs8)
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+}
+
+func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
+	var (
+		ID           = "test_lock_try_sync_conflict_non_intrusive-`foo`.`bar`"
+		task         = "test_lock_try_sync_conflict_non_intrusive"
+		source       = "mysql-replica-1"
+		db           = "foo"
+		tbls         = []string{"tbl1", "tbl2"}
+		p            = parser.New()
+		se           = mock.NewContext()
+		tblID  int64 = 111
+		DDLs1        = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		DDLs2        = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME", "ALTER TABLE ADD COLUMN c2 INT"}
+		DDLs3        = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		DDLs4        = DDLs2
+		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
+		ti3          = ti0
+		ti4          = ti2
+
+		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
+		sts    = []SourceTables{NewSourceTables(task, source, tables)}
+		l      = NewLock(ID, task, ti0, sts)
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// TrySync for the first table, construct the joined schema.
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	ready := l.Ready()
+	c.Assert(ready[source][db][tbls[0]], IsTrue)
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+	cmp, err := l.tables[source][db][tbls[0]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+
+	// TrySync for the second table with another schema (add two columns, one of them will cause conflict).
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts...)
+	c.Assert(err, ErrorMatches, ".*at tuple index.*")
+	c.Assert(DDLs, DeepEquals, []string{})
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, ErrorMatches, ".*at tuple index.*")
+	c.Assert(cmp, Equals, 0)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
+
+	// TrySync for the first table to resolve the conflict.
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs3)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[0]], IsFalse)
+	c.Assert(ready[source][db][tbls[1]], IsTrue) // the second table become synced now.
+	cmp, err = l.tables[source][db][tbls[0]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+
+	// TrySync for the first table.
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs4, ti4, sts...)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs4)
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+}
+
+func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
+	var (
+		ID           = "test_lock_try_sync_conflict_intrusive-`foo`.`bar`"
+		task         = "test_lock_try_sync_conflict_intrusive"
+		source       = "mysql-replica-1"
+		db           = "foo"
+		tbls         = []string{"tbl1", "tbl2"}
+		p            = parser.New()
+		se           = mock.NewContext()
+		tblID  int64 = 111
+		DDLs1        = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		DDLs2        = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME", "ALTER TABLE ADD COLUMN c2 INT"}
+		DDLs3        = []string{"ALTER TABLE bar DROP COLUMN c2"}
+		DDLs4        = []string{"ALTER TABLE bar DROP COLUMN c1"}
 		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
 		ti1          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
 		ti2          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
 		ti3          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
 		ti4          = ti0
 
-		DDLs5   = []string{"ALTER TABLE ADD COLUMN c2 TEXT"}
-		DDLs6   = []string{"ALTER TABLE ADD COLUMN c2 DATETIME", "ALTER TABLE ADD COLUMN c3 INT"}
-		DDLs7   = []string{"ALTER TABLE DROP COLUMN c2"}
-		DDLs8_1 = []string{"ALTER TABLE ADD COLUMN c3 INT"}
-		DDLs8_2 = []string{"ALTER TABLE ADD COLUMN c2 TEXT"}
+		DDLs5   = []string{"ALTER TABLE bar ADD COLUMN c2 TEXT"}
+		DDLs6   = []string{"ALTER TABLE bar ADD COLUMN c2 DATETIME", "ALTER TABLE ADD COLUMN c3 INT"}
+		DDLs7   = []string{"ALTER TABLE bar DROP COLUMN c2"}
+		DDLs8_1 = []string{"ALTER TABLE bar ADD COLUMN c3 INT"}
+		DDLs8_2 = []string{"ALTER TABLE bar ADD COLUMN c2 TEXT"}
 		ti5     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 TEXT)`)
 		ti6     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 DATETIME, c3 INT)`)
 		ti7     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c3 INT)`)

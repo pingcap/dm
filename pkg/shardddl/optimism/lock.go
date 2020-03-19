@@ -62,6 +62,14 @@ func NewLock(ID, task string, ti *model.TableInfo, sts []SourceTables) *Lock {
 // so we need to merge these new sources.
 // NOTE: now, any error returned, we treat it as conflict detected.
 // NOTE: now, DDLs (not empty) returned when resolved the conflict, but in fact these DDLs should not be replicated to the downstream.
+// NOTE: now, `TrySync` can detect and resolve conflicts in both of the following modes:
+//   - non-intrusive: update the schema of non-conflict tables to match the conflict tables.
+//                      data from conflict tables are non-intrusive.
+//   - intrusive: revert the schema of the conflict tables to match the non-conflict tables.
+//                  data from conflict tables are intrusive.
+// TODO: but both of these modes are difficult to be implemented in DM-worker now, try to do that later.
+// for non-intrusive, a broadcast mechanism needed to notify conflict tables after the conflict has resolved, or even a block mechanism needed.
+// for intrusive, a DML prune or transform mechanism needed for two different schemas (before and after the conflict resolved).
 func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	ddls []string, newTI *model.TableInfo, sts ...SourceTables) (newDDLs []string, err error) {
 	l.mu.Lock()
@@ -113,14 +121,17 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		}
 	}
 	l.joined = newJoined // update the current table info.
-	log.L().Info("update joined table info", zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined))
+	log.L().Info("update joined table info", zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined),
+		zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable), zap.Strings("ddls", ddls))
 
 	// FIXME: Compute DDLs through schema diff instead of propagating DDLs directly.
 	// and now we MUST ensure different sources execute same DDLs to the downstream multiple times is safe.
 	// TODO: update lock status (`done`) according to the compared result.
 	if cmp, err = oldJoined.Compare(newJoined); err != nil {
-		// NOTE: conflict detected.
-		return emptyDDLs, err
+		// resolving conflict in non-intrusive mode.
+		log.L().Warn("resolving conflict", zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
+			zap.Stringer("joined-from", oldJoined), zap.Stringer("joined-to", newJoined), zap.Strings("ddls", ddls))
+		return ddls, nil
 	}
 	if cmp != 0 {
 		// < 0: the joined schema become larger after applied these DDLs.
@@ -171,7 +182,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		// now, they should re-try until replicated successfully, try to implement better strategy later.
 		return emptyDDLs, nil
 	}
-	return ddls, nil // this should not happen.
+	return ddls, nil // NOTE: this should not happen.
 }
 
 // IsSynced returns whether the lock has synced.
