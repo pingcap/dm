@@ -20,11 +20,9 @@ import (
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/clientv3/clientv3util"
 	"go.etcd.io/etcd/mvcc/mvccpb"
-	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
-	"github.com/pingcap/dm/pkg/log"
 )
 
 // ConflictStage represents the current shard DDL conflict stage in the optimistic mode.
@@ -174,7 +172,8 @@ func GetAllOperations(cli *clientv3.Client) (map[string]map[string]map[string]ma
 // If want to watch all operations matching, pass empty string for `task`, `source`, `upSchema` and `upTable`.
 // This function can be called by DM-worker and DM-master.
 func WatchOperationPut(ctx context.Context, cli *clientv3.Client,
-	task, source, upSchema, upTable string, revision int64, outCh chan<- Operation) {
+	task, source, upSchema, upTable string, revision int64,
+	outCh chan<- Operation, errCh chan<- error) {
 	ch := cli.Watch(ctx, common.ShardDDLOptimismOperationKeyAdapter.Encode(task, source, upSchema, upTable),
 		clientv3.WithPrefix(), clientv3.WithRev(revision))
 
@@ -184,6 +183,10 @@ func WatchOperationPut(ctx context.Context, cli *clientv3.Client,
 			return
 		case resp := <-ch:
 			if resp.Canceled {
+				select {
+				case errCh <- resp.Err():
+				case <-ctx.Done():
+				}
 				return
 			}
 
@@ -194,14 +197,17 @@ func WatchOperationPut(ctx context.Context, cli *clientv3.Client,
 
 				op, err := operationFromJSON(string(ev.Kv.Value))
 				if err != nil {
-					// this should not happen.
-					log.L().Error("fail to construct shard DDL operation from json", zap.ByteString("json", ev.Kv.Value))
-					continue
-				}
-				select {
-				case outCh <- op:
-				case <-ctx.Done():
-					return
+					select {
+					case errCh <- err:
+					case <-ctx.Done():
+						return
+					}
+				} else {
+					select {
+					case outCh <- op:
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		}

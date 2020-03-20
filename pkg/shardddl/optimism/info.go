@@ -20,11 +20,9 @@ import (
 	"github.com/pingcap/parser/model"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
-	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
-	"github.com/pingcap/dm/pkg/log"
 )
 
 // TODO: much of the code in optimistic mode is very similar to pessimistic mode, we can try to combine them together.
@@ -142,7 +140,8 @@ func GetAllInfo(cli *clientv3.Client) (map[string]map[string]map[string]map[stri
 
 // WatchInfoPut watches PUT operations for info.
 // This function should often be called by DM-master.
-func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64, outCh chan<- Info) {
+func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64,
+	outCh chan<- Info, errCh chan<- error) {
 	ch := cli.Watch(ctx, common.ShardDDLOptimismInfoKeyAdapter.Path(),
 		clientv3.WithPrefix(), clientv3.WithRev(revision))
 
@@ -152,6 +151,10 @@ func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64, out
 			return
 		case resp := <-ch:
 			if resp.Canceled {
+				select {
+				case errCh <- resp.Err():
+				case <-ctx.Done():
+				}
 				return
 			}
 
@@ -162,14 +165,17 @@ func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64, out
 
 				info, err := infoFromJSON(string(ev.Kv.Value))
 				if err != nil {
-					// this should not happen.
-					log.L().Error("fail to construct shard DDL info from json", zap.ByteString("json", ev.Kv.Value))
-					continue
-				}
-				select {
-				case outCh <- info:
-				case <-ctx.Done():
-					return
+					select {
+					case errCh <- err:
+					case <-ctx.Done():
+						return
+					}
+				} else {
+					select {
+					case outCh <- info:
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		}

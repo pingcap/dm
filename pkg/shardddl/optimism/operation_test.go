@@ -63,14 +63,17 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 
 	// start the watcher with the same revision as the last PUT for the specified task and source.
 	wch := make(chan Operation, 10)
+	ech := make(chan error, 10)
 	ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
-	WatchOperationPut(ctx, etcdTestCli, task1, source1, upSchema, upTable, rev2, wch)
+	WatchOperationPut(ctx, etcdTestCli, task1, source1, upSchema, upTable, rev2, wch, ech)
 	cancel()
 	close(wch)
+	close(ech)
 
 	// watch should only get op11.
 	c.Assert(len(wch), Equals, 1)
 	c.Assert(<-wch, DeepEquals, op11)
+	c.Assert(len(ech), Equals, 0)
 
 	// put for another task.
 	rev3, succ, err := PutOperation(etcdTestCli, false, op21)
@@ -79,15 +82,18 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 
 	// start the watch with an older revision for all tasks and sources.
 	wch = make(chan Operation, 10)
+	ech = make(chan error, 10)
 	ctx, cancel = context.WithTimeout(context.Background(), watchTimeout)
-	WatchOperationPut(ctx, etcdTestCli, "", "", "", "", rev2, wch)
+	WatchOperationPut(ctx, etcdTestCli, "", "", "", "", rev2, wch, ech)
 	cancel()
 	close(wch)
+	close(ech)
 
 	// watch should get 2 operations.
 	c.Assert(len(wch), Equals, 2)
 	c.Assert(<-wch, DeepEquals, op11)
 	c.Assert(<-wch, DeepEquals, op21)
+	c.Assert(len(ech), Equals, 0)
 
 	// get all operations.
 	opm, rev4, err := GetAllOperations(etcdTestCli)
