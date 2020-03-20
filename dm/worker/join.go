@@ -58,11 +58,11 @@ func (s *Server) JoinMaster(endpoints []string) error {
 		resp, err := client.RegisterWorker(ctx1, req)
 		cancel1()
 		if err != nil {
-			log.L().Error("fail to register worker: %s", zap.Error(err))
+			log.L().Error("fail to register worker", zap.Error(err))
 			continue
 		}
 		if !resp.GetResult() {
-			log.L().Error("fail to register worker: %s", zap.String("error", resp.Msg))
+			log.L().Error("fail to register worker", zap.String("error", resp.Msg))
 			continue
 		}
 		return nil
