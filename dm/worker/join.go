@@ -36,7 +36,7 @@ func GetJoinURLs(addrs string) []string {
 // JoinMaster let dm-worker join the cluster with the specified master endpoints.
 func (s *Server) JoinMaster(endpoints []string) error {
 	// TODO: grpc proxy
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	req := &pb.RegisterWorkerRequest{
@@ -46,13 +46,15 @@ func (s *Server) JoinMaster(endpoints []string) error {
 
 	var client pb.MasterClient
 	for _, endpoint := range endpoints {
-		conn, err := grpc.Dial(endpoint, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+		ctx1, cancel1 := context.WithTimeout(ctx, 3*time.Second)
+		conn, err := grpc.DialContext(ctx1, endpoint, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+		cancel1()
 		if err != nil {
 			log.L().Error("fail to dial dm-master", zap.Error(err))
 			continue
 		}
 		client = pb.NewMasterClient(conn)
-		ctx1, cancel1 := context.WithTimeout(ctx, 3*time.Second)
+		ctx1, cancel1 = context.WithTimeout(ctx, 3*time.Second)
 		resp, err := client.RegisterWorker(ctx1, req)
 		cancel1()
 		if err != nil {
