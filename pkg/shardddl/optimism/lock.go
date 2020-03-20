@@ -14,6 +14,7 @@
 package optimism
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/pingcap/parser/model"
@@ -21,6 +22,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // Lock represents the shard DDL lock in memory.
@@ -54,7 +56,7 @@ func NewLock(ID, task string, ti *model.TableInfo, sts []SourceTables) *Lock {
 		tables: make(map[string]map[string]map[string]schemacmp.Table),
 		done:   make(map[string]map[string]map[string]bool),
 	}
-	l.addSources(sts...)
+	l.addSources(sts)
 	return l
 }
 
@@ -72,7 +74,7 @@ func NewLock(ID, task string, ti *model.TableInfo, sts []SourceTables) *Lock {
 // for non-intrusive, a broadcast mechanism needed to notify conflict tables after the conflict has resolved, or even a block mechanism needed.
 // for intrusive, a DML prune or transform mechanism needed for two different schemas (before and after the conflict resolved).
 func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
-	ddls []string, newTI *model.TableInfo, sts ...SourceTables) (newDDLs []string, err error) {
+	ddls []string, newTI *model.TableInfo, sts []SourceTables) (newDDLs []string, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -82,14 +84,14 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	sts = append(sts, NewSourceTables(l.Task, callerSource,
 		map[string]map[string]struct{}{callerSchema: {callerTable: struct{}{}}}))
 	// add any new source tables.
-	l.addSources(sts...)
+	l.addSources(sts)
 
 	oldTable := l.tables[callerSource][callerSchema][callerTable]
 	newTable := schemacmp.Encode(newTI)
 	oldJoined := l.joined
 	newJoined := newTable
 	l.tables[callerSource][callerSchema][callerTable] = newTable
-	log.L().Info("update table info", zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
+	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
 		zap.Stringer("from", oldTable), zap.Stringer("to", newTable), zap.Strings("ddls", ddls))
 
 	// special case: if the DDL does not affect the schema at all, assume it is
@@ -105,18 +107,19 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		for schema, tables := range schemaTables {
 			for table, ti := range tables {
 				if source != callerSource || schema != callerSchema || table != callerTable {
-					var err2 error
-					newJoined, err2 = newJoined.Join(ti)
+					newJoined2, err2 := newJoined.Join(ti)
 					if err2 != nil {
 						// NOTE: conflict detected.
-						return emptyDDLs, err2
+						return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+							err2, l.ID, fmt.Sprintf("fail to join table info %s with %s", newJoined, ti))
 					}
+					newJoined = newJoined2
 				}
 			}
 		}
 	}
 	l.joined = newJoined // update the current table info.
-	log.L().Info("update joined table info", zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined),
+	log.L().Info("update joined table info", zap.String("lock", l.ID), zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined),
 		zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable), zap.Strings("ddls", ddls))
 
 	cmp, err = oldJoined.Compare(newJoined)
@@ -129,7 +132,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	// and now we MUST ensure different sources execute same DDLs to the downstream multiple times is safe.
 	if err != nil {
 		// resolving conflict in non-intrusive mode.
-		log.L().Warn("resolving conflict", zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
+		log.L().Warn("resolving conflict", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
 			zap.Stringer("joined-from", oldJoined), zap.Stringer("joined-to", newJoined), zap.Strings("ddls", ddls))
 		return ddls, nil
 	}
@@ -161,7 +164,8 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 
 	cmp, err = oldTable.Compare(newTable)
 	if err != nil {
-		return emptyDDLs, err // NOTE: this should not happen.
+		return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+			err, l.ID, fmt.Sprintf("can't compare table info (old table info) %s with (new table info) %s", oldTable, newTable)) // NOTE: this should not happen.
 	}
 	if cmp < 0 {
 		// let every table to replicate the DDL.
@@ -174,7 +178,8 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	// compare the current table's info with joined info.
 	cmp, err = newTable.Compare(newJoined)
 	if err != nil {
-		return emptyDDLs, err // NOTE: this should not happen.
+		return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+			err, l.ID, "can't compare table info (new table info) %s with (new joined table info) %s", newTable, newJoined) // NOTE: this should not happen.
 	}
 	if cmp < 0 {
 		// no need to replicate DDLs, because has a larger joined schema (in the downstream).
@@ -306,7 +311,7 @@ func (l *Lock) tryRevertDone() {
 }
 
 // addSources adds any not-existing tables into the lock.
-func (l *Lock) addSources(sts ...SourceTables) {
+func (l *Lock) addSources(sts []SourceTables) {
 	for _, st := range sts {
 		if _, ok := l.tables[st.Source]; !ok {
 			l.tables[st.Source] = make(map[string]map[string]schemacmp.Table)

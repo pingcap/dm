@@ -149,6 +149,9 @@ const (
 	codeBinlogInvalidFilenameWithUUIDSuffix
 	// dm/common
 	codeDecodeEtcdKeyFail
+
+	// pkg/shardddl/optimism
+	codeShardDDLOptimismTrySyncFail
 )
 
 // Config related error code list
@@ -672,6 +675,10 @@ var (
 
 	// dm/common
 	ErrDecodeEtcdKeyFail = New(codeDecodeEtcdKeyFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to decode etcd key: %s")
+
+	// pkg/shardddl/optimism
+	ErrShardDDLOptimismTrySyncFail = New(codeShardDDLOptimismTrySyncFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to try sync the optimistic shard ddl lock %s: %s")
+
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
 	ErrConfigTomlTransform          = New(codeConfigTomlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s")
