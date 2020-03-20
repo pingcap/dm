@@ -184,7 +184,8 @@ func (t *testPessimist) TestPessimist(c *C) {
 		return remain == 1
 	}), IsTrue)
 
-	p.Close() // close the Pessimist.
+	p.Close()                          // close the Pessimist.
+	p = NewPessimist(&logger, sources) // rebuild another pessimist because pessimist will be rebuilt after interruption
 
 	// CASE 3: start again with some previous shard DDL info and the lock is un-synced.
 	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
@@ -235,7 +236,8 @@ func (t *testPessimist) TestPessimist(c *C) {
 		return p.Locks()[ID2].IsDone(source1)
 	}), IsTrue)
 
-	p.Close() // close the Pessimist.
+	p.Close()                          // close the Pessimist.
+	p = NewPessimist(&logger, sources) // rebuild another pessimist because pessimist will be rebuilt after interruption
 
 	// CASE 5: start again with some previous shard DDL info and `done` operation for the owner.
 	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
@@ -255,7 +257,8 @@ func (t *testPessimist) TestPessimist(c *C) {
 		return p.Locks()[ID2].IsDone(source2)
 	}), IsTrue)
 
-	p.Close() // close the Pessimist.
+	p.Close()                          // close the Pessimist.
+	p = NewPessimist(&logger, sources) // rebuild another pessimist because pessimist will be rebuilt after interruption
 
 	// CASE 6: start again with some previous shard DDL info and `done` operation for the owner and non-owner.
 	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
@@ -279,7 +282,8 @@ func (t *testPessimist) TestPessimist(c *C) {
 	}), IsTrue)
 	c.Assert(p.Locks(), HasLen, 0)
 
-	p.Close() // close the Pessimist.
+	p.Close()                          // close the Pessimist.
+	p = NewPessimist(&logger, sources) // rebuild another pessimist because pessimist will be rebuilt after interruption
 
 	// CASE 7: start again after all shard DDL locks have been resolved.
 	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
@@ -502,6 +506,7 @@ func (t *testPessimist) TestUnlockSourceMissBeforeSynced(c *C) {
 	defer cancel()
 
 	// 0. start the pessimist.
+	c.Assert(terror.ErrMasterPessimistNotStarted.Equal(p.UnlockLock(ctx, ID, "", false)), IsTrue)
 	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
 	c.Assert(p.Locks(), HasLen, 0)
 	defer p.Close()
