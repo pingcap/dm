@@ -807,7 +807,7 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 }
 
 func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
-	var tablesNumber int
+	var tablesNumber float64
 
 	for file := range files {
 		if !strings.HasSuffix(file, "-schema.sql") {
@@ -846,12 +846,12 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		l.totalFileCount.Add(1) // for table
 	}
 
-	tableGauge.WithLabelValues(l.cfg.Name).Set(float64(tablesNumber))
+	tableGauge.WithLabelValues(l.cfg.Name).Set(tablesNumber)
 	return nil
 }
 
 func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
-	var dataFilesNumber int
+	var dataFilesNumber float64
 
 	for file := range files {
 		if !strings.HasSuffix(file, ".sql") || strings.Contains(file, "-schema.sql") ||
@@ -901,7 +901,7 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 		tables[table] = dataFiles
 	}
 
-	dataFileGauge.WithLabelValues(l.cfg.Name).Set(float64(dataFilesNumber))
+	dataFileGauge.WithLabelValues(l.cfg.Name).Set(dataFilesNumber)
 	dataSizeGauge.WithLabelValues(l.cfg.Name).Set(float64(l.totalDataSize.Get()))
 	return nil
 }
