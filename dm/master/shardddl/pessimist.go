@@ -127,7 +127,6 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 
 	p.closed = false // started now.
 	p.cancel = cancel
-	p.cli = etcdCli
 	p.logger.Info("the shard DDL pessimist has started")
 	return nil
 }
