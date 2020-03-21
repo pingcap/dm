@@ -190,6 +190,31 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	return ddls, nil // NOTE: this should not happen.
 }
 
+// TryRemoveTable tries to remove a table in the lock.
+// it returns whether the table has been removed.
+// TODO: it does NOT try to rebuild the joined schema after the table removed now.
+// try to support this if needed later.
+// NOTE: if no table exists in the lock after removed the table,
+// it's the caller's responsibility to decide whether remove the lock or not.
+func (l *Lock) TryRemoveTable(source, schema, table string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if _, ok := l.tables[source]; !ok {
+		return false
+	}
+	if _, ok := l.tables[source][schema]; !ok {
+		return false
+	}
+	if _, ok := l.tables[source][schema][table]; !ok {
+		return false
+	}
+
+	delete(l.tables[source][schema], table)
+	delete(l.done[source][schema], table)
+	return true
+}
+
 // IsSynced returns whether the lock has synced.
 // In the optimistic mode, we call it `synced` if table info of all tables are the same,
 // and we define `remain` as the table count which have different table info with the joined one,

@@ -704,6 +704,78 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	t.checkLockNoDone(c, l)
 }
 
+func (t *testLock) TestTryRemoveTable(c *C) {
+	var (
+		ID           = "test_lock_try_remove_table-`foo`.`bar`"
+		task         = "test_lock_try_remove_table"
+		source       = "mysql-replica-1"
+		db           = "foo"
+		tbl1         = "bar1"
+		tbl2         = "bar2"
+		p            = parser.New()
+		se           = mock.NewContext()
+		tblID  int64 = 111
+		DDLs1        = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		DDLs2        = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
+		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
+
+		tables = map[string]map[string]struct{}{db: {tbl1: struct{}{}, tbl2: struct{}{}}}
+		sts    = []SourceTables{NewSourceTables(task, source, tables)}
+		l      = NewLock(ID, task, ti0, sts)
+	)
+
+	// only one table exists before TrySync.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// CASE: remove a table as normal.
+	// TrySync for the first table.
+	DDLs, err := l.TrySync(source, db, tbl1, DDLs1, ti1, sts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	ready := l.Ready()
+	c.Assert(ready, HasLen, 1)
+	c.Assert(ready[source], HasLen, 1)
+	c.Assert(ready[source][db], HasLen, 2)
+	c.Assert(ready[source][db][tbl1], IsTrue)
+	c.Assert(ready[source][db][tbl2], IsFalse)
+
+	// TryRemoveTable for the second table.
+	c.Assert(l.TryRemoveTable(source, db, tbl2), IsTrue)
+	ready = l.Ready()
+	c.Assert(ready, HasLen, 1)
+	c.Assert(ready[source], HasLen, 1)
+	c.Assert(ready[source][db], HasLen, 1)
+	c.Assert(ready[source][db][tbl1], IsTrue)
+
+	// CASE: remove a table will not rebuild joined schema now.
+	// TrySync to add the second back.
+	DDLs, err = l.TrySync(source, db, tbl2, DDLs2, ti2, sts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs2)
+	ready = l.Ready()
+	c.Assert(ready, HasLen, 1)
+	c.Assert(ready[source], HasLen, 1)
+	c.Assert(ready[source][db], HasLen, 2)
+	c.Assert(ready[source][db][tbl1], IsFalse)
+	c.Assert(ready[source][db][tbl2], IsTrue)
+
+	// TryRemoveTable for the second table.
+	c.Assert(l.TryRemoveTable(source, db, tbl2), IsTrue)
+	ready = l.Ready()
+	c.Assert(ready, HasLen, 1)
+	c.Assert(ready[source], HasLen, 1)
+	c.Assert(ready[source][db], HasLen, 1)
+	c.Assert(ready[source][db][tbl1], IsFalse) // the joined schema is not rebuild.
+
+	// CASE: try to remove for not-exists table.
+	c.Assert(l.TryRemoveTable(source, db, "not-exist"), IsFalse)
+	c.Assert(l.TryRemoveTable(source, "not-exist", tbl1), IsFalse)
+	c.Assert(l.TryRemoveTable("not-exist", db, tbl1), IsFalse)
+}
+
 func (t *testLock) TestLockTryMarkDone(c *C) {
 	var (
 		ID           = "test_lock_try_mark_done-`foo`.`bar`"
