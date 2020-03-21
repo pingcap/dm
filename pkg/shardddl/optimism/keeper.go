@@ -15,6 +15,7 @@ package optimism
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -95,4 +96,94 @@ func (lk *LockKeeper) Clear() {
 // genDDLLockID generates DDL lock ID from its info.
 func genDDLLockID(info Info) string {
 	return fmt.Sprintf("%s-%s", info.Task, dbutil.TableName(info.DownSchema, info.DownTable))
+}
+
+// TableKeeper used to keep initial tables for a task in optimism mode.
+type TableKeeper struct {
+	mu     sync.RWMutex
+	tables map[string]map[string]SourceTables // task-name -> source-ID -> tables.
+}
+
+// NewTableKeeper creates a new TableKeeper instance.
+func NewTableKeeper() *TableKeeper {
+	return &TableKeeper{
+		tables: make(map[string]map[string]SourceTables),
+	}
+}
+
+// Init (re-)initializes the keeper with initial source tables.
+func (tk *TableKeeper) Init(stm map[string]map[string]SourceTables) {
+	tk.mu.Lock()
+	defer tk.mu.Unlock()
+
+	tk.tables = make(map[string]map[string]SourceTables)
+	for task, sts := range stm {
+		if _, ok := tk.tables[task]; !ok {
+			tk.tables[task] = make(map[string]SourceTables)
+		}
+		for source, st := range sts {
+			tk.tables[task][source] = st
+		}
+	}
+}
+
+// Update adds/updates tables into the keeper or removes tables from the keeper.
+// it returns whether added/updated or removed.
+func (tk *TableKeeper) Update(st SourceTables) bool {
+	tk.mu.Lock()
+	defer tk.mu.Unlock()
+
+	if st.IsDeleted {
+		if _, ok := tk.tables[st.Task]; !ok {
+			return false
+		}
+		if _, ok := tk.tables[st.Task][st.Source]; !ok {
+			return false
+		}
+		delete(tk.tables[st.Task], st.Source)
+		return true
+	}
+
+	if _, ok := tk.tables[st.Task]; !ok {
+		tk.tables[st.Task] = make(map[string]SourceTables)
+	}
+	tk.tables[st.Task][st.Source] = st
+	return true
+}
+
+// FindTables finds source tables by task name.
+func (tk *TableKeeper) FindTables(task string) []SourceTables {
+	tk.mu.RLock()
+	defer tk.mu.RUnlock()
+
+	sts, ok := tk.tables[task]
+	if !ok {
+		return nil
+	}
+
+	var ret SourceTablesSlice
+	for _, st := range sts {
+		ret = append(ret, st)
+	}
+	sort.Sort(ret)
+	return ret
+}
+
+// SourceTablesSlice attaches the methods of Interface to []SourceTables,
+// sorting in increasing order according to `Source` field.
+type SourceTablesSlice []SourceTables
+
+// Len implements Sorter.Len.
+func (t SourceTablesSlice) Len() int {
+	return len(t)
+}
+
+// Less implements Sorter.Less.
+func (t SourceTablesSlice) Less(i, j int) bool {
+	return t[i].Source < t[j].Source
+}
+
+// Swap implements Sorter.Swap.
+func (t SourceTablesSlice) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
 }

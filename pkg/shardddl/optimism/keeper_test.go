@@ -19,11 +19,11 @@ import (
 	"github.com/pingcap/tidb/util/mock"
 )
 
-type testLockKeeper struct{}
+type testKeeper struct{}
 
-var _ = Suite(&testLockKeeper{})
+var _ = Suite(&testKeeper{})
 
-func (t *testLockKeeper) TestLockKeeper(c *C) {
+func (t *testKeeper) TestLockKeeper(c *C) {
 	var (
 		lk         = NewLockKeeper()
 		upSchema   = "foo_1"
@@ -110,4 +110,65 @@ func (t *testLockKeeper) TestLockKeeper(c *C) {
 
 	// no locks exist.
 	c.Assert(lk.Locks(), HasLen, 0)
+}
+
+func (t *testKeeper) TestTableKeeper(c *C) {
+	var (
+		tk      = NewTableKeeper()
+		task1   = "task-1"
+		task2   = "task-2"
+		source1 = "mysql-replica-1"
+		source2 = "mysql-replica-2"
+		st11    = NewSourceTables(task1, source1, map[string]map[string]struct{}{
+			"db": {"tbl-1": struct{}{}, "tbl-2": struct{}{}},
+		})
+		st12 = NewSourceTables(task1, source2, map[string]map[string]struct{}{
+			"db": {"tbl-1": struct{}{}, "tbl-2": struct{}{}},
+		})
+		st21 = NewSourceTables(task2, source2, map[string]map[string]struct{}{
+			"db": {"tbl-3": struct{}{}},
+		})
+		st22 = NewSourceTables(task2, source2, map[string]map[string]struct{}{
+			"db": {"tbl-3": struct{}{}, "tbl-4": struct{}{}},
+		})
+		stm = map[string]map[string]SourceTables{
+			task1: {source2: st12, source1: st11},
+		}
+	)
+
+	// no tables exist before Init/Update.
+	c.Assert(tk.FindTables(task1), IsNil)
+
+	// Init with `nil` is fine.
+	tk.Init(nil)
+	c.Assert(tk.FindTables(task1), IsNil)
+
+	// tables for task1 exit after Init.
+	tk.Init(stm)
+	sts := tk.FindTables(task1)
+	c.Assert(sts, HasLen, 2)
+	c.Assert(sts[0], DeepEquals, st11)
+	c.Assert(sts[1], DeepEquals, st12)
+
+	// adds new tables.
+	c.Assert(tk.Update(st21), IsTrue)
+	sts = tk.FindTables(task2)
+	c.Assert(sts, HasLen, 1)
+	c.Assert(sts[0], DeepEquals, st21)
+
+	// updates/appends new tables.
+	c.Assert(tk.Update(st22), IsTrue)
+	sts = tk.FindTables(task2)
+	c.Assert(sts, HasLen, 1)
+	c.Assert(sts[0], DeepEquals, st22)
+
+	// deletes tables.
+	st22.IsDeleted = true
+	c.Assert(tk.Update(st22), IsTrue)
+	c.Assert(tk.FindTables(task2), IsNil)
+
+	// try to delete, but not exist.
+	c.Assert(tk.Update(st22), IsFalse)
+	st22.Task = "not-exist"
+	c.Assert(tk.Update(st22), IsFalse)
 }
