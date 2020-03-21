@@ -94,24 +94,25 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		source1          = "mysql-replica-1"
-		source2          = "mysql-replica-2"
-		task1            = "task-1"
-		task2            = "task-2"
-		upSchema         = "foo_1"
-		upTable          = "bar_1"
-		downSchema       = "foo"
-		downTable        = "bar"
-		p                = parser.New()
-		se               = mock.NewContext()
-		tblID      int64 = 111
-		tblI1            = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
-		tblI2            = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
-		tblI3            = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
-		tblI4            = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT, c3 INT)`)
-		i11              = NewInfo(task1, source1, upSchema, upTable, downSchema, downTable, []string{"ALTER TABLE bar ADD COLUMN c1 INT"}, tblI1, tblI2)
-		i12              = NewInfo(task1, source2, upSchema, upTable, downSchema, downTable, []string{"ALTER TABLE bar ADD COLUMN c2 INT"}, tblI2, tblI3)
-		i21              = NewInfo(task2, source1, upSchema, upTable, downSchema, downTable, []string{"ALTER TABLE bar ADD COLUMN c3 INT"}, tblI3, tblI4)
+		watchTimeout       = 500 * time.Millisecond
+		source1            = "mysql-replica-1"
+		source2            = "mysql-replica-2"
+		task1              = "task-1"
+		task2              = "task-2"
+		upSchema           = "foo_1"
+		upTable            = "bar_1"
+		downSchema         = "foo"
+		downTable          = "bar"
+		p                  = parser.New()
+		se                 = mock.NewContext()
+		tblID        int64 = 111
+		tblI1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		tblI2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		tblI3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
+		tblI4              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT, c3 INT)`)
+		i11                = NewInfo(task1, source1, upSchema, upTable, downSchema, downTable, []string{"ALTER TABLE bar ADD COLUMN c1 INT"}, tblI1, tblI2)
+		i12                = NewInfo(task1, source2, upSchema, upTable, downSchema, downTable, []string{"ALTER TABLE bar ADD COLUMN c2 INT"}, tblI2, tblI3)
+		i21                = NewInfo(task2, source1, upSchema, upTable, downSchema, downTable, []string{"ALTER TABLE bar ADD COLUMN c3 INT"}, tblI3, tblI4)
 	)
 
 	// put the same key twice.
@@ -150,10 +151,10 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
 		defer cancel()
-		WatchInfoPut(ctx, etcdTestCli, rev4+1, wch, ech) // revision+1
-		close(wch)                                       // close the chan
+		WatchInfo(ctx, etcdTestCli, rev4+1, wch, ech) // revision+1
+		close(wch)                                    // close the chan
 		close(ech)
 	}()
 
@@ -169,7 +170,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 
 	// delete i12.
 	deleteOp := deleteInfoOp(i12)
-	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
+	resp, err := etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
 	c.Assert(err, IsNil)
 
 	// get again.
@@ -182,4 +183,21 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11)
 	c.Assert(ifm[task2], HasLen, 1)
 	c.Assert(ifm[task2][source1][upSchema][upTable], DeepEquals, i21)
+
+	// watch the deletion for i12.
+	wch = make(chan Info, 10)
+	ech = make(chan error, 10)
+	ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
+	WatchInfo(ctx, etcdTestCli, resp.Header.Revision, wch, ech)
+	cancel()
+	close(wch)
+	close(ech)
+	c.Assert(len(wch), Equals, 1)
+	info := <-wch
+	c.Assert(info.IsDeleted, IsTrue)
+	c.Assert(info.Task, Equals, i12.Task)
+	c.Assert(info.Source, Equals, i12.Source)
+	c.Assert(info.UpSchema, Equals, i12.UpSchema)
+	c.Assert(info.UpTable, Equals, i12.UpTable)
+	c.Assert(len(ech), Equals, 0)
 }

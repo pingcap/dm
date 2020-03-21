@@ -39,7 +39,7 @@ type SourceTables struct {
 	Tables map[string]map[string]struct{} `json:"tables"` // schema name -> table name -> struct{}.
 
 	// only used to report to the caller of the watcher, do not marsh it.
-	// if it's true, it means the bound has been deleted in etcd.
+	// if it's true, it means the SourceTables has been deleted in etcd.
 	IsDeleted bool `json:"-"`
 }
 
@@ -175,7 +175,7 @@ func WatchSourceTables(ctx context.Context, cli *clientv3.Client, revision int64
 	}
 }
 
-// sourceTablesFromKey constructs an incompleted SourceTables from an etcd key.
+// sourceTablesFromKey constructs an incomplete SourceTables from an etcd key.
 func sourceTablesFromKey(key string) (SourceTables, error) {
 	var st SourceTables
 	ks, err := common.ShardDDLOptimismSourceTablesKeyAdapter.Decode(key)

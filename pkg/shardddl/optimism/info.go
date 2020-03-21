@@ -16,6 +16,7 @@ package optimism
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/pingcap/parser/model"
 	"go.etcd.io/etcd/clientv3"
@@ -45,6 +46,10 @@ type Info struct {
 
 	TableInfoBefore *model.TableInfo `json:"table-info-before"` // the tracked table schema before applying the DDLs
 	TableInfoAfter  *model.TableInfo `json:"table-info-after"`  // the tracked table schema after applying the DDLs
+
+	// only used to report to the caller of the watcher, do not marsh it.
+	// if it's true, it means the Info has been deleted in etcd.
+	IsDeleted bool `json:"-"`
 }
 
 // NewInfo creates a new Info instance.
@@ -138,9 +143,9 @@ func GetAllInfo(cli *clientv3.Client) (map[string]map[string]map[string]map[stri
 	return ifm, resp.Header.Revision, nil
 }
 
-// WatchInfoPut watches PUT operations for info.
+// WatchInfo watches PUT & DELETE operations for info.
 // This function should often be called by DM-master.
-func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64,
+func WatchInfo(ctx context.Context, cli *clientv3.Client, revision int64,
 	outCh chan<- Info, errCh chan<- error) {
 	ch := cli.Watch(ctx, common.ShardDDLOptimismInfoKeyAdapter.Path(),
 		clientv3.WithPrefix(), clientv3.WithRev(revision))
@@ -159,11 +164,22 @@ func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64,
 			}
 
 			for _, ev := range resp.Events {
-				if ev.Type != mvccpb.PUT {
-					continue
+				var (
+					info Info
+					err  error
+				)
+
+				switch ev.Type {
+				case mvccpb.PUT:
+					info, err = infoFromJSON(string(ev.Kv.Value))
+				case mvccpb.DELETE:
+					info, err = infoFromKey(string(ev.Kv.Key))
+					info.IsDeleted = true
+				default:
+					// this should not happen.
+					err = fmt.Errorf("unsupported ectd event type %v", ev.Type)
 				}
 
-				info, err := infoFromJSON(string(ev.Kv.Value))
 				if err != nil {
 					select {
 					case errCh <- err:
@@ -180,6 +196,20 @@ func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64,
 			}
 		}
 	}
+}
+
+// infoFromKey constructs an incomplete Info from an etcd key.
+func infoFromKey(key string) (Info, error) {
+	var info Info
+	ks, err := common.ShardDDLOptimismInfoKeyAdapter.Decode(key)
+	if err != nil {
+		return info, err
+	}
+	info.Task = ks[0]
+	info.Source = ks[1]
+	info.UpSchema = ks[2]
+	info.UpTable = ks[3]
+	return info, nil
 }
 
 // deleteInfoOp returns a DELETE etcd operation for info.

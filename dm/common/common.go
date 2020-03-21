@@ -53,7 +53,9 @@ var (
 	// k/v: Encode(task-name, source-id) -> shard DDL operation
 	ShardDDLPessimismOperationKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/operation/")
 
-	// ShardDDLOptimismSourceTablesKeyAdapter used to store upstream schema & table names.
+	// ShardDDLOptimismSourceTablesKeyAdapter used to store INITIAL upstream schema & table names when starting the subtask.
+	// In other words, if any Info for this subtask exists, we should obey source tables in the Info.
+	// This is because the current upstream tables may not match the tables that the binlog stream has reached.
 	// k/v: Encode(task-name, source-id) -> upstream schema & table names.
 	ShardDDLOptimismSourceTablesKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/source-tables/")
 	// ShardDDLOptimismInfoKeyAdapter used to store shard DDL info in optimistic model.
