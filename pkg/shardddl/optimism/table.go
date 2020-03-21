@@ -16,14 +16,13 @@ package optimism
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
-	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
-	"github.com/pingcap/dm/pkg/log"
 )
 
 // SourceTables represents the upstream/sources tables for a data migration subtask.
@@ -123,7 +122,8 @@ func GetAllSourceTables(cli *clientv3.Client) (map[string]map[string]SourceTable
 
 // WatchSourceTables watches PUT & DELETE operations for source tables.
 // This function should often be called by DM-master.
-func WatchSourceTables(ctx context.Context, cli *clientv3.Client, revision int64, outCh chan<- SourceTables) {
+func WatchSourceTables(ctx context.Context, cli *clientv3.Client, revision int64,
+	outCh chan<- SourceTables, errCh chan<- error) {
 	ch := cli.Watch(ctx, common.ShardDDLOptimismSourceTablesKeyAdapter.Path(),
 		clientv3.WithPrefix(), clientv3.WithRev(revision))
 
@@ -133,6 +133,10 @@ func WatchSourceTables(ctx context.Context, cli *clientv3.Client, revision int64
 			return
 		case resp := <-ch:
 			if resp.Canceled {
+				select {
+				case errCh <- resp.Err():
+				case <-ctx.Done():
+				}
 				return
 			}
 
@@ -150,12 +154,15 @@ func WatchSourceTables(ctx context.Context, cli *clientv3.Client, revision int64
 					st.IsDeleted = true
 				default:
 					// this should not happen.
-					log.L().Error("unsupported etcd event type", zap.Reflect("kv", ev.Kv), zap.Reflect("type", ev.Type))
-					continue
+					err = fmt.Errorf("unsupported ectd event type %v", ev.Type)
 				}
 
 				if err != nil {
-					log.L().Error("fail to construct source tables", zap.Reflect("kv", ev.Kv), zap.Error(err))
+					select {
+					case errCh <- err:
+					case <-ctx.Done():
+						return
+					}
 				} else {
 					select {
 					case outCh <- st:

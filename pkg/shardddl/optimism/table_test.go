@@ -69,15 +69,18 @@ func (t *testForEtcd) TestSourceTablesEtcd(c *C) {
 
 	// watch with an older revision for all SourceTables.
 	wch := make(chan SourceTables, 10)
+	ech := make(chan error, 10)
 	ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
-	WatchSourceTables(ctx, etcdTestCli, rev1, wch)
+	WatchSourceTables(ctx, etcdTestCli, rev1, wch, ech)
 	cancel()
 	close(wch)
+	close(ech)
 
 	// get two source tables.
 	c.Assert(len(wch), Equals, 2)
 	c.Assert(<-wch, DeepEquals, st1)
 	c.Assert(<-wch, DeepEquals, st2)
+	c.Assert(len(ech), Equals, 0)
 
 	// delete tow sources tables.
 	_, err = DeleteSourceTables(etcdTestCli, st1)
@@ -93,13 +96,16 @@ func (t *testForEtcd) TestSourceTablesEtcd(c *C) {
 
 	// watch the deletion for SourceTables.
 	wch = make(chan SourceTables, 10)
+	ech = make(chan error, 10)
 	ctx, cancel = context.WithTimeout(context.Background(), watchTimeout)
-	WatchSourceTables(ctx, etcdTestCli, rev4, wch)
+	WatchSourceTables(ctx, etcdTestCli, rev4, wch, ech)
 	cancel()
 	close(wch)
+	close(ech)
 	c.Assert(len(wch), Equals, 1)
 	std := <-wch
 	c.Assert(std.IsDeleted, IsTrue)
 	c.Assert(std.Task, Equals, st2.Task)
 	c.Assert(std.Source, Equals, st2.Source)
+	c.Assert(len(ech), Equals, 0)
 }
