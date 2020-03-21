@@ -28,8 +28,6 @@ import (
 	"github.com/pingcap/tidb/util/mock"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
-
-	"github.com/pingcap/dm/dm/common"
 )
 
 var (
@@ -47,10 +45,7 @@ func TestInfo(t *testing.T) {
 
 // clear keys in etcd test cluster.
 func clearTestInfoOperation(c *C) {
-	clearInfo := clientv3.OpDelete(common.ShardDDLOptimismInfoKeyAdapter.Path(), clientv3.WithPrefix())
-	clearOp := clientv3.OpDelete(common.ShardDDLOptimismOperationKeyAdapter.Path(), clientv3.WithPrefix())
-	_, err := etcdTestCli.Txn(context.Background()).Then(clearInfo, clearOp).Commit()
-	c.Assert(err, IsNil)
+	c.Assert(ClearTestInfoOperation(etcdTestCli), IsNil)
 }
 
 func createTableInfo(c *C, p *parser.Parser, se sessionctx.Context, tableID int64, sql string) *model.TableInfo {

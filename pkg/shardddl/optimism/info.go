@@ -218,3 +218,12 @@ func deleteInfoOp(info Info) clientv3.Op {
 	return clientv3.OpDelete(common.ShardDDLOptimismInfoKeyAdapter.Encode(
 		info.Task, info.Source, info.UpSchema, info.UpTable))
 }
+
+// ClearTestInfoOperation is used to clear all shard DDL information in optimism mode.
+func ClearTestInfoOperation(cli *clientv3.Client) error {
+	clearSource := clientv3.OpDelete(common.ShardDDLOptimismSourceTablesKeyAdapter.Path(), clientv3.WithPrefix())
+	clearInfo := clientv3.OpDelete(common.ShardDDLOptimismInfoKeyAdapter.Path(), clientv3.WithPrefix())
+	clearOp := clientv3.OpDelete(common.ShardDDLOptimismOperationKeyAdapter.Path(), clientv3.WithPrefix())
+	_, err := cli.Txn(context.Background()).Then(clearSource, clearInfo, clearOp).Commit()
+	return err
+}
