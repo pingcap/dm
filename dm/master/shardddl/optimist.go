@@ -126,7 +126,9 @@ func (o *Optimist) run(ctx context.Context, etcdCli *clientv3.Client, revSource,
 				break
 			}
 		} else {
-			o.logger.Error("non-retryable error occurred, optimist will quite now", zap.Error(err))
+			if err != nil {
+				o.logger.Error("non-retryable error occurred, optimist will quite now", zap.Error(err))
+			}
 			return err
 		}
 	}
@@ -141,6 +143,7 @@ func (o *Optimist) rebuildLocks(etcdCli *clientv3.Client) (revSource, revInfo, r
 	if err != nil {
 		return 0, 0, 0, err
 	}
+	// we do not log `stm`, `ifm` and `opm` now, because they may too long in optimism mode.
 	o.logger.Info("get history initial source tables", zap.Int64("revision", revSource))
 	o.tk.Init(stm) // re-initialize again with valid tables.
 
@@ -177,7 +180,93 @@ func (o *Optimist) recoverLocks(
 
 // watchSourceInfoOperation watches the etcd operation for source tables, shard DDL infos and shard DDL operations.
 func (o *Optimist) watchSourceInfoOperation(
-	ctx context.Context, etcdCli *clientv3.Client, revSource, revInfo, revOperation int64) error {
-	// TODO:
-	return nil
+	pCtx context.Context, etcdCli *clientv3.Client,
+	revSource, revInfo, revOperation int64) error {
+	ctx, cancel := context.WithCancel(pCtx)
+	var wg sync.WaitGroup
+	defer func() {
+		cancel()
+		wg.Wait()
+	}()
+
+	errCh := make(chan error, 10)
+
+	// watch for source tables and handle them.
+	sourceCh := make(chan optimism.SourceTables, 10)
+	wg.Add(2)
+	go func() {
+		defer func() {
+			wg.Done()
+			close(sourceCh)
+		}()
+		optimism.WatchSourceTables(ctx, etcdCli, revSource+1, sourceCh, errCh)
+	}()
+	go func() {
+		defer wg.Done()
+		o.handleSourceTables(ctx, sourceCh)
+	}()
+
+	// watch for the shard DDL info and handle them.
+	infoCh := make(chan optimism.Info, 10)
+	wg.Add(2)
+	go func() {
+		defer func() {
+			wg.Done()
+			close(infoCh)
+		}()
+		optimism.WatchInfo(ctx, etcdCli, revInfo+1, infoCh, errCh)
+	}()
+	go func() {
+		defer wg.Done()
+		o.handleInfo(ctx, infoCh)
+	}()
+
+	// watch for the shard DDL lock operation and handle them.
+	opCh := make(chan optimism.Operation, 10)
+	wg.Add(2)
+	go func() {
+		defer func() {
+			wg.Done()
+			close(opCh)
+		}()
+		optimism.WatchOperationPut(ctx, etcdCli, "", "", "", "", revOperation+1, opCh, errCh)
+	}()
+	go func() {
+		defer wg.Done()
+		o.handleOperationPut(ctx, opCh)
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-pCtx.Done():
+		return nil
+	}
+}
+
+// handleSourceTables handles PUT and DELETE for source tables.
+func (o *Optimist) handleSourceTables(ctx context.Context, sourceCh <-chan optimism.SourceTables) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case st, ok := <-sourceCh:
+			if !ok {
+				return
+			}
+			updated := o.tk.Update(st)
+			o.logger.Info("receive source tables", zap.Stringer("source tables", st),
+				zap.Bool("is deleted", st.IsDeleted), zap.Bool("updated", updated))
+		}
+	}
+}
+
+// handleInfo handles PUT and DELETE for the shard DDL info.
+func (o *Optimist) handleInfo(ctx context.Context, infoCh <-chan optimism.Info) {
+	// TODO
+}
+
+// handleOperationPut handles PUT for the shard DDL lock operations.
+func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.Operation) {
+	// TODO
 }
