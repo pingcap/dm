@@ -31,7 +31,7 @@ mysql-instances:
 black-white-list:
   instance:
     do-dbs: ["ha_test"]
-  
+
 mydumpers:
   global:
     mydumper-path: "./bin/mydumper"

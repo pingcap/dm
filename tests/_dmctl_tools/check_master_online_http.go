@@ -40,7 +40,6 @@ func main() {
 
 	tls, err := toolutils.NewTLS(sslCA, sslCert, sslKey, "", nil)
 	if err != nil {
-		fmt.Println(err)
 		utils.ExitWithError(err)
 	}
 
@@ -52,14 +51,12 @@ func main() {
 
 	resp, err := client.Get("https://" + addr + "/status")
 	if err != nil {
-		fmt.Println("**53**", err)
 		utils.ExitWithError(err)
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("**59**", err)
 		utils.ExitWithError(err)
 	}
-	fmt.Println("*62*", string(body))
+	fmt.Println(string(body))
 }

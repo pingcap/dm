@@ -147,7 +147,6 @@ func (s *Server) Start() error {
 	grpcL := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 
 	httpL := m.Match(cmux.HTTP1Fast())
-	//tlsl := m.Match(cmux.Any())
 
 	s.svr = grpc.NewServer()
 	//s.svr = grpc.NewServer(tls.ToGRPCServerOption())
@@ -161,7 +160,6 @@ func (s *Server) Start() error {
 
 	RegistryMetrics()
 	go InitStatus(httpL) // serve status
-	//go InitStatus(tlsl)
 
 	s.closed.Set(false)
 	log.L().Info("start gRPC API", zap.String("listened address", s.cfg.WorkerAddr))

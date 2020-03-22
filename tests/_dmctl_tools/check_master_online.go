@@ -15,7 +15,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
@@ -37,7 +36,6 @@ func main() {
 		sslKey := os.Args[4]
 		tls, err := toolutils.NewTLS(sslCA, sslCert, sslKey, "", nil)
 		if err != nil {
-			fmt.Println(err)
 			utils.ExitWithError(err)
 		}
 		secureOpt = tls.ToGRPCDialOption()
@@ -45,14 +43,12 @@ func main() {
 
 	conn, err := grpc.Dial(addr, secureOpt, grpc.WithBackoffMaxDelay(2*time.Second))
 	if err != nil {
-		fmt.Println(err)
 		utils.ExitWithError(err)
 	}
 	cli := pb.NewMasterClient(conn)
 	req := &pb.ShowDDLLocksRequest{}
 	_, err = cli.ShowDDLLocks(context.Background(), req)
 	if err != nil {
-		fmt.Println(err)
 		utils.ExitWithError(err)
 	}
 }

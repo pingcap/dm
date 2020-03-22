@@ -340,8 +340,6 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 
 	// reuse the previous master-addr as the client listening URL.
 	cURL, err := parseURLs(c.MasterAddr)
-	//cURL, err := parseURLs("https://127.0.0.1" + c.MasterAddr)
-	//cURL, err := parseURLs("https://0.0.0.0:8261")
 	if err != nil {
 		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "invalid master-addr")
 	}

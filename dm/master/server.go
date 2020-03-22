@@ -178,8 +178,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	// create an etcd client used in the whole server instance.
 	// NOTE: we only use the local member's address now, but we can use all endpoints of the cluster if needed.
-	s.etcdClient, err = etcdutil.CreateClient([]string{"127.0.0.1" + s.cfg.MasterAddr}, tls.TLSConfig())
-	//s.etcdClient, err = etcdutil.CreateClient([]string{"127.0.0.1:8261"}, tls.TLSConfig())
+	s.etcdClient, err = etcdutil.CreateClient([]string{s.cfg.MasterAddr}, tls.TLSConfig())
 	if err != nil {
 		return
 	}
