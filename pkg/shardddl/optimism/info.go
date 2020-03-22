@@ -100,13 +100,11 @@ func infoFromJSON(s string) (i Info, err error) {
 //     2. DM-worker can re-PUT and comply with the coordination correctly.
 // This function should often be called by DM-worker.
 func PutInfo(cli *clientv3.Client, info Info) (int64, error) {
-	value, err := info.toJSON()
+	op, err := putInfoOp(info)
 	if err != nil {
 		return 0, err
 	}
-	key := common.ShardDDLOptimismInfoKeyAdapter.Encode(info.Task, info.Source, info.UpSchema, info.UpTable)
-
-	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clientv3.OpPut(key, value))
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, op)
 	return rev, nil
 }
 
@@ -210,6 +208,16 @@ func infoFromKey(key string) (Info, error) {
 	info.UpSchema = ks[2]
 	info.UpTable = ks[3]
 	return info, nil
+}
+
+// putInfoOp returns a PUT etcd operation for Info.
+func putInfoOp(info Info) (clientv3.Op, error) {
+	value, err := info.toJSON()
+	if err != nil {
+		return clientv3.Op{}, err
+	}
+	key := common.ShardDDLOptimismInfoKeyAdapter.Encode(info.Task, info.Source, info.UpSchema, info.UpTable)
+	return clientv3.OpPut(key, value), nil
 }
 
 // deleteInfoOp returns a DELETE etcd operation for info.

@@ -35,6 +35,27 @@ func (t *testForEtcd) TestSourceTablesJSON(c *C) {
 	c.Assert(st2, DeepEquals, st1)
 }
 
+func (t *testForEtcd) TestSourceTablesAddRemove(c *C) {
+	var (
+		task   = "task"
+		source = "mysql-replica-1"
+		db     = "foo"
+		tbl    = "bar"
+		st     = NewSourceTables(task, source, map[string]map[string]struct{}{})
+	)
+
+	// add a table.
+	c.Assert(st.AddTable(db, tbl), IsTrue)
+	c.Assert(st.AddTable(db, tbl), IsFalse)
+	c.Assert(st.Tables, HasKey, db)
+	c.Assert(st.Tables[db], HasKey, tbl)
+
+	// remove a table.
+	c.Assert(st.RemoveTable(db, tbl), IsTrue)
+	c.Assert(st.RemoveTable(db, tbl), IsFalse)
+	c.Assert(st.Tables, HasLen, 0)
+}
+
 func (t *testForEtcd) TestSourceTablesEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 

@@ -67,6 +67,35 @@ func (st SourceTables) toJSON() (string, error) {
 	return string(data), nil
 }
 
+// AddTable adds a table into SourceTables.
+// it returns whether added (not exist before).
+func (st *SourceTables) AddTable(schema, table string) bool {
+	if _, ok := st.Tables[schema]; !ok {
+		st.Tables[schema] = make(map[string]struct{})
+	}
+	if _, ok := st.Tables[schema][table]; !ok {
+		st.Tables[schema][table] = struct{}{}
+		return true
+	}
+	return false
+}
+
+// RemoveTable removes a table from SourceTables.
+// it returns whether removed (exist before).
+func (st *SourceTables) RemoveTable(schema, table string) bool {
+	if _, ok := st.Tables[schema]; !ok {
+		return false
+	}
+	if _, ok := st.Tables[schema][table]; !ok {
+		return false
+	}
+	delete(st.Tables[schema], table)
+	if len(st.Tables[schema]) == 0 {
+		delete(st.Tables, schema)
+	}
+	return true
+}
+
 // sourceTablesFromJSON constructs SourceTables from its JSON represent.
 func sourceTablesFromJSON(s string) (st SourceTables, err error) {
 	err = json.Unmarshal([]byte(s), &st)
@@ -76,13 +105,11 @@ func sourceTablesFromJSON(s string) (st SourceTables, err error) {
 // PutSourceTables puts source tables into etcd.
 // This function should often be called by DM-worker.
 func PutSourceTables(cli *clientv3.Client, st SourceTables) (int64, error) {
-	value, err := st.toJSON()
+	op, err := putSourceTablesOp(st)
 	if err != nil {
 		return 0, err
 	}
-	key := common.ShardDDLOptimismSourceTablesKeyAdapter.Encode(st.Task, st.Source)
-
-	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clientv3.OpPut(key, value))
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, op)
 	return rev, err
 }
 
@@ -185,4 +212,14 @@ func sourceTablesFromKey(key string) (SourceTables, error) {
 	st.Task = ks[0]
 	st.Source = ks[1]
 	return st, nil
+}
+
+// putSourceTablesOp returns a PUT etcd operation for source tables.
+func putSourceTablesOp(st SourceTables) (clientv3.Op, error) {
+	value, err := st.toJSON()
+	if err != nil {
+		return clientv3.Op{}, err
+	}
+	key := common.ShardDDLOptimismSourceTablesKeyAdapter.Encode(st.Task, st.Source)
+	return clientv3.OpPut(key, value), nil
 }

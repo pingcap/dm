@@ -171,4 +171,38 @@ func (t *testKeeper) TestTableKeeper(c *C) {
 	c.Assert(tk.Update(st22), IsFalse)
 	st22.Task = "not-exist"
 	c.Assert(tk.Update(st22), IsFalse)
+
+	// tables for task1 not affected.
+	sts = tk.FindTables(task1)
+	c.Assert(sts, HasLen, 2)
+	c.Assert(sts[0], DeepEquals, st11)
+	c.Assert(sts[1], DeepEquals, st12)
+
+	// add a table for st11.
+	c.Assert(tk.AddTable(task1, st11.Source, "db-2", "tbl-3"), IsTrue)
+	c.Assert(tk.AddTable(task1, st11.Source, "db-2", "tbl-3"), IsFalse)
+	sts = tk.FindTables(task1)
+	st11n := sts[0]
+	c.Assert(st11n.Tables, HasKey, "db-2")
+	c.Assert(st11n.Tables["db-2"], HasKey, "tbl-3")
+
+	// removed the added table in st11.
+	c.Assert(tk.RemoveTable(task1, st11.Source, "db-2", "tbl-3"), IsTrue)
+	c.Assert(tk.RemoveTable(task1, st11.Source, "db-2", "tbl-3"), IsFalse)
+	sts = tk.FindTables(task1)
+	st11n = sts[0]
+	c.Assert(st11n.Tables["db-2"], IsNil)
+
+	// adds for not existing task/source takes no effect.
+	c.Assert(tk.AddTable("not-exist", st11.Source, "db-2", "tbl-3"), IsFalse)
+	c.Assert(tk.AddTable(task1, "not-exist", "db-2", "tbl-3"), IsFalse)
+	sts = tk.FindTables(task1)
+	st11n = sts[0]
+	c.Assert(st11n.Tables["db-2"], IsNil)
+
+	// removes for not existing task/source takes no effect.
+	c.Assert(tk.RemoveTable("not-exit", st12.Source, "db", "tbl-1"), IsFalse)
+	c.Assert(tk.RemoveTable(task1, "not-exit", "db", "tbl-1"), IsFalse)
+	sts = tk.FindTables(task1)
+	c.Assert(sts[1], DeepEquals, st12)
 }

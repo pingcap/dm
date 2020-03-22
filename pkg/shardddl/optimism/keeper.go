@@ -151,6 +151,43 @@ func (tk *TableKeeper) Update(st SourceTables) bool {
 	return true
 }
 
+// AddTable adds a table into the source tables.
+// it returns whether added (not exist before).
+// NOTE: we only add for existing <task, source> now.
+func (tk *TableKeeper) AddTable(task, source, schema, table string) bool {
+	tk.mu.Lock()
+	defer tk.mu.Unlock()
+
+	if _, ok := tk.tables[task]; !ok {
+		return false
+	}
+	if _, ok := tk.tables[task][source]; !ok {
+		return false
+	}
+	st := tk.tables[task][source]
+	added := st.AddTable(schema, table)
+	tk.tables[task][source] = st // assign the modified SourceTables.
+	return added
+}
+
+// RemoveTable removes a table from the source tables.
+// it returns whether removed (exit before).
+func (tk *TableKeeper) RemoveTable(task, source, schema, table string) bool {
+	tk.mu.Lock()
+	defer tk.mu.Unlock()
+
+	if _, ok := tk.tables[task]; !ok {
+		return false
+	}
+	if _, ok := tk.tables[task][source]; !ok {
+		return false
+	}
+	st := tk.tables[task][source]
+	removed := st.RemoveTable(schema, table)
+	tk.tables[task][source] = st // assign the modified SourceTables.
+	return removed
+}
+
 // FindTables finds source tables by task name.
 func (tk *TableKeeper) FindTables(task string) []SourceTables {
 	tk.mu.RLock()

@@ -19,6 +19,33 @@ import (
 	"github.com/pingcap/dm/pkg/etcdutil"
 )
 
+// PutSourceTablesInfo puts source tables and a shard DDL info.
+// This function is often used in DM-worker when handling `CREATE TABLE`.
+func PutSourceTablesInfo(cli *clientv3.Client, st SourceTables, info Info) (int64, error) {
+	stOp, err := putSourceTablesOp(st)
+	if err != nil {
+		return 0, err
+	}
+	infoOp, err := putInfoOp(info)
+	if err != nil {
+		return 0, err
+	}
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, stOp, infoOp)
+	return rev, err
+}
+
+// PutSourceTablesDeleteInfo puts source tables and deletes a shard DDL info.
+// This function is often used in DM-worker when handling `DROP TABLE`.
+func PutSourceTablesDeleteInfo(cli *clientv3.Client, st SourceTables, info Info) (int64, error) {
+	stOp, err := putSourceTablesOp(st)
+	if err != nil {
+		return 0, err
+	}
+	infoOp := deleteInfoOp(info)
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, stOp, infoOp)
+	return rev, err
+}
+
 // DeleteInfosOperations deletes the shard DDL infos and operations in etcd.
 // This function should often be called by DM-master when removing the lock.
 func DeleteInfosOperations(cli *clientv3.Client, infos []Info, ops []Operation) (int64, error) {
