@@ -115,8 +115,7 @@ func (tr *Tracker) Reset() error {
 	ddl := tr.dom.DDL()
 	for _, db := range allDBs {
 		dbName := model.NewCIStr(db)
-		switch dbName.L {
-		case "mysql", "performance_schema", "information_schema":
+		if filter.IsSystemSchema(dbName.L) {
 			continue
 		}
 		if err := ddl.DropSchema(tr.se, dbName); err != nil {

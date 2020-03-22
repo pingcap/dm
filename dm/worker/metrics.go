@@ -18,13 +18,13 @@ import (
 	"net/http"
 	"net/http/pprof"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
-	"github.com/pingcap/dm/mydumper"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay"
 	"github.com/pingcap/dm/syncer"
@@ -61,7 +61,7 @@ func RegistryMetrics() {
 	registry.MustRegister(taskState)
 
 	relay.RegisterMetrics(registry)
-	mydumper.RegisterMetrics(registry)
+	dumpling.RegisterMetrics(registry)
 	loader.RegisterMetrics(registry)
 	syncer.RegisterMetrics(registry)
 	prometheus.DefaultGatherer = registry

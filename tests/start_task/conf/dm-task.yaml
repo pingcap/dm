@@ -31,7 +31,8 @@ mydumpers:
     chunk-filesize: 0
     skip-tz-utc: true
     # start_task integration_test will add failpoint to function fetchTables will cause mydumper failing to start and won't rebuild dm-worker during restart so extra-args is given here
-    extra-args: "-B start_task --statement-size=100"
+    statement-size: 100
+    extra-args: ""
 
 loaders:
   global:

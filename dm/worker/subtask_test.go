@@ -21,8 +21,8 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
-	"github.com/pingcap/dm/mydumper"
 	"github.com/pingcap/dm/syncer"
 
 	. "github.com/pingcap/check"
@@ -43,7 +43,7 @@ func (t *testSubTask) TestCreateUnits(c *C) {
 	cfg.Mode = config.ModeFull
 	unitsFull := createUnits(cfg, nil)
 	c.Assert(unitsFull, HasLen, 2)
-	_, ok := unitsFull[0].(*mydumper.Mydumper)
+	_, ok := unitsFull[0].(*dumpling.Dumpling)
 	c.Assert(ok, IsTrue)
 	_, ok = unitsFull[1].(*loader.Loader)
 	c.Assert(ok, IsTrue)
@@ -57,7 +57,7 @@ func (t *testSubTask) TestCreateUnits(c *C) {
 	cfg.Mode = config.ModeAll
 	unitsAll := createUnits(cfg, nil)
 	c.Assert(unitsAll, HasLen, 3)
-	_, ok = unitsAll[0].(*mydumper.Mydumper)
+	_, ok = unitsAll[0].(*dumpling.Dumpling)
 	c.Assert(ok, IsTrue)
 	_, ok = unitsAll[1].(*loader.Loader)
 	c.Assert(ok, IsTrue)

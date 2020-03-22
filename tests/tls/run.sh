@@ -12,7 +12,6 @@ API_VERSION="v1alpha1"
 function run_tidb_with_tls() {
     echo "run a new tidb server with tls"
     cat - > "$WORK_DIR/tidb-tls-config.toml" <<EOF
-status-port = 10090
 [security]
 # set the path for certificates. Empty string means disabling secure connectoins.
 ssl-ca = "$cur/conf/ca.pem"
