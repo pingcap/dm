@@ -46,7 +46,10 @@ func getStatusHandle() http.Handler {
 
 // getHTTPAPIHandler returns a HTTP handler to handle DM-master APIs.
 func getHTTPAPIHandler(ctx context.Context, addr string, securityOpt grpc.DialOption) (http.Handler, error) {
+	// FIXME: don't support tls for grpc gateway, see https://github.com/grpc-ecosystem/grpc-gateway/issues/727
+	// will fix it later
 	securityOpt = grpc.WithInsecure()
+
 	// dial the real API server in non-blocking mode, it may not started yet.
 	opts := []grpc.DialOption{securityOpt}
 	// NOTE: should we need to replace `host` in `addr` to `127.0.0.1`?

@@ -87,6 +87,7 @@ function run() {
             "query-status test" \
             "\"result\": true" 2
 
+    echo "test http interface"
     check_rpc_alive $cur/../bin/check_master_online_http 127.0.0.1:$MASTER_PORT1 "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
 
     # FIXME: should not success

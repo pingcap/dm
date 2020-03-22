@@ -36,11 +36,10 @@ import (
 )
 
 const (
-	defaultRPCTimeout    = "30s"
-	defaultNamePrefix    = "dm-master"
-	defaultDataDirPrefix = "default"
-	defaultPeerUrls      = "http://127.0.0.1:8291"
-	//defaultPeerHTTPsUrls            = "https://127.0.0.1:8291"
+	defaultRPCTimeout          = "30s"
+	defaultNamePrefix          = "dm-master"
+	defaultDataDirPrefix       = "default"
+	defaultPeerUrls            = "http://127.0.0.1:8291"
 	defaultInitialClusterState = embed.ClusterStateFlagNew
 )
 
@@ -293,6 +292,16 @@ func (c *Config) adjust() error {
 
 	if c.InitialClusterState == "" {
 		c.InitialClusterState = defaultInitialClusterState
+	}
+
+	if enableTLS(&c.Security) {
+		if !strings.HasPrefix(c.PeerUrls, "https://") {
+			return terror.ErrMasterPeerURLsNotValid.Generate(c.PeerUrls)
+		}
+
+		if !strings.HasPrefix(c.AdvertisePeerUrls, "https://") {
+			return terror.ErrMasterAdvertisePeerURLsNotValid.Generate(c.AdvertisePeerUrls)
+		}
 	}
 
 	return err

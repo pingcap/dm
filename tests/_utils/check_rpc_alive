@@ -19,7 +19,6 @@ fi
 i=0
 while [ $i -lt 10 ]
 do
-    #bash -c "$check_tool $addr > /dev/null 2>&1"
     bash -c "$check_tool $addr $ssl_ca $ssl_cert $ssl_key"
     ret=$?
     if [ "$ret" == 0 ]; then

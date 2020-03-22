@@ -85,8 +85,7 @@ func NewServer(cfg *Config) *Server {
 func (s *Server) Start() error {
 	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
 	if err != nil {
-		// TODO: use tls
-		return err
+		return terror.ErrWorkerSecurityConfigNotValid.Delegate(err)
 	}
 
 	rootLis, err := net.Listen("tcp", s.cfg.WorkerAddr)
@@ -96,7 +95,6 @@ func (s *Server) Start() error {
 	s.rootLis = tls.WrapListener(rootLis)
 
 	log.L().Info("Start Server")
-	// TODO: use tls
 	s.setWorker(nil, true)
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.etcdClient, err = clientv3.New(clientv3.Config{

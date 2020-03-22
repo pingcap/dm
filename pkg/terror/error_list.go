@@ -409,6 +409,9 @@ const (
 	codeMasterRequestIsNotForwardToLeader
 	codeMasterIsNotAsyncRequest
 	codeMasterFailToGetExpectResult
+	codeMasterPeerURLsNotValid
+	codeMasterAdvertisePeerURLsNotValid
+	codeMasterSecurityConfigNotValid
 )
 
 // DM-worker error code
@@ -487,6 +490,7 @@ const (
 	codeWorkerSourceNotMatch
 	codeWorkerFailToGetSubtaskConfigFromEtcd
 	codeWorkerFailToGetSourceConfigFromEtcd
+	codeWorkerSecurityConfigNotValid
 )
 
 // DM-tracer error code
@@ -914,6 +918,10 @@ var (
 	ErrMasterIsNotAsyncRequest           = New(codeMasterIsNotAsyncRequest, ClassDMMaster, ScopeInternal, LevelMedium, "request %s is not an async one, needn't wait for ok")
 	ErrMasterFailToGetExpectResult       = New(codeMasterFailToGetExpectResult, ClassDMMaster, ScopeInternal, LevelMedium, "fail to get expected result")
 
+	ErrMasterPeerURLsNotValid          = New(codeMasterPeerURLsNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "peer urls %s not valid")
+	ErrMasterAdvertisePeerURLsNotValid = New(codeMasterAdvertisePeerURLsNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "advertise peer urls %s not valid")
+	ErrMasterSecurityConfigNotValid    = New(codeMasterSecurityConfigNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "security config not valid")
+
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
 	ErrWorkerInvalidFlag             = New(codeWorkerInvalidFlag, ClassDMWorker, ScopeInternal, LevelMedium, "'%s' is an invalid flag")
@@ -990,6 +998,7 @@ var (
 
 	ErrWorkerFailToGetSubtaskConfigFromEtcd = New(codeWorkerFailToGetSubtaskConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative subtask config for task %s in etcd")
 	ErrWorkerFailToGetSourceConfigFromEtcd  = New(codeWorkerFailToGetSourceConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative source config for source %s in etcd")
+	ErrWorkerSecurityConfigNotValid         = New(codeWorkerSecurityConfigNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "security config not valid")
 
 	// DM-tracer error
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set")

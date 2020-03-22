@@ -64,7 +64,3 @@ require (
 go 1.13
 
 replace github.com/pingcap/tidb-tools v4.0.0-beta.1.0.20200315095020-6bea09b23e42+incompatible => github.com/WangXiangUSTC/tidb-tools v3.0.13-0.20200317132248-41f80010eedd+incompatible
-
-//replace google.golang.org/grpc v1.25.1 => github.com/WangXiangUSTC/grpc-go v1.25.2-0.20200319081910-012c0861fa0b
-
-replace go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738 => github.com/WangXiangUSTC/etcd v0.5.0-alpha.5.0.20200320021120-9c261e469e61

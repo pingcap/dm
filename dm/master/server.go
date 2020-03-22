@@ -145,16 +145,13 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
 	if err != nil {
-		// TODO: use terror
-		return
+		return terror.ErrMasterSecurityConfigNotValid.Delegate(err)
 	}
 
-	/*
-		apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr, tls.ToGRPCDialOption())
-		if err != nil {
-			return
-		}
-	*/
+	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr, tls.ToGRPCDialOption())
+	if err != nil {
+		return
+	}
 
 	// HTTP handlers on etcd's client IP:port
 	// no `metrics` for DM-master now, add it later.
@@ -165,7 +162,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// But I haven't figured it out.
 	// (maybe more requests are sent from chrome or its extensions).
 	userHandles := map[string]http.Handler{
-		//"/apis/":  apiHandler,
+		"/apis/":  apiHandler,
 		"/status": getStatusHandle(),
 		"/debug/": getDebugHandler(),
 	}
@@ -1364,17 +1361,19 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 }
 
 func setUseTLS(tlsCfg *config.Security) {
+	useTLS = enableTLS(tlsCfg)
+}
+
+func enableTLS(tlsCfg *config.Security) bool {
 	if tlsCfg == nil {
-		useTLS = false
-		return
+		return false
 	}
 
 	if len(tlsCfg.SSLCA) == 0 || len(tlsCfg.SSLCert) == 0 || len(tlsCfg.CertAllowedCN) == 0 {
-		useTLS = false
-		return
+		return false
 	}
 
-	useTLS = true
+	return true
 }
 
 func extractWorkerError(result *pb.ProcessResult) error {

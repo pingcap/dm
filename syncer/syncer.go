@@ -1247,7 +1247,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 				// only need compare binlog position?
 				lastLocation = shardingReSync.currLocation.Clone()
-				s.tctx.L().Info("judge re-replicate shard group was completed", zap.String("event", "XID"), zap.Reflect("shardingReSync current location", ec.shardingReSync.currLocation), zap.Stringer("shardingReSync latest location", ec.shardingReSync.latestLocation), zap.Stringer("current location", ec.currentLocation))
 				if binlog.CompareLocation(shardingReSync.currLocation, shardingReSync.latestLocation) >= 0 {
 					s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "XID"), zap.Reflect("re-shard", shardingReSync))
 					err = closeShardingResync()
@@ -1345,8 +1344,6 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currLocation.Position.Pos = ec.header.LogPos
-		s.tctx.L().Info("judge re-replicate shard group was completed", zap.String("event", "row"), zap.Reflect("shardingReSync current location", ec.shardingReSync.currLocation), zap.Stringer("shardingReSync latest location", ec.shardingReSync.latestLocation), zap.Stringer("current location", ec.currentLocation))
-
 		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "row"), zap.Reflect("re-shard", ec.shardingReSync))
 			return ec.closeShardingResync()
@@ -1513,7 +1510,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currLocation.Position.Pos = ec.header.LogPos
 		ec.shardingReSync.currLocation.GTIDSet.Set(ev.GSet)
-		s.tctx.L().Info("judge re-replicate shard group was completed", zap.String("event", "query"), zap.Reflect("shardingReSync current location", ec.shardingReSync.currLocation), zap.Stringer("shardingReSync latest location", ec.shardingReSync.latestLocation), zap.Stringer("current location", ec.currentLocation))
 
 		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "query"), zap.String("statement", sql), zap.Reflect("re-shard", ec.shardingReSync))
