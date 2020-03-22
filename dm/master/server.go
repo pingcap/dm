@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -178,7 +179,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	// create an etcd client used in the whole server instance.
 	// NOTE: we only use the local member's address now, but we can use all endpoints of the cluster if needed.
-	s.etcdClient, err = etcdutil.CreateClient([]string{s.cfg.MasterAddr}, tls.TLSConfig())
+	s.etcdClient, err = etcdutil.CreateClient([]string{withHost(s.cfg.MasterAddr)}, tls.TLSConfig())
 	if err != nil {
 		return
 	}
@@ -1373,6 +1374,19 @@ func enableTLS(tlsCfg *config.Security) bool {
 	}
 
 	return true
+}
+
+func withHost(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		// do nothing
+		return addr
+	}
+	if len(host) == 0 {
+		return fmt.Sprintf("127.0.0.1:%s", port)
+	}
+
+	return addr
 }
 
 func extractWorkerError(result *pb.ProcessResult) error {

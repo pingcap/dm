@@ -148,8 +148,8 @@ func (s *Server) Start() error {
 
 	httpL := m.Match(cmux.HTTP1Fast())
 
+	// NOTE: don't need to set tls config, because rootLis already use tls
 	s.svr = grpc.NewServer()
-	//s.svr = grpc.NewServer(tls.ToGRPCServerOption())
 	pb.RegisterWorkerServer(s.svr, s)
 	go func() {
 		err2 := s.svr.Serve(grpcL)

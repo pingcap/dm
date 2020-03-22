@@ -373,9 +373,7 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 
 	// security config
 	if len(c.SSLCA) != 0 {
-
 		cfg.ClientTLSInfo.ServerName = c.Name
-		//cfg.ClientTLSInfo.ClientCertAuth = false
 		cfg.ClientTLSInfo.TrustedCAFile = c.SSLCA
 		cfg.ClientTLSInfo.CertFile = c.SSLCert
 		cfg.ClientTLSInfo.KeyFile = c.SSLKey
@@ -383,17 +381,14 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 		cfg.ClientTLSInfo.SkipClientSANVerify = true
 
 		cfg.PeerTLSInfo.ServerName = c.Name
-		//cfg.PeerTLSInfo.ClientCertAuth = false
 		cfg.PeerTLSInfo.TrustedCAFile = c.SSLCA
 		cfg.PeerTLSInfo.CertFile = c.SSLCert
 		cfg.PeerTLSInfo.KeyFile = c.SSLKey
 		cfg.PeerTLSInfo.InsecureSkipVerify = true
 		cfg.PeerTLSInfo.SkipClientSANVerify = true
 
-		cfg.EnableGRPCGateway = true
-
 		// NOTE: etcd only support one allowed CN
-		// TODO: support AllowedCN in etcd
+		// FIXME: support AllowedCN in etcd
 		/*
 			if len(c.CertAllowedCN) > 0 {
 				cfg.ClientTLSInfo.AllowedCN = c.CertAllowedCN[0]
