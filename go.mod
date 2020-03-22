@@ -45,7 +45,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20190318030020-c3a204f8e965 // indirect
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
-	github.com/twitchtv/retool v1.3.8-0.20180918173430-41330f8b4e07
+	github.com/twitchtv/retool v1.3.7
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v2.16.0+incompatible // indirect
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
@@ -63,4 +63,8 @@ require (
 
 go 1.13
 
-replace github.com/pingcap/tidb-tools v4.0.0-beta.1.0.20200315095020-6bea09b23e42+incompatible => github.com/WangXiangUSTC/tidb-tools v3.0.13-0.20200316165904-ca836f5a71cc+incompatible
+replace github.com/pingcap/tidb-tools v4.0.0-beta.1.0.20200315095020-6bea09b23e42+incompatible => github.com/WangXiangUSTC/tidb-tools v3.0.13-0.20200317132248-41f80010eedd+incompatible
+
+//replace google.golang.org/grpc v1.25.1 => github.com/WangXiangUSTC/grpc-go v1.25.2-0.20200319081910-012c0861fa0b
+
+replace go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738 => github.com/WangXiangUSTC/etcd v0.5.0-alpha.5.0.20200320021120-9c261e469e61

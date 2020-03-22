@@ -85,6 +85,7 @@ func NewServer(cfg *Config) *Server {
 func (s *Server) Start() error {
 	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
 	if err != nil {
+		// TODO: use tls
 		return err
 	}
 
@@ -95,6 +96,7 @@ func (s *Server) Start() error {
 	s.rootLis = tls.WrapListener(rootLis)
 
 	log.L().Info("Start Server")
+	// TODO: use tls
 	s.setWorker(nil, true)
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.etcdClient, err = clientv3.New(clientv3.Config{
@@ -102,6 +104,7 @@ func (s *Server) Start() error {
 		DialTimeout:          dialTimeout,
 		DialKeepAliveTime:    keepaliveTime,
 		DialKeepAliveTimeout: keepaliveTimeout,
+		TLS:                  tls.TLSConfig(),
 	})
 	if err != nil {
 		return err
@@ -139,13 +142,17 @@ func (s *Server) Start() error {
 
 	// create a cmux
 	m := cmux.New(s.rootLis)
+
 	m.SetReadTimeout(cmuxReadTimeout) // set a timeout, ref: https://github.com/pingcap/tidb-binlog/pull/352
 
 	// match connections in order: first gRPC, then HTTP
 	grpcL := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
-	httpL := m.Match(cmux.HTTP1Fast())
 
-	s.svr = grpc.NewServer(tls.ToGRPCServerOption())
+	httpL := m.Match(cmux.HTTP1Fast())
+	//tlsl := m.Match(cmux.Any())
+
+	s.svr = grpc.NewServer()
+	//s.svr = grpc.NewServer(tls.ToGRPCServerOption())
 	pb.RegisterWorkerServer(s.svr, s)
 	go func() {
 		err2 := s.svr.Serve(grpcL)
@@ -156,6 +163,7 @@ func (s *Server) Start() error {
 
 	RegistryMetrics()
 	go InitStatus(httpL) // serve status
+	//go InitStatus(tlsl)
 
 	s.closed.Set(false)
 	log.L().Info("start gRPC API", zap.String("listened address", s.cfg.WorkerAddr))

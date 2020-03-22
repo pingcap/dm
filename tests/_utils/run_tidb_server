@@ -6,13 +6,19 @@ set -eu
 
 PORT=$1
 PASSWORD=$2
+
+config=""
+if [ $# == 3 ] ; then
+    config="--config=$3"
+fi
+
 TEST_DIR=/tmp/dm_test
 
 echo "Starting TiDB on port ${PORT}"
 bin/tidb-server \
     -P ${PORT} \
     --store mocktikv \
-    --log-file "$TEST_DIR/tidb.log" &
+    --log-file "$TEST_DIR/tidb.log" $config &
 
 echo "Verifying TiDB is started..."
 i=0

@@ -5,10 +5,22 @@
 check_tool=$1
 addr=$2
 
+ssl_ca=""
+ssl_cert=""
+ssl_key=""
+
+
+if [ $# == 5 ] ; then
+    ssl_ca=$3
+    ssl_cert=$4
+    ssl_key=$5
+fi
+
 i=0
 while [ $i -lt 10 ]
 do
-    bash -c "$check_tool $addr > /dev/null 2>&1"
+    #bash -c "$check_tool $addr > /dev/null 2>&1"
+    bash -c "$check_tool $addr $ssl_ca $ssl_cert $ssl_key"
     ret=$?
     if [ "$ret" == 0 ]; then
         echo "rpc addr $addr is alive"

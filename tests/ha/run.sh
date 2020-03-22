@@ -9,10 +9,10 @@ API_VERSION="v1alpha1"
 
 function run() {
     echo "import prepare data"
-    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    check_contains 'Query OK, 2 rows affected'
-    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
-    check_contains 'Query OK, 3 rows affected'
+    #run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    #check_contains 'Query OK, 2 rows affected'
+    #run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+    #check_contains 'Query OK, 3 rows affected'
 
     echo "start DM worker and master"
     run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml
@@ -37,6 +37,7 @@ function run() {
 
     echo "start DM task"
     dmctl_start_task
+    sleep 1000
 
     echo "use sync_diff_inspector to check full dump loader"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

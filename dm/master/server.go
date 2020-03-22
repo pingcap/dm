@@ -63,6 +63,8 @@ var (
 	maxRetryNum = 30
 	// the retry interval for dm-master to confirm the dm-workers status is expected
 	retryInterval = time.Second
+
+	useTLS = false
 )
 
 // Server handles RPC requests for dm-master
@@ -115,6 +117,8 @@ func NewServer(cfg *Config) *Server {
 	server.pessimist = shardddl.NewPessimist(&logger, server.getTaskResources)
 	server.closed.Set(true)
 
+	setUseTLS(&cfg.Security)
+
 	return &server
 }
 
@@ -145,10 +149,12 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
-	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr, tls.ToGRPCDialOption())
-	if err != nil {
-		return
-	}
+	/*
+		apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr, tls.ToGRPCDialOption())
+		if err != nil {
+			return
+		}
+	*/
 
 	// HTTP handlers on etcd's client IP:port
 	// no `metrics` for DM-master now, add it later.
@@ -159,7 +165,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// But I haven't figured it out.
 	// (maybe more requests are sent from chrome or its extensions).
 	userHandles := map[string]http.Handler{
-		"/apis/":  apiHandler,
+		//"/apis/":  apiHandler,
 		"/status": getStatusHandle(),
 		"/debug/": getDebugHandler(),
 	}
@@ -175,7 +181,8 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	// create an etcd client used in the whole server instance.
 	// NOTE: we only use the local member's address now, but we can use all endpoints of the cluster if needed.
-	s.etcdClient, err = etcdutil.CreateClient([]string{s.cfg.MasterAddr}, tls.TLSConfig())
+	s.etcdClient, err = etcdutil.CreateClient([]string{"127.0.0.1" + s.cfg.MasterAddr}, tls.TLSConfig())
+	//s.etcdClient, err = etcdutil.CreateClient([]string{"127.0.0.1:8261"}, tls.TLSConfig())
 	if err != nil {
 		return
 	}
@@ -1354,6 +1361,20 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 	}
 
 	return cfg, stCfgs, nil
+}
+
+func setUseTLS(tlsCfg *config.Security) {
+	if tlsCfg == nil {
+		useTLS = false
+		return
+	}
+
+	if len(tlsCfg.SSLCA) == 0 || len(tlsCfg.SSLCert) == 0 || len(tlsCfg.CertAllowedCN) == 0 {
+		useTLS = false
+		return
+	}
+
+	useTLS = true
 }
 
 func extractWorkerError(result *pb.ProcessResult) error {

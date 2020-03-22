@@ -15,9 +15,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
-	"fmt"
 
 	"google.golang.org/grpc"
 
@@ -31,7 +31,7 @@ func main() {
 	addr := os.Args[1]
 
 	secureOpt := grpc.WithInsecure()
-	if len(os.Args) == 4 {
+	if len(os.Args) == 5 {
 		sslCA := os.Args[2]
 		sslCert := os.Args[3]
 		sslKey := os.Args[4]

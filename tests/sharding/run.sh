@@ -75,6 +75,9 @@ function run() {
     new_checksum=$(checksum)
     echo "checksum before drop/truncate: $old_checksum, checksum after drop/truncate: $new_checksum"
     [ "$old_checksum" == "$new_checksum" ]
+
+    echo "sleep 300"
+    sleep 300
 }
 
 cleanup_data db_target

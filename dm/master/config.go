@@ -36,10 +36,11 @@ import (
 )
 
 const (
-	defaultRPCTimeout          = "30s"
-	defaultNamePrefix          = "dm-master"
-	defaultDataDirPrefix       = "default"
-	defaultPeerUrls            = "http://127.0.0.1:8291"
+	defaultRPCTimeout    = "30s"
+	defaultNamePrefix    = "dm-master"
+	defaultDataDirPrefix = "default"
+	defaultPeerUrls      = "http://127.0.0.1:8291"
+	//defaultPeerHTTPsUrls            = "https://127.0.0.1:8291"
 	defaultInitialClusterState = embed.ClusterStateFlagNew
 )
 
@@ -330,6 +331,8 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 
 	// reuse the previous master-addr as the client listening URL.
 	cURL, err := parseURLs(c.MasterAddr)
+	//cURL, err := parseURLs("https://127.0.0.1" + c.MasterAddr)
+	//cURL, err := parseURLs("https://0.0.0.0:8261")
 	if err != nil {
 		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "invalid master-addr")
 	}
@@ -363,20 +366,35 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 
 	// security config
 	if len(c.SSLCA) != 0 {
-		cfg.ClientTLSInfo.ClientCertAuth = len(c.SSLCA) != 0
+
+		cfg.ClientTLSInfo.ServerName = c.Name
+		//cfg.ClientTLSInfo.ClientCertAuth = false
 		cfg.ClientTLSInfo.TrustedCAFile = c.SSLCA
 		cfg.ClientTLSInfo.CertFile = c.SSLCert
 		cfg.ClientTLSInfo.KeyFile = c.SSLKey
-		cfg.PeerTLSInfo.ClientCertAuth = len(c.SSLCA) != 0
+		cfg.ClientTLSInfo.InsecureSkipVerify = true
+		cfg.ClientTLSInfo.SkipClientSANVerify = true
+
+		cfg.PeerTLSInfo.ServerName = c.Name
+		//cfg.PeerTLSInfo.ClientCertAuth = false
 		cfg.PeerTLSInfo.TrustedCAFile = c.SSLCA
 		cfg.PeerTLSInfo.CertFile = c.SSLCert
 		cfg.PeerTLSInfo.KeyFile = c.SSLKey
+		cfg.PeerTLSInfo.InsecureSkipVerify = true
+		cfg.PeerTLSInfo.SkipClientSANVerify = true
 
-		// etcd only support one allowed CN
-		if len(c.CertAllowedCN) > 0 {
-			cfg.ClientTLSInfo.AllowedCN = c.CertAllowedCN[0]
-			cfg.PeerTLSInfo.AllowedCN = c.CertAllowedCN[0]
-		}
+		cfg.EnableGRPCGateway = true
+
+		// NOTE: etcd only support one allowed CN
+		// TODO: support AllowedCN in etcd
+		/*
+			if len(c.CertAllowedCN) > 0 {
+				cfg.ClientTLSInfo.AllowedCN = c.CertAllowedCN[0]
+				cfg.PeerTLSInfo.AllowedCN = c.CertAllowedCN[0]
+				cfg.PeerTLSInfo.ClientCertAuth = len(c.SSLCA) != 0
+				cfg.ClientTLSInfo.ClientCertAuth = len(c.SSLCA) != 0
+			}
+		*/
 	}
 
 	return cfg, nil
@@ -399,7 +417,11 @@ func parseURLs(s string) ([]url.URL, error) {
 		// `127.0.0.1:8261`: first path segment in URL cannot contain colon
 		if err != nil && (strings.Contains(err.Error(), "missing protocol scheme") ||
 			strings.Contains(err.Error(), "first path segment in URL cannot contain colon")) {
-			u, err = url.Parse("http://" + item)
+			prefix := "http://"
+			if useTLS {
+				prefix = "https://"
+			}
+			u, err = url.Parse(prefix + item)
 		}
 		if err != nil {
 			return nil, terror.ErrMasterParseURLFail.Delegate(err, item)

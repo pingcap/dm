@@ -49,16 +49,25 @@ function run() {
 
     prepare_data
 
-    cp $cur/conf/dm-master.toml $WORK_DIR/
+    cp $cur/conf/dm-master1.toml $WORK_DIR/
+    cp $cur/conf/dm-master2.toml $WORK_DIR/
+    cp $cur/conf/dm-master3.toml $WORK_DIR/
     cp $cur/conf/dm-worker1.toml $WORK_DIR/
     cp $cur/conf/dm-task.yaml $WORK_DIR/
 
-    sed -i "s%dir-placeholer%$cur\/conf%g" $WORK_DIR/dm-master.toml
+    sed -i "s%dir-placeholer%$cur\/conf%g" $WORK_DIR/dm-master1.toml
+    sed -i "s%dir-placeholer%$cur\/conf%g" $WORK_DIR/dm-master2.toml
+    sed -i "s%dir-placeholer%$cur\/conf%g" $WORK_DIR/dm-master3.toml
     sed -i "s%dir-placeholer%$cur\/conf%g" $WORK_DIR/dm-worker1.toml
     sed -i "s%dir-placeholer%$cur\/conf%g" $WORK_DIR/dm-task.yaml
 
-    run_dm_master $WORK_DIR/master $MASTER_PORT $WORK_DIR/dm-master.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
+    run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $WORK_DIR/dm-master1.toml
+    run_dm_master $WORK_DIR/master2 $MASTER_PORT2 $WORK_DIR/dm-master2.toml
+    run_dm_master $WORK_DIR/master3 $MASTER_PORT3 $WORK_DIR/dm-master3.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1 "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2 "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3 "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
+
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $WORK_DIR/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
     # operate mysql config to worker
@@ -77,6 +86,11 @@ function run() {
     run_dm_ctl_with_tls $WORK_DIR "127.0.0.1:$MASTER_PORT" $cur/conf/ca.pem $cur/conf/dm.pem $cur/conf/dm.key \
             "query-status test" \
             "\"result\": true" 2
+
+    check_rpc_alive $cur/../bin/check_master_online_http 127.0.0.1:$MASTER_PORT1 "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
+
+    # FIXME: should not success
+    check_rpc_alive $cur/../bin/check_master_online_http 127.0.0.1:$MASTER_PORT1 "$cur/conf/ca.pem" "$cur/conf/other.pem" "$cur/conf/other.key"
 
     sleep 1
 

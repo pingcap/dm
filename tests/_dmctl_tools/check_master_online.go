@@ -15,8 +15,8 @@ package main
 
 import (
 	"context"
-	"os"
 	"fmt"
+	"os"
 	"time"
 
 	"google.golang.org/grpc"
@@ -29,9 +29,9 @@ import (
 // use show-ddl-locks request to test DM-master is online
 func main() {
 	addr := os.Args[1]
-	
+
 	secureOpt := grpc.WithInsecure()
-	if len(os.Args) == 4 {
+	if len(os.Args) == 5 {
 		sslCA := os.Args[2]
 		sslCert := os.Args[3]
 		sslKey := os.Args[4]
