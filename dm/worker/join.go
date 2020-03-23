@@ -44,7 +44,6 @@ func (s *Server) JoinMaster(endpoints []string) error {
 		Address: s.cfg.AdvertiseAddr,
 	}
 
-	var client pb.MasterClient
 	for _, endpoint := range endpoints {
 		ctx1, cancel1 := context.WithTimeout(ctx, 3*time.Second)
 		conn, err := grpc.DialContext(ctx1, endpoint, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
@@ -53,7 +52,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 			log.L().Error("fail to dial dm-master", zap.Error(err))
 			continue
 		}
-		client = pb.NewMasterClient(conn)
+		client := pb.NewMasterClient(conn)
 		ctx1, cancel1 = context.WithTimeout(ctx, 3*time.Second)
 		resp, err := client.RegisterWorker(ctx1, req)
 		cancel1()
@@ -67,6 +66,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 		}
 		return nil
 	}
+	// TODO: use terror here
 	return errors.Errorf("cannot connect with master endpoints: %v", endpoints)
 }
 
