@@ -238,6 +238,13 @@ func (l *Lock) Ready() map[string]map[string]map[string]bool {
 	return ready
 }
 
+// Joined returns the joined table info.
+func (l *Lock) Joined() schemacmp.Table {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.joined
+}
+
 // TryMarkDone tries to mark the operation of the source table as done.
 // it returns whether marked done.
 // NOTE: we can only mark the operation of the table as done if it's already synced.

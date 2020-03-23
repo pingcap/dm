@@ -73,6 +73,11 @@ func (lk *LockKeeper) FindLock(lockID string) *Lock {
 	return lk.locks[lockID]
 }
 
+// FindLockByInfo finds a lock with a shard DDL info.
+func (lk *LockKeeper) FindLockByInfo(info Info) *Lock {
+	return lk.FindLock(genDDLLockID(info))
+}
+
 // Locks return a copy of all Locks.
 func (lk *LockKeeper) Locks() map[string]*Lock {
 	lk.mu.RLock()

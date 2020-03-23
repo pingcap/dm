@@ -63,6 +63,7 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 	lock1 := lk.FindLock(lockID1)
 	c.Assert(lock1, NotNil)
 	c.Assert(lock1.ID, Equals, lockID1)
+	c.Assert(lk.FindLockByInfo(i11).ID, Equals, lockID1)
 	synced, remain := lock1.IsSynced()
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
