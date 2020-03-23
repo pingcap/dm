@@ -1948,7 +1948,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_loader_data_size_count{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_loader_data_size_gauge{task=\"$task\",instance=\"$instance\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -2191,7 +2191,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_loader_table_count{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_loader_table_gauge{task=\"$task\",instance=\"$instance\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -2272,7 +2272,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_loader_data_file_count{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_loader_data_file_gauge{task=\"$task\",instance=\"$instance\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"

@@ -189,10 +189,10 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName1, keepAliveTTL), IsNil)
 	}()
 	// wait for source1 bound to worker1.
-	utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		bounds := s.BoundSources()
 		return len(bounds) == 1 && bounds[0] == sourceID1
-	})
+	}), IsTrue)
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
 	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName1))
 	// expect relay stage become Running after the first bound.
@@ -264,10 +264,10 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	cancel1()
 	wg.Wait()
 	// wait for source1 unbound from worker1.
-	utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
+	c.Assert(utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
 		unbounds := s.UnboundSources()
 		return len(unbounds) == 1 && unbounds[0] == sourceID1
-	})
+	}), IsTrue)
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
 	// static information are still there.
 	t.sourceCfgExist(c, s, sourceCfg1)
@@ -304,10 +304,10 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName1, keepAliveTTL), IsNil)
 	}()
 	// wait for source1 bound to worker1.
-	utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		bounds := s.BoundSources()
 		return len(bounds) == 1 && bounds[0] == sourceID1
-	})
+	}), IsTrue)
 	// source1 bound to worker1.
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
 	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName1))
@@ -349,10 +349,10 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 		c.Assert(ha.KeepAlive(ctx2, etcdTestCli, workerName2, keepAliveTTL), IsNil)
 	}()
 	// wait for worker2 become Free.
-	utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		w := s.GetWorkerByName(workerName2)
 		return w.Stage() == WorkerFree
-	})
+	}), IsTrue)
 	t.workerFree(c, s, workerName2)
 	rebuildScheduler(ctx)
 
@@ -444,11 +444,11 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	// cancel keep-alive.
 	cancel1()
 	// wait for worker1 become offline.
-	utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
+	c.Assert(utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
 		w := s.GetWorkerByName(workerName1)
 		c.Assert(w, NotNil)
 		return w.Stage() == WorkerOffline
-	})
+	}), IsTrue)
 	t.workerOffline(c, s, workerName1)
 	// source1 should bound to worker2.
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
@@ -482,11 +482,11 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	cancel2()
 	wg.Wait()
 	// wait for worker2 become offline.
-	utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
+	c.Assert(utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
 		w := s.GetWorkerByName(workerName2)
 		c.Assert(w, NotNil)
 		return w.Stage() == WorkerOffline
-	})
+	}), IsTrue)
 	t.workerOffline(c, s, workerName2)
 	// source1 should unbound
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
@@ -710,10 +710,10 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 	}()
 	// step 2.3: scheduler should bound source to worker
 	// wait for source1 bound to worker1.
-	utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		bounds := s.BoundSources()
 		return len(bounds) == 1 && bounds[0] == sourceID1
-	})
+	}), IsTrue)
 	checkSourceBoundCh := func() {
 		time.Sleep(300 * time.Millisecond)
 		c.Assert(sourceBoundCh, HasLen, 1)
