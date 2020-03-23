@@ -36,32 +36,38 @@ func GetJoinURLs(addrs string) []string {
 // JoinMaster let dm-worker join the cluster with the specified master endpoints.
 func (s *Server) JoinMaster(endpoints []string) error {
 	// TODO: grpc proxy
-	var client pb.MasterClient
-	for _, endpoint := range endpoints {
-		conn, err := grpc.Dial(endpoint, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
-		if err != nil {
-			return err
-		}
-		client = pb.NewMasterClient(conn)
-		break
-	}
-	if client == nil {
-		return errors.Errorf("cannot connect with master endpoints: %v", endpoints)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	req := &pb.RegisterWorkerRequest{
 		Name:    s.cfg.Name,
 		Address: s.cfg.AdvertiseAddr,
 	}
-	resp, err := client.RegisterWorker(ctx, req)
-	if err != nil {
-		return err
+
+	for _, endpoint := range endpoints {
+		ctx1, cancel1 := context.WithTimeout(ctx, 3*time.Second)
+		conn, err := grpc.DialContext(ctx1, endpoint, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+		cancel1()
+		if err != nil {
+			log.L().Error("fail to dial dm-master", zap.Error(err))
+			continue
+		}
+		client := pb.NewMasterClient(conn)
+		ctx1, cancel1 = context.WithTimeout(ctx, 3*time.Second)
+		resp, err := client.RegisterWorker(ctx1, req)
+		cancel1()
+		if err != nil {
+			log.L().Error("fail to register worker", zap.Error(err))
+			continue
+		}
+		if !resp.GetResult() {
+			log.L().Error("fail to register worker", zap.String("error", resp.Msg))
+			continue
+		}
+		return nil
 	}
-	if !resp.GetResult() {
-		return errors.Errorf("fail to register worker: %s", resp.GetMsg())
-	}
-	return nil
+	// TODO: use terror here
+	return errors.Errorf("cannot connect with master endpoints: %v", endpoints)
 }
 
 // KeepAlive attempts to keep the lease of the server alive forever.

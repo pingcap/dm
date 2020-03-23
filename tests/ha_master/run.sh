@@ -31,10 +31,25 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT4
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
 
+    # kill dm-master1 and dm-master2 to simulate the first two dm-master addr in join config are invalid
+    echo "kill dm-master1 and kill dm-master2"
+    ps aux | grep dm-master1 |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT1 20
+    ps aux | grep dm-master2 |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT2 20
+
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    # start dm_master1 and dm-master2 again
+    echo "start dm-master1 and dm-master2 again"
+    run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml
+    run_dm_master $WORK_DIR/master2 $MASTER_PORT2 $cur/conf/dm-master2.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
+
     echo "operate mysql config to worker"
     cp $cur/conf/source1.toml $WORK_DIR/source1.toml
     cp $cur/conf/source2.toml $WORK_DIR/source2.toml
