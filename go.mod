@@ -30,7 +30,7 @@ require (
 	github.com/pingcap/parser v0.0.0-20200305120128-bde9faa0df84
 	github.com/pingcap/pd/v4 v4.0.0-beta.1.0.20200305072537-61d9f9cc35d3
 	github.com/pingcap/tidb v1.1.0-beta.0.20200311125547-6c67561ee0df
-	github.com/pingcap/tidb-tools v4.0.0-beta.1.0.20200315095020-6bea09b23e42+incompatible
+	github.com/pingcap/tidb-tools v4.0.0-beta.2.0.20200323030733-8d3314c33a54+incompatible
 	github.com/prometheus/client_golang v1.2.1
 	github.com/prometheus/procfs v0.0.6 // indirect
 	github.com/rakyll/statik v0.1.6
@@ -60,5 +60,3 @@ require (
 )
 
 go 1.13
-
-replace github.com/pingcap/tidb-tools v4.0.0-beta.1.0.20200315095020-6bea09b23e42+incompatible => github.com/WangXiangUSTC/tidb-tools v3.0.13-0.20200317132248-41f80010eedd+incompatible

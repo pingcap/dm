@@ -13,8 +13,6 @@ github.com/PuerkitoBio/purell v1.1.1/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbt
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
 github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d h1:G0m3OIz70MZUWq3EgK3CesDbo8upS2Vm9/P3FtgI+Jk=
 github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d/go.mod h1:3eOhrUMpNV+6aFIbp5/iudMxNCF27Vw2OZgy4xEx0Fg=
-github.com/WangXiangUSTC/tidb-tools v3.0.13-0.20200317132248-41f80010eedd+incompatible h1:vAY27Vr7JHerCsuI5Z8DbQi2CyxXHi+NrwxQq7ur4kM=
-github.com/WangXiangUSTC/tidb-tools v3.0.13-0.20200317132248-41f80010eedd+incompatible/go.mod h1:D8Ujz5RB7WTEThouaR6MlIN8LqdG+/16cMw9tjbwGFI=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc h1:cAKDfWh5VpdgMhJosfJnn5/FoN2SRZ4p7fJNX58YPaU=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
@@ -368,6 +366,8 @@ github.com/pingcap/tidb v1.1.0-beta.0.20200311125547-6c67561ee0df h1:PADbR890puZ
 github.com/pingcap/tidb v1.1.0-beta.0.20200311125547-6c67561ee0df/go.mod h1:WTmfs5zrUGMPw3Enn5FI3buzkU8BDuJ6BhsO/JC239U=
 github.com/pingcap/tidb-tools v4.0.0-beta.1.0.20200306084441-875bd09aa3d5+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
 github.com/pingcap/tidb-tools v4.0.0-beta.1.0.20200306103835-530c669f7112+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
+github.com/pingcap/tidb-tools v4.0.0-beta.2.0.20200323030733-8d3314c33a54+incompatible h1:SCmsKoJNEq/VAgNKSqYk4waoPyvxqgilrSFARm/HCQo=
+github.com/pingcap/tidb-tools v4.0.0-beta.2.0.20200323030733-8d3314c33a54+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
 github.com/pingcap/tipb v0.0.0-20190428032612-535e1abaa330 h1:rRMLMjIMFulCX9sGKZ1hoov/iROMsKyC8Snc02nSukw=
 github.com/pingcap/tipb v0.0.0-20190428032612-535e1abaa330/go.mod h1:RtkHW8WbcNxj8lsbzjaILci01CtYnYbIkQhjyZWrWVI=
 github.com/pingcap/tipb v0.0.0-20200212061130-c4d518eb1d60 h1:aJPXrT1u4VfUSGFA2oQVwl4pOXzqe+YI6wed01cjDH4=
