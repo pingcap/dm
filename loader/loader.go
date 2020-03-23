@@ -807,6 +807,8 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 }
 
 func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
+	var tablesNumber float64
+
 	for file := range files {
 		if !strings.HasSuffix(file, "-schema.sql") {
 			continue
@@ -839,15 +841,18 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		if _, ok := tables[table]; ok {
 			return terror.ErrLoadUnitDuplicateTableFile.Generate(file)
 		}
-		tableCounter.WithLabelValues(l.cfg.Name).Inc()
+		tablesNumber++
 		tables[table] = make(DataFiles, 0, 16)
 		l.totalFileCount.Add(1) // for table
 	}
 
+	tableGauge.WithLabelValues(l.cfg.Name).Set(tablesNumber)
 	return nil
 }
 
 func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
+	var dataFilesNumber float64
+
 	for file := range files {
 		if !strings.HasSuffix(file, ".sql") || strings.Contains(file, "-schema.sql") ||
 			strings.Contains(file, "-schema-create.sql") {
@@ -892,11 +897,12 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 		l.totalFileCount.Add(1) // for data
 
 		dataFiles = append(dataFiles, file)
-		dataFileCounter.WithLabelValues(l.cfg.Name).Inc()
+		dataFilesNumber++
 		tables[table] = dataFiles
 	}
 
-	dataSizeCounter.WithLabelValues(l.cfg.Name).Add(float64(l.totalDataSize.Get()))
+	dataFileGauge.WithLabelValues(l.cfg.Name).Set(dataFilesNumber)
+	dataSizeGauge.WithLabelValues(l.cfg.Name).Set(float64(l.totalDataSize.Get()))
 	return nil
 }
 
