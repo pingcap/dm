@@ -12,6 +12,9 @@ API_VERSION="v1alpha1"
 function run_tidb_with_tls() {
     echo "run a new tidb server with tls"
     cat - > "$WORK_DIR/tidb-tls-config.toml" <<EOF
+[status]
+status-port = 10090
+
 [security]
 # set the path for certificates. Empty string means disabling secure connectoins.
 ssl-ca = "$cur/conf/ca.pem"
@@ -30,6 +33,7 @@ EOF
     --log-file "$WORK_DIR/tidb.log" &
 
     sleep 3
+    # if execute failed, print tidb's log for debug
     mysql -uroot -h127.0.0.1 -P4400 --default-character-set utf8 --ssl-ca $cur/conf/ca.pem --ssl-cert $cur/conf/dm.pem --ssl-key $cur/conf/dm.key -E -e "drop database if exists tls" || (cat $WORK_DIR/tidb.log && exit 1)
     mysql -uroot -h127.0.0.1 -P4400 --default-character-set utf8 --ssl-ca $cur/conf/ca.pem --ssl-cert $cur/conf/dm.pem --ssl-key $cur/conf/dm.key -E -e "drop database if exists dm_meta"
 }
