@@ -39,6 +39,12 @@ const (
 	subTaskSampleFile = "../../worker/subtask.toml"
 )
 
+const (
+	noRestart          = iota // do nothing in rebuildPessimist, just keep testing
+	restartOnly               // restart without building new instance. mock leader role transfer
+	restartNewInstance        // restart with build a new instance. mock progress restore from failure
+)
+
 var (
 	etcdTestCli      *clientv3.Client
 	etcdErrCompacted = v3rpc.ErrCompacted
@@ -70,11 +76,12 @@ var (
 )
 
 func (t *testScheduler) TestScheduler(c *C) {
-	t.testSchedulerProgress(c, false)
-	t.testSchedulerProgress(c, true)
+	t.testSchedulerProgress(c, noRestart)
+	t.testSchedulerProgress(c, restartOnly)
+	t.testSchedulerProgress(c, restartNewInstance)
 }
 
-func (t *testScheduler) testSchedulerProgress(c *C, rebuild bool) {
+func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	defer clearTestInfoOperation(c)
 
 	var (
@@ -95,9 +102,13 @@ func (t *testScheduler) testSchedulerProgress(c *C, rebuild bool) {
 		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
 
 		rebuildScheduler = func(ctx context.Context) {
-			if rebuild {
+			switch restart {
+			case restartOnly:
 				s.Close()
-				*s = *NewScheduler(&logger)
+				c.Assert(s.Start(ctx, etcdTestCli), IsNil)
+			case restartNewInstance:
+				s.Close()
+				s = NewScheduler(&logger)
 				c.Assert(s.Start(ctx, etcdTestCli), IsNil)
 			}
 		}
