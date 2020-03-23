@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/check"
 	"go.etcd.io/etcd/embed"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -377,4 +378,25 @@ func (t *testConfigSuite) TestAdjustAddr(c *check.C) {
 	cfg.MasterAddr = "127.0.0.1:8261"
 	c.Assert(cfg.adjust(), check.IsNil)
 	c.Assert(cfg.AdvertiseAddr, check.Equals, cfg.MasterAddr)
+
+	// check tls
+	cfg.Security = config.Security{
+		SSLCA:   "123",
+		SSLCert: "123",
+		SSLKey:  "123",
+	}
+
+	// PeerUrls and AdvertisePeerUrls all use http, not valid
+	cfg.PeerUrls = "http://127.0.0.1:123"
+	cfg.AdvertisePeerUrls = "http://127.0.0.1:123"
+	c.Assert(terror.ErrMasterPeerURLsNotValid.Equal(cfg.adjust()), check.IsTrue)
+
+	// AdvertisePeerUrls use http, not valid
+	cfg.PeerUrls = "https://127.0.0.1:123"
+	c.Assert(terror.ErrMasterAdvertisePeerURLsNotValid.Equal(cfg.adjust()), check.IsTrue)
+
+	// all use https, is valid
+	cfg.AdvertisePeerUrls = "https://127.0.0.1:123"
+	c.Assert(cfg.adjust(), check.IsNil)
+
 }
