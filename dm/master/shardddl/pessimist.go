@@ -67,7 +67,8 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.lk.Clear() // clear all previous locks to support re-Start.
+	p.cli = etcdCli // p.cli should be set before watching and recover locks because these operations need p.cli
+	p.lk.Clear()    // clear all previous locks to support re-Start.
 
 	// get the history shard DDL info.
 	// for the sequence of coordinate a shard DDL lock, see `/pkg/shardddl/pessimism/doc.go`.
@@ -126,7 +127,6 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 
 	p.closed = false // started now.
 	p.cancel = cancel
-	p.cli = etcdCli
 	p.logger.Info("the shard DDL pessimist has started")
 	return nil
 }
@@ -164,6 +164,11 @@ func (p *Pessimist) Locks() map[string]*pessimism.Lock {
 // NOTE: this function has side effects, if it failed, some status can't revert anymore.
 // NOTE: this function should not be called if the lock is still in automatic resolving.
 func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, forceRemove bool) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return terror.ErrMasterPessimistNotStarted.Generate()
+	}
 	// 1. find the lock.
 	lock := p.lk.FindLock(ID)
 	if lock == nil {
