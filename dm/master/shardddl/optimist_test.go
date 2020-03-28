@@ -429,3 +429,94 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(o.Locks(), HasLen, 0)
 	o.Close()
 }
+
+func (t *testOptimist) TestOptimistLockConflict(c *C) {
+	defer clearOptimistTestSourceInfoOperation(c)
+
+	var (
+		watchTimeout = 500 * time.Millisecond
+		logger       = log.L()
+		o            = NewOptimist(&logger)
+		task         = "task-test-optimist"
+		source1      = "mysql-replica-1"
+		downSchema   = "foo"
+		downTable    = "bar"
+		st1          = optimism.NewSourceTables(task, source1, map[string]map[string]struct{}{
+			"foo": {"bar-1": struct{}{}, "bar-2": struct{}{}},
+		})
+		p           = parser.New()
+		se          = mock.NewContext()
+		tblID int64 = 111
+		DDLs1       = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		DDLs2       = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME"}
+		DDLs3       = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		ti0         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
+		ti3         = ti0
+		i1          = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, ti1)
+		i2          = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs2, ti0, ti2)
+		i3          = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs3, ti2, ti3)
+	)
+
+	// put source tables first.
+	_, err := optimism.PutSourceTables(etcdTestCli, st1)
+	c.Assert(err, IsNil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(o.Locks(), HasLen, 0)
+
+	// PUT i1, will create a lock but not synced.
+	rev1, err := optimism.PutInfo(etcdTestCli, i1)
+	c.Assert(err, IsNil)
+	// wait operation for i1 become available.
+	opCh := make(chan optimism.Operation, 10)
+	errCh := make(chan error, 10)
+	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
+	optimism.WatchOperationPut(ctx2, etcdTestCli, i1.Task, i1.Source, i1.UpSchema, i1.UpTable, rev1, opCh, errCh)
+	cancel2()
+	close(opCh)
+	close(errCh)
+	c.Assert(len(opCh), Equals, 1)
+	op1 := <-opCh
+	c.Assert(op1.DDLs, DeepEquals, DDLs1)
+	c.Assert(op1.ConflictStage, Equals, optimism.ConflictNone)
+	c.Assert(len(errCh), Equals, 0)
+
+	// PUT i2, conflict will be detected.
+	rev2, err := optimism.PutInfo(etcdTestCli, i2)
+	c.Assert(err, IsNil)
+	// wait operation for i2 become available.
+	opCh = make(chan optimism.Operation, 10)
+	errCh = make(chan error, 10)
+	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
+	optimism.WatchOperationPut(ctx2, etcdTestCli, i2.Task, i2.Source, i2.UpSchema, i2.UpTable, rev2, opCh, errCh)
+	cancel2()
+	close(opCh)
+	close(errCh)
+	c.Assert(len(opCh), Equals, 1)
+	op2 := <-opCh
+	c.Assert(op2.DDLs, DeepEquals, []string{})
+	c.Assert(op2.ConflictStage, Equals, optimism.ConflictDetected)
+	c.Assert(len(errCh), Equals, 0)
+
+	// PUT i3, no conflict now.
+	rev3, err := optimism.PutInfo(etcdTestCli, i3)
+	c.Assert(err, IsNil)
+	// wait operation for i3 become available.
+	opCh = make(chan optimism.Operation, 10)
+	errCh = make(chan error, 10)
+	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
+	optimism.WatchOperationPut(ctx2, etcdTestCli, i3.Task, i3.Source, i3.UpSchema, i3.UpTable, rev3, opCh, errCh)
+	cancel2()
+	close(opCh)
+	close(errCh)
+	c.Assert(len(opCh), Equals, 1)
+	op3 := <-opCh
+	c.Assert(op3.DDLs, DeepEquals, []string{})
+	c.Assert(op3.ConflictStage, Equals, optimism.ConflictNone)
+	c.Assert(len(errCh), Equals, 0)
+}
