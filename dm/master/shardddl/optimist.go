@@ -328,7 +328,18 @@ func (o *Optimist) handleInfo(ctx context.Context, infoCh <-chan optimism.Info) 
 			added := o.tk.AddTable(info.Task, info.Source, info.UpSchema, info.UpTable)
 			o.logger.Debug("a table added for info", zap.Bool("added", added), zap.Stringer("info", info))
 
-			sts := o.tk.FindTables(info.Task) // TODO(csuzhangxc): handle sts is nil.
+			sts := o.tk.FindTables(info.Task)
+			if sts == nil {
+				// WATCH for SourceTables may fall behind WATCH for Info although PUT earlier,
+				// so we try to get SourceTables again.
+				// NOTE: check SourceTables for `info.Source` if needed later.
+				stm, _, err := optimism.GetAllSourceTables(o.cli)
+				if err != nil {
+					o.logger.Error("fail to get source tables", log.ShortError(err))
+				} else if stTask, ok := stm[info.Task]; ok {
+					sts = optimism.SourceTablesMapToSlice(stTask)
+				}
+			}
 			// put operation for the table. we don't set `skipDone=true` now,
 			// because in optimism mode, one table may execute/done multiple DDLs but other tables may do nothing.
 			err := o.handleLock(info, sts, false)

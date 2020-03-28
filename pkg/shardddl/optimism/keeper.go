@@ -198,13 +198,17 @@ func (tk *TableKeeper) FindTables(task string) []SourceTables {
 	tk.mu.RLock()
 	defer tk.mu.RUnlock()
 
-	sts, ok := tk.tables[task]
+	stm, ok := tk.tables[task]
 	if !ok {
 		return nil
 	}
+	return SourceTablesMapToSlice(stm)
+}
 
+// SourceTablesMapToSlice converts a map[string]SourceTables to []SourceTables.
+func SourceTablesMapToSlice(stm map[string]SourceTables) []SourceTables {
 	var ret SourceTablesSlice
-	for _, st := range sts {
+	for _, st := range stm {
 		ret = append(ret, st)
 	}
 	sort.Sort(ret)
