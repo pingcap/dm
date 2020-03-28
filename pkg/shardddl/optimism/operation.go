@@ -74,6 +74,12 @@ func NewOperation(ID, task, source, upSchema, upTable string,
 	}
 }
 
+// NewFakeOperationFromInfo creates a fake Operation instance from an Info instance.
+// NOTE: this function often used when handling `DROP TABLE` in DM-worker.
+func NewFakeOperationFromInfo(info Info) Operation {
+	return NewOperation(genDDLLockID(info), info.Task, info.Source, info.UpSchema, info.UpTable, info.DDLs, ConflictNone, false)
+}
+
 // String implements Stringer interface.
 func (o Operation) String() string {
 	s, _ := o.toJSON()

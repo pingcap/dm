@@ -56,7 +56,7 @@ func createTableInfo(c *C, p *parser.Parser, se sessionctx.Context, tableID int6
 	return info
 }
 
-func (t *testOptimist) testOptimistSourceTables(c *C) {
+func (t *testOptimist) TestOptimistSourceTables(c *C) {
 	defer clearOptimistTestSourceInfoOperation(c)
 
 	var (
@@ -155,6 +155,12 @@ func (t *testOptimist) TestOptimist(c *C) {
 		lockID       = fmt.Sprintf("%s-`%s`.`%s`", task, downSchema, downTable)
 		st1          = optimism.NewSourceTables(task, source1, map[string]map[string]struct{}{
 			"foo": {"bar-1": struct{}{}, "bar-2": struct{}{}},
+		})
+		st31 = optimism.NewSourceTables(task, source1, map[string]map[string]struct{}{
+			"foo": {"bar-1": struct{}{}},
+		})
+		st32 = optimism.NewSourceTables(task, source2, map[string]map[string]struct{}{
+			"foo-2": {"bar-3": struct{}{}},
 		})
 		p           = parser.New()
 		se          = mock.NewContext()
@@ -271,7 +277,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(opm, HasLen, 0)
 
 	// put another table info.
-	_, err = optimism.PutInfo(etcdTestCli, i21)
+	rev1, err = optimism.PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
 		return len(o.Locks()) == 1
@@ -281,8 +287,31 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
 
+	// wait operation for i21 become available.
+	opCh = make(chan optimism.Operation, 10)
+	errCh = make(chan error, 10)
+	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
+	optimism.WatchOperationPut(ctx2, etcdTestCli, i21.Task, i21.Source, i21.UpSchema, i21.UpTable, rev1, opCh, errCh)
+	cancel2()
+	close(opCh)
+	close(errCh)
+	c.Assert(len(opCh), Equals, 1)
+	op21 := <-opCh
+	c.Assert(op21.DDLs, DeepEquals, i21.DDLs)
+	c.Assert(op12.ConflictStage, Equals, optimism.ConflictNone)
+	c.Assert(len(errCh), Equals, 0)
+	o.Close()
+
+	// CASE 3: start again with some previous shard DDL info and the lock is un-synced.
+	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(o.Locks(), HasLen, 1)
+	c.Assert(o.Locks(), HasKey, lockID)
+	synced, remain = o.Locks()[lockID].IsSynced()
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+
 	// put table info for a new table (to simulate `CREATE TABLE`).
-	_, err = optimism.PutInfo(etcdTestCli, i23)
+	rev3, err := optimism.PutInfo(etcdTestCli, i23)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
 		ready := o.Locks()[lockID].Ready()
@@ -297,10 +326,36 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(sts[1].Tables, HasKey, i23.UpSchema)
 	c.Assert(sts[1].Tables[i23.UpSchema], HasKey, i23.UpTable)
 
+	// wait operation for i23 become available.
+	opCh = make(chan optimism.Operation, 10)
+	errCh = make(chan error, 10)
+	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
+	optimism.WatchOperationPut(ctx2, etcdTestCli, i23.Task, i23.Source, i23.UpSchema, i23.UpTable, rev3, opCh, errCh)
+	cancel2()
+	close(opCh)
+	close(errCh)
+	c.Assert(len(opCh), Equals, 1)
+	op23 := <-opCh
+	c.Assert(op23.DDLs, DeepEquals, i23.DDLs)
+	c.Assert(op23.ConflictStage, Equals, optimism.ConflictNone)
+	c.Assert(len(errCh), Equals, 0)
+
 	// delete i12 for a table (to simulate `DROP TABLE`), the lock should become synced again.
-	_, err = optimism.PutInfo(etcdTestCli, i12) // put i12 first to trigger DELETE for i12.
+	rev2, err = optimism.PutInfo(etcdTestCli, i12) // put i12 first to trigger DELETE for i12.
 	c.Assert(err, IsNil)
-	_, err = optimism.DeleteInfosOperations(etcdTestCli, []optimism.Info{i12}, nil)
+	// wait until operation for i12 ready.
+	opCh = make(chan optimism.Operation, 10)
+	errCh = make(chan error, 10)
+	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
+	optimism.WatchOperationPut(ctx2, etcdTestCli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, opCh, errCh)
+	cancel2()
+	close(opCh)
+	close(errCh)
+	c.Assert(len(opCh), Equals, 1)
+	c.Assert(len(errCh), Equals, 0)
+
+	op12Prev := optimism.NewFakeOperationFromInfo(i12)
+	_, err = optimism.DeleteInfosOperations(etcdTestCli, []optimism.Info{i12}, []optimism.Operation{op12Prev})
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
 		synced, _ = o.Locks()[lockID].IsSynced()
@@ -314,4 +369,63 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(sts[1].Source, Equals, source2)
 	c.Assert(sts[1].Tables, HasLen, 1)
 	c.Assert(sts[1].Tables[i23.UpSchema], HasKey, i23.UpTable)
+	c.Assert(o.Locks()[lockID].IsResolved(), IsFalse)
+	c.Assert(o.Locks()[lockID].IsDone(i21.Source, i21.UpSchema, i21.UpTable), IsFalse)
+	c.Assert(o.Locks()[lockID].IsDone(i23.Source, i23.UpSchema, i23.UpTable), IsFalse)
+	o.Close()
+
+	// CASE 4: start again with some previous shard DDL info and non-`done` operation.
+	// updated source tables before optimist started to match the real persistent source tables.
+	_, err = optimism.PutSourceTables(etcdTestCli, st31)
+	c.Assert(err, IsNil)
+	_, err = optimism.PutSourceTables(etcdTestCli, st32)
+	c.Assert(err, IsNil)
+
+	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(o.Locks(), HasLen, 1)
+	c.Assert(o.Locks(), HasKey, lockID)
+	synced, remain = o.Locks()[lockID].IsSynced()
+	c.Assert(synced, IsTrue)
+	c.Assert(remain, Equals, 0)
+	c.Assert(o.Locks()[lockID].IsDone(i21.Source, i21.UpSchema, i21.UpTable), IsFalse)
+	c.Assert(o.Locks()[lockID].IsDone(i23.Source, i23.UpSchema, i23.UpTable), IsFalse)
+
+	// mark op21 as done.
+	op21c := op21
+	op21c.Done = true
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op21c)
+	c.Assert(err, IsNil)
+	c.Assert(putted, IsTrue)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		return o.Locks()[lockID].IsDone(i21.Source, i21.UpSchema, i21.UpTable)
+	}), IsTrue)
+	o.Close()
+
+	// CASE 5: start again with some previous shard DDL info and `done` operation.
+	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(o.Locks(), HasLen, 1)
+	c.Assert(o.Locks(), HasKey, lockID)
+	synced, remain = o.Locks()[lockID].IsSynced()
+	c.Assert(synced, IsTrue)
+	c.Assert(remain, Equals, 0)
+	c.Assert(o.Locks()[lockID].IsDone(i21.Source, i21.UpSchema, i21.UpTable), IsTrue)
+	c.Assert(o.Locks()[lockID].IsDone(i23.Source, i23.UpSchema, i23.UpTable), IsFalse)
+
+	// mark op23 as done.
+	op23c := op23
+	op23c.Done = true
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op23c)
+	c.Assert(err, IsNil)
+	c.Assert(putted, IsTrue)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		_, ok := o.Locks()[lockID]
+		return !ok
+	}), IsTrue)
+	c.Assert(o.Locks(), HasLen, 0)
+	o.Close()
+
+	// CASE 6: start again after all shard DDL locks have been resolved.
+	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(o.Locks(), HasLen, 0)
+	o.Close()
 }
