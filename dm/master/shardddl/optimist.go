@@ -348,11 +348,10 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 
 			// the lock has done, remove the lock.
 			o.logger.Info("the lock for the shard DDL lock operation has been resolved", zap.Stringer("operation", op))
-			err := o.deleteInfosOps(lock)
+			err := o.removeLock(lock)
 			if err != nil {
 				o.logger.Error("fail to delete the shard DDL infos and lock operations", zap.String("lock", lock.ID), log.ShortError(err))
 			}
-			o.lk.RemoveLock(lock.ID)
 			o.logger.Info("the shard DDL infos and lock operations have been cleared", zap.Stringer("operation", op))
 		}
 	}
@@ -368,7 +367,11 @@ func (o *Optimist) handleLock(lockID string, info optimism.Info, newDDLs []strin
 	// check whether the lock has resolved.
 	if lock.IsResolved() {
 		// remove all operations for this shard DDL lock.
-		// TODO(csuzhangxc:) remove lock in memory and in etcd.
+		// this is to handle the case where dm-master exit before deleting operations for them.
+		err := o.removeLock(lock)
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -381,6 +384,16 @@ func (o *Optimist) handleLock(lockID string, info optimism.Info, newDDLs []strin
 	}
 	o.logger.Info("put shard DDL lock operation", zap.String("lock", lockID),
 		zap.Stringer("operation", op), zap.Bool("already exist", !succ), zap.Int64("revision", rev))
+	return nil
+}
+
+// removeLock removes the lock in memory and its information in etcd.
+func (o *Optimist) removeLock(lock *optimism.Lock) error {
+	err := o.deleteInfosOps(lock)
+	if err != nil {
+		return err
+	}
+	o.lk.RemoveLock(lock.ID)
 	return nil
 }
 
