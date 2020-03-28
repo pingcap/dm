@@ -297,18 +297,20 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(sts[1].Tables, HasKey, i23.UpSchema)
 	c.Assert(sts[1].Tables[i23.UpSchema], HasKey, i23.UpTable)
 
-	// delete i21 for a table (to simulate `DROP TABLE`).
-	_, err = optimism.DeleteInfosOperations(etcdTestCli, []optimism.Info{i21}, nil)
+	// delete i12 for a table (to simulate `DROP TABLE`), the lock should become synced again.
+	_, err = optimism.PutInfo(etcdTestCli, i12) // put i12 first to trigger DELETE for i12.
+	c.Assert(err, IsNil)
+	_, err = optimism.DeleteInfosOperations(etcdTestCli, []optimism.Info{i12}, nil)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
-		ready := o.Locks()[lockID].Ready()
-		return len(ready) == 2
+		synced, _ = o.Locks()[lockID].IsSynced()
+		return synced
 	}), IsTrue)
 	sts = o.tk.FindTables(task)
 	c.Assert(sts, HasLen, 2)
 	c.Assert(sts[0].Source, Equals, source1)
 	c.Assert(sts[0].Tables, HasLen, 1)
-	c.Assert(sts[0].Tables[i12.UpSchema], HasKey, i12.UpTable)
+	c.Assert(sts[0].Tables[i21.UpSchema], HasKey, i21.UpTable)
 	c.Assert(sts[1].Source, Equals, source2)
 	c.Assert(sts[1].Tables, HasLen, 1)
 	c.Assert(sts[1].Tables[i23.UpSchema], HasKey, i23.UpTable)

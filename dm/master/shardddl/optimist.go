@@ -303,7 +303,6 @@ func (o *Optimist) handleInfo(ctx context.Context, infoCh <-chan optimism.Info) 
 				o.logger.Info("the shard DDL lock returned some DDLs",
 					zap.String("lock", lockID), zap.Strings("ddls", newDDLs), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted))
 			}
-			// TODO(csuzhangxc): handle CREATE/DROP table.
 			err = o.handleLock(lockID, info, newDDLs, cfStage)
 			if err != nil {
 				// TODO: add & update metrics.
