@@ -139,6 +139,12 @@ func (t *testOptimist) TestOptimistSourceTables(c *C) {
 }
 
 func (t *testOptimist) TestOptimist(c *C) {
+	t.testOptimist(c, noRestart)
+	t.testOptimist(c, restartOnly)
+	t.testOptimist(c, restartNewInstance)
+}
+
+func (t *testOptimist) testOptimist(c *C, restart int) {
 	defer clearOptimistTestSourceInfoOperation(c)
 
 	var (
@@ -147,13 +153,26 @@ func (t *testOptimist) TestOptimist(c *C) {
 		watchTimeout = 500 * time.Millisecond
 		logger       = log.L()
 		o            = NewOptimist(&logger)
-		task         = "task-test-optimist"
-		source1      = "mysql-replica-1"
-		source2      = "mysql-replica-2"
-		downSchema   = "foo"
-		downTable    = "bar"
-		lockID       = fmt.Sprintf("%s-`%s`.`%s`", task, downSchema, downTable)
-		st1          = optimism.NewSourceTables(task, source1, map[string]map[string]struct{}{
+
+		rebuildOptimist = func(ctx context.Context) {
+			switch restart {
+			case restartOnly:
+				o.Close()
+				c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+			case restartNewInstance:
+				o.Close()
+				o = NewOptimist(&logger)
+				c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+			}
+		}
+
+		task       = "task-test-optimist"
+		source1    = "mysql-replica-1"
+		source2    = "mysql-replica-2"
+		downSchema = "foo"
+		downTable  = "bar"
+		lockID     = fmt.Sprintf("%s-`%s`.`%s`", task, downSchema, downTable)
+		st1        = optimism.NewSourceTables(task, source1, map[string]map[string]struct{}{
 			"foo": {"bar-1": struct{}{}, "bar-2": struct{}{}},
 		})
 		st31 = optimism.NewSourceTables(task, source1, map[string]map[string]struct{}{
@@ -300,10 +319,9 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(op21.DDLs, DeepEquals, i21.DDLs)
 	c.Assert(op12.ConflictStage, Equals, optimism.ConflictNone)
 	c.Assert(len(errCh), Equals, 0)
-	o.Close()
 
 	// CASE 3: start again with some previous shard DDL info and the lock is un-synced.
-	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	rebuildOptimist(ctx)
 	c.Assert(o.Locks(), HasLen, 1)
 	c.Assert(o.Locks(), HasKey, lockID)
 	synced, remain = o.Locks()[lockID].IsSynced()
@@ -372,7 +390,6 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(o.Locks()[lockID].IsResolved(), IsFalse)
 	c.Assert(o.Locks()[lockID].IsDone(i21.Source, i21.UpSchema, i21.UpTable), IsFalse)
 	c.Assert(o.Locks()[lockID].IsDone(i23.Source, i23.UpSchema, i23.UpTable), IsFalse)
-	o.Close()
 
 	// CASE 4: start again with some previous shard DDL info and non-`done` operation.
 	// updated source tables before optimist started to match the real persistent source tables.
@@ -381,7 +398,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	_, err = optimism.PutSourceTables(etcdTestCli, st32)
 	c.Assert(err, IsNil)
 
-	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	rebuildOptimist(ctx)
 	c.Assert(o.Locks(), HasLen, 1)
 	c.Assert(o.Locks(), HasKey, lockID)
 	synced, remain = o.Locks()[lockID].IsSynced()
@@ -399,10 +416,9 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
 		return o.Locks()[lockID].IsDone(i21.Source, i21.UpSchema, i21.UpTable)
 	}), IsTrue)
-	o.Close()
 
 	// CASE 5: start again with some previous shard DDL info and `done` operation.
-	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	rebuildOptimist(ctx)
 	c.Assert(o.Locks(), HasLen, 1)
 	c.Assert(o.Locks(), HasKey, lockID)
 	synced, remain = o.Locks()[lockID].IsSynced()
@@ -422,10 +438,9 @@ func (t *testOptimist) TestOptimist(c *C) {
 		return !ok
 	}), IsTrue)
 	c.Assert(o.Locks(), HasLen, 0)
-	o.Close()
 
 	// CASE 6: start again after all shard DDL locks have been resolved.
-	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	rebuildOptimist(ctx)
 	c.Assert(o.Locks(), HasLen, 0)
 	o.Close()
 }

@@ -58,17 +58,14 @@ func (o *Optimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
+	o.cli = etcdCli // o.cli should be set before watching and recover locks because these operations need o.cli
+
 	revSource, revInfo, revOperation, err := o.rebuildLocks(etcdCli)
 	if err != nil {
 		return err
 	}
 
 	ctx, cancel := context.WithCancel(pCtx)
-
-	o.closed = false // started now, no error will interrupt the start process.
-	o.cancel = cancel
-	o.cli = etcdCli
-	o.logger.Info("the shard DDL optimist has started")
 
 	o.wg.Add(1)
 	go func() {
@@ -77,6 +74,9 @@ func (o *Optimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error {
 		o.run(ctx, etcdCli, revSource, revInfo, revOperation)
 	}()
 
+	o.closed = false // started now, no error will interrupt the start process.
+	o.cancel = cancel
+	o.logger.Info("the shard DDL optimist has started")
 	return nil
 }
 
