@@ -142,14 +142,17 @@ func (t *testOptimist) TestOptimist(c *C) {
 	defer clearOptimistTestSourceInfoOperation(c)
 
 	var (
+		backOff      = 30
+		waitTime     = 100 * time.Millisecond
 		watchTimeout = 500 * time.Millisecond
 		logger       = log.L()
 		o            = NewOptimist(&logger)
 		task         = "task-test-optimist"
 		source1      = "mysql-replica-1"
+		source2      = "mysql-replica-2"
 		downSchema   = "foo"
 		downTable    = "bar"
-		ID1          = fmt.Sprintf("%s-`%s`.`%s`", task, downSchema, downTable)
+		lockID       = fmt.Sprintf("%s-`%s`.`%s`", task, downSchema, downTable)
 		st1          = optimism.NewSourceTables(task, source1, map[string]map[string]struct{}{
 			"foo": {"bar-1": struct{}{}, "bar-2": struct{}{}},
 		})
@@ -157,10 +160,15 @@ func (t *testOptimist) TestOptimist(c *C) {
 		se          = mock.NewContext()
 		tblID int64 = 111
 		DDLs1       = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		DDLs2       = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
 		ti0         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
 		ti1         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
 		i11         = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, ti1)
 		i12         = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs1, ti0, ti1)
+		i21         = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs2, ti1, ti2)
+		i23         = optimism.NewInfo(task, source2, "foo-2", "bar-3", downSchema, downTable,
+			[]string{`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`}, ti2, ti2)
 	)
 
 	// put source tables first.
@@ -183,11 +191,11 @@ func (t *testOptimist) TestOptimist(c *C) {
 	// PUT i11, will create a lock but not synced.
 	rev1, err := optimism.PutInfo(etcdTestCli, i11)
 	c.Assert(err, IsNil)
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
 		return len(o.Locks()) == 1
 	}), IsTrue)
-	c.Assert(o.Locks(), HasKey, ID1)
-	synced, remain := o.Locks()[ID1].IsSynced()
+	c.Assert(o.Locks(), HasKey, lockID)
+	synced, remain := o.Locks()[lockID].IsSynced()
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
 
@@ -208,8 +216,8 @@ func (t *testOptimist) TestOptimist(c *C) {
 	// PUT i12, the lock will be synced.
 	rev2, err := optimism.PutInfo(etcdTestCli, i12)
 	c.Assert(err, IsNil)
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		synced, _ = o.Locks()[ID1].IsSynced()
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		synced, _ = o.Locks()[lockID].IsSynced()
 		return synced
 	}), IsTrue)
 
@@ -233,14 +241,14 @@ func (t *testOptimist) TestOptimist(c *C) {
 	_, putted, err := optimism.PutOperation(etcdTestCli, false, op11c)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		lock := o.Locks()[ID1]
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		lock := o.Locks()[lockID]
 		if lock == nil {
 			return false
 		}
 		return lock.IsDone(op11.Source, op11.UpSchema, op11.UpTable)
 	}), IsTrue)
-	c.Assert(o.Locks()[ID1].IsDone(op12.Source, op12.UpSchema, op12.UpTable), IsFalse)
+	c.Assert(o.Locks()[lockID].IsDone(op12.Source, op12.UpSchema, op12.UpTable), IsFalse)
 
 	// mark op12 as done, the lock should be resolved.
 	op12c := op12
@@ -248,12 +256,11 @@ func (t *testOptimist) TestOptimist(c *C) {
 	_, putted, err = optimism.PutOperation(etcdTestCli, false, op12c)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		_, ok := o.Locks()[ID1]
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		_, ok := o.Locks()[lockID]
 		return !ok
 	}), IsTrue)
 	c.Assert(o.Locks(), HasLen, 0)
-	o.Close()
 
 	// no shard DDL info or lock operation exists.
 	ifm, _, err := optimism.GetAllInfo(etcdTestCli)
@@ -262,4 +269,47 @@ func (t *testOptimist) TestOptimist(c *C) {
 	opm, _, err := optimism.GetAllOperations(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(opm, HasLen, 0)
+
+	// put another table info.
+	_, err = optimism.PutInfo(etcdTestCli, i21)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		return len(o.Locks()) == 1
+	}), IsTrue)
+	c.Assert(o.Locks(), HasKey, lockID)
+	synced, remain = o.Locks()[lockID].IsSynced()
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+
+	// put table info for a new table (to simulate `CREATE TABLE`).
+	_, err = optimism.PutInfo(etcdTestCli, i23)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		ready := o.Locks()[lockID].Ready()
+		return ready[source2][i23.UpSchema][i23.UpTable]
+	}), IsTrue)
+	synced, remain = o.Locks()[lockID].IsSynced()
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+	sts := o.tk.FindTables(task)
+	c.Assert(sts, HasLen, 2)
+	c.Assert(sts[1].Source, Equals, source2)
+	c.Assert(sts[1].Tables, HasKey, i23.UpSchema)
+	c.Assert(sts[1].Tables[i23.UpSchema], HasKey, i23.UpTable)
+
+	// delete i21 for a table (to simulate `DROP TABLE`).
+	_, err = optimism.DeleteInfosOperations(etcdTestCli, []optimism.Info{i21}, nil)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		ready := o.Locks()[lockID].Ready()
+		return len(ready) == 2
+	}), IsTrue)
+	sts = o.tk.FindTables(task)
+	c.Assert(sts, HasLen, 2)
+	c.Assert(sts[0].Source, Equals, source1)
+	c.Assert(sts[0].Tables, HasLen, 1)
+	c.Assert(sts[0].Tables[i12.UpSchema], HasKey, i12.UpTable)
+	c.Assert(sts[1].Source, Equals, source2)
+	c.Assert(sts[1].Tables, HasLen, 1)
+	c.Assert(sts[1].Tables[i23.UpSchema], HasKey, i23.UpTable)
 }

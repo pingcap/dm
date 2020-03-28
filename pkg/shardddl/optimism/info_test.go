@@ -189,10 +189,8 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	close(ech)
 	c.Assert(len(wch), Equals, 1)
 	info := <-wch
-	c.Assert(info.IsDeleted, IsTrue)
-	c.Assert(info.Task, Equals, i12.Task)
-	c.Assert(info.Source, Equals, i12.Source)
-	c.Assert(info.UpSchema, Equals, i12.UpSchema)
-	c.Assert(info.UpTable, Equals, i12.UpTable)
+	i12c := i12
+	i12c.IsDeleted = true
+	c.Assert(info, DeepEquals, i12c)
 	c.Assert(len(ech), Equals, 0)
 }

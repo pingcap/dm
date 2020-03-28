@@ -145,8 +145,9 @@ func GetAllInfo(cli *clientv3.Client) (map[string]map[string]map[string]map[stri
 // This function should often be called by DM-master.
 func WatchInfo(ctx context.Context, cli *clientv3.Client, revision int64,
 	outCh chan<- Info, errCh chan<- error) {
+	// NOTE: WithPrevKV used to get a valid `ev.PrevKv` for deletion.
 	ch := cli.Watch(ctx, common.ShardDDLOptimismInfoKeyAdapter.Path(),
-		clientv3.WithPrefix(), clientv3.WithRev(revision))
+		clientv3.WithPrefix(), clientv3.WithRev(revision), clientv3.WithPrevKV())
 
 	for {
 		select {
@@ -171,7 +172,7 @@ func WatchInfo(ctx context.Context, cli *clientv3.Client, revision int64,
 				case mvccpb.PUT:
 					info, err = infoFromJSON(string(ev.Kv.Value))
 				case mvccpb.DELETE:
-					info, err = infoFromKey(string(ev.Kv.Key))
+					info, err = infoFromJSON(string(ev.PrevKv.Value))
 					info.IsDeleted = true
 				default:
 					// this should not happen.
@@ -194,20 +195,6 @@ func WatchInfo(ctx context.Context, cli *clientv3.Client, revision int64,
 			}
 		}
 	}
-}
-
-// infoFromKey constructs an incomplete Info from an etcd key.
-func infoFromKey(key string) (Info, error) {
-	var info Info
-	ks, err := common.ShardDDLOptimismInfoKeyAdapter.Decode(key)
-	if err != nil {
-		return info, err
-	}
-	info.Task = ks[0]
-	info.Source = ks[1]
-	info.UpSchema = ks[2]
-	info.UpTable = ks[3]
-	return info, nil
 }
 
 // putInfoOp returns a PUT etcd operation for Info.

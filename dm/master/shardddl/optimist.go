@@ -275,12 +275,22 @@ func (o *Optimist) handleInfo(ctx context.Context, infoCh <-chan optimism.Info) 
 
 			if info.IsDeleted {
 				lock := o.lk.FindLockByInfo(info)
-				if lock == nil || lock.IsResolved() {
-					// special case for deleting shard DDL infos and lock operations after the lock resolved.
-					o.logger.Debug("ignore a shard DDL info deletion after it has been resolved", zap.Stringer("info", info))
+				if lock == nil {
+					// this often happen after the lock resolved.
+					o.logger.Debug("lock for info not found", zap.Stringer("info", info))
 					continue
 				}
+				// handle `DROP TABLE`, need to remove the table schema from the lock,
+				// and remove the table name from table keeper.
+				removed := lock.TryRemoveTable(info.Source, info.UpSchema, info.UpTable)
+				o.logger.Debug("the table name remove from the table keeper", zap.Bool("removed", removed), zap.Stringer("info", info))
+				removed = o.tk.RemoveTable(info.Task, info.Source, info.UpSchema, info.UpTable)
+				o.logger.Debug("a table removed for info from the lock", zap.Bool("removed", removed), zap.Stringer("info", info))
+				continue
 			}
+
+			added := o.tk.AddTable(info.Task, info.Source, info.UpSchema, info.UpTable)
+			o.logger.Debug("a table added for info", zap.Bool("added", added), zap.Stringer("info", info))
 
 			sts := o.tk.FindTables(info.Task) // TODO(csuzhangxc): handle sts is nil.
 			lockID, newDDLs, err := o.lk.TrySync(info, sts)

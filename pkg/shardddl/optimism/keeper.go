@@ -158,7 +158,7 @@ func (tk *TableKeeper) Update(st SourceTables) bool {
 
 // AddTable adds a table into the source tables.
 // it returns whether added (not exist before).
-// NOTE: we only add for existing <task, source> now.
+// NOTE: we only add for existing task now.
 func (tk *TableKeeper) AddTable(task, source, schema, table string) bool {
 	tk.mu.Lock()
 	defer tk.mu.Unlock()
@@ -167,7 +167,7 @@ func (tk *TableKeeper) AddTable(task, source, schema, table string) bool {
 		return false
 	}
 	if _, ok := tk.tables[task][source]; !ok {
-		return false
+		tk.tables[task][source] = NewSourceTables(task, source, map[string]map[string]struct{}{})
 	}
 	st := tk.tables[task][source]
 	added := st.AddTable(schema, table)
