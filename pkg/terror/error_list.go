@@ -188,6 +188,7 @@ const (
 	codeConfigSyncerCfgNotFound
 	codeConfigSourceIDNotFound
 	codeConfigDuplicateCfgItem
+	codeConfigShardModeNotSupport
 )
 
 // Binlog operation error code list
@@ -713,6 +714,7 @@ var (
 	ErrConfigSyncerCfgNotFound      = New(codeConfigSyncerCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s syncer config %s not exist in syncer")
 	ErrConfigSourceIDNotFound       = New(codeConfigSourceIDNotFound, ClassConfig, ScopeInternal, LevelMedium, "source %s in deployment configuration not found")
 	ErrConfigDuplicateCfgItem       = New(codeConfigDuplicateCfgItem, ClassConfig, ScopeInternal, LevelMedium, "the following mysql configs have duplicate items, please remove the duplicates:\n%s")
+	ErrConfigShardModeNotSupport    = New(codeConfigShardModeNotSupport, ClassConfig, ScopeInternal, LevelMedium, "shard mode %s not supported")
 
 	// Binlog operation error
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "")
