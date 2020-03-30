@@ -329,7 +329,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	c.Assert(remain, Equals, 1)
 
 	// put table info for a new table (to simulate `CREATE TABLE`).
-	rev3, err := optimism.PutInfo(etcdTestCli, i23)
+	rev3, err := optimism.PutSourceTablesInfo(etcdTestCli, st32, i23)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
 		ready := o.Locks()[lockID].Ready()
@@ -372,8 +372,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	c.Assert(len(opCh), Equals, 1)
 	c.Assert(len(errCh), Equals, 0)
 
-	op12Prev := optimism.NewFakeOperationFromInfo(i12)
-	_, err = optimism.DeleteInfosOperations(etcdTestCli, []optimism.Info{i12}, []optimism.Operation{op12Prev})
+	_, err = optimism.PutSourceTablesDeleteInfo(etcdTestCli, st31, i12)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
 		synced, _ = o.Locks()[lockID].IsSynced()
@@ -392,12 +391,6 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	c.Assert(o.Locks()[lockID].IsDone(i23.Source, i23.UpSchema, i23.UpTable), IsFalse)
 
 	// CASE 4: start again with some previous shard DDL info and non-`done` operation.
-	// updated source tables before optimist started to match the real persistent source tables.
-	_, err = optimism.PutSourceTables(etcdTestCli, st31)
-	c.Assert(err, IsNil)
-	_, err = optimism.PutSourceTables(etcdTestCli, st32)
-	c.Assert(err, IsNil)
-
 	rebuildOptimist(ctx)
 	c.Assert(o.Locks(), HasLen, 1)
 	c.Assert(o.Locks(), HasKey, lockID)
