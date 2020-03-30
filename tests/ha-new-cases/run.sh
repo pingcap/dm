@@ -24,8 +24,8 @@ function test_running() {
     run_sql "flush logs;" $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     echo "apply increment data before restart dm-worker to ensure entering increment phase"
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+    run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
+    run_sql_file_withdb $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test
 
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -45,14 +45,12 @@ function test_multi_task_running() {
     echo "flush logs to force rotate binlog file"
     run_sql "flush logs;" $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql "flush logs;" $MYSQL_PORT2 $MYSQL_PASSWORD2
-    run_sql "flush logs;" $MYSQL_PORT3 $MYSQL_PASSWORD3
-    run_sql "flush logs;" $MYSQL_PORT4 $MYSQL_PASSWORD4
 
     echo "apply increment data before restart dm-worker to ensure entering increment phase"
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST3 $MYSQL_PORT3 $MYSQL_PASSWORD3
-    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST4 $MYSQL_PORT4 $MYSQL_PASSWORD4
+    run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
+    run_sql_file_withdb $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test
+    run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test2
+    run_sql_file_withdb $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test2
 
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
@@ -461,8 +459,9 @@ function test_isolate_master() {
 
 
 function run() {
-    test_join_masters
-
+    test_running
+    test_multi_task_running
+    # test_join_masters
     # test_multi_task_reduce_worker
     test_isolate_master follower
     # test_pause_task
