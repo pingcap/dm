@@ -66,13 +66,13 @@ function test_join_masters {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
     run_dm_master $WORK_DIR/master-join2 $MASTER_PORT2 $cur/conf/dm-master-join2.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
-    sleep 2
+    sleep 5
     run_dm_master $WORK_DIR/master-join3 $MASTER_PORT3 $cur/conf/dm-master-join3.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3
-    sleep 2
+    sleep 5
     run_dm_master $WORK_DIR/master-join4 $MASTER_PORT4 $cur/conf/dm-master-join4.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT4
-    sleep 2
+    sleep 5
     run_dm_master $WORK_DIR/master-join5 $MASTER_PORT5 $cur/conf/dm-master-join5.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
 
@@ -145,8 +145,8 @@ function test_kill_worker() {
         "query-status test" \
         "\"stage\": \"Running\"" 2
 
-    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+    run_sql_file_withdb $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
+    run_sql_file_withdb $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test
     sleep 2
 
     echo "use sync_diff_inspector to check increment2 data now!"
@@ -166,16 +166,16 @@ function test_kill_master_in_sync() {
 
     sleep 1
 
-    ps aux | grep dm-master1 |awk '{print $2}'|xargs kill || true
-    check_port_offline $MASTER_PORT1 20
+    ps aux | grep dm-master2 |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT2 20
 
     run_dm_worker $WORK_DIR/worker4 $WORKER4_PORT $cur/conf/dm-worker4.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER4_PORT
 
     echo "wait and check task running"
     sleep 1
-    check_http_alive 127.0.0.1:$MASTER_PORT2/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
+    check_http_alive 127.0.0.1:$MASTER_PORT1/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
         "\"stage\": \"Running\"" 2
 
@@ -188,7 +188,7 @@ function test_kill_master_in_sync() {
 
     # WARN: run ddl sqls spent so long
     sleep 300
-    echo $(dmctl --master-addr "127.0.0.1:$MASTER_PORT2" query-status test)
+    echo $(dmctl --master-addr "127.0.0.1:$MASTER_PORT1" query-status test)
 
     echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -425,9 +425,9 @@ function test_isolate_master() {
 
 
 function run() {
-    test_join_masters
-    test_kill_master
-    test_kill_worker
+    # test_join_masters
+    # test_kill_master
+    # test_kill_worker
     test_kill_master_in_sync
     test_kill_worker_in_sync
     test_standalone_running

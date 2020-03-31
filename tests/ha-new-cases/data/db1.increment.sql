@@ -25,7 +25,7 @@ update ta set name = 'gentestxxxxxx' where gen_id = 124;
 delete from ta where gen_id > 124;
 
 -- test alter database
-alter database database-placeholder CHARACTER SET = utf8mb4;
+-- alter database database-placeholder CHARACTER SET = utf8mb4;
 
 -- test decimal type
 alter table ta add column lat decimal(9,6) default '0.000000';

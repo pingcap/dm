@@ -21,7 +21,7 @@ function start_random_sql_to() {
     if [ $3 = 1 ]; then
         bin="pocketb"
     fi
-    eval "${bin} -dsn1 \"${dsn}\" -config \"$cur/conf/$config_name\" > /var/log/tipoket.run.log 2>&1 &"
+    eval "${bin} -dsn1 \"${dsn}\" -config \"$cur/conf/$config_name\" > $WORK_DIR/tipoket.run.log 2>&1 &"
     pid=$!
     # return pocket's pid for being killed in future
     echo $pid
@@ -35,9 +35,9 @@ function run_sql_file_withdb() {
     port=$3
     pswd=$4
     db=$5
-    cp $cur/data/$sql $WORK_DIR/$sql
-    sed -i "s/database-placeholder/$db/g" $WORK_DIR/$sql
-    run_sql_file $WORK_DIR/$sql $host $port $pswd
+    cp $sql $WORK_DIR/data.sql
+    sed -i "s/database-placeholder/$db/g" $WORK_DIR/data.sql
+    run_sql_file $WORK_DIR/data.sql $host $port $pswd
 }
 
 # build tables etc.
