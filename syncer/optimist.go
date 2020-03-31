@@ -48,8 +48,6 @@ func (s *Syncer) handleQueryEventOptimistic(
 	ev *replication.QueryEvent, ec eventContext,
 	needHandleDDLs []string, needTrackDDLs []trackedDDL,
 	onlineDDLTableNames map[string]*filter.Table) error {
-	s.tctx.L().Info("start to handle ddls in optimistic shard mode", zap.Strings("ddls", needHandleDDLs))
-
 	// wait previous DMLs to be replicated
 	s.jobWg.Wait()
 
@@ -93,7 +91,8 @@ func (s *Syncer) handleQueryEventOptimistic(
 	}
 
 	s.tctx.L().Info("save table checkpoint", zap.String("event", "query"),
-		zap.String("schema", upSchema), zap.String("table", upTable), log.WrapStringerField("location", ec.currentLocation))
+		zap.String("schema", upSchema), zap.String("table", upTable),
+		zap.Strings("ddls", needHandleDDLs), log.WrapStringerField("location", ec.currentLocation))
 	s.saveTablePoint(upSchema, upTable, ec.currentLocation.Clone())
 
 	info := s.optimist.ConstructInfo(upSchema, upTable, downSchema, downTable, needHandleDDLs, tiBefore, tiAfter)
@@ -125,6 +124,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 			return err
 		}
 	}
+	s.tctx.L().Info("putted a shard DDL info into etcd", zap.Stringer("info", info))
 
 	var op optimism.Operation
 	if !skipOp {
@@ -133,6 +133,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 			return err
 		}
 	}
+	s.tctx.L().Info("got a shard DDL lock operation", zap.Stringer("operation", op))
 
 	if op.ConflictStage == optimism.ConflictDetected {
 		return terror.ErrSyncerShardDDLConflict.Generate(needHandleDDLs)
@@ -152,7 +153,13 @@ func (s *Syncer) handleQueryEventOptimistic(
 			log.WrapStringerField("location", ec.currentLocation))
 		needHandleDDLs = appliedSQLs // maybe nil
 	}
-	job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID)
+
+	ddlInfo := &shardingDDLInfo{
+		name:       needTrackDDLs[0].tableNames[0][0].String(),
+		tableNames: needTrackDDLs[0].tableNames,
+		stmt:       needTrackDDLs[0].stmt,
+	}
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
