@@ -59,7 +59,7 @@ function test_multi_task_running() {
 
 
 function test_join_masters {
-    echo "[$(date)] <<<<<< start test_join_multi_masters >>>>>>"
+    echo "[$(date)] <<<<<< start test_join_masters >>>>>>"
     cleanup
 
     run_dm_master $WORK_DIR/master-join1 $MASTER_PORT1 $cur/conf/dm-master-join1.toml
@@ -81,12 +81,13 @@ function test_join_masters {
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT3 "query-status" '"result": true' 1
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT4 "query-status" '"result": true' 1
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT5 "query-status" '"result": true' 1
+    echo "[$(date)] <<<<<< finish test_join_masters >>>>>>"
 }
 
 
 function test_kill_master() {
-    test_running
     echo "[$(date)] <<<<<< start test_kill_master >>>>>>"
+    test_running
 
     echo "kill dm-master1"
     ps aux | grep dm-master1 | awk '{print $2}' | xargs kill || true
@@ -113,12 +114,13 @@ function test_kill_master() {
 
     echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    echo "[$(date)] <<<<<< finish test_kill_master >>>>>>"
 }
 
 
 function test_kill_worker() {
-    test_running
     echo "[$(date)] <<<<<< start test_kill_worker >>>>>>"
+    test_running
 
 
     echo "kill dm-worker2"
@@ -151,14 +153,15 @@ function test_kill_worker() {
 
     echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    echo "[$(date)] <<<<<< finish test_kill_worker >>>>>>"
 }
 
 # usage: test_kill_master_in_sync leader
 # or: test_kill_master_in_sync follower (default)
 function test_kill_master_in_sync() {
+    echo "[$(date)] <<<<<< start test_kill_master_in_sync >>>>>>"
     role=false
     test_running
-    echo "[$(date)] <<<<<< start test_kill_master_in_sync >>>>>>"
 
     echo "start dumping random SQLs into source"
     pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test" 1 0)
@@ -192,11 +195,12 @@ function test_kill_master_in_sync() {
 
     echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    echo "[$(date)] <<<<<< finish test_kill_master_in_sync >>>>>>"
 }
 
 function test_kill_worker_in_sync() {
-    test_running
     echo "[$(date)] <<<<<< start test_kill_worker_in_sync >>>>>>"
+    test_running
 
     echo "start dumping random SQLs into source"
     pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test" 0 0)
@@ -237,10 +241,11 @@ function test_kill_worker_in_sync() {
 
     echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    echo "[$(date)] <<<<<< finish test_kill_worker_in_sync >>>>>>"
 }
 
 function test_standalone_running() {
-    echo "[$(date)] <<<<<< start test_running >>>>>>"
+    echo "[$(date)] <<<<<< start test_standalone_running >>>>>>"
     cleanup
     prepare_sql
     start_standalone_cluster
@@ -256,12 +261,13 @@ function test_standalone_running() {
 
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff-standalone-config.toml
+    echo "[$(date)] <<<<<< finish test_standalone_running >>>>>>"
 }
 
 
 function test_pause_task() {
-    test_multi_task_running
     echo "[$(date)] <<<<<< start test_pause_task >>>>>>"
+    test_multi_task_running
 
     echo "start dumping random SQLs into source"
     pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test" 0 0)
@@ -302,12 +308,13 @@ function test_pause_task() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
     echo $(dmctl --master-addr "127.0.0.1":$MASTER_PORT query-status test)
     echo $(dmctl --master-addr "127.0.0.1":$MASTER_PORT query-status test2)
+    echo "[$(date)] <<<<<< finish test_pause_task >>>>>>"
 }
 
 
 function test_multi_task_reduce_worker() {
-    test_multi_task_running
     echo "[$(date)] <<<<<< start test_multi_task_reduce_worker >>>>>>"
+    test_multi_task_running
 
     echo "start dumping random SQLs into source"
     pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test" 0 0)
@@ -359,18 +366,18 @@ function test_multi_task_reduce_worker() {
             fi
         fi
     done
-
+    echo "[$(date)] <<<<<< finish test_multi_task_reduce_worker >>>>>>"
 }
 
 
 function test_isolate_master() {
+    echo "[$(date)] <<<<<< start test_isolate_master $1 >>>>>>"
     role=false
     if [ $1 = "leader" ]; then
         role=true
     fi
     test_running
 
-    echo "[$(date)] <<<<<< start test_isolate_master >>>>>>"
 
     master_ports=($MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3)
     leader_index=""         # in general, only one leader
@@ -421,6 +428,7 @@ function test_isolate_master() {
 
         disable_isolate_port ${master_ports[${follower_indeces[0]}]}
     fi
+    echo "[$(date)] <<<<<< finish test_isolate_master $1 >>>>>>"
 }
 
 
