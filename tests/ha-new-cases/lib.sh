@@ -137,16 +137,10 @@ function start_multi_tasks_cluster() {
     echo "operate mysql config to worker"
     cp $cur/conf/source1.toml $WORK_DIR/source1.toml
     cp $cur/conf/source2.toml $WORK_DIR/source2.toml
-    cp $cur/conf/source3.toml $WORK_DIR/source3.toml
-    cp $cur/conf/source4.toml $WORK_DIR/source4.toml
     sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
     sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker3/relay_log\"" $WORK_DIR/source3.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker4/relay_log\"" $WORK_DIR/source4.toml
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
-    dmctl_operate_source create $WORK_DIR/source3.toml $SOURCE_ID3
-    dmctl_operate_source create $WORK_DIR/source4.toml $SOURCE_ID4
 
     echo "start DM task"
 
@@ -155,8 +149,8 @@ function start_multi_tasks_cluster() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/dm-task2.yaml" \
         "\"result\": true" 3 \
-        "\"source\": \"$SOURCE_ID3\"" 1 \
-        "\"source\": \"$SOURCE_ID4\"" 1
+        "\"source\": \"$SOURCE_ID1\"" 1 \
+        "\"source\": \"$SOURCE_ID2\"" 1
 }
 
 
