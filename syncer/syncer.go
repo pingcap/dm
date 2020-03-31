@@ -1529,11 +1529,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		ec.shardingReSync.currLocation.GTIDSet.Set(ev.GSet)
 		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("re-shard", ec.shardingReSync))
-			direct, err2 := ec.closeShardingResync()
+			redirect, err2 := ec.closeShardingResync()
 			if err2 != nil {
 				return err2
 			}
-			if direct {
+			if redirect {
 				return nil
 			}
 		} else {
