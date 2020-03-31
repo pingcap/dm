@@ -158,9 +158,10 @@ function cleanup() {
     cleanup_data ha_test
     cleanup_data ha_test2
     echo "clean source table"
-    mysql_ports=(MYSQL_PORT1 MYSQL_PORT2)
+    mysql_ports=($MYSQL_PORT1 $MYSQL_PORT2)
     for i in ${mysql_ports[@]}; do
-        $(mysql -h127.1 -p123456 -P$i -e "drop database if exists ha_test;")
+        $(mysql -h127.0.0.1 -p123456 -P${i} -uroot -e "drop database if exists ha_test;")
+        sleep 1
     done
     cleanup_process $*
 }
