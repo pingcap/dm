@@ -1095,9 +1095,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return false, err2
 			}
 			redirect = true
+			lastLocation = nextLocation.Clone()
+		} else {
+			lastLocation = savedGlobalLastLocation.Clone() // restore global last pos
 		}
+
 		shardingReSync = nil
-		lastLocation = savedGlobalLastLocation.Clone() // restore global last pos
 		return redirect, nil
 	}
 
