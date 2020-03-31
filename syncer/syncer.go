@@ -48,6 +48,7 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/pkg/shardddl/optimism"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
@@ -840,10 +841,26 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			return
 		}
 
-		shardOp := s.pessimist.PendingOperation()
-		if shardOp != nil && !shardOp.Exec {
-			tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
-		} else {
+		var (
+			ignore            = false
+			shardPessimistOp  *pessimism.Operation
+			shardOptimisticOp *optimism.Operation
+		)
+		switch s.cfg.ShardMode {
+		case config.ShardPessimistic:
+			shardPessimistOp = s.pessimist.PendingOperation()
+			if shardPessimistOp != nil && !shardPessimistOp.Exec {
+				ignore = true
+				tctx.L().Info("ignore shard DDLs in pessimistic shard mode", zap.Strings("ddls", sqlJob.ddls))
+			}
+		case config.ShardOptimistic:
+			shardOptimisticOp = s.optimist.PendingOperation()
+			if shardOptimisticOp != nil && len(shardOptimisticOp.DDLs) == 0 {
+				ignore = true
+				tctx.L().Info("ignore shard DDLs in optimistic mode")
+			}
+		}
+		if !ignore {
 			var affected int
 			affected, err = db.executeSQLWithIgnore(tctx, ignoreDDLError, sqlJob.ddls)
 			if err != nil {
@@ -859,17 +876,28 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			})
 		}
 
-		if s.cfg.ShardMode == config.ShardPessimistic {
+		switch s.cfg.ShardMode {
+		case config.ShardPessimistic:
 			// for sharding DDL syncing, send result back
 			shardInfo := s.pessimist.PendingInfo()
 			if shardInfo == nil {
 				// no need to do the shard DDL handle for `CREATE DATABASE/TABLE` now.
-				s.tctx.L().Warn("skip shard DDL handle in sharding mode", zap.Strings("ddl", sqlJob.ddls))
-			} else if shardOp == nil {
+				s.tctx.L().Warn("skip shard DDL handle in pessimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
+			} else if shardPessimistOp == nil {
 				// TODO(csuzhangxc): add terror.
 				err = fmt.Errorf("missing shard DDL lock operation for shard DDL info (%s)", shardInfo)
 			} else {
-				err = s.pessimist.DoneOperationDeleteInfo(*shardOp, *shardInfo)
+				err = s.pessimist.DoneOperationDeleteInfo(*shardPessimistOp, *shardInfo)
+			}
+		case config.ShardOptimistic:
+			shardInfo := s.optimist.PendingInfo()
+			if shardInfo == nil {
+				// no need to do the shard DDL handle for `DROP TABLE` now.
+				s.tctx.L().Warn("skip shard DDL handle in optimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
+			} else if shardOptimisticOp == nil {
+				err = fmt.Errorf("missing shard DDL lock operation for shard DDL info (%s)", shardInfo)
+			} else {
+				err = s.optimist.DoneOperation(*shardOptimisticOp)
 			}
 		}
 		s.jobWg.Done()
@@ -1578,11 +1606,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			* online ddl: we would ignore rename ghost table,  make no difference
 			* other rename: we don't allow user to execute more than one rename operation in one ddl event, then it would make no difference
 	*/
-	type trackedDDL struct {
-		rawSQL     string
-		stmt       ast.StmtNode
-		tableNames [][]*filter.Table
-	}
 	var (
 		ddlInfo        *shardingDDLInfo
 		needHandleDDLs []string
@@ -1700,6 +1723,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		return nil
+	}
+
+	// handle shard DDL in optimistic mode.
+	if s.cfg.ShardMode == config.ShardOptimistic {
+		return s.handleQueryEventOptimistic(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames)
 	}
 
 	// handle sharding ddl
