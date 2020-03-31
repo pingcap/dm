@@ -16,13 +16,13 @@ target-database:
   password: "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs="
 
 mysql-instances:
-  - source-id: "mysql-replica-03"
+  - source-id: "mysql-replica-01"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
     route-rules: ["rule-1"]
 
-  - source-id: "mysql-replica-04"
+  - source-id: "mysql-replica-02"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -30,7 +30,7 @@ mysql-instances:
 
 routes:
   rule-1:
-    schema-pattern: "ha_test"
+    schema-pattern: "ha_test2"
     target-schema: "ha_test2"
 
 mydumpers:
