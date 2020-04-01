@@ -123,6 +123,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(DDLs, DeepEquals, DDLs2)
 	ready = l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[0]], IsTrue)
+	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
 
 	// add only the first column for another table.
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[0:1], ti2_1, sts) // use ti2_1 info
@@ -219,6 +220,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(DDLs, DeepEquals, []string{})
 	ready = l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[0]], IsFalse)
+	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsTrue)
 
 	// drop only the first column for another table.
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[0:1], ti4_1, sts)

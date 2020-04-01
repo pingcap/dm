@@ -179,6 +179,8 @@ func (t *testOptimist) TestOptimist(c *C) {
 	rev5, err := o.PutInfo(info2)
 	c.Assert(err, IsNil)
 	c.Assert(o.PendingInfo(), NotNil)
+	c.Assert(*o.PendingInfo(), DeepEquals, info2)
+	c.Assert(o.PendingOperation(), IsNil)
 
 	// put another lock operation.
 	rev6, putted, err := optimism.PutOperation(etcdTestCli, false, op2)
@@ -189,6 +191,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	_, err = o.GetOperation(ctx, info2, rev5)
 	c.Assert(err, IsNil)
 	c.Assert(o.PendingOperation(), NotNil)
+	c.Assert(*o.PendingOperation(), DeepEquals, op2)
 
 	// reset the optimist.
 	o.Reset()

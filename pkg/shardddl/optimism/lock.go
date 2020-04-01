@@ -142,6 +142,8 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		// > 0: the joined schema become smaller after applied these DDLs.
 		//      this often happens when executing `DROP COLUMN` for the LAST table.
 		// for these two cases, we should execute the DDLs to the downstream to update the schema.
+		log.L().Info("joined table info changed", zap.String("lock", l.ID), zap.Int("cmp", cmp), zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined),
+			zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable), zap.Strings("ddls", ddls))
 		return ddls, nil
 	}
 
@@ -187,6 +189,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		// now, they should re-try until replicated successfully, try to implement better strategy later.
 		return emptyDDLs, nil
 	}
+	log.L().Warn("new table info > new joined table info", zap.Stringer("table info", newTable), zap.Stringer("joined table info", newJoined))
 	return ddls, nil // NOTE: this should not happen.
 }
 
