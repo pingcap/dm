@@ -1657,6 +1657,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			s.tctx.L().Info("replace ddls to preset ddls by sql operator in normal mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 			needHandleDDLs = appliedSQLs // maybe nil
 		}
+		// TODO: s.cfg.IsSharding == false => ddlInfo == nil => job.sourceSchema == ""
+		//      so the table checkpoint won't be flushed instantly in addJob
 		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID)
 		err = s.addJobFunc(job)
 		if err != nil {
