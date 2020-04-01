@@ -47,27 +47,27 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 16),
 		}, []string{"task"})
 
-	dataFileCounter = metricsProxy.NewCounterVec(
-		prometheus.CounterOpts{
+	dataFileGauge = metricsProxy.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
-			Name:      "data_file_count",
+			Name:      "data_file_gauge",
 			Help:      "data files in total",
 		}, []string{"task"})
 
-	tableCounter = metricsProxy.NewCounterVec(
-		prometheus.CounterOpts{
+	tableGauge = metricsProxy.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
-			Name:      "table_count",
+			Name:      "table_gauge",
 			Help:      "tables in total",
 		}, []string{"task"})
 
-	dataSizeCounter = metricsProxy.NewCounterVec(
-		prometheus.CounterOpts{
+	dataSizeGauge = metricsProxy.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
-			Name:      "data_size_count",
+			Name:      "data_size_gauge",
 			Help:      "data size in total",
 		}, []string{"task"})
 
@@ -94,9 +94,9 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(tidbExecutionErrorCounter)
 	registry.MustRegister(txnHistogram)
 	registry.MustRegister(queryHistogram)
-	registry.MustRegister(dataFileCounter)
-	registry.MustRegister(tableCounter)
-	registry.MustRegister(dataSizeCounter)
+	registry.MustRegister(dataFileGauge)
+	registry.MustRegister(tableGauge)
+	registry.MustRegister(dataSizeGauge)
 	registry.MustRegister(progressGauge)
 	registry.MustRegister(loaderExitWithErrorCounter)
 }
@@ -105,9 +105,9 @@ func (m *Loader) removeLabelValuesWithTaskInMetrics(task string) {
 	tidbExecutionErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	txnHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	queryHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	dataFileCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	tableCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	dataSizeCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	dataFileGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	tableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	dataSizeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	progressGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	loaderExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }
