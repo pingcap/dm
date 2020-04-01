@@ -764,3 +764,8 @@ type ShardingReSync struct {
 	targetTable    string
 	allResolved    bool
 }
+
+// String implements stringer.String
+func (s *ShardingReSync) String() string {
+	return fmt.Sprintf("{schema: %s, table: %s, current location: %v, latest location: %v, all resolved: %v}", s.targetSchema, s.targetTable, s.currLocation, s.latestLocation, s.allResolved)
+}
