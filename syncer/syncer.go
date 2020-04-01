@@ -1131,13 +1131,18 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			currentLocation = nextLocation.Clone()
-			err2 = s.streamerController.RedirectStreamer(s.tctx, nextLocation.Clone())
-			if err2 != nil {
-				return err2
-			}
+			lastLocation = nextLocation.Clone()
+		} else {
+			currentLocation = savedGlobalLastLocation.Clone()
+			lastLocation = savedGlobalLastLocation.Clone() // restore global last pos
 		}
+
+		err3 := s.streamerController.RedirectStreamer(s.tctx, currentLocation.Clone())
+		if err3 != nil {
+			return err3
+		}
+
 		shardingReSync = nil
-		lastLocation = savedGlobalLastLocation.Clone() // restore global last pos
 		return nil
 	}
 
@@ -1291,7 +1296,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				// only need compare binlog position?
 				lastLocation = shardingReSync.currLocation.Clone()
 				if binlog.CompareLocation(shardingReSync.currLocation, shardingReSync.latestLocation) >= 0 {
-					s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "XID"), zap.Reflect("re-shard", shardingReSync))
+					s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "XID"), zap.Stringer("re-shard", shardingReSync))
 					err = closeShardingResync()
 					if err != nil {
 						return terror.Annotatef(err, "shard group current location %s", shardingReSync.currLocation)
@@ -1358,7 +1363,7 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 		}
 
 		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation) >= 0 {
-			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "rotate"), zap.Reflect("re-shard", ec.shardingReSync))
+			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "rotate"), zap.Stringer("re-shard", ec.shardingReSync))
 			err := ec.closeShardingResync()
 			if err != nil {
 				return err
@@ -1388,7 +1393,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currLocation.Position.Pos = ec.header.LogPos
 		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation) >= 0 {
-			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "row"), zap.Reflect("re-shard", ec.shardingReSync))
+			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "row"), zap.Stringer("re-shard", ec.shardingReSync))
 			return ec.closeShardingResync()
 		}
 		if ec.shardingReSync.targetSchema != schemaName || ec.shardingReSync.targetTable != tableName {
@@ -1554,7 +1559,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		ec.shardingReSync.currLocation.Position.Pos = ec.header.LogPos
 		ec.shardingReSync.currLocation.GTIDSet.Set(ev.GSet)
 		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation) >= 0 {
-			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "query"), zap.String("statement", sql), zap.Reflect("re-shard", ec.shardingReSync))
+			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("re-shard", ec.shardingReSync))
 			err2 := ec.closeShardingResync()
 			if err2 != nil {
 				return err2
@@ -1570,7 +1575,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	s.tctx.L().Info("", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation))
-	lastGTIDSet := ec.lastLocation.GTIDSet
+	lastGTIDSet := ec.lastLocation.GTIDSet.Clone()
 	*ec.lastLocation = ec.currentLocation.Clone() // update lastLocation, because we have checked `isDDL`
 	*ec.latestOp = ddl
 
