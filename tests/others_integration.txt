@@ -1,3 +1,4 @@
+sharding2
 ha
 ha_master
 full_mode
