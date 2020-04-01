@@ -72,6 +72,10 @@ dm-syncer:
 debug-tools:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/binlog-event-blackhole ./debug-tools/binlog-event-blackhole
 
+dm-portal-frontend:
+	# TODO: build frontend
+	statik -src=./dm/portal/frontend/build -dest=./dm/portal/
+
 retool_setup:
 	@echo "setup retool"
 	go get github.com/twitchtv/retool
