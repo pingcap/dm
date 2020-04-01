@@ -15,11 +15,13 @@ package mydumper
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/pingcap/dm/pkg/metricsProxy"
 )
 
 var (
 	// should alert
-	mydumperExitWithErrorCounter = prometheus.NewCounterVec(
+	mydumperExitWithErrorCounter = metricsProxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "mydumper",

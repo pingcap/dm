@@ -10,7 +10,7 @@ type HistogramVecProxy struct {
 	*prometheus.HistogramVec
 }
 
-func NewHistogramVec(opts prometheus.SummaryOpts, labelNames []string) *HistogramVecProxy {
+func NewHistogramVec(opts prometheus.HistogramOpts, labelNames []string) *HistogramVecProxy {
 	return &HistogramVecProxy{
 		LabelNames:   labelNames,
 		Labels:       make(map[string]map[string]string, 0),

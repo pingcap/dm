@@ -15,11 +15,13 @@ package dumpling
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/pingcap/dm/pkg/metricsProxy"
 )
 
 var (
 	// should alert
-	dumplingExitWithErrorCounter = prometheus.NewCounterVec(
+	dumplingExitWithErrorCounter = metricsProxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "dumpling",
