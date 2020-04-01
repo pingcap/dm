@@ -184,13 +184,13 @@ function test_kill_master_in_sync() {
 
     sleep 1
     echo "kill tipocket"
-    kill $pocket_pid1 $pocket_pid2
+    # kill $pocket_pid1 $pocket_pid2
 
     # waiting for syncing
     sleep 1
 
     # WARN: run ddl sqls spent so long
-    sleep 300
+    # sleep 300
     echo $(dmctl --master-addr "127.0.0.1:$MASTER_PORT1" query-status test)
 
     echo "use sync_diff_inspector to check increment2 data now!"
@@ -234,10 +234,10 @@ function test_kill_worker_in_sync() {
     sleep 1
 
     echo "kill tipocket"
-    kill $pocket_pid1 $pocket_pid2 # if kill fails, means tipocket exited unexceptly
+    # kill $pocket_pid1 $pocket_pid2 # if kill fails, means tipocket exited unexceptly
 
     # waiting for syncing
-    sleep 100
+    # sleep 100
 
     echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -300,14 +300,12 @@ function test_pause_task() {
 
     sleep 1
     # stop
-    kill $pocket_pid1 $pocket_pid2
-    sleep 200
+    # kill $pocket_pid1 $pocket_pid2
+    # sleep 200
 
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
     check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
-    echo $(dmctl --master-addr "127.0.0.1":$MASTER_PORT query-status test)
-    echo $(dmctl --master-addr "127.0.0.1":$MASTER_PORT query-status test2)
     echo "[$(date)] <<<<<< finish test_pause_task >>>>>>"
 }
 
@@ -324,7 +322,7 @@ function test_multi_task_reduce_worker() {
     task_name=(test test2)
     worker_inuse=("")     # such as ("worker1" "worker4")
     for name in ${task_name[@]}; do
-        status=$(dmctl --master-addr "127.0.0.1":$MASTER_PORT query-status $name \
+        status=$($PWD/bin/dmctl.test --master-addr "127.0.0.1":$MASTER_PORT query-status $name \
             | grep 'worker' | awk -F 'u0007' '{print $2}')
         for w in ${status[@]}; do
             worker_inuse=(${worker_inuse[*]} ${w:0-9:7})
@@ -346,7 +344,7 @@ function test_multi_task_reduce_worker() {
             done
 
             # stop
-            kill $pocket_pid1 $pocket_pid2
+            # kill $pocket_pid1 $pocket_pid2
 
             sleep 10
             echo "use sync_diff_inspector to check increment data"
@@ -436,10 +434,10 @@ function run() {
     # test_join_masters
     # test_kill_master
     # test_kill_worker
-    test_kill_master_in_sync
-    test_kill_worker_in_sync
-    test_standalone_running
-    test_pause_task
+    # test_kill_master_in_sync
+    # test_kill_worker_in_sync
+    # test_standalone_running
+    # test_pause_task
     test_multi_task_reduce_worker
     test_isolate_master leader
     test_isolate_master follower

@@ -29,12 +29,12 @@ table = "ta"
     table  = "ta"
 
 [[table-config]]
-    schema = "ha_test2"
-    table = "tb"
+schema = "ha_test2"
+table = "tb"
 
     [[table-config.source-tables]]
         instance-id = "source-2"
-        schema = "ha_test"
+        schema = "ha_test2"
         table  = "tb"
 
 [[source-db]]
