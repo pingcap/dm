@@ -614,6 +614,7 @@ func (l *Loader) loadFinishedSize() {
 func (l *Loader) Close() {
 	l.Lock()
 	defer l.Unlock()
+	l.removeLabelValuesWithTaskInMetrics(l.cfg.Name)
 	if l.isClosed() {
 		return
 	}

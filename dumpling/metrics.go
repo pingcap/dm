@@ -34,3 +34,7 @@ var (
 func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(dumplingExitWithErrorCounter)
 }
+
+func (m *Dumpling) removeLabelValuesWithTaskInMetrics(task string) {
+	dumplingExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+}

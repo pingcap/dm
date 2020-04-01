@@ -213,3 +213,18 @@ func InitStatusAndMetrics(addr string) {
 		}
 	}()
 }
+func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
+	binlogEvent.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogSkippedEventsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	addedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	finishedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	sqlRetriesTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogPosGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogFileGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	txnHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	syncerExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	replicationLagGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	remainingTimeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	unsyncedTableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	shardLockResolving.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+}

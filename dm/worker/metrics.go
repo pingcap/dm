@@ -88,3 +88,7 @@ func InitStatus(lis net.Listener) {
 		log.L().Error("fail to start status server return", log.ShortError(err))
 	}
 }
+
+func (st *SubTask) removeLabelValuesWithTaskInMetrics(task string) {
+	taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+}

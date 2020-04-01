@@ -2155,6 +2155,8 @@ func (s *Syncer) Close() {
 	s.Lock()
 	defer s.Unlock()
 
+	s.removeLabelValuesWithTaskInMetrics(s.cfg.Name)
+
 	if s.isClosed() {
 		return
 	}

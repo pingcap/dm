@@ -100,3 +100,14 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(progressGauge)
 	registry.MustRegister(loaderExitWithErrorCounter)
 }
+
+func (m *Loader) removeLabelValuesWithTaskInMetrics(task string) {
+	tidbExecutionErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	txnHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	queryHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	dataFileCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	tableCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	dataSizeCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	progressGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	loaderExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+}

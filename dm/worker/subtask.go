@@ -384,6 +384,7 @@ func (st *SubTask) Result() *pb.ProcessResult {
 // Close stops the sub task
 func (st *SubTask) Close() {
 	st.l.Info("closing")
+	st.removeLabelValuesWithTaskInMetrics(st.cfg.Name)
 	if st.cancel == nil {
 		st.l.Info("not run yet, no need to close")
 		return

@@ -34,3 +34,7 @@ var (
 func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(mydumperExitWithErrorCounter)
 }
+
+func (m *Mydumper) removeLabelValuesWithTaskInMetrics(task string) {
+	mydumperExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+}
