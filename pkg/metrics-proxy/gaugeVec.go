@@ -1,9 +1,10 @@
-package metricsProxy
+package metrics_proxy
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// GaugeVecProxy to proxy prometheus.GaugeVec
 type GaugeVecProxy struct {
 	LabelNames []string
 	Labels     map[string]map[string]string
@@ -55,12 +56,12 @@ func (c *GaugeVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	return findAndDeleteLabels(c, labels)
 }
 
-// to support get GaugeVecProxy's Labels when you use Proxy object
+// GaugeVecProxy to support get GaugeVecProxy's Labels when you use Proxy object
 func (c *GaugeVecProxy) GetLabels() map[string]map[string]string {
 	return c.Labels
 }
 
-// to support delete GaugeVecProxy's Labels when you use Proxy object
+// GaugeVecProxy to support delete GaugeVecProxy's Labels when you use Proxy object
 func (c *GaugeVecProxy) vecDelete(labels prometheus.Labels) bool {
 	return c.GaugeVec.Delete(labels)
 }

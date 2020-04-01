@@ -1,9 +1,10 @@
-package metricsProxy
+package metrics_proxy
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// CounterVecProxy to proxy prometheus.CounterVec
 type CounterVecProxy struct {
 	LabelNames []string
 	Labels     map[string]map[string]string
@@ -55,12 +56,12 @@ func (c *CounterVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	return findAndDeleteLabels(c, labels)
 }
 
-// to support get CounterVecProxy's Labels when you use Proxy object
+// CounterVecProxy to support get CounterVecProxy's Labels when you use Proxy object
 func (c *CounterVecProxy) GetLabels() map[string]map[string]string {
 	return c.Labels
 }
 
-// to support delete CounterVecProxy's Labels when you use Proxy object
+// CounterVecProxy to support delete CounterVecProxy's Labels when you use Proxy object
 func (c *CounterVecProxy) vecDelete(labels prometheus.Labels) bool {
 	return c.CounterVec.Delete(labels)
 }

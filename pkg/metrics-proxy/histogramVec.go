@@ -1,9 +1,10 @@
-package metricsProxy
+package metrics_proxy
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// HistogramVecProxy to proxy prometheus.HistogramVec
 type HistogramVecProxy struct {
 	LabelNames []string
 	Labels     map[string]map[string]string
@@ -55,12 +56,12 @@ func (c *HistogramVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool 
 	return findAndDeleteLabels(c, labels)
 }
 
-// to support get HistogramVecProxy's Labels when you use Proxy object
+// HistogramVecProxy to support get HistogramVecProxy's Labels when you use Proxy object
 func (c *HistogramVecProxy) GetLabels() map[string]map[string]string {
 	return c.Labels
 }
 
-// to support delete HistogramVecProxy's Labels when you use Proxy object
+// HistogramVecProxy to support delete HistogramVecProxy's Labels when you use Proxy object
 func (c *HistogramVecProxy) vecDelete(labels prometheus.Labels) bool {
 	return c.HistogramVec.Delete(labels)
 }

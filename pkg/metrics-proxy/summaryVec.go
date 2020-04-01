@@ -1,9 +1,10 @@
-package metricsProxy
+package metrics_proxy
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// SummaryVecProxy to proxy prometheus.SummaryVec
 type SummaryVecProxy struct {
 	LabelNames []string
 	Labels     map[string]map[string]string
@@ -59,12 +60,12 @@ func (c *SummaryVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	return findAndDeleteLabels(c, labels)
 }
 
-// to support get SummaryVecProxy's Labels when you use Proxy object
+// SummaryVecProxy to support get SummaryVecProxy's Labels when you use Proxy object
 func (c *SummaryVecProxy) GetLabels() map[string]map[string]string {
 	return c.Labels
 }
 
-// to support delete SummaryVecProxy's Labels when you use Proxy object
+// SummaryVecProxy to support delete SummaryVecProxy's Labels when you use Proxy object
 func (c *SummaryVecProxy) vecDelete(labels prometheus.Labels) bool {
 	return c.SummaryVec.Delete(labels)
 }

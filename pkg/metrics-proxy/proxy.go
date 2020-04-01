@@ -1,4 +1,4 @@
-package metricsProxy
+package metrics_proxy
 
 import (
 	"crypto/md5"

@@ -16,12 +16,12 @@ package loader
 import (
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/pingcap/dm/pkg/metricsProxy"
+	"github.com/pingcap/dm/pkg/metrics-proxy"
 )
 
 var (
 	// should error
-	tidbExecutionErrorCounter = metricsProxy.NewCounterVec(
+	tidbExecutionErrorCounter = metrics_proxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
@@ -29,7 +29,7 @@ var (
 			Help:      "Total count of tidb execution errors",
 		}, []string{"task"})
 
-	queryHistogram = metricsProxy.NewHistogramVec(
+	queryHistogram = metrics_proxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
@@ -38,7 +38,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 16),
 		}, []string{"task"})
 
-	txnHistogram = metricsProxy.NewHistogramVec(
+	txnHistogram = metrics_proxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
@@ -47,7 +47,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 16),
 		}, []string{"task"})
 
-	dataFileGauge = metricsProxy.NewGaugeVec(
+	dataFileGauge = metrics_proxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
@@ -55,7 +55,7 @@ var (
 			Help:      "data files in total",
 		}, []string{"task"})
 
-	tableGauge = metricsProxy.NewGaugeVec(
+	tableGauge = metrics_proxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
@@ -63,7 +63,7 @@ var (
 			Help:      "tables in total",
 		}, []string{"task"})
 
-	dataSizeGauge = metricsProxy.NewGaugeVec(
+	dataSizeGauge = metrics_proxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
@@ -71,7 +71,7 @@ var (
 			Help:      "data size in total",
 		}, []string{"task"})
 
-	progressGauge = metricsProxy.NewGaugeVec(
+	progressGauge = metrics_proxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
@@ -80,7 +80,7 @@ var (
 		}, []string{"task"})
 
 	// should alert
-	loaderExitWithErrorCounter = metricsProxy.NewCounterVec(
+	loaderExitWithErrorCounter = metrics_proxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
