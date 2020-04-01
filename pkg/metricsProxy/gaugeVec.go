@@ -10,6 +10,8 @@ type GaugeVecProxy struct {
 	*prometheus.GaugeVec
 }
 
+// NewGaugeVec creates a new GaugeVec based on the provided GaugeOpts and
+// partitioned by the given label names.
 func NewGaugeVec(opts prometheus.GaugeOpts, labelNames []string) *GaugeVecProxy {
 	return &GaugeVecProxy{
 		LabelNames: labelNames,
@@ -18,6 +20,10 @@ func NewGaugeVec(opts prometheus.GaugeOpts, labelNames []string) *GaugeVecProxy 
 	}
 }
 
+// WithLabelValues works as GetMetricWithLabelValues, but panics where
+// GetMetricWithLabelValues would have returned an error. Not returning an
+// error allows shortcuts like
+//     myVec.WithLabelValues("404", "GET").Add(42)
 func (c *GaugeVecProxy) WithLabelValues(lvs ...string) prometheus.Gauge {
 	if len(lvs) > 0 {
 		labels := make(map[string]string, len(lvs))
@@ -29,6 +35,9 @@ func (c *GaugeVecProxy) WithLabelValues(lvs ...string) prometheus.Gauge {
 	return c.GaugeVec.WithLabelValues(lvs...)
 }
 
+// With works as GetMetricWith, but panics where GetMetricWithLabels would have
+// returned an error. Not returning an error allows shortcuts like
+//     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Add(42)
 func (c *GaugeVecProxy) With(labels prometheus.Labels) prometheus.Gauge {
 	if len(labels) > 0 {
 		noteLabels(c, labels)
@@ -37,6 +46,7 @@ func (c *GaugeVecProxy) With(labels prometheus.Labels) prometheus.Gauge {
 	return c.GaugeVec.With(labels)
 }
 
+// Remove all labelsValue with these labels
 func (c *GaugeVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	if len(labels) == 0 {
 		return false
@@ -45,10 +55,12 @@ func (c *GaugeVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	return findAndDeleteLabels(c, labels)
 }
 
+// to support get GaugeVecProxy's Labels when you use Proxy object
 func (c *GaugeVecProxy) GetLabels() map[string]map[string]string {
 	return c.Labels
 }
 
+// to support delete GaugeVecProxy's Labels when you use Proxy object
 func (c *GaugeVecProxy) vecDelete(labels prometheus.Labels) bool {
 	return c.GaugeVec.Delete(labels)
 }
