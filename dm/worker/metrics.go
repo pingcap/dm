@@ -25,14 +25,14 @@ import (
 	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/metrics-proxy"
+	"github.com/pingcap/dm/pkg/metricsproxy"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay"
 	"github.com/pingcap/dm/syncer"
 )
 
 var (
-	taskState = metrics_proxy.NewGaugeVec(
+	taskState = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "worker",

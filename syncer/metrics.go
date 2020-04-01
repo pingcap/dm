@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/metrics-proxy"
+	"github.com/pingcap/dm/pkg/metricsproxy"
 
 	cpu "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	binlogEvent = metrics_proxy.NewHistogramVec(
+	binlogEvent = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -39,7 +39,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
 		}, []string{"type", "task"})
 
-	binlogSkippedEventsTotal = metrics_proxy.NewCounterVec(
+	binlogSkippedEventsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -47,7 +47,7 @@ var (
 			Help:      "total number of skipped binlog events",
 		}, []string{"type", "task"})
 
-	addedJobsTotal = metrics_proxy.NewCounterVec(
+	addedJobsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -55,7 +55,7 @@ var (
 			Help:      "total number of added jobs",
 		}, []string{"type", "task", "queueNo"})
 
-	finishedJobsTotal = metrics_proxy.NewCounterVec(
+	finishedJobsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -63,7 +63,7 @@ var (
 			Help:      "total number of finished jobs",
 		}, []string{"type", "task", "queueNo"})
 
-	binlogPosGauge = metrics_proxy.NewGaugeVec(
+	binlogPosGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -71,7 +71,7 @@ var (
 			Help:      "current binlog pos",
 		}, []string{"node", "task"})
 
-	binlogFileGauge = metrics_proxy.NewGaugeVec(
+	binlogFileGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -79,7 +79,7 @@ var (
 			Help:      "current binlog file index",
 		}, []string{"node", "task"})
 
-	sqlRetriesTotal = metrics_proxy.NewCounterVec(
+	sqlRetriesTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -87,7 +87,7 @@ var (
 			Help:      "total number of sql retryies",
 		}, []string{"type", "task"})
 
-	txnHistogram = metrics_proxy.NewHistogramVec(
+	txnHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -106,7 +106,7 @@ var (
 		})
 
 	// should alert
-	syncerExitWithErrorCounter = metrics_proxy.NewCounterVec(
+	syncerExitWithErrorCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -115,7 +115,7 @@ var (
 		}, []string{"task"})
 
 	// some problems with it
-	replicationLagGauge = metrics_proxy.NewGaugeVec(
+	replicationLagGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -123,7 +123,7 @@ var (
 			Help:      "replication lag in second between mysql and syncer",
 		}, []string{"task"})
 
-	remainingTimeGauge = metrics_proxy.NewGaugeVec(
+	remainingTimeGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -131,7 +131,7 @@ var (
 			Help:      "the remaining time in second to catch up master",
 		}, []string{"task"})
 
-	unsyncedTableGauge = metrics_proxy.NewGaugeVec(
+	unsyncedTableGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -139,7 +139,7 @@ var (
 			Help:      "number of unsynced tables in the subtask",
 		}, []string{"task", "table"})
 
-	shardLockResolving = metrics_proxy.NewGaugeVec(
+	shardLockResolving = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
