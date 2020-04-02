@@ -35,7 +35,7 @@ func getLabelsMd5(labels map[string]string) string {
 func findAndDeleteLabels(proxy Proxy, labels prometheus.Labels) bool {
 	var (
 		deleteLabelsList = make([]map[string]string, 0)
-		res              bool
+		res              = true
 	)
 	inputLabelsLen := len(labels)
 	for _, ls := range proxy.GetLabels() {
