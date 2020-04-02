@@ -93,9 +93,21 @@ function run() {
         "query-status test" \
         "\"stage\": \"Running\"" 2
 
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
+        "stop-task test" \
+        "\"result\": true" 3 \
+        "\"source\": \"$SOURCE_ID1\"" 1 \
+        "\"source\": \"$SOURCE_ID2\"" 1
+
     run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     sleep 2
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
+        "start-task $cur/conf/dm-task.yaml" \
+        "\"result\": true" 3 \
+        "\"source\": \"$SOURCE_ID1\"" 1 \
+        "\"source\": \"$SOURCE_ID2\"" 1
 
     echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
