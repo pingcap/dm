@@ -48,6 +48,7 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/pkg/shardddl/optimism"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
@@ -99,6 +100,7 @@ type Syncer struct {
 
 	sgk           *ShardingGroupKeeper          // keeper to keep all sharding (sub) group in this syncer
 	pessimist     *shardddl.Pessimist           // shard DDL pessimist
+	optimist      *shardddl.Optimist            // shard DDL optimist
 	injectEventCh chan *replication.BinlogEvent // extra binlog event chan, used to inject binlog event into the main for loop
 
 	binlogType         BinlogType
@@ -184,6 +186,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	logger := log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication"))
 	syncer := &Syncer{
 		pessimist: shardddl.NewPessimist(&logger, etcdClient, cfg.Name, cfg.SourceID),
+		optimist:  shardddl.NewOptimist(&logger, etcdClient, cfg.Name, cfg.SourceID),
 	}
 	syncer.cfg = cfg
 	syncer.tctx = tcontext.Background().WithLogger(logger)
@@ -209,7 +212,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.sqlOperatorHolder = operator.NewHolder()
 	syncer.readerHub = streamer.GetReaderHub()
 
-	if cfg.IsSharding {
+	if cfg.ShardMode == config.ShardPessimistic {
 		// only need to sync DDL in sharding mode
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
@@ -304,7 +307,8 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return err
 	}
 
-	if s.cfg.IsSharding {
+	switch s.cfg.ShardMode {
+	case config.ShardPessimistic:
 		err = s.sgk.Init()
 		if err != nil {
 			return err
@@ -315,6 +319,11 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 			return err
 		}
 		rollbackHolder.Add(fr.FuncRollback{Name: "close-sharding-group-keeper", Fn: s.sgk.Close})
+	case config.ShardOptimistic:
+		err = s.initOptimisticShardDDL()
+		if err != nil {
+			return err
+		}
 	}
 
 	err = s.checkpoint.Init(tctx)
@@ -438,10 +447,13 @@ func (s *Syncer) reset() {
 	s.execErrorDetected.Set(false)
 	s.resetExecErrors()
 
-	if s.cfg.IsSharding {
+	switch s.cfg.ShardMode {
+	case config.ShardPessimistic:
 		// every time start to re-sync from resume, we reset status to make it like a fresh syncing
 		s.sgk.ResetGroups()
 		s.pessimist.Reset()
+	case config.ShardOptimistic:
+		s.optimist.Reset()
 	}
 }
 
@@ -751,14 +763,16 @@ func (s *Syncer) addJob(job *job) error {
 }
 
 func (s *Syncer) saveGlobalPoint(globalLocation binlog.Location) {
-	if s.cfg.IsSharding {
+	if s.cfg.ShardMode == config.ShardPessimistic {
+		// NOTE: for the optimistic mode, because we don't handle conflicts automatically (or no re-direct supported),
+		// so it is not need to adjust global checkpoint now, and after re-direct supported this should be updated.
 		globalLocation = s.sgk.AdjustGlobalLocation(globalLocation)
 	}
 	s.checkpoint.SaveGlobalPoint(globalLocation.Clone())
 }
 
 func (s *Syncer) resetShardingGroup(schema, table string) {
-	if s.cfg.IsSharding {
+	if s.cfg.ShardMode == config.ShardPessimistic {
 		// for DDL sharding group, reset group after checkpoint saved
 		group := s.sgk.Group(schema, table)
 		if group != nil {
@@ -789,8 +803,10 @@ func (s *Syncer) flushCheckPoints() error {
 		shardMetaSQLs  []string
 		shardMetaArgs  [][]interface{}
 	)
-	if s.cfg.IsSharding {
-		// flush all checkpoints except tables which are unresolved for sharding DDL
+	if s.cfg.ShardMode == config.ShardPessimistic {
+		// flush all checkpoints except tables which are unresolved for sharding DDL for the pessimistic mode.
+		// NOTE: for the optimistic mode, because we don't handle conflicts automatically (or no re-direct supported),
+		// so we can simply flush checkpoint for all tables now, and after re-direct supported this should be updated.
 		exceptTableIDs, exceptTables = s.sgk.UnresolvedTables()
 		s.tctx.L().Info("flush checkpoints except for these tables", zap.Reflect("tables", exceptTables))
 
@@ -825,10 +841,26 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			return
 		}
 
-		shardOp := s.pessimist.PendingOperation()
-		if shardOp != nil && !shardOp.Exec {
-			tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
-		} else {
+		var (
+			ignore            = false
+			shardPessimistOp  *pessimism.Operation
+			shardOptimisticOp *optimism.Operation
+		)
+		switch s.cfg.ShardMode {
+		case config.ShardPessimistic:
+			shardPessimistOp = s.pessimist.PendingOperation()
+			if shardPessimistOp != nil && !shardPessimistOp.Exec {
+				ignore = true
+				tctx.L().Info("ignore shard DDLs in pessimistic shard mode", zap.Strings("ddls", sqlJob.ddls))
+			}
+		case config.ShardOptimistic:
+			shardOptimisticOp = s.optimist.PendingOperation()
+			if shardOptimisticOp != nil && len(shardOptimisticOp.DDLs) == 0 {
+				ignore = true
+				tctx.L().Info("ignore shard DDLs in optimistic mode", zap.Stringer("info", s.optimist.PendingInfo()))
+			}
+		}
+		if !ignore {
 			var affected int
 			affected, err = db.executeSQLWithIgnore(tctx, ignoreDDLError, sqlJob.ddls)
 			if err != nil {
@@ -844,17 +876,28 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			})
 		}
 
-		if s.cfg.IsSharding {
+		switch s.cfg.ShardMode {
+		case config.ShardPessimistic:
 			// for sharding DDL syncing, send result back
 			shardInfo := s.pessimist.PendingInfo()
 			if shardInfo == nil {
 				// no need to do the shard DDL handle for `CREATE DATABASE/TABLE` now.
-				s.tctx.L().Warn("skip shard DDL handle in sharding mode", zap.Strings("ddl", sqlJob.ddls))
-			} else if shardOp == nil {
+				s.tctx.L().Warn("skip shard DDL handle in pessimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
+			} else if shardPessimistOp == nil {
 				// TODO(csuzhangxc): add terror.
 				err = fmt.Errorf("missing shard DDL lock operation for shard DDL info (%s)", shardInfo)
 			} else {
-				err = s.pessimist.DoneOperationDeleteInfo(*shardOp, *shardInfo)
+				err = s.pessimist.DoneOperationDeleteInfo(*shardPessimistOp, *shardInfo)
+			}
+		case config.ShardOptimistic:
+			shardInfo := s.optimist.PendingInfo()
+			if shardInfo == nil {
+				// no need to do the shard DDL handle for `DROP TABLE` now.
+				s.tctx.L().Warn("skip shard DDL handle in optimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
+			} else if shardOptimisticOp == nil {
+				err = fmt.Errorf("missing shard DDL lock operation for shard DDL info (%s)", shardInfo)
+			} else {
+				err = s.optimist.DoneOperation(*shardOptimisticOp)
 			}
 		}
 		s.jobWg.Done()
@@ -1382,7 +1425,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
 	}
 
-	if s.cfg.IsSharding {
+	if s.cfg.ShardMode == config.ShardPessimistic {
 		source, _ := GenTableID(originSchema, originTable)
 		if s.sgk.InSyncing(schemaName, tableName, source, *ec.currentLocation) {
 			// if in unsync stage and not before active DDL, ignore it
@@ -1568,11 +1611,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			* online ddl: we would ignore rename ghost table,  make no difference
 			* other rename: we don't allow user to execute more than one rename operation in one ddl event, then it would make no difference
 	*/
-	type trackedDDL struct {
-		rawSQL     string
-		stmt       ast.StmtNode
-		tableNames [][]*filter.Table
-	}
 	var (
 		ddlInfo        *shardingDDLInfo
 		needHandleDDLs []string
@@ -1597,7 +1635,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			continue
 		}
 
-		if s.cfg.IsSharding {
+		if s.cfg.ShardMode == config.ShardPessimistic {
 			switch stmt.(type) {
 			case *ast.DropDatabaseStmt:
 				err = s.dropSchemaInSharding(ec.tctx, tableNames[0][0].Schema)
@@ -1646,7 +1684,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
 	}
 
-	if !s.cfg.IsSharding {
+	if s.cfg.ShardMode == "" {
 		s.tctx.L().Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 		// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
 		applied, appliedSQLs, applyErr := s.tryApplySQLOperator(ec.currentLocation.Clone(), needHandleDDLs)
@@ -1692,6 +1730,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		return nil
+	}
+
+	// handle shard DDL in optimistic mode.
+	if s.cfg.ShardMode == config.ShardOptimistic {
+		return s.handleQueryEventOptimistic(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames)
 	}
 
 	// handle sharding ddl
@@ -1882,7 +1925,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	case *ast.DropDatabaseStmt:
 		shouldExecDDLOnSchemaTracker = true
 		shouldSchemaExist = true
-		if !s.cfg.IsSharding {
+		if s.cfg.ShardMode == "" {
 			if err := s.checkpoint.DeleteSchemaPoint(ec.tctx, srcTable.Schema); err != nil {
 				return err
 			}
@@ -2251,7 +2294,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 // now, only support to update config for routes, filters, column-mappings, black-white-list
 // now no config diff implemented, so simply re-init use new config
 func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
-	if s.cfg.IsSharding {
+	if s.cfg.ShardMode == config.ShardPessimistic {
 		_, tables := s.sgk.UnresolvedTables()
 		if len(tables) > 0 {
 			return terror.ErrSyncerUnitUpdateConfigInSharding.Generate(tables)
@@ -2312,7 +2355,8 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 		return terror.ErrSyncerUnitGenColumnMapping.Delegate(err)
 	}
 
-	if s.cfg.IsSharding {
+	switch s.cfg.ShardMode {
+	case config.ShardPessimistic:
 		// re-init sharding group
 		err = s.sgk.Init()
 		if err != nil {
@@ -2320,6 +2364,11 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 		}
 
 		err = s.initShardingGroups()
+		if err != nil {
+			return err
+		}
+	case config.ShardOptimistic:
+		err = s.initOptimisticShardDDL()
 		if err != nil {
 			return err
 		}

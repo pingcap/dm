@@ -38,6 +38,12 @@ const (
 	PT    = "pt"
 )
 
+// shard DDL mode.
+const (
+	ShardPessimistic = "pessimistic"
+	ShardOptimistic  = "optimistic"
+)
+
 // default config item values
 var (
 	// TaskConfig
@@ -236,6 +242,7 @@ type TaskConfig struct {
 	Name       string `yaml:"name"`
 	TaskMode   string `yaml:"task-mode"`
 	IsSharding bool   `yaml:"is-sharding"`
+	ShardMode  string `yaml:"shard-mode"` // when `shard-mode` set, we always enable sharding support.
 	//  treat it as hidden configuration
 	IgnoreCheckingItems []string `yaml:"ignore-checking-items"`
 	// we store detail status in meta
@@ -332,6 +339,12 @@ func (c *TaskConfig) adjust() error {
 	}
 	if c.TaskMode != ModeFull && c.TaskMode != ModeIncrement && c.TaskMode != ModeAll {
 		return terror.ErrConfigInvalidTaskMode.Generate()
+	}
+
+	if c.ShardMode != "" && c.ShardMode != ShardPessimistic && c.ShardMode != ShardOptimistic {
+		return terror.ErrConfigShardModeNotSupport.Generate(c.ShardMode)
+	} else if c.ShardMode == "" && c.IsSharding {
+		c.ShardMode = ShardPessimistic // use the pessimistic mode as default for back compatible.
 	}
 
 	for _, item := range c.IgnoreCheckingItems {
@@ -482,6 +495,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 
 		cfg := NewSubTaskConfig()
 		cfg.IsSharding = c.IsSharding
+		cfg.ShardMode = c.ShardMode
 		cfg.OnlineDDLScheme = c.OnlineDDLScheme
 		cfg.IgnoreCheckingItems = c.IgnoreCheckingItems
 		cfg.Name = c.Name

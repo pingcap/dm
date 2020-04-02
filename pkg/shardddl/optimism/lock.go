@@ -1,0 +1,370 @@
+// Copyright 2020 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package optimism
+
+import (
+	"fmt"
+	"sync"
+
+	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/schemacmp"
+	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
+)
+
+// Lock represents the shard DDL lock in memory.
+// This information does not need to be persistent, and can be re-constructed from the shard DDL info.
+type Lock struct {
+	mu sync.RWMutex
+
+	ID   string // lock's ID
+	Task string // lock's corresponding task name
+
+	// current joined info.
+	joined schemacmp.Table
+	// per-table's table info,
+	// upstream source ID -> schema name -> table name -> table info.
+	// if all of them are the same, then we call the lock `synced`.
+	tables map[string]map[string]map[string]schemacmp.Table
+
+	// whether the operations have done (execute the shard DDL) in synced status.
+	// if all of them have done, then we call the lock `resolved`.
+	// if the table is not synced, we NEVER call it done the operation.
+	done map[string]map[string]map[string]bool
+}
+
+// NewLock creates a new Lock instance.
+// NOTE: we MUST give the initial table info when creating the lock now.
+func NewLock(ID, task string, ti *model.TableInfo, sts []SourceTables) *Lock {
+	l := &Lock{
+		ID:     ID,
+		Task:   task,
+		joined: schemacmp.Encode(ti),
+		tables: make(map[string]map[string]map[string]schemacmp.Table),
+		done:   make(map[string]map[string]map[string]bool),
+	}
+	l.addSources(sts)
+	return l
+}
+
+// TrySync tries to sync the lock, re-entrant.
+// new upstream sources may join when the DDL lock is in syncing,
+// so we need to merge these new sources.
+// NOTE: now, any error returned, we treat it as conflict detected.
+// NOTE: now, DDLs (not empty) returned when resolved the conflict, but in fact these DDLs should not be replicated to the downstream.
+// NOTE: now, `TrySync` can detect and resolve conflicts in both of the following modes:
+//   - non-intrusive: update the schema of non-conflict tables to match the conflict tables.
+//                      data from conflict tables are non-intrusive.
+//   - intrusive: revert the schema of the conflict tables to match the non-conflict tables.
+//                  data from conflict tables are intrusive.
+// TODO: but both of these modes are difficult to be implemented in DM-worker now, try to do that later.
+// for non-intrusive, a broadcast mechanism needed to notify conflict tables after the conflict has resolved, or even a block mechanism needed.
+// for intrusive, a DML prune or transform mechanism needed for two different schemas (before and after the conflict resolved).
+func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
+	ddls []string, newTI *model.TableInfo, sts []SourceTables) (newDDLs []string, err error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	// handle the case where <callerSource, callerSchema, callerTable>
+	// is not in old source tables and current new source tables.
+	// duplicate append is not a problem.
+	sts = append(sts, NewSourceTables(l.Task, callerSource,
+		map[string]map[string]struct{}{callerSchema: {callerTable: struct{}{}}}))
+	// add any new source tables.
+	l.addSources(sts)
+
+	oldTable := l.tables[callerSource][callerSchema][callerTable]
+	newTable := schemacmp.Encode(newTI)
+	oldJoined := l.joined
+	newJoined := newTable
+	l.tables[callerSource][callerSchema][callerTable] = newTable
+	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
+		zap.Stringer("from", oldTable), zap.Stringer("to", newTable), zap.Strings("ddls", ddls))
+
+	// special case: if the DDL does not affect the schema at all, assume it is
+	// idempotent and just execute the DDL directly.
+	// if any real conflicts after joined exist, they will be detected by the following steps.
+	var cmp int
+	if cmp, err = newTable.Compare(oldJoined); err == nil && cmp == 0 {
+		return ddls, nil
+	}
+
+	// try to join tables.
+	var emptyDDLs = []string{}
+	for source, schemaTables := range l.tables {
+		for schema, tables := range schemaTables {
+			for table, ti := range tables {
+				if source != callerSource || schema != callerSchema || table != callerTable {
+					newJoined2, err2 := newJoined.Join(ti)
+					if err2 != nil {
+						// NOTE: conflict detected.
+						return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+							err2, l.ID, fmt.Sprintf("fail to join table info %s with %s", newJoined, ti))
+					}
+					newJoined = newJoined2
+				}
+			}
+		}
+	}
+	l.joined = newJoined // update the current table info.
+	log.L().Info("update joined table info", zap.String("lock", l.ID), zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined),
+		zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable), zap.Strings("ddls", ddls))
+
+	cmp, err = oldJoined.Compare(newJoined)
+	if err != nil || cmp != 0 {
+		// the joined schema changed, we need to revert the `done` status for tables.
+		l.tryRevertDone()
+	}
+
+	// FIXME: Compute DDLs through schema diff instead of propagating DDLs directly.
+	// and now we MUST ensure different sources execute same DDLs to the downstream multiple times is safe.
+	if err != nil {
+		// resolving conflict in non-intrusive mode.
+		log.L().Warn("resolving conflict", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
+			zap.Stringer("joined-from", oldJoined), zap.Stringer("joined-to", newJoined), zap.Strings("ddls", ddls))
+		return ddls, nil
+	}
+	if cmp != 0 {
+		// < 0: the joined schema become larger after applied these DDLs.
+		//      this often happens when executing `ADD COLUMN` for the FIRST table.
+		// > 0: the joined schema become smaller after applied these DDLs.
+		//      this often happens when executing `DROP COLUMN` for the LAST table.
+		// for these two cases, we should execute the DDLs to the downstream to update the schema.
+		log.L().Info("joined table info changed", zap.String("lock", l.ID), zap.Int("cmp", cmp), zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined),
+			zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable), zap.Strings("ddls", ddls))
+		return ddls, nil
+	}
+
+	// NOTE: now, different DM-workers do not wait for each other when executing DDL/DML,
+	// when coordinating the shard DDL between multiple DM-worker instances,
+	// a possible sequences:
+	//   1. DM-worker-A do this `trySync` and DM-master let it to `ADD COLUMN`.
+	//   2. DM-worker-B do this `trySync` again.
+	//   3. DM-worker-B replicate DML to the downstream.
+	//   4. DM-worker-A replicate `ADD COLUMN` to the downstream.
+	// in order to support DML from DM-worker-B matches the downstream schema,
+	// two strategies exist:
+	//   A. DM-worker-B waits for DM-worker-A to finish the replication of the DDL before replicating DML.
+	//   B. DM-worker-B also replicates the DDL before replicating DML,
+	//      but this MUST ensure we can tolerate replicating the DDL multiple times.
+	// for `DROP COLUMN` or other DDL which makes the schema become smaller,
+	// this is not a problem because all DML with larger schema should already replicated to the downstream,
+	// and any DML with smaller schema can fit both the larger or smaller schema.
+	// To make it easy to implement, we will temporarily choose strategy-B.
+
+	cmp, err = oldTable.Compare(newTable)
+	if err != nil {
+		return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+			err, l.ID, fmt.Sprintf("can't compare table info (old table info) %s with (new table info) %s", oldTable, newTable)) // NOTE: this should not happen.
+	}
+	if cmp < 0 {
+		// let every table to replicate the DDL.
+		return ddls, nil
+	} else if cmp > 0 {
+		// do nothing except the last table.
+		return emptyDDLs, nil
+	}
+
+	// compare the current table's info with joined info.
+	cmp, err = newTable.Compare(newJoined)
+	if err != nil {
+		return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+			err, l.ID, "can't compare table info (new table info) %s with (new joined table info) %s", newTable, newJoined) // NOTE: this should not happen.
+	}
+	if cmp < 0 {
+		// no need to replicate DDLs, because has a larger joined schema (in the downstream).
+		// FIXME: if the previous tables reached the joined schema has not replicated to the downstream,
+		// now, they should re-try until replicated successfully, try to implement better strategy later.
+		return emptyDDLs, nil
+	}
+	log.L().Warn("new table info >= new joined table info", zap.Stringer("table info", newTable), zap.Stringer("joined table info", newJoined))
+	return ddls, nil // NOTE: this should not happen.
+}
+
+// TryRemoveTable tries to remove a table in the lock.
+// it returns whether the table has been removed.
+// TODO: it does NOT try to rebuild the joined schema after the table removed now.
+// try to support this if needed later.
+// NOTE: if no table exists in the lock after removed the table,
+// it's the caller's responsibility to decide whether remove the lock or not.
+func (l *Lock) TryRemoveTable(source, schema, table string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if _, ok := l.tables[source]; !ok {
+		return false
+	}
+	if _, ok := l.tables[source][schema]; !ok {
+		return false
+	}
+	if _, ok := l.tables[source][schema][table]; !ok {
+		return false
+	}
+
+	delete(l.tables[source][schema], table)
+	delete(l.done[source][schema], table)
+	return true
+}
+
+// IsSynced returns whether the lock has synced.
+// In the optimistic mode, we call it `synced` if table info of all tables are the same,
+// and we define `remain` as the table count which have different table info with the joined one,
+// e.g. for `ADD COLUMN`, it's the table count which have not added the column,
+// for `DROP COLUMN`, it's the table count which have dropped the column.
+func (l *Lock) IsSynced() (bool, int) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	_, remain := l.syncStatus()
+	return remain == 0, remain
+}
+
+// Ready returns the source tables' sync status (whether they are ready).
+// we define `ready` if the table's info is the same with the joined one,
+// e.g for `ADD COLUMN`, it's true if it has added the column,
+// for `DROP COLUMN`, it's true if it has not dropped the column.
+func (l *Lock) Ready() map[string]map[string]map[string]bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	ready, _ := l.syncStatus()
+	return ready
+}
+
+// Joined returns the joined table info.
+func (l *Lock) Joined() schemacmp.Table {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.joined
+}
+
+// TryMarkDone tries to mark the operation of the source table as done.
+// it returns whether marked done.
+// NOTE: we can only mark the operation of the table as done if it's already synced.
+// NOTE: a done table may revert to not-done if the joined schema changed.
+func (l *Lock) TryMarkDone(source, schema, table string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if _, ok := l.done[source]; !ok {
+		return false
+	}
+	if _, ok := l.done[source][schema]; !ok {
+		return false
+	}
+	if _, ok := l.done[source][schema][table]; !ok {
+		return false
+	}
+
+	if cmp, err := l.tables[source][schema][table].Compare(l.joined); err != nil || cmp != 0 {
+		return false
+	}
+	l.done[source][schema][table] = true
+	return true
+}
+
+// IsDone returns whether the operation of the source table has done.
+func (l *Lock) IsDone(source, schema, table string) bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	if _, ok := l.done[source]; !ok {
+		return false
+	}
+	if _, ok := l.done[source][schema]; !ok {
+		return false
+	}
+	if _, ok := l.done[source][schema][table]; !ok {
+		return false
+	}
+	return l.done[source][schema][table]
+}
+
+// IsResolved returns whether the lock has resolved (all operations have done).
+func (l *Lock) IsResolved() bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	for _, schemaTables := range l.done {
+		for _, tables := range schemaTables {
+			for _, done := range tables {
+				if !done {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+// syncedStatus returns the current tables' sync status (<Ready, remain>).
+func (l *Lock) syncStatus() (map[string]map[string]map[string]bool, int) {
+	ready := make(map[string]map[string]map[string]bool)
+	remain := 0
+	for source, schemaTables := range l.tables {
+		if _, ok := ready[source]; !ok {
+			ready[source] = make(map[string]map[string]bool)
+		}
+		for schema, tables := range schemaTables {
+			if _, ok := ready[source][schema]; !ok {
+				ready[source][schema] = make(map[string]bool)
+			}
+			for table, ti := range tables {
+				if cmp, err := l.joined.Compare(ti); err == nil && cmp == 0 {
+					ready[source][schema][table] = true
+				} else {
+					ready[source][schema][table] = false
+					remain++
+				}
+			}
+		}
+	}
+	return ready, remain
+}
+
+// tryRevertDone tries to revert the done status when the joined schema changed.
+func (l *Lock) tryRevertDone() {
+	for source, schemaTables := range l.tables {
+		for schema, tables := range schemaTables {
+			for table, ti := range tables {
+				if cmp, err := l.joined.Compare(ti); err != nil || cmp != 0 {
+					l.done[source][schema][table] = false
+				}
+			}
+		}
+	}
+}
+
+// addSources adds any not-existing tables into the lock.
+func (l *Lock) addSources(sts []SourceTables) {
+	for _, st := range sts {
+		if _, ok := l.tables[st.Source]; !ok {
+			l.tables[st.Source] = make(map[string]map[string]schemacmp.Table)
+			l.done[st.Source] = make(map[string]map[string]bool)
+		}
+		for schema, tables := range st.Tables {
+			if _, ok := l.tables[st.Source][schema]; !ok {
+				l.tables[st.Source][schema] = make(map[string]schemacmp.Table)
+				l.done[st.Source][schema] = make(map[string]bool)
+			}
+			for table := range tables {
+				if _, ok := l.tables[st.Source][schema][table]; !ok {
+					// NOTE: the newly added table uses the current table info.
+					l.tables[st.Source][schema][table] = l.joined
+					l.done[st.Source][schema][table] = false
+				}
+			}
+		}
+	}
+}
