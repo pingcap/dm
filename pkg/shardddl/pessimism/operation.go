@@ -17,14 +17,12 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/pkg/etcdutil"
+
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/clientv3/clientv3util"
 	"go.etcd.io/etcd/mvcc/mvccpb"
-	"go.uber.org/zap"
-
-	"github.com/pingcap/dm/dm/common"
-	"github.com/pingcap/dm/pkg/etcdutil"
-	"github.com/pingcap/dm/pkg/log"
 )
 
 // Operation represents a shard DDL coordinate operation.
@@ -171,7 +169,7 @@ func GetAllOperations(cli *clientv3.Client) (map[string]map[string]Operation, in
 // If want to watch all operations, pass empty string for `task` and `source`.
 // This function can be called by DM-worker and DM-master.
 // TODO(csuzhangxc): report error and do some retry.
-func WatchOperationPut(ctx context.Context, cli *clientv3.Client, task, source string, revision int64, outCh chan<- Operation) {
+func WatchOperationPut(ctx context.Context, cli *clientv3.Client, task, source string, revision int64, outCh chan<- Operation, errCh chan<- error) {
 	ch := cli.Watch(ctx, common.ShardDDLPessimismOperationKeyAdapter.Encode(task, source),
 		clientv3.WithPrefix(), clientv3.WithRev(revision))
 
@@ -181,6 +179,10 @@ func WatchOperationPut(ctx context.Context, cli *clientv3.Client, task, source s
 			return
 		case resp := <-ch:
 			if resp.Canceled {
+				select {
+				case errCh <- resp.Err():
+				case <-ctx.Done():
+				}
 				return
 			}
 
@@ -191,14 +193,17 @@ func WatchOperationPut(ctx context.Context, cli *clientv3.Client, task, source s
 
 				op, err := operationFromJSON(string(ev.Kv.Value))
 				if err != nil {
-					// this should not happen.
-					log.L().Error("fail to construct shard DDL operation from json", zap.ByteString("json", ev.Kv.Value))
-					continue
-				}
-				select {
-				case outCh <- op:
-				case <-ctx.Done():
-					return
+					select {
+					case errCh <- err:
+					case <-ctx.Done():
+						return
+					}
+				} else {
+					select {
+					case outCh <- op:
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		}
