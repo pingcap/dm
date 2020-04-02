@@ -106,4 +106,22 @@ var testCases = []testCase{
 		},
 		WantResLength: 3,
 	},
+	{
+		LabelsNames: []string{
+			"type",
+			"task",
+			"queueNo",
+		},
+		AddArgs: [][]string{
+			{"flash", "task2", "No.2"},
+			{"flash", "task2", "No.3"},
+			{"flash", "task4", "No.4"},
+			{"flash", "task5", "No.4"},
+			{"start", "task6", "No.6"},
+		},
+		DeleteArgs: []map[string]string{
+			{},
+		},
+		WantResLength: 5,
+	},
 }

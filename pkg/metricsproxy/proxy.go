@@ -51,7 +51,7 @@ func findAndDeleteLabels(proxy Proxy, labels prometheus.Labels) bool {
 	}
 
 	for _, deleteLabels := range deleteLabelsList {
-		res = res && proxy.vecDelete(deleteLabels)
+		res = proxy.vecDelete(deleteLabels) && res
 	}
 	return res
 }
