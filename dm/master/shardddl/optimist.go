@@ -60,7 +60,7 @@ func (o *Optimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error {
 
 	o.cli = etcdCli // o.cli should be set before watching and recover locks because these operations need o.cli
 
-	revSource, revInfo, revOperation, err := o.rebuildLocks(etcdCli)
+	revSource, revInfo, revOperation, err := o.rebuildLocks()
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func (o *Optimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error {
 	go func() {
 		defer o.wg.Done()
 		// TODO: handle fatal error from run
-		o.run(ctx, etcdCli, revSource, revInfo, revOperation)
+		o.run(ctx, revSource, revInfo, revOperation)
 	}()
 
 	o.closed = false // started now, no error will interrupt the start process.
@@ -105,9 +105,9 @@ func (o *Optimist) Locks() map[string]*optimism.Lock {
 }
 
 // run runs jobs in the background.
-func (o *Optimist) run(ctx context.Context, etcdCli *clientv3.Client, revSource, revInfo, revOperation int64) error {
+func (o *Optimist) run(ctx context.Context, revSource, revInfo, revOperation int64) error {
 	for {
-		err := o.watchSourceInfoOperation(ctx, etcdCli, revSource, revInfo, revOperation)
+		err := o.watchSourceInfoOperation(ctx, revSource, revInfo, revOperation)
 		if etcdutil.IsRetryableError(err) {
 			retryNum := 0
 			for {
@@ -116,7 +116,7 @@ func (o *Optimist) run(ctx context.Context, etcdCli *clientv3.Client, revSource,
 				case <-ctx.Done():
 					return nil
 				case <-time.After(500 * time.Millisecond):
-					revSource, revInfo, revOperation, err = o.rebuildLocks(etcdCli)
+					revSource, revInfo, revOperation, err = o.rebuildLocks()
 					if err != nil {
 						o.logger.Error("fail to rebuild shard DDL lock, will retry",
 							zap.Int("retryNum", retryNum), zap.Error(err))
@@ -135,11 +135,11 @@ func (o *Optimist) run(ctx context.Context, etcdCli *clientv3.Client, revSource,
 }
 
 // rebuildLocks rebuilds shard DDL locks from etcd persistent data.
-func (o *Optimist) rebuildLocks(etcdCli *clientv3.Client) (revSource, revInfo, revOperation int64, err error) {
+func (o *Optimist) rebuildLocks() (revSource, revInfo, revOperation int64, err error) {
 	o.lk.Clear() // clear all previous locks to support re-Start.
 
 	// get the history & initial source tables.
-	stm, revSource, err := optimism.GetAllSourceTables(etcdCli)
+	stm, revSource, err := optimism.GetAllSourceTables(o.cli)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -148,7 +148,7 @@ func (o *Optimist) rebuildLocks(etcdCli *clientv3.Client) (revSource, revInfo, r
 	o.tk.Init(stm) // re-initialize again with valid tables.
 
 	// get the history shard DDL info.
-	ifm, revInfo, err := optimism.GetAllInfo(etcdCli)
+	ifm, revInfo, err := optimism.GetAllInfo(o.cli)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -156,7 +156,7 @@ func (o *Optimist) rebuildLocks(etcdCli *clientv3.Client) (revSource, revInfo, r
 
 	// get the history shard DDL lock operation.
 	// the newly operations after this GET will be received through the WATCH with `revOperation+1`,
-	opm, revOperation, err := optimism.GetAllOperations(etcdCli)
+	opm, revOperation, err := optimism.GetAllOperations(o.cli)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -216,8 +216,7 @@ func (o *Optimist) recoverLocks(
 
 // watchSourceInfoOperation watches the etcd operation for source tables, shard DDL infos and shard DDL operations.
 func (o *Optimist) watchSourceInfoOperation(
-	pCtx context.Context, etcdCli *clientv3.Client,
-	revSource, revInfo, revOperation int64) error {
+	pCtx context.Context, revSource, revInfo, revOperation int64) error {
 	ctx, cancel := context.WithCancel(pCtx)
 	var wg sync.WaitGroup
 	defer func() {
@@ -235,7 +234,7 @@ func (o *Optimist) watchSourceInfoOperation(
 			wg.Done()
 			close(sourceCh)
 		}()
-		optimism.WatchSourceTables(ctx, etcdCli, revSource+1, sourceCh, errCh)
+		optimism.WatchSourceTables(ctx, o.cli, revSource+1, sourceCh, errCh)
 	}()
 	go func() {
 		defer wg.Done()
@@ -250,7 +249,7 @@ func (o *Optimist) watchSourceInfoOperation(
 			wg.Done()
 			close(infoCh)
 		}()
-		optimism.WatchInfo(ctx, etcdCli, revInfo+1, infoCh, errCh)
+		optimism.WatchInfo(ctx, o.cli, revInfo+1, infoCh, errCh)
 	}()
 	go func() {
 		defer wg.Done()
@@ -265,7 +264,7 @@ func (o *Optimist) watchSourceInfoOperation(
 			wg.Done()
 			close(opCh)
 		}()
-		optimism.WatchOperationPut(ctx, etcdCli, "", "", "", "", revOperation+1, opCh, errCh)
+		optimism.WatchOperationPut(ctx, o.cli, "", "", "", "", revOperation+1, opCh, errCh)
 	}()
 	go func() {
 		defer wg.Done()
