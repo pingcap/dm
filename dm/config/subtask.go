@@ -133,6 +133,7 @@ type SubTaskConfig struct {
 
 	// when in sharding, multi dm-workers do one task
 	IsSharding      bool   `toml:"is-sharding" json:"is-sharding"`
+	ShardMode       string `toml:"shard-mode" json:"shard-mode"`
 	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
 	// handle schema/table name mode, and only for schema/table name/pattern
@@ -258,6 +259,12 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	//if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
 	//	return errors.Errorf("please specify right mysql version, support mysql, mariadb now")
 	//}
+
+	if c.ShardMode != "" && c.ShardMode != ShardPessimistic && c.ShardMode != ShardOptimistic {
+		return terror.ErrConfigShardModeNotSupport.Generate(c.ShardMode)
+	} else if c.ShardMode == "" && c.IsSharding {
+		c.ShardMode = ShardPessimistic // use the pessimistic mode as default for back compatible.
+	}
 
 	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
 		return terror.ErrConfigOnlineSchemeNotSupport.Generate(c.OnlineDDLScheme)

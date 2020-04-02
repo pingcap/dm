@@ -35,7 +35,7 @@ type testPessimist struct{}
 
 var _ = Suite(&testPessimist{})
 
-func TestPessimist(t *testing.T) {
+func TestShardDDL(t *testing.T) {
 	log.InitLogger(&log.Config{})
 
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})

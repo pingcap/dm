@@ -149,6 +149,9 @@ const (
 	codeBinlogInvalidFilenameWithUUIDSuffix
 	// dm/common
 	codeDecodeEtcdKeyFail
+
+	// pkg/shardddl/optimism
+	codeShardDDLOptimismTrySyncFail
 )
 
 // Config related error code list
@@ -185,6 +188,7 @@ const (
 	codeConfigSyncerCfgNotFound
 	codeConfigSourceIDNotFound
 	codeConfigDuplicateCfgItem
+	codeConfigShardModeNotSupport
 )
 
 // Binlog operation error code list
@@ -360,6 +364,7 @@ const (
 	codeSyncerUnitExecWithNoBlockingDDL
 	codeSyncerUnitGenBWList
 	codeSyncerUnitHandleDDLFailed
+	codeSyncerShardDDLConflict
 )
 
 // DM-master error code
@@ -673,6 +678,10 @@ var (
 
 	// dm/common
 	ErrDecodeEtcdKeyFail = New(codeDecodeEtcdKeyFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to decode etcd key: %s")
+
+	// pkg/shardddl/optimism
+	ErrShardDDLOptimismTrySyncFail = New(codeShardDDLOptimismTrySyncFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to try sync the optimistic shard ddl lock %s: %s")
+
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
 	ErrConfigTomlTransform          = New(codeConfigTomlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s")
@@ -706,6 +715,7 @@ var (
 	ErrConfigSyncerCfgNotFound      = New(codeConfigSyncerCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s syncer config %s not exist in syncer")
 	ErrConfigSourceIDNotFound       = New(codeConfigSourceIDNotFound, ClassConfig, ScopeInternal, LevelMedium, "source %s in deployment configuration not found")
 	ErrConfigDuplicateCfgItem       = New(codeConfigDuplicateCfgItem, ClassConfig, ScopeInternal, LevelMedium, "the following mysql configs have duplicate items, please remove the duplicates:\n%s")
+	ErrConfigShardModeNotSupport    = New(codeConfigShardModeNotSupport, ClassConfig, ScopeInternal, LevelMedium, "shard mode %s not supported")
 
 	// Binlog operation error
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "")
@@ -866,6 +876,7 @@ var (
 	ErrSyncerUnitExecWithNoBlockingDDL      = New(codeSyncerUnitExecWithNoBlockingDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "process unit not waiting for sharding DDL to sync")
 	ErrSyncerUnitGenBWList                  = New(codeSyncerUnitGenBWList, ClassSyncUnit, ScopeInternal, LevelHigh, "generate black white list")
 	ErrSyncerUnitHandleDDLFailed            = New(codeSyncerUnitHandleDDLFailed, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle ddl job for %s")
+	ErrSyncerShardDDLConflict               = New(codeSyncerShardDDLConflict, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle shard ddl %v in optimistic mode, because schema conflict detected")
 
 	// DM-master error
 	ErrMasterSQLOpNilRequest        = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid")
