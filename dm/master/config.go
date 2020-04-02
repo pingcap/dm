@@ -397,6 +397,9 @@ func genEmbedEtcdConfigWithLogger() *embed.Config {
 	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger.Logger, logger.Core(), log.Props().Syncer) // use global app props.
 	cfg.Logger = "zap"
 
+	// TODO: we run ZapLoggerBuilder to set SetLoggerV2 before we do some etcd operations
+	//       otherwise we will meet data race while running `grpclog.SetLoggerV2`
+	//       It's vert tricky here, we should use a better way to avoid this in the future.
 	cfg.ZapLoggerBuilder(cfg)
 
 	return cfg

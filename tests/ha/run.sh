@@ -87,11 +87,35 @@ function run() {
 
     # may join failed with error `fail to join embed etcd: add member http://127.0.0.1:8295: etcdserver: unhealthy cluster`, and dm-master will exit. so just sleep some seconds.
     sleep 5
+
+    echo "kill dm-master1"
+    ps aux | grep dm-master1 |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT1 20
+
     run_dm_master $WORK_DIR/master5 $MASTER_PORT5 $cur/conf/dm-master5.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
         "query-status test" \
         "\"stage\": \"Running\"" 2
+    sleep 5
+
+    echo "kill dm-master2"
+    ps aux | grep dm-master2 |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT2 20
+
+
+    run_dm_master $WORK_DIR/master6 $MASTER_PORT6 $cur/conf/dm-master6.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT6
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT6" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 2
+
+    echo "kill dm-master3"
+    ps aux | grep dm-master3 |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT3 20
+
+    echo "initial cluster of dm-masters have been replaced to joined masters"
+    echo "now we will check whether joined masters can worker normally"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
         "stop-task test" \
