@@ -71,9 +71,9 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	close(ech)
 
 	// watch should only get op11.
+	c.Assert(len(ech), Equals, 0)
 	c.Assert(len(wch), Equals, 1)
 	c.Assert(<-wch, DeepEquals, op11)
-	c.Assert(len(ech), Equals, 0)
 
 	// put for another task.
 	rev3, succ, err := PutOperation(etcdTestCli, false, op21)
@@ -90,10 +90,10 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	close(ech)
 
 	// watch should get 2 operations.
+	c.Assert(len(ech), Equals, 0)
 	c.Assert(len(wch), Equals, 2)
 	c.Assert(<-wch, DeepEquals, op11)
 	c.Assert(<-wch, DeepEquals, op21)
-	c.Assert(len(ech), Equals, 0)
 
 	// get all operations.
 	opm, rev4, err := GetAllOperations(etcdTestCli)
