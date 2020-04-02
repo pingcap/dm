@@ -84,7 +84,8 @@ func (p *Pessimist) GetOperation(ctx context.Context, info pessimism.Info, rev i
 	defer cancel2()
 
 	ch := make(chan pessimism.Operation, 1)
-	go pessimism.WatchOperationPut(ctx2, p.cli, info.Task, info.Source, rev, ch)
+	errCh := make(chan error, 1)
+	go pessimism.WatchOperationPut(ctx2, p.cli, info.Task, info.Source, rev, ch, errCh)
 
 	select {
 	case op := <-ch:
@@ -92,6 +93,8 @@ func (p *Pessimist) GetOperation(ctx context.Context, info pessimism.Info, rev i
 		p.pendingOp = &op
 		p.mu.Unlock()
 		return op, nil
+	case err := <-errCh:
+		return pessimism.Operation{}, err
 	case <-ctx.Done():
 		return pessimism.Operation{}, ctx.Err()
 	}

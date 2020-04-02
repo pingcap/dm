@@ -115,14 +115,16 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 
 	// start the watcher.
 	wch := make(chan Info, 10)
+	ech := make(chan error, 10)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
-		WatchInfoPut(ctx, etcdTestCli, rev4+1, wch) // revision+1
-		close(wch)                                  // close the chan
+		WatchInfoPut(ctx, etcdTestCli, rev4+1, wch, ech) // revision+1
+		close(wch)                                       // close the chan
+		close(ech)
 	}()
 
 	// put another key for a different task.
@@ -132,6 +134,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 
 	// watch should only get i21.
 	c.Assert(len(wch), Equals, 1)
+	c.Assert(len(ech), Equals, 0)
 	c.Assert(<-wch, DeepEquals, i21)
 
 	// delete i12.
