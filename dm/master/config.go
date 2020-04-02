@@ -323,8 +323,7 @@ func (c *Config) Reload() error {
 
 // genEmbedEtcdConfig generates the configuration needed by embed etcd.
 // This method should be called after logger initialized and before any concurrent gRPC calls.
-func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
-	cfg := embed.NewConfig()
+func (c *Config) genEmbedEtcdConfig(cfg *embed.Config) (*embed.Config, error) {
 	cfg.Name = c.Name
 	cfg.Dir = c.DataDir
 
@@ -348,20 +347,6 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 
 	cfg.InitialCluster = c.InitialCluster
 	cfg.ClusterState = c.InitialClusterState
-
-	// use zap as the logger for embed etcd
-	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.
-	// NOTE: if using zap logger for etcd, must build it before any concurrent gRPC calls,
-	// otherwise, DATA RACE occur in builder and gRPC.
-	logger := log.L().WithFields(zap.String("component", "embed etcd"))
-	if EnableZap {
-		// The etcd master version has removed embed.Config.SetupLogging.
-		// Now logger is set up automatically based on embed.Config.Logger,
-		// Use zap logger in the test, otherwise will panic.
-		// Reference: https://go.etcd.io/etcd/blob/master/embed/config_logging.go#L45
-		cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger.Logger, logger.Core(), log.Props().Syncer) // use global app props.
-	}
-	cfg.Logger = "zap"
 
 	err = cfg.Validate() // verify & trigger the builder
 	if err != nil {
@@ -399,4 +384,20 @@ func parseURLs(s string) ([]url.URL, error) {
 		urls = append(urls, *u)
 	}
 	return urls, nil
+}
+
+func genEmbedEtcdConfigWithLogger() *embed.Config {
+	cfg := embed.NewConfig()
+
+	// use zap as the logger for embed etcd
+	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.
+	// NOTE: if using zap logger for etcd, must build it before any concurrent gRPC calls,
+	// otherwise, DATA RACE occur in builder and gRPC.
+	logger := log.L().WithFields(zap.String("component", "embed etcd"))
+	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger.Logger, logger.Core(), log.Props().Syncer) // use global app props.
+	cfg.Logger = "zap"
+
+	cfg.ZapLoggerBuilder(cfg)
+
+	return cfg
 }
