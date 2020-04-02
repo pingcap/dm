@@ -19,9 +19,6 @@ function run() {
     run_dm_master $WORK_DIR/master2 $MASTER_PORT2 $cur/conf/dm-master2.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
-    # join master3
-    run_dm_master $WORK_DIR/master3 $MASTER_PORT3 $cur/conf/dm-master3.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
@@ -35,6 +32,9 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
+    # join master3
+    run_dm_master $WORK_DIR/master3 $MASTER_PORT3 $cur/conf/dm-master3.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3
 
     echo "start DM task"
     dmctl_start_task
@@ -113,7 +113,8 @@ function run() {
     echo "initial cluster of dm-masters have been killed"
     echo "now we will check whether joined masters can work normally"
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
+    # we need some time for cluster to re-elect new available leader
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
         "stop-task test" \
         "\"result\": true" 3 \
         "\"source\": \"$SOURCE_ID1\"" 1 \
@@ -123,7 +124,8 @@ function run() {
     run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     sleep 2
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
+    # leader needs some time to rebuild info
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
         "start-task $cur/conf/dm-task.yaml" \
         "\"result\": true" 3 \
         "\"source\": \"$SOURCE_ID1\"" 1 \
