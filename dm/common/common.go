@@ -49,9 +49,21 @@ var (
 	// ShardDDLPessimismInfoKeyAdapter used to store shard DDL info in pessimistic model.
 	// k/v: Encode(task-name, source-id) -> shard DDL info
 	ShardDDLPessimismInfoKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/info/")
-	// ShardDDLPessimismOperationKeyAdapter used to store shard DDL lock in pessimistic model.
+	// ShardDDLPessimismOperationKeyAdapter used to store shard DDL operation in pessimistic model.
 	// k/v: Encode(task-name, source-id) -> shard DDL operation
 	ShardDDLPessimismOperationKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/operation/")
+
+	// ShardDDLOptimismSourceTablesKeyAdapter used to store INITIAL upstream schema & table names when starting the subtask.
+	// In other words, if any Info for this subtask exists, we should obey source tables in the Info.
+	// This is because the current upstream tables may not match the tables that the binlog stream has reached.
+	// k/v: Encode(task-name, source-id) -> upstream schema & table names.
+	ShardDDLOptimismSourceTablesKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/source-tables/")
+	// ShardDDLOptimismInfoKeyAdapter used to store shard DDL info in optimistic model.
+	// k/v: Encode(task-name, source-id, upstream-schema-name, upstream-table-name) -> shard DDL info.
+	ShardDDLOptimismInfoKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/info/")
+	// ShardDDLOptimismOperationKeyAdapter used to store shard DDL operation in optimistic model.
+	// k/v: Encode(task-name, sourc-id, upstream-schema-name, upstream-table-name) -> shard DDL operation.
+	ShardDDLOptimismOperationKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/operation/")
 )
 
 func keyAdapterKeysLen(s KeyAdapter) int {
@@ -59,8 +71,13 @@ func keyAdapterKeysLen(s KeyAdapter) int {
 	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter,
 		WorkerKeepAliveKeyAdapter, StageRelayKeyAdapter:
 		return 1
-	case UpstreamSubTaskKeyAdapter, StageSubTaskKeyAdapter:
+	case UpstreamSubTaskKeyAdapter, StageSubTaskKeyAdapter,
+		ShardDDLPessimismInfoKeyAdapter, ShardDDLPessimismOperationKeyAdapter,
+		ShardDDLOptimismSourceTablesKeyAdapter:
 		return 2
+	case ShardDDLOptimismInfoKeyAdapter, ShardDDLOptimismOperationKeyAdapter:
+		return 4
+
 	}
 	return -1
 }

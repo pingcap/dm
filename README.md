@@ -10,12 +10,12 @@
 
 ## Architecture
 
-![architecture](https://pingcap.com/images/docs/dm-architecture.png)
+![architecture](docs/media/dm-architecture.png)
 
 ## Documentation
 
-* [Detailed documentation](https://pingcap.com/docs/tools/dm/overview/)
-* [简体中文文档](https://pingcap.com/docs-cn/tools/dm/overview/)
+* [Detailed documentation](https://pingcap.com/docs/tidb-data-migration/stable/)
+* [简体中文文档](https://pingcap.com/docs-cn/tidb-data-migration/stable/)
 
 ## Building
 

@@ -1,4 +1,4 @@
-# DM-Master4 Configuration.
+# DM-Master5 Configuration.
 name = "master5"
 master-addr = ":8661"
 advertise-addr = "127.0.0.1:8661"
