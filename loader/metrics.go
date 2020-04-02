@@ -45,27 +45,27 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 16),
 		}, []string{"task"})
 
-	dataFileCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	dataFileGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
-			Name:      "data_file_count",
+			Name:      "data_file_gauge",
 			Help:      "data files in total",
 		}, []string{"task"})
 
-	tableCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	tableGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
-			Name:      "table_count",
+			Name:      "table_gauge",
 			Help:      "tables in total",
 		}, []string{"task"})
 
-	dataSizeCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	dataSizeGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
-			Name:      "data_size_count",
+			Name:      "data_size_gauge",
 			Help:      "data size in total",
 		}, []string{"task"})
 
@@ -92,9 +92,9 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(tidbExecutionErrorCounter)
 	registry.MustRegister(txnHistogram)
 	registry.MustRegister(queryHistogram)
-	registry.MustRegister(dataFileCounter)
-	registry.MustRegister(tableCounter)
-	registry.MustRegister(dataSizeCounter)
+	registry.MustRegister(dataFileGauge)
+	registry.MustRegister(tableGauge)
+	registry.MustRegister(dataSizeGauge)
 	registry.MustRegister(progressGauge)
 	registry.MustRegister(loaderExitWithErrorCounter)
 }

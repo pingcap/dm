@@ -37,6 +37,12 @@ var (
 	etcdErrCompacted = v3rpc.ErrCompacted
 )
 
+const (
+	noRestart          = iota // do nothing in rebuildPessimist, just keep testing
+	restartOnly               // restart without building new instance. mock leader role transfer
+	restartNewInstance        // restart with build a new instance. mock progress restore from failure
+)
+
 type testPessimist struct{}
 
 var _ = Suite(&testPessimist{})
@@ -61,6 +67,12 @@ func clearTestInfoOperation(c *C) {
 }
 
 func (t *testPessimist) TestPessimist(c *C) {
+	t.testPessimistProgress(c, noRestart)
+	t.testPessimistProgress(c, restartOnly)
+	t.testPessimistProgress(c, restartNewInstance)
+}
+
+func (t *testPessimist) testPessimistProgress(c *C, restart int) {
 	defer clearTestInfoOperation(c)
 
 	var (
@@ -93,6 +105,18 @@ func (t *testPessimist) TestPessimist(c *C) {
 		}
 		logger = log.L()
 		p      = NewPessimist(&logger, sources)
+
+		rebuildPessimist = func(ctx context.Context) {
+			switch restart {
+			case restartOnly:
+				p.Close()
+				c.Assert(p.Start(ctx, etcdTestCli), IsNil)
+			case restartNewInstance:
+				p.Close()
+				p = NewPessimist(&logger, sources)
+				c.Assert(p.Start(ctx, etcdTestCli), IsNil)
+			}
+		}
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -192,10 +216,8 @@ func (t *testPessimist) TestPessimist(c *C) {
 		return remain == 1
 	}), IsTrue)
 
-	p.Close() // close the Pessimist.
-
 	// CASE 3: start again with some previous shard DDL info and the lock is un-synced.
-	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
+	rebuildPessimist(ctx)
 	c.Assert(p.Locks(), HasLen, 1)
 	c.Assert(p.Locks(), HasKey, ID2)
 	synced, remain = p.Locks()[ID2].IsSynced()
@@ -226,10 +248,8 @@ func (t *testPessimist) TestPessimist(c *C) {
 	c.Assert(op21.Exec, IsTrue)
 	c.Assert(op21.Done, IsFalse)
 
-	p.Close() // close the Pessimist.
-
 	// CASE 4: start again with some previous shard DDL info and non-`done` operation.
-	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
+	rebuildPessimist(ctx)
 	c.Assert(p.Locks(), HasLen, 1)
 	c.Assert(p.Locks(), HasKey, ID2)
 	synced, _ = p.Locks()[ID2].IsSynced()
@@ -246,10 +266,8 @@ func (t *testPessimist) TestPessimist(c *C) {
 		return p.Locks()[ID2].IsDone(source1)
 	}), IsTrue)
 
-	p.Close() // close the Pessimist.
-
 	// CASE 5: start again with some previous shard DDL info and `done` operation for the owner.
-	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
+	rebuildPessimist(ctx)
 	c.Assert(p.Locks(), HasLen, 1)
 	c.Assert(p.Locks(), HasKey, ID2)
 	synced, _ = p.Locks()[ID2].IsSynced()
@@ -266,10 +284,8 @@ func (t *testPessimist) TestPessimist(c *C) {
 		return p.Locks()[ID2].IsDone(source2)
 	}), IsTrue)
 
-	p.Close() // close the Pessimist.
-
 	// CASE 6: start again with some previous shard DDL info and `done` operation for the owner and non-owner.
-	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
+	rebuildPessimist(ctx)
 	c.Assert(p.Locks(), HasLen, 1)
 	c.Assert(p.Locks(), HasKey, ID2)
 	synced, _ = p.Locks()[ID2].IsSynced()
@@ -290,10 +306,8 @@ func (t *testPessimist) TestPessimist(c *C) {
 	}), IsTrue)
 	c.Assert(p.Locks(), HasLen, 0)
 
-	p.Close() // close the Pessimist.
-
 	// CASE 7: start again after all shard DDL locks have been resolved.
-	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
+	rebuildPessimist(ctx)
 	c.Assert(p.Locks(), HasLen, 0)
 	p.Close() // close the Pessimist.
 }
@@ -528,6 +542,7 @@ func (t *testPessimist) TestUnlockSourceMissBeforeSynced(c *C) {
 	defer cancel()
 
 	// 0. start the pessimist.
+	c.Assert(terror.ErrMasterPessimistNotStarted.Equal(p.UnlockLock(ctx, ID, "", false)), IsTrue)
 	c.Assert(p.Start(ctx, etcdTestCli), IsNil)
 	c.Assert(p.Locks(), HasLen, 0)
 	defer p.Close()

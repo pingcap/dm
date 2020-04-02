@@ -1,7 +1,7 @@
 ---
 name: test
 task-mode: all
-is-sharding: false
+is-sharding: true
 meta-schema: "dm_meta"
 remove-meta: false
 # enable-heartbeat: true
@@ -16,22 +16,39 @@ target-database:
 mysql-instances:
   - source-id: "mysql-replica-01"
     black-white-list:  "instance"
+    route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
+    mydumper-config-name: "global"
+    loader-config-name: "global"
+    syncer-config-name: "global"
+
+  - source-id: "mysql-replica-02"
+    black-white-list:  "instance"
+    route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
 black-white-list:
   instance:
-    do-dbs: ["start_task"]
+    do-dbs: ["sharding22"]
+
+routes:
+  sharding-route-rules-table:
+    schema-pattern: sharding22
+    table-pattern: t*
+    target-schema: db_target
+    target-table: t_target
+
+  sharding-route-rules-schema:
+    schema-pattern: sharding22
+    target-schema: db_target
 
 mydumpers:
   global:
     mydumper-path: "./bin/mydumper"
     threads: 4
-    chunk-filesize: 0
+    chunk-filesize: 64
     skip-tz-utc: true
-    # start_task integration_test will add failpoint to function fetchTables will cause mydumper failing to start and won't rebuild dm-worker during restart so extra-args is given here
-    statement-size: 100
     extra-args: ""
 
 loaders:

@@ -24,7 +24,7 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/pd/pkg/tempurl"
+	"github.com/pingcap/pd/v4/pkg/tempurl"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
@@ -370,7 +370,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 
 func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, dir string, hostName string) *embed.Etcd {
 	ETCD.Close()
-	time.Sleep(4 * time.Second)
+	time.Sleep(6 * time.Second)
 	// When worker server fail to keepalive with etcd, sever should close its worker
 	c.Assert(s.getWorker(true), IsNil)
 	c.Assert(s.getSourceStatus(true).Result, IsNil)
