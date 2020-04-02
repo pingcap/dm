@@ -17,6 +17,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -78,7 +79,8 @@ func (s *Syncer) Status() interface{} {
 		st.Synced = utils.CompareBinlogPos(masterPos, realPos, 0) == 0
 	}
 
-	if s.cfg.IsSharding {
+	// only support to show `UnresolvedGroups` in pessimistic mode now.
+	if s.cfg.ShardMode == config.ShardPessimistic {
 		st.UnresolvedGroups = s.sgk.UnresolvedGroups()
 	}
 

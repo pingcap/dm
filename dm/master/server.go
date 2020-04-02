@@ -88,6 +88,8 @@ type Server struct {
 
 	// shard DDL pessimist
 	pessimist *shardddl.Pessimist
+	// shard DDL optimist
+	optimist *shardddl.Optimist
 
 	// SQL operator holder
 	sqlOperatorHolder *operator.Holder
@@ -112,6 +114,7 @@ func NewServer(cfg *Config) *Server {
 		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
 	}
 	server.pessimist = shardddl.NewPessimist(&logger, server.getTaskResources)
+	server.optimist = shardddl.NewOptimist(&logger)
 	server.closed.Set(true)
 
 	return &server
@@ -644,6 +647,7 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 		Result: true,
 	}
 
+	// TODO: add `show-ddl-locks` support for Optimist later.
 	locks := s.pessimist.Locks()
 	resp.Locks = make([]*pb.DDLLock, 0, len(locks))
 	for _, lock := range locks {
@@ -702,6 +706,7 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 	resp := &pb.UnlockDDLLockResponse{
 		Result: true,
 	}
+	// TODO: add `unlock-ddl-lock` support for Optimist later.
 	err := s.pessimist.UnlockLock(ctx, req.ID, req.ReplaceOwner, req.ForceRemove)
 	if err != nil {
 		resp.Result = false

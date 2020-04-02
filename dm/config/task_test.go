@@ -129,7 +129,7 @@ ignore-checking-items: ["all"]
 	configContent = []byte(`---
 name: test
 task-mode: all
-is-sharding: false
+is-sharding: true
 meta-schema: "dm_meta"
 remove-meta: false
 enable-heartbeat: true
@@ -193,6 +193,8 @@ syncers:
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
 	c.Assert(err, IsNil)
+	c.Assert(taskConfig.IsSharding, IsTrue)
+	c.Assert(taskConfig.ShardMode, Equals, ShardPessimistic)
 	c.Assert(taskConfig.MySQLInstances[0].Mydumper.Threads, Equals, 11)
 	c.Assert(taskConfig.MySQLInstances[0].Loader.PoolSize, Equals, 22)
 	c.Assert(taskConfig.MySQLInstances[0].Syncer.WorkerCount, Equals, 33)
@@ -206,7 +208,8 @@ syncers:
 	configContent = []byte(`---
 name: test
 task-mode: all
-is-sharding: false
+is-sharding: true
+shard-mode: "optimistic"
 meta-schema: "dm_meta"
 remove-meta: false
 enable-heartbeat: true
@@ -247,6 +250,8 @@ filters:
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
 	c.Assert(err, IsNil)
+	c.Assert(taskConfig.IsSharding, IsTrue)
+	c.Assert(taskConfig.ShardMode, Equals, ShardOptimistic)
 	taskConfig.MySQLInstances[0].RouteRules = []string{"route-rule-1", "route-rule-2", "route-rule-1", "route-rule-2"}
 	taskConfig.MySQLInstances[1].FilterRules = []string{"filter-rule-1", "filter-rule-2", "filter-rule-3", "filter-rule-2"}
 	err = taskConfig.adjust()
