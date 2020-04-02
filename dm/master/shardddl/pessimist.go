@@ -101,13 +101,18 @@ func (p *Pessimist) run(ctx context.Context, etcdCli *clientv3.Client, rev1, rev
 					rev1, rev2, err = p.buildLocks(etcdCli)
 					if err != nil {
 						log.L().Error("resetWorkerEv is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
+					} else {
+						succeed = true
 					}
-					succeed = true
 				}
 				retryNum++
 			}
 		} else {
-			log.L().Error("pessimist is failed and will quit now", zap.Error(err))
+			if err != nil {
+				log.L().Error("pessimist is failed and will quit now", zap.Error(err))
+			} else {
+				log.L().Info("pessimist will quit now")
+			}
 			return err
 		}
 	}

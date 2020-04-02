@@ -1011,7 +1011,11 @@ func (s *Scheduler) observeWorkerEvent(ctx context.Context, etcdCli *clientv3.Cl
 				retryNum++
 			}
 		} else {
-			log.L().Error("observeWorkerEvent is failed and will quit now", zap.Error(err))
+			if err != nil {
+				log.L().Error("observeWorkerEvent is failed and will quit now", zap.Error(err))
+			} else {
+				log.L().Info("observeWorkerEvent will quit now")
+			}
 			return err
 		}
 	}
