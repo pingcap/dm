@@ -96,8 +96,9 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 
 	// special case: if the DDL does not affect the schema at all, assume it is
 	// idempotent and just execute the DDL directly.
+	// if any real conflicts after joined exist, they will be detected by the following steps.
 	var cmp int
-	if cmp, err = newJoined.Compare(oldJoined); err == nil && cmp == 0 {
+	if cmp, err = newTable.Compare(oldJoined); err == nil && cmp == 0 {
 		return ddls, nil
 	}
 
@@ -189,7 +190,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		// now, they should re-try until replicated successfully, try to implement better strategy later.
 		return emptyDDLs, nil
 	}
-	log.L().Warn("new table info > new joined table info", zap.Stringer("table info", newTable), zap.Stringer("joined table info", newJoined))
+	log.L().Warn("new table info >= new joined table info", zap.Stringer("table info", newTable), zap.Stringer("joined table info", newJoined))
 	return ddls, nil // NOTE: this should not happen.
 }
 

@@ -31,6 +31,8 @@ run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # TODO: now one table may fetch updated schema by another table from the downstream, this needs to be supported later.
+    # e.g the initial downstream schema is Ver1, table-A received rows binlog event and want to fetch this Ver1 schema,
+    # but it fetched Ver2 schema (updated by another table-B after applied a DDL).
     # now we simply ensure schema tracker have tracked all tables' schema before executing shard DDL.
     run_sql_file $cur/data/db1.increment0.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment0.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
