@@ -392,7 +392,7 @@ func genEmbedEtcdConfigWithLogger() *embed.Config {
 	// use zap as the logger for embed etcd
 	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.
 	// NOTE: if using zap logger for etcd, must build it before any concurrent gRPC calls,
-	// otherwise, DATA RACE occur in builder and gRPC.
+	// otherwise, DATA RACE occur in NewZapCoreLoggerBuilder and gRPC.
 	logger := log.L().WithFields(zap.String("component", "embed etcd"))
 	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger.Logger, logger.Core(), log.Props().Syncer) // use global app props.
 	cfg.Logger = "zap"
