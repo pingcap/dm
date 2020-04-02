@@ -212,7 +212,11 @@ func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Clien
 				retryNum++
 			}
 		} else {
-			log.L().Error("observeSourceBound is failed and will quit now", zap.Error(err))
+			if err != nil {
+				log.L().Error("observeSourceBound is failed and will quit now", zap.Error(err))
+			} else {
+				log.L().Info("observeSourceBound will quit now")
+			}
 			return err
 		}
 	}
