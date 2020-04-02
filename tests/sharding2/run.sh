@@ -35,6 +35,17 @@ function run() {
     # use sync_diff_inspector to check data now!
     echo "check sync diff for the increment replication"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    # restart DM task
+    dmctl_stop_task test
+    dmctl_start_task
+
+    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+
+    # use sync_diff_inspector to check data now!
+    echo "check sync diff for the increment replication"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 cleanup_data db_target
