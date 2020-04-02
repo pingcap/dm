@@ -1577,7 +1577,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		ddlInfo        *shardingDDLInfo
 		needHandleDDLs []string
 		needTrackDDLs  []trackedDDL
-		targetTbls     = make(map[string]*filter.Table)
+		sourceTbls     = make(map[string]*filter.Table)
 	)
 	for _, sql := range sqls {
 		sqlDDL, tableNames, stmt, handleErr := s.handleDDL(ec.parser2, usedSchema, sql)
@@ -1637,7 +1637,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		needHandleDDLs = append(needHandleDDLs, sqlDDL)
 		needTrackDDLs = append(needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tableNames: tableNames})
-		targetTbls[tableNames[1][0].String()] = tableNames[1][0]
+		sourceTbls[tableNames[0][0].String()] = tableNames[0][0]
 	}
 
 	s.tctx.L().Info("prepare to handle ddls", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
@@ -1657,6 +1657,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			s.tctx.L().Info("replace ddls to preset ddls by sql operator in normal mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 			needHandleDDLs = appliedSQLs // maybe nil
 		}
+		// TODO: s.cfg.IsSharding == false => ddlInfo == nil => job.sourceSchema == ""
+		//      so the table checkpoint won't be flushed instantly in addJob
 		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID)
 		err = s.addJobFunc(job)
 		if err != nil {
@@ -1676,7 +1678,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 				return err
 			}
 		}
-		for _, tbl := range targetTbls {
+		for _, tbl := range sourceTbls {
 			// save checkpoint of each table
 			s.saveTablePoint(tbl.Schema, tbl.Name, ec.currentLocation.Clone())
 		}
@@ -1739,18 +1741,18 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	s.tctx.L().Info(annotate, zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Bool("in-sharding", needShardingHandle), zap.Stringer("start location", startLocation), zap.Bool("is-synced", synced), zap.Int("unsynced", remain))
 
+	for _, td := range needTrackDDLs {
+		if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+			return err
+		}
+	}
+
 	if needShardingHandle {
 		target, _ := GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 		unsyncedTableGauge.WithLabelValues(s.cfg.Name, target).Set(float64(remain))
 		err = ec.safeMode.IncrForTable(s.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
 		if err != nil {
 			return err
-		}
-
-		for _, td := range needTrackDDLs {
-			if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
-				return err
-			}
 		}
 
 		// save checkpoint in memory, don't worry, if error occurred, we can rollback it
