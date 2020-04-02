@@ -23,6 +23,8 @@ import (
 	"syscall"
 
 	"github.com/pingcap/errors"
+	zaplog "github.com/pingcap/log"
+	"github.com/pingcap/pd/v4/pkg/logutil"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/master"
@@ -50,6 +52,17 @@ func main() {
 	})
 	if err != nil {
 		fmt.Printf("init logger error %v", errors.ErrorStack(err))
+		os.Exit(2)
+	}
+
+	err = logutil.InitLogger(&zaplog.Config{
+		File: zaplog.FileLogConfig{
+			Filename: cfg.LogFile,
+		},
+		Level: strings.ToLower(cfg.LogLevel),
+	})
+	if err != nil {
+		fmt.Printf("init file log error %v", errors.ErrorStack(err))
 		os.Exit(2)
 	}
 

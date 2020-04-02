@@ -43,8 +43,6 @@ const (
 )
 
 var (
-	// EnableZap enable the zap logger in embed etcd.
-	EnableZap = false
 	// SampleConfigFile is sample config file of dm-master
 	// later we can read it from dm/master/dm-master.toml
 	// and assign it to SampleConfigFile while we build dm-master
@@ -354,13 +352,7 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 	// NOTE: if using zap logger for etcd, must build it before any concurrent gRPC calls,
 	// otherwise, DATA RACE occur in builder and gRPC.
 	logger := log.L().WithFields(zap.String("component", "embed etcd"))
-	if EnableZap {
-		// The etcd master version has removed embed.Config.SetupLogging.
-		// Now logger is set up automatically based on embed.Config.Logger,
-		// Use zap logger in the test, otherwise will panic.
-		// Reference: https://go.etcd.io/etcd/blob/master/embed/config_logging.go#L45
-		cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger.Logger, logger.Core(), log.Props().Syncer) // use global app props.
-	}
+	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger.Logger, logger.Core(), log.Props().Syncer) // use global app props.
 	cfg.Logger = "zap"
 
 	err = cfg.Validate() // verify & trigger the builder
