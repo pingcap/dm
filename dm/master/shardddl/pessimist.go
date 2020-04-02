@@ -68,6 +68,7 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	p.cli = etcdCli // p.cli should be set before watching and recover locks because these operations need p.cli
 	rev1, rev2, err := p.buildLocks(etcdCli)
 	if err != nil {
 		return err
@@ -82,7 +83,6 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 
 	p.closed = false // started now.
 	p.cancel = cancel
-	p.cli = etcdCli
 	p.logger.Info("the shard DDL pessimist has started")
 	return nil
 }
@@ -119,8 +119,7 @@ func (p *Pessimist) run(ctx context.Context, etcdCli *clientv3.Client, rev1, rev
 }
 
 func (p *Pessimist) buildLocks(etcdCli *clientv3.Client) (int64, int64, error) {
-	p.cli = etcdCli // p.cli should be set before watching and recover locks because these operations need p.cli
-	p.lk.Clear()    // clear all previous locks to support re-Start.
+	p.lk.Clear() // clear all previous locks to support re-Start.
 
 	// get the history shard DDL info.
 	// for the sequence of coordinate a shard DDL lock, see `/pkg/shardddl/pessimism/doc.go`.
