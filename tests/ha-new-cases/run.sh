@@ -321,14 +321,12 @@ function test_multi_task_reduce_worker() {
     # find which worker is in use
     task_name=(test test2)
     worker_inuse=("")     # such as ("worker1" "worker4")
-    for name in ${task_name[@]}; do
-        status=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT" query-status $name \
-				| grep 'worker' | awk -F: '{print $2}')
-        echo $status
-        for w in ${status[@]}; do
-            worker_inuse=(${worker_inuse[*]} ${w:0-9:7})
-            echo "find workers: ${w:0-9:7} for task: $name"
-        done
+    status=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT" query-status test \
+        | grep 'worker' | awk -F: '{print $2}')
+    echo $status
+    for w in ${status[@]}; do
+        worker_inuse=(${worker_inuse[*]} ${w:0-9:7})
+        echo "find workers: ${w:0-9:7} for task: test"
     done
     echo "find all workers: ${worker_inuse[@]} (total: ${#worker_inuse[@]})"
 
@@ -365,7 +363,7 @@ function test_multi_task_reduce_worker() {
             done
             search_str="\"stage\": \"Running\""
             running_count=$(echo $status_str | sed "s/$search_str/$search_str\n/g" | grep -c "$search_str")
-            if [ $running_count != $[4-$i] ]; then
+            if [ $running_count != 4 ]; then
                 echo "error running worker"
                 exit 1
             fi
@@ -438,13 +436,13 @@ function test_isolate_master() {
 
 
 function run() {
-    # test_join_masters
-    # test_kill_master
-    # test_kill_worker
-    # test_kill_master_in_sync
-    # test_kill_worker_in_sync
-    # test_standalone_running
-    # test_pause_task
+    test_join_masters
+    test_kill_master
+    test_kill_worker
+    test_kill_master_in_sync
+    test_kill_worker_in_sync
+    test_standalone_running
+    test_pause_task
     test_multi_task_reduce_worker
     test_isolate_master leader
     test_isolate_master follower
