@@ -29,6 +29,8 @@ function run() {
         echo "failpoint=${failpoints[i]}"
         export GO_FAILPOINTS=${failpoints[i]}
 
+        # clear downstream env
+        run_sql 'DROP DATABASE if exists dm_meta;' $TIDB_PORT $TIDB_PASSWORD
         run_sql 'DROP DATABASE if exists start_task;' $TIDB_PORT $TIDB_PASSWORD
         prepare_data $i
 
