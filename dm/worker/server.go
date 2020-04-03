@@ -721,8 +721,8 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	for _, subTaskCfg := range subTaskCfgm {
 		subTaskCfg.LogLevel = s.cfg.LogLevel
 		subTaskCfg.LogFile = s.cfg.LogFile
-
-		subTaskCfgs = append(subTaskCfgs, &subTaskCfg)
+		subTaskCfgClone := subTaskCfg
+		subTaskCfgs = append(subTaskCfgs, &subTaskCfgClone)
 	}
 
 	if cfg.EnableRelay {
