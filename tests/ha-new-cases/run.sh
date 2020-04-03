@@ -258,9 +258,9 @@ function test_pause_task() {
     echo "[$(date)] <<<<<< start test_pause_task >>>>>>"
     test_multi_task_running
 
-    echo "start dumping random SQLs into source"
-    pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test" 0 0)
-    pocket_pid2=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3307)/ha_test" 0 1)
+    echo "start dumping SQLs into source"
+    load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
+    load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
 
     task_name=(test test2)
     for name in ${task_name[@]}; do
@@ -287,10 +287,9 @@ function test_pause_task() {
             "\"stage\": \"Running\"" 2
     done
 
+    # waiting for syncing
+    wait
     sleep 1
-    # stop
-    # kill $pocket_pid1 $pocket_pid2
-    # sleep 200
 
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
@@ -303,9 +302,11 @@ function test_multi_task_reduce_worker() {
     echo "[$(date)] <<<<<< start test_multi_task_reduce_worker >>>>>>"
     test_multi_task_running
 
-    echo "start dumping random SQLs into source"
-    pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test" 0 0)
-    pocket_pid2=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3307)/ha_test" 0 1)
+    echo "start dumping SQLs into source"
+    load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
+    load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
+    load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" $ha_test2 &
+    load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" $ha_test2 &
     worker_ports=($WORKER1_PORT $WORKER2_PORT $WORKER3_PORT $WORKER4_PORT $WORKER5_PORT)
 
     # find which worker is in use
@@ -338,10 +339,9 @@ function test_multi_task_reduce_worker() {
                     "\"stage\": \"Running\"" 2
             done
 
-            # stop
-            # kill $pocket_pid1 $pocket_pid2
-
-            sleep 10
+            # waiting for syncing
+            wait
+            sleep 2
             echo "use sync_diff_inspector to check increment data"
             check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
             check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
