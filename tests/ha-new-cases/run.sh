@@ -163,8 +163,8 @@ function test_kill_master_in_sync() {
     test_running
 
     echo "start dumping SQLs into source"
-    load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 1 &
-    load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 2 &
+    load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
+    load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
 
     ps aux | grep dm-master1 |awk '{print $2}'|xargs kill || true
     check_port_offline $MASTER_PORT1 20
@@ -191,8 +191,8 @@ function test_kill_worker_in_sync() {
     test_running
 
     echo "start dumping SQLs into source"
-    load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 1 &
-    load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 2 &
+    load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
+    load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
 
     echo "kill dm-worker1"
     ps aux | grep dm-worker1 |awk '{print $2}'|xargs kill || true
@@ -386,9 +386,9 @@ function test_isolate_master() {
 
 
 function run() {
-    test_join_masters
-    test_kill_master
-    test_kill_worker
+    # test_join_masters
+    # test_kill_master
+    # test_kill_worker
     test_kill_master_in_sync
     test_kill_worker_in_sync
     test_standalone_running

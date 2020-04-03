@@ -12,12 +12,12 @@ function load_data() {
     port=$1
     pswd=$2
     i=$3
-    run_sql 'DROP DATABASE if exists ha_test;' $port $pswd
-    run_sql 'CREATE DATABASE ha_test;' $port $pswd
-    run_sql "CREATE TABLE ha_test.t${i}(i TINYINT, j INT UNIQUE KEY);" $port $pswd
-    for j in $(seq 800); do
+    run_sql 'CREATE DATABASE if not exists ha_test;' $port $pswd
+    run_sql 'DROP TABLE if exists ha_test.t{$i}' $port $pswd
+	run_sql "CREATE TABLE ha_test.t${i}(i TINYINT, j INT UNIQUE KEY);" $port $pswd
+    for j in $(seq 80); do
         run_sql "INSERT INTO ha_test.t${i} VALUES ($j,${j}000$j),($j,${j}001$j);" $port $pswd
-        sleep 0.01
+        sleep 0.1
     done
 }
 
