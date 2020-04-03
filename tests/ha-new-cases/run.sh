@@ -160,39 +160,28 @@ function test_kill_worker() {
 # or: test_kill_master_in_sync follower (default)
 function test_kill_master_in_sync() {
     echo "[$(date)] <<<<<< start test_kill_master_in_sync >>>>>>"
-    role=false
     test_running
 
-    echo "start dumping random SQLs into source"
-    pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test" 1 0)
-    pocket_pid2=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3307)/ha_test" 1 1)
+    echo "start dumping SQLs into source"
+    load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 1 &
+    load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 2 &
 
-    sleep 1
-
-    ps aux | grep dm-master2 |awk '{print $2}'|xargs kill || true
-    check_port_offline $MASTER_PORT2 20
-
-    run_dm_worker $WORK_DIR/worker4 $WORKER4_PORT $cur/conf/dm-worker4.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER4_PORT
+    ps aux | grep dm-master1 |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT1 20
 
     echo "wait and check task running"
     sleep 1
-    check_http_alive 127.0.0.1:$MASTER_PORT1/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
+    check_http_alive 127.0.0.1:$MASTER_PORT2/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
         "query-status test" \
         "\"stage\": \"Running\"" 2
 
-    sleep 1
-    echo "kill tipocket"
-    # kill $pocket_pid1 $pocket_pid2
-
     # waiting for syncing
+    wait
+
+    echo "wait for dm to sync"
     sleep 1
-
-    # WARN: run ddl sqls spent so long
-    # sleep 300
-
-    echo "use sync_diff_inspector to check increment2 data now!"
+    echo "use sync_diff_inspector to check data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     echo "[$(date)] <<<<<< finish test_kill_master_in_sync >>>>>>"
 }
@@ -201,18 +190,21 @@ function test_kill_worker_in_sync() {
     echo "[$(date)] <<<<<< start test_kill_worker_in_sync >>>>>>"
     test_running
 
-    echo "start dumping random SQLs into source"
-    pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test" 0 0)
-    pocket_pid2=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3307)/ha_test" 0 1)
+    echo "start dumping SQLs into source"
+    load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 1 &
+    load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 2 &
 
-    sleep 1
-
+    echo "kill dm-worker1"
+    ps aux | grep dm-worker1 |awk '{print $2}'|xargs kill || true
+    echo "kill dm-worker2"
+    ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
     echo "start worker3"
     run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
+    echo "start worker4"
+    run_dm_worker $WORK_DIR/worker4 $WORKER4_PORT $cur/conf/dm-worker4.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER4_PORT
 
-    echo "kill dm-worker2"
-    ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
 
     echo "wait and check task running"
     check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
@@ -230,15 +222,13 @@ function test_kill_worker_in_sync() {
         "query-status test" \
         "\"stage\": \"Running\"" 2
 
+    # waiting for syncing
+    wait
+
+    echo "wait for dm to sync"
     sleep 1
 
-    echo "kill tipocket"
-    # kill $pocket_pid1 $pocket_pid2 # if kill fails, means tipocket exited unexceptly
-
-    # waiting for syncing
-    # sleep 100
-
-    echo "use sync_diff_inspector to check increment2 data now!"
+    echo "use sync_diff_inspector to check data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     echo "[$(date)] <<<<<< finish test_kill_worker_in_sync >>>>>>"
 }
@@ -373,64 +363,24 @@ function test_multi_task_reduce_worker() {
 }
 
 
+# shellcheck disable=SC2120
 function test_isolate_master() {
-    echo "[$(date)] <<<<<< start test_isolate_master $1 >>>>>>"
-    role=false
-    if [ $1 = "leader" ]; then
-        role=true
-    fi
+    echo "[$(date)] <<<<<< start test_isolate_master >>>>>>"
+
     test_running
 
-
     master_ports=($MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3)
-    leader_index=""         # in general, only one leader
-    follower_indeces=( "" )
     for idx in ${!master_ports[@]}; do
-        master=$(etcdctl --endpoints='127.0.0.1:'${master_ports[$idx]}'' endpoint status | awk -F ', ' '{print $5}')
-        if [ $master = "true" ]; then
-            leader_index=$idx
-        else
-            follower_indeces=(${follower_indeces[*]} $idx)
-        fi
-    done
-    echo "leader idx: $leader_index ; followers idx: $follower_indeces"
+        port=${master_ports[$idx]}
 
-    if [ leader_index = "" ]; then
-        echo "no leader has been elected"
-        exit 1
-    fi
-
-    if [ role = true ]; then
-        isolate_port ${master_ports[$leader_index]}
-        sleep 1
-        # check new leader was elected
-        elected="no"
-        for idx in ${follower_indeces[@]}; do
-            master=$(etcdctl --endpoints='127.0.0.1:'${master_ports[$idx]}'' endpoint status | awk -F ', ' '{print $5}')
-            if [ $master = "true" ]; then
-                elected="yes"
-                break
-            fi
-        done
-        if [ elected = "no" ]; then
-            echo "no new leader was elected"
-            disable_isolate_port ${master_ports[$leader_index]}
-            exit 1
-        fi
-        disable_isolate_port ${master_ports[$leader_index]}
-    else
-        if [ ${#follower_indeces[@]} = 0 ]; then
-            echo "there is not any follower"
-        fi
-        isolate_port ${master_ports[${follower_indeces[0]}]}
-        sleep 1
-        # check serve normally
-        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:${master_ports[$leader_index]}" \
+        isolate_port $port
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:${port}" \
         "query-status test" \
         "\"stage\": \"Running\"" 2
+        sleep 1
+    done
 
-        disable_isolate_port ${master_ports[${follower_indeces[0]}]}
-    fi
+
     echo "[$(date)] <<<<<< finish test_isolate_master $1 >>>>>>"
 }
 
@@ -444,8 +394,7 @@ function run() {
     test_standalone_running
     test_pause_task
     test_multi_task_reduce_worker
-    test_isolate_master leader
-    test_isolate_master follower
+    # test_isolate_master
 }
 
 

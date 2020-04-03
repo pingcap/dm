@@ -8,26 +8,18 @@ set -eu
 ha_test="ha_test"
 ha_test2="ha_test2"
 
-# start a tipocket process to generate random SQL and execute them on passed DSN argument
-# make sure pocket (binary of tipocket) can be found in PATH
-# more details at https://github.com/pingcap/tipocket
-function start_random_sql_to() {
-    dsn=$1
-    config_name="pocket-dml.toml"
-    if [ $2 = 1 ]; then
-        config_name="pocket-hybrid.toml"
-    fi
-    bin="pocket"
-    if [ $3 = 1 ]; then
-        bin="pocketb"
-    fi
-    eval "${bin} -dsn1 \"${dsn}\" -config \"$cur/conf/$config_name\" > $WORK_DIR/tipoket.run.log 2>&1 &"
-    pid=$!
-    # return pocket's pid for being killed in future
-    echo $pid
+function load_data() {
+    port=$1
+    pswd=$2
+    i=$3
+    run_sql 'DROP DATABASE if exists ha_test;' $port $pswd
+    run_sql 'CREATE DATABASE ha_test;' $port $pswd
+    run_sql "CREATE TABLE ha_test.t${i}(i TINYINT, j INT UNIQUE KEY);" $port $pswd
+    for j in $(seq 800); do
+        run_sql "INSERT INTO ha_test.t${i} VALUES ($j,${j}000$j),($j,${j}001$j);" $port $pswd
+        sleep 0.01
+    done
 }
-# unit test case (with ddl):
-# pid=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/pocket" 0 1)
 
 function run_sql_file_withdb() {
     sql=$1
