@@ -721,7 +721,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	for _, subTaskCfg := range subTaskCfgm {
 		subTaskCfg.LogLevel = s.cfg.LogLevel
 		subTaskCfg.LogFile = s.cfg.LogFile
-
+		log.L().Info("debug task name", zap.String("name", subTaskCfg.Name))
 		subTaskCfgs = append(subTaskCfgs, &subTaskCfg)
 	}
 

@@ -191,7 +191,6 @@ function test_kill_master_in_sync() {
 
     # WARN: run ddl sqls spent so long
     # sleep 300
-    echo $(dmctl --master-addr "127.0.0.1:$MASTER_PORT1" query-status test)
 
     echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -317,13 +316,15 @@ function test_multi_task_reduce_worker() {
     echo "start dumping random SQLs into source"
     pocket_pid1=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3306)/ha_test" 0 0)
     pocket_pid2=$(start_random_sql_to "root:123456@tcp(127.0.0.1:3307)/ha_test" 0 1)
+    worker_ports=($WORKER1_PORT $WORKER2_PORT $WORKER3_PORT $WORKER4_PORT $WORKER5_PORT)
 
     # find which worker is in use
     task_name=(test test2)
     worker_inuse=("")     # such as ("worker1" "worker4")
     for name in ${task_name[@]}; do
-        status=$($PWD/bin/dmctl.test --master-addr "127.0.0.1":$MASTER_PORT query-status $name \
-            | grep 'worker' | awk -F 'u0007' '{print $2}')
+        status=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT" query-status $name \
+				| grep 'worker' | awk -F: '{print $2}')
+        echo $status
         for w in ${status[@]}; do
             worker_inuse=(${worker_inuse[*]} ${w:0-9:7})
             echo "find workers: ${w:0-9:7} for task: $name"
@@ -332,13 +333,19 @@ function test_multi_task_reduce_worker() {
     echo "find all workers: ${worker_inuse[@]} (total: ${#worker_inuse[@]})"
 
     for  ((i=0; i < ${#worker_inuse[@]}; i++)); do
+        echo "debug info"
+        echo ${worker_inuse[$i]}
+        wk=${worker_inuse[$i]:0-1:1}
+        echo $wk
+        echo ${worker_ports[$[ $wk - 1 ] ]}
+        echo "****************"
         ps aux | grep dm-${worker_inuse[$i]} |awk '{print $2}'|xargs kill || true
-        check_port_offline ${WORKER$[$i+1]_PORT} 20
+        check_port_offline ${worker_ports[$[${worker_inuse[$i]:0-1:1} - 1]]} 20
         # just one worker was killed should be safe
-        echo "$[$i+1] worker(s) were killed"
+        echo "${worker_inuse[$i]} was killed"
         if [ $i = 0 ]; then
             for name in ${task_name[@]}; do
-                run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
                     "query-status $name"\
                     "\"stage\": \"Running\"" 2
             done
@@ -354,7 +361,7 @@ function test_multi_task_reduce_worker() {
         else
             status_str=""
             for name in ${task_name[@]}; do
-                status_str=$status_str$(dmctl --master-addr "127.0.0.1":$MASTER_PORT query-status $name)
+                status_str=$status_str$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1":$MASTER_PORT query-status $name)
             done
             search_str="\"stage\": \"Running\""
             running_count=$(echo $status_str | sed "s/$search_str/$search_str\n/g" | grep -c "$search_str")
