@@ -10,9 +10,9 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 function prepare_data() {
     run_sql 'DROP DATABASE if exists start_task;' $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql 'CREATE DATABASE start_task;' $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql "CREATE TABLE start_task.t${j}(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "CREATE TABLE start_task.t$1(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     for j in $(seq 100); do
-        run_sql "INSERT INTO start_task.t${j} VALUES ($j,${j}000$j),($j,${j}001$j);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+        run_sql "INSERT INTO start_task.t${i} VALUES ($j,${j}000$j),($j,${j}001$j);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     done
 }
 
@@ -30,7 +30,7 @@ function run() {
         export GO_FAILPOINTS=${failpoints[i]}
 
         run_sql 'DROP DATABASE if exists start_task;' $TIDB_PORT $TIDB_PASSWORD
-        prepare_data
+        prepare_data $i
 
         run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
         check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
