@@ -874,7 +874,7 @@ func (t *testPessimist) TestMeetEtcdCompactError(c *C) {
 		}
 		cancel1()
 		select {
-		case err := <-errCh:
+		case err = <-errCh:
 			c.Assert(err, Equals, etcdErrCompacted)
 		case <-time.After(300 * time.Millisecond):
 			c.Fatal("fail to get etcd error compacted")

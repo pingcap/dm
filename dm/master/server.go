@@ -647,7 +647,6 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 		Result: true,
 	}
 
-	// TODO: add `show-ddl-locks` support for Optimist later.
 	locks := s.pessimist.Locks()
 	resp.Locks = make([]*pb.DDLLock, 0, len(locks))
 	for _, lock := range locks {
@@ -683,6 +682,9 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 		sort.Strings(l.Unsynced)
 		resp.Locks = append(resp.Locks, l)
 	}
+
+	// show optimistic locks.
+	resp.Locks = append(resp.Locks, s.optimist.ShowLocks(req.Task, req.Sources)...)
 
 	if len(resp.Locks) == 0 {
 		resp.Msg = "no DDL lock exists"

@@ -22,10 +22,12 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	tiddl "github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/util/mock"
 
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/optimism"
 	"github.com/pingcap/dm/pkg/utils"
@@ -286,6 +288,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 		return !ok
 	}), IsTrue)
 	c.Assert(o.Locks(), HasLen, 0)
+	c.Assert(o.ShowLocks("", nil), HasLen, 0)
 
 	// no shard DDL info or lock operation exists.
 	ifm, _, err := optimism.GetAllInfo(etcdTestCli)
@@ -343,6 +346,31 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	c.Assert(sts[1].Source, Equals, source2)
 	c.Assert(sts[1].Tables, HasKey, i23.UpSchema)
 	c.Assert(sts[1].Tables[i23.UpSchema], HasKey, i23.UpTable)
+
+	// check ShowLocks.
+	expectedLock := []*pb.DDLLock{
+		{
+			ID:    lockID,
+			Task:  task,
+			Owner: "",
+			DDLs:  nil,
+			Synced: []string{
+				fmt.Sprintf("%s-%s", source1, dbutil.TableName(i21.UpSchema, i21.UpTable)),
+				fmt.Sprintf("%s-%s", source2, dbutil.TableName(i23.UpSchema, i23.UpTable)),
+			},
+			Unsynced: []string{
+				fmt.Sprintf("%s-%s", source1, dbutil.TableName(i12.UpSchema, i12.UpTable)),
+			},
+		},
+	}
+	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
+	c.Assert(o.ShowLocks(task, []string{}), DeepEquals, expectedLock)
+	c.Assert(o.ShowLocks("", []string{source1}), DeepEquals, expectedLock)
+	c.Assert(o.ShowLocks("", []string{source2}), DeepEquals, expectedLock)
+	c.Assert(o.ShowLocks("", []string{source1, source2}), DeepEquals, expectedLock)
+	c.Assert(o.ShowLocks(task, []string{source1, source2}), DeepEquals, expectedLock)
+	c.Assert(o.ShowLocks("no-exist", []string{}), HasLen, 0)
+	c.Assert(o.ShowLocks("", []string{"no-exist"}), HasLen, 0)
 
 	// wait operation for i23 become available.
 	opCh = make(chan optimism.Operation, 10)
