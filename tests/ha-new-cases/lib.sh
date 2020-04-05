@@ -7,6 +7,7 @@ set -eu
 
 ha_test="ha_test"
 ha_test2="ha_test2"
+master_ports=($MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3)
 
 function load_data() {
     port=$1
@@ -173,7 +174,7 @@ function isolate_master() {
     fi
     echo "kill dm-master$1"
     ps aux | grep dm-master$1 |awk '{print $2}'|xargs kill || true
-    eval check_port_offline $MASTER_PORT$1 20
-    eval run_dm_master $WORK_DIR/master$1 $MASTER_PORT$1 $cur/conf/dm-master$1.toml
-    eval check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT$1
+    eval check_port_offline ${master_port[$i]} 20
+    eval run_dm_master $WORK_DIR/master$1 ${master_port[$i]} $cur/conf/dm-master$1.toml
+    eval check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:${master_port[$i]}
 }
