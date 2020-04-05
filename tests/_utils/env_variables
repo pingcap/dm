@@ -22,6 +22,4 @@ WORKER5_PORT=18263
 TRACER_PORT=8265
 SOURCE_ID1="mysql-replica-01"
 SOURCE_ID2="mysql-replica-02"
-SOURCE_ID3="mysql-replica-03"
-SOURCE_ID4="mysql-replica-04"
 RESET_MASTER=${RESET_MASTER:-true}
