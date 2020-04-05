@@ -369,15 +369,23 @@ function test_isolate_master() {
 
     test_running
 
-    master_ports=($MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3)
-    for idx in ${!master_ports[@]}; do
-        port=${master_ports[$idx]}
+    for idx in $(seq 1 3); do
+        echo "try to isolate dm-master$idx"
+        isolate_master $idx "isolate"
 
-        isolate_port $port
-        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:${port}" \
-        "query-status test" \
-        "\"stage\": \"Running\"" 2
+        run_sql 'DROP TABLE if exists ha_test.ta;' $TIDB_PORT $TIDB_PASSWORD
+        run_sql 'DROP TABLE if exists ha_test.tb;' $TIDB_PORT $TIDB_PASSWORD
+        load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
+        load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
+
+        # wait for load data
+        wait
         sleep 1
+
+        echo "use sync_diff_inspector to check increment data"
+        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
+
+        isolate_master $idx "disable isolate"
     done
 
 

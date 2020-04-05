@@ -165,13 +165,15 @@ function cleanup() {
 }
 
 
-function isolate_port() {
-    port=$1
-    iptables -I OUTPUT -p tcp --dport $port -j DROP
-}
-
-
-function disable_isolate_port() {
-    port=$1
-    iptables -D OUTPUT -p tcp --dport $port -j DROP
+function isolate_master() {
+    if [ $2 = "isolate" ]; then
+        export GO_FAILPOINTS="github.com/pingcap/dm/master/FailToElect=master$1"
+    else
+        export GO_FAILPOINTS=""
+    fi
+    echo "kill dm-master$1"
+    ps aux | grep dm-master$1 |awk '{print $2}'|xargs kill || true
+    eval check_port_offline $MASTER_PORT$1 20
+    eval run_dm_master $WORK_DIR/master$1 $MASTER_PORT$1 $cur/conf/dm-master$1.toml
+    eval check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT$1
 }
