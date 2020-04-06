@@ -27,6 +27,7 @@ function test_running() {
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
+    sleep 3
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
@@ -54,6 +55,7 @@ function test_multi_task_running() {
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST3 $MYSQL_PORT3 $MYSQL_PASSWORD3
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST4 $MYSQL_PORT4 $MYSQL_PASSWORD4
 
+    sleep 3
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
     check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
