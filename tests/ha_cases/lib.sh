@@ -45,9 +45,9 @@ function prepare_sql_multi_task() {
     check_contains 'Query OK, 2 rows affected'
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_contains 'Query OK, 3 rows affected'
-    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST3 $MYSQL_PORT3 $MYSQL_PASSWORD3
+    run_sql_file_withdb $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test2
     check_contains 'Query OK, 2 rows affected'
-    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST4 $MYSQL_PORT4 $MYSQL_PASSWORD4
+    run_sql_file_withdb $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test2
     check_contains 'Query OK, 3 rows affected'
 }
 
