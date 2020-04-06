@@ -171,5 +171,4 @@ function isolate_master() {
     ps aux | grep dm-master$1 |awk '{print $2}'|xargs kill || true
     check_port_offline $port 20
     run_dm_master $WORK_DIR/master$1 $port $cur/conf/dm-master$1.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$port
 }

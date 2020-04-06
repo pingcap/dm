@@ -420,6 +420,29 @@ function test_isolate_master() {
         else
             follower_indeces=(${follower_indeces[*]} $idx)
         fi
+
+        run_dm_ctl $WORK_DIR "127.0.0.1:$port" \
+            "pause-task test"\
+            "\"result\": true" 3
+
+        run_sql 'DROP TABLE if exists ha_test.ta;' $TIDB_PORT $TIDB_PASSWORD
+        run_sql 'DROP TABLE if exists ha_test.tb;' $TIDB_PORT $TIDB_PASSWORD
+        load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
+        load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
+
+        run_dm_ctl $WORK_DIR "127.0.0.1:$port" \
+            "resume-task test"\
+            "\"result\": true" 3
+
+        # wait for load data
+        wait
+        sleep 3
+
+        echo "use sync_diff_inspector to check increment data"
+        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10
+
+        isolate_master $idx "disable_isolate"
+        check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$port
     done
     echo "leader idx: $leader_index ; followers idx: $follower_indeces"
 
