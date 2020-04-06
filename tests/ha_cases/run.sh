@@ -421,7 +421,7 @@ function test_isolate_master() {
             follower_indeces=(${follower_indeces[*]} $idx)
         fi
 
-        run_dm_ctl $WORK_DIR "127.0.0.1:$port" \
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$port" \
             "pause-task test"\
             "\"result\": true" 3
 
@@ -430,7 +430,7 @@ function test_isolate_master() {
         load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
         load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
 
-        run_dm_ctl $WORK_DIR "127.0.0.1:$port" \
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$port" \
             "resume-task test"\
             "\"result\": true" 3
 
