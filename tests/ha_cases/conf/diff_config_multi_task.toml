@@ -16,40 +16,40 @@ fix-sql-file = "fix.sql"
 
 # tables need to check.
 [[check-tables]]
-    schema = "ha_test2"
-    tables = ["ta", "tb"]
+schema = "ha_test2"
+tables = ["ta", "tb"]
 
 [[table-config]]
-    schema = "ha_test2"
-    table = "ta"
+schema = "ha_test2"
+table = "ta"
 
     [[table-config.source-tables]]
-    instance-id = "source-3"
-    schema = "ha_test"
+    instance-id = "source-1"
+    schema = "ha_test2"
     table  = "ta"
 
 [[table-config]]
-    schema = "ha_test2"
-    table = "tb"
+schema = "ha_test2"
+table = "tb"
 
     [[table-config.source-tables]]
-        instance-id = "source-4"
-        schema = "ha_test"
+        instance-id = "source-2"
+        schema = "ha_test2"
         table  = "tb"
 
 [[source-db]]
     host = "127.0.0.1"
-    port = 3308
+    port = 3306
     user = "root"
     password = "123456"
-    instance-id = "source-3"
+    instance-id = "source-1"
 
 [[source-db]]
     host = "127.0.0.1"
-    port = 3309
+    port = 3307
     user = "root"
     password = "123456"
-    instance-id = "source-4"
+    instance-id = "source-2"
 
 [target-db]
     host = "127.0.0.1"
