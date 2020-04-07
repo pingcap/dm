@@ -2,6 +2,7 @@ package metricsproxy
 
 import (
 	"math/rand"
+	"time"
 
 	. "github.com/pingcap/check"
 
@@ -9,6 +10,7 @@ import (
 )
 
 func (t *testMetricsProxySuite) TestGaugeVecProxy(c *C) {
+	rand.Seed(time.Now().UnixNano())
 	for _, oneCase := range testCases {
 		gauge := NewGaugeVec(prometheus.GaugeOpts{
 			Namespace:   "dm",

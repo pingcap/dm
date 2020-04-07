@@ -2,6 +2,7 @@ package metricsproxy
 
 import (
 	"math/rand"
+	"time"
 
 	. "github.com/pingcap/check"
 
@@ -9,6 +10,7 @@ import (
 )
 
 func (t *testMetricsProxySuite) TestHistogramVecProxy(c *C) {
+	rand.Seed(time.Now().UnixNano())
 	for _, oneCase := range testCases {
 		histogram := NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:   "dm",
