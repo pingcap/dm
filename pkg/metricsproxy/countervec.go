@@ -44,7 +44,7 @@ func (c *CounterVecProxy) WithLabelValues(lvs ...string) prometheus.Counter {
 		for index, label := range lvs {
 			labels[c.LabelNames[index]] = label
 		}
-		noteLabels(c, labels)
+		noteLabelsInMetricsProxy(c, labels)
 	}
 	return c.CounterVec.WithLabelValues(lvs...)
 }
@@ -54,7 +54,7 @@ func (c *CounterVecProxy) WithLabelValues(lvs ...string) prometheus.Counter {
 //     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Add(42)
 func (c *CounterVecProxy) With(labels prometheus.Labels) prometheus.Counter {
 	if len(labels) > 0 {
-		noteLabels(c, labels)
+		noteLabelsInMetricsProxy(c, labels)
 	}
 
 	return c.CounterVec.With(labels)
@@ -66,7 +66,7 @@ func (c *CounterVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 		return false
 	}
 
-	return findAndDeleteLabels(c, labels)
+	return findAndDeleteLabelsInMetricsProxy(c, labels)
 }
 
 // GetLabels to support get CounterVecProxy's Labels when you use Proxy object

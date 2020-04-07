@@ -48,7 +48,7 @@ func (c *SummaryVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 		for index, label := range lvs {
 			labels[c.LabelNames[index]] = label
 		}
-		noteLabels(c, labels)
+		noteLabelsInMetricsProxy(c, labels)
 	}
 	return c.SummaryVec.WithLabelValues(lvs...)
 }
@@ -58,7 +58,7 @@ func (c *SummaryVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 //     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Observe(42.21)
 func (c *SummaryVecProxy) With(labels prometheus.Labels) prometheus.Observer {
 	if len(labels) > 0 {
-		noteLabels(c, labels)
+		noteLabelsInMetricsProxy(c, labels)
 	}
 
 	return c.SummaryVec.With(labels)
@@ -70,7 +70,7 @@ func (c *SummaryVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 		return false
 	}
 
-	return findAndDeleteLabels(c, labels)
+	return findAndDeleteLabelsInMetricsProxy(c, labels)
 }
 
 // GetLabels to support get SummaryVecProxy's Labels when you use Proxy object

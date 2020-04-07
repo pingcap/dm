@@ -26,17 +26,17 @@ type Proxy interface {
 	vecDelete(prometheus.Labels) bool
 }
 
-// noteLabels common function in Proxy
-func noteLabels(proxy Proxy, labels map[string]string) {
-	labelsMd5 := getLabelsMd5(labels)
+// noteLabelsInMetricsProxy common function in Proxy
+func noteLabelsInMetricsProxy(proxy Proxy, labels map[string]string) {
+	labelsMd5Sum := labelsMd5Sum(labels)
 
-	if _, ok := proxy.GetLabels()[labelsMd5]; !ok {
-		proxy.GetLabels()[labelsMd5] = labels
+	if _, ok := proxy.GetLabels()[labelsMd5Sum]; !ok {
+		proxy.GetLabels()[labelsMd5Sum] = labels
 	}
 }
 
-// getLabelsMd5 common function in Proxy
-func getLabelsMd5(labels map[string]string) string {
+// labelsMd5Sum common function in Proxy
+func labelsMd5Sum(labels map[string]string) string {
 	var str string
 	for _, label := range labels {
 		str += label
@@ -44,8 +44,8 @@ func getLabelsMd5(labels map[string]string) string {
 	return fmt.Sprintf("%x", md5.Sum([]byte(str)))
 }
 
-// findAndDeleteLabels common function in Proxy
-func findAndDeleteLabels(proxy Proxy, labels prometheus.Labels) bool {
+// findAndDeleteLabelsInMetricsProxy common function in Proxy
+func findAndDeleteLabelsInMetricsProxy(proxy Proxy, labels prometheus.Labels) bool {
 	var (
 		deleteLabelsList = make([]map[string]string, 0)
 		res              = true

@@ -44,7 +44,7 @@ func (c *HistogramVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 		for index, label := range lvs {
 			labels[c.LabelNames[index]] = label
 		}
-		noteLabels(c, labels)
+		noteLabelsInMetricsProxy(c, labels)
 	}
 	return c.HistogramVec.WithLabelValues(lvs...)
 }
@@ -54,7 +54,7 @@ func (c *HistogramVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 //     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Observe(42.21)
 func (c *HistogramVecProxy) With(labels prometheus.Labels) prometheus.Observer {
 	if len(labels) > 0 {
-		noteLabels(c, labels)
+		noteLabelsInMetricsProxy(c, labels)
 	}
 
 	return c.HistogramVec.With(labels)
@@ -66,7 +66,7 @@ func (c *HistogramVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool 
 		return false
 	}
 
-	return findAndDeleteLabels(c, labels)
+	return findAndDeleteLabelsInMetricsProxy(c, labels)
 }
 
 // GetLabels to support get HistogramVecProxy's Labels when you use Proxy object
