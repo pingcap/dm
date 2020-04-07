@@ -180,10 +180,11 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 
 // Close implements Unit.Close
 func (m *Mydumper) Close() {
-	m.removeLabelValuesWithTaskInMetrics(m.cfg.Name)
 	if m.closed.Get() {
 		return
 	}
+
+	m.removeLabelValuesWithTaskInMetrics(m.cfg.Name)
 	// do nothing, external will cancel the command (if running)
 	m.closed.Set(true)
 }

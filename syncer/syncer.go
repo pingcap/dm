@@ -2205,8 +2205,6 @@ func (s *Syncer) Close() {
 	s.Lock()
 	defer s.Unlock()
 
-	s.removeLabelValuesWithTaskInMetrics(s.cfg.Name)
-
 	if s.isClosed() {
 		return
 	}
@@ -2223,6 +2221,8 @@ func (s *Syncer) Close() {
 
 	// when closing syncer by `stop-task`, remove active relay log from hub
 	s.removeActiveRelayLog()
+
+	s.removeLabelValuesWithTaskInMetrics(s.cfg.Name)
 
 	s.closed.Set(true)
 }

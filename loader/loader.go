@@ -614,7 +614,6 @@ func (l *Loader) loadFinishedSize() {
 func (l *Loader) Close() {
 	l.Lock()
 	defer l.Unlock()
-	l.removeLabelValuesWithTaskInMetrics(l.cfg.Name)
 	if l.isClosed() {
 		return
 	}
@@ -626,6 +625,7 @@ func (l *Loader) Close() {
 		l.logCtx.L().Error("close downstream DB error", log.ShortError(err))
 	}
 	l.checkPoint.Close()
+	l.removeLabelValuesWithTaskInMetrics(l.cfg.Name)
 	l.closed.Set(true)
 }
 
