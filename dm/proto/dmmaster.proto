@@ -163,6 +163,7 @@ message ShowDDLLocksRequest {
 // it been sent from dm-master to dmctl
 // ID: DDL lock generated ID
 // task: lock's corresponding task name
+// mode: the shard DDL mode, `pessimistic` or `optimistic`.
 // owner: lock's owner, a dm-worker
 // DDL: DDL statement
 // synced: already synced dm-workers
@@ -170,10 +171,11 @@ message ShowDDLLocksRequest {
 message DDLLock {
     string ID = 1;
     string task = 2;
-    string owner = 3;
-    repeated string DDLs = 4;
-    repeated string synced = 5;
-    repeated string unsynced = 6;
+    string mode = 3;
+    string owner = 4;
+    repeated string DDLs = 5;
+    repeated string synced = 6;
+    repeated string unsynced = 7;
 }
 
 message ShowDDLLocksResponse {

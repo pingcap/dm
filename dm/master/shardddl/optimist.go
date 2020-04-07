@@ -24,6 +24,7 @@ import (
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
@@ -129,6 +130,7 @@ func (o *Optimist) ShowLocks(task string, sources []string) []*pb.DDLLock {
 		l := &pb.DDLLock{
 			ID:       lock.ID,
 			Task:     lock.Task,
+			Mode:     config.ShardOptimistic,
 			Owner:    "",  // N/A for the optimistic mode
 			DDLs:     nil, // N/A for the optimistic mode
 			Synced:   make([]string, 0, len(ready)),

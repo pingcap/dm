@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/util/mock"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/optimism"
@@ -352,6 +353,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 		{
 			ID:    lockID,
 			Task:  task,
+			Mode:  config.ShardOptimistic,
 			Owner: "",
 			DDLs:  nil,
 			Synced: []string{
@@ -369,8 +371,8 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	c.Assert(o.ShowLocks("", []string{source2}), DeepEquals, expectedLock)
 	c.Assert(o.ShowLocks("", []string{source1, source2}), DeepEquals, expectedLock)
 	c.Assert(o.ShowLocks(task, []string{source1, source2}), DeepEquals, expectedLock)
-	c.Assert(o.ShowLocks("no-exist", []string{}), HasLen, 0)
-	c.Assert(o.ShowLocks("", []string{"no-exist"}), HasLen, 0)
+	c.Assert(o.ShowLocks("not-exist", []string{}), HasLen, 0)
+	c.Assert(o.ShowLocks("", []string{"not-exist"}), HasLen, 0)
 
 	// wait operation for i23 become available.
 	opCh = make(chan optimism.Operation, 10)
