@@ -61,9 +61,6 @@ const (
 
 	// dumpFlagSendAnnotateRowsEvent (BINLOG_SEND_ANNOTATE_ROWS_EVENT) request the MariaDB master to send Annotate_rows_log_event back.
 	dumpFlagSendAnnotateRowsEvent uint16 = 0x02
-
-	// max reconnection times for binlog syncer in go-mysql
-	maxBinlogSyncerReconnect = 60
 )
 
 // NewRelay creates an instance of Relay.

@@ -79,9 +79,6 @@ var (
 
 	adminQueueName     = "admin queue"
 	defaultBucketCount = 8
-
-	// max reconnection times for binlog syncer in go-mysql
-	maxBinlogSyncerReconnect = 60
 )
 
 // BinlogType represents binlog sync type
