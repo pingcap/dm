@@ -42,6 +42,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
@@ -1217,13 +1218,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return err1
 			}
 			continue
-		} else if isConnectionRefusedError(err) {
-			tctx.L().Error("fail to get binlog event", zap.Error(err))
-			return err
 		}
 
 		if err != nil {
 			s.tctx.L().Error("fail to fetch binlog", log.ShortError(err))
+
+			if isConnectionRefusedError(err) {
+				return err
+			}
 
 			if s.streamerController.CanRetry() {
 				err = s.streamerController.ResetReplicationSyncer(s.tctx, lastLocation.Clone())
@@ -2484,18 +2486,17 @@ func (s *Syncer) setTimezone() {
 }
 
 func (s *Syncer) setSyncCfg() {
-	s.syncCfg = replication.BinlogSyncerConfig{
+	syncCfg := replication.BinlogSyncerConfig{
 		ServerID:                uint32(s.cfg.ServerID),
 		Flavor:                  s.cfg.Flavor,
 		Host:                    s.cfg.From.Host,
 		Port:                    uint16(s.cfg.From.Port),
 		User:                    s.cfg.From.User,
 		Password:                s.cfg.From.Password,
-		UseDecimal:              true,
-		VerifyChecksum:          true,
 		TimestampStringLocation: s.timezone,
-		MaxReconnectAttempts:    maxBinlogSyncerReconnect,
 	}
+	common.SetDefaultReplicationCfg(&syncCfg)
+	s.syncCfg = syncCfg
 }
 
 // ShardDDLInfo returns the current pending to handle shard DDL info.
