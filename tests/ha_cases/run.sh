@@ -30,6 +30,7 @@ function test_running() {
     sleep 3
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    echo "[$(date)] <<<<<< finish test_running >>>>>>"
 }
 
 
@@ -57,6 +58,7 @@ function test_multi_task_running() {
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
     check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
+    echo "[$(date)] <<<<<< finish test_multi_task_running >>>>>>"
 }
 
 
@@ -323,8 +325,8 @@ function test_multi_task_reduce_worker() {
     done
     echo "find all workers: ${worker_inuse[@]} (total: ${#worker_inuse[@]})"
 
-    for  ((i=0; i < ${#worker_inuse[@]}; i++)); do
-		wk=${worker_inuse[$i]:0-1:1} # get worker id, such as ("1", "4")
+    for ((i=0; i < ${#worker_inuse[@]}; i++)); do
+        wk=${worker_inuse[$i]:0-1:1} # get worker id, such as ("1", "4")
         echo "try to kill worker port ${worker_ports[$[ $wk - 1 ] ]}" # get relative worker port 
         ps aux | grep dm-${worker_inuse[$i]} |awk '{print $2}'|xargs kill || true
         check_port_offline ${worker_ports[$[ $wk - 1] ]} 20
@@ -379,8 +381,8 @@ function test_isolate_master() {
             "pause-task test"\
             "\"result\": true" 3
 
-        run_sql 'DROP TABLE if exists ha_test.ta;' $TIDB_PORT $TIDB_PASSWORD
-        run_sql 'DROP TABLE if exists ha_test.tb;' $TIDB_PORT $TIDB_PASSWORD
+        run_sql "DROP TABLE if exists $ha_test.ta;" $TIDB_PORT $TIDB_PASSWORD
+        run_sql "DROP TABLE if exists $ha_test.tb;" $TIDB_PORT $TIDB_PASSWORD
         load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
         load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
 
@@ -418,8 +420,8 @@ function run() {
 }
 
 
-cleanup_data ha_test
-cleanup_data ha_test2
+cleanup_data $ha_test
+cleanup_data $ha_test2
 # also cleanup dm processes in case of last run failed
 cleanup_process $*
 run $*

@@ -16,7 +16,7 @@ function load_data() {
     if [ $# -ge 4 ]; then
         db=$4
     else
-        db="ha_test"
+        db=$ha_test
     fi
 
     run_sql "CREATE DATABASE if not exists ${db};" $port $pswd
@@ -154,12 +154,13 @@ function start_multi_tasks_cluster() {
 
 
 function cleanup() {
-    cleanup_data ha_test
-    cleanup_data ha_test2
+    cleanup_data $ha_test
+    cleanup_data $ha_test2
     echo "clean source table"
     mysql_ports=($MYSQL_PORT1 $MYSQL_PORT2)
     for i in ${mysql_ports[@]}; do
         $(mysql -h127.0.0.1 -p123456 -P${i} -uroot -e "drop database if exists ha_test;")
+        $(mysql -h127.0.0.1 -p123456 -P${i} -uroot -e "drop database if exists ha_test2;")
         sleep 1
     done
     cleanup_process $*
