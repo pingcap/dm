@@ -14,11 +14,15 @@
 package metricsproxy
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 // CounterVecProxy to proxy prometheus.CounterVec
 type CounterVecProxy struct {
+	mu sync.Mutex
+
 	LabelNames []string
 	Labels     map[string]map[string]string
 	*prometheus.CounterVec
@@ -44,7 +48,9 @@ func (c *CounterVecProxy) WithLabelValues(lvs ...string) prometheus.Counter {
 		for index, label := range lvs {
 			labels[c.LabelNames[index]] = label
 		}
+		c.mu.Lock()
 		noteLabelsInMetricsProxy(c, labels)
+		c.mu.Unlock()
 	}
 	return c.CounterVec.WithLabelValues(lvs...)
 }
@@ -54,7 +60,9 @@ func (c *CounterVecProxy) WithLabelValues(lvs ...string) prometheus.Counter {
 //     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Add(42)
 func (c *CounterVecProxy) With(labels prometheus.Labels) prometheus.Counter {
 	if len(labels) > 0 {
+		c.mu.Lock()
 		noteLabelsInMetricsProxy(c, labels)
+		c.mu.Unlock()
 	}
 
 	return c.CounterVec.With(labels)
@@ -65,7 +73,8 @@ func (c *CounterVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	if len(labels) == 0 {
 		return false
 	}
-
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return findAndDeleteLabelsInMetricsProxy(c, labels)
 }
 
