@@ -19,12 +19,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/metricsproxy"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (
-	relayLogPosGauge = prometheus.NewGaugeVec(
+	relayLogPosGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "relay",
@@ -32,7 +33,7 @@ var (
 			Help:      "current binlog pos in current binlog file",
 		}, []string{"node"})
 
-	relayLogFileGauge = prometheus.NewGaugeVec(
+	relayLogFileGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "relay",
@@ -42,7 +43,7 @@ var (
 
 	// split sub directory info from relayLogPosGauge / relayLogFileGauge
 	// to make compare relayLogFileGauge for master / relay more easier
-	relaySubDirIndex = prometheus.NewGaugeVec(
+	relaySubDirIndex = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "relay",
@@ -51,7 +52,7 @@ var (
 		}, []string{"node", "uuid"})
 
 	// should alert if available space < 10G
-	relayLogSpaceGauge = prometheus.NewGaugeVec(
+	relayLogSpaceGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "relay",

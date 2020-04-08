@@ -621,6 +621,7 @@ func (l *Loader) Close() {
 		l.logCtx.L().Error("close downstream DB error", log.ShortError(err))
 	}
 	l.checkPoint.Close()
+	l.removeLabelValuesWithTaskInMetrics(l.cfg.Name)
 	l.closed.Set(true)
 }
 

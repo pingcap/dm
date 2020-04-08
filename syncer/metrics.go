@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/metricsproxy"
+
 	cpu "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -28,7 +30,7 @@ import (
 )
 
 var (
-	binlogReadDurationHistogram = prometheus.NewHistogramVec(
+	binlogReadDurationHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -37,7 +39,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
-	binlogEventSizeHistogram = prometheus.NewHistogramVec(
+	binlogEventSizeHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -46,7 +48,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(16, 2, 20),
 		}, []string{"task"})
 
-	binlogEvent = prometheus.NewHistogramVec(
+	binlogEvent = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -55,7 +57,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"type", "task"})
 
-	conflictDetectDurationHistogram = prometheus.NewHistogramVec(
+	conflictDetectDurationHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -64,7 +66,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
-	addJobDurationHistogram = prometheus.NewHistogramVec(
+	addJobDurationHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -75,7 +77,7 @@ var (
 
 	// dispatch/add multiple jobs for one binlog event.
 	// NOTE: only observe for DML now.
-	dispatchBinlogDurationHistogram = prometheus.NewHistogramVec(
+	dispatchBinlogDurationHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -84,7 +86,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"type", "task"})
 
-	skipBinlogDurationHistogram = prometheus.NewHistogramVec(
+	skipBinlogDurationHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -93,7 +95,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0000005, 2, 25), // this should be very fast.
 		}, []string{"type", "task"})
 
-	addedJobsTotal = prometheus.NewCounterVec(
+	addedJobsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -101,7 +103,7 @@ var (
 			Help:      "total number of added jobs",
 		}, []string{"type", "task", "queueNo"})
 
-	finishedJobsTotal = prometheus.NewCounterVec(
+	finishedJobsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -109,7 +111,7 @@ var (
 			Help:      "total number of finished jobs",
 		}, []string{"type", "task", "queueNo"})
 
-	queueSizeGauge = prometheus.NewGaugeVec(
+	queueSizeGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -117,7 +119,7 @@ var (
 			Help:      "remain size of the DML queue",
 		}, []string{"task", "queueNo"})
 
-	binlogPosGauge = prometheus.NewGaugeVec(
+	binlogPosGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -125,7 +127,7 @@ var (
 			Help:      "current binlog pos",
 		}, []string{"node", "task"})
 
-	binlogFileGauge = prometheus.NewGaugeVec(
+	binlogFileGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -133,7 +135,7 @@ var (
 			Help:      "current binlog file index",
 		}, []string{"node", "task"})
 
-	sqlRetriesTotal = prometheus.NewCounterVec(
+	sqlRetriesTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -141,7 +143,7 @@ var (
 			Help:      "total number of sql retries",
 		}, []string{"type", "task"})
 
-	txnHistogram = prometheus.NewHistogramVec(
+	txnHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -150,7 +152,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
-	queryHistogram = prometheus.NewHistogramVec(
+	queryHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -159,7 +161,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
-	stmtHistogram = prometheus.NewHistogramVec(
+	stmtHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -178,7 +180,7 @@ var (
 		})
 
 	// should alert
-	syncerExitWithErrorCounter = prometheus.NewCounterVec(
+	syncerExitWithErrorCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -187,7 +189,7 @@ var (
 		}, []string{"task"})
 
 	// some problems with it
-	replicationLagGauge = prometheus.NewGaugeVec(
+	replicationLagGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -195,7 +197,7 @@ var (
 			Help:      "replication lag in second between mysql and syncer",
 		}, []string{"task"})
 
-	remainingTimeGauge = prometheus.NewGaugeVec(
+	remainingTimeGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -203,7 +205,7 @@ var (
 			Help:      "the remaining time in second to catch up master",
 		}, []string{"task"})
 
-	unsyncedTableGauge = prometheus.NewGaugeVec(
+	unsyncedTableGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -211,7 +213,7 @@ var (
 			Help:      "number of unsynced tables in the subtask",
 		}, []string{"task", "table"})
 
-	shardLockResolving = prometheus.NewGaugeVec(
+	shardLockResolving = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -292,4 +294,27 @@ func InitStatusAndMetrics(addr string) {
 			log.L().Fatal(err.Error())
 		}
 	}()
+}
+func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
+	binlogReadDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogEventSizeHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogEvent.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	conflictDetectDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	addJobDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	dispatchBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	skipBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	addedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	finishedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	queueSizeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	sqlRetriesTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogPosGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogFileGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	txnHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	stmtHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	queryHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	syncerExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	replicationLagGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	remainingTimeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	unsyncedTableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	shardLockResolving.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }
