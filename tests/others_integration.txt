@@ -1,5 +1,7 @@
+sharding2
 ha
 ha_master
 full_mode
 start_task
 dm_syncer
+sequence_sharding_optimistic

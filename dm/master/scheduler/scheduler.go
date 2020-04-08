@@ -156,7 +156,8 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 		return terror.ErrSchedulerStarted.Generate()
 	}
 
-	s.reset() // reset previous status.
+	s.etcdCli = etcdCli // set s.etcdCli first for safety, observeWorkerEvent will use s.etcdCli in retry
+	s.reset()           // reset previous status.
 
 	// recover previous status from etcd.
 	err := s.recoverSources(etcdCli)
@@ -184,7 +185,6 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 
 	s.started = true // started now
 	s.cancel = cancel
-	s.etcdCli = etcdCli
 	s.logger.Info("the scheduler has started")
 	return nil
 }
@@ -1011,7 +1011,11 @@ func (s *Scheduler) observeWorkerEvent(ctx context.Context, etcdCli *clientv3.Cl
 				retryNum++
 			}
 		} else {
-			log.L().Error("observeWorkerEvent is failed and will quit now", zap.Error(err))
+			if err != nil {
+				log.L().Error("observeWorkerEvent is failed and will quit now", zap.Error(err))
+			} else {
+				log.L().Info("observeWorkerEvent will quit now")
+			}
 			return err
 		}
 	}

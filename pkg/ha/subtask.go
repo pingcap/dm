@@ -31,7 +31,7 @@ func PutSubTaskCfg(cli *clientv3.Client, cfgs ...config.SubTaskConfig) (int64, e
 	if err != nil {
 		return 0, err
 	}
-	_, rev, err := etcdutil.DoOpsInOneTxn(cli, ops...)
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
 }
 

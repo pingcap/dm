@@ -39,6 +39,12 @@ const (
 	subTaskSampleFile = "../../worker/subtask.toml"
 )
 
+const (
+	noRestart          = iota // do nothing in rebuildPessimist, just keep testing
+	restartOnly               // restart without building new instance. mock leader role transfer
+	restartNewInstance        // restart with build a new instance. mock progress restore from failure
+)
+
 var (
 	etcdTestCli      *clientv3.Client
 	etcdErrCompacted = v3rpc.ErrCompacted
@@ -70,6 +76,12 @@ var (
 )
 
 func (t *testScheduler) TestScheduler(c *C) {
+	t.testSchedulerProgress(c, noRestart)
+	t.testSchedulerProgress(c, restartOnly)
+	t.testSchedulerProgress(c, restartNewInstance)
+}
+
+func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	defer clearTestInfoOperation(c)
 
 	var (
@@ -88,6 +100,18 @@ func (t *testScheduler) TestScheduler(c *C) {
 		sourceCfg1   config.SourceConfig
 		subtaskCfg1  config.SubTaskConfig
 		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
+
+		rebuildScheduler = func(ctx context.Context) {
+			switch restart {
+			case restartOnly:
+				s.Close()
+				c.Assert(s.Start(ctx, etcdTestCli), IsNil)
+			case restartNewInstance:
+				s.Close()
+				s = NewScheduler(&logger)
+				c.Assert(s.Start(ctx, etcdTestCli), IsNil)
+			}
+		}
 	)
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1
@@ -137,6 +161,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.sourceCfgExist(c, s, sourceCfg1)
 	// one unbound source exist (because no free worker).
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
+	rebuildScheduler(ctx)
 
 	// CASE 2.2: add the first worker.
 	// no worker exist before added.
@@ -152,6 +177,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
 	// no expect relay stage exist (because the source has never been bounded).
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_InvalidStage)
+	rebuildScheduler(ctx)
 
 	// CASE 2.3: the worker become online.
 	// do keep-alive for worker1.
@@ -163,14 +189,15 @@ func (t *testScheduler) TestScheduler(c *C) {
 		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName1, keepAliveTTL), IsNil)
 	}()
 	// wait for source1 bound to worker1.
-	utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		bounds := s.BoundSources()
 		return len(bounds) == 1 && bounds[0] == sourceID1
-	})
+	}), IsTrue)
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
 	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName1))
 	// expect relay stage become Running after the first bound.
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 2.4: pause the relay.
 	c.Assert(s.UpdateExpectRelayStage(pb.Stage_Paused, sourceID1), IsNil)
@@ -186,10 +213,12 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// can't update stage with not existing sources now.
 	c.Assert(terror.ErrSchedulerRelayStageSourceNotExist.Equal(s.UpdateExpectRelayStage(pb.Stage_Running, sourceID1, sourceID2)), IsTrue)
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Paused)
+	rebuildScheduler(ctx)
 
 	// CASE 2.5: resume the relay.
 	c.Assert(s.UpdateExpectRelayStage(pb.Stage_Running, sourceID1), IsNil)
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 2.6: start a task with only one source.
 	// no subtask config exists before start.
@@ -209,6 +238,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_InvalidStage)
 	t.subTaskCfgNotExist(c, s, taskName2, sourceID2)
 	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_InvalidStage)
+	rebuildScheduler(ctx)
 
 	// CASE 2.7: pause/resume task1.
 	c.Assert(s.UpdateExpectSubTaskStage(pb.Stage_Paused, taskName1, sourceID1), IsNil)
@@ -227,16 +257,17 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// can't update stage with not existing sources now.
 	c.Assert(terror.ErrSchedulerSubTaskOpSourceNotExist.Equal(s.UpdateExpectSubTaskStage(pb.Stage_Paused, taskName1, sourceID1, sourceID2)), IsTrue)
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 2.8: worker1 become offline.
 	// cancel keep-alive.
 	cancel1()
 	wg.Wait()
 	// wait for source1 unbound from worker1.
-	utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
+	c.Assert(utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
 		unbounds := s.UnboundSources()
 		return len(unbounds) == 1 && unbounds[0] == sourceID1
-	})
+	}), IsTrue)
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
 	// static information are still there.
 	t.sourceCfgExist(c, s, sourceCfg1)
@@ -247,13 +278,9 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// expect relay stage keep Running.
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
-
-	// shutdown the scheduler.
-	s.Close()
+	rebuildScheduler(ctx)
 
 	// CASE 3: start again with previous `Offline` worker, relay stage, subtask stage.
-	c.Assert(s.Start(ctx, etcdTestCli), IsNil)
-
 	// CASE 3.1: previous information should recover.
 	// source1 is still unbound.
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
@@ -266,6 +293,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// expect relay stage keep Running.
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 3.2: start worker1 again.
 	// do keep-alive for worker1 again.
@@ -276,22 +304,17 @@ func (t *testScheduler) TestScheduler(c *C) {
 		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName1, keepAliveTTL), IsNil)
 	}()
 	// wait for source1 bound to worker1.
-	utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		bounds := s.BoundSources()
 		return len(bounds) == 1 && bounds[0] == sourceID1
-	})
+	}), IsTrue)
 	// source1 bound to worker1.
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
 	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName1))
 	// expect stages keep Running.
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
-
-	// shutdown the scheduler.
-	s.Close()
-
-	// CASE 4: start again with previous `Bound` worker, relay stage, subtask stage.
-	c.Assert(s.Start(ctx, etcdTestCli), IsNil)
+	rebuildScheduler(ctx)
 
 	// CASE 4.1: previous information should recover.
 	// source1 is still bound.
@@ -305,6 +328,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// expect stages keep Running.
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 4.2: add another worker into the cluster.
 	// worker2 not exists before added.
@@ -314,6 +338,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// the worker added, but is offline.
 	t.workerExist(c, s, workerInfo2)
 	t.workerOffline(c, s, workerName2)
+	rebuildScheduler(ctx)
 
 	// CASE 4.3: the worker2 become online.
 	// do keep-alive for worker2.
@@ -324,11 +349,12 @@ func (t *testScheduler) TestScheduler(c *C) {
 		c.Assert(ha.KeepAlive(ctx2, etcdTestCli, workerName2, keepAliveTTL), IsNil)
 	}()
 	// wait for worker2 become Free.
-	utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		w := s.GetWorkerByName(workerName2)
 		return w.Stage() == WorkerFree
-	})
+	}), IsTrue)
 	t.workerFree(c, s, workerName2)
+	rebuildScheduler(ctx)
 
 	// CASE 4.4: add source config2.
 	// source2 not exists before.
@@ -341,6 +367,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.workerBound(c, s, ha.NewSourceBound(sourceID2, workerName2))
 	t.sourceBounds(c, s, []string{sourceID1, sourceID2}, []string{})
 	t.relayStageMatch(c, s, sourceID2, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 4.4: start a task with two sources.
 	// can't add more than one tasks at a time now.
@@ -357,6 +384,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.subTaskCfgExist(c, s, subtaskCfg22)
 	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_Running)
 	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 4.4.1 fail to stop any task.
 	// can call without tasks or sources, return without error, but take no effect.
@@ -379,6 +407,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	c.Assert(s.UpdateExpectSubTaskStage(pb.Stage_Running, taskName2, sourceID1, sourceID2), IsNil)
 	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_Running)
 	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 4.6: try remove source when subtasks exist.
 	c.Assert(terror.ErrSchedulerSourceOpTaskExist.Equal(s.RemoveSourceCfg(sourceID2)), IsTrue)
@@ -388,6 +417,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.workerBound(c, s, ha.NewSourceBound(sourceID2, workerName2))
 	t.sourceBounds(c, s, []string{sourceID1, sourceID2}, []string{})
 	t.relayStageMatch(c, s, sourceID2, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 4.7: stop task2.
 	c.Assert(s.RemoveSubTasks(taskName2, sourceID1, sourceID2), IsNil)
@@ -395,6 +425,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.subTaskCfgNotExist(c, s, taskName2, sourceID2)
 	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_InvalidStage)
 	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_InvalidStage)
+	rebuildScheduler(ctx)
 
 	// CASE 4.7: remove source2.
 	c.Assert(s.RemoveSourceCfg(sourceID2), IsNil)
@@ -405,6 +436,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.workerFree(c, s, workerName2)
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
 	t.relayStageMatch(c, s, sourceID2, pb.Stage_InvalidStage)
+	rebuildScheduler(ctx)
 
 	// CASE 4.8: worker1 become offline.
 	// before shutdown, worker1 bound source
@@ -412,11 +444,11 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// cancel keep-alive.
 	cancel1()
 	// wait for worker1 become offline.
-	utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
+	c.Assert(utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
 		w := s.GetWorkerByName(workerName1)
 		c.Assert(w, NotNil)
 		return w.Stage() == WorkerOffline
-	})
+	}), IsTrue)
 	t.workerOffline(c, s, workerName1)
 	// source1 should bound to worker2.
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
@@ -424,38 +456,43 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// expect stages keep Running.
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 4.9: remove worker1.
 	c.Assert(s.RemoveWorker(workerName1), IsNil)
 	c.Assert(terror.ErrSchedulerWorkerNotExist.Equal(s.RemoveWorker(workerName1)), IsTrue) // can't remove multiple times.
 	// worker1 not exists now.
 	t.workerNotExist(c, s, workerName1)
+	rebuildScheduler(ctx)
 
 	// CASE 4.10: stop task1.
 	c.Assert(s.RemoveSubTasks(taskName1, sourceID1), IsNil)
 	t.subTaskCfgNotExist(c, s, taskName1, sourceID1)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_InvalidStage)
+	rebuildScheduler(ctx)
 
 	// CASE 4.11: remove worker not supported when the worker is online.
 	c.Assert(terror.ErrSchedulerWorkerOnline.Equal(s.RemoveWorker(workerName2)), IsTrue)
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
 	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName2))
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 4.12: worker2 become offline.
 	cancel2()
 	wg.Wait()
 	// wait for worker2 become offline.
-	utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
+	c.Assert(utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
 		w := s.GetWorkerByName(workerName2)
 		c.Assert(w, NotNil)
 		return w.Stage() == WorkerOffline
-	})
+	}), IsTrue)
 	t.workerOffline(c, s, workerName2)
 	// source1 should unbound
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
 	// expect stages keep Running.
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 4.13: remove worker2.
 	c.Assert(s.RemoveWorker(workerName2), IsNil)
@@ -463,6 +500,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// relay stage still there.
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	rebuildScheduler(ctx)
 
 	// CASE 4.14: remove source1.
 	c.Assert(s.RemoveSourceCfg(sourceID1), IsNil)
@@ -672,10 +710,10 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 	}()
 	// step 2.3: scheduler should bound source to worker
 	// wait for source1 bound to worker1.
-	utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		bounds := s.BoundSources()
 		return len(bounds) == 1 && bounds[0] == sourceID1
-	})
+	}), IsTrue)
 	checkSourceBoundCh := func() {
 		time.Sleep(300 * time.Millisecond)
 		c.Assert(sourceBoundCh, HasLen, 1)
@@ -794,7 +832,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 		defer wg.Done()
 		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName2, keepAliveTTL), IsNil)
 	}()
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
 		return err == nil && len(kam) == 2
 	}), IsTrue)
@@ -803,7 +841,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 	// check whether keepalive lease is out of date
 	time.Sleep(time.Duration(keepAliveTTL) * time.Second)
 	var rev int64
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		kam, rev1, err := ha.GetKeepAliveWorkers(etcdTestCli)
 		rev = rev1
 		return err == nil && len(kam) == 0

@@ -15,11 +15,13 @@ package loader
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/pingcap/dm/pkg/metricsproxy"
 )
 
 var (
 	// should error
-	tidbExecutionErrorCounter = prometheus.NewCounterVec(
+	tidbExecutionErrorCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
@@ -27,7 +29,7 @@ var (
 			Help:      "Total count of tidb execution errors",
 		}, []string{"task"})
 
-	queryHistogram = prometheus.NewHistogramVec(
+	queryHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
@@ -36,7 +38,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 16),
 		}, []string{"task"})
 
-	txnHistogram = prometheus.NewHistogramVec(
+	txnHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
@@ -45,31 +47,31 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 16),
 		}, []string{"task"})
 
-	dataFileCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	dataFileGauge = metricsproxy.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
-			Name:      "data_file_count",
+			Name:      "data_file_gauge",
 			Help:      "data files in total",
 		}, []string{"task"})
 
-	tableCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	tableGauge = metricsproxy.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
-			Name:      "table_count",
+			Name:      "table_gauge",
 			Help:      "tables in total",
 		}, []string{"task"})
 
-	dataSizeCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	dataSizeGauge = metricsproxy.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
-			Name:      "data_size_count",
+			Name:      "data_size_gauge",
 			Help:      "data size in total",
 		}, []string{"task"})
 
-	progressGauge = prometheus.NewGaugeVec(
+	progressGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
@@ -78,7 +80,7 @@ var (
 		}, []string{"task"})
 
 	// should alert
-	loaderExitWithErrorCounter = prometheus.NewCounterVec(
+	loaderExitWithErrorCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
@@ -92,9 +94,20 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(tidbExecutionErrorCounter)
 	registry.MustRegister(txnHistogram)
 	registry.MustRegister(queryHistogram)
-	registry.MustRegister(dataFileCounter)
-	registry.MustRegister(tableCounter)
-	registry.MustRegister(dataSizeCounter)
+	registry.MustRegister(dataFileGauge)
+	registry.MustRegister(tableGauge)
+	registry.MustRegister(dataSizeGauge)
 	registry.MustRegister(progressGauge)
 	registry.MustRegister(loaderExitWithErrorCounter)
+}
+
+func (m *Loader) removeLabelValuesWithTaskInMetrics(task string) {
+	tidbExecutionErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	txnHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	queryHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	dataFileGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	tableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	dataSizeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	progressGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	loaderExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }

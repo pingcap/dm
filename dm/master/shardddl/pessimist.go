@@ -22,6 +22,7 @@ import (
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/terror"
@@ -67,13 +68,64 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	p.cli = etcdCli // p.cli should be set before watching and recover locks because these operations need p.cli
+	rev1, rev2, err := p.buildLocks(etcdCli)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(pCtx)
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		// TODO: handle fatal error from run
+		p.run(ctx, etcdCli, rev1, rev2)
+	}()
+
+	p.closed = false // started now.
+	p.cancel = cancel
+	p.logger.Info("the shard DDL pessimist has started")
+	return nil
+}
+
+func (p *Pessimist) run(ctx context.Context, etcdCli *clientv3.Client, rev1, rev2 int64) error {
+	for {
+		err := p.watchInfoOperation(ctx, etcdCli, rev1, rev2)
+		if etcdutil.IsRetryableError(err) {
+			retryNum := 1
+			succeed := false
+			for !succeed {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(500 * time.Millisecond):
+					rev1, rev2, err = p.buildLocks(etcdCli)
+					if err != nil {
+						log.L().Error("resetWorkerEv is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
+					} else {
+						succeed = true
+					}
+				}
+				retryNum++
+			}
+		} else {
+			if err != nil {
+				log.L().Error("pessimist is failed and will quit now", zap.Error(err))
+			} else {
+				log.L().Info("pessimist will quit now")
+			}
+			return err
+		}
+	}
+}
+
+func (p *Pessimist) buildLocks(etcdCli *clientv3.Client) (int64, int64, error) {
 	p.lk.Clear() // clear all previous locks to support re-Start.
 
 	// get the history shard DDL info.
 	// for the sequence of coordinate a shard DDL lock, see `/pkg/shardddl/pessimism/doc.go`.
 	ifm, rev1, err := pessimism.GetAllInfo(etcdCli)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	p.logger.Info("get history shard DDL info", zap.Reflect("info", ifm), zap.Int64("revision", rev1))
 
@@ -82,53 +134,63 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	// and call `Lock.MarkDone` multiple times is fine.
 	opm, rev2, err := pessimism.GetAllOperations(etcdCli)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	p.logger.Info("get history shard DDL lock operation", zap.Reflect("operation", opm), zap.Int64("revision", rev2))
 
 	// recover the shard DDL lock based on history shard DDL info & lock operation.
 	err = p.recoverLocks(ifm, opm)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
+	return rev1, rev2, nil
+}
 
+func (p *Pessimist) watchInfoOperation(pCtx context.Context, etcdCli *clientv3.Client, rev1, rev2 int64) error {
 	ctx, cancel := context.WithCancel(pCtx)
+	var wg sync.WaitGroup
+	defer func() {
+		cancel()
+		wg.Wait()
+	}()
 
 	// watch for the shard DDL info and handle them.
 	infoCh := make(chan pessimism.Info, 10)
-	p.wg.Add(2)
+	errCh := make(chan error, 10)
+	wg.Add(2)
 	go func() {
 		defer func() {
-			p.wg.Done()
+			wg.Done()
 			close(infoCh)
 		}()
-		pessimism.WatchInfoPut(ctx, etcdCli, rev1+1, infoCh)
+		pessimism.WatchInfoPut(ctx, etcdCli, rev1+1, infoCh, errCh)
 	}()
 	go func() {
-		defer p.wg.Done()
+		defer wg.Done()
 		p.handleInfoPut(ctx, infoCh)
 	}()
 
 	// watch for the shard DDL lock operation and handle them.
 	opCh := make(chan pessimism.Operation, 10)
-	p.wg.Add(2)
+	wg.Add(2)
 	go func() {
 		defer func() {
-			p.wg.Done()
+			wg.Done()
 			close(opCh)
 		}()
-		pessimism.WatchOperationPut(ctx, etcdCli, "", "", rev2+1, opCh)
+		pessimism.WatchOperationPut(ctx, etcdCli, "", "", rev2+1, opCh, errCh)
 	}()
 	go func() {
-		defer p.wg.Done()
+		defer wg.Done()
 		p.handleOperationPut(ctx, opCh)
 	}()
 
-	p.closed = false // started now.
-	p.cancel = cancel
-	p.cli = etcdCli
-	p.logger.Info("the shard DDL pessimist has started")
-	return nil
+	select {
+	case err := <-errCh:
+		return err
+	case <-pCtx.Done():
+		return nil
+	}
 }
 
 // Close closes the Pessimist instance.
@@ -164,6 +226,11 @@ func (p *Pessimist) Locks() map[string]*pessimism.Lock {
 // NOTE: this function has side effects, if it failed, some status can't revert anymore.
 // NOTE: this function should not be called if the lock is still in automatic resolving.
 func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, forceRemove bool) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return terror.ErrMasterPessimistNotStarted.Generate()
+	}
 	// 1. find the lock.
 	lock := p.lk.FindLock(ID)
 	if lock == nil {

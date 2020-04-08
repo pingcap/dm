@@ -381,7 +381,11 @@ func (w *Worker) observeSubtaskStage(ctx context.Context, etcdCli *clientv3.Clie
 				retryNum++
 			}
 		} else {
-			log.L().Error("observeSubtaskStage is failed and will quit now", zap.Error(err))
+			if err != nil {
+				log.L().Error("observeSubtaskStage is failed and will quit now", zap.Error(err))
+			} else {
+				log.L().Info("observeSubtaskStage will quit now")
+			}
 			return err
 		}
 	}
@@ -494,7 +498,11 @@ func (w *Worker) observeRelayStage(ctx context.Context, etcdCli *clientv3.Client
 				retryNum++
 			}
 		} else {
-			log.L().Error("observeRelayStage is failed and will quit now", zap.Error(err))
+			if err != nil {
+				log.L().Error("observeRelayStage is failed and will quit now", zap.Error(err))
+			} else {
+				log.L().Info("observeRelayStage will quit now")
+			}
 			return err
 		}
 	}
