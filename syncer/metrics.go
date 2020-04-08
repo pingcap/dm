@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/metricsproxy"
+
 	cpu "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -28,7 +30,7 @@ import (
 )
 
 var (
-	binlogEvent = prometheus.NewHistogramVec(
+	binlogEvent = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -37,7 +39,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
 		}, []string{"type", "task"})
 
-	binlogSkippedEventsTotal = prometheus.NewCounterVec(
+	binlogSkippedEventsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -45,7 +47,7 @@ var (
 			Help:      "total number of skipped binlog events",
 		}, []string{"type", "task"})
 
-	addedJobsTotal = prometheus.NewCounterVec(
+	addedJobsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -53,7 +55,7 @@ var (
 			Help:      "total number of added jobs",
 		}, []string{"type", "task", "queueNo"})
 
-	finishedJobsTotal = prometheus.NewCounterVec(
+	finishedJobsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -61,7 +63,7 @@ var (
 			Help:      "total number of finished jobs",
 		}, []string{"type", "task", "queueNo"})
 
-	binlogPosGauge = prometheus.NewGaugeVec(
+	binlogPosGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -69,7 +71,7 @@ var (
 			Help:      "current binlog pos",
 		}, []string{"node", "task"})
 
-	binlogFileGauge = prometheus.NewGaugeVec(
+	binlogFileGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -77,7 +79,7 @@ var (
 			Help:      "current binlog file index",
 		}, []string{"node", "task"})
 
-	sqlRetriesTotal = prometheus.NewCounterVec(
+	sqlRetriesTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -85,7 +87,7 @@ var (
 			Help:      "total number of sql retryies",
 		}, []string{"type", "task"})
 
-	txnHistogram = prometheus.NewHistogramVec(
+	txnHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -104,7 +106,7 @@ var (
 		})
 
 	// should alert
-	syncerExitWithErrorCounter = prometheus.NewCounterVec(
+	syncerExitWithErrorCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -113,7 +115,7 @@ var (
 		}, []string{"task"})
 
 	// some problems with it
-	replicationLagGauge = prometheus.NewGaugeVec(
+	replicationLagGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -121,7 +123,7 @@ var (
 			Help:      "replication lag in second between mysql and syncer",
 		}, []string{"task"})
 
-	remainingTimeGauge = prometheus.NewGaugeVec(
+	remainingTimeGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -129,7 +131,7 @@ var (
 			Help:      "the remaining time in second to catch up master",
 		}, []string{"task"})
 
-	unsyncedTableGauge = prometheus.NewGaugeVec(
+	unsyncedTableGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -137,7 +139,7 @@ var (
 			Help:      "number of unsynced tables in the subtask",
 		}, []string{"task", "table"})
 
-	shardLockResolving = prometheus.NewGaugeVec(
+	shardLockResolving = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -210,4 +212,19 @@ func InitStatusAndMetrics(addr string) {
 			log.L().Fatal(err.Error())
 		}
 	}()
+}
+func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
+	binlogEvent.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogSkippedEventsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	addedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	finishedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	sqlRetriesTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogPosGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogFileGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	txnHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	syncerExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	replicationLagGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	remainingTimeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	unsyncedTableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	shardLockResolving.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }

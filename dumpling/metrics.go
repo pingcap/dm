@@ -15,11 +15,13 @@ package dumpling
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/pingcap/dm/pkg/metricsproxy"
 )
 
 var (
 	// should alert
-	dumplingExitWithErrorCounter = prometheus.NewCounterVec(
+	dumplingExitWithErrorCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "dumpling",
@@ -31,4 +33,8 @@ var (
 // RegisterMetrics registers metrics.
 func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(dumplingExitWithErrorCounter)
+}
+
+func (m *Dumpling) removeLabelValuesWithTaskInMetrics(task string) {
+	dumplingExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }
