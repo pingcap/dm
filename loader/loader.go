@@ -358,6 +358,8 @@ type Loader struct {
 
 	// for every worker goroutine, not for every data file
 	workerWg *sync.WaitGroup
+	// for other goroutines
+	wg *sync.WaitGroup
 
 	fileJobQueue       chan *fileJob
 	fileJobQueueClosed sync2.AtomicBool
@@ -387,6 +389,7 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 		db2Tables:  make(map[string]Tables2DataFiles),
 		tableInfos: make(map[string]*tableInfo),
 		workerWg:   new(sync.WaitGroup),
+		wg:         new(sync.WaitGroup),
 		logCtx:     tcontext.Background().WithLogger(log.With(zap.String("task", cfg.Name), zap.String("unit", "load"))),
 	}
 	loader.fileJobQueueClosed.Set(true) // not open yet
@@ -580,7 +583,11 @@ func (l *Loader) Restore(ctx context.Context) error {
 		return err2
 	}
 
-	go l.PrintStatus(ctx)
+	l.wg.Add(1)
+	go func() {
+		defer l.wg.Done()
+		l.PrintStatus(ctx)
+	}()
 
 	begin := time.Now()
 	err = l.restoreData(ctx)
@@ -620,6 +627,7 @@ func (l *Loader) Close() {
 
 	l.stopLoad()
 
+	l.wg.Wait()
 	err := l.toDB.Close()
 	if err != nil {
 		l.logCtx.L().Error("close downstream DB error", log.ShortError(err))
