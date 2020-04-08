@@ -1114,7 +1114,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		shardingReSync          *ShardingReSync
 		savedGlobalLastLocation binlog.Location
 		latestOp                opType // latest job operation tp
-		eventTimeoutCounter     time.Duration
 		traceSource             = fmt.Sprintf("%s.syncer.%s", s.cfg.SourceID, s.cfg.Name)
 		traceID                 string
 	)
@@ -1189,16 +1188,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return nil
 		} else if err == context.DeadlineExceeded {
 			s.tctx.L().Info("deadline exceeded when fetching binlog event")
-			eventTimeoutCounter += eventTimeout
-			if eventTimeoutCounter < maxEventTimeout {
-				err = s.flushJobs()
-				if err != nil {
-					return err
-				}
-				continue
-			}
-
-			eventTimeoutCounter = 0
 			if s.needResync() {
 				s.tctx.L().Info("timeout when fetching binlog event, there must be some problems with replica connection, try to re-connect")
 				err = s.streamerController.ReopenWithRetry(tctx, lastLocation.Clone())
@@ -1321,6 +1310,18 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			err = s.addJobFunc(job)
 			if err != nil {
 				return terror.Annotatef(err, "current location %s", currentLocation)
+			}
+		case *replication.GenericEvent:
+			switch e.Header.EventType {
+			case replication.HEARTBEAT_EVENT:
+				// flush checkpoint even if there are no real binlog events
+				if s.checkpoint.CheckGlobalPoint() {
+					s.tctx.L().Info("meet heartbeat event and then flush jobs")
+					err = s.flushJobs()
+					if err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
