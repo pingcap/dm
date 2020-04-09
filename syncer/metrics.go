@@ -34,7 +34,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "read_binlog_duration",
 			Help:      "bucketed histogram of read time (s) for single binlog event from the relay log or master.",
-			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 20),
+			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 21),
 		}, []string{"task"})
 
 	binlogEventSizeHistogram = prometheus.NewHistogramVec(
@@ -61,7 +61,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "conflict_detect_duration",
 			Help:      "bucketed histogram of conflict detect time (s) for single DML statement",
-			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 20),
+			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 21),
 		}, []string{"task"})
 
 	binlogSkippedEventsTotal = prometheus.NewCounterVec(
