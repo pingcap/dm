@@ -398,7 +398,7 @@ func NewDummyRelayHolder(cfg *config.SourceConfig) RelayHolder {
 	}
 }
 
-// NewDummyRelayHolder creates a new RelayHolder
+// NewDummyRelayHolderWithRelayBinlog creates a new RelayHolder with relayBinlog in relayStatus
 func NewDummyRelayHolderWithRelayBinlog(cfg *config.SourceConfig, relayBinlog string) RelayHolder {
 	return &dummyRelayHolder{
 		cfg:         cfg,
