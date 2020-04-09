@@ -1,6 +1,7 @@
 sharding2
 ha
 ha_master
+ha_cases
 full_mode
 start_task
 dm_syncer

@@ -33,7 +33,9 @@ func main() {
 	}
 	cli := pb.NewWorkerClient(conn)
 	req := &pb.QueryStatusRequest{}
-	_, err = cli.QueryStatus(context.Background(), req)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	_, err = cli.QueryStatus(ctx, req)
+	cancel()
 	if err != nil {
 		utils.ExitWithError(err)
 	}
