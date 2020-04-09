@@ -411,12 +411,10 @@ function run() {
     test_kill_master
     test_kill_worker
     test_kill_master_in_sync
-    # TODO: current ha doesn't support kill worker in sync well now
-    # test_kill_worker_in_sync
+    test_kill_worker_in_sync
     test_standalone_running
     test_pause_task
-    # TODO: current ha doesn't support kill worker in sync well now
-    # test_multi_task_reduce_worker
+    test_multi_task_reduce_worker
     test_isolate_master
 }
 
