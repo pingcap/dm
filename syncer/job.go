@@ -16,6 +16,8 @@ package syncer
 import (
 	"fmt"
 
+	"github.com/pingcap/tidb-tools/pkg/filter"
+
 	"github.com/pingcap/dm/pkg/binlog"
 )
 
@@ -58,8 +60,8 @@ func (t opType) String() string {
 
 type job struct {
 	tp              opType
-	sourceSchema    string
-	sourceTable     string
+	sourceSchemas   []string
+	sourceTables    []string
 	targetSchema    string
 	targetTable     string
 	sql             string
@@ -84,8 +86,8 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 
 	return &job{
 		tp:              tp,
-		sourceSchema:    sourceSchema,
-		sourceTable:     sourceTable,
+		sourceSchemas:   []string{sourceSchema},
+		sourceTables:    []string{sourceTable},
 		targetSchema:    targetSchema,
 		targetTable:     targetTable,
 		sql:             sql,
@@ -98,7 +100,8 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 	}
 }
 
-func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation binlog.Location, traceID string) *job {
+func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation binlog.Location,
+	traceID string, sourceTbls []*filter.Table) *job {
 	location1 := location.Clone()
 	cmdLocation1 := cmdLocation.Clone()
 
@@ -111,10 +114,19 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation bi
 	}
 
 	if ddlInfo != nil {
-		j.sourceSchema = ddlInfo.tableNames[0][0].Schema
-		j.sourceTable = ddlInfo.tableNames[0][0].Name
+		j.sourceSchemas = []string{ddlInfo.tableNames[0][0].Schema}
+		j.sourceTables = []string{ddlInfo.tableNames[0][0].Name}
 		j.targetSchema = ddlInfo.tableNames[1][0].Schema
 		j.targetTable = ddlInfo.tableNames[1][0].Name
+	} else if sourceTbls != nil {
+		sourceSchemas := make([]string, 0, len(sourceTbls))
+		sourceTables := make([]string, 0, len(sourceTbls))
+		for _, tbl := range sourceTbls {
+			sourceSchemas = append(sourceSchemas, tbl.Schema)
+			sourceTables = append(sourceTables, tbl.Name)
+		}
+		j.sourceSchemas = sourceSchemas
+		j.sourceTables = sourceTables
 	}
 
 	return j

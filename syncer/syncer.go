@@ -743,15 +743,19 @@ func (s *Syncer) addJob(job *job) error {
 	case ddl:
 		// only save checkpoint for DDL and XID (see above)
 		s.saveGlobalPoint(job.location)
-		if len(job.sourceSchema) > 0 {
-			s.saveTablePoint(job.sourceSchema, job.sourceTable, job.location)
+		for i := range job.sourceSchemas {
+			if len(job.sourceSchemas[i]) > 0 {
+				s.saveTablePoint(job.sourceSchemas[i], job.sourceTables[i], job.location)
+			}
 		}
 		// reset sharding group after checkpoint saved
 		s.resetShardingGroup(job.targetSchema, job.targetTable)
 	case insert, update, del:
 		// save job's current pos for DML events
-		if len(job.sourceSchema) > 0 {
-			s.saveTablePoint(job.sourceSchema, job.sourceTable, job.currentLocation)
+		for i := range job.sourceSchemas {
+			if len(job.sourceSchemas[i]) > 0 {
+				s.saveTablePoint(job.sourceSchemas[i], job.sourceTables[i], job.location)
+			}
 		}
 	}
 
@@ -1615,7 +1619,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		ddlInfo        *shardingDDLInfo
 		needHandleDDLs []string
 		needTrackDDLs  []trackedDDL
-		sourceTbls     = make(map[string]*filter.Table)
+		sourceTbls     []*filter.Table
 	)
 	for _, sql := range sqls {
 		sqlDDL, tableNames, stmt, handleErr := s.handleDDL(ec.parser2, usedSchema, sql)
@@ -1675,7 +1679,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		needHandleDDLs = append(needHandleDDLs, sqlDDL)
 		needTrackDDLs = append(needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tableNames: tableNames})
-		sourceTbls[tableNames[0][0].String()] = tableNames[0][0]
+		sourceTbls = append(sourceTbls, tableNames[0][0])
 	}
 
 	s.tctx.L().Info("prepare to handle ddls", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
@@ -1695,9 +1699,15 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			s.tctx.L().Info("replace ddls to preset ddls by sql operator in normal mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 			needHandleDDLs = appliedSQLs // maybe nil
 		}
-		// TODO: s.cfg.IsSharding == false => ddlInfo == nil => job.sourceSchema == ""
-		//      so the table checkpoint won't be flushed instantly in addJob
-		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID)
+
+		// run trackDDL before add ddl job to make sure checkpoint can be flushed
+		for _, td := range needTrackDDLs {
+			if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+				return err
+			}
+		}
+
+		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID, sourceTbls)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err
@@ -1710,16 +1720,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
-
-		for _, td := range needTrackDDLs {
-			if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
-				return err
-			}
-		}
-		for _, tbl := range sourceTbls {
-			// save checkpoint of each table
-			s.saveTablePoint(tbl.Schema, tbl.Name, ec.currentLocation.Clone())
-		}
 
 		for _, table := range onlineDDLTableNames {
 			s.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.String("schema", table.Schema), zap.String("table", table.Name))
@@ -1890,7 +1890,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		s.tctx.L().Info("replace ddls to preset ddls by sql operator in shard mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
 		needHandleDDLs = appliedSQLs // maybe nil
 	}
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID, nil)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
