@@ -16,7 +16,6 @@ package reader
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
@@ -27,11 +26,6 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-)
-
-const (
-	// event timeout when trying to read events from upstream master server.
-	eventTimeout = 10 * time.Minute
 )
 
 // Result represents a read operation result.
@@ -140,7 +134,7 @@ func (r *reader) GetEvent(ctx context.Context) (Result, error) {
 	}
 
 	for {
-		ctx2, cancel2 := context.WithTimeout(ctx, eventTimeout)
+		ctx2, cancel2 := context.WithTimeout(ctx, common.SlaveReadTimeout)
 		ev, err := r.in.GetEvent(ctx2)
 		cancel2()
 
