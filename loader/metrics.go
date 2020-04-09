@@ -49,7 +49,7 @@ var (
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "loader",
-			Name:      "query_duration_time",
+			Name:      "stmt_duration_time",
 			Help:      "Bucketed histogram of every statement query time (s).",
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
 		}, []string{"type", "task"})
