@@ -426,7 +426,7 @@ func genMultipleKeys(columns []*column, value []interface{}, indexColumns map[st
 	multipleKeys := make([]string, 0, len(indexColumns))
 	for _, indexCols := range indexColumns {
 		cols, vals := getColumnData(columns, indexCols, value)
-		multipleKeys = append(multipleKeys, genKeyList(cols, vals)+table)
+		multipleKeys = append(multipleKeys, table+genKeyList(cols, vals))
 	}
 	return multipleKeys
 }
