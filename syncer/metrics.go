@@ -28,6 +28,24 @@ import (
 )
 
 var (
+	binlogReadDurationHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "read_binlog_duration",
+			Help:      "bucketed histogram of read time (s) for single binlog event from the relay log or master.",
+			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 20),
+		}, []string{"task"})
+
+	binlogEventSizeHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "binlog_event_size",
+			Help:      "size of a binlog event",
+			Buckets:   prometheus.ExponentialBuckets(16, 2, 20),
+		}, []string{"task"})
+
 	binlogEvent = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
@@ -36,6 +54,15 @@ var (
 			Help:      "cost of binlog event transform",
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
 		}, []string{"type", "task"})
+
+	conflictDetectDurationHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "conflict_detect_duration",
+			Help:      "bucketed histogram of conflict detect time (s) for single DML statement",
+			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 20),
+		}, []string{"task"})
 
 	binlogSkippedEventsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -60,6 +87,14 @@ var (
 			Name:      "finished_jobs_total",
 			Help:      "total number of finished jobs",
 		}, []string{"type", "task", "queueNo"})
+
+	queueSizeGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "queue_size",
+			Help:      "remain size of the DML queue",
+		}, []string{"task", "queueNo"})
 
 	binlogPosGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -148,10 +183,14 @@ var (
 
 // RegisterMetrics registers metrics
 func RegisterMetrics(registry *prometheus.Registry) {
+	registry.MustRegister(binlogReadDurationHistogram)
+	registry.MustRegister(binlogEventSizeHistogram)
 	registry.MustRegister(binlogEvent)
+	registry.MustRegister(conflictDetectDurationHistogram)
 	registry.MustRegister(binlogSkippedEventsTotal)
 	registry.MustRegister(addedJobsTotal)
 	registry.MustRegister(finishedJobsTotal)
+	registry.MustRegister(queueSizeGauge)
 	registry.MustRegister(sqlRetriesTotal)
 	registry.MustRegister(binlogPosGauge)
 	registry.MustRegister(binlogFileGauge)
