@@ -89,7 +89,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		watchTimeout       = 500 * time.Millisecond
+		watchTimeout       = 2 * time.Second
 		source1            = "mysql-replica-1"
 		source2            = "mysql-replica-2"
 		task1              = "task-1"

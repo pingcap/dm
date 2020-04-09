@@ -15,12 +15,17 @@ package shardddl
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"sync"
 	"time"
 
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/optimism"
@@ -102,6 +107,51 @@ func (o *Optimist) Close() {
 // Locks return all shard DDL locks current exist.
 func (o *Optimist) Locks() map[string]*optimism.Lock {
 	return o.lk.Locks()
+}
+
+// ShowLocks is used by `show-ddl-locks` command.
+func (o *Optimist) ShowLocks(task string, sources []string) []*pb.DDLLock {
+	locks := o.lk.Locks()
+	ret := make([]*pb.DDLLock, 0, len(locks))
+	for _, lock := range locks {
+		if task != "" && task != lock.Task {
+			continue // specify task but mismatch
+		}
+		ready := lock.Ready()
+		if len(sources) > 0 {
+			for _, source := range sources {
+				if _, ok := ready[source]; ok {
+					goto FOUND // if any source matched, show lock for it.
+				}
+			}
+			continue // specify sources but mismath
+		}
+	FOUND:
+		l := &pb.DDLLock{
+			ID:       lock.ID,
+			Task:     lock.Task,
+			Mode:     config.ShardOptimistic,
+			Owner:    "",  // N/A for the optimistic mode
+			DDLs:     nil, // N/A for the optimistic mode
+			Synced:   make([]string, 0, len(ready)),
+			Unsynced: make([]string, 0, len(ready)),
+		}
+		for source, schemaTables := range ready {
+			for schema, tables := range schemaTables {
+				for table, synced := range tables {
+					if synced {
+						l.Synced = append(l.Synced, fmt.Sprintf("%s-%s", source, dbutil.TableName(schema, table)))
+					} else {
+						l.Unsynced = append(l.Unsynced, fmt.Sprintf("%s-%s", source, dbutil.TableName(schema, table)))
+					}
+				}
+			}
+		}
+		sort.Strings(l.Synced)
+		sort.Strings(l.Unsynced)
+		ret = append(ret, l)
+	}
+	return ret
 }
 
 // run runs jobs in the background.
