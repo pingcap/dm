@@ -63,8 +63,6 @@ import (
 var (
 	maxRetryCount = 100
 
-	maxEventTimeout = 1 * time.Hour
-
 	retryTimeout = 3 * time.Second
 	waitTime     = 10 * time.Millisecond
 	statusTime   = 30 * time.Second

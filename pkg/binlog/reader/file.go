@@ -94,6 +94,7 @@ func NewFileReader(cfg *FileReaderConfig) Reader {
 }
 
 // StartSyncByPos implements Reader.StartSyncByPos.
+// TODO: support heartbeat event.
 func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

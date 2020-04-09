@@ -22,8 +22,8 @@ import (
 var (
 	// max reconnection times for binlog syncer in go-mysql
 	maxBinlogSyncerReconnect = 60
-
-	slaveReadTimeout      = 1 * time.Minute  // slave read binlog data timeout, ref: https://dev.mysql.com/doc/refman/8.0/en/replication-options-slave.html#sysvar_slave_net_timeout
+	// SlaveReadTimeout slave read binlog data timeout, ref: https://dev.mysql.com/doc/refman/8.0/en/replication-options-slave.html#sysvar_slave_net_timeout
+	SlaveReadTimeout      = 1 * time.Minute
 	masterHeartbeatPeriod = 30 * time.Second // master server send heartbeat period: ref: `MASTER_HEARTBEAT_PERIOD` in https://dev.mysql.com/doc/refman/8.0/en/change-master-to.html
 )
 
@@ -32,6 +32,6 @@ func SetDefaultReplicationCfg(cfg *replication.BinlogSyncerConfig) {
 	cfg.UseDecimal = true // must set true. ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
 	cfg.VerifyChecksum = true
 	cfg.MaxReconnectAttempts = maxBinlogSyncerReconnect
-	cfg.ReadTimeout = slaveReadTimeout
+	cfg.ReadTimeout = SlaveReadTimeout
 	cfg.HeartbeatPeriod = masterHeartbeatPeriod
 }
