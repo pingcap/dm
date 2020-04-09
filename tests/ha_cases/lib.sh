@@ -2,9 +2,6 @@
 
 set -eu
 
-# cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
-# source $cur/../_utils/test_prepare
-
 ha_test="ha_test"
 ha_test2="ha_test2"
 master_ports=($MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3)
