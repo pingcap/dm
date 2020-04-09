@@ -193,7 +193,7 @@ func (st *SubTask) Run() {
 }
 
 func (st *SubTask) run() {
-	st.setStage(pb.Stage_Paused)
+	st.setStage(pb.Stage_Running)
 	ctx, cancel := context.WithCancel(st.ctx)
 	st.setCurrCtx(ctx, cancel)
 	err := st.unitTransWaitCondition(ctx)
@@ -205,7 +205,6 @@ func (st *SubTask) run() {
 		return
 	}
 
-	st.setStage(pb.Stage_Running)
 	st.setResult(nil) // clear previous result
 	cu := st.CurrUnit()
 	st.l.Info("start to run", zap.Stringer("unit", cu.Type()))
@@ -451,6 +450,9 @@ func (st *SubTask) Resume() error {
 		return nil
 	}
 
+	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Running) {
+		return terror.ErrWorkerNotPausedStage.Generate()
+	}
 	ctx, cancel := context.WithCancel(st.ctx)
 	st.setCurrCtx(ctx, cancel)
 	// NOTE: this may block if user resume a task
@@ -461,10 +463,6 @@ func (st *SubTask) Resume() error {
 		return err
 	} else if ctx.Err() != nil {
 		return nil
-	}
-
-	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Running) {
-		return terror.ErrWorkerNotPausedStage.Generate()
 	}
 
 	st.setResult(nil) // clear previous result

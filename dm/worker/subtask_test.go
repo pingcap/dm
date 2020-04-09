@@ -517,6 +517,7 @@ func (t *testSubTask) TestSubtaskFastQuit(c *C) {
 	}()
 
 	// test Pause
+	time.Sleep(time.Second) // wait for task to run for some time
 	c.Assert(st.Pause(), IsNil)
 	select {
 	case <-time.After(500 * time.Millisecond):
@@ -534,6 +535,7 @@ func (t *testSubTask) TestSubtaskFastQuit(c *C) {
 		st.run()
 	}()
 
+	time.Sleep(time.Second)
 	// test Close
 	st.Close()
 	select {
