@@ -72,7 +72,7 @@ func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 	var (
 		syncer = NewSyncer(s.cfg)
 		tctx   = tcontext.Background()
-		conn2  = &DBConn{resetBaseConnFn: func(*context.Context, *conn.BaseConn) (*conn.BaseConn, error) {
+		conn2  = &DBConn{cfg: s.cfg, resetBaseConnFn: func(*context.Context, *conn.BaseConn) (*conn.BaseConn, error) {
 			return nil, nil
 		}}
 		customErr     = errors.New("custom error")
