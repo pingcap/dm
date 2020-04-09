@@ -88,6 +88,13 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 		return true, nil
 	}
 
+	if c.queryRelay {
+		// TODO call function to parse
+
+		fmt.Println("hello")
+		return true, nil
+	}
+
 	if len(c.encrypt) > 0 {
 		ciphertext, err1 := utils.Encrypt(c.encrypt)
 		if err1 != nil {
