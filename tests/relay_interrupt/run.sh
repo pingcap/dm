@@ -10,10 +10,14 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 function prepare_data() {
     run_sql 'DROP DATABASE if exists relay_interrupt;' $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql 'CREATE DATABASE relay_interrupt;' $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql "CREATE TABLE relay_interrupt.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "CREATE TABLE relay_interrupt.t$1(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     for j in $(seq 100); do
-        run_sql "INSERT INTO relay_interrupt.t VALUES ($j,${j}000$j),($j,${j}001$j);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+        run_sql "INSERT INTO relay_interrupt.t$1 VALUES ($j,${j}000$j),($j,${j}001$j);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     done
+}
+
+function prepare_data2() {
+    run_sql "DELETE FROM relay_interrupt.t$1 limit 1;" $MYSQL_PORT1 $MYSQL_PASSWORD1
 }
 
 function run() {
@@ -29,7 +33,10 @@ function run() {
         echo "failpoint=${failpoints[i]}"
         export GO_FAILPOINTS=${failpoints[i]}
 
-        prepare_data
+        # clear downstream env
+        run_sql 'DROP DATABASE if exists dm_meta;' $TIDB_PORT $TIDB_PASSWORD
+        run_sql 'DROP DATABASE if exists relay_interrupt;' $TIDB_PORT $TIDB_PASSWORD
+        prepare_data1 $i
 
         run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
         check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
@@ -73,6 +80,20 @@ function run() {
 
         check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+#        prepare_data2 $i
+#        echo "read binlog from relay log failed, and will use remote binlog"
+        kill_dm_worker
+        export GO_FAILPOINTS="github.com/pingcap/dm/pkg/streamer/GetEventFromLocalFailed=return()"
+        run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+        check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+        sleep 8
+#        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+#            "query-status test" \
+#            "\"binlogType\": \"remote\"" 1
+#
+#        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+        export GO_FAILPOINTS=''
         cleanup_process
     done
 }
