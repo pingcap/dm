@@ -129,6 +129,15 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
 		}, []string{"task"})
 
+	queryHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "query_duration_time",
+			Help:      "Bucketed histogram of query time (s).",
+			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+		}, []string{"task"})
+
 	// FIXME: should I move it to dm-worker?
 	cpuUsageGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
@@ -195,6 +204,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(binlogPosGauge)
 	registry.MustRegister(binlogFileGauge)
 	registry.MustRegister(txnHistogram)
+	registry.MustRegister(queryHistogram)
 	registry.MustRegister(cpuUsageGauge)
 	registry.MustRegister(syncerExitWithErrorCounter)
 	registry.MustRegister(replicationLagGauge)
