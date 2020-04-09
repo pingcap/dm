@@ -80,7 +80,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		}
 
 		sql := fmt.Sprintf("%s INTO %s (%s) VALUES (%s);", insertOrReplace, qualifiedName, columnList, columnPlaceholders)
-		ks := genMultipleKeys(ti, originalValue)
+		ks := genMultipleKeys(ti, originalValue, qualifiedName)
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -135,8 +135,8 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			defaultIndexColumns = getAvailableIndexColumn(ti, oriOldValues)
 		}
 
-		ks := genMultipleKeys(ti, oriOldValues)
-		ks = append(ks, genMultipleKeys(ti, oriChangedValues)...)
+		ks := genMultipleKeys(ti, oriOldValues, qualifiedName)
+		ks = append(ks, genMultipleKeys(ti, oriChangedValues, qualifiedName)...)
 
 		if safeMode {
 			// generate delete sql from old data
@@ -206,7 +206,7 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		if defaultIndexColumns == nil {
 			defaultIndexColumns = getAvailableIndexColumn(ti, value)
 		}
-		ks := genMultipleKeys(ti, value)
+		ks := genMultipleKeys(ti, value, qualifiedName)
 
 		sql, value := genDeleteSQL(qualifiedName, value, ti.Columns, defaultIndexColumns)
 		sqls = append(sqls, sql)
@@ -341,19 +341,19 @@ func genKeyList(columns []*model.ColumnInfo, dataSeq []interface{}) string {
 	return strings.Join(values, ",")
 }
 
-func genMultipleKeys(ti *model.TableInfo, value []interface{}) []string {
+func genMultipleKeys(ti *model.TableInfo, value []interface{}, table string) []string {
 	multipleKeys := make([]string, 0, len(ti.Indices)+1)
 	if ti.PKIsHandle {
 		if pk := ti.GetPkColInfo(); pk != nil {
 			cols := []*model.ColumnInfo{pk}
 			vals := []interface{}{value[pk.Offset]}
-			multipleKeys = append(multipleKeys, genKeyList(cols, vals))
+			multipleKeys = append(multipleKeys, table+genKeyList(cols, vals))
 		}
 	}
 
 	for _, indexCols := range ti.Indices {
 		cols, vals := getColumnData(ti.Columns, indexCols, value)
-		multipleKeys = append(multipleKeys, genKeyList(cols, vals))
+		multipleKeys = append(multipleKeys, table+genKeyList(cols, vals))
 	}
 	return multipleKeys
 }

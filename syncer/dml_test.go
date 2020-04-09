@@ -165,49 +165,49 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 			// one primary key
 			schema: `create table t2(a int primary key, b double)`,
 			values: []interface{}{60, 70.5},
-			keys:   []string{"60"},
+			keys:   []string{"table60"},
 		},
 		{
 			// one unique key
 			schema: `create table t3(a int unique, b double)`,
 			values: []interface{}{60, 70.5},
-			keys:   []string{"60"},
+			keys:   []string{"table60"},
 		},
 		{
 			// one ordinary key
 			schema: `create table t4(a int, b double, key(b))`,
 			values: []interface{}{60, 70.5},
-			keys:   []string{"70.5"},
+			keys:   []string{"table70.5"},
 		},
 		{
 			// multiple keys
 			schema: `create table t5(a int, b text, c int, key(a), key(b(3)))`,
 			values: []interface{}{13, "abcdef", 15},
-			keys:   []string{"13", "abcdef"},
+			keys:   []string{"table13", "tableabcdef"},
 		},
 		{
 			// multiple keys with primary key
 			schema: `create table t6(a int primary key, b varchar(16) unique)`,
 			values: []interface{}{16, "xyz"},
-			keys:   []string{"16", "xyz"},
+			keys:   []string{"table16", "tablexyz"},
 		},
 		{
 			// non-integer primary key
 			schema: `create table t65(a int unique, b varchar(16) primary key)`,
 			values: []interface{}{16, "xyz"},
-			keys:   []string{"16", "xyz"},
+			keys:   []string{"table16", "tablexyz"},
 		},
 		{
 			// primary key of multiple columns
 			schema: `create table t7(a int, b int, primary key(a, b))`,
 			values: []interface{}{59, 69},
-			keys:   []string{"59,69"},
+			keys:   []string{"table59,69"},
 		},
 		{
 			// ordinary key of multiple columns
 			schema: `create table t75(a int, b int, c int, key(a, b), key(c, b))`,
 			values: []interface{}{48, 58, 68},
-			keys:   []string{"48,58", "68,58"},
+			keys:   []string{"table48,58", "table68,58"},
 		},
 		{
 			// so many keys
@@ -221,7 +221,7 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 				)
 			`,
 			values: []interface{}{27, 37, 47},
-			keys:   []string{"27,37", "37,47", "27,37,47", "47,27"},
+			keys:   []string{"table27,37", "table37,47", "table27,37,47", "table47,27"},
 		},
 	}
 
@@ -232,7 +232,7 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 
 		ti, err := createTableInfo(p, se, int64(i+1), tc.schema)
 		assert(err, IsNil)
-		keys := genMultipleKeys(ti, tc.values)
+		keys := genMultipleKeys(ti, tc.values, "table")
 		assert(keys, DeepEquals, tc.keys)
 	}
 }
