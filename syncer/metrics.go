@@ -117,7 +117,7 @@ var (
 			Namespace: "dm",
 			Subsystem: "syncer",
 			Name:      "sql_retries_total",
-			Help:      "total number of sql retryies",
+			Help:      "total number of sql retries",
 		}, []string{"type", "task"})
 
 	txnHistogram = prometheus.NewHistogramVec(
@@ -137,6 +137,15 @@ var (
 			Help:      "Bucketed histogram of query time (s).",
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
 		}, []string{"task"})
+
+	stmtHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "query_duration_time",
+			Help:      "Bucketed histogram of every statement query time (s).",
+			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+		}, []string{"type", "task"})
 
 	// FIXME: should I move it to dm-worker?
 	cpuUsageGauge = prometheus.NewGauge(
@@ -204,6 +213,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(binlogPosGauge)
 	registry.MustRegister(binlogFileGauge)
 	registry.MustRegister(txnHistogram)
+	registry.MustRegister(stmtHistogram)
 	registry.MustRegister(queryHistogram)
 	registry.MustRegister(cpuUsageGauge)
 	registry.MustRegister(syncerExitWithErrorCounter)
