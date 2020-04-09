@@ -647,42 +647,10 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 		Result: true,
 	}
 
-	// TODO: add `show-ddl-locks` support for Optimist later.
-	locks := s.pessimist.Locks()
-	resp.Locks = make([]*pb.DDLLock, 0, len(locks))
-	for _, lock := range locks {
-		if len(req.Task) > 0 && req.Task != lock.Task {
-			continue // specify task and mismatch
-		}
-		ready := lock.Ready()
-		if len(req.Sources) > 0 {
-			for _, worker := range req.Sources {
-				if _, ok := ready[worker]; ok {
-					goto FOUND
-				}
-			}
-			continue // specify workers and mismatch
-		}
-	FOUND:
-		l := &pb.DDLLock{
-			ID:       lock.ID,
-			Task:     lock.Task,
-			Owner:    lock.Owner,
-			DDLs:     lock.DDLs,
-			Synced:   make([]string, 0, len(ready)),
-			Unsynced: make([]string, 0, len(ready)),
-		}
-		for worker, synced := range ready {
-			if synced {
-				l.Synced = append(l.Synced, worker)
-			} else {
-				l.Unsynced = append(l.Unsynced, worker)
-			}
-		}
-		sort.Strings(l.Synced)
-		sort.Strings(l.Unsynced)
-		resp.Locks = append(resp.Locks, l)
-	}
+	// show pessimistic locks.
+	resp.Locks = append(resp.Locks, s.pessimist.ShowLocks(req.Task, req.Sources)...)
+	// show optimistic locks.
+	resp.Locks = append(resp.Locks, s.optimist.ShowLocks(req.Task, req.Sources)...)
 
 	if len(resp.Locks) == 0 {
 		resp.Msg = "no DDL lock exists"
