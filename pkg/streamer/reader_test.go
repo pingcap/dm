@@ -36,6 +36,8 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
+var parseFileTimeout = 3 * time.Second
+
 var _ = Suite(&testReaderSuite{})
 
 type testReaderSuite struct {
@@ -269,7 +271,7 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 		_, err2 := f.Write(extraEvents[0].RawData)
 		c.Assert(err2, IsNil)
 	}()
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel2()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
 		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
@@ -290,7 +292,7 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 		err2 := ioutil.WriteFile(nextPath, replication.BinLogFileHeader, 0600)
 		c.Assert(err2, IsNil)
 	}()
-	ctx3, cancel3 := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx3, cancel3 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel3()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
 		ctx3, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
@@ -340,7 +342,7 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 
 	// invalid UUID in UUID list, error
 	r.uuids = []string{currentUUID, "invalid.uuid"}
-	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
+	ctx1, cancel1 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel1()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
 		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
@@ -360,7 +362,7 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 	c.Assert(err, IsNil)
 
 	// has relay log file in next sub directory, need to switch
-	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel2()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
 		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
@@ -401,7 +403,7 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	defer f.Close()
 
 	// file has no data, meet io.EOF error (when reading file header) and ignore it. but will get `context deadline exceeded` error
-	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
+	ctx1, cancel1 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel1()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
 		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
@@ -422,7 +424,7 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	c.Assert(err, IsNil)
 
 	// meet `err EOF` error (when parsing binlog event) ignored
-	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel2()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
 		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
