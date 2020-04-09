@@ -137,7 +137,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		}
 
 		sql := fmt.Sprintf("%s INTO `%s`.`%s` (%s) VALUES (%s);", insertOrReplace, schema, table, columnList, columnPlaceholders)
-		ks := genMultipleKeys(originalColumns, originalValue, originalIndexColumns)
+		ks := genMultipleKeys(originalColumns, originalValue, originalIndexColumns, dbutil.TableName(schema, table))
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -194,8 +194,8 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			defaultIndexColumns = getAvailableIndexColumn(originalIndexColumns, oriOldValues)
 		}
 
-		ks := genMultipleKeys(originalColumns, oriOldValues, originalIndexColumns)
-		ks = append(ks, genMultipleKeys(originalColumns, oriChangedValues, originalIndexColumns)...)
+		ks := genMultipleKeys(originalColumns, oriOldValues, originalIndexColumns, dbutil.TableName(schema, table))
+		ks = append(ks, genMultipleKeys(originalColumns, oriChangedValues, originalIndexColumns, dbutil.TableName(schema, table))...)
 
 		if safeMode {
 			// generate delete sql from old data
@@ -267,7 +267,7 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		if len(defaultIndexColumns) == 0 {
 			defaultIndexColumns = getAvailableIndexColumn(indexColumns, value)
 		}
-		ks := genMultipleKeys(columns, value, indexColumns)
+		ks := genMultipleKeys(columns, value, indexColumns, dbutil.TableName(schema, table))
 
 		sql, value := genDeleteSQL(schema, table, value, columns, defaultIndexColumns)
 		sqls = append(sqls, sql)
@@ -422,11 +422,11 @@ func genKeyList(columns []*column, dataSeq []interface{}) string {
 	return strings.Join(values, ",")
 }
 
-func genMultipleKeys(columns []*column, value []interface{}, indexColumns map[string][]*column) []string {
+func genMultipleKeys(columns []*column, value []interface{}, indexColumns map[string][]*column, table string) []string {
 	multipleKeys := make([]string, 0, len(indexColumns))
 	for _, indexCols := range indexColumns {
 		cols, vals := getColumnData(columns, indexCols, value)
-		multipleKeys = append(multipleKeys, genKeyList(cols, vals))
+		multipleKeys = append(multipleKeys, table+genKeyList(cols, vals))
 	}
 	return multipleKeys
 }
