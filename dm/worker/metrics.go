@@ -25,13 +25,14 @@ import (
 	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/metricsproxy"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay"
 	"github.com/pingcap/dm/syncer"
 )
 
 var (
-	taskState = prometheus.NewGaugeVec(
+	taskState = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "worker",
@@ -86,4 +87,8 @@ func InitStatus(lis net.Listener) {
 	if err != nil && !common.IsErrNetClosing(err) && err != http.ErrServerClosed {
 		log.L().Error("fail to start status server return", log.ShortError(err))
 	}
+}
+
+func (st *SubTask) removeLabelValuesWithTaskInMetrics(task string) {
+	taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }
