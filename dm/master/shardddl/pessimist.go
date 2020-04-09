@@ -22,6 +22,8 @@ import (
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
@@ -215,6 +217,47 @@ func (p *Pessimist) Close() {
 // Locks return all shard DDL locks current exist.
 func (p *Pessimist) Locks() map[string]*pessimism.Lock {
 	return p.lk.Locks()
+}
+
+// ShowLocks is used by `show-ddl-locks` command.
+func (p *Pessimist) ShowLocks(task string, sources []string) []*pb.DDLLock {
+	locks := p.lk.Locks()
+	ret := make([]*pb.DDLLock, 0, len(locks))
+	for _, lock := range locks {
+		if task != "" && task != lock.Task {
+			continue // specify task but mismatch
+		}
+		ready := lock.Ready()
+		if len(sources) > 0 {
+			for _, worker := range sources {
+				if _, ok := ready[worker]; ok {
+					goto FOUND // if any source matched, show lock for it.
+				}
+			}
+			continue // specify workers but mismatch
+		}
+	FOUND:
+		l := &pb.DDLLock{
+			ID:       lock.ID,
+			Task:     lock.Task,
+			Mode:     config.ShardPessimistic,
+			Owner:    lock.Owner,
+			DDLs:     lock.DDLs,
+			Synced:   make([]string, 0, len(ready)),
+			Unsynced: make([]string, 0, len(ready)),
+		}
+		for worker, synced := range ready {
+			if synced {
+				l.Synced = append(l.Synced, worker)
+			} else {
+				l.Unsynced = append(l.Unsynced, worker)
+			}
+		}
+		sort.Strings(l.Synced)
+		sort.Strings(l.Unsynced)
+		ret = append(ret, l)
+	}
+	return ret
 }
 
 // UnlockLock unlocks a shard DDL lock manually when using `unlock-ddl-lock` command.
