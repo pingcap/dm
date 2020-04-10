@@ -64,6 +64,15 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 21),
 		}, []string{"task"})
 
+	addJobDurationHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "add_job_duration",
+			Help:      "bucketed histogram of add a job to the queue time (s)",
+			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 21),
+		}, []string{"type", "task", "queueNo"})
+
 	binlogSkippedEventsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
@@ -205,6 +214,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(binlogEventSizeHistogram)
 	registry.MustRegister(binlogEvent)
 	registry.MustRegister(conflictDetectDurationHistogram)
+	registry.MustRegister(addJobDurationHistogram)
 	registry.MustRegister(binlogSkippedEventsTotal)
 	registry.MustRegister(addedJobsTotal)
 	registry.MustRegister(finishedJobsTotal)
