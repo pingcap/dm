@@ -16,6 +16,7 @@ function test_running() {
     prepare_sql
     start_cluster
 
+    sleep 3 # make sure task to step in "Sync" stage
     echo "use sync_diff_inspector to check full dump loader"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
@@ -27,7 +28,6 @@ function test_running() {
     run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
     run_sql_file_withdb $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test
 
-    sleep 3
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     echo "[$(date)] <<<<<< finish test_running >>>>>>"
