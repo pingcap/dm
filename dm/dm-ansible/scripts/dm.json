@@ -3409,11 +3409,13 @@
           "fill": 1,
           "id": 56,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -3435,6 +3437,7 @@
               "expr": "dm_syncer_queue_size{task=\"$task\", instance=\"$instance\"}",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "{{queueNo}}",
               "refId": "A"
             }
           ],
@@ -3486,11 +3489,13 @@
           "fill": 1,
           "id": 3,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -3512,6 +3517,7 @@
               "expr": "rate(dm_syncer_added_jobs_total{task=\"$task\", instance=\"$instance\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "{{queueNo}}-{{type}}",
               "refId": "A"
             }
           ],
@@ -3562,11 +3568,13 @@
           "fill": 1,
           "id": 2,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -3588,6 +3596,7 @@
               "expr": "rate(dm_syncer_finished_jobs_total{task=\"$task\", instance=\"$instance\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "{{queueNo}}-{{type}}",
               "refId": "A"
             }
           ],
