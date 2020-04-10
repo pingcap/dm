@@ -1623,7 +1623,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		ddlInfo        *shardingDDLInfo
 		needHandleDDLs []string
 		needTrackDDLs  []trackedDDL
-		sourceTbls     = make(map[string]*filter.Table)
+		sourceTbls     = make(map[string]map[string]struct{}) // db name -> tb name
 	)
 	for _, sql := range sqls {
 		sqlDDL, tableNames, stmt, handleErr := s.handleDDL(ec.parser2, usedSchema, sql)
@@ -1683,7 +1683,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		needHandleDDLs = append(needHandleDDLs, sqlDDL)
 		needTrackDDLs = append(needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tableNames: tableNames})
-		sourceTbls[tableNames[0][0].String()] = tableNames[0][0]
+		// TODO: current table checkpoints will be deleted in track ddls, but created and updated in flush checkpoints,
+		//       we should use a better mechanism to combine these operations
+		recordSourceTbls(sourceTbls, stmt, tableNames[0][0])
 	}
 
 	s.tctx.L().Info("prepare to handle ddls", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))

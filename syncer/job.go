@@ -16,8 +16,6 @@ package syncer
 import (
 	"fmt"
 
-	"github.com/pingcap/tidb-tools/pkg/filter"
-
 	"github.com/pingcap/dm/pkg/binlog"
 )
 
@@ -101,7 +99,7 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 }
 
 func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation binlog.Location,
-	traceID string, sourceTbls map[string]*filter.Table) *job {
+	traceID string, sourceTbls map[string]map[string]struct{}) *job {
 	location1 := location.Clone()
 	cmdLocation1 := cmdLocation.Clone()
 
@@ -121,9 +119,11 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation bi
 	} else if sourceTbls != nil {
 		sourceSchemas := make([]string, 0, len(sourceTbls))
 		sourceTables := make([]string, 0, len(sourceTbls))
-		for _, tbl := range sourceTbls {
-			sourceSchemas = append(sourceSchemas, tbl.Schema)
-			sourceTables = append(sourceTables, tbl.Name)
+		for schema, tbMap := range sourceTbls {
+			for name := range tbMap {
+				sourceSchemas = append(sourceSchemas, schema)
+				sourceTables = append(sourceTables, name)
+			}
 		}
 		j.sourceSchemas = sourceSchemas
 		j.sourceTables = sourceTables

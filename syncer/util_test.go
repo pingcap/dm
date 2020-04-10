@@ -18,6 +18,7 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	_ "github.com/pingcap/tidb/types/parser_driver"
 )
 
@@ -119,4 +120,21 @@ func (t *testUtilSuite) TestTableNameResultSet(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(schema, Equals, "test")
 	c.Assert(table, Equals, "t1")
+}
+
+func (t *testUtilSuite) TestRecordSourceTbls(c *C) {
+	sourceTbls := make(map[string]map[string]struct{})
+	recordSourceTbls(sourceTbls, &ast.CreateDatabaseStmt{}, &filter.Table{Schema: "a", Name: ""})
+	c.Assert(sourceTbls, HasKey, "a")
+	c.Assert(sourceTbls["a"], HasKey, "")
+	recordSourceTbls(sourceTbls, &ast.CreateTableStmt{}, &filter.Table{Schema: "a", Name: "b"})
+	c.Assert(sourceTbls, HasKey, "a")
+	c.Assert(sourceTbls["a"], HasKey, "b")
+	recordSourceTbls(sourceTbls, &ast.CreateTableStmt{}, &filter.Table{Schema: "a", Name: "c"})
+	recordSourceTbls(sourceTbls, &ast.DropTableStmt{}, &filter.Table{Schema: "a", Name: "b"})
+	c.Assert(sourceTbls, HasKey, "a")
+	c.Assert(sourceTbls["a"], HasLen, 1)
+	c.Assert(sourceTbls, HasKey, "c")
+	recordSourceTbls(sourceTbls, &ast.DropDatabaseStmt{}, &filter.Table{Schema: "a", Name: ""})
+	c.Assert(sourceTbls, HasLen, 0)
 }
