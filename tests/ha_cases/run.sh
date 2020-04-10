@@ -33,6 +33,7 @@ function test_running() {
     run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
     run_sql_file_withdb $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test
 
+    sleep 3 # wait for flush checkpoint
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     echo "[$(date)] <<<<<< finish test_running >>>>>>"
@@ -69,6 +70,7 @@ function test_multi_task_running() {
     run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test2
     run_sql_file_withdb $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test2
 
+    sleep 3 # wait for flush checkpoint
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
     check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
