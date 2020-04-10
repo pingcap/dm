@@ -101,7 +101,7 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 }
 
 func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation binlog.Location,
-	traceID string, sourceTbls []*filter.Table) *job {
+	traceID string, sourceTbls map[string]*filter.Table) *job {
 	location1 := location.Clone()
 	cmdLocation1 := cmdLocation.Clone()
 

@@ -1623,7 +1623,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		ddlInfo        *shardingDDLInfo
 		needHandleDDLs []string
 		needTrackDDLs  []trackedDDL
-		sourceTbls     []*filter.Table
+		sourceTbls     = make(map[string]*filter.Table)
 	)
 	for _, sql := range sqls {
 		sqlDDL, tableNames, stmt, handleErr := s.handleDDL(ec.parser2, usedSchema, sql)
@@ -1683,7 +1683,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		needHandleDDLs = append(needHandleDDLs, sqlDDL)
 		needTrackDDLs = append(needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tableNames: tableNames})
-		sourceTbls = append(sourceTbls, tableNames[0][0])
+		sourceTbls[tableNames[0][0].String()] = tableNames[0][0]
 	}
 
 	s.tctx.L().Info("prepare to handle ddls", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
