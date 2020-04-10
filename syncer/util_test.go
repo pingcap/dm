@@ -124,17 +124,23 @@ func (t *testUtilSuite) TestTableNameResultSet(c *C) {
 
 func (t *testUtilSuite) TestRecordSourceTbls(c *C) {
 	sourceTbls := make(map[string]map[string]struct{})
+
 	recordSourceTbls(sourceTbls, &ast.CreateDatabaseStmt{}, &filter.Table{Schema: "a", Name: ""})
 	c.Assert(sourceTbls, HasKey, "a")
 	c.Assert(sourceTbls["a"], HasKey, "")
+
 	recordSourceTbls(sourceTbls, &ast.CreateTableStmt{}, &filter.Table{Schema: "a", Name: "b"})
 	c.Assert(sourceTbls, HasKey, "a")
 	c.Assert(sourceTbls["a"], HasKey, "b")
-	recordSourceTbls(sourceTbls, &ast.CreateTableStmt{}, &filter.Table{Schema: "a", Name: "c"})
+
 	recordSourceTbls(sourceTbls, &ast.DropTableStmt{}, &filter.Table{Schema: "a", Name: "b"})
+	_, ok := sourceTbls["a"]["b"]
+	c.Assert(ok, IsFalse)
+
+	recordSourceTbls(sourceTbls, &ast.CreateTableStmt{}, &filter.Table{Schema: "a", Name: "c"})
 	c.Assert(sourceTbls, HasKey, "a")
-	c.Assert(sourceTbls["a"], HasLen, 1)
-	c.Assert(sourceTbls, HasKey, "c")
+	c.Assert(sourceTbls["a"], HasKey, "c")
+
 	recordSourceTbls(sourceTbls, &ast.DropDatabaseStmt{}, &filter.Table{Schema: "a", Name: ""})
 	c.Assert(sourceTbls, HasLen, 0)
 }
