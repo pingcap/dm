@@ -18,9 +18,11 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/failpoint"
+	"github.com/prometheus/client_golang/prometheus"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
@@ -114,7 +116,7 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 // return
 // 1. failed: (the index of sqls executed error, error)
 // 2. succeed: (len(sqls), nil)
-func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreErr func(error) bool, queries []string, args ...[]interface{}) (int, error) {
+func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *prometheus.HistogramVec, task string, ignoreErr func(error) bool, queries []string, args ...[]interface{}) (int, error) {
 	// inject an error to trigger retry, this should be placed before the real execution of the SQL statement.
 	failpoint.Inject("retryableError", func(val failpoint.Value) {
 		if mark, ok := val.(string); ok {
@@ -140,11 +142,13 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 		return 0, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
+	startTime := time.Now()
 	txn, err := conn.DBConn.BeginTx(tctx.Context(), nil)
 
 	if err != nil {
 		return 0, terror.ErrDBExecuteFailed.Delegate(err, "begin")
 	}
+	hVec.WithLabelValues("begin", task).Observe(time.Since(startTime).Seconds())
 
 	l := len(queries)
 
@@ -158,8 +162,11 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 			zap.String("query", utils.TruncateString(query, -1)),
 			zap.String("argument", utils.TruncateInterface(arg, -1)))
 
+		startTime = time.Now()
 		_, err = txn.ExecContext(tctx.Context(), query, arg...)
-		if err != nil {
+		if err == nil {
+			hVec.WithLabelValues("stmt", task).Observe(time.Since(startTime).Seconds())
+		} else {
 			if ignoreErr != nil && ignoreErr(err) {
 				tctx.L().Warn("execute statement failed and will ignore this error",
 					zap.String("query", utils.TruncateString(query, -1)),
@@ -172,21 +179,26 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 				zap.String("query", utils.TruncateString(query, -1)),
 				zap.String("argument", utils.TruncateInterface(arg, -1)), log.ShortError(err))
 
+			startTime = time.Now()
 			rerr := txn.Rollback()
 			if rerr != nil {
 				tctx.L().Error("rollback failed",
 					zap.String("query", utils.TruncateString(query, -1)),
 					zap.String("argument", utils.TruncateInterface(arg, -1)),
 					log.ShortError(rerr))
+			} else {
+				hVec.WithLabelValues("rollback", task).Observe(time.Since(startTime).Seconds())
 			}
 			// we should return the exec err, instead of the rollback rerr.
 			return i, terror.ErrDBExecuteFailed.Delegate(err, utils.TruncateString(query, -1))
 		}
 	}
+	startTime = time.Now()
 	err = txn.Commit()
 	if err != nil {
 		return l - 1, terror.ErrDBExecuteFailed.Delegate(err, "commit") // mark failed on the last one
 	}
+	hVec.WithLabelValues("commit", task).Observe(time.Since(startTime).Seconds())
 	return l, nil
 }
 
@@ -194,8 +206,8 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 // return
 // 1. failed: (the index of sqls executed error, error)
 // 2. succeed: (len(sqls), nil)
-func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, queries []string, args ...[]interface{}) (int, error) {
-	return conn.ExecuteSQLWithIgnoreError(tctx, nil, queries, args...)
+func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, hVec *prometheus.HistogramVec, task string, queries []string, args ...[]interface{}) (int, error) {
+	return conn.ExecuteSQLWithIgnoreError(tctx, hVec, task, nil, queries, args...)
 }
 
 // ApplyRetryStrategy apply specify strategy for BaseConn

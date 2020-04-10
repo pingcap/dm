@@ -23,6 +23,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func TestSuite(t *testing.T) {
@@ -34,6 +35,17 @@ var _ = Suite(&testBaseConnSuite{})
 type testBaseConnSuite struct {
 }
 
+var (
+	testStmtHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "conn",
+			Name:      "stmt_duration_time",
+			Help:      "Bucketed histogram of every statement query time (s).",
+			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+		}, []string{"type", "task"})
+)
+
 func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	baseConn := NewBaseConn(nil, nil)
 
@@ -44,7 +56,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	_, err = baseConn.QuerySQL(tctx, "select 1")
 	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
 
-	_, err = baseConn.ExecuteSQL(tctx, []string{""})
+	_, err = baseConn.ExecuteSQL(tctx, testStmtHistogram, "test", []string{""})
 	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
 
 	db, mock, err := sqlmock.New()
@@ -74,24 +86,24 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	_, err = baseConn.QuerySQL(tctx, "select 1")
 	c.Assert(terror.ErrDBQueryFailed.Equal(err), IsTrue)
 
-	affected, _ := baseConn.ExecuteSQL(tctx, []string{""})
+	affected, _ := baseConn.ExecuteSQL(tctx, testStmtHistogram, "test", []string{""})
 	c.Assert(affected, Equals, 0)
 
 	mock.ExpectBegin()
 	mock.ExpectExec("create database test").WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
-	affected, err = baseConn.ExecuteSQL(tctx, []string{"create database test"})
+	affected, err = baseConn.ExecuteSQL(tctx, testStmtHistogram, "test", []string{"create database test"})
 	c.Assert(err, IsNil)
 	c.Assert(affected, Equals, 1)
 
 	mock.ExpectBegin().WillReturnError(errors.New("begin error"))
-	_, err = baseConn.ExecuteSQL(tctx, []string{"create database test"})
+	_, err = baseConn.ExecuteSQL(tctx, testStmtHistogram, "test", []string{"create database test"})
 	c.Assert(terror.ErrDBExecuteFailed.Equal(err), IsTrue)
 
 	mock.ExpectBegin()
 	mock.ExpectExec("create database test").WillReturnError(errors.New("invalid connection"))
 	mock.ExpectRollback()
-	_, err = baseConn.ExecuteSQL(tctx, []string{"create database test"})
+	_, err = baseConn.ExecuteSQL(tctx, testStmtHistogram, "test", []string{"create database test"})
 	c.Assert(terror.ErrDBExecuteFailed.Equal(err), IsTrue)
 
 	if err = mock.ExpectationsWereMet(); err != nil {
