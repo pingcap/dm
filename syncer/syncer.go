@@ -962,6 +962,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	for {
 		select {
 		case sqlJob, ok := <-jobChan:
+			queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket).Set(float64(len(jobChan)))
 			if !ok {
 				return
 			}
@@ -981,7 +982,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 				clearF()
 			}
 
-		default:
+		case <-time.After(waitTime):
 			if len(jobs) > 0 {
 				err = executeSQLs()
 				if err != nil {
@@ -989,8 +990,6 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 					continue
 				}
 				clearF()
-			} else {
-				time.Sleep(waitTime)
 			}
 		}
 	}
@@ -1176,11 +1175,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			e = s.tryInject(latestOp, currentLocation.Clone())
 			latestOp = null
 		}
+
+		startTime := time.Now()
 		if e == nil {
 			e, err = s.streamerController.GetEvent(tctx)
 		}
 
-		startTime := time.Now()
 		if err == context.Canceled {
 			s.tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last location", lastLocation))
 			return nil
@@ -1233,6 +1233,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return err
 		}
 
+		// time duration for reading an event from relay log or upstream master.
+		binlogReadDurationHistogram.WithLabelValues(s.cfg.Name).Observe(time.Since(startTime).Seconds())
+		startTime = time.Now() // reset start time for the next metric.
+
 		// get binlog event, reset tryReSync, so we can re-sync binlog while syncer meets errors next time
 		tryReSync = true
 		binlogPosGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(e.Header.LogPos))
@@ -1243,6 +1247,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(index))
 		}
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
+		binlogEventSizeHistogram.WithLabelValues(s.cfg.Name).Observe(float64(e.Header.EventSize))
 
 		failpoint.Inject("ProcessBinlogSlowDown", nil)
 

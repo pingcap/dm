@@ -30,6 +30,24 @@ import (
 )
 
 var (
+	binlogReadDurationHistogram = metricsproxy.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "read_binlog_duration",
+			Help:      "bucketed histogram of read time (s) for single binlog event from the relay log or master.",
+			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 21),
+		}, []string{"task"})
+
+	binlogEventSizeHistogram = metricsproxy.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "binlog_event_size",
+			Help:      "size of a binlog event",
+			Buckets:   prometheus.ExponentialBuckets(16, 2, 20),
+		}, []string{"task"})
+
 	binlogEvent = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
@@ -38,6 +56,15 @@ var (
 			Help:      "cost of binlog event transform",
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
 		}, []string{"type", "task"})
+
+	conflictDetectDurationHistogram = metricsproxy.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "conflict_detect_duration",
+			Help:      "bucketed histogram of conflict detect time (s) for single DML statement",
+			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 21),
+		}, []string{"task"})
 
 	binlogSkippedEventsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
@@ -63,6 +90,14 @@ var (
 			Help:      "total number of finished jobs",
 		}, []string{"type", "task", "queueNo"})
 
+	queueSizeGauge = metricsproxy.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "queue_size",
+			Help:      "remain size of the DML queue",
+		}, []string{"task", "queueNo"})
+
 	binlogPosGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
@@ -84,7 +119,7 @@ var (
 			Namespace: "dm",
 			Subsystem: "syncer",
 			Name:      "sql_retries_total",
-			Help:      "total number of sql retryies",
+			Help:      "total number of sql retries",
 		}, []string{"type", "task"})
 
 	txnHistogram = metricsproxy.NewHistogramVec(
@@ -95,6 +130,24 @@ var (
 			Help:      "Bucketed histogram of processing time (s) of a txn.",
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
 		}, []string{"task"})
+
+	queryHistogram = metricsproxy.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "query_duration_time",
+			Help:      "Bucketed histogram of query time (s).",
+			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+		}, []string{"task"})
+
+	stmtHistogram = metricsproxy.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "stmt_duration_time",
+			Help:      "Bucketed histogram of every statement query time (s).",
+			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+		}, []string{"type", "task"})
 
 	// FIXME: should I move it to dm-worker?
 	cpuUsageGauge = prometheus.NewGauge(
@@ -150,14 +203,20 @@ var (
 
 // RegisterMetrics registers metrics
 func RegisterMetrics(registry *prometheus.Registry) {
+	registry.MustRegister(binlogReadDurationHistogram)
+	registry.MustRegister(binlogEventSizeHistogram)
 	registry.MustRegister(binlogEvent)
+	registry.MustRegister(conflictDetectDurationHistogram)
 	registry.MustRegister(binlogSkippedEventsTotal)
 	registry.MustRegister(addedJobsTotal)
 	registry.MustRegister(finishedJobsTotal)
+	registry.MustRegister(queueSizeGauge)
 	registry.MustRegister(sqlRetriesTotal)
 	registry.MustRegister(binlogPosGauge)
 	registry.MustRegister(binlogFileGauge)
 	registry.MustRegister(txnHistogram)
+	registry.MustRegister(stmtHistogram)
+	registry.MustRegister(queryHistogram)
 	registry.MustRegister(cpuUsageGauge)
 	registry.MustRegister(syncerExitWithErrorCounter)
 	registry.MustRegister(replicationLagGauge)
@@ -214,14 +273,20 @@ func InitStatusAndMetrics(addr string) {
 	}()
 }
 func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
+	binlogReadDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogEventSizeHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogEvent.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	conflictDetectDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogSkippedEventsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	addedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	finishedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	queueSizeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	sqlRetriesTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogPosGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogFileGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	txnHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	stmtHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	queryHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	syncerExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	replicationLagGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	remainingTimeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
