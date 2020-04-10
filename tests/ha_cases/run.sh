@@ -16,7 +16,16 @@ function test_running() {
     prepare_sql
     start_cluster
 
-    sleep 3 # make sure task to step in "Sync" stage
+    # make sure task to step in "Sync" stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 2 \
+        "\"unit\": \"Sync\"" 2
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
+        "query-status test2" \
+        "\"stage\": \"Running\"" 2 \
+        "\"unit\": \"Sync\"" 2
+
     echo "use sync_diff_inspector to check full dump loader"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
@@ -40,6 +49,16 @@ function test_multi_task_running() {
     prepare_sql_multi_task
     start_multi_tasks_cluster
 
+    # make sure task to step in "Sync" stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 2 \
+        "\"unit\": \"Sync\"" 2
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
+        "query-status test2" \
+        "\"stage\": \"Running\"" 2 \
+        "\"unit\": \"Sync\"" 2
+
     echo "use sync_diff_inspector to check full dump loader"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml
@@ -54,7 +73,6 @@ function test_multi_task_running() {
     run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test2
     run_sql_file_withdb $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test2
 
-    sleep 3
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
     check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
