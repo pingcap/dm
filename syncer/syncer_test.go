@@ -1036,6 +1036,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	s.cfg.WorkerCount = 1
 	syncer := NewSyncer(s.cfg)
 	syncer.jobs = []chan *job{make(chan *job, 1)}
+	syncer.queueBucketMapping = []string{"queue_0", adminQueueName}
 
 	wg.Add(1)
 	go func() {
