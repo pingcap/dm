@@ -130,7 +130,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			originalValue = extractValueFromData(originalDataSeq[dataIdx], originalColumns)
 		}
 
-		ks := genMultipleKeys(originalColumns, originalValue, originalIndexColumns, fullname)
+		ks := genMultipleKeys(originalValue, originalIndexColumns, fullname)
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -188,8 +188,8 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			defaultIndexColumns = getAvailableIndexColumn(originalIndexColumns, oriOldValues)
 		}
 
-		ks := genMultipleKeys(originalColumns, oriOldValues, originalIndexColumns, fullname)
-		ks = append(ks, genMultipleKeys(originalColumns, oriChangedValues, originalIndexColumns, fullname)...)
+		ks := genMultipleKeys(oriOldValues, originalIndexColumns, fullname)
+		ks = append(ks, genMultipleKeys(oriChangedValues, originalIndexColumns, fullname)...)
 
 		if param.safeMode {
 			// generate delete sql from old data
@@ -222,7 +222,8 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 
 		whereColumns, whereValues := originalColumns, oriOldValues
 		if len(defaultIndexColumns) > 0 {
-			whereColumns, whereValues = getColumnData(originalColumns, defaultIndexColumns, oriOldValues)
+			whereColumns = defaultIndexColumns
+			whereValues = getColumnData(defaultIndexColumns, oriOldValues)
 		}
 
 		value = append(value, whereValues...)
@@ -258,7 +259,7 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		if len(defaultIndexColumns) == 0 {
 			defaultIndexColumns = getAvailableIndexColumn(indexColumns, value)
 		}
-		ks := genMultipleKeys(columns, value, indexColumns, fullname)
+		ks := genMultipleKeys(value, indexColumns, fullname)
 
 		sql, value := genDeleteSQL(fullname, value, columns, defaultIndexColumns)
 		sqls = append(sqls, sql)
@@ -323,7 +324,8 @@ func genUpdateSQL(table string, updateColumns, whereColumns []*column, whereValu
 func genDeleteSQL(table string, value []interface{}, columns []*column, indexColumns []*column) (string, []interface{}) {
 	whereColumns, whereValues := columns, value
 	if len(indexColumns) > 0 {
-		whereColumns, whereValues = getColumnData(columns, indexColumns, value)
+		whereColumns = indexColumns
+		whereValues = getColumnData(indexColumns, value)
 	}
 
 	var buf strings.Builder
@@ -448,11 +450,11 @@ func genKeyList(columns []*column, dataSeq []interface{}) string {
 	return strings.Join(values, ",")
 }
 
-func genMultipleKeys(columns []*column, value []interface{}, indexColumns map[string][]*column, table string) []string {
+func genMultipleKeys(value []interface{}, indexColumns map[string][]*column, table string) []string {
 	multipleKeys := make([]string, 0, len(indexColumns))
 	for _, indexCols := range indexColumns {
-		cols, vals := getColumnData(columns, indexCols, value)
-		multipleKeys = append(multipleKeys, table+genKeyList(cols, vals))
+		vals := getColumnData(indexCols, value)
+		multipleKeys = append(multipleKeys, table+genKeyList(indexCols, vals))
 	}
 	return multipleKeys
 }
@@ -505,15 +507,13 @@ func getSpecifiedIndexColumn(indexColumns map[string][]*column, fn func(col *col
 	return nil
 }
 
-func getColumnData(columns []*column, indexColumns []*column, data []interface{}) ([]*column, []interface{}) {
-	cols := make([]*column, 0, len(columns))
-	values := make([]interface{}, 0, len(columns))
+func getColumnData(indexColumns []*column, data []interface{}) []interface{} {
+	values := make([]interface{}, 0, len(indexColumns))
 	for _, column := range indexColumns {
-		cols = append(cols, column)
 		values = append(values, data[column.idx])
 	}
 
-	return cols, values
+	return values
 }
 
 func genWhere(w io.Writer, columns []*column, data []interface{}) {
