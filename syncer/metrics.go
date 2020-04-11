@@ -34,7 +34,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "read_binlog_duration",
 			Help:      "bucketed histogram of read time (s) for single binlog event from the relay log or master.",
-			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 21),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
 	binlogEventSizeHistogram = prometheus.NewHistogramVec(
@@ -52,7 +52,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "binlog_transform_cost",
 			Help:      "cost of binlog event transform",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"type", "task"})
 
 	conflictDetectDurationHistogram = prometheus.NewHistogramVec(
@@ -61,7 +61,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "conflict_detect_duration",
 			Help:      "bucketed histogram of conflict detect time (s) for single DML statement",
-			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 21),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
 	addJobDurationHistogram = prometheus.NewHistogramVec(
@@ -70,7 +70,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "add_job_duration",
 			Help:      "bucketed histogram of add a job to the queue time (s)",
-			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 21),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"type", "task", "queueNo"})
 
 	binlogSkippedEventsTotal = prometheus.NewCounterVec(
@@ -135,7 +135,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "txn_duration_time",
 			Help:      "Bucketed histogram of processing time (s) of a txn.",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
 	queryHistogram = prometheus.NewHistogramVec(
@@ -144,7 +144,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "query_duration_time",
 			Help:      "Bucketed histogram of query time (s).",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
 	stmtHistogram = prometheus.NewHistogramVec(
@@ -153,7 +153,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "stmt_duration_time",
 			Help:      "Bucketed histogram of every statement query time (s).",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"type", "task"})
 
 	// FIXME: should I move it to dm-worker?
