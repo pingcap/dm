@@ -276,22 +276,22 @@ func genInsertReplace(op, table string, columns []*column) string {
 	var buf strings.Builder
 	buf.Grow(256)
 	buf.WriteString(op)
-	buf.WriteString(" " + table + " ")
+	buf.WriteString(" " + table + " (")
 	for i, column := range columns {
 		if i != len(columns)-1 {
 			buf.WriteString("`" + column.name + "`,")
 		} else {
-			buf.WriteString("`" + column.name + "`")
+			buf.WriteString("`" + column.name + "`)")
 		}
 	}
-	buf.WriteString(" VALUES ")
+	buf.WriteString(" VALUES (")
 
 	// placeholders
 	for i := range columns {
 		if i != len(columns)-1 {
 			buf.WriteString("?,")
 		} else {
-			buf.WriteString("?")
+			buf.WriteString("?)")
 		}
 	}
 	return buf.String()
