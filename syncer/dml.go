@@ -441,20 +441,21 @@ func findColumns(columns []*column, indexColumns map[string][]string) map[string
 	return result
 }
 
-func genKeyList(columns []*column, dataSeq []interface{}) string {
-	values := make([]string, 0, len(dataSeq))
+func genKeyList(table string, columns []*column, dataSeq []interface{}) string {
+	var buf strings.Builder
+	buf.WriteString(table)
 	for i, data := range dataSeq {
-		values = append(values, columnValue(data, columns[i].unsigned, columns[i].tp))
+		// for key, I think no need to add the `,` separator.
+		buf.WriteString(columnValue(data, columns[i].unsigned, columns[i].tp))
 	}
-
-	return strings.Join(values, ",")
+	return buf.String()
 }
 
 func genMultipleKeys(value []interface{}, indexColumns map[string][]*column, table string) []string {
 	multipleKeys := make([]string, 0, len(indexColumns))
 	for _, indexCols := range indexColumns {
 		vals := getColumnData(indexCols, value)
-		multipleKeys = append(multipleKeys, table+genKeyList(indexCols, vals))
+		multipleKeys = append(multipleKeys, genKeyList(table, indexCols, vals))
 	}
 	return multipleKeys
 }
