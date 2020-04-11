@@ -451,14 +451,18 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The number of binlog files in Syncer that are behind the master",
+          "description": "The number of binlog files in binlog replication unit that are behind the master",
           "fill": 1,
           "id": 51,
           "legend": {
+            "alignAsTable": false,
             "avg": false,
             "current": false,
+            "hideEmpty": false,
+            "hideZero": false,
             "max": false,
             "min": false,
+            "rightSide": false,
             "show": false,
             "total": false,
             "values": false
@@ -1190,11 +1194,13 @@
           "fill": 1,
           "id": 5,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -1213,10 +1219,18 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_relay_binlog_file{instance=\"$instance\"}",
+              "expr": "dm_relay_binlog_file{instance=\"$instance\", node=\"master\"}",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "master",
               "refId": "A"
+            },
+            {
+              "expr": "dm_relay_binlog_file{instance=\"$instance\", node=\"relay\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "relay",
+              "refId": "B"
             }
           ],
           "thresholds": [],
@@ -1345,11 +1359,13 @@
           "fill": 1,
           "id": 6,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -1368,10 +1384,18 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_relay_binlog_pos{instance=\"$instance\"}",
+              "expr": "dm_relay_binlog_pos{instance=\"$instance\", node=\"master\"}",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "master",
               "refId": "A"
+            },
+            {
+              "expr": "dm_relay_binlog_pos{instance=\"$instance\", node=\"relay\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "relay",
+              "refId": "B"
             }
           ],
           "thresholds": [],
@@ -1418,15 +1442,17 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The duration that the relay log reads binlog from the upstream MySQL (in seconds)",
+          "description": "The duration that the relay log reads binlog event from the upstream MySQL (in seconds)",
           "fill": 1,
           "id": 9,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -1449,13 +1475,28 @@
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
+              "legendFormat": "90",
               "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(dm_relay_read_binlog_duration_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(dm_relay_read_binlog_duration_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "99",
+              "refId": "C"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "read binlog duration",
+          "title": "read binlog event duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -1486,7 +1527,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -1496,15 +1537,17 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The duration that the relay log writes binlog into the disks each time (in seconds)",
+          "description": "The duration that the relay log writes binlog event into the disks each time (in seconds)",
           "fill": 1,
           "id": 12,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -1526,7 +1569,22 @@
               "expr": "histogram_quantile(0.90, sum(rate(dm_relay_write_duration_bucket{instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "90",
               "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(dm_relay_write_duration_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(dm_relay_write_duration_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "99",
+              "refId": "C"
             }
           ],
           "thresholds": [],
@@ -1563,7 +1621,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -1577,11 +1635,13 @@
           "fill": 1,
           "id": 25,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -1603,13 +1663,28 @@
               "expr": "histogram_quantile(0.90, sum(rate(dm_relay_write_size_bucket{instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "90",
               "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(dm_relay_write_size_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(dm_relay_write_size_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "99",
+              "refId": "C"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "binlog size",
+          "title": "binlog event size",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -1640,7 +1715,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         }
@@ -2122,11 +2197,13 @@
           "fill": 1,
           "id": 18,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -2148,13 +2225,28 @@
               "expr": "histogram_quantile(0.90, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "90",
               "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "99",
+              "refId": "C"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "latency of execute transaction",
+          "title": "transaction execution latency",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -2184,7 +2276,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -2194,15 +2286,17 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The duration that Loader executes a query (in seconds)",
+          "description": "The time it takes loader to execute every statement to the downstream (in seconds)",
           "fill": 1,
           "id": 34,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -2221,16 +2315,38 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_loader_query_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_loader_stmt_duration_time_bucket{task=\"$task\", type=\"begin\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "begin",
               "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.90, sum(rate(dm_loader_stmt_duration_time_bucket{task=\"$task\", type=\"stmt\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "stmt",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.90, sum(rate(dm_loader_stmt_duration_time_bucket{task=\"$task\", type=\"commit\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "commit",
+              "refId": "C"
+            },
+            {
+              "expr": "histogram_quantile(0.90, sum(rate(dm_loader_stmt_duration_time_bucket{task=\"$task\", type=\"rollback\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "rollback",
+              "refId": "D"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "latency of query",
+          "title": "statement execution latency - 90",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -2260,7 +2376,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         }
@@ -2510,7 +2626,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The number of binlog files in Syncer that are behind the master",
+          "description": "The number of binlog files in binlog replication unit that are behind the master",
           "fill": 1,
           "id": 43,
           "legend": {
@@ -2588,7 +2704,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The number of binlog files in Syncer that are behind relay",
+          "description": "The number of binlog files in binlog replication unit that are behind relay",
           "fill": 1,
           "id": 44,
           "legend": {
@@ -2702,7 +2818,7 @@
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "binlog event qps",
+          "title": "binlog event QPS",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -2732,7 +2848,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -2778,7 +2894,7 @@
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "skipped binlog event qps",
+          "title": "skipped binlog event QPS",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -2808,7 +2924,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -2818,15 +2934,17 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The duration that the binlog replication unit reads binlog from the relay log or upstream MySQL (in seconds)",
+          "description": "The duration that the binlog replication unit reads binlog event from the relay log or upstream MySQL (in seconds)",
           "fill": 1,
           "id": 53,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -2848,13 +2966,29 @@
               "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "90",
               "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 2,
+              "legendFormat": "95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "99",
+              "refId": "C"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "read binlog duration",
+          "title": "read binlog event duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -2885,7 +3019,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -2895,15 +3029,17 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The time it takes Syncer to parse and transform the binlog into SQL statements (in seconds)",
+          "description": "The time it takes binlog replication unit to parse and transform the binlog into SQL statements (in seconds)",
           "fill": 1,
           "id": 36,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -2925,13 +3061,28 @@
               "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "90",
               "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "99",
+              "refId": "C"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "cost of binlog event  transform",
+          "title": "transform binlog event duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -2962,7 +3113,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -2976,11 +3127,13 @@
           "fill": 1,
           "id": 54,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -3002,13 +3155,28 @@
               "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "90",
               "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "99",
+              "refId": "C"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "cost of conflict detect",
+          "title": "DML conflict detect duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -3039,7 +3207,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -3053,11 +3221,13 @@
           "fill": 1,
           "id": 1,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -3079,7 +3249,22 @@
               "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_txn_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "90",
               "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_txn_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_txn_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "99",
+              "refId": "C"
             }
           ],
           "thresholds": [],
@@ -3116,7 +3301,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -3126,15 +3311,17 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The size of a single binlog event that the binlog replication reads from relay log or upstream master",
+          "description": "The size of a single binlog event that the binlog replication unit reads from relay log or upstream master",
           "fill": 1,
           "id": 55,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -3156,7 +3343,22 @@
               "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_event_size_bucket{instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "90",
               "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_binlog_event_size_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_binlog_event_size_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "99",
+              "refId": "C"
             }
           ],
           "thresholds": [],
@@ -3193,7 +3395,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -3207,11 +3409,13 @@
           "fill": 1,
           "id": 56,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -3230,9 +3434,10 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(dm_syncer_query_duration_time_count{task=\"$task\", instance=\"$instance\"}[1m])",
+              "expr": "dm_syncer_queue_size{task=\"$task\", instance=\"$instance\"}",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "{{queueNo}}",
               "refId": "A"
             }
           ],
@@ -3256,6 +3461,7 @@
           },
           "yaxes": [
             {
+              "decimals": 0,
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -3269,7 +3475,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -3283,11 +3489,13 @@
           "fill": 1,
           "id": 3,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -3309,13 +3517,14 @@
               "expr": "rate(dm_syncer_added_jobs_total{task=\"$task\", instance=\"$instance\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "{{queueNo}}-{{type}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "total  sql jobs",
+          "title": "total SQL jobs",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -3345,7 +3554,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -3359,11 +3568,13 @@
           "fill": 1,
           "id": 2,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -3385,13 +3596,14 @@
               "expr": "rate(dm_syncer_finished_jobs_total{task=\"$task\", instance=\"$instance\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "{{queueNo}}-{{type}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "finished  sql jobs",
+          "title": "finished SQL jobs",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -3421,7 +3633,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -3435,11 +3647,13 @@
           "fill": 1,
           "id": 57,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -3489,7 +3703,7 @@
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "statement execution latency",
+          "title": "statement execution latency - 90",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -3520,7 +3734,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -3598,7 +3812,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -3767,5 +3981,5 @@
   },
   "timezone": "",
   "title": "DM-task",
-  "version": 29
+  "version": 30
 }
