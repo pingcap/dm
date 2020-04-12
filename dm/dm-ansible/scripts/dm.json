@@ -3123,9 +3123,9 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The time it takes binlog replication unit to detect conflicts between DMLs (in seconds)",
+          "description": "The time it takes binlog replication unit to dispatch a binlog event (in seconds)",
           "fill": 1,
-          "id": 54,
+          "id": 59,
           "legend": {
             "alignAsTable": true,
             "avg": false,
@@ -3152,21 +3152,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -3176,7 +3176,7 @@
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "DML conflict detect duration",
+          "title": "dispatch binlog event duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -3667,7 +3667,7 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
+          "span": 4,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -3768,7 +3768,7 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
+          "span": 4,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -3838,6 +3838,100 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The time it takes binlog replication unit to detect conflicts between DMLs (in seconds)",
+          "fill": 1,
+          "id": 54,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 4,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "90",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "99",
+              "refId": "C"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "DML conflict detect duration",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 2,
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": 0,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
           "description": "The number of unsynced tables in the subtask",
           "fill": 1,
           "id": 45,
@@ -3860,7 +3954,7 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
+          "span": 6,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -3938,7 +4032,7 @@
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "span": 3,
+          "span": 6,
           "stack": false,
           "steppedLine": false,
           "targets": [
