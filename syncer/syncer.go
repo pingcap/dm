@@ -327,6 +327,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return err
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
+	s.workerCheckpoints = makeWorkerCheckpointArray(s.cfg.WorkerCount)
 
 	s.bwList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BWList)
 	if err != nil {
@@ -2585,4 +2586,12 @@ func (s *Syncer) setTimezone() {
 	}
 	s.tctx.L().Info("use timezone", log.WrapStringerField("location", loc))
 	s.timezone = loc
+}
+
+func makeWorkerCheckpointArray(workerCount int) []*binlogPoint {
+	workerCheckpoints := make([]*binlogPoint, 0, workerCount)
+	for i := 0; i < workerCount; i++ {
+		workerCheckpoints = append(workerCheckpoints, newBinlogPoint(minCheckpoint, minCheckpoint))
+	}
+	return workerCheckpoints
 }
