@@ -13,7 +13,7 @@ Some users have customization requirements like below, but it is not suitable to
 
 ### Replication incompatible DDL in TiDB
 
-DM is a tool used to replication data from MySQL to TiDB, we know that TiDB is compatible with MySQL in most case, but some DDL is not supported in TiDB now. for example: TiDB can't reduce column's length, if you execute these SQLs in MySQL:
+DM is a tool used to replication data from MySQL to TiDB, we know that TiDB is compatible with MySQL in most case, but some DDL is not supported in TiDB now. For example: TiDB can't reduce column's length, if you execute these SQLs in MySQL:
 
 ```SQL
 CREATE DATABASE test;
