@@ -1552,6 +1552,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		*ec.traceID = traceEvent.Base.TraceID
 	}
 
+	startTime := time.Now()
 	for i := range sqls {
 		var arg []interface{}
 		var key []string
@@ -1566,6 +1567,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err
 		}
 	}
+	dispatchBinlogDurationHistogram.WithLabelValues(ec.latestOp.String(), s.cfg.Name).Observe(time.Since(startTime).Seconds())
 	return nil
 }
 

@@ -73,6 +73,17 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"type", "task", "queueNo"})
 
+	// dispatch/add multiple jobs for one binlog event.
+	// NOTE: only observe for DML now.
+	dispatchBinlogDurationHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "dispatch_binlog_duration",
+			Help:      "bucketed histogram of dispatch a binlog event time (s)",
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
+		}, []string{"type", "task"})
+
 	binlogSkippedEventsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
@@ -215,6 +226,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(binlogEvent)
 	registry.MustRegister(conflictDetectDurationHistogram)
 	registry.MustRegister(addJobDurationHistogram)
+	registry.MustRegister(dispatchBinlogDurationHistogram)
 	registry.MustRegister(binlogSkippedEventsTotal)
 	registry.MustRegister(addedJobsTotal)
 	registry.MustRegister(finishedJobsTotal)
