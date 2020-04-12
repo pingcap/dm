@@ -7,8 +7,6 @@
 
 This proposal introduces why we need to support plugin in binlog replication(syncer) unit, and how to implements it.
 
-Table of contents:
-
 ## Background
 
 Some users have customization requirements like below, but it is not suitable to implement in DM. We can support plugin in DM, and then user can implement their requirements by plugin.
