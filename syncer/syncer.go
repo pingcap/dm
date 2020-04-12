@@ -83,6 +83,13 @@ const (
 	LocalBinlog
 )
 
+type FlushType uint8
+
+const (
+	NoNeedUpdate FlushType = iota + 1
+	NeedUpdate
+)
+
 // StreamerProducer provides the ability to generate binlog streamer by StartSync()
 // but go-mysql StartSync() returns (struct, err) rather than (interface, err)
 // And we can't simplely use StartSync() method in SteamerProducer
@@ -160,6 +167,9 @@ type Syncer struct {
 	jobsClosed         sync2.AtomicBool
 	jobsChanLock       sync.Mutex
 	queueBucketMapping []string
+
+	workerCheckpoints   []*binlogPoint
+	flushCheckpointChan chan FlushType
 
 	c *causality
 
@@ -502,6 +512,7 @@ func (s *Syncer) reset() {
 	s.resetReplicationSyncer()
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
+	s.flushCheckpointChan = make(chan FlushType, 16)
 	// clear tables info
 	s.clearAllTables()
 
@@ -736,10 +747,6 @@ func (s *Syncer) checkWait(job *job) bool {
 		return true
 	}
 
-	if s.checkpoint.CheckGlobalPoint() {
-		return true
-	}
-
 	return false
 }
 
@@ -761,7 +768,8 @@ func (s *Syncer) addJob(job *job) error {
 		}
 		s.jobWg.Wait()
 		finishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
-		return s.flushCheckPoints()
+		s.flushCheckpointChan <- NoNeedUpdate
+		return nil
 	case ddl:
 		s.jobWg.Wait()
 		addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName).Inc()
@@ -790,6 +798,9 @@ func (s *Syncer) addJob(job *job) error {
 		s.jobWg.Wait()
 		s.c.reset()
 	}
+	if s.checkpoint.CheckGlobalPoint() {
+		s.flushCheckpointChan <- NeedUpdate
+	}
 
 	switch job.tp {
 	case ddl:
@@ -808,7 +819,7 @@ func (s *Syncer) addJob(job *job) error {
 	}
 
 	if wait {
-		return s.flushCheckPoints()
+		s.flushCheckpointChan <- NoNeedUpdate
 	}
 
 	return nil
@@ -938,7 +949,8 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	}
 }
 
-func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
+func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
+	jobChan chan *job, workerCheckpoint *binlogPoint) {
 	defer s.wg.Done()
 
 	idx := 0
@@ -981,6 +993,8 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		if err != nil {
 			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
+		} else {
+			err = workerCheckpoint.save(jobs[len(jobs)-1].pos)
 		}
 		if s.tracer.Enable() {
 			syncerJobState := s.tracer.FinishedSyncerJobState(err)
@@ -1027,6 +1041,39 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 				}
 				clearF()
 			}
+		}
+	}
+}
+
+func (s *Syncer) asyncFlushCheckpoint(ctx context.Context, flushChan chan FlushType) {
+	defer func() {
+		close(flushChan)
+		s.wg.Done()
+	}()
+	for {
+		select {
+		case flushType := <-flushChan:
+			if flushType == NeedUpdate {
+				minPos := s.workerCheckpoints[0].MySQLPos()
+				for _, workerCheckpoint := range s.workerCheckpoints {
+					pos := workerCheckpoint.MySQLPos()
+					if minPos.Compare(pos) < 0 {
+						minPos = pos
+					}
+				}
+				// minPos will be greater than global checkpoint
+				s.saveGlobalPoint(minPos)
+			}
+			err := s.flushCheckPoints()
+			if err != nil {
+				if !utils.IsContextCanceledError(err) {
+					s.runFatalChan <- unit.NewProcessError(pb.ErrorType_UnknownError, err)
+					return
+				}
+			}
+		case <-ctx.Done():
+			s.tctx.L().Info("async flush checkpoint routine exits", log.ShortError(ctx.Err()))
+			return
 		}
 	}
 }
@@ -1089,10 +1136,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		go func(i int, n string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
-			s.sync(ctctx, n, s.toDBConns[i], s.jobs[i])
+			s.sync(ctctx, n, s.toDBConns[i], s.jobs[i], s.workerCheckpoints[i])
 			cancel()
 		}(i, name)
 	}
+
+	s.wg.Add(1)
+	go func() {
+		ctx2, cancel := context.WithCancel(ctx)
+		s.asyncFlushCheckpoint(ctx2, s.flushCheckpointChan)
+		cancel()
+	}()
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
