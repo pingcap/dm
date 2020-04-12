@@ -36,7 +36,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "read_binlog_duration",
 			Help:      "bucketed histogram of read time (s) for single binlog event from the relay log or master.",
-			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 21),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
 	binlogEventSizeHistogram = metricsproxy.NewHistogramVec(
@@ -54,7 +54,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "binlog_transform_cost",
 			Help:      "cost of binlog event transform",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"type", "task"})
 
 	conflictDetectDurationHistogram = metricsproxy.NewHistogramVec(
@@ -63,8 +63,28 @@ var (
 			Subsystem: "syncer",
 			Name:      "conflict_detect_duration",
 			Help:      "bucketed histogram of conflict detect time (s) for single DML statement",
-			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 21),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
+
+	addJobDurationHistogram = metricsproxy.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "add_job_duration",
+			Help:      "bucketed histogram of add a job to the queue time (s)",
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
+		}, []string{"type", "task", "queueNo"})
+
+	// dispatch/add multiple jobs for one binlog event.
+	// NOTE: only observe for DML now.
+	dispatchBinlogDurationHistogram = metricsproxy.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "dispatch_binlog_duration",
+			Help:      "bucketed histogram of dispatch a binlog event time (s)",
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
+		}, []string{"type", "task"})
 
 	binlogSkippedEventsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
@@ -128,7 +148,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "txn_duration_time",
 			Help:      "Bucketed histogram of processing time (s) of a txn.",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
 	queryHistogram = metricsproxy.NewHistogramVec(
@@ -137,7 +157,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "query_duration_time",
 			Help:      "Bucketed histogram of query time (s).",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
 	stmtHistogram = metricsproxy.NewHistogramVec(
@@ -146,7 +166,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "stmt_duration_time",
 			Help:      "Bucketed histogram of every statement query time (s).",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"type", "task"})
 
 	// FIXME: should I move it to dm-worker?
@@ -207,6 +227,8 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(binlogEventSizeHistogram)
 	registry.MustRegister(binlogEvent)
 	registry.MustRegister(conflictDetectDurationHistogram)
+	registry.MustRegister(addJobDurationHistogram)
+	registry.MustRegister(dispatchBinlogDurationHistogram)
 	registry.MustRegister(binlogSkippedEventsTotal)
 	registry.MustRegister(addedJobsTotal)
 	registry.MustRegister(finishedJobsTotal)
@@ -277,6 +299,8 @@ func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	binlogEventSizeHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogEvent.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	conflictDetectDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	addJobDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	dispatchBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogSkippedEventsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	addedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	finishedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})

@@ -63,6 +63,7 @@ var (
 	// SyncerConfig
 	defaultWorkerCount = 16
 	defaultBatch       = 100
+	defaultQueueSize   = 5120
 )
 
 // Meta represents binlog's meta pos
@@ -204,6 +205,8 @@ type SyncerConfig struct {
 	MetaFile    string `yaml:"meta-file" toml:"meta-file" json:"meta-file"` // meta filename, used only when load SubConfig directly
 	WorkerCount int    `yaml:"worker-count" toml:"worker-count" json:"worker-count"`
 	Batch       int    `yaml:"batch" toml:"batch" json:"batch"`
+	QueueSize   int    `yaml:"queue-size" toml:"queue-size" json:"queue-size"`
+
 	// deprecated
 	MaxRetry int `yaml:"max-retry" toml:"max-retry" json:"max-retry"`
 
@@ -219,6 +222,7 @@ func defaultSyncerConfig() SyncerConfig {
 	return SyncerConfig{
 		WorkerCount: defaultWorkerCount,
 		Batch:       defaultBatch,
+		QueueSize:   defaultQueueSize,
 	}
 }
 

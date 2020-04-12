@@ -52,34 +52,28 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		originalDataSeq = param.originalData
 		columns         = param.columns
 		ti              = param.originalTableInfo
+		sqls            = make([]string, 0, len(dataSeq))
+		keys            = make([][]string, 0, len(dataSeq))
+		values          = make([][]interface{}, 0, len(dataSeq))
 	)
-	sqls := make([]string, 0, len(dataSeq))
-	keys := make([][]string, 0, len(dataSeq))
-	values := make([][]interface{}, 0, len(dataSeq))
-	columnList := genColumnList(columns)
-	columnPlaceholders := genColumnPlaceholders(len(columns))
+
+	var insertOrReplace = "INSERT INTO"
+	if param.safeMode {
+		insertOrReplace = "REPLACE INTO"
+	}
+	sql := genInsertReplace(insertOrReplace, qualifiedName, columns)
+
 	for dataIdx, data := range dataSeq {
 		if len(data) != len(columns) {
 			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(data))
 		}
 
 		value := extractValueFromData(data, columns)
-		originalData := originalDataSeq[dataIdx]
-		var originalValue []interface{}
-		if len(columns) == len(ti.Columns) {
-			originalValue = value
-		} else {
-			originalValue = extractValueFromData(originalData, ti.Columns)
+		var originalValue = value
+		if len(columns) != len(ti.Columns) {
+			originalValue = extractValueFromData(originalDataSeq[dataIdx], ti.Columns)
 		}
 
-		var insertOrReplace string
-		if param.safeMode {
-			insertOrReplace = "REPLACE"
-		} else {
-			insertOrReplace = "INSERT"
-		}
-
-		sql := fmt.Sprintf("%s INTO %s (%s) VALUES (%s);", insertOrReplace, qualifiedName, columnList, columnPlaceholders)
 		ks := genMultipleKeys(ti, originalValue, qualifiedName)
 		sqls = append(sqls, sql)
 		values = append(values, value)
@@ -91,19 +85,21 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 
 func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
 	var (
-		qualifiedName = dbutil.TableName(param.schema, param.table)
-		safeMode      = param.safeMode
-		data          = param.data
-		originalData  = param.originalData
-		columns       = param.columns
-		ti            = param.originalTableInfo
+		qualifiedName       = dbutil.TableName(param.schema, param.table)
+		data                = param.data
+		originalData        = param.originalData
+		columns             = param.columns
+		ti                  = param.originalTableInfo
+		defaultIndexColumns = findFitIndex(ti)
+		replaceSQL          string // `REPLACE INTO` SQL
+		sqls                = make([]string, 0, len(data)/2)
+		keys                = make([][]string, 0, len(data)/2)
+		values              = make([][]interface{}, 0, len(data)/2)
 	)
-	sqls := make([]string, 0, len(data)/2)
-	keys := make([][]string, 0, len(data)/2)
-	values := make([][]interface{}, 0, len(data)/2)
-	columnList := genColumnList(columns)
-	columnPlaceholders := genColumnPlaceholders(len(columns))
-	defaultIndexColumns := findFitIndex(ti)
+
+	if param.safeMode {
+		replaceSQL = genInsertReplace("REPLACE INTO", qualifiedName, columns)
+	}
 
 	for i := 0; i < len(data); i += 2 {
 		oldData := data[i]
@@ -138,20 +134,20 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		ks := genMultipleKeys(ti, oriOldValues, qualifiedName)
 		ks = append(ks, genMultipleKeys(ti, oriChangedValues, qualifiedName)...)
 
-		if safeMode {
+		if param.safeMode {
 			// generate delete sql from old data
 			sql, value := genDeleteSQL(qualifiedName, oriOldValues, ti.Columns, defaultIndexColumns)
 			sqls = append(sqls, sql)
 			values = append(values, value)
 			keys = append(keys, ks)
 			// generate replace sql from new data
-			sql = fmt.Sprintf("REPLACE INTO %s (%s) VALUES (%s);", qualifiedName, columnList, columnPlaceholders)
-			sqls = append(sqls, sql)
+			sqls = append(sqls, replaceSQL)
 			values = append(values, changedValues)
 			keys = append(keys, ks)
 			continue
 		}
 
+		// NOTE: move these variables outer of `for` if needed (to reuse).
 		updateColumns := make([]*model.ColumnInfo, 0, indexColumnsCount(defaultIndexColumns))
 		updateValues := make([]interface{}, 0, indexColumnsCount(defaultIndexColumns))
 		for j := range oldValues {
@@ -165,7 +161,6 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		}
 
 		value := make([]interface{}, 0, len(oldData))
-		kvs := genKVs(updateColumns)
 		value = append(value, updateValues...)
 
 		whereColumns, whereValues := ti.Columns, oriOldValues
@@ -173,10 +168,9 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			whereColumns, whereValues = getColumnData(ti.Columns, defaultIndexColumns, oriOldValues)
 		}
 
-		where := genWhere(whereColumns, whereValues)
 		value = append(value, whereValues...)
 
-		sql := fmt.Sprintf("UPDATE %s SET %s WHERE %s LIMIT 1;", qualifiedName, kvs, where)
+		sql := genUpdateSQL(qualifiedName, updateColumns, whereColumns, whereValues)
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -187,14 +181,14 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 
 func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
 	var (
-		qualifiedName = dbutil.TableName(param.schema, param.table)
-		dataSeq       = param.originalData
-		ti            = param.originalTableInfo
+		qualifiedName       = dbutil.TableName(param.schema, param.table)
+		dataSeq             = param.originalData
+		ti                  = param.originalTableInfo
+		defaultIndexColumns = findFitIndex(ti)
+		sqls                = make([]string, 0, len(dataSeq))
+		keys                = make([][]string, 0, len(dataSeq))
+		values              = make([][]interface{}, 0, len(dataSeq))
 	)
-	sqls := make([]string, 0, len(dataSeq))
-	keys := make([][]string, 0, len(dataSeq))
-	values := make([][]interface{}, 0, len(dataSeq))
-	defaultIndexColumns := findFitIndex(ti)
 
 	for _, data := range dataSeq {
 		if len(data) != len(ti.Columns) {
@@ -217,16 +211,72 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 	return sqls, keys, values, nil
 }
 
-func genDeleteSQL(qualifiedName string, value []interface{}, columns []*model.ColumnInfo, indexColumns *model.IndexInfo) (string, []interface{}) {
+// genInsertReplace generates a DML for `INSERT INTO` or `REPLCATE INTO`.
+// the returned SQL with placeholders for `VALUES`.
+func genInsertReplace(op, table string, columns []*model.ColumnInfo) string {
+	// NOTE: use sync.Pool to hold the builder if needed later.
+	var buf strings.Builder
+	buf.Grow(256)
+	buf.WriteString(op)
+	buf.WriteString(" " + table + " (")
+	for i, column := range columns {
+		if i != len(columns)-1 {
+			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`,")
+		} else {
+			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`)")
+		}
+	}
+	buf.WriteString(" VALUES (")
+
+	// placeholders
+	for i := range columns {
+		if i != len(columns)-1 {
+			buf.WriteString("?,")
+		} else {
+			buf.WriteString("?)")
+		}
+	}
+	return buf.String()
+}
+
+// genUpdateSQL generates a `UPDATE` SQL with `SET` and `WHERE`.
+func genUpdateSQL(table string, updateColumns, whereColumns []*model.ColumnInfo, whereValues []interface{}) string {
+	var buf strings.Builder
+	buf.Grow(2048)
+	buf.WriteString("UPDATE ")
+	buf.WriteString(table)
+	buf.WriteString(" SET ")
+
+	for i, column := range updateColumns {
+		if i == len(updateColumns)-1 {
+			fmt.Fprintf(&buf, "`%s` = ?", strings.ReplaceAll(column.Name.O, "`", "``"))
+		} else {
+			fmt.Fprintf(&buf, "`%s` = ?, ", strings.ReplaceAll(column.Name.O, "`", "``"))
+		}
+	}
+
+	buf.WriteString(" WHERE ")
+	genWhere(&buf, whereColumns, whereValues)
+	buf.WriteString(" LIMIT 1")
+	return buf.String()
+}
+
+// genDeleteSQL generates a `DELETE FROM` SQL with `WHERE`.
+func genDeleteSQL(table string, value []interface{}, columns []*model.ColumnInfo, indexColumns *model.IndexInfo) (string, []interface{}) {
 	whereColumns, whereValues := columns, value
 	if indexColumns != nil {
 		whereColumns, whereValues = getColumnData(columns, indexColumns, value)
 	}
 
-	where := genWhere(whereColumns, whereValues)
-	sql := fmt.Sprintf("DELETE FROM %s WHERE %s LIMIT 1;", qualifiedName, where)
+	var buf strings.Builder
+	buf.Grow(1024)
+	buf.WriteString("DELETE FROM ")
+	buf.WriteString(table)
+	buf.WriteString(" WHERE ")
+	genWhere(&buf, whereColumns, whereValues)
+	buf.WriteString(" LIMIT 1")
 
-	return sql, whereValues
+	return buf.String(), whereValues
 }
 
 func indexColumnsCount(index *model.IndexInfo) int {
@@ -234,27 +284,6 @@ func indexColumnsCount(index *model.IndexInfo) int {
 		return 0
 	}
 	return len(index.Columns)
-}
-
-func genColumnList(columns []*model.ColumnInfo) string {
-	var buf strings.Builder
-	for i, column := range columns {
-		if i != 0 {
-			buf.WriteByte(',')
-		}
-		buf.WriteByte('`')
-		buf.WriteString(strings.ReplaceAll(column.Name.O, "`", "``"))
-		buf.WriteByte('`')
-	}
-	return buf.String()
-}
-
-func genColumnPlaceholders(length int) string {
-	values := make([]string, length)
-	for i := 0; i < length; i++ {
-		values[i] = "?"
-	}
-	return strings.Join(values, ",")
 }
 
 func castUnsigned(data interface{}, ft *types.FieldType) interface{} {
@@ -332,13 +361,14 @@ func columnValue(value interface{}, ft *types.FieldType) string {
 	return data
 }
 
-func genKeyList(columns []*model.ColumnInfo, dataSeq []interface{}) string {
-	values := make([]string, 0, len(dataSeq))
+func genKeyList(table string, columns []*model.ColumnInfo, dataSeq []interface{}) string {
+	var buf strings.Builder
+	buf.WriteString(table)
 	for i, data := range dataSeq {
-		values = append(values, columnValue(data, &columns[i].FieldType))
+		// for key, I think no need to add the `,` separator.
+		buf.WriteString(columnValue(data, &columns[i].FieldType))
 	}
-
-	return strings.Join(values, ",")
+	return buf.String()
 }
 
 func genMultipleKeys(ti *model.TableInfo, value []interface{}, table string) []string {
@@ -347,13 +377,13 @@ func genMultipleKeys(ti *model.TableInfo, value []interface{}, table string) []s
 		if pk := ti.GetPkColInfo(); pk != nil {
 			cols := []*model.ColumnInfo{pk}
 			vals := []interface{}{value[pk.Offset]}
-			multipleKeys = append(multipleKeys, table+genKeyList(cols, vals))
+			multipleKeys = append(multipleKeys, genKeyList(table, cols, vals))
 		}
 	}
 
 	for _, indexCols := range ti.Indices {
 		cols, vals := getColumnData(ti.Columns, indexCols, value)
-		multipleKeys = append(multipleKeys, table+genKeyList(cols, vals))
+		multipleKeys = append(multipleKeys, genKeyList(table, cols, vals))
 	}
 	return multipleKeys
 }
@@ -419,8 +449,8 @@ func getSpecifiedIndexColumn(ti *model.TableInfo, fn func(i int) bool) *model.In
 }
 
 func getColumnData(columns []*model.ColumnInfo, indexColumns *model.IndexInfo, data []interface{}) ([]*model.ColumnInfo, []interface{}) {
-	cols := make([]*model.ColumnInfo, 0, len(columns))
-	values := make([]interface{}, 0, len(columns))
+	cols := make([]*model.ColumnInfo, 0, len(indexColumns.Columns))
+	values := make([]interface{}, 0, len(indexColumns.Columns))
 	for _, column := range indexColumns.Columns {
 		cols = append(cols, columns[column.Offset])
 		values = append(values, data[column.Offset])
@@ -429,36 +459,19 @@ func getColumnData(columns []*model.ColumnInfo, indexColumns *model.IndexInfo, d
 	return cols, values
 }
 
-func genWhere(columns []*model.ColumnInfo, data []interface{}) string {
-	var kvs strings.Builder
+func genWhere(buf *strings.Builder, columns []*model.ColumnInfo, data []interface{}) {
 	for i, col := range columns {
 		if i != 0 {
-			kvs.WriteString(" AND ")
+			buf.WriteString(" AND ")
 		}
-		kvs.WriteByte('`')
-		kvs.WriteString(strings.ReplaceAll(col.Name.O, "`", "``"))
+		buf.WriteByte('`')
+		buf.WriteString(strings.ReplaceAll(col.Name.O, "`", "``"))
 		if data[i] == nil {
-			kvs.WriteString("` IS ?")
+			buf.WriteString("` IS ?")
 		} else {
-			kvs.WriteString("` = ?")
+			buf.WriteString("` = ?")
 		}
 	}
-
-	return kvs.String()
-}
-
-func genKVs(columns []*model.ColumnInfo) string {
-	var kvs strings.Builder
-	for i, col := range columns {
-		if i != 0 {
-			kvs.WriteString(", ")
-		}
-		kvs.WriteByte('`')
-		kvs.WriteString(strings.ReplaceAll(col.Name.O, "`", "``"))
-		kvs.WriteString("` = ?")
-	}
-
-	return kvs.String()
 }
 
 func (s *Syncer) mappingDML(schema, table string, ti *model.TableInfo, data [][]interface{}) ([][]interface{}, error) {

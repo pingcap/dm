@@ -57,38 +57,12 @@ func (s *testSyncerSuite) TestCastUnsigned(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TestGenColumnPlaceholders(c *C) {
-	placeholderStr := genColumnPlaceholders(1)
-	c.Assert(placeholderStr, Equals, "?")
-
-	placeholderStr = genColumnPlaceholders(3)
-	c.Assert(placeholderStr, Equals, "?,?,?")
-}
-
 func createTableInfo(p *parser.Parser, se sessionctx.Context, tableID int64, sql string) (*model.TableInfo, error) {
 	node, err := p.ParseOneStmt(sql, "utf8mb4", "utf8mb4_bin")
 	if err != nil {
 		return nil, err
 	}
 	return tiddl.MockTableInfo(se, node.(*ast.CreateTableStmt), tableID)
-}
-
-func (s *testSyncerSuite) TestGenColumnList(c *C) {
-	columns := []*model.ColumnInfo{
-		{
-			Name: model.NewCIStr("a"),
-		}, {
-			Name: model.NewCIStr("b"),
-		}, {
-			Name: model.NewCIStr("c`d"),
-		},
-	}
-
-	columnList := genColumnList(columns[:1])
-	c.Assert(columnList, Equals, "`a`")
-
-	columnList = genColumnList(columns)
-	c.Assert(columnList, Equals, "`a`,`b`,`c``d`")
 }
 
 func (s *testSyncerSuite) TestFindFitIndex(c *C) {
