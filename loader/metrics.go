@@ -33,7 +33,7 @@ var (
 			Subsystem: "loader",
 			Name:      "query_duration_time",
 			Help:      "Bucketed histogram of query time (s) of a txn.",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
 	txnHistogram = prometheus.NewHistogramVec(
@@ -42,7 +42,7 @@ var (
 			Subsystem: "loader",
 			Name:      "txn_duration_time",
 			Help:      "Bucketed histogram of processing time (s) of a txn.",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
 	stmtHistogram = prometheus.NewHistogramVec(
@@ -51,7 +51,7 @@ var (
 			Subsystem: "loader",
 			Name:      "stmt_duration_time",
 			Help:      "Bucketed histogram of every statement query time (s).",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"type", "task"})
 
 	dataFileGauge = prometheus.NewGaugeVec(
