@@ -45,32 +45,6 @@ func (s *testSyncerSuite) TestCastUnsigned(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TestGenColumnPlaceholders(c *C) {
-	placeholderStr := genColumnPlaceholders(1)
-	c.Assert(placeholderStr, Equals, "?")
-
-	placeholderStr = genColumnPlaceholders(3)
-	c.Assert(placeholderStr, Equals, "?,?,?")
-}
-
-func (s *testSyncerSuite) TestGenColumnList(c *C) {
-	columns := []*column{
-		{
-			name: "a",
-		}, {
-			name: "b",
-		}, {
-			name: "c",
-		},
-	}
-
-	columnList := genColumnList(columns[:1])
-	c.Assert(columnList, Equals, "`a`")
-
-	columnList = genColumnList(columns)
-	c.Assert(columnList, Equals, "`a`,`b`,`c`")
-}
-
 func (s *testSyncerSuite) TestFindFitIndex(c *C) {
 	pkColumns := []*column{
 		{

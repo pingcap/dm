@@ -287,7 +287,7 @@ func (s *Syncer) newJobChans(count int) {
 	s.closeJobChans()
 	s.jobs = make([]chan *job, 0, count)
 	for i := 0; i < count; i++ {
-		s.jobs = append(s.jobs, make(chan *job, 1000))
+		s.jobs = append(s.jobs, make(chan *job, s.cfg.QueueSize))
 	}
 	s.jobsClosed.Set(false)
 }
@@ -766,7 +766,10 @@ func (s *Syncer) addJob(job *job) error {
 		// ugly code addJob and sync, refine it later
 		s.jobWg.Add(s.cfg.WorkerCount)
 		for i := 0; i < s.cfg.WorkerCount; i++ {
+			startTime := time.Now()
 			s.jobs[i] <- job
+			// flush for every DML queue
+			addJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, s.queueBucketMapping[i]).Observe(time.Since(startTime).Seconds())
 		}
 		s.jobWg.Wait()
 		finishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
@@ -777,7 +780,9 @@ func (s *Syncer) addJob(job *job) error {
 		addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName).Inc()
 		s.jobWg.Add(1)
 		queueBucket = s.cfg.WorkerCount
+		startTime := time.Now()
 		s.jobs[queueBucket] <- job
+		addJobDurationHistogram.WithLabelValues("ddl", s.cfg.Name, adminQueueName).Observe(time.Since(startTime).Seconds())
 		if job.ddlExecItem != nil {
 			execDDLReq = job.ddlExecItem.req
 		}
@@ -785,7 +790,9 @@ func (s *Syncer) addJob(job *job) error {
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
 		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
+		startTime := time.Now()
 		s.jobs[queueBucket] <- job
+		addJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket]).Observe(time.Since(startTime).Seconds())
 	}
 
 	if s.tracer.Enable() {
@@ -1601,6 +1608,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		*ec.traceID = traceEvent.Base.TraceID
 	}
 
+	startTime := time.Now()
 	for i := range sqls {
 		var arg []interface{}
 		var key []string
@@ -1615,6 +1623,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err
 		}
 	}
+	dispatchBinlogDurationHistogram.WithLabelValues(ec.latestOp.String(), s.cfg.Name).Observe(time.Since(startTime).Seconds())
 	return nil
 }
 
