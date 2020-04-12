@@ -83,8 +83,10 @@ const (
 	LocalBinlog
 )
 
+// FlushType represents flush checkpoint type
 type FlushType uint8
 
+// flush checkpoint type
 const (
 	NoNeedUpdate FlushType = iota + 1
 	NeedUpdate
