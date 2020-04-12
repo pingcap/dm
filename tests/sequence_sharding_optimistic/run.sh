@@ -7,8 +7,8 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 run() {
-    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+    #run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    #run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
@@ -25,7 +25,10 @@ run() {
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
     # start DM task only
-    dmctl_start_task
+    #dmctl_start_task
+
+    echo "sleep"
+    sleep 1000
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

@@ -1409,7 +1409,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	// DML position before table checkpoint, ignore it
 	if !s.checkpoint.IsNewerTablePoint(originSchema, originTable, *ec.currentLocation) {
-		s.tctx.L().Debug("ignore obsolete event that is old than table checkpoint", zap.String("event", "row"), log.WrapStringerField("position", ec.currentLocation), zap.String("origin schema", originSchema), zap.String("origin table", originTable))
+		s.tctx.L().Debug("ignore obsolete event that is old than table checkpoint", zap.String("event", "row"), log.WrapStringerField("location", ec.currentLocation), zap.String("origin schema", originSchema), zap.String("origin table", originTable))
 		return nil
 	}
 

@@ -69,6 +69,40 @@ func (s *Syncer) handleQueryEventOptimistic(
 		downTable = td.tableNames[1][0].Name
 	}
 
+	
+
+	for _, td := range needTrackDDLs {
+		if err := s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+			return err
+		}
+	}
+
+	s.tctx.L().Info("save table checkpoint", zap.String("event", "query"),
+		zap.String("schema", upSchema), zap.String("table", upTable),
+		zap.Strings("ddls", needHandleDDLs), log.WrapStringerField("location", ec.currentLocation))
+	s.saveTablePoint(upSchema, upTable, ec.currentLocation.Clone())
+
+	switch needTrackDDLs[0].stmt.(type) {
+	case *ast.CreateDatabaseStmt, *ast.DropDatabaseStmt:
+		ddlInfo := &shardingDDLInfo{
+			name:       needTrackDDLs[0].tableNames[0][0].String(),
+			tableNames: needTrackDDLs[0].tableNames,
+			stmt:       needTrackDDLs[0].stmt,
+		}
+
+		job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID)
+		err := s.addJobFunc(job)
+		if err != nil {
+			return err
+		}
+	
+		if s.execErrorDetected.Get() {
+			return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
+		}
+
+		return nil
+	}
+
 	var tiBefore *model.TableInfo
 	if _, ok := needTrackDDLs[0].stmt.(*ast.CreateTableStmt); !ok {
 		var err error
@@ -78,22 +112,11 @@ func (s *Syncer) handleQueryEventOptimistic(
 		}
 	}
 
-	for _, td := range needTrackDDLs {
-		if err := s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
-			return err
-		}
-	}
-
 	// TODO(csuzhangxc): rollback schema in the tracker if failed.
 	tiAfter, err := s.getTable(upSchema, upTable, downSchema, downTable, ec.parser2)
 	if err != nil {
 		return err
 	}
-
-	s.tctx.L().Info("save table checkpoint", zap.String("event", "query"),
-		zap.String("schema", upSchema), zap.String("table", upTable),
-		zap.Strings("ddls", needHandleDDLs), log.WrapStringerField("location", ec.currentLocation))
-	s.saveTablePoint(upSchema, upTable, ec.currentLocation.Clone())
 
 	info := s.optimist.ConstructInfo(upSchema, upTable, downSchema, downTable, needHandleDDLs, tiBefore, tiAfter)
 
