@@ -2786,11 +2786,13 @@
           "fill": 1,
           "id": 4,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "show": false,
+            "rightSide": true,
+            "show": true,
             "total": false,
             "values": false
           },
@@ -2809,10 +2811,32 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\"}[1m])",
+              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\", type=\"write_rows\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
+              "legendFormat": "insert",
               "refId": "A"
+            },
+            {
+              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\", type=\"update_rows\"}[1m])",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "update",
+              "refId": "B"
+            },
+            {
+              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\", type=\"delete_rows\"}[1m])",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "delete",
+              "refId": "C"
+            },
+            {
+              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\", type=\"query\"}[1m])",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "query",
+              "refId": "D"
             }
           ],
           "thresholds": [],
