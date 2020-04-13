@@ -1,7 +1,7 @@
 # Proposal: Binlog replication(syncer) unit support plugin
 
 - Author(s):    [wangxiang](https://github.com/WangXiangUSTC)
-- Last updated: 2020-04-12
+- Last updated: 2020-04-13
 
 ## Abstract
 
@@ -36,7 +36,7 @@ ALTER TABLE test.t1 CHANGE COLUMN name_tmp name varchar(50);
 
 Maybe we can execute them automated when meet `unsupported modify column` error.
 
-### Double write(just for DDL now)
+### Double write
 
 DM only support replication data to TiDB, but some users
 want to send binlog to other platform while replication to TiDB.
@@ -47,7 +47,7 @@ For example, user expect to send DDL binlog to Kafka after DDL is replication to
 
 ### Interface
 
-For handle DDL which is not supported in TiDB or used for double write, we need to design at least two interface in plugin.
+For handle DDL which is not supported in TiDB or used for double write, we need to design at least three interface in plugin.
 
 #### Init
 
@@ -60,11 +60,20 @@ This interface used to handle the DDL job's result in binlog replication unit(sy
 - When the ddl job execute failed, judge the error type by error code or error message, then do something to resolve it.
 - When the ddl job execute success, then send it to other platform.
 
+#### HandleDMLJobResult
+
+This interface used to handle the DML job's result in binlog replication unit(syncer)
+
+- When the dml job execute success, then send it to other platform.
+
 ### Hook
 
 `Init` can be execute when [initial](https://github.com/pingcap/dm/blob/9023c789964fde0f5134e0c49435db557e21fdf7/syncer/syncer.go#L257) binlog replication unit.
 
-`HandleDDLJobResult` can be execute in [handleQueryEvent](https://github.com/pingcap/dm/blob/9023c789964fde0f5134e0c49435db557e21fdf7/syncer/syncer.go#L1533) after [addJobFunc](https://github.com/pingcap/dm/blob/9023c789964fde0f5134e0c49435db557e21fdf7/syncer/syncer.go#L1898) and [addJobFunc](https://github.com/pingcap/dm/blob/9023c789964fde0f5134e0c49435db557e21fdf7/syncer/syncer.go#L1705).
+`HandleDDLJobResult` handle the result of [handleQueryEvent](https://github.com/pingcap/dm/blob/9023c789964fde0f5134e0c49435db557e21fdf7/syncer/syncer.go#L1279) and then do something.
+
+`HandleDMLJobResult` handle the result of [handleRowsEvent](https://github.com/pingcap/dm/blob/9023c789964fde0f5134e0c49435db557e21fdf7/syncer/syncer.go#L1274) and then do something.
+``
 
 ## How to use
 
