@@ -14,11 +14,15 @@
 package metricsproxy
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 // GaugeVecProxy to proxy prometheus.GaugeVec
 type GaugeVecProxy struct {
+	mu sync.Mutex
+
 	LabelNames []string
 	Labels     map[string]map[string]string
 	*prometheus.GaugeVec
@@ -44,7 +48,9 @@ func (c *GaugeVecProxy) WithLabelValues(lvs ...string) prometheus.Gauge {
 		for index, label := range lvs {
 			labels[c.LabelNames[index]] = label
 		}
+		c.mu.Lock()
 		noteLabelsInMetricsProxy(c, labels)
+		c.mu.Unlock()
 	}
 	return c.GaugeVec.WithLabelValues(lvs...)
 }
@@ -54,7 +60,9 @@ func (c *GaugeVecProxy) WithLabelValues(lvs ...string) prometheus.Gauge {
 //     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Add(42)
 func (c *GaugeVecProxy) With(labels prometheus.Labels) prometheus.Gauge {
 	if len(labels) > 0 {
+		c.mu.Lock()
 		noteLabelsInMetricsProxy(c, labels)
+		c.mu.Unlock()
 	}
 
 	return c.GaugeVec.With(labels)
@@ -65,7 +73,8 @@ func (c *GaugeVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	if len(labels) == 0 {
 		return false
 	}
-
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return findAndDeleteLabelsInMetricsProxy(c, labels)
 }
 

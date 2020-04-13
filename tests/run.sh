@@ -45,7 +45,8 @@ if [ "$#" -ge 1 ]; then
         if [ "$test_case" == "others" ]; then
             test_case=$(cat $CUR/others_integration.txt)
         elif [ ! -d "tests/$test_case" ]; then
-            exit 1
+            echo $test_case "not exist"
+            exit 0
         fi
     fi
 else
