@@ -760,7 +760,6 @@ func (s *Syncer) addJob(job *job) error {
 	)
 	switch job.tp {
 	case xid:
-		s.saveGlobalPoint(job.pos)
 		return nil
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
@@ -811,12 +810,6 @@ func (s *Syncer) addJob(job *job) error {
 		s.jobWg.Wait()
 		s.c.reset()
 	}
-	if s.checkpoint.CheckGlobalPoint() {
-		select {
-		case <-s.done:
-		case s.flushCheckpointChan <- NeedUpdate:
-		}
-	}
 
 	switch job.tp {
 	case ddl:
@@ -834,7 +827,12 @@ func (s *Syncer) addJob(job *job) error {
 		}
 	}
 
-	if wait {
+	if s.checkpoint.CheckGlobalPoint() {
+		select {
+		case <-s.done:
+		case s.flushCheckpointChan <- NeedUpdate:
+		}
+	} else if wait {
 		select {
 		case <-s.done:
 		case s.flushCheckpointChan <- NoNeedUpdate:
@@ -2374,8 +2372,9 @@ func (s *Syncer) Pause() {
 		s.tctx.L().Warn("try to pause, but already closed")
 		return
 	}
-
+	s.Lock()
 	s.stopSync()
+	s.Unlock()
 }
 
 // Resume resumes the paused process

@@ -92,7 +92,10 @@ function run() {
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-
+    # execute ddl to make sure sync checkpoint is flushed
+	run_sql "ALTER TABLE \`retry_cancel\`.\`t1\` ADD COLUMN info VARCHAR(10);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "ALTER TABLE \`retry_cancel\`.\`t2\` ADD COLUMN info VARCHAR(10);" $MYSQL_PORT2 $MYSQL_PASSWORD2
+    sleep 3
     # ---------- test for incremental replication ----------
     # stop DM-worker, then enable failponits
     kill_dm_worker
