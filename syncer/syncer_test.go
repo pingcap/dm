@@ -1190,6 +1190,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	// set batch to 1 is easy to mock
 	s.cfg.Batch = 1
 	s.cfg.WorkerCount = 1
+	s.cfg.CheckpointFlushInterval = 30
 
 	for i, _case := range testCases {
 		s.resetEventsGenerator(c)

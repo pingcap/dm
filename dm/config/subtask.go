@@ -273,6 +273,13 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		c.LoaderConfig.Dir += dirSuffix
 	}
 
+	if c.SyncerConfig.QueueSize == 0 {
+		c.SyncerConfig.QueueSize = defaultQueueSize
+	}
+	if c.SyncerConfig.CheckpointFlushInterval == 0 {
+		c.SyncerConfig.CheckpointFlushInterval = defaultCheckpointFlushInterval
+	}
+
 	c.From.Adjust()
 	c.To.Adjust()
 
