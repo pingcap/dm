@@ -47,7 +47,6 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server addr")
 	fs.StringVar(&cfg.RPCTimeoutStr, "rpc-timeout", defaultRPCTimeout, fmt.Sprintf("rpc timeout, default is %s", defaultRPCTimeout))
 	fs.StringVar(&cfg.encrypt, EncryptCmdName, "", "encrypt plaintext to ciphertext")
-	fs.BoolVar(&cfg.queryRelay, "query-relay", false, "query relay status")
 
 	return cfg
 }
@@ -63,7 +62,6 @@ type Config struct {
 
 	ConfigFile string `json:"config-file"`
 
-	queryRelay   bool
 	printVersion bool
 	encrypt      string // string need to be encrypted
 }
@@ -85,13 +83,6 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 
 	if c.printVersion {
 		fmt.Println(utils.GetRawInfo())
-		return true, nil
-	}
-
-	if c.queryRelay {
-		// TODO call function to parse
-
-		fmt.Println("hello")
 		return true, nil
 	}
 
