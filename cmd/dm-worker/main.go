@@ -37,7 +37,7 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		fmt.Printf("parse cmd flags err: %s", errors.ErrorStack(err))
+		fmt.Printf("parse cmd flags err: %s \n", errors.ErrorStack(err))
 		os.Exit(2)
 	}
 
