@@ -775,7 +775,7 @@ func (s *Syncer) addJob(job *job) error {
 		finishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
 		select {
 		case <-s.done:
-		case s.flushCheckpointChan <- NoNeedUpdate:
+		case s.flushCheckpointChan <- NeedUpdate:
 		}
 		return nil
 	case ddl:
@@ -1063,7 +1063,6 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 }
 
 func (s *Syncer) asyncFlushCheckpoint(ctx context.Context, flushChan chan FlushType) {
-	defer s.wg.Done()
 	for {
 		select {
 		case flushType := <-flushChan:
@@ -1071,11 +1070,10 @@ func (s *Syncer) asyncFlushCheckpoint(ctx context.Context, flushChan chan FlushT
 				minPos := s.workerCheckpoints[0].MySQLPos()
 				for _, workerCheckpoint := range s.workerCheckpoints {
 					pos := workerCheckpoint.MySQLPos()
-					if minPos.Compare(pos) < 0 {
+					if pos.Compare(minPos) < 0 {
 						minPos = pos
 					}
 				}
-				// minPos will be greater than global checkpoint
 				s.saveGlobalPoint(minPos)
 			}
 			err := s.flushCheckPoints()
@@ -1157,9 +1155,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	s.wg.Add(1)
 	go func() {
-		ctx2, cancel := context.WithCancel(ctx)
-		s.asyncFlushCheckpoint(ctx2, s.flushCheckpointChan)
-		cancel()
+		defer s.wg.Done()
+		s.asyncFlushCheckpoint(ctx, s.flushCheckpointChan)
 	}()
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)

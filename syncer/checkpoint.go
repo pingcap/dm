@@ -356,8 +356,8 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(pos mysql.Position) {
 
 // FlushPointsExcept implements CheckPoint.FlushPointsExcept
 func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error {
-	cp.RLock()
-
+	cp.Lock()
+	defer cp.Unlock()
 	// convert slice to map
 	excepts := make(map[string]map[string]struct{})
 	for _, schemaTable := range exceptTables {
@@ -405,18 +405,15 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 	}
 
 	_, err := cp.dbConn.executeSQL(tctx, sqls, args...)
-	cp.RUnlock()
 	if err != nil {
 		return err
 	}
 
-	cp.Lock()
 	cp.globalPoint.flush()
 	for _, point := range points {
 		point.flush()
 	}
 	cp.globalPointSaveTime = time.Now()
-	cp.Unlock()
 	return nil
 }
 
