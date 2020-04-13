@@ -130,7 +130,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			originalValue = extractValueFromData(originalDataSeq[dataIdx], originalColumns)
 		}
 
-		ks := genMultipleKeys(originalValue, originalIndexColumns, fullname)
+		ks := genMultipleKeys(originalValue, originalIndexColumns, originalColumns, fullname)
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -188,8 +188,8 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			defaultIndexColumns = getAvailableIndexColumn(originalIndexColumns, oriOldValues)
 		}
 
-		ks := genMultipleKeys(oriOldValues, originalIndexColumns, fullname)
-		ks = append(ks, genMultipleKeys(oriChangedValues, originalIndexColumns, fullname)...)
+		ks := genMultipleKeys(oriOldValues, originalIndexColumns, originalColumns, fullname)
+		ks = append(ks, genMultipleKeys(oriChangedValues, originalIndexColumns, originalColumns, fullname)...)
 
 		if param.safeMode {
 			// generate delete sql from old data
@@ -259,7 +259,7 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		if len(defaultIndexColumns) == 0 {
 			defaultIndexColumns = getAvailableIndexColumn(indexColumns, value)
 		}
-		ks := genMultipleKeys(value, indexColumns, fullname)
+		ks := genMultipleKeys(value, indexColumns, columns, fullname)
 
 		sql, value := genDeleteSQL(fullname, value, columns, defaultIndexColumns)
 		sqls = append(sqls, sql)
@@ -443,20 +443,40 @@ func findColumns(columns []*column, indexColumns map[string][]string) map[string
 
 func genKeyList(table string, columns []*column, dataSeq []interface{}) string {
 	var buf strings.Builder
-	buf.WriteString(table)
 	for i, data := range dataSeq {
+		if data == nil {
+			continue // ignore `null` value.
+		}
 		// for key, I think no need to add the `,` separator.
 		buf.WriteString(columnValue(data, columns[i].unsigned, columns[i].tp))
 	}
+	if buf.Len() == 0 {
+		return "" // all values are `null`.
+	}
+
+	buf.WriteString(table)
 	return buf.String()
 }
 
-func genMultipleKeys(value []interface{}, indexColumns map[string][]*column, table string) []string {
+func genMultipleKeys(value []interface{}, indexColumns map[string][]*column, columns []*column, table string) []string {
 	multipleKeys := make([]string, 0, len(indexColumns))
 	for _, indexCols := range indexColumns {
 		vals := getColumnData(indexCols, value)
-		multipleKeys = append(multipleKeys, genKeyList(table, indexCols, vals))
+		key := genKeyList(table, indexCols, vals)
+		if len(key) > 0 { // ignore `null` value.
+			multipleKeys = append(multipleKeys, key)
+		}
 	}
+
+	if len(multipleKeys) == 0 { // use all values as key if no key generated.
+		vals := getColumnData(columns, value)
+		key := genKeyList(table, columns, vals)
+		if key == "" {
+			key = table // use table name as the key.
+		}
+		multipleKeys = append(multipleKeys, key)
+	}
+
 	return multipleKeys
 }
 
