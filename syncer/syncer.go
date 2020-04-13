@@ -96,6 +96,13 @@ const (
 	NeedUpdate
 )
 
+const (
+	// GetMinPos gets min pos from checkpoints
+	GetMinPos int = iota + 1
+	// GetMaxPos gets max pos from checkpoints
+	GetMaxPos
+)
+
 // StreamerProducer provides the ability to generate binlog streamer by StartSync()
 // but go-mysql StartSync() returns (struct, err) rather than (interface, err)
 // And we can't simplely use StartSync() method in SteamerProducer
@@ -1066,15 +1073,22 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	}
 }
 
-func (s *Syncer) updateGlobalCheckpointFromWorkers() {
-	minPos := s.workerCheckpoints[0].MySQLPos()
+func (s *Syncer) updateGlobalCheckpointFromWorkers(typ int) {
+	updatePos := minCheckpoint
 	for _, workerCheckpoint := range s.workerCheckpoints {
 		pos := workerCheckpoint.MySQLPos()
-		if pos.Compare(minPos) < 0 {
-			minPos = pos
+		if pos.Compare(minCheckpoint) > 0 {
+			shouldUpdate := updatePos.Compare(minCheckpoint) == 0 ||
+				(typ == GetMinPos && pos.Compare(updatePos) < 0) ||
+				(typ == GetMaxPos && pos.Compare(updatePos) > 0)
+			if shouldUpdate {
+				updatePos = pos
+			}
 		}
 	}
-	s.saveGlobalPoint(minPos)
+	if updatePos.Compare(minCheckpoint) > 0 {
+		s.saveGlobalPoint(updatePos)
+	}
 }
 
 func (s *Syncer) asyncFlushCheckpoint(ctx context.Context, flushChan chan FlushType) {
@@ -1082,7 +1096,7 @@ func (s *Syncer) asyncFlushCheckpoint(ctx context.Context, flushChan chan FlushT
 		select {
 		case flushType := <-flushChan:
 			if flushType == NeedUpdate {
-				s.updateGlobalCheckpointFromWorkers()
+				s.updateGlobalCheckpointFromWorkers(GetMinPos)
 			}
 			err := s.flushCheckPoints()
 			if err != nil {
@@ -1190,7 +1204,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		s.jobWg.Wait()
-		s.updateGlobalCheckpointFromWorkers()
+		s.updateGlobalCheckpointFromWorkers(GetMaxPos)
 		if err2 := s.flushCheckPoints(); err2 != nil {
 			s.tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
 		}
@@ -1963,6 +1977,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		if ddlExecItem.req.Exec {
 			failpoint.Inject("ShardSyncedExecutionExit", func() {
 				s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ShardSyncedExecutionExit"))
+				s.jobWg.Wait()
+				s.updateGlobalCheckpointFromWorkers(GetMaxPos)
 				s.flushCheckPoints()
 				utils.OsExit(1)
 			})
@@ -1972,6 +1988,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 					// exit in the first round sequence sharding DDL only
 					if group.meta.ActiveIdx() == 1 {
 						s.tctx.L().Warn("exit triggered", zap.String("failpoint", "SequenceShardSyncedExecutionExit"))
+						s.jobWg.Wait()
+						s.updateGlobalCheckpointFromWorkers(GetMaxPos)
 						s.flushCheckPoints()
 						utils.OsExit(1)
 					}
