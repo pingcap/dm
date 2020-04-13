@@ -1066,19 +1066,23 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	}
 }
 
+func (s *Syncer) updateGlobalCheckpointFromWorkers() {
+	minPos := s.workerCheckpoints[0].MySQLPos()
+	for _, workerCheckpoint := range s.workerCheckpoints {
+		pos := workerCheckpoint.MySQLPos()
+		if pos.Compare(minPos) < 0 {
+			minPos = pos
+		}
+	}
+	s.saveGlobalPoint(minPos)
+}
+
 func (s *Syncer) asyncFlushCheckpoint(ctx context.Context, flushChan chan FlushType) {
 	for {
 		select {
 		case flushType := <-flushChan:
 			if flushType == NeedUpdate {
-				minPos := s.workerCheckpoints[0].MySQLPos()
-				for _, workerCheckpoint := range s.workerCheckpoints {
-					pos := workerCheckpoint.MySQLPos()
-					if pos.Compare(minPos) < 0 {
-						minPos = pos
-					}
-				}
-				s.saveGlobalPoint(minPos)
+				s.updateGlobalCheckpointFromWorkers()
 			}
 			err := s.flushCheckPoints()
 			if err != nil {
@@ -1186,6 +1190,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		s.jobWg.Wait()
+		s.updateGlobalCheckpointFromWorkers()
 		if err2 := s.flushCheckPoints(); err2 != nil {
 			s.tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
 		}
