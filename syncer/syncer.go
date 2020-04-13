@@ -327,7 +327,6 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return err
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
-	s.workerCheckpoints = makeWorkerCheckpointArray(s.cfg.WorkerCount)
 
 	s.bwList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BWList)
 	if err != nil {
@@ -515,6 +514,7 @@ func (s *Syncer) reset() {
 	s.resetReplicationSyncer()
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
+	s.workerCheckpoints = makeWorkerCheckpointArray(s.cfg.WorkerCount)
 	s.flushCheckpointChan = make(chan FlushType, 16)
 	// clear tables info
 	s.clearAllTables()
@@ -774,7 +774,10 @@ func (s *Syncer) addJob(job *job) error {
 		}
 		s.jobWg.Wait()
 		finishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
-		s.flushCheckpointChan <- NoNeedUpdate
+		select {
+		case <-s.done:
+		case s.flushCheckpointChan <- NoNeedUpdate:
+		}
 		return nil
 	case ddl:
 		s.jobWg.Wait()
@@ -809,7 +812,10 @@ func (s *Syncer) addJob(job *job) error {
 		s.c.reset()
 	}
 	if s.checkpoint.CheckGlobalPoint() {
-		s.flushCheckpointChan <- NeedUpdate
+		select {
+		case <-s.done:
+		case s.flushCheckpointChan <- NeedUpdate:
+		}
 	}
 
 	switch job.tp {
@@ -829,7 +835,10 @@ func (s *Syncer) addJob(job *job) error {
 	}
 
 	if wait {
-		s.flushCheckpointChan <- NoNeedUpdate
+		select {
+		case <-s.done:
+		case s.flushCheckpointChan <- NoNeedUpdate:
+		}
 	}
 
 	return nil
@@ -1056,10 +1065,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 }
 
 func (s *Syncer) asyncFlushCheckpoint(ctx context.Context, flushChan chan FlushType) {
-	defer func() {
-		close(flushChan)
-		s.wg.Done()
-	}()
+	defer s.wg.Done()
 	for {
 		select {
 		case flushType := <-flushChan:
