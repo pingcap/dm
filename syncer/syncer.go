@@ -88,7 +88,11 @@ type FlushType uint8
 
 // flush checkpoint type
 const (
+	// For ddl job the global checkpoint will be updated in addJobFunc, so we needn't update and flush directly
 	NoNeedUpdate FlushType = iota + 1
+	// If global checkpoint hasn't been updated for more than 30s, or receive a flush job,
+	// we send a NeedUpdate request to async flush checkpoint go routine.
+	// It will update global checkpoint to minPos of workers and then flush checkpoint
 	NeedUpdate
 )
 
