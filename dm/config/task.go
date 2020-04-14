@@ -57,8 +57,8 @@ var (
 	// SyncerConfig
 	defaultWorkerCount             = 16
 	defaultBatch                   = 100
-	defaultQueueSize               = 5120
-	defaultCheckpointFlushInterval = 30 // in seconds
+	defaultQueueSize               = 1024 // do not give too large default value to avoid OOM
+	defaultCheckpointFlushInterval = 30   // in seconds
 )
 
 // Meta represents binlog's meta pos
