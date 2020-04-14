@@ -176,11 +176,21 @@ function run() {
     server_uuid=$(tail -n 1 $WORK_DIR/worker1/relay_log/server-uuid.index)
     run_sql "show binary logs\G" $MYSQL_PORT1 $MYSQL_PASSWORD1
     max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
+    echo "max_binlog_name: $max_binlog_name"
     binlog_count=$(grep Log_name "$SQL_RESULT_FILE" | wc -l)
+    echo "binlog_count: $binlog_count"
     relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
+    echo "relay_log_count: $relay_log_count"
     [ "$binlog_count" -eq "$relay_log_count" ]
+
+    # use ddl to flush checkpoint
+    run_sql "alter table \`dmctl\`.\`t_1\` add column d varchar(10);alter table \`dmctl\`.\`t_2\` add column d varchar(10);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "alter table \`dmctl\`.\`t_1\` add column d varchar(10);alter table \`dmctl\`.\`t_2\` add column d varchar(10);" $MYSQL_PORT2 $MYSQL_PASSWORD2
+    sleep 3
+
     purge_relay_success $max_binlog_name 127.0.0.1:$WORKER1_PORT
     new_relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
+    echo "new_relay_log_count: $new_relay_log_count"
     [ "$new_relay_log_count" -eq 1 ]
 }
 
