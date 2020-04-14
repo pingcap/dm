@@ -769,7 +769,7 @@ func (s *Syncer) checkWait(job *job) bool {
 func (s *Syncer) addJob(job *job) error {
 	defer func() {
 		if job.tp == insert || job.tp == update || job.tp == del {
-			s.lastAddedJobPos.save(job.pos)
+			s.lastAddedJobPos.save(s.sgk.AdjustGlobalPoint(job.pos))
 		}
 	}()
 	var (
