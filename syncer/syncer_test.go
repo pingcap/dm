@@ -1035,6 +1035,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	var wg sync.WaitGroup
 	s.cfg.WorkerCount = 1
 	syncer := NewSyncer(s.cfg)
+	syncer.lastAddedJobPos = newBinlogPoint(minCheckpoint, minCheckpoint)
 	syncer.jobs = []chan *job{make(chan *job, 1)}
 	syncer.workerCheckpoints = makeWorkerCheckpointArray(1)
 	syncer.flushCheckpointChan = make(chan FlushType, 16)

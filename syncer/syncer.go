@@ -183,6 +183,7 @@ type Syncer struct {
 
 	workerCheckpoints   []*binlogPoint
 	flushCheckpointChan chan FlushType
+	lastAddedJobPos     *binlogPoint
 
 	c *causality
 
@@ -525,6 +526,7 @@ func (s *Syncer) reset() {
 	s.resetReplicationSyncer()
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
+	s.lastAddedJobPos = newBinlogPoint(minCheckpoint, minCheckpoint)
 	s.workerCheckpoints = makeWorkerCheckpointArray(s.cfg.WorkerCount)
 	s.flushCheckpointChan = make(chan FlushType, 16)
 	// clear tables info
@@ -765,6 +767,7 @@ func (s *Syncer) checkWait(job *job) bool {
 }
 
 func (s *Syncer) addJob(job *job) error {
+	defer s.lastAddedJobPos.save(job.pos)
 	var (
 		queueBucket int
 		execDDLReq  *pb.ExecDDLRequest
@@ -985,6 +988,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	count := s.cfg.Batch
 	jobs := make([]*job, 0, count)
 	tpCnt := make(map[opType]int64)
+	lastUpdateCheckpointTime := time.Now()
 
 	clearF := func() {
 		for i := 0; i < idx; i++ {
@@ -1023,6 +1027,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			s.appendExecErrors(errCtx)
 		} else {
 			err = workerCheckpoint.save(jobs[len(jobs)-1].pos)
+			lastUpdateCheckpointTime = time.Now()
 		}
 		if s.tracer.Enable() {
 			syncerJobState := s.tracer.FinishedSyncerJobState(err)
@@ -1046,6 +1051,17 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			}
 			idx++
 
+			if sqlJob.tp == fake {
+				// update pos only if no jobs are waiting to be executed
+				if len(jobs) == 0 {
+					err = workerCheckpoint.save(sqlJob.pos)
+					if err != nil {
+						fatalF(err, pb.ErrorType_UnknownError)
+					}
+					lastUpdateCheckpointTime = time.Now()
+				}
+				continue
+			}
 			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
 				jobs = append(jobs, sqlJob)
 				tpCnt[sqlJob.tp]++
@@ -1068,6 +1084,8 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 					continue
 				}
 				clearF()
+			} else if time.Now().Sub(lastUpdateCheckpointTime) > 3*time.Second {
+				jobChan <- newFakeJob(s.lastAddedJobPos.MySQLPos())
 			}
 		}
 	}

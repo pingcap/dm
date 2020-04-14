@@ -33,6 +33,7 @@ const (
 	flush
 	skip // used by Syncer.recordSkipSQLsPos to record global pos, but not execute SQL
 	rotate
+	fake // used to flush worker's checkpoint
 )
 
 func (t opType) String() string {
@@ -53,6 +54,8 @@ func (t opType) String() string {
 		return "skip"
 	case rotate:
 		return "rotate"
+	case fake:
+		return "fake"
 	}
 
 	return ""
@@ -150,6 +153,13 @@ func newXIDJob(pos, cmdPos mysql.Position, currentGtidSet gtid.Set, traceID stri
 func newFlushJob() *job {
 	return &job{
 		tp: flush,
+	}
+}
+
+func newFakeJob(pos mysql.Position) *job {
+	return &job{
+		tp:  fake,
+		pos: pos,
 	}
 }
 
