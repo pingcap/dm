@@ -150,7 +150,6 @@ func (s *Syncer) handleQueryEventOptimistic(
 			return err
 		}
 	}
-
 	s.tctx.L().Info("got a shard DDL lock operation", zap.Stringer("operation", op))
 
 	if op.ConflictStage == optimism.ConflictDetected {

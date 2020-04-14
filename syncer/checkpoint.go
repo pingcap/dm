@@ -388,7 +388,6 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 		return true
 	}
 	oldLocation := point.MySQLLocation()
-	cp.logCtx.L().Info("IsNewerTablePoint", zap.Stringer("location", location), zap.Stringer("oldLocation", oldLocation))
 
 	return binlog.CompareLocation(location, oldLocation) > 0
 }
