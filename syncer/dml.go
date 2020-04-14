@@ -19,11 +19,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/types"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // genDMLParam stores pruned columns, data as well as the original columns, data, index
@@ -363,11 +366,20 @@ func columnValue(value interface{}, ft *types.FieldType) string {
 
 func genKeyList(table string, columns []*model.ColumnInfo, dataSeq []interface{}) string {
 	var buf strings.Builder
-	buf.WriteString(table)
 	for i, data := range dataSeq {
+		if data == nil {
+			log.L().Debug("ignore null value", zap.String("column", columns[i].Name.O), zap.String("table", table))
+			continue // ignore `null` value.
+		}
 		// for key, I think no need to add the `,` separator.
 		buf.WriteString(columnValue(data, &columns[i].FieldType))
 	}
+	if buf.Len() == 0 {
+		log.L().Debug("all value are nil, no key generated", zap.String("table", table))
+		return "" // all values are `null`.
+	}
+
+	buf.WriteString(table)
 	return buf.String()
 }
 
@@ -383,8 +395,21 @@ func genMultipleKeys(ti *model.TableInfo, value []interface{}, table string) []s
 
 	for _, indexCols := range ti.Indices {
 		cols, vals := getColumnData(ti.Columns, indexCols, value)
-		multipleKeys = append(multipleKeys, genKeyList(table, cols, vals))
+		key := genKeyList(table, cols, vals)
+		if len(key) > 0 { // ignore `null` value.
+			multipleKeys = append(multipleKeys, key)
+		} else {
+			log.L().Debug("ignore empty key", zap.String("table", table))
+		}
 	}
+
+	if len(multipleKeys) == 0 {
+		// use table name as key if no key generated (no PK/UK),
+		// no concurrence for rows in the same table.
+		log.L().Debug("use table name as the key", zap.String("table", table))
+		multipleKeys = append(multipleKeys, table)
+	}
+
 	return multipleKeys
 }
 

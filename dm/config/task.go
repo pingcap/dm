@@ -61,9 +61,10 @@ var (
 	defaultPoolSize = 16
 	defaultDir      = "./dumped_data"
 	// SyncerConfig
-	defaultWorkerCount = 16
-	defaultBatch       = 100
-	defaultQueueSize   = 5120
+	defaultWorkerCount             = 16
+	defaultBatch                   = 100
+	defaultQueueSize               = 1024 // do not give too large default value to avoid OOM
+	defaultCheckpointFlushInterval = 30   // in seconds
 )
 
 // Meta represents binlog's meta pos
@@ -206,6 +207,8 @@ type SyncerConfig struct {
 	WorkerCount int    `yaml:"worker-count" toml:"worker-count" json:"worker-count"`
 	Batch       int    `yaml:"batch" toml:"batch" json:"batch"`
 	QueueSize   int    `yaml:"queue-size" toml:"queue-size" json:"queue-size"`
+	// checkpoint flush interval in seconds.
+	CheckpointFlushInterval int `yaml:"checkpoint-flush-interval" toml:"checkpoint-flush-interval" json:"checkpoint-flush-interval"`
 
 	// deprecated
 	MaxRetry int `yaml:"max-retry" toml:"max-retry" json:"max-retry"`
@@ -220,9 +223,10 @@ type SyncerConfig struct {
 
 func defaultSyncerConfig() SyncerConfig {
 	return SyncerConfig{
-		WorkerCount: defaultWorkerCount,
-		Batch:       defaultBatch,
-		QueueSize:   defaultQueueSize,
+		WorkerCount:             defaultWorkerCount,
+		Batch:                   defaultBatch,
+		QueueSize:               defaultQueueSize,
+		CheckpointFlushInterval: defaultCheckpointFlushInterval,
 	}
 }
 
