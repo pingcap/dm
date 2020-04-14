@@ -728,7 +728,7 @@ func (s *Syncer) addJob(job *job) error {
 	defer func() {
 		if job.tp == insert || job.tp == update || job.tp == del {
 			pos := job.location.Clone()
-			if s.cfg.IsSharding {
+			if s.cfg.ShardMode == config.ShardPessimistic {
 				pos = s.sgk.AdjustGlobalLocation(pos)
 			}
 			s.lastAddedJobPos.save(pos, nil)
