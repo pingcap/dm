@@ -48,5 +48,3 @@ alter table t1 add column c3 int;
 insert into t2 (id, c2, c3) values (200009, '220009', 230009);
 insert into t1 (id, c2, c3) values (100009, '120009', 130009);
 
-/* test drop database ddl in optimistic mode */
-drop database `sharding_seq_tmp`;

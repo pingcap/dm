@@ -53,11 +53,6 @@ run() {
 
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-
-     # check database `sharding_seq_tmp` not exists
-    run_sql "show tables in sharding_seq_tmp;" $TIDB_PORT $TIDB_PASSWORD || true
-    sleep 1
-    check_count 'Unknown database' 1
 }
 
 cleanup_data sharding_target_opt

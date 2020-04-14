@@ -57,10 +57,10 @@ func (s *Syncer) handleQueryEventOptimistic(
 		downSchema string
 		downTable  string
 
-		isDBDDL    bool
+		isDBDDL  bool
 		tiBefore *model.TableInfo
-		tiAfter *model.TableInfo
-		err error
+		tiAfter  *model.TableInfo
+		err      error
 	)
 
 	switch needTrackDDLs[0].stmt.(type) {
@@ -96,7 +96,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	}
 
 	if !isDBDDL {
-	// TODO(csuzhangxc): rollback schema in the tracker if failed.
+		// TODO(csuzhangxc): rollback schema in the tracker if failed.
 		tiAfter, err = s.getTable(upSchema, upTable, downSchema, downTable, ec.parser2)
 		if err != nil {
 			return err
@@ -113,10 +113,15 @@ func (s *Syncer) handleQueryEventOptimistic(
 	var (
 		rev    int64
 		skipOp bool
+		op     optimism.Operation
 	)
 	switch needTrackDDLs[0].stmt.(type) {
-	case *ast.CreateDatabaseStmt, *ast.DropDatabaseStmt:
-	// for CREATE/DROP DATABASE, we do nothing now.
+	case *ast.CreateDatabaseStmt:
+		op.DDLs = needHandleDDLs
+		skipOp = true
+	case *ast.DropDatabaseStmt:
+		skipOp = true
+		needHandleDDLs = []string{} // no DDL needs to be handled for `DROP DATABASE` now.
 	case *ast.CreateTableStmt:
 		info.TableInfoBefore = tiAfter // for `CREATE TABLE`, we use tiAfter as tiBefore.
 		rev, err = s.optimist.PutInfoAddTable(info)
@@ -139,15 +144,13 @@ func (s *Syncer) handleQueryEventOptimistic(
 	}
 	s.tctx.L().Info("putted a shard DDL info into etcd", zap.Stringer("info", info))
 
-	var op optimism.Operation
-	if !skipOp && !isDBDDL {
+	if !skipOp {
 		op, err = s.optimist.GetOperation(ec.tctx.Ctx, info, rev+1)
 		if err != nil {
 			return err
 		}
-	} else {
-		op.DDLs = needHandleDDLs
 	}
+
 	s.tctx.L().Info("got a shard DDL lock operation", zap.Stringer("operation", op))
 
 	if op.ConflictStage == optimism.ConflictDetected {
