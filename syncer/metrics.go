@@ -84,12 +84,13 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"type", "task"})
 
-	binlogSkippedEventsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	skipBinlogDurationHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
-			Name:      "binlog_skipped_events_total",
-			Help:      "total number of skipped binlog events",
+			Name:      "skip_binlog_duration",
+			Help:      "bucketed histogram of skip a binlog event time (s)",
+			Buckets:   prometheus.ExponentialBuckets(0.0000005, 2, 25), // this should be very fast.
 		}, []string{"type", "task"})
 
 	addedJobsTotal = prometheus.NewCounterVec(
@@ -227,7 +228,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(conflictDetectDurationHistogram)
 	registry.MustRegister(addJobDurationHistogram)
 	registry.MustRegister(dispatchBinlogDurationHistogram)
-	registry.MustRegister(binlogSkippedEventsTotal)
+	registry.MustRegister(skipBinlogDurationHistogram)
 	registry.MustRegister(addedJobsTotal)
 	registry.MustRegister(finishedJobsTotal)
 	registry.MustRegister(queueSizeGauge)
