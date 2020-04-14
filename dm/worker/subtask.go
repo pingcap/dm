@@ -512,7 +512,7 @@ func (st *SubTask) ShardDDLInfo() *pessimism.Info {
 	st.RLock()
 	defer st.RUnlock()
 
-	cu := st.CurrUnit()
+	cu := st.currUnit
 	syncer2, ok := cu.(*syncer.Syncer)
 	if !ok {
 		return nil
@@ -526,7 +526,7 @@ func (st *SubTask) ShardDDLOperation() *pessimism.Operation {
 	st.RLock()
 	defer st.RUnlock()
 
-	cu := st.CurrUnit()
+	cu := st.currUnit
 	syncer2, ok := cu.(*syncer.Syncer)
 	if !ok {
 		return nil
