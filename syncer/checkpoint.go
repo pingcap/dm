@@ -405,8 +405,8 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(location binlog.Location) {
 
 // FlushPointsExcept implements CheckPoint.FlushPointsExcept
 func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error {
-	cp.RLock()
-	defer cp.RUnlock()
+	cp.Lock()
+	defer cp.Unlock()
 
 	// convert slice to map
 	excepts := make(map[string]map[string]struct{})

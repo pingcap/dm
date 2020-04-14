@@ -88,6 +88,26 @@ const (
 	LocalBinlog
 )
 
+// FlushType represents flush checkpoint type
+type FlushType uint8
+
+// flush checkpoint type
+const (
+	// For ddl job the global checkpoint will be updated in addJobFunc, so we needn't update and flush directly
+	NoNeedUpdate FlushType = iota + 1
+	// If global checkpoint hasn't been updated for more than 30s, or receive a flush job,
+	// we send a NeedUpdate request to async flush checkpoint go routine.
+	// It will update global checkpoint to minPos of workers and then flush checkpoint
+	NeedUpdate
+)
+
+const (
+	// GetMinPos gets min pos from checkpoints
+	GetMinPos int = iota + 1
+	// GetMaxPos gets max pos from checkpoints
+	GetMaxPos
+)
+
 // Syncer can sync your MySQL data to another MySQL database.
 type Syncer struct {
 	sync.RWMutex
@@ -122,6 +142,10 @@ type Syncer struct {
 	jobsClosed         sync2.AtomicBool
 	jobsChanLock       sync.Mutex
 	queueBucketMapping []string
+
+	workerCheckpoints   []*binlogPoint
+	flushCheckpointChan chan FlushType
+	lastAddedJobPos     *binlogPoint
 
 	c *causality
 
@@ -442,6 +466,9 @@ func (s *Syncer) reset() {
 	}
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
+	s.lastAddedJobPos = newBinlogPoint(binlog.NewLocation(s.cfg.Flavor), binlog.NewLocation(s.cfg.Flavor), nil, nil)
+	s.workerCheckpoints = makeWorkerCheckpointArray(s.cfg.WorkerCount, s.cfg.Flavor)
+	s.flushCheckpointChan = make(chan FlushType, 16)
 
 	s.execErrorDetected.Set(false)
 	s.resetExecErrors()
@@ -682,10 +709,6 @@ func (s *Syncer) checkWait(job *job) bool {
 		return true
 	}
 
-	if s.checkpoint.CheckGlobalPoint() {
-		return true
-	}
-
 	return false
 }
 
@@ -702,12 +725,20 @@ func (s *Syncer) saveTablePoint(db, table string, location binlog.Location) {
 }
 
 func (s *Syncer) addJob(job *job) error {
+	defer func() {
+		if job.tp == insert || job.tp == update || job.tp == del {
+			pos := job.location.Clone()
+			if s.cfg.IsSharding {
+				pos = s.sgk.AdjustGlobalLocation(pos)
+			}
+			s.lastAddedJobPos.save(pos, nil)
+		}
+	}()
 	var (
 		queueBucket int
 	)
 	switch job.tp {
 	case xid:
-		s.saveGlobalPoint(job.location)
 		return nil
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
@@ -718,7 +749,11 @@ func (s *Syncer) addJob(job *job) error {
 		}
 		s.jobWg.Wait()
 		finishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
-		return s.flushCheckPoints()
+		select {
+		case <-s.done:
+		case s.flushCheckpointChan <- NeedUpdate:
+		}
+		return nil
 	case ddl:
 		s.jobWg.Wait()
 		addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName).Inc()
@@ -754,8 +789,16 @@ func (s *Syncer) addJob(job *job) error {
 		}
 	}
 
-	if wait {
-		return s.flushCheckPoints()
+	if s.checkpoint.CheckGlobalPoint() {
+		select {
+		case <-s.done:
+		case s.flushCheckpointChan <- NeedUpdate:
+		}
+	} else if wait {
+		select {
+		case <-s.done:
+		case s.flushCheckpointChan <- NoNeedUpdate:
+		}
 	}
 
 	return nil
@@ -911,13 +954,15 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	}
 }
 
-func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
+func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
+	jobChan chan *job, workerCheckpoint *binlogPoint) {
 	defer s.wg.Done()
 
 	idx := 0
 	count := s.cfg.Batch
 	jobs := make([]*job, 0, count)
 	tpCnt := make(map[opType]int64)
+	lastUpdateCheckpointTime := time.Now()
 
 	clearF := func() {
 		for i := 0; i < idx; i++ {
@@ -954,6 +999,9 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		if err != nil {
 			errCtx := &ExecErrorContext{err, jobs[affected].currentLocation.Clone(), fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
+		} else {
+			workerCheckpoint.save(jobs[len(jobs)-1].location.Clone(), nil)
+			lastUpdateCheckpointTime = time.Now()
 		}
 		return err
 	}
@@ -965,6 +1013,15 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			if !ok {
 				return
 			}
+			if sqlJob.tp == fake {
+				// update pos only if no jobs are waiting to be executed
+				if len(jobs) == 0 {
+					workerCheckpoint.save(sqlJob.location.Clone(), nil)
+					lastUpdateCheckpointTime = time.Now()
+				}
+				continue
+			}
+
 			idx++
 
 			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
@@ -990,8 +1047,51 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 				}
 				clearF()
 			} else {
+				if time.Now().Sub(lastUpdateCheckpointTime) > 3*time.Second {
+					jobChan <- newFakeJob(s.lastAddedJobPos.MySQLLocation())
+				}
 				time.Sleep(waitTime)
 			}
+		}
+	}
+}
+
+func (s *Syncer) updateGlobalCheckpointFromWorkers(typ int) {
+	minPos := binlog.NewLocation(s.cfg.Flavor)
+	updatePos := minPos.Clone()
+	for _, workerCheckpoint := range s.workerCheckpoints {
+		pos := workerCheckpoint.MySQLLocation()
+		if binlog.CompareLocation(pos, minPos) > 0 {
+			shouldUpdate := binlog.CompareLocation(updatePos, minPos) == 0 ||
+				(typ == GetMinPos && binlog.CompareLocation(pos, updatePos) < 0) ||
+				(typ == GetMaxPos && binlog.CompareLocation(pos, updatePos) > 0)
+			if shouldUpdate {
+				updatePos = pos
+			}
+		}
+	}
+	if binlog.CompareLocation(updatePos, minPos) > 0 {
+		s.saveGlobalPoint(updatePos)
+	}
+}
+
+func (s *Syncer) asyncFlushCheckpoint(ctx context.Context, flushChan chan FlushType) {
+	for {
+		select {
+		case flushType := <-flushChan:
+			if flushType == NeedUpdate {
+				s.updateGlobalCheckpointFromWorkers(GetMinPos)
+			}
+			err := s.flushCheckPoints()
+			if err != nil {
+				if !utils.IsContextCanceledError(err) {
+					s.runFatalChan <- unit.NewProcessError(err)
+					return
+				}
+			}
+		case <-ctx.Done():
+			s.tctx.L().Info("async flush checkpoint routine exits", log.ShortError(ctx.Err()))
+			return
 		}
 	}
 }
@@ -1047,10 +1147,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		go func(i int, n string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
-			s.sync(ctctx, n, s.toDBConns[i], s.jobs[i])
+			s.sync(ctctx, n, s.toDBConns[i], s.jobs[i], s.workerCheckpoints[i])
 			cancel()
 		}(i, name)
 	}
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.asyncFlushCheckpoint(ctx, s.flushCheckpointChan)
+	}()
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
@@ -1075,6 +1181,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		s.jobWg.Wait()
+		s.updateGlobalCheckpointFromWorkers(GetMaxPos)
 		if err2 := s.flushCheckPoints(); err2 != nil {
 			s.tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
 		}
@@ -1862,6 +1969,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		if shardOp.Exec {
 			failpoint.Inject("ShardSyncedExecutionExit", func() {
 				s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ShardSyncedExecutionExit"))
+				s.jobWg.Wait()
+				s.updateGlobalCheckpointFromWorkers(GetMaxPos)
 				s.flushCheckPoints()
 				utils.OsExit(1)
 			})
@@ -1871,6 +1980,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 					// exit in the first round sequence sharding DDL only
 					if group.meta.ActiveIdx() == 1 {
 						s.tctx.L().Warn("exit triggered", zap.String("failpoint", "SequenceShardSyncedExecutionExit"))
+						s.jobWg.Wait()
+						s.updateGlobalCheckpointFromWorkers(GetMaxPos)
 						s.flushCheckPoints()
 						utils.OsExit(1)
 					}
@@ -2269,8 +2380,9 @@ func (s *Syncer) Pause() {
 		s.tctx.L().Warn("try to pause, but already closed")
 		return
 	}
-
+	s.Lock()
 	s.stopSync()
+	s.Unlock()
 }
 
 // Resume resumes the paused process
@@ -2503,4 +2615,12 @@ func (s *Syncer) ShardDDLInfo() *pessimism.Info {
 // ShardDDLOperation returns the current pending to handle shard DDL lock operation.
 func (s *Syncer) ShardDDLOperation() *pessimism.Operation {
 	return s.pessimist.PendingOperation()
+}
+
+func makeWorkerCheckpointArray(workerCount int, flavor string) []*binlogPoint {
+	workerCheckpoints := make([]*binlogPoint, 0, workerCount)
+	for i := 0; i < workerCount; i++ {
+		workerCheckpoints = append(workerCheckpoints, newBinlogPoint(binlog.NewLocation(flavor), binlog.NewLocation(flavor), nil, nil))
+	}
+	return workerCheckpoints
 }
