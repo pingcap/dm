@@ -767,7 +767,11 @@ func (s *Syncer) checkWait(job *job) bool {
 }
 
 func (s *Syncer) addJob(job *job) error {
-	defer s.lastAddedJobPos.save(job.pos)
+	defer func() {
+		if job.tp == insert || job.tp == update || job.tp == del {
+			s.lastAddedJobPos.save(job.pos)
+		}
+	}()
 	var (
 		queueBucket int
 		execDDLReq  *pb.ExecDDLRequest
@@ -1026,7 +1030,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
 		} else {
-			err = workerCheckpoint.save(jobs[len(jobs)-1].pos)
+			workerCheckpoint.save(jobs[len(jobs)-1].pos)
 			lastUpdateCheckpointTime = time.Now()
 		}
 		if s.tracer.Enable() {
@@ -1049,19 +1053,16 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			if !ok {
 				return
 			}
-			idx++
-
 			if sqlJob.tp == fake {
 				// update pos only if no jobs are waiting to be executed
 				if len(jobs) == 0 {
-					err = workerCheckpoint.save(sqlJob.pos)
-					if err != nil {
-						fatalF(err, pb.ErrorType_UnknownError)
-					}
+					workerCheckpoint.save(sqlJob.pos)
 					lastUpdateCheckpointTime = time.Now()
 				}
 				continue
 			}
+
+			idx++
 			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
 				jobs = append(jobs, sqlJob)
 				tpCnt[sqlJob.tp]++
