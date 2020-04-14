@@ -42,6 +42,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
@@ -61,8 +62,6 @@ import (
 
 var (
 	maxRetryCount = 100
-
-	maxEventTimeout = 1 * time.Hour
 
 	retryTimeout = 3 * time.Second
 	waitTime     = 10 * time.Millisecond
@@ -1113,7 +1112,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		shardingReSync          *ShardingReSync
 		savedGlobalLastLocation binlog.Location
 		latestOp                opType // latest job operation tp
-		eventTimeoutCounter     time.Duration
 		traceSource             = fmt.Sprintf("%s.syncer.%s", s.cfg.SourceID, s.cfg.Name)
 		traceID                 string
 	)
@@ -1188,16 +1186,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return nil
 		} else if err == context.DeadlineExceeded {
 			s.tctx.L().Info("deadline exceeded when fetching binlog event")
-			eventTimeoutCounter += eventTimeout
-			if eventTimeoutCounter < maxEventTimeout {
-				err = s.flushJobs()
-				if err != nil {
-					return err
-				}
-				continue
-			}
-
-			eventTimeoutCounter = 0
 			if s.needResync() {
 				s.tctx.L().Info("timeout when fetching binlog event, there must be some problems with replica connection, try to re-connect")
 				err = s.streamerController.ReopenWithRetry(tctx, lastLocation.Clone())
@@ -1218,6 +1206,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		if err != nil {
 			s.tctx.L().Error("fail to fetch binlog", log.ShortError(err))
+
+			if isConnectionRefusedError(err) {
+				return err
+			}
 
 			if s.streamerController.CanRetry() {
 				err = s.streamerController.ResetReplicationSyncer(s.tctx, lastLocation.Clone())
@@ -1316,6 +1308,18 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			err = s.addJobFunc(job)
 			if err != nil {
 				return terror.Annotatef(err, "current location %s", currentLocation)
+			}
+		case *replication.GenericEvent:
+			switch e.Header.EventType {
+			case replication.HEARTBEAT_EVENT:
+				// flush checkpoint even if there are no real binlog events
+				if s.checkpoint.CheckGlobalPoint() {
+					s.tctx.L().Info("meet heartbeat event and then flush jobs")
+					err = s.flushJobs()
+					if err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
@@ -2478,17 +2482,17 @@ func (s *Syncer) setTimezone() {
 }
 
 func (s *Syncer) setSyncCfg() {
-	s.syncCfg = replication.BinlogSyncerConfig{
+	syncCfg := replication.BinlogSyncerConfig{
 		ServerID:                uint32(s.cfg.ServerID),
 		Flavor:                  s.cfg.Flavor,
 		Host:                    s.cfg.From.Host,
 		Port:                    uint16(s.cfg.From.Port),
 		User:                    s.cfg.From.User,
 		Password:                s.cfg.From.Password,
-		UseDecimal:              true,
-		VerifyChecksum:          true,
 		TimestampStringLocation: s.timezone,
 	}
+	common.SetDefaultReplicationCfg(&syncCfg)
+	s.syncCfg = syncCfg
 }
 
 // ShardDDLInfo returns the current pending to handle shard DDL info.

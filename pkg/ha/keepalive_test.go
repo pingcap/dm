@@ -127,7 +127,7 @@ func (t *testForEtcd) TestKeepAliveRevokeLease(c *C) {
 		}(ctx1, cancel1)
 	}
 
-	ctx1, cancel1 := context.WithTimeout(ctx, 4*time.Second)
+	ctx1, cancel1 := context.WithTimeout(ctx, 6*time.Second)
 	WatchWorkerEvent(ctx1, etcdTestCli, rev, evCh, errCh)
 	cancel1()
 	c.Assert(evCh, HasLen, 100)

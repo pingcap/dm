@@ -14,11 +14,15 @@
 package metricsproxy
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 // HistogramVecProxy to proxy prometheus.HistogramVec
 type HistogramVecProxy struct {
+	mu sync.Mutex
+
 	LabelNames []string
 	Labels     map[string]map[string]string
 	*prometheus.HistogramVec
@@ -44,7 +48,9 @@ func (c *HistogramVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 		for index, label := range lvs {
 			labels[c.LabelNames[index]] = label
 		}
+		c.mu.Lock()
 		noteLabelsInMetricsProxy(c, labels)
+		c.mu.Unlock()
 	}
 	return c.HistogramVec.WithLabelValues(lvs...)
 }
@@ -54,7 +60,9 @@ func (c *HistogramVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 //     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Observe(42.21)
 func (c *HistogramVecProxy) With(labels prometheus.Labels) prometheus.Observer {
 	if len(labels) > 0 {
+		c.mu.Lock()
 		noteLabelsInMetricsProxy(c, labels)
+		c.mu.Unlock()
 	}
 
 	return c.HistogramVec.With(labels)
@@ -65,7 +73,8 @@ func (c *HistogramVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool 
 	if len(labels) == 0 {
 		return false
 	}
-
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return findAndDeleteLabelsInMetricsProxy(c, labels)
 }
 

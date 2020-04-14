@@ -189,7 +189,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName1, keepAliveTTL), IsNil)
 	}()
 	// wait for source1 bound to worker1.
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		bounds := s.BoundSources()
 		return len(bounds) == 1 && bounds[0] == sourceID1
 	}), IsTrue)
@@ -304,7 +304,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName1, keepAliveTTL), IsNil)
 	}()
 	// wait for source1 bound to worker1.
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		bounds := s.BoundSources()
 		return len(bounds) == 1 && bounds[0] == sourceID1
 	}), IsTrue)
@@ -349,7 +349,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 		c.Assert(ha.KeepAlive(ctx2, etcdTestCli, workerName2, keepAliveTTL), IsNil)
 	}()
 	// wait for worker2 become Free.
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		w := s.GetWorkerByName(workerName2)
 		return w.Stage() == WorkerFree
 	}), IsTrue)
@@ -710,7 +710,7 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 	}()
 	// step 2.3: scheduler should bound source to worker
 	// wait for source1 bound to worker1.
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		bounds := s.BoundSources()
 		return len(bounds) == 1 && bounds[0] == sourceID1
 	}), IsTrue)
@@ -756,7 +756,7 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 	wg.Wait()
 	// check whether keepalive lease is out of date
 	time.Sleep(time.Duration(keepAliveTTL) * time.Second)
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
 		return err == nil && len(kam) == 0
 	}), IsTrue)

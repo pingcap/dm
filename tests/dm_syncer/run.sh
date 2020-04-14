@@ -67,11 +67,12 @@ function run() {
     sed -i "s/binlog-pos-placeholder-1/$pos1/g" $WORK_DIR/dm-syncer-1.toml
     sed -i "s/binlog-name-placeholder-2/\"$name2\"/g" $WORK_DIR/old_meta_file
     sed -i "s/binlog-pos-placeholder-2/$pos2/g" $WORK_DIR/old_meta_file
-    sleep 2
     run_dm_syncer $WORK_DIR/syncer1 $WORK_DIR/dm-syncer-1.toml
     meta_file=$WORK_DIR/old_meta_file
     run_dm_syncer $WORK_DIR/syncer2 $WORK_DIR/dm-syncer-2.toml $meta_file --syncer-config-format syncer2
 
+    # wait for dm_syncer to init and start
+    sleep 5
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
