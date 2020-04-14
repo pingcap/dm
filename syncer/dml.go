@@ -22,6 +22,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
@@ -443,11 +444,20 @@ func findColumns(columns []*column, indexColumns map[string][]string) map[string
 
 func genKeyList(table string, columns []*column, dataSeq []interface{}) string {
 	var buf strings.Builder
-	buf.WriteString(table)
 	for i, data := range dataSeq {
+		if data == nil {
+			log.L().Debug("ignore null value", zap.String("column", columns[i].name), zap.String("table", table))
+			continue // ignore `null` value.
+		}
 		// for key, I think no need to add the `,` separator.
 		buf.WriteString(columnValue(data, columns[i].unsigned, columns[i].tp))
 	}
+	if buf.Len() == 0 {
+		log.L().Debug("all value are nil, no key generated", zap.String("table", table))
+		return "" // all values are `null`.
+	}
+
+	buf.WriteString(table)
 	return buf.String()
 }
 
@@ -455,8 +465,21 @@ func genMultipleKeys(value []interface{}, indexColumns map[string][]*column, tab
 	multipleKeys := make([]string, 0, len(indexColumns))
 	for _, indexCols := range indexColumns {
 		vals := getColumnData(indexCols, value)
-		multipleKeys = append(multipleKeys, genKeyList(table, indexCols, vals))
+		key := genKeyList(table, indexCols, vals)
+		if len(key) > 0 { // ignore `null` value.
+			multipleKeys = append(multipleKeys, key)
+		} else {
+			log.L().Debug("ignore empty key", zap.String("table", table))
+		}
 	}
+
+	if len(multipleKeys) == 0 {
+		// use table name as key if no key generated (no PK/UK),
+		// no concurrence for rows in the same table.
+		log.L().Debug("use table name as the key", zap.String("table", table))
+		multipleKeys = append(multipleKeys, table)
+	}
+
 	return multipleKeys
 }
 

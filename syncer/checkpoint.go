@@ -46,8 +46,6 @@ var (
 	globalCpTable        = "" // global checkpoint's cp_table
 	maxCheckPointTimeout = "1m"
 	minCheckpoint        = mysql.Position{Pos: 4}
-
-	maxCheckPointSaveTime = 30 * time.Second
 )
 
 // NOTE: now we sync from relay log, so not add GTID support yet
@@ -453,7 +451,7 @@ func (cp *RemoteCheckPoint) String() string {
 func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 	cp.RLock()
 	defer cp.RUnlock()
-	return time.Since(cp.globalPointSaveTime) >= maxCheckPointSaveTime
+	return time.Since(cp.globalPointSaveTime) >= time.Duration(cp.cfg.CheckpointFlushInterval)*time.Second
 }
 
 // Rollback implements CheckPoint.Rollback

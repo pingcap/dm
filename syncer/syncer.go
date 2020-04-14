@@ -781,6 +781,7 @@ func (s *Syncer) addJob(job *job) error {
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
 		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
 		startTime := time.Now()
+		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
 		addJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket]).Observe(time.Since(startTime).Seconds())
 	}
@@ -1454,7 +1455,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return err
 	}
 	if ignore {
-		binlogSkippedEventsTotal.WithLabelValues("rows", s.cfg.Name).Inc()
+		skipBinlogDurationHistogram.WithLabelValues("rows", s.cfg.Name).Observe(time.Since(ec.startTime).Seconds())
 		// for RowsEvent, we should record lastPos rather than currentPos
 		return s.recordSkipSQLsPos(*ec.lastPos, nil)
 	}
@@ -1585,7 +1586,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	if parseResult.ignore {
-		binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
+		skipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name).Observe(time.Since(ec.startTime).Seconds())
 		s.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema))
 		*ec.lastPos = *ec.currentPos // before record skip pos, update lastPos
 		return s.recordSkipSQLsPos(*ec.lastPos, nil)
@@ -1660,7 +1661,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			return handleErr
 		}
 		if len(sqlDDL) == 0 {
-			binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
+			skipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name).Observe(time.Since(ec.startTime).Seconds())
 			s.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema))
 			continue
 		}
@@ -1957,6 +1958,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	if err != nil {
 		return terror.ErrSyncerUnitResolveCasualityFail.Generate(err)
 	}
+	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 	conflictDetectDurationHistogram.WithLabelValues(s.cfg.Name).Observe(time.Since(startTime).Seconds())
 
 	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, cmdPos, gs, traceID)
