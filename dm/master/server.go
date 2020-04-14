@@ -601,6 +601,45 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 	return resp, nil
 }
 
+// QueryRelay implements MasterServer.QueryStatus
+func (s *Server) QueryRelay(ctx context.Context, req *pb.QueryStatusListRequest) (*pb.QueryStatusListResponse, error) {
+	// TODO
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryRelay"))
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.QueryStatus(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	sources, err := extractSources(s, req)
+	if err != nil {
+		return &pb.QueryStatusListResponse{
+			Result: false,
+			Msg:    err.Error(),
+		}, nil
+	}
+	workerRespCh := s.getStatusFromWorkers(ctx, sources, req.Name)
+
+	workerRespMap := make(map[string]*pb.QueryStatusResponse, len(sources))
+	for len(workerRespCh) > 0 {
+		workerResp := <-workerRespCh
+		workerRespMap[workerResp.SourceStatus.Source] = workerResp
+	}
+
+	sort.Strings(sources)
+	workerResps := make([]*pb.QueryStatusResponse, 0, len(sources))
+	for _, worker := range sources {
+		workerResps = append(workerResps, workerRespMap[worker])
+	}
+	resp := &pb.QueryStatusListResponse{
+		Result:  true,
+		Sources: workerResps,
+	}
+	return resp, nil
+}
+
 // QueryError implements MasterServer.QueryError
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) (*pb.QueryErrorListResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryError"))

@@ -58,7 +58,6 @@ func queryRelayFunc(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
 	resp, err := cli.QueryStatus(ctx, &pb.QueryStatusListRequest{
-		Name:    "",
 		Sources: sources,
 	})
 	if err != nil {
