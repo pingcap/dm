@@ -715,7 +715,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 16
+            "y": 2
           },
           "id": 40,
           "interval": null,
@@ -1932,7 +1932,7 @@
             "h": 7,
             "w": 6,
             "x": 0,
-            "y": 32
+            "y": 4
           },
           "id": 15,
           "interval": null,
@@ -2013,7 +2013,7 @@
             "h": 7,
             "w": 6,
             "x": 6,
-            "y": 32
+            "y": 4
           },
           "id": 16,
           "interval": null,
@@ -2094,7 +2094,7 @@
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 32
+            "y": 4
           },
           "id": 32,
           "interval": null,
@@ -2175,7 +2175,7 @@
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 32
+            "y": 4
           },
           "id": 33,
           "interval": null,
@@ -2256,7 +2256,7 @@
             "h": 7,
             "w": 6,
             "x": 0,
-            "y": 39
+            "y": 11
           },
           "id": 23,
           "interval": null,
@@ -2337,7 +2337,7 @@
             "h": 7,
             "w": 6,
             "x": 6,
-            "y": 39
+            "y": 11
           },
           "id": 17,
           "interval": null,
@@ -2407,7 +2407,7 @@
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 39
+            "y": 11
           },
           "id": 18,
           "legend": {
@@ -2458,6 +2458,7 @@
           ],
           "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "transaction execution latency",
           "tooltip": {
@@ -2491,7 +2492,11 @@
               "min": null,
               "show": false
             }
-          ]
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
           "aliasColors": {},
@@ -2505,7 +2510,7 @@
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 39
+            "y": 11
           },
           "id": 34,
           "legend": {
@@ -2563,6 +2568,7 @@
           ],
           "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
           "title": "statement execution latency - 90",
           "tooltip": {
@@ -2596,7 +2602,11 @@
               "min": null,
               "show": false
             }
-          ]
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         }
       ],
       "repeat": null,
@@ -2636,7 +2646,7 @@
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 26
+            "y": 5
           },
           "id": 37,
           "interval": null,
@@ -2717,7 +2727,7 @@
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 26
+            "y": 5
           },
           "id": 38,
           "interval": null,
@@ -2798,7 +2808,7 @@
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 26
+            "y": 5
           },
           "id": 39,
           "interval": null,
@@ -2868,7 +2878,7 @@
             "h": 7,
             "w": 6,
             "x": 0,
-            "y": 33
+            "y": 12
           },
           "id": 43,
           "legend": {
@@ -2956,7 +2966,7 @@
             "h": 7,
             "w": 6,
             "x": 6,
-            "y": 33
+            "y": 12
           },
           "id": 44,
           "legend": {
@@ -3044,7 +3054,7 @@
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 33
+            "y": 12
           },
           "id": 4,
           "legend": {
@@ -3154,7 +3164,7 @@
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 33
+            "y": 12
           },
           "id": 35,
           "legend": {
@@ -3250,7 +3260,7 @@
             "h": 7,
             "w": 6,
             "x": 0,
-            "y": 40
+            "y": 19
           },
           "id": 36,
           "legend": {
@@ -3354,7 +3364,7 @@
             "h": 7,
             "w": 6,
             "x": 6,
-            "y": 40
+            "y": 19
           },
           "id": 58,
           "legend": {
@@ -3458,7 +3468,7 @@
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 40
+            "y": 19
           },
           "id": 59,
           "legend": {
@@ -3562,7 +3572,7 @@
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 40
+            "y": 19
           },
           "id": 60,
           "legend": {
@@ -3666,7 +3676,7 @@
             "h": 7,
             "w": 6,
             "x": 0,
-            "y": 47
+            "y": 26
           },
           "id": 61,
           "legend": {
@@ -3694,21 +3704,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_event_size_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_binlog_event_size_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_binlog_event_size_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -3770,7 +3780,7 @@
             "h": 7,
             "w": 6,
             "x": 6,
-            "y": 47
+            "y": 26
           },
           "id": 62,
           "legend": {
@@ -3859,7 +3869,7 @@
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 47
+            "y": 26
           },
           "id": 3,
           "legend": {
@@ -3948,7 +3958,7 @@
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 47
+            "y": 26
           },
           "id": 2,
           "legend": {
@@ -4037,7 +4047,7 @@
             "h": 7,
             "w": 6,
             "x": 0,
-            "y": 54
+            "y": 33
           },
           "id": 1,
           "legend": {
@@ -4148,7 +4158,7 @@
             "h": 7,
             "w": 6,
             "x": 6,
-            "y": 54
+            "y": 33
           },
           "id": 63,
           "legend": {
@@ -4183,7 +4193,7 @@
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
@@ -4252,7 +4262,7 @@
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 54
+            "y": 33
           },
           "id": 64,
           "legend": {
@@ -4287,7 +4297,7 @@
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
@@ -4356,7 +4366,7 @@
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 54
+            "y": 33
           },
           "id": 65,
           "legend": {
@@ -4391,7 +4401,7 @@
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
@@ -4460,7 +4470,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 61
+            "y": 40
           },
           "id": 45,
           "legend": {
@@ -4548,7 +4558,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 61
+            "y": 40
           },
           "id": 46,
           "legend": {
