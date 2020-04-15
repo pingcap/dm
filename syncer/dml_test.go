@@ -197,6 +197,18 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 			values: []interface{}{27, 37, 47},
 			keys:   []string{"2737table", "3747table", "273747table", "4727table"},
 		},
+		{
+			// `null` for unique key
+			schema: `
+				create table t8(
+					a int, b int default null,
+					primary key(a),
+					unique key(b)
+				)
+			`,
+			values: []interface{}{17, nil},
+			keys:   []string{"17table"},
+		},
 	}
 
 	for i, tc := range testCases {
