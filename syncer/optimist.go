@@ -78,6 +78,10 @@ func (s *Syncer) handleQueryEventOptimistic(
 		}
 	}
 
+	if err := s.flushCheckPoints(); err != nil {
+		return err
+	}
+
 	for _, td := range needTrackDDLs {
 		if err := s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
 			return err

@@ -753,10 +753,15 @@ func (s *Syncer) addJob(job *job) error {
 		// save job's current pos for DML events
 		for i := range job.sourceSchemas {
 			if len(job.sourceSchemas[i]) > 0 {
-				s.saveTablePoint(job.sourceSchemas[i], job.sourceTables[i], job.location)
+				s.saveTablePoint(job.sourceSchemas[i], job.sourceTables[i], job.currentLocation)
 			}
 		}
 	}
+
+	failpoint.Inject("FlushCheckpointExit", func() {
+		s.tctx.L().Warn("exit triggered", zap.String("failpoint", "FlushCheckpointExit"))
+		utils.OsExit(1)
+	})
 
 	if wait {
 		return s.flushCheckPoints()
@@ -1706,6 +1711,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			needHandleDDLs = appliedSQLs // maybe nil
 		}
 
+		if err := s.flushCheckPoints(); err != nil {
+			return err
+		}
+
 		// run trackDDL before add ddl job to make sure checkpoint can be flushed
 		for _, td := range needTrackDDLs {
 			if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
@@ -1789,6 +1798,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	s.tctx.L().Info(annotate, zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Bool("in-sharding", needShardingHandle), zap.Stringer("start location", startLocation), zap.Bool("is-synced", synced), zap.Int("unsynced", remain))
+
+	if err := s.flushCheckPoints(); err != nil {
+		return err
+	}
 
 	for _, td := range needTrackDDLs {
 		if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
