@@ -64,7 +64,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	)
 
 	switch needTrackDDLs[0].stmt.(type) {
-	case *ast.CreateDatabaseStmt, *ast.DropDatabaseStmt:
+	case *ast.CreateDatabaseStmt, *ast.DropDatabaseStmt, *ast.AlterDatabaseStmt:
 		isDBDDL = true
 	}
 
@@ -116,7 +116,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 		op     optimism.Operation
 	)
 	switch needTrackDDLs[0].stmt.(type) {
-	case *ast.CreateDatabaseStmt:
+	case *ast.CreateDatabaseStmt, *ast.AlterDatabaseStmt:
 		op.DDLs = needHandleDDLs
 		skipOp = true
 	case *ast.DropDatabaseStmt:
