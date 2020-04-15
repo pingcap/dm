@@ -144,6 +144,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(relayLogWriteErrorCounter)
 	registry.MustRegister(binlogReadErrorCounter)
 	registry.MustRegister(binlogReadDurationHistogram)
+	registry.MustRegister(binlogTransformDurationHistogram)
 	registry.MustRegister(relayExitWithErrorCounter)
 }
 
