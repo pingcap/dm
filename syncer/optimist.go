@@ -49,7 +49,9 @@ func (s *Syncer) handleQueryEventOptimistic(
 	needHandleDDLs []string, needTrackDDLs []trackedDDL,
 	onlineDDLTableNames map[string]*filter.Table) error {
 	// wait previous DMLs to be replicated
-	s.jobWg.Wait()
+	if err := s.flushJobs(); err != nil {
+		return err
+	}
 
 	var (
 		upSchema   string
@@ -76,10 +78,6 @@ func (s *Syncer) handleQueryEventOptimistic(
 		if err != nil {
 			return err
 		}
-	}
-
-	if err := s.flushCheckPoints(); err != nil {
-		return err
 	}
 
 	for _, td := range needTrackDDLs {

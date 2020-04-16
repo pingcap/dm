@@ -52,7 +52,10 @@ function run() {
     echo "kill dm-worker2"
     ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
 
-    export GO_FAILPOINTS='github.com/pingcap/dm/syncer/FlushCheckpointExit=return(true)'
+    check_port_offline $WORKER1_PORT 20
+    check_port_offline $WORKER2_PORT 20
+
+    export GO_FAILPOINTS='github.com/pingcap/dm/syncer/ExitAfterDDLBeforeFlush=return(true)'
 
     run_sql_file $cur/data/db1.increment3.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment3.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2

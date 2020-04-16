@@ -740,6 +740,10 @@ func (s *Syncer) addJob(job *job) error {
 
 	switch job.tp {
 	case ddl:
+		failpoint.Inject("ExitAfterDDLBeforeFlush", func() {
+			s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ExitAfterDDLBeforeFlush"))
+			utils.OsExit(1)
+		})
 		// only save checkpoint for DDL and XID (see above)
 		s.saveGlobalPoint(job.location)
 		for i := range job.sourceSchemas {
@@ -757,11 +761,6 @@ func (s *Syncer) addJob(job *job) error {
 			}
 		}
 	}
-
-	failpoint.Inject("FlushCheckpointExit", func() {
-		s.tctx.L().Warn("exit triggered", zap.String("failpoint", "FlushCheckpointExit"))
-		utils.OsExit(1)
-	})
 
 	if wait {
 		return s.flushCheckPoints()
@@ -1711,7 +1710,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			needHandleDDLs = appliedSQLs // maybe nil
 		}
 
-		if err := s.flushCheckPoints(); err != nil {
+		if err := s.flushJobs(); err != nil {
 			return err
 		}
 
@@ -1799,7 +1798,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	s.tctx.L().Info(annotate, zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Bool("in-sharding", needShardingHandle), zap.Stringer("start location", startLocation), zap.Bool("is-synced", synced), zap.Int("unsynced", remain))
 
-	if err := s.flushCheckPoints(); err != nil {
+	if err := s.flushJobs(); err != nil {
 		return err
 	}
 
