@@ -725,20 +725,19 @@ func (s *Syncer) saveTablePoint(db, table string, location binlog.Location) {
 }
 
 func (s *Syncer) addJob(job *job) error {
-	defer func() {
-		if job.tp == insert || job.tp == update || job.tp == del {
-			pos := job.location.Clone()
-			if s.cfg.ShardMode == config.ShardPessimistic {
-				pos = s.sgk.AdjustGlobalLocation(pos)
-			}
-			s.lastAddedJobPos.save(pos, nil)
-		}
-	}()
-	var (
-		queueBucket int
-	)
+	var queueBucket int
 	switch job.tp {
 	case xid:
+		s.jobWg.Add(s.cfg.WorkerCount)
+		for i := 0; i < s.cfg.WorkerCount; i++ {
+			s.jobs[i] <- job
+		}
+		// save max added xid pos as lastAddedJobPos for fake job
+		pos := job.location.Clone()
+		if s.cfg.ShardMode == config.ShardPessimistic {
+			pos = s.sgk.AdjustGlobalLocation(pos)
+		}
+		s.lastAddedJobPos.save(pos, nil)
 		return nil
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
@@ -963,6 +962,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	jobs := make([]*job, 0, count)
 	tpCnt := make(map[opType]int64)
 	lastUpdateCheckpointTime := time.Now()
+	lastAddedXidPos := newBinlogPoint(binlog.NewLocation(s.cfg.Flavor), binlog.NewLocation(s.cfg.Flavor), nil, nil)
 
 	clearF := func() {
 		for i := 0; i < idx; i++ {
@@ -1000,7 +1000,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			errCtx := &ExecErrorContext{err, jobs[affected].currentLocation.Clone(), fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
 		} else {
-			workerCheckpoint.save(jobs[len(jobs)-1].location.Clone(), nil)
+			workerCheckpoint.save(lastAddedXidPos.MySQLLocation(), nil)
 			lastUpdateCheckpointTime = time.Now()
 		}
 		return err
@@ -1021,9 +1021,12 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				}
 				continue
 			}
-
 			idx++
 
+			if sqlJob.tp == xid {
+				lastAddedXidPos.save(sqlJob.location.Clone(), nil)
+				continue
+			}
 			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
 				jobs = append(jobs, sqlJob)
 				tpCnt[sqlJob.tp]++
