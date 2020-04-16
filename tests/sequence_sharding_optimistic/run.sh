@@ -41,8 +41,8 @@ run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # check database `sharding_seq_tmp` exists
-    run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
-    check_count 'sharding_seq_tmp' 1
+    run_sql "select count(*) from sharding_seq_tmp.t1;" $TIDB_PORT $TIDB_PASSWORD
+    check_contains "count(*): 1"
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -52,6 +52,7 @@ run() {
 }
 
 cleanup_data sharding_target_opt
+cleanup_data sharding_seq_tmp
 # also cleanup dm processes in case of last run failed
 cleanup_process $*
 run $*

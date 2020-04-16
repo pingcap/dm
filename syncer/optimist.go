@@ -121,7 +121,6 @@ func (s *Syncer) handleQueryEventOptimistic(
 		skipOp = true
 	case *ast.DropDatabaseStmt:
 		skipOp = true
-		needHandleDDLs = []string{} // no DDL needs to be handled for `DROP DATABASE` now.
 	case *ast.CreateTableStmt:
 		info.TableInfoBefore = tiAfter // for `CREATE TABLE`, we use tiAfter as tiBefore.
 		rev, err = s.optimist.PutInfoAddTable(info)

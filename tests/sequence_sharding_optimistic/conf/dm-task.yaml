@@ -35,6 +35,8 @@ black-white-list:
     do-tables:
     -  db-name: "sharding_seq_opt"
        tbl-name: "~^t[\\d]+"
+    -  db-name: "sharding_seq_tmp"
+       tbl-name: "~^t[\\d]+"
 
 routes:
   sharding-route-rules-table:
