@@ -1853,7 +1853,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		// Don't send new DDLInfo to dm-master until all local sql jobs finished
-		s.jobWg.Wait()
+		// since jobWg is flushed by flushJobs before, we don't wait here any more
 
 		// NOTE: if we need singleton Syncer (without dm-master) to support sharding DDL sync
 		// we should add another config item to differ, and do not save DDLInfo, and not wait for ddlExecInfo
