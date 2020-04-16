@@ -94,12 +94,19 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 				synced, remain := l.IsSynced()
 				c.Assert(synced, Equals, syncedCount == tableCount)
 				c.Assert(remain, Equals, tableCount-syncedCount)
+				c.Assert(l.IsTableSynced(source, db, tbl), IsTrue)
 			}
 		}
 	}
 	// synced again after all tables applied the DDL.
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
+
+	// check IsTableSynced for not existing tables.
+	c.Assert(l.IsTableSynced(sources[0], dbs[0], tbls[0]), IsTrue)
+	c.Assert(l.IsTableSynced("not-exist", dbs[0], tbls[0]), IsFalse)
+	c.Assert(l.IsTableSynced(sources[0], "not-exist", tbls[0]), IsFalse)
+	c.Assert(l.IsTableSynced(sources[0], dbs[0], "not-exit"), IsFalse)
 
 	// CASE: TrySync again after synced is idempotent.
 	DDLs, err := l.TrySync(sources[0], dbs[0], tbls[0], DDLs1, ti1, sts)
@@ -135,6 +142,8 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	synced, remain := l.IsSynced()
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, tableCount-1)
+	c.Assert(l.IsTableSynced(sources[0], dbs[0], tbls[0]), IsTrue)
+	c.Assert(l.IsTableSynced(sources[0], dbs[0], tbls[1]), IsFalse)
 	cmp, err := l.tables[sources[0]][dbs[0]][tbls[0]].Compare(l.tables[sources[0]][dbs[0]][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 1)
@@ -155,6 +164,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	synced, remain = l.IsSynced()
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, tableCount-2)
+	c.Assert(l.IsTableSynced(sources[0], dbs[0], tbls[1]), IsTrue)
 	cmp, err = l.tables[sources[0]][dbs[0]][tbls[0]].Compare(l.tables[sources[0]][dbs[0]][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 0)
@@ -194,10 +204,12 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 					c.Assert(DDLs, DeepEquals, DDLs3)
 					c.Assert(synced, IsTrue)
 					c.Assert(remain, Equals, 0)
+					c.Assert(l.IsTableSynced(source, db, tbl), IsTrue) // un-synced until the last one.
 				} else {
 					c.Assert(DDLs, DeepEquals, []string{})
 					c.Assert(synced, IsFalse)
 					c.Assert(remain, Equals, syncedCount)
+					c.Assert(l.IsTableSynced(source, db, tbl), IsFalse)
 				}
 			}
 		}
@@ -876,10 +888,11 @@ func (t *testLock) checkLockSynced(c *C, l *Lock) {
 	c.Assert(remain, Equals, 0)
 
 	ready := l.Ready()
-	for _, schemaTables := range ready {
-		for _, tables := range schemaTables {
-			for _, synced := range tables {
+	for source, schemaTables := range ready {
+		for schema, tables := range schemaTables {
+			for table, synced := range tables {
 				c.Assert(synced, IsTrue)
+				c.Assert(l.IsTableSynced(source, schema, table), IsTrue)
 			}
 		}
 	}

@@ -421,7 +421,9 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 			if lock == nil {
 				o.logger.Warn("no lock for the shard DDL lock operation exist", zap.Stringer("operation", op))
 				continue
-			} else if synced, _ := lock.IsSynced(); !synced {
+			} else if synced := lock.IsTableSynced(op.Source, op.UpSchema, op.UpTable); !synced {
+				// in optimistic mode, we can mark a table as done if its schema is the same with the joined one,
+				// and if the joined schema changed, we can revert `done` back to `not done`.
 				// this should not happen in normal case.
 				o.logger.Warn("the lock for the shard DDL lock operation has not synced", zap.Stringer("operation", op))
 				continue

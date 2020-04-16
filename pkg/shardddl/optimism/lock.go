@@ -231,6 +231,28 @@ func (l *Lock) IsSynced() (bool, int) {
 	return remain == 0, remain
 }
 
+// IsTableSynced returns whether the schema of the table has synced.
+// In the optimistic mode, we call a table `synced` if its table info is the same with the joined one.
+func (l *Lock) IsTableSynced(source, schema, table string) bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	if _, ok := l.tables[source]; !ok {
+		return false
+	}
+	if _, ok := l.tables[source][schema]; !ok {
+		return false
+	}
+	if _, ok := l.tables[source][schema][table]; !ok {
+		return false
+	}
+	cmp, err := l.joined.Compare(l.tables[source][schema][table])
+	if err == nil && cmp == 0 {
+		return true
+	}
+	return false
+}
+
 // Ready returns the source tables' sync status (whether they are ready).
 // we define `ready` if the table's info is the same with the joined one,
 // e.g for `ADD COLUMN`, it's true if it has added the column,
