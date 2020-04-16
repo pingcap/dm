@@ -116,6 +116,13 @@ message QueryErrorResponse {
     repeated SubTaskError subTaskError = 4;
 }
 
+// QueryRelayResponse represents response for query on a dm-worker
+message QueryRelayResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated RelayStatus RelayStatus = 4;
+}
+
 // Stage represents current stage for a (sub) task
 // a (sub) task should be always in one stage of the following stages
 // (sub) task can transfer from on stage to some special other stages
