@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
@@ -206,6 +207,14 @@ func (s *Server) Start(ctx context.Context) (err error) {
 			return
 		}
 	}()
+
+	failpoint.Inject("FailToElect", func(val failpoint.Value) {
+		masterStrings := val.(string)
+		if strings.Contains(masterStrings, s.cfg.Name) {
+			log.L().Info("master election failed", zap.String("failpoint", "FailToElect"))
+			s.election.Close()
+		}
+	})
 
 	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
 	return
