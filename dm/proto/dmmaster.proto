@@ -151,7 +151,8 @@ message QueryErrorListResponse {
 }
 
 message QueryRelayListRequest {
-    repeated string sources = 1; // sources need to query, empty for all sources
+    string name = 1;             // task's name, empty for all tasks
+    repeated string sources = 2; // sources need to query, empty for all sources
 }
 
 message QueryRelayListResponse {

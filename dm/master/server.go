@@ -471,8 +471,8 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		}
 	}
 
-	//var wg sync.WaitGroup
-	//for _, stCfg := range stCfgs {
+	// var wg sync.WaitGroup
+	// for _, stCfg := range stCfgs {
 	//	wg.Add(1)
 	//	go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 	//		defer wg.Done()
@@ -505,8 +505,8 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 	//		}
 	//		workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker.Address()).Error(), cfg.SourceID)
 	//	}, stCfg)
-	//}
-	//wg.Wait()
+	// }
+	// wg.Wait()
 
 	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(stCfgs))
 	workers := make([]string, 0, len(stCfgs))
@@ -602,34 +602,34 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 }
 
 // QueryRelay implements MasterServer.QueryStatus
-func (s *Server) QueryRelay(ctx context.Context, req *pb.QueryStatusListRequest) (*pb.QueryStatusListResponse, error) {
+func (s *Server) QueryRelay(ctx context.Context, req *pb.QueryRelayListRequest) (*pb.QueryRelayListResponse, error) {
 	// TODO
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryRelay"))
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
-			return s.leaderClient.QueryStatus(ctx, req)
+			return s.leaderClient.QueryRelay(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	sources, err := extractSources(s, req)
 	if err != nil {
-		return &pb.QueryStatusListResponse{
+		return &pb.QueryRelayListResponse{
 			Result: false,
 			Msg:    err.Error(),
 		}, nil
 	}
 	workerRespCh := s.getStatusFromWorkers(ctx, sources, req.Name)
 
-	workerRespMap := make(map[string]*pb.QueryStatusResponse, len(sources))
+	workerRespMap := make(map[string]*pb.QueryRelayResponse, len(sources))
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
-		workerRespMap[workerResp.SourceStatus.Source] = workerResp
+		workerRespMap[workerResp.SourceStatus.Source] = workerResp.SourceStatus.RelayStatus
 	}
 
 	sort.Strings(sources)
-	workerResps := make([]*pb.QueryStatusResponse, 0, len(sources))
+	workerResps := make([]*pb.QueryRelayResponse, 0, len(sources))
 	for _, worker := range sources {
 		workerResps = append(workerResps, workerRespMap[worker])
 	}
