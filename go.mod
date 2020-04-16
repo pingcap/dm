@@ -53,7 +53,7 @@ require (
 	go.uber.org/zap v1.14.1
 	golang.org/x/sys v0.0.0-20200113162924-86b910548bc1
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
-	golang.org/x/tools v0.0.0-20200318150045-ba25ddc85566 // indirect
+	golang.org/x/tools v0.0.0-20200416061724-5744cfde56ed // indirect
 	google.golang.org/genproto v0.0.0-20191114150713-6bbd007550de
 	google.golang.org/grpc v1.25.1
 	gopkg.in/yaml.v2 v2.2.8

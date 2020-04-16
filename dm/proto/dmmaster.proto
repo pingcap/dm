@@ -27,6 +27,7 @@ service Master {
         };
     }
     rpc QueryError (QueryErrorListRequest) returns (QueryErrorListResponse) {}
+    rpc QueryRelay (QueryRelayListRequest) returns (QueryRelayListResponse) {}
 
     // show un-resolved DDL locks
     rpc ShowDDLLocks (ShowDDLLocksRequest) returns (ShowDDLLocksResponse) {}
@@ -147,6 +148,16 @@ message QueryErrorListResponse {
     bool result = 1;
     string msg = 2;
     repeated QueryErrorResponse sources = 3;
+}
+
+message QueryRelayListRequest {
+    repeated string sources = 1; // sources need to query, empty for all sources
+}
+
+message QueryRelayListResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated QueryRelayResponse sources = 3;
 }
 
 // ShowDDLLocksRequest used to query DDL locks which are un-resolved
