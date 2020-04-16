@@ -226,9 +226,9 @@ func (st *SubTask) setCurrCtx(ctx context.Context, cancel context.CancelFunc) {
 }
 
 func (st *SubTask) callCurrCancel() {
-	st.Lock()
+	st.RLock()
 	st.currCancel()
-	st.Unlock()
+	st.RUnlock()
 }
 
 // fetchResult fetches units process result
@@ -236,9 +236,9 @@ func (st *SubTask) callCurrCancel() {
 func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 	defer st.wg.Done()
 
-	st.Lock()
+	st.RLock()
 	ctx := st.currCtx
-	st.Unlock()
+	st.RUnlock()
 
 	select {
 	case <-ctx.Done():

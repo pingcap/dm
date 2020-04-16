@@ -490,7 +490,7 @@ func (t *testSubTask) TestSubtaskFastQuit(c *C) {
 	// case: test subtask stuck into unitTransWaitCondition
 	cfg := &config.SubTaskConfig{
 		Name: "testSubtaskFastQuit",
-		Mode: config.ModeFull,
+		Mode: config.ModeAll,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -512,8 +512,8 @@ func (t *testSubTask) TestSubtaskFastQuit(c *C) {
 
 	finished := make(chan struct{})
 	go func() {
-		close(finished)
 		st.run()
+		close(finished)
 	}()
 
 	// test Pause
@@ -531,8 +531,8 @@ func (t *testSubTask) TestSubtaskFastQuit(c *C) {
 
 	finished = make(chan struct{})
 	go func() {
-		close(finished)
 		st.run()
+		close(finished)
 	}()
 
 	time.Sleep(time.Second)
