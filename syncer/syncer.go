@@ -145,7 +145,6 @@ type Syncer struct {
 
 	workerCheckpoints   []*binlogPoint
 	flushCheckpointChan chan FlushType
-	lastAddedJobPos     *binlogPoint
 
 	c *causality
 
@@ -466,7 +465,6 @@ func (s *Syncer) reset() {
 	}
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
-	s.lastAddedJobPos = newBinlogPoint(binlog.NewLocation(s.cfg.Flavor), binlog.NewLocation(s.cfg.Flavor), nil, nil)
 	s.workerCheckpoints = makeWorkerCheckpointArray(s.cfg.WorkerCount, s.cfg.Flavor)
 	s.flushCheckpointChan = make(chan FlushType, 16)
 
@@ -728,16 +726,12 @@ func (s *Syncer) addJob(job *job) error {
 	var queueBucket int
 	switch job.tp {
 	case xid:
-		s.jobWg.Add(s.cfg.WorkerCount)
+		if s.cfg.ShardMode == config.ShardPessimistic {
+			job.location = s.sgk.AdjustGlobalLocation(job.location)
+		}
 		for i := 0; i < s.cfg.WorkerCount; i++ {
 			s.jobs[i] <- job
 		}
-		// save max added xid pos as lastAddedJobPos for fake job
-		pos := job.location.Clone()
-		if s.cfg.ShardMode == config.ShardPessimistic {
-			pos = s.sgk.AdjustGlobalLocation(pos)
-		}
-		s.lastAddedJobPos.save(pos, nil)
 		return nil
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
@@ -961,7 +955,6 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	count := s.cfg.Batch
 	jobs := make([]*job, 0, count)
 	tpCnt := make(map[opType]int64)
-	lastUpdateCheckpointTime := time.Now()
 	lastAddedXidPos := newBinlogPoint(binlog.NewLocation(s.cfg.Flavor), binlog.NewLocation(s.cfg.Flavor), nil, nil)
 
 	clearF := func() {
@@ -987,6 +980,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 	executeSQLs := func() error {
 		if len(jobs) == 0 {
+			workerCheckpoint.save(lastAddedXidPos.MySQLLocation(), nil)
 			return nil
 		}
 		queries := make([]string, 0, len(jobs))
@@ -1001,7 +995,6 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			s.appendExecErrors(errCtx)
 		} else {
 			workerCheckpoint.save(lastAddedXidPos.MySQLLocation(), nil)
-			lastUpdateCheckpointTime = time.Now()
 		}
 		return err
 	}
@@ -1013,20 +1006,12 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			if !ok {
 				return
 			}
-			if sqlJob.tp == fake {
-				// update pos only if no jobs are waiting to be executed
-				if len(jobs) == 0 {
-					workerCheckpoint.save(sqlJob.location.Clone(), nil)
-					lastUpdateCheckpointTime = time.Now()
-				}
-				continue
-			}
-			idx++
-
 			if sqlJob.tp == xid {
 				lastAddedXidPos.save(sqlJob.location.Clone(), nil)
 				continue
 			}
+			idx++
+
 			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
 				jobs = append(jobs, sqlJob)
 				tpCnt[sqlJob.tp]++
@@ -1050,9 +1035,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				}
 				clearF()
 			} else {
-				if time.Now().Sub(lastUpdateCheckpointTime) > 3*time.Second {
-					jobChan <- newFakeJob(s.lastAddedJobPos.MySQLLocation())
-				}
+				workerCheckpoint.save(lastAddedXidPos.MySQLLocation(), nil)
 				time.Sleep(waitTime)
 			}
 		}

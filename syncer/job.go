@@ -31,7 +31,6 @@ const (
 	flush
 	skip // used by Syncer.recordSkipSQLsLocation to record global location, but not execute SQL
 	rotate
-	fake // used to flush worker's checkpoint
 )
 
 func (t opType) String() string {
@@ -52,8 +51,6 @@ func (t opType) String() string {
 		return "skip"
 	case rotate:
 		return "rotate"
-	case fake:
-		return "fake"
 	}
 
 	return ""
@@ -138,13 +135,6 @@ func newXIDJob(location, cmdLocation binlog.Location, traceID string) *job {
 func newFlushJob() *job {
 	return &job{
 		tp: flush,
-	}
-}
-
-func newFakeJob(location binlog.Location) *job {
-	return &job{
-		tp:       fake,
-		location: location.Clone(),
 	}
 }
 
