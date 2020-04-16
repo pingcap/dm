@@ -91,7 +91,7 @@ func (b *binlogPoint) save(location binlog.Location, ti *model.TableInfo) error 
 func (b *binlogPoint) flush() {
 	b.Lock()
 	defer b.Unlock()
-	b.flushedLocation = b.location
+	b.flushedLocation = b.location.Clone()
 	b.flushedTI = b.ti
 }
 
