@@ -392,6 +392,11 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 	}
 	oldLocation := point.MySQLLocation()
 
+	if cp.cfg.EnableGTID {
+		// when enable GTID, different location may have same GTID, so when GTID is equal, also treat it as new table point
+		return binlog.CompareLocation(location, oldLocation, cp.cfg.EnableGTID) >= 0
+	}
+
 	return binlog.CompareLocation(location, oldLocation, cp.cfg.EnableGTID) > 0
 }
 
