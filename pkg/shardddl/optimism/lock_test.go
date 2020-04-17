@@ -94,19 +94,12 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 				synced, remain := l.IsSynced()
 				c.Assert(synced, Equals, syncedCount == tableCount)
 				c.Assert(remain, Equals, tableCount-syncedCount)
-				c.Assert(l.IsTableSynced(source, db, tbl), IsTrue)
 			}
 		}
 	}
 	// synced again after all tables applied the DDL.
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
-
-	// check IsTableSynced for not existing tables.
-	c.Assert(l.IsTableSynced(sources[0], dbs[0], tbls[0]), IsTrue)
-	c.Assert(l.IsTableSynced("not-exist", dbs[0], tbls[0]), IsFalse)
-	c.Assert(l.IsTableSynced(sources[0], "not-exist", tbls[0]), IsFalse)
-	c.Assert(l.IsTableSynced(sources[0], dbs[0], "not-exit"), IsFalse)
 
 	// CASE: TrySync again after synced is idempotent.
 	DDLs, err := l.TrySync(sources[0], dbs[0], tbls[0], DDLs1, ti1, sts)
@@ -142,8 +135,6 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	synced, remain := l.IsSynced()
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, tableCount-1)
-	c.Assert(l.IsTableSynced(sources[0], dbs[0], tbls[0]), IsTrue)
-	c.Assert(l.IsTableSynced(sources[0], dbs[0], tbls[1]), IsFalse)
 	cmp, err := l.tables[sources[0]][dbs[0]][tbls[0]].Compare(l.tables[sources[0]][dbs[0]][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 1)
@@ -164,7 +155,6 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	synced, remain = l.IsSynced()
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, tableCount-2)
-	c.Assert(l.IsTableSynced(sources[0], dbs[0], tbls[1]), IsTrue)
 	cmp, err = l.tables[sources[0]][dbs[0]][tbls[0]].Compare(l.tables[sources[0]][dbs[0]][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 0)
@@ -204,12 +194,10 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 					c.Assert(DDLs, DeepEquals, DDLs3)
 					c.Assert(synced, IsTrue)
 					c.Assert(remain, Equals, 0)
-					c.Assert(l.IsTableSynced(source, db, tbl), IsTrue) // un-synced until the last one.
 				} else {
 					c.Assert(DDLs, DeepEquals, []string{})
 					c.Assert(synced, IsFalse)
 					c.Assert(remain, Equals, syncedCount)
-					c.Assert(l.IsTableSynced(source, db, tbl), IsFalse)
 				}
 			}
 		}
@@ -813,47 +801,55 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 		l      = NewLock(ID, task, ti0, sts)
 	)
 
-	// the initial status is synced.
+	// the initial status is synced but not resolved.
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
+	c.Assert(l.IsResolved(), IsFalse)
 
-	// TrySync for the first table.
+	// TrySync for the first table, no table has done the DDLs operation.
 	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
+	t.checkLockNoDone(c, l)
+	c.Assert(l.IsResolved(), IsFalse)
 
-	// mark done for synced table, fail for non-synced table
+	// mark done for the synced table, the lock is un-resolved.
 	c.Assert(l.TryMarkDone(source, db, tbls[0]), IsTrue)
-	c.Assert(l.TryMarkDone(source, db, tbls[1]), IsFalse)
 	c.Assert(l.IsDone(source, db, tbls[0]), IsTrue)
 	c.Assert(l.IsDone(source, db, tbls[1]), IsFalse)
+	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the second table, the joined schema become larger.
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
 
-	// both of tables should become not-done now.
-	c.Assert(l.IsDone(source, db, tbls[0]), IsFalse)
+	// the first table is still keep `done` (for the previous DDLs operation)
+	c.Assert(l.IsDone(source, db, tbls[0]), IsTrue)
 	c.Assert(l.IsDone(source, db, tbls[1]), IsFalse)
+	c.Assert(l.IsResolved(), IsFalse)
 
-	// mark done for synced table, fail for non-synced table
-	c.Assert(l.TryMarkDone(source, db, tbls[0]), IsFalse)
+	// mark done for the second table, both of them are done (for different DDLs operations)
 	c.Assert(l.TryMarkDone(source, db, tbls[1]), IsTrue)
-	c.Assert(l.IsDone(source, db, tbls[0]), IsFalse)
+	c.Assert(l.IsDone(source, db, tbls[0]), IsTrue)
 	c.Assert(l.IsDone(source, db, tbls[1]), IsTrue)
+	// but the lock is still not resolved because tables have different schemas.
+	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the first table, all tables become synced.
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, sts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
 
-	// the lock is still not resolved.
+	// the first table become not-done, and the lock is un-resolved.
+	c.Assert(l.IsDone(source, db, tbls[0]), IsFalse)
+	c.Assert(l.IsDone(source, db, tbls[1]), IsTrue)
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// mark done for the first table.
 	c.Assert(l.TryMarkDone(source, db, tbls[0]), IsTrue)
 	c.Assert(l.IsDone(source, db, tbls[0]), IsTrue)
+	c.Assert(l.IsDone(source, db, tbls[1]), IsTrue)
 
 	// the lock become resolved now.
 	c.Assert(l.IsResolved(), IsTrue)
@@ -888,11 +884,10 @@ func (t *testLock) checkLockSynced(c *C, l *Lock) {
 	c.Assert(remain, Equals, 0)
 
 	ready := l.Ready()
-	for source, schemaTables := range ready {
-		for schema, tables := range schemaTables {
-			for table, synced := range tables {
+	for _, schemaTables := range ready {
+		for _, tables := range schemaTables {
+			for _, synced := range tables {
 				c.Assert(synced, IsTrue)
-				c.Assert(l.IsTableSynced(source, schema, table), IsTrue)
 			}
 		}
 	}

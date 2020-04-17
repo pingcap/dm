@@ -421,14 +421,11 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 			if lock == nil {
 				o.logger.Warn("no lock for the shard DDL lock operation exist", zap.Stringer("operation", op))
 				continue
-			} else if synced := lock.IsTableSynced(op.Source, op.UpSchema, op.UpTable); !synced {
-				// in optimistic mode, we can mark a table as done if its schema is the same with the joined one,
-				// and if the joined schema changed, we can revert `done` back to `not done`.
-				// this should not happen in normal case.
-				o.logger.Warn("the lock for the shard DDL lock operation has not synced", zap.Stringer("operation", op))
-				continue
 			}
 
+			// in optimistic mode, we always try to mark a table as done after received the `done` status of the DDLs operation.
+			// NOTE: even all tables have done their previous DDLs operations, the lock may still not resolved,
+			/// because these tables may have different schemas.
 			done := lock.TryMarkDone(op.Source, op.UpSchema, op.UpTable)
 			o.logger.Info("mark operation for a table as done", zap.Bool("done", done), zap.Stringer("operation", op))
 			if !lock.IsResolved() {

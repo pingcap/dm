@@ -40,9 +40,11 @@ type Lock struct {
 	// if all of them are the same, then we call the lock `synced`.
 	tables map[string]map[string]map[string]schemacmp.Table
 
-	// whether the operations have done (execute the shard DDL) in synced status.
-	// if all of them have done, then we call the lock `resolved`.
-	// if the table is not synced, we NEVER call it done the operation.
+	// whether DDLs operations have done (execute the shard DDL) to the downstream.
+	// if all of them have done and have the same schema, then we call the lock `resolved`.
+	// in optimistic mode, one table should only send a new table info (and DDLs) after the old one has done,
+	// so we can set `done` to `false` when received a table info (and need the table to done some DDLs),
+	// and mark `done` to `true` after received the done status of the DDLs operation.
 	done map[string]map[string]map[string]bool
 }
 
@@ -77,6 +79,14 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	ddls []string, newTI *model.TableInfo, sts []SourceTables) (newDDLs []string, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
+	defer func() {
+		if len(newDDLs) > 0 {
+			// revert the `done` status if need to wait for the new operation to be done.
+			// Now, we wait for the new operation to be done if any DDLs returned.
+			l.tryRevertDone(callerSource, callerSchema, callerTable)
+		}
+	}()
 
 	// handle the case where <callerSource, callerSchema, callerTable>
 	// is not in old source tables and current new source tables.
@@ -124,11 +134,6 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable), zap.Strings("ddls", ddls))
 
 	cmp, err = oldJoined.Compare(newJoined)
-	if err != nil || cmp != 0 {
-		// the joined schema changed, we need to revert the `done` status for tables.
-		l.tryRevertDone()
-	}
-
 	// FIXME: Compute DDLs through schema diff instead of propagating DDLs directly.
 	// and now we MUST ensure different sources execute same DDLs to the downstream multiple times is safe.
 	if err != nil {
@@ -231,28 +236,6 @@ func (l *Lock) IsSynced() (bool, int) {
 	return remain == 0, remain
 }
 
-// IsTableSynced returns whether the schema of the table has synced.
-// In the optimistic mode, we call a table `synced` if its table info is the same with the joined one.
-func (l *Lock) IsTableSynced(source, schema, table string) bool {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-
-	if _, ok := l.tables[source]; !ok {
-		return false
-	}
-	if _, ok := l.tables[source][schema]; !ok {
-		return false
-	}
-	if _, ok := l.tables[source][schema][table]; !ok {
-		return false
-	}
-	cmp, err := l.joined.Compare(l.tables[source][schema][table])
-	if err == nil && cmp == 0 {
-		return true
-	}
-	return false
-}
-
 // Ready returns the source tables' sync status (whether they are ready).
 // we define `ready` if the table's info is the same with the joined one,
 // e.g for `ADD COLUMN`, it's true if it has added the column,
@@ -273,8 +256,9 @@ func (l *Lock) Joined() schemacmp.Table {
 
 // TryMarkDone tries to mark the operation of the source table as done.
 // it returns whether marked done.
-// NOTE: we can only mark the operation of the table as done if it's already synced.
-// NOTE: a done table may revert to not-done if the joined schema changed.
+// NOTE: this method can always mark a existing table as done,
+// so the caller of this method should ensure that the table has done the DDLs operation.
+// NOTE: a done table may revert to not-done if new table schema received and new DDLs operation need to be done.
 func (l *Lock) TryMarkDone(source, schema, table string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -289,9 +273,7 @@ func (l *Lock) TryMarkDone(source, schema, table string) bool {
 		return false
 	}
 
-	if cmp, err := l.tables[source][schema][table].Compare(l.joined); err != nil || cmp != 0 {
-		return false
-	}
+	// always mark it as `true` now.
 	l.done[source][schema][table] = true
 	return true
 }
@@ -313,11 +295,19 @@ func (l *Lock) IsDone(source, schema, table string) bool {
 	return l.done[source][schema][table]
 }
 
-// IsResolved returns whether the lock has resolved (all operations have done).
+// IsResolved returns whether the lock has resolved.
+// return true if all tables have the same schema and all DDLs operations have done.
 func (l *Lock) IsResolved() bool {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
+	// whether all tables have the same schema.
+	_, remain := l.syncStatus()
+	if remain != 0 {
+		return false
+	}
+
+	// whether all tables have done DDLs operations.
 	for _, schemaTables := range l.done {
 		for _, tables := range schemaTables {
 			for _, done := range tables {
@@ -355,17 +345,18 @@ func (l *Lock) syncStatus() (map[string]map[string]map[string]bool, int) {
 	return ready, remain
 }
 
-// tryRevertDone tries to revert the done status when the joined schema changed.
-func (l *Lock) tryRevertDone() {
-	for source, schemaTables := range l.tables {
-		for schema, tables := range schemaTables {
-			for table, ti := range tables {
-				if cmp, err := l.joined.Compare(ti); err != nil || cmp != 0 {
-					l.done[source][schema][table] = false
-				}
-			}
-		}
+// tryRevertDone tries to revert the done status when the table's schema changed.
+func (l *Lock) tryRevertDone(source, schema, table string) {
+	if _, ok := l.done[source]; !ok {
+		return
 	}
+	if _, ok := l.done[source][schema]; !ok {
+		return
+	}
+	if _, ok := l.done[source][schema][table]; !ok {
+		return
+	}
+	l.done[source][schema][table] = false
 }
 
 // addSources adds any not-existing tables into the lock.
