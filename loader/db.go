@@ -147,7 +147,7 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {
 			startTime := time.Now()
-			_, err := conn.baseConn.ExecuteSQL(ctx, queries, args...)
+			_, err := conn.baseConn.ExecuteSQL(ctx, stmtHistogram, conn.cfg.Name, queries, args...)
 			failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
 				errCode, err1 := strconv.ParseUint(val.(string), 10, 16)
 				if err1 != nil {
@@ -163,7 +163,10 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 				cost := time.Since(startTime)
 				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
 				if cost.Seconds() > 1 {
-					ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
+					ctx.L().Warn("execute transaction",
+						zap.String("query", utils.TruncateInterface(queries, -1)),
+						zap.String("argument", utils.TruncateInterface(args, -1)),
+						zap.Duration("cost time", cost))
 				}
 			}
 			return nil, err
