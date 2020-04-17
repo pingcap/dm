@@ -10,9 +10,9 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 function prepare_data() {
     run_sql 'DROP DATABASE if exists initial_unit;' $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql 'CREATE DATABASE initial_unit;' $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql "CREATE TABLE initial_unit.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "CREATE TABLE initial_unit.t$1(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     for j in $(seq 100); do
-        run_sql "INSERT INTO initial_unit.t VALUES ($j,${j}000$j),($j,${j}001$j);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+        run_sql "INSERT INTO initial_unit.t$1 VALUES ($j,${j}000$j),($j,${j}001$j);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     done
 }
 
@@ -26,7 +26,10 @@ function run() {
     for(( i=0;i<${#failpoints[@]};i++)) do
         WORK_DIR=$TEST_DIR/$TEST_NAME/$i
 
-        prepare_data
+        # clear downstream env
+        run_sql 'DROP DATABASE if exists dm_meta;' $TIDB_PORT $TIDB_PASSWORD
+        run_sql 'DROP DATABASE if exists initial_unit;' $TIDB_PORT $TIDB_PASSWORD
+        prepare_data $i
 
         echo "failpoint=${failpoints[i]}"
         export GO_FAILPOINTS=${failpoints[i]}
@@ -82,8 +85,6 @@ function run() {
             "current stage is not paused not valid" 1
 
         cleanup_process
-        run_sql "drop database if exists initial_unit" $TIDB_PORT $TIDB_PASSWORD
-        run_sql "drop database if exists dm_meta" $TIDB_PORT $TIDB_PASSWORD
     done
 }
 
