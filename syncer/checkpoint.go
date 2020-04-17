@@ -178,7 +178,7 @@ type CheckPoint interface {
 	DeleteSchemaPoint(tctx *tcontext.Context, sourceSchema string) error
 
 	// IsNewerTablePoint checks whether job's checkpoint is newer than previous saved checkpoint
-	IsNewerTablePoint(sourceSchema, sourceTable string, point binlog.Location) bool
+	IsNewerTablePoint(sourceSchema, sourceTable string, point binlog.Location, gte bool) bool
 
 	// SaveGlobalPoint saves the global binlog stream's checkpoint
 	// corresponding to Meta.Save
@@ -378,8 +378,12 @@ func (cp *RemoteCheckPoint) DeleteSchemaPoint(tctx *tcontext.Context, sourceSche
 	return nil
 }
 
-// IsNewerTablePoint implements CheckPoint.IsNewerTablePoint
-func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, location binlog.Location) bool {
+// IsNewerTablePoint implements CheckPoint.IsNewerTablePoint.
+// gte means greater than or equal, gte should judge by EnableGTID and the event type
+// - when enable GTID and binlog is DML, different location may have same GTID, so when GTID is equal, can treat it as new table point
+// - when enable GTID and binlog is DDL, different DDL have different GTID, so if GTID is euqal, it is a old table point
+// - when not enable GTID, just compare the position, and only when grater than the old point is newer table point
+func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, location binlog.Location, gte bool) bool {
 	cp.RLock()
 	defer cp.RUnlock()
 	mSchema, ok := cp.points[sourceSchema]
@@ -392,8 +396,7 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 	}
 	oldLocation := point.MySQLLocation()
 
-	if cp.cfg.EnableGTID {
-		// when enable GTID, different location may have same GTID, so when GTID is equal, also treat it as new table point
+	if gte {
 		return binlog.CompareLocation(location, oldLocation, cp.cfg.EnableGTID) >= 0
 	}
 
