@@ -181,6 +181,8 @@ type SubTaskConfig struct {
 	PprofAddr  string `toml:"pprof-addr" json:"pprof-addr"`
 	StatusAddr string `toml:"status-addr" json:"status-addr"`
 
+	PluginPath string `toml:"plugin-path" json:"plugin-path"`
+
 	ConfigFile string `toml:"-" json:"config-file"`
 
 	// still needed by Syncer / Loader bin
