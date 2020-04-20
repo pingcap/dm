@@ -151,14 +151,13 @@ message QueryErrorListResponse {
 }
 
 message QueryRelayListRequest {
-    string name = 1;             // task's name, empty for all tasks
-    repeated string sources = 2; // sources need to query, empty for all sources
+    repeated string sources = 1; // sources need to query, empty for all sources
 }
 
 message QueryRelayListResponse {
     bool result = 1;
     string msg = 2;
-    repeated QueryRelayResponse sources = 3;
+    repeated QueryRelayStatusResponse sources = 3;
 }
 
 // ShowDDLLocksRequest used to query DDL locks which are un-resolved

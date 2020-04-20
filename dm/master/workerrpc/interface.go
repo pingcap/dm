@@ -30,6 +30,7 @@ const (
 	CmdUpdateSubTask
 
 	CmdQueryStatus
+	CmdQueryRelayStatus
 	CmdQueryError
 	CmdQueryTaskOperation
 	CmdQueryWorkerConfig
@@ -54,6 +55,7 @@ type Request struct {
 	UpdateSubTask  *pb.UpdateSubTaskRequest
 
 	QueryStatus       *pb.QueryStatusRequest
+	QueryRelayStatus  *pb.QueryRelayStatusRequest
 	QueryError        *pb.QueryErrorRequest
 	QueryWorkerConfig *pb.QueryWorkerConfigRequest
 
@@ -75,6 +77,7 @@ type Response struct {
 	UpdateSubTask  *pb.CommonWorkerResponse
 
 	QueryStatus       *pb.QueryStatusResponse
+	QueryRelayStatus  *pb.QueryRelayStatusResponse
 	QueryError        *pb.QueryErrorResponse
 	QueryWorkerConfig *pb.QueryWorkerConfigResponse
 

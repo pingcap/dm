@@ -613,30 +613,26 @@ func (s *Server) QueryRelay(ctx context.Context, req *pb.QueryRelayListRequest) 
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
-	sources, err := extractSources(s, req)
-	if err != nil {
-		return &pb.QueryRelayListResponse{
-			Result: false,
-			Msg:    err.Error(),
-		}, nil
-	}
-	workerRespCh := s.getStatusFromWorkers(ctx, sources, req.Name)
+	sources := s.scheduler.BoundSources()
 
-	workerRespMap := make(map[string]*pb.QueryRelayResponse, len(sources))
+	workerRespCh := s.getRelayStatusFromWorkers(ctx, sources)
+
+	workerRespMap := make(map[string]*pb.QueryRelayStatusResponse, len(sources))
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
-		workerRespMap[workerResp.SourceStatus.Source] = workerResp.SourceStatus.RelayStatus
+		workerRespMap[workerResp.SourceStatus.Source] = workerResp
 	}
 
 	sort.Strings(sources)
-	workerResps := make([]*pb.QueryRelayResponse, 0, len(sources))
+	workerResps := make([]*pb.QueryRelayStatusResponse, 0, len(sources))
 	for _, worker := range sources {
 		workerResps = append(workerResps, workerRespMap[worker])
 	}
-	resp := &pb.QueryStatusListResponse{
+	resp := &pb.QueryRelayListResponse{
 		Result:  true,
 		Sources: workerResps,
 	}
+
 	return resp, nil
 }
 
@@ -979,6 +975,66 @@ func (s *Server) getTaskResources(task string) []string {
 		ret = append(ret, source)
 	}
 	return ret
+}
+
+// getStatusFromWorkers does RPC request to get status from dm-workers
+func (s *Server) getRelayStatusFromWorkers(ctx context.Context, sources []string) chan *pb.QueryRelayStatusResponse {
+	workerReq := &workerrpc.Request{
+		Type:             workerrpc.CmdQueryRelayStatus,
+		QueryRelayStatus: &pb.QueryRelayStatusRequest{},
+	}
+	workerRespCh := make(chan *pb.QueryRelayStatusResponse, len(sources))
+
+	handleErr := func(err error, source string) bool {
+		log.L().Error("response error", zap.Error(err))
+		resp := &pb.QueryRelayStatusResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+			SourceStatus: &pb.SourceStatus{
+				Source: source,
+			},
+			SourceError: &pb.SourceError{
+				Source: source,
+			},
+		}
+		workerRespCh <- resp
+		return false
+	}
+
+	var wg sync.WaitGroup
+	for _, source := range sources {
+		wg.Add(1)
+		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
+			defer wg.Done()
+			sourceID, _ := args[0].(string)
+			worker := s.scheduler.GetWorkerBySource(sourceID)
+			if worker == nil {
+				err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", sourceID)
+				handleErr(err, sourceID)
+				return
+			}
+			resp, err := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
+			workerStatus := &pb.QueryRelayStatusResponse{}
+			if err != nil {
+				workerStatus = &pb.QueryRelayStatusResponse{
+					Result:       false,
+					Msg:          errors.ErrorStack(err),
+					SourceStatus: &pb.SourceStatus{},
+					SourceError:  &pb.SourceError{},
+				}
+			} else {
+				workerStatus = resp.QueryRelayStatus
+			}
+			//workerStatus.SourceStatus.Source = sourceID
+			workerRespCh <- workerStatus
+		}, func(args ...interface{}) {
+			defer wg.Done()
+			sourceID, _ := args[0].(string)
+			handleErr(terror.ErrMasterNoEmitToken.Generate(sourceID), sourceID)
+		}, source)
+	}
+	wg.Wait()
+	return workerRespCh
 }
 
 // getStatusFromWorkers does RPC request to get status from dm-workers

@@ -517,6 +517,41 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	return resp, nil
 }
 
+// QueryRelay implements WorkerServer.QueryRelay
+func (s *Server) QueryRelay(ctx context.Context, req *pb.QueryRelayStatusRequest) (*pb.QueryRelayStatusResponse, error) {
+	log.L().Info("", zap.String("request", "QueryRelay"), zap.Stringer("payload", req))
+	sourceStatus := s.getSourceStatus(true)
+	sourceStatus.Worker = s.cfg.Name
+
+	sourceError := pb.SourceError{
+		Source: sourceStatus.Source,
+		Worker: s.cfg.Name,
+	}
+	if sourceStatus.Result != nil && len(sourceStatus.Result.Errors) > 0 {
+		sourceError.SourceError = utils.JoinProcessErrors(sourceStatus.Result.Errors)
+	}
+
+	resp := &pb.QueryRelayStatusResponse{
+		Result:       true,
+		SourceStatus: &sourceStatus,
+		SourceError:  &sourceError,
+	}
+
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call QueryRelay, because mysql worker has not been started")
+		resp.Result = false
+		resp.Msg = terror.ErrWorkerNoStart.Error()
+		return resp, nil
+	}
+
+	if w.relayHolder != nil {
+		sourceStatus.RelayStatus = w.relayHolder.Status()
+	}
+
+	return resp, nil
+}
+
 // QueryError implements WorkerServer.QueryError
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb.QueryErrorResponse, error) {
 	log.L().Info("", zap.String("request", "QueryError"), zap.Stringer("payload", req))

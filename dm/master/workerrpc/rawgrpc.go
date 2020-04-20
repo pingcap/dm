@@ -103,6 +103,8 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.UpdateSubTask, err = client.UpdateSubTask(ctx, req.UpdateSubTask)
 	case CmdQueryStatus:
 		resp.QueryStatus, err = client.QueryStatus(ctx, req.QueryStatus)
+	case CmdQueryRelayStatus:
+		resp.QueryRelayStatus, err = client.QueryRelayStatus(ctx, req.QueryRelayStatus)
 	case CmdQueryError:
 		resp.QueryError, err = client.QueryError(ctx, req.QueryError)
 	case CmdQueryWorkerConfig:

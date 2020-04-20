@@ -35,6 +35,7 @@ type relayInfo struct {
 	Worker      string            `json:"worker"`
 	Result      *pb.ProcessResult `json:"result"`
 	RelayStatus *pb.RelayStatus   `json:"relayStatus"`
+	RelayError  *pb.RelayError    `json:"relayError"`
 }
 
 // NewQueryRelayCmd represents the queryRelay command
@@ -48,6 +49,7 @@ func NewQueryRelayCmd() *cobra.Command {
 }
 
 func queryRelayFunc(cmd *cobra.Command, args []string) {
+	// TODO
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", terror.Message(err))
@@ -57,7 +59,7 @@ func queryRelayFunc(cmd *cobra.Command, args []string) {
 	cli := common.MasterClient()
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
-	resp, err := cli.QueryStatus(ctx, &pb.QueryStatusListRequest{
+	resp, err := cli.QueryRelay(ctx, &pb.QueryRelayListRequest{
 		Sources: sources,
 	})
 	if err != nil {
@@ -69,7 +71,8 @@ func queryRelayFunc(cmd *cobra.Command, args []string) {
 	common.PrettyPrintInterface(result)
 }
 
-func wrapRelayResult(resp *pb.QueryStatusListResponse) *relayResult {
+func wrapRelayResult(resp *pb.QueryRelayListResponse) *relayResult {
+	// TODO
 	relayResult := relayResult{
 		Result:     resp.Result,
 		Msg:        resp.Msg,
@@ -84,6 +87,7 @@ func wrapRelayResult(resp *pb.QueryStatusListResponse) *relayResult {
 				Worker:      source.SourceStatus.Worker,
 				Result:      source.SourceStatus.Result,
 				RelayStatus: source.SourceStatus.RelayStatus,
+				RelayError:  source.SourceError.RelayError,
 			}
 			relayInfos = append(relayInfos, relayInfo)
 		}
