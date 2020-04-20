@@ -246,22 +246,30 @@ func CompareLocation(location1, location2 Location, cmpGTID bool) int {
 //   -1, true if gSet1 is less than gSet2
 // but if can't compare gSet1 and gSet2, will returns 0, false
 func CompareGTID(gSet1, gSet2 gtid.Set) (int, bool) {
-	if gSet1 != nil && len(gSet1.String()) != 0 &&
-		gSet2 != nil && len(gSet2.String()) != 0 {
-		contain1 := gSet1.Contain(gSet2)
-		contain2 := gSet2.Contain(gSet1)
-		if contain1 && contain2 {
-			// gtidSet1 contains gtidSet2 and gtidSet2 contains gtidSet1 means gtidSet1 equals to gtidSet2,
-			return 0, true
-		}
+	gSetIsEmpty1 := gSet1 == nil || len(gSet1.String()) == 0
+	gSetIsEmpty2 := gSet2 == nil || len(gSet2.String()) == 0
 
-		if contain1 {
-			return 1, true
-		} else if contain2 {
-			return -1, true
-		}
+	if gSetIsEmpty1 && gSetIsEmpty2 {
+		// both gSet1 and gSet2 is nil
+		return 0, true
+	} else if gSetIsEmpty1 {
+		return -1, true
+	} else if gSetIsEmpty2 {
+		return 1, true
+	}
 
-		return 0, false
+	// both gSet1 and gSet2 is not nil
+	contain1 := gSet1.Contain(gSet2)
+	contain2 := gSet2.Contain(gSet1)
+	if contain1 && contain2 {
+		// gtidSet1 contains gtidSet2 and gtidSet2 contains gtidSet1 means gtidSet1 equals to gtidSet2,
+		return 0, true
+	}
+
+	if contain1 {
+		return 1, true
+	} else if contain2 {
+		return -1, true
 	}
 
 	return 0, false

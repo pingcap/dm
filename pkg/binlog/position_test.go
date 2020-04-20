@@ -361,7 +361,7 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 		cmpPos  int
 	}{
 		{
-			// pos1 = pos2, gset is nil
+			// both gset1 and gset2 is nil, gset1 = gset2, pos1 = pos2
 			gmysql.MySQLFlavor,
 			gmysql.Position{
 				Name: "binlog.00001",
@@ -376,7 +376,7 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 			0,
 			0,
 		}, {
-			// pos1 < pos2, gset is nil
+			// both gset1 and gset2 is nil, gset1 = gset2, pos1 < pos2
 			gmysql.MariaDBFlavor,
 			gmysql.Position{
 				Name: "binlog.00001",
@@ -388,7 +388,7 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  122,
 			},
 			"",
-			-1,
+			0,
 			-1,
 		}, {
 			// pos1 > pos2, gset is nil
@@ -403,7 +403,7 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  122,
 			},
 			"",
-			1,
+			0,
 			1,
 		}, {
 			// gset1 = gset2, pos1 < pos2
@@ -524,6 +524,36 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 			},
 			"2-2-2,3-3-3",
 			-1,
+			-1,
+		}, {
+			// gset1 is nil < gset2, pos1 < pos2
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"",
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  124,
+			},
+			"2-2-2,3-3-3",
+			-1,
+			-1,
+		}, {
+			// both gset1 and gset2 is nil, gset1 = gset2, pos1 < pos2
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"",
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  124,
+			},
+			"",
+			0,
 			-1,
 		},
 	}

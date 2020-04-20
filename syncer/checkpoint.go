@@ -378,9 +378,13 @@ func (cp *RemoteCheckPoint) DeleteSchemaPoint(tctx *tcontext.Context, sourceSche
 
 // IsNewerTablePoint implements CheckPoint.IsNewerTablePoint.
 // gte means greater than or equal, gte should judge by EnableGTID and the event type
-// - when enable GTID and binlog is DML, different location may have same GTID, so when GTID is equal, can treat it as new table point
-// - when enable GTID and binlog is DDL, different DDL have different GTID, so if GTID is euqal, it is a old table point
-// - when not enable GTID, just compare the position, and only when grater than the old point is newer table point
+// - when enable GTID and binlog is DML, go-mysql will only update GTID set in a XID event after the rows event, for example, the binlog events are:
+//   - Query event, location is gset1
+//   - Rows event, location is gset1
+//   - XID event, location is gset2
+//   after syncer handle query event, will save table point with gset1, and when handle rows event, will compare the rows's location with table checkpoint's location in `IsNewerTablePoint`, and these two location have same gset, so we should use `>=` to compare location in this case.
+// - when enable GTID and binlog is DDL, different DDL have different GTID set, so if GTID set is euqal, it is a old table point, should use `>` to compare location in this case.
+// - when not enable GTID, just compare the position, and only when grater than the old point is newer table point, should use `>` to compare location is this case.
 func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, location binlog.Location, gte bool) bool {
 	cp.RLock()
 	defer cp.RUnlock()
