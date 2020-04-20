@@ -229,7 +229,7 @@ func (s *Syncer) newJobChans(count int) {
 	s.closeJobChans()
 	s.jobs = make([]chan *job, 0, count)
 	for i := 0; i < count; i++ {
-		s.jobs = append(s.jobs, make(chan *job, 1000))
+		s.jobs = append(s.jobs, make(chan *job, s.cfg.QueueSize))
 	}
 	s.jobsClosed.Set(false)
 }
@@ -714,7 +714,10 @@ func (s *Syncer) addJob(job *job) error {
 		// ugly code addJob and sync, refine it later
 		s.jobWg.Add(s.cfg.WorkerCount)
 		for i := 0; i < s.cfg.WorkerCount; i++ {
+			startTime := time.Now()
 			s.jobs[i] <- job
+			// flush for every DML queue
+			addJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, s.queueBucketMapping[i]).Observe(time.Since(startTime).Seconds())
 		}
 		s.jobWg.Wait()
 		finishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
@@ -724,12 +727,17 @@ func (s *Syncer) addJob(job *job) error {
 		addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName).Inc()
 		s.jobWg.Add(1)
 		queueBucket = s.cfg.WorkerCount
+		startTime := time.Now()
 		s.jobs[queueBucket] <- job
+		addJobDurationHistogram.WithLabelValues("ddl", s.cfg.Name, adminQueueName).Observe(time.Since(startTime).Seconds())
 	case insert, update, del:
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
 		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
+		startTime := time.Now()
+		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
+		addJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket]).Observe(time.Since(startTime).Seconds())
 	}
 
 	wait := s.checkWait(job)
@@ -970,6 +978,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	for {
 		select {
 		case sqlJob, ok := <-jobChan:
+			queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket).Set(float64(len(jobChan)))
 			if !ok {
 				return
 			}
@@ -989,7 +998,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 				clearF()
 			}
 
-		default:
+		case <-time.After(waitTime):
 			if len(jobs) > 0 {
 				err = executeSQLs()
 				if err != nil {
@@ -997,8 +1006,6 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 					continue
 				}
 				clearF()
-			} else {
-				time.Sleep(waitTime)
 			}
 		}
 	}
@@ -1184,11 +1191,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			e = s.tryInject(latestOp, currentLocation.Clone())
 			latestOp = null
 		}
+
+		startTime := time.Now()
 		if e == nil {
 			e, err = s.streamerController.GetEvent(tctx)
 		}
 
-		startTime := time.Now()
 		if err == context.Canceled {
 			s.tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last location", lastLocation))
 			return nil
@@ -1241,6 +1249,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return err
 		}
 
+		// time duration for reading an event from relay log or upstream master.
+		binlogReadDurationHistogram.WithLabelValues(s.cfg.Name).Observe(time.Since(startTime).Seconds())
+		startTime = time.Now() // reset start time for the next metric.
+
 		// get binlog event, reset tryReSync, so we can re-sync binlog while syncer meets errors next time
 		tryReSync = true
 		binlogPosGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(e.Header.LogPos))
@@ -1251,6 +1263,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(index))
 		}
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
+		binlogEventSizeHistogram.WithLabelValues(s.cfg.Name).Observe(float64(e.Header.EventSize))
 
 		failpoint.Inject("ProcessBinlogSlowDown", nil)
 
@@ -1432,7 +1445,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return err
 	}
 	if ignore {
-		binlogSkippedEventsTotal.WithLabelValues("rows", s.cfg.Name).Inc()
+		skipBinlogDurationHistogram.WithLabelValues("rows", s.cfg.Name).Observe(time.Since(ec.startTime).Seconds())
 		// for RowsEvent, we should record lastLocation rather than currentLocation
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
 	}
@@ -1521,6 +1534,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return nil
 	}
 
+	startTime := time.Now()
 	for i := range sqls {
 		var arg []interface{}
 		var key []string
@@ -1535,6 +1549,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err
 		}
 	}
+	dispatchBinlogDurationHistogram.WithLabelValues(ec.latestOp.String(), s.cfg.Name).Observe(time.Since(startTime).Seconds())
 	return nil
 }
 
@@ -1557,7 +1572,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	if parseResult.ignore {
-		binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
+		skipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name).Observe(time.Since(ec.startTime).Seconds())
 		s.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema))
 		*ec.lastLocation = ec.currentLocation.Clone() // before record skip location, update lastLocation
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
@@ -1635,7 +1650,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			return handleErr
 		}
 		if len(sqlDDL) == 0 {
-			binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
+			skipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name).Observe(time.Since(ec.startTime).Seconds())
 			s.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema))
 			continue
 		}
@@ -1991,10 +2006,14 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 }
 
 func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, location, cmdLocation binlog.Location, traceID string) error {
+	startTime := time.Now()
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
 		return terror.ErrSyncerUnitResolveCasualityFail.Generate(err)
 	}
+	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
+	conflictDetectDurationHistogram.WithLabelValues(s.cfg.Name).Observe(time.Since(startTime).Seconds())
+
 	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, location, cmdLocation, traceID)
 	return s.addJobFunc(job)
 }
@@ -2008,7 +2027,7 @@ func (s *Syncer) resolveCasuality(keys []string) (string, error) {
 	}
 
 	if s.c.detectConflict(keys) {
-		s.tctx.L().Debug("meet causality key, will generate a flush job and wait all sqls executed", zap.String("feature", "conflict detect"))
+		s.tctx.L().Debug("meet causality key, will generate a flush job and wait all sqls executed", zap.Strings("keys", keys))
 		if err := s.flushJobs(); err != nil {
 			return "", err
 		}

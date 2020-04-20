@@ -845,15 +845,15 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"insert into gctest_1.t_3(id, cfg) values (3, '{\"id\": 3}')",
 			},
 			[]string{
-				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
-				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
-				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
+				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?)",
+				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?)",
+				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?)",
+				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?)",
+				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?)",
+				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?)",
+				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?)",
+				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?)",
+				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?)",
 			},
 			[][]interface{}{
 				{int32(1), int32(18), "{}"},
@@ -879,14 +879,14 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"update gctest_1.t_3 set cfg = '{\"id\": 12, \"old_id\": 2}' where gen_id = 2",
 			},
 			[]string{
-				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1;",
-				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1;",
-				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` IS ? AND `cfg_json` IS ? LIMIT 1;",
-				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1;",
-				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1;",
-				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1;",
-				"UPDATE `gctest_1`.`t_3` SET `id` = ?, `cfg` = ? WHERE `gen_id` = ? LIMIT 1;",
-				"UPDATE `gctest_1`.`t_3` SET `id` = ?, `cfg` = ? WHERE `gen_id` = ? LIMIT 1;",
+				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1",
+				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1",
+				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` IS ? AND `cfg_json` IS ? LIMIT 1",
+				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1",
+				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1",
+				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1",
+				"UPDATE `gctest_1`.`t_3` SET `id` = ?, `cfg` = ? WHERE `gen_id` = ? LIMIT 1",
+				"UPDATE `gctest_1`.`t_3` SET `id` = ?, `cfg` = ? WHERE `gen_id` = ? LIMIT 1",
 			},
 			[][]interface{}{
 				{int32(1), int32(21), "{\"a\": 12}", int32(1), int32(18), "{}", []uint8("{}")},
@@ -911,14 +911,14 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"delete from gctest_1.t_3 where gen_id = 12",
 			},
 			[]string{
-				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1;",
-				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1;",
-				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` IS ? AND `cfg_json` IS ? LIMIT 1;",
-				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1;",
-				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1;",
-				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1;",
-				"DELETE FROM `gctest_1`.`t_3` WHERE `gen_id` = ? LIMIT 1;",
-				"DELETE FROM `gctest_1`.`t_3` WHERE `gen_id` = ? LIMIT 1;",
+				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1",
+				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1",
+				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` IS ? AND `cfg_json` IS ? LIMIT 1",
+				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1",
+				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1",
+				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1",
+				"DELETE FROM `gctest_1`.`t_3` WHERE `gen_id` = ? LIMIT 1",
+				"DELETE FROM `gctest_1`.`t_3` WHERE `gen_id` = ? LIMIT 1",
 			},
 			[][]interface{}{
 				{int32(1), int32(21), "{\"a\": 12}", []uint8("{\"a\":12}")},
@@ -950,8 +950,8 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
 	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db)}
-	syncer.ddlDBConn = &DBConn{baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
-	syncer.toDBConns = []*DBConn{{baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
+	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	syncer.reset()
 
 	syncer.streamerController = NewStreamerController(tcontext.Background(), syncer.syncCfg, true, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone)
@@ -1041,6 +1041,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	s.cfg.WorkerCount = 1
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.jobs = []chan *job{make(chan *job, 1)}
+	syncer.queueBucketMapping = []string{"queue_0", adminQueueName}
 
 	wg.Add(1)
 	go func() {
@@ -1192,7 +1193,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			nil,
 		}, {
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?);",
+			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int64(580981944116838401), "a"},
 		}, {
 			flush,
@@ -1204,11 +1205,11 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			nil,
 		}, {
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?);",
+			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int64(580981944116838402), "b"},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1;",
+			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
 			[]interface{}{int64(580981944116838401)},
 		}, {
 			flush,
@@ -1217,12 +1218,12 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		}, {
 			// in first 5 minutes, safe mode is true, will split update to delete + replace
 			update,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1;",
+			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
 			[]interface{}{int64(580981944116838402)},
 		}, {
 			// in first 5 minutes, , safe mode is true, will split update to delete + replace
 			update,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?);",
+			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int64(580981944116838401), "b"},
 		},
 	}
@@ -1277,11 +1278,11 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	expectJobs2 := []*expectJob{
 		{
 			insert,
-			"REPLACE INTO `test_1`.`t_2` (`id`,`name`) VALUES (?,?);",
+			"REPLACE INTO `test_1`.`t_2` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int32(3), "c"},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1;",
+			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1",
 			[]interface{}{int32(3)},
 		},
 	}
