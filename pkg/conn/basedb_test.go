@@ -53,7 +53,7 @@ func (t *testBaseDBSuite) TestGetBaseConn(c *C) {
 	mock.ExpectBegin()
 	mock.ExpectExec("create database test").WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
-	affected, err := dbConn.ExecuteSQL(tctx, []string{"create database test"})
+	affected, err := dbConn.ExecuteSQL(tctx, testStmtHistogram, "test", []string{"create database test"})
 	c.Assert(err, IsNil)
 	c.Assert(affected, Equals, 1)
 }
