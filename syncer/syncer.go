@@ -143,8 +143,8 @@ type Syncer struct {
 	jobsChanLock       sync.Mutex
 	queueBucketMapping []string
 
-	workerCheckpoints   []*binlogPoint
-	flushCheckpointChan chan FlushType
+	workerCheckpoints []*binlogPoint
+	flusher           *flushHelper
 
 	c *causality
 
@@ -466,7 +466,6 @@ func (s *Syncer) reset() {
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
 	s.workerCheckpoints = makeWorkerCheckpointArray(s.cfg.WorkerCount, s.cfg.Flavor)
-	s.flushCheckpointChan = make(chan FlushType, 16)
 
 	s.execErrorDetected.Set(false)
 	s.resetExecErrors()
@@ -702,14 +701,6 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 	}
 }
 
-func (s *Syncer) checkWait(job *job) bool {
-	if job.tp == ddl {
-		return true
-	}
-
-	return false
-}
-
 func (s *Syncer) saveTablePoint(db, table string, location binlog.Location) {
 	ti, err := s.schemaTracker.GetTable(db, table)
 	if err != nil {
@@ -745,10 +736,8 @@ func (s *Syncer) addJob(job *job) error {
 		}
 		s.jobWg.Wait()
 		finishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
-		select {
-		case <-s.done:
-		case s.flushCheckpointChan <- NeedUpdate:
-		}
+		s.updateGlobalCheckpointFromWorkers(GetMaxPos)
+		s.flusher.addFlushRequest(NoNeedUpdate, true)
 		return nil
 	case ddl:
 		s.jobWg.Wait()
@@ -768,7 +757,7 @@ func (s *Syncer) addJob(job *job) error {
 		addJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket]).Observe(time.Since(startTime).Seconds())
 	}
 
-	wait := s.checkWait(job)
+	wait := job.tp == ddl
 	if wait {
 		s.jobWg.Wait()
 		s.c.reset()
@@ -791,15 +780,9 @@ func (s *Syncer) addJob(job *job) error {
 	}
 
 	if s.checkpoint.CheckGlobalPoint() {
-		select {
-		case <-s.done:
-		case s.flushCheckpointChan <- NeedUpdate:
-		}
+		s.flusher.addFlushRequest(NeedUpdate, false)
 	} else if wait {
-		select {
-		case <-s.done:
-		case s.flushCheckpointChan <- NoNeedUpdate:
-		}
+		s.flusher.addFlushRequest(NoNeedUpdate, true)
 	}
 
 	return nil
@@ -1070,10 +1053,11 @@ func (s *Syncer) updateGlobalCheckpointFromWorkers(typ int) {
 	}
 }
 
-func (s *Syncer) asyncFlushCheckpoint(ctx context.Context, flushChan chan FlushType) {
+func (s *Syncer) asyncFlushCheckpoint(ctx context.Context, flusher *flushHelper) {
+	defer flusher.close()
 	for {
 		select {
-		case flushType := <-flushChan:
+		case flushType := <-flusher.flushCheckpointChan:
 			if flushType == NeedUpdate {
 				s.updateGlobalCheckpointFromWorkers(GetMinPos)
 			}
@@ -1084,6 +1068,7 @@ func (s *Syncer) asyncFlushCheckpoint(ctx context.Context, flushChan chan FlushT
 					return
 				}
 			}
+			flusher.finishRequest(flushType)
 		case <-ctx.Done():
 			s.tctx.L().Info("async flush checkpoint routine exits", log.ShortError(ctx.Err()))
 			return
@@ -1148,9 +1133,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 
 	s.wg.Add(1)
+	s.flusher = newFlusher(ctx)
 	go func() {
 		defer s.wg.Done()
-		s.asyncFlushCheckpoint(ctx, s.flushCheckpointChan)
+		s.asyncFlushCheckpoint(ctx, s.flusher)
 	}()
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)

@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -99,4 +100,47 @@ func getDBConfigFromEnv() config.DBConfig {
 		Password: pswd,
 		Port:     port,
 	}
+}
+
+type flushHelper struct {
+	ctx                 context.Context
+	flushCheckpointChan chan FlushType
+	finished            chan struct{}
+}
+
+func newFlusher(ctx context.Context) *flushHelper {
+	return &flushHelper{
+		ctx:                 ctx,
+		flushCheckpointChan: make(chan FlushType, 16),
+		finished:            make(chan struct{}, 4),
+	}
+}
+
+func (f *flushHelper) addFlushRequest(typ FlushType, wait bool) {
+	select {
+	case <-f.ctx.Done():
+		return
+	case f.flushCheckpointChan <- typ:
+	}
+	if wait {
+		select {
+		case <-f.ctx.Done():
+		case <-f.finished:
+		}
+	}
+}
+
+func (f *flushHelper) finishRequest(typ FlushType) {
+	if typ == NeedUpdate {
+		return
+	}
+	select {
+	case <-f.ctx.Done():
+		return
+	case f.finished <- struct{}{}:
+	}
+}
+
+func (f *flushHelper) close() {
+	close(f.finished)
 }
