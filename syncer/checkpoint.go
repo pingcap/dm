@@ -51,8 +51,6 @@ var (
 	globalCpSchema       = "" // global checkpoint's cp_schema
 	globalCpTable        = "" // global checkpoint's cp_table
 	maxCheckPointTimeout = "1m"
-
-	maxCheckPointSaveTime = 30 * time.Second
 )
 
 type binlogPoint struct {
@@ -510,7 +508,7 @@ func (cp *RemoteCheckPoint) String() string {
 func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 	cp.RLock()
 	defer cp.RUnlock()
-	return time.Since(cp.globalPointSaveTime) >= maxCheckPointSaveTime
+	return time.Since(cp.globalPointSaveTime) >= time.Duration(cp.cfg.CheckpointFlushInterval)*time.Second
 }
 
 // Rollback implements CheckPoint.Rollback
