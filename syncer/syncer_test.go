@@ -1042,6 +1042,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.jobs = []chan *job{make(chan *job, 1)}
 	syncer.workerCheckpoints = makeWorkerCheckpointArray(1, s.cfg.Flavor)
+	syncer.flushCheckpointChan = make(chan FlushType, 16)
 	syncer.queueBucketMapping = []string{"queue_0", adminQueueName}
 
 	wg.Add(1)
