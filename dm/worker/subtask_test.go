@@ -524,6 +524,7 @@ func (t *testSubTask) TestSubtaskFastQuit(c *C) {
 		c.Fatal("fail to pause subtask in 0.5s when stuck into unitTransWaitCondition")
 	case <-finished:
 	}
+	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
 
 	st = NewSubTaskWithStage(cfg, pb.Stage_Paused, nil)
 	st.prevUnit = mockLoader
@@ -543,4 +544,5 @@ func (t *testSubTask) TestSubtaskFastQuit(c *C) {
 		c.Fatal("fail to stop subtask in 0.5s when stuck into unitTransWaitCondition")
 	case <-finished:
 	}
+	c.Assert(st.Stage(), Equals, pb.Stage_Stopped)
 }
