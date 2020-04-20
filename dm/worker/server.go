@@ -518,7 +518,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 }
 
 // QueryRelay implements WorkerServer.QueryRelay
-func (s *Server) QueryRelay(ctx context.Context, req *pb.QueryRelayStatusRequest) (*pb.QueryRelayStatusResponse, error) {
+func (s *Server) QueryRelayStatus(ctx context.Context, req *pb.QueryRelayStatusRequest) (*pb.QueryRelayStatusResponse, error) {
 	log.L().Info("", zap.String("request", "QueryRelay"), zap.Stringer("payload", req))
 	sourceStatus := s.getSourceStatus(true)
 	sourceStatus.Worker = s.cfg.Name
