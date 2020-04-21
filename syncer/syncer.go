@@ -759,7 +759,7 @@ func (s *Syncer) addJob(job *job) error {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(sourceSchema, sourceTable, job.location.Clone())
+				s.saveTablePoint(sourceSchema, sourceTable, job.location)
 			}
 		}
 		// reset sharding group after checkpoint saved
@@ -771,7 +771,7 @@ func (s *Syncer) addJob(job *job) error {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(sourceSchema, sourceTable, job.currentLocation.Clone())
+				s.saveTablePoint(sourceSchema, sourceTable, job.currentLocation)
 			}
 		}
 	}
