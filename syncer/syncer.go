@@ -402,41 +402,6 @@ func (s *Syncer) initPlugin() error {
 	}
 	s.plugin = plugin
 	return s.plugin.Init(s.cfg)
-	/*
-		if len(s.plugin.path) == 0 {
-			return nil
-		}
-
-		p, err := plugin.Open(s.plugin.path)
-		if err != nil {
-			// TODO: use terror
-			return err
-		}
-
-		initFunc, err := p.Lookup("Init")
-		if err != nil {
-			// TODO: use terror
-			return err
-		}
-
-		handleDDLJobResultFunc, err := p.Lookup("HandleDDLJobResult")
-		if err != nil {
-			// TODO: use terror
-			return err
-		}
-
-		handleDMLJobResultFunc, err := p.Lookup("HandleDMLJobResult")
-		if err != nil {
-			// TODO: use terror
-			return err
-		}
-
-		s.plugin.Init = initFunc.(func() error)
-		s.plugin.HandleDDLJobResult = handleDDLJobResultFunc.(func(*replication.QueryEvent, eventContext, error) error)
-		s.plugin.HandleDMLJobResult = handleDMLJobResultFunc.(func(*replication.RowsEvent, eventContext, error) error)
-
-		return s.plugin.Init()
-	*/
 }
 
 // initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
@@ -971,9 +936,6 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		s.jobWg.Done()
 		if err != nil {
 			s.execError.Set(err)
-			if !utils.IsContextCanceledError(err) {
-				s.runFatalChan <- unit.NewProcessError(err)
-			}
 			continue
 		}
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))

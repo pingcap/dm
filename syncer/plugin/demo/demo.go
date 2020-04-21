@@ -36,7 +36,7 @@ type DemoPlugin struct {
 }
 
 // NewPlugin creates a new DemoPlugin
-func NewPlugin() *DemoPlugin {
+func NewPlugin() interface{} {
 	return &DemoPlugin{}
 }
 
@@ -59,20 +59,26 @@ func (dp *DemoPlugin) HandleDDLJobResult(ev *replication.QueryEvent, err error) 
 		return nil
 	}
 
+	log.Info("demo plugin HandleDDLJobResult", zap.String("query", string(ev.Query)), zap.Error(err))
 	if !strings.Contains(err.Error(), "unsupported modify column length") {
+		log.Info("don't contain error message \"unsupported modify column length\"")
 		return nil
 	}
 
 	stmt, err := parser.New().ParseOneStmt(string(ev.Query), "", "")
 	if err != nil {
+		log.Info("parser failed", zap.Error(err))
 		return err
 	}
 
+	schema := string(ev.Schema)
+
 	switch st := stmt.(type) {
 	case *ast.AlterTableStmt:
-
 		switch st.Specs[0].Tp {
 		case ast.AlterTableModifyColumn:
+			log.Info("handle AlterTableModifyColumn")
+
 			originColName := st.Specs[0].NewColumns[0].Name.Name.O
 			tmpColName := fmt.Sprintf("%s_tmp", st.Specs[0].NewColumns[0].Name)
 
@@ -84,44 +90,57 @@ func (dp *DemoPlugin) HandleDDLJobResult(ev *replication.QueryEvent, err error) 
 			var sb2 strings.Builder
 			st.Specs[0].NewColumns[0].Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb2))
 			tmpCol := sb2.String()
-			log.Info("after translate", zap.String("new col", tmpCol), zap.String("origin col", originColName))
+			//log.Info("after translate", zap.String("new col", tmpCol), zap.String("origin col", originColName))
 
 			ctx := context.Background()
-			tableInfo, err := dbutil.GetTableInfo(ctx, dp.db, st.Table.Schema.O, st.Table.Name.O, "")
+			tableInfo, err := dbutil.GetTableInfo(ctx, dp.db, schema, st.Table.Name.O, "")
 			if err != nil {
+				log.Info("GetTableInfo failed", zap.Error(err))
 				return err
 			}
 			keys, _ := dbutil.SelectUniqueOrderKey(tableInfo)
 			keysList := strings.Join(keys, ", ")
 
-			addColSQL := fmt.Sprintf("alter table `%s`.`%s` add column %s after %s", st.Table.Schema.O, st.Table.Name.O, tmpCol, originColName)
+			addColSQL := fmt.Sprintf("alter table `%s`.`%s` add column %s after %s", schema, st.Table.Name.O, tmpCol, originColName)
+			log.Info("execute", zap.String("sql", addColSQL))
 			_, err = dp.db.ExecContext(ctx, addColSQL)
 			if err != nil {
+				log.Info("GetTableInfo failed", zap.Error(err))
 				return err
 			}
 
-			insertSQL := fmt.Sprintf("replace into `%s`.`%s`(%s, %s) SELECT %s, %s AS %s FROM `%s`.`%s`;", st.Table.Schema.O, st.Table.Name.O, keysList, tmpColName, keysList, originColName, tmpColName, st.Table.Schema.O, st.Table.Name.O)
+			insertSQL := fmt.Sprintf("replace into `%s`.`%s`(%s, %s) SELECT %s, %s AS %s FROM `%s`.`%s`;", schema, st.Table.Name.O, keysList, tmpColName, keysList, originColName, tmpColName, schema, st.Table.Name.O)
+			log.Info("execute", zap.String("sql", insertSQL))
 			_, err = dp.db.ExecContext(ctx, insertSQL)
 			if err != nil {
+				log.Info("GetTableInfo failed", zap.Error(err))
 				return err
 			}
 
-			dropColSQL := fmt.Sprintf("alter table `%s`.`%s` drop column %s", st.Table.Schema.O, st.Table.Name.O, originColName)
+			dropColSQL := fmt.Sprintf("alter table `%s`.`%s` drop column %s", schema, st.Table.Name.O, originColName)
+			log.Info("execute", zap.String("sql", dropColSQL))
 			_, err = dp.db.ExecContext(ctx, dropColSQL)
 			if err != nil {
+				log.Info("GetTableInfo failed", zap.Error(err))
 				return err
 			}
 
-			changeColSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` CHANGE COLUMN %s %s;", st.Table.Schema.O, st.Table.Name.O, tmpColName, originCol)
+			changeColSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` CHANGE COLUMN %s %s;", schema, st.Table.Name.O, tmpColName, originCol)
+			log.Info("execute", zap.String("sql", changeColSQL))
 			_, err = dp.db.ExecContext(ctx, changeColSQL)
 			if err != nil {
 				return err
 			}
+		default:
+			log.Info("ignore")
+			return nil
 		}
 	default:
+		log.Info("ignore")
 		return nil
 	}
 
+	log.Info("ignore")
 	return nil
 }
 

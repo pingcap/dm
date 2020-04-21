@@ -19,6 +19,7 @@ import (
 
 	//"github.com/pingcap/errors"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/siddontang/go-mysql/replication"
 )
 
@@ -35,24 +36,24 @@ func LoadPlugin(filepath string) (Plugin, error) {
 	p, err := plugin.Open(filepath)
 	if err != nil {
 		// TODO: use terror
-		return nil, err
+		return nil, terror.ErrSyncerLoadPlugin.Delegate(err, filepath)
 	}
 
 	pluginSymbol, err := p.Lookup(createPluginFunc)
 	if err != nil {
-		return nil, err
+		return nil, terror.ErrSyncerLoadPlugin.Delegate(err, filepath)
 	}
 
 	newPlugin, ok := pluginSymbol.(func() interface{})
 	if !ok {
 		// TODO: use terror
-		return nil, nil
+		return nil, terror.ErrSyncerLoadPlugin.Delegate(err, filepath)
 	}
 
 	plg := newPlugin()
 	plg2, ok := plg.(Plugin)
 	if !ok {
-		return nil, nil
+		return nil, terror.ErrSyncerLoadPlugin.Delegate(err, filepath)
 	}
 
 	return plg2, nil
@@ -71,7 +72,7 @@ type Plugin interface {
 }
 
 // NilPlugin is a plugin which do nothing
-type NilPlugin struct {}
+type NilPlugin struct{}
 
 // Init implements Plugin's Init
 func (n *NilPlugin) Init(cfg *config.SubTaskConfig) error {

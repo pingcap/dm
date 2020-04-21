@@ -23,3 +23,9 @@ insert into t1 (id, name, info) values (7, 'gentest', '{"id": 126}');
 update t1 set name = 'gentestxxxxxx' where gen_id = 124;
 -- delete with unique key
 delete from t1 where gen_id > 124;
+
+create table t11(id int primary key, name varchar(100));
+insert into t11 values(1, "a"),(2, "b");
+/* alter table will failed when execute in TiDB, will be handled by plugin */
+ALTER TABLE t11 MODIFY COLUMN name varchar(50);
+insert into t11 values(3, "c"),(4, "d");

@@ -23,6 +23,9 @@ disable-heartbeat = true
 # replicate from relay log or remote binlog
 binlog-type = "remote"
 
+# plugin configuration
+plugin-path = "/tmp/demo.so"
+
 # Mydumper configuration
 
 # -t, --threads
