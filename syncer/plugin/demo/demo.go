@@ -127,5 +127,5 @@ func (dp *DemoPlugin) HandleDDLJobResult(ev *replication.QueryEvent, err error) 
 
 // HandleDMLJobResult implements Plugin's HandleDMLJobResult
 func (dp *DemoPlugin) HandleDMLJobResult(ev *replication.RowsEvent, err error) error {
-	return nil
+	return err
 }

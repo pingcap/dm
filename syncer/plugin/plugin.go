@@ -28,6 +28,10 @@ var (
 
 // LoadPlugin loads plugin by plugin's file path
 func LoadPlugin(filepath string) (Plugin, error) {
+	if len(filepath) == 0 {
+		return new(NilPlugin), nil
+	}
+
 	p, err := plugin.Open(filepath)
 	if err != nil {
 		// TODO: use terror
@@ -64,4 +68,22 @@ type Plugin interface {
 
 	// HandleDMLJobResult handles the result of dml job
 	HandleDMLJobResult(ev *replication.RowsEvent, err error) error
+}
+
+// NilPlugin is a plugin which do nothing
+type NilPlugin struct {}
+
+// Init implements Plugin's Init
+func (n *NilPlugin) Init(cfg *config.SubTaskConfig) error {
+	return nil
+}
+
+// HandleDDLJobResult implements Plugin's HandleDDLJobResult
+func (n *NilPlugin) HandleDDLJobResult(ev *replication.QueryEvent, err error) error {
+	return err
+}
+
+// HandleDMLJobResult implements Plugin's HandleDMLJobResult
+func (n *NilPlugin) HandleDMLJobResult(ev *replication.RowsEvent, err error) error {
+	return err
 }
