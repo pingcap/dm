@@ -158,7 +158,9 @@ type Syncer struct {
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
 	// record whether error occurred when execute SQLs
-	execErrorDetected sync2.AtomicBool
+	//execErrorDetected sync2.AtomicBool
+
+	execError executeError
 
 	execErrors struct {
 		sync.Mutex
@@ -502,7 +504,7 @@ func (s *Syncer) reset() {
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
 
-	s.execErrorDetected.Set(false)
+	s.execError.Set(nil)
 	s.resetExecErrors()
 
 	switch s.cfg.ShardMode {
@@ -858,7 +860,7 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 //
 // we may need to refactor the concurrency model to make the work-flow more clearer later
 func (s *Syncer) flushCheckPoints() error {
-	if s.execErrorDetected.Get() {
+	if detected, _ := s.execError.Detected(); detected {
 		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint", zap.Stringer("checkpoint", s.checkpoint))
 		return nil
 	}
@@ -968,7 +970,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		}
 		s.jobWg.Done()
 		if err != nil {
-			s.execErrorDetected.Set(true)
+			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
@@ -1000,7 +1002,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	}
 
 	fatalF := func(err error) {
-		s.execErrorDetected.Set(true)
+		s.execError.Set(err)
 		if !utils.IsContextCanceledError(err) {
 			s.runFatalChan <- unit.NewProcessError(err)
 		}
@@ -1785,8 +1787,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// when add ddl job, will execute ddl and then flush checkpoint.
 		// if execute ddl failed, the execErrorDetected will be true.
-		if s.execErrorDetected.Get() {
-			return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
+		if detected, err := s.execError.Detected(); detected {
+			return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 		}
 
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
@@ -1976,8 +1978,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return err
 	}
 
-	if s.execErrorDetected.Get() {
-		return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
+	if detected, err := s.execError.Detected(); detected {
+		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 	}
 
 	if len(onlineDDLTableNames) > 0 {

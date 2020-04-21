@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/terror"
@@ -99,4 +100,23 @@ func getDBConfigFromEnv() config.DBConfig {
 		Password: pswd,
 		Port:     port,
 	}
+}
+
+type executeError struct {
+	sync.RWMutex
+
+	err error
+}
+
+func (e *executeError) Detected() (bool, error) {
+	e.RLock()
+	defer e.RUnlock()
+
+	return e.err != nil, e.err
+}
+
+func (e *executeError) Set(err error) {
+	e.Lock()
+	e.err = err
+	e.Unlock()
 }

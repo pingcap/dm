@@ -168,8 +168,8 @@ func (s *Syncer) handleQueryEventOptimistic(
 		return err
 	}
 
-	if s.execErrorDetected.Get() {
-		return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
+	if detected, err := s.execError.Detected(); detected {
+		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 	}
 
 	for _, table := range onlineDDLTableNames {

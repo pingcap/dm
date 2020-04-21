@@ -52,37 +52,10 @@ func LoadPlugin(filepath string) (Plugin, error) {
 	}
 
 	return plg2, nil
-	/*
-		syncerPlugin.Init = initFunc
-
-
-		plg := newPlugin()
-		handleDDLJobResultFunc, ok := plg.(HandleDDLJobResult)
-		if !ok {
-			return nil, nil
-		}
-		syncerPlugin.HandleDDLJobResult = handleDDLJobResultFunc
-
-
-		plg := newPlugin()
-		HandleDMLJobResultFunc, ok := plg.(HandleDMLJobResult)
-		if !ok {
-			return nil, nil
-		}
-		syncerPlugin.HandleDMLJobResult = HandleDMLJobResultFunc
-
-		return syncerPlugin
-	*/
 }
 
 // Plugin is a struct of plugin used in syncer unit
 type Plugin interface {
-	// the plugin's .so file path
-	//path string
-
-	// conn used to creating connection for double write or other usage
-	//conn interface{}
-
 	// Init do some init job
 	Init(cfg *config.SubTaskConfig) error
 
