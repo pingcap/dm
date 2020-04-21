@@ -16,7 +16,7 @@ package syncer
 import (
 	"context"
 	"fmt"
-	"plugin"
+	//"plugin"
 	"reflect"
 	"strconv"
 	"strings"
@@ -56,6 +56,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer/plugin"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/shardddl"
 	operator "github.com/pingcap/dm/syncer/sql-operator"
@@ -180,7 +181,7 @@ type Syncer struct {
 
 	addJobFunc func(*job) error
 
-	plugin *Plugin
+	plugin plugin.Plugin
 }
 
 // NewSyncer creates a new Syncer.
@@ -225,9 +226,9 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.tctx.L().DPanic("cannot create schema tracker", zap.Error(err))
 	}
 
-	syncer.plugin = &Plugin{
-		path: cfg.PluginPath,
-	}
+	//syncer.plugin = &Plugin{
+	//	path: cfg.PluginPath,
+	//}
 
 	return syncer
 }
@@ -393,39 +394,47 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 
 // initPlugin initializes the plugin
 func (s *Syncer) initPlugin() error {
-	if len(s.plugin.path) == 0 {
-		return nil
-	}
-
-	p, err := plugin.Open(s.plugin.path)
+	plugin, err := plugin.LoadPlugin(s.cfg.PluginPath)
 	if err != nil {
-		// TODO: use terror
 		return err
 	}
+	s.plugin = plugin
+	return s.plugin.Init(s.cfg)
+	/*
+		if len(s.plugin.path) == 0 {
+			return nil
+		}
 
-	initFunc, err := p.Lookup("Init")
-	if err != nil {
-		// TODO: use terror
-		return err
-	}
+		p, err := plugin.Open(s.plugin.path)
+		if err != nil {
+			// TODO: use terror
+			return err
+		}
 
-	handleDDLJobResultFunc, err := p.Lookup("HandleDDLJobResult")
-	if err != nil {
-		// TODO: use terror
-		return err
-	}
+		initFunc, err := p.Lookup("Init")
+		if err != nil {
+			// TODO: use terror
+			return err
+		}
 
-	handleDMLJobResultFunc, err := p.Lookup("HandleDMLJobResult")
-	if err != nil {
-		// TODO: use terror
-		return err
-	}
+		handleDDLJobResultFunc, err := p.Lookup("HandleDDLJobResult")
+		if err != nil {
+			// TODO: use terror
+			return err
+		}
 
-	s.plugin.Init = initFunc.(func() error)
-	s.plugin.HandleDDLJobResult = handleDDLJobResultFunc.(func(*replication.QueryEvent, eventContext, error) error)
-	s.plugin.HandleDMLJobResult = handleDMLJobResultFunc.(func(*replication.RowsEvent, eventContext, error) error)
+		handleDMLJobResultFunc, err := p.Lookup("HandleDMLJobResult")
+		if err != nil {
+			// TODO: use terror
+			return err
+		}
 
-	return s.plugin.Init()
+		s.plugin.Init = initFunc.(func() error)
+		s.plugin.HandleDDLJobResult = handleDDLJobResultFunc.(func(*replication.QueryEvent, eventContext, error) error)
+		s.plugin.HandleDMLJobResult = handleDMLJobResultFunc.(func(*replication.RowsEvent, eventContext, error) error)
+
+		return s.plugin.Init()
+	*/
 }
 
 // initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
@@ -1335,13 +1344,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 		case *replication.RowsEvent:
 			err = s.handleRowsEvent(ev, ec)
-			err1 := s.plugin.HandleDMLJobResult(ev, ec, err)
+			err1 := s.plugin.HandleDMLJobResult(ev, err)
 			if err1 != nil {
 				return terror.Annotatef(err1, "current location %s", currentLocation)
 			}
 		case *replication.QueryEvent:
 			err = s.handleQueryEvent(ev, ec)
-			err1 := s.plugin.HandleDDLJobResult(ev, ec, err)
+			err1 := s.plugin.HandleDDLJobResult(ev, err)
 			if err1 != nil {
 				return terror.Annotatef(err1, "current location %s", currentLocation)
 			}
