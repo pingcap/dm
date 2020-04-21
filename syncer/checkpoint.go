@@ -96,11 +96,25 @@ func (b *binlogPoint) flush() {
 	b.flushedTI = b.ti
 }
 
-func (b *binlogPoint) rollback() (isSchemaChanged bool) {
+func (b *binlogPoint) rollback(schemaTracker *schema.Tracker, schema string) (isSchemaChanged bool) {
 	b.Lock()
 	defer b.Unlock()
 	b.location = b.flushedLocation
-	if isSchemaChanged = b.ti != b.flushedTI; isSchemaChanged {
+	if b.ti == nil {
+		return // for global checkpoint, no need to rollback the schema.
+	}
+
+	// NOTE: no `Equal` function for `model.TableInfo` exists now, so we compare `pointer` directly,
+	// and after a new DDL applied to the schema, the returned pointer of `model.TableInfo` changed now.
+	trackedTi, _ := schemaTracker.GetTable(schema, b.ti.Name.O) // ignore the returned error, only compare `trackerTi` is enough.
+	// may three versions of schema exist:
+	// - the one tracked in the TiDB-with-mockTiKV.
+	// - the one in the checkpoint but not flushed.
+	// - the one in the checkpoint and flushed.
+	// if any of them are not equal, then we rollback them:
+	// - set the one in the checkpoint but not flushed to the one flushed.
+	// - set the one tracked to the one in the checkpoint by the caller of this method (both flushed and not flushed are the same now)
+	if isSchemaChanged = trackedTi != b.ti || b.ti != b.flushedTI; isSchemaChanged {
 		b.ti = b.flushedTI
 	}
 	return
@@ -530,12 +544,13 @@ func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
-	cp.globalPoint.rollback()
+	cp.globalPoint.rollback(schemaTracker, "")
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
 			logger := cp.logCtx.L().WithFields(zap.String("schema", schema), zap.String("table", table))
-			logger.Info("rollback checkpoint", log.WrapStringerField("checkpoint", point))
-			if point.rollback() {
+			logger.Debug("try to rollback checkpoint", log.WrapStringerField("checkpoint", point))
+			if point.rollback(schemaTracker, schema) {
+				logger.Info("rollback checkpoint", log.WrapStringerField("checkpoint", point))
 				// schema changed
 				if err := schemaTracker.DropTable(schema, table); err != nil {
 					logger.Debug("failed to drop table from schema tracker", log.ShortError(err))

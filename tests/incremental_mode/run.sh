@@ -8,6 +8,8 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 TASK_NAME="test"
 
 function run() {
+    export GO_FAILPOINTS="github.com/pingcap/dm/syncer/FlushCheckpointStage=return()"
+
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -107,7 +109,55 @@ function run() {
     sleep 3
     dmctl_start_task $WORK_DIR/dm-task.yaml
 
+    # the task should paused by `FlushCheckpointStage` failpont before flush old checkpoint.
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "failpoint error for FlushCheckpointStage before flush old checkpoint" 1
+
+    # resume-task to next stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task test"\
+        "\"result\": true" 3
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "failpoint error for FlushCheckpointStage before track DDL" 1
+
+    # resume-task to next stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task test"\
+        "\"result\": true" 3
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "failpoint error for FlushCheckpointStage before execute DDL" 1
+
+    # resume-task to next stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task test"\
+        "\"result\": true" 3
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "failpoint error for FlushCheckpointStage before save checkpoint" 1
+
+    # resume-task to next stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task test"\
+        "\"result\": true" 3
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "failpoint error for FlushCheckpointStage before flush checkpoint" 1
+
+    # resume-task to continue the sync
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task test"\
+        "\"result\": true" 3
+
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    export GO_FAILPOINTS=''
 }
 
 cleanup_data $TEST_NAME

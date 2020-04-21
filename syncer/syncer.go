@@ -752,6 +752,14 @@ func (s *Syncer) addJob(job *job) error {
 			s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ExitAfterDDLBeforeFlush"))
 			utils.OsExit(1)
 		})
+		// interrupted after executed DDL and before save checkpoint.
+		failpoint.Inject("FlushCheckpointStage", func(_ failpoint.Value) {
+			if testInjector.flushCheckpointStage == 3 {
+				s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
+				testInjector.flushCheckpointStage++
+				failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before save checkpoint"))
+			}
+		})
 		// only save checkpoint for DDL and XID (see above)
 		s.saveGlobalPoint(job.location)
 		for sourceSchema, tbs := range job.sourceTbl {
@@ -777,6 +785,14 @@ func (s *Syncer) addJob(job *job) error {
 	}
 
 	if wait {
+		// interrupted after save checkpoint and before flush checkpoint.
+		failpoint.Inject("FlushCheckpointStage", func(_ failpoint.Value) {
+			if testInjector.flushCheckpointStage == 4 {
+				s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
+				testInjector.flushCheckpointStage++
+				failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before flush checkpoint"))
+			}
+		})
 		return s.flushCheckPoints()
 	}
 
@@ -1731,9 +1747,27 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			needHandleDDLs = appliedSQLs // maybe nil
 		}
 
+		// interrupted before flush old checkpoint.
+		failpoint.Inject("FlushCheckpointStage", func(_ failpoint.Value) {
+			if testInjector.flushCheckpointStage == 0 {
+				s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
+				testInjector.flushCheckpointStage++
+				failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before flush old checkpoint"))
+			}
+		})
+
 		if err := s.flushJobs(); err != nil {
 			return err
 		}
+
+		// interrupted after flush old checkpoint and before track DDL.
+		failpoint.Inject("FlushCheckpointStage", func(_ failpoint.Value) {
+			if testInjector.flushCheckpointStage == 1 {
+				s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
+				testInjector.flushCheckpointStage++
+				failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before track DDL"))
+			}
+		})
 
 		// run trackDDL before add ddl job to make sure checkpoint can be flushed
 		for _, td := range needTrackDDLs {
@@ -1741,6 +1775,15 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 				return err
 			}
 		}
+
+		// interrupted after track DDL and before execute DDL.
+		failpoint.Inject("FlushCheckpointStage", func(_ failpoint.Value) {
+			if testInjector.flushCheckpointStage == 2 {
+				s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
+				testInjector.flushCheckpointStage++
+				failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before execute DDL"))
+			}
+		})
 
 		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID, sourceTbls)
 		err = s.addJobFunc(job)
