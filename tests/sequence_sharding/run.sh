@@ -41,6 +41,7 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+    sleep 1
 
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20
@@ -51,13 +52,14 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+    sleep 1
 
     # use sync_diff_inspector to check data now!
     echo "check sync diff for the increment replication"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
+        "query-status sequence_sharding" \
         "\"stage\": \"Running\"" 4 \
         "\"unit\": \"Sync\"" 2
 }
