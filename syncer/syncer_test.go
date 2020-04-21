@@ -1462,13 +1462,26 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	go syncer.Process(ctx, resultCh)
 
 	expectJobs1 := []*expectJob{
+		// now every ddl job will start with a flush job
 		{
+			flush,
+			"",
+			nil,
+		}, {
 			ddl,
 			"CREATE DATABASE IF NOT EXISTS `test_1`",
 			nil,
 		}, {
+			flush,
+			"",
+			nil,
+		}, {
 			ddl,
 			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			nil,
+		}, {
+			flush,
+			"",
 			nil,
 		}, {
 			ddl,
@@ -1478,6 +1491,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			insert,
 			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int64(580981944116838401), "a"},
+		}, {
+			flush,
+			"",
+			nil,
 		}, {
 			ddl,
 			"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`name`)",
