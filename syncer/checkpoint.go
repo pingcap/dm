@@ -553,7 +553,7 @@ func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 				logger.Info("rollback checkpoint", log.WrapStringerField("checkpoint", point))
 				// schema changed
 				if err := schemaTracker.DropTable(schema, table); err != nil {
-					logger.Debug("failed to drop table from schema tracker", log.ShortError(err))
+					logger.Warn("failed to drop table from schema tracker", log.ShortError(err))
 				}
 				if point.ti != nil {
 					// TODO: Figure out how to recover from errors.
