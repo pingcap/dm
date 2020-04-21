@@ -1050,6 +1050,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		syncer.flusher.finished <- struct{}{}
 		job := <-syncer.jobs[0]
 		c.Assert(job.tp, Equals, flush)
 		syncer.jobWg.Done()
