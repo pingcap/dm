@@ -69,9 +69,6 @@ dm-portal:
 dm-syncer:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-syncer ./cmd/dm-syncer
 
-plugin-demo:
-	CGO_ENABLED=1 $(GOBUILD) -ldflags '$(LDFLAGS)' -o /tmp/demo.so -buildmode=plugin ./syncer/plugin/demo/demo.go
-
 debug-tools:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/binlog-event-blackhole ./debug-tools/binlog-event-blackhole
 
@@ -161,7 +158,7 @@ dm_integration_test_build: retool_setup
 		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-tracer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
 	CGO_ENABLED=1 GO111MODULE=on go build -o bin/dm-syncer ./cmd/dm-syncer
-	CGO_ENABLED=1 GO111MODULE=on go build -o /tmp/demo.so -buildmode=plugin ./syncer/plugin/demo/demo.go
+	CGO_ENABLED=1 GO111MODULE=on go build -o bin/demo.so -buildmode=plugin ./syncer/plugin/demo/demo.go
 	$(FAILPOINT_DISABLE)
 	tests/prepare_tools.sh
 

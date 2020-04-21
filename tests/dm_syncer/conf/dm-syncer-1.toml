@@ -24,7 +24,6 @@ disable-heartbeat = true
 binlog-type = "remote"
 
 # plugin configuration
-plugin-path = "/tmp/demo.so"
 
 # Mydumper configuration
 

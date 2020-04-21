@@ -42,6 +42,8 @@ func NewPlugin() interface{} {
 
 // Init implements Plugin's Init
 func (dp *DemoPlugin) Init(cfg *config.SubTaskConfig) error {
+	log.Info("demo plugin initialize")
+
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true",
 		cfg.To.User, cfg.To.Password, cfg.To.Host, cfg.To.Port)
 	db, err := sql.Open("mysql", dsn)
@@ -54,12 +56,16 @@ func (dp *DemoPlugin) Init(cfg *config.SubTaskConfig) error {
 }
 
 // HandleDDLJobResult implements Plugin's HandleDDLJobResult
+// for example:
+// 	ev.Query is `ALTER TABLE test.t1 MODIFY COLUMN name varchar(50);`
+//  error is `unsupported modify column length 50 is less than origin 100`
 func (dp *DemoPlugin) HandleDDLJobResult(ev *replication.QueryEvent, err error) error {
 	if err == nil {
 		return nil
 	}
 
-	log.Info("demo plugin HandleDDLJobResult", zap.String("query", string(ev.Query)), zap.Error(err))
+	log.Info("demo plugin handle ddl job result", zap.String("query", string(ev.Query)), zap.Error(err))
+
 	if !strings.Contains(err.Error(), "unsupported modify column length") {
 		log.Info("don't contain error message \"unsupported modify column length\"")
 		return nil
@@ -77,25 +83,25 @@ func (dp *DemoPlugin) HandleDDLJobResult(ev *replication.QueryEvent, err error) 
 	case *ast.AlterTableStmt:
 		switch st.Specs[0].Tp {
 		case ast.AlterTableModifyColumn:
-			log.Info("handle AlterTableModifyColumn")
-
 			originColName := st.Specs[0].NewColumns[0].Name.Name.O
 			tmpColName := fmt.Sprintf("%s_tmp", st.Specs[0].NewColumns[0].Name)
 
+			// get origin column from ast, originCol is `name varchar(50)`
 			var sb strings.Builder
 			st.Specs[0].NewColumns[0].Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb))
 			originCol := sb.String()
 
+			// generate tmp column, tmpCol is `name_tmp varchar(50)`
 			st.Specs[0].NewColumns[0].Name.Name = model.NewCIStr(tmpColName)
 			var sb2 strings.Builder
 			st.Specs[0].NewColumns[0].Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb2))
 			tmpCol := sb2.String()
-			//log.Info("after translate", zap.String("new col", tmpCol), zap.String("origin col", originColName))
 
+			// get table infomation, used to get primary key and unique key
 			ctx := context.Background()
 			tableInfo, err := dbutil.GetTableInfo(ctx, dp.db, schema, st.Table.Name.O, "")
 			if err != nil {
-				log.Info("GetTableInfo failed", zap.Error(err))
+				log.Info("get table information failed", zap.Error(err))
 				return err
 			}
 			keys, _ := dbutil.SelectUniqueOrderKey(tableInfo)
@@ -105,7 +111,7 @@ func (dp *DemoPlugin) HandleDDLJobResult(ev *replication.QueryEvent, err error) 
 			log.Info("execute", zap.String("sql", addColSQL))
 			_, err = dp.db.ExecContext(ctx, addColSQL)
 			if err != nil {
-				log.Info("GetTableInfo failed", zap.Error(err))
+				log.Info("execute sql failed", zap.String("sql", addColSQL), zap.Error(err))
 				return err
 			}
 
@@ -113,7 +119,7 @@ func (dp *DemoPlugin) HandleDDLJobResult(ev *replication.QueryEvent, err error) 
 			log.Info("execute", zap.String("sql", insertSQL))
 			_, err = dp.db.ExecContext(ctx, insertSQL)
 			if err != nil {
-				log.Info("GetTableInfo failed", zap.Error(err))
+				log.Info("execute sql failed", zap.String("sql", insertSQL), zap.Error(err))
 				return err
 			}
 
@@ -121,7 +127,7 @@ func (dp *DemoPlugin) HandleDDLJobResult(ev *replication.QueryEvent, err error) 
 			log.Info("execute", zap.String("sql", dropColSQL))
 			_, err = dp.db.ExecContext(ctx, dropColSQL)
 			if err != nil {
-				log.Info("GetTableInfo failed", zap.Error(err))
+				log.Info("execute sql failed", zap.String("sql", dropColSQL), zap.Error(err))
 				return err
 			}
 
@@ -129,18 +135,18 @@ func (dp *DemoPlugin) HandleDDLJobResult(ev *replication.QueryEvent, err error) 
 			log.Info("execute", zap.String("sql", changeColSQL))
 			_, err = dp.db.ExecContext(ctx, changeColSQL)
 			if err != nil {
+				log.Info("execute sql failed", zap.String("sql", changeColSQL), zap.Error(err))
 				return err
 			}
 		default:
-			log.Info("ignore")
+			log.Info("unhandle ddl type")
 			return nil
 		}
 	default:
-		log.Info("ignore")
+		log.Info("unhandle ddl type")
 		return nil
 	}
 
-	log.Info("ignore")
 	return nil
 }
 

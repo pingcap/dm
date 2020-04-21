@@ -15,9 +15,7 @@ package plugin
 
 import (
 	"plugin"
-	//"fmt"
 
-	//"github.com/pingcap/errors"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/siddontang/go-mysql/replication"
@@ -35,7 +33,6 @@ func LoadPlugin(filepath string) (Plugin, error) {
 
 	p, err := plugin.Open(filepath)
 	if err != nil {
-		// TODO: use terror
 		return nil, terror.ErrSyncerLoadPlugin.Delegate(err, filepath)
 	}
 
@@ -46,7 +43,6 @@ func LoadPlugin(filepath string) (Plugin, error) {
 
 	newPlugin, ok := pluginSymbol.(func() interface{})
 	if !ok {
-		// TODO: use terror
 		return nil, terror.ErrSyncerLoadPlugin.Delegate(err, filepath)
 	}
 

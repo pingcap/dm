@@ -16,7 +16,6 @@ package syncer
 import (
 	"context"
 	"fmt"
-	//"plugin"
 	"reflect"
 	"strconv"
 	"strings"
@@ -158,8 +157,6 @@ type Syncer struct {
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
 	// record whether error occurred when execute SQLs
-	//execErrorDetected sync2.AtomicBool
-
 	execError executeError
 
 	execErrors struct {
@@ -227,10 +224,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	if err != nil {
 		syncer.tctx.L().DPanic("cannot create schema tracker", zap.Error(err))
 	}
-
-	//syncer.plugin = &Plugin{
-	//	path: cfg.PluginPath,
-	//}
 
 	return syncer
 }
@@ -1748,7 +1741,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		// when add ddl job, will execute ddl and then flush checkpoint.
-		// if execute ddl failed, the execErrorDetected will be true.
+		// if execute ddl failed, the detected will be true.
 		if detected, err := s.execError.Detected(); detected {
 			return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 		}
