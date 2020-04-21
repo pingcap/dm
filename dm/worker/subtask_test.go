@@ -531,7 +531,9 @@ func (t *testSubTask) TestSubtaskFastQuit(c *C) {
 		// loadStatus relay MetaBinlog must be greater
 		relayHolder: NewDummyRelayHolderWithRelayBinlog(NewConfig(), relayHolderBinlog),
 	}
-	InitConditionHub(w)
+	conditionHub = &ConditionHub{
+		w: w,
+	}
 
 	mockLoader := NewMockUnit(pb.UnitType_Load)
 	mockSyncer := NewMockUnit(pb.UnitType_Sync)
