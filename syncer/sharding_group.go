@@ -105,11 +105,12 @@ type ShardingGroup struct {
 	firstEndLocation *binlog.Location // first DDL's binlog End_log_pos and gtid, used to re-direct binlog streamer after synced
 	ddls             []string         // DDL which current in syncing
 
-	flavor string
+	flavor     string
+	enableGTID bool
 }
 
 // NewShardingGroup creates a new ShardingGroup
-func NewShardingGroup(sourceID, shardMetaSchema, shardMetaTable string, sources []string, meta *shardmeta.ShardingMeta, isSchemaOnly bool, flavor string) *ShardingGroup {
+func NewShardingGroup(sourceID, shardMetaSchema, shardMetaTable string, sources []string, meta *shardmeta.ShardingMeta, isSchemaOnly bool, flavor string, enableGTID bool) *ShardingGroup {
 	sg := &ShardingGroup{
 		remain:           len(sources),
 		sources:          make(map[string]bool, len(sources)),
@@ -118,11 +119,12 @@ func NewShardingGroup(sourceID, shardMetaSchema, shardMetaTable string, sources 
 		firstLocation:    nil,
 		firstEndLocation: nil,
 		flavor:           flavor,
+		enableGTID:       enableGTID,
 	}
 	if meta != nil {
 		sg.meta = meta
 	} else {
-		sg.meta = shardmeta.NewShardingMeta(shardMetaSchema, shardMetaTable)
+		sg.meta = shardmeta.NewShardingMeta(shardMetaSchema, shardMetaTable, enableGTID)
 	}
 	for _, source := range sources {
 		sg.sources[source] = false
@@ -232,7 +234,7 @@ func (sg *ShardingGroup) CheckSyncing(source string, location binlog.Location) (
 	if activeDDLItem == nil {
 		return true
 	}
-	return binlog.CompareLocation(activeDDLItem.FirstLocation, location) > 0
+	return binlog.CompareLocation(activeDDLItem.FirstLocation, location, sg.enableGTID) > 0
 }
 
 // UnresolvedGroupInfo returns pb.ShardingGroup if is unresolved, else returns nil
@@ -429,7 +431,7 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 	defer k.Unlock()
 
 	if schemaGroup, ok := k.groups[schemaID]; !ok {
-		k.groups[schemaID] = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, true, k.cfg.Flavor)
+		k.groups[schemaID] = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, true, k.cfg.Flavor, k.cfg.EnableGTID)
 	} else {
 		_, _, _, err = schemaGroup.Merge(sourceIDs)
 		if err != nil {
@@ -439,7 +441,7 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 
 	var ok bool
 	if group, ok = k.groups[targetTableID]; !ok {
-		group = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, false, k.cfg.Flavor)
+		group = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, false, k.cfg.Flavor, k.cfg.EnableGTID)
 		k.groups[targetTableID] = group
 	} else if merge {
 		needShardingHandle, synced, remain, err = k.groups[targetTableID].Merge(sourceIDs)
@@ -578,7 +580,7 @@ func (k *ShardingGroupKeeper) lowestFirstLocationInGroups() *binlog.Location {
 		}
 		if lowest == nil {
 			lowest = location
-		} else if binlog.CompareLocation(*lowest, *location) > 0 {
+		} else if binlog.CompareLocation(*lowest, *location, k.cfg.EnableGTID) > 0 {
 			lowest = location
 		}
 	}
@@ -588,7 +590,7 @@ func (k *ShardingGroupKeeper) lowestFirstLocationInGroups() *binlog.Location {
 // AdjustGlobalLocation adjusts globalLocation with sharding groups' lowest first point
 func (k *ShardingGroupKeeper) AdjustGlobalLocation(globalLocation binlog.Location) binlog.Location {
 	lowestFirstLocation := k.lowestFirstLocationInGroups()
-	if lowestFirstLocation != nil && binlog.CompareLocation(*lowestFirstLocation, globalLocation) < 0 {
+	if lowestFirstLocation != nil && binlog.CompareLocation(*lowestFirstLocation, globalLocation, k.cfg.EnableGTID) < 0 {
 		return lowestFirstLocation.Clone()
 	}
 	return globalLocation.Clone()
@@ -724,7 +726,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 }
 
 // LoadShardMeta implements CheckPoint.LoadShardMeta
-func (k *ShardingGroupKeeper) LoadShardMeta(flavor string) (map[string]*shardmeta.ShardingMeta, error) {
+func (k *ShardingGroupKeeper) LoadShardMeta(flavor string, enableGTID bool) (map[string]*shardmeta.ShardingMeta, error) {
 	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM `%s`.`%s` WHERE `source_id`='%s'", k.shardMetaSchema, k.shardMetaTable, k.cfg.SourceID)
 	rows, err := k.dbConn.querySQL(k.tctx, query)
 	if err != nil {
@@ -746,7 +748,7 @@ func (k *ShardingGroupKeeper) LoadShardMeta(flavor string) (map[string]*shardmet
 			return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
 		if _, ok := meta[targetTableID]; !ok {
-			meta[targetTableID] = shardmeta.NewShardingMeta(k.shardMetaSchema, k.shardMetaTable)
+			meta[targetTableID] = shardmeta.NewShardingMeta(k.shardMetaSchema, k.shardMetaTable, enableGTID)
 		}
 		err = meta[targetTableID].RestoreFromData(sourceTableID, activeIndex, isGlobal, []byte(data), flavor)
 		if err != nil {
