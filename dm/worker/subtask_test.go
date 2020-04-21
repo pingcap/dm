@@ -29,6 +29,12 @@ import (
 	"github.com/pingcap/errors"
 )
 
+const (
+	// mocked loadMetaBinlog must be greater than relayHolderBinlog
+	loadMetaBinlog    = "(mysql-bin.00001,154)"
+	relayHolderBinlog = "(mysql-bin.00001,150)"
+)
+
 type testSubTask struct{}
 
 var _ = Suite(&testSubTask{})
@@ -115,7 +121,20 @@ func (m *MockUnit) Update(cfg *config.SubTaskConfig) error {
 	return m.errUpdate
 }
 
-func (m *MockUnit) Status() interface{} { return nil }
+func (m *MockUnit) Status() interface{} {
+	switch m.typ {
+	case pb.UnitType_Check:
+		return &pb.CheckStatus{}
+	case pb.UnitType_Dump:
+		return &pb.DumpStatus{}
+	case pb.UnitType_Load:
+		return &pb.LoadStatus{MetaBinlog: loadMetaBinlog}
+	case pb.UnitType_Sync:
+		return &pb.SyncStatus{}
+	default:
+		return struct{}{}
+	}
+}
 
 func (m *MockUnit) Error() interface{} { return nil }
 
@@ -495,4 +514,67 @@ func (t *testSubTask) TestDDLInfo(c *C) {
 
 	c.Assert(st.SaveDDLInfo(ddlInfo), IsNil)
 	c.Assert(st.GetDDLInfo(), DeepEquals, ddlInfo)
+}
+
+func (t *testSubTask) TestSubtaskFastQuit(c *C) {
+	// case: test subtask stuck into unitTransWaitCondition
+	cfg := &config.SubTaskConfig{
+		Name: "testSubtaskFastQuit",
+		Mode: config.ModeAll,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	w := &Worker{
+		ctx: ctx,
+		// loadStatus relay MetaBinlog must be greater
+		relayHolder: NewDummyRelayHolderWithRelayBinlog(NewConfig(), relayHolderBinlog),
+	}
+	InitConditionHub(w)
+
+	mockLoader := NewMockUnit(pb.UnitType_Load)
+	mockSyncer := NewMockUnit(pb.UnitType_Sync)
+
+	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
+	st.prevUnit = mockLoader
+	st.currUnit = mockSyncer
+
+	finished := make(chan struct{})
+	go func() {
+		st.run()
+		close(finished)
+	}()
+
+	// test Pause
+	time.Sleep(time.Second) // wait for task to run for some time
+	c.Assert(st.Stage(), Equals, pb.Stage_Running)
+	c.Assert(st.Pause(), IsNil)
+	select {
+	case <-time.After(500 * time.Millisecond):
+		c.Fatal("fail to pause subtask in 0.5s when stuck into unitTransWaitCondition")
+	case <-finished:
+	}
+	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
+
+	st = NewSubTaskWithStage(cfg, pb.Stage_Paused)
+	st.prevUnit = mockLoader
+	st.currUnit = mockSyncer
+
+	finished = make(chan struct{})
+	go func() {
+		st.run()
+		close(finished)
+	}()
+
+	time.Sleep(time.Second)
+	c.Assert(st.Stage(), Equals, pb.Stage_Running)
+	// test Close
+	st.Close()
+	select {
+	case <-time.After(500 * time.Millisecond):
+		c.Fatal("fail to stop subtask in 0.5s when stuck into unitTransWaitCondition")
+	case <-finished:
+	}
+	c.Assert(st.Stage(), Equals, pb.Stage_Stopped)
 }
