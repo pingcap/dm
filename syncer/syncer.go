@@ -754,18 +754,24 @@ func (s *Syncer) addJob(job *job) error {
 		})
 		// only save checkpoint for DDL and XID (see above)
 		s.saveGlobalPoint(job.location)
-		for i := range job.sourceSchemas {
-			if len(job.sourceSchemas[i]) > 0 {
-				s.saveTablePoint(job.sourceSchemas[i], job.sourceTables[i], job.location)
+		for sourceSchema, tbs := range job.sourceTbl {
+			if len(sourceSchema) == 0 {
+				continue
+			}
+			for _, sourceTable := range tbs {
+				s.saveTablePoint(sourceSchema, sourceTable, job.location)
 			}
 		}
 		// reset sharding group after checkpoint saved
 		s.resetShardingGroup(job.targetSchema, job.targetTable)
 	case insert, update, del:
 		// save job's current pos for DML events
-		for i := range job.sourceSchemas {
-			if len(job.sourceSchemas[i]) > 0 {
-				s.saveTablePoint(job.sourceSchemas[i], job.sourceTables[i], job.currentLocation)
+		for sourceSchema, tbs := range job.sourceTbl {
+			if len(sourceSchema) == 0 {
+				continue
+			}
+			for _, sourceTable := range tbs {
+				s.saveTablePoint(sourceSchema, sourceTable, job.location)
 			}
 		}
 	}
