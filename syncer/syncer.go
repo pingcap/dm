@@ -407,7 +407,7 @@ func (s *Syncer) initShardingGroups() error {
 		}
 	}
 
-	loadMeta, err2 := s.sgk.LoadShardMeta(s.cfg.Flavor)
+	loadMeta, err2 := s.sgk.LoadShardMeta(s.cfg.Flavor, s.cfg.EnableGTID)
 	if err2 != nil {
 		return err2
 	}
@@ -433,7 +433,7 @@ func (s *Syncer) initShardingGroups() error {
 func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
 	tablePoint := s.checkpoint.TablePoint()
-	return binlog.CompareLocation(globalPoint, binlog.NewLocation(s.cfg.Flavor)) <= 0 && len(tablePoint) == 0, nil
+	return binlog.CompareLocation(globalPoint, binlog.NewLocation(s.cfg.Flavor), s.cfg.EnableGTID) <= 0 && len(tablePoint) == 0, nil
 }
 
 func (s *Syncer) reset() {
@@ -566,7 +566,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	prePos := s.checkpoint.GlobalPoint()
 	s.checkpoint.Rollback(s.schemaTracker)
 	currPos := s.checkpoint.GlobalPoint()
-	if binlog.CompareLocation(prePos, currPos) != 0 {
+	if binlog.CompareLocation(prePos, currPos, s.cfg.EnableGTID) != 0 {
 		s.tctx.L().Warn("something wrong with rollback global checkpoint", zap.Stringer("previous position", prePos), zap.Stringer("current position", currPos))
 	}
 
@@ -1314,7 +1314,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 				// only need compare binlog position?
 				lastLocation = shardingReSync.currLocation.Clone()
-				if binlog.CompareLocation(shardingReSync.currLocation, shardingReSync.latestLocation) >= 0 {
+				if binlog.CompareLocation(shardingReSync.currLocation, shardingReSync.latestLocation, s.cfg.EnableGTID) >= 0 {
 					s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "XID"), zap.Stringer("re-shard", shardingReSync))
 					err = closeShardingResync()
 					if err != nil {
@@ -1384,16 +1384,16 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 		},
 		GTIDSet: ec.currentLocation.GTIDSet,
 	}
-	if binlog.CompareLocation(*ec.currentLocation, *ec.lastLocation) > 0 {
+	if binlog.CompareLocation(*ec.currentLocation, *ec.lastLocation, s.cfg.EnableGTID) > 0 {
 		*ec.lastLocation = ec.currentLocation.Clone()
 	}
 
 	if ec.shardingReSync != nil {
-		if binlog.CompareLocation(*ec.currentLocation, ec.shardingReSync.currLocation) > 0 {
+		if binlog.CompareLocation(*ec.currentLocation, ec.shardingReSync.currLocation, s.cfg.EnableGTID) > 0 {
 			ec.shardingReSync.currLocation = ec.currentLocation.Clone()
 		}
 
-		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation) >= 0 {
+		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation, s.cfg.EnableGTID) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "rotate"), zap.Stringer("re-shard", ec.shardingReSync))
 			err := ec.closeShardingResync()
 			if err != nil {
@@ -1423,7 +1423,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currLocation.Position.Pos = ec.header.LogPos
-		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation) >= 0 {
+		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation, s.cfg.EnableGTID) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "row"), zap.Stringer("re-shard", ec.shardingReSync))
 			return ec.closeShardingResync()
 		}
@@ -1435,7 +1435,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	// DML position before table checkpoint, ignore it
-	if !s.checkpoint.IsNewerTablePoint(originSchema, originTable, *ec.currentLocation) {
+	if !s.checkpoint.IsNewerTablePoint(originSchema, originTable, *ec.currentLocation, s.cfg.EnableGTID) {
 		s.tctx.L().Debug("ignore obsolete event that is old than table checkpoint", zap.String("event", "row"), log.WrapStringerField("position", ec.currentLocation), zap.String("origin schema", originSchema), zap.String("origin table", originTable))
 		return nil
 	}
@@ -1591,7 +1591,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currLocation.Position.Pos = ec.header.LogPos
 		ec.shardingReSync.currLocation.GTIDSet.Set(ev.GSet)
-		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation) >= 0 {
+		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation, s.cfg.EnableGTID) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("re-shard", ec.shardingReSync))
 			err2 := ec.closeShardingResync()
 			if err2 != nil {
@@ -1663,7 +1663,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// for DDL, we wait it to be executed, so we can check if event is newer in this syncer's main process goroutine
 		// ignore obsolete DDL here can avoid to try-sync again for already synced DDLs
-		if !s.checkpoint.IsNewerTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, *ec.currentLocation) {
+		if !s.checkpoint.IsNewerTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, *ec.currentLocation, false) {
 			s.tctx.L().Info("ignore obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation))
 			continue
 		}
