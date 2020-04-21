@@ -376,6 +376,21 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 			0,
 			0,
 		}, {
+			// both gset1 and gset2 is nil, gset1 = gset2, pos1 = pos2
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"",
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"",
+			0,
+			0,
+		}, {
 			// both gset1 and gset2 is nil, gset1 = gset2, pos1 < pos2
 			gmysql.MariaDBFlavor,
 			gmysql.Position{
