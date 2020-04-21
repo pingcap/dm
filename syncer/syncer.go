@@ -1756,7 +1756,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			}
 		})
 
-		if err := s.flushJobs(); err != nil {
+		if err = s.flushJobs(); err != nil {
 			return err
 		}
 
@@ -1862,7 +1862,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	s.tctx.L().Info(annotate, zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Bool("in-sharding", needShardingHandle), zap.Stringer("start location", startLocation), zap.Bool("is-synced", synced), zap.Int("unsynced", remain))
 
-	if err := s.flushJobs(); err != nil {
+	if err = s.flushJobs(); err != nil {
 		return err
 	}
 

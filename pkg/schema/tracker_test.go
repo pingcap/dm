@@ -67,14 +67,19 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(ti.Columns[2].Name.L, Equals, "c")
 	c.Assert(ti.Columns[2].IsGenerated(), IsFalse)
 
+	// Verify the table info not changed (pointer equal) when getting again.
+	ti2, err := tracker.GetTable("testdb", "foo")
+	c.Assert(err, IsNil)
+	c.Assert(ti, Equals, ti2)
+
 	// Drop one column from the table.
 	err = tracker.Exec(ctx, "testdb", "alter table foo drop column b")
 	c.Assert(err, IsNil)
 
 	// Verify that 2 columns remain.
-	ti2, err := tracker.GetTable("testdb", "foo")
+	ti2, err = tracker.GetTable("testdb", "foo")
 	c.Assert(err, IsNil)
-	c.Assert(ti, Not(Equals), ti2)
+	c.Assert(ti, Not(Equals), ti2) // changed (not pointer equal) after applied DDL.
 	c.Assert(ti2.Columns, HasLen, 2)
 	c.Assert(ti2.Columns[0].Name.L, Equals, "a")
 	c.Assert(ti2.Columns[0].IsGenerated(), IsFalse)
