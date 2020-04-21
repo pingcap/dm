@@ -226,25 +226,51 @@ func (l Location) CloneWithFlavor(flavor string) Location {
 //   1 if point1 is bigger than point2
 //   0 if point1 is equal to point2
 //   -1 if point1 is less than point2
-func CompareLocation(location1, location2 Location) int {
-	if location1.GTIDSet != nil && len(location1.GTIDSet.String()) != 0 &&
-		location2.GTIDSet != nil && len(location2.GTIDSet.String()) != 0 {
-		contain1 := location1.GTIDSet.Contain(location2.GTIDSet)
-		contain2 := location2.GTIDSet.Contain(location1.GTIDSet)
-		if contain1 && contain2 {
-			// gtidSet1 contains gtidSet2 and gtidSet2 contains gtidSet1 means gtidSet1 equals to gtidSet2,
-			// then need to compare by position.
-		} else {
-			if contain1 {
-				return 1
-			} else if contain2 {
-				return -1
-			}
-
-			// can't compare location by gtid, and will compare by position
-			log.L().Warn("gtidSet can't be compared", zap.Stringer("location1", location1), zap.Stringer("location2", location2))
+func CompareLocation(location1, location2 Location, cmpGTID bool) int {
+	if cmpGTID {
+		cmp, canCmp := CompareGTID(location1.GTIDSet, location2.GTIDSet)
+		if canCmp {
+			return cmp
 		}
+
+		// if can't compare by GTIDSet, then compare by position
+		log.L().Warn("gtidSet can't be compared, will compare by position", zap.Stringer("location1", location1), zap.Stringer("location2", location2))
 	}
 
 	return ComparePosition(location1.Position, location2.Position)
+}
+
+// CompareGTID returns:
+//   1, true if gSet1 is bigger than gSet2
+//   0, true if gSet1 is equal to gSet2
+//   -1, true if gSet1 is less than gSet2
+// but if can't compare gSet1 and gSet2, will returns 0, false
+func CompareGTID(gSet1, gSet2 gtid.Set) (int, bool) {
+	gSetIsEmpty1 := gSet1 == nil || len(gSet1.String()) == 0
+	gSetIsEmpty2 := gSet2 == nil || len(gSet2.String()) == 0
+
+	if gSetIsEmpty1 && gSetIsEmpty2 {
+		// both gSet1 and gSet2 is nil
+		return 0, true
+	} else if gSetIsEmpty1 {
+		return -1, true
+	} else if gSetIsEmpty2 {
+		return 1, true
+	}
+
+	// both gSet1 and gSet2 is not nil
+	contain1 := gSet1.Contain(gSet2)
+	contain2 := gSet2.Contain(gSet1)
+	if contain1 && contain2 {
+		// gtidSet1 contains gtidSet2 and gtidSet2 contains gtidSet1 means gtidSet1 equals to gtidSet2,
+		return 0, true
+	}
+
+	if contain1 {
+		return 1, true
+	} else if contain2 {
+		return -1, true
+	}
+
+	return 0, false
 }

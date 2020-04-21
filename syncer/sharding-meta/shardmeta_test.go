@@ -47,7 +47,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 		metaTable  = "test_syncer_sharding_meta"
 		sourceID   = "mysql-replica-01"
 		tableID    = "`target_db`.`target_table`"
-		meta       = NewShardingMeta(metaSchema, metaTable)
+		meta       = NewShardingMeta(metaSchema, metaTable, false)
 		items      = []*DDLItem{
 			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1000}}, []string{"ddl1"}, table1),
 			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1200}}, []string{"ddl2-1,ddl2-2"}, table1),
@@ -198,7 +198,7 @@ func (t *testShardMetaSuite) TestShardingMetaWrongSequence(c *check.C) {
 		filename = "mysql-bin.000001"
 		table1   = "table1"
 		table2   = "table2"
-		meta     = NewShardingMeta("", "")
+		meta     = NewShardingMeta("", "", false)
 		items    = []*DDLItem{
 			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1000}}, []string{"ddl1"}, table1),
 			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1200}}, []string{"ddl2"}, table1),
@@ -251,8 +251,8 @@ func (t *testShardMetaSuite) TestFlushLoadMeta(c *check.C) {
 		metaTable  = "test_syncer_sharding_meta"
 		sourceID   = "mysql-replica-01"
 		tableID    = "`target_db`.`target_table`"
-		meta       = NewShardingMeta(metaSchema, metaTable)
-		loadedMeta = NewShardingMeta(metaSchema, metaTable)
+		meta       = NewShardingMeta(metaSchema, metaTable, false)
+		loadedMeta = NewShardingMeta(metaSchema, metaTable, false)
 		items      = []*DDLItem{
 			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1000}}, []string{"ddl1"}, table1),
 			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1200}}, []string{"ddl1"}, table2),
