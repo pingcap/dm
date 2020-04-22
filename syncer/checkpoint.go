@@ -328,7 +328,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, loc
 	}
 
 	// we save table checkpoint while we meet DDL or DML
-	cp.logCtx.L().Debug("save table checkpoint", zap.Stringer("loaction", location), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
+	cp.logCtx.L().Info("save table checkpoint", zap.Stringer("loaction", location), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)
@@ -425,7 +425,7 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(location binlog.Location) {
 	cp.Lock()
 	defer cp.Unlock()
 
-	cp.logCtx.L().Debug("save global checkpoint", zap.Stringer("location", location))
+	cp.logCtx.L().Info("save global checkpoint", zap.Stringer("location", location))
 	if err := cp.globalPoint.save(location.Clone(), nil); err != nil {
 		cp.logCtx.L().Error("fail to save global checkpoint", log.ShortError(err))
 	}
@@ -548,9 +548,11 @@ func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
 	cp.globalPoint.rollback(schemaTracker, "")
-	cp.logCtx.L().Info("rollback", zap.Reflect("points", cp.points))
+	cp.logCtx.L().Info("rollback all", zap.Int("len", len(cp.points)), zap.Reflect("points", cp.points))
 	for schema, mSchema := range cp.points {
+		cp.logCtx.L().Info("rollback schema", zap.String("schema", schema), zap.Int("len", len(mSchema)), zap.Reflect("points", mSchema))
 		for table, point := range mSchema {
+			cp.logCtx.L().Info("rollback table", zap.String("schema", schema), zap.String("table", table), zap.Reflect("point", point))
 			logger := cp.logCtx.L().WithFields(zap.String("schema", schema), zap.String("table", table))
 			logger.Info("try to rollback checkpoint", log.WrapStringerField("checkpoint", point))
 			if point.rollback(schemaTracker, schema) {
