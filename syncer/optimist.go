@@ -48,11 +48,6 @@ func (s *Syncer) handleQueryEventOptimistic(
 	ev *replication.QueryEvent, ec eventContext,
 	needHandleDDLs []string, needTrackDDLs []trackedDDL,
 	onlineDDLTableNames map[string]*filter.Table) error {
-	// wait previous DMLs to be replicated
-	if err := s.flushJobs(); err != nil {
-		return err
-	}
-
 	var (
 		upSchema   string
 		upTable    string

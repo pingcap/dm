@@ -779,7 +779,7 @@ func (s *Syncer) addJob(job *job) error {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(sourceSchema, sourceTable, job.location)
+				s.saveTablePoint(sourceSchema, sourceTable, job.currentLocation)
 			}
 		}
 	}
@@ -1735,6 +1735,21 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
 	}
 
+	// interrupted before flush old checkpoint.
+	failpoint.Inject("FlushCheckpointStage", func(_ failpoint.Value) {
+		if testInjector.flushCheckpointStage == 0 {
+			s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
+			testInjector.flushCheckpointStage++
+			failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before flush old checkpoint"))
+		}
+	})
+
+	// flush previous DMLs and checkpoint if needing to handle the DDL.
+	// NOTE: do this flush before operations on shard groups which may lead to skip a table caused by `UnresolvedTables`.
+	if err = s.flushJobs(); err != nil {
+		return err
+	}
+
 	if s.cfg.ShardMode == "" {
 		s.tctx.L().Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 		// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
@@ -1745,19 +1760,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		if applied {
 			s.tctx.L().Info("replace ddls to preset ddls by sql operator in normal mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 			needHandleDDLs = appliedSQLs // maybe nil
-		}
-
-		// interrupted before flush old checkpoint.
-		failpoint.Inject("FlushCheckpointStage", func(_ failpoint.Value) {
-			if testInjector.flushCheckpointStage == 0 {
-				s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
-				testInjector.flushCheckpointStage++
-				failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before flush old checkpoint"))
-			}
-		})
-
-		if err = s.flushJobs(); err != nil {
-			return err
 		}
 
 		// interrupted after flush old checkpoint and before track DDL.
@@ -1861,19 +1863,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	s.tctx.L().Info(annotate, zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Bool("in-sharding", needShardingHandle), zap.Stringer("start location", startLocation), zap.Bool("is-synced", synced), zap.Int("unsynced", remain))
-
-	// interrupted before flush old checkpoint.
-	failpoint.Inject("FlushCheckpointStage", func(_ failpoint.Value) {
-		if testInjector.flushCheckpointStage == 0 {
-			s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
-			testInjector.flushCheckpointStage++
-			failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before flush old checkpoint"))
-		}
-	})
-
-	if err = s.flushJobs(); err != nil {
-		return err
-	}
 
 	// interrupted after flush old checkpoint and before track DDL.
 	failpoint.Inject("FlushCheckpointStage", func(_ failpoint.Value) {
