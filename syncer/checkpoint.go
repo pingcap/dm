@@ -412,6 +412,7 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 	}
 	oldLocation := point.MySQLLocation()
 
+	cp.logCtx.L().Info("IsNewerTablePoint", zap.Stringer("location", location), zap.Stringer("old location", oldLocation))
 	if gte {
 		return binlog.CompareLocation(location, oldLocation, cp.cfg.EnableGTID) >= 0
 	}
@@ -486,6 +487,8 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 		args = append(args, extraArgs[i])
 	}
 
+	cp.logCtx.L().Info("flush checkpoint sqls", zap.Strings("sqls", sqls), zap.Reflect("args", args))
+
 	_, err := cp.dbConn.executeSQL(tctx, sqls, args...)
 	if err != nil {
 		return err
@@ -545,6 +548,7 @@ func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
 	cp.globalPoint.rollback(schemaTracker, "")
+	cp.logCtx.L().Info("rollback", zap.Reflect("points", cp.points))
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
 			logger := cp.logCtx.L().WithFields(zap.String("schema", schema), zap.String("table", table))

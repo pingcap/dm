@@ -50,7 +50,7 @@ func NewTracker() (*Tracker, error) {
 
 	// shorten the schema lease, since the time needed to confirm DDL sync is
 	// proportional to this duration (default = 1 second)
-	//session.SetSchemaLease(schemaLeaseTime)
+	session.SetSchemaLease(schemaLeaseTime)
 	dom, err := session.BootstrapSession(store)
 	if err != nil {
 		return nil, err
