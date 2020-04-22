@@ -552,26 +552,30 @@ func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	for schema, mSchema := range cp.points {
 		cp.logCtx.L().Info("rollback schema", zap.String("schema", schema), zap.Int("len", len(mSchema)), zap.Reflect("points", mSchema))
 		for table, point := range mSchema {
-			cp.logCtx.L().Info("rollback table", zap.String("schema", schema), zap.String("table", table), zap.Reflect("point", point))
+			cp.logCtx.L().Info("rollback table before", zap.String("schema", schema), zap.Int("len(mSchema)", len(mSchema)), zap.String("table", table), zap.Reflect("point", point))
 			logger := cp.logCtx.L().WithFields(zap.String("schema", schema), zap.String("table", table))
 			logger.Info("try to rollback checkpoint", log.WrapStringerField("checkpoint", point))
 			if point.rollback(schemaTracker, schema) {
-				logger.Info("rollback checkpoint", log.WrapStringerField("checkpoint", point))
+				logger.Info("rollback checkpoint", zap.Int("len(mSchema)", len(mSchema)), log.WrapStringerField("checkpoint", point))
 				// schema changed
 				if err := schemaTracker.DropTable(schema, table); err != nil {
 					logger.Warn("failed to drop table from schema tracker", log.ShortError(err))
 				}
+				logger.Info("dropped", zap.Int("len(mSchema)", len(mSchema)))
 				if point.ti != nil {
 					// TODO: Figure out how to recover from errors.
 					if err := schemaTracker.CreateSchemaIfNotExists(schema); err != nil {
 						logger.Error("failed to rollback schema on schema tracker: cannot create schema", log.ShortError(err))
 					}
+					logger.Info("create schema", zap.Int("len(mSchema)", len(mSchema)))
 					if err := schemaTracker.CreateTableIfNotExists(schema, table, point.ti); err != nil {
 						logger.Error("failed to rollback schema on schema tracker: cannot create table", log.ShortError(err))
 					}
+					logger.Info("create table", zap.Int("len(mSchema)", len(mSchema)))
 				}
 			}
 		}
+		cp.logCtx.L().Info("rollback schema after", zap.String("schema", schema), zap.Int("len", len(mSchema)), zap.Reflect("points", mSchema))
 	}
 }
 
