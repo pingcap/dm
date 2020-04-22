@@ -547,6 +547,14 @@ func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
+
+	defer func() {
+		cp.logCtx.L().Info("rollback defer", zap.Int("len", len(cp.points)), zap.Reflect("points", cp.points))
+		if err1 := recover(); err1 != nil {
+			cp.logCtx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("statck"))
+		}
+	}()
+
 	cp.globalPoint.rollback(schemaTracker, "")
 	cp.logCtx.L().Info("rollback all", zap.Int("len", len(cp.points)), zap.Reflect("points", cp.points))
 	for schema, mSchema := range cp.points {
@@ -556,12 +564,13 @@ func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 			logger := cp.logCtx.L().WithFields(zap.String("schema", schema), zap.String("table", table))
 			logger.Info("try to rollback checkpoint", log.WrapStringerField("checkpoint", point))
 			if point.rollback(schemaTracker, schema) {
-				logger.Info("rollback checkpoint", zap.Int("len(mSchema)", len(mSchema)), log.WrapStringerField("checkpoint", point))
+				cp.logCtx.L().Info("rollback checkpoint", zap.Int("len(mSchema)", len(mSchema)), log.WrapStringerField("checkpoint", point))
 				// schema changed
 				if err := schemaTracker.DropTable(schema, table); err != nil {
+					cp.logCtx.L().Info("droptable", zap.Error(err))
 					logger.Warn("failed to drop table from schema tracker", log.ShortError(err))
 				}
-				logger.Info("dropped", zap.Int("len(mSchema)", len(mSchema)))
+				cp.logCtx.L().Info("dropped", zap.Int("len(mSchema)", len(mSchema)))
 				if point.ti != nil {
 					// TODO: Figure out how to recover from errors.
 					if err := schemaTracker.CreateSchemaIfNotExists(schema); err != nil {
