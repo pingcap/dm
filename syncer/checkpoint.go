@@ -548,7 +548,7 @@ func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
 			logger := cp.logCtx.L().WithFields(zap.String("schema", schema), zap.String("table", table))
-			logger.Debug("try to rollback checkpoint", log.WrapStringerField("checkpoint", point))
+			logger.Info("try to rollback checkpoint", log.WrapStringerField("checkpoint", point))
 			if point.rollback(schemaTracker, schema) {
 				logger.Info("rollback checkpoint", log.WrapStringerField("checkpoint", point))
 				// schema changed
