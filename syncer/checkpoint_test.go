@@ -270,22 +270,22 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	)
 
 	// not exist
-	newer := cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
+	newer := cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
 	c.Assert(newer, IsTrue)
 
 	// save
 	cp.SaveTablePoint(schema, table, binlog.Location{Position: pos2}, nil)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
 	c.Assert(newer, IsFalse)
 
 	// rollback, to min
 	cp.Rollback(s.tracker)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
 	c.Assert(newer, IsTrue)
 
 	// save again
 	cp.SaveTablePoint(schema, table, binlog.Location{Position: pos2}, nil)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
 	c.Assert(newer, IsFalse)
 
 	// flush + rollback
@@ -295,7 +295,7 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	err = cp.FlushPointsExcept(tctx, nil, nil, nil)
 	c.Assert(err, IsNil)
 	cp.Rollback(s.tracker)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
 	c.Assert(newer, IsFalse)
 
 	// clear, to min
@@ -304,12 +304,12 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	s.mock.ExpectCommit()
 	err = cp.Clear(tctx)
 	c.Assert(err, IsNil)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
 	c.Assert(newer, IsTrue)
 
 	// save
 	cp.SaveTablePoint(schema, table, binlog.Location{Position: pos2}, nil)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
 	c.Assert(newer, IsFalse)
 
 	// test save table point less than global point
@@ -330,6 +330,6 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	err = cp.FlushPointsExcept(tctx, [][]string{{schema, table}}, nil, nil)
 	c.Assert(err, IsNil)
 	cp.Rollback(s.tracker)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1})
+	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
 	c.Assert(newer, IsTrue)
 }

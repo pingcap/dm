@@ -14,3 +14,5 @@ alter table sharding22.t1 add column e int, add index e(e);
 insert into sharding22.t1 values(7, "g", 7, 7, 7);
 insert into sharding22.t1 values(8, "h", 8, 8, 8);
 insert into sharding22.t1 values(9, "i", 9, 9, 9);
+
+alter table sharding22.t1 add column f int;
