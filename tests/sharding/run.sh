@@ -25,8 +25,14 @@ function run() {
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
-    # enable `FlushCheckpointStage` failpoint only for one worker to simply check logic when executing DDL.
-    export GO_FAILPOINTS="github.com/pingcap/dm/syncer/FlushCheckpointStage=return()"
+    # now, for pessimistic shard DDL, if interrupted after executed DDL but before flush checkpoint,
+    # re-sync this DDL will cause the source try to sync the DDL of the previous lock again,
+    # this will need to recover the replication manually,
+    # so we do not interrupt the replication after executed DDL for this test case.
+    #
+    # now, for pessimistic shard DDL, owner and non-owner will reach a stage often not at the same time,
+    # in order to simply the check and resume flow, only enable the failpoint for one DM-worker.
+    export GO_FAILPOINTS="github.com/pingcap/dm/syncer/FlushCheckpointStage=return(2)"
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     export GO_FAILPOINTS=''
@@ -80,20 +86,16 @@ function run() {
         "resume-task test"\
         "\"result\": true" 3
 
+    # NOTE: the lock may be locked for the next DDL, for details please see the following comments in `master/shardll/pessimist.go`,
+    # `FIXME: the following case is not supported automatically now, try to support it later`
+    # so we try to do this `pause-task` and `resume-task` in the case now.
+    sleep 3
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
-        "failpoint error for FlushCheckpointStage before save checkpoint" 1
-
-    # resume-task to next stage
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "resume-task test"\
+        "pause-task test"\
         "\"result\": true" 3
-
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
-        "failpoint error for FlushCheckpointStage before flush checkpoint" 1
-
-    # resume-task to continue the sync
+        "query-status test"\
+        "\"stage\": \"Paused\"" 2
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task test"\
         "\"result\": true" 3
