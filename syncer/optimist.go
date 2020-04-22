@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -48,6 +49,19 @@ func (s *Syncer) handleQueryEventOptimistic(
 	ev *replication.QueryEvent, ec eventContext,
 	needHandleDDLs []string, needTrackDDLs []trackedDDL,
 	onlineDDLTableNames map[string]*filter.Table) error {
+	// interrupted after flush old checkpoint and before track DDL.
+	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+		if testInjector.flushCheckpointStage == 1 {
+			s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
+			if testInjector.flushCheckpointStage == val.(int) {
+				testInjector.flushCheckpointStage = -1 // disable for following stages.
+			} else {
+				testInjector.flushCheckpointStage++
+			}
+			failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before track DDL"))
+		}
+	})
+
 	var (
 		upSchema   string
 		upTable    string
@@ -153,6 +167,19 @@ func (s *Syncer) handleQueryEventOptimistic(
 			log.WrapStringerField("location", ec.currentLocation))
 		needHandleDDLs = appliedSQLs // maybe nil
 	}
+
+	// interrupted after track DDL and before execute DDL.
+	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+		if testInjector.flushCheckpointStage == 2 {
+			s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
+			if testInjector.flushCheckpointStage == val.(int) {
+				testInjector.flushCheckpointStage = -1 // disable for following stages.
+			} else {
+				testInjector.flushCheckpointStage++
+			}
+			failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before execute DDL"))
+		}
+	})
 
 	ddlInfo := &shardingDDLInfo{
 		name:       needTrackDDLs[0].tableNames[0][0].String(),
