@@ -13,6 +13,13 @@
 
 package syncer
 
+import (
+	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
+)
+
 // TestInjector is used to support inject test cases into syncer.
 // In some cases, we use failpoint to control the test flow,
 // but we may need to control the flow based on some previous status,
@@ -23,3 +30,18 @@ type TestInjector struct {
 }
 
 var testInjector = TestInjector{}
+
+// handleFlushCheckpointStage handles failpoint of `FlushCheckpointStage`.
+func handleFlushCheckpointStage(expectStage, maxStage int, stageStr string) error {
+	if testInjector.flushCheckpointStage != expectStage {
+		return nil
+	}
+
+	log.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
+	if testInjector.flushCheckpointStage == maxStage {
+		testInjector.flushCheckpointStage = -1 // disable for following stages.
+	} else {
+		testInjector.flushCheckpointStage++
+	}
+	return terror.ErrSyncerFailpoint.Generatef("failpoint error for FlushCheckpointStage %s", stageStr)
+}

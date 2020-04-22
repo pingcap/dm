@@ -51,14 +51,9 @@ func (s *Syncer) handleQueryEventOptimistic(
 	onlineDDLTableNames map[string]*filter.Table) error {
 	// interrupted after flush old checkpoint and before track DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-		if testInjector.flushCheckpointStage == 1 {
-			s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
-			if testInjector.flushCheckpointStage == val.(int) {
-				testInjector.flushCheckpointStage = -1 // disable for following stages.
-			} else {
-				testInjector.flushCheckpointStage++
-			}
-			failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before track DDL"))
+		err := handleFlushCheckpointStage(1, val.(int), "before track DDL")
+		if err != nil {
+			failpoint.Return(err)
 		}
 	})
 
@@ -170,14 +165,9 @@ func (s *Syncer) handleQueryEventOptimistic(
 
 	// interrupted after track DDL and before execute DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-		if testInjector.flushCheckpointStage == 2 {
-			s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
-			if testInjector.flushCheckpointStage == val.(int) {
-				testInjector.flushCheckpointStage = -1 // disable for following stages.
-			} else {
-				testInjector.flushCheckpointStage++
-			}
-			failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before execute DDL"))
+		err = handleFlushCheckpointStage(2, val.(int), "before execute DDL")
+		if err != nil {
+			failpoint.Return(err)
 		}
 	})
 

@@ -754,14 +754,9 @@ func (s *Syncer) addJob(job *job) error {
 		})
 		// interrupted after executed DDL and before save checkpoint.
 		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-			if testInjector.flushCheckpointStage == 3 {
-				s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
-				if testInjector.flushCheckpointStage == val.(int) {
-					testInjector.flushCheckpointStage = -1 // disable for following stages.
-				} else {
-					testInjector.flushCheckpointStage++
-				}
-				failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before save checkpoint"))
+			err := handleFlushCheckpointStage(3, val.(int), "before save checkpoint")
+			if err != nil {
+				failpoint.Return(err)
 			}
 		})
 		// only save checkpoint for DDL and XID (see above)
@@ -791,14 +786,9 @@ func (s *Syncer) addJob(job *job) error {
 	if wait {
 		// interrupted after save checkpoint and before flush checkpoint.
 		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-			if testInjector.flushCheckpointStage == 4 {
-				s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
-				if testInjector.flushCheckpointStage == val.(int) {
-					testInjector.flushCheckpointStage = -1 // disable for following stages.
-				} else {
-					testInjector.flushCheckpointStage++
-				}
-				failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before flush checkpoint"))
+			err := handleFlushCheckpointStage(4, val.(int), "before flush checkpoint")
+			if err != nil {
+				failpoint.Return(err)
 			}
 		})
 		return s.flushCheckPoints()
@@ -1745,14 +1735,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	// interrupted before flush old checkpoint.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-		if testInjector.flushCheckpointStage == 0 {
-			s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
-			if testInjector.flushCheckpointStage == val.(int) {
-				testInjector.flushCheckpointStage = -1 // disable for following stages.
-			} else {
-				testInjector.flushCheckpointStage++
-			}
-			failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before flush old checkpoint"))
+		err = handleFlushCheckpointStage(0, val.(int), "before flush old checkpoint")
+		if err != nil {
+			failpoint.Return(err)
 		}
 	})
 
@@ -1776,14 +1761,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// interrupted after flush old checkpoint and before track DDL.
 		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-			if testInjector.flushCheckpointStage == 1 {
-				s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
-				if testInjector.flushCheckpointStage == val.(int) {
-					testInjector.flushCheckpointStage = -1 // disable for following stages.
-				} else {
-					testInjector.flushCheckpointStage++
-				}
-				failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before track DDL"))
+			err = handleFlushCheckpointStage(1, val.(int), "before track DDL")
+			if err != nil {
+				failpoint.Return(err)
 			}
 		})
 
@@ -1796,14 +1776,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// interrupted after track DDL and before execute DDL.
 		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-			if testInjector.flushCheckpointStage == 2 {
-				s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
-				if testInjector.flushCheckpointStage == val.(int) {
-					testInjector.flushCheckpointStage = -1 // disable for following stages.
-				} else {
-					testInjector.flushCheckpointStage++
-				}
-				failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before execute DDL"))
+			err = handleFlushCheckpointStage(2, val.(int), "before execute DDL")
+			if err != nil {
+				failpoint.Return(err)
 			}
 		})
 
@@ -1886,14 +1861,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	// interrupted after flush old checkpoint and before track DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-		if testInjector.flushCheckpointStage == 1 {
-			s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
-			if testInjector.flushCheckpointStage == val.(int) {
-				testInjector.flushCheckpointStage = -1 // disable for following stages.
-			} else {
-				testInjector.flushCheckpointStage++
-			}
-			failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before track DDL"))
+		err = handleFlushCheckpointStage(1, val.(int), "before track DDL")
+		if err != nil {
+			failpoint.Return(err)
 		}
 	})
 
@@ -2006,14 +1976,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	// interrupted after track DDL and before execute DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-		if testInjector.flushCheckpointStage == 2 {
-			s.tctx.L().Info("set FlushCheckpointStage", zap.String("failpoint", "FlushCheckpointStage"), zap.Int("stage", testInjector.flushCheckpointStage))
-			if testInjector.flushCheckpointStage == val.(int) {
-				testInjector.flushCheckpointStage = -1 // disable for following stages.
-			} else {
-				testInjector.flushCheckpointStage++
-			}
-			failpoint.Return(terror.ErrSyncerFailpoint.New("failpoint error for FlushCheckpointStage before execute DDL"))
+		err = handleFlushCheckpointStage(2, val.(int), "before execute DDL")
+		if err != nil {
+			failpoint.Return(err)
 		}
 	})
 
