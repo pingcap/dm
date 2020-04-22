@@ -99,7 +99,7 @@ func (b *binlogPoint) flush() {
 func (b *binlogPoint) rollback(schemaTracker *schema.Tracker, schema string) (isSchemaChanged bool) {
 	b.Lock()
 	defer b.Unlock()
-	b.location = b.flushedLocation
+	b.location = b.flushedLocation.Clone()
 	if b.ti == nil {
 		return // for global checkpoint, no need to rollback the schema.
 	}
