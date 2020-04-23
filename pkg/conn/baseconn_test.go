@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/metricsproxy"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 
@@ -36,7 +37,7 @@ type testBaseConnSuite struct {
 }
 
 var (
-	testStmtHistogram = prometheus.NewHistogramVec(
+	testStmtHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "conn",

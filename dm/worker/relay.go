@@ -381,7 +381,11 @@ func (h *realRelayHolder) Migrate(ctx context.Context, binlogName string, binlog
 /******************** dummy relay holder ********************/
 
 type dummyRelayHolder struct {
-	initError error
+	sync.RWMutex
+
+	initError   error
+	stage       pb.Stage
+	relayBinlog string
 
 	cfg *Config
 }
@@ -389,7 +393,8 @@ type dummyRelayHolder struct {
 // NewDummyRelayHolder creates a new RelayHolder
 func NewDummyRelayHolder(cfg *Config) RelayHolder {
 	return &dummyRelayHolder{
-		cfg: cfg,
+		cfg:   cfg,
+		stage: pb.Stage_New,
 	}
 }
 
@@ -398,6 +403,16 @@ func NewDummyRelayHolderWithInitError(cfg *Config) RelayHolder {
 	return &dummyRelayHolder{
 		initError: errors.New("init error"),
 		cfg:       cfg,
+		stage:     pb.Stage_New,
+	}
+}
+
+// NewDummyRelayHolderWithRelayBinlog creates a new RelayHolder with relayBinlog in relayStatus
+func NewDummyRelayHolderWithRelayBinlog(cfg *Config, relayBinlog string) RelayHolder {
+	return &dummyRelayHolder{
+		cfg:         cfg,
+		relayBinlog: relayBinlog,
+		stage:       pb.Stage_New,
 	}
 }
 
@@ -419,7 +434,12 @@ func (d *dummyRelayHolder) Close() {}
 
 // Status implements interface of RelayHolder
 func (d *dummyRelayHolder) Status() *pb.RelayStatus {
-	return nil
+	d.RLock()
+	defer d.RUnlock()
+	return &pb.RelayStatus{
+		Stage:       d.stage,
+		RelayBinlog: d.relayBinlog,
+	}
 }
 
 // Error implements interface of RelayHolder

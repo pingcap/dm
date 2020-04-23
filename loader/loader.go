@@ -358,6 +358,8 @@ type Loader struct {
 
 	// for every worker goroutine, not for every data file
 	workerWg *sync.WaitGroup
+	// for other goroutines
+	wg sync.WaitGroup
 
 	fileJobQueue       chan *fileJob
 	fileJobQueueClosed sync2.AtomicBool
@@ -576,7 +578,11 @@ func (l *Loader) Restore(ctx context.Context) error {
 		return err2
 	}
 
-	go l.PrintStatus(ctx)
+	l.wg.Add(1)
+	go func() {
+		defer l.wg.Done()
+		l.PrintStatus(ctx)
+	}()
 
 	begin := time.Now()
 	err = l.restoreData(ctx)
@@ -621,6 +627,7 @@ func (l *Loader) Close() {
 		l.logCtx.L().Error("close downstream DB error", log.ShortError(err))
 	}
 	l.checkPoint.Close()
+	l.removeLabelValuesWithTaskInMetrics(l.cfg.Name)
 	l.closed.Set(true)
 }
 
@@ -633,8 +640,10 @@ func (l *Loader) stopLoad() {
 
 	l.closeFileJobQueue()
 	l.workerWg.Wait()
-
 	l.logCtx.L().Debug("all workers have been closed")
+
+	l.wg.Wait()
+	l.logCtx.L().Debug("all loader's go-routines have been closed")
 }
 
 // Pause pauses the process, and it can be resumed later

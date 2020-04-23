@@ -15,11 +15,13 @@ package mydumper
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/pingcap/dm/pkg/metricsproxy"
 )
 
 var (
 	// should alert
-	mydumperExitWithErrorCounter = prometheus.NewCounterVec(
+	mydumperExitWithErrorCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "mydumper",
@@ -31,4 +33,8 @@ var (
 // RegisterMetrics registers metrics.
 func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(mydumperExitWithErrorCounter)
+}
+
+func (m *Mydumper) removeLabelValuesWithTaskInMetrics(task string) {
+	mydumperExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }
