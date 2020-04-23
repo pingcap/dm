@@ -183,6 +183,8 @@ func (m *Mydumper) Close() {
 	if m.closed.Get() {
 		return
 	}
+
+	m.removeLabelValuesWithTaskInMetrics(m.cfg.Name)
 	// do nothing, external will cancel the command (if running)
 	m.closed.Set(true)
 }
