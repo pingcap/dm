@@ -614,6 +614,7 @@ func (s *Server) QueryRelay(ctx context.Context, req *pb.QueryRelayListRequest) 
 	}
 
 	sources := s.scheduler.BoundSources()
+	log.L().Info("debug,", zap.Strings("sources", sources))
 
 	workerRespCh := s.getRelayStatusFromWorkers(ctx, sources)
 
