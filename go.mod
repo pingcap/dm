@@ -22,7 +22,7 @@ require (
 	github.com/onsi/ginkgo v1.9.0 // indirect
 	github.com/onsi/gomega v1.6.0 // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
-	github.com/pingcap/dumpling v0.0.0-20200319081211-255ce0d25719
+	github.com/pingcap/dumpling v0.0.0-20200423082233-887d037b5b5c
 	github.com/pingcap/errcode v0.3.0 // indirect
 	github.com/pingcap/errors v0.11.5-0.20190809092503-95897b64e011
 	github.com/pingcap/failpoint v0.0.0-20200210140405-f8f9fb234798
@@ -30,7 +30,7 @@ require (
 	github.com/pingcap/parser v0.0.0-20200317021010-cd90cc2a7d87
 	github.com/pingcap/pd/v4 v4.0.0-beta.1.0.20200305072537-61d9f9cc35d3
 	github.com/pingcap/tidb v1.1.0-beta.0.20200318081823-de474b42bcae
-	github.com/pingcap/tidb-tools v4.0.0-beta.2.0.20200318094144-f1bd74032260+incompatible
+	github.com/pingcap/tidb-tools v4.0.0-rc.1.0.20200423101451-efaa8b1028bc+incompatible
 	github.com/prometheus/client_golang v1.2.1
 	github.com/prometheus/procfs v0.0.6 // indirect
 	github.com/rakyll/statik v0.1.6
