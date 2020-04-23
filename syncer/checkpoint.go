@@ -328,7 +328,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, loc
 	}
 
 	// we save table checkpoint while we meet DDL or DML
-	cp.logCtx.L().Info("save table checkpoint", zap.Stringer("loaction", location), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
+	cp.logCtx.L().Debug("save table checkpoint", zap.Stringer("location", location), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)
@@ -411,8 +411,8 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 		return true
 	}
 	oldLocation := point.MySQLLocation()
+	cp.logCtx.L().Debug("compare table location whether is newer", zap.Stringer("location", location), zap.Stringer("old location", oldLocation))
 
-	cp.logCtx.L().Info("IsNewerTablePoint", zap.Stringer("location", location), zap.Stringer("old location", oldLocation))
 	if gte {
 		return binlog.CompareLocation(location, oldLocation, cp.cfg.EnableGTID) >= 0
 	}
@@ -425,7 +425,7 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(location binlog.Location) {
 	cp.Lock()
 	defer cp.Unlock()
 
-	cp.logCtx.L().Info("save global checkpoint", zap.Stringer("location", location))
+	cp.logCtx.L().Debug("save global checkpoint", zap.Stringer("location", location))
 	if err := cp.globalPoint.save(location.Clone(), nil); err != nil {
 		cp.logCtx.L().Error("fail to save global checkpoint", log.ShortError(err))
 	}
@@ -487,8 +487,6 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 		args = append(args, extraArgs[i])
 	}
 
-	cp.logCtx.L().Info("flush checkpoint sqls", zap.Strings("sqls", sqls), zap.Reflect("args", args))
-
 	_, err := cp.dbConn.executeSQL(tctx, sqls, args...)
 	if err != nil {
 		return err
@@ -547,44 +545,29 @@ func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
-
-	defer func() {
-		cp.logCtx.L().Info("rollback defer", zap.Int("len", len(cp.points)), zap.Reflect("points", cp.points))
-		if err1 := recover(); err1 != nil {
-			cp.logCtx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("statck"))
-		}
-	}()
-
 	cp.globalPoint.rollback(schemaTracker, "")
-	cp.logCtx.L().Info("rollback all", zap.Int("len", len(cp.points)), zap.Reflect("points", cp.points))
 	for schema, mSchema := range cp.points {
-		cp.logCtx.L().Info("rollback schema", zap.String("schema", schema), zap.Int("len", len(mSchema)), zap.Reflect("points", mSchema))
 		for table, point := range mSchema {
-			cp.logCtx.L().Info("rollback table before", zap.String("schema", schema), zap.Int("len(mSchema)", len(mSchema)), zap.String("table", table), zap.Reflect("point", point))
 			logger := cp.logCtx.L().WithFields(zap.String("schema", schema), zap.String("table", table))
-			logger.Info("try to rollback checkpoint", log.WrapStringerField("checkpoint", point))
+			logger.Debug("try to rollback checkpoint", log.WrapStringerField("checkpoint", point))
+			from := point.MySQLLocation()
 			if point.rollback(schemaTracker, schema) {
-				cp.logCtx.L().Info("rollback checkpoint", zap.Int("len(mSchema)", len(mSchema)), log.WrapStringerField("checkpoint", point))
+				logger.Info("rollback checkpoint", zap.Stringer("from", from), zap.Stringer("to", point.FlushedMySQLLocation()))
 				// schema changed
 				if err := schemaTracker.DropTable(schema, table); err != nil {
-					cp.logCtx.L().Info("droptable", zap.Error(err))
 					logger.Warn("failed to drop table from schema tracker", log.ShortError(err))
 				}
-				cp.logCtx.L().Info("dropped", zap.Int("len(mSchema)", len(mSchema)))
 				if point.ti != nil {
 					// TODO: Figure out how to recover from errors.
 					if err := schemaTracker.CreateSchemaIfNotExists(schema); err != nil {
 						logger.Error("failed to rollback schema on schema tracker: cannot create schema", log.ShortError(err))
 					}
-					logger.Info("create schema", zap.Int("len(mSchema)", len(mSchema)))
 					if err := schemaTracker.CreateTableIfNotExists(schema, table, point.ti); err != nil {
 						logger.Error("failed to rollback schema on schema tracker: cannot create table", log.ShortError(err))
 					}
-					logger.Info("create table", zap.Int("len(mSchema)", len(mSchema)))
 				}
 			}
 		}
-		cp.logCtx.L().Info("rollback schema after", zap.String("schema", schema), zap.Int("len", len(mSchema)), zap.Reflect("points", mSchema))
 	}
 }
 

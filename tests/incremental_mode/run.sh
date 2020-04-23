@@ -110,6 +110,7 @@ function run() {
     dmctl_start_task $WORK_DIR/dm-task.yaml
 
     # the task should paused by `FlushCheckpointStage` failpont before flush old checkpoint.
+    # `db2.increment.sql` has no DDL, so we check count of content as `1`.
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "failpoint error for FlushCheckpointStage before flush old checkpoint" 1
