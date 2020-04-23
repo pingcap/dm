@@ -16,15 +16,12 @@ package main
 // Reference: https://dzone.com/articles/measuring-integration-test-coverage-rate-in-pouchc
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestRunMain(t *testing.T) {
-	fmt.Println("dmctl startup", time.Now())
 	var args []string
 	for _, arg := range os.Args {
 		switch {
@@ -37,5 +34,4 @@ func TestRunMain(t *testing.T) {
 
 	os.Args = args
 	main()
-	fmt.Println("dmctl exit", time.Now())
 }
