@@ -153,7 +153,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	var (
 		backOff      = 30
 		waitTime     = 100 * time.Millisecond
-		watchTimeout = 500 * time.Millisecond
+		watchTimeout = 2 * time.Second
 		logger       = log.L()
 		o            = NewOptimist(&logger)
 
@@ -472,7 +472,7 @@ func (t *testOptimist) TestOptimistLockConflict(c *C) {
 	defer clearOptimistTestSourceInfoOperation(c)
 
 	var (
-		watchTimeout = 500 * time.Millisecond
+		watchTimeout = 2 * time.Second
 		logger       = log.L()
 		o            = NewOptimist(&logger)
 		task         = "task-test-optimist"

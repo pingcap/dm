@@ -78,7 +78,7 @@ func (t *testPessimist) testPessimistProgress(c *C, restart int) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		watchTimeout  = 500 * time.Millisecond
+		watchTimeout  = 2 * time.Second
 		task1         = "task-pessimist-1"
 		task2         = "task-pessimist-2"
 		source1       = "mysql-replica-1"
@@ -341,7 +341,7 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		watchTimeout  = 500 * time.Millisecond
+		watchTimeout  = 2 * time.Second
 		task          = "task-source-re-entrant"
 		source1       = "mysql-replica-1"
 		source2       = "mysql-replica-2"
@@ -538,7 +538,7 @@ func (t *testPessimist) TestUnlockSourceMissBeforeSynced(c *C) {
 	}()
 
 	var (
-		watchTimeout  = 500 * time.Millisecond
+		watchTimeout  = 2 * time.Second
 		task          = "task-unlock-source-lack-before-synced"
 		source1       = "mysql-replica-1"
 		source2       = "mysql-replica-2"
@@ -631,7 +631,7 @@ func (t *testPessimist) TestUnlockSourceInterrupt(c *C) {
 	}()
 
 	var (
-		watchTimeout  = 500 * time.Millisecond
+		watchTimeout  = 2 * time.Second
 		task          = "task-unlock-source-interrupt"
 		source1       = "mysql-replica-1"
 		source2       = "mysql-replica-2"
@@ -747,7 +747,7 @@ func (t *testPessimist) TestUnlockSourceOwnerRemoved(c *C) {
 	}()
 
 	var (
-		watchTimeout  = 500 * time.Millisecond
+		watchTimeout  = 2 * time.Second
 		task          = "task-unlock-source-owner-removed"
 		source1       = "mysql-replica-1"
 		source2       = "mysql-replica-2"
@@ -828,7 +828,7 @@ func (t *testPessimist) TestMeetEtcdCompactError(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		watchTimeout  = 500 * time.Millisecond
+		watchTimeout  = 2 * time.Second
 		task1         = "task-pessimist-1"
 		task2         = "task-pessimist-2"
 		source1       = "mysql-replica-1"
