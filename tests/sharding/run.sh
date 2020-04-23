@@ -94,7 +94,7 @@ function run() {
         "pause-task test"\
         "\"result\": true" 3
     # wait really paused
-    # FIXME: `if !st.stageCAS(pb.Stage_Paused, pb.Stage_Running)` in `subtask.go` is not enough to indicate the real stage.
+    # FIXME: `if !st.stageCAS(pb.Stage_Running, pb.Stage_Paused)` in `subtask.go` is not enough to indicate the real stage.
     sleep 2
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task test"\
