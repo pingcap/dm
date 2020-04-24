@@ -56,6 +56,8 @@ type commonConfig struct {
 	EnableANSIQuotes bool
 	TimezoneStr      string
 
+	PluginPath string
+
 	SyncerConfigFormat bool
 }
 
@@ -77,6 +79,7 @@ func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTask
 		MaxRetry:         c.MaxRetry,
 		EnableANSIQuotes: c.EnableANSIQuotes,
 		TimezoneStr:      c.TimezoneStr,
+		PluginPath:       c.PluginPath,
 	}
 
 	cfg.FlagSet = flag.NewFlagSet("dm-syncer", flag.ContinueOnError)
@@ -271,6 +274,8 @@ type syncerConfig struct {
 	TimezoneStr      string         `toml:"timezone" json:"timezone"`
 	Timezone         *time.Location `json:"-"`
 
+	PluginPath string `toml:"plugin-path" json:"plugin-path"`
+
 	printVersion bool
 }
 
@@ -349,6 +354,8 @@ func (oc *syncerConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 		Timezone:   oc.TimezoneStr,
 		From:       oc.From,
 		To:         oc.To,
+
+		PluginPath: oc.PluginPath,
 	}
 
 	for _, rule := range oc.RouteRules {

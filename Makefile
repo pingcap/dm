@@ -157,10 +157,8 @@ dm_integration_test_build: retool_setup
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-tracer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
-		-coverpkg=github.com/pingcap/dm/... \
-		-o bin/dm-syncer.test github.com/pingcap/dm/cmd/dm-syncer \
-		|| { $(FAILPOINT_DISABLE); exit 1; }
+	CGO_ENABLED=1 GO111MODULE=on go build -o bin/dm-syncer ./cmd/dm-syncer
+	CGO_ENABLED=1 GO111MODULE=on go build -o bin/demo.so -buildmode=plugin ./syncer/plugin/demo/demo.go
 	$(FAILPOINT_DISABLE)
 	tests/prepare_tools.sh
 
@@ -173,7 +171,7 @@ integration_test: check_third_party_binary
 	@which bin/dm-master.test
 	@which bin/dm-worker.test
 	@which bin/dm-tracer.test
-	@which bin/dm-syncer.test
+	@which bin/dm-syncer
 	tests/run.sh $(CASE)
 
 compatibility_test: check_third_party_binary

@@ -55,6 +55,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer/plugin"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/shardddl"
 	operator "github.com/pingcap/dm/syncer/sql-operator"
@@ -156,7 +157,7 @@ type Syncer struct {
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
 	// record whether error occurred when execute SQLs
-	execErrorDetected sync2.AtomicBool
+	execError executeError
 
 	execErrors struct {
 		sync.Mutex
@@ -178,6 +179,8 @@ type Syncer struct {
 	}
 
 	addJobFunc func(*job) error
+
+	plugin plugin.Plugin
 }
 
 // NewSyncer creates a new Syncer.
@@ -374,8 +377,24 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "remove-active-realylog", Fn: s.removeActiveRelayLog})
 
+	// init plugin
+	err = s.initPlugin()
+	if err != nil {
+		return err
+	}
+
 	s.reset()
 	return nil
+}
+
+// initPlugin initializes the plugin
+func (s *Syncer) initPlugin() error {
+	plugin, err := plugin.LoadPlugin(s.cfg.PluginPath)
+	if err != nil {
+		return err
+	}
+	s.plugin = plugin
+	return s.plugin.Init(s.cfg)
 }
 
 // initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
@@ -443,7 +462,7 @@ func (s *Syncer) reset() {
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
 
-	s.execErrorDetected.Set(false)
+	s.execError.Set(nil)
 	s.resetExecErrors()
 
 	switch s.cfg.ShardMode {
@@ -813,7 +832,7 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 //
 // we may need to refactor the concurrency model to make the work-flow more clearer later
 func (s *Syncer) flushCheckPoints() error {
-	if s.execErrorDetected.Get() {
+	if detected, _ := s.execError.Detected(); detected {
 		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint", zap.Stringer("checkpoint", s.checkpoint))
 		return nil
 	}
@@ -923,10 +942,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		}
 		s.jobWg.Done()
 		if err != nil {
-			s.execErrorDetected.Set(true)
-			if !utils.IsContextCanceledError(err) {
-				s.runFatalChan <- unit.NewProcessError(err)
-			}
+			s.execError.Set(err)
 			continue
 		}
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
@@ -955,7 +971,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	}
 
 	fatalF := func(err error) {
-		s.execErrorDetected.Set(true)
+		s.execError.Set(err)
 		if !utils.IsContextCanceledError(err) {
 			s.runFatalChan <- unit.NewProcessError(err)
 		}
@@ -1299,13 +1315,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 		case *replication.RowsEvent:
 			err = s.handleRowsEvent(ev, ec)
-			if err != nil {
-				return terror.Annotatef(err, "current location %s", currentLocation)
+			err1 := s.plugin.HandleDMLJobResult(ev, err)
+			if err1 != nil {
+				return terror.Annotatef(err1, "current location %s", currentLocation)
 			}
 		case *replication.QueryEvent:
 			err = s.handleQueryEvent(ev, ec)
-			if err != nil {
-				return terror.Annotatef(err, "current location %s", currentLocation)
+			err1 := s.plugin.HandleDDLJobResult(ev, err)
+			if err1 != nil {
+				return terror.Annotatef(err1, "current location %s", currentLocation)
 			}
 		case *replication.XIDEvent:
 			if shardingReSync != nil {
@@ -1749,9 +1767,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		// when add ddl job, will execute ddl and then flush checkpoint.
-		// if execute ddl failed, the execErrorDetected will be true.
-		if s.execErrorDetected.Get() {
-			return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
+		// if execute ddl failed, the detected will be true.
+		if detected, err := s.execError.Detected(); detected {
+			return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 		}
 
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
@@ -1935,8 +1953,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return err
 	}
 
-	if s.execErrorDetected.Get() {
-		return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
+	if detected, err := s.execError.Detected(); detected {
+		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 	}
 
 	if len(onlineDDLTableNames) > 0 {

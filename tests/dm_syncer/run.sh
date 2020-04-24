@@ -63,10 +63,14 @@ function run() {
         name1=$(grep "Log: " $WORK_DIR/worker2/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
         pos1=$(grep "Pos: " $WORK_DIR/worker2/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
     fi
+
     sed -i "s/binlog-name-placeholder-1/\"$name1\"/g" $WORK_DIR/dm-syncer-1.toml
     sed -i "s/binlog-pos-placeholder-1/$pos1/g" $WORK_DIR/dm-syncer-1.toml
     sed -i "s/binlog-name-placeholder-2/\"$name2\"/g" $WORK_DIR/old_meta_file
     sed -i "s/binlog-pos-placeholder-2/$pos2/g" $WORK_DIR/old_meta_file
+    plugin_so=$PWD/bin/demo.so
+    sed -i "/plugin/i\plugin-path = \"$plugin_so\"" $WORK_DIR/dm-syncer-1.toml
+
     run_dm_syncer $WORK_DIR/syncer1 $WORK_DIR/dm-syncer-1.toml
     meta_file=$WORK_DIR/old_meta_file
     run_dm_syncer $WORK_DIR/syncer2 $WORK_DIR/dm-syncer-2.toml $meta_file --syncer-config-format syncer2

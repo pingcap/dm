@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -101,6 +102,25 @@ func getDBConfigFromEnv() config.DBConfig {
 		Password: pswd,
 		Port:     port,
 	}
+}
+
+type executeError struct {
+	sync.RWMutex
+
+	err error
+}
+
+func (e *executeError) Detected() (bool, error) {
+	e.RLock()
+	defer e.RUnlock()
+
+	return e.err != nil, e.err
+}
+
+func (e *executeError) Set(err error) {
+	e.Lock()
+	e.err = err
+	e.Unlock()
 }
 
 // record source tbls record the tables that need to flush checkpoints
