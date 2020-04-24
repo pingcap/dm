@@ -96,10 +96,8 @@ func (s *Syncer) handleQueryEventOptimistic(
 		return err
 	}
 
-	s.tctx.L().Info("save table checkpoint", zap.String("event", "query"),
-		zap.String("schema", upSchema), zap.String("table", upTable),
-		zap.Strings("ddls", needHandleDDLs), log.WrapStringerField("location", ec.currentLocation))
-	s.saveTablePoint(upSchema, upTable, ec.currentLocation.Clone())
+	// in optimistic mode, don't `saveTablePoint` before execute DDL,
+	// because it has no `UnresolvedTables` to prevent the flush of this checkpoint.
 
 	info := s.optimist.ConstructInfo(upSchema, upTable, downSchema, downTable, needHandleDDLs, tiBefore, tiAfter)
 
