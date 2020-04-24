@@ -1727,8 +1727,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		needHandleDDLs = append(needHandleDDLs, sqlDDL)
-		// TODO: current table checkpoints will be deleted in track ddls, but created and updated in flush checkpoints,
-		//       we should use a better mechanism to combine these operations
 		recordSourceTbls(sourceTbls, stmt, tableNames[0][0])
 		targetTbls[tableNames[1][0].String()] = tableNames[1][0]
 	}
