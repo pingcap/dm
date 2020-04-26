@@ -28,10 +28,14 @@ var (
 )
 
 // SetDefaultReplicationCfg sets some default value for BinlogSyncerConfig
-func SetDefaultReplicationCfg(cfg *replication.BinlogSyncerConfig) {
+func SetDefaultReplicationCfg(cfg *replication.BinlogSyncerConfig, reConnect bool) {
 	cfg.UseDecimal = true // must set true. ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
 	cfg.VerifyChecksum = true
-	cfg.MaxReconnectAttempts = maxBinlogSyncerReconnect
+	if reConnect {
+		cfg.MaxReconnectAttempts = maxBinlogSyncerReconnect
+	} else {
+		cfg.MaxReconnectAttempts = 1
+	}
 	cfg.ReadTimeout = SlaveReadTimeout
 	cfg.HeartbeatPeriod = masterHeartbeatPeriod
 }

@@ -2530,7 +2530,10 @@ func (s *Syncer) setSyncCfg() {
 		Password:                s.cfg.From.Password,
 		TimestampStringLocation: s.timezone,
 	}
-	common.SetDefaultReplicationCfg(&syncCfg)
+	// when enable reConnect, go-mysql will retry sync from the previous GTID set in GTID mode,
+	// which may get duplicate binlog event after retry success. so just disable reConnect, and task
+	// will exit with error, and then auto resume by DM itself.
+	common.SetDefaultReplicationCfg(&syncCfg, false)
 	s.syncCfg = syncCfg
 }
 
