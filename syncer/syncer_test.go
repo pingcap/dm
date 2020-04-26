@@ -1330,6 +1330,8 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		ctx, cancel := context.WithCancel(context.Background())
 		resultCh := make(chan pb.ProcessResult)
 
+		s.mockCheckPointFlush(checkPointMock)
+
 		go syncer.Process(ctx, resultCh)
 
 		var wg sync.WaitGroup
