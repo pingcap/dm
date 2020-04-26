@@ -1295,15 +1295,13 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 				"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
 			).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
 
-		// before first ddl, we only flush global checkpoint
+		// before first ddl, we flush the saved global checkpoint and table point
+		s.mockCheckPointFlush(checkPointMock)
+		// before second ddl, we flush on the global checkpoint because the two table are in sgk
 		checkPointMock.ExpectBegin()
 		checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 		checkPointMock.ExpectCommit()
-		// before second ddl, we flush the saved table checkpoint t1
-		checkPointMock.ExpectBegin()
-		checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-		checkPointMock.ExpectCommit()
-		// after ddl is synced, we flush global checkpoint and saved table point t2
+		// after ddl group is synced, update two table points. global checkpoint is flushed before so we don't flush it again
 		checkPointMock.ExpectBegin()
 		checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 		checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -1331,8 +1329,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		resultCh := make(chan pb.ProcessResult)
-
-		s.mockCheckPointFlush(checkPointMock)
 
 		go syncer.Process(ctx, resultCh)
 
