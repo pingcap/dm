@@ -57,38 +57,12 @@ func (s *testSyncerSuite) TestCastUnsigned(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TestGenColumnPlaceholders(c *C) {
-	placeholderStr := genColumnPlaceholders(1)
-	c.Assert(placeholderStr, Equals, "?")
-
-	placeholderStr = genColumnPlaceholders(3)
-	c.Assert(placeholderStr, Equals, "?,?,?")
-}
-
 func createTableInfo(p *parser.Parser, se sessionctx.Context, tableID int64, sql string) (*model.TableInfo, error) {
 	node, err := p.ParseOneStmt(sql, "utf8mb4", "utf8mb4_bin")
 	if err != nil {
 		return nil, err
 	}
 	return tiddl.MockTableInfo(se, node.(*ast.CreateTableStmt), tableID)
-}
-
-func (s *testSyncerSuite) TestGenColumnList(c *C) {
-	columns := []*model.ColumnInfo{
-		{
-			Name: model.NewCIStr("a"),
-		}, {
-			Name: model.NewCIStr("b"),
-		}, {
-			Name: model.NewCIStr("c`d"),
-		},
-	}
-
-	columnList := genColumnList(columns[:1])
-	c.Assert(columnList, Equals, "`a`")
-
-	columnList = genColumnList(columns)
-	c.Assert(columnList, Equals, "`a`,`b`,`c``d`")
 }
 
 func (s *testSyncerSuite) TestFindFitIndex(c *C) {
@@ -159,55 +133,55 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 			// test no keys
 			schema: `create table t1(a int)`,
 			values: []interface{}{10},
-			keys:   []string{},
+			keys:   []string{"table"},
 		},
 		{
 			// one primary key
 			schema: `create table t2(a int primary key, b double)`,
 			values: []interface{}{60, 70.5},
-			keys:   []string{"60"},
+			keys:   []string{"60table"},
 		},
 		{
 			// one unique key
 			schema: `create table t3(a int unique, b double)`,
 			values: []interface{}{60, 70.5},
-			keys:   []string{"60"},
+			keys:   []string{"60table"},
 		},
 		{
 			// one ordinary key
 			schema: `create table t4(a int, b double, key(b))`,
 			values: []interface{}{60, 70.5},
-			keys:   []string{"70.5"},
+			keys:   []string{"70.5table"},
 		},
 		{
 			// multiple keys
 			schema: `create table t5(a int, b text, c int, key(a), key(b(3)))`,
 			values: []interface{}{13, "abcdef", 15},
-			keys:   []string{"13", "abcdef"},
+			keys:   []string{"13table", "abcdeftable"},
 		},
 		{
 			// multiple keys with primary key
 			schema: `create table t6(a int primary key, b varchar(16) unique)`,
 			values: []interface{}{16, "xyz"},
-			keys:   []string{"16", "xyz"},
+			keys:   []string{"16table", "xyztable"},
 		},
 		{
 			// non-integer primary key
 			schema: `create table t65(a int unique, b varchar(16) primary key)`,
 			values: []interface{}{16, "xyz"},
-			keys:   []string{"16", "xyz"},
+			keys:   []string{"16table", "xyztable"},
 		},
 		{
 			// primary key of multiple columns
 			schema: `create table t7(a int, b int, primary key(a, b))`,
 			values: []interface{}{59, 69},
-			keys:   []string{"59,69"},
+			keys:   []string{"5969table"},
 		},
 		{
 			// ordinary key of multiple columns
 			schema: `create table t75(a int, b int, c int, key(a, b), key(c, b))`,
 			values: []interface{}{48, 58, 68},
-			keys:   []string{"48,58", "68,58"},
+			keys:   []string{"4858table", "6858table"},
 		},
 		{
 			// so many keys
@@ -221,7 +195,19 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 				)
 			`,
 			values: []interface{}{27, 37, 47},
-			keys:   []string{"27,37", "37,47", "27,37,47", "47,27"},
+			keys:   []string{"2737table", "3747table", "273747table", "4727table"},
+		},
+		{
+			// `null` for unique key
+			schema: `
+				create table t8(
+					a int, b int default null,
+					primary key(a),
+					unique key(b)
+				)
+			`,
+			values: []interface{}{17, nil},
+			keys:   []string{"17table"},
 		},
 	}
 
@@ -232,7 +218,7 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 
 		ti, err := createTableInfo(p, se, int64(i+1), tc.schema)
 		assert(err, IsNil)
-		keys := genMultipleKeys(ti, tc.values)
+		keys := genMultipleKeys(ti, tc.values, "table")
 		assert(keys, DeepEquals, tc.keys)
 	}
 }

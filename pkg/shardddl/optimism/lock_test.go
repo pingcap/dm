@@ -276,6 +276,104 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	t.checkLockNoDone(c, l)
 }
 
+func (t *testLock) TestLockTrySyncIndex(c *C) {
+	var (
+		ID           = "test_lock_try_sync_index-`foo`.`bar`"
+		task         = "test_lock_try_sync_index"
+		source       = "mysql-replica-1"
+		db           = "db"
+		tbls         = []string{"bar1", "bar2"}
+		p            = parser.New()
+		se           = mock.NewContext()
+		tblID  int64 = 111
+		DDLs1        = []string{"ALTER TABLE bar DROP INDEX idx_c1"}
+		DDLs2        = []string{"ALTER TABLE bar ADD UNIQUE INDEX idx_c1(c1)"}
+		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, UNIQUE INDEX idx_c1(c1))`)
+		ti1          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2          = ti0
+		tables       = map[string]map[string]struct{}{
+			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
+		}
+		sts = []SourceTables{
+			NewSourceTables(task, source, tables),
+		}
+
+		l = NewLock(ID, task, ti0, sts)
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// try sync for one table, `DROP INDEX` returned directly (to make schema become more compatible).
+	// `DROP INDEX` is handled like `ADD COLUMN`.
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	synced, remain := l.IsSynced()
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+
+	// try sync for another table, also got `DROP INDEX` now.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, sts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	t.checkLockSynced(c, l)
+
+	// try sync for one table, `ADD INDEX` not returned directly (to keep the schema more compatible).
+	// `ADD INDEX` is handled like `DROP COLUMN`.
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, sts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, []string{}) // no DDLs returned
+	synced, remain = l.IsSynced()
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+
+	// try sync for another table, got `ADD INDEX` now.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs2)
+	t.checkLockSynced(c, l)
+}
+
+func (t *testLock) TestLockTrySyncNoDiff(c *C) {
+	var (
+		ID           = "test_lock_try_sync_no_diff-`foo`.`bar`"
+		task         = "test_lock_try_sync_no_diff"
+		source       = "mysql-replica-1"
+		db           = "db"
+		tbls         = []string{"bar1", "bar2"}
+		p            = parser.New()
+		se           = mock.NewContext()
+		tblID  int64 = 111
+		DDLs1        = []string{"ALTER TABLE bar DROP COLUMN c1, ADD COLUMN c2 INT"}
+		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti1          = createTableInfo(c, p, se, tblID,
+			`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`) // `c1` not dropped, `c2` added
+		tables = map[string]map[string]struct{}{
+			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
+		}
+		sts = []SourceTables{
+			NewSourceTables(task, source, tables),
+		}
+
+		l = NewLock(ID, task, ti0, sts)
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// try sync for one table.
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+	c.Assert(err, IsNil)
+	// FIXME, the returned DDLs should only be `ALTER TABLE bar ADD COLUMN c2 INT`, but we lack schema diff mechanism now.
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	synced, remain := l.IsSynced()
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+}
+
 func (t *testLock) TestLockTrySyncNewTable(c *C) {
 	var (
 		ID            = "test_lock_try_sync_new_table-`foo`.`bar`"
