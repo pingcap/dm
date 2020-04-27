@@ -215,17 +215,17 @@ func (l *Lock) TryRemoveTable(source, schema, table string) bool {
 	if _, ok := l.tables[source][schema]; !ok {
 		return false
 	}
-	if _, ok := l.tables[source][schema][table]; !ok {
+
+	ti, ok := l.tables[source][schema][table]
+	if !ok {
 		return false
 	}
 
-	if ti, ok := l.tables[source][schema][table]; ok {
-		delete(l.tables[source][schema], table)
-		log.L().Info("table removed from the lock", zap.String("lock", l.ID),
-			zap.String("source", source), zap.String("schema", schema), zap.String("table", table),
-			zap.Stringer("table info", ti))
-	}
+	delete(l.tables[source][schema], table)
 	delete(l.done[source][schema], table)
+	log.L().Info("table removed from the lock", zap.String("lock", l.ID),
+		zap.String("source", source), zap.String("schema", schema), zap.String("table", table),
+		zap.Stringer("table info", ti))
 	return true
 }
 
