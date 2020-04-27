@@ -79,12 +79,12 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	ddls []string, newTI *model.TableInfo, sts []SourceTables) (newDDLs []string, err error) {
 	l.mu.Lock()
 	defer func() {
-		l.mu.Unlock()
 		if len(newDDLs) > 0 {
 			// revert the `done` status if need to wait for the new operation to be done.
 			// Now, we wait for the new operation to be done if any DDLs returned.
 			l.tryRevertDone(callerSource, callerSchema, callerTable)
 		}
+		l.mu.Unlock()
 	}()
 
 	// handle the case where <callerSource, callerSchema, callerTable>
