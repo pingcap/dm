@@ -125,7 +125,7 @@ func NewRealRelay(cfg *Config) Process {
 		Password: cfg.From.Password,
 		Charset:  cfg.Charset,
 	}
-	common.SetDefaultReplicationCfg(&syncerCfg, true)
+	common.SetDefaultReplicationCfg(&syncerCfg, common.MaxBinlogSyncerReconnect)
 
 	if !cfg.EnableGTID {
 		// for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent
@@ -803,7 +803,7 @@ func (r *Relay) Reload(newCfg *Config) error {
 		Password: newCfg.From.Password,
 		Charset:  newCfg.Charset,
 	}
-	common.SetDefaultReplicationCfg(&syncerCfg, true)
+	common.SetDefaultReplicationCfg(&syncerCfg, common.MaxBinlogSyncerReconnect)
 
 	if !newCfg.EnableGTID {
 		// for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent
