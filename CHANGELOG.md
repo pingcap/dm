@@ -28,7 +28,7 @@ All notable changes to this project will be documented in this file.
 - Fix the issue the monitoring metrics still display data after the replication task is stopped [#616](https://github.com/pingcap/dm/pull/616)
 - Fix the issue that the `Column count doesn't match value count` error might be returned during the sharding DDL replication [#624](https://github.com/pingcap/dm/pull/624)
 - Fix the issue that some metrics such as `data file size` are incorrectly displayed when the paused task of full data import is resumed [#570](https://github.com/pingcap/dm/pull/570)
-- Add and fix multiple monitoring metrics [#590](https://github.com/pingcap/dm/pull/594) [#594](https://github.com/pingcap/dm/pull/594)
+- Add and fix multiple monitoring metrics [#590](https://github.com/pingcap/dm/pull/590) [#594](https://github.com/pingcap/dm/pull/594)
 
 ## [1.0.4] 2020-03-13
 
