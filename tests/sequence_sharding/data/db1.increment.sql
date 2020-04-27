@@ -20,3 +20,6 @@ update t2 set d = 200;
 update t1 set c = 101;
 update t2 set c = 102;
 insert into t1 (uid,name,c) values(100004,'VALUES',191472878),(100005,'jAPlnzXli',1091218279);
+
+alter table t1 add column f int;
+alter table t2 add column f int;

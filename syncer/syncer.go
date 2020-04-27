@@ -801,17 +801,31 @@ func (s *Syncer) addJob(job *job) error {
 
 	switch job.tp {
 	case ddl:
+		failpoint.Inject("ExitAfterDDLBeforeFlush", func() {
+			s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ExitAfterDDLBeforeFlush"))
+			utils.OsExit(1)
+		})
 		// only save checkpoint for DDL and XID (see above)
 		s.saveGlobalPoint(job.pos)
-		if len(job.sourceSchema) > 0 {
-			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
+		for sourceSchema, tbs := range job.sourceTbl {
+			if len(sourceSchema) == 0 {
+				continue
+			}
+			for _, sourceTable := range tbs {
+				s.checkpoint.SaveTablePoint(sourceSchema, sourceTable, job.pos)
+			}
 		}
 		// reset sharding group after checkpoint saved
 		s.resetShardingGroup(job.targetSchema, job.targetTable)
 	case insert, update, del:
 		// save job's current pos for DML events
-		if len(job.sourceSchema) > 0 {
-			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.currentPos)
+		for sourceSchema, tbs := range job.sourceTbl {
+			if len(sourceSchema) == 0 {
+				continue
+			}
+			for _, sourceTable := range tbs {
+				s.checkpoint.SaveTablePoint(sourceSchema, sourceTable, job.currentPos)
+			}
 		}
 	}
 
@@ -1653,6 +1667,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	var (
 		ddlInfo        *shardingDDLInfo
 		needHandleDDLs []string
+		sourceTbls     = make(map[string]map[string]struct{}) // db name -> tb name
 		targetTbls     = make(map[string]*filter.Table)
 	)
 	for _, sql := range sqls {
@@ -1712,6 +1727,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		needHandleDDLs = append(needHandleDDLs, sqlDDL)
+		recordSourceTbls(sourceTbls, stmt, tableNames[0][0])
 		targetTbls[tableNames[1][0].String()] = tableNames[1][0]
 	}
 
@@ -1729,6 +1745,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		*ec.traceID = traceEvent.Base.TraceID
 	}
 
+	// flush previous DMLs and checkpoint if needing to handle the DDL.
+	// NOTE: do this flush before operations on shard groups which may lead to skip a table caused by `UnresolvedTables`.
+	if err := s.flushJobs(); err != nil {
+		return err
+	}
 	if !s.cfg.IsSharding {
 		s.tctx.L().Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 		// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
@@ -1741,7 +1762,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			needHandleDDLs = appliedSQLs // maybe nil
 		}
 
-		job := newDDLJob(nil, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, nil, *ec.traceID)
+		job := newDDLJob(nil, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, nil, *ec.traceID, sourceTbls)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err
@@ -1753,13 +1774,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
 		}
 
-		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
-
 		for _, tbl := range targetTbls {
 			s.clearTables(tbl.Schema, tbl.Name)
-			// save checkpoint of each table
-			s.checkpoint.SaveTablePoint(tbl.Schema, tbl.Name, *ec.currentPos)
 		}
+
+		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 
 		for _, table := range onlineDDLTableNames {
 			s.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.String("schema", table.Schema), zap.String("table", table.Name))
@@ -1861,7 +1880,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		// Don't send new DDLInfo to dm-master until all local sql jobs finished
-		s.jobWg.Wait()
+		// since jobWg is flushed by flushJobs before, we don't wait here any more
 
 		// NOTE: if we need singleton Syncer (without dm-master) to support sharding DDL sync
 		// we should add another config item to differ, and do not save DDLInfo, and not wait for ddlExecInfo
@@ -1929,7 +1948,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		s.tctx.L().Info("replace ddls to preset ddls by sql operator in shard mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos))
 		needHandleDDLs = appliedSQLs // maybe nil
 	}
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, ddlExecItem, *ec.traceID)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, ddlExecItem, *ec.traceID, nil)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err

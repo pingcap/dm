@@ -218,6 +218,12 @@ func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.
 	return utils.GetParser(db, false)
 }
 
+func (s *testSyncerSuite) mockCheckPointMeta(checkPointMock sqlmock.Sqlmock) {
+	checkPointMock.ExpectBegin()
+	checkPointMock.ExpectExec(fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_sharding_meta", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectCommit()
+}
+
 func (s *testSyncerSuite) mockCheckPointCreate(checkPointMock sqlmock.Sqlmock) {
 	checkPointMock.ExpectBegin()
 	checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -1262,8 +1268,11 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 				AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
 
 		// mock checkpoint db after create db table1 table2
+		s.mockCheckPointMeta(checkPointMock)
 		s.mockCheckPointCreate(checkPointMock)
+		s.mockCheckPointMeta(checkPointMock)
 		s.mockCheckPointCreate(checkPointMock)
+		s.mockCheckPointMeta(checkPointMock)
 		s.mockCheckPointCreate(checkPointMock)
 
 		// mock downstream db result
@@ -1286,6 +1295,19 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 				"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
 			).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
 
+		// before first ddl, we flush the saved global checkpoint and table point
+		s.mockCheckPointFlush(checkPointMock)
+		// before second ddl, we flush on the global checkpoint because the two table are in sgk
+		checkPointMock.ExpectBegin()
+		checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+		checkPointMock.ExpectCommit()
+		// after ddl group is synced, update two table points. global checkpoint is flushed before so we don't flush it again
+		checkPointMock.ExpectBegin()
+		checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+		checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+		checkPointMock.ExpectExec(fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_sharding_meta", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+		checkPointMock.ExpectCommit()
+
 		// mock expect sql
 		for i, expectSQL := range _case.expectSQLS {
 			mock.ExpectBegin()
@@ -1299,7 +1321,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 					sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
 						"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
 					).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
-				s.mockCheckPointFlush(checkPointMock)
 			} else {
 				// change insert to replace because of safe mode
 				mock.ExpectExec(expectSQL.sql).WithArgs(expectSQL.args...).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -1363,7 +1384,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	// 3. check the generated jobs
 	// 4. update config, add route rules, and update syncer
 	// 5. execute somes sqls and then check jobs generated
-
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 	dbConn, err := db.Conn(context.Background())
@@ -1462,13 +1482,26 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	go syncer.Process(ctx, resultCh)
 
 	expectJobs1 := []*expectJob{
+		// now every ddl job will start with a flush job
 		{
+			flush,
+			"",
+			nil,
+		}, {
 			ddl,
 			"CREATE DATABASE IF NOT EXISTS `test_1`",
 			nil,
 		}, {
+			flush,
+			"",
+			nil,
+		}, {
 			ddl,
 			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			nil,
+		}, {
+			flush,
+			"",
 			nil,
 		}, {
 			ddl,
@@ -1478,6 +1511,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			insert,
 			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int64(580981944116838401), "a"},
+		}, {
+			flush,
+			"",
+			nil,
 		}, {
 			ddl,
 			"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`name`)",

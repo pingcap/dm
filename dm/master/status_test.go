@@ -42,6 +42,7 @@ func (t *testHTTPServer) startServer(c *check.C) {
 		c.Assert(err, check.IsNil)
 	}()
 
+	time.Sleep(time.Second) // wait server fully started
 	err := t.waitUntilServerOnline()
 	c.Assert(err, check.IsNil)
 }
