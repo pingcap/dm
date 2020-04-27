@@ -336,6 +336,59 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 	t.checkLockSynced(c, l)
 }
 
+func (t *testLock) TestLockTrySyncNullNotNull(c *C) {
+	var (
+		ID           = "test_lock_try_sync_null_not_null-`foo`.`bar`"
+		task         = "test_lock_try_sync_null_not_null"
+		source       = "mysql-replica-1"
+		db           = "db"
+		tbls         = []string{"bar1", "bar2"}
+		p            = parser.New()
+		se           = mock.NewContext()
+		tblID  int64 = 111
+		DDLs1        = []string{"ALTER TABLE bar MODIFY COLUMN c1 INT NOT NULL DEFAULT 1234"}
+		DDLs2        = []string{"ALTER TABLE bar MODIFY COLUMN c1 INT NULL DEFAULT 1234"}
+		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT NULL DEFAULT 1234)`)
+		ti1          = createTableInfo(c, p, se, tblID,
+			`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT NOT NULL DEFAULT 1234)`)
+		ti2    = ti0
+		tables = map[string]map[string]struct{}{
+			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
+		}
+		sts = []SourceTables{
+			NewSourceTables(task, source, tables),
+		}
+
+		l = NewLock(ID, task, ti0, sts)
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	for i := 0; i < 2; i++ { // two round
+		// try sync for one table, from `NULL` to `NOT NULL`, no DDLs returned.
+		DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+		c.Assert(err, IsNil)
+		c.Assert(DDLs, DeepEquals, []string{})
+
+		// try sync for another table, DDLs returned.
+		DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, sts)
+		c.Assert(err, IsNil)
+		c.Assert(DDLs, DeepEquals, DDLs1)
+
+		// try sync for one table, from `NOT NULL` to `NULL`, DDLs returned.
+		DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, sts)
+		c.Assert(err, IsNil)
+		c.Assert(DDLs, DeepEquals, DDLs2)
+
+		// try sync for another table, from `NOT NULL` to `NULL`, DDLs, returned.
+		DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts)
+		c.Assert(err, IsNil)
+		c.Assert(DDLs, DeepEquals, DDLs2)
+	}
+}
+
 func (t *testLock) TestLockTrySyncNoDiff(c *C) {
 	var (
 		ID           = "test_lock_try_sync_no_diff-`foo`.`bar`"

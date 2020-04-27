@@ -129,9 +129,9 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 			}
 		}
 	}
-	l.joined = newJoined // update the current table info.
-	log.L().Info("update joined table info", zap.String("lock", l.ID), zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined),
-		zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable), zap.Strings("ddls", ddls))
+
+	// update the current joined table info, if it's actually changed it should be logged in `if cmp != 0` block.
+	l.joined = newJoined
 
 	cmp, err = oldJoined.Compare(newJoined)
 	// FIXME: Compute DDLs through schema diff instead of propagating DDLs directly.
@@ -219,7 +219,12 @@ func (l *Lock) TryRemoveTable(source, schema, table string) bool {
 		return false
 	}
 
-	delete(l.tables[source][schema], table)
+	if ti, ok := l.tables[source][schema][table]; ok {
+		delete(l.tables[source][schema], table)
+		log.L().Info("table removed from the lock", zap.String("lock", l.ID),
+			zap.String("source", source), zap.String("schema", schema), zap.String("table", table),
+			zap.Stringer("table info", ti))
+	}
 	delete(l.done[source][schema], table)
 	return true
 }
@@ -376,6 +381,9 @@ func (l *Lock) addSources(sts []SourceTables) {
 					// NOTE: the newly added table uses the current table info.
 					l.tables[st.Source][schema][table] = l.joined
 					l.done[st.Source][schema][table] = false
+					log.L().Info("table added to the lock", zap.String("lock", l.ID),
+						zap.String("source", st.Source), zap.String("schema", schema), zap.String("table", table),
+						zap.Stringer("table info", l.joined))
 				}
 			}
 		}
