@@ -63,19 +63,22 @@ func (t *testForEtcd) TestSourceTablesInfo(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		task     = "task"
-		source   = "mysql-replica-1"
-		upSchema = "foo-1"
-		upTable  = "bar-1"
-		st1      = NewSourceTables(task, source, map[string]map[string]struct{}{
-			"db": {"tbl-1": struct{}{}, "tbl-2": struct{}{}},
-		})
-		st2 = NewSourceTables(task, source, map[string]map[string]struct{}{
-			"db": {"tbl-2": struct{}{}, "tbl-3": struct{}{}},
-		})
-		i11 = NewInfo(task, source, upSchema, upTable, "foo", "bar",
+		task       = "task"
+		source     = "mysql-replica-1"
+		upSchema   = "foo-1"
+		upTable    = "bar-1"
+		downSchema = "foo"
+		downTable  = "bar"
+		st1        = NewSourceTables(task, source)
+		st2        = NewSourceTables(task, source)
+		i11        = NewInfo(task, source, upSchema, upTable, "foo", "bar",
 			[]string{"ALTER TABLE bar ADD COLUMN c1 INT"}, nil, nil)
 	)
+
+	st1.AddTable("db", "tbl-1", downSchema, downTable)
+	st1.AddTable("db", "tbl-2", downSchema, downTable)
+	st2.AddTable("db", "tbl-2", downSchema, downTable)
+	st2.AddTable("db", "tbl-3", downSchema, downTable)
 
 	// put source tables and info.
 	rev1, err := PutSourceTablesInfo(etcdTestCli, st1, i11)

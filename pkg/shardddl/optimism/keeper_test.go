@@ -46,17 +46,17 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 		i12 = NewInfo(task1, source2, upSchema, upTable, downSchema, downTable, DDLs, tiBefore, tiAfter)
 		i21 = NewInfo(task2, source1, upSchema, upTable, downSchema, downTable, DDLs, tiBefore, tiAfter)
 
-		sts1 = []SourceTables{
-			NewSourceTables(task1, source1, map[string]map[string]struct{}{upSchema: {upTable: struct{}{}}}),
-			NewSourceTables(task1, source2, map[string]map[string]struct{}{upSchema: {upTable: struct{}{}}}),
+		tts1 = []TargetTable{
+			newTargetTable(task1, source1, downSchema, downTable, map[string]map[string]struct{}{upSchema: {upTable: struct{}{}}}),
+			newTargetTable(task1, source2, downSchema, downTable, map[string]map[string]struct{}{upSchema: {upTable: struct{}{}}}),
 		}
-		sts2 = []SourceTables{
-			NewSourceTables(task1, source1, map[string]map[string]struct{}{upSchema: {upTable: struct{}{}}}),
+		tts2 = []TargetTable{
+			newTargetTable(task1, source1, downSchema, downTable, map[string]map[string]struct{}{upSchema: {upTable: struct{}{}}}),
 		}
 	)
 
 	// lock with 2 sources.
-	lockID1, newDDLs, err := lk.TrySync(i11, sts1)
+	lockID1, newDDLs, err := lk.TrySync(i11, tts1)
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
@@ -68,7 +68,7 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
 
-	lockID1, newDDLs, err = lk.TrySync(i12, sts1)
+	lockID1, newDDLs, err = lk.TrySync(i12, tts1)
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
@@ -80,7 +80,7 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 	c.Assert(remain, Equals, 0)
 
 	// lock with only 1 source.
-	lockID2, newDDLs, err := lk.TrySync(i21, sts2)
+	lockID2, newDDLs, err := lk.TrySync(i21, tts2)
 	c.Assert(err, IsNil)
 	c.Assert(lockID2, Equals, "task2-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
@@ -115,58 +115,86 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 
 func (t *testKeeper) TestTableKeeper(c *C) {
 	var (
-		tk      = NewTableKeeper()
-		task1   = "task-1"
-		task2   = "task-2"
-		source1 = "mysql-replica-1"
-		source2 = "mysql-replica-2"
-		st11    = NewSourceTables(task1, source1, map[string]map[string]struct{}{
+		tk         = NewTableKeeper()
+		task1      = "task-1"
+		task2      = "task-2"
+		source1    = "mysql-replica-1"
+		source2    = "mysql-replica-2"
+		downSchema = "db"
+		downTable  = "tbl"
+
+		tt11 = newTargetTable(task1, source1, downSchema, downTable, map[string]map[string]struct{}{
 			"db": {"tbl-1": struct{}{}, "tbl-2": struct{}{}},
 		})
-		st12 = NewSourceTables(task1, source2, map[string]map[string]struct{}{
+		tt12 = newTargetTable(task1, source2, downSchema, downTable, map[string]map[string]struct{}{
 			"db": {"tbl-1": struct{}{}, "tbl-2": struct{}{}},
 		})
-		st21 = NewSourceTables(task2, source2, map[string]map[string]struct{}{
+		tt21 = newTargetTable(task2, source2, downSchema, downTable, map[string]map[string]struct{}{
 			"db": {"tbl-3": struct{}{}},
 		})
-		st22 = NewSourceTables(task2, source2, map[string]map[string]struct{}{
+		tt22 = newTargetTable(task2, source2, downSchema, downTable, map[string]map[string]struct{}{
 			"db": {"tbl-3": struct{}{}, "tbl-4": struct{}{}},
 		})
-		stm = map[string]map[string]SourceTables{
+
+		st11 = NewSourceTables(task1, source1)
+		st12 = NewSourceTables(task1, source2)
+		st21 = NewSourceTables(task2, source2)
+		st22 = NewSourceTables(task2, source2)
+		stm  = map[string]map[string]SourceTables{
 			task1: {source2: st12, source1: st11},
 		}
 	)
+	for schema, tables := range tt11.UpTables {
+		for table := range tables {
+			st11.AddTable(schema, table, tt11.DownSchema, tt11.DownTable)
+		}
+	}
+	for schema, tables := range tt12.UpTables {
+		for table := range tables {
+			st12.AddTable(schema, table, tt12.DownSchema, tt12.DownTable)
+		}
+	}
+	for schema, tables := range tt21.UpTables {
+		for table := range tables {
+			st21.AddTable(schema, table, tt21.DownSchema, tt21.DownTable)
+		}
+	}
+	for schema, tables := range tt22.UpTables {
+		for table := range tables {
+			st22.AddTable(schema, table, tt22.DownSchema, tt22.DownTable)
+		}
+	}
 
 	// no tables exist before Init/Update.
-	c.Assert(tk.FindTables(task1), IsNil)
+	c.Assert(tk.FindTables(task1, downSchema, downTable), IsNil)
 
 	// Init with `nil` is fine.
 	tk.Init(nil)
-	c.Assert(tk.FindTables(task1), IsNil)
+	c.Assert(tk.FindTables(task1, downSchema, downTable), IsNil)
 
 	// tables for task1 exit after Init.
 	tk.Init(stm)
-	sts := tk.FindTables(task1)
-	c.Assert(sts, HasLen, 2)
-	c.Assert(sts[0], DeepEquals, st11)
-	c.Assert(sts[1], DeepEquals, st12)
+	tts := tk.FindTables(task1, downSchema, downTable)
+	c.Assert(tts, HasLen, 2)
+	c.Assert(tts[0], DeepEquals, tt11)
+	c.Assert(tts[1], DeepEquals, tt12)
 
 	// adds new tables.
 	c.Assert(tk.Update(st21), IsTrue)
-	sts = tk.FindTables(task2)
-	c.Assert(sts, HasLen, 1)
-	c.Assert(sts[0], DeepEquals, st21)
+	tts = tk.FindTables(task2, downSchema, downTable)
+	c.Assert(tts, HasLen, 1)
+	c.Assert(tts[0], DeepEquals, tt21)
 
 	// updates/appends new tables.
 	c.Assert(tk.Update(st22), IsTrue)
-	sts = tk.FindTables(task2)
-	c.Assert(sts, HasLen, 1)
-	c.Assert(sts[0], DeepEquals, st22)
+	tts = tk.FindTables(task2, downSchema, downTable)
+	c.Assert(tts, HasLen, 1)
+	c.Assert(tts[0], DeepEquals, tt22)
 
 	// deletes tables.
 	st22.IsDeleted = true
 	c.Assert(tk.Update(st22), IsTrue)
-	c.Assert(tk.FindTables(task2), IsNil)
+	c.Assert(tk.FindTables(task2, downSchema, downTable), IsNil)
 
 	// try to delete, but not exist.
 	c.Assert(tk.Update(st22), IsFalse)
@@ -174,38 +202,38 @@ func (t *testKeeper) TestTableKeeper(c *C) {
 	c.Assert(tk.Update(st22), IsFalse)
 
 	// tables for task1 not affected.
-	sts = tk.FindTables(task1)
-	c.Assert(sts, HasLen, 2)
-	c.Assert(sts[0], DeepEquals, st11)
-	c.Assert(sts[1], DeepEquals, st12)
+	tts = tk.FindTables(task1, downSchema, downTable)
+	c.Assert(tts, HasLen, 2)
+	c.Assert(tts[0], DeepEquals, tt11)
+	c.Assert(tts[1], DeepEquals, tt12)
 
 	// add a table for st11.
-	c.Assert(tk.AddTable(task1, st11.Source, "db-2", "tbl-3"), IsTrue)
-	c.Assert(tk.AddTable(task1, st11.Source, "db-2", "tbl-3"), IsFalse)
-	sts = tk.FindTables(task1)
-	st11n := sts[0]
-	c.Assert(st11n.Tables, HasKey, "db-2")
-	c.Assert(st11n.Tables["db-2"], HasKey, "tbl-3")
+	c.Assert(tk.AddTable(task1, st11.Source, "db-2", "tbl-3", downSchema, downTable), IsTrue)
+	c.Assert(tk.AddTable(task1, st11.Source, "db-2", "tbl-3", downSchema, downTable), IsFalse)
+	tts = tk.FindTables(task1, downSchema, downTable)
+	st11n := tts[0]
+	c.Assert(st11n.UpTables, HasKey, "db-2")
+	c.Assert(st11n.UpTables["db-2"], HasKey, "tbl-3")
 
 	// removed the added table in st11.
-	c.Assert(tk.RemoveTable(task1, st11.Source, "db-2", "tbl-3"), IsTrue)
-	c.Assert(tk.RemoveTable(task1, st11.Source, "db-2", "tbl-3"), IsFalse)
-	sts = tk.FindTables(task1)
-	st11n = sts[0]
-	c.Assert(st11n.Tables["db-2"], IsNil)
+	c.Assert(tk.RemoveTable(task1, st11.Source, "db-2", "tbl-3", downSchema, downTable), IsTrue)
+	c.Assert(tk.RemoveTable(task1, st11.Source, "db-2", "tbl-3", downSchema, downTable), IsFalse)
+	tts = tk.FindTables(task1, downSchema, downTable)
+	st11n = tts[0]
+	c.Assert(st11n.UpTables["db-2"], IsNil)
 
 	// adds for not existing task takes no effect.
-	c.Assert(tk.AddTable("not-exist", st11.Source, "db-2", "tbl-3"), IsFalse)
+	c.Assert(tk.AddTable("not-exist", st11.Source, "db-2", "tbl-3", downSchema, downTable), IsFalse)
 	// adds for not existing source takes effect.
-	c.Assert(tk.AddTable(task1, "new-source", "db-2", "tbl-3"), IsTrue)
-	sts = tk.FindTables(task1)
-	c.Assert(sts, HasLen, 3)
-	c.Assert(sts[2].Source, Equals, "new-source")
-	c.Assert(sts[2].Tables["db-2"], HasKey, "tbl-3")
+	c.Assert(tk.AddTable(task1, "new-source", "db-2", "tbl-3", downSchema, downTable), IsTrue)
+	tts = tk.FindTables(task1, downSchema, downTable)
+	c.Assert(tts, HasLen, 3)
+	c.Assert(tts[2].Source, Equals, "new-source")
+	c.Assert(tts[2].UpTables["db-2"], HasKey, "tbl-3")
 
 	// removes for not existing task/source takes no effect.
-	c.Assert(tk.RemoveTable("not-exit", st12.Source, "db", "tbl-1"), IsFalse)
-	c.Assert(tk.RemoveTable(task1, "not-exit", "db", "tbl-1"), IsFalse)
-	sts = tk.FindTables(task1)
-	c.Assert(sts[1], DeepEquals, st12)
+	c.Assert(tk.RemoveTable("not-exit", st12.Source, "db", "tbl-1", downSchema, downTable), IsFalse)
+	c.Assert(tk.RemoveTable(task1, "not-exit", "db", "tbl-1", downSchema, downTable), IsFalse)
+	tts = tk.FindTables(task1, downSchema, downTable)
+	c.Assert(tts[1], DeepEquals, tt12)
 }
