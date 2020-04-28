@@ -5,6 +5,7 @@ set -eux
 cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
+task_name="sequence_sharding_optimistic"
 
 run() {
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -12,8 +13,14 @@ run() {
 
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+
+    # now, for optimistic shard DDL, different sources will reach a stage often not at the same time,
+    # in order to simply the check and resume flow, only enable the failpoint for one DM-worker.
+    export GO_FAILPOINTS="github.com/pingcap/dm/syncer/FlushCheckpointStage=return(100)" # for all stages
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    export GO_FAILPOINTS=''
+
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     # operate mysql config to worker
@@ -46,6 +53,52 @@ run() {
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+
+     # the task should paused by `FlushCheckpointStage` failpont before flush old checkpoint.
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status $task_name" \
+        "failpoint error for FlushCheckpointStage before flush old checkpoint" 1
+
+    # resume-task to next stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task $task_name"\
+        "\"result\": true" 3
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status $task_name" \
+        "failpoint error for FlushCheckpointStage before track DDL" 1
+
+    # resume-task to next stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task $task_name"\
+        "\"result\": true" 3
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status $task_name" \
+        "failpoint error for FlushCheckpointStage before execute DDL" 1
+
+    # resume-task to next stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task $task_name"\
+        "\"result\": true" 3
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status $task_name" \
+        "failpoint error for FlushCheckpointStage before save checkpoint" 1
+
+    # resume-task to next stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task $task_name"\
+        "\"result\": true" 3
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status $task_name" \
+        "failpoint error for FlushCheckpointStage before flush checkpoint" 1
+
+    # resume-task to continue the sync
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task $task_name"\
+        "\"result\": true" 3
 
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

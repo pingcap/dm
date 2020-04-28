@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -48,10 +49,13 @@ func (s *Syncer) handleQueryEventOptimistic(
 	ev *replication.QueryEvent, ec eventContext,
 	needHandleDDLs []string, needTrackDDLs []trackedDDL,
 	onlineDDLTableNames map[string]*filter.Table) error {
-	// wait previous DMLs to be replicated
-	if err := s.flushJobs(); err != nil {
-		return err
-	}
+	// interrupted after flush old checkpoint and before track DDL.
+	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+		err := handleFlushCheckpointStage(1, val.(int), "before track DDL")
+		if err != nil {
+			failpoint.Return(err)
+		}
+	})
 
 	var (
 		upSchema   string
@@ -105,10 +109,8 @@ func (s *Syncer) handleQueryEventOptimistic(
 		}
 	}
 
-	s.tctx.L().Info("save table checkpoint", zap.String("event", "query"),
-		zap.String("schema", upSchema), zap.String("table", upTable),
-		zap.Strings("ddls", needHandleDDLs), log.WrapStringerField("location", ec.currentLocation))
-	s.saveTablePoint(upSchema, upTable, ec.currentLocation.Clone())
+	// in optimistic mode, don't `saveTablePoint` before execute DDL,
+	// because it has no `UnresolvedTables` to prevent the flush of this checkpoint.
 
 	info := s.optimist.ConstructInfo(upSchema, upTable, downSchema, downTable, needHandleDDLs, tiBefore, tiAfter)
 
@@ -174,6 +176,14 @@ func (s *Syncer) handleQueryEventOptimistic(
 			log.WrapStringerField("location", ec.currentLocation))
 		needHandleDDLs = appliedSQLs // maybe nil
 	}
+
+	// interrupted after track DDL and before execute DDL.
+	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+		err = handleFlushCheckpointStage(2, val.(int), "before execute DDL")
+		if err != nil {
+			failpoint.Return(err)
+		}
+	})
 
 	ddlInfo := &shardingDDLInfo{
 		name:       needTrackDDLs[0].tableNames[0][0].String(),
