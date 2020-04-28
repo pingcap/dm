@@ -282,6 +282,9 @@ func (w *Worker) OperateSubTask(name string, op pb.TaskOp) error {
 		err = terror.ErrWorkerUpdateTaskStage.Generatef("invalid operate %s on subtask %v", op, name)
 	}
 
+	if err != nil {
+		w.l.Info("OperateSubTask", zap.String("task", name), zap.Reflect("operate", op), zap.Error(err))
+	}
 	return err
 }
 

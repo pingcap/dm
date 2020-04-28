@@ -237,16 +237,18 @@ func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 	defer st.wg.Done()
 
 	st.RLock()
-	ctx := st.currCtx
+	//ctx := st.currCtx
 	st.RUnlock()
 
 	select {
-	case <-ctx.Done():
-		return
+	//case <-ctx.Done():
+	//	st.l.Info("fetchResult ctx done")
+	//	return
 	case result := <-pr:
 		st.setResult(&result) // save result
 		st.callCurrCancel()   // dm-unit finished, canceled or error occurred, always cancel processing
 
+		// should update
 		if len(result.Errors) == 0 && st.Stage() == pb.Stage_Paused {
 			return // paused by external request
 		}
@@ -371,6 +373,7 @@ func (st *SubTask) setStage(stage pb.Stage) {
 func (st *SubTask) stageCAS(oldStage, newStage pb.Stage) bool {
 	st.Lock()
 	defer st.Unlock()
+	st.l.Info("stageCAS", zap.Stringer("old stage", oldStage))
 	if st.stage == oldStage {
 		st.stage = newStage
 		taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
@@ -428,9 +431,11 @@ func (st *SubTask) Close() {
 
 // Pause pauses the running sub task
 func (st *SubTask) Pause() error {
-	if !st.stageCAS(pb.Stage_Running, pb.Stage_Paused) {
+	if st.Stage() != pb.Stage_Running {
 		return terror.ErrWorkerNotRunningStage.Generate()
 	}
+
+	//if !st.stageCAS(pb.Stage_Running, pb.Stage_Paused) {}
 
 	st.callCurrCancel()
 	st.wg.Wait() // wait fetchResult return
@@ -439,6 +444,7 @@ func (st *SubTask) Pause() error {
 	cu.Pause()
 
 	st.l.Info("paused", zap.Stringer("unit", cu.Type()))
+	st.setStage(pb.Stage_Paused)
 	return nil
 }
 
@@ -450,16 +456,18 @@ func (st *SubTask) Resume() error {
 		return nil
 	}
 
-	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Running) {
+	if st.Stage() != pb.Stage_Paused {
 		return terror.ErrWorkerNotPausedStage.Generate()
 	}
+
+	//if !st.stageCAS(pb.Stage_Paused, pb.Stage_Running) {}
 	ctx, cancel := context.WithCancel(st.ctx)
 	st.setCurrCtx(ctx, cancel)
 	// NOTE: this may block if user resume a task
 	err := st.unitTransWaitCondition(ctx)
 	if err != nil {
 		st.l.Error("wait condition", log.ShortError(err))
-		st.setStage(pb.Stage_Paused)
+		//st.setStage(pb.Stage_Paused)
 		return err
 	} else if ctx.Err() != nil {
 		return nil
@@ -473,6 +481,8 @@ func (st *SubTask) Resume() error {
 	st.wg.Add(1)
 	go st.fetchResult(pr)
 	go cu.Resume(ctx, pr)
+
+	st.setStage(pb.Stage_Running)
 	return nil
 }
 
