@@ -276,6 +276,157 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	t.checkLockNoDone(c, l)
 }
 
+func (t *testLock) TestLockTrySyncIndex(c *C) {
+	var (
+		ID           = "test_lock_try_sync_index-`foo`.`bar`"
+		task         = "test_lock_try_sync_index"
+		source       = "mysql-replica-1"
+		db           = "db"
+		tbls         = []string{"bar1", "bar2"}
+		p            = parser.New()
+		se           = mock.NewContext()
+		tblID  int64 = 111
+		DDLs1        = []string{"ALTER TABLE bar DROP INDEX idx_c1"}
+		DDLs2        = []string{"ALTER TABLE bar ADD UNIQUE INDEX idx_c1(c1)"}
+		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, UNIQUE INDEX idx_c1(c1))`)
+		ti1          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2          = ti0
+		tables       = map[string]map[string]struct{}{
+			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
+		}
+		sts = []SourceTables{
+			NewSourceTables(task, source, tables),
+		}
+
+		l = NewLock(ID, task, ti0, sts)
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// try sync for one table, `DROP INDEX` returned directly (to make schema become more compatible).
+	// `DROP INDEX` is handled like `ADD COLUMN`.
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	synced, remain := l.IsSynced()
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+
+	// try sync for another table, also got `DROP INDEX` now.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, sts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	t.checkLockSynced(c, l)
+
+	// try sync for one table, `ADD INDEX` not returned directly (to keep the schema more compatible).
+	// `ADD INDEX` is handled like `DROP COLUMN`.
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, sts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, []string{}) // no DDLs returned
+	synced, remain = l.IsSynced()
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+
+	// try sync for another table, got `ADD INDEX` now.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs2)
+	t.checkLockSynced(c, l)
+}
+
+func (t *testLock) TestLockTrySyncNullNotNull(c *C) {
+	var (
+		ID           = "test_lock_try_sync_null_not_null-`foo`.`bar`"
+		task         = "test_lock_try_sync_null_not_null"
+		source       = "mysql-replica-1"
+		db           = "db"
+		tbls         = []string{"bar1", "bar2"}
+		p            = parser.New()
+		se           = mock.NewContext()
+		tblID  int64 = 111
+		DDLs1        = []string{"ALTER TABLE bar MODIFY COLUMN c1 INT NOT NULL DEFAULT 1234"}
+		DDLs2        = []string{"ALTER TABLE bar MODIFY COLUMN c1 INT NULL DEFAULT 1234"}
+		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT NULL DEFAULT 1234)`)
+		ti1          = createTableInfo(c, p, se, tblID,
+			`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT NOT NULL DEFAULT 1234)`)
+		ti2    = ti0
+		tables = map[string]map[string]struct{}{
+			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
+		}
+		sts = []SourceTables{
+			NewSourceTables(task, source, tables),
+		}
+
+		l = NewLock(ID, task, ti0, sts)
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	for i := 0; i < 2; i++ { // two round
+		// try sync for one table, from `NULL` to `NOT NULL`, no DDLs returned.
+		DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+		c.Assert(err, IsNil)
+		c.Assert(DDLs, DeepEquals, []string{})
+
+		// try sync for another table, DDLs returned.
+		DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, sts)
+		c.Assert(err, IsNil)
+		c.Assert(DDLs, DeepEquals, DDLs1)
+
+		// try sync for one table, from `NOT NULL` to `NULL`, DDLs returned.
+		DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, sts)
+		c.Assert(err, IsNil)
+		c.Assert(DDLs, DeepEquals, DDLs2)
+
+		// try sync for another table, from `NOT NULL` to `NULL`, DDLs, returned.
+		DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts)
+		c.Assert(err, IsNil)
+		c.Assert(DDLs, DeepEquals, DDLs2)
+	}
+}
+
+func (t *testLock) TestLockTrySyncNoDiff(c *C) {
+	var (
+		ID           = "test_lock_try_sync_no_diff-`foo`.`bar`"
+		task         = "test_lock_try_sync_no_diff"
+		source       = "mysql-replica-1"
+		db           = "db"
+		tbls         = []string{"bar1", "bar2"}
+		p            = parser.New()
+		se           = mock.NewContext()
+		tblID  int64 = 111
+		DDLs1        = []string{"ALTER TABLE bar DROP COLUMN c1, ADD COLUMN c2 INT"}
+		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti1          = createTableInfo(c, p, se, tblID,
+			`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`) // `c1` not dropped, `c2` added
+		tables = map[string]map[string]struct{}{
+			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
+		}
+		sts = []SourceTables{
+			NewSourceTables(task, source, tables),
+		}
+
+		l = NewLock(ID, task, ti0, sts)
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// try sync for one table.
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+	c.Assert(err, IsNil)
+	// FIXME, the returned DDLs should only be `ALTER TABLE bar ADD COLUMN c2 INT`, but we lack schema diff mechanism now.
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	synced, remain := l.IsSynced()
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+}
+
 func (t *testLock) TestLockTrySyncNewTable(c *C) {
 	var (
 		ID            = "test_lock_try_sync_new_table-`foo`.`bar`"
@@ -801,47 +952,55 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 		l      = NewLock(ID, task, ti0, sts)
 	)
 
-	// the initial status is synced.
+	// the initial status is synced but not resolved.
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
+	c.Assert(l.IsResolved(), IsFalse)
 
-	// TrySync for the first table.
+	// TrySync for the first table, no table has done the DDLs operation.
 	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
+	t.checkLockNoDone(c, l)
+	c.Assert(l.IsResolved(), IsFalse)
 
-	// mark done for synced table, fail for non-synced table
+	// mark done for the synced table, the lock is un-resolved.
 	c.Assert(l.TryMarkDone(source, db, tbls[0]), IsTrue)
-	c.Assert(l.TryMarkDone(source, db, tbls[1]), IsFalse)
 	c.Assert(l.IsDone(source, db, tbls[0]), IsTrue)
 	c.Assert(l.IsDone(source, db, tbls[1]), IsFalse)
+	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the second table, the joined schema become larger.
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
 
-	// both of tables should become not-done now.
-	c.Assert(l.IsDone(source, db, tbls[0]), IsFalse)
+	// the first table is still keep `done` (for the previous DDLs operation)
+	c.Assert(l.IsDone(source, db, tbls[0]), IsTrue)
 	c.Assert(l.IsDone(source, db, tbls[1]), IsFalse)
+	c.Assert(l.IsResolved(), IsFalse)
 
-	// mark done for synced table, fail for non-synced table
-	c.Assert(l.TryMarkDone(source, db, tbls[0]), IsFalse)
+	// mark done for the second table, both of them are done (for different DDLs operations)
 	c.Assert(l.TryMarkDone(source, db, tbls[1]), IsTrue)
-	c.Assert(l.IsDone(source, db, tbls[0]), IsFalse)
+	c.Assert(l.IsDone(source, db, tbls[0]), IsTrue)
 	c.Assert(l.IsDone(source, db, tbls[1]), IsTrue)
+	// but the lock is still not resolved because tables have different schemas.
+	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the first table, all tables become synced.
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, sts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
 
-	// the lock is still not resolved.
+	// the first table become not-done, and the lock is un-resolved.
+	c.Assert(l.IsDone(source, db, tbls[0]), IsFalse)
+	c.Assert(l.IsDone(source, db, tbls[1]), IsTrue)
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// mark done for the first table.
 	c.Assert(l.TryMarkDone(source, db, tbls[0]), IsTrue)
 	c.Assert(l.IsDone(source, db, tbls[0]), IsTrue)
+	c.Assert(l.IsDone(source, db, tbls[1]), IsTrue)
 
 	// the lock become resolved now.
 	c.Assert(l.IsResolved(), IsTrue)

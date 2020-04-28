@@ -2,12 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.5] 2020-04-27
+
+### Improvements
+
+- Improve the incremental replication speed when the `UNIQUE KEY` column has the `NULL` value
+- Add retry for the `Write conflict` (9007 and 8005) error returned by TiDB
+
+### Bug fixes
+
+- Fix the issue that the `Duplicate entry` error might occur during the full data import
+- Fix the issue that the replication task cannot be stopped or paused when the full data import is completed and the upstream has no written data  
+- Fix the issue the monitoring metrics still display data after the replication task is stopped
+
+### Action required
+
+- When upgrading from a previous version, note that you must upgrade all DM components (dmctl/DM-master/DM-worker) together
+
+### Detailed Bug Fixes and Changes
+
+- Improve the incremental replication speed when the `UNIQUE KEY` column has the `NULL` value [#588](https://github.com/pingcap/dm/pull/588) [#597](https://github.com/pingcap/dm/pull/597)
+- Add retry for the `Write conflict` (9007 and 8005) error returned by TiDB [#632](https://github.com/pingcap/dm/pull/632)
+- Fix the issue that the `Duplicate entry` error might occur during the full data import [#554](https://github.com/pingcap/dm/pull/554)
+- Fix the issue that the replication task cannot be stopped or paused when the full data import is completed and the upstream has no written data [#622](https://github.com/pingcap/dm/pull/622)
+- Fix the issue the monitoring metrics still display data after the replication task is stopped [#616](https://github.com/pingcap/dm/pull/616)
+- Fix the issue that the `Column count doesn't match value count` error might be returned during the sharding DDL replication [#624](https://github.com/pingcap/dm/pull/624)
+- Fix the issue that some metrics such as `data file size` are incorrectly displayed when the paused task of full data import is resumed [#570](https://github.com/pingcap/dm/pull/570)
+- Add and fix multiple monitoring metrics [#590](https://github.com/pingcap/dm/pull/590) [#594](https://github.com/pingcap/dm/pull/594)
+
 ## [1.0.4] 2020-03-13
 
 ### Improvements
 
 - Add English UI for DM-portal
-- Add the ` --more` parameter in the `query-status` command to show complete replication status information
+- Add the `--more` parameter in the `query-status` command to show complete replication status information
 
 ### Bug fixes
 
@@ -23,7 +51,7 @@ All notable changes to this project will be documented in this file.
 ### Detailed Bug Fixes and Changes
 
 - Add English UI for DM-portal [#480](https://github.com/pingcap/dm/pull/480)
-- Add the ` --more` parameter in the `query-status` command to show complete replication status information [#533](https://github.com/pingcap/dm/pull/533)
+- Add the `--more` parameter in the `query-status` command to show complete replication status information [#533](https://github.com/pingcap/dm/pull/533)
 - Fix the issue that `resume-task` might fail to resume the replication task which is interrupted by the abnormal connection to the downstream TiDB server [#436](https://github.com/pingcap/dm/pull/436)
 - Fix the issue that the online DDL operation cannot be properly replicated after a failed replication task is restarted because the online DDL meta information is cleared after the DDL operation failure [#465](https://github.com/pingcap/dm/pull/465)
 - Fix the issue that `query-error` might cause the DM-worker to panic after `start-task` goes into error [#519](https://github.com/pingcap/dm/pull/519)

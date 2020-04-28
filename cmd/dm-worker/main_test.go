@@ -16,6 +16,7 @@ package main
 // Reference: https://dzone.com/articles/measuring-integration-test-coverage-rate-in-pouchc
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -28,6 +29,7 @@ import (
 )
 
 func TestRunMain(t *testing.T) {
+	fmt.Println("dm-worker startup", time.Now())
 	var (
 		args   []string
 		exit   = make(chan int)
@@ -67,8 +69,10 @@ func TestRunMain(t *testing.T) {
 
 	select {
 	case <-waitCh:
+		fmt.Println("dm-worker exit", time.Now())
 		return
 	case <-exit:
+		fmt.Println("dm-worker exit", time.Now())
 		return
 	}
 }

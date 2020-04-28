@@ -39,7 +39,7 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		watchTimeout = 500 * time.Millisecond
+		watchTimeout = 2 * time.Second
 		worker1      = "dm-worker-1"
 		worker2      = "dm-worker-2"
 		bound1       = NewSourceBound("mysql-replica-1", worker1)

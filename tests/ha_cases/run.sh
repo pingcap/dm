@@ -16,6 +16,12 @@ function test_running() {
     prepare_sql
     start_cluster
 
+    # make sure task to step in "Sync" stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 2 \
+        "\"unit\": \"Sync\"" 2
+
     echo "use sync_diff_inspector to check full dump loader"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
@@ -27,7 +33,7 @@ function test_running() {
     run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
     run_sql_file_withdb $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test
 
-    sleep 3
+    sleep 3 # wait for flush checkpoint
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     echo "[$(date)] <<<<<< finish test_running >>>>>>"
@@ -39,6 +45,16 @@ function test_multi_task_running() {
     cleanup
     prepare_sql_multi_task
     start_multi_tasks_cluster
+
+    # make sure task to step in "Sync" stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 2 \
+        "\"unit\": \"Sync\"" 2
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
+        "query-status test2" \
+        "\"stage\": \"Running\"" 2 \
+        "\"unit\": \"Sync\"" 2
 
     echo "use sync_diff_inspector to check full dump loader"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -54,7 +70,7 @@ function test_multi_task_running() {
     run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test2
     run_sql_file_withdb $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test2
 
-    sleep 3
+    sleep 3 # wait for flush checkpoint
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
     check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
@@ -411,12 +427,10 @@ function run() {
     test_kill_master
     test_kill_worker
     test_kill_master_in_sync
-    # TODO: current ha doesn't support kill worker in sync well now
-    # test_kill_worker_in_sync
+    test_kill_worker_in_sync
     test_standalone_running
     test_pause_task
-    # TODO: current ha doesn't support kill worker in sync well now
-    # test_multi_task_reduce_worker
+    test_multi_task_reduce_worker
     test_isolate_master
 }
 
