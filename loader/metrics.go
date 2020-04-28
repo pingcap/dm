@@ -35,7 +35,7 @@ var (
 			Subsystem: "loader",
 			Name:      "query_duration_time",
 			Help:      "Bucketed histogram of query time (s) of a txn.",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 16),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
 	txnHistogram = metricsproxy.NewHistogramVec(
@@ -44,8 +44,17 @@ var (
 			Subsystem: "loader",
 			Name:      "txn_duration_time",
 			Help:      "Bucketed histogram of processing time (s) of a txn.",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 16),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
+
+	stmtHistogram = metricsproxy.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "loader",
+			Name:      "stmt_duration_time",
+			Help:      "Bucketed histogram of every statement query time (s).",
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
+		}, []string{"type", "task"})
 
 	dataFileGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -94,6 +103,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(tidbExecutionErrorCounter)
 	registry.MustRegister(txnHistogram)
 	registry.MustRegister(queryHistogram)
+	registry.MustRegister(stmtHistogram)
 	registry.MustRegister(dataFileGauge)
 	registry.MustRegister(tableGauge)
 	registry.MustRegister(dataSizeGauge)
@@ -105,6 +115,7 @@ func (m *Loader) removeLabelValuesWithTaskInMetrics(task string) {
 	tidbExecutionErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	txnHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	queryHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	stmtHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	dataFileGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	tableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	dataSizeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})

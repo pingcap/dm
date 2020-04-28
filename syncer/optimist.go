@@ -49,7 +49,9 @@ func (s *Syncer) handleQueryEventOptimistic(
 	needHandleDDLs []string, needTrackDDLs []trackedDDL,
 	onlineDDLTableNames map[string]*filter.Table) error {
 	// wait previous DMLs to be replicated
-	s.jobWg.Wait()
+	if err := s.flushJobs(); err != nil {
+		return err
+	}
 
 	var (
 		upSchema   string
@@ -178,7 +180,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 		tableNames: needTrackDDLs[0].tableNames,
 		stmt:       needTrackDDLs[0].stmt,
 	}
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID, nil)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err

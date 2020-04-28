@@ -102,15 +102,19 @@ type ShardingMeta struct {
 	sources   map[string]*ShardingSequence // source table ID -> its sharding sequence
 	schema    string                       // schema name in downstream meta db
 	table     string                       // table name used in downstream meta db
+
+	enableGTID bool // whether enableGTID, used to compare location
 }
 
 // NewShardingMeta creates a new ShardingMeta
-func NewShardingMeta(schema, table string) *ShardingMeta {
+func NewShardingMeta(schema, table string, enableGTID bool) *ShardingMeta {
 	return &ShardingMeta{
 		schema:  schema,
 		table:   table,
 		global:  &ShardingSequence{Items: make([]*DDLItem, 0)},
 		sources: make(map[string]*ShardingSequence),
+
+		enableGTID: enableGTID,
 	}
 }
 
@@ -163,7 +167,7 @@ func (meta *ShardingMeta) checkItemExists(item *DDLItem) (int, bool) {
 		return 0, false
 	}
 	for idx, ddlItem := range source.Items {
-		if binlog.CompareLocation(item.FirstLocation, ddlItem.FirstLocation) == 0 {
+		if binlog.CompareLocation(item.FirstLocation, ddlItem.FirstLocation, meta.enableGTID) == 0 {
 			return idx, true
 		}
 	}
