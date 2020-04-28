@@ -114,7 +114,7 @@ func (b *binlogPoint) rollback(schemaTracker *schema.Tracker, schema string) (is
 	// if any of them are not equal, then we rollback them:
 	// - set the one in the checkpoint but not flushed to the one flushed.
 	// - set the one tracked to the one in the checkpoint by the caller of this method (both flushed and not flushed are the same now)
-	if isSchemaChanged = trackedTi != b.ti || b.ti != b.flushedTI; isSchemaChanged {
+	if isSchemaChanged = (trackedTi != b.ti) || (b.ti != b.flushedTI); isSchemaChanged {
 		b.ti = b.flushedTI
 	}
 	return
