@@ -346,13 +346,13 @@ func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 		pswdFrom string
 	)
 	if len(clone.To.Password) > 0 {
-		pswdTo, err = utils.Decrypt(clone.To.Password)
+		pswdTo, err = utils.DecryptOrPlaintext(clone.To.Password)
 		if err != nil {
 			return nil, terror.WithScope(terror.ErrConfigDecryptDBPassword.Delegate(err, clone.To.Password), terror.ScopeDownstream)
 		}
 	}
 	if len(clone.From.Password) > 0 {
-		pswdFrom, err = utils.Decrypt(clone.From.Password)
+		pswdFrom, err = utils.DecryptOrPlaintext(clone.From.Password)
 		if err != nil {
 			return nil, terror.WithScope(terror.ErrConfigDecryptDBPassword.Delegate(err, clone.From.Password), terror.ScopeUpstream)
 		}

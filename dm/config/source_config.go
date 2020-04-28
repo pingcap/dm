@@ -183,7 +183,7 @@ func (c *SourceConfig) DecryptPassword() (*SourceConfig, error) {
 		err      error
 	)
 	if len(clone.From.Password) > 0 {
-		pswdFrom, err = utils.Decrypt(clone.From.Password)
+		pswdFrom, err = utils.DecryptOrPlaintext(clone.From.Password)
 		if err != nil {
 			return nil, terror.WithClass(err, terror.ClassDMWorker)
 		}

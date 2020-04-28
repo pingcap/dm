@@ -341,7 +341,7 @@ func (p *Handler) AnalyzeConfig(w http.ResponseWriter, req *http.Request) {
 	log.L().Info("analyze config", zap.String("config name", cfg.Name))
 
 	// decrypt password
-	dePwd, err := utils.Decrypt(cfg.TargetDB.Password)
+	dePwd, err := utils.DecryptOrPlaintext(cfg.TargetDB.Password)
 	log.L().Error("decrypt password failed", zap.Error(err))
 	if err != nil {
 		p.genJSONResp(w, http.StatusBadRequest, AnalyzeResult{

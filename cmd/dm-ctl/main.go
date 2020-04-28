@@ -74,10 +74,12 @@ func helpUsage(cfg *common.Config) {
 	fmt.Println("Special Commands:")
 	f := cfg.FlagSet.Lookup(common.EncryptCmdName)
 	fmt.Println(fmt.Sprintf("  --%s %s", f.Name, f.Usage))
+	f = cfg.FlagSet.Lookup(common.DecryptCmdName)
+	fmt.Println(fmt.Sprintf("  --%s %s", f.Name, f.Usage))
 	fmt.Println()
 	fmt.Println("Global Options:")
 	cfg.FlagSet.VisitAll(func(flag2 *flag.Flag) {
-		if flag2.Name == common.EncryptCmdName {
+		if flag2.Name == common.EncryptCmdName || flag2.Name == common.DecryptCmdName {
 			return
 		}
 		fmt.Println(fmt.Sprintf("  --%s %s", flag2.Name, flag2.Usage))
