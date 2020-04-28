@@ -214,6 +214,25 @@ func (tk *TableKeeper) FindTables(task, downSchema, downTable string) []TargetTa
 	return ret
 }
 
+// TargetTablesForTask returns TargetTable list for a specified task and downstream table.
+// stm: task name -> upstream source ID -> SourceTables.
+func TargetTablesForTask(task, downSchema, downTable string, stm map[string]map[string]SourceTables) []TargetTable {
+	sts, ok := stm[task]
+	if !ok || len(sts) == 0 {
+		return nil
+	}
+
+	ret := make([]TargetTable, 0, len(sts))
+	for _, st := range sts {
+		if tt := st.TargetTable(downSchema, downTable); !tt.IsEmpty() {
+			ret = append(ret, tt)
+		}
+	}
+
+	sort.Sort(TargetTableSlice(ret))
+	return ret
+}
+
 // TargetTableSlice attaches the methods of Interface to []TargetTable,
 // sorting in increasing order according to `Source` field.
 type TargetTableSlice []TargetTable

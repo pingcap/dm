@@ -63,81 +63,84 @@ func (t *testOptimist) TestOptimistSourceTables(c *C) {
 	defer clearOptimistTestSourceInfoOperation(c)
 
 	var (
-		logger  = log.L()
-		o       = NewOptimist(&logger)
-		task    = "task"
-		source1 = "mysql-replica-1"
-		source2 = "mysql-replica-2"
-		st1     = optimism.NewSourceTables(task, source1, map[string]map[string]struct{}{
-			"db": {"tbl-1": struct{}{}, "tbl-2": struct{}{}},
-		})
-		st2 = optimism.NewSourceTables(task, source2, map[string]map[string]struct{}{
-			"db": {"tbl-1": struct{}{}, "tbl-2": struct{}{}},
-		})
+		logger     = log.L()
+		o          = NewOptimist(&logger)
+		task       = "task"
+		source1    = "mysql-replica-1"
+		source2    = "mysql-replica-2"
+		downSchema = "db"
+		downTable  = "tbl"
+		st1        = optimism.NewSourceTables(task, source1)
+		st2        = optimism.NewSourceTables(task, source2)
 	)
+
+	st1.AddTable("db", "tbl-1", downSchema, downTable)
+	st1.AddTable("db", "tbl-2", downSchema, downTable)
+	st2.AddTable("db", "tbl-1", downSchema, downTable)
+	st2.AddTable("db", "tbl-2", downSchema, downTable)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// CASE 1: start without any previous kv and no etcd operation.
 	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
-	c.Assert(o.tk.FindTables(task), IsNil)
+	c.Assert(o.tk.FindTables(task, downSchema, downTable), IsNil)
 	o.Close()
 	o.Close() // close multiple times.
 
 	// CASE 2: start again without any previous kv.
 	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
-	c.Assert(o.tk.FindTables(task), IsNil)
+	c.Assert(o.tk.FindTables(task, downSchema, downTable), IsNil)
 
 	// PUT st1, should find tables.
 	_, err := optimism.PutSourceTables(etcdTestCli, st1)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		sts := o.tk.FindTables(task)
-		return len(sts) == 1
+		tts := o.tk.FindTables(task, downSchema, downTable)
+		return len(tts) == 1
 	}), IsTrue)
-	sts := o.tk.FindTables(task)
-	c.Assert(sts, HasLen, 1)
-	c.Assert(sts[0], DeepEquals, st1)
+	tts := o.tk.FindTables(task, downSchema, downTable)
+	c.Assert(tts, HasLen, 1)
+	c.Assert(tts[0], DeepEquals, st1.TargetTable(downSchema, downTable))
 	o.Close()
 
 	// CASE 3: start again with previous source tables.
 	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
-	sts = o.tk.FindTables(task)
-	c.Assert(sts, HasLen, 1)
-	c.Assert(sts[0], DeepEquals, st1)
+	tts = o.tk.FindTables(task, downSchema, downTable)
+	c.Assert(tts, HasLen, 1)
+	c.Assert(tts[0], DeepEquals, st1.TargetTable(downSchema, downTable))
 
 	// PUT st2, should find more tables.
 	_, err = optimism.PutSourceTables(etcdTestCli, st2)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		sts = o.tk.FindTables(task)
-		return len(sts) == 2
+		tts = o.tk.FindTables(task, downSchema, downTable)
+		return len(tts) == 2
 	}), IsTrue)
-	sts = o.tk.FindTables(task)
-	c.Assert(sts, HasLen, 2)
-	c.Assert(sts[0], DeepEquals, st1)
-	c.Assert(sts[1], DeepEquals, st2)
+	tts = o.tk.FindTables(task, downSchema, downTable)
+	c.Assert(tts, HasLen, 2)
+	c.Assert(tts[0], DeepEquals, st1.TargetTable(downSchema, downTable))
+	c.Assert(tts[1], DeepEquals, st2.TargetTable(downSchema, downTable))
 	o.Close()
 
 	// CASE 4: create (not re-start) a new optimist with previous source tables.
 	o = NewOptimist(&logger)
 	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
-	sts = o.tk.FindTables(task)
-	c.Assert(sts, HasLen, 2)
-	c.Assert(sts[0], DeepEquals, st1)
-	c.Assert(sts[1], DeepEquals, st2)
+	tts = o.tk.FindTables(task, downSchema, downTable)
+	c.Assert(tts, HasLen, 2)
+	c.Assert(tts[0], DeepEquals, st1.TargetTable(downSchema, downTable))
+	c.Assert(tts[1], DeepEquals, st2.TargetTable(downSchema, downTable))
 
 	// DELETE st1, should find less tables.
 	_, err = optimism.DeleteSourceTables(etcdTestCli, st1)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		sts = o.tk.FindTables(task)
-		return len(sts) == 1
+		tts = o.tk.FindTables(task, downSchema, downTable)
+		return len(tts) == 1
 	}), IsTrue)
-	sts = o.tk.FindTables(task)
-	c.Assert(sts, HasLen, 1)
-	c.Assert(sts[0], DeepEquals, st2)
+	tts = o.tk.FindTables(task, downSchema, downTable)
+	c.Assert(tts, HasLen, 1)
+	c.Assert(tts[0], DeepEquals, st2.TargetTable(downSchema, downTable))
 	o.Close()
 }
 
@@ -169,39 +172,38 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 			}
 		}
 
-		task       = "task-test-optimist"
-		source1    = "mysql-replica-1"
-		source2    = "mysql-replica-2"
-		downSchema = "foo"
-		downTable  = "bar"
-		lockID     = fmt.Sprintf("%s-`%s`.`%s`", task, downSchema, downTable)
-		st1        = optimism.NewSourceTables(task, source1, map[string]map[string]struct{}{
-			"foo": {"bar-1": struct{}{}, "bar-2": struct{}{}},
-		})
-		st31 = optimism.NewSourceTables(task, source1, map[string]map[string]struct{}{
-			"foo": {"bar-1": struct{}{}},
-		})
-		st32 = optimism.NewSourceTables(task, source2, map[string]map[string]struct{}{
-			"foo-2": {"bar-3": struct{}{}},
-		})
-		p           = parser.New()
-		se          = mock.NewContext()
-		tblID int64 = 111
-		DDLs1       = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		DDLs2       = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
-		DDLs3       = []string{"ALTER TABLE bar DROP COLUMN c2"}
-		ti0         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
-		ti1         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
-		ti2         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
-		ti3         = ti1
-		i11         = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, ti1)
-		i12         = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs1, ti0, ti1)
-		i21         = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs2, ti1, ti2)
-		i23         = optimism.NewInfo(task, source2, "foo-2", "bar-3", downSchema, downTable,
+		task             = "task-test-optimist"
+		source1          = "mysql-replica-1"
+		source2          = "mysql-replica-2"
+		downSchema       = "foo"
+		downTable        = "bar"
+		lockID           = fmt.Sprintf("%s-`%s`.`%s`", task, downSchema, downTable)
+		st1              = optimism.NewSourceTables(task, source1)
+		st31             = optimism.NewSourceTables(task, source1)
+		st32             = optimism.NewSourceTables(task, source2)
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		DDLs2            = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
+		DDLs3            = []string{"ALTER TABLE bar DROP COLUMN c2"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
+		ti3              = ti1
+		i11              = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, ti1)
+		i12              = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs1, ti0, ti1)
+		i21              = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs2, ti1, ti2)
+		i23              = optimism.NewInfo(task, source2, "foo-2", "bar-3", downSchema, downTable,
 			[]string{`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`}, ti2, ti2)
 		i31 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs3, ti2, ti3)
 		i33 = optimism.NewInfo(task, source2, "foo-2", "bar-3", downSchema, downTable, DDLs3, ti2, ti3)
 	)
+
+	st1.AddTable("foo", "bar-1", downSchema, downTable)
+	st1.AddTable("foo", "bar-2", downSchema, downTable)
+	st31.AddTable("foo", "bar-1", downSchema, downTable)
+	st32.AddTable("foo-2", "bar-3", downSchema, downTable)
 
 	// put source tables first.
 	_, err := optimism.PutSourceTables(etcdTestCli, st1)
@@ -383,11 +385,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	synced, remain = o.Locks()[lockID].IsSynced()
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
-	sts := o.tk.FindTables(task)
-	c.Assert(sts, HasLen, 2)
-	c.Assert(sts[1].Source, Equals, source2)
-	c.Assert(sts[1].Tables, HasKey, i23.UpSchema)
-	c.Assert(sts[1].Tables[i23.UpSchema], HasKey, i23.UpTable)
+	tts := o.tk.FindTables(task, downSchema, downTable)
+	c.Assert(tts, HasLen, 2)
+	c.Assert(tts[1].Source, Equals, source2)
+	c.Assert(tts[1].UpTables, HasKey, i23.UpSchema)
+	c.Assert(tts[1].UpTables[i23.UpSchema], HasKey, i23.UpTable)
 
 	// check ShowLocks.
 	expectedLock = []*pb.DDLLock{
@@ -449,14 +451,14 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 		synced, _ = o.Locks()[lockID].IsSynced()
 		return synced
 	}), IsTrue)
-	sts = o.tk.FindTables(task)
-	c.Assert(sts, HasLen, 2)
-	c.Assert(sts[0].Source, Equals, source1)
-	c.Assert(sts[0].Tables, HasLen, 1)
-	c.Assert(sts[0].Tables[i21.UpSchema], HasKey, i21.UpTable)
-	c.Assert(sts[1].Source, Equals, source2)
-	c.Assert(sts[1].Tables, HasLen, 1)
-	c.Assert(sts[1].Tables[i23.UpSchema], HasKey, i23.UpTable)
+	tts = o.tk.FindTables(task, downSchema, downTable)
+	c.Assert(tts, HasLen, 2)
+	c.Assert(tts[0].Source, Equals, source1)
+	c.Assert(tts[0].UpTables, HasLen, 1)
+	c.Assert(tts[0].UpTables[i21.UpSchema], HasKey, i21.UpTable)
+	c.Assert(tts[1].Source, Equals, source2)
+	c.Assert(tts[1].UpTables, HasLen, 1)
+	c.Assert(tts[1].UpTables[i23.UpSchema], HasKey, i23.UpTable)
 	c.Assert(o.Locks()[lockID].IsResolved(), IsFalse)
 	c.Assert(o.Locks()[lockID].IsDone(i21.Source, i21.UpSchema, i21.UpTable), IsFalse)
 	c.Assert(o.Locks()[lockID].IsDone(i23.Source, i23.UpSchema, i23.UpTable), IsFalse)
@@ -620,30 +622,31 @@ func (t *testOptimist) TestOptimistLockConflict(c *C) {
 	defer clearOptimistTestSourceInfoOperation(c)
 
 	var (
-		watchTimeout = 2 * time.Second
-		logger       = log.L()
-		o            = NewOptimist(&logger)
-		task         = "task-test-optimist"
-		source1      = "mysql-replica-1"
-		downSchema   = "foo"
-		downTable    = "bar"
-		st1          = optimism.NewSourceTables(task, source1, map[string]map[string]struct{}{
-			"foo": {"bar-1": struct{}{}, "bar-2": struct{}{}},
-		})
-		p           = parser.New()
-		se          = mock.NewContext()
-		tblID int64 = 111
-		DDLs1       = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
-		DDLs2       = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME"}
-		DDLs3       = []string{"ALTER TABLE bar DROP COLUMN c1"}
-		ti0         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
-		ti1         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
-		ti2         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
-		ti3         = ti0
-		i1          = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, ti1)
-		i2          = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs2, ti0, ti2)
-		i3          = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs3, ti2, ti3)
+		watchTimeout       = 2 * time.Second
+		logger             = log.L()
+		o                  = NewOptimist(&logger)
+		task               = "task-test-optimist"
+		source1            = "mysql-replica-1"
+		downSchema         = "foo"
+		downTable          = "bar"
+		st1                = optimism.NewSourceTables(task, source1)
+		p                  = parser.New()
+		se                 = mock.NewContext()
+		tblID        int64 = 111
+		DDLs1              = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		DDLs2              = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME"}
+		DDLs3              = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		ti0                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
+		ti3                = ti0
+		i1                 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, ti1)
+		i2                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs2, ti0, ti2)
+		i3                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs3, ti2, ti3)
 	)
+
+	st1.AddTable("foo", "bar-1", downSchema, downTable)
+	st1.AddTable("foo", "bar-2", downSchema, downTable)
 
 	// put source tables first.
 	_, err := optimism.PutSourceTables(etcdTestCli, st1)

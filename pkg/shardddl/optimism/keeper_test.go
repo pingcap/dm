@@ -237,3 +237,49 @@ func (t *testKeeper) TestTableKeeper(c *C) {
 	tts = tk.FindTables(task1, downSchema, downTable)
 	c.Assert(tts[1], DeepEquals, tt12)
 }
+
+func (t *testKeeper) TestTargetTablesForTask(c *C) {
+	var (
+		task1      = "task1"
+		task2      = "task2"
+		source1    = "mysql-replicate-1"
+		source2    = "mysql-replicate-2"
+		downSchema = "foo"
+		downTable  = "bar"
+		stm        = map[string]map[string]SourceTables{
+			task1: {source1: NewSourceTables(task1, source1), source2: NewSourceTables(task1, source2)},
+			task2: {source1: NewSourceTables(task2, source1), source2: NewSourceTables(task2, source2)},
+		}
+	)
+
+	// not exist task.
+	c.Assert(TargetTablesForTask("not-exist", downSchema, downTable, stm), IsNil)
+
+	// no tables exist.
+	tts := TargetTablesForTask(task1, downSchema, downTable, stm)
+	c.Assert(tts, DeepEquals, []TargetTable{})
+
+	// add some tables.
+	tt11 := stm[task1][source1]
+	tt11.AddTable("foo-1", "bar-1", downSchema, downTable)
+	tt11.AddTable("foo-1", "bar-2", downSchema, downTable)
+	tt12 := stm[task1][source2]
+	tt12.AddTable("foo-2", "bar-3", downSchema, downTable)
+	tt21 := stm[task2][source1]
+	tt21.AddTable("foo-3", "bar-1", downSchema, downTable)
+	tt22 := stm[task2][source2]
+	tt22.AddTable("foo-4", "bar-2", downSchema, downTable)
+	tt22.AddTable("foo-4", "bar-3", downSchema, downTable)
+
+	// get tables back.
+	tts = TargetTablesForTask(task1, downSchema, downTable, stm)
+	c.Assert(tts, DeepEquals, []TargetTable{
+		tt11.TargetTable(downSchema, downTable),
+		tt12.TargetTable(downSchema, downTable),
+	})
+	tts = TargetTablesForTask(task2, downSchema, downTable, stm)
+	c.Assert(tts, DeepEquals, []TargetTable{
+		tt21.TargetTable(downSchema, downTable),
+		tt22.TargetTable(downSchema, downTable),
+	})
+}
