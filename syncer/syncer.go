@@ -752,6 +752,13 @@ func (s *Syncer) addJob(job *job) error {
 			s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ExitAfterDDLBeforeFlush"))
 			utils.OsExit(1)
 		})
+		// interrupted after executed DDL and before save checkpoint.
+		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+			err := handleFlushCheckpointStage(3, val.(int), "before save checkpoint")
+			if err != nil {
+				failpoint.Return(err)
+			}
+		})
 		// only save checkpoint for DDL and XID (see above)
 		s.saveGlobalPoint(job.location)
 		for sourceSchema, tbs := range job.sourceTbl {
@@ -771,12 +778,19 @@ func (s *Syncer) addJob(job *job) error {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(sourceSchema, sourceTable, job.location)
+				s.saveTablePoint(sourceSchema, sourceTable, job.currentLocation)
 			}
 		}
 	}
 
 	if wait {
+		// interrupted after save checkpoint and before flush checkpoint.
+		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+			err := handleFlushCheckpointStage(4, val.(int), "before flush checkpoint")
+			if err != nil {
+				failpoint.Return(err)
+			}
+		})
 		return s.flushCheckPoints()
 	}
 
@@ -1719,6 +1733,20 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
 	}
 
+	// interrupted before flush old checkpoint.
+	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+		err = handleFlushCheckpointStage(0, val.(int), "before flush old checkpoint")
+		if err != nil {
+			failpoint.Return(err)
+		}
+	})
+
+	// flush previous DMLs and checkpoint if needing to handle the DDL.
+	// NOTE: do this flush before operations on shard groups which may lead to skip a table caused by `UnresolvedTables`.
+	if err = s.flushJobs(); err != nil {
+		return err
+	}
+
 	if s.cfg.ShardMode == "" {
 		s.tctx.L().Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 		// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
@@ -1731,9 +1759,13 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			needHandleDDLs = appliedSQLs // maybe nil
 		}
 
-		if err := s.flushJobs(); err != nil {
-			return err
-		}
+		// interrupted after flush old checkpoint and before track DDL.
+		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+			err = handleFlushCheckpointStage(1, val.(int), "before track DDL")
+			if err != nil {
+				failpoint.Return(err)
+			}
+		})
 
 		// run trackDDL before add ddl job to make sure checkpoint can be flushed
 		for _, td := range needTrackDDLs {
@@ -1741,6 +1773,14 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 				return err
 			}
 		}
+
+		// interrupted after track DDL and before execute DDL.
+		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+			err = handleFlushCheckpointStage(2, val.(int), "before execute DDL")
+			if err != nil {
+				failpoint.Return(err)
+			}
+		})
 
 		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID, sourceTbls)
 		err = s.addJobFunc(job)
@@ -1819,9 +1859,13 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	s.tctx.L().Info(annotate, zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Bool("in-sharding", needShardingHandle), zap.Stringer("start location", startLocation), zap.Bool("is-synced", synced), zap.Int("unsynced", remain))
 
-	if err := s.flushJobs(); err != nil {
-		return err
-	}
+	// interrupted after flush old checkpoint and before track DDL.
+	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+		err = handleFlushCheckpointStage(1, val.(int), "before track DDL")
+		if err != nil {
+			failpoint.Return(err)
+		}
+	})
 
 	for _, td := range needTrackDDLs {
 		if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
@@ -1929,6 +1973,15 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		s.tctx.L().Info("replace ddls to preset ddls by sql operator in shard mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
 		needHandleDDLs = appliedSQLs // maybe nil
 	}
+
+	// interrupted after track DDL and before execute DDL.
+	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+		err = handleFlushCheckpointStage(2, val.(int), "before execute DDL")
+		if err != nil {
+			failpoint.Return(err)
+		}
+	})
+
 	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID, nil)
 	err = s.addJobFunc(job)
 	if err != nil {
