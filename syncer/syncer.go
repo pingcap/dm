@@ -554,16 +554,12 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	select {
 	case <-ctx.Done():
 		isCanceled = true
-		if len(errs) == 1 {
-			errs = errs[:0]
-		}
+		// FIXME: maybe some errors is not caused by context canceled
+		errs = errs[:0]
 	default:
 	}
 
-	
-	if len(errs) == 0 {
-		
-	} else {
+	if len(errs) != 0 {
 		// pause because of error occurred
 		s.Pause()
 	}
@@ -576,7 +572,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		s.tctx.L().Warn("something wrong with rollback global checkpoint", zap.Stringer("previous position", prePos), zap.Stringer("current position", currPos))
 	}
 
-	s.tctx.L().Info("after rollback")
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
 		Errors:     errs,
@@ -2374,7 +2369,6 @@ func (s *Syncer) Pause() {
 
 // Resume resumes the paused process
 func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
-	s.tctx.L().Info("syncerresume")
 	if s.isClosed() {
 		s.tctx.L().Warn("try to resume, but already closed")
 		return
