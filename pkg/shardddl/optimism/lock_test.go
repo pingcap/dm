@@ -397,26 +397,28 @@ func (t *testLock) TestLockTrySyncNullNotNull(c *C) {
 
 func (t *testLock) TestLockTrySyncIntBigint(c *C) {
 	var (
-		ID           = "test_lock_try_sync_int_bigint-`foo`.`bar`"
-		task         = "test_lock_try_sync_int_bigint"
-		source       = "mysql-replica-1"
-		db           = "db"
-		tbls         = []string{"bar1", "bar2"}
-		p            = parser.New()
-		se           = mock.NewContext()
-		tblID  int64 = 111
-		DDLs1        = []string{"ALTER TABLE bar MODIFY COLUMN c1 BIGINT NOT NULL DEFAULT 1234"}
-		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT NOT NULL DEFAULT 1234)`)
-		ti1          = createTableInfo(c, p, se, tblID,
+		ID               = "test_lock_try_sync_int_bigint-`foo`.`bar`"
+		task             = "test_lock_try_sync_int_bigint"
+		source           = "mysql-replica-1"
+		downSchema       = "db"
+		downTable        = "bar"
+		db               = "db"
+		tbls             = []string{"bar1", "bar2"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar MODIFY COLUMN c1 BIGINT NOT NULL DEFAULT 1234"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT NOT NULL DEFAULT 1234)`)
+		ti1              = createTableInfo(c, p, se, tblID,
 			`CREATE TABLE bar (id INT PRIMARY KEY, c1 BIGINT NOT NULL DEFAULT 1234)`)
 		tables = map[string]map[string]struct{}{
 			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
 		}
-		sts = []SourceTables{
-			NewSourceTables(task, source, tables),
+		tts = []TargetTable{
+			newTargetTable(task, source, downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, ti0, sts)
+		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
 	)
 
 	// the initial status is synced.
@@ -424,12 +426,12 @@ func (t *testLock) TestLockTrySyncIntBigint(c *C) {
 	t.checkLockNoDone(c, l)
 
 	// try sync for one table, from `INT` to `BIGINT`, DDLs returned.
-	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 
 	// try sync for another table, DDLs returned.
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 }
