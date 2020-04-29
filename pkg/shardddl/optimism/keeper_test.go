@@ -51,7 +51,7 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 			newTargetTable(task1, source2, downSchema, downTable, map[string]map[string]struct{}{upSchema: {upTable: struct{}{}}}),
 		}
 		tts2 = []TargetTable{
-			newTargetTable(task1, source1, downSchema, downTable, map[string]map[string]struct{}{upSchema: {upTable: struct{}{}}}),
+			newTargetTable(task2, source1, downSchema, downTable, map[string]map[string]struct{}{upSchema: {upTable: struct{}{}}}),
 		}
 	)
 
@@ -111,6 +111,93 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 
 	// no locks exist.
 	c.Assert(lk.Locks(), HasLen, 0)
+}
+
+func (t *testKeeper) TestLockKeeperMultipleTarget(c *C) {
+	var (
+		lk         = NewLockKeeper()
+		task       = "test-lock-keeper-multiple-target"
+		source     = "mysql-replica-1"
+		upSchema   = "foo"
+		upTables   = []string{"bar-1", "bar-2"}
+		downSchema = "foo"
+		downTable1 = "bar"
+		downTable2 = "rab"
+		DDLs       = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+
+		p              = parser.New()
+		se             = mock.NewContext()
+		tblID    int64 = 111
+		tiBefore       = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		tiAfter        = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+
+		i11 = NewInfo(task, source, upSchema, upTables[0], downSchema, downTable1, DDLs, tiBefore, tiAfter)
+		i12 = NewInfo(task, source, upSchema, upTables[1], downSchema, downTable1, DDLs, tiBefore, tiAfter)
+		i21 = NewInfo(task, source, upSchema, upTables[0], downSchema, downTable2, DDLs, tiBefore, tiAfter)
+		i22 = NewInfo(task, source, upSchema, upTables[1], downSchema, downTable2, DDLs, tiBefore, tiAfter)
+
+		tts1 = []TargetTable{
+			newTargetTable(task, source, downSchema, downTable1, map[string]map[string]struct{}{
+				upSchema: {upTables[0]: struct{}{}, upTables[1]: struct{}{}},
+			}),
+		}
+		tts2 = []TargetTable{
+			newTargetTable(task, source, downSchema, downTable2, map[string]map[string]struct{}{
+				upSchema: {upTables[0]: struct{}{}, upTables[1]: struct{}{}},
+			}),
+		}
+	)
+
+	// lock for target1.
+	lockID1, newDDLs, err := lk.TrySync(i11, tts1)
+	c.Assert(err, IsNil)
+	c.Assert(lockID1, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`bar`")
+	c.Assert(newDDLs, DeepEquals, DDLs)
+
+	// lock for target2.
+	lockID2, newDDLs, err := lk.TrySync(i21, tts2)
+	c.Assert(err, IsNil)
+	c.Assert(lockID2, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`rab`")
+	c.Assert(newDDLs, DeepEquals, DDLs)
+
+	// check two locks exist.
+	lock1 := lk.FindLock(lockID1)
+	c.Assert(lock1, NotNil)
+	c.Assert(lock1.ID, Equals, lockID1)
+	c.Assert(lk.FindLockByInfo(i11).ID, Equals, lockID1)
+	synced, remain := lock1.IsSynced()
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+	lock2 := lk.FindLock(lockID2)
+	c.Assert(lock2, NotNil)
+	c.Assert(lock2.ID, Equals, lockID2)
+	c.Assert(lk.FindLockByInfo(i21).ID, Equals, lockID2)
+	synced, remain = lock2.IsSynced()
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+
+	// sync for two locks.
+	lockID1, newDDLs, err = lk.TrySync(i12, tts1)
+	c.Assert(err, IsNil)
+	c.Assert(lockID1, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`bar`")
+	c.Assert(newDDLs, DeepEquals, DDLs)
+	lockID2, newDDLs, err = lk.TrySync(i22, tts2)
+	c.Assert(err, IsNil)
+	c.Assert(lockID2, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`rab`")
+	c.Assert(newDDLs, DeepEquals, DDLs)
+
+	lock1 = lk.FindLock(lockID1)
+	c.Assert(lock1, NotNil)
+	c.Assert(lock1.ID, Equals, lockID1)
+	synced, remain = lock1.IsSynced()
+	c.Assert(synced, IsTrue)
+	c.Assert(remain, Equals, 0)
+	lock2 = lk.FindLock(lockID2)
+	c.Assert(lock2, NotNil)
+	c.Assert(lock2.ID, Equals, lockID2)
+	synced, remain = lock2.IsSynced()
+	c.Assert(synced, IsTrue)
+	c.Assert(remain, Equals, 0)
 }
 
 func (t *testKeeper) TestTableKeeper(c *C) {
@@ -240,12 +327,14 @@ func (t *testKeeper) TestTableKeeper(c *C) {
 
 func (t *testKeeper) TestTargetTablesForTask(c *C) {
 	var (
+		tk         = NewTableKeeper()
 		task1      = "task1"
 		task2      = "task2"
-		source1    = "mysql-replicate-1"
-		source2    = "mysql-replicate-2"
+		source1    = "mysql-replica-1"
+		source2    = "mysql-replica-2"
 		downSchema = "foo"
-		downTable  = "bar"
+		downTable1 = "bar"
+		downTable2 = "rab"
 		stm        = map[string]map[string]SourceTables{
 			task1: {source1: NewSourceTables(task1, source1), source2: NewSourceTables(task1, source2)},
 			task2: {source1: NewSourceTables(task2, source1), source2: NewSourceTables(task2, source2)},
@@ -253,33 +342,51 @@ func (t *testKeeper) TestTargetTablesForTask(c *C) {
 	)
 
 	// not exist task.
-	c.Assert(TargetTablesForTask("not-exist", downSchema, downTable, stm), IsNil)
+	c.Assert(TargetTablesForTask("not-exist", downSchema, downTable1, stm), IsNil)
 
 	// no tables exist.
-	tts := TargetTablesForTask(task1, downSchema, downTable, stm)
+	tts := TargetTablesForTask(task1, downSchema, downTable1, stm)
 	c.Assert(tts, DeepEquals, []TargetTable{})
 
 	// add some tables.
 	tt11 := stm[task1][source1]
-	tt11.AddTable("foo-1", "bar-1", downSchema, downTable)
-	tt11.AddTable("foo-1", "bar-2", downSchema, downTable)
+	tt11.AddTable("foo-1", "bar-1", downSchema, downTable1)
+	tt11.AddTable("foo-1", "bar-2", downSchema, downTable1)
 	tt12 := stm[task1][source2]
-	tt12.AddTable("foo-2", "bar-3", downSchema, downTable)
+	tt12.AddTable("foo-2", "bar-3", downSchema, downTable1)
 	tt21 := stm[task2][source1]
-	tt21.AddTable("foo-3", "bar-1", downSchema, downTable)
+	tt21.AddTable("foo-3", "bar-1", downSchema, downTable1)
 	tt22 := stm[task2][source2]
-	tt22.AddTable("foo-4", "bar-2", downSchema, downTable)
-	tt22.AddTable("foo-4", "bar-3", downSchema, downTable)
+	tt22.AddTable("foo-4", "bar-2", downSchema, downTable1)
+	tt22.AddTable("foo-4", "bar-3", downSchema, downTable1)
 
 	// get tables back.
-	tts = TargetTablesForTask(task1, downSchema, downTable, stm)
+	tts = TargetTablesForTask(task1, downSchema, downTable1, stm)
 	c.Assert(tts, DeepEquals, []TargetTable{
-		tt11.TargetTable(downSchema, downTable),
-		tt12.TargetTable(downSchema, downTable),
+		tt11.TargetTable(downSchema, downTable1),
+		tt12.TargetTable(downSchema, downTable1),
 	})
-	tts = TargetTablesForTask(task2, downSchema, downTable, stm)
+	tts = TargetTablesForTask(task2, downSchema, downTable1, stm)
 	c.Assert(tts, DeepEquals, []TargetTable{
-		tt21.TargetTable(downSchema, downTable),
-		tt22.TargetTable(downSchema, downTable),
+		tt21.TargetTable(downSchema, downTable1),
+		tt22.TargetTable(downSchema, downTable1),
+	})
+
+	tk.Init(stm)
+	tts = tk.FindTables(task1, downSchema, downTable1)
+	c.Assert(tts, DeepEquals, []TargetTable{
+		tt11.TargetTable(downSchema, downTable1),
+		tt12.TargetTable(downSchema, downTable1),
+	})
+
+	// add some tables for another target table.
+	c.Assert(tk.AddTable(task1, source1, "foo-1", "bar-3", downSchema, downTable2), IsTrue)
+	c.Assert(tk.AddTable(task1, source1, "foo-1", "bar-4", downSchema, downTable2), IsTrue)
+	tts = tk.FindTables(task1, downSchema, downTable2)
+	c.Assert(tts, DeepEquals, []TargetTable{
+		newTargetTable(task1, source1, downSchema, downTable2,
+			map[string]map[string]struct{}{
+				"foo-1": {"bar-3": struct{}{}, "bar-4": struct{}{}},
+			}),
 	})
 }

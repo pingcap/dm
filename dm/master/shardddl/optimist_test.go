@@ -709,3 +709,187 @@ func (t *testOptimist) TestOptimistLockConflict(c *C) {
 	c.Assert(op3.ConflictStage, Equals, optimism.ConflictNone)
 	c.Assert(len(errCh), Equals, 0)
 }
+
+func (t *testOptimist) TestOptimistLockMultipleTarget(c *C) {
+	defer clearOptimistTestSourceInfoOperation(c)
+
+	var (
+		backOff            = 30
+		waitTime           = 100 * time.Millisecond
+		watchTimeout       = 2 * time.Second
+		logger             = log.L()
+		o                  = NewOptimist(&logger)
+		task               = "test-optimist-lock-multiple-target"
+		source             = "mysql-replica-1"
+		upSchema           = "foo"
+		upTables           = []string{"bar-1", "bar-2", "bar-3", "bar-4"}
+		downSchema         = "foo"
+		downTable1         = "bar"
+		downTable2         = "rab"
+		lockID1            = fmt.Sprintf("%s-`%s`.`%s`", task, downSchema, downTable1)
+		lockID2            = fmt.Sprintf("%s-`%s`.`%s`", task, downSchema, downTable2)
+		sts                = optimism.NewSourceTables(task, source)
+		p                  = parser.New()
+		se                 = mock.NewContext()
+		tblID        int64 = 111
+		DDLs               = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		ti0                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		i11                = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable1, DDLs, ti0, ti1)
+		i12                = optimism.NewInfo(task, source, upSchema, upTables[1], downSchema, downTable1, DDLs, ti0, ti1)
+		i21                = optimism.NewInfo(task, source, upSchema, upTables[2], downSchema, downTable2, DDLs, ti0, ti1)
+		i22                = optimism.NewInfo(task, source, upSchema, upTables[3], downSchema, downTable2, DDLs, ti0, ti1)
+	)
+
+	sts.AddTable(upSchema, upTables[0], downSchema, downTable1)
+	sts.AddTable(upSchema, upTables[1], downSchema, downTable1)
+	sts.AddTable(upSchema, upTables[2], downSchema, downTable2)
+	sts.AddTable(upSchema, upTables[3], downSchema, downTable2)
+
+	// put source tables first.
+	_, err := optimism.PutSourceTables(etcdTestCli, sts)
+	c.Assert(err, IsNil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(o.Locks(), HasLen, 0)
+
+	// PUT i11 and i21, will create two locks but no synced.
+	_, err = optimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+	_, err = optimism.PutInfo(etcdTestCli, i21)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		return len(o.Locks()) == 2
+	}), IsTrue)
+	c.Assert(o.Locks(), HasKey, lockID1)
+	c.Assert(o.Locks(), HasKey, lockID2)
+
+	// check ShowLocks
+	expectedLock := map[string]*pb.DDLLock{
+		lockID1: {
+			ID:    lockID1,
+			Task:  task,
+			Mode:  config.ShardOptimistic,
+			Owner: "",
+			DDLs:  nil,
+			Synced: []string{
+				fmt.Sprintf("%s-%s", i11.Source, dbutil.TableName(i11.UpSchema, i11.UpTable)),
+			},
+			Unsynced: []string{
+				fmt.Sprintf("%s-%s", i12.Source, dbutil.TableName(i12.UpSchema, i12.UpTable)),
+			},
+		},
+		lockID2: {
+			ID:    lockID2,
+			Task:  task,
+			Mode:  config.ShardOptimistic,
+			Owner: "",
+			DDLs:  nil,
+			Synced: []string{
+				fmt.Sprintf("%s-%s", i21.Source, dbutil.TableName(i21.UpSchema, i21.UpTable)),
+			},
+			Unsynced: []string{
+				fmt.Sprintf("%s-%s", i22.Source, dbutil.TableName(i22.UpSchema, i22.UpTable)),
+			},
+		},
+	}
+	locks := o.ShowLocks("", []string{})
+	c.Assert(locks, HasLen, 2)
+	c.Assert(locks[0], DeepEquals, expectedLock[locks[0].ID])
+	c.Assert(locks[1], DeepEquals, expectedLock[locks[1].ID])
+
+	// put i12 and i22, both of locks will be synced.
+	rev1, err := optimism.PutInfo(etcdTestCli, i12)
+	c.Assert(err, IsNil)
+	rev2, err := optimism.PutInfo(etcdTestCli, i22)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		synced1, _ := o.Locks()[lockID1].IsSynced()
+		synced2, _ := o.Locks()[lockID2].IsSynced()
+		return synced1 && synced2
+	}), IsTrue)
+
+	expectedLock[lockID1].Synced = []string{
+		fmt.Sprintf("%s-%s", i11.Source, dbutil.TableName(i11.UpSchema, i11.UpTable)),
+		fmt.Sprintf("%s-%s", i12.Source, dbutil.TableName(i12.UpSchema, i12.UpTable)),
+	}
+	expectedLock[lockID1].Unsynced = []string{}
+	expectedLock[lockID2].Synced = []string{
+		fmt.Sprintf("%s-%s", i21.Source, dbutil.TableName(i21.UpSchema, i21.UpTable)),
+		fmt.Sprintf("%s-%s", i22.Source, dbutil.TableName(i22.UpSchema, i22.UpTable)),
+	}
+	expectedLock[lockID2].Unsynced = []string{}
+	locks = o.ShowLocks("", []string{})
+	c.Assert(locks, HasLen, 2)
+	c.Assert(locks[0], DeepEquals, expectedLock[locks[0].ID])
+	c.Assert(locks[1], DeepEquals, expectedLock[locks[1].ID])
+
+	// wait operation for i12 become available.
+	opCh := make(chan optimism.Operation, 10)
+	errCh := make(chan error, 10)
+	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
+	optimism.WatchOperationPut(ctx2, etcdTestCli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev1, opCh, errCh)
+	cancel2()
+	close(opCh)
+	close(errCh)
+	c.Assert(len(opCh), Equals, 1)
+	op12 := <-opCh
+	c.Assert(op12.DDLs, DeepEquals, DDLs)
+	c.Assert(op12.ConflictStage, Equals, optimism.ConflictNone)
+	c.Assert(len(errCh), Equals, 0)
+
+	// mark op11 and op12 as done, the lock should be resolved.
+	op11c := op12
+	op11c.Done = true
+	op11c.UpTable = i11.UpTable // overwrite `UpTable`.
+	_, putted, err := optimism.PutOperation(etcdTestCli, false, op11c)
+	c.Assert(err, IsNil)
+	c.Assert(putted, IsTrue)
+	op12c := op12
+	op12c.Done = true
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op12c)
+	c.Assert(err, IsNil)
+	c.Assert(putted, IsTrue)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		_, ok := o.Locks()[lockID1]
+		return !ok
+	}), IsTrue)
+	c.Assert(o.Locks(), HasLen, 1)
+	c.Assert(o.ShowLocks("", nil), HasLen, 1)
+	c.Assert(o.ShowLocks("", nil)[0], DeepEquals, expectedLock[lockID2])
+
+	// wait operation for i22 become available.
+	opCh = make(chan optimism.Operation, 10)
+	errCh = make(chan error, 10)
+	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
+	optimism.WatchOperationPut(ctx2, etcdTestCli, i22.Task, i22.Source, i22.UpSchema, i22.UpTable, rev2, opCh, errCh)
+	cancel2()
+	close(opCh)
+	close(errCh)
+	c.Assert(len(opCh), Equals, 1)
+	op22 := <-opCh
+	c.Assert(op22.DDLs, DeepEquals, DDLs)
+	c.Assert(op22.ConflictStage, Equals, optimism.ConflictNone)
+	c.Assert(len(errCh), Equals, 0)
+
+	// mark op21 and op22 as done, the lock should be resolved.
+	op21c := op22
+	op21c.Done = true
+	op21c.UpTable = i21.UpTable // overwrite `UpTable`.
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op21c)
+	c.Assert(err, IsNil)
+	c.Assert(putted, IsTrue)
+	op22c := op22
+	op22c.Done = true
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op22c)
+	c.Assert(err, IsNil)
+	c.Assert(putted, IsTrue)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		_, ok := o.Locks()[lockID2]
+		return !ok
+	}), IsTrue)
+	c.Assert(o.Locks(), HasLen, 0)
+	c.Assert(o.ShowLocks("", nil), HasLen, 0)
+}
