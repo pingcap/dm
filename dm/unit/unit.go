@@ -79,7 +79,7 @@ func NewProcessError(err error) *pb.ProcessError {
 	return result
 }
 
-// IsCtxCanceledProcessErr returns true if the err's
+// IsCtxCanceledProcessErr returns true if the err's context canceled
 func IsCtxCanceledProcessErr(err *pb.ProcessError) bool {
 	if strings.Contains(err.Msg, "context canceled") {
 		return true
