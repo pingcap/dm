@@ -61,9 +61,11 @@ func (t *testOptimist) TestOptimist(c *C) {
 	var (
 		task         = "task-optimist"
 		source       = "mysql-replicate-1"
-		sourceTables = map[string][]string{
-			"foo-1": {"bar-1", "bar-2"},
-			"foo-2": {"bar-3", "bar-4"},
+		sourceTables = map[string]map[string]map[string]map[string]struct{}{
+			"foo": {"bar": {
+				"foo-1": {"bar-1": struct{}{}, "bar-2": struct{}{}},
+				"foo-2": {"bar-3": struct{}{}, "bar-4": struct{}{}},
+			}},
 		}
 		downSchema, downTable = "foo", "bar"
 		ID                    = fmt.Sprintf("%s-`%s`.`%s`", task, downSchema, downTable)
@@ -164,7 +166,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	ifm, _, err = optimism.GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(ifm[task][source][infoCreate.UpSchema][infoCreate.UpTable], DeepEquals, infoCreate)
-	c.Assert(o.tables.Tables[infoCreate.UpSchema], HasKey, infoCreate.UpTable)
+	c.Assert(o.tables.Tables[infoCreate.DownSchema][infoCreate.DownTable][infoCreate.UpSchema], HasKey, infoCreate.UpTable)
 
 	// handle `DROP TABLE`.
 	rev4, err := o.DeleteInfoRemoveTable(infoDrop)
@@ -173,7 +175,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	ifm, _, err = optimism.GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(ifm[task][source][infoDrop.UpSchema], IsNil)
-	c.Assert(o.tables.Tables[infoDrop.UpSchema], IsNil)
+	c.Assert(o.tables.Tables[infoCreate.DownSchema][infoCreate.DownTable][infoCreate.UpSchema], IsNil)
 
 	// put another info.
 	rev5, err := o.PutInfo(info2)

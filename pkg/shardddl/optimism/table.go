@@ -46,7 +46,7 @@ type SourceTables struct {
 	IsDeleted bool `json:"-"`
 }
 
-// TargetTables represents some upstream/sources tables for **one** target table.
+// TargetTable represents some upstream/sources tables for **one** target table.
 // It is often generated from `SourceTables` for the specified downstream table.
 type TargetTable struct {
 	Task       string `json:"task"`        // data migration task name

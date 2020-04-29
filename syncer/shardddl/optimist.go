@@ -55,18 +55,17 @@ func NewOptimist(pLogger *log.Logger, cli *clientv3.Client, task, source string)
 // Init initializes the optimist with source tables.
 // NOTE: this will PUT the initial source tables into etcd (and overwrite any previous existing tables).
 // NOTE: we do not remove source tables for `stop-task` now, may need to handle it for `remove-meta`.
-func (o *Optimist) Init(sourceTables map[string][]string) error {
-	tbm := make(map[string]map[string]struct{}, len(sourceTables))
-	for schema, tables := range sourceTables {
-		if _, ok := tbm[schema]; !ok {
-			tbm[schema] = make(map[string]struct{}, len(tables))
-		}
-		for _, table := range tables {
-			tbm[schema][table] = struct{}{}
+func (o *Optimist) Init(sourceTables map[string]map[string]map[string]map[string]struct{}) error {
+	o.tables = optimism.NewSourceTables(o.task, o.source)
+	for downSchema, downTables := range sourceTables {
+		for downTable, upSchemas := range downTables {
+			for upSchema, upTables := range upSchemas {
+				for upTable := range upTables {
+					o.tables.AddTable(upSchema, upTable, downSchema, downTable)
+				}
+			}
 		}
 	}
-
-	o.tables = optimism.NewSourceTables(o.task, o.source, tbm)
 	_, err := optimism.PutSourceTables(o.cli, o.tables)
 	return err
 }
@@ -103,7 +102,7 @@ func (o *Optimist) PutInfo(info optimism.Info) (int64, error) {
 // PutInfoAddTable puts the shard DDL info into etcd and adds the table for the info into source tables,
 // this is often called for `CREATE TABLE`.
 func (o *Optimist) PutInfoAddTable(info optimism.Info) (int64, error) {
-	o.tables.AddTable(info.UpSchema, info.UpTable)
+	o.tables.AddTable(info.UpSchema, info.UpTable, info.DownSchema, info.DownTable)
 	rev, err := optimism.PutSourceTablesInfo(o.cli, o.tables, info)
 	if err != nil {
 		return 0, err
@@ -119,7 +118,7 @@ func (o *Optimist) PutInfoAddTable(info optimism.Info) (int64, error) {
 // DeleteInfoRemoveTable deletes the shard DDL info from etcd and removes the table for the info from source tables,
 // this is often called for `DROP TABLE`.
 func (o *Optimist) DeleteInfoRemoveTable(info optimism.Info) (int64, error) {
-	o.tables.RemoveTable(info.UpSchema, info.UpTable)
+	o.tables.RemoveTable(info.UpSchema, info.UpTable, info.DownSchema, info.DownTable)
 	// don't record shard DDL info for `DROP TABLE` because we do not replicate it to the downstream now.
 	return optimism.PutSourceTablesDeleteInfo(o.cli, o.tables, info)
 }

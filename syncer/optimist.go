@@ -41,7 +41,26 @@ func (s *Syncer) initOptimisticShardDDL() error {
 		return err
 	}
 
-	return s.optimist.Init(sourceTables)
+	// convert according to router rules.
+	// downstream-schema -> downstream-table -> upstream-schema -> upstream-table.
+	mapper := make(map[string]map[string]map[string]map[string]struct{})
+	for upSchema, UpTables := range sourceTables {
+		for _, upTable := range UpTables {
+			downSchema, downTable := s.renameShardingSchema(upSchema, upTable)
+			if _, ok := mapper[downSchema]; !ok {
+				mapper[downSchema] = make(map[string]map[string]map[string]struct{})
+			}
+			if _, ok := mapper[downSchema][downTable]; !ok {
+				mapper[downSchema][downTable] = make(map[string]map[string]struct{})
+			}
+			if _, ok := mapper[downSchema][downTable][upSchema]; !ok {
+				mapper[downSchema][downTable][upSchema] = make(map[string]struct{})
+			}
+			mapper[downSchema][downTable][upSchema][upTable] = struct{}{}
+		}
+	}
+
+	return s.optimist.Init(mapper)
 }
 
 // handleQueryEventOptimistic handles QueryEvent in the optimistic shard DDL mode.
@@ -96,13 +115,12 @@ func (s *Syncer) handleQueryEventOptimistic(
 	}
 
 	for _, td := range needTrackDDLs {
-		if err := s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+		if err = s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
 			return err
 		}
 	}
 
 	if !isDBDDL {
-		// TODO(csuzhangxc): rollback schema in the tracker if failed.
 		tiAfter, err = s.getTable(upSchema, upTable, downSchema, downTable, ec.parser2)
 		if err != nil {
 			return err
