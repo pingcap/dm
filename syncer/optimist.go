@@ -139,6 +139,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	)
 	switch needTrackDDLs[0].stmt.(type) {
 	case *ast.CreateDatabaseStmt, *ast.AlterDatabaseStmt:
+		// need to execute the DDL to the downstream, but do not do the coordination with DM-master.
 		op.DDLs = needHandleDDLs
 		skipOp = true
 	case *ast.DropDatabaseStmt:
@@ -156,22 +157,21 @@ func (s *Syncer) handleQueryEventOptimistic(
 			return err
 		}
 		skipOp = true
-		needHandleDDLs = []string{} // no DDL needs to be handled for `DROP TABLE` now.
 	default:
 		rev, err = s.optimist.PutInfo(info)
 		if err != nil {
 			return err
 		}
 	}
-	s.tctx.L().Info("putted a shard DDL info into etcd", zap.Stringer("info", info))
 
 	if !skipOp {
+		s.tctx.L().Info("putted a shard DDL info into etcd", zap.Stringer("info", info))
 		op, err = s.optimist.GetOperation(ec.tctx.Ctx, info, rev+1)
 		if err != nil {
 			return err
 		}
+		s.tctx.L().Info("got a shard DDL lock operation", zap.Stringer("operation", op))
 	}
-	s.tctx.L().Info("got a shard DDL lock operation", zap.Stringer("operation", op))
 
 	if op.ConflictStage == optimism.ConflictDetected {
 		return terror.ErrSyncerShardDDLConflict.Generate(needHandleDDLs)
