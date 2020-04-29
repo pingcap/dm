@@ -395,6 +395,45 @@ func (t *testLock) TestLockTrySyncNullNotNull(c *C) {
 	}
 }
 
+func (t *testLock) TestLockTrySyncIntBigint(c *C) {
+	var (
+		ID           = "test_lock_try_sync_int_bigint-`foo`.`bar`"
+		task         = "test_lock_try_sync_int_bigint"
+		source       = "mysql-replica-1"
+		db           = "db"
+		tbls         = []string{"bar1", "bar2"}
+		p            = parser.New()
+		se           = mock.NewContext()
+		tblID  int64 = 111
+		DDLs1        = []string{"ALTER TABLE bar MODIFY COLUMN c1 BIGINT NOT NULL DEFAULT 1234"}
+		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT NOT NULL DEFAULT 1234)`)
+		ti1          = createTableInfo(c, p, se, tblID,
+			`CREATE TABLE bar (id INT PRIMARY KEY, c1 BIGINT NOT NULL DEFAULT 1234)`)
+		tables = map[string]map[string]struct{}{
+			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
+		}
+		sts = []SourceTables{
+			NewSourceTables(task, source, tables),
+		}
+
+		l = NewLock(ID, task, ti0, sts)
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// try sync for one table, from `INT` to `BIGINT`, DDLs returned.
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+
+	// try sync for another table, DDLs returned.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, sts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+}
+
 func (t *testLock) TestLockTrySyncNoDiff(c *C) {
 	var (
 		ID               = "test_lock_try_sync_no_diff-`foo`.`bar`"
