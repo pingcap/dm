@@ -238,6 +238,8 @@ func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 
 	select {
 	case <-st.ctx.Done():
+		// should not use st.currCtx, because will do st.currCancel when Pause task,
+		// and this function will return, and the unit's Process maybe still running.
 		return
 	case result := <-pr:
 		st.setResult(&result) // save result
@@ -253,7 +255,7 @@ func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 		)
 		if len(result.Errors) == 0 {
 			if result.IsCanceled {
-				stage = pb.Stage_Stopped
+				stage = pb.Stage_Stopped // canceled by user
 			} else {
 				stage = pb.Stage_Finished // process finished with no error
 			}
