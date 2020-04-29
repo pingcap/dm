@@ -554,8 +554,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	select {
 	case <-ctx.Done():
 		isCanceled = true
-		// FIXME: maybe some errors is not caused by context canceled
-		errs = errs[:0]
 	default:
 	}
 

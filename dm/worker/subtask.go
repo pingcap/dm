@@ -242,6 +242,15 @@ func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 		// and this function will return, and the unit's Process maybe still running.
 		return
 	case result := <-pr:
+		// filter the context canceled error
+		errs := make([]*pb.ProcessError, 0, 2)
+		for _, err := range result.Errors {
+			if !unit.IsCtxCanceledProcessErr(err) {
+				errs = append(errs, err)
+			}
+		}
+		result.Errors = errs
+
 		st.setResult(&result) // save result
 		st.callCurrCancel()   // dm-unit finished, canceled or error occurred, always cancel processing
 
