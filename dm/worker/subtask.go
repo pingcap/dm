@@ -236,18 +236,25 @@ func (st *SubTask) callCurrCancel() {
 func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 	defer st.wg.Done()
 
-	st.RLock()
-	ctx := st.currCtx
-	st.RUnlock()
-
 	select {
-	case <-ctx.Done():
+	case <-st.ctx.Done():
+		// should not use st.currCtx, because will do st.currCancel when Pause task,
+		// and this function will return, and the unit's Process maybe still running.
 		return
 	case result := <-pr:
+		// filter the context canceled error
+		errs := make([]*pb.ProcessError, 0, 2)
+		for _, err := range result.Errors {
+			if !unit.IsCtxCanceledProcessErr(err) {
+				errs = append(errs, err)
+			}
+		}
+		result.Errors = errs
+
 		st.setResult(&result) // save result
 		st.callCurrCancel()   // dm-unit finished, canceled or error occurred, always cancel processing
 
-		if len(result.Errors) == 0 && st.Stage() == pb.Stage_Paused {
+		if len(result.Errors) == 0 && st.Stage() == pb.Stage_Pausing {
 			return // paused by external request
 		}
 
@@ -371,6 +378,7 @@ func (st *SubTask) setStage(stage pb.Stage) {
 func (st *SubTask) stageCAS(oldStage, newStage pb.Stage) bool {
 	st.Lock()
 	defer st.Unlock()
+
 	if st.stage == oldStage {
 		st.stage = newStage
 		taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
@@ -428,8 +436,8 @@ func (st *SubTask) Close() {
 
 // Pause pauses the running sub task
 func (st *SubTask) Pause() error {
-	if !st.stageCAS(pb.Stage_Running, pb.Stage_Paused) {
-		return terror.ErrWorkerNotRunningStage.Generate()
+	if !st.stageCAS(pb.Stage_Running, pb.Stage_Pausing) {
+		return terror.ErrWorkerNotRunningStage.Generate(st.Stage().String())
 	}
 
 	st.callCurrCancel()
@@ -439,6 +447,7 @@ func (st *SubTask) Pause() error {
 	cu.Pause()
 
 	st.l.Info("paused", zap.Stringer("unit", cu.Type()))
+	st.setStage(pb.Stage_Paused)
 	return nil
 }
 
@@ -450,9 +459,10 @@ func (st *SubTask) Resume() error {
 		return nil
 	}
 
-	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Running) {
-		return terror.ErrWorkerNotPausedStage.Generate()
+	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Resuming) {
+		return terror.ErrWorkerNotPausedStage.Generate(st.Stage().String())
 	}
+
 	ctx, cancel := context.WithCancel(st.ctx)
 	st.setCurrCtx(ctx, cancel)
 	// NOTE: this may block if user resume a task
@@ -462,6 +472,8 @@ func (st *SubTask) Resume() error {
 		st.setStage(pb.Stage_Paused)
 		return err
 	} else if ctx.Err() != nil {
+		// ctx.Err() != nil means this context is canceled in other go routine,
+		// that go routine will change the stage, so don't need to set stage to paused here.
 		return nil
 	}
 
@@ -473,6 +485,8 @@ func (st *SubTask) Resume() error {
 	st.wg.Add(1)
 	go st.fetchResult(pr)
 	go cu.Resume(ctx, pr)
+
+	st.setStage(pb.Stage_Running)
 	return nil
 }
 
