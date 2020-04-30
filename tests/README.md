@@ -11,7 +11,7 @@
     * `bin/dm-master.test.current` # generated from `bin/dm-master.test` by `make compatibility_test`
     * `bin/dm-worker.test.current` # generated from `bin/dm-worker.test` by `make compatibility test`
     * `bin/dm-master.test.previous` # generated from `bin/dm-master.test` by `make compatibility test`
-    * `bin/dm-worker.test.previous` # generated from `bin/dm-worker.test `by `make compatibility test`
+    * `bin/dm-worker.test.previous` # generated from `bin/dm-worker.test` by `make compatibility test`
     * [gh-ost](https://github.com/github/gh-ost) # must be added to path, or you can `export GHOST_BINARY=/path/to/gh-ost-binary`
     * [pt-online-schema-change](https://www.percona.com/doc/percona-toolkit/LATEST/pt-online-schema-change.html) # must be added to path, or you can `export PTOSC_BINARY=/path/to/pt-osc-binary`
 
