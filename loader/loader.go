@@ -505,13 +505,13 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 
 	isCanceled := false
-	if len(errs) == 0 {
-		select {
-		case <-ctx.Done():
-			isCanceled = true
-		default:
-		}
-	} else {
+	select {
+	case <-ctx.Done():
+		isCanceled = true
+	default:
+	}
+
+	if len(errs) != 0 {
 		// pause because of error occurred
 		l.Pause()
 	}
