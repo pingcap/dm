@@ -60,7 +60,7 @@
 
     Run `make compatibility_test` will run compatibility test.
 
-2. Setup two MySQL servers with binlog enabled first and set `GTID_MODE=ON`, export proper environment variable. Variables and their default values showed in following table.
+2. Setup two MySQL servers with binlog enabled first and set `GTID_MODE=ON`, export proper environment variable. Variables and their default values are showed in following table.
 
     | MySQL | Host | Port| PASSWORD |
     | :------------ | :---------- | :------ | :---- |
