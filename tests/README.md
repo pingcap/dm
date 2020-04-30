@@ -34,7 +34,12 @@
 
 1. Run `make dm_integration_test_build` to generate DM related binary for integration test
 
-2. Setup two MySQL servers with binlog enabled first and set `GTID_MODE=ON`, export proper environment variable `MYSQL_HOST1`, `MYSQL_PORT1`, `MYSQL_PASSWORD1` and `MYSQL_HOST2`, `MYSQL_PORT2`, `MYSQL_PASSWORD2`, default is `127.0.0.1`, `3306`, `123456` and `127.0.0.1`, `3307`, `123456`.
+2. Setup two MySQL servers with binlog enabled first and set `GTID_MODE=ON`, export proper environment variable. Variable and its default value showed in following table.
+
+    | MySQL | Host | Port| PASSWORD |
+    | :------------ | :---------- | :------ | :---- |
+    | MySQL1 | `MYSQL_HOST1` / `127.0.0.1` | `MYSQL_PORT1` / `3306` | `MYSQL_PASSWORD1` / `123456` |
+    | MySQL2 | `MYSQL_HOST2` / `127.0.0.1` | `MYSQL_PORT2` / `3307` | `MYSQL_PASSWORD2` / `123456` |
 
 3. Run `make integration_test` to execute the integration tests. This command will
 
@@ -55,7 +60,12 @@
 
     Run `make compatibility_test` will run compatibility test.
 
-2. Setup two MySQL servers with binlog enabled first and set `GTID_MODE=ON`, export proper environment variable `MYSQL_HOST1`, `MYSQL_PORT1`, `MYSQL_PASSWORD1` and `MYSQL_HOST2`, `MYSQL_PORT2`, `MYSQL_PASSWORD2`, default is `127.0.0.1`, `3306`, `123456` and `127.0.0.1`, `3307`, `123456`.
+2. Setup two MySQL servers with binlog enabled first and set `GTID_MODE=ON`, export proper environment variable. Variable and its default value showed in following table.
+
+    | MySQL | Host | Port| PASSWORD |
+    | :------------ | :---------- | :------ | :---- |
+    | MySQL1 | `MYSQL_HOST1` / `127.0.0.1` | `MYSQL_PORT1` / `3306` | `MYSQL_PASSWORD1` / `123456` |
+    | MySQL2 | `MYSQL_HOST2` / `127.0.0.1` | `MYSQL_PORT2` / `3307` | `MYSQL_PASSWORD2` / `123456` |
 
 3. Run other test with different version's dm-master and dm-worker
 
