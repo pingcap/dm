@@ -472,7 +472,8 @@ func (st *SubTask) Resume() error {
 		st.setStage(pb.Stage_Paused)
 		return err
 	} else if ctx.Err() != nil {
-		st.setStage(pb.Stage_Paused)
+		// ctx.Err() != nil means this context is canceled in other go routine,
+		// that go routine will change the stage, so don't need to set stage to paused here.
 		return nil
 	}
 
