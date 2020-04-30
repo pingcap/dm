@@ -33,10 +33,13 @@ type Lock struct {
 	ID   string // lock's ID
 	Task string // lock's corresponding task name
 
+	downSchema string // downstream schema name
+	downTable  string // downstream table name
+
 	// current joined info.
 	joined schemacmp.Table
 	// per-table's table info,
-	// upstream source ID -> schema name -> table name -> table info.
+	// upstream source ID -> upstream schema name -> upstream table name -> table info.
 	// if all of them are the same, then we call the lock `synced`.
 	tables map[string]map[string]map[string]schemacmp.Table
 
@@ -50,15 +53,17 @@ type Lock struct {
 
 // NewLock creates a new Lock instance.
 // NOTE: we MUST give the initial table info when creating the lock now.
-func NewLock(ID, task string, ti *model.TableInfo, sts []SourceTables) *Lock {
+func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []TargetTable) *Lock {
 	l := &Lock{
-		ID:     ID,
-		Task:   task,
-		joined: schemacmp.Encode(ti),
-		tables: make(map[string]map[string]map[string]schemacmp.Table),
-		done:   make(map[string]map[string]map[string]bool),
+		ID:         ID,
+		Task:       task,
+		downSchema: downSchema,
+		downTable:  downTable,
+		joined:     schemacmp.Encode(ti),
+		tables:     make(map[string]map[string]map[string]schemacmp.Table),
+		done:       make(map[string]map[string]map[string]bool),
 	}
-	l.addSources(sts)
+	l.addTables(tts)
 	return l
 }
 
@@ -76,7 +81,7 @@ func NewLock(ID, task string, ti *model.TableInfo, sts []SourceTables) *Lock {
 // for non-intrusive, a broadcast mechanism needed to notify conflict tables after the conflict has resolved, or even a block mechanism needed.
 // for intrusive, a DML prune or transform mechanism needed for two different schemas (before and after the conflict resolved).
 func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
-	ddls []string, newTI *model.TableInfo, sts []SourceTables) (newDDLs []string, err error) {
+	ddls []string, newTI *model.TableInfo, tts []TargetTable) (newDDLs []string, err error) {
 	l.mu.Lock()
 	defer func() {
 		if len(newDDLs) > 0 {
@@ -90,10 +95,10 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	// handle the case where <callerSource, callerSchema, callerTable>
 	// is not in old source tables and current new source tables.
 	// duplicate append is not a problem.
-	sts = append(sts, NewSourceTables(l.Task, callerSource,
+	tts = append(tts, newTargetTable(l.Task, callerSource, l.downSchema, l.downTable,
 		map[string]map[string]struct{}{callerSchema: {callerTable: struct{}{}}}))
 	// add any new source tables.
-	l.addSources(sts)
+	l.addTables(tts)
 
 	oldTable := l.tables[callerSource][callerSchema][callerTable]
 	newTable := schemacmp.Encode(newTI)
@@ -363,25 +368,25 @@ func (l *Lock) tryRevertDone(source, schema, table string) {
 	l.done[source][schema][table] = false
 }
 
-// addSources adds any not-existing tables into the lock.
-func (l *Lock) addSources(sts []SourceTables) {
-	for _, st := range sts {
-		if _, ok := l.tables[st.Source]; !ok {
-			l.tables[st.Source] = make(map[string]map[string]schemacmp.Table)
-			l.done[st.Source] = make(map[string]map[string]bool)
+// addTables adds any not-existing tables into the lock.
+func (l *Lock) addTables(tts []TargetTable) {
+	for _, tt := range tts {
+		if _, ok := l.tables[tt.Source]; !ok {
+			l.tables[tt.Source] = make(map[string]map[string]schemacmp.Table)
+			l.done[tt.Source] = make(map[string]map[string]bool)
 		}
-		for schema, tables := range st.Tables {
-			if _, ok := l.tables[st.Source][schema]; !ok {
-				l.tables[st.Source][schema] = make(map[string]schemacmp.Table)
-				l.done[st.Source][schema] = make(map[string]bool)
+		for schema, tables := range tt.UpTables {
+			if _, ok := l.tables[tt.Source][schema]; !ok {
+				l.tables[tt.Source][schema] = make(map[string]schemacmp.Table)
+				l.done[tt.Source][schema] = make(map[string]bool)
 			}
 			for table := range tables {
-				if _, ok := l.tables[st.Source][schema][table]; !ok {
+				if _, ok := l.tables[tt.Source][schema][table]; !ok {
 					// NOTE: the newly added table uses the current table info.
-					l.tables[st.Source][schema][table] = l.joined
-					l.done[st.Source][schema][table] = false
+					l.tables[tt.Source][schema][table] = l.joined
+					l.done[tt.Source][schema][table] = false
 					log.L().Info("table added to the lock", zap.String("lock", l.ID),
-						zap.String("source", st.Source), zap.String("schema", schema), zap.String("table", table),
+						zap.String("source", tt.Source), zap.String("schema", schema), zap.String("table", table),
 						zap.Stringer("table info", l.joined))
 				}
 			}
