@@ -13,13 +13,8 @@ run() {
 
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-
-    # now, for optimistic shard DDL, different sources will reach a stage often not at the same time,
-    # in order to simply the check and resume flow, only enable the failpoint for one DM-worker.
-    export GO_FAILPOINTS="github.com/pingcap/dm/syncer/FlushCheckpointStage=return(100)" # for all stages
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
-    export GO_FAILPOINTS=''
 
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
@@ -46,6 +41,20 @@ run() {
 
     # use sync_diff_inspector to check schema fetching increment data.
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    # check database `sharding_seq_tmp` exists
+    run_sql "select count(*) from sharding_seq_tmp.t1;" $TIDB_PORT $TIDB_PASSWORD
+    check_contains "count(*): 1"
+
+    # now, for optimistic shard DDL, different sources will reach a stage often not at the same time,
+    # in order to simply the check and resume flow, only enable the failpoint for one DM-worker.
+    export GO_FAILPOINTS="github.com/pingcap/dm/syncer/FlushCheckpointStage=return(100)" # for all stages
+    echo "restart dm-worker1"
+    ps aux | grep dm-worker1 |awk '{print $2}'|xargs kill || true
+    check_port_offline $WORKER1_PORT 20
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    export GO_FAILPOINTS=''
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -101,6 +110,7 @@ run() {
 }
 
 cleanup_data sharding_target_opt
+cleanup_data sharding_seq_tmp
 # also cleanup dm processes in case of last run failed
 cleanup_process $*
 run $*

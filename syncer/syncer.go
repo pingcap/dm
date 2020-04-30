@@ -49,7 +49,6 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
-	"github.com/pingcap/dm/pkg/shardddl/optimism"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
@@ -877,9 +876,8 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		}
 
 		var (
-			ignore            = false
-			shardPessimistOp  *pessimism.Operation
-			shardOptimisticOp *optimism.Operation
+			ignore           = false
+			shardPessimistOp *pessimism.Operation
 		)
 		switch s.cfg.ShardMode {
 		case config.ShardPessimistic:
@@ -889,10 +887,9 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				tctx.L().Info("ignore shard DDLs in pessimistic shard mode", zap.Strings("ddls", sqlJob.ddls))
 			}
 		case config.ShardOptimistic:
-			shardOptimisticOp = s.optimist.PendingOperation()
-			if shardOptimisticOp != nil && len(shardOptimisticOp.DDLs) == 0 {
+			if len(sqlJob.ddls) == 0 {
 				ignore = true
-				tctx.L().Info("ignore shard DDLs in optimistic mode", zap.Stringer("info", s.optimist.PendingInfo()))
+				tctx.L().Info("ignore shard DDLs in optimistic mode", log.WrapStringerField("info", s.optimist.PendingInfo()))
 			}
 		}
 		if !ignore {
@@ -927,12 +924,15 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		case config.ShardOptimistic:
 			shardInfo := s.optimist.PendingInfo()
 			if shardInfo == nil {
-				// no need to do the shard DDL handle for `DROP TABLE` now.
-				s.tctx.L().Warn("skip shard DDL handle in optimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
-			} else if shardOptimisticOp == nil {
+				// no need to do the shard DDL handle for `DROP DATABASE/TABLE` now.
+				// but for `CREATE DATABASE` and `ALTER DATABASE` we execute it to the downstream directly without `shardInfo`.
+				if ignore { // actually ignored.
+					s.tctx.L().Warn("skip shard DDL handle in optimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
+				}
+			} else if s.optimist.PendingOperation() == nil {
 				err = fmt.Errorf("missing shard DDL lock operation for shard DDL info (%s)", shardInfo)
 			} else {
-				err = s.optimist.DoneOperation(*shardOptimisticOp)
+				err = s.optimist.DoneOperation(*(s.optimist.PendingOperation()))
 			}
 		}
 		s.jobWg.Done()
@@ -1450,7 +1450,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	// DML position before table checkpoint, ignore it
 	if !s.checkpoint.IsNewerTablePoint(originSchema, originTable, *ec.currentLocation, s.cfg.EnableGTID) {
-		s.tctx.L().Debug("ignore obsolete event that is old than table checkpoint", zap.String("event", "row"), log.WrapStringerField("position", ec.currentLocation), zap.String("origin schema", originSchema), zap.String("origin table", originTable))
+		s.tctx.L().Debug("ignore obsolete event that is old than table checkpoint", zap.String("event", "row"), log.WrapStringerField("location", ec.currentLocation), zap.String("origin schema", originSchema), zap.String("origin table", originTable))
 		return nil
 	}
 
