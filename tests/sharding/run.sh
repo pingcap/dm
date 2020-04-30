@@ -90,10 +90,10 @@ function run() {
     # `FIXME: the following case is not supported automatically now, try to support it later`
     # so we try to do this `pause-task` and `resume-task` in the case now.
     sleep 3
+    # pause twice, just used to test pause by the way
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "pause-task test"\
         "\"result\": true" 3
-    # pause twice
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "pause-task test"\
         "\"result\": true" 3
@@ -101,10 +101,11 @@ function run() {
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "Paused" 2
+
+    # resume twice, just used to test resume by the way
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task test"\
         "\"result\": true" 3
-    # resume twice
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task test"\
         "\"result\": true" 3
@@ -137,6 +138,14 @@ function run() {
     new_checksum=$(checksum)
     echo "checksum before drop/truncate: $old_checksum, checksum after drop/truncate: $new_checksum"
     [ "$old_checksum" == "$new_checksum" ]
+
+    # stop twice, just used to test stop by the way
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "stop-task test"\
+        "\"result\": true" 3
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "stop-task test"\
+        "task test has no source or not exist" 1
 }
 
 cleanup_data db_target
