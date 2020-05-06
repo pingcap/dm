@@ -24,11 +24,15 @@ type AtomicError struct {
 }
 
 // Get returns error
-func (e AtomicError) Get() error {
-	return *(*error)(atomic.LoadPointer(&e.p))
+func (e *AtomicError) Get() error {
+	p := atomic.LoadPointer(&e.p)
+	if p == nil {
+		return nil
+	}
+	return *(*error)(p)
 }
 
 // Set sets error to AtomicError
-func (e AtomicError) Set(err error) {
+func (e *AtomicError) Set(err error) {
 	atomic.StorePointer(&e.p, unsafe.Pointer(&err))
 }
