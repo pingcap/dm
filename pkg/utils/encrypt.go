@@ -44,7 +44,6 @@ func Decrypt(ciphertextB64 string) (string, error) {
 	return string(plaintext), nil
 }
 
-
 // DecryptOrPlaintext tries to decrypt base64 encoded ciphertext to plaintext or return plaintext
 func DecryptOrPlaintext(ciphertextB64 string) (string, error) {
 	plaintext, err := Decrypt(ciphertextB64)

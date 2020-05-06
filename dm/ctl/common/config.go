@@ -91,18 +91,18 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 	}
 
 	if len(c.encrypt) > 0 {
-		ciphertext, err := utils.Encrypt(c.encrypt)
-		if err != nil {
-			return true, err
+		ciphertext, err1 := utils.Encrypt(c.encrypt)
+		if err1 != nil {
+			return true, err1
 		}
 		fmt.Println(ciphertext)
 		return true, nil
 	}
 
 	if len(c.decrypt) > 0 {
-		plaintext, err := utils.Decrypt(c.decrypt)
-		if err != nil {
-			return true, err
+		plaintext, err1 := utils.Decrypt(c.decrypt)
+		if err1 != nil {
+			return true, err1
 		}
 		fmt.Println(plaintext)
 		return true, nil
