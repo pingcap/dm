@@ -110,6 +110,8 @@ function test_join_masters_and_worker {
     check_port_offline $MASTER_PORT1 20
     rm -rf $WORK_DIR/master1/default.master1
 
+    sleep 5
+
     echo "join worker with 5 masters endpoint"
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker-join1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
