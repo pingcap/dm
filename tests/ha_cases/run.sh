@@ -78,12 +78,16 @@ function test_multi_task_running() {
 }
 
 
-function test_join_masters {
-    echo "[$(date)] <<<<<< start test_join_masters >>>>>>"
+function test_join_masters_and_worker {
+    echo "[$(date)] <<<<<< start test_join_masters_and_worker >>>>>>"
     cleanup
 
     run_dm_master $WORK_DIR/master-join1 $MASTER_PORT1 $cur/conf/dm-master-join1.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
+
+    echo "query-status from unique master"
+    run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT1 "query-status" '"result": true' 1
+
     run_dm_master $WORK_DIR/master-join2 $MASTER_PORT2 $cur/conf/dm-master-join2.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
     sleep 5
@@ -96,12 +100,24 @@ function test_join_masters {
     run_dm_master $WORK_DIR/master-join5 $MASTER_PORT5 $cur/conf/dm-master-join5.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
 
-    run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT1 "query-status" '"result": true' 1
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT2 "query-status" '"result": true' 1
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT3 "query-status" '"result": true' 1
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT4 "query-status" '"result": true' 1
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT5 "query-status" '"result": true' 1
-    echo "[$(date)] <<<<<< finish test_join_masters >>>>>>"
+
+    echo "kill dm-master1"
+    ps aux | grep dm-master1 | awk '{print $2}' | xargs kill || true
+    check_port_offline $MASTER_PORT1 20
+    rm -rf $WORK_DIR/master1/default.master1
+
+    echo "join worker with 5 masters endpoint"
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker-join1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    
+    echo "query-status from master2"
+    run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT2 "query-status" '"result": true' 1
+
+    echo "[$(date)] <<<<<< finish test_join_masters_and_worker >>>>>>"
 }
 
 
@@ -150,6 +166,17 @@ function test_kill_worker() {
 
     run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
+
+    echo "wait and check task running"
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+
+    run_dm_worker $WORK_DIR/worker4 $WORKER4_PORT $cur/conf/dm-worker4.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER4_PORT
+
+    echo "kill dm-worker3"
+    ps aux | grep dm-worker3 |awk '{print $2}'|xargs kill || true
+    check_port_offline $WORKER3_PORT 20
+    rm -rf $WORK_DIR/worker3/relay_log
 
     echo "wait and check task running"
     check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
@@ -318,7 +345,7 @@ function test_pause_task() {
 }
 
 
-function test_multi_task_reduce_worker() {
+function test_multi_task_reduce_and_restart_worker() {
     echo "[$(date)] <<<<<< start test_multi_task_reduce_worker >>>>>>"
     test_multi_task_running
 
@@ -340,6 +367,20 @@ function test_multi_task_reduce_worker() {
         echo "find workers: ${w:0-9:7} for task: test"
     done
     echo "find all workers: ${worker_inuse[@]} (total: ${#worker_inuse[@]})"
+
+    for idx in $(seq 1 5); do
+        if [[ ! " ${worker_inuse[@]} " =~ " worker${idx} " ]]; then
+            echo "restart unuse worker${idx}"
+
+            echo "try to kill worker port ${worker_ports[$[ $idx - 1 ] ]}"
+            ps aux | grep dm-worker${idx} |awk '{print $2}'|xargs kill || true
+            check_port_offline ${worker_ports[$[ $idx - 1] ]} 20
+
+            echo "start dm-worker${idx}"
+            run_dm_worker $WORK_DIR/worker${idx} ${worker_ports[$[ $idx - 1] ]} $cur/conf/dm-worker${idx}.toml
+            check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:${worker_ports[$[ $idx - 1] ]}
+        fi
+    done
 
     for ((i=0; i < ${#worker_inuse[@]}; i++)); do
         wk=${worker_inuse[$i]:0-1:1} # get worker id, such as ("1", "4")
@@ -423,15 +464,15 @@ function test_isolate_master() {
 
 
 function run() {
-    test_join_masters
-    test_kill_master
-    test_kill_worker
-    test_kill_master_in_sync
-    test_kill_worker_in_sync
-    test_standalone_running
-    test_pause_task
-    test_multi_task_reduce_worker
-    test_isolate_master
+    test_join_masters_and_worker               # TICASE-928, 930, 931, 961
+    test_kill_master                           # TICASE-996
+    test_kill_worker                           # TICASE-968, 973, 1002
+    test_kill_master_in_sync                   # TICASE-997, 1000
+    test_kill_worker_in_sync                   # TICASE-1001
+    test_standalone_running                    # TICASE-929, 959, 960, 967
+    test_pause_task                            # TICASE-990, 991
+    test_multi_task_reduce_and_restart_worker  # TICASE-968, 994, 995
+    test_isolate_master                        # TICASE-934, 935
 }
 
 
