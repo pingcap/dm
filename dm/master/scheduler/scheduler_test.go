@@ -715,7 +715,7 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 		return len(bounds) == 1 && bounds[0] == sourceID1
 	}), IsTrue)
 	checkSourceBoundCh := func() {
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(time.Second)
 		c.Assert(sourceBoundCh, HasLen, 1)
 		sourceBound := <-sourceBoundCh
 		sourceBound.Revision = 0
@@ -857,7 +857,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 	select {
 	case err := <-workerErrCh:
 		c.Assert(err, Equals, etcdErrCompacted)
-	case <-time.After(300 * time.Millisecond):
+	case <-time.After(time.Second):
 		c.Fatal("fail to get etcd error compacted")
 	}
 

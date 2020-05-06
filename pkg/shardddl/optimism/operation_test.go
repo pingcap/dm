@@ -39,7 +39,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		watchTimeout = 500 * time.Millisecond
+		watchTimeout = 2 * time.Second
 		task1        = "test1"
 		task2        = "test2"
 		upSchema     = "foo_1"
