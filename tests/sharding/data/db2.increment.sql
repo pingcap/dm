@@ -1,5 +1,6 @@
 use sharding1;
 delete from t3 where name = 'Santa Sofía de la Piedad';
+insert into t2 (uid, name, info) values (40001, 'Amaranta', '{"age": 0}'); # DML to trigger fetch schema from downstream before DDL
 alter table t2 add column age int;
 update t2 set uid = uid + 10000;
 alter table t3 add column age int;

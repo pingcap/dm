@@ -136,6 +136,7 @@ type SubTaskConfig struct {
 
 	// when in sharding, multi dm-workers do one task
 	IsSharding      bool   `toml:"is-sharding" json:"is-sharding"`
+	ShardMode       string `toml:"shard-mode" json:"shard-mode"`
 	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
 	// handle schema/table name mode, and only for schema/table name/pattern
@@ -262,6 +263,12 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	//	return errors.Errorf("please specify right mysql version, support mysql, mariadb now")
 	//}
 
+	if c.ShardMode != "" && c.ShardMode != ShardPessimistic && c.ShardMode != ShardOptimistic {
+		return terror.ErrConfigShardModeNotSupport.Generate(c.ShardMode)
+	} else if c.ShardMode == "" && c.IsSharding {
+		c.ShardMode = ShardPessimistic // use the pessimistic mode as default for back compatible.
+	}
+
 	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
 		return terror.ErrConfigOnlineSchemeNotSupport.Generate(c.OnlineDDLScheme)
 	}
@@ -281,6 +288,13 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if !strings.HasSuffix(c.LoaderConfig.Dir, dirSuffix) { // check to support multiple times calling
 		// if not ends with the task name, we append the task name to the tail
 		c.LoaderConfig.Dir += dirSuffix
+	}
+
+	if c.SyncerConfig.QueueSize == 0 {
+		c.SyncerConfig.QueueSize = defaultQueueSize
+	}
+	if c.SyncerConfig.CheckpointFlushInterval == 0 {
+		c.SyncerConfig.CheckpointFlushInterval = defaultCheckpointFlushInterval
 	}
 
 	c.From.Adjust()

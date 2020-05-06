@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
@@ -92,6 +93,8 @@ type Server struct {
 
 	// shard DDL pessimist
 	pessimist *shardddl.Pessimist
+	// shard DDL optimist
+	optimist *shardddl.Optimist
 
 	// SQL operator holder
 	sqlOperatorHolder *operator.Holder
@@ -110,12 +113,13 @@ func NewServer(cfg *Config) *Server {
 	logger := log.L()
 	server := Server{
 		cfg:               cfg,
-		scheduler:         scheduler.NewScheduler(&logger, cfg.Security),
+		scheduler:         scheduler.NewScheduler(&logger, config.Security{}),
 		sqlOperatorHolder: operator.NewHolder(),
 		idGen:             tracing.NewIDGen(),
 		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
 	}
 	server.pessimist = shardddl.NewPessimist(&logger, server.getTaskResources)
+	server.optimist = shardddl.NewOptimist(&logger)
 	server.closed.Set(true)
 
 	setUseTLS(&cfg.Security)
@@ -125,6 +129,7 @@ func NewServer(cfg *Config) *Server {
 
 // Start starts to serving
 func (s *Server) Start(ctx context.Context) (err error) {
+	etcdCfg := genEmbedEtcdConfigWithLogger()
 	// prepare config to join an existing cluster
 	err = prepareJoinEtcd(s.cfg)
 	if err != nil {
@@ -139,7 +144,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// no `String` method exists for embed.Config, and can not marshal it to join too.
 	// but when starting embed etcd server, the etcd pkg will log the config.
 	// https://github.com/etcd-io/etcd/blob/3cf2f69b5738fb702ba1a935590f36b52b18979b/embed/etcd.go#L299
-	etcdCfg, err := s.cfg.genEmbedEtcdConfig()
+	etcdCfg, err = s.cfg.genEmbedEtcdConfig(etcdCfg)
 	if err != nil {
 		return
 	}
@@ -213,6 +218,14 @@ func (s *Server) Start(ctx context.Context) (err error) {
 			return
 		}
 	}()
+
+	failpoint.Inject("FailToElect", func(val failpoint.Value) {
+		masterStrings := val.(string)
+		if strings.Contains(masterStrings, s.cfg.Name) {
+			log.L().Info("master election failed", zap.String("failpoint", "FailToElect"))
+			s.election.Close()
+		}
+	})
 
 	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
 	return
@@ -654,41 +667,10 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 		Result: true,
 	}
 
-	locks := s.pessimist.Locks()
-	resp.Locks = make([]*pb.DDLLock, 0, len(locks))
-	for _, lock := range locks {
-		if len(req.Task) > 0 && req.Task != lock.Task {
-			continue // specify task and mismatch
-		}
-		ready := lock.Ready()
-		if len(req.Sources) > 0 {
-			for _, worker := range req.Sources {
-				if _, ok := ready[worker]; ok {
-					goto FOUND
-				}
-			}
-			continue // specify workers and mismatch
-		}
-	FOUND:
-		l := &pb.DDLLock{
-			ID:       lock.ID,
-			Task:     lock.Task,
-			Owner:    lock.Owner,
-			DDLs:     lock.DDLs,
-			Synced:   make([]string, 0, len(ready)),
-			Unsynced: make([]string, 0, len(ready)),
-		}
-		for worker, synced := range ready {
-			if synced {
-				l.Synced = append(l.Synced, worker)
-			} else {
-				l.Unsynced = append(l.Unsynced, worker)
-			}
-		}
-		sort.Strings(l.Synced)
-		sort.Strings(l.Unsynced)
-		resp.Locks = append(resp.Locks, l)
-	}
+	// show pessimistic locks.
+	resp.Locks = append(resp.Locks, s.pessimist.ShowLocks(req.Task, req.Sources)...)
+	// show optimistic locks.
+	resp.Locks = append(resp.Locks, s.optimist.ShowLocks(req.Task, req.Sources)...)
 
 	if len(resp.Locks) == 0 {
 		resp.Msg = "no DDL lock exists"
@@ -712,6 +694,7 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 	resp := &pb.UnlockDDLLockResponse{
 		Result: true,
 	}
+	// TODO: add `unlock-ddl-lock` support for Optimist later.
 	err := s.pessimist.UnlockLock(ctx, req.ID, req.ReplaceOwner, req.ForceRemove)
 	if err != nil {
 		resp.Result = false

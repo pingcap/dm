@@ -47,7 +47,9 @@ func main() {
 	}
 	cli := pb.NewMasterClient(conn)
 	req := &pb.ShowDDLLocksRequest{}
-	_, err = cli.ShowDDLLocks(context.Background(), req)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	_, err = cli.ShowDDLLocks(ctx, req)
+	cancel()
 	if err != nil {
 		utils.ExitWithError(err)
 	}

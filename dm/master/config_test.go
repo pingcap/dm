@@ -245,7 +245,7 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 	cfg1.AdvertiseAddr = "127.0.0.1:8261"
 	cfg1.InitialClusterState = embed.ClusterStateFlagExisting
 	c.Assert(cfg1.adjust(), check.IsNil)
-	etcdCfg, err := cfg1.genEmbedEtcdConfig()
+	etcdCfg, err := cfg1.genEmbedEtcdConfig(embed.NewConfig())
 	c.Assert(err, check.IsNil)
 	c.Assert(etcdCfg.Name, check.Equals, fmt.Sprintf("dm-master-%s", hostname))
 	c.Assert(etcdCfg.Dir, check.Equals, fmt.Sprintf("default.%s", etcdCfg.Name))
@@ -259,33 +259,33 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 	cfg2 := *cfg1
 	cfg2.MasterAddr = "127.0.0.1\n:8261"
 	cfg2.AdvertiseAddr = "127.0.0.1:8261"
-	_, err = cfg2.genEmbedEtcdConfig()
+	_, err = cfg2.genEmbedEtcdConfig(embed.NewConfig())
 	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
 	c.Assert(err, check.ErrorMatches, "(?m).*invalid master-addr.*")
 	cfg2.MasterAddr = "172.100.8.8:8261"
 	cfg2.AdvertiseAddr = "172.100.8.8:8261"
-	etcdCfg, err = cfg2.genEmbedEtcdConfig()
+	etcdCfg, err = cfg2.genEmbedEtcdConfig(embed.NewConfig())
 	c.Assert(err, check.IsNil)
 	c.Assert(etcdCfg.LCUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8261"}})
 	c.Assert(etcdCfg.ACUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8261"}})
 
 	cfg3 := *cfg1
 	cfg3.PeerUrls = "127.0.0.1:\n8291"
-	_, err = cfg3.genEmbedEtcdConfig()
+	_, err = cfg3.genEmbedEtcdConfig(embed.NewConfig())
 	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
 	c.Assert(err, check.ErrorMatches, "(?m).*invalid peer-urls.*")
 	cfg3.PeerUrls = "http://172.100.8.8:8291"
-	etcdCfg, err = cfg3.genEmbedEtcdConfig()
+	etcdCfg, err = cfg3.genEmbedEtcdConfig(embed.NewConfig())
 	c.Assert(err, check.IsNil)
 	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8291"}})
 
 	cfg4 := *cfg1
 	cfg4.AdvertisePeerUrls = "127.0.0.1:\n8291"
-	_, err = cfg4.genEmbedEtcdConfig()
+	_, err = cfg4.genEmbedEtcdConfig(embed.NewConfig())
 	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
 	c.Assert(err, check.ErrorMatches, "(?m).*invalid advertise-peer-urls.*")
 	cfg4.AdvertisePeerUrls = "http://172.100.8.8:8291"
-	etcdCfg, err = cfg4.genEmbedEtcdConfig()
+	etcdCfg, err = cfg4.genEmbedEtcdConfig(embed.NewConfig())
 	c.Assert(err, check.IsNil)
 	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8291"}})
 }

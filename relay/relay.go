@@ -35,6 +35,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/binlog/common"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
@@ -53,8 +54,6 @@ var (
 )
 
 const (
-	slaveReadTimeout            = 1 * time.Minute  // slave read binlog data timeout, ref: https://dev.mysql.com/doc/refman/8.0/en/replication-options-slave.html#sysvar_slave_net_timeout
-	masterHeartbeatPeriod       = 30 * time.Second // master server send heartbeat period: ref: `MASTER_HEARTBEAT_PERIOD` in https://dev.mysql.com/doc/refman/8.0/en/change-master-to.html
 	flushMetaInterval           = 30 * time.Second
 	getMasterStatusInterval     = 30 * time.Second
 	trimUUIDsInterval           = 1 * time.Hour
@@ -118,19 +117,15 @@ type Relay struct {
 // NewRealRelay creates an instance of Relay.
 func NewRealRelay(cfg *Config) Process {
 	syncerCfg := replication.BinlogSyncerConfig{
-		ServerID:         uint32(cfg.ServerID),
-		Flavor:           cfg.Flavor,
-		Host:             cfg.From.Host,
-		Port:             uint16(cfg.From.Port),
-		User:             cfg.From.User,
-		Password:         cfg.From.Password,
-		Charset:          cfg.Charset,
-		UseDecimal:       true, // must set true. ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
-		ReadTimeout:      slaveReadTimeout,
-		HeartbeatPeriod:  masterHeartbeatPeriod,
-		VerifyChecksum:   true,
-		DisableRetrySync: true, // the retry of go-mysql has some problem now, we disable it and do the retry in relay first.
+		ServerID: uint32(cfg.ServerID),
+		Flavor:   cfg.Flavor,
+		Host:     cfg.From.Host,
+		Port:     uint16(cfg.From.Port),
+		User:     cfg.From.User,
+		Password: cfg.From.Password,
+		Charset:  cfg.Charset,
 	}
+	common.SetDefaultReplicationCfg(&syncerCfg, common.MaxBinlogSyncerReconnect)
 
 	if !cfg.EnableGTID {
 		// for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent
@@ -378,7 +373,7 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 		if result.Recovered {
 			r.tctx.L().Warn("relay log file recovered",
 				zap.Stringer("from position", latestPos), zap.Stringer("to position", result.LatestPos), log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
-			if !result.LatestGTIDs.Equal(latestGTID) && result.LatestGTIDs.Contain(latestGTID) {
+			if result.LatestGTIDs != nil && !result.LatestGTIDs.Equal(latestGTID) && result.LatestGTIDs.Contain(latestGTID) {
 				r.tctx.L().Warn("some GTIDs are missing in the meta data, this is usually due to the process was interrupted while writing the meta data. force to update GTIDs",
 					log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
 				latestGTID = result.LatestGTIDs.Clone()
@@ -800,18 +795,15 @@ func (r *Relay) Reload(newCfg *Config) error {
 	r.db = db
 
 	syncerCfg := replication.BinlogSyncerConfig{
-		ServerID:        uint32(r.cfg.ServerID),
-		Flavor:          r.cfg.Flavor,
-		Host:            newCfg.From.Host,
-		Port:            uint16(newCfg.From.Port),
-		User:            newCfg.From.User,
-		Password:        newCfg.From.Password,
-		Charset:         newCfg.Charset,
-		UseDecimal:      true, // must set true. ref: https://github.com/pingcap/dm/pull/272
-		ReadTimeout:     slaveReadTimeout,
-		HeartbeatPeriod: masterHeartbeatPeriod,
-		VerifyChecksum:  true,
+		ServerID: uint32(r.cfg.ServerID),
+		Flavor:   r.cfg.Flavor,
+		Host:     newCfg.From.Host,
+		Port:     uint16(newCfg.From.Port),
+		User:     newCfg.From.User,
+		Password: newCfg.From.Password,
+		Charset:  newCfg.Charset,
 	}
+	common.SetDefaultReplicationCfg(&syncerCfg, common.MaxBinlogSyncerReconnect)
 
 	if !newCfg.EnableGTID {
 		// for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent

@@ -25,15 +25,12 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/binlog/common"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-)
-
-const (
-	eventTimeout = 1 * time.Minute
 )
 
 // StreamerProducer provides the ability to generate binlog streamer by StartSync()
@@ -216,7 +213,7 @@ func (c *StreamerController) RedirectStreamer(tctx *tcontext.Context, location b
 
 // GetEvent returns binlog event, should only have one thread call this function.
 func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replication.BinlogEvent, err error) {
-	ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
+	ctx, cancel := context.WithTimeout(tctx.Context(), common.SlaveReadTimeout)
 	failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
 		if seconds, ok := val.(int); ok {
 			cancel()
@@ -436,4 +433,12 @@ func isDuplicateServerIDError(err error) bool {
 	}
 
 	return strings.Contains(err.Error(), "A slave with the same server_uuid/server_id as this slave has connected to the master")
+}
+
+func isConnectionRefusedError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	return strings.Contains(err.Error(), "connect: connection refused")
 }

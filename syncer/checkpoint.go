@@ -51,8 +51,6 @@ var (
 	globalCpSchema       = "" // global checkpoint's cp_schema
 	globalCpTable        = "" // global checkpoint's cp_table
 	maxCheckPointTimeout = "1m"
-
-	maxCheckPointSaveTime = 30 * time.Second
 )
 
 type binlogPoint struct {
@@ -63,14 +61,17 @@ type binlogPoint struct {
 
 	flushedLocation binlog.Location // location which flushed permanently
 	flushedTI       *model.TableInfo
+
+	enableGTID bool
 }
 
-func newBinlogPoint(location, flushedLocation binlog.Location, ti, flushedTI *model.TableInfo) *binlogPoint {
+func newBinlogPoint(location, flushedLocation binlog.Location, ti, flushedTI *model.TableInfo, enableGTID bool) *binlogPoint {
 	return &binlogPoint{
 		location:        location,
 		ti:              ti,
 		flushedLocation: flushedLocation,
 		flushedTI:       flushedTI,
+		enableGTID:      enableGTID,
 	}
 }
 
@@ -78,7 +79,7 @@ func (b *binlogPoint) save(location binlog.Location, ti *model.TableInfo) error 
 	b.Lock()
 	defer b.Unlock()
 
-	if binlog.CompareLocation(location, b.location) < 0 {
+	if binlog.CompareLocation(location, b.location, b.enableGTID) < 0 {
 		// support to save equal location, but not older location
 		return terror.ErrCheckpointSaveInvalidPos.Generate(location, b.location)
 	}
@@ -91,15 +92,29 @@ func (b *binlogPoint) save(location binlog.Location, ti *model.TableInfo) error 
 func (b *binlogPoint) flush() {
 	b.Lock()
 	defer b.Unlock()
-	b.flushedLocation = b.location
+	b.flushedLocation = b.location.Clone()
 	b.flushedTI = b.ti
 }
 
-func (b *binlogPoint) rollback() (isSchemaChanged bool) {
+func (b *binlogPoint) rollback(schemaTracker *schema.Tracker, schema string) (isSchemaChanged bool) {
 	b.Lock()
 	defer b.Unlock()
-	b.location = b.flushedLocation
-	if isSchemaChanged = b.ti != b.flushedTI; isSchemaChanged {
+	b.location = b.flushedLocation.Clone()
+	if b.ti == nil {
+		return // for global checkpoint, no need to rollback the schema.
+	}
+
+	// NOTE: no `Equal` function for `model.TableInfo` exists now, so we compare `pointer` directly,
+	// and after a new DDL applied to the schema, the returned pointer of `model.TableInfo` changed now.
+	trackedTi, _ := schemaTracker.GetTable(schema, b.ti.Name.O) // ignore the returned error, only compare `trackerTi` is enough.
+	// may three versions of schema exist:
+	// - the one tracked in the TiDB-with-mockTiKV.
+	// - the one in the checkpoint but not flushed.
+	// - the one in the checkpoint and flushed.
+	// if any of them are not equal, then we rollback them:
+	// - set the one in the checkpoint but not flushed to the one flushed.
+	// - set the one tracked to the one in the checkpoint by the caller of this method (both flushed and not flushed are the same now)
+	if isSchemaChanged = (trackedTi != b.ti) || (b.ti != b.flushedTI); isSchemaChanged {
 		b.ti = b.flushedTI
 	}
 	return
@@ -109,7 +124,7 @@ func (b *binlogPoint) outOfDate() bool {
 	b.RLock()
 	defer b.RUnlock()
 
-	return binlog.CompareLocation(b.location, b.flushedLocation) > 0
+	return binlog.CompareLocation(b.location, b.flushedLocation, b.enableGTID) > 0
 }
 
 // MySQLLocation returns point as binlog.Location
@@ -175,7 +190,7 @@ type CheckPoint interface {
 	DeleteSchemaPoint(tctx *tcontext.Context, sourceSchema string) error
 
 	// IsNewerTablePoint checks whether job's checkpoint is newer than previous saved checkpoint
-	IsNewerTablePoint(sourceSchema, sourceTable string, point binlog.Location) bool
+	IsNewerTablePoint(sourceSchema, sourceTable string, point binlog.Location, gte bool) bool
 
 	// SaveGlobalPoint saves the global binlog stream's checkpoint
 	// corresponding to Meta.Save
@@ -247,7 +262,7 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 		tableName:   dbutil.TableName(cfg.MetaSchema, cfg.Name+"_syncer_checkpoint"),
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
-		globalPoint: newBinlogPoint(binlog.NewLocation(cfg.Flavor), binlog.NewLocation(cfg.Flavor), nil, nil),
+		globalPoint: newBinlogPoint(binlog.NewLocation(cfg.Flavor), binlog.NewLocation(cfg.Flavor), nil, nil, cfg.EnableGTID),
 		logCtx:      tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
 	}
 
@@ -293,7 +308,7 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 		return err
 	}
 
-	cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil)
+	cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil, cp.cfg.EnableGTID)
 	cp.points = make(map[string]map[string]*binlogPoint)
 
 	return nil
@@ -308,12 +323,12 @@ func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, poi
 
 // saveTablePoint saves single table's checkpoint without mutex.Lock
 func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, location binlog.Location, ti *model.TableInfo) {
-	if binlog.CompareLocation(cp.globalPoint.location, location) > 0 {
+	if binlog.CompareLocation(cp.globalPoint.location, location, cp.cfg.EnableGTID) > 0 {
 		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
 	}
 
 	// we save table checkpoint while we meet DDL or DML
-	cp.logCtx.L().Debug("save table checkpoint", zap.Stringer("loaction", location), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
+	cp.logCtx.L().Debug("save table checkpoint", zap.Stringer("location", location), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)
@@ -321,7 +336,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, loc
 	}
 	point, ok := mSchema[sourceTable]
 	if !ok {
-		mSchema[sourceTable] = newBinlogPoint(location, binlog.NewLocation(cp.cfg.Flavor), ti, nil)
+		mSchema[sourceTable] = newBinlogPoint(location, binlog.NewLocation(cp.cfg.Flavor), ti, nil, cp.cfg.EnableGTID)
 	} else if err := point.save(location, ti); err != nil {
 		cp.logCtx.L().Error("fail to save table point", zap.String("schema", sourceSchema), zap.String("table", sourceTable), log.ShortError(err))
 	}
@@ -375,8 +390,16 @@ func (cp *RemoteCheckPoint) DeleteSchemaPoint(tctx *tcontext.Context, sourceSche
 	return nil
 }
 
-// IsNewerTablePoint implements CheckPoint.IsNewerTablePoint
-func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, location binlog.Location) bool {
+// IsNewerTablePoint implements CheckPoint.IsNewerTablePoint.
+// gte means greater than or equal, gte should judge by EnableGTID and the event type
+// - when enable GTID and binlog is DML, go-mysql will only update GTID set in a XID event after the rows event, for example, the binlog events are:
+//   - Query event, location is gset1
+//   - Rows event, location is gset1
+//   - XID event, location is gset2
+//   after syncer handle query event, will save table point with gset1, and when handle rows event, will compare the rows's location with table checkpoint's location in `IsNewerTablePoint`, and these two location have same gset, so we should use `>=` to compare location in this case.
+// - when enable GTID and binlog is DDL, different DDL have different GTID set, so if GTID set is euqal, it is a old table point, should use `>` to compare location in this case.
+// - when not enable GTID, just compare the position, and only when grater than the old point is newer table point, should use `>` to compare location is this case.
+func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, location binlog.Location, gte bool) bool {
 	cp.RLock()
 	defer cp.RUnlock()
 	mSchema, ok := cp.points[sourceSchema]
@@ -388,8 +411,13 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 		return true
 	}
 	oldLocation := point.MySQLLocation()
+	cp.logCtx.L().Debug("compare table location whether is newer", zap.Stringer("location", location), zap.Stringer("old location", oldLocation))
 
-	return binlog.CompareLocation(location, oldLocation) > 0
+	if gte {
+		return binlog.CompareLocation(location, oldLocation, cp.cfg.EnableGTID) >= 0
+	}
+
+	return binlog.CompareLocation(location, oldLocation, cp.cfg.EnableGTID) > 0
 }
 
 // SaveGlobalPoint implements CheckPoint.SaveGlobalPoint
@@ -510,22 +538,24 @@ func (cp *RemoteCheckPoint) String() string {
 func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 	cp.RLock()
 	defer cp.RUnlock()
-	return time.Since(cp.globalPointSaveTime) >= maxCheckPointSaveTime
+	return time.Since(cp.globalPointSaveTime) >= time.Duration(cp.cfg.CheckpointFlushInterval)*time.Second
 }
 
 // Rollback implements CheckPoint.Rollback
 func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
-	cp.globalPoint.rollback()
+	cp.globalPoint.rollback(schemaTracker, "")
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
 			logger := cp.logCtx.L().WithFields(zap.String("schema", schema), zap.String("table", table))
-			logger.Info("rollback checkpoint", log.WrapStringerField("checkpoint", point))
-			if point.rollback() {
+			logger.Debug("try to rollback checkpoint", log.WrapStringerField("checkpoint", point))
+			from := point.MySQLLocation()
+			if point.rollback(schemaTracker, schema) {
+				logger.Info("rollback checkpoint", zap.Stringer("from", from), zap.Stringer("to", point.FlushedMySQLLocation()))
 				// schema changed
 				if err := schemaTracker.DropTable(schema, table); err != nil {
-					logger.Debug("failed to drop table from schema tracker", log.ShortError(err))
+					logger.Warn("failed to drop table from schema tracker", log.ShortError(err))
 				}
 				if point.ti != nil {
 					// TODO: Figure out how to recover from errors.
@@ -633,8 +663,8 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			GTIDSet: gset,
 		}
 		if isGlobal {
-			if binlog.CompareLocation(location, binlog.NewLocation(cp.cfg.Flavor)) > 0 {
-				cp.globalPoint = newBinlogPoint(location.Clone(), location.Clone(), nil, nil)
+			if binlog.CompareLocation(location, binlog.NewLocation(cp.cfg.Flavor), cp.cfg.EnableGTID) > 0 {
+				cp.globalPoint = newBinlogPoint(location.Clone(), location.Clone(), nil, nil, cp.cfg.EnableGTID)
 				cp.logCtx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
 			}
 			continue // skip global checkpoint
@@ -659,7 +689,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			mSchema = make(map[string]*binlogPoint)
 			cp.points[cpSchema] = mSchema
 		}
-		mSchema[cpTable] = newBinlogPoint(location.Clone(), location.Clone(), &ti, &ti)
+		mSchema[cpTable] = newBinlogPoint(location.Clone(), location.Clone(), &ti, &ti, cp.cfg.EnableGTID)
 	}
 
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
@@ -683,7 +713,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 		// load meta from task config
 		if cp.cfg.Meta == nil {
 			cp.logCtx.L().Warn("don't set meta in increment task-mode")
-			cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil)
+			cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil, cp.cfg.EnableGTID)
 			return nil
 		}
 		gset, err := gtid.ParserGTID(cp.cfg.Flavor, cp.cfg.Meta.BinLogGTID)
@@ -705,7 +735,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 
 	// if meta loaded, we will start syncing from meta's pos
 	if location != nil {
-		cp.globalPoint = newBinlogPoint(location.Clone(), location.Clone(), nil, nil)
+		cp.globalPoint = newBinlogPoint(location.Clone(), location.Clone(), nil, nil, cp.cfg.EnableGTID)
 		cp.logCtx.L().Info("loaded checkpoints from meta", log.WrapStringerField("global checkpoint", cp.globalPoint))
 	}
 

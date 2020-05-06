@@ -36,6 +36,9 @@ const (
 
 	// DefaultRequestTimeout 10s is long enough for most of etcd clusters.
 	DefaultRequestTimeout = 10 * time.Second
+
+	// DefaultRevokeLeaseTimeout is the maximum amount of time waiting for revoke etcd lease.
+	DefaultRevokeLeaseTimeout = 3 * time.Second
 )
 
 var etcdDefaultTxnRetryParam = retry.Params{

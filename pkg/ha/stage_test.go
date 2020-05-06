@@ -51,7 +51,7 @@ func (t *testForEtcd) TestRelayStageEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		watchTimeout = 500 * time.Millisecond
+		watchTimeout = 2 * time.Second
 		source1      = "mysql-replica-1"
 		source2      = "mysql-replica-2"
 		emptyStage   = Stage{}
@@ -130,7 +130,7 @@ func (t *testForEtcd) TestSubTaskStageEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		watchTimeout = 500 * time.Millisecond
+		watchTimeout = 2 * time.Second
 		source       = "mysql-replica-1"
 		task1        = "task-1"
 		task2        = "task-2"

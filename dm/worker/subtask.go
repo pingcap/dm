@@ -73,9 +73,13 @@ type SubTask struct {
 	l log.Logger
 
 	sync.RWMutex
-	wg     sync.WaitGroup
+	wg sync.WaitGroup
+	// ctx is used for the whole subtask. It will be created only when we new a subtask.
 	ctx    context.Context
 	cancel context.CancelFunc
+	// currCtx is used for one loop. It will be created each time we use st.run/st.Resume
+	currCtx    context.Context
+	currCancel context.CancelFunc
 
 	units    []unit.Unit // units do job one by one
 	currUnit unit.Unit
@@ -98,10 +102,13 @@ func NewRealSubTask(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Sub
 
 // NewSubTaskWithStage creates a new SubTask with stage
 func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *clientv3.Client) *SubTask {
+	ctx, cancel := context.WithCancel(context.Background())
 	st := SubTask{
 		cfg:        cfg,
 		stage:      stage,
 		l:          log.With(zap.String("subtask", cfg.Name)),
+		ctx:        ctx,
+		cancel:     cancel,
 		etcdClient: etcdClient,
 	}
 	taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
@@ -186,23 +193,42 @@ func (st *SubTask) Run() {
 }
 
 func (st *SubTask) run() {
-	st.setStage(pb.Stage_Paused)
-	err := st.unitTransWaitCondition()
+	st.setStage(pb.Stage_Running)
+	ctx, cancel := context.WithCancel(st.ctx)
+	st.setCurrCtx(ctx, cancel)
+	err := st.unitTransWaitCondition(ctx)
 	if err != nil {
 		st.l.Error("wait condition", log.ShortError(err))
 		st.fail(err)
 		return
+	} else if ctx.Err() != nil {
+		return
 	}
 
-	st.setStage(pb.Stage_Running)
 	st.setResult(nil) // clear previous result
 	cu := st.CurrUnit()
 	st.l.Info("start to run", zap.Stringer("unit", cu.Type()))
-	st.ctx, st.cancel = context.WithCancel(context.Background())
 	pr := make(chan pb.ProcessResult, 1)
 	st.wg.Add(1)
 	go st.fetchResult(pr)
-	go cu.Process(st.ctx, pr)
+	go cu.Process(ctx, pr)
+}
+
+func (st *SubTask) setCurrCtx(ctx context.Context, cancel context.CancelFunc) {
+	st.Lock()
+	// call previous cancel func for safety
+	if st.currCancel != nil {
+		st.currCancel()
+	}
+	st.currCtx = ctx
+	st.currCancel = cancel
+	st.Unlock()
+}
+
+func (st *SubTask) callCurrCancel() {
+	st.RLock()
+	st.currCancel()
+	st.RUnlock()
 }
 
 // fetchResult fetches units process result
@@ -212,12 +238,23 @@ func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 
 	select {
 	case <-st.ctx.Done():
+		// should not use st.currCtx, because will do st.currCancel when Pause task,
+		// and this function will return, and the unit's Process maybe still running.
 		return
 	case result := <-pr:
-		st.setResult(&result) // save result
-		st.cancel()           // dm-unit finished, canceled or error occurred, always cancel processing
+		// filter the context canceled error
+		errs := make([]*pb.ProcessError, 0, 2)
+		for _, err := range result.Errors {
+			if !unit.IsCtxCanceledProcessErr(err) {
+				errs = append(errs, err)
+			}
+		}
+		result.Errors = errs
 
-		if len(result.Errors) == 0 && st.Stage() == pb.Stage_Paused {
+		st.setResult(&result) // save result
+		st.callCurrCancel()   // dm-unit finished, canceled or error occurred, always cancel processing
+
+		if len(result.Errors) == 0 && st.Stage() == pb.Stage_Pausing {
 			return // paused by external request
 		}
 
@@ -341,6 +378,7 @@ func (st *SubTask) setStage(stage pb.Stage) {
 func (st *SubTask) stageCAS(oldStage, newStage pb.Stage) bool {
 	st.Lock()
 	defer st.Unlock()
+
 	if st.stage == oldStage {
 		st.stage = newStage
 		taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
@@ -384,30 +422,32 @@ func (st *SubTask) Result() *pb.ProcessResult {
 // Close stops the sub task
 func (st *SubTask) Close() {
 	st.l.Info("closing")
-	if st.cancel == nil {
-		st.l.Info("not run yet, no need to close")
+	if st.Stage() == pb.Stage_Stopped {
+		st.l.Info("subTask is already closed, no need to close")
 		return
 	}
 
 	st.cancel()
 	st.closeUnits() // close all un-closed units
-	st.setStageIfNot(pb.Stage_Finished, pb.Stage_Stopped)
+	st.removeLabelValuesWithTaskInMetrics(st.cfg.Name)
 	st.wg.Wait()
+	st.setStageIfNot(pb.Stage_Finished, pb.Stage_Stopped)
 }
 
 // Pause pauses the running sub task
 func (st *SubTask) Pause() error {
-	if !st.stageCAS(pb.Stage_Running, pb.Stage_Paused) {
-		return terror.ErrWorkerNotRunningStage.Generate()
+	if !st.stageCAS(pb.Stage_Running, pb.Stage_Pausing) {
+		return terror.ErrWorkerNotRunningStage.Generate(st.Stage().String())
 	}
 
-	st.cancel()
+	st.callCurrCancel()
 	st.wg.Wait() // wait fetchResult return
 
 	cu := st.CurrUnit()
 	cu.Pause()
 
 	st.l.Info("paused", zap.Stringer("unit", cu.Type()))
+	st.setStage(pb.Stage_Paused)
 	return nil
 }
 
@@ -419,27 +459,34 @@ func (st *SubTask) Resume() error {
 		return nil
 	}
 
+	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Resuming) {
+		return terror.ErrWorkerNotPausedStage.Generate(st.Stage().String())
+	}
+
+	ctx, cancel := context.WithCancel(st.ctx)
+	st.setCurrCtx(ctx, cancel)
 	// NOTE: this may block if user resume a task
-	err := st.unitTransWaitCondition()
+	err := st.unitTransWaitCondition(ctx)
 	if err != nil {
 		st.l.Error("wait condition", log.ShortError(err))
 		st.setStage(pb.Stage_Paused)
 		return err
-	}
-
-	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Running) {
-		return terror.ErrWorkerNotPausedStage.Generate()
+	} else if ctx.Err() != nil {
+		// ctx.Err() != nil means this context is canceled in other go routine,
+		// that go routine will change the stage, so don't need to set stage to paused here.
+		return nil
 	}
 
 	st.setResult(nil) // clear previous result
 	cu := st.CurrUnit()
 	st.l.Info("resume with unit", zap.Stringer("unit", cu.Type()))
 
-	st.ctx, st.cancel = context.WithCancel(context.Background())
 	pr := make(chan pb.ProcessResult, 1)
 	st.wg.Add(1)
 	go st.fetchResult(pr)
-	go cu.Resume(st.ctx, pr)
+	go cu.Resume(ctx, pr)
+
+	st.setStage(pb.Stage_Running)
 	return nil
 }
 
@@ -511,7 +558,7 @@ func (st *SubTask) ShardDDLInfo() *pessimism.Info {
 	st.RLock()
 	defer st.RUnlock()
 
-	cu := st.CurrUnit()
+	cu := st.currUnit
 	syncer2, ok := cu.(*syncer.Syncer)
 	if !ok {
 		return nil
@@ -525,7 +572,7 @@ func (st *SubTask) ShardDDLOperation() *pessimism.Operation {
 	st.RLock()
 	defer st.RUnlock()
 
-	cu := st.CurrUnit()
+	cu := st.currUnit
 	syncer2, ok := cu.(*syncer.Syncer)
 	if !ok {
 		return nil
@@ -537,7 +584,7 @@ func (st *SubTask) ShardDDLOperation() *pessimism.Operation {
 // unitTransWaitCondition waits when transferring from current unit to next unit.
 // Currently there is only one wait condition
 // from Load unit to Sync unit, wait for relay-log catched up with mydumper binlog position.
-func (st *SubTask) unitTransWaitCondition() error {
+func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 	pu := st.PrevUnit()
 	cu := st.CurrUnit()
 	if pu != nil && pu.Type() == pb.UnitType_Load && cu.Type() == pb.UnitType_Sync {
@@ -571,6 +618,8 @@ func (st *SubTask) unitTransWaitCondition() error {
 			select {
 			case <-ctx.Done():
 				return terror.ErrWorkerWaitRelayCatchupTimeout.Generate(waitRelayCatchupTimeout, pos1, pos2)
+			case <-subTaskCtx.Done():
+				return nil
 			case <-time.After(time.Millisecond * 50):
 			}
 		}

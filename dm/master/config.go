@@ -43,10 +43,14 @@ const (
 	defaultInitialClusterState = embed.ClusterStateFlagNew
 )
 
-// SampleConfigFile is sample config file of dm-master
-// later we can read it from dm/master/dm-master.toml
-// and assign it to SampleConfigFile while we build dm-master
-var SampleConfigFile string
+var (
+	// EnableZap enable the zap logger in embed etcd.
+	EnableZap = false
+	// SampleConfigFile is sample config file of dm-master
+	// later we can read it from dm/master/dm-master.toml
+	// and assign it to SampleConfigFile while we build dm-master
+	SampleConfigFile string
+)
 
 // NewConfig creates a config for dm-master
 func NewConfig() *Config {
@@ -66,10 +70,10 @@ func NewConfig() *Config {
 
 	fs.StringVar(&cfg.Name, "name", "", "human-readable name for this DM-master member")
 	fs.StringVar(&cfg.DataDir, "data-dir", "", `path to the data directory (default "default.${name}")`)
-	fs.StringVar(&cfg.InitialCluster, "initial-cluster", "", fmt.Sprintf("initial cluster configuration for bootstrapping, e,g. dm-master=%s", defaultPeerUrls))
+	fs.StringVar(&cfg.InitialCluster, "initial-cluster", "", fmt.Sprintf("initial cluster configuration for bootstrapping, e.g. dm-master=%s", defaultPeerUrls))
 	fs.StringVar(&cfg.PeerUrls, "peer-urls", defaultPeerUrls, "URLs for peer traffic")
 	fs.StringVar(&cfg.AdvertisePeerUrls, "advertise-peer-urls", "", `advertise URLs for peer traffic (default "${peer-urls}")`)
-	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: cluster's "${master-addr}" list, e,g. "127.0.0.1:8261,127.0.0.1:18261"`)
+	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: cluster's "${master-addr}" list, e.g. "127.0.0.1:8261,127.0.0.1:18261"`)
 
 	return cfg
 }
@@ -333,8 +337,7 @@ func (c *Config) Reload() error {
 
 // genEmbedEtcdConfig generates the configuration needed by embed etcd.
 // This method should be called after logger initialized and before any concurrent gRPC calls.
-func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
-	cfg := embed.NewConfig()
+func (c *Config) genEmbedEtcdConfig(cfg *embed.Config) (*embed.Config, error) {
 	cfg.Name = c.Name
 	cfg.Dir = c.DataDir
 
@@ -359,13 +362,6 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 	cfg.InitialCluster = c.InitialCluster
 	cfg.ClusterState = c.InitialClusterState
 
-	// use zap as the logger for embed etcd
-	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.
-	// NOTE: if using zap logger for etcd, must build it before any concurrent gRPC calls,
-	// otherwise, DATA RACE occur in builder and gRPC.
-	logger := log.L().WithFields(zap.String("component", "embed etcd"))
-	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger.Logger, logger.Core(), log.Props().Syncer) // use global app props.
-	cfg.Logger = "zap"
 	err = cfg.Validate() // verify & trigger the builder
 	if err != nil {
 		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.AnnotateDelegate(err, "fail to validate embed etcd config")
@@ -434,4 +430,23 @@ func parseURLs(s string) ([]url.URL, error) {
 		urls = append(urls, *u)
 	}
 	return urls, nil
+}
+
+func genEmbedEtcdConfigWithLogger() *embed.Config {
+	cfg := embed.NewConfig()
+
+	// use zap as the logger for embed etcd
+	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.
+	// NOTE: if using zap logger for etcd, must build it before any concurrent gRPC calls,
+	// otherwise, DATA RACE occur in NewZapCoreLoggerBuilder and gRPC.
+	logger := log.L().WithFields(zap.String("component", "embed etcd"))
+	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger.Logger, logger.Core(), log.Props().Syncer) // use global app props.
+	cfg.Logger = "zap"
+
+	// TODO: we run ZapLoggerBuilder to set SetLoggerV2 before we do some etcd operations
+	//       otherwise we will meet data race while running `grpclog.SetLoggerV2`
+	//       It's vert tricky here, we should use a better way to avoid this in the future.
+	cfg.ZapLoggerBuilder(cfg)
+
+	return cfg
 }

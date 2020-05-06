@@ -19,12 +19,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/metricsproxy"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (
-	relayLogPosGauge = prometheus.NewGaugeVec(
+	relayLogPosGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "relay",
@@ -32,7 +33,7 @@ var (
 			Help:      "current binlog pos in current binlog file",
 		}, []string{"node"})
 
-	relayLogFileGauge = prometheus.NewGaugeVec(
+	relayLogFileGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "relay",
@@ -42,7 +43,7 @@ var (
 
 	// split sub directory info from relayLogPosGauge / relayLogFileGauge
 	// to make compare relayLogFileGauge for master / relay more easier
-	relaySubDirIndex = prometheus.NewGaugeVec(
+	relaySubDirIndex = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "relay",
@@ -51,7 +52,7 @@ var (
 		}, []string{"node", "uuid"})
 
 	// should alert if available space < 10G
-	relayLogSpaceGauge = prometheus.NewGaugeVec(
+	relayLogSpaceGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "relay",
@@ -83,7 +84,7 @@ var (
 			Subsystem: "relay",
 			Name:      "write_duration",
 			Help:      "bucketed histogram of write time (s) of single relay log event",
-			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 20),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		})
 
 	// should alert
@@ -110,7 +111,7 @@ var (
 			Subsystem: "relay",
 			Name:      "read_binlog_duration",
 			Help:      "bucketed histogram of read time (s) of single binlog event from the master.",
-			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 20),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		})
 
 	binlogTransformDurationHistogram = prometheus.NewHistogram(
@@ -119,7 +120,7 @@ var (
 			Subsystem: "relay",
 			Name:      "read_transform_duration",
 			Help:      "bucketed histogram of transform time (s) of single binlog event.",
-			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 20),
+			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		})
 
 	// should alert
@@ -144,6 +145,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(relayLogWriteErrorCounter)
 	registry.MustRegister(binlogReadErrorCounter)
 	registry.MustRegister(binlogReadDurationHistogram)
+	registry.MustRegister(binlogTransformDurationHistogram)
 	registry.MustRegister(relayExitWithErrorCounter)
 }
 

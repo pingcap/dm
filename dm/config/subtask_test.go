@@ -20,6 +20,8 @@ import (
 func (t *testConfig) TestSubTask(c *C) {
 	cfg := &SubTaskConfig{
 		Name:            "test-task",
+		IsSharding:      true,
+		ShardMode:       "optimistic",
 		SourceID:        "mysql-instance-01",
 		OnlineDDLScheme: "pt",
 		Timezone:        "Asia/Shanghai",
@@ -113,6 +115,14 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				return cfg
 			},
 			"\\[.*\\] too long source-id not valid",
+		},
+		{
+			func() *SubTaskConfig {
+				cfg := newSubTaskConfig()
+				cfg.ShardMode = "invalid-shard-mode"
+				return cfg
+			},
+			"\\[.*\\] shard mode invalid-shard-mode not supported",
 		},
 		{
 			func() *SubTaskConfig {

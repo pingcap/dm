@@ -358,6 +358,8 @@ type Loader struct {
 
 	// for every worker goroutine, not for every data file
 	workerWg *sync.WaitGroup
+	// for other goroutines
+	wg sync.WaitGroup
 
 	fileJobQueue       chan *fileJob
 	fileJobQueueClosed sync2.AtomicBool
@@ -503,13 +505,13 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 
 	isCanceled := false
-	if len(errs) == 0 {
-		select {
-		case <-ctx.Done():
-			isCanceled = true
-		default:
-		}
-	} else {
+	select {
+	case <-ctx.Done():
+		isCanceled = true
+	default:
+	}
+
+	if len(errs) != 0 {
 		// pause because of error occurred
 		l.Pause()
 	}
@@ -580,7 +582,11 @@ func (l *Loader) Restore(ctx context.Context) error {
 		return err2
 	}
 
-	go l.PrintStatus(ctx)
+	l.wg.Add(1)
+	go func() {
+		defer l.wg.Done()
+		l.PrintStatus(ctx)
+	}()
 
 	begin := time.Now()
 	err = l.restoreData(ctx)
@@ -625,6 +631,7 @@ func (l *Loader) Close() {
 		l.logCtx.L().Error("close downstream DB error", log.ShortError(err))
 	}
 	l.checkPoint.Close()
+	l.removeLabelValuesWithTaskInMetrics(l.cfg.Name)
 	l.closed.Set(true)
 }
 
@@ -637,8 +644,10 @@ func (l *Loader) stopLoad() {
 
 	l.closeFileJobQueue()
 	l.workerWg.Wait()
-
 	l.logCtx.L().Debug("all workers have been closed")
+
+	l.wg.Wait()
+	l.logCtx.L().Debug("all loader's go-routines have been closed")
 }
 
 // Pause pauses the process, and it can be resumed later
@@ -811,6 +820,8 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 }
 
 func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
+	var tablesNumber float64
+
 	for file := range files {
 		if !strings.HasSuffix(file, "-schema.sql") {
 			continue
@@ -843,15 +854,18 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		if _, ok := tables[table]; ok {
 			return terror.ErrLoadUnitDuplicateTableFile.Generate(file)
 		}
-		tableCounter.WithLabelValues(l.cfg.Name).Inc()
+		tablesNumber++
 		tables[table] = make(DataFiles, 0, 16)
 		l.totalFileCount.Add(1) // for table
 	}
 
+	tableGauge.WithLabelValues(l.cfg.Name).Set(tablesNumber)
 	return nil
 }
 
 func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
+	var dataFilesNumber float64
+
 	for file := range files {
 		if !strings.HasSuffix(file, ".sql") || strings.Contains(file, "-schema.sql") ||
 			strings.Contains(file, "-schema-create.sql") {
@@ -896,11 +910,12 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 		l.totalFileCount.Add(1) // for data
 
 		dataFiles = append(dataFiles, file)
-		dataFileCounter.WithLabelValues(l.cfg.Name).Inc()
+		dataFilesNumber++
 		tables[table] = dataFiles
 	}
 
-	dataSizeCounter.WithLabelValues(l.cfg.Name).Add(float64(l.totalDataSize.Get()))
+	dataFileGauge.WithLabelValues(l.cfg.Name).Set(dataFilesNumber)
+	dataSizeGauge.WithLabelValues(l.cfg.Name).Set(float64(l.totalDataSize.Get()))
 	return nil
 }
 
