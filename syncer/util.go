@@ -19,9 +19,11 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/parser/ast"
 )
 
 func toBinlogType(enableRelay bool) BinlogType {
@@ -143,4 +145,28 @@ func (f *flushHelper) finishRequest(typ FlushType) {
 
 func (f *flushHelper) close() {
 	close(f.finished)
+}
+
+// record source tbls record the tables that need to flush checkpoints
+func recordSourceTbls(sourceTbls map[string]map[string]struct{}, stmt ast.StmtNode, table *filter.Table) {
+	schema, name := table.Schema, table.Name
+	switch stmt.(type) {
+	// these ddls' relative table checkpoints will be deleted during track ddl,
+	// so we shouldn't flush these checkpoints
+	case *ast.DropDatabaseStmt:
+		delete(sourceTbls, schema)
+	case *ast.DropTableStmt:
+		if _, ok := sourceTbls[schema]; ok {
+			delete(sourceTbls[schema], name)
+		}
+	// these ddls won't update schema tracker, no need to update them
+	case *ast.LockTablesStmt, *ast.UnlockTablesStmt, *ast.CleanupTableLockStmt, *ast.TruncateTableStmt:
+		break
+	// flush other tables schema tracker info into checkpoint
+	default:
+		if _, ok := sourceTbls[schema]; !ok {
+			sourceTbls[schema] = make(map[string]struct{})
+		}
+		sourceTbls[schema][name] = struct{}{}
+	}
 }

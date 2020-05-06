@@ -57,9 +57,11 @@ func (t opType) String() string {
 }
 
 type job struct {
-	tp              opType
-	sourceSchema    string
-	sourceTable     string
+	tp opType
+	// ddl in ShardOptimistic and ShardPessimistic will only affect one table at one time but for normal node
+	// we don't have this limit. So we should update multi tables in normal mode.
+	// sql example: drop table `s1`.`t1`, `s2`.`t2`.
+	sourceTbl       map[string][]string
 	targetSchema    string
 	targetTable     string
 	sql             string
@@ -84,8 +86,7 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 
 	return &job{
 		tp:              tp,
-		sourceSchema:    sourceSchema,
-		sourceTable:     sourceTable,
+		sourceTbl:       map[string][]string{sourceSchema: {sourceTable}},
 		targetSchema:    targetSchema,
 		targetTable:     targetTable,
 		sql:             sql,
@@ -98,7 +99,11 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 	}
 }
 
-func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation binlog.Location, traceID string) *job {
+// newDDL job is used to create a new ddl job
+// when cfg.ShardMode == "", ddlInfo == nil，sourceTbls != nil, we use sourceTbls to record ddl affected tables.
+// when cfg.ShardMode == ShardOptimistic || ShardPessimistic, ddlInfo != nil, sourceTbls == nil.
+func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation binlog.Location,
+	traceID string, sourceTbls map[string]map[string]struct{}) *job {
 	location1 := location.Clone()
 	cmdLocation1 := cmdLocation.Clone()
 
@@ -111,10 +116,20 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation bi
 	}
 
 	if ddlInfo != nil {
-		j.sourceSchema = ddlInfo.tableNames[0][0].Schema
-		j.sourceTable = ddlInfo.tableNames[0][0].Name
+		j.sourceTbl = map[string][]string{ddlInfo.tableNames[0][0].Schema: {ddlInfo.tableNames[0][0].Name}}
 		j.targetSchema = ddlInfo.tableNames[1][0].Schema
 		j.targetTable = ddlInfo.tableNames[1][0].Name
+	} else if sourceTbls != nil {
+		sourceTbl := make(map[string][]string, len(sourceTbls))
+		for schema, tbMap := range sourceTbls {
+			if len(tbMap) > 0 {
+				sourceTbl[schema] = make([]string, 0, len(tbMap))
+			}
+			for name := range tbMap {
+				sourceTbl[schema] = append(sourceTbl[schema], name)
+			}
+		}
+		j.sourceTbl = sourceTbl
 	}
 
 	return j

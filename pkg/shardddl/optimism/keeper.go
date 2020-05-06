@@ -36,7 +36,7 @@ func NewLockKeeper() *LockKeeper {
 }
 
 // TrySync tries to sync the lock.
-func (lk *LockKeeper) TrySync(info Info, sts []SourceTables) (string, []string, error) {
+func (lk *LockKeeper) TrySync(info Info, tts []TargetTable) (string, []string, error) {
 	var (
 		lockID = genDDLLockID(info)
 		l      *Lock
@@ -47,11 +47,11 @@ func (lk *LockKeeper) TrySync(info Info, sts []SourceTables) (string, []string, 
 	defer lk.mu.Unlock()
 
 	if l, ok = lk.locks[lockID]; !ok {
-		lk.locks[lockID] = NewLock(lockID, info.Task, info.TableInfoBefore, sts)
+		lk.locks[lockID] = NewLock(lockID, info.Task, info.DownSchema, info.DownTable, info.TableInfoBefore, tts)
 		l = lk.locks[lockID]
 	}
 
-	newDDLs, err := l.TrySync(info.Source, info.UpSchema, info.UpTable, info.DDLs, info.TableInfoAfter, sts)
+	newDDLs, err := l.TrySync(info.Source, info.UpSchema, info.UpTable, info.DDLs, info.TableInfoAfter, tts)
 	return lockID, newDDLs, err
 }
 
@@ -159,7 +159,7 @@ func (tk *TableKeeper) Update(st SourceTables) bool {
 // AddTable adds a table into the source tables.
 // it returns whether added (not exist before).
 // NOTE: we only add for existing task now.
-func (tk *TableKeeper) AddTable(task, source, schema, table string) bool {
+func (tk *TableKeeper) AddTable(task, source, upSchema, upTable, downSchema, downTable string) bool {
 	tk.mu.Lock()
 	defer tk.mu.Unlock()
 
@@ -167,17 +167,17 @@ func (tk *TableKeeper) AddTable(task, source, schema, table string) bool {
 		return false
 	}
 	if _, ok := tk.tables[task][source]; !ok {
-		tk.tables[task][source] = NewSourceTables(task, source, map[string]map[string]struct{}{})
+		tk.tables[task][source] = NewSourceTables(task, source)
 	}
 	st := tk.tables[task][source]
-	added := st.AddTable(schema, table)
+	added := st.AddTable(upSchema, upTable, downSchema, downTable)
 	tk.tables[task][source] = st // assign the modified SourceTables.
 	return added
 }
 
 // RemoveTable removes a table from the source tables.
 // it returns whether removed (exit before).
-func (tk *TableKeeper) RemoveTable(task, source, schema, table string) bool {
+func (tk *TableKeeper) RemoveTable(task, source, upSchema, upTable, downSchema, downTable string) bool {
 	tk.mu.Lock()
 	defer tk.mu.Unlock()
 
@@ -188,48 +188,66 @@ func (tk *TableKeeper) RemoveTable(task, source, schema, table string) bool {
 		return false
 	}
 	st := tk.tables[task][source]
-	removed := st.RemoveTable(schema, table)
+	removed := st.RemoveTable(upSchema, upTable, downSchema, downTable)
 	tk.tables[task][source] = st // assign the modified SourceTables.
 	return removed
 }
 
-// FindTables finds source tables by task name.
-func (tk *TableKeeper) FindTables(task string) []SourceTables {
+// FindTables finds source tables by task name and downstream table name.
+func (tk *TableKeeper) FindTables(task, downSchema, downTable string) []TargetTable {
 	tk.mu.RLock()
 	defer tk.mu.RUnlock()
 
 	stm, ok := tk.tables[task]
-	if !ok {
+	if !ok || len(stm) == 0 {
 		return nil
 	}
-	return SourceTablesMapToSlice(stm)
-}
 
-// SourceTablesMapToSlice converts a map[string]SourceTables to []SourceTables.
-func SourceTablesMapToSlice(stm map[string]SourceTables) []SourceTables {
-	var ret SourceTablesSlice
+	ret := make([]TargetTable, 0, len(stm))
 	for _, st := range stm {
-		ret = append(ret, st)
+		if tt := st.TargetTable(downSchema, downTable); !tt.IsEmpty() {
+			ret = append(ret, tt)
+		}
 	}
-	sort.Sort(ret)
+
+	sort.Sort(TargetTableSlice(ret))
 	return ret
 }
 
-// SourceTablesSlice attaches the methods of Interface to []SourceTables,
+// TargetTablesForTask returns TargetTable list for a specified task and downstream table.
+// stm: task name -> upstream source ID -> SourceTables.
+func TargetTablesForTask(task, downSchema, downTable string, stm map[string]map[string]SourceTables) []TargetTable {
+	sts, ok := stm[task]
+	if !ok || len(sts) == 0 {
+		return nil
+	}
+
+	ret := make([]TargetTable, 0, len(sts))
+	for _, st := range sts {
+		if tt := st.TargetTable(downSchema, downTable); !tt.IsEmpty() {
+			ret = append(ret, tt)
+		}
+	}
+
+	sort.Sort(TargetTableSlice(ret))
+	return ret
+}
+
+// TargetTableSlice attaches the methods of Interface to []TargetTable,
 // sorting in increasing order according to `Source` field.
-type SourceTablesSlice []SourceTables
+type TargetTableSlice []TargetTable
 
 // Len implements Sorter.Len.
-func (t SourceTablesSlice) Len() int {
+func (t TargetTableSlice) Len() int {
 	return len(t)
 }
 
 // Less implements Sorter.Less.
-func (t SourceTablesSlice) Less(i, j int) bool {
+func (t TargetTableSlice) Less(i, j int) bool {
 	return t[i].Source < t[j].Source
 }
 
 // Swap implements Sorter.Swap.
-func (t SourceTablesSlice) Swap(i, j int) {
+func (t TargetTableSlice) Swap(i, j int) {
 	t[i], t[j] = t[j], t[i]
 }

@@ -2795,7 +2795,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The binlog replication process encounters an error within the DM-worker and exits",
+          "description": "The binlog replication unit process encounters an error within the DM-worker and exits",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -3566,7 +3566,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The time it takes binlog replication to execute the transaction to the downstream (in seconds)",
+          "description": "The time it takes binlog replication unit to execute the transaction to the downstream (in seconds)",
           "fill": 1,
           "gridPos": {
             "h": 7,
@@ -4041,7 +4041,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The time it takes binlog replication to execute every statement to the downstream (in seconds)",
+          "description": "The time it takes binlog replication unit to execute every statement to the downstream (in seconds)",
           "fill": 1,
           "gridPos": {
             "h": 7,
