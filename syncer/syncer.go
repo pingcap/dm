@@ -973,7 +973,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	count := s.cfg.Batch
 	jobs := make([]*job, 0, count)
 	tpCnt := make(map[opType]int64)
-	lastAddedXidPos := newBinlogPoint(binlog.NewLocation(s.cfg.Flavor), binlog.NewLocation(s.cfg.Flavor), nil, nil)
+	lastAddedXidPos := newBinlogPoint(binlog.NewLocation(s.cfg.Flavor), binlog.NewLocation(s.cfg.Flavor), nil, nil, false)
 
 	clearF := func() {
 		for i := 0; i < idx; i++ {
@@ -1026,7 +1026,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				return
 			}
 			if sqlJob.tp == xid {
-				lastAddedXidPos.save(sqlJob.location.Clone(), nil)
+				lastAddedXidPos.save(sqlJob.currentLocation.Clone(), nil)
 				continue
 			}
 			idx++
@@ -1066,16 +1066,16 @@ func (s *Syncer) updateGlobalCheckpointFromWorkers(typ int) {
 	updatePos := minPos.Clone()
 	for _, workerCheckpoint := range s.workerCheckpoints {
 		pos := workerCheckpoint.MySQLLocation()
-		if binlog.CompareLocation(pos, minPos) > 0 {
-			shouldUpdate := binlog.CompareLocation(updatePos, minPos) == 0 ||
-				(typ == GetMinPos && binlog.CompareLocation(pos, updatePos) < 0) ||
-				(typ == GetMaxPos && binlog.CompareLocation(pos, updatePos) > 0)
+		if binlog.CompareLocation(pos, minPos, false) > 0 {
+			shouldUpdate := binlog.CompareLocation(updatePos, minPos, false) == 0 ||
+				(typ == GetMinPos && binlog.CompareLocation(pos, updatePos, false) < 0) ||
+				(typ == GetMaxPos && binlog.CompareLocation(pos, updatePos, false) > 0)
 			if shouldUpdate {
 				updatePos = pos
 			}
 		}
 	}
-	if binlog.CompareLocation(updatePos, minPos) > 0 {
+	if binlog.CompareLocation(updatePos, minPos, false) > 0 {
 		s.saveGlobalPoint(updatePos)
 	}
 }
