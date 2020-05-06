@@ -41,6 +41,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/atomic2"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/conn"
@@ -178,7 +179,7 @@ type Syncer struct {
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
 	// record whether error occurred when execute SQLs
-	execErrorDetected sync2.AtomicBool
+	execError atomic2.AtomicError
 
 	execErrors struct {
 		sync.Mutex
@@ -466,7 +467,7 @@ func (s *Syncer) reset() {
 	s.newJobChans(s.cfg.WorkerCount + 1)
 	s.workerCheckpoints = makeWorkerCheckpointArray(s.cfg.WorkerCount, s.cfg.Flavor)
 
-	s.execErrorDetected.Set(false)
+	s.execError.Set(nil)
 	s.resetExecErrors()
 
 	switch s.cfg.ShardMode {
@@ -568,7 +569,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	close(runFatalChan) // Run returned, all potential fatal sent to s.runFatalChan
 	wg.Wait()           // wait for receive all fatal from s.runFatalChan
 
-	if err != nil {
+	if err != nil && !utils.IsContextCanceledError(err) {
 		syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
 		errs = append(errs, unit.NewProcessError(err))
 	}
@@ -580,7 +581,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	default:
 	}
 
-	if len(errs) != 0 {
+	if len(errs) != 0 || err != nil {
 		// pause because of error occurred
 		s.Pause()
 	}
@@ -844,8 +845,8 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 //
 // we may need to refactor the concurrency model to make the work-flow more clearer later
 func (s *Syncer) flushCheckPoints() error {
-	if s.execErrorDetected.Get() {
-		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint", zap.Stringer("checkpoint", s.checkpoint))
+	if err := s.execError.Get(); err != nil {
+		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint", zap.Stringer("checkpoint", s.checkpoint), zap.Error(err))
 		return nil
 	}
 
@@ -955,7 +956,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		}
 		s.jobWg.Done()
 		if err != nil {
-			s.execErrorDetected.Set(true)
+			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
@@ -989,7 +990,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	}
 
 	fatalF := func(err error) {
-		s.execErrorDetected.Set(true)
+		s.execError.Set(err)
 		if !utils.IsContextCanceledError(err) {
 			s.runFatalChan <- unit.NewProcessError(err)
 		}
@@ -1870,8 +1871,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// when add ddl job, will execute ddl and then flush checkpoint.
 		// if execute ddl failed, the execErrorDetected will be true.
-		if s.execErrorDetected.Get() {
-			return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
+		if err := s.execError.Get(); err != nil {
+			return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 		}
 
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
@@ -2072,8 +2073,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return err
 	}
 
-	if s.execErrorDetected.Get() {
-		return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
+	if err := s.execError.Get(); err != nil {
+		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 	}
 
 	if len(onlineDDLTableNames) > 0 {
