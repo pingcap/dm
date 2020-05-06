@@ -105,8 +105,8 @@ function test_join_masters_and_worker {
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT4 "query-status" '"result": true' 1
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT5 "query-status" '"result": true' 1
 
-    echo "kill dm-master1"
-    ps aux | grep dm-master1 | awk '{print $2}' | xargs kill || true
+    echo "kill dm-master-join1"
+    ps aux | grep dm-master-join1 | awk '{print $2}' | xargs kill || true
     check_port_offline $MASTER_PORT1 20
     rm -rf $WORK_DIR/master1/default.master1
 
