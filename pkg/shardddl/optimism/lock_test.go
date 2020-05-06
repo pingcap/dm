@@ -36,6 +36,8 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 		ID               = "test_lock_try_sync_normal-`foo`.`bar`"
 		task             = "test_lock_try_sync_normal"
 		sources          = []string{"mysql-replica-1", "mysql-replica-2"}
+		downSchema       = "db"
+		downTable        = "bar"
 		dbs              = []string{"db1", "db2"}
 		tbls             = []string{"bar1", "bar2"}
 		tableCount       = len(sources) * len(dbs) * len(tbls)
@@ -57,12 +59,12 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 			dbs[0]: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
 			dbs[1]: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
 		}
-		sts = []SourceTables{
-			NewSourceTables(task, sources[0], tables),
-			NewSourceTables(task, sources[1], tables),
+		tts = []TargetTable{
+			newTargetTable(task, sources[0], downSchema, downTable, tables),
+			newTargetTable(task, sources[1], downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, ti0, sts)
+		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
 	)
 
 	// the initial status is synced.
@@ -86,7 +88,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 
 		for _, db := range dbs {
 			for _, tbl := range tbls {
-				DDLs, err := l.TrySync(source, db, tbl, DDLs1, ti1, sts)
+				DDLs, err := l.TrySync(source, db, tbl, DDLs1, ti1, tts)
 				c.Assert(err, IsNil)
 				c.Assert(DDLs, DeepEquals, DDLs1)
 
@@ -102,7 +104,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	t.checkLockNoDone(c, l)
 
 	// CASE: TrySync again after synced is idempotent.
-	DDLs, err := l.TrySync(sources[0], dbs[0], tbls[0], DDLs1, ti1, sts)
+	DDLs, err := l.TrySync(sources[0], dbs[0], tbls[0], DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	t.checkLockSynced(c, l)
@@ -110,7 +112,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 
 	// CASE: need to add more than one DDL to reach the desired schema (schema become larger).
 	// add two columns for one table.
-	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs2, ti2, sts)
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs2, ti2, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
 	ready := l.Ready()
@@ -118,7 +120,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
 
 	// TrySync again is idempotent (more than one DDL).
-	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs2, ti2, sts)
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs2, ti2, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
 	ready = l.Ready()
@@ -126,7 +128,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
 
 	// add only the first column for another table.
-	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[0:1], ti2_1, sts) // use ti2_1 info
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[0:1], ti2_1, tts) // use ti2_1 info
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2[0:1])
 	ready = l.Ready()
@@ -140,14 +142,14 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(cmp, Equals, 1)
 
 	// TrySync again (only the first DDL).
-	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[0:1], ti2_1, sts)
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[0:1], ti2_1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{}) // NOTE: special case, joined has larger schema.
 	ready = l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
 
 	// add the second column for another table.
-	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[1:2], ti2, sts) // use ti2 info.
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[1:2], ti2, tts) // use ti2 info.
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2[1:2])
 	ready = l.Ready()
@@ -160,12 +162,12 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(cmp, Equals, 0)
 
 	// Try again (for the second DDL).
-	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[1:2], ti2, sts)
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[1:2], ti2, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2[1:2])
 
 	// try add columns for all tables to reach the same schema.
-	t.trySyncForAllTablesLarger(c, l, DDLs2, ti2, sts)
+	t.trySyncForAllTablesLarger(c, l, DDLs2, ti2, tts)
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
 
@@ -187,7 +189,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 		for _, db := range dbs {
 			for _, tbl := range tbls {
 				syncedCount++
-				DDLs, err = l.TrySync(source, db, tbl, DDLs3, ti3, sts)
+				DDLs, err = l.TrySync(source, db, tbl, DDLs3, ti3, tts)
 				c.Assert(err, IsNil)
 				synced, remain = l.IsSynced()
 				if syncedCount == tableCount {
@@ -207,7 +209,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 
 	// CASE: need to drop more than one DDL to reach the desired schema (schema become smaller).
 	// drop two columns for one table.
-	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs4, ti4, sts)
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs4, ti4, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
 	ready = l.Ready()
@@ -215,7 +217,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsTrue)
 
 	// TrySync again is idempotent.
-	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs4, ti4, sts)
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs4, ti4, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
 	ready = l.Ready()
@@ -223,7 +225,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsTrue)
 
 	// drop only the first column for another table.
-	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[0:1], ti4_1, sts)
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[0:1], ti4_1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
 	ready = l.Ready()
@@ -234,12 +236,12 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// TrySync again (only the first DDL).
-	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[0:1], ti4_1, sts)
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[0:1], ti4_1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
 
 	// drop the second column for another table.
-	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[1:2], ti4, sts) // use ti4 info.
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[1:2], ti4, tts) // use ti4 info.
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
 	ready = l.Ready()
@@ -250,7 +252,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(cmp, Equals, 0)
 
 	// TrySync again (for the second DDL).
-	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[1:2], ti4, sts)
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[1:2], ti4, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
 
@@ -260,7 +262,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 		for schema, tables := range schemaTables {
 			for table, synced2 := range tables {
 				if synced2 { // do not `TrySync` again for previous two (un-synced now).
-					DDLs, err = l.TrySync(source, schema, table, DDLs4, ti4, sts)
+					DDLs, err = l.TrySync(source, schema, table, DDLs4, ti4, tts)
 					c.Assert(err, IsNil)
 					remain--
 					if remain == 0 {
@@ -278,27 +280,29 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 
 func (t *testLock) TestLockTrySyncIndex(c *C) {
 	var (
-		ID           = "test_lock_try_sync_index-`foo`.`bar`"
-		task         = "test_lock_try_sync_index"
-		source       = "mysql-replica-1"
-		db           = "db"
-		tbls         = []string{"bar1", "bar2"}
-		p            = parser.New()
-		se           = mock.NewContext()
-		tblID  int64 = 111
-		DDLs1        = []string{"ALTER TABLE bar DROP INDEX idx_c1"}
-		DDLs2        = []string{"ALTER TABLE bar ADD UNIQUE INDEX idx_c1(c1)"}
-		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, UNIQUE INDEX idx_c1(c1))`)
-		ti1          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
-		ti2          = ti0
-		tables       = map[string]map[string]struct{}{
+		ID               = "test_lock_try_sync_index-`foo`.`bar`"
+		task             = "test_lock_try_sync_index"
+		source           = "mysql-replica-1"
+		downSchema       = "db"
+		downTable        = "bar"
+		db               = "db"
+		tbls             = []string{"bar1", "bar2"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar DROP INDEX idx_c1"}
+		DDLs2            = []string{"ALTER TABLE bar ADD UNIQUE INDEX idx_c1(c1)"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, UNIQUE INDEX idx_c1(c1))`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2              = ti0
+		tables           = map[string]map[string]struct{}{
 			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
 		}
-		sts = []SourceTables{
-			NewSourceTables(task, source, tables),
+		tts = []TargetTable{
+			newTargetTable(task, source, downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, ti0, sts)
+		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
 	)
 
 	// the initial status is synced.
@@ -307,7 +311,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 
 	// try sync for one table, `DROP INDEX` returned directly (to make schema become more compatible).
 	// `DROP INDEX` is handled like `ADD COLUMN`.
-	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	synced, remain := l.IsSynced()
@@ -315,14 +319,14 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 	c.Assert(remain, Equals, 1)
 
 	// try sync for another table, also got `DROP INDEX` now.
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	t.checkLockSynced(c, l)
 
 	// try sync for one table, `ADD INDEX` not returned directly (to keep the schema more compatible).
 	// `ADD INDEX` is handled like `DROP COLUMN`.
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, sts)
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{}) // no DDLs returned
 	synced, remain = l.IsSynced()
@@ -330,7 +334,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 	c.Assert(remain, Equals, 1)
 
 	// try sync for another table, got `ADD INDEX` now.
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
 	t.checkLockSynced(c, l)
@@ -338,28 +342,30 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 
 func (t *testLock) TestLockTrySyncNullNotNull(c *C) {
 	var (
-		ID           = "test_lock_try_sync_null_not_null-`foo`.`bar`"
-		task         = "test_lock_try_sync_null_not_null"
-		source       = "mysql-replica-1"
-		db           = "db"
-		tbls         = []string{"bar1", "bar2"}
-		p            = parser.New()
-		se           = mock.NewContext()
-		tblID  int64 = 111
-		DDLs1        = []string{"ALTER TABLE bar MODIFY COLUMN c1 INT NOT NULL DEFAULT 1234"}
-		DDLs2        = []string{"ALTER TABLE bar MODIFY COLUMN c1 INT NULL DEFAULT 1234"}
-		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT NULL DEFAULT 1234)`)
-		ti1          = createTableInfo(c, p, se, tblID,
+		ID               = "test_lock_try_sync_null_not_null-`foo`.`bar`"
+		task             = "test_lock_try_sync_null_not_null"
+		source           = "mysql-replica-1"
+		downSchema       = "db"
+		downTable        = "bar"
+		db               = "db"
+		tbls             = []string{"bar1", "bar2"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar MODIFY COLUMN c1 INT NOT NULL DEFAULT 1234"}
+		DDLs2            = []string{"ALTER TABLE bar MODIFY COLUMN c1 INT NULL DEFAULT 1234"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT NULL DEFAULT 1234)`)
+		ti1              = createTableInfo(c, p, se, tblID,
 			`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT NOT NULL DEFAULT 1234)`)
 		ti2    = ti0
 		tables = map[string]map[string]struct{}{
 			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
 		}
-		sts = []SourceTables{
-			NewSourceTables(task, source, tables),
+		tts = []TargetTable{
+			newTargetTable(task, source, downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, ti0, sts)
+		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
 	)
 
 	// the initial status is synced.
@@ -368,49 +374,92 @@ func (t *testLock) TestLockTrySyncNullNotNull(c *C) {
 
 	for i := 0; i < 2; i++ { // two round
 		// try sync for one table, from `NULL` to `NOT NULL`, no DDLs returned.
-		DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+		DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts)
 		c.Assert(err, IsNil)
 		c.Assert(DDLs, DeepEquals, []string{})
 
 		// try sync for another table, DDLs returned.
-		DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, sts)
+		DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, tts)
 		c.Assert(err, IsNil)
 		c.Assert(DDLs, DeepEquals, DDLs1)
 
 		// try sync for one table, from `NOT NULL` to `NULL`, DDLs returned.
-		DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, sts)
+		DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, tts)
 		c.Assert(err, IsNil)
 		c.Assert(DDLs, DeepEquals, DDLs2)
 
 		// try sync for another table, from `NOT NULL` to `NULL`, DDLs, returned.
-		DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts)
+		DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, tts)
 		c.Assert(err, IsNil)
 		c.Assert(DDLs, DeepEquals, DDLs2)
 	}
 }
 
+func (t *testLock) TestLockTrySyncIntBigint(c *C) {
+	var (
+		ID               = "test_lock_try_sync_int_bigint-`foo`.`bar`"
+		task             = "test_lock_try_sync_int_bigint"
+		source           = "mysql-replica-1"
+		downSchema       = "db"
+		downTable        = "bar"
+		db               = "db"
+		tbls             = []string{"bar1", "bar2"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar MODIFY COLUMN c1 BIGINT NOT NULL DEFAULT 1234"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT NOT NULL DEFAULT 1234)`)
+		ti1              = createTableInfo(c, p, se, tblID,
+			`CREATE TABLE bar (id INT PRIMARY KEY, c1 BIGINT NOT NULL DEFAULT 1234)`)
+		tables = map[string]map[string]struct{}{
+			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
+		}
+		tts = []TargetTable{
+			newTargetTable(task, source, downSchema, downTable, tables),
+		}
+
+		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// try sync for one table, from `INT` to `BIGINT`, DDLs returned.
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+
+	// try sync for another table, DDLs returned.
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, tts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+}
+
 func (t *testLock) TestLockTrySyncNoDiff(c *C) {
 	var (
-		ID           = "test_lock_try_sync_no_diff-`foo`.`bar`"
-		task         = "test_lock_try_sync_no_diff"
-		source       = "mysql-replica-1"
-		db           = "db"
-		tbls         = []string{"bar1", "bar2"}
-		p            = parser.New()
-		se           = mock.NewContext()
-		tblID  int64 = 111
-		DDLs1        = []string{"ALTER TABLE bar DROP COLUMN c1, ADD COLUMN c2 INT"}
-		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
-		ti1          = createTableInfo(c, p, se, tblID,
+		ID               = "test_lock_try_sync_no_diff-`foo`.`bar`"
+		task             = "test_lock_try_sync_no_diff"
+		source           = "mysql-replica-1"
+		downSchema       = "db"
+		downTable        = "bar"
+		db               = "db"
+		tbls             = []string{"bar1", "bar2"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar DROP COLUMN c1, ADD COLUMN c2 INT"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti1              = createTableInfo(c, p, se, tblID,
 			`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`) // `c1` not dropped, `c2` added
 		tables = map[string]map[string]struct{}{
 			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
 		}
-		sts = []SourceTables{
-			NewSourceTables(task, source, tables),
+		tts = []TargetTable{
+			newTargetTable(task, source, downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, ti0, sts)
+		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
 	)
 
 	// the initial status is synced.
@@ -418,7 +467,7 @@ func (t *testLock) TestLockTrySyncNoDiff(c *C) {
 	t.checkLockNoDone(c, l)
 
 	// try sync for one table.
-	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	// FIXME, the returned DDLs should only be `ALTER TABLE bar ADD COLUMN c2 INT`, but we lack schema diff mechanism now.
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -429,24 +478,26 @@ func (t *testLock) TestLockTrySyncNoDiff(c *C) {
 
 func (t *testLock) TestLockTrySyncNewTable(c *C) {
 	var (
-		ID            = "test_lock_try_sync_new_table-`foo`.`bar`"
-		task          = "test_lock_try_sync_new_table"
-		source1       = "mysql-replica-1"
-		source2       = "mysql-replica-2"
-		db1           = "foo1"
-		db2           = "foo2"
-		tbl1          = "bar1"
-		tbl2          = "bar2"
-		p             = parser.New()
-		se            = mock.NewContext()
-		tblID   int64 = 111
-		DDLs1         = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		ti0           = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
-		ti1           = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ID               = "test_lock_try_sync_new_table-`foo`.`bar`"
+		task             = "test_lock_try_sync_new_table"
+		source1          = "mysql-replica-1"
+		source2          = "mysql-replica-2"
+		downSchema       = "foo"
+		downTable        = "bar"
+		db1              = "foo1"
+		db2              = "foo2"
+		tbl1             = "bar1"
+		tbl2             = "bar2"
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
 
 		tables = map[string]map[string]struct{}{db1: {tbl1: struct{}{}}}
-		sts    = []SourceTables{NewSourceTables(task, source1, tables)}
-		l      = NewLock(ID, task, ti0, sts)
+		tts    = []TargetTable{newTargetTable(task, source1, downSchema, downTable, tables)}
+		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
 	)
 
 	// only one table exists before TrySync.
@@ -454,7 +505,7 @@ func (t *testLock) TestLockTrySyncNewTable(c *C) {
 	t.checkLockNoDone(c, l)
 
 	// TrySync for a new table as the caller.
-	DDLs, err := l.TrySync(source2, db2, tbl2, DDLs1, ti1, sts)
+	DDLs, err := l.TrySync(source2, db2, tbl2, DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 
@@ -469,11 +520,11 @@ func (t *testLock) TestLockTrySyncNewTable(c *C) {
 
 	// TrySync for two new tables as extra sources.
 	// we treat all newly added sources as synced.
-	sts = append(sts,
-		NewSourceTables(task, source1, map[string]map[string]struct{}{db1: {tbl2: struct{}{}}}),
-		NewSourceTables(task, source2, map[string]map[string]struct{}{db2: {tbl1: struct{}{}}}),
+	tts = append(tts,
+		newTargetTable(task, source1, downSchema, downTable, map[string]map[string]struct{}{db1: {tbl2: struct{}{}}}),
+		newTargetTable(task, source2, downTable, downTable, map[string]map[string]struct{}{db2: {tbl1: struct{}{}}}),
 	)
-	DDLs, err = l.TrySync(source1, db1, tbl1, DDLs1, ti1, sts)
+	DDLs, err = l.TrySync(source1, db1, tbl1, DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 
@@ -491,14 +542,16 @@ func (t *testLock) TestLockTrySyncNewTable(c *C) {
 
 func (t *testLock) TestLockTrySyncRevert(c *C) {
 	var (
-		ID           = "test_lock_try_sync_revert-`foo`.`bar`"
-		task         = "test_lock_try_sync_revert"
-		source       = "mysql-replica-1"
-		db           = "foo"
-		tbls         = []string{"bar1", "bar2"}
-		p            = parser.New()
-		se           = mock.NewContext()
-		tblID  int64 = 111
+		ID               = "test_lock_try_sync_revert-`foo`.`bar`"
+		task             = "test_lock_try_sync_revert"
+		source           = "mysql-replica-1"
+		downSchema       = "foo"
+		downTable        = "bar"
+		db               = "foo"
+		tbls             = []string{"bar1", "bar2"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
 
 		DDLs1 = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
 		DDLs2 = []string{"ALTER TABLE bar DROP COLUMN c1"}
@@ -521,8 +574,8 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 		ti8   = ti4
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
-		sts    = []SourceTables{NewSourceTables(task, source, tables)}
-		l      = NewLock(ID, task, ti0, sts)
+		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
+		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
 	)
 
 	// the initial status is synced.
@@ -531,7 +584,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 
 	// CASE: revert for single DDL.
 	// TrySync for one table.
-	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	ready := l.Ready()
@@ -545,7 +598,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// revert for the table, become synced again.
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, sts)
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
 	t.checkLockSynced(c, l)
@@ -553,7 +606,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 
 	// CASE: revert for multiple DDLs.
 	// TrySync for one table.
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, sts)
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
 	ready = l.Ready()
@@ -567,7 +620,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// revert part of the DDLs.
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs4, ti4, sts)
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs4, ti4, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs4)
 	ready = l.Ready()
@@ -580,7 +633,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// revert the reset part of the DDLs.
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs5, ti5, sts)
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs5, ti5, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs5)
 	t.checkLockSynced(c, l)
@@ -588,7 +641,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 
 	// CASE: revert part of multiple DDLs.
 	// TrySync for one table.
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs6, ti6, sts)
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs6, ti6, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs6)
 	ready = l.Ready()
@@ -601,7 +654,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// revert part of the DDLs.
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs7, ti7, sts)
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs7, ti7, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs7)
 	ready = l.Ready()
@@ -614,7 +667,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// TrySync for another table.
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs8, ti8, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs8, ti8, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs8)
 	t.checkLockSynced(c, l)
@@ -623,27 +676,29 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 
 func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	var (
-		ID           = "test_lock_try_sync_conflict_non_intrusive-`foo`.`bar`"
-		task         = "test_lock_try_sync_conflict_non_intrusive"
-		source       = "mysql-replica-1"
-		db           = "foo"
-		tbls         = []string{"bar1", "bar2"}
-		p            = parser.New()
-		se           = mock.NewContext()
-		tblID  int64 = 111
-		DDLs1        = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
-		DDLs2        = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME", "ALTER TABLE bar ADD COLUMN c2 INT"}
-		DDLs3        = []string{"ALTER TABLE bar DROP COLUMN c1"}
-		DDLs4        = DDLs2
-		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
-		ti1          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
-		ti2          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
-		ti3          = ti0
-		ti4          = ti2
+		ID               = "test_lock_try_sync_conflict_non_intrusive-`foo`.`bar`"
+		task             = "test_lock_try_sync_conflict_non_intrusive"
+		source           = "mysql-replica-1"
+		downSchema       = "foo"
+		downTable        = "bar"
+		db               = "foo"
+		tbls             = []string{"bar1", "bar2"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		DDLs2            = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME", "ALTER TABLE bar ADD COLUMN c2 INT"}
+		DDLs3            = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		DDLs4            = DDLs2
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
+		ti3              = ti0
+		ti4              = ti2
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
-		sts    = []SourceTables{NewSourceTables(task, source, tables)}
-		l      = NewLock(ID, task, ti0, sts)
+		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
+		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
 	)
 
 	// the initial status is synced.
@@ -651,7 +706,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	t.checkLockNoDone(c, l)
 
 	// TrySync for the first table, construct the joined schema.
-	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	ready := l.Ready()
@@ -665,7 +720,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// TrySync for the second table with another schema (add two columns, one of them will cause conflict).
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, tts)
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
@@ -675,7 +730,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 
 	// TrySync for the first table to resolve the conflict.
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, sts)
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
 	ready = l.Ready()
@@ -689,7 +744,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	c.Assert(cmp, Equals, 0)
 
 	// TrySync for the first table.
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs4, ti4, sts)
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs4, ti4, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs4)
 	t.checkLockSynced(c, l)
@@ -698,23 +753,25 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 
 func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	var (
-		ID           = "test_lock_try_sync_conflict_intrusive-`foo`.`bar`"
-		task         = "test_lock_try_sync_conflict_intrusive"
-		source       = "mysql-replica-1"
-		db           = "foo"
-		tbls         = []string{"bar1", "bar2"}
-		p            = parser.New()
-		se           = mock.NewContext()
-		tblID  int64 = 111
-		DDLs1        = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
-		DDLs2        = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME", "ALTER TABLE bar ADD COLUMN c2 INT"}
-		DDLs3        = []string{"ALTER TABLE bar DROP COLUMN c2"}
-		DDLs4        = []string{"ALTER TABLE bar DROP COLUMN c1"}
-		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
-		ti1          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
-		ti2          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
-		ti3          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
-		ti4          = ti0
+		ID               = "test_lock_try_sync_conflict_intrusive-`foo`.`bar`"
+		task             = "test_lock_try_sync_conflict_intrusive"
+		source           = "mysql-replica-1"
+		downSchema       = "foo"
+		downTable        = "bar"
+		db               = "foo"
+		tbls             = []string{"bar1", "bar2"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		DDLs2            = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME", "ALTER TABLE bar ADD COLUMN c2 INT"}
+		DDLs3            = []string{"ALTER TABLE bar DROP COLUMN c2"}
+		DDLs4            = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
+		ti3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
+		ti4              = ti0
 
 		DDLs5   = []string{"ALTER TABLE bar ADD COLUMN c2 TEXT"}
 		DDLs6   = []string{"ALTER TABLE bar ADD COLUMN c2 DATETIME", "ALTER TABLE bar ADD COLUMN c3 INT"}
@@ -727,8 +784,8 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 		ti8     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 TEXT, c3 INT)`)
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
-		sts    = []SourceTables{NewSourceTables(task, source, tables)}
-		l      = NewLock(ID, task, ti0, sts)
+		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
+		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
 	)
 
 	// the initial status is synced.
@@ -737,7 +794,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 
 	// CASE: conflict happen, revert all changes to resolve the conflict.
 	// TrySync for the first table, construct the joined schema.
-	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	ready := l.Ready()
@@ -751,7 +808,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// TrySync for the second table with another schema (add two columns, one of them will cause conflict).
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, tts)
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
@@ -761,7 +818,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 
 	// TrySync again.
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, tts)
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
@@ -769,7 +826,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(cmp, Equals, 0)
 
 	// TrySync for the second table to drop the non-conflict column, the conflict should still exist.
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs3, ti3, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs3, ti3, tts)
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
@@ -779,7 +836,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 
 	// TrySync for the second table to drop the conflict column, the conflict should be resolved.
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs4, ti4, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs4, ti4, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
@@ -789,7 +846,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 
 	// TrySync for the second table as we did for the first table, the lock should be synced.
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
@@ -800,7 +857,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 
 	// CASE: conflict happen, revert part of changes to resolve the conflict.
 	// TrySync for the first table, construct the joined schema.
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs5, ti5, sts)
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs5, ti5, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs5)
 	ready = l.Ready()
@@ -814,7 +871,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// TrySync for the second table with another schema (add two columns, one of them will cause conflict).
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs6, ti6, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs6, ti6, tts)
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
@@ -825,7 +882,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 
 	// TrySync for the second table to drop the conflict column, the conflict should be resolved.
 	// but both of tables are not synced now.
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs7, ti7, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs7, ti7, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs7) // special case: these DDLs should not be replicated to the downstream.
 	ready = l.Ready()
@@ -839,14 +896,14 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// TrySync for the first table to become synced.
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs8_1, ti8, sts)
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs8_1, ti8, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs8_1)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[0]], IsTrue)
 
 	// TrySync for the second table to become synced.
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs8_2, ti8, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs8_2, ti8, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs8_2)
 	ready = l.Ready()
@@ -859,24 +916,26 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 
 func (t *testLock) TestTryRemoveTable(c *C) {
 	var (
-		ID           = "test_lock_try_remove_table-`foo`.`bar`"
-		task         = "test_lock_try_remove_table"
-		source       = "mysql-replica-1"
-		db           = "foo"
-		tbl1         = "bar1"
-		tbl2         = "bar2"
-		p            = parser.New()
-		se           = mock.NewContext()
-		tblID  int64 = 111
-		DDLs1        = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		DDLs2        = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
-		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
-		ti1          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
-		ti2          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
+		ID               = "test_lock_try_remove_table-`foo`.`bar`"
+		task             = "test_lock_try_remove_table"
+		source           = "mysql-replica-1"
+		downSchema       = "foo"
+		downTable        = "bar"
+		db               = "foo"
+		tbl1             = "bar1"
+		tbl2             = "bar2"
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		DDLs2            = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
 
 		tables = map[string]map[string]struct{}{db: {tbl1: struct{}{}, tbl2: struct{}{}}}
-		sts    = []SourceTables{NewSourceTables(task, source, tables)}
-		l      = NewLock(ID, task, ti0, sts)
+		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
+		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
 	)
 
 	// only one table exists before TrySync.
@@ -885,7 +944,7 @@ func (t *testLock) TestTryRemoveTable(c *C) {
 
 	// CASE: remove a table as normal.
 	// TrySync for the first table.
-	DDLs, err := l.TrySync(source, db, tbl1, DDLs1, ti1, sts)
+	DDLs, err := l.TrySync(source, db, tbl1, DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	ready := l.Ready()
@@ -905,7 +964,7 @@ func (t *testLock) TestTryRemoveTable(c *C) {
 
 	// CASE: remove a table will not rebuild joined schema now.
 	// TrySync to add the second back.
-	DDLs, err = l.TrySync(source, db, tbl2, DDLs2, ti2, sts)
+	DDLs, err = l.TrySync(source, db, tbl2, DDLs2, ti2, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
 	ready = l.Ready()
@@ -931,25 +990,27 @@ func (t *testLock) TestTryRemoveTable(c *C) {
 
 func (t *testLock) TestLockTryMarkDone(c *C) {
 	var (
-		ID           = "test_lock_try_mark_done-`foo`.`bar`"
-		task         = "test_lock_try_mark_done"
-		source       = "mysql-replica-1"
-		db           = "foo"
-		tbls         = []string{"bar1", "bar2"}
-		p            = parser.New()
-		se           = mock.NewContext()
-		tblID  int64 = 111
-		DDLs1        = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		DDLs2        = []string{"ALTER TABLE bar ADD COLUMN c1 INT", "ALTER TABLE bar ADD COLUMN c2 INT"}
-		DDLs3        = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
-		ti0          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
-		ti1          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
-		ti2          = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
-		ti3          = ti2
+		ID               = "test_lock_try_mark_done-`foo`.`bar`"
+		task             = "test_lock_try_mark_done"
+		source           = "mysql-replica-1"
+		downSchema       = "foo"
+		downTable        = "bar"
+		db               = "foo"
+		tbls             = []string{"bar1", "bar2"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		DDLs2            = []string{"ALTER TABLE bar ADD COLUMN c1 INT", "ALTER TABLE bar ADD COLUMN c2 INT"}
+		DDLs3            = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
+		ti3              = ti2
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
-		sts    = []SourceTables{NewSourceTables(task, source, tables)}
-		l      = NewLock(ID, task, ti0, sts)
+		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
+		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
 	)
 
 	// the initial status is synced but not resolved.
@@ -958,7 +1019,7 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the first table, no table has done the DDLs operation.
-	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, sts)
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	t.checkLockNoDone(c, l)
@@ -971,7 +1032,7 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the second table, the joined schema become larger.
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, sts)
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
 
@@ -988,7 +1049,7 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the first table, all tables become synced.
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, sts)
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
 
@@ -1017,11 +1078,11 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 }
 
 func (t *testLock) trySyncForAllTablesLarger(c *C, l *Lock,
-	DDLs []string, ti *model.TableInfo, sts []SourceTables) {
+	DDLs []string, ti *model.TableInfo, tts []TargetTable) {
 	for source, schemaTables := range l.Ready() {
 		for schema, tables := range schemaTables {
 			for table := range tables {
-				DDLs2, err := l.TrySync(source, schema, table, DDLs, ti, sts)
+				DDLs2, err := l.TrySync(source, schema, table, DDLs, ti, tts)
 				c.Assert(err, IsNil)
 				c.Assert(DDLs2, DeepEquals, DDLs)
 			}
