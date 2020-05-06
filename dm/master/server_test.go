@@ -1040,6 +1040,12 @@ func (t *testMaster) TestOfflineWorker(c *check.C) {
 		c.Assert(err, check.IsNil)
 		c.Assert(res.Result, check.IsTrue)
 	}
+	{
+		// register offline worker again. TICASE-962, 963
+		resp, err := s1.RegisterWorker(ectx, req1)
+		c.Assert(err, check.IsNil)
+		c.Assert(resp.Result, check.IsTrue)
+	}
 }
 
 func stageDeepEqualExcludeRev(c *check.C, stage, expectStage ha.Stage) {
