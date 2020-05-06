@@ -18,6 +18,7 @@ import (
 	"unsafe"
 )
 
+// AtomicError implements atomic error method
 type AtomicError struct {
 	p unsafe.Pointer
 }
