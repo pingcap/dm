@@ -34,15 +34,15 @@ func (t *testAtomicSuite) TestAtomicError(c *check.C) {
 		err = errors.New("test")
 	)
 	err2 := e.Get()
-	c.Assert(err, check.Equals, nil)
+	c.Assert(err2, check.Equals, nil)
 
 	e.Set(err)
 	err2 = e.Get()
-	c.Assert(err, check.DeepEquals, err2)
+	c.Assert(err2, check.DeepEquals, err)
 
 	e.Set(nil)
 	err2 = e.Get()
-	c.Assert(err, check.Equals, nil)
+	c.Assert(err2, check.Equals, nil)
 
 	err = errors.New("test2")
 	err2 = e.Get()
