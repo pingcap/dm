@@ -369,6 +369,8 @@ func (c *TaskConfig) adjust() error {
 		return terror.ErrConfigNeedTargetDB.Generate()
 	}
 
+	c.TargetDB.Adjust()
+
 	if len(c.MySQLInstances) == 0 {
 		return terror.ErrConfigMySQLInstsAtLeastOne.Generate()
 	}
