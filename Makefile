@@ -163,10 +163,12 @@ integration_test: check_third_party_binary
 
 compatibility_test: check_third_party_binary
 	@which bin/dm-tracer.test
-	@which bin/dm-master.test.current
-	@which bin/dm-worker.test.current
-	@which bin/dm-master.test.previous
-	@which bin/dm-worker.test.previous
+	@which bin/dm-master.test
+	@which bin/dm-worker.test
+	cp bin/dm-master.test bin/dm-master.test.current
+	cp bin/dm-worker.test bin/dm-worker.test.current
+	cp bin/dm-master.test bin/dm-master.test.previous
+	cp bin/dm-worker.test bin/dm-worker.test.previous
 	tests/compatibility_run.sh ${CASE}
 
 # unify cover mode in coverage files, more details refer to tests/_utils/run_dm_ctl
