@@ -25,9 +25,6 @@ binlog-type = "local"
 
 # Mydumper configuration
 
-# mydumper binary path
-mydumper-path = "./mydumper"
-
 # -t, --threads
 #threads = 16
 
