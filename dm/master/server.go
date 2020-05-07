@@ -1350,6 +1350,16 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 }
 
 func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) error {
+	toDB := *cfg.TargetDB
+	toDB.Adjust()
+	if len(toDB.Password) > 0 {
+		pswdTo, err := utils.Decrypt(toDB.Password)
+		if err != nil {
+			return err
+		}
+		toDB.Password = pswdTo
+	}
+
 	sqls := make([]string, 0, 3)
 	sqls = append(sqls, fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cfg.MetaSchema))
 	// clear loader and syncer checkpoints
@@ -1380,7 +1390,7 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 			cfg.MetaSchema, fmt.Sprintf("%s_onlineddl", cfg.Name)))
 	}
 
-	baseDB, err := conn.DefaultDBProvider.Apply(*cfg.TargetDB)
+	baseDB, err := conn.DefaultDBProvider.Apply(toDB)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
