@@ -377,7 +377,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			}
 			err = s.removeMetaData(ctx, cfg)
 			if err != nil {
-				resp.Msg = err.Error()
+				resp.Msg = terror.Annotate(err, "while removing metadata").Error()
 				return resp, nil
 			}
 		}
