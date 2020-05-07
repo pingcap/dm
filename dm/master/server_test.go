@@ -115,7 +115,6 @@ column-mappings:
 
 mydumpers:
   global:
-    mydumper-path: "./bin/mydumper"
     threads: 4
     chunk-filesize: 64
     skip-tz-utc: true
