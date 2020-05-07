@@ -428,6 +428,14 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 		return terror.ErrLoadUnitGenBWList.Delegate(err)
 	}
 
+	if l.cfg.RemoveMeta {
+		err2 := l.checkPoint.Clear(tctx)
+		if err2 != nil {
+			return err2
+		}
+		l.logCtx.L().Info("all previous checkpoints cleared")
+	}
+
 	err = l.genRouter(l.cfg.RouteRules)
 	if err != nil {
 		return err

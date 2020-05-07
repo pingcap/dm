@@ -330,6 +330,21 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-checkpoint", Fn: s.checkpoint.Close})
 
+	if s.cfg.RemoveMeta {
+		err = s.checkpoint.Clear(tctx)
+		if err != nil {
+			return terror.Annotate(err, "clear checkpoint in syncer")
+		}
+
+		if s.onlineDDL != nil {
+			err = s.onlineDDL.Clear(tctx)
+			if err != nil {
+				return terror.Annotate(err, "clear online ddl in syncer")
+			}
+		}
+		s.tctx.L().Info("all previous meta cleared")
+	}
+
 	err = s.checkpoint.Load(tctx, s.schemaTracker)
 	if err != nil {
 		return err
