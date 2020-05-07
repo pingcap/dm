@@ -113,7 +113,7 @@ func NewServer(cfg *Config) *Server {
 	logger := log.L()
 	server := Server{
 		cfg:               cfg,
-		scheduler:         scheduler.NewScheduler(&logger, config.Security{}),
+		scheduler:         scheduler.NewScheduler(&logger, cfg.Security),
 		sqlOperatorHolder: operator.NewHolder(),
 		idGen:             tracing.NewIDGen(),
 		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
