@@ -145,10 +145,11 @@ type SubTaskConfig struct {
 	//  treat it as hidden configuration
 	IgnoreCheckingItems []string `toml:"ignore-checking-items" json:"ignore-checking-items"`
 	// it represents a MySQL/MariaDB instance or a replica group
-	SourceID                string `toml:"source-id" json:"source-id"`
-	ServerID                uint32 `toml:"server-id" json:"server-id"`
-	Flavor                  string `toml:"flavor" json:"flavor"`
-	MetaSchema              string `toml:"meta-schema" json:"meta-schema"`
+	SourceID   string `toml:"source-id" json:"source-id"`
+	ServerID   uint32 `toml:"server-id" json:"server-id"`
+	Flavor     string `toml:"flavor" json:"flavor"`
+	MetaSchema string `toml:"meta-schema" json:"meta-schema"`
+	// Deprecated: do not use.
 	RemoveMeta              bool   `toml:"remove-meta" json:"remove-meta"`
 	HeartbeatUpdateInterval int    `toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
 	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`

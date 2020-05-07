@@ -38,12 +38,14 @@ import (
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
+	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
 )
 
 const (
@@ -164,6 +166,9 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	// gRPC API server
 	gRPCSvr := func(gs *grpc.Server) { pb.RegisterMasterServer(gs, s) }
+
+	// register metrics before serving
+	RegisterMetrics()
 
 	// start embed etcd server, gRPC API server and HTTP (API, status and debug) server.
 	s.etcd, err = startEtcd(etcdCfg, gRPCSvr, userHandles, etcdStartTimeout)
@@ -360,14 +365,26 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	if len(sourceRespCh) > 0 {
 		sourceResps = sortCommonWorkerResults(sourceRespCh)
 	} else {
+		sources := make([]string, 0, len(stCfgs))
+		for _, stCfg := range stCfgs {
+			sources = append(sources, stCfg.SourceID)
+		}
+		if cfg.RemoveMeta {
+			if scm := s.scheduler.GetSubTaskCfgsByTask(cfg.Name); len(scm) > 0 {
+				resp.Msg = terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
+					"while remove-meta is true").Error()
+				return resp, nil
+			}
+			err = s.removeMetaData(ctx, cfg)
+			if err != nil {
+				resp.Msg = err.Error()
+				return resp, nil
+			}
+		}
 		err = s.scheduler.AddSubTasks(subtaskCfgPointersToInstances(stCfgs...)...)
 		if err != nil {
 			resp.Msg = errors.ErrorStack(err)
 			return resp, nil
-		}
-		sources := make([]string, 0, len(stCfgs))
-		for _, stCfg := range stCfgs {
-			sources = append(sources, stCfg.SourceID)
 		}
 		resp.Result = true
 		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, sources, []string{}, req)
@@ -1330,6 +1347,52 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 	}
 
 	return cfg, stCfgs, nil
+}
+
+func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) error {
+	sqls := make([]string, 0, 3)
+	sqls = append(sqls, fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cfg.MetaSchema))
+	// clear loader and syncer checkpoints
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
+		cfg.MetaSchema, cfg.Name+"_loader_checkpoint"))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
+		cfg.MetaSchema, cfg.Name+"_syncer_checkpoint"))
+
+	// clear etcd data
+	if cfg.ShardMode == config.ShardPessimistic {
+		err := s.pessimist.RemoveMetaData(cfg.Name)
+		if err != nil {
+			return err
+		}
+		// clear shard meta data for pessimistic
+		sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
+			cfg.MetaSchema, fmt.Sprintf(shardmeta.MetaTableFormat, cfg.Name)))
+	} else if cfg.ShardMode == config.ShardOptimistic {
+		err := s.optimist.RemoveMetaData(cfg.Name)
+		if err != nil {
+			return err
+		}
+	}
+
+	// clear online ddl schema
+	if cfg.OnlineDDLScheme != "" {
+		sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
+			cfg.MetaSchema, fmt.Sprintf("%s_onlineddl", cfg.Name)))
+	}
+
+	baseDB, err := conn.DefaultDBProvider.Apply(*cfg.TargetDB)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+	defer baseDB.Close()
+	dbConn, err := baseDB.GetBaseConn(ctx)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+	defer baseDB.CloseBaseConn(dbConn)
+	ctctx := tcontext.Background().WithContext(ctx).WithLogger(log.With(zap.String("unit", "remove metadata")))
+	_, err = dbConn.ExecuteSQL(ctctx, stmtHistogram, cfg.Name, []string{})
+	return err
 }
 
 func extractWorkerError(result *pb.ProcessResult) error {

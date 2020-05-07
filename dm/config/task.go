@@ -510,7 +510,6 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.Mode = c.TaskMode
 		cfg.CaseSensitive = c.CaseSensitive
 		cfg.MetaSchema = c.MetaSchema
-		cfg.RemoveMeta = c.RemoveMeta
 		cfg.EnableHeartbeat = c.EnableHeartbeat
 		cfg.HeartbeatUpdateInterval = c.HeartbeatUpdateInterval
 		cfg.HeartbeatReportInterval = c.HeartbeatReportInterval

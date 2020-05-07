@@ -18,6 +18,7 @@ import (
 
 	"go.etcd.io/etcd/clientv3"
 
+	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
 )
 
@@ -55,6 +56,16 @@ func DeleteInfosOperations(cli *clientv3.Client, infos []Info, ops []Operation) 
 	for _, op := range ops {
 		opsDel = append(opsDel, deleteOperationOp(op))
 	}
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, opsDel...)
+	return rev, err
+}
+
+// DeleteInfosOperationsThroughTask deletes the shard DDL infos and operations of a specified task in etcd.
+// This function should often be called by DM-master when deleting ddl meta data.
+func DeleteInfosOperationsThroughTask(cli *clientv3.Client, task string) (int64, error) {
+	opsDel := make([]clientv3.Op, 0, 2)
+	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismInfoKeyAdapter.Encode(task), clientv3.WithPrefix()))
+	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismOperationKeyAdapter.Encode(task), clientv3.WithPrefix()))
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, opsDel...)
 	return rev, err
 }

@@ -64,6 +64,12 @@ func (lk *LockKeeper) RemoveLock(lockID string) bool {
 	return ok
 }
 
+// RemoveLockThroughInfo removes a lock through given info.
+func (lk *LockKeeper) RemoveLockThroughInfo(info Info) bool {
+	lockID := genDDLLockID(info)
+	return lk.RemoveLock(lockID)
+}
+
 // FindLock finds a lock.
 func (lk *LockKeeper) FindLock(lockID string) *Lock {
 	lk.mu.RLock()

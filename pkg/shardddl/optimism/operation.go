@@ -168,6 +168,39 @@ func GetAllOperations(cli *clientv3.Client) (map[string]map[string]map[string]ma
 	return opm, resp.Header.Revision, nil
 }
 
+// GetInfosOperationsThroughTask gets all shard DDL info and operation in etcd currently.
+// This function should often be called by DM-master.
+func GetInfosOperationsThroughTask(cli *clientv3.Client, task string) ([]Info, []Operation, int64, error) {
+	respTxn, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli,
+		clientv3.OpGet(common.ShardDDLOptimismInfoKeyAdapter.Encode(task), clientv3.WithPrefix()),
+		clientv3.OpGet(common.ShardDDLOptimismOperationKeyAdapter.Encode(task), clientv3.WithPrefix()))
+
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	infoResp := respTxn.Responses[0].GetResponseRange()
+	opsResp := respTxn.Responses[1].GetResponseRange()
+	var (
+		infos = make([]Info, 0, len(infoResp.Kvs))
+		ops   = make([]Operation, 0, len(opsResp.Kvs))
+	)
+	for _, kv := range infoResp.Kvs {
+		info, err2 := infoFromJSON(string(kv.Value))
+		if err2 != nil {
+			return nil, nil, 0, err2
+		}
+		infos = append(infos, info)
+	}
+	for _, kv := range opsResp.Kvs {
+		op, err2 := operationFromJSON(string(kv.Value))
+		if err2 != nil {
+			return nil, nil, 0, err2
+		}
+		ops = append(ops, op)
+	}
+	return infos, ops, respTxn.Header.Revision, nil
+}
+
 // WatchOperationPut watches PUT operations for DDL lock operation.
 // If want to watch all operations matching, pass empty string for `task`, `source`, `upSchema` and `upTable`.
 // This function can be called by DM-worker and DM-master.

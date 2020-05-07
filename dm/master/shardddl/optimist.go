@@ -154,6 +154,31 @@ func (o *Optimist) ShowLocks(task string, sources []string) []*pb.DDLLock {
 	return ret
 }
 
+// RemoveMetaData removes meta data for a specified task
+// NOTE: this function can only be used when the specified task is not running
+func (o *Optimist) RemoveMetaData(task string) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.closed {
+		return nil
+	}
+
+	infos, ops, _, err := optimism.GetInfosOperationsThroughTask(o.cli, task)
+	if err != nil {
+		return err
+	}
+	for _, info := range infos {
+		o.lk.RemoveLockThroughInfo(info)
+	}
+	for _, op := range ops {
+		o.lk.RemoveLock(op.ID)
+	}
+
+	o.tk.RemoveTableThroughTask(task)
+	_, err = optimism.DeleteInfosOperationsTablesThroughTask(o.cli, task)
+	return err
+}
+
 // run runs jobs in the background.
 func (o *Optimist) run(ctx context.Context, revSource, revInfo, revOperation int64) error {
 	for {
