@@ -346,6 +346,52 @@ function test_pause_task() {
     echo "[$(date)] <<<<<< finish test_pause_task >>>>>>"
 }
 
+function test_stop_task() {
+    echo "[$(date)] <<<<<< start test_stop_task >>>>>>"
+    test_multi_task_running
+
+    echo "start dumping SQLs into source"
+    load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
+    load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
+
+    task_name=(test test2)
+    task_config=(dm-task.yaml dm-task2.yaml)
+    for name in ${task_name[@]}; do
+        echo "stop tasks $name"
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task $name"\
+            "\"result\": true" 3
+        
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status $name"\
+            "\"result\": false" 1
+    done
+
+    sleep 1
+
+    for idx in $(seq 0 1); do
+        echo "start tasks $cur/conf/${task_config[$idx]}"
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $cur/conf/${task_config[$idx]}"\
+            "\"result\": true" 3 \
+            "\"source\": \"$SOURCE_ID1\"" 1 \
+            "\"source\": \"$SOURCE_ID2\"" 1
+
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status ${task_name[$idx]}"\
+        "\"stage\": \"Running\"" 2
+    done
+
+    # waiting for syncing
+    wait
+    sleep 1
+
+    echo "use sync_diff_inspector to check increment data"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
+    echo "[$(date)] <<<<<< finish test_stop_task >>>>>>"
+}
+
 
 function test_multi_task_reduce_and_restart_worker() {
     echo "[$(date)] <<<<<< start test_multi_task_reduce_worker >>>>>>"
@@ -472,9 +518,10 @@ function run() {
     test_kill_master_in_sync                   # TICASE-997, 1000
     test_kill_worker_in_sync                   # TICASE-1001
     test_standalone_running                    # TICASE-929, 959, 960, 967
-    test_pause_task                            # TICASE-990, 991
+    test_pause_task                            # TICASE-990
     test_multi_task_reduce_and_restart_worker  # TICASE-968, 994, 995
     test_isolate_master                        # TICASE-934, 935
+    test_stop_task                             # TICASE-991
 }
 
 
