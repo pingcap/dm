@@ -1559,3 +1559,24 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 	wg.Wait()
 	return sortCommonWorkerResults(sourceRespCh)
 }
+
+// GetLeader get master leader
+func (s *Server) GetLeader(ctx context.Context, req *pb.GetLeaderRequest) (*pb.GetLeaderResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "GetLeader"))
+
+	_, leaderID, addr, err := s.election.LeaderInfo(ctx)
+
+	if err != nil {
+		return &pb.GetLeaderResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+
+	log.L().Info("get leader successfully", zap.String("leaderId", leaderID))
+	return &pb.GetLeaderResponse{
+		Result: true,
+		Name:   leaderID,
+		Addr:   addr,
+	}, nil
+}

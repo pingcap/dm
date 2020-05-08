@@ -62,6 +62,9 @@ service Master {
 
     // OfflineWorker offline the dm-workers.
     rpc OfflineWorker(OfflineWorkerRequest) returns(OfflineWorkerResponse) {}
+
+    // GetLeader get master leader.
+    rpc GetLeader(GetLeaderRequest) returns(GetLeaderResponse) {}
 }
 
 message MigrateWorkerRelayRequest {
@@ -305,4 +308,14 @@ message OfflineWorkerRequest {
 message OfflineWorkerResponse {
     bool result = 1;
     string msg = 2;
+}
+
+message GetLeaderRequest {
+}
+
+message GetLeaderResponse {
+    bool result = 1;
+    string name = 2;
+    string addr = 3;    
+    string msg = 4;
 }
