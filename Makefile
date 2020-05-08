@@ -167,7 +167,6 @@ dm_integration_test_build: retool_setup
 check_third_party_binary:
 	@which bin/tidb-server
 	@which bin/sync_diff_inspector
-	@which bin/mydumper
 
 integration_test: check_third_party_binary
 	@which bin/dm-master.test
