@@ -48,7 +48,7 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
     # start DM task only
-    dmctl_start_task
+    dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
 
     # TODO: check sharding partition id
     # use sync_diff_inspector to check full dump loader

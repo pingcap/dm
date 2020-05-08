@@ -366,7 +366,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		for _, stCfg := range stCfgs {
 			sources = append(sources, stCfg.SourceID)
 		}
-		if cfg.RemoveMeta {
+		if req.RemoveMeta {
 			if scm := s.scheduler.GetSubTaskCfgsByTask(cfg.Name); len(scm) > 0 {
 				resp.Msg = terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
 					"while remove-meta is true").Error()

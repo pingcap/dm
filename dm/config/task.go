@@ -256,9 +256,7 @@ type TaskConfig struct {
 	// we store detail status in meta
 	// don't save configuration into it
 	MetaSchema string `yaml:"meta-schema"`
-	// remove meta from downstreaming database
-	// now we delete checkpoint and online ddl information
-	RemoveMeta              bool   `yaml:"remove-meta"`
+
 	EnableHeartbeat         bool   `yaml:"enable-heartbeat"`
 	HeartbeatUpdateInterval int    `yaml:"heartbeat-update-interval"`
 	HeartbeatReportInterval int    `yaml:"heartbeat-report-interval"`

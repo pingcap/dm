@@ -60,7 +60,7 @@ function run() {
 
 
     echo "start DM task"
-    dmctl_start_task
+    dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
 
     echo "use sync_diff_inspector to check full dump loader"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

@@ -23,15 +23,17 @@ import (
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewStartTaskCmd creates a StartTask command
 func NewStartTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "start-task [-s source ...] <config-file>",
+		Use:   "start-task [-s source ...] <config-file> [--remove-meta]",
 		Short: "start a task as defined in the config file",
 		Run:   startTaskFunc,
 	}
+	cmd.Flags().BoolP("remove-meta", "", false, "whether to remove task's meta data")
 	return cmd
 }
 
@@ -54,14 +56,21 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
+	removeMeta, err := cmd.Flags().GetBool("remove-meta")
+	if err != nil {
+		common.PrintLines("%s", terror.Message(err))
+		return
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// start task
 	cli := common.MasterClient()
 	resp, err := cli.StartTask(ctx, &pb.StartTaskRequest{
-		Task:    string(content),
-		Sources: sources,
+		Task:       string(content),
+		Sources:    sources,
+		RemoveMeta: removeMeta,
 	})
 	if err != nil {
 		common.PrintLines("can not start task:\n%v", errors.ErrorStack(err))
