@@ -1401,7 +1401,7 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 	}
 	defer baseDB.CloseBaseConn(dbConn)
 	ctctx := tcontext.Background().WithContext(ctx).WithLogger(log.With(zap.String("unit", "remove metadata")))
-	_, err = dbConn.ExecuteSQL(ctctx, stmtHistogram, cfg.Name, []string{})
+	_, err = dbConn.ExecuteSQL(ctctx, stmtHistogram, cfg.Name, sqls)
 	return err
 }
 

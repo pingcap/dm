@@ -56,13 +56,12 @@ func (s *Server) JoinMaster(endpoints []string) error {
 		ctx1, cancel1 = context.WithTimeout(ctx, 3*time.Second)
 		resp, err := client.RegisterWorker(ctx1, req)
 		cancel1()
+		conn.Close()
 		if err != nil {
-			conn.Close()
 			log.L().Error("fail to register worker", zap.Error(err))
 			continue
 		}
 		if !resp.GetResult() {
-			conn.Close()
 			log.L().Error("fail to register worker", zap.String("error", resp.Msg))
 			continue
 		}
