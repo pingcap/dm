@@ -167,9 +167,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// gRPC API server
 	gRPCSvr := func(gs *grpc.Server) { pb.RegisterMasterServer(gs, s) }
 
-	// register metrics before serving
-	RegisterMetrics()
-
 	// start embed etcd server, gRPC API server and HTTP (API, status and debug) server.
 	s.etcd, err = startEtcd(etcdCfg, gRPCSvr, userHandles, etcdStartTimeout)
 	if err != nil {
@@ -1401,7 +1398,7 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 	}
 	defer baseDB.CloseBaseConn(dbConn)
 	ctctx := tcontext.Background().WithContext(ctx).WithLogger(log.With(zap.String("unit", "remove metadata")))
-	_, err = dbConn.ExecuteSQL(ctctx, stmtHistogram, cfg.Name, sqls)
+	_, err = dbConn.ExecuteSQL(ctctx, nil, cfg.Name, sqls)
 	return err
 }
 
