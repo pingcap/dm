@@ -29,7 +29,6 @@ name: test
 task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
-remove-meta: false
 enable-heartbeat: true
 timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
@@ -56,7 +55,6 @@ name: test1
 task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
-remove-meta: false
 enable-heartbeat: true
 timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
@@ -94,7 +92,6 @@ name: test
 task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
-remove-meta: false
 enable-heartbeat: true
 timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
@@ -113,7 +110,6 @@ task-mode: all
 task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
-remove-meta: false
 enable-heartbeat: true
 timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
@@ -131,7 +127,6 @@ name: test
 task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
-remove-meta: false
 enable-heartbeat: true
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1
@@ -210,7 +205,6 @@ task-mode: all
 is-sharding: true
 shard-mode: "optimistic"
 meta-schema: "dm_meta"
-remove-meta: false
 enable-heartbeat: true
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1

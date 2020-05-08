@@ -3,7 +3,6 @@ name: test # global unique
 task-mode: all  # full/incremental/all
 is-sharding: true  # whether multi dm-worker do one sharding job
 meta-schema: "dm_meta"  # meta schema in downstreaming database to store meta informaton of dm
-remove-meta: false  # remove meta from downstreaming database, now we delete checkpoint and online ddl information
 enable-heartbeat: false  # whether to enable heartbeat for calculating lag between master and syncer
 # heartbeat-update-interval: 1  # interval to do heartbeat and save timestamp, default 1s
 # heartbeat-report-interval: 10 # interval to report time lap to prometheus, default 10s
@@ -23,8 +22,7 @@ mysql-instances:             # one or more source database, config more source d
     # `full` / `all`:
     #    never be used
     # `incremental`:
-    #    if `remove-meta` is true, this will be used
-    #    else if checkpoints already exists in `meta-schema`, this will not be used
+    #    if checkpoints already exists in `meta-schema`, this will not be used
     #    otherwise, this will be used
     meta:
       binlog-name: mysql-bin.000001

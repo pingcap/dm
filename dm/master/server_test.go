@@ -50,7 +50,6 @@ name: test
 task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
-remove-meta: false
 enable-heartbeat: true
 timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
