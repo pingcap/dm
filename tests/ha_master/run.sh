@@ -12,6 +12,101 @@ MASTER_PORT3=8461
 MASTER_PORT4=8561
 MASTER_PORT5=8661
 
+function test_get_leader() {
+    echo "[$(date)] <<<<<< start test_get_leader_command >>>>>>"
+
+    master_ports=(0 $MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3 $MASTER_PORT4 $MASTER_PORT5)
+
+    alive=(1 2 3 4 5)
+    leaders=()
+
+    # get leader in all masters
+    for idx in ${alive[@]}; do
+        leaders+=($(get_leader $WORK_DIR 127.0.0.1:${master_ports[$idx]}))
+    done
+
+    # check leader is same for every master
+    leader=${leaders[0]}
+    leader_idx=${leader:6}
+    echo "current leader is" $leader
+    for ld in ${leaders[@]}; do
+        if [ "$leader" != "$ld" ]; then
+            echo "leader not consisent"
+            exit 1
+        fi
+    done
+
+    # kill leader
+    echo "kill leader" $leader
+    ps aux | grep $leader |awk '{print $2}'|xargs kill || true
+    check_port_offline ${master_ports[$leader_idx]} 20
+
+    # test again
+    alive=( "${alive[@]/$leader_idx}" )
+    leaders=()
+    for idx in ${alive[@]}; do
+        leaders+=($(get_leader $WORK_DIR 127.0.0.1:${master_ports[$idx]}))
+    done
+    leader=${leaders[0]}
+    leader_idx=${leader:6}
+    echo "current leader is" $leader
+    for ld in ${leaders[@]}; do
+        if [ "$leader" != "$ld" ]; then
+            echo "leader not consisent"
+            exit 1
+        fi
+    done
+    echo "kill leader" $leader
+    ps aux | grep $leader |awk '{print $2}'|xargs kill || true
+    check_port_offline ${master_ports[$leader_idx]} 20
+
+    # test again
+    alive=( "${alive[@]/$leader_idx}" )
+    leaders=()
+    for idx in ${alive[@]}; do
+        leaders+=($(get_leader $WORK_DIR 127.0.0.1:${master_ports[$idx]}))
+    done
+    leader=${leaders[0]}
+    leader_idx=${leader:6}
+    echo "current leader is" $leader
+    for ld in ${leaders[@]}; do
+        if [ "$leader" != "$ld" ]; then
+            echo "leader not consisent"
+            exit 1
+        fi
+    done
+    echo "kill leader" $leader
+    ps aux | grep $leader |awk '{print $2}'|xargs kill || true
+    check_port_offline ${master_ports[$leader_idx]} 20
+    
+    # join master which has been killed
+    alive=( "${alive[@]/$leader_idx}" )
+    for idx in $(seq 1 5); do
+        if [[ ! " ${alive[@]} " =~ " ${idx} " ]]; then
+            run_dm_master $WORK_DIR/master${idx} ${master_ports[$idx]} $cur/conf/dm-master${idx}.toml
+            check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:${master_ports[$idx]}
+        fi
+    done
+
+    # check leader is same for every master
+    alive=(1 2 3 4 5)
+    leaders=()
+    for idx in ${alive[@]}; do
+        leaders+=($(get_leader $WORK_DIR 127.0.0.1:${master_ports[$idx]}))
+    done
+    leader=${leaders[0]}
+    leader_idx=${leader:6}
+    echo "current leader is" $leader
+    for ld in ${leaders[@]}; do
+        if [ "$leader" != "$ld" ]; then
+            echo "leader not consisent"
+            exit 1
+        fi
+    done
+
+    echo "[$(date)] <<<<<< finish test_get_leader_command >>>>>>"
+}
+
 function run() {
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
@@ -30,6 +125,8 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT4
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
+
+    test_get_leader
 
     # kill dm-master1 and dm-master2 to simulate the first two dm-master addr in join config are invalid
     echo "kill dm-master1 and kill dm-master2"
