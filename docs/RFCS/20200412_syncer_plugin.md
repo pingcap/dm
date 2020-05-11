@@ -74,8 +74,6 @@ This interface used to handle the DML job's result in binlog replication unit(sy
 
 `HandleDMLJobResult` handle the result of [handleRowsEvent](https://github.com/pingcap/dm/blob/9023c789964fde0f5134e0c49435db557e21fdf7/syncer/syncer.go#L1274) and then do something.
 
-NOTE: We use `runFatalChan` to report errors between goroutines for executing ddl and dml, and the `err` of `handleQueryEvent` and `handleRowsEvent` don't contain the real error message. Need to refine it.
-
 ## How to use
 
 1. User implements these interface designed in plugin
