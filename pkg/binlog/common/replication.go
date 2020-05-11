@@ -32,6 +32,9 @@ func SetDefaultReplicationCfg(cfg *replication.BinlogSyncerConfig, retryCount in
 	cfg.UseDecimal = true // must set true. ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
 	cfg.VerifyChecksum = true
 	cfg.MaxReconnectAttempts = retryCount
+	if retryCount <= 1 {
+		cfg.DisableRetrySync = true
+	}
 	cfg.ReadTimeout = SlaveReadTimeout
 	cfg.HeartbeatPeriod = masterHeartbeatPeriod
 }
