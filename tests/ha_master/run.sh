@@ -12,8 +12,8 @@ MASTER_PORT3=8461
 MASTER_PORT4=8561
 MASTER_PORT5=8661
 
-function test_get_leader() {
-    echo "[$(date)] <<<<<< start test_get_leader_command >>>>>>"
+function test_list_member() {
+    echo "[$(date)] <<<<<< start test_list_member_command >>>>>>"
 
     master_ports=(0 $MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3 $MASTER_PORT4 $MASTER_PORT5)
 
@@ -36,10 +36,16 @@ function test_get_leader() {
         fi
     done
 
+    # check list-member master
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member master" \
+        "\"alive\": true" 5
+
     # kill leader
     echo "kill leader" $leader
     ps aux | grep $leader |awk '{print $2}'|xargs kill || true
     check_port_offline ${master_ports[$leader_idx]} 20
+    sleep 5
 
     # test again
     alive=( "${alive[@]/$leader_idx}" )
@@ -56,9 +62,13 @@ function test_get_leader() {
             exit 1
         fi
     done
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member master" \
+        "\"alive\": true" 4
     echo "kill leader" $leader
     ps aux | grep $leader |awk '{print $2}'|xargs kill || true
     check_port_offline ${master_ports[$leader_idx]} 20
+    sleep 5
 
     # test again
     alive=( "${alive[@]/$leader_idx}" )
@@ -75,9 +85,13 @@ function test_get_leader() {
             exit 1
         fi
     done
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member master" \
+        "\"alive\": true" 3
     echo "kill leader" $leader
     ps aux | grep $leader |awk '{print $2}'|xargs kill || true
     check_port_offline ${master_ports[$leader_idx]} 20
+    sleep 5
     
     # join master which has been killed
     alive=( "${alive[@]/$leader_idx}" )
@@ -103,8 +117,70 @@ function test_get_leader() {
             exit 1
         fi
     done
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member master" \
+        "\"alive\": true" 5
+    
+    # check list-member worker
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member worker" \
+        "\"stage\": \"bound\"" 2
+    
+    dmctl_operate_source stop $WORK_DIR/source1.toml $SOURCE_ID1
+    sleep 5
 
-    echo "[$(date)] <<<<<< finish test_get_leader_command >>>>>>"
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member worker" \
+        "\"stage\": \"bound\"" 1 \
+        "\"stage\": \"free\"" 1
+ 
+    dmctl_operate_source stop $WORK_DIR/source2.toml $SOURCE_ID2
+    sleep 5
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member worker" \
+        "\"stage\": \"free\"" 2
+ 
+    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
+    sleep 5
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member worker" \
+        "\"stage\": \"bound\"" 2
+
+    # kill worker
+    echo "kill worker1"
+    ps aux | grep dm-worker1 |awk '{print $2}'|xargs kill || true
+    check_port_offline $WORKER1_PORT 20
+    sleep 5
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member worker" \
+        "\"stage\": \"bound\"" 1 \
+        "\"stage\": \"offline\"" 1
+
+    # kill worker
+    echo "kill worker2"
+    ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
+    check_port_offline $WORKER2_PORT 20
+    sleep 5
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member worker" \
+        "\"stage\": \"offline\"" 2
+
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+    sleep 5
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member worker" \
+        "\"stage\": \"bound\"" 2
+
+    echo "[$(date)] <<<<<< finish test_list_member_command >>>>>>"
 }
 
 function run() {
@@ -125,8 +201,6 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT4
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
-
-    test_get_leader
 
     # kill dm-master1 and dm-master2 to simulate the first two dm-master addr in join config are invalid
     echo "kill dm-master1 and kill dm-master2"
@@ -155,6 +229,7 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
+    test_list_member
 
     echo "start DM task"
     dmctl_start_task
@@ -180,7 +255,7 @@ function run() {
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
-    sleep 2
+    sleep 10
 
     echo "use sync_diff_inspector to check data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

@@ -63,8 +63,21 @@ service Master {
     // OfflineWorker offline the dm-workers.
     rpc OfflineWorker(OfflineWorkerRequest) returns(OfflineWorkerResponse) {}
 
-    // GetLeader get master leader.
-    rpc GetLeader(GetLeaderRequest) returns(GetLeaderResponse) {}
+    // ListMember list member master information
+    rpc ListMemberMaster(ListMemberRequest) returns(ListMemberMasterResponse) {}
+
+    // ListMember list member worker information
+    rpc ListMemberWorker(ListMemberRequest) returns(ListMemberWorkerResponse) {}
+
+    // ListMember list member leader information
+    rpc ListMemberLeader(ListMemberRequest) returns(ListMemberLeaderResponse) {}
+}
+
+enum MemberType {
+    InvalidType = 0;  // placeholder
+    MasterType = 1;
+    WorkerType = 2;
+    LeaderType = 3;
 }
 
 message MigrateWorkerRelayRequest {
@@ -310,12 +323,42 @@ message OfflineWorkerResponse {
     string msg = 2;
 }
 
-message GetLeaderRequest {
+message MemberMasterResponse {
+    string name = 1;
+    uint64 memberID = 2;
+    bool alive = 3;
+    repeated string peerURLs = 4;
+    repeated string clientURLs = 5;
 }
 
-message GetLeaderResponse {
+message MemberWorkerResponse {
+    string name = 1;
+    string addr = 2;
+    string stage = 3;
+    string source = 4;
+}
+
+message ListMemberRequest {
+}
+
+message ListMemberMasterResponse {
     bool result = 1;
-    string name = 2;
-    string addr = 3;    
-    string msg = 4;
+    string msg = 2;
+    repeated MemberMasterResponse members = 3;
+}
+
+message ListMemberLeaderResponse {
+    bool result = 1;
+    string msg = 2;
+    string name = 3;
+    uint64 memberID = 4;
+    bool alive = 5;
+    repeated string peerURLs = 6;
+    repeated string clientURLs = 7;
+}
+
+message ListMemberWorkerResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated MemberWorkerResponse members = 3;
 }

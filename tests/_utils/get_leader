@@ -12,4 +12,4 @@ ts=$(date +"%s")
 dmctl_log=$workdir/dmctl.$ts.log
 pid=$$
 
-echo $($binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.$pid.out" DEVEL -master-addr=$master_addr get-leader | grep name | gawk 'match($2,/"(.*)",/,a) {print a[1]}')
+echo $($binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.$pid.out" DEVEL -master-addr=$master_addr list-member leader | grep name | gawk 'match($2,/"(.*)",/,a) {print a[1]}')

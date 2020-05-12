@@ -573,6 +573,17 @@ func (s *Scheduler) RemoveWorker(name string) error {
 	return nil
 }
 
+// GetWorker gets all worker agent.
+func (s *Scheduler) GetWorker() []*Worker {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	workers := make([]*Worker, 0, len(s.workers))
+	for _, value := range s.workers {
+		workers = append(workers, value)
+	}
+	return workers
+}
+
 // GetWorkerByName gets worker agent by worker name.
 func (s *Scheduler) GetWorkerByName(name string) *Worker {
 	s.mu.RLock()

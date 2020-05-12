@@ -1560,23 +1560,129 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 	return sortCommonWorkerResults(sourceRespCh)
 }
 
-// GetLeader get master leader
-func (s *Server) GetLeader(ctx context.Context, req *pb.GetLeaderRequest) (*pb.GetLeaderResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "GetLeader"))
+// ListMemberMaster list member master information
+func (s *Server) ListMemberMaster(ctx context.Context, req *pb.ListMemberRequest) (*pb.ListMemberMasterResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ListMemberMaster"))
+	resp := &pb.ListMemberMasterResponse{}
 
-	_, leaderID, addr, err := s.election.LeaderInfo(ctx)
-
-	if err != nil {
-		return &pb.GetLeaderResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.ListMemberMaster(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
-	log.L().Info("get leader successfully", zap.String("leaderId", leaderID))
-	return &pb.GetLeaderResponse{
-		Result: true,
-		Name:   leaderID,
-		Addr:   addr,
-	}, nil
+	memberList, err := s.etcdClient.MemberList(ctx)
+	if err != nil {
+		resp.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	etcdMembers := memberList.Members
+	members := make([]*pb.MemberMasterResponse, 0, len(etcdMembers))
+	client := http.Client{
+		Timeout: 1 * time.Second,
+	}
+
+	for _, etcdMember := range etcdMembers {
+		alive := true
+		_, err := client.Get(etcdMember.ClientURLs[0] + "/health")
+		if err != nil {
+			alive = false
+		}
+
+		members = append(members, &pb.MemberMasterResponse{
+			Name:       etcdMember.Name,
+			MemberID:   etcdMember.ID,
+			Alive:      alive,
+			ClientURLs: etcdMember.ClientURLs,
+			PeerURLs:   etcdMember.PeerURLs,
+		})
+	}
+
+	resp.Result = true
+	resp.Members = members
+	return resp, nil
+}
+
+// ListMemberWorker list member worker information
+func (s *Server) ListMemberWorker(ctx context.Context, req *pb.ListMemberRequest) (*pb.ListMemberWorkerResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ListMemberWorker"))
+	resp := &pb.ListMemberWorkerResponse{}
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.ListMemberWorker(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	workers := s.scheduler.GetWorker()
+	members := make([]*pb.MemberWorkerResponse, 0, len(workers))
+
+	for _, worker := range workers {
+		members = append(members, &pb.MemberWorkerResponse{
+			Name:   worker.BaseInfo().Name,
+			Addr:   worker.BaseInfo().Addr,
+			Stage:  string(worker.Stage()),
+			Source: worker.Bound().Source,
+		})
+	}
+
+	resp.Result = true
+	resp.Members = members
+	return resp, nil
+}
+
+// ListMemberLeader list member leader information
+func (s *Server) ListMemberLeader(ctx context.Context, req *pb.ListMemberRequest) (*pb.ListMemberLeaderResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ListMemberLeader"))
+	resp := &pb.ListMemberLeaderResponse{}
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.ListMemberLeader(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	memberList, err := s.etcdClient.MemberList(ctx)
+	if err != nil {
+		resp.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	_, leaderName, _, err := s.election.LeaderInfo(ctx)
+	if err != nil {
+		resp.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	etcdMembers := memberList.Members
+	client := http.Client{
+		Timeout: 1 * time.Second,
+	}
+
+	for _, etcdMember := range etcdMembers {
+		if leaderName != etcdMember.Name {
+			continue
+		}
+		alive := true
+		_, err := client.Get(etcdMember.ClientURLs[0] + "/health")
+		if err != nil {
+			alive = false
+		}
+
+		resp.Name = etcdMember.Name
+		resp.MemberID = etcdMember.ID
+		resp.Alive = alive
+		resp.ClientURLs = etcdMember.ClientURLs
+		resp.PeerURLs = etcdMember.PeerURLs
+	}
+
+	resp.Result = true
+	return resp, nil
 }
