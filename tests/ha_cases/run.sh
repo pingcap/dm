@@ -78,12 +78,16 @@ function test_multi_task_running() {
 }
 
 
-function test_join_masters {
-    echo "[$(date)] <<<<<< start test_join_masters >>>>>>"
+function test_join_masters_and_worker {
+    echo "[$(date)] <<<<<< start test_join_masters_and_worker >>>>>>"
     cleanup
 
     run_dm_master $WORK_DIR/master-join1 $MASTER_PORT1 $cur/conf/dm-master-join1.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
+
+    echo "query-status from unique master"
+    run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT1 "query-status" '"result": true' 1
+
     run_dm_master $WORK_DIR/master-join2 $MASTER_PORT2 $cur/conf/dm-master-join2.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
     sleep 5
@@ -96,12 +100,26 @@ function test_join_masters {
     run_dm_master $WORK_DIR/master-join5 $MASTER_PORT5 $cur/conf/dm-master-join5.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
 
-    run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT1 "query-status" '"result": true' 1
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT2 "query-status" '"result": true' 1
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT3 "query-status" '"result": true' 1
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT4 "query-status" '"result": true' 1
     run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT5 "query-status" '"result": true' 1
-    echo "[$(date)] <<<<<< finish test_join_masters >>>>>>"
+
+    echo "kill dm-master-join1"
+    ps aux | grep dm-master-join1 | awk '{print $2}' | xargs kill || true
+    check_port_offline $MASTER_PORT1 20
+    rm -rf $WORK_DIR/master1/default.master1
+
+    sleep 5
+
+    echo "join worker with 5 masters endpoint"
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker-join1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    
+    echo "query-status from master2"
+    run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT2 "query-status" '"result": true' 1
+
+    echo "[$(date)] <<<<<< finish test_join_masters_and_worker >>>>>>"
 }
 
 
@@ -150,6 +168,17 @@ function test_kill_worker() {
 
     run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
+
+    echo "wait and check task running"
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+
+    run_dm_worker $WORK_DIR/worker4 $WORKER4_PORT $cur/conf/dm-worker4.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER4_PORT
+
+    echo "kill dm-worker3"
+    ps aux | grep dm-worker3 |awk '{print $2}'|xargs kill || true
+    check_port_offline $WORKER3_PORT 20
+    rm -rf $WORK_DIR/worker3/relay_log
 
     echo "wait and check task running"
     check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
@@ -317,8 +346,54 @@ function test_pause_task() {
     echo "[$(date)] <<<<<< finish test_pause_task >>>>>>"
 }
 
+function test_stop_task() {
+    echo "[$(date)] <<<<<< start test_stop_task >>>>>>"
+    test_multi_task_running
 
-function test_multi_task_reduce_worker() {
+    echo "start dumping SQLs into source"
+    load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
+    load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
+
+    task_name=(test test2)
+    task_config=(dm-task.yaml dm-task2.yaml)
+    for name in ${task_name[@]}; do
+        echo "stop tasks $name"
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task $name"\
+            "\"result\": true" 3
+        
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status $name"\
+            "\"result\": false" 1
+    done
+
+    sleep 1
+
+    for idx in $(seq 0 1); do
+        echo "start tasks $cur/conf/${task_config[$idx]}"
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $cur/conf/${task_config[$idx]}"\
+            "\"result\": true" 3 \
+            "\"source\": \"$SOURCE_ID1\"" 1 \
+            "\"source\": \"$SOURCE_ID2\"" 1
+
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status ${task_name[$idx]}"\
+        "\"stage\": \"Running\"" 2
+    done
+
+    # waiting for syncing
+    wait
+    sleep 1
+
+    echo "use sync_diff_inspector to check increment data"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
+    echo "[$(date)] <<<<<< finish test_stop_task >>>>>>"
+}
+
+
+function test_multi_task_reduce_and_restart_worker() {
     echo "[$(date)] <<<<<< start test_multi_task_reduce_worker >>>>>>"
     test_multi_task_running
 
@@ -340,6 +415,20 @@ function test_multi_task_reduce_worker() {
         echo "find workers: ${w:0-9:7} for task: test"
     done
     echo "find all workers: ${worker_inuse[@]} (total: ${#worker_inuse[@]})"
+
+    for idx in $(seq 1 5); do
+        if [[ ! " ${worker_inuse[@]} " =~ " worker${idx} " ]]; then
+            echo "restart unuse worker${idx}"
+
+            echo "try to kill worker port ${worker_ports[$[ $idx - 1 ] ]}"
+            ps aux | grep dm-worker${idx} |awk '{print $2}'|xargs kill || true
+            check_port_offline ${worker_ports[$[ $idx - 1] ]} 20
+
+            echo "start dm-worker${idx}"
+            run_dm_worker $WORK_DIR/worker${idx} ${worker_ports[$[ $idx - 1] ]} $cur/conf/dm-worker${idx}.toml
+            check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:${worker_ports[$[ $idx - 1] ]}
+        fi
+    done
 
     for ((i=0; i < ${#worker_inuse[@]}; i++)); do
         wk=${worker_inuse[$i]:0-1:1} # get worker id, such as ("1", "4")
@@ -423,15 +512,16 @@ function test_isolate_master() {
 
 
 function run() {
-    test_join_masters
-    test_kill_master
-    test_kill_worker
+    test_join_masters_and_worker               # TICASE-928, 930, 931, 961
+    test_kill_master                           # TICASE-996
+    test_kill_worker                           # TICASE-968, 973, 1002
     test_kill_master_in_sync
     test_kill_worker_in_sync
-    test_standalone_running
-    test_pause_task
-    test_multi_task_reduce_worker
-    test_isolate_master
+    test_standalone_running                    # TICASE-929, 959, 960, 967
+    test_pause_task                            # TICASE-990
+    test_multi_task_reduce_and_restart_worker  # TICASE-968, 994, 995
+    test_isolate_master                        # TICASE-934, 935
+    test_stop_task                             # TICASE-991
 }
 
 
