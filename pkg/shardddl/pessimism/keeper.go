@@ -64,8 +64,8 @@ func (lk *LockKeeper) RemoveLock(lockID string) bool {
 	return ok
 }
 
-// RemoveLockThroughInfo removes a lock through given info.
-func (lk *LockKeeper) RemoveLockThroughInfo(info Info) bool {
+// RemoveLockByInfo removes a lock through given info.
+func (lk *LockKeeper) RemoveLockByInfo(info Info) bool {
 	lockID := genDDLLockID(info)
 	return lk.RemoveLock(lockID)
 }

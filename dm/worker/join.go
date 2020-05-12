@@ -49,6 +49,9 @@ func (s *Server) JoinMaster(endpoints []string) error {
 		conn, err := grpc.DialContext(ctx1, endpoint, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 		cancel1()
 		if err != nil {
+			if conn != nil {
+				conn.Close()
+			}
 			log.L().Error("fail to dial dm-master", zap.Error(err))
 			continue
 		}

@@ -80,6 +80,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/terror"
 	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
 
@@ -416,7 +417,7 @@ func NewShardingGroupKeeper(tctx *tcontext.Context, cfg *config.SubTaskConfig) *
 		tctx:   tctx.WithLogger(tctx.L().WithFields(zap.String("component", "shard group keeper"))),
 	}
 	k.shardMetaSchema = cfg.MetaSchema
-	k.shardMetaTable = fmt.Sprintf(shardmeta.MetaTableFormat, cfg.Name)
+	k.shardMetaTable = cputil.SyncerShardMeta(cfg.Name)
 	return k
 }
 

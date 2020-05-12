@@ -168,9 +168,9 @@ func GetAllOperations(cli *clientv3.Client) (map[string]map[string]map[string]ma
 	return opm, resp.Header.Revision, nil
 }
 
-// GetInfosOperationsThroughTask gets all shard DDL info and operation in etcd currently.
+// GetInfosOperationsByTask gets all shard DDL info and operation in etcd currently.
 // This function should often be called by DM-master.
-func GetInfosOperationsThroughTask(cli *clientv3.Client, task string) ([]Info, []Operation, int64, error) {
+func GetInfosOperationsByTask(cli *clientv3.Client, task string) ([]Info, []Operation, int64, error) {
 	respTxn, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli,
 		clientv3.OpGet(common.ShardDDLOptimismInfoKeyAdapter.Encode(task), clientv3.WithPrefix()),
 		clientv3.OpGet(common.ShardDDLOptimismOperationKeyAdapter.Encode(task), clientv3.WithPrefix()))

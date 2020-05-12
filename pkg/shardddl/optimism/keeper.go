@@ -65,8 +65,8 @@ func (lk *LockKeeper) RemoveLock(lockID string) bool {
 	return ok
 }
 
-// RemoveLockThroughInfo removes a lock.
-func (lk *LockKeeper) RemoveLockThroughInfo(info Info) bool {
+// RemoveLockByInfo removes a lock.
+func (lk *LockKeeper) RemoveLockByInfo(info Info) bool {
 	lockID := genDDLLockID(info)
 	return lk.RemoveLock(lockID)
 }
@@ -199,9 +199,9 @@ func (tk *TableKeeper) RemoveTable(task, source, upSchema, upTable, downSchema, 
 	return removed
 }
 
-// RemoveTableThroughTask removes tables from the source tables through task name.
+// RemoveTableByTask removes tables from the source tables through task name.
 // it returns whether removed (exit before).
-func (tk *TableKeeper) RemoveTableThroughTask(task string) bool {
+func (tk *TableKeeper) RemoveTableByTask(task string) bool {
 	tk.mu.Lock()
 	defer tk.mu.Unlock()
 

@@ -165,8 +165,8 @@ func GetAllOperations(cli *clientv3.Client) (map[string]map[string]Operation, in
 	return opm, resp.Header.Revision, nil
 }
 
-// GetInfosOperationsThroughTask gets all DDL lock infos and operations in etcd currently.
-func GetInfosOperationsThroughTask(cli *clientv3.Client, task string) ([]Info, []Operation, int64, error) {
+// GetInfosOperationsByTask gets all DDL lock infos and operations in etcd currently.
+func GetInfosOperationsByTask(cli *clientv3.Client, task string) ([]Info, []Operation, int64, error) {
 	respTxn, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli,
 		clientv3.OpGet(common.ShardDDLPessimismInfoKeyAdapter.Encode(task), clientv3.WithPrefix()),
 		clientv3.OpGet(common.ShardDDLPessimismOperationKeyAdapter.Encode(task), clientv3.WithPrefix()))

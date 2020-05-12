@@ -61,8 +61,8 @@ func DeleteInfosOperations(cli *clientv3.Client, infos []Info, ops []Operation) 
 	return rev, err
 }
 
-// DeleteInfosOperationsTablesThroughTask deletes the shard DDL infos and operations in etcd.
-func DeleteInfosOperationsTablesThroughTask(cli *clientv3.Client, task string) (int64, error) {
+// DeleteInfosOperationsTablesByTask deletes the shard DDL infos and operations in etcd.
+func DeleteInfosOperationsTablesByTask(cli *clientv3.Client, task string) (int64, error) {
 	opsDel := make([]clientv3.Op, 0, 3)
 	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLOptimismInfoKeyAdapter.Encode(task), clientv3.WithPrefix()))
 	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLOptimismOperationKeyAdapter.Encode(task), clientv3.WithPrefix()))

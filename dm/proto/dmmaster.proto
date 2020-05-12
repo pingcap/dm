@@ -78,7 +78,7 @@ message UpdateWorkerRelayConfigRequest {
 message StartTaskRequest {
     string task = 1; // task's configuration, yaml format
     repeated string sources = 2; // mysql source need to do start task, empty for all matched workers in deployment
-    bool RemoveMeta = 3; // whether to remove meta data for this task or not
+    bool removeMeta = 3; // whether to remove meta data for this task or not
 }
 
 message StartTaskResponse {

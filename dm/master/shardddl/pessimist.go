@@ -378,15 +378,15 @@ func (p *Pessimist) RemoveMetaData(task string) error {
 		return terror.ErrMasterPessimistNotStarted.Generate()
 	}
 
-	infos, ops, _, err := pessimism.GetInfosOperationsThroughTask(p.cli, task)
+	infos, ops, _, err := pessimism.GetInfosOperationsByTask(p.cli, task)
 	for _, info := range infos {
-		p.lk.RemoveLockThroughInfo(info)
+		p.lk.RemoveLockByInfo(info)
 	}
 	for _, op := range ops {
 		p.lk.RemoveLock(op.ID)
 	}
 
-	_, err = pessimism.DeleteInfosOperationsThroughTask(p.cli, task)
+	_, err = pessimism.DeleteInfosOperationsByTask(p.cli, task)
 	return err
 }
 

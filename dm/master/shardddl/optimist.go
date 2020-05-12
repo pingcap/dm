@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/optimism"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // Optimist is used to coordinate the shard DDL migration in optimism mode.
@@ -160,22 +161,22 @@ func (o *Optimist) RemoveMetaData(task string) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.closed {
-		return nil
+		return terror.ErrMasterOptimistNotStarted.Generate()
 	}
 
-	infos, ops, _, err := optimism.GetInfosOperationsThroughTask(o.cli, task)
+	infos, ops, _, err := optimism.GetInfosOperationsByTask(o.cli, task)
 	if err != nil {
 		return err
 	}
 	for _, info := range infos {
-		o.lk.RemoveLockThroughInfo(info)
+		o.lk.RemoveLockByInfo(info)
 	}
 	for _, op := range ops {
 		o.lk.RemoveLock(op.ID)
 	}
 
-	o.tk.RemoveTableThroughTask(task)
-	_, err = optimism.DeleteInfosOperationsTablesThroughTask(o.cli, task)
+	o.tk.RemoveTableByTask(task)
+	_, err = optimism.DeleteInfosOperationsTablesByTask(o.cli, task)
 	return err
 }
 

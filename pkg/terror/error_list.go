@@ -416,6 +416,7 @@ const (
 	codeMasterIsNotAsyncRequest
 	codeMasterFailToGetExpectResult
 	codeMasterPessimistNotStarted
+	codeMasterOptimistNotStarted
 )
 
 // DM-worker error code
@@ -928,6 +929,7 @@ var (
 	ErrMasterIsNotAsyncRequest           = New(codeMasterIsNotAsyncRequest, ClassDMMaster, ScopeInternal, LevelMedium, "request %s is not an async one, needn't wait for ok")
 	ErrMasterFailToGetExpectResult       = New(codeMasterFailToGetExpectResult, ClassDMMaster, ScopeInternal, LevelMedium, "fail to get expected result")
 	ErrMasterPessimistNotStarted         = New(codeMasterPessimistNotStarted, ClassDMMaster, ScopeInternal, LevelMedium, "the shardddl pessimist has not started")
+	ErrMasterOptimistNotStarted          = New(codeMasterOptimistNotStarted, ClassDMMaster, ScopeInternal, LevelMedium, "the shardddl optimist has not started")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
