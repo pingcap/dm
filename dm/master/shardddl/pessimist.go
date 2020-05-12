@@ -379,6 +379,9 @@ func (p *Pessimist) RemoveMetaData(task string) error {
 	}
 
 	infos, ops, _, err := pessimism.GetInfosOperationsByTask(p.cli, task)
+	if err != nil {
+		return err
+	}
 	for _, info := range infos {
 		p.lk.RemoveLockByInfo(info)
 	}
@@ -386,8 +389,7 @@ func (p *Pessimist) RemoveMetaData(task string) error {
 		p.lk.RemoveLock(op.ID)
 	}
 
-	_, err = pessimism.DeleteInfosOperationsByTask(p.cli, task)
-	return err
+	return nil
 }
 
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.

@@ -16,6 +16,7 @@ package master
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -24,22 +25,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/golang/mock/gomock"
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/pd/v4/pkg/tempurl"
+	tiddl "github.com/pingcap/tidb/ddl"
+	"github.com/pingcap/tidb/sessionctx"
+	tidbmock "github.com/pingcap/tidb/util/mock"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/scheduler"
+	"github.com/pingcap/dm/dm/master/shardddl"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
+	"github.com/pingcap/dm/pkg/conn"
+	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/shardddl/optimism"
+	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -424,6 +437,166 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Matches, errCheckSyncConfigReg)
+	clearSchedulerEnv(c, cancel, &wg)
+}
+
+type mockDBProvider struct {
+	db *sql.DB
+}
+
+// Apply will build BaseDB with DBConfig
+func (d *mockDBProvider) Apply(config config.DBConfig) (*conn.BaseDB, error) {
+	return conn.NewBaseDB(d.db), nil
+}
+
+func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	server := testDefaultMasterServer(c)
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
+
+	// test start task successfully
+	var wg sync.WaitGroup
+	// taskName is relative to taskConfig
+	cfg := config.NewTaskConfig()
+	err := cfg.Decode(taskConfig)
+	c.Assert(err, check.IsNil)
+	taskName := cfg.Name
+	ctx, cancel := context.WithCancel(context.Background())
+	logger := log.L()
+
+	// test remove meta with pessimist
+	cfg.ShardMode = config.ShardPessimistic
+	req := &pb.StartTaskRequest{
+		Task:       cfg.String(),
+		Sources:    sources,
+		RemoveMeta: true,
+	}
+	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
+		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, req))
+	server.pessimist = shardddl.NewPessimist(&logger, func(task string) []string { return sources })
+	server.optimist = nil
+
+	var (
+		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		schema, table = "foo", "bar"
+		ID            = fmt.Sprintf("%s-`%s`.`%s`", taskName, schema, table)
+		i11           = pessimism.NewInfo(taskName, sources[0], schema, table, DDLs)
+		op2           = pessimism.NewOperation(ID, taskName, sources[0], DDLs, true, false)
+	)
+	_, err = pessimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, check.IsNil)
+	_, succ, err := pessimism.PutOperations(etcdTestCli, false, op2)
+	c.Assert(succ, check.IsTrue)
+	c.Assert(err, check.IsNil)
+	c.Assert(server.pessimist.Start(ctx, etcdTestCli), check.IsNil)
+
+	db, mock, err := sqlmock.New()
+	c.Assert(err, check.IsNil)
+	conn.DefaultDBProvider = &mockDBProvider{db: db}
+	defer func() {
+		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+	}()
+	mock.ExpectBegin()
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name)))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name)))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)))
+	mock.ExpectCommit()
+
+	resp, err := server.StartTask(context.Background(), req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	for _, source := range sources {
+		t.subTaskStageMatch(c, server.scheduler, taskName, source, pb.Stage_Running)
+		tcm, _, err2 := ha.GetSubTaskCfg(etcdTestCli, source, taskName, 0)
+		c.Assert(err2, check.IsNil)
+		c.Assert(tcm, check.HasKey, taskName)
+		c.Assert(tcm[taskName].Name, check.Equals, taskName)
+		c.Assert(tcm[taskName].SourceID, check.Equals, source)
+	}
+
+	c.Assert(server.pessimist.Locks(), check.HasLen, 0)
+	if err := mock.ExpectationsWereMet(); err != nil {
+		c.Errorf("db unfulfilled expectations: %s", err)
+	}
+	ifm, _, err := pessimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, check.IsNil)
+	c.Assert(ifm, check.HasLen, 0)
+	opm, _, err := pessimism.GetAllOperations(etcdTestCli)
+	c.Assert(err, check.IsNil)
+	c.Assert(opm, check.HasLen, 0)
+
+	// test remove meta with optimist
+	cfg.ShardMode = config.ShardOptimistic
+	req = &pb.StartTaskRequest{
+		Task:       cfg.String(),
+		Sources:    sources,
+		RemoveMeta: true,
+	}
+	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
+		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, req))
+	server.pessimist = nil
+	server.optimist = shardddl.NewOptimist(&logger)
+
+	var (
+		p           = parser.New()
+		se          = tidbmock.NewContext()
+		tblID int64 = 111
+
+		st1      = optimism.NewSourceTables(taskName, sources[0])
+		DDLs1    = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		tiBefore = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		tiAfter1 = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		info1    = optimism.NewInfo(taskName, sources[0], "foo-1", "bar-1", schema, table, DDLs1, tiBefore, tiAfter1)
+		op1      = optimism.NewOperation(ID, taskName, sources[0], info1.UpSchema, info1.UpTable, DDLs1, optimism.ConflictNone, false)
+	)
+
+	_, err = optimism.PutSourceTables(etcdTestCli, st1)
+	c.Assert(err, check.IsNil)
+	_, err = optimism.PutInfo(etcdTestCli, info1)
+	c.Assert(err, check.IsNil)
+	_, succ, err = optimism.PutOperation(etcdTestCli, false, op1)
+	c.Assert(succ, check.IsTrue)
+	c.Assert(err, check.IsNil)
+
+	err = server.optimist.Start(ctx, etcdTestCli)
+	c.Assert(err, check.IsNil)
+
+	db, mock, err = sqlmock.New()
+	c.Assert(err, check.IsNil)
+	conn.DefaultDBProvider = &mockDBProvider{db: db}
+	mock.ExpectBegin()
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name)))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name)))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)))
+	mock.ExpectCommit()
+
+	resp, err = server.StartTask(context.Background(), req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	for _, source := range sources {
+		t.subTaskStageMatch(c, server.scheduler, taskName, source, pb.Stage_Running)
+		tcm, _, err2 := ha.GetSubTaskCfg(etcdTestCli, source, taskName, 0)
+		c.Assert(err2, check.IsNil)
+		c.Assert(tcm, check.HasKey, taskName)
+		c.Assert(tcm[taskName].Name, check.Equals, taskName)
+		c.Assert(tcm[taskName].SourceID, check.Equals, source)
+	}
+
+	c.Assert(server.optimist.Locks(), check.HasLen, 0)
+	if err := mock.ExpectationsWereMet(); err != nil {
+		c.Errorf("db unfulfilled expectations: %s", err)
+	}
+	ifm2, _, err := optimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, check.IsNil)
+	c.Assert(ifm2, check.HasLen, 0)
+	opm2, _, err := optimism.GetAllOperations(etcdTestCli)
+	c.Assert(err, check.IsNil)
+	c.Assert(opm2, check.HasLen, 0)
+
 	clearSchedulerEnv(c, cancel, &wg)
 }
 
@@ -1139,4 +1312,20 @@ func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskNam
 			Name: taskName,
 		},
 	).Return(queryResp, nil).MaxTimes(maxRetryNum)
+}
+
+func createTableInfo(c *check.C, p *parser.Parser, se sessionctx.Context, tableID int64, sql string) *model.TableInfo {
+	node, err := p.ParseOneStmt(sql, "utf8mb4", "utf8mb4_bin")
+	if err != nil {
+		c.Fatalf("fail to parse stmt, %v", err)
+	}
+	createStmtNode, ok := node.(*ast.CreateTableStmt)
+	if !ok {
+		c.Fatalf("%s is not a CREATE TABLE statement", sql)
+	}
+	info, err := tiddl.MockTableInfo(se, createStmtNode, tableID)
+	if err != nil {
+		c.Fatalf("fail to create table info, %v", err)
+	}
+	return info
 }
