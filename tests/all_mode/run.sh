@@ -92,8 +92,6 @@ function run() {
     # check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 1
 
     export GO_FAILPOINTS=''
-
-    sleep 1000
 }
 
 cleanup_data all_mode
