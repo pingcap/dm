@@ -255,7 +255,7 @@ function run() {
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
-    sleep 10
+    sleep 2
 
     echo "use sync_diff_inspector to check data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
