@@ -50,7 +50,10 @@ function run() {
     run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     # start again with remove-meta
     dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
-    sleep 5
+    sleep 3
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "no DDL lock exists" 1
     # use sync_diff_inspector to check full data
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
