@@ -478,7 +478,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
 		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, req))
 	server.pessimist = shardddl.NewPessimist(&logger, func(task string) []string { return sources })
-	server.optimist = nil
+	server.optimist = shardddl.NewOptimist(&logger)
 
 	var (
 		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
@@ -492,7 +492,9 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	_, succ, err := pessimism.PutOperations(etcdTestCli, false, op2)
 	c.Assert(succ, check.IsTrue)
 	c.Assert(err, check.IsNil)
+
 	c.Assert(server.pessimist.Start(ctx, etcdTestCli), check.IsNil)
+	c.Assert(server.optimist.Start(ctx, etcdTestCli), check.IsNil)
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, check.IsNil)
@@ -544,7 +546,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	}
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
 		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, req))
-	server.pessimist = nil
+	server.pessimist = shardddl.NewPessimist(&logger, func(task string) []string { return sources })
 	server.optimist = shardddl.NewOptimist(&logger)
 
 	var (
@@ -568,6 +570,8 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	c.Assert(succ, check.IsTrue)
 	c.Assert(err, check.IsNil)
 
+	err = server.pessimist.Start(ctx, etcdTestCli)
+	c.Assert(err, check.IsNil)
 	err = server.optimist.Start(ctx, etcdTestCli)
 	c.Assert(err, check.IsNil)
 
