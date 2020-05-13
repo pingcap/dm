@@ -1,3 +1,4 @@
+use sharding_seq;
 update t4 set c = 100;
 alter table t4 add column d int;
 alter table t4 add index d(d);
