@@ -35,10 +35,24 @@ function run() {
 
     sleep 3
     # check task's ddl unsynced locks
+    task_name="sequence_sharding_removemeta"
+    lock_id="$task_name-\`sharding_target3\`.\`t_target\`"
+    ddl="ALTER TABLE \`sharding_target3\`.\`t_target\` ADD COLUMN \`d\` INT"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "show-ddl-locks" \
         "\"ID\": \"$lock_id\"" 1 \
         "$ddl" 1
+    dmctl_stop_task $task_name
+
+    # clean downstream data
+    run_sql "drop database if exists sharding_target3" $TIDB_PORT $TIDB_PASSWORD
+    # run all the data
+    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+    # start again with remove-meta
+    dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
+    sleep 5
+    # use sync_diff_inspector to check full data
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 cleanup_data sharding_target3
