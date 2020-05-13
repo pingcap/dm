@@ -17,49 +17,61 @@ import (
 	"context"
 	"os"
 
-	"github.com/gogo/protobuf/proto"
-	"github.com/pingcap/dm/dm/ctl/common"
-	"github.com/pingcap/dm/dm/pb"
-
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
+
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 // NewListMemberCmd creates an ListMember command
 func NewListMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list-member master/worker/leader",
-		Short: "list member information of master/worker/leader",
+		Use:   "list-member [--master] [--worker] [--leader]",
+		Short: "list member information",
 		Run:   listMemberFunc,
 	}
+	cmd.Flags().BoolP("master", "", false, "only to list master")
+	cmd.Flags().BoolP("worker", "", false, "only to list worker")
+	cmd.Flags().BoolP("leader", "", false, "only to list leader")
 	return cmd
 }
 
-func convertMemberType(t string) pb.MemberType {
-	switch t {
-	case "master":
-		return pb.MemberType_MasterType
-	case "worker":
-		return pb.MemberType_WorkerType
-	case "leader":
-		return pb.MemberType_LeaderType
-	default:
-		return pb.MemberType_InvalidType
+func extractListMemberFlag(cmd *cobra.Command) (bool, bool, bool, error) {
+	master, err := cmd.Flags().GetBool("master")
+	if err != nil {
+		return false, false, false, errors.Trace(err)
 	}
+
+	worker, err := cmd.Flags().GetBool("worker")
+	if err != nil {
+		return false, false, false, errors.Trace(err)
+	}
+
+	leader, err := cmd.Flags().GetBool("leader")
+	if err != nil {
+		return false, false, false, errors.Trace(err)
+	}
+
+	if !master && !worker && !leader {
+		master = true
+		worker = true
+		leader = true
+	}
+	return master, worker, leader, nil
 }
 
 // listMemberFunc does list member request
 func listMemberFunc(cmd *cobra.Command, _ []string) {
-	if len(cmd.Flags().Args()) != 1 {
+	if len(cmd.Flags().Args()) != 0 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
 		return
 	}
 
-	memberType := cmd.Flags().Arg(0)
-	member := convertMemberType(memberType)
-	if member == pb.MemberType_InvalidType {
-		common.PrintLines("invalid arg '%s'", memberType)
+	master, worker, leader, err := extractListMemberFlag(cmd)
+	if err != nil {
+		common.PrintLines("%s", err.Error())
 		return
 	}
 
@@ -67,16 +79,11 @@ func listMemberFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 
 	cli := common.MasterClient()
-	var resp proto.Message
-	var err error
-	switch member {
-	case pb.MemberType_MasterType:
-		resp, err = cli.ListMemberMaster(ctx, &pb.ListMemberRequest{})
-	case pb.MemberType_WorkerType:
-		resp, err = cli.ListMemberWorker(ctx, &pb.ListMemberRequest{})
-	case pb.MemberType_LeaderType:
-		resp, err = cli.ListMemberLeader(ctx, &pb.ListMemberRequest{})
-	}
+	resp, err := cli.ListMember(ctx, &pb.ListMemberRequest{
+		Master: master,
+		Worker: worker,
+		Leader: leader,
+	})
 
 	if err != nil {
 		common.PrintLines("list member failed, error:\n%v", errors.ErrorStack(err))

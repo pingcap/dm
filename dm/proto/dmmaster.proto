@@ -63,21 +63,8 @@ service Master {
     // OfflineWorker offline the dm-workers.
     rpc OfflineWorker(OfflineWorkerRequest) returns(OfflineWorkerResponse) {}
 
-    // ListMember list member master information
-    rpc ListMemberMaster(ListMemberRequest) returns(ListMemberMasterResponse) {}
-
-    // ListMember list member worker information
-    rpc ListMemberWorker(ListMemberRequest) returns(ListMemberWorkerResponse) {}
-
-    // ListMember list member leader information
-    rpc ListMemberLeader(ListMemberRequest) returns(ListMemberLeaderResponse) {}
-}
-
-enum MemberType {
-    InvalidType = 0;  // placeholder
-    MasterType = 1;
-    WorkerType = 2;
-    LeaderType = 3;
+    // ListMember list member information
+    rpc ListMember(ListMemberRequest) returns(ListMemberResponse) {}
 }
 
 message MigrateWorkerRelayRequest {
@@ -323,7 +310,7 @@ message OfflineWorkerResponse {
     string msg = 2;
 }
 
-message MemberMasterResponse {
+message MasterInfo {
     string name = 1;
     uint64 memberID = 2;
     bool alive = 3;
@@ -331,34 +318,46 @@ message MemberMasterResponse {
     repeated string clientURLs = 5;
 }
 
-message MemberWorkerResponse {
+message WorkerInfo {
     string name = 1;
     string addr = 2;
     string stage = 3;
     string source = 4;
 }
 
+message ListLeaderMember {
+    string msg = 1;
+    string name = 2;
+    bool alive = 3;
+    string addr = 4;
+}
+
+message ListMasterMember {
+    string msg = 1;
+    repeated MasterInfo masters = 2;
+}
+
+message ListWorkerMember {
+    string msg = 1;
+    repeated WorkerInfo workers = 2;
+}
+
+message Members {
+    oneof member {
+        ListLeaderMember leader = 1;
+        ListMasterMember master = 2;
+        ListWorkerMember worker = 3;
+    }
+}
+
 message ListMemberRequest {
+    bool master = 1;
+    bool worker = 2;
+    bool leader = 3;
 }
 
-message ListMemberMasterResponse {
+message ListMemberResponse {
     bool result = 1;
     string msg = 2;
-    repeated MemberMasterResponse members = 3;
-}
-
-message ListMemberLeaderResponse {
-    bool result = 1;
-    string msg = 2;
-    string name = 3;
-    uint64 memberID = 4;
-    bool alive = 5;
-    repeated string peerURLs = 6;
-    repeated string clientURLs = 7;
-}
-
-message ListMemberWorkerResponse {
-    bool result = 1;
-    string msg = 2;
-    repeated MemberWorkerResponse members = 3;
+    repeated Members members = 3;
 }

@@ -1560,27 +1560,19 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 	return sortCommonWorkerResults(sourceRespCh)
 }
 
-// ListMemberMaster list member master information
-func (s *Server) ListMemberMaster(ctx context.Context, req *pb.ListMemberRequest) (*pb.ListMemberMasterResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ListMemberMaster"))
-	resp := &pb.ListMemberMasterResponse{}
+func (s *Server) listMemberMaster(ctx context.Context) (*pb.Members_Master, error) {
 
-	isLeader, needForward := s.isLeaderAndNeedForward()
-	if !isLeader {
-		if needForward {
-			return s.leaderClient.ListMemberMaster(ctx, req)
-		}
-		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	resp := &pb.Members_Master{
+		Master: &pb.ListMasterMember{},
 	}
 
 	memberList, err := s.etcdClient.MemberList(ctx)
 	if err != nil {
-		resp.Msg = errors.ErrorStack(err)
+		resp.Master.Msg = errors.ErrorStack(err)
 		return resp, nil
 	}
-
 	etcdMembers := memberList.Members
-	members := make([]*pb.MemberMasterResponse, 0, len(etcdMembers))
+	masters := make([]*pb.MasterInfo, 0, len(etcdMembers))
 	client := http.Client{
 		Timeout: 1 * time.Second,
 	}
@@ -1592,7 +1584,7 @@ func (s *Server) ListMemberMaster(ctx context.Context, req *pb.ListMemberRequest
 			alive = false
 		}
 
-		members = append(members, &pb.MemberMasterResponse{
+		masters = append(masters, &pb.MasterInfo{
 			Name:       etcdMember.Name,
 			MemberID:   etcdMember.ID,
 			Alive:      alive,
@@ -1601,88 +1593,107 @@ func (s *Server) ListMemberMaster(ctx context.Context, req *pb.ListMemberRequest
 		})
 	}
 
-	resp.Result = true
-	resp.Members = members
+	resp.Master.Masters = masters
 	return resp, nil
 }
 
-// ListMemberWorker list member worker information
-func (s *Server) ListMemberWorker(ctx context.Context, req *pb.ListMemberRequest) (*pb.ListMemberWorkerResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ListMemberWorker"))
-	resp := &pb.ListMemberWorkerResponse{}
+func (s *Server) listMemberWorker(ctx context.Context) (*pb.Members_Worker, error) {
+	resp := &pb.Members_Worker{
+		Worker: &pb.ListWorkerMember{},
+	}
+
+	workerAgents := s.scheduler.GetWorker()
+	workers := make([]*pb.WorkerInfo, 0, len(workerAgents))
+
+	for _, workerAgent := range workerAgents {
+		workers = append(workers, &pb.WorkerInfo{
+			Name:   workerAgent.BaseInfo().Name,
+			Addr:   workerAgent.BaseInfo().Addr,
+			Stage:  string(workerAgent.Stage()),
+			Source: workerAgent.Bound().Source,
+		})
+	}
+
+	resp.Worker.Workers = workers
+	return resp, nil
+}
+
+func (s *Server) listMemberLeader(ctx context.Context) (*pb.Members_Leader, error) {
+	resp := &pb.Members_Leader{
+		Leader: &pb.ListLeaderMember{},
+	}
+
+	_, name, addr, err := s.election.LeaderInfo(ctx)
+	if err != nil {
+		resp.Leader.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	client := http.Client{
+		Timeout: 1 * time.Second,
+	}
+
+	alive := true
+	_, err = client.Get("http://" + addr + "/health")
+	if err != nil {
+		alive = false
+	}
+
+	resp.Leader.Name = name
+	resp.Leader.Addr = addr
+	resp.Leader.Alive = alive
+	return resp, nil
+}
+
+// ListMember list member information
+func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb.ListMemberResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ListMember"))
 
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
-			return s.leaderClient.ListMemberWorker(ctx, req)
+			return s.leaderClient.ListMember(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
-	workers := s.scheduler.GetWorker()
-	members := make([]*pb.MemberWorkerResponse, 0, len(workers))
+	resp := &pb.ListMemberResponse{}
+	members := make([]*pb.Members, 0)
 
-	for _, worker := range workers {
-		members = append(members, &pb.MemberWorkerResponse{
-			Name:   worker.BaseInfo().Name,
-			Addr:   worker.BaseInfo().Addr,
-			Stage:  string(worker.Stage()),
-			Source: worker.Bound().Source,
+	if req.Master {
+		res, err := s.listMemberMaster(ctx)
+		if err != nil {
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
+		}
+		members = append(members, &pb.Members{
+			Member: res,
+		})
+	}
+
+	if req.Worker {
+		res, err := s.listMemberWorker(ctx)
+		if err != nil {
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
+		}
+		members = append(members, &pb.Members{
+			Member: res,
+		})
+	}
+
+	if req.Leader {
+		res, err := s.listMemberLeader(ctx)
+		if err != nil {
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
+		}
+		members = append(members, &pb.Members{
+			Member: res,
 		})
 	}
 
 	resp.Result = true
 	resp.Members = members
-	return resp, nil
-}
-
-// ListMemberLeader list member leader information
-func (s *Server) ListMemberLeader(ctx context.Context, req *pb.ListMemberRequest) (*pb.ListMemberLeaderResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ListMemberLeader"))
-	resp := &pb.ListMemberLeaderResponse{}
-
-	isLeader, needForward := s.isLeaderAndNeedForward()
-	if !isLeader {
-		if needForward {
-			return s.leaderClient.ListMemberLeader(ctx, req)
-		}
-		return nil, terror.ErrMasterRequestIsNotForwardToLeader
-	}
-
-	memberList, err := s.etcdClient.MemberList(ctx)
-	if err != nil {
-		resp.Msg = errors.ErrorStack(err)
-		return resp, nil
-	}
-
-	_, leaderName, _, err := s.election.LeaderInfo(ctx)
-	if err != nil {
-		resp.Msg = errors.ErrorStack(err)
-		return resp, nil
-	}
-
-	etcdMembers := memberList.Members
-	client := http.Client{
-		Timeout: 1 * time.Second,
-	}
-
-	for _, etcdMember := range etcdMembers {
-		if leaderName != etcdMember.Name {
-			continue
-		}
-		alive := true
-		_, err := client.Get(etcdMember.ClientURLs[0] + "/health")
-		if err != nil {
-			alive = false
-		}
-
-		resp.Name = etcdMember.Name
-		resp.MemberID = etcdMember.ID
-		resp.Alive = alive
-		resp.ClientURLs = etcdMember.ClientURLs
-		resp.PeerURLs = etcdMember.PeerURLs
-	}
-
-	resp.Result = true
 	return resp, nil
 }

@@ -75,64 +75,24 @@ func (mr *MockMasterClientMockRecorder) HandleSQLs(arg0, arg1 interface{}, arg2 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSQLs", reflect.TypeOf((*MockMasterClient)(nil).HandleSQLs), varargs...)
 }
 
-// ListMemberLeader mocks base method
-func (m *MockMasterClient) ListMemberLeader(arg0 context.Context, arg1 *pb.ListMemberRequest, arg2 ...grpc.CallOption) (*pb.ListMemberLeaderResponse, error) {
+// ListMember mocks base method
+func (m *MockMasterClient) ListMember(arg0 context.Context, arg1 *pb.ListMemberRequest, arg2 ...grpc.CallOption) (*pb.ListMemberResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0, arg1}
 	for _, a := range arg2 {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "ListMemberLeader", varargs...)
-	ret0, _ := ret[0].(*pb.ListMemberLeaderResponse)
+	ret := m.ctrl.Call(m, "ListMember", varargs...)
+	ret0, _ := ret[0].(*pb.ListMemberResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ListMemberLeader indicates an expected call of ListMemberLeader
-func (mr *MockMasterClientMockRecorder) ListMemberLeader(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+// ListMember indicates an expected call of ListMember
+func (mr *MockMasterClientMockRecorder) ListMember(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMemberLeader", reflect.TypeOf((*MockMasterClient)(nil).ListMemberLeader), varargs...)
-}
-
-// ListMemberMaster mocks base method
-func (m *MockMasterClient) ListMemberMaster(arg0 context.Context, arg1 *pb.ListMemberRequest, arg2 ...grpc.CallOption) (*pb.ListMemberMasterResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "ListMemberMaster", varargs...)
-	ret0, _ := ret[0].(*pb.ListMemberMasterResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListMemberMaster indicates an expected call of ListMemberMaster
-func (mr *MockMasterClientMockRecorder) ListMemberMaster(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMemberMaster", reflect.TypeOf((*MockMasterClient)(nil).ListMemberMaster), varargs...)
-}
-
-// ListMemberWorker mocks base method
-func (m *MockMasterClient) ListMemberWorker(arg0 context.Context, arg1 *pb.ListMemberRequest, arg2 ...grpc.CallOption) (*pb.ListMemberWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "ListMemberWorker", varargs...)
-	ret0, _ := ret[0].(*pb.ListMemberWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListMemberWorker indicates an expected call of ListMemberWorker
-func (mr *MockMasterClientMockRecorder) ListMemberWorker(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMemberWorker", reflect.TypeOf((*MockMasterClient)(nil).ListMemberWorker), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMember", reflect.TypeOf((*MockMasterClient)(nil).ListMember), varargs...)
 }
 
 // MigrateWorkerRelay mocks base method
@@ -508,49 +468,19 @@ func (mr *MockMasterServerMockRecorder) HandleSQLs(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSQLs", reflect.TypeOf((*MockMasterServer)(nil).HandleSQLs), arg0, arg1)
 }
 
-// ListMemberLeader mocks base method
-func (m *MockMasterServer) ListMemberLeader(arg0 context.Context, arg1 *pb.ListMemberRequest) (*pb.ListMemberLeaderResponse, error) {
+// ListMember mocks base method
+func (m *MockMasterServer) ListMember(arg0 context.Context, arg1 *pb.ListMemberRequest) (*pb.ListMemberResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListMemberLeader", arg0, arg1)
-	ret0, _ := ret[0].(*pb.ListMemberLeaderResponse)
+	ret := m.ctrl.Call(m, "ListMember", arg0, arg1)
+	ret0, _ := ret[0].(*pb.ListMemberResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ListMemberLeader indicates an expected call of ListMemberLeader
-func (mr *MockMasterServerMockRecorder) ListMemberLeader(arg0, arg1 interface{}) *gomock.Call {
+// ListMember indicates an expected call of ListMember
+func (mr *MockMasterServerMockRecorder) ListMember(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMemberLeader", reflect.TypeOf((*MockMasterServer)(nil).ListMemberLeader), arg0, arg1)
-}
-
-// ListMemberMaster mocks base method
-func (m *MockMasterServer) ListMemberMaster(arg0 context.Context, arg1 *pb.ListMemberRequest) (*pb.ListMemberMasterResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListMemberMaster", arg0, arg1)
-	ret0, _ := ret[0].(*pb.ListMemberMasterResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListMemberMaster indicates an expected call of ListMemberMaster
-func (mr *MockMasterServerMockRecorder) ListMemberMaster(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMemberMaster", reflect.TypeOf((*MockMasterServer)(nil).ListMemberMaster), arg0, arg1)
-}
-
-// ListMemberWorker mocks base method
-func (m *MockMasterServer) ListMemberWorker(arg0 context.Context, arg1 *pb.ListMemberRequest) (*pb.ListMemberWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListMemberWorker", arg0, arg1)
-	ret0, _ := ret[0].(*pb.ListMemberWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListMemberWorker indicates an expected call of ListMemberWorker
-func (mr *MockMasterServerMockRecorder) ListMemberWorker(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMemberWorker", reflect.TypeOf((*MockMasterServer)(nil).ListMemberWorker), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMember", reflect.TypeOf((*MockMasterServer)(nil).ListMember), arg0, arg1)
 }
 
 // MigrateWorkerRelay mocks base method
