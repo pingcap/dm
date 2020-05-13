@@ -62,6 +62,7 @@ var taskConfig = `---
 name: test
 task-mode: all
 is-sharding: true
+shard-mode: ""
 meta-schema: "dm_meta"
 enable-heartbeat: true
 timezone: "Asia/Shanghai"
@@ -455,6 +456,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 
 	server := testDefaultMasterServer(c)
 	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	server.etcdClient = etcdTestCli
 
 	// test start task successfully
 	var wg sync.WaitGroup
@@ -469,7 +471,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	// test remove meta with pessimist
 	cfg.ShardMode = config.ShardPessimistic
 	req := &pb.StartTaskRequest{
-		Task:       cfg.String(),
+		Task:       strings.ReplaceAll(taskConfig, `shard-mode: ""`, fmt.Sprintf(`shard-mode: "%s"`, cfg.ShardMode)),
 		Sources:    sources,
 		RemoveMeta: true,
 	}
@@ -499,15 +501,18 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
 	}()
 	mock.ExpectBegin()
-	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name)))
-	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)))
-	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name)))
-	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
+	c.Assert(len(server.pessimist.Locks()), check.Greater, 0)
 
 	resp, err := server.StartTask(context.Background(), req)
 	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
+	if !resp.Result {
+		c.Errorf("start task failed: %s", resp.Msg)
+	}
 	for _, source := range sources {
 		t.subTaskStageMatch(c, server.scheduler, taskName, source, pb.Stage_Running)
 		tcm, _, err2 := ha.GetSubTaskCfg(etcdTestCli, source, taskName, 0)
@@ -527,11 +532,13 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	opm, _, err := pessimism.GetAllOperations(etcdTestCli)
 	c.Assert(err, check.IsNil)
 	c.Assert(opm, check.HasLen, 0)
+	clearSchedulerEnv(c, cancel, &wg)
 
 	// test remove meta with optimist
+	ctx, cancel = context.WithCancel(context.Background())
 	cfg.ShardMode = config.ShardOptimistic
 	req = &pb.StartTaskRequest{
-		Task:       cfg.String(),
+		Task:       strings.ReplaceAll(taskConfig, `shard-mode: ""`, fmt.Sprintf(`shard-mode: "%s"`, cfg.ShardMode)),
 		Sources:    sources,
 		RemoveMeta: true,
 	}
@@ -568,11 +575,12 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	c.Assert(err, check.IsNil)
 	conn.DefaultDBProvider = &mockDBProvider{db: db}
 	mock.ExpectBegin()
-	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name)))
-	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)))
-	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name)))
-	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
+	c.Assert(len(server.optimist.Locks()), check.Greater, 0)
 
 	resp, err = server.StartTask(context.Background(), req)
 	c.Assert(err, check.IsNil)
@@ -596,6 +604,9 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	opm2, _, err := optimism.GetAllOperations(etcdTestCli)
 	c.Assert(err, check.IsNil)
 	c.Assert(opm2, check.HasLen, 0)
+	tbm, _, err := optimism.GetAllSourceTables(etcdTestCli)
+	c.Assert(err, check.IsNil)
+	c.Assert(tbm, check.HasLen, 0)
 
 	clearSchedulerEnv(c, cancel, &wg)
 }
