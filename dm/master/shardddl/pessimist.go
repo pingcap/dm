@@ -389,7 +389,9 @@ func (p *Pessimist) RemoveMetaData(task string) error {
 		p.lk.RemoveLock(op.ID)
 	}
 
-	return nil
+	// clear meta data in etcd
+	_, err = pessimism.DeleteInfosOperationsByTask(p.cli, task)
+	return err
 }
 
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.

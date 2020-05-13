@@ -176,7 +176,10 @@ func (o *Optimist) RemoveMetaData(task string) error {
 	}
 
 	o.tk.RemoveTableByTask(task)
-	return nil
+
+	// clear meta data in etcd
+	_, err = optimism.DeleteInfosOperationsTablesByTask(o.cli, task)
+	return err
 }
 
 // run runs jobs in the background.

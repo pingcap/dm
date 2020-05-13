@@ -43,8 +43,6 @@ import (
 	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/shardddl/optimism"
-	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
@@ -1366,28 +1364,16 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 		toDB.Password = pswdTo
 	}
 
-	// clear meta data in pessimist/optimist
-	if cfg.ShardMode == config.ShardPessimistic {
-		err := s.pessimist.RemoveMetaData(cfg.Name)
-		if err != nil {
-			return err
-		}
-		// clear shard meta data for pessimistic
-	} else if cfg.ShardMode == config.ShardOptimistic {
-		err := s.optimist.RemoveMetaData(cfg.Name)
-		if err != nil {
-			return err
-		}
-	}
-	// clear meta data in etcd
-	_, err := pessimism.DeleteInfosOperationsByTask(s.etcdClient, cfg.Name)
+	// clear shard meta data for pessimistic/optimist
+	err := s.pessimist.RemoveMetaData(cfg.Name)
 	if err != nil {
 		return err
 	}
-	_, err = optimism.DeleteInfosOperationsTablesByTask(s.etcdClient, cfg.Name)
+	err = s.optimist.RemoveMetaData(cfg.Name)
 	if err != nil {
 		return err
 	}
+
 	// set up db and clear meta data in downstream db
 	baseDB, err := conn.DefaultDBProvider.Apply(toDB)
 	if err != nil {

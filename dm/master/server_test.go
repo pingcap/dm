@@ -523,7 +523,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	}
 
 	c.Assert(server.pessimist.Locks(), check.HasLen, 0)
-	if err := mock.ExpectationsWereMet(); err != nil {
+	if err = mock.ExpectationsWereMet(); err != nil {
 		c.Errorf("db unfulfilled expectations: %s", err)
 	}
 	ifm, _, err := pessimism.GetAllInfo(etcdTestCli)
@@ -595,7 +595,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	}
 
 	c.Assert(server.optimist.Locks(), check.HasLen, 0)
-	if err := mock.ExpectationsWereMet(); err != nil {
+	if err = mock.ExpectationsWereMet(); err != nil {
 		c.Errorf("db unfulfilled expectations: %s", err)
 	}
 	ifm2, _, err := optimism.GetAllInfo(etcdTestCli)
