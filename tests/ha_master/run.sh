@@ -121,6 +121,8 @@ function test_list_member() {
         "list-member --master" \
         "\"alive\": true" 5
     
+    sleep 5
+    
     # check list-member worker
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --worker" \
