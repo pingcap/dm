@@ -111,7 +111,11 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 	}
 
-	m.logger.Info("dump data finished", zap.Duration("cost time", time.Since(begin)))
+	if err == nil {
+		m.logger.Info("dump data finished", zap.Duration("cost time", time.Since(begin)))
+	} else {
+		m.logger.Error("dump data exits with error", zap.Duration("cost time", time.Since(begin)), log.ShortError(err))
+	}
 
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
