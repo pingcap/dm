@@ -55,7 +55,12 @@ service Master {
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
 
     // Operate an upstream MySQL source.
-    rpc OperateSource(OperateSourceRequest) returns (OperateSourceResponse) {}
+    rpc OperateSource(OperateSourceRequest) returns (OperateSourceResponse) {
+        option (google.api.http) = {
+            put: "/apis/v1alpha1/sources"
+            body: "*"
+        };
+    }
 
     // RegisterWorker register the dm-workers.
     rpc RegisterWorker(RegisterWorkerRequest) returns(RegisterWorkerResponse) {}
