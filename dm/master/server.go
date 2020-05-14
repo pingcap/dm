@@ -1629,19 +1629,8 @@ func (s *Server) listMemberLeader(ctx context.Context) (*pb.Members_Leader, erro
 		return resp, nil
 	}
 
-	client := http.Client{
-		Timeout: 1 * time.Second,
-	}
-
-	alive := true
-	_, err = client.Get("http://" + addr + "/health")
-	if err != nil {
-		alive = false
-	}
-
 	resp.Leader.Name = name
 	resp.Leader.Addr = addr
-	resp.Leader.Alive = alive
 	return resp, nil
 }
 

@@ -328,8 +328,7 @@ message WorkerInfo {
 message ListLeaderMember {
     string msg = 1;
     string name = 2;
-    bool alive = 3;
-    string addr = 4;
+    string addr = 3;
 }
 
 message ListMasterMember {
