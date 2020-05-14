@@ -1385,7 +1385,7 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 	defer baseDB.CloseBaseConn(dbConn)
-	ctctx := tcontext.Background().WithContext(ctx).WithLogger(log.With(zap.String("unit", "remove metadata")))
+	ctctx := tcontext.Background().WithContext(ctx).WithLogger(log.With(zap.String("job", "remove metadata")))
 
 	sqls := make([]string, 0, 4)
 	// clear loader and syncer checkpoints
