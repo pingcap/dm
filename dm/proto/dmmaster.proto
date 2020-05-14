@@ -62,6 +62,12 @@ service Master {
 
     // OfflineWorker offline the dm-workers.
     rpc OfflineWorker(OfflineWorkerRequest) returns(OfflineWorkerResponse) {}
+
+    // EvictLeader make the master resign if it is leader, and will not campaign the leader again
+    rpc EvictLeader(OperateLeaderRequest) returns(OperateLeaderResponse) {}
+
+    // CancelEvictLeader cancel the evict operate of a master, the master can campaign the leader again
+    rpc CancelEvictLeader(OperateLeaderRequest) returns(OperateLeaderResponse) {}
 }
 
 message MigrateWorkerRelayRequest {
@@ -303,6 +309,22 @@ message OfflineWorkerRequest {
 }
 
 message OfflineWorkerResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+enum LeaderOp {
+    InvalidLeaderOp = 0;
+    EvictLeaderOp = 1;
+    CancelEvictLeaderOp = 2;
+}
+
+message OperateLeaderRequest {
+    string leaderID = 1;
+    LeaderOp op = 2;
+}
+
+message OperateLeaderResponse {
     bool result = 1;
     string msg = 2;
 }
