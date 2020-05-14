@@ -511,6 +511,15 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	c.Assert(len(server.pessimist.Locks()), check.Greater, 0)
 
 	resp, err := server.StartTask(context.Background(), req)
+	go func() {
+		time.Sleep(10 * time.Microsecond)
+		// start another same task at the same time, should get err
+		resp1, err1 := server.StartTask(context.Background(), req)
+		c.Assert(err1, check.IsNil)
+		c.Assert(resp1.Result, check.IsFalse)
+		c.Assert(resp1.Msg, check.Matches, terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
+			"while remove-meta is true").Error())
+	}()
 	c.Assert(err, check.IsNil)
 	if !resp.Result {
 		c.Errorf("start task failed: %s", resp.Msg)
@@ -587,6 +596,15 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	c.Assert(len(server.optimist.Locks()), check.Greater, 0)
 
 	resp, err = server.StartTask(context.Background(), req)
+	go func() {
+		time.Sleep(10 * time.Microsecond)
+		// start another same task at the same time, should get err
+		resp1, err1 := server.StartTask(context.Background(), req)
+		c.Assert(err1, check.IsNil)
+		c.Assert(resp1.Result, check.IsFalse)
+		c.Assert(resp1.Msg, check.Matches, terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
+			"while remove-meta is true").Error())
+	}()
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	for _, source := range sources {
