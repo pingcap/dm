@@ -574,14 +574,19 @@ func (s *Scheduler) RemoveWorker(name string) error {
 }
 
 // GetWorker gets all worker agent.
-func (s *Scheduler) GetWorker() []*Worker {
+func (s *Scheduler) GetWorker() ([]*Worker, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
+	if !s.started {
+		return nil, terror.ErrSchedulerNotStarted.Generate()
+	}
+
 	workers := make([]*Worker, 0, len(s.workers))
 	for _, value := range s.workers {
 		workers = append(workers, value)
 	}
-	return workers
+	return workers, nil
 }
 
 // GetWorkerByName gets worker agent by worker name.

@@ -1602,7 +1602,12 @@ func (s *Server) listMemberWorker(ctx context.Context) (*pb.Members_Worker, erro
 		Worker: &pb.ListWorkerMember{},
 	}
 
-	workerAgents := s.scheduler.GetWorker()
+	workerAgents, err := s.scheduler.GetWorker()
+	if err != nil {
+		resp.Worker.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
 	workers := make([]*pb.WorkerInfo, 0, len(workerAgents))
 
 	for _, workerAgent := range workerAgents {
