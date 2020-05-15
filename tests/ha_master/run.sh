@@ -37,7 +37,7 @@ function test_list_member() {
     done
 
     # check list-member master
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --type=master" \
         "\"alive\": true" 5
 
@@ -62,7 +62,7 @@ function test_list_member() {
             exit 1
         fi
     done
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --type=master" \
         "\"alive\": true" 4
     echo "kill leader" $leader
@@ -85,7 +85,7 @@ function test_list_member() {
             exit 1
         fi
     done
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --type=master" \
         "\"alive\": true" 3
     echo "kill leader" $leader
@@ -117,37 +117,32 @@ function test_list_member() {
             exit 1
         fi
     done
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --type=master" \
         "\"alive\": true" 5
     
-    sleep 5
-    
     # check list-member worker
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --type=worker --name=worker1,worker2" \
         "\"stage\": \"bound\"" 2
     
     dmctl_operate_source stop $WORK_DIR/source1.toml $SOURCE_ID1
-    sleep 5
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --type=worker" \
         "\"stage\": \"bound\"" 1 \
         "\"stage\": \"free\"" 1
  
     dmctl_operate_source stop $WORK_DIR/source2.toml $SOURCE_ID2
-    sleep 5
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member" \
         "\"stage\": \"free\"" 2
  
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
-    sleep 5
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --name=worker1,worker2" \
         "\"stage\": \"bound\"" 2
 
@@ -155,9 +150,8 @@ function test_list_member() {
     echo "kill worker1"
     ps aux | grep dm-worker1 |awk '{print $2}'|xargs kill || true
     check_port_offline $WORKER1_PORT 20
-    sleep 5
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --name=worker1,worker2" \
         "\"stage\": \"bound\"" 1 \
         "\"stage\": \"offline\"" 1
@@ -166,9 +160,8 @@ function test_list_member() {
     echo "kill worker2"
     ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
     check_port_offline $WORKER2_PORT 20
-    sleep 5
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member" \
         "\"stage\": \"offline\"" 2
 
@@ -176,9 +169,8 @@ function test_list_member() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    sleep 5
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --type=worker" \
         "\"stage\": \"bound\"" 2
 
