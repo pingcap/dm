@@ -80,6 +80,10 @@ func listMemberFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	memType := convertListMemberType(member)
+	if memType == pb.MemberType_InvalidType {
+		common.PrintLines("invalid type '%s', choose from master, worker, and leader", member)
+		return
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -19,80 +19,40 @@ function test_list_member() {
 
     alive=(1 2 3 4 5)
     leaders=()
+    leader_idx=0
 
-    # get leader in all masters
-    for idx in ${alive[@]}; do
-        leaders+=($(get_leader $WORK_DIR 127.0.0.1:${master_ports[$idx]}))
+    for i in $(seq 0 2); do
+        alive=( "${alive[@]/$leader_idx}" )
+        leaders=()
+
+        # get leader in all masters
+        for idx in ${alive[@]}; do
+            leaders+=($(get_leader $WORK_DIR 127.0.0.1:${master_ports[$idx]}))
+        done
+        leader=${leaders[0]}
+        leader_idx=${leader:6}
+        echo "current leader is" $leader
+
+        # check leader is same for every master
+        for ld in ${leaders[@]}; do
+            if [ "$leader" != "$ld" ]; then
+                echo "leader not consisent"
+                exit 1
+            fi
+        done
+
+        # check list-member master
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "list-member --type=master" \
+            "\"alive\": true" $((5 - i))
+
+        # kill leader
+        echo "kill leader" $leader
+        ps aux | grep $leader |awk '{print $2}'|xargs kill || true
+        check_port_offline ${master_ports[$leader_idx]} 20
+        sleep 5
     done
 
-    # check leader is same for every master
-    leader=${leaders[0]}
-    leader_idx=${leader:6}
-    echo "current leader is" $leader
-    for ld in ${leaders[@]}; do
-        if [ "$leader" != "$ld" ]; then
-            echo "leader not consisent"
-            exit 1
-        fi
-    done
-
-    # check list-member master
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --type=master" \
-        "\"alive\": true" 5
-
-    # kill leader
-    echo "kill leader" $leader
-    ps aux | grep $leader |awk '{print $2}'|xargs kill || true
-    check_port_offline ${master_ports[$leader_idx]} 20
-    sleep 5
-
-    # test again
-    alive=( "${alive[@]/$leader_idx}" )
-    leaders=()
-    for idx in ${alive[@]}; do
-        leaders+=($(get_leader $WORK_DIR 127.0.0.1:${master_ports[$idx]}))
-    done
-    leader=${leaders[0]}
-    leader_idx=${leader:6}
-    echo "current leader is" $leader
-    for ld in ${leaders[@]}; do
-        if [ "$leader" != "$ld" ]; then
-            echo "leader not consisent"
-            exit 1
-        fi
-    done
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --type=master" \
-        "\"alive\": true" 4
-    echo "kill leader" $leader
-    ps aux | grep $leader |awk '{print $2}'|xargs kill || true
-    check_port_offline ${master_ports[$leader_idx]} 20
-    sleep 5
-
-    # test again
-    alive=( "${alive[@]/$leader_idx}" )
-    leaders=()
-    for idx in ${alive[@]}; do
-        leaders+=($(get_leader $WORK_DIR 127.0.0.1:${master_ports[$idx]}))
-    done
-    leader=${leaders[0]}
-    leader_idx=${leader:6}
-    echo "current leader is" $leader
-    for ld in ${leaders[@]}; do
-        if [ "$leader" != "$ld" ]; then
-            echo "leader not consisent"
-            exit 1
-        fi
-    done
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --type=master" \
-        "\"alive\": true" 3
-    echo "kill leader" $leader
-    ps aux | grep $leader |awk '{print $2}'|xargs kill || true
-    check_port_offline ${master_ports[$leader_idx]} 20
-    sleep 5
-    
     # join master which has been killed
     alive=( "${alive[@]/$leader_idx}" )
     for idx in $(seq 1 5); do

@@ -1613,7 +1613,7 @@ func (s *Server) listMemberWorker(ctx context.Context, names []string) (*pb.Memb
 		Worker: &pb.ListWorkerMember{},
 	}
 
-	workerAgents, err := s.scheduler.GetWorker()
+	workerAgents, err := s.scheduler.GetAllWorkers()
 	if err != nil {
 		resp.Worker.Msg = errors.ErrorStack(err)
 		return resp, nil

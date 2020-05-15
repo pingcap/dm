@@ -573,8 +573,8 @@ func (s *Scheduler) RemoveWorker(name string) error {
 	return nil
 }
 
-// GetWorker gets all worker agent.
-func (s *Scheduler) GetWorker() ([]*Worker, error) {
+// GetAllWorkers gets all worker agent.
+func (s *Scheduler) GetAllWorkers() ([]*Worker, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
