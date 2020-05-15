@@ -41,7 +41,7 @@ func (c ListMemberFlags) Reset() {
 // NewListMemberCmd creates an ListMember command
 func NewListMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list-member [--type] [--name]",
+		Use:   "list-member [--type leader/master/worker] [--name master-name/worker-name ...]",
 		Short: "list member information",
 		Run:   listMemberFunc,
 	}
