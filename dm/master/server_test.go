@@ -517,7 +517,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		resp1, err1 := server.StartTask(context.Background(), req)
 		c.Assert(err1, check.IsNil)
 		c.Assert(resp1.Result, check.IsFalse)
-		c.Assert(resp1.Msg, check.Matches, terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
+		c.Assert(resp1.Msg, check.Equals, terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
 			"while remove-meta is true").Error())
 	}()
 	c.Assert(err, check.IsNil)
@@ -602,7 +602,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		resp1, err1 := server.StartTask(context.Background(), req)
 		c.Assert(err1, check.IsNil)
 		c.Assert(resp1.Result, check.IsFalse)
-		c.Assert(resp1.Msg, check.Matches, terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
+		c.Assert(resp1.Msg, check.Equals, terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
 			"while remove-meta is true").Error())
 	}()
 	c.Assert(err, check.IsNil)
