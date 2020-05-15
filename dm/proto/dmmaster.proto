@@ -310,6 +310,14 @@ message OfflineWorkerResponse {
     string msg = 2;
 }
 
+enum MemberType {
+    InvalidType = 0;  // placeholder
+    MasterType = 1;
+    WorkerType = 2;
+    LeaderType = 3;
+    AllType = 4;
+}
+
 message MasterInfo {
     string name = 1;
     uint64 memberID = 2;
@@ -350,9 +358,8 @@ message Members {
 }
 
 message ListMemberRequest {
-    bool master = 1;
-    bool worker = 2;
-    bool leader = 3;
+    MemberType memType = 1;
+    repeated string names = 2;
 }
 
 message ListMemberResponse {

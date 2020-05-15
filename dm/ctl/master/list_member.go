@@ -24,41 +24,45 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
+var (
+	listMemberFlags = ListMemberFlags{}
+)
+
+// ListMemberFlags are flags that used in ListMember command
+type ListMemberFlags struct {
+	names []string // specify names to list information
+}
+
+// Reset clears cache of ListMemberFlags
+func (c ListMemberFlags) Reset() {
+	c.names = c.names[:0]
+}
+
 // NewListMemberCmd creates an ListMember command
 func NewListMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list-member [--master] [--worker] [--leader]",
+		Use:   "list-member [--type] [--name]",
 		Short: "list member information",
 		Run:   listMemberFunc,
 	}
-	cmd.Flags().BoolP("master", "", false, "only to list master")
-	cmd.Flags().BoolP("worker", "", false, "only to list worker")
-	cmd.Flags().BoolP("leader", "", false, "only to list leader")
+	cmd.Flags().StringP("type", "t", "", "specify a member type from master, worker, and leader")
+	cmd.Flags().StringSliceVarP(&listMemberFlags.names, "name", "n", []string{}, "specify member names in choosing type")
 	return cmd
 }
 
-func extractListMemberFlag(cmd *cobra.Command) (bool, bool, bool, error) {
-	master, err := cmd.Flags().GetBool("master")
-	if err != nil {
-		return false, false, false, errors.Trace(err)
+func convertListMemberType(t string) pb.MemberType {
+	switch t {
+	case "master":
+		return pb.MemberType_MasterType
+	case "worker":
+		return pb.MemberType_WorkerType
+	case "leader":
+		return pb.MemberType_LeaderType
+	case "":
+		return pb.MemberType_AllType
+	default:
+		return pb.MemberType_InvalidType
 	}
-
-	worker, err := cmd.Flags().GetBool("worker")
-	if err != nil {
-		return false, false, false, errors.Trace(err)
-	}
-
-	leader, err := cmd.Flags().GetBool("leader")
-	if err != nil {
-		return false, false, false, errors.Trace(err)
-	}
-
-	if !master && !worker && !leader {
-		master = true
-		worker = true
-		leader = true
-	}
-	return master, worker, leader, nil
 }
 
 // listMemberFunc does list member request
@@ -69,20 +73,21 @@ func listMemberFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	master, worker, leader, err := extractListMemberFlag(cmd)
+	member, err := cmd.Flags().GetString("type")
 	if err != nil {
-		common.PrintLines("%s", err.Error())
+		common.PrintLines("%s", errors.ErrorStack(err))
 		return
 	}
+
+	memType := convertListMemberType(member)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	cli := common.MasterClient()
 	resp, err := cli.ListMember(ctx, &pb.ListMemberRequest{
-		Master: master,
-		Worker: worker,
-		Leader: leader,
+		MemType: memType,
+		Names:   listMemberFlags.names,
 	})
 
 	if err != nil {

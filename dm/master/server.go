@@ -1560,7 +1560,7 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 	return sortCommonWorkerResults(sourceRespCh)
 }
 
-func (s *Server) listMemberMaster(ctx context.Context) (*pb.Members_Master, error) {
+func (s *Server) listMemberMaster(ctx context.Context, names []string) (*pb.Members_Master, error) {
 
 	resp := &pb.Members_Master{
 		Master: &pb.ListMasterMember{},
@@ -1571,6 +1571,13 @@ func (s *Server) listMemberMaster(ctx context.Context) (*pb.Members_Master, erro
 		resp.Master.Msg = errors.ErrorStack(err)
 		return resp, nil
 	}
+
+	all := len(names) == 0
+	set := make(map[string]bool)
+	for _, name := range names {
+		set[name] = true
+	}
+
 	etcdMembers := memberList.Members
 	masters := make([]*pb.MasterInfo, 0, len(etcdMembers))
 	client := http.Client{
@@ -1578,6 +1585,10 @@ func (s *Server) listMemberMaster(ctx context.Context) (*pb.Members_Master, erro
 	}
 
 	for _, etcdMember := range etcdMembers {
+		if !all && !set[etcdMember.Name] {
+			continue
+		}
+
 		alive := true
 		_, err := client.Get(etcdMember.ClientURLs[0] + "/health")
 		if err != nil {
@@ -1597,7 +1608,7 @@ func (s *Server) listMemberMaster(ctx context.Context) (*pb.Members_Master, erro
 	return resp, nil
 }
 
-func (s *Server) listMemberWorker(ctx context.Context) (*pb.Members_Worker, error) {
+func (s *Server) listMemberWorker(ctx context.Context, names []string) (*pb.Members_Worker, error) {
 	resp := &pb.Members_Worker{
 		Worker: &pb.ListWorkerMember{},
 	}
@@ -1608,9 +1619,19 @@ func (s *Server) listMemberWorker(ctx context.Context) (*pb.Members_Worker, erro
 		return resp, nil
 	}
 
+	all := len(names) == 0
+	set := make(map[string]bool)
+	for _, name := range names {
+		set[name] = true
+	}
+
 	workers := make([]*pb.WorkerInfo, 0, len(workerAgents))
 
 	for _, workerAgent := range workerAgents {
+		if !all && !set[workerAgent.BaseInfo().Name] {
+			continue
+		}
+
 		workers = append(workers, &pb.WorkerInfo{
 			Name:   workerAgent.BaseInfo().Name,
 			Addr:   workerAgent.BaseInfo().Addr,
@@ -1623,14 +1644,24 @@ func (s *Server) listMemberWorker(ctx context.Context) (*pb.Members_Worker, erro
 	return resp, nil
 }
 
-func (s *Server) listMemberLeader(ctx context.Context) (*pb.Members_Leader, error) {
+func (s *Server) listMemberLeader(ctx context.Context, names []string) (*pb.Members_Leader, error) {
 	resp := &pb.Members_Leader{
 		Leader: &pb.ListLeaderMember{},
+	}
+
+	all := len(names) == 0
+	set := make(map[string]bool)
+	for _, name := range names {
+		set[name] = true
 	}
 
 	_, name, addr, err := s.election.LeaderInfo(ctx)
 	if err != nil {
 		resp.Leader.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	if !all && !set[name] {
 		return resp, nil
 	}
 
@@ -1654,8 +1685,8 @@ func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb
 	resp := &pb.ListMemberResponse{}
 	members := make([]*pb.Members, 0)
 
-	if req.Master {
-		res, err := s.listMemberMaster(ctx)
+	if req.MemType == pb.MemberType_AllType || req.MemType == pb.MemberType_MasterType {
+		res, err := s.listMemberMaster(ctx, req.Names)
 		if err != nil {
 			resp.Msg = errors.ErrorStack(err)
 			return resp, nil
@@ -1665,8 +1696,8 @@ func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb
 		})
 	}
 
-	if req.Worker {
-		res, err := s.listMemberWorker(ctx)
+	if req.MemType == pb.MemberType_AllType || req.MemType == pb.MemberType_WorkerType {
+		res, err := s.listMemberWorker(ctx, req.Names)
 		if err != nil {
 			resp.Msg = errors.ErrorStack(err)
 			return resp, nil
@@ -1676,8 +1707,8 @@ func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb
 		})
 	}
 
-	if req.Leader {
-		res, err := s.listMemberLeader(ctx)
+	if req.MemType == pb.MemberType_AllType || req.MemType == pb.MemberType_LeaderType {
+		res, err := s.listMemberLeader(ctx, req.Names)
 		if err != nil {
 			resp.Msg = errors.ErrorStack(err)
 			return resp, nil

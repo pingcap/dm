@@ -38,7 +38,7 @@ function test_list_member() {
 
     # check list-member master
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --master" \
+        "list-member --type=master" \
         "\"alive\": true" 5
 
     # kill leader
@@ -63,7 +63,7 @@ function test_list_member() {
         fi
     done
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --master" \
+        "list-member --type=master" \
         "\"alive\": true" 4
     echo "kill leader" $leader
     ps aux | grep $leader |awk '{print $2}'|xargs kill || true
@@ -86,7 +86,7 @@ function test_list_member() {
         fi
     done
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --master" \
+        "list-member --type=master" \
         "\"alive\": true" 3
     echo "kill leader" $leader
     ps aux | grep $leader |awk '{print $2}'|xargs kill || true
@@ -118,21 +118,21 @@ function test_list_member() {
         fi
     done
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --master" \
+        "list-member --type=master" \
         "\"alive\": true" 5
     
     sleep 5
     
     # check list-member worker
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --worker" \
+        "list-member --type=worker --name=worker1,worker2" \
         "\"stage\": \"bound\"" 2
     
     dmctl_operate_source stop $WORK_DIR/source1.toml $SOURCE_ID1
     sleep 5
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --worker" \
+        "list-member --type=worker" \
         "\"stage\": \"bound\"" 1 \
         "\"stage\": \"free\"" 1
  
@@ -140,7 +140,7 @@ function test_list_member() {
     sleep 5
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --worker" \
+        "list-member" \
         "\"stage\": \"free\"" 2
  
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
@@ -148,7 +148,7 @@ function test_list_member() {
     sleep 5
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member" \
+        "list-member --name=worker1,worker2" \
         "\"stage\": \"bound\"" 2
 
     # kill worker
@@ -158,7 +158,7 @@ function test_list_member() {
     sleep 5
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member" \
+        "list-member --name=worker1,worker2" \
         "\"stage\": \"bound\"" 1 \
         "\"stage\": \"offline\"" 1
 
@@ -179,7 +179,7 @@ function test_list_member() {
     sleep 5
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --worker" \
+        "list-member --type=worker" \
         "\"stage\": \"bound\"" 2
 
     echo "[$(date)] <<<<<< finish test_list_member_command >>>>>>"
