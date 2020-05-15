@@ -259,8 +259,8 @@ func errorCommonWorkerResponse(msg string, source, worker string) *pb.CommonWork
 }
 
 // RegisterWorker registers the worker to the master, and all the worker will be store in the path:
-// key:   /dm-worker/r/address
-// value: name
+// key:   /dm-worker/r/name
+// value: workerInfo
 func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "RegisterWorker"))
 	isLeader, needForward := s.isLeaderAndNeedForward()
@@ -285,8 +285,8 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 }
 
 // OfflineWorker removes info of the worker which has been Closed, and all the worker are store in the path:
-// key:   /dm-worker/r/address
-// value: name
+// key:   /dm-worker/r/name
+// value: workerInfo
 func (s *Server) OfflineWorker(ctx context.Context, req *pb.OfflineWorkerRequest) (*pb.OfflineWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OfflineWorker"))
 	isLeader, needForward := s.isLeaderAndNeedForward()
@@ -304,7 +304,7 @@ func (s *Server) OfflineWorker(ctx context.Context, req *pb.OfflineWorkerRequest
 			Msg:    errors.ErrorStack(err),
 		}, nil
 	}
-	log.L().Info("offline worker successfully", zap.String("name", req.Name), zap.String("address", req.Address))
+	log.L().Info("offline worker successfully", zap.String("name", req.Name))
 	return &pb.OfflineWorkerResponse{
 		Result: true,
 	}, nil

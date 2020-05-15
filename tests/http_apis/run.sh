@@ -71,6 +71,14 @@ function run() {
     check_log_contains $WORK_DIR/status.log "\"stage\":\"Running\"" 1
     check_log_contains $WORK_DIR/status.log "\"name\":\"test\"" 1
 
+  sleep 1
+    echo "kill dm-worker1"
+    ps aux | grep dm-worker1 |awk '{print $2}'|xargs kill || true
+    check_port_offline $WORKER1_PORT 20
+    curl -X DELETE 127.0.0.1 $MASTER_PORT/apis/${API_VERSION}/workers/worker1 > $WORK_DIR/offline-worker.log
+    check_log_contains $WORK_DIR/offline-worker.log "\"result\":true" 1
+    check_log_contains $WORK_DIR/offline-worker.log "\"msg\":\"\"" 1
+
     echo "check data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
