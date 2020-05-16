@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -111,7 +112,12 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 	}
 
-	m.logger.Info("dump data finished", zap.Duration("cost time", time.Since(begin)))
+	if len(errs) == 0 {
+		m.logger.Info("dump data finished", zap.Duration("cost time", time.Since(begin)))
+	} else {
+		m.logger.Error("dump data exits with error", zap.Duration("cost time", time.Since(begin)),
+			zap.String("error", utils.JoinProcessErrors(errs)))
+	}
 
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
