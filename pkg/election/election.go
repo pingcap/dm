@@ -65,7 +65,7 @@ func (c *CampaignerInfo) String() string {
 	return string(infoBytes)
 }
 
-func getCompaingerInfo(infoBytes []byte) (*CampaignerInfo, error) {
+func getCampaignerInfo(infoBytes []byte) (*CampaignerInfo, error) {
 	info := &CampaignerInfo{}
 	err := json.Unmarshal(infoBytes, info)
 	if err != nil {
@@ -155,7 +155,7 @@ func (e *Election) LeaderInfo(ctx context.Context) (string, string, string, erro
 		return "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
 	}
 
-	leaderInfo, err := getCompaingerInfo(resp.Kvs[0].Value)
+	leaderInfo, err := getCampaignerInfo(resp.Kvs[0].Value)
 	if err != nil {
 		return "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
 	}
@@ -262,7 +262,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 				e.l.Info("get response from election observe", zap.String("key", string(resp.Kvs[0].Key)), zap.String("value", string(resp.Kvs[0].Value)))
 				leaderKey = string(resp.Kvs[0].Key)
-				leaderInfo, err = getCompaingerInfo(resp.Kvs[0].Value)
+				leaderInfo, err = getCampaignerInfo(resp.Kvs[0].Value)
 				if err != nil {
 					// this should never happened
 					e.l.Error("fail to get leader information", zap.String("value", string(resp.Kvs[0].Value)), zap.Error(err))
@@ -385,13 +385,39 @@ forLoop:
 	return session, err
 }
 
+// ReCampaignIfNeeded will re-campaign immediately when deleted master is leader
+// returns (triggered re-campaign, error)
+func (e *Election) ReCampaignIfNeeded(ctx context.Context, id string) (bool, error) {
+	resp, err := e.cli.Get(ctx, e.key, clientv3.WithFirstCreate()...)
+	if err != nil {
+		return false, err
+	} else if len(resp.Kvs) == 0 {
+		// no leader exists, no need to trigger re-campaign
+		return false, nil
+	}
+	leaderInfo, err := getCampaignerInfo(resp.Kvs[0].Value)
+	if err != nil {
+		return false, err
+	}
+	if leaderInfo.ID != id {
+		// given id is not leader, no need to trigger re-campaign
+		return false, nil
+	}
+	delResp, err := e.cli.Txn(ctx).If(clientv3.Compare(clientv3.Value(e.key), "=", resp.Kvs[0].Value)).
+		Then(clientv3.OpDelete(e.key)).Commit()
+	if err != nil {
+		return false, err
+	}
+	return delResp.Succeeded, nil
+}
+
 // getLeaderInfo get the current leader's information (if exists).
 func getLeaderInfo(ctx context.Context, elec *concurrency.Election) (key, ID, addr string, err error) {
 	resp, err := elec.Leader(ctx)
 	if err != nil {
 		return "", "", "", err
 	}
-	leaderInfo, err := getCompaingerInfo(resp.Kvs[0].Value)
+	leaderInfo, err := getCampaignerInfo(resp.Kvs[0].Value)
 	if err != nil {
 		return "", "", "", err
 	}

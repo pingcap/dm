@@ -310,6 +310,33 @@ func (s *Server) OfflineWorker(ctx context.Context, req *pb.OfflineWorkerRequest
 	}, nil
 }
 
+func (s *Server) deleteMasterByName(ctx context.Context, name string) error {
+	cli := s.etcdClient
+	// Get etcd ID by name.
+	var id uint64
+	listResp, err := etcdutil.ListMembers(cli)
+	if err != nil {
+		return err
+	}
+	for _, m := range listResp.Members {
+		if name == m.Name {
+			id = m.ID
+			break
+		}
+	}
+	if id == 0 {
+		return terror.ErrMasterRequestedNameNotExist.Generate(name)
+	}
+
+	_, err = s.election.ReCampaignIfNeeded(ctx, name)
+	if err != nil {
+		return err
+	}
+
+	_, err = etcdutil.RemoveMember(cli, id)
+	return err
+}
+
 func subtaskCfgPointersToInstances(stCfgPointers ...*config.SubTaskConfig) []config.SubTaskConfig {
 	stCfgs := make([]config.SubTaskConfig, 0, len(stCfgPointers))
 	for _, stCfg := range stCfgPointers {
