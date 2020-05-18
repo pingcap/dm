@@ -1604,6 +1604,9 @@ func (s *Server) listMemberMaster(ctx context.Context, names []string) (*pb.Memb
 		})
 	}
 
+	sort.Slice(masters, func(lhs, rhs int) bool {
+		return masters[lhs].Name < masters[rhs].Name
+	})
 	resp.Master.Masters = masters
 	return resp, nil
 }
@@ -1640,6 +1643,9 @@ func (s *Server) listMemberWorker(ctx context.Context, names []string) (*pb.Memb
 		})
 	}
 
+	sort.Slice(workers, func(lhs, rhs int) bool {
+		return workers[lhs].Name < workers[rhs].Name
+	})
 	resp.Worker.Workers = workers
 	return resp, nil
 }
@@ -1685,7 +1691,18 @@ func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb
 	resp := &pb.ListMemberResponse{}
 	members := make([]*pb.Members, 0)
 
-	if req.MemType == pb.MemberType_AllType || req.MemType == pb.MemberType_MasterType {
+	if req.Leader {
+		res, err := s.listMemberLeader(ctx, req.Names)
+		if err != nil {
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
+		}
+		members = append(members, &pb.Members{
+			Member: res,
+		})
+	}
+
+	if req.Master {
 		res, err := s.listMemberMaster(ctx, req.Names)
 		if err != nil {
 			resp.Msg = errors.ErrorStack(err)
@@ -1696,19 +1713,8 @@ func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb
 		})
 	}
 
-	if req.MemType == pb.MemberType_AllType || req.MemType == pb.MemberType_WorkerType {
+	if req.Worker {
 		res, err := s.listMemberWorker(ctx, req.Names)
-		if err != nil {
-			resp.Msg = errors.ErrorStack(err)
-			return resp, nil
-		}
-		members = append(members, &pb.Members{
-			Member: res,
-		})
-	}
-
-	if req.MemType == pb.MemberType_AllType || req.MemType == pb.MemberType_LeaderType {
-		res, err := s.listMemberLeader(ctx, req.Names)
 		if err != nil {
 			resp.Msg = errors.ErrorStack(err)
 			return resp, nil

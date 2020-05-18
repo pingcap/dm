@@ -41,28 +41,36 @@ func (c ListMemberFlags) Reset() {
 // NewListMemberCmd creates an ListMember command
 func NewListMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list-member [--type leader/master/worker] [--name master-name/worker-name ...]",
+		Use:   "list-member [--leader] [--master] [--worker] [--name master-name/worker-name ...]",
 		Short: "list member information",
 		Run:   listMemberFunc,
 	}
-	cmd.Flags().StringP("type", "t", "", "specify a member type from master, worker, and leader")
+	cmd.Flags().BoolP("leader", "l", false, "only to list leader information")
+	cmd.Flags().BoolP("master", "m", false, "only to list master information")
+	cmd.Flags().BoolP("worker", "w", false, "only to list worker information")
 	cmd.Flags().StringSliceVarP(&listMemberFlags.names, "name", "n", []string{}, "specify member names in choosing type")
 	return cmd
 }
 
-func convertListMemberType(t string) pb.MemberType {
-	switch t {
-	case "master":
-		return pb.MemberType_MasterType
-	case "worker":
-		return pb.MemberType_WorkerType
-	case "leader":
-		return pb.MemberType_LeaderType
-	case "":
-		return pb.MemberType_AllType
-	default:
-		return pb.MemberType_InvalidType
+func convertListMemberType(cmd *cobra.Command) (bool, bool, bool, error) {
+	leader, err := cmd.Flags().GetBool("leader")
+	if err != nil {
+		return false, false, false, err
 	}
+	master, err := cmd.Flags().GetBool("master")
+	if err != nil {
+		return false, false, false, err
+	}
+	worker, err := cmd.Flags().GetBool("worker")
+	if err != nil {
+		return false, false, false, err
+	}
+	if !leader && !master && !worker {
+		leader = true
+		master = true
+		worker = true
+	}
+	return leader, master, worker, nil
 }
 
 // listMemberFunc does list member request
@@ -73,16 +81,9 @@ func listMemberFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	member, err := cmd.Flags().GetString("type")
+	leader, master, worker, err := convertListMemberType(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
-		return
-	}
-
-	memType := convertListMemberType(member)
-	if memType == pb.MemberType_InvalidType {
-		common.PrintLines("invalid type '%s', choose from master, worker, and leader", member)
-		return
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -90,7 +91,9 @@ func listMemberFunc(cmd *cobra.Command, _ []string) {
 
 	cli := common.MasterClient()
 	resp, err := cli.ListMember(ctx, &pb.ListMemberRequest{
-		MemType: memType,
+		Leader: leader,
+		Master: master,
+		Worker: worker,
 		Names:   listMemberFlags.names,
 	})
 

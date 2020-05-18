@@ -43,7 +43,7 @@ function test_list_member() {
 
         # check list-member master
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "list-member --type=master" \
+            "list-member --master" \
             "\"alive\": true" $((5 - i))
 
         # kill leader
@@ -78,18 +78,18 @@ function test_list_member() {
         fi
     done
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --type=master" \
+        "list-member --master" \
         "\"alive\": true" 5
     
     # check list-member worker
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --type=worker --name=worker1,worker2" \
+        "list-member --worker --name=worker1,worker2" \
         "\"stage\": \"bound\"" 2
     
     dmctl_operate_source stop $WORK_DIR/source1.toml $SOURCE_ID1
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --type=worker" \
+        "list-member --worker" \
         "\"stage\": \"bound\"" 1 \
         "\"stage\": \"free\"" 1
  
@@ -131,7 +131,7 @@ function test_list_member() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member --type=worker" \
+        "list-member --worker" \
         "\"stage\": \"bound\"" 2
 
     echo "[$(date)] <<<<<< finish test_list_member_command >>>>>>"
