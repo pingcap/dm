@@ -94,7 +94,7 @@ func listMemberFunc(cmd *cobra.Command, _ []string) {
 		Leader: leader,
 		Master: master,
 		Worker: worker,
-		Names:   listMemberFlags.names,
+		Names:  listMemberFlags.names,
 	})
 
 	if err != nil {
