@@ -115,7 +115,6 @@ column-mappings:
 
 mydumpers:
   global:
-    mydumper-path: "./bin/mydumper"
     threads: 4
     chunk-filesize: 64
     skip-tz-utc: true
@@ -1025,8 +1024,7 @@ func (t *testMaster) TestOfflineWorker(c *check.C) {
 	c.Assert(resp.Result, check.IsTrue)
 
 	req2 := &pb.OfflineWorkerRequest{
-		Name:    "haha",
-		Address: "127.0.0.1:1000",
+		Name: "haha",
 	}
 	{
 		res, err := s1.OfflineWorker(ectx, req2)
@@ -1039,6 +1037,12 @@ func (t *testMaster) TestOfflineWorker(c *check.C) {
 		res, err := s1.OfflineWorker(ectx, req2)
 		c.Assert(err, check.IsNil)
 		c.Assert(res.Result, check.IsTrue)
+	}
+	{
+		// register offline worker again. TICASE-962, 963
+		resp, err := s1.RegisterWorker(ectx, req1)
+		c.Assert(err, check.IsNil)
+		c.Assert(resp.Result, check.IsTrue)
 	}
 }
 

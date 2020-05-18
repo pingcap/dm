@@ -2,7 +2,10 @@ use sharding1;
 insert into t1 (uid, name) values (10003, 'Buenos Aires');
 update t1 set name = 'Gabriel José de la Concordia García Márquez' where `uid` = 10001;
 update t1 set name = 'One Hundred Years of Solitude' where name = 'Cien años de soledad';
+insert into t2 (uid, name, info) values (20013, 'Colonel', '{}'); # DML to trigger fetch schema from downstream before DDL
 alter table t1 add column age int;
+insert into t2 (uid, name, info) values (20023, 'Aureliano', '{}');
+insert into t2 (uid, name, info) values (20033, 'Buendía', '{}');
 alter table t2 add column age int;
 insert into t2 (uid, name, age, info) values (20004, 'Colonel Aureliano Buendía', 301, '{}');
 alter table t2 add column info_json json GENERATED ALWAYS AS (`info`) VIRTUAL;

@@ -31,9 +31,11 @@ mysql-instances:
 
 black-white-list:
   instance:
-    do-dbs: ["sharding_seq_opt"]
+    do-dbs: ["sharding_seq_opt", "sharding_seq_tmp"]
     do-tables:
     -  db-name: "sharding_seq_opt"
+       tbl-name: "~^t[\\d]+"
+    -  db-name: "sharding_seq_tmp"
        tbl-name: "~^t[\\d]+"
 
 routes:
@@ -49,7 +51,6 @@ routes:
 
 mydumpers:
   global:
-    mydumper-path: "./bin/mydumper"
     threads: 4
     chunk-filesize: 64
     skip-tz-utc: true

@@ -173,6 +173,9 @@ enum Stage {
     Paused = 3;
     Stopped = 4;
     Finished = 5;
+
+    Pausing = 6;
+    Resuming = 7;
 }
 
 // CheckStatus represents status for check unit

@@ -1,4 +1,4 @@
-// Copyright 2019 PingCAP, Inc.
+// Copyright 2020 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,31 +11,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
-
-// Reference: https://dzone.com/articles/measuring-integration-test-coverage-rate-in-pouchc
+package unit
 
 import (
-	"fmt"
-	"os"
-	"strings"
-	"testing"
-	"time"
+	"context"
+
+	"github.com/pingcap/check"
+	"github.com/pingcap/errors"
 )
 
-func TestRunMain(t *testing.T) {
-	fmt.Println("dm-syncer startup", time.Now())
-	var args []string
-	for _, arg := range os.Args {
-		switch {
-		case arg == "DEVEL":
-		case strings.HasPrefix(arg, "-test."):
-		default:
-			args = append(args, arg)
-		}
-	}
+var _ = check.Suite(&testUnitSuite{})
 
-	os.Args = args
-	main()
-	fmt.Println("dm-syncer exit", time.Now())
+type testUnitSuite struct{}
+
+func (t *testUnitSuite) TestIsCtxCanceledProcessErr(c *check.C) {
+	err := NewProcessError(context.Canceled)
+	c.Assert(IsCtxCanceledProcessErr(err), check.IsTrue)
+
+	err = NewProcessError(errors.New("123"))
+	c.Assert(IsCtxCanceledProcessErr(err), check.IsFalse)
 }

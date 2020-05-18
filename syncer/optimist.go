@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -40,7 +41,26 @@ func (s *Syncer) initOptimisticShardDDL() error {
 		return err
 	}
 
-	return s.optimist.Init(sourceTables)
+	// convert according to router rules.
+	// downstream-schema -> downstream-table -> upstream-schema -> upstream-table.
+	mapper := make(map[string]map[string]map[string]map[string]struct{})
+	for upSchema, UpTables := range sourceTables {
+		for _, upTable := range UpTables {
+			downSchema, downTable := s.renameShardingSchema(upSchema, upTable)
+			if _, ok := mapper[downSchema]; !ok {
+				mapper[downSchema] = make(map[string]map[string]map[string]struct{})
+			}
+			if _, ok := mapper[downSchema][downTable]; !ok {
+				mapper[downSchema][downTable] = make(map[string]map[string]struct{})
+			}
+			if _, ok := mapper[downSchema][downTable][upSchema]; !ok {
+				mapper[downSchema][downTable][upSchema] = make(map[string]struct{})
+			}
+			mapper[downSchema][downTable][upSchema][upTable] = struct{}{}
+		}
+	}
+
+	return s.optimist.Init(mapper)
 }
 
 // handleQueryEventOptimistic handles QueryEvent in the optimistic shard DDL mode.
@@ -48,15 +68,31 @@ func (s *Syncer) handleQueryEventOptimistic(
 	ev *replication.QueryEvent, ec eventContext,
 	needHandleDDLs []string, needTrackDDLs []trackedDDL,
 	onlineDDLTableNames map[string]*filter.Table) error {
-	// wait previous DMLs to be replicated
-	s.jobWg.Wait()
+	// interrupted after flush old checkpoint and before track DDL.
+	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+		err := handleFlushCheckpointStage(1, val.(int), "before track DDL")
+		if err != nil {
+			failpoint.Return(err)
+		}
+	})
 
 	var (
 		upSchema   string
 		upTable    string
 		downSchema string
 		downTable  string
+
+		isDBDDL  bool
+		tiBefore *model.TableInfo
+		tiAfter  *model.TableInfo
+		err      error
 	)
+
+	switch needTrackDDLs[0].stmt.(type) {
+	case *ast.CreateDatabaseStmt, *ast.DropDatabaseStmt, *ast.AlterDatabaseStmt:
+		isDBDDL = true
+	}
+
 	for _, td := range needTrackDDLs {
 		// check whether do shard DDL for multi upstream tables.
 		if upSchema != "" && upSchema != td.tableNames[0][0].Schema &&
@@ -69,41 +105,45 @@ func (s *Syncer) handleQueryEventOptimistic(
 		downTable = td.tableNames[1][0].Name
 	}
 
-	var tiBefore *model.TableInfo
-	if _, ok := needTrackDDLs[0].stmt.(*ast.CreateTableStmt); !ok {
-		var err error
-		tiBefore, err = s.getTable(upSchema, upTable, downSchema, downTable, ec.parser2)
+	if !isDBDDL {
+		if _, ok := needTrackDDLs[0].stmt.(*ast.CreateTableStmt); !ok {
+			tiBefore, err = s.getTable(upSchema, upTable, downSchema, downTable, ec.parser2)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, td := range needTrackDDLs {
+		if err = s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+			return err
+		}
+	}
+
+	if !isDBDDL {
+		tiAfter, err = s.getTable(upSchema, upTable, downSchema, downTable, ec.parser2)
 		if err != nil {
 			return err
 		}
 	}
 
-	for _, td := range needTrackDDLs {
-		if err := s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
-			return err
-		}
-	}
-
-	// TODO(csuzhangxc): rollback schema in the tracker if failed.
-	tiAfter, err := s.getTable(upSchema, upTable, downSchema, downTable, ec.parser2)
-	if err != nil {
-		return err
-	}
-
-	s.tctx.L().Info("save table checkpoint", zap.String("event", "query"),
-		zap.String("schema", upSchema), zap.String("table", upTable),
-		zap.Strings("ddls", needHandleDDLs), log.WrapStringerField("location", ec.currentLocation))
-	s.saveTablePoint(upSchema, upTable, ec.currentLocation.Clone())
+	// in optimistic mode, don't `saveTablePoint` before execute DDL,
+	// because it has no `UnresolvedTables` to prevent the flush of this checkpoint.
 
 	info := s.optimist.ConstructInfo(upSchema, upTable, downSchema, downTable, needHandleDDLs, tiBefore, tiAfter)
 
 	var (
 		rev    int64
 		skipOp bool
+		op     optimism.Operation
 	)
 	switch needTrackDDLs[0].stmt.(type) {
-	case *ast.CreateDatabaseStmt, *ast.DropDatabaseStmt:
-	// for CREATE/DROP DATABASE, we do nothing now.
+	case *ast.CreateDatabaseStmt, *ast.AlterDatabaseStmt:
+		// need to execute the DDL to the downstream, but do not do the coordination with DM-master.
+		op.DDLs = needHandleDDLs
+		skipOp = true
+	case *ast.DropDatabaseStmt:
+		skipOp = true
 	case *ast.CreateTableStmt:
 		info.TableInfoBefore = tiAfter // for `CREATE TABLE`, we use tiAfter as tiBefore.
 		rev, err = s.optimist.PutInfoAddTable(info)
@@ -117,23 +157,21 @@ func (s *Syncer) handleQueryEventOptimistic(
 			return err
 		}
 		skipOp = true
-		needHandleDDLs = []string{} // no DDL needs to be handled for `DROP TABLE` now.
 	default:
 		rev, err = s.optimist.PutInfo(info)
 		if err != nil {
 			return err
 		}
 	}
-	s.tctx.L().Info("putted a shard DDL info into etcd", zap.Stringer("info", info))
 
-	var op optimism.Operation
 	if !skipOp {
+		s.tctx.L().Info("putted a shard DDL info into etcd", zap.Stringer("info", info))
 		op, err = s.optimist.GetOperation(ec.tctx.Ctx, info, rev+1)
 		if err != nil {
 			return err
 		}
+		s.tctx.L().Info("got a shard DDL lock operation", zap.Stringer("operation", op))
 	}
-	s.tctx.L().Info("got a shard DDL lock operation", zap.Stringer("operation", op))
 
 	if op.ConflictStage == optimism.ConflictDetected {
 		return terror.ErrSyncerShardDDLConflict.Generate(needHandleDDLs)
@@ -157,12 +195,20 @@ func (s *Syncer) handleQueryEventOptimistic(
 		needHandleDDLs = appliedSQLs // maybe nil
 	}
 
+	// interrupted after track DDL and before execute DDL.
+	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+		err = handleFlushCheckpointStage(2, val.(int), "before execute DDL")
+		if err != nil {
+			failpoint.Return(err)
+		}
+	})
+
 	ddlInfo := &shardingDDLInfo{
 		name:       needTrackDDLs[0].tableNames[0][0].String(),
 		tableNames: needTrackDDLs[0].tableNames,
 		stmt:       needTrackDDLs[0].stmt,
 	}
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID, nil)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
