@@ -357,7 +357,7 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 		Task: taskConfig,
 	})
 	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(resp.Result, check.IsTrue)
 	clearSchedulerEnv(c, cancel, &wg)
 }
 

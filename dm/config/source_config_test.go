@@ -68,7 +68,7 @@ func (t *testConfig) TestConfig(c *C) {
 
 	cfg.From.Password = "xxx"
 	_, err = cfg.DecryptPassword()
-	c.Assert(err, NotNil)
+	c.Assert(err, IsNil)
 
 	cfg.From.Password = ""
 	clone3, err := cfg.DecryptPassword()
@@ -167,7 +167,15 @@ func (t *testConfig) TestConfigVerify(c *C) {
 				cfg.From.Password = "not-encrypt"
 				return cfg
 			},
-			"*decode base64 encoded password.*",
+			"",
+		},
+		{
+			func() *SourceConfig {
+				cfg := newConfig()
+				cfg.From.Password = "" // password empty
+				return cfg
+			},
+			"",
 		},
 	}
 
