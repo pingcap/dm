@@ -297,55 +297,7 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 func (t *testElectionSuite) TestElectionReCampaignTriggered(c *C) {
 	var (
 		sessionTTL = 60
-		key        = "unit-test/election-delete-key"
-		ID         = "member"
-		addr       = "127.0.0.1:1234"
-	)
-	cli, err := etcdutil.CreateClient([]string{t.endPoint})
-	c.Assert(err, IsNil)
-	defer cli.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	e, err := NewElection(ctx, cli, sessionTTL, key, ID, addr, t.notifyBlockTime)
-	c.Assert(err, IsNil)
-	defer e.Close()
-
-	// should become the leader
-	select {
-	case leader := <-e.LeaderNotify():
-		c.Assert(leader.ID, Equals, ID)
-	case <-time.After(3 * time.Second):
-		c.Fatal("leader campaign timeout")
-	}
-	c.Assert(e.IsLeader(), IsTrue)
-	_, leaderID, leaderAddr, err := e.LeaderInfo(ctx)
-	c.Assert(err, IsNil)
-	c.Assert(leaderID, Equals, e.ID())
-	c.Assert(leaderAddr, Equals, addr)
-
-	// the leader retired after deleted the key
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		wg.Done()
-		select {
-		case err2 := <-e.ErrorNotify():
-			c.Fatalf("delete the leader key should not get an error, %v", err2)
-		case leader := <-e.LeaderNotify():
-			c.Assert(leader, IsNil)
-		}
-	}()
-	triggered, err := e.ReCampaignIfNeeded(ctx, ID)
-	c.Assert(err, IsNil)
-	c.Assert(triggered, IsTrue)
-	wg.Wait()
-}
-
-func (t *testElectionSuite) TestElectionReCampaignSkipped(c *C) {
-	var (
-		sessionTTL = 60
-		key        = "unit-test/election-2-after-1"
+		key        = "unit-test/election-re-campaign-triggered"
 		ID1        = "member1"
 		ID2        = "member2"
 		addr1      = "127.0.0.1:1"
@@ -393,7 +345,64 @@ func (t *testElectionSuite) TestElectionReCampaignSkipped(c *C) {
 	c.Assert(leaderAddr, Equals, addr1)
 	c.Assert(e2.IsLeader(), IsFalse)
 
-	triggered, err := e2.ReCampaignIfNeeded(ctx2, ID2)
+	triggered, err := e2.ReCampaignIfNeeded(ctx2, ID1)
+	c.Assert(err, IsNil)
+	c.Assert(triggered, IsTrue)
+	c.Assert(e1.IsLeader(), IsFalse)
+}
+
+func (t *testElectionSuite) TestElectionReCampaignSkipped(c *C) {
+	var (
+		sessionTTL = 60
+		key        = "unit-test/election-re-campaign-skipped"
+		ID1        = "member1"
+		ID2        = "member2"
+		addr1      = "127.0.0.1:1"
+		addr2      = "127.0.0.1:2"
+	)
+	cli, err := etcdutil.CreateClient([]string{t.endPoint})
+	c.Assert(err, IsNil)
+	defer cli.Close()
+
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	defer cancel1()
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1, t.notifyBlockTime)
+	c.Assert(err, IsNil)
+	defer e1.Close()
+
+	// e1 should become the leader
+	select {
+	case leader := <-e1.LeaderNotify():
+		c.Assert(leader.ID, Equals, ID1)
+	case <-time.After(3 * time.Second):
+		c.Fatal("leader campaign timeout")
+	}
+	c.Assert(e1.IsLeader(), IsTrue)
+	_, leaderID, leaderAddr, err := e1.LeaderInfo(ctx1)
+	c.Assert(err, IsNil)
+	c.Assert(leaderID, Equals, e1.ID())
+	c.Assert(leaderAddr, Equals, addr1)
+
+	// start e2
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, addr2, t.notifyBlockTime)
+	c.Assert(err, IsNil)
+	defer e2.Close()
+	select {
+	case leader := <-e2.leaderCh:
+		c.Assert(leader.ID, Equals, ID1)
+	case <-time.After(time.Second):
+		c.Fatal("leader campaign timeout")
+	}
+	// but the leader should still be e1
+	_, leaderID, leaderAddr, err = e2.LeaderInfo(ctx2)
+	c.Assert(err, IsNil)
+	c.Assert(leaderID, Equals, e1.ID())
+	c.Assert(leaderAddr, Equals, addr1)
+	c.Assert(e2.IsLeader(), IsFalse)
+
+	triggered, err := e1.ReCampaignIfNeeded(ctx2, ID2)
 	c.Assert(err, IsNil)
 	c.Assert(triggered, IsFalse)
 	c.Assert(e1.IsLeader(), IsTrue)

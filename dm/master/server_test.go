@@ -1023,12 +1023,16 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	cfg3.InitialCluster = initialCluster
 
 	s1 := NewServer(cfg1)
-	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
+	go func() {
+		c.Assert(s1.Start(ctx), check.IsNil)
+	}()
 
 	s2 := NewServer(cfg2)
-	c.Assert(s2.Start(ctx), check.IsNil)
 	defer s2.Close()
+	go func() {
+		c.Assert(s2.Start(ctx), check.IsNil)
+	}()
 
 	s3 := NewServer(cfg3)
 	c.Assert(s3.Start(ctx), check.IsNil)

@@ -403,7 +403,7 @@ func (e *Election) ReCampaignIfNeeded(ctx context.Context, id string) (bool, err
 		// given id is not leader, no need to trigger re-campaign
 		return false, nil
 	}
-	delResp, err := e.cli.Txn(ctx).If(clientv3.Compare(clientv3.Value(e.key), "=", resp.Kvs[0].Value)).
+	delResp, err := e.cli.Txn(ctx).If(clientv3.Compare(clientv3.Value(e.key), "=", string(resp.Kvs[0].Value))).
 		Then(clientv3.OpDelete(e.key)).Commit()
 	if err != nil {
 		return false, err

@@ -87,6 +87,24 @@ function run() {
 
     echo "use sync_diff_inspector to check data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    dmctl_offline_member master master1
+    dmctl_offline_member master master2
+
+    echo "kill dm-master3"
+    ps aux | grep dm-master3 |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT3 20
+
+    sleep 2
+    # the last two masters should elect a new leader and serve service
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT4" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 2
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT4" \
+        "pause-task test" \
+        "\"result\": true" 3 \
+        "\"source\": \"$SOURCE_ID1\"" 1 \
+        "\"source\": \"$SOURCE_ID2\"" 1
 }
 
 cleanup_data ha_master_test
