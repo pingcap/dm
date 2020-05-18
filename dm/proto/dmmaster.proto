@@ -65,10 +65,10 @@ service Master {
     // RegisterWorker register the dm-workers.
     rpc RegisterWorker(RegisterWorkerRequest) returns(RegisterWorkerResponse) {}
 
-    // OfflineWorker offline the dm-workers.
-    rpc OfflineWorker(OfflineWorkerRequest) returns(OfflineWorkerResponse) {
+    // OfflineMember offline the dm cluster's members (master/worker).
+    rpc OfflineMember(OfflineMemberRequest) returns(OfflineMemberResponse) {
         option (google.api.http) = {
-            delete: "/apis/v1alpha1/workers/{name}"
+            delete: "/apis/v1alpha1/members/{type}/{name}"
         };
     }
 }
@@ -306,11 +306,12 @@ message RegisterWorkerResponse {
     string msg = 2;
 }
 
-message OfflineWorkerRequest {
-    string name = 1;
+message OfflineMemberRequest {
+    string type = 1;
+    string name = 2;
 }
 
-message OfflineWorkerResponse {
+message OfflineMemberResponse {
     bool result = 1;
     string msg = 2;
 }

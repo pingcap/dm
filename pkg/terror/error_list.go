@@ -416,7 +416,8 @@ const (
 	codeMasterIsNotAsyncRequest
 	codeMasterFailToGetExpectResult
 	codeMasterPessimistNotStarted
-	codeMasterRequestedNameNotExist
+	codeMasterMasterNameNotExist
+	codeMasterInvalidOfflineType
 )
 
 // DM-worker error code
@@ -929,7 +930,8 @@ var (
 	ErrMasterIsNotAsyncRequest           = New(codeMasterIsNotAsyncRequest, ClassDMMaster, ScopeInternal, LevelMedium, "request %s is not an async one, needn't wait for ok")
 	ErrMasterFailToGetExpectResult       = New(codeMasterFailToGetExpectResult, ClassDMMaster, ScopeInternal, LevelMedium, "fail to get expected result")
 	ErrMasterPessimistNotStarted         = New(codeMasterPessimistNotStarted, ClassDMMaster, ScopeInternal, LevelMedium, "the shardddl pessimist has not started")
-	ErrMasterRequestedNameNotExist       = New(codeMasterRequestedNameNotExist, ClassDMMaster, ScopeInternal, LevelLow, "requested master name %d doesn't exist in etcd cluster")
+	ErrMasterMasterNameNotExist          = New(codeMasterMasterNameNotExist, ClassDMMaster, ScopeInternal, LevelLow, "requested master name %s doesn't exist in etcd cluster")
+	ErrMasterInvalidOfflineType          = New(codeMasterInvalidOfflineType, ClassDMMaster, ScopeInternal, LevelLow, "requested offline type %s is invalid, please use master/worker")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")

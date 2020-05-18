@@ -287,25 +287,40 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 // OfflineWorker removes info of the worker which has been Closed, and all the worker are store in the path:
 // key:   /dm-worker/r/name
 // value: workerInfo
-func (s *Server) OfflineWorker(ctx context.Context, req *pb.OfflineWorkerRequest) (*pb.OfflineWorkerResponse, error) {
+func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest) (*pb.OfflineMemberResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OfflineWorker"))
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
-			return s.leaderClient.OfflineWorker(ctx, req)
+			return s.leaderClient.OfflineMember(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
-	err := s.scheduler.RemoveWorker(req.Name)
-	if err != nil {
-		return &pb.OfflineWorkerResponse{
+	if req.Type == "worker" {
+		err := s.scheduler.RemoveWorker(req.Name)
+		if err != nil {
+			return &pb.OfflineMemberResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+	} else if req.Type == "master" {
+		err := s.deleteMasterByName(ctx, req.Name)
+		if err != nil {
+			return &pb.OfflineMemberResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+	} else {
+		return &pb.OfflineMemberResponse{
 			Result: false,
-			Msg:    errors.ErrorStack(err),
+			Msg:    terror.ErrMasterInvalidOfflineType.Generate(req.Type).Error(),
 		}, nil
 	}
-	log.L().Info("offline worker successfully", zap.String("name", req.Name))
-	return &pb.OfflineWorkerResponse{
+	log.L().Info("offline member successfully", zap.String("type", req.Type), zap.String("name", req.Name))
+	return &pb.OfflineMemberResponse{
 		Result: true,
 	}, nil
 }
@@ -325,7 +340,7 @@ func (s *Server) deleteMasterByName(ctx context.Context, name string) error {
 		}
 	}
 	if id == 0 {
-		return terror.ErrMasterRequestedNameNotExist.Generate(name)
+		return terror.ErrMasterMasterNameNotExist.Generate(name)
 	}
 
 	_, err = s.election.ReCampaignIfNeeded(ctx, name)
