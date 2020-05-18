@@ -284,7 +284,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 	}, nil
 }
 
-// OfflineWorker removes info of the worker which has been Closed, and all the worker are store in the path:
+// OfflineMember removes info of the worker which has been Closed, and all the worker are store in the path:
 // key:   /dm-worker/r/name
 // value: workerInfo
 func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest) (*pb.OfflineMemberResponse, error) {

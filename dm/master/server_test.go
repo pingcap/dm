@@ -1023,18 +1023,19 @@ func (t *testMaster) TestOfflineWorker(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 
-	req2 := &pb.OfflineWorkerRequest{
+	req2 := &pb.OfflineMemberRequest{
+		Type: "worker",
 		Name: "haha",
 	}
 	{
-		res, err := s1.OfflineWorker(ectx, req2)
+		res, err := s1.OfflineMember(ectx, req2)
 		c.Assert(err, check.IsNil)
 		c.Assert(res.Result, check.IsFalse)
 		c.Assert(res.Msg, check.Matches, `[\s\S]*dm-worker with name `+req2.Name+` not exists[\s\S]*`)
 	}
 	{
 		req2.Name = "xixi"
-		res, err := s1.OfflineWorker(ectx, req2)
+		res, err := s1.OfflineMember(ectx, req2)
 		c.Assert(err, check.IsNil)
 		c.Assert(res.Result, check.IsTrue)
 	}

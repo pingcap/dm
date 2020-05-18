@@ -6,10 +6,11 @@ package pbmock
 
 import (
 	context "context"
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	pb "github.com/pingcap/dm/dm/pb"
 	grpc "google.golang.org/grpc"
-	reflect "reflect"
 )
 
 // MockMasterClient is a mock of MasterClient interface
@@ -95,24 +96,24 @@ func (mr *MockMasterClientMockRecorder) MigrateWorkerRelay(arg0, arg1 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateWorkerRelay", reflect.TypeOf((*MockMasterClient)(nil).MigrateWorkerRelay), varargs...)
 }
 
-// OfflineWorker mocks base method
-func (m *MockMasterClient) OfflineWorker(arg0 context.Context, arg1 *pb.OfflineWorkerRequest, arg2 ...grpc.CallOption) (*pb.OfflineWorkerResponse, error) {
+// OfflineMember mocks base method
+func (m *MockMasterClient) OfflineMember(arg0 context.Context, arg1 *pb.OfflineMemberRequest, arg2 ...grpc.CallOption) (*pb.OfflineMemberResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0, arg1}
 	for _, a := range arg2 {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "OfflineWorker", varargs...)
-	ret0, _ := ret[0].(*pb.OfflineWorkerResponse)
+	ret := m.ctrl.Call(m, "OfflineMember", varargs...)
+	ret0, _ := ret[0].(*pb.OfflineMemberResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// OfflineWorker indicates an expected call of OfflineWorker
-func (mr *MockMasterClientMockRecorder) OfflineWorker(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+// OfflineMember indicates an expected call of OfflineMember
+func (mr *MockMasterClientMockRecorder) OfflineMember(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OfflineWorker", reflect.TypeOf((*MockMasterClient)(nil).OfflineWorker), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OfflineMember", reflect.TypeOf((*MockMasterClient)(nil).OfflineMember), varargs...)
 }
 
 // OperateSource mocks base method
@@ -463,19 +464,19 @@ func (mr *MockMasterServerMockRecorder) MigrateWorkerRelay(arg0, arg1 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateWorkerRelay", reflect.TypeOf((*MockMasterServer)(nil).MigrateWorkerRelay), arg0, arg1)
 }
 
-// OfflineWorker mocks base method
-func (m *MockMasterServer) OfflineWorker(arg0 context.Context, arg1 *pb.OfflineWorkerRequest) (*pb.OfflineWorkerResponse, error) {
+// OfflineMember mocks base method
+func (m *MockMasterServer) OfflineMember(arg0 context.Context, arg1 *pb.OfflineMemberRequest) (*pb.OfflineMemberResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OfflineWorker", arg0, arg1)
-	ret0, _ := ret[0].(*pb.OfflineWorkerResponse)
+	ret := m.ctrl.Call(m, "OfflineMember", arg0, arg1)
+	ret0, _ := ret[0].(*pb.OfflineMemberResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// OfflineWorker indicates an expected call of OfflineWorker
-func (mr *MockMasterServerMockRecorder) OfflineWorker(arg0, arg1 interface{}) *gomock.Call {
+// OfflineMember indicates an expected call of OfflineMember
+func (mr *MockMasterServerMockRecorder) OfflineMember(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OfflineWorker", reflect.TypeOf((*MockMasterServer)(nil).OfflineWorker), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OfflineMember", reflect.TypeOf((*MockMasterServer)(nil).OfflineMember), arg0, arg1)
 }
 
 // OperateSource mocks base method
