@@ -27,7 +27,7 @@ import (
 // NewOfflineWorkerCmd creates an OfflineWorker command
 func NewOfflineWorkerCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "offline-worker <name> <address>",
+		Use:   "offline-worker <name>",
 		Short: "offline worker which has been closed",
 		Run:   offlineWorkerFunc,
 	}
@@ -43,14 +43,12 @@ func offlineWorkerFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	name := cmd.Flags().Arg(0)
-	addr := cmd.Flags().Arg(1)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	cli := common.MasterClient()
 	resp, err := cli.OfflineWorker(ctx, &pb.OfflineWorkerRequest{
-		Name:    name,
-		Address: addr,
+		Name: name,
 	})
 	if err != nil {
 		common.PrintLines("offline worker failed, error:\n%v", errors.ErrorStack(err))
