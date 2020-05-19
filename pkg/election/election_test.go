@@ -247,6 +247,72 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	c.Assert(e2.IsLeader(), IsFalse)
 }
 
+func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
+	var (
+		sessionTTL = 60
+		key        = "unit-test/election-evict-leader"
+		ID1        = "member1"
+		ID2        = "member2"
+		addr1      = "127.0.0.1:1234"
+		addr2      = "127.0.0.1:2345"
+	)
+	cli, err := etcdutil.CreateClient([]string{t.endPoint})
+	c.Assert(err, IsNil)
+	defer cli.Close()
+
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	defer cancel1()
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1, t.notifyBlockTime)
+	c.Assert(err, IsNil)
+	defer e1.Close()
+
+	// e1 should become the leader
+	select {
+	case leader := <-e1.LeaderNotify():
+		c.Assert(leader.ID, Equals, ID1)
+	case <-time.After(3 * time.Second):
+		c.Fatal("leader campaign timeout")
+	}
+	c.Assert(e1.IsLeader(), IsTrue)
+	_, leaderID, leaderAddr, err := e1.LeaderInfo(ctx1)
+	c.Assert(err, IsNil)
+	c.Assert(leaderID, Equals, e1.ID())
+	c.Assert(leaderAddr, Equals, addr1)
+
+	// start e2
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, addr2, t.notifyBlockTime)
+	c.Assert(err, IsNil)
+	defer e2.Close()
+	time.Sleep(100 * time.Millisecond) // wait 100ms to start the campaign
+	// but the leader should still be e1
+	_, leaderID, leaderAddr, err = e2.LeaderInfo(ctx2)
+	c.Assert(err, IsNil)
+	c.Assert(leaderID, Equals, e1.ID())
+	c.Assert(leaderAddr, Equals, addr1)
+	c.Assert(e2.IsLeader(), IsFalse)
+
+	// e1 evict leader, and e2 will be the leader
+	e1.EvictLeader()
+	time.Sleep(time.Second)
+	_, leaderID, leaderAddr, err = e2.LeaderInfo(ctx2)
+	c.Assert(err, IsNil)
+	c.Assert(leaderID, Equals, e2.ID())
+	c.Assert(leaderAddr, Equals, addr2)
+	c.Assert(e2.IsLeader(), IsTrue)
+
+	// cancel evict of e1, and then evict e2, e1 will be the leader
+	e1.CancelEvictLeader()
+	e2.EvictLeader()
+	time.Sleep(time.Second)
+	_, leaderID, leaderAddr, err = e1.LeaderInfo(ctx1)
+	c.Assert(err, IsNil)
+	c.Assert(leaderID, Equals, e1.ID())
+	c.Assert(leaderAddr, Equals, addr1)
+	c.Assert(e1.IsLeader(), IsTrue)
+}
+
 func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 	var (
 		sessionTTL = 60

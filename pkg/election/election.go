@@ -92,13 +92,7 @@ type Election struct {
 	closed sync2.AtomicInt32
 	cancel context.CancelFunc
 
-	campaignCancel context.CancelFunc
-	campaignWg     sync.WaitGroup
-	// campaignStage:
-	// set 0: means is not in campaign
-	// set -1: means is exit campaign
-	// set 1: means is in campaign
-	campaignStage sync2.AtomicInt32
+	campaignWg sync.WaitGroup
 
 	campaignMu sync.RWMutex
 
@@ -226,14 +220,6 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		compaignWg  sync.WaitGroup
 	)
 	for {
-		/*
-			// this member should not be leader, skip campagin
-			if e.evictLeader.Get() {
-				time.Sleep(time.Second * 5)
-				continue
-			}
-		*/
-
 		// check context canceled/timeout
 		select {
 		case <-session.Done():
@@ -364,12 +350,15 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 
 	e.campaignMu.Lock()
 	e.resignCh = make(chan struct{})
-	defer close(e.resignCh)
 	e.campaignMu.Unlock()
 
+	defer func() {
+		e.campaignMu.Lock()
+		e.resignCh = nil
+		e.campaignMu.Unlock()
+	}()
+
 	wch := e.cli.Watch(ctx, key)
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
 
 	for {
 		if e.evictLeader.Get() {
@@ -428,6 +417,12 @@ func (e *Election) EvictLeader() {
 // CancelEvictLeader set evictLeader to false, and this member can campaign leader again
 func (e *Election) CancelEvictLeader() {
 	e.evictLeader.Set(false)
+	e.campaignMu.Lock()
+	if e.cancelCampaign != nil {
+		e.cancelCampaign()
+		e.cancelCampaign = nil
+	}
+	e.campaignMu.Unlock()
 }
 
 func (e *Election) newSession(ctx context.Context, retryCnt int) (*concurrency.Session, error) {

@@ -1308,6 +1308,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 }
 
 // OperateLeader implements MasterServer.OperateLeader
+// Note: this request dosen't need to forward to leader
 func (s *Server) OperateLeader(ctx context.Context, req *pb.OperateLeaderRequest) (*pb.OperateLeaderResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateLeader"))
 
