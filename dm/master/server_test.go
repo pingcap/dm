@@ -1001,6 +1001,7 @@ func generateServerConfig(c *check.C, name string) *Config {
 	cfg1.Name = name
 	cfg1.DataDir = c.MkDir()
 	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg1.AdvertiseAddr = cfg1.MasterAddr
 	cfg1.PeerUrls = tempurl.Alloc()
 	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
 	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
@@ -1008,7 +1009,7 @@ func generateServerConfig(c *check.C, name string) *Config {
 }
 
 func (t *testMaster) TestOfflineMember(c *check.C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	cfg1 := generateServerConfig(c, "dm-master-1")
@@ -1039,9 +1040,11 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 		wg.Done()
 	}()
 
+	ctx3, cancel3 := context.WithCancel(ctx)
 	s3 := NewServer(cfg3)
-	c.Assert(s3.Start(ctx), check.IsNil)
+	c.Assert(s3.Start(ctx3), check.IsNil)
 	defer s3.Close()
+	defer cancel3()
 
 	wg.Wait()
 	time.Sleep(time.Second)
@@ -1070,8 +1073,9 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(listResp.Members, check.HasLen, 3)
 
+	cancel3()
 	s3.Close()
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 	req.Name = s3.cfg.Name
 	resp, err = s2.OfflineMember(ctx, req)
 	c.Assert(err, check.IsNil)
