@@ -55,13 +55,22 @@ service Master {
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
 
     // Operate an upstream MySQL source.
-    rpc OperateSource(OperateSourceRequest) returns (OperateSourceResponse) {}
+    rpc OperateSource(OperateSourceRequest) returns (OperateSourceResponse) {
+        option (google.api.http) = {
+            put: "/apis/v1alpha1/sources"
+            body: "*"
+        };
+    }
 
     // RegisterWorker register the dm-workers.
     rpc RegisterWorker(RegisterWorkerRequest) returns(RegisterWorkerResponse) {}
 
     // OfflineWorker offline the dm-workers.
-    rpc OfflineWorker(OfflineWorkerRequest) returns(OfflineWorkerResponse) {}
+    rpc OfflineWorker(OfflineWorkerRequest) returns(OfflineWorkerResponse) {
+        option (google.api.http) = {
+            delete: "/apis/v1alpha1/workers/{name}"
+        };
+    }
 
     // OperateLeader do some operate on master:
     //   - evict leader: make the master resign if it is leader, and will not campaign the leader again
@@ -309,7 +318,6 @@ message RegisterWorkerResponse {
 
 message OfflineWorkerRequest {
     string name = 1;
-    string address = 2;
 }
 
 message OfflineWorkerResponse {

@@ -28,7 +28,14 @@ function run() {
     # operate mysql config to worker
     cp $cur/conf/source1.toml $WORK_DIR/source1.toml
     sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
+
+    cat $WORK_DIR/source1.toml | sed 's/$/\\n/' | sed 's/"/\\"/g' | tr -d '\n' > $WORK_DIR/source1.toml.bak
+    source_data=`cat $WORK_DIR/source1.toml.bak`
+    rm $WORK_DIR/source1.toml.bak
+    echo $source_data
+    curl -X PUT 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/sources -d '{"op": 1, "config": "'"$source_data"'"}' > $WORK_DIR/create-source.log
+    check_log_contains $WORK_DIR/create-source.log "\"result\":true" 1
+    check_log_contains $WORK_DIR/create-source.log "\"source\":\"$SOURCE_ID1\"" 1
 
     echo "start task and check stage"
     cat $cur/conf/dm-task.yaml | sed 's/$/\\n/' | sed 's/"/\\"/g' | tr -d '\n' > $WORK_DIR/task.yaml.bak
@@ -63,6 +70,13 @@ function run() {
     curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
     check_log_contains $WORK_DIR/status.log "\"stage\":\"Running\"" 1
     check_log_contains $WORK_DIR/status.log "\"name\":\"test\"" 1
+
+  sleep 1
+    echo "kill dm-worker1"
+    ps aux | grep dm-worker1 |awk '{print $2}'|xargs kill || true
+    check_port_offline $WORKER1_PORT 20
+    curl -X DELETE 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/workers/worker1 > $WORK_DIR/offline-worker.log
+    check_log_contains $WORK_DIR/offline-worker.log "\"result\":true" 1
 
     echo "check data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
