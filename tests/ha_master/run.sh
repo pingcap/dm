@@ -81,6 +81,26 @@ function test_list_member() {
         "list-member --master" \
         "\"alive\": true" 5
     
+    
+    # restart follower
+    for idx in $(seq 1 5); do
+        leader=$(get_leader $WORK_DIR 127.0.0.1:${master_ports[$idx]})
+        leader_idx=${leader:6}
+        echo "current leader is" $leader
+        if [[ $idx = $leader_idx ]]; then
+            continue
+        fi
+        echo "kill master$idx"
+        ps aux | grep dm-master$idx |awk '{print $2}'|xargs kill || true
+        check_port_offline ${master_ports[$idx]} 20
+        run_dm_master $WORK_DIR/master${idx} ${master_ports[$idx]} $cur/conf/dm-master${idx}.toml
+        check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:${master_ports[$idx]}
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "list-member --master" \
+            "\"alive\": true" 5
+        sleep 5
+    done    
+    
     # check list-member worker
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --worker --name=worker1,worker2" \
@@ -183,7 +203,7 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
-    test_list_member
+    test_list_member # TICASE-933, 942, 946, 947
 
     echo "start DM task"
     dmctl_start_task

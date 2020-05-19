@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
@@ -74,8 +75,22 @@ func (s *Server) JoinMaster(endpoints []string) error {
 func (s *Server) KeepAlive() {
 	for {
 		log.L().Info("start to keepalive with master")
-		err1 := ha.KeepAlive(s.ctx, s.etcdClient, s.cfg.Name, s.cfg.KeepAliveTTL)
-		log.L().Warn("keepalive with master goroutine paused", zap.Error(err1))
+
+		failpoint.Inject("FailToKeepAlive", func(val failpoint.Value) {
+			workerStrings := val.(string)
+			if strings.Contains(workerStrings, s.cfg.Name) {
+				log.L().Info("worker keep alive failed", zap.String("failpoint", "FailToKeepAlive"))
+				failpoint.Goto("bypass")
+			}
+		})
+
+		{
+			err1 := ha.KeepAlive(s.ctx, s.etcdClient, s.cfg.Name, s.cfg.KeepAliveTTL)
+			log.L().Warn("keepalive with master goroutine paused", zap.Error(err1))
+		}
+
+		failpoint.Label("bypass")
+
 		s.stopWorker("")
 		select {
 		case <-s.ctx.Done():
