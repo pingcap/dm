@@ -63,11 +63,15 @@ service Master {
     // OfflineWorker offline the dm-workers.
     rpc OfflineWorker(OfflineWorkerRequest) returns(OfflineWorkerResponse) {}
 
-    // EvictLeader make the master resign if it is leader, and will not campaign the leader again
-    rpc EvictLeader(OperateLeaderRequest) returns(OperateLeaderResponse) {}
-
-    // CancelEvictLeader cancel the evict operate of a master, the master can campaign the leader again
-    rpc CancelEvictLeader(OperateLeaderRequest) returns(OperateLeaderResponse) {}
+    // OperateLeader do some operate on master:
+    //   - evict leader: make the master resign if it is leader, and will not campaign the leader again
+    //   - cancel evict leader: the master can campaign leader again.
+    rpc OperateLeader(OperateLeaderRequest) returns(OperateLeaderResponse) {
+        option (google.api.http) = { 
+            put: "/apis/v1alpha1/leader/{op}"
+            body: "*"
+        };
+    }
 }
 
 message MigrateWorkerRelayRequest {
@@ -320,8 +324,7 @@ enum LeaderOp {
 }
 
 message OperateLeaderRequest {
-    string leaderID = 1;
-    LeaderOp op = 2;
+    LeaderOp op = 1;
 }
 
 message OperateLeaderResponse {

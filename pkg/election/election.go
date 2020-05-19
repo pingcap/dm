@@ -91,10 +91,26 @@ type Election struct {
 
 	closed sync2.AtomicInt32
 	cancel context.CancelFunc
-	bgWg   sync.WaitGroup
+
+	campaignCancel context.CancelFunc
+	campaignWg     sync.WaitGroup
+	// campaignStage:
+	// set 0: means is not in campaign
+	// set -1: means is exit campaign
+	// set 1: means is in campaign
+	campaignStage sync2.AtomicInt32
+
+	campaignMu sync.RWMutex
+
+	cancelCampaign func()
 
 	// notifyBlockTime is the max block time for notify leader
 	notifyBlockTime time.Duration
+
+	// set evictLeader is true if don't hope this member be leader
+	evictLeader sync2.AtomicBool
+
+	resignCh chan struct{}
 
 	l log.Logger
 }
@@ -126,9 +142,9 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 		return nil, terror.ErrElectionCampaignFail.Delegate(err, "create the initial session")
 	}
 
-	e.bgWg.Add(1)
+	e.campaignWg.Add(1)
 	go func() {
-		defer e.bgWg.Done()
+		defer e.campaignWg.Done()
 		e.campaignLoop(ctx2, session)
 	}()
 	return e, nil
@@ -183,7 +199,7 @@ func (e *Election) Close() {
 	}
 
 	e.cancel()
-	e.bgWg.Wait()
+	e.campaignWg.Wait()
 	e.l.Info("election is closed", zap.Stringer("current member", e.info))
 }
 
@@ -210,6 +226,14 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		compaignWg  sync.WaitGroup
 	)
 	for {
+		/*
+			// this member should not be leader, skip campagin
+			if e.evictLeader.Get() {
+				time.Sleep(time.Second * 5)
+				continue
+			}
+		*/
+
 		// check context canceled/timeout
 		select {
 		case <-session.Done():
@@ -235,6 +259,19 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 			defer compaignWg.Done()
 
 			e.l.Debug("begin to compaign", zap.Stringer("current member", e.info))
+			e.campaignMu.Lock()
+			if e.evictLeader.Get() {
+				// skip campaign
+				e.campaignMu.Unlock()
+				return
+			}
+
+			e.cancelCampaign = func() {
+				cancel2()
+				compaignWg.Wait()
+			}
+			e.campaignMu.Unlock()
+
 			err2 := elec.Campaign(ctx2, e.infoStr)
 			if err2 != nil {
 				// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
@@ -294,7 +331,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 		e.l.Info("become leader", zap.Stringer("current member", e.info))
 		e.notifyLeader(ctx, leaderInfo) // become the leader now
-		e.watchLeader(ctx, session, leaderKey)
+		e.watchLeader(ctx, session, leaderKey, elec)
 		e.l.Info("retire from leader", zap.Stringer("current member", e.info))
 		e.notifyLeader(ctx, nil) // need to re-campaign
 		oldLeaderID = ""
@@ -323,10 +360,24 @@ func (e *Election) notifyLeader(ctx context.Context, leaderInfo *CampaignerInfo)
 	}
 }
 
-func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session, key string) {
+func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session, key string, elec *concurrency.Election) {
 	e.l.Debug("watch leader key", zap.String("key", key))
+
+	e.campaignMu.Lock()
+	e.resignCh = make(chan struct{})
+	defer close(e.resignCh)
+	e.campaignMu.Unlock()
+
 	wch := e.cli.Watch(ctx, key)
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+
 	for {
+		if e.evictLeader.Get() {
+			elec.Resign(ctx)
+			return
+		}
+
 		select {
 		case resp, ok := <-wch:
 			if !ok {
@@ -349,8 +400,34 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 			return
 		case <-ctx.Done():
 			return
+		case <-e.resignCh:
+			if e.evictLeader.Get() {
+				elec.Resign(ctx)
+				return
+			}
 		}
 	}
+}
+
+// EvictLeader set evictLeader to true, and this member can't be leader
+func (e *Election) EvictLeader() {
+	e.evictLeader.Set(true)
+
+	// cancel campagin or current member is leader and then resign
+	e.campaignMu.Lock()
+	if e.cancelCampaign != nil {
+		e.cancelCampaign()
+	}
+
+	if e.resignCh != nil {
+		close(e.resignCh)
+	}
+	e.campaignMu.Unlock()
+}
+
+// CancelEvictLeader set evictLeader to false, and this member can campaign leader again
+func (e *Election) CancelEvictLeader() {
+	e.evictLeader.Set(false)
 }
 
 func (e *Election) newSession(ctx context.Context, retryCnt int) (*concurrency.Session, error) {
