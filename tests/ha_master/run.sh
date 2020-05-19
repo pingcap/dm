@@ -156,12 +156,18 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT4
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
 
+    # wait for master raft log to catch up
+    sleep 2
+
     # kill dm-master1 and dm-master2 to simulate the first two dm-master addr in join config are invalid
     echo "kill dm-master1 and kill dm-master2"
     ps aux | grep dm-master1 |awk '{print $2}'|xargs kill || true
     check_port_offline $MASTER_PORT1 20
     ps aux | grep dm-master2 |awk '{print $2}'|xargs kill || true
     check_port_offline $MASTER_PORT2 20
+
+    # wait for master switch leader and re-setup
+    sleep 2
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
