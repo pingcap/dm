@@ -177,6 +177,14 @@ func (t *testConfig) TestConfigVerify(c *C) {
 			},
 			"",
 		},
+		{
+			func() *SourceConfig {
+				cfg := newConfig()
+				cfg.From.Password = "123456" // plaintext password
+				return cfg
+			},
+			"",
+		},
 	}
 
 	for _, tc := range testCases {
