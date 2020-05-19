@@ -33,11 +33,6 @@ type ListMemberFlags struct {
 	names []string // specify names to list information
 }
 
-// Reset clears cache of ListMemberFlags
-func (c ListMemberFlags) Reset() {
-	c.names = c.names[:0]
-}
-
 // NewListMemberCmd creates an ListMember command
 func NewListMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
