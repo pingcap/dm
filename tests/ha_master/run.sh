@@ -88,8 +88,12 @@ function run() {
     echo "use sync_diff_inspector to check data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    dmctl_offline_member master master1
-    dmctl_offline_member master master2
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT4" \
+        "offline-member --master --name master1" \
+        "\"result\": true" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT4" \
+        "offline-member --master --name master2" \
+        "\"result\": true" 1
 
     echo "kill dm-master3"
     ps aux | grep dm-master3 |awk '{print $2}'|xargs kill || true
