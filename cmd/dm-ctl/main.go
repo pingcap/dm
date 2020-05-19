@@ -60,6 +60,7 @@ import (
 //
 //Special Commands:
 //  --encrypt encrypt plaintext to ciphertext
+//  --decrypt decrypt ciphertext to plaintext
 //
 //Global Options:
 //  --V prints version and exit
