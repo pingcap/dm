@@ -254,23 +254,22 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		elec := concurrency.NewElection(session, e.key)
 		ctx2, cancel2 := context.WithCancel(ctx)
 
+		e.campaignMu.Lock()
+		e.cancelCampaign = func() {
+			cancel2()
+			compaignWg.Wait()
+		}
+		e.campaignMu.Unlock()
+
 		compaignWg.Add(1)
 		go func() {
 			defer compaignWg.Done()
 
 			e.l.Debug("begin to compaign", zap.Stringer("current member", e.info))
-			e.campaignMu.Lock()
 			if e.evictLeader.Get() {
 				// skip campaign
-				e.campaignMu.Unlock()
 				return
 			}
-
-			e.cancelCampaign = func() {
-				cancel2()
-				compaignWg.Wait()
-			}
-			e.campaignMu.Unlock()
 
 			err2 := elec.Campaign(ctx2, e.infoStr)
 			if err2 != nil {
@@ -417,6 +416,7 @@ func (e *Election) EvictLeader() {
 	e.campaignMu.Lock()
 	if e.cancelCampaign != nil {
 		e.cancelCampaign()
+		e.cancelCampaign = nil
 	}
 
 	if e.resignCh != nil {
