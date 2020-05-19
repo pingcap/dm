@@ -1063,7 +1063,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	resp, err = s2.OfflineMember(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	c.Assert(resp.Msg, check.Matches, `[\s\S]*`+terror.ErrMasterMasterNameNotExist.Generate(req.Name).Error()+`[\s\S]*`)
+	c.Assert(resp.Msg, check.Matches, `[\s\S]*requested master name `+req.Name+` doesn't exist in etcd cluster[\s\S]*`)
 	// test offline member with correct master name
 	cli := s2.etcdClient
 	listResp, err := etcdutil.ListMembers(cli)
@@ -1075,6 +1075,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	req.Name = s3.cfg.Name
 	resp, err = s2.OfflineMember(ctx, req)
 	c.Assert(err, check.IsNil)
+	c.Assert(resp.Msg, check.Equals, "")
 	c.Assert(resp.Result, check.IsTrue)
 
 	listResp, err = etcdutil.ListMembers(cli)

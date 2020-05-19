@@ -101,6 +101,6 @@ function dmctl_offline_member() {
     type=$1
     name=$2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source --$component --name $name" \
+        "operate-source --$type --name $name" \
         "\"result\": true" 1
 }
