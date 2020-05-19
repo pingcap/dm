@@ -75,6 +75,26 @@ func (mr *MockMasterClientMockRecorder) HandleSQLs(arg0, arg1 interface{}, arg2 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSQLs", reflect.TypeOf((*MockMasterClient)(nil).HandleSQLs), varargs...)
 }
 
+// ListMember mocks base method
+func (m *MockMasterClient) ListMember(arg0 context.Context, arg1 *pb.ListMemberRequest, arg2 ...grpc.CallOption) (*pb.ListMemberResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ListMember", varargs...)
+	ret0, _ := ret[0].(*pb.ListMemberResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListMember indicates an expected call of ListMember
+func (mr *MockMasterClientMockRecorder) ListMember(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMember", reflect.TypeOf((*MockMasterClient)(nil).ListMember), varargs...)
+}
+
 // MigrateWorkerRelay mocks base method
 func (m *MockMasterClient) MigrateWorkerRelay(arg0 context.Context, arg1 *pb.MigrateWorkerRelayRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
 	m.ctrl.T.Helper()
@@ -446,6 +466,21 @@ func (m *MockMasterServer) HandleSQLs(arg0 context.Context, arg1 *pb.HandleSQLsR
 func (mr *MockMasterServerMockRecorder) HandleSQLs(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSQLs", reflect.TypeOf((*MockMasterServer)(nil).HandleSQLs), arg0, arg1)
+}
+
+// ListMember mocks base method
+func (m *MockMasterServer) ListMember(arg0 context.Context, arg1 *pb.ListMemberRequest) (*pb.ListMemberResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListMember", arg0, arg1)
+	ret0, _ := ret[0].(*pb.ListMemberResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListMember indicates an expected call of ListMember
+func (mr *MockMasterServerMockRecorder) ListMember(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMember", reflect.TypeOf((*MockMasterServer)(nil).ListMember), arg0, arg1)
 }
 
 // MigrateWorkerRelay mocks base method
