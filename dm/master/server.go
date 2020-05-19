@@ -264,8 +264,8 @@ func errorCommonWorkerResponse(msg string, source, worker string) *pb.CommonWork
 }
 
 // RegisterWorker registers the worker to the master, and all the worker will be store in the path:
-// key:   /dm-worker/r/address
-// value: name
+// key:   /dm-worker/r/name
+// value: workerInfo
 func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "RegisterWorker"))
 	isLeader, needForward := s.isLeaderAndNeedForward()
@@ -290,8 +290,8 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 }
 
 // OfflineWorker removes info of the worker which has been Closed, and all the worker are store in the path:
-// key:   /dm-worker/r/address
-// value: name
+// key:   /dm-worker/r/name
+// value: workerInfo
 func (s *Server) OfflineWorker(ctx context.Context, req *pb.OfflineWorkerRequest) (*pb.OfflineWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OfflineWorker"))
 	isLeader, needForward := s.isLeaderAndNeedForward()
@@ -309,7 +309,7 @@ func (s *Server) OfflineWorker(ctx context.Context, req *pb.OfflineWorkerRequest
 			Msg:    errors.ErrorStack(err),
 		}, nil
 	}
-	log.L().Info("offline worker successfully", zap.String("name", req.Name), zap.String("address", req.Address))
+	log.L().Info("offline worker successfully", zap.String("name", req.Name))
 	return &pb.OfflineWorkerResponse{
 		Result: true,
 	}, nil
@@ -1628,4 +1628,173 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 	}
 	wg.Wait()
 	return sortCommonWorkerResults(sourceRespCh)
+}
+
+func (s *Server) listMemberMaster(ctx context.Context, names []string) (*pb.Members_Master, error) {
+
+	resp := &pb.Members_Master{
+		Master: &pb.ListMasterMember{},
+	}
+
+	memberList, err := s.etcdClient.MemberList(ctx)
+	if err != nil {
+		resp.Master.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	all := len(names) == 0
+	set := make(map[string]bool)
+	for _, name := range names {
+		set[name] = true
+	}
+
+	etcdMembers := memberList.Members
+	masters := make([]*pb.MasterInfo, 0, len(etcdMembers))
+	client := http.Client{
+		Timeout: 1 * time.Second,
+	}
+
+	for _, etcdMember := range etcdMembers {
+		if !all && !set[etcdMember.Name] {
+			continue
+		}
+
+		alive := true
+		_, err := client.Get(etcdMember.ClientURLs[0] + "/health")
+		if err != nil {
+			alive = false
+		}
+
+		masters = append(masters, &pb.MasterInfo{
+			Name:       etcdMember.Name,
+			MemberID:   etcdMember.ID,
+			Alive:      alive,
+			ClientURLs: etcdMember.ClientURLs,
+			PeerURLs:   etcdMember.PeerURLs,
+		})
+	}
+
+	sort.Slice(masters, func(lhs, rhs int) bool {
+		return masters[lhs].Name < masters[rhs].Name
+	})
+	resp.Master.Masters = masters
+	return resp, nil
+}
+
+func (s *Server) listMemberWorker(ctx context.Context, names []string) (*pb.Members_Worker, error) {
+	resp := &pb.Members_Worker{
+		Worker: &pb.ListWorkerMember{},
+	}
+
+	workerAgents, err := s.scheduler.GetAllWorkers()
+	if err != nil {
+		resp.Worker.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	all := len(names) == 0
+	set := make(map[string]bool)
+	for _, name := range names {
+		set[name] = true
+	}
+
+	workers := make([]*pb.WorkerInfo, 0, len(workerAgents))
+
+	for _, workerAgent := range workerAgents {
+		if !all && !set[workerAgent.BaseInfo().Name] {
+			continue
+		}
+
+		workers = append(workers, &pb.WorkerInfo{
+			Name:   workerAgent.BaseInfo().Name,
+			Addr:   workerAgent.BaseInfo().Addr,
+			Stage:  string(workerAgent.Stage()),
+			Source: workerAgent.Bound().Source,
+		})
+	}
+
+	sort.Slice(workers, func(lhs, rhs int) bool {
+		return workers[lhs].Name < workers[rhs].Name
+	})
+	resp.Worker.Workers = workers
+	return resp, nil
+}
+
+func (s *Server) listMemberLeader(ctx context.Context, names []string) (*pb.Members_Leader, error) {
+	resp := &pb.Members_Leader{
+		Leader: &pb.ListLeaderMember{},
+	}
+
+	all := len(names) == 0
+	set := make(map[string]bool)
+	for _, name := range names {
+		set[name] = true
+	}
+
+	_, name, addr, err := s.election.LeaderInfo(ctx)
+	if err != nil {
+		resp.Leader.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	if !all && !set[name] {
+		return resp, nil
+	}
+
+	resp.Leader.Name = name
+	resp.Leader.Addr = addr
+	return resp, nil
+}
+
+// ListMember list member information
+func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb.ListMemberResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ListMember"))
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.ListMember(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	resp := &pb.ListMemberResponse{}
+	members := make([]*pb.Members, 0)
+
+	if req.Leader {
+		res, err := s.listMemberLeader(ctx, req.Names)
+		if err != nil {
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
+		}
+		members = append(members, &pb.Members{
+			Member: res,
+		})
+	}
+
+	if req.Master {
+		res, err := s.listMemberMaster(ctx, req.Names)
+		if err != nil {
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
+		}
+		members = append(members, &pb.Members{
+			Member: res,
+		})
+	}
+
+	if req.Worker {
+		res, err := s.listMemberWorker(ctx, req.Names)
+		if err != nil {
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
+		}
+		members = append(members, &pb.Members{
+			Member: res,
+		})
+	}
+
+	resp.Result = true
+	resp.Members = members
+	return resp, nil
 }
