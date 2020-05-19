@@ -288,7 +288,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 // key:   /dm-worker/r/name
 // value: workerInfo
 func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest) (*pb.OfflineMemberResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OfflineWorker"))
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OfflineMember"))
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {

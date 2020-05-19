@@ -1022,26 +1022,31 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	cfg2.InitialCluster = initialCluster
 	cfg3.InitialCluster = initialCluster
 
+	var wg sync.WaitGroup
 	s1 := NewServer(cfg1)
 	defer s1.Close()
+	wg.Add(1)
 	go func() {
 		c.Assert(s1.Start(ctx), check.IsNil)
+		wg.Done()
 	}()
 
 	s2 := NewServer(cfg2)
 	defer s2.Close()
+	wg.Add(1)
 	go func() {
 		c.Assert(s2.Start(ctx), check.IsNil)
+		wg.Done()
 	}()
 
 	s3 := NewServer(cfg3)
 	c.Assert(s3.Start(ctx), check.IsNil)
 	defer s3.Close()
 
-	time.Sleep(time.Second * 2)
+	wg.Wait()
+	time.Sleep(time.Second)
 	_, leaderID, _, err := s1.election.LeaderInfo(ctx)
 	c.Assert(err, check.IsNil)
-	s3.Close()
 
 	// master related operations
 	req := &pb.OfflineMemberRequest{
@@ -1058,13 +1063,15 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	resp, err = s2.OfflineMember(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	c.Assert(resp.Msg, check.Matches, ".*"+terror.ErrMasterMasterNameNotExist.Generate(req.Name).Error()+".*")
+	c.Assert(resp.Msg, check.Matches, `[\s\S]*`+terror.ErrMasterMasterNameNotExist.Generate(req.Name).Error()+`[\s\S]*`)
 	// test offline member with correct master name
 	cli := s2.etcdClient
 	listResp, err := etcdutil.ListMembers(cli)
 	c.Assert(err, check.IsNil)
 	c.Assert(listResp.Members, check.HasLen, 3)
 
+	s3.Close()
+	time.Sleep(3 * time.Second)
 	req.Name = s3.cfg.Name
 	resp, err = s2.OfflineMember(ctx, req)
 	c.Assert(err, check.IsNil)
