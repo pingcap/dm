@@ -57,7 +57,7 @@ func convertOfflineMemberType(cmd *cobra.Command) (string, error) {
 
 // offlineMemberFunc does offline member request
 func offlineMemberFunc(cmd *cobra.Command, _ []string) {
-	if len(cmd.Flags().Args()) != 1 {
+	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
 		return
@@ -66,6 +66,7 @@ func offlineMemberFunc(cmd *cobra.Command, _ []string) {
 	offlineType, err := convertOfflineMemberType(cmd)
 	if err != nil {
 		common.PrintLines("get offline type failed, error:\n%v", errors.ErrorStack(err))
+		return
 	}
 	name, err := cmd.Flags().GetString("name")
 	if err != nil {
@@ -90,4 +91,5 @@ func offlineMemberFunc(cmd *cobra.Command, _ []string) {
 	if !resp.Result {
 		common.PrintLines("offline member failed:\n%v", resp.Msg)
 	}
+	common.PrettyPrintResponse(resp)
 }
