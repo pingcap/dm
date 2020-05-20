@@ -38,6 +38,8 @@ import (
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
@@ -80,6 +82,9 @@ type Server struct {
 	leader         string
 	leaderClient   pb.MasterClient
 	leaderGrpcConn *grpc.ClientConn
+
+	// removeMetaLock locks start task when removing meta
+	removeMetaLock sync.RWMutex
 
 	// WaitGroup for background functions.
 	bgFunWg sync.WaitGroup
@@ -404,14 +409,30 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	if len(sourceRespCh) > 0 {
 		sourceResps = sortCommonWorkerResults(sourceRespCh)
 	} else {
-		err = s.scheduler.AddSubTasks(subtaskCfgPointersToInstances(stCfgs...)...)
-		if err != nil {
-			resp.Msg = errors.ErrorStack(err)
-			return resp, nil
-		}
 		sources := make([]string, 0, len(stCfgs))
 		for _, stCfg := range stCfgs {
 			sources = append(sources, stCfg.SourceID)
+		}
+		s.removeMetaLock.Lock()
+		if req.RemoveMeta {
+			if scm := s.scheduler.GetSubTaskCfgsByTask(cfg.Name); len(scm) > 0 {
+				resp.Msg = terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
+					"while remove-meta is true").Error()
+				s.removeMetaLock.Unlock()
+				return resp, nil
+			}
+			err = s.removeMetaData(ctx, cfg)
+			if err != nil {
+				resp.Msg = terror.Annotate(err, "while removing metadata").Error()
+				s.removeMetaLock.Unlock()
+				return resp, nil
+			}
+		}
+		err = s.scheduler.AddSubTasks(subtaskCfgPointersToInstances(stCfgs...)...)
+		s.removeMetaLock.Unlock()
+		if err != nil {
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
 		}
 		resp.Result = true
 		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, sources, []string{}, req)
@@ -1374,6 +1395,55 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 	}
 
 	return cfg, stCfgs, nil
+}
+
+func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) error {
+	toDB := *cfg.TargetDB
+	toDB.Adjust()
+	if len(toDB.Password) > 0 {
+		pswdTo, err := utils.Decrypt(toDB.Password)
+		if err != nil {
+			return err
+		}
+		toDB.Password = pswdTo
+	}
+
+	// clear shard meta data for pessimistic/optimist
+	err := s.pessimist.RemoveMetaData(cfg.Name)
+	if err != nil {
+		return err
+	}
+	err = s.optimist.RemoveMetaData(cfg.Name)
+	if err != nil {
+		return err
+	}
+
+	// set up db and clear meta data in downstream db
+	baseDB, err := conn.DefaultDBProvider.Apply(toDB)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+	defer baseDB.Close()
+	dbConn, err := baseDB.GetBaseConn(ctx)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+	defer baseDB.CloseBaseConn(dbConn)
+	ctctx := tcontext.Background().WithContext(ctx).WithLogger(log.With(zap.String("job", "remove metadata")))
+
+	sqls := make([]string, 0, 4)
+	// clear loader and syncer checkpoints
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
+		cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name)))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
+		cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
+		cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name)))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
+		cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)))
+
+	_, err = dbConn.ExecuteSQL(ctctx, nil, cfg.Name, sqls)
+	return err
 }
 
 func extractWorkerError(result *pb.ProcessResult) error {

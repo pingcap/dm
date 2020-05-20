@@ -416,6 +416,7 @@ const (
 	codeMasterIsNotAsyncRequest
 	codeMasterFailToGetExpectResult
 	codeMasterPessimistNotStarted
+	codeMasterOptimistNotStarted
 	codeMasterMasterNameNotExist
 	codeMasterInvalidOfflineType
 )
@@ -930,6 +931,7 @@ var (
 	ErrMasterIsNotAsyncRequest           = New(codeMasterIsNotAsyncRequest, ClassDMMaster, ScopeInternal, LevelMedium, "request %s is not an async one, needn't wait for ok")
 	ErrMasterFailToGetExpectResult       = New(codeMasterFailToGetExpectResult, ClassDMMaster, ScopeInternal, LevelMedium, "fail to get expected result")
 	ErrMasterPessimistNotStarted         = New(codeMasterPessimistNotStarted, ClassDMMaster, ScopeInternal, LevelMedium, "the shardddl pessimist has not started")
+	ErrMasterOptimistNotStarted          = New(codeMasterOptimistNotStarted, ClassDMMaster, ScopeInternal, LevelMedium, "the shardddl optimist has not started")
 	ErrMasterMasterNameNotExist          = New(codeMasterMasterNameNotExist, ClassDMMaster, ScopeInternal, LevelLow, "requested master name %s doesn't exist in etcd cluster")
 	ErrMasterInvalidOfflineType          = New(codeMasterInvalidOfflineType, ClassDMMaster, ScopeInternal, LevelLow, "requested offline type %s is invalid, please use master/worker")
 

@@ -27,11 +27,6 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-const (
-	// MetaTableFormat is used in meta table name constructor
-	MetaTableFormat = "%s_syncer_sharding_meta"
-)
-
 // DDLItem records ddl information used in sharding sequence organization
 type DDLItem struct {
 	FirstLocation binlog.Location `json:"-"`      // first DDL's binlog Pos, not the End_log_pos of the event

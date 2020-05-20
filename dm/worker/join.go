@@ -49,6 +49,9 @@ func (s *Server) JoinMaster(endpoints []string) error {
 		conn, err := grpc.DialContext(ctx1, endpoint, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 		cancel1()
 		if err != nil {
+			if conn != nil {
+				conn.Close()
+			}
 			log.L().Error("fail to dial dm-master", zap.Error(err))
 			continue
 		}
@@ -56,6 +59,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 		ctx1, cancel1 = context.WithTimeout(ctx, 3*time.Second)
 		resp, err := client.RegisterWorker(ctx1, req)
 		cancel1()
+		conn.Close()
 		if err != nil {
 			log.L().Error("fail to register worker", zap.Error(err))
 			continue

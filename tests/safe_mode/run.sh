@@ -27,7 +27,7 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
-    dmctl_start_task
+    dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # DM-worker exit during re-sync after sharding group synced

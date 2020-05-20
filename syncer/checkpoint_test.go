@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/schema"
 
@@ -73,10 +74,10 @@ func (s *testCheckpointSuite) TestUpTest(c *C) {
 
 func (s *testCheckpointSuite) prepareCheckPointSQL() {
 	schemaCreateSQL = fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.cfg.MetaSchema)
-	tableCreateSQL = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_syncer_checkpoint` .*", s.cfg.MetaSchema, s.cfg.Name)
-	flushCheckPointSQL = fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint` .* VALUES.* ON DUPLICATE KEY UPDATE .*", s.cfg.MetaSchema, s.cfg.Name)
-	clearCheckPointSQL = fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_checkpoint` WHERE id = \\?", s.cfg.MetaSchema, s.cfg.Name)
-	loadCheckPointSQL = fmt.Sprintf("SELECT .* FROM `%s`.`%s_syncer_checkpoint` WHERE id = \\?", s.cfg.MetaSchema, s.cfg.Name)
+	tableCreateSQL = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s` .*", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))
+	flushCheckPointSQL = fmt.Sprintf("INSERT INTO `%s`.`%s` .* VALUES.* ON DUPLICATE KEY UPDATE .*", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))
+	clearCheckPointSQL = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE id = \\?", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))
+	loadCheckPointSQL = fmt.Sprintf("SELECT .* FROM `%s`.`%s` WHERE id = \\?", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))
 }
 
 // this test case uses sqlmock to simulate all SQL operations in tests
