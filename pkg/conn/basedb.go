@@ -29,18 +29,19 @@ type DBProvider interface {
 	Apply(config config.DBConfig) (*BaseDB, error)
 }
 
-type defaultDBProvider struct {
+// DefaultDBProviderImpl is default DBProvider implement
+type DefaultDBProviderImpl struct {
 }
 
 // DefaultDBProvider is global instance of DBProvider
 var DefaultDBProvider DBProvider
 
 func init() {
-	DefaultDBProvider = &defaultDBProvider{}
+	DefaultDBProvider = &DefaultDBProviderImpl{}
 }
 
 // Apply will build BaseDB with DBConfig
-func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
+func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&maxAllowedPacket=%d",
 		config.User, config.Password, config.Host, config.Port, *config.MaxAllowedPacket)
 
