@@ -632,7 +632,8 @@ function test_isolate_master_and_worker() {
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10
 
-    sleep 5
+    # sleep more time to avoid unhealty cluster
+    sleep 10
     run_dm_master $WORK_DIR/master-join6 $MASTER_PORT6 $cur/conf/dm-master-join6.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT6
 
