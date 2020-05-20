@@ -353,19 +353,26 @@ function test_standalone_running() {
         "start-task $cur/conf/standalone-task2.yaml" \
         "\"result\": true" 2 \
         "\"source\": \"$SOURCE_ID2\"" 1
+
+    worker=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT" query-status test2 \
+        | grep 'worker' | awk -F: '{print $2}')
+    worker_name=${worker:0-9:7}
+    worker_idx=${worker_name:0-1:1}
+    worker_ports=(0 WORKER1_PORT WORKER2_PORT)
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status"\
+        "\"taskStatus\": \"Running\"" 2
     
-    echo "kill worker2"
-    ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
-    check_port_offline $WORKER2_PORT 20
-    rm -rf $WORK_DIR/worker2/relay_log
+    echo "kill $worker_name"
+    ps aux | grep dm-worker${worker_idx} |awk '{print $2}'|xargs kill || true
+    check_port_offline ${worker_ports[$worker_idx]} 20
+    rm -rf $WORK_DIR/worker${worker_idx}/relay_log
 
+    # test running, test2 fail
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test2"\
-        "\"result\": false" 1
-
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test"\
-        "\"stage\": \"Running\"" 1
+        "query-status"\
+        "\"taskStatus\": \"Running\"" 1
     
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "stop-task test2"\
@@ -375,6 +382,7 @@ function test_standalone_running() {
         "start-task $cur/conf/standalone-task2.yaml"\
         "\"result\": false" 1
 
+    # test running, test2 fail
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test"\
         "\"stage\": \"Running\"" 1
