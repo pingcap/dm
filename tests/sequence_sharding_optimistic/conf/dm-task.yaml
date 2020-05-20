@@ -4,7 +4,6 @@ task-mode: all
 is-sharding: true
 shard-mode: "optimistic"
 meta-schema: "dm_meta"
-remove-meta: false
 # enable-heartbeat: true
 timezone: "Asia/Shanghai"
 

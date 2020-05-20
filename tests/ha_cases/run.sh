@@ -311,6 +311,8 @@ function test_pause_task() {
     load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
     load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
 
+    # TODO: After change execErrorDetected to execError, remove this line
+    sleep 1
     task_name=(test test2)
     for name in ${task_name[@]}; do
         echo "pause tasks $name"

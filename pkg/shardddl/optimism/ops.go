@@ -16,6 +16,7 @@ package optimism
 import (
 	"go.etcd.io/etcd/clientv3"
 
+	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
 )
 
@@ -56,6 +57,16 @@ func DeleteInfosOperations(cli *clientv3.Client, infos []Info, ops []Operation) 
 	for _, op := range ops {
 		opsDel = append(opsDel, deleteOperationOp(op))
 	}
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, opsDel...)
+	return rev, err
+}
+
+// DeleteInfosOperationsTablesByTask deletes the shard DDL infos and operations in etcd.
+func DeleteInfosOperationsTablesByTask(cli *clientv3.Client, task string) (int64, error) {
+	opsDel := make([]clientv3.Op, 0, 3)
+	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLOptimismInfoKeyAdapter.Encode(task), clientv3.WithPrefix()))
+	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLOptimismOperationKeyAdapter.Encode(task), clientv3.WithPrefix()))
+	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLOptimismSourceTablesKeyAdapter.Encode(task), clientv3.WithPrefix()))
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, opsDel...)
 	return rev, err
 }

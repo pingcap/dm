@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/optimism"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // Optimist is used to coordinate the shard DDL migration in optimism mode.
@@ -152,6 +153,33 @@ func (o *Optimist) ShowLocks(task string, sources []string) []*pb.DDLLock {
 		ret = append(ret, l)
 	}
 	return ret
+}
+
+// RemoveMetaData removes meta data for a specified task
+// NOTE: this function can only be used when the specified task is not running
+func (o *Optimist) RemoveMetaData(task string) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.closed {
+		return terror.ErrMasterOptimistNotStarted.Generate()
+	}
+
+	infos, ops, _, err := optimism.GetInfosOperationsByTask(o.cli, task)
+	if err != nil {
+		return err
+	}
+	for _, info := range infos {
+		o.lk.RemoveLockByInfo(info)
+	}
+	for _, op := range ops {
+		o.lk.RemoveLock(op.ID)
+	}
+
+	o.tk.RemoveTableByTask(task)
+
+	// clear meta data in etcd
+	_, err = optimism.DeleteInfosOperationsTablesByTask(o.cli, task)
+	return err
 }
 
 // run runs jobs in the background.
