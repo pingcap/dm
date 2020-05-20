@@ -610,7 +610,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	}
 
 	w.l.Info("update relay config", zap.Stringer("new config", newCfg))
-	cloneCfg, _ := newCfg.DecryptPassword()
+	cloneCfg := newCfg.DecryptPassword()
 
 	// Update SubTask configure
 	// NOTE: we only update `DB.Config` in SubTaskConfig now

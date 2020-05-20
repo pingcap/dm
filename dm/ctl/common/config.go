@@ -31,6 +31,8 @@ const (
 
 	// EncryptCmdName is special command
 	EncryptCmdName = "encrypt"
+	// DecryptCmdName is special command
+	DecryptCmdName = "decrypt"
 )
 
 // NewConfig creates a new base config for dmctl.
@@ -47,6 +49,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server addr")
 	fs.StringVar(&cfg.RPCTimeoutStr, "rpc-timeout", defaultRPCTimeout, fmt.Sprintf("rpc timeout, default is %s", defaultRPCTimeout))
 	fs.StringVar(&cfg.encrypt, EncryptCmdName, "", "encrypt plaintext to ciphertext")
+	fs.StringVar(&cfg.decrypt, DecryptCmdName, "", "decrypt ciphertext to plaintext")
 
 	return cfg
 }
@@ -64,6 +67,7 @@ type Config struct {
 
 	printVersion bool
 	encrypt      string // string need to be encrypted
+	decrypt      string // string need to be decrypted
 }
 
 func (c *Config) String() string {
@@ -92,6 +96,15 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 			return true, err1
 		}
 		fmt.Println(ciphertext)
+		return true, nil
+	}
+
+	if len(c.decrypt) > 0 {
+		plaintext, err1 := utils.Decrypt(c.decrypt)
+		if err1 != nil {
+			return true, err1
+		}
+		fmt.Println(plaintext)
 		return true, nil
 	}
 
