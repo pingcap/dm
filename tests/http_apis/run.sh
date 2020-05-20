@@ -74,8 +74,8 @@ function run() {
   sleep 1
     curl -X GET "127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/members?leader=true&master=true&worker=true" > $WORK_DIR/list-member.log
     check_log_contains $WORK_DIR/list-member.log "\"leader\":{\"name\":\"master1\"" 1
-    check_log_contains $WORK_DIR/list-member.log "\"masters\":[{\"name\":\"master1\"" 1
-    check_log_contains $WORK_DIR/list-member.log "\"workers\":[{\"name\":\"worker1\"" 1
+    check_log_contains $WORK_DIR/list-member.log "\"masters\":\[{\"name\":\"master1\"" 1
+    check_log_contains $WORK_DIR/list-member.log "\"workers\":\[{\"name\":\"worker1\"" 1
     check_log_contains $WORK_DIR/list-member.log "\"stage\":\"bound\"" 1
     check_log_contains $WORK_DIR/list-member.log "\"source\":\"mysql-replica-01\"" 1
 
