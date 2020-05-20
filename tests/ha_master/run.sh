@@ -21,6 +21,8 @@ function test_list_member() {
     leaders=()
     leader_idx=0
 
+    # TODO: when removing 3 masters (use `sql 0 2`), this test sometimes will fail
+    # In these cases, DM-master will campaign successfully, but fails to `get` from etcd while starting scheduler. But finally it will recover.
     for i in $(seq 0 1); do
         alive=( "${alive[@]/$leader_idx}" )
         leaders=()
