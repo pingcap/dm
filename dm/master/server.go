@@ -1752,6 +1752,12 @@ func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
+	if !req.Leader && !req.Master && !req.Worker {
+		req.Leader = true
+		req.Master = true
+		req.Worker = true
+	}
+
 	resp := &pb.ListMemberResponse{}
 	members := make([]*pb.Members, 0)
 
