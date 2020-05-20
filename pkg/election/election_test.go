@@ -86,7 +86,7 @@ func (t *testElectionSuite) TearDownTest(c *C) {
 	t.etcd.Close()
 }
 
-func (t *testElectionSuite) TestElection2After1(c *C) {
+func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 	var (
 		sessionTTL = 60
 		key        = "unit-test/election-2-after-1"
@@ -103,6 +103,10 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
+	if !normalExit {
+		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/election/mockCampaignLoopExitedAbnormally", `return()`), IsNil)
+		defer failpoint.Disable("github.com/pingcap/dm/pkg/election/mockCampaignLoopExitedAbnormally")
+	}
 	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e1.Close()
@@ -119,6 +123,9 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
+	if !normalExit {
+		c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/election/mockCampaignLoopExitedAbnormally"), IsNil)
+	}
 
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
@@ -143,6 +150,18 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	e1.Close() // stop the campaign for e1
 	c.Assert(e1.IsLeader(), IsFalse)
 
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel3()
+	deleted, err := e2.ClearSessionIfNeeded(ctx3, ID1)
+	c.Assert(err, IsNil)
+	if normalExit {
+		// for normally exited election, session has already been closed before
+		c.Assert(deleted, IsFalse)
+	} else {
+		// for abnormally exited election, session will be cleared here
+		c.Assert(deleted, IsTrue)
+	}
+
 	// e2 should become the leader
 	select {
 	case leader := <-e2.LeaderNotify():
@@ -155,6 +174,13 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e2.ID())
 	c.Assert(leaderAddr, Equals, addr2)
+
+	// only e2's election info is left in etcd
+	ctx4, cancel4 := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel4()
+	resp, err := cli.Get(ctx4, key, clientv3.WithPrefix())
+	c.Assert(err, IsNil)
+	c.Assert(resp.Kvs, HasLen, 1)
 
 	// if closing the client when campaigning, we should get an error
 	wg.Add(1)
@@ -173,14 +199,19 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	wg.Wait()
 
 	// can not elect with closed client.
-	ctx3, cancel3 := context.WithCancel(context.Background())
-	defer cancel3()
-	_, err = NewElection(ctx3, cli, sessionTTL, key, ID3, addr3, t.notifyBlockTime)
+	ctx5, cancel5 := context.WithCancel(context.Background())
+	defer cancel5()
+	_, err = NewElection(ctx5, cli, sessionTTL, key, ID3, addr3, t.notifyBlockTime)
 	c.Assert(terror.ErrElectionCampaignFail.Equal(err), IsTrue)
 	c.Assert(err, ErrorMatches, ".*fail to campaign leader: create the initial session: context canceled.*")
 }
 
-func testElectionAlways1(t *testElectionSuite, c *C, normalExit bool) {
+func (t *testElectionSuite) TestElection2After1(c *C) {
+	testElection2After1(t, c, true)
+	testElection2After1(t, c, false)
+}
+
+func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	var (
 		sessionTTL = 60
 		key        = "unit-test/election-always-1"
@@ -212,10 +243,6 @@ func testElectionAlways1(t *testElectionSuite, c *C, normalExit bool) {
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
 
-	if !normalExit {
-		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/election/mockCampaignLoopExitedAbnormally", `return()`), IsNil)
-		defer failpoint.Disable("github.com/pingcap/dm/pkg/election/mockCampaignLoopExitedAbnormally")
-	}
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
@@ -244,18 +271,6 @@ func testElectionAlways1(t *testElectionSuite, c *C, normalExit bool) {
 	cancel2()
 	wg.Wait()
 
-	ctx3, cancel3 := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel3()
-	deleted, err := e1.ClearSessionIfNeeded(ctx3, ID2)
-	c.Assert(err, IsNil)
-	if normalExit {
-		// for normally exited election, session has already been closed before
-		c.Assert(deleted, IsFalse)
-	} else {
-		// for abnormally exited election, session will be cleared here
-		c.Assert(deleted, IsTrue)
-	}
-
 	// e1 is still the leader
 	c.Assert(e1.IsLeader(), IsTrue)
 	_, leaderID, leaderAddr, err = e1.LeaderInfo(ctx1)
@@ -264,12 +279,6 @@ func testElectionAlways1(t *testElectionSuite, c *C, normalExit bool) {
 	c.Assert(leaderAddr, Equals, addr1)
 	c.Assert(e2.IsLeader(), IsFalse)
 
-	// only e1's election info is left in etcd
-	ctx4, cancel4 := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel4()
-	resp, err := e1.cli.Get(ctx4, e1.key, clientv3.WithPrefix())
-	c.Assert(err, IsNil)
-	c.Assert(resp.Kvs, HasLen, 1)
 }
 
 func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
@@ -317,9 +326,4 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 	_, err = cli.Delete(ctx, leaderKey)
 	c.Assert(err, IsNil)
 	wg.Wait()
-}
-
-func (t *testElectionSuite) TestElectionAlways1(c *C) {
-	testElectionAlways1(t, c, true)
-	testElectionAlways1(t, c, false)
 }

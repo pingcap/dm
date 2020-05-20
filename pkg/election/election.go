@@ -197,7 +197,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 	}
 	failpoint.Inject("mockCampaignLoopExitedAbnormally", func(_ failpoint.Value) {
 		closeSession = func(se *concurrency.Session) {
-			e.l.Info("skipp closeSession", zap.String("failpoint", "mockCampaignLoopExitedAbnormally"))
+			e.l.Info("skip closeSession", zap.String("failpoint", "mockCampaignLoopExitedAbnormally"))
 		}
 	})
 
