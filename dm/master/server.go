@@ -1171,10 +1171,7 @@ func (s *Server) getSourceConfigs(sources []*config.MySQLInstance) (map[string]c
 	for _, source := range sources {
 		if cfg := s.scheduler.GetSourceCfgByID(source.SourceID); cfg != nil {
 			// check the password
-			_, err := cfg.DecryptPassword()
-			if err != nil {
-				return nil, err
-			}
+			cfg.DecryptPassword()
 			cfgs[source.SourceID] = cfg.From
 		}
 	}
@@ -1243,10 +1240,7 @@ func parseAndAdjustSourceConfig(cfg *config.SourceConfig, content string) error 
 		return err
 	}
 
-	dbConfig, err := cfg.GenerateDBConfig()
-	if err != nil {
-		return err
-	}
+	dbConfig := cfg.GenerateDBConfig()
 
 	fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
 	if err != nil {
