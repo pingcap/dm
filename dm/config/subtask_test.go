@@ -52,9 +52,9 @@ func (t *testConfig) TestSubTask(c *C) {
 
 	cfg.From.Password = "xxx"
 	_, err = cfg.DecryptPassword()
-	c.Assert(err, NotNil)
+	c.Assert(err, IsNil)
 	err = cfg.Adjust(true)
-	c.Assert(err, NotNil)
+	c.Assert(err, IsNil)
 	err = cfg.Adjust(false)
 	c.Assert(err, IsNil)
 
