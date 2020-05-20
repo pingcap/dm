@@ -363,14 +363,14 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	c.Assert(resp.Result, check.IsFalse)
 	clearSchedulerEnv(c, cancel, &wg)
 
-	// simulate invalid password returned from scheduler, so cfg.SubTaskConfigs will fail
+	// simulate invalid password returned from scheduler, but config was supported plaintext mysql password, so cfg.SubTaskConfigs will success
 	ctx, cancel = context.WithCancel(context.Background())
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "invalid-encrypt-password", t.workerClients)
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
 	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(resp.Result, check.IsTrue)
 	clearSchedulerEnv(c, cancel, &wg)
 }
 
