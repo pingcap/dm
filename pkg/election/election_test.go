@@ -22,7 +22,9 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/pd/v4/pkg/tempurl"
+	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
 
 	"github.com/pingcap/dm/pkg/etcdutil"
@@ -178,7 +180,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	c.Assert(err, ErrorMatches, ".*fail to campaign leader: create the initial session: context canceled.*")
 }
 
-func (t *testElectionSuite) TestElectionAlways1(c *C) {
+func testElectionAlways1(t *testElectionSuite, c *C, normalExit bool) {
 	var (
 		sessionTTL = 60
 		key        = "unit-test/election-always-1"
@@ -210,6 +212,10 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
 
+	if !normalExit {
+		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/election/mockCampaignLoopExitedAbnormally", `return()`), IsNil)
+		defer failpoint.Disable("github.com/pingcap/dm/pkg/election/mockCampaignLoopExitedAbnormally")
+	}
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
@@ -238,6 +244,18 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	cancel2()
 	wg.Wait()
 
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel3()
+	deleted, err := e1.ClearSessionIfNeeded(ctx3, ID2)
+	c.Assert(err, IsNil)
+	if normalExit {
+		// for normally exited election, session has already been closed before
+		c.Assert(deleted, IsFalse)
+	} else {
+		// for abnormally exited election, session will be cleared here
+		c.Assert(deleted, IsTrue)
+	}
+
 	// e1 is still the leader
 	c.Assert(e1.IsLeader(), IsTrue)
 	_, leaderID, leaderAddr, err = e1.LeaderInfo(ctx1)
@@ -245,6 +263,13 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
 	c.Assert(e2.IsLeader(), IsFalse)
+
+	// only e1's election info is left in etcd
+	ctx4, cancel4 := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel4()
+	resp, err := e1.cli.Get(ctx4, e1.key, clientv3.WithPrefix())
+	c.Assert(err, IsNil)
+	c.Assert(resp.Kvs, HasLen, 1)
 }
 
 func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
@@ -292,4 +317,9 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 	_, err = cli.Delete(ctx, leaderKey)
 	c.Assert(err, IsNil)
 	wg.Wait()
+}
+
+func (t *testElectionSuite) TestElectionAlways1(c *C) {
+	testElectionAlways1(t, c, true)
+	testElectionAlways1(t, c, false)
 }

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/clientv3/concurrency"
@@ -194,6 +195,11 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 			e.l.Error("fail to close etcd session", zap.Int64("lease", int64(se.Lease())), zap.Error(err2))
 		}
 	}
+	failpoint.Inject("mockCampaignLoopExitedAbnormally", func(_ failpoint.Value) {
+		closeSession = func(se *concurrency.Session) {
+			e.l.Info("skipp closeSession", zap.String("failpoint", "mockCampaignLoopExitedAbnormally"))
+		}
+	})
 
 	var err error
 	defer func() {
@@ -403,8 +409,8 @@ func (e *Election) ClearSessionIfNeeded(ctx context.Context, id string) (bool, e
 			break
 		}
 	}
-	if len(resp.Kvs) == 0 {
-		// no leader exists, no need to trigger re-campaign
+	if deleteKey == "" {
+		// no campaign info left in etcd, no need to trigger re-campaign
 		return false, nil
 	}
 	delResp, err := e.cli.Delete(ctx, deleteKey)
