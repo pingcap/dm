@@ -1,4 +1,4 @@
-// Copyright 2019 PingCAP, Inc.
+// Copyright 2020 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 // NewOfflineMemberCmd creates an OfflineWorker command
 func NewOfflineMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "offline-member [--master/--worker] [--name master-name/worker-name]",
+		Use:   "offline-member <--master/--worker> [--name master-name/worker-name]",
 		Short: "offline member which has been closed",
 		Run:   offlineMemberFunc,
 	}

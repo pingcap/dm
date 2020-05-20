@@ -385,30 +385,33 @@ forLoop:
 	return session, err
 }
 
-// ReCampaignIfNeeded will re-campaign immediately when deleted master is leader
-// returns (triggered re-campaign, error)
-func (e *Election) ReCampaignIfNeeded(ctx context.Context, id string) (bool, error) {
-	resp, err := e.cli.Get(ctx, e.key, clientv3.WithFirstCreate()...)
+// ClearSessionIfNeeded will clear session when deleted master quited abnormally
+// returns (triggered deleting session, error)
+func (e *Election) ClearSessionIfNeeded(ctx context.Context, id string) (bool, error) {
+	resp, err := e.cli.Get(ctx, e.key, clientv3.WithPrefix())
 	if err != nil {
 		return false, err
-	} else if len(resp.Kvs) == 0 {
+	}
+	deleteKey := ""
+	for _, kv := range resp.Kvs {
+		leaderInfo, err := getCampaignerInfo(kv.Value)
+		if err != nil {
+			return false, err
+		}
+		if leaderInfo.ID == id {
+			deleteKey = string(kv.Key)
+			break
+		}
+	}
+	if len(resp.Kvs) == 0 {
 		// no leader exists, no need to trigger re-campaign
 		return false, nil
 	}
-	leaderInfo, err := getCampaignerInfo(resp.Kvs[0].Value)
+	delResp, err := e.cli.Delete(ctx, deleteKey)
 	if err != nil {
 		return false, err
 	}
-	if leaderInfo.ID != id {
-		// given id is not leader, no need to trigger re-campaign
-		return false, nil
-	}
-	delResp, err := e.cli.Txn(ctx).If(clientv3.Compare(clientv3.Value(e.key), "=", string(resp.Kvs[0].Value))).
-		Then(clientv3.OpDelete(e.key)).Commit()
-	if err != nil {
-		return false, err
-	}
-	return delResp.Succeeded, nil
+	return delResp.Deleted > 0, err
 }
 
 // getLeaderInfo get the current leader's information (if exists).

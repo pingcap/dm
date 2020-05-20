@@ -1095,7 +1095,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	if leaderID == cfg3.Name {
-		// s3 is leader, leader should re-campaign
+		// s3 isn't leader, leader should re-campaign
 		c.Assert(leaderID != leaderID2, check.IsTrue)
 	} else {
 		// s3 is leader, leader should keep the same

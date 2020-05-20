@@ -284,9 +284,11 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 	}, nil
 }
 
-// OfflineMember removes info of the worker which has been Closed, and all the worker are store in the path:
-// key:   /dm-worker/r/name
-// value: workerInfo
+// OfflineMember removes info of the master/worker which has been Closed
+// all the masters are store in etcd member list
+// all the workers are store in the path:
+// key:   /dm-worker/r
+// value: WorkerInfo
 func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest) (*pb.OfflineMemberResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OfflineMember"))
 	isLeader, needForward := s.isLeaderAndNeedForward()
@@ -343,7 +345,7 @@ func (s *Server) deleteMasterByName(ctx context.Context, name string) error {
 		return terror.ErrMasterMasterNameNotExist.Generate(name)
 	}
 
-	_, err = s.election.ReCampaignIfNeeded(ctx, name)
+	_, err = s.election.ClearSessionIfNeeded(ctx, name)
 	if err != nil {
 		return err
 	}
