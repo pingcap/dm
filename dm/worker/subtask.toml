@@ -15,8 +15,6 @@ flavor = "mysql"
 
 # meta schema in downstreaming database to store meta informaton of dm
 meta-schema = "dm_meta"
-# remove meta from downstreaming database, now we delete checkpoint and online ddl information
-remove-meta = false
 # whether to disable heartbeat for calculating lag between master and syncer
 enable-heartbeat = false
 

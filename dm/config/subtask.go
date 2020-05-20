@@ -27,7 +27,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
-	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
+	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
@@ -149,7 +149,6 @@ type SubTaskConfig struct {
 	ServerID                uint32 `toml:"server-id" json:"server-id"`
 	Flavor                  string `toml:"flavor" json:"flavor"`
 	MetaSchema              string `toml:"meta-schema" json:"meta-schema"`
-	RemoveMeta              bool   `toml:"remove-meta" json:"remove-meta"`
 	HeartbeatUpdateInterval int    `toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
 	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
@@ -353,16 +352,10 @@ func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 		pswdFrom string
 	)
 	if len(clone.To.Password) > 0 {
-		pswdTo, err = utils.Decrypt(clone.To.Password)
-		if err != nil {
-			return nil, terror.WithScope(terror.ErrConfigDecryptDBPassword.Delegate(err, clone.To.Password), terror.ScopeDownstream)
-		}
+		pswdTo = utils.DecryptOrPlaintext(clone.To.Password)
 	}
 	if len(clone.From.Password) > 0 {
-		pswdFrom, err = utils.Decrypt(clone.From.Password)
-		if err != nil {
-			return nil, terror.WithScope(terror.ErrConfigDecryptDBPassword.Delegate(err, clone.From.Password), terror.ScopeUpstream)
-		}
+		pswdFrom = utils.DecryptOrPlaintext(clone.From.Password)
 	}
 	clone.From.Password = pswdFrom
 	clone.To.Password = pswdTo

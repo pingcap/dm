@@ -167,41 +167,31 @@ func (c *SourceConfig) Verify() error {
 		}
 	}
 
-	_, err = c.DecryptPassword()
-	if err != nil {
-		return err
-	}
+	c.DecryptPassword()
 
 	return nil
 }
 
 // DecryptPassword returns a decrypted config replica in config
-func (c *SourceConfig) DecryptPassword() (*SourceConfig, error) {
+func (c *SourceConfig) DecryptPassword() *SourceConfig {
 	clone := c.Clone()
 	var (
 		pswdFrom string
-		err      error
 	)
 	if len(clone.From.Password) > 0 {
-		pswdFrom, err = utils.Decrypt(clone.From.Password)
-		if err != nil {
-			return nil, terror.WithClass(err, terror.ClassDMWorker)
-		}
+		pswdFrom = utils.DecryptOrPlaintext(clone.From.Password)
 	}
 	clone.From.Password = pswdFrom
-	return clone, nil
+	return clone
 }
 
 // GenerateDBConfig creates DBConfig for DB
-func (c *SourceConfig) GenerateDBConfig() (*DBConfig, error) {
+func (c *SourceConfig) GenerateDBConfig() *DBConfig {
 	// decrypt password
-	clone, err := c.DecryptPassword()
-	if err != nil {
-		return nil, err
-	}
+	clone := c.DecryptPassword()
 	from := &clone.From
 	from.RawDBCfg = DefaultRawDBConfig().SetReadTimeout(dbReadTimeout)
-	return from, nil
+	return from
 }
 
 // Adjust flavor and serverid of SourceConfig
