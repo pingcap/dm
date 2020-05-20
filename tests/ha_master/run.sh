@@ -21,7 +21,7 @@ function test_list_member() {
     leaders=()
     leader_idx=0
 
-    for i in $(seq 0 2); do
+    for i in $(seq 0 1); do
         alive=( "${alive[@]/$leader_idx}" )
         leaders=()
 
