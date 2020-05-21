@@ -23,11 +23,12 @@ import (
 
 	"github.com/siddontang/go-mysql/mysql"
 
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
 // ParseMetaData parses mydumper's output meta file and returns binlog position and GTID
-func ParseMetaData(filename string) (mysql.Position, string, error) {
+func ParseMetaData(filename, flavor string) (mysql.Position, string, error) {
 	fd, err := os.Open(filename)
 	if err != nil {
 		return mysql.Position{}, "", terror.ErrParseMydumperMeta.Generate(err)
@@ -71,7 +72,12 @@ func ParseMetaData(filename string) (mysql.Position, string, error) {
 			}
 			pos.Pos = uint32(pos64)
 		case "GTID":
-			gtid = value
+			// multiple GTID sets may cross multiple lines, continue to read them.
+			following, err := readFollowingGTIDs(br, flavor)
+			if err != nil {
+				return mysql.Position{}, "", terror.ErrParseMydumperMeta.Generate(err)
+			}
+			gtid = value + following
 		}
 	}
 
@@ -80,4 +86,34 @@ func ParseMetaData(filename string) (mysql.Position, string, error) {
 	}
 
 	return pos, gtid, nil
+}
+
+func readFollowingGTIDs(br *bufio.Reader, flavor string) (string, error) {
+	var following strings.Builder
+	for {
+		line, err := br.ReadString('\n')
+		if err == io.EOF {
+			return following.String(), nil // return the previous, not including the last line.
+		} else if err != nil {
+			return "", err
+		}
+
+		line = strings.TrimSpace(line[:len(line)-1])
+		if len(line) == 0 {
+			return following.String(), nil // end with empty line.
+		}
+
+		end := len(line)
+		if strings.HasSuffix(line, ",") {
+			end = len(line) - 1
+		}
+
+		// try parse to verify it
+		_, err = gtid.ParserGTID(flavor, line[:end])
+		if err != nil {
+			return following.String(), nil // return the previous, not including this non-GTID line.
+		}
+
+		following.WriteString(line)
+	}
 }
