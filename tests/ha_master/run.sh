@@ -95,12 +95,12 @@ function test_list_member() {
         echo "kill master$idx"
         ps aux | grep dm-master$idx |awk '{print $2}'|xargs kill || true
         check_port_offline ${master_ports[$idx]} 20
+        sleep 5
         run_dm_master $WORK_DIR/master${idx} ${master_ports[$idx]} $cur/conf/dm-master${idx}.toml
         check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:${master_ports[$idx]}
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "list-member --master" \
             "\"alive\": true" 5
-        sleep 5
     done    
     
     # check list-member worker
