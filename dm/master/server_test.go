@@ -511,7 +511,9 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	c.Assert(len(server.pessimist.Locks()), check.Greater, 0)
 
 	resp, err := server.StartTask(context.Background(), req)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		time.Sleep(10 * time.Microsecond)
 		// start another same task at the same time, should get err
 		resp1, err1 := server.StartTask(context.Background(), req)
@@ -596,7 +598,9 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	c.Assert(len(server.optimist.Locks()), check.Greater, 0)
 
 	resp, err = server.StartTask(context.Background(), req)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		time.Sleep(10 * time.Microsecond)
 		// start another same task at the same time, should get err
 		resp1, err1 := server.StartTask(context.Background(), req)
