@@ -60,11 +60,6 @@ func convertListMemberType(cmd *cobra.Command) (bool, bool, bool, error) {
 	if err != nil {
 		return false, false, false, err
 	}
-	if !leader && !master && !worker {
-		leader = true
-		master = true
-		worker = true
-	}
 	return leader, master, worker, nil
 }
 

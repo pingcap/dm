@@ -400,9 +400,9 @@ func (e *Election) ClearSessionIfNeeded(ctx context.Context, id string) (bool, e
 	}
 	deleteKey := ""
 	for _, kv := range resp.Kvs {
-		leaderInfo, err := getCampaignerInfo(kv.Value)
-		if err != nil {
-			return false, err
+		leaderInfo, err2 := getCampaignerInfo(kv.Value)
+		if err2 != nil {
+			return false, err2
 		}
 		if leaderInfo.ID == id {
 			deleteKey = string(kv.Key)
