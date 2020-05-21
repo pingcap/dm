@@ -27,7 +27,7 @@ import (
 // NewOfflineMemberCmd creates an OfflineWorker command
 func NewOfflineMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "offline-member <--master/--worker> [--name master-name/worker-name]",
+		Use:   "offline-member <--master/--worker> <--name master-name/worker-name>",
 		Short: "offline member which has been closed",
 		Run:   offlineMemberFunc,
 	}
