@@ -405,7 +405,7 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 
-	// simulate invalid password returned from scheduler, but config was supported plaintext mysql password, so cfg.SubTaskConfigs will success
+	// simulate invalid password returned from dm-workers, but config was supported plaintext mysql password, so cfg.SubTaskConfigs will success
 	testMockWorkerConfig(c, server, ctrl, "invalid-encrypt-password", true)
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,

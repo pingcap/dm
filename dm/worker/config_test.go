@@ -67,9 +67,6 @@ func (t *testServer) TestConfig(c *C) {
 	clone2 := cfg.DecryptPassword()
 	c.Assert(clone2, DeepEquals, clone1)
 
-	cfg.From.Password = "xxx"
-	cfg.DecryptPassword()
-
 	cfg.From.Password = ""
 	clone3 := cfg.DecryptPassword()
 	c.Assert(clone3, DeepEquals, cfg)
