@@ -932,8 +932,8 @@ var (
 	ErrMasterFailToGetExpectResult       = New(codeMasterFailToGetExpectResult, ClassDMMaster, ScopeInternal, LevelMedium, "fail to get expected result")
 	ErrMasterPessimistNotStarted         = New(codeMasterPessimistNotStarted, ClassDMMaster, ScopeInternal, LevelMedium, "the shardddl pessimist has not started")
 	ErrMasterOptimistNotStarted          = New(codeMasterOptimistNotStarted, ClassDMMaster, ScopeInternal, LevelMedium, "the shardddl optimist has not started")
-	ErrMasterMasterNameNotExist          = New(codeMasterMasterNameNotExist, ClassDMMaster, ScopeInternal, LevelLow, "requested master name %s doesn't exist in etcd cluster")
-	ErrMasterInvalidOfflineType          = New(codeMasterInvalidOfflineType, ClassDMMaster, ScopeInternal, LevelLow, "requested offline type %s is invalid, please use master/worker")
+	ErrMasterMasterNameNotExist          = New(codeMasterMasterNameNotExist, ClassDMMaster, ScopeInternal, LevelLow, "dm-master with name %s not exists")
+	ErrMasterInvalidOfflineType          = New(codeMasterInvalidOfflineType, ClassDMMaster, ScopeInternal, LevelLow, "offline member type %s is invalid, please use master/worker")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
