@@ -73,7 +73,11 @@ service Master {
     }
 
     // ListMember list member information
-    rpc ListMember(ListMemberRequest) returns(ListMemberResponse) {}
+    rpc ListMember(ListMemberRequest) returns(ListMemberResponse) {
+        option (google.api.http) = {
+            get: "/apis/v1alpha1/members"
+        };
+    }
 }
 
 message MigrateWorkerRelayRequest {
