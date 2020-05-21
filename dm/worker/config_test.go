@@ -142,7 +142,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.From.Password = "not-encrypt"
 				return cfg
 			},
-			"*decode base64 encoded password.*",
+			"",
 		},
 		{
 			func() *Config {
