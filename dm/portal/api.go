@@ -17,15 +17,16 @@ import (
 
 	// for database
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/unrolled/render"
 	"go.uber.org/zap"
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 const (
@@ -341,18 +342,8 @@ func (p *Handler) AnalyzeConfig(w http.ResponseWriter, req *http.Request) {
 	log.L().Info("analyze config", zap.String("config name", cfg.Name))
 
 	// decrypt password
-	dePwd, err := utils.Decrypt(cfg.TargetDB.Password)
-	log.L().Error("decrypt password failed", zap.Error(err))
-	if err != nil {
-		p.genJSONResp(w, http.StatusBadRequest, AnalyzeResult{
-			CommonResult: CommonResult{
-				Result: failed,
-				Error:  err.Error(),
-			},
-			Config: DMTaskConfig{},
-		})
-		return
-	}
+	dePwd := utils.DecryptOrPlaintext(cfg.TargetDB.Password)
+
 	cfg.TargetDB.Password = dePwd
 
 	p.genJSONResp(w, http.StatusOK, AnalyzeResult{

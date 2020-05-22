@@ -21,7 +21,7 @@ import (
 	"path"
 	"strings"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
 
@@ -64,17 +64,11 @@ func (t *testServer) TestConfig(c *C) {
 	// test decrypt password
 	clone1.From.Password = "1234"
 	clone1.ServerID = 101
-	clone2, err := cfg.DecryptPassword()
-	c.Assert(err, IsNil)
+	clone2 := cfg.DecryptPassword()
 	c.Assert(clone2, DeepEquals, clone1)
 
-	cfg.From.Password = "xxx"
-	_, err = cfg.DecryptPassword()
-	c.Assert(err, NotNil)
-
 	cfg.From.Password = ""
-	clone3, err := cfg.DecryptPassword()
-	c.Assert(err, IsNil)
+	clone3 := cfg.DecryptPassword()
 	c.Assert(clone3, DeepEquals, cfg)
 
 	// test invalid config
@@ -145,7 +139,31 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.From.Password = "not-encrypt"
 				return cfg
 			},
-			"*decode base64 encoded password.*",
+			"",
+		},
+		{
+			func() *Config {
+				cfg := newConfig()
+				cfg.From.Password = "" // password empty
+				return cfg
+			},
+			"",
+		},
+		{
+			func() *Config {
+				cfg := newConfig()
+				cfg.From.Password = "123456" // plaintext password
+				return cfg
+			},
+			"",
+		},
+		{
+			func() *Config {
+				cfg := newConfig()
+				cfg.From.Password = "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs=" // encrypt password (123456)
+				return cfg
+			},
+			"",
 		},
 	}
 

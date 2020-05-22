@@ -236,10 +236,7 @@ func (c *Config) verify() error {
 		}
 	}
 
-	_, err = c.DecryptPassword()
-	if err != nil {
-		return err
-	}
+	c.DecryptPassword()
 
 	return nil
 }
@@ -292,10 +289,8 @@ func (c *Config) adjust() error {
 
 func (c *Config) createFromDB() (*conn.BaseDB, error) {
 	// decrypt password
-	clone, err := c.DecryptPassword()
-	if err != nil {
-		return nil, err
-	}
+	clone := c.DecryptPassword()
+
 	from := clone.From
 	from.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(dbReadTimeout)
 	fromDB, err := conn.DefaultDBProvider.Apply(from)
@@ -378,18 +373,14 @@ func (c *Config) Reload() error {
 }
 
 // DecryptPassword returns a decrypted config replica in config
-func (c *Config) DecryptPassword() (*Config, error) {
+func (c *Config) DecryptPassword() *Config {
 	clone := c.Clone()
 	var (
 		pswdFrom string
-		err      error
 	)
 	if len(clone.From.Password) > 0 {
-		pswdFrom, err = utils.Decrypt(clone.From.Password)
-		if err != nil {
-			return nil, terror.WithClass(err, terror.ClassDMWorker)
-		}
+		pswdFrom = utils.DecryptOrPlaintext(clone.From.Password)
 	}
 	clone.From.Password = pswdFrom
-	return clone, nil
+	return clone
 }
