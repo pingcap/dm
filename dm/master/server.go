@@ -38,6 +38,8 @@ import (
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
@@ -80,6 +82,9 @@ type Server struct {
 	leader         string
 	leaderClient   pb.MasterClient
 	leaderGrpcConn *grpc.ClientConn
+
+	// removeMetaLock locks start task when removing meta
+	removeMetaLock sync.RWMutex
 
 	// WaitGroup for background functions.
 	bgFunWg sync.WaitGroup
@@ -360,14 +365,30 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	if len(sourceRespCh) > 0 {
 		sourceResps = sortCommonWorkerResults(sourceRespCh)
 	} else {
-		err = s.scheduler.AddSubTasks(subtaskCfgPointersToInstances(stCfgs...)...)
-		if err != nil {
-			resp.Msg = errors.ErrorStack(err)
-			return resp, nil
-		}
 		sources := make([]string, 0, len(stCfgs))
 		for _, stCfg := range stCfgs {
 			sources = append(sources, stCfg.SourceID)
+		}
+		s.removeMetaLock.Lock()
+		if req.RemoveMeta {
+			if scm := s.scheduler.GetSubTaskCfgsByTask(cfg.Name); len(scm) > 0 {
+				resp.Msg = terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
+					"while remove-meta is true").Error()
+				s.removeMetaLock.Unlock()
+				return resp, nil
+			}
+			err = s.removeMetaData(ctx, cfg)
+			if err != nil {
+				resp.Msg = terror.Annotate(err, "while removing metadata").Error()
+				s.removeMetaLock.Unlock()
+				return resp, nil
+			}
+		}
+		err = s.scheduler.AddSubTasks(subtaskCfgPointersToInstances(stCfgs...)...)
+		s.removeMetaLock.Unlock()
+		if err != nil {
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
 		}
 		resp.Result = true
 		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, sources, []string{}, req)
@@ -1150,10 +1171,7 @@ func (s *Server) getSourceConfigs(sources []*config.MySQLInstance) (map[string]c
 	for _, source := range sources {
 		if cfg := s.scheduler.GetSourceCfgByID(source.SourceID); cfg != nil {
 			// check the password
-			_, err := cfg.DecryptPassword()
-			if err != nil {
-				return nil, err
-			}
+			cfg.DecryptPassword()
 			cfgs[source.SourceID] = cfg.From
 		}
 	}
@@ -1222,10 +1240,7 @@ func parseAndAdjustSourceConfig(cfg *config.SourceConfig, content string) error 
 		return err
 	}
 
-	dbConfig, err := cfg.GenerateDBConfig()
-	if err != nil {
-		return err
-	}
+	dbConfig := cfg.GenerateDBConfig()
 
 	fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
 	if err != nil {
@@ -1352,6 +1367,55 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 	}
 
 	return cfg, stCfgs, nil
+}
+
+func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) error {
+	toDB := *cfg.TargetDB
+	toDB.Adjust()
+	if len(toDB.Password) > 0 {
+		pswdTo, err := utils.Decrypt(toDB.Password)
+		if err != nil {
+			return err
+		}
+		toDB.Password = pswdTo
+	}
+
+	// clear shard meta data for pessimistic/optimist
+	err := s.pessimist.RemoveMetaData(cfg.Name)
+	if err != nil {
+		return err
+	}
+	err = s.optimist.RemoveMetaData(cfg.Name)
+	if err != nil {
+		return err
+	}
+
+	// set up db and clear meta data in downstream db
+	baseDB, err := conn.DefaultDBProvider.Apply(toDB)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+	defer baseDB.Close()
+	dbConn, err := baseDB.GetBaseConn(ctx)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+	defer baseDB.CloseBaseConn(dbConn)
+	ctctx := tcontext.Background().WithContext(ctx).WithLogger(log.With(zap.String("job", "remove metadata")))
+
+	sqls := make([]string, 0, 4)
+	// clear loader and syncer checkpoints
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
+		cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name)))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
+		cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
+		cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name)))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
+		cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)))
+
+	_, err = dbConn.ExecuteSQL(ctctx, nil, cfg.Name, sqls)
+	return err
 }
 
 func extractWorkerError(result *pb.ProcessResult) error {
@@ -1580,4 +1644,179 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 	}
 	wg.Wait()
 	return sortCommonWorkerResults(sourceRespCh)
+}
+
+func (s *Server) listMemberMaster(ctx context.Context, names []string) (*pb.Members_Master, error) {
+
+	resp := &pb.Members_Master{
+		Master: &pb.ListMasterMember{},
+	}
+
+	memberList, err := s.etcdClient.MemberList(ctx)
+	if err != nil {
+		resp.Master.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	all := len(names) == 0
+	set := make(map[string]bool)
+	for _, name := range names {
+		set[name] = true
+	}
+
+	etcdMembers := memberList.Members
+	masters := make([]*pb.MasterInfo, 0, len(etcdMembers))
+	client := http.Client{
+		Timeout: 1 * time.Second,
+	}
+
+	for _, etcdMember := range etcdMembers {
+		if !all && !set[etcdMember.Name] {
+			continue
+		}
+
+		alive := true
+		_, err := client.Get(etcdMember.ClientURLs[0] + "/health")
+		if err != nil {
+			alive = false
+		}
+
+		masters = append(masters, &pb.MasterInfo{
+			Name:       etcdMember.Name,
+			MemberID:   etcdMember.ID,
+			Alive:      alive,
+			ClientURLs: etcdMember.ClientURLs,
+			PeerURLs:   etcdMember.PeerURLs,
+		})
+	}
+
+	sort.Slice(masters, func(lhs, rhs int) bool {
+		return masters[lhs].Name < masters[rhs].Name
+	})
+	resp.Master.Masters = masters
+	return resp, nil
+}
+
+func (s *Server) listMemberWorker(ctx context.Context, names []string) (*pb.Members_Worker, error) {
+	resp := &pb.Members_Worker{
+		Worker: &pb.ListWorkerMember{},
+	}
+
+	workerAgents, err := s.scheduler.GetAllWorkers()
+	if err != nil {
+		resp.Worker.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	all := len(names) == 0
+	set := make(map[string]bool)
+	for _, name := range names {
+		set[name] = true
+	}
+
+	workers := make([]*pb.WorkerInfo, 0, len(workerAgents))
+
+	for _, workerAgent := range workerAgents {
+		if !all && !set[workerAgent.BaseInfo().Name] {
+			continue
+		}
+
+		workers = append(workers, &pb.WorkerInfo{
+			Name:   workerAgent.BaseInfo().Name,
+			Addr:   workerAgent.BaseInfo().Addr,
+			Stage:  string(workerAgent.Stage()),
+			Source: workerAgent.Bound().Source,
+		})
+	}
+
+	sort.Slice(workers, func(lhs, rhs int) bool {
+		return workers[lhs].Name < workers[rhs].Name
+	})
+	resp.Worker.Workers = workers
+	return resp, nil
+}
+
+func (s *Server) listMemberLeader(ctx context.Context, names []string) (*pb.Members_Leader, error) {
+	resp := &pb.Members_Leader{
+		Leader: &pb.ListLeaderMember{},
+	}
+
+	all := len(names) == 0
+	set := make(map[string]bool)
+	for _, name := range names {
+		set[name] = true
+	}
+
+	_, name, addr, err := s.election.LeaderInfo(ctx)
+	if err != nil {
+		resp.Leader.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	if !all && !set[name] {
+		return resp, nil
+	}
+
+	resp.Leader.Name = name
+	resp.Leader.Addr = addr
+	return resp, nil
+}
+
+// ListMember list member information
+func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb.ListMemberResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ListMember"))
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.ListMember(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	if !req.Leader && !req.Master && !req.Worker {
+		req.Leader = true
+		req.Master = true
+		req.Worker = true
+	}
+
+	resp := &pb.ListMemberResponse{}
+	members := make([]*pb.Members, 0)
+
+	if req.Leader {
+		res, err := s.listMemberLeader(ctx, req.Names)
+		if err != nil {
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
+		}
+		members = append(members, &pb.Members{
+			Member: res,
+		})
+	}
+
+	if req.Master {
+		res, err := s.listMemberMaster(ctx, req.Names)
+		if err != nil {
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
+		}
+		members = append(members, &pb.Members{
+			Member: res,
+		})
+	}
+
+	if req.Worker {
+		res, err := s.listMemberWorker(ctx, req.Names)
+		if err != nil {
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
+		}
+		members = append(members, &pb.Members{
+			Member: res,
+		})
+	}
+
+	resp.Result = true
+	resp.Members = members
+	return resp, nil
 }

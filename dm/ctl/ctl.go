@@ -77,6 +77,7 @@ func NewRootCmd() *cobra.Command {
 		master.NewOperateSourceCmd(),
 		master.NewOfflineWorkerCmd(),
 		master.NewOperateLeaderCmd(),
+		master.NewListMemberCmd(),
 	)
 	return cmd
 }

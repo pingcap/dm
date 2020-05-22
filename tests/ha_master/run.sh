@@ -12,6 +12,133 @@ MASTER_PORT3=8461
 MASTER_PORT4=8561
 MASTER_PORT5=8661
 
+function test_list_member() {
+    echo "[$(date)] <<<<<< start test_list_member_command >>>>>>"
+
+    master_ports=(0 $MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3 $MASTER_PORT4 $MASTER_PORT5)
+
+    alive=(1 2 3 4 5)
+    leaders=()
+    leader_idx=0
+
+    # TODO: when removing 3 masters (use `sql 0 2`), this test sometimes will fail
+    # In these cases, DM-master will campaign successfully, but fails to `get` from etcd while starting scheduler. But finally it will recover.
+    for i in $(seq 0 1); do
+        alive=( "${alive[@]/$leader_idx}" )
+        leaders=()
+
+        # get leader in all masters
+        for idx in ${alive[@]}; do
+            leaders+=($(get_leader $WORK_DIR 127.0.0.1:${master_ports[$idx]}))
+        done
+        leader=${leaders[0]}
+        leader_idx=${leader:6}
+        echo "current leader is" $leader
+
+        # check leader is same for every master
+        for ld in ${leaders[@]}; do
+            if [ "$leader" != "$ld" ]; then
+                echo "leader not consisent"
+                exit 1
+            fi
+        done
+
+        # check list-member master
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "list-member --master" \
+            "\"alive\": true" $((5 - i))
+
+        # kill leader
+        echo "kill leader" $leader
+        ps aux | grep $leader |awk '{print $2}'|xargs kill || true
+        check_port_offline ${master_ports[$leader_idx]} 20
+        sleep 5
+    done
+
+    # join master which has been killed
+    alive=( "${alive[@]/$leader_idx}" )
+    for idx in $(seq 1 5); do
+        if [[ ! " ${alive[@]} " =~ " ${idx} " ]]; then
+            run_dm_master $WORK_DIR/master${idx} ${master_ports[$idx]} $cur/conf/dm-master${idx}.toml
+            check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:${master_ports[$idx]}
+        fi
+    done
+
+    # check leader is same for every master
+    alive=(1 2 3 4 5)
+    leaders=()
+    for idx in ${alive[@]}; do
+        leaders+=($(get_leader $WORK_DIR 127.0.0.1:${master_ports[$idx]}))
+    done
+    leader=${leaders[0]}
+    leader_idx=${leader:6}
+    echo "current leader is" $leader
+    for ld in ${leaders[@]}; do
+        if [ "$leader" != "$ld" ]; then
+            echo "leader not consisent"
+            exit 1
+        fi
+    done
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member --master" \
+        "\"alive\": true" 5
+    
+    # check list-member worker
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member --worker --name=worker1,worker2" \
+        "\"stage\": \"bound\"" 2
+    
+    dmctl_operate_source stop $WORK_DIR/source1.toml $SOURCE_ID1
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member --worker" \
+        "\"stage\": \"bound\"" 1 \
+        "\"stage\": \"free\"" 1
+ 
+    dmctl_operate_source stop $WORK_DIR/source2.toml $SOURCE_ID2
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member" \
+        "\"stage\": \"free\"" 2
+ 
+    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member --name=worker1,worker2" \
+        "\"stage\": \"bound\"" 2
+
+    # kill worker
+    echo "kill worker1"
+    ps aux | grep dm-worker1 |awk '{print $2}'|xargs kill || true
+    check_port_offline $WORKER1_PORT 20
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member --name=worker1,worker2" \
+        "\"stage\": \"bound\"" 1 \
+        "\"stage\": \"offline\"" 1
+
+    # kill worker
+    echo "kill worker2"
+    ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
+    check_port_offline $WORKER2_PORT 20
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member" \
+        "\"stage\": \"offline\"" 2
+
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member --worker" \
+        "\"stage\": \"bound\"" 2
+
+    echo "[$(date)] <<<<<< finish test_list_member_command >>>>>>"
+}
+
 function run() {
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
@@ -31,12 +158,18 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT4
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
 
+    # wait for master raft log to catch up
+    sleep 2
+
     # kill dm-master1 and dm-master2 to simulate the first two dm-master addr in join config are invalid
     echo "kill dm-master1 and kill dm-master2"
     ps aux | grep dm-master1 |awk '{print $2}'|xargs kill || true
     check_port_offline $MASTER_PORT1 20
     ps aux | grep dm-master2 |awk '{print $2}'|xargs kill || true
     check_port_offline $MASTER_PORT2 20
+
+    # wait for master switch leader and re-setup
+    sleep 2
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
@@ -58,9 +191,10 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
+    test_list_member
 
     echo "start DM task"
-    dmctl_start_task
+    dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
 
     echo "use sync_diff_inspector to check full dump loader"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

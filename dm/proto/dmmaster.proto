@@ -81,6 +81,13 @@ service Master {
             body: "*"
         };
     }
+
+    // ListMember list member information
+    rpc ListMember(ListMemberRequest) returns(ListMemberResponse) {
+        option (google.api.http) = {
+            get: "/apis/v1alpha1/members"
+        };
+    }
 }
 
 message MigrateWorkerRelayRequest {
@@ -97,6 +104,7 @@ message UpdateWorkerRelayConfigRequest {
 message StartTaskRequest {
     string task = 1; // task's configuration, yaml format
     repeated string sources = 2; // mysql source need to do start task, empty for all matched workers in deployment
+    bool removeMeta = 3; // whether to remove meta data for this task or not
 }
 
 message StartTaskResponse {
@@ -338,4 +346,56 @@ message OperateLeaderRequest {
 message OperateLeaderResponse {
     bool result = 1;
     string msg = 2;
+}
+
+message MasterInfo {
+    string name = 1;
+    uint64 memberID = 2;
+    bool alive = 3;
+    repeated string peerURLs = 4;
+    repeated string clientURLs = 5;
+}
+
+message WorkerInfo {
+    string name = 1;
+    string addr = 2;
+    string stage = 3;
+    string source = 4;
+}
+
+message ListLeaderMember {
+    string msg = 1;
+    string name = 2;
+    string addr = 3;
+}
+
+message ListMasterMember {
+    string msg = 1;
+    repeated MasterInfo masters = 2;
+}
+
+message ListWorkerMember {
+    string msg = 1;
+    repeated WorkerInfo workers = 2;
+}
+
+message Members {
+    oneof member {
+        ListLeaderMember leader = 1;
+        ListMasterMember master = 2;
+        ListWorkerMember worker = 3;
+    }
+}
+
+message ListMemberRequest {
+    bool leader = 1;
+    bool master = 2;
+    bool worker = 3;
+    repeated string names = 4;
+}
+
+message ListMemberResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated Members members = 3;
 }

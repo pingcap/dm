@@ -3,7 +3,6 @@ name: test
 task-mode: "full"
 is-sharding: false
 meta-schema: "dm_meta"
-remove-meta: true
 # enable-heartbeat: true
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1

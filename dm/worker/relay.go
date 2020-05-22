@@ -82,7 +82,7 @@ type realRelayHolder struct {
 
 // NewRealRelayHolder creates a new RelayHolder
 func NewRealRelayHolder(cfg *config.SourceConfig) RelayHolder {
-	clone, _ := cfg.DecryptPassword()
+	clone := cfg.DecryptPassword()
 	relayCfg := &relay.Config{
 		EnableGTID:  clone.EnableGTID,
 		AutoFixGTID: clone.AutoFixGTID,

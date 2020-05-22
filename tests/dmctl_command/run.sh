@@ -6,6 +6,8 @@ cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
+help_cnt=36
+
 function run() {
     # check dmctl alone output
     # it should usage for root command
@@ -13,7 +15,7 @@ function run() {
     $PWD/bin/dmctl.test DEVEL > $WORK_DIR/help.log
     help_msg=$(cat $WORK_DIR/help.log)
     help_msg_cnt=$(echo "${help_msg}" | wc -l |xargs)
-    if [ "$help_msg_cnt" != 34 ]; then
+    if [ "$help_msg_cnt" != $help_cnt ]; then
         echo "dmctl case 1 help failed: $help_msg"
         echo $help_msg_cnt
         exit 1
@@ -24,7 +26,7 @@ function run() {
     $PWD/bin/dmctl.test DEVEL --help > $WORK_DIR/help.log
     help_msg=$(cat $WORK_DIR/help.log)
     help_msg_cnt=$(echo "${help_msg}" | wc -l |xargs)
-    if [ "$help_msg_cnt" != 34 ]; then
+    if [ "$help_msg_cnt" != $help_cnt ]; then
         echo "dmctl case 2 help failed: $help_msg"
         exit 1
     fi
