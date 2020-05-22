@@ -139,9 +139,7 @@ message QueryRelayStatusResponse {
     bool result = 1;
     string msg = 2;
     SourceStatus sourceStatus = 3;
-    SourceError sourceError = 4;
     repeated SourceStatus subSourceStatus = 5;
-    repeated SourceError subSourceError = 6;
 }
 
 // Stage represents current stage for a (sub) task

@@ -605,6 +605,8 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 func (s *Server) QueryRelay(ctx context.Context, req *pb.QueryRelayListRequest) (*pb.QueryRelayListResponse, error) {
 	// TODO
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryRelay"))
+
+	// check if the request needs to be forwarded
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -625,6 +627,13 @@ func (s *Server) QueryRelay(ctx context.Context, req *pb.QueryRelayListRequest) 
 	}
 
 	sort.Strings(sources)
+
+	log.L().Debug("", zap.Int("workerRespMap int", len(workerRespMap)))
+
+	for _, resp := range workerRespMap {
+		log.L().Debug("", zap.Stringer("workerRespMap", resp))
+	}
+
 	workerResps := make([]*pb.QueryRelayStatusResponse, 0, len(sources))
 	for _, worker := range sources {
 		workerResps = append(workerResps, workerRespMap[worker])
@@ -994,9 +1003,6 @@ func (s *Server) getRelayStatusFromWorkers(ctx context.Context, sources []string
 			SourceStatus: &pb.SourceStatus{
 				Source: source,
 			},
-			SourceError: &pb.SourceError{
-				Source: source,
-			},
 		}
 		workerRespCh <- resp
 		return false
@@ -1021,7 +1027,6 @@ func (s *Server) getRelayStatusFromWorkers(ctx context.Context, sources []string
 					Result:       false,
 					Msg:          errors.ErrorStack(err),
 					SourceStatus: &pb.SourceStatus{},
-					SourceError:  &pb.SourceError{},
 				}
 			} else {
 				workerStatus = resp.QueryRelayStatus
