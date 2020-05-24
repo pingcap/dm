@@ -12,6 +12,75 @@ MASTER_PORT3=8461
 MASTER_PORT4=8561
 MASTER_PORT5=8661
 
+Leader_Name="master1"
+Leader_Port=MASTER_PORT1
+
+function set_leader_port() {
+    case $Leader_Name in
+        "master1") Leader_Port=$MASTER_PORT1
+        ;;
+        "master2") Leader_Port=$MASTER_PORT2
+        ;;
+        "master3") Leader_Port=$MASTER_PORT3
+        ;;
+        "master4") Leader_Port=$MASTER_PORT4
+        ;;
+        "master5") Leader_Port=$MASTER_PORT5
+        ;;
+    esac
+}
+
+function test_evict_leader() {
+    echo "[$(date)] <<<<<< start test_evict_leader >>>>>>"
+
+    master_ports=($MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3 $MASTER_PORT4 $MASTER_PORT5)
+
+    # evict leader
+    for i in $(seq 0 4); do 
+        Leader_Name=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
+        echo "leader is $Leader_Name"
+        set_leader_port
+
+        echo "leader port is $Leader_Port"
+
+        run_dm_ctl $WORK_DIR "127.0.0.1:$Leader_Port" \
+            "operate-leader evict"\
+            "\"result\": true" 1
+
+        leader_can_be_empty=""
+        if [ $i = 4 ]; then
+            leader_can_be_empty="leader_can_be_empty"
+        fi
+        New_Leader_Name=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1} $leader_can_be_empty)
+        echo "new leader is $New_Leader_Name"
+        if [ "$New_Leader_Name" = "$Leader_Name" ]; then
+            echo "leader evict failed"
+            exit 1
+        fi
+    done
+
+    # cancel evict leader on master1, and master1 will be the leader 
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
+        "operate-leader cancel-evict"\
+        "\"result\": true" 1
+    Leader_Name=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
+    echo "leader is $Leader_Name"
+    if [ $Leader_Name != "master1" ]; then
+        echo "cancel evict leader failed"
+        exit 1
+    fi
+
+    # cancel evict leader on all masters
+    for i in $(seq 1 4); do
+        echo "cancel master port ${master_ports[$i]}"
+        run_dm_ctl $WORK_DIR "127.0.0.1:${master_ports[$i]}" \
+            "operate-leader cancel-evict"\
+            "\"result\": true" 1
+    done
+
+    echo "[$(date)] <<<<<< finish test_evict_leader >>>>>>"
+}
+
 function test_list_member() {
     echo "[$(date)] <<<<<< start test_list_member_command >>>>>>"
 
@@ -191,8 +260,9 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
+    test_evict_leader
     test_list_member
-
+    
     echo "start DM task"
     dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
 

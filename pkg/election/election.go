@@ -399,8 +399,11 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 
 // EvictLeader set evictLeader to true, and this member can't be leader
 func (e *Election) EvictLeader() {
-	e.evictLeader.Set(true)
+	if e.evictLeader.Get() {
+		return
+	}
 
+	e.evictLeader.Set(true)
 	// cancel campagin or current member is leader and then resign
 	e.campaignMu.Lock()
 	if e.cancelCampaign != nil {
@@ -416,6 +419,10 @@ func (e *Election) EvictLeader() {
 
 // CancelEvictLeader set evictLeader to false, and this member can campaign leader again
 func (e *Election) CancelEvictLeader() {
+	if !e.evictLeader.Get() {
+		return
+	}
+
 	e.evictLeader.Set(false)
 	e.campaignMu.Lock()
 	if e.cancelCampaign != nil {
