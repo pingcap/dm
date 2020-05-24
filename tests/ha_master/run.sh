@@ -36,7 +36,7 @@ function test_evict_leader() {
     master_ports=($MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3 $MASTER_PORT4 $MASTER_PORT5)
 
     # evict leader
-    for i in $(seq 0 4); do 
+    for i in $(seq 0 4); do
         Leader_Name=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
         echo "leader is $Leader_Name"
         set_leader_port
@@ -59,7 +59,7 @@ function test_evict_leader() {
         fi
     done
 
-    # cancel evict leader on master1, and master1 will be the leader 
+    # cancel evict leader on master1, and master1 will be the leader
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "operate-leader cancel-evict"\
         "\"result\": true" 1
@@ -113,7 +113,7 @@ function test_list_member() {
         done
 
         # check list-member master
-        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:${master_ports[$leader_idx]}" \
             "list-member --master" \
             "\"alive\": true" $((5 - i))
 
@@ -262,7 +262,7 @@ function run() {
 
     test_evict_leader
     test_list_member
-    
+
     echo "start DM task"
     dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
 
