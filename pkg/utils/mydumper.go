@@ -46,7 +46,7 @@ func ParseMetaData(filename, flavor string) (mysql.Position, string, error) {
 		} else if err != nil {
 			return mysql.Position{}, "", terror.ErrParseMydumperMeta.Generate(err)
 		}
-		line = strings.TrimSpace(line[:len(line)-1])
+		line = strings.TrimSpace(line)
 		if len(line) == 0 {
 			continue
 		}
@@ -98,7 +98,7 @@ func readFollowingGTIDs(br *bufio.Reader, flavor string) (string, error) {
 			return "", err
 		}
 
-		line = strings.TrimSpace(line[:len(line)-1])
+		line = strings.TrimSpace(line)
 		if len(line) == 0 {
 			return following.String(), nil // end with empty line.
 		}
