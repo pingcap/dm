@@ -14,7 +14,10 @@ target-database:
   user: "root"
   password: ""
   session:
-    sql-mode: "ANSI,ANSI_QUOTES"
+    sql_mode: "ANSI,ANSI_QUOTES"
+    tidb_skip_utf8_check: 1
+    tidb_disable_txn_auto_retry: off
+    tidb_retry_limit: "10"
 
 mysql-instances:
   - source-id: "mysql-replica-01"
