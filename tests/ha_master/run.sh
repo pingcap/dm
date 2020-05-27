@@ -45,6 +45,9 @@ function test_evict_leader() {
             "operate-leader evict"\
             "\"result\": true" 1
 
+        # evict leader twice, and test evict leader from http interface
+        curl -X PUT 127.0.0.1:$LEADER_PORT/apis/v1alpha1/leader/1
+
         # will get_leader failed because evict leader on all master, so just skip
         if [ $i = 4 ]; then
             continue
@@ -61,6 +64,10 @@ function test_evict_leader() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "operate-leader cancel-evict"\
         "\"result\": true" 1
+
+    # cancel evict leader twice, and test cancel evict leader from http interface
+    curl -X PUT 127.0.0.1:$MASTER_PORT1/apis/v1alpha1/leader/2
+
     LEADER_NAME=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
     echo "leader is $LEADER_NAME"
     if [ "$LEADER_NAME" != "master1" ]; then
