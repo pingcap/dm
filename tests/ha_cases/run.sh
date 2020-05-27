@@ -346,46 +346,46 @@ function test_standalone_running() {
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff-standalone-config.toml
 
-    cp $cur/conf/source2.toml $WORK_DIR/source2.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
-    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "start-task $cur/conf/standalone-task2.yaml" \
-        "\"result\": true" 2 \
-        "\"source\": \"$SOURCE_ID2\"" 1
-
-    worker=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT" query-status test2 \
-        | grep 'worker' | awk -F: '{print $2}')
-    worker_name=${worker:0-9:7}
-    worker_idx=${worker_name:0-1:1}
-    worker_ports=(0 WORKER1_PORT WORKER2_PORT)
-
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status"\
-        "\"taskStatus\": \"Running\"" 2
-    
-    echo "kill $worker_name"
-    ps aux | grep dm-worker${worker_idx} |awk '{print $2}'|xargs kill || true
-    check_port_offline ${worker_ports[$worker_idx]} 20
-    rm -rf $WORK_DIR/worker${worker_idx}/relay_log
-
-    # test running, test2 fail
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status"\
-        "\"taskStatus\": \"Running\"" 1
-    
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "stop-task test2"\
-        "\"result\": true" 1
-    
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "start-task $cur/conf/standalone-task2.yaml"\
-        "\"result\": false" 1
-
-    # test running, test2 fail
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test"\
-        "\"stage\": \"Running\"" 1
+#    cp $cur/conf/source2.toml $WORK_DIR/source2.toml
+#    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
+#    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
+#    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+#        "start-task $cur/conf/standalone-task2.yaml" \
+#        "\"result\": true" 2 \
+#        "\"source\": \"$SOURCE_ID2\"" 1
+#
+#    worker=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT" query-status test2 \
+#        | grep 'worker' | awk -F: '{print $2}')
+#    worker_name=${worker:0-9:7}
+#    worker_idx=${worker_name:0-1:1}
+#    worker_ports=(0 WORKER1_PORT WORKER2_PORT)
+#
+#    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+#        "query-status"\
+#        "\"taskStatus\": \"Running\"" 2
+#    
+#    echo "kill $worker_name"
+#    ps aux | grep dm-worker${worker_idx} |awk '{print $2}'|xargs kill || true
+#    check_port_offline ${worker_ports[$worker_idx]} 20
+#    rm -rf $WORK_DIR/worker${worker_idx}/relay_log
+#
+#    # test running, test2 fail
+#    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+#        "query-status"\
+#        "\"taskStatus\": \"Running\"" 1
+#    
+#    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+#        "stop-task test2"\
+#        "\"result\": true" 1
+#    
+#    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+#        "start-task $cur/conf/standalone-task2.yaml"\
+#        "\"result\": false" 1
+#
+#    # test running, test2 fail
+#    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+#        "query-status test"\
+#        "\"stage\": \"Running\"" 1
 
     echo "[$(date)] <<<<<< finish test_standalone_running >>>>>>"
 }
@@ -650,7 +650,7 @@ function run() {
     test_kill_worker                           # TICASE-968, 973, 1002, 975, 969, 972, 974, 970, 971, 976, 978, 988
     test_kill_master_in_sync
     test_kill_worker_in_sync
-#    test_standalone_running                    # TICASE-929, 959, 960, 967, 977, 980
+    test_standalone_running                    # TICASE-929, 959, 960, 967, 977, 980
     test_pause_task                            # TICASE-990
     test_multi_task_reduce_and_restart_worker  # TICASE-968, 994, 995, 964, 966, 979, 981, 982, 985, 986, 989, 993
     test_isolate_master_and_worker             # TICASE-934, 935, 936, 987, 992, 998
