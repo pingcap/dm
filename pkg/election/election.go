@@ -404,6 +404,7 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 
 // EvictLeader set evictLeader to true, and this member can't be leader
 func (e *Election) EvictLeader() {
+
 	if e.evictLeader.Get() {
 		return
 	}

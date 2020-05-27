@@ -6,13 +6,6 @@
 workdir=$1
 master_addr=$2
 
-leader_can_be_empty=false
-if [ $# = 3 ] ; then
-    if [ $3 = "leader_can_be_empty" ] ; then
-        leader_can_be_empty=true
-    fi
-fi
-
 PWD=$(pwd)
 binary=$PWD/bin/dmctl.test
 ts=$(date +"%s")
@@ -23,13 +16,13 @@ leader_name=""
 
 for ((k=0; k<10; k++)); do
     leader_name=$($binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.$pid.out" DEVEL -master-addr=$master_addr list-member --leader | grep name | gawk 'match($2,/"(.*)",/,a) {print a[1]}')
-    if [ ! -z "$leader_name" ] || [ $leader_can_be_empty ]; then
+    if [[ ! -z "$leader_name" ]]; then
         echo $leader_name
         break
     fi
     sleep 2
 done
 
-if [ -z "$leader_name" ] && [ ! $leader_can_be_empty ]; then
+if [[ -z "$leader_name" ]]; then
     exit 1
 fi

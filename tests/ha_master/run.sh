@@ -12,20 +12,20 @@ MASTER_PORT3=8461
 MASTER_PORT4=8561
 MASTER_PORT5=8661
 
-Leader_Name="master1"
-Leader_Port=MASTER_PORT1
+LEADER_NAME="master1"
+LEADER_PORT=MASTER_PORT1
 
 function set_leader_port() {
-    case $Leader_Name in
-        "master1") Leader_Port=$MASTER_PORT1
+    case $LEADER_NAME in
+        "master1") LEADER_PORT=$MASTER_PORT1
         ;;
-        "master2") Leader_Port=$MASTER_PORT2
+        "master2") LEADER_PORT=$MASTER_PORT2
         ;;
-        "master3") Leader_Port=$MASTER_PORT3
+        "master3") LEADER_PORT=$MASTER_PORT3
         ;;
-        "master4") Leader_Port=$MASTER_PORT4
+        "master4") LEADER_PORT=$MASTER_PORT4
         ;;
-        "master5") Leader_Port=$MASTER_PORT5
+        "master5") LEADER_PORT=$MASTER_PORT5
         ;;
     esac
 }
@@ -37,23 +37,21 @@ function test_evict_leader() {
 
     # evict leader
     for i in $(seq 0 4); do
-        Leader_Name=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
-        echo "leader is $Leader_Name"
+        LEADER_NAME=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
+        echo "leader is $LEADER_NAME"
         set_leader_port
 
-        echo "leader port is $Leader_Port"
-
-        run_dm_ctl $WORK_DIR "127.0.0.1:$Leader_Port" \
+        run_dm_ctl $WORK_DIR "127.0.0.1:$LEADER_PORT" \
             "operate-leader evict"\
             "\"result\": true" 1
 
-        leader_can_be_empty=""
+        # will get_leader failed because evict leader on all master, so just skip
         if [ $i = 4 ]; then
-            leader_can_be_empty="leader_can_be_empty"
+            continue
         fi
-        New_Leader_Name=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1} $leader_can_be_empty)
-        echo "new leader is $New_Leader_Name"
-        if [ "$New_Leader_Name" = "$Leader_Name" ]; then
+        NEW_LEADER_NAME=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
+        echo "new leader is $NEW_LEADER_NAME"
+        if [ "$NEW_LEADER_NAME" = "$LEADER_NAME" ]; then
             echo "leader evict failed"
             exit 1
         fi
@@ -63,9 +61,9 @@ function test_evict_leader() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "operate-leader cancel-evict"\
         "\"result\": true" 1
-    Leader_Name=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
-    echo "leader is $Leader_Name"
-    if [ $Leader_Name != "master1" ]; then
+    LEADER_NAME=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
+    echo "leader is $LEADER_NAME"
+    if [ "$LEADER_NAME" != "master1" ]; then
         echo "cancel evict leader failed"
         exit 1
     fi
