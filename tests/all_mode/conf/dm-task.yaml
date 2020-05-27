@@ -13,6 +13,8 @@ target-database:
   port: 4000
   user: "root"
   password: ""
+  session:
+    sql-mode: "ANSI,ANSI_QUOTES"
 
 mysql-instances:
   - source-id: "mysql-replica-01"

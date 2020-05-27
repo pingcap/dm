@@ -60,6 +60,17 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
+
+	sessionConfig := config.Session
+	if sessionConfig != nil {
+		if sessionConfig.SQLMode != "" {
+			_, err := db.Exec(fmt.Sprintf("set @@session.sql_mode = \"%s\";", sessionConfig.SQLMode))
+			if err != nil {
+				return nil, terror.ErrDBExecuteFailed.Delegate(err)
+			}
+		}
+	}
+
 	db.SetMaxIdleConns(maxIdleConns)
 
 	return NewBaseDB(db), nil
