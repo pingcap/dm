@@ -650,7 +650,7 @@ function run() {
     test_kill_worker                           # TICASE-968, 973, 1002, 975, 969, 972, 974, 970, 971, 976, 978, 988
     test_kill_master_in_sync
     test_kill_worker_in_sync
-    test_standalone_running                    # TICASE-929, 959, 960, 967, 977, 980
+#    test_standalone_running                    # TICASE-929, 959, 960, 967, 977, 980
     test_pause_task                            # TICASE-990
     test_multi_task_reduce_and_restart_worker  # TICASE-968, 994, 995, 964, 966, 979, 981, 982, 985, 986, 989, 993
     test_isolate_master_and_worker             # TICASE-934, 935, 936, 987, 992, 998
