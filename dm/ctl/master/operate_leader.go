@@ -20,12 +20,11 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewOperateLeaderCmd creates a CheckTask command
+// NewOperateLeaderCmd creates a OperateLeader command
 func NewOperateLeaderCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operate-leader <operate-type>",
@@ -65,7 +64,7 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// start task
+	// operate leader
 	cli := common.MasterClient()
 	resp, err := cli.OperateLeader(ctx, &pb.OperateLeaderRequest{
 		Op: op,
@@ -75,7 +74,5 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
-		common.PrettyPrintResponse(resp)
-	}
+	common.PrettyPrintResponse(resp)
 }
