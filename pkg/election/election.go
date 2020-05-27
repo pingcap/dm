@@ -92,7 +92,7 @@ type Election struct {
 	closed sync2.AtomicInt32
 	cancel context.CancelFunc
 
-	campaignWg sync.WaitGroup
+	bgWg sync.WaitGroup
 
 	campaignMu sync.RWMutex
 
@@ -136,9 +136,9 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 		return nil, terror.ErrElectionCampaignFail.Delegate(err, "create the initial session")
 	}
 
-	e.campaignWg.Add(1)
+	e.bgWg.Add(1)
 	go func() {
-		defer e.campaignWg.Done()
+		defer e.bgWg.Done()
 		e.campaignLoop(ctx2, session)
 	}()
 	return e, nil
@@ -193,7 +193,7 @@ func (e *Election) Close() {
 	}
 
 	e.cancel()
-	e.campaignWg.Wait()
+	e.bgWg.Wait()
 	e.l.Info("election is closed", zap.Stringer("current member", e.info))
 }
 
@@ -251,11 +251,12 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		go func() {
 			defer compaignWg.Done()
 
-			e.l.Debug("begin to compaign", zap.Stringer("current member", e.info))
 			if e.evictLeader.Get() {
 				// skip campaign
 				return
 			}
+
+			e.l.Debug("begin to compaign", zap.Stringer("current member", e.info))
 
 			err2 := elec.Campaign(ctx2, e.infoStr)
 			if err2 != nil {
@@ -362,7 +363,9 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 
 	for {
 		if e.evictLeader.Get() {
-			elec.Resign(ctx)
+			if err := elec.Resign(ctx); err != nil {
+				e.l.Info("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
+			}
 			return
 		}
 
@@ -390,7 +393,9 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 			return
 		case <-e.resignCh:
 			if e.evictLeader.Get() {
-				elec.Resign(ctx)
+				if err := elec.Resign(ctx); err != nil {
+					e.l.Info("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
+				}
 				return
 			}
 		}
