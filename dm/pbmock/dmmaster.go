@@ -135,6 +135,26 @@ func (mr *MockMasterClientMockRecorder) OfflineWorker(arg0, arg1 interface{}, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OfflineWorker", reflect.TypeOf((*MockMasterClient)(nil).OfflineWorker), varargs...)
 }
 
+// OperateLeader mocks base method
+func (m *MockMasterClient) OperateLeader(arg0 context.Context, arg1 *pb.OperateLeaderRequest, arg2 ...grpc.CallOption) (*pb.OperateLeaderResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "OperateLeader", varargs...)
+	ret0, _ := ret[0].(*pb.OperateLeaderResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OperateLeader indicates an expected call of OperateLeader
+func (mr *MockMasterClientMockRecorder) OperateLeader(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateLeader", reflect.TypeOf((*MockMasterClient)(nil).OperateLeader), varargs...)
+}
+
 // OperateSource mocks base method
 func (m *MockMasterClient) OperateSource(arg0 context.Context, arg1 *pb.OperateSourceRequest, arg2 ...grpc.CallOption) (*pb.OperateSourceResponse, error) {
 	m.ctrl.T.Helper()
@@ -511,6 +531,21 @@ func (m *MockMasterServer) OfflineWorker(arg0 context.Context, arg1 *pb.OfflineW
 func (mr *MockMasterServerMockRecorder) OfflineWorker(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OfflineWorker", reflect.TypeOf((*MockMasterServer)(nil).OfflineWorker), arg0, arg1)
+}
+
+// OperateLeader mocks base method
+func (m *MockMasterServer) OperateLeader(arg0 context.Context, arg1 *pb.OperateLeaderRequest) (*pb.OperateLeaderResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OperateLeader", arg0, arg1)
+	ret0, _ := ret[0].(*pb.OperateLeaderResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OperateLeader indicates an expected call of OperateLeader
+func (mr *MockMasterServerMockRecorder) OperateLeader(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateLeader", reflect.TypeOf((*MockMasterServer)(nil).OperateLeader), arg0, arg1)
 }
 
 // OperateSource mocks base method
