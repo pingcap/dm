@@ -7,6 +7,8 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 TASK_NAME="test"
 
+API_VERSION="v1alpha1"
+
 function run() {
     export GO_FAILPOINTS="github.com/pingcap/dm/syncer/FlushCheckpointStage=return(100)" # for all stages
 
@@ -158,7 +160,25 @@ function run() {
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    # test rotate binlog
+    run_sql "flush logs;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "flush logs;" $MYSQL_PORT2 $MYSQL_PASSWORD2
+
+    run_sql "truncate table incremental_mode.t1;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "truncate table incremental_mode.t1;" $MYSQL_PORT2 $MYSQL_PASSWORD2
+
+    curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
+
     export GO_FAILPOINTS=''
+}
+
+#func get_master_binlog() {
+#    port=$1
+#    password=$2
+#    run_sql "show master status;" $port $password 
+#
+#
+#
 }
 
 cleanup_data $TEST_NAME

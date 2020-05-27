@@ -1383,7 +1383,8 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 		},
 		GTIDSet: ec.currentLocation.GTIDSet,
 	}
-	if binlog.CompareLocation(*ec.currentLocation, *ec.lastLocation, s.cfg.EnableGTID) > 0 {
+
+	if binlog.CompareLocation(*ec.currentLocation, *ec.lastLocation, s.cfg.EnableGTID) >= 0 {
 		*ec.lastLocation = ec.currentLocation.Clone()
 	}
 

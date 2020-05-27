@@ -71,7 +71,7 @@ function run() {
     check_log_contains $WORK_DIR/status.log "\"stage\":\"Running\"" 1
     check_log_contains $WORK_DIR/status.log "\"name\":\"test\"" 1
 
-  sleep 1
+    sleep 1
     curl -X GET "127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/members?leader=true&master=true&worker=true" > $WORK_DIR/list-member.log
     check_log_contains $WORK_DIR/list-member.log "\"leader\":{\"name\":\"master1\"" 1
     check_log_contains $WORK_DIR/list-member.log "\"masters\":\[{\"name\":\"master1\"" 1
@@ -79,7 +79,7 @@ function run() {
     check_log_contains $WORK_DIR/list-member.log "\"stage\":\"bound\"" 1
     check_log_contains $WORK_DIR/list-member.log "\"source\":\"mysql-replica-01\"" 1
 
-  sleep 1
+    sleep 1
     echo "kill dm-worker1"
     ps aux | grep dm-worker1 |awk '{print $2}'|xargs kill || true
     check_port_offline $WORKER1_PORT 20
