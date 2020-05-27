@@ -101,8 +101,8 @@ type Election struct {
 	// notifyBlockTime is the max block time for notify leader
 	notifyBlockTime time.Duration
 
-	// set evictLeader is true if don't hope this member be leader
-	evictLeader sync2.AtomicBool
+	// set evictLeader to 1 if don't hope this member be leader
+	evictLeader sync2.AtomicInt32
 
 	resignCh chan struct{}
 
@@ -251,7 +251,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		go func() {
 			defer compaignWg.Done()
 
-			if e.evictLeader.Get() {
+			if e.evictLeader.Get() == 1 {
 				// skip campaign
 				return
 			}
@@ -362,7 +362,7 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 	wch := e.cli.Watch(ctx, key)
 
 	for {
-		if e.evictLeader.Get() {
+		if e.evictLeader.Get() == 1 {
 			if err := elec.Resign(ctx); err != nil {
 				e.l.Info("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
 			}
@@ -392,7 +392,7 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 		case <-ctx.Done():
 			return
 		case <-e.resignCh:
-			if e.evictLeader.Get() {
+			if e.evictLeader.Get() == 1 {
 				if err := elec.Resign(ctx); err != nil {
 					e.l.Info("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
 				}
@@ -404,12 +404,10 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 
 // EvictLeader set evictLeader to true, and this member can't be leader
 func (e *Election) EvictLeader() {
-
-	if e.evictLeader.Get() {
+	if !e.evictLeader.CompareAndSwap(0, 1) {
 		return
 	}
 
-	e.evictLeader.Set(true)
 	// cancel campagin or current member is leader and then resign
 	e.campaignMu.Lock()
 	if e.cancelCampaign != nil {
@@ -425,11 +423,10 @@ func (e *Election) EvictLeader() {
 
 // CancelEvictLeader set evictLeader to false, and this member can campaign leader again
 func (e *Election) CancelEvictLeader() {
-	if !e.evictLeader.Get() {
+	if !e.evictLeader.CompareAndSwap(1, 0) {
 		return
 	}
 
-	e.evictLeader.Set(false)
 	e.campaignMu.Lock()
 	if e.cancelCampaign != nil {
 		e.cancelCampaign()
