@@ -60,13 +60,10 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 
-	sessionConfig := config.Session
-	if sessionConfig != nil {
-		if sessionConfig.SQLMode != "" {
-			_, err := db.Exec(fmt.Sprintf("set @@session.sql_mode = \"%s\";", sessionConfig.SQLMode))
-			if err != nil {
-				return nil, terror.ErrDBExecuteFailed.Delegate(err)
-			}
+	for key, val := range config.Session {
+		_, err := db.Exec(fmt.Sprintf("set @@session.%s = \"%s\";", key, val))
+		if err != nil {
+			return nil, terror.ErrDBExecuteFailed.Delegate(err)
 		}
 	}
 
