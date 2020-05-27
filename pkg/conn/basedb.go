@@ -55,16 +55,14 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 		}
 		maxIdleConns = rawCfg.MaxIdleConns
 	}
+
+	for key, val := range config.Session {
+		dsn += fmt.Sprintf("&%s=\"%s\"", key, val)
+	}
+
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-
-	for key, val := range config.Session {
-		_, err := db.Exec(fmt.Sprintf("set @@session.%s = \"%s\";", key, val))
-		if err != nil {
-			return nil, terror.ErrDBExecuteFailed.Delegate(err)
-		}
 	}
 
 	db.SetMaxIdleConns(maxIdleConns)
