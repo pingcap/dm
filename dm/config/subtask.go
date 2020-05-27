@@ -45,6 +45,11 @@ var (
 	defaultMaxIdleConns     = 2
 )
 
+// SessionConfig contains some session config
+type SessionConfig struct {
+	SQLMode string `toml:"sql-mode" json:"sql-mode" yaml:"sql-mode"`
+}
+
 // RawDBConfig contains some low level database config
 type RawDBConfig struct {
 	MaxIdleConns int
@@ -81,11 +86,12 @@ func (c *RawDBConfig) SetMaxIdleConns(value int) *RawDBConfig {
 
 // DBConfig is the DB configuration.
 type DBConfig struct {
-	Host             string `toml:"host" json:"host" yaml:"host"`
-	Port             int    `toml:"port" json:"port" yaml:"port"`
-	User             string `toml:"user" json:"user" yaml:"user"`
-	Password         string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
-	MaxAllowedPacket *int   `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
+	Host             string         `toml:"host" json:"host" yaml:"host"`
+	Port             int            `toml:"port" json:"port" yaml:"port"`
+	User             string         `toml:"user" json:"user" yaml:"user"`
+	Password         string         `toml:"password" json:"-" yaml:"password"` // omit it for privacy
+	MaxAllowedPacket *int           `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
+	Session          *SessionConfig `toml:"session" json:"session" yaml:"session"`
 
 	RawDBCfg *RawDBConfig `toml:"-" json:"-" yaml:"-"`
 }
