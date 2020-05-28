@@ -91,10 +91,20 @@ type Election struct {
 
 	closed sync2.AtomicInt32
 	cancel context.CancelFunc
-	bgWg   sync.WaitGroup
+
+	bgWg sync.WaitGroup
+
+	campaignMu sync.RWMutex
+
+	cancelCampaign func()
 
 	// notifyBlockTime is the max block time for notify leader
 	notifyBlockTime time.Duration
+
+	// set evictLeader to 1 if don't hope this member be leader
+	evictLeader sync2.AtomicInt32
+
+	resignCh chan struct{}
 
 	l log.Logger
 }
@@ -230,11 +240,24 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		elec := concurrency.NewElection(session, e.key)
 		ctx2, cancel2 := context.WithCancel(ctx)
 
+		e.campaignMu.Lock()
+		e.cancelCampaign = func() {
+			cancel2()
+			compaignWg.Wait()
+		}
+		e.campaignMu.Unlock()
+
 		compaignWg.Add(1)
 		go func() {
 			defer compaignWg.Done()
 
+			if e.evictLeader.Get() == 1 {
+				// skip campaign
+				return
+			}
+
 			e.l.Debug("begin to compaign", zap.Stringer("current member", e.info))
+
 			err2 := elec.Campaign(ctx2, e.infoStr)
 			if err2 != nil {
 				// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
@@ -294,7 +317,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 		e.l.Info("become leader", zap.Stringer("current member", e.info))
 		e.notifyLeader(ctx, leaderInfo) // become the leader now
-		e.watchLeader(ctx, session, leaderKey)
+		e.watchLeader(ctx, session, leaderKey, elec)
 		e.l.Info("retire from leader", zap.Stringer("current member", e.info))
 		e.notifyLeader(ctx, nil) // need to re-campaign
 		oldLeaderID = ""
@@ -323,10 +346,29 @@ func (e *Election) notifyLeader(ctx context.Context, leaderInfo *CampaignerInfo)
 	}
 }
 
-func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session, key string) {
+func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session, key string, elec *concurrency.Election) {
 	e.l.Debug("watch leader key", zap.String("key", key))
+
+	e.campaignMu.Lock()
+	e.resignCh = make(chan struct{})
+	e.campaignMu.Unlock()
+
+	defer func() {
+		e.campaignMu.Lock()
+		e.resignCh = nil
+		e.campaignMu.Unlock()
+	}()
+
 	wch := e.cli.Watch(ctx, key)
+
 	for {
+		if e.evictLeader.Get() == 1 {
+			if err := elec.Resign(ctx); err != nil {
+				e.l.Info("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
+			}
+			return
+		}
+
 		select {
 		case resp, ok := <-wch:
 			if !ok {
@@ -349,8 +391,48 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 			return
 		case <-ctx.Done():
 			return
+		case <-e.resignCh:
+			if e.evictLeader.Get() == 1 {
+				if err := elec.Resign(ctx); err != nil {
+					e.l.Info("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
+				}
+				return
+			}
 		}
 	}
+}
+
+// EvictLeader set evictLeader to true, and this member can't be leader
+func (e *Election) EvictLeader() {
+	if !e.evictLeader.CompareAndSwap(0, 1) {
+		return
+	}
+
+	// cancel campagin or current member is leader and then resign
+	e.campaignMu.Lock()
+	if e.cancelCampaign != nil {
+		e.cancelCampaign()
+		e.cancelCampaign = nil
+	}
+
+	if e.resignCh != nil {
+		close(e.resignCh)
+	}
+	e.campaignMu.Unlock()
+}
+
+// CancelEvictLeader set evictLeader to false, and this member can campaign leader again
+func (e *Election) CancelEvictLeader() {
+	if !e.evictLeader.CompareAndSwap(1, 0) {
+		return
+	}
+
+	e.campaignMu.Lock()
+	if e.cancelCampaign != nil {
+		e.cancelCampaign()
+		e.cancelCampaign = nil
+	}
+	e.campaignMu.Unlock()
 }
 
 func (e *Election) newSession(ctx context.Context, retryCnt int) (*concurrency.Session, error) {
