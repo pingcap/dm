@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"sync"
 
 	"github.com/pingcap/dm/dm/config"
@@ -58,7 +59,7 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 	}
 
 	for key, val := range config.Session {
-		dsn += fmt.Sprintf("&%s=\"%s\"", key, val)
+		dsn += fmt.Sprintf("&%s='%s'", key, url.QueryEscape(val))
 	}
 
 	db, err := sql.Open("mysql", dsn)
