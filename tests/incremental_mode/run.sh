@@ -160,25 +160,20 @@ function run() {
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    # test rotate binlog
+    # test rotate binlog, after rotate and ddl, master binlog should be equal to sync binlog
     run_sql "flush logs;" $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql "flush logs;" $MYSQL_PORT2 $MYSQL_PASSWORD2
-
     run_sql "truncate table incremental_mode.t1;" $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql "truncate table incremental_mode.t1;" $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
+    SYNCER_BINLOG=`cat $WORK_DIR/status.log | sed 's/.*mysql-replica-01.*\"syncerBinlog\":\"\(.*\)\",\"syncerBinlogGtid.*mysql-replica-02.*/\1/g'`
+    MASTER_BINLOG=`cat $WORK_DIR/status.log | sed 's/.*mysql-replica-01.*\"masterBinlog\":\"\(.*\)\",\"masterBinlogGtid.*mysql-replica-02.*/\1/g'`
+
+    if [ "$MASTER_BINLOG" != "$SYNCER_BINLOG" ]; then
+        echo "master binlog is not equal to syncer binlog"
+        exit 1
+    fi
 
     export GO_FAILPOINTS=''
-}
-
-#func get_master_binlog() {
-#    port=$1
-#    password=$2
-#    run_sql "show master status;" $port $password 
-#
-#
-#
 }
 
 cleanup_data $TEST_NAME
