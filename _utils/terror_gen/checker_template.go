@@ -15,11 +15,15 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/BurntSushi/toml"
 
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -28,9 +32,26 @@ const (
 	developErrorFile     = "errors_develop.txt"
 	releaseErrorFile     = "errors_release.txt"
 	generatedCheckerFile = "{{.CheckerFile}}"
+	tomlErrorFile        = "../../errors.toml"
 )
 
 var dumpErrorRe = regexp.MustCompile("^([a-zA-Z].*),\\[code=([0-9]+).*$")
+
+type tomlErrorBody = struct {
+	Message     string   `toml:"message"`
+	Description string   `toml:"description"`
+	Workaround  string   `toml:"workaround"`
+	Tags        []string `toml:"tags"`
+}
+
+type tomlErrorItem = struct {
+	key  string
+	code terror.ErrCode
+	body string
+}
+
+// used to generate `errors.toml` in the repo's root.
+var tomlErrors []tomlErrorItem
 
 var errors = []struct {
 	name string
@@ -51,8 +72,32 @@ func genErrors() {
 	for _, item := range errors {
 		s := strings.SplitN(item.err.Error(), " ", 2)
 		w.WriteString(fmt.Sprintf("%s,%s,\"%s\"\n", item.name, s[0], strings.ReplaceAll(s[1], "\n", "\\n")))
+
+		body := tomlErrorBody{
+			Message:     item.err.Message(),
+			Description: "", // empty now
+			Workaround:  "", // empyt now,
+			Tags:        []string{item.err.Scope().String(), item.err.Level().String()},
+		}
+		var buf bytes.Buffer
+		enc := toml.NewEncoder(&buf)
+		err := enc.Encode(body)
+		if err != nil {
+			panic(err)
+		}
+
+		tomlErrors = append(tomlErrors, tomlErrorItem{
+			key:  fmt.Sprintf("error.DM-%s-%d", item.err.Class(), item.err.Code()),
+			code: item.err.Code(),
+			body: buf.String(),
+		})
 	}
 	w.Flush()
+
+	// sort according to the code.
+	sort.Slice(tomlErrors, func(i, j int) bool {
+		return tomlErrors[i].code < tomlErrors[j].code
+	})
 }
 
 func readErrorFile(filename string) map[string]int64 {
@@ -125,6 +170,28 @@ func cleanup(success bool) {
 		if err := os.Rename(developErrorFile, releaseErrorFile); err != nil {
 			panic(err)
 		}
+
+		tef, err := os.Create(tomlErrorFile)
+		if err != nil {
+			panic(err)
+		}
+		defer tef.Close()
+		for _, item := range tomlErrors {
+			// generate to TOML file, poor man's method for ordered codes.
+			_, err = tef.WriteString(fmt.Sprintf("[%s]\n", item.key))
+			if err != nil {
+				panic(err)
+			}
+			_, err = tef.WriteString(item.body)
+			if err != nil {
+				panic(err)
+			}
+			_, err = tef.WriteString("\n")
+			if err != nil {
+				panic(err)
+			}
+		}
+
 		fmt.Println("check pass")
 	} else {
 		if err := os.Remove(developErrorFile); err != nil {
