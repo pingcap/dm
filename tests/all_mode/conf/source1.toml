@@ -2,7 +2,7 @@
 
 source-id = "mysql-replica-01"
 flavor = ""
-enable-gtid = true
+enable-gtid = false
 relay-binlog-name = ""
 relay-binlog-gtid = ""
 
