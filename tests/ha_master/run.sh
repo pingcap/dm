@@ -46,7 +46,8 @@ function test_evict_leader() {
             "\"result\": true" 1
 
         # evict leader twice, and test evict leader from http interface
-        curl -X PUT 127.0.0.1:$LEADER_PORT/apis/v1alpha1/leader/1
+        curl -X PUT 127.0.0.1:$LEADER_PORT/apis/v1alpha1/leader/1 > $WORK_DIR/evict_leader.log
+        check_log_contains $WORK_DIR/evict_leader.log "\"result\":true" 1
 
         # will get_leader failed because evict leader on all master, so just skip
         if [ $i = 4 ]; then
@@ -66,7 +67,8 @@ function test_evict_leader() {
         "\"result\": true" 1
 
     # cancel evict leader twice, and test cancel evict leader from http interface
-    curl -X PUT 127.0.0.1:$MASTER_PORT1/apis/v1alpha1/leader/2
+    curl -X PUT 127.0.0.1:$MASTER_PORT1/apis/v1alpha1/leader/2  > $WORK_DIR/cancel_evict_leader.log
+    check_log_contains $WORK_DIR/cancel_evict_leader.log "\"result\":true" 1
 
     LEADER_NAME=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
     echo "leader is $LEADER_NAME"
