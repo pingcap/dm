@@ -76,7 +76,7 @@ function NamingStep({ onNext, onPrev, onData, taskInfo }: Props) {
           help={taskName.errMsg}
         >
           <Input
-            placeholder="test-task"
+            placeholder="test"
             value={taskName.value}
             onChange={(e: any) =>
               setTaskName(handleTaskNameChange(e.target.value))

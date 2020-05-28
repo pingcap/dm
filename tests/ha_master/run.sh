@@ -12,6 +12,82 @@ MASTER_PORT3=8461
 MASTER_PORT4=8561
 MASTER_PORT5=8661
 
+LEADER_NAME="master1"
+LEADER_PORT=MASTER_PORT1
+
+function set_leader_port() {
+    case $LEADER_NAME in
+        "master1") LEADER_PORT=$MASTER_PORT1
+        ;;
+        "master2") LEADER_PORT=$MASTER_PORT2
+        ;;
+        "master3") LEADER_PORT=$MASTER_PORT3
+        ;;
+        "master4") LEADER_PORT=$MASTER_PORT4
+        ;;
+        "master5") LEADER_PORT=$MASTER_PORT5
+        ;;
+    esac
+}
+
+function test_evict_leader() {
+    echo "[$(date)] <<<<<< start test_evict_leader >>>>>>"
+
+    master_ports=($MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3 $MASTER_PORT4 $MASTER_PORT5)
+
+    # evict leader
+    for i in $(seq 0 4); do
+        LEADER_NAME=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
+        echo "leader is $LEADER_NAME"
+        set_leader_port
+
+        run_dm_ctl $WORK_DIR "127.0.0.1:$LEADER_PORT" \
+            "operate-leader evict"\
+            "\"result\": true" 1
+
+        # evict leader twice, and test evict leader from http interface
+        curl -X PUT 127.0.0.1:$LEADER_PORT/apis/v1alpha1/leader/1 > $WORK_DIR/evict_leader.log
+        check_log_contains $WORK_DIR/evict_leader.log "\"result\":true" 1
+
+        # will get_leader failed because evict leader on all master, so just skip
+        if [ $i = 4 ]; then
+            continue
+        fi
+        NEW_LEADER_NAME=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
+        echo "new leader is $NEW_LEADER_NAME"
+        if [ "$NEW_LEADER_NAME" = "$LEADER_NAME" ]; then
+            echo "leader evict failed"
+            exit 1
+        fi
+    done
+
+    # cancel evict leader on master1, and master1 will be the leader
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
+        "operate-leader cancel-evict"\
+        "\"result\": true" 1
+
+    # cancel evict leader twice, and test cancel evict leader from http interface
+    curl -X PUT 127.0.0.1:$MASTER_PORT1/apis/v1alpha1/leader/2  > $WORK_DIR/cancel_evict_leader.log
+    check_log_contains $WORK_DIR/cancel_evict_leader.log "\"result\":true" 1
+
+    LEADER_NAME=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
+    echo "leader is $LEADER_NAME"
+    if [ "$LEADER_NAME" != "master1" ]; then
+        echo "cancel evict leader failed"
+        exit 1
+    fi
+
+    # cancel evict leader on all masters
+    for i in $(seq 1 4); do
+        echo "cancel master port ${master_ports[$i]}"
+        run_dm_ctl $WORK_DIR "127.0.0.1:${master_ports[$i]}" \
+            "operate-leader cancel-evict"\
+            "\"result\": true" 1
+    done
+
+    echo "[$(date)] <<<<<< finish test_evict_leader >>>>>>"
+}
+
 function test_list_member() {
     echo "[$(date)] <<<<<< start test_list_member_command >>>>>>"
 
@@ -44,7 +120,7 @@ function test_list_member() {
         done
 
         # check list-member master
-        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:${master_ports[$leader_idx]}" \
             "list-member --master" \
             "\"alive\": true" $((5 - i))
 
@@ -191,6 +267,7 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
+    test_evict_leader
     test_list_member
 
     echo "start DM task"

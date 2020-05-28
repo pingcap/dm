@@ -72,6 +72,16 @@ service Master {
         };
     }
 
+    // OperateLeader do some operate on master:
+    //   - evict leader: make the master resign if it is leader, and will not campaign the leader again
+    //   - cancel evict leader: the master can campaign leader again.
+    rpc OperateLeader(OperateLeaderRequest) returns(OperateLeaderResponse) {
+        option (google.api.http) = { 
+            put: "/apis/v1alpha1/leader/{op}"
+            body: "*"
+        };
+    }
+
     // ListMember list member information
     rpc ListMember(ListMemberRequest) returns(ListMemberResponse) {
         option (google.api.http) = {
@@ -320,6 +330,21 @@ message OfflineMemberRequest {
 }
 
 message OfflineMemberResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+enum LeaderOp {
+    InvalidLeaderOp = 0;
+    EvictLeaderOp = 1;
+    CancelEvictLeaderOp = 2;
+}
+
+message OperateLeaderRequest {
+    LeaderOp op = 1;
+}
+
+message OperateLeaderResponse {
     bool result = 1;
     string msg = 2;
 }

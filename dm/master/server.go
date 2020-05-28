@@ -1367,6 +1367,28 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 	return resp, nil
 }
 
+// OperateLeader implements MasterServer.OperateLeader
+// Note: this request dosen't need to forward to leader
+func (s *Server) OperateLeader(ctx context.Context, req *pb.OperateLeaderRequest) (*pb.OperateLeaderResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateLeader"))
+
+	switch req.Op {
+	case pb.LeaderOp_EvictLeaderOp:
+		s.election.EvictLeader()
+	case pb.LeaderOp_CancelEvictLeaderOp:
+		s.election.CancelEvictLeader()
+	default:
+		return &pb.OperateLeaderResponse{
+			Result: false,
+			Msg:    fmt.Sprintf("operate %s is not supported", req.Op),
+		}, nil
+	}
+
+	return &pb.OperateLeaderResponse{
+		Result: true,
+	}, nil
+}
+
 func (s *Server) generateSubTask(ctx context.Context, task string) (*config.TaskConfig, []*config.SubTaskConfig, error) {
 	cfg := config.NewTaskConfig()
 	err := cfg.Decode(task)
