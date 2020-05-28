@@ -33,6 +33,11 @@ const (
 	EncryptCmdName = "encrypt"
 	// DecryptCmdName is special command
 	DecryptCmdName = "decrypt"
+
+	// Master specifies member master type
+	Master = "master"
+	// Worker specifies member worker type
+	Worker = "worker"
 )
 
 // NewConfig creates a new base config for dmctl.

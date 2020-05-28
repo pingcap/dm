@@ -32,6 +32,7 @@ import (
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/master/shardddl"
 	operator "github.com/pingcap/dm/dm/master/sql-operator"
@@ -304,7 +305,7 @@ func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
-	if req.Type == "worker" {
+	if req.Type == common.Worker {
 		err := s.scheduler.RemoveWorker(req.Name)
 		if err != nil {
 			return &pb.OfflineMemberResponse{
@@ -312,7 +313,7 @@ func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest
 				Msg:    errors.ErrorStack(err),
 			}, nil
 		}
-	} else if req.Type == "master" {
+	} else if req.Type == common.Master {
 		err := s.deleteMasterByName(ctx, req.Name)
 		if err != nil {
 			return &pb.OfflineMemberResponse{

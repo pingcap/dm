@@ -50,9 +50,9 @@ func convertOfflineMemberType(cmd *cobra.Command) (string, error) {
 		return "", errors.New("should specify either --master or --worker")
 	}
 	if master {
-		return "master", nil
+		return common.Master, nil
 	}
-	return "worker", nil
+	return common.Worker, nil
 }
 
 // offlineMemberFunc does offline member request

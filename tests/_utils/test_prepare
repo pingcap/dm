@@ -100,12 +100,3 @@ function dmctl_operate_source() {
         "\"result\": true" 2 \
         "\"source\": \"$source_id\"" 1
 }
-
-
-function dmctl_offline_member() {
-    type=$1
-    name=$2
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "offline-member --$type --name $name" \
-        "\"result\": true" 1
-}

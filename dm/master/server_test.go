@@ -41,6 +41,7 @@ import (
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/master/shardddl"
 	"github.com/pingcap/dm/dm/master/workerrpc"
@@ -1271,7 +1272,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Equals, terror.ErrMasterInvalidOfflineType.Generate(req.Type).Error())
 	// test offline member with invalid master name
-	req.Type = "master"
+	req.Type = common.Master
 	resp, err = s2.OfflineMember(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
@@ -1323,7 +1324,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	c.Assert(regReq.Result, check.IsTrue)
 
 	req2 := &pb.OfflineMemberRequest{
-		Type: "worker",
+		Type: common.Worker,
 		Name: "haha",
 	}
 	{
