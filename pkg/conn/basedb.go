@@ -59,6 +59,9 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 	}
 
 	for key, val := range config.Session {
+		// for num such as 1/"1", format as key='1'
+		// for string, format as key='string'
+		// both are valid for mysql and tidb
 		dsn += fmt.Sprintf("&%s='%s'", key, url.QueryEscape(val))
 	}
 
