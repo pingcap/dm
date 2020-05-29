@@ -32,6 +32,7 @@ import (
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/master/shardddl"
 	operator "github.com/pingcap/dm/dm/master/sql-operator"
@@ -289,30 +290,74 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 	}, nil
 }
 
-// OfflineWorker removes info of the worker which has been Closed, and all the worker are store in the path:
-// key:   /dm-worker/r/name
-// value: workerInfo
-func (s *Server) OfflineWorker(ctx context.Context, req *pb.OfflineWorkerRequest) (*pb.OfflineWorkerResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OfflineWorker"))
+// OfflineMember removes info of the master/worker which has been Closed
+// all the masters are store in etcd member list
+// all the workers are store in the path:
+// key:   /dm-worker/r
+// value: WorkerInfo
+func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest) (*pb.OfflineMemberResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OfflineMember"))
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
-			return s.leaderClient.OfflineWorker(ctx, req)
+			return s.leaderClient.OfflineMember(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
-	err := s.scheduler.RemoveWorker(req.Name)
-	if err != nil {
-		return &pb.OfflineWorkerResponse{
+	if req.Type == common.Worker {
+		err := s.scheduler.RemoveWorker(req.Name)
+		if err != nil {
+			return &pb.OfflineMemberResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+	} else if req.Type == common.Master {
+		err := s.deleteMasterByName(ctx, req.Name)
+		if err != nil {
+			return &pb.OfflineMemberResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+	} else {
+		return &pb.OfflineMemberResponse{
 			Result: false,
-			Msg:    errors.ErrorStack(err),
+			Msg:    terror.ErrMasterInvalidOfflineType.Generate(req.Type).Error(),
 		}, nil
 	}
-	log.L().Info("offline worker successfully", zap.String("name", req.Name))
-	return &pb.OfflineWorkerResponse{
+	log.L().Info("offline member successfully", zap.String("type", req.Type), zap.String("name", req.Name))
+	return &pb.OfflineMemberResponse{
 		Result: true,
 	}, nil
+}
+
+func (s *Server) deleteMasterByName(ctx context.Context, name string) error {
+	cli := s.etcdClient
+	// Get etcd ID by name.
+	var id uint64
+	listResp, err := etcdutil.ListMembers(cli)
+	if err != nil {
+		return err
+	}
+	for _, m := range listResp.Members {
+		if name == m.Name {
+			id = m.ID
+			break
+		}
+	}
+	if id == 0 {
+		return terror.ErrMasterMasterNameNotExist.Generate(name)
+	}
+
+	_, err = s.election.ClearSessionIfNeeded(ctx, name)
+	if err != nil {
+		return err
+	}
+
+	_, err = etcdutil.RemoveMember(cli, id)
+	return err
 }
 
 func subtaskCfgPointersToInstances(stCfgPointers ...*config.SubTaskConfig) []config.SubTaskConfig {
@@ -1320,6 +1365,28 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		resp.Sources = s.getSourceRespsAfterOperation(ctx, "", []string{cfg.SourceID}, []string{w.BaseInfo().Name}, req)
 	}
 	return resp, nil
+}
+
+// OperateLeader implements MasterServer.OperateLeader
+// Note: this request dosen't need to forward to leader
+func (s *Server) OperateLeader(ctx context.Context, req *pb.OperateLeaderRequest) (*pb.OperateLeaderResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateLeader"))
+
+	switch req.Op {
+	case pb.LeaderOp_EvictLeaderOp:
+		s.election.EvictLeader()
+	case pb.LeaderOp_CancelEvictLeaderOp:
+		s.election.CancelEvictLeader()
+	default:
+		return &pb.OperateLeaderResponse{
+			Result: false,
+			Msg:    fmt.Sprintf("operate %s is not supported", req.Op),
+		}, nil
+	}
+
+	return &pb.OperateLeaderResponse{
+		Result: true,
+	}, nil
 }
 
 func (s *Server) generateSubTask(ctx context.Context, task string) (*config.TaskConfig, []*config.SubTaskConfig, error) {

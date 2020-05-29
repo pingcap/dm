@@ -88,6 +88,13 @@ func AddMember(client *clientv3.Client, peerAddrs []string) (*clientv3.MemberAdd
 	return client.MemberAdd(ctx, peerAddrs)
 }
 
+// RemoveMember removes an etcd member by the given id.
+func RemoveMember(client *clientv3.Client, id uint64) (*clientv3.MemberRemoveResponse, error) {
+	ctx, cancel := context.WithTimeout(client.Ctx(), DefaultRequestTimeout)
+	defer cancel()
+	return client.MemberRemove(ctx, id)
+}
+
 // DoOpsInOneTxnWithRetry do multiple etcd operations in one txn.
 // TODO: add unit test to test encountered an retryable error first but then recovered
 func DoOpsInOneTxnWithRetry(cli *clientv3.Client, ops ...clientv3.Op) (*clientv3.TxnResponse, int64, error) {

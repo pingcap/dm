@@ -172,6 +172,11 @@ func (e *Error) Level() ErrLevel {
 	return e.level
 }
 
+// Message returns the formatted error message.
+func (e *Error) Message() string {
+	return e.getMsg()
+}
+
 // Error implements error interface.
 func (e *Error) Error() string {
 	return fmt.Sprintf(errFormat, e.code, e.class, e.scope, e.level, e.getMsg())
