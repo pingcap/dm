@@ -1,4 +1,4 @@
-// Copyright 2019 PingCAP, Inc.
+// Copyright 2020 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,7 +75,8 @@ func NewRootCmd() *cobra.Command {
 		master.NewPurgeRelayCmd(),
 		master.NewMigrateRelayCmd(),
 		master.NewOperateSourceCmd(),
-		master.NewOfflineWorkerCmd(),
+		master.NewOfflineMemberCmd(),
+		master.NewOperateLeaderCmd(),
 		master.NewListMemberCmd(),
 	)
 	return cmd

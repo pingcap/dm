@@ -775,7 +775,7 @@ func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, error) {
 	// `metadata` is mydumper's output meta file name
 	filename := path.Join(cp.cfg.Dir, "metadata")
 	cp.logCtx.L().Info("parsing metadata from file", zap.String("file", filename))
-	pos, gsetStr, err := utils.ParseMetaData(filename)
+	pos, gsetStr, err := utils.ParseMetaData(filename, cp.cfg.Flavor)
 	if err != nil {
 		return nil, err
 	}

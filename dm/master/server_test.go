@@ -41,6 +41,7 @@ import (
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/master/shardddl"
 	"github.com/pingcap/dm/dm/master/workerrpc"
@@ -511,7 +512,9 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	c.Assert(len(server.pessimist.Locks()), check.Greater, 0)
 
 	resp, err := server.StartTask(context.Background(), req)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		time.Sleep(10 * time.Microsecond)
 		// start another same task at the same time, should get err
 		resp1, err1 := server.StartTask(context.Background(), req)
@@ -596,7 +599,9 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	c.Assert(len(server.optimist.Locks()), check.Greater, 0)
 
 	resp, err = server.StartTask(context.Background(), req)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		time.Sleep(10 * time.Microsecond)
 		// start another same task at the same time, should get err
 		resp1, err1 := server.StartTask(context.Background(), req)
@@ -1199,47 +1204,138 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	cancel()
 }
 
-func (t *testMaster) TestOfflineWorker(c *check.C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+func generateServerConfig(c *check.C, name string) *Config {
 	// create a new cluster
 	cfg1 := NewConfig()
 	c.Assert(cfg1.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
-	cfg1.Name = "dm-master-1"
+	cfg1.Name = name
 	cfg1.DataDir = c.MkDir()
 	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg1.AdvertiseAddr = cfg1.MasterAddr
 	cfg1.PeerUrls = tempurl.Alloc()
 	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
 	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
+	return cfg1
+}
 
+func (t *testMaster) TestOfflineMember(c *check.C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	cfg1 := generateServerConfig(c, "dm-master-1")
+	cfg2 := generateServerConfig(c, "dm-master-2")
+	cfg3 := generateServerConfig(c, "dm-master-3")
+
+	initialCluster := fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls) + "," +
+		fmt.Sprintf("%s=%s", cfg2.Name, cfg2.AdvertisePeerUrls) + "," +
+		fmt.Sprintf("%s=%s", cfg3.Name, cfg3.AdvertisePeerUrls)
+	cfg1.InitialCluster = initialCluster
+	cfg2.InitialCluster = initialCluster
+	cfg3.InitialCluster = initialCluster
+
+	var wg sync.WaitGroup
 	s1 := NewServer(cfg1)
-	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
+	wg.Add(1)
+	go func() {
+		c.Assert(s1.Start(ctx), check.IsNil)
+		wg.Done()
+	}()
 
-	time.Sleep(time.Second * 2)
+	s2 := NewServer(cfg2)
+	defer s2.Close()
+	wg.Add(1)
+	go func() {
+		c.Assert(s2.Start(ctx), check.IsNil)
+		wg.Done()
+	}()
 
+	ctx3, cancel3 := context.WithCancel(ctx)
+	s3 := NewServer(cfg3)
+	c.Assert(s3.Start(ctx3), check.IsNil)
+	defer s3.Close()
+	defer cancel3()
+
+	wg.Wait()
+	time.Sleep(time.Second)
+	_, leaderID, _, err := s1.election.LeaderInfo(ctx)
+	c.Assert(err, check.IsNil)
+
+	// master related operations
+	req := &pb.OfflineMemberRequest{
+		Type: "masters",
+		Name: "xixi",
+	}
+	// test offline member with wrong type
+	resp, err := s2.OfflineMember(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(resp.Msg, check.Equals, terror.ErrMasterInvalidOfflineType.Generate(req.Type).Error())
+	// test offline member with invalid master name
+	req.Type = common.Master
+	resp, err = s2.OfflineMember(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(resp.Msg, check.Matches, `[\s\S]*dm-master with name `+req.Name+` not exists[\s\S]*`)
+	// test offline member with correct master name
+	cli := s2.etcdClient
+	listResp, err := etcdutil.ListMembers(cli)
+	c.Assert(err, check.IsNil)
+	c.Assert(listResp.Members, check.HasLen, 3)
+
+	cancel3()
+	s3.Close()
+	time.Sleep(5 * time.Second)
+	req.Name = s3.cfg.Name
+	resp, err = s2.OfflineMember(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Msg, check.Equals, "")
+	c.Assert(resp.Result, check.IsTrue)
+
+	listResp, err = etcdutil.ListMembers(cli)
+	c.Assert(err, check.IsNil)
+	c.Assert(listResp.Members, check.HasLen, 2)
+	if listResp.Members[0].Name == cfg2.Name {
+		listResp.Members[0], listResp.Members[1] = listResp.Members[1], listResp.Members[0]
+	}
+	c.Assert(listResp.Members[0].Name, check.Equals, cfg1.Name)
+	c.Assert(listResp.Members[1].Name, check.Equals, cfg2.Name)
+
+	_, leaderID2, _, err := s1.election.LeaderInfo(ctx)
+	c.Assert(err, check.IsNil)
+
+	if leaderID == cfg3.Name {
+		// s3 is leader before, leader should re-campaign
+		c.Assert(leaderID != leaderID2, check.IsTrue)
+	} else {
+		// s3 isn't leader before, leader should keep the same
+		c.Assert(leaderID, check.Equals, leaderID2)
+	}
+
+	// worker related operations
 	ectx, canc := context.WithTimeout(ctx, time.Second)
 	defer canc()
 	req1 := &pb.RegisterWorkerRequest{
 		Name:    "xixi",
 		Address: "127.0.0.1:1000",
 	}
-	resp, err := s1.RegisterWorker(ectx, req1)
+	regReq, err := s1.RegisterWorker(ectx, req1)
 	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(regReq.Result, check.IsTrue)
 
-	req2 := &pb.OfflineWorkerRequest{
+	req2 := &pb.OfflineMemberRequest{
+		Type: common.Worker,
 		Name: "haha",
 	}
 	{
-		res, err := s1.OfflineWorker(ectx, req2)
+		res, err := s1.OfflineMember(ectx, req2)
 		c.Assert(err, check.IsNil)
 		c.Assert(res.Result, check.IsFalse)
 		c.Assert(res.Msg, check.Matches, `[\s\S]*dm-worker with name `+req2.Name+` not exists[\s\S]*`)
 	}
 	{
 		req2.Name = "xixi"
-		res, err := s1.OfflineWorker(ectx, req2)
+		res, err := s1.OfflineMember(ectx, req2)
 		c.Assert(err, check.IsNil)
 		c.Assert(res.Result, check.IsTrue)
 	}
