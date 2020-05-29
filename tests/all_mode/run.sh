@@ -7,7 +7,50 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
 
+function test_session_config(){
+    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    check_contains 'Query OK, 2 rows affected'
+    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+    check_contains 'Query OK, 3 rows affected'
+
+    # start DM worker and master
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
+
+    # error config
+    sed -i 's/tidb_retry_limit: "10"/tidb_retry_limit: "fjs"/g'  $WORK_DIR/dm-task.yaml
+    dmctl_start_task "$WORK_DIR/dm-task.yaml"
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "'tidb_retry_limit' can't be set to the value" 2
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "stop-task test" \
+        "\"result\": true" 3
+
+    # sql_mode=""
+    sed -i 's/tidb_retry_limit: "fjs"/tidb_retry_limit: "10"/g'  $WORK_DIR/dm-task.yaml
+    sed -i 's/sql_mode: ".*"/sql_mode: ""/g'  $WORK_DIR/dm-task.yaml
+    dmctl_start_task "$WORK_DIR/dm-task.yaml"
+
+    # fail because insert 0 will auto generates the next serial number
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10 'fail'
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test"\
+            "\"result\": true" 3
+
+    cleanup_data all_mode
+    cleanup_process $*
+}
+
 function run() {
+    test_session_config
+
     export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
 
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
