@@ -164,6 +164,7 @@ function run() {
     run_sql "flush logs;" $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql "truncate table incremental_mode.t1;" $MYSQL_PORT1 $MYSQL_PASSWORD1
 
+    sleep 2
     curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
     SYNCER_BINLOG=`cat $WORK_DIR/status.log | sed 's/.*mysql-replica-01.*\"syncerBinlog\":\"\(.*\)\",\"syncerBinlogGtid.*mysql-replica-02.*/\1/g'`
     MASTER_BINLOG=`cat $WORK_DIR/status.log | sed 's/.*mysql-replica-01.*\"masterBinlog\":\"\(.*\)\",\"masterBinlogGtid.*mysql-replica-02.*/\1/g'`
