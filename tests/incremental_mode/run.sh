@@ -170,6 +170,7 @@ function run() {
 
     if [ "$MASTER_BINLOG" != "$SYNCER_BINLOG" ]; then
         echo "master binlog is not equal to syncer binlog"
+        cat $WORK_DIR/status.log
         exit 1
     fi
 
