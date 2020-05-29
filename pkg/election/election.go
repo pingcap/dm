@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/clientv3/concurrency"
@@ -65,7 +66,7 @@ func (c *CampaignerInfo) String() string {
 	return string(infoBytes)
 }
 
-func getCompaingerInfo(infoBytes []byte) (*CampaignerInfo, error) {
+func getCampaignerInfo(infoBytes []byte) (*CampaignerInfo, error) {
 	info := &CampaignerInfo{}
 	err := json.Unmarshal(infoBytes, info)
 	if err != nil {
@@ -165,7 +166,7 @@ func (e *Election) LeaderInfo(ctx context.Context) (string, string, string, erro
 		return "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
 	}
 
-	leaderInfo, err := getCompaingerInfo(resp.Kvs[0].Value)
+	leaderInfo, err := getCampaignerInfo(resp.Kvs[0].Value)
 	if err != nil {
 		return "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
 	}
@@ -204,6 +205,11 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 			e.l.Error("fail to close etcd session", zap.Int64("lease", int64(se.Lease())), zap.Error(err2))
 		}
 	}
+	failpoint.Inject("mockCampaignLoopExitedAbnormally", func(_ failpoint.Value) {
+		closeSession = func(se *concurrency.Session) {
+			e.l.Info("skip closeSession", zap.String("failpoint", "mockCampaignLoopExitedAbnormally"))
+		}
+	})
 
 	var err error
 	defer func() {
@@ -285,7 +291,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 				e.l.Info("get response from election observe", zap.String("key", string(resp.Kvs[0].Key)), zap.String("value", string(resp.Kvs[0].Value)))
 				leaderKey = string(resp.Kvs[0].Key)
-				leaderInfo, err = getCompaingerInfo(resp.Kvs[0].Value)
+				leaderInfo, err = getCampaignerInfo(resp.Kvs[0].Value)
 				if err != nil {
 					// this should never happened
 					e.l.Error("fail to get leader information", zap.String("value", string(resp.Kvs[0].Value)), zap.Error(err))
@@ -467,13 +473,42 @@ forLoop:
 	return session, err
 }
 
+// ClearSessionIfNeeded will clear session when deleted master quited abnormally
+// returns (triggered deleting session, error)
+func (e *Election) ClearSessionIfNeeded(ctx context.Context, id string) (bool, error) {
+	resp, err := e.cli.Get(ctx, e.key, clientv3.WithPrefix())
+	if err != nil {
+		return false, err
+	}
+	deleteKey := ""
+	for _, kv := range resp.Kvs {
+		leaderInfo, err2 := getCampaignerInfo(kv.Value)
+		if err2 != nil {
+			return false, err2
+		}
+		if leaderInfo.ID == id {
+			deleteKey = string(kv.Key)
+			break
+		}
+	}
+	if deleteKey == "" {
+		// no campaign info left in etcd, no need to trigger re-campaign
+		return false, nil
+	}
+	delResp, err := e.cli.Delete(ctx, deleteKey)
+	if err != nil {
+		return false, err
+	}
+	return delResp.Deleted > 0, err
+}
+
 // getLeaderInfo get the current leader's information (if exists).
 func getLeaderInfo(ctx context.Context, elec *concurrency.Election) (key, ID, addr string, err error) {
 	resp, err := elec.Leader(ctx)
 	if err != nil {
 		return "", "", "", err
 	}
-	leaderInfo, err := getCompaingerInfo(resp.Kvs[0].Value)
+	leaderInfo, err := getCampaignerInfo(resp.Kvs[0].Value)
 	if err != nil {
 		return "", "", "", err
 	}
