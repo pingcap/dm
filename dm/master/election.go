@@ -15,10 +15,12 @@ package master
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/failpoint"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -55,21 +57,46 @@ func (s *Server) electionNotify(ctx context.Context) {
 				continue
 			}
 
+			failToStart := false
+
 			if leaderInfo.ID == s.cfg.Name {
 				// this member become leader
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
 				err := s.scheduler.Start(ctx, s.etcdClient)
 				if err != nil {
 					log.L().Error("scheduler do not started", zap.Error(err))
+					failToStart = true
 				}
 
 				err = s.pessimist.Start(ctx, s.etcdClient)
-				if err != nil {
+				if err != nil && !failToStart {
 					log.L().Error("pessimist do not started", zap.Error(err))
+					failToStart = true
 				}
 				err = s.optimist.Start(ctx, s.etcdClient)
-				if err != nil {
+				if err != nil && !failToStart {
 					log.L().Error("optimist do not started", zap.Error(err))
+					failToStart = true
+				}
+
+				failpoint.Inject("FailToStartLeader", func(val failpoint.Value) {
+					masterStrings := val.(string)
+					if strings.Contains(masterStrings, s.cfg.Name) {
+						log.L().Info("fail to start leader", zap.String("failpoint", "FailToStartLeader"))
+						failToStart = true
+					}
+				})
+
+				if failToStart {
+					s.pessimist.Close()
+					s.optimist.Close()
+					s.scheduler.Close()
+					s.election.Resign()
+
+					s.Lock()
+					s.leader = ""
+					s.Unlock()
+					continue
 				}
 
 				s.Lock()

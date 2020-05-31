@@ -398,12 +398,10 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 		case <-ctx.Done():
 			return
 		case <-e.resignCh:
-			if e.evictLeader.Get() == 1 {
-				if err := elec.Resign(ctx); err != nil {
-					e.l.Info("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
-				}
-				return
+			if err := elec.Resign(ctx); err != nil {
+				e.l.Info("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
 			}
+			return
 		}
 	}
 }
@@ -414,6 +412,11 @@ func (e *Election) EvictLeader() {
 		return
 	}
 
+	e.Resign()
+}
+
+// Resign resign the leader
+func (e *Election) Resign() {
 	// cancel campagin or current member is leader and then resign
 	e.campaignMu.Lock()
 	if e.cancelCampaign != nil {
