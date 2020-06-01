@@ -351,6 +351,13 @@ function test_standalone_running() {
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/standalone-task2.yaml" \
+        "\"result\": false" 1
+
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/standalone-task2.yaml" \
         "\"result\": true" 2 \
         "\"source\": \"$SOURCE_ID2\"" 1
 
