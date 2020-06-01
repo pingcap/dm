@@ -590,12 +590,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 	}()
 
-	wg.Add(1)
-	go func() {
-		s.runBackgroundJob(newCtx)
-		wg.Done()
-	}()
-
 	err := s.Run(newCtx)
 	if err != nil {
 		// returned error rather than sent to runFatalChan
