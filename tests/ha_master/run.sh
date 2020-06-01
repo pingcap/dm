@@ -344,7 +344,7 @@ function run() {
 
     rm -rf $WORK_DIR/master1/default.master1
     # join master1 after offline, TICASE-933, 943
-    run_dm_master $WORK_DIR/master-join1 $MASTER_PORT1 $cur/conf/dm-master-join1.toml
+    run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master-join1.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT4" \
