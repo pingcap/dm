@@ -68,15 +68,20 @@ func (s *Server) electionNotify(ctx context.Context) {
 					failToStart = true
 				}
 
-				err = s.pessimist.Start(ctx, s.etcdClient)
-				if err != nil && !failToStart {
-					log.L().Error("pessimist do not started", zap.Error(err))
-					failToStart = true
+				if !failToStart {
+					err = s.pessimist.Start(ctx, s.etcdClient)
+					if err != nil {
+						log.L().Error("pessimist do not started", zap.Error(err))
+						failToStart = true
+					}
 				}
-				err = s.optimist.Start(ctx, s.etcdClient)
-				if err != nil && !failToStart {
-					log.L().Error("optimist do not started", zap.Error(err))
-					failToStart = true
+
+				if !failToStart {
+					err = s.optimist.Start(ctx, s.etcdClient)
+					if err != nil {
+						log.L().Error("optimist do not started", zap.Error(err))
+						failToStart = true
+					}
 				}
 
 				failpoint.Inject("FailToStartLeader", func(val failpoint.Value) {
