@@ -323,7 +323,7 @@ function run() {
         "offline-member --master --name master1" \
         "\"result\": true" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT4" \
-        "offline-member --master --name master5" \
+        "offline-member --master --name master2" \
         "\"result\": true" 1
 
     echo "kill dm-master3"
@@ -340,11 +340,14 @@ function run() {
     run_dm_master $WORK_DIR/master3 $MASTER_PORT3 $cur/conf/dm-master3.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3
 
-    # join master5 after offline, TICASE-933, 943
-    run_dm_master $WORK_DIR/master5 $MASTER_PORT5 $cur/conf/dm-master5.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
+    sleep 5
 
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
+    rm -rf $WORK_DIR/master1/default.master1
+    # join master1 after offline, TICASE-933, 943
+    run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master-join1.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT4" \
         "pause-task test" \
         "\"result\": true" 3 \
         "\"source\": \"$SOURCE_ID1\"" 1 \
