@@ -2050,6 +2050,18 @@ description = ""
 workaround = ""
 tags = ["internal", "medium"]
 
+[error.DM-dm-master-38048]
+message = "dm-master with name %s not exists"
+description = ""
+workaround = ""
+tags = ["internal", "low"]
+
+[error.DM-dm-master-38049]
+message = "offline member type %s is invalid, please use master/worker"
+description = ""
+workaround = ""
+tags = ["internal", "low"]
+
 [error.DM-dm-worker-40001]
 message = "parse dm-worker config flag set"
 description = ""
