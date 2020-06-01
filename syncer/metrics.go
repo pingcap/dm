@@ -14,14 +14,11 @@
 package syncer
 
 import (
-	"context"
 	"net/http"
-	"time"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/metricsproxy"
 
-	cpu "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -170,15 +167,6 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"type", "task"})
 
-	// FIXME: should I move it to dm-worker?
-	cpuUsageGauge = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: "dm",
-			Subsystem: "syncer",
-			Name:      "cpu_usage",
-			Help:      "the cpu usage of syncer process",
-		})
-
 	// should alert
 	syncerExitWithErrorCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
@@ -240,34 +228,11 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(txnHistogram)
 	registry.MustRegister(stmtHistogram)
 	registry.MustRegister(queryHistogram)
-	registry.MustRegister(cpuUsageGauge)
 	registry.MustRegister(syncerExitWithErrorCounter)
 	registry.MustRegister(replicationLagGauge)
 	registry.MustRegister(remainingTimeGauge)
 	registry.MustRegister(unsyncedTableGauge)
 	registry.MustRegister(shardLockResolving)
-}
-
-func (s *Syncer) runBackgroundJob(ctx context.Context) {
-	ticker := time.NewTicker(time.Second * 10)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			s.collectMetrics()
-
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-// Note: handle error inside the function with returning it.
-func (s *Syncer) collectMetrics() {
-	// CPU usage metric
-	cpuUsage := cpu.GetCPUPercentage()
-	cpuUsageGauge.Set(cpuUsage)
 }
 
 // InitStatusAndMetrics register prometheus metrics and listen for status port.
