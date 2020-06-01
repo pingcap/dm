@@ -382,7 +382,7 @@ function test_standalone_running() {
         "start-task $cur/conf/standalone-task2.yaml"\
         "\"result\": false" 1
 
-    # test running, test2 fail
+    # test should still running
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test"\
         "\"stage\": \"Running\"" 1
@@ -646,14 +646,14 @@ function test_isolate_master_and_worker() {
 
 function run() {
     test_join_masters_and_worker               # TICASE-928, 930, 931, 961, 932, 957
-    test_kill_master                           # TICASE-996, 944, 958
+    test_kill_master                           # TICASE-996, 958
     test_kill_worker                           # TICASE-968, 973, 1002, 975, 969, 972, 974, 970, 971, 976, 978, 988
     test_kill_master_in_sync
     test_kill_worker_in_sync
-    test_standalone_running                    # TICASE-929, 959, 960, 967, 977, 980
+    test_standalone_running                    # TICASE-929, 959, 960, 967, 977, 980, 983
     test_pause_task                            # TICASE-990
     test_multi_task_reduce_and_restart_worker  # TICASE-968, 994, 995, 964, 966, 979, 981, 982, 985, 986, 989, 993
-    test_isolate_master_and_worker             # TICASE-934, 935, 936, 987, 992, 998
+    test_isolate_master_and_worker             # TICASE-934, 935, 936, 987, 992, 998, 999
     test_stop_task                             # TICASE-991, 984
 }
 

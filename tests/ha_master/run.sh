@@ -288,7 +288,7 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
     test_evict_leader
-    test_list_member # TICASE-933, 942, 946, 947
+    test_list_member # TICASE-942, 944, 945, 946, 947
 
     echo "start DM task"
     dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
@@ -323,7 +323,7 @@ function run() {
         "offline-member --master --name master1" \
         "\"result\": true" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT4" \
-        "offline-member --master --name master2" \
+        "offline-member --master --name master5" \
         "\"result\": true" 1
 
     echo "kill dm-master3"
@@ -335,7 +335,16 @@ function run() {
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT4" \
         "query-status test" \
         "\"stage\": \"Running\"" 2
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT4" \
+
+    # run master3 again
+    run_dm_master $WORK_DIR/master3 $MASTER_PORT3 $cur/conf/dm-master3.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3
+
+    # join master5 after offline, TICASE-933, 943
+    run_dm_master $WORK_DIR/master5 $MASTER_PORT5 $cur/conf/dm-master5.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
         "pause-task test" \
         "\"result\": true" 3 \
         "\"source\": \"$SOURCE_ID1\"" 1 \
