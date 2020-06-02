@@ -15,10 +15,12 @@ package master
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/failpoint"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -58,18 +60,27 @@ func (s *Server) electionNotify(ctx context.Context) {
 			if leaderInfo.ID == s.cfg.Name {
 				// this member become leader
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
-				err := s.scheduler.Start(ctx, s.etcdClient)
-				if err != nil {
-					log.L().Error("scheduler do not started", zap.Error(err))
-				}
 
-				err = s.pessimist.Start(ctx, s.etcdClient)
-				if err != nil {
-					log.L().Error("pessimist do not started", zap.Error(err))
-				}
-				err = s.optimist.Start(ctx, s.etcdClient)
-				if err != nil {
-					log.L().Error("optimist do not started", zap.Error(err))
+				ok := s.startLeaderComponent(ctx)
+
+				failpoint.Inject("FailToStartLeader", func(val failpoint.Value) {
+					masterStrings := val.(string)
+					if strings.Contains(masterStrings, s.cfg.Name) {
+						log.L().Info("fail to start leader", zap.String("failpoint", "FailToStartLeader"))
+						ok = false
+					}
+				})
+
+				if !ok {
+					s.pessimist.Close()
+					s.optimist.Close()
+					s.scheduler.Close()
+					s.election.Resign()
+
+					s.Lock()
+					s.leader = ""
+					s.Unlock()
+					continue
 				}
 
 				s.Lock()
@@ -121,4 +132,25 @@ func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
 	isLeader = (s.leader == oneselfLeader)
 	needForward = (s.leaderGrpcConn != nil)
 	return
+}
+
+func (s *Server) startLeaderComponent(ctx context.Context) bool {
+	err := s.scheduler.Start(ctx, s.etcdClient)
+	if err != nil {
+		log.L().Error("scheduler do not started", zap.Error(err))
+		return false
+	}
+
+	err = s.pessimist.Start(ctx, s.etcdClient)
+	if err != nil {
+		log.L().Error("pessimist do not started", zap.Error(err))
+		return false
+	}
+
+	err = s.optimist.Start(ctx, s.etcdClient)
+	if err != nil {
+		log.L().Error("optimist do not started", zap.Error(err))
+		return false
+	}
+	return true
 }
