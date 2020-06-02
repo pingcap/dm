@@ -80,6 +80,7 @@ func (t *testMaster) TestFailToStartLeader(c *check.C) {
 
 	// fail to start scheduler/pessimism/optimism
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/FailToStartLeader", `return("dm-master-2")`), check.IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/master/FailToStartLeader")
 
 	s1.election.Resign()
 	time.Sleep(1 * time.Second)

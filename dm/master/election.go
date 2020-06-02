@@ -57,42 +57,21 @@ func (s *Server) electionNotify(ctx context.Context) {
 				continue
 			}
 
-			failToStart := false
-
 			if leaderInfo.ID == s.cfg.Name {
 				// this member become leader
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
-				err := s.scheduler.Start(ctx, s.etcdClient)
-				if err != nil {
-					log.L().Error("scheduler do not started", zap.Error(err))
-					failToStart = true
-				}
 
-				if !failToStart {
-					err = s.pessimist.Start(ctx, s.etcdClient)
-					if err != nil {
-						log.L().Error("pessimist do not started", zap.Error(err))
-						failToStart = true
-					}
-				}
-
-				if !failToStart {
-					err = s.optimist.Start(ctx, s.etcdClient)
-					if err != nil {
-						log.L().Error("optimist do not started", zap.Error(err))
-						failToStart = true
-					}
-				}
+				ok := s.startLeaderComponent(ctx)
 
 				failpoint.Inject("FailToStartLeader", func(val failpoint.Value) {
 					masterStrings := val.(string)
 					if strings.Contains(masterStrings, s.cfg.Name) {
 						log.L().Info("fail to start leader", zap.String("failpoint", "FailToStartLeader"))
-						failToStart = true
+						ok = false
 					}
 				})
 
-				if failToStart {
+				if !ok {
 					s.pessimist.Close()
 					s.optimist.Close()
 					s.scheduler.Close()
@@ -153,4 +132,25 @@ func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
 	isLeader = (s.leader == oneselfLeader)
 	needForward = (s.leaderGrpcConn != nil)
 	return
+}
+
+func (s *Server) startLeaderComponent(ctx context.Context) bool {
+	err := s.scheduler.Start(ctx, s.etcdClient)
+	if err != nil {
+		log.L().Error("scheduler do not started", zap.Error(err))
+		return false
+	}
+
+	err = s.pessimist.Start(ctx, s.etcdClient)
+	if err != nil {
+		log.L().Error("pessimist do not started", zap.Error(err))
+		return false
+	}
+
+	err = s.optimist.Start(ctx, s.etcdClient)
+	if err != nil {
+		log.L().Error("optimist do not started", zap.Error(err))
+		return false
+	}
+	return true
 }
