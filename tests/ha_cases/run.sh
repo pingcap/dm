@@ -162,8 +162,8 @@ function test_kill_master() {
 }
 
 
-function test_kill_worker() {
-    echo "[$(date)] <<<<<< start test_kill_worker >>>>>>"
+function test_kill_and_isolate_worker() {
+    echo "[$(date)] <<<<<< start test_kill_and_isolate_worker >>>>>>"
     test_running
 
 
@@ -248,7 +248,7 @@ function test_kill_worker() {
 
     echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-    echo "[$(date)] <<<<<< finish test_kill_worker >>>>>>"
+    echo "[$(date)] <<<<<< finish test_kill_and_isolate_worker >>>>>>"
 }
 
 # usage: test_kill_master_in_sync leader
@@ -493,7 +493,7 @@ function test_stop_task() {
 
 
 function test_multi_task_reduce_and_restart_worker() {
-    echo "[$(date)] <<<<<< start test_multi_task_reduce_worker >>>>>>"
+    echo "[$(date)] <<<<<< start test_multi_task_reduce_and_restart_worker >>>>>>"
     test_multi_task_running
 
     echo "start dumping SQLs into source"
@@ -563,7 +563,7 @@ function test_multi_task_reduce_and_restart_worker() {
             fi
         fi
     done
-    echo "[$(date)] <<<<<< finish test_multi_task_reduce_worker >>>>>>"
+    echo "[$(date)] <<<<<< finish test_multi_task_reduce_and_restart_worker >>>>>>"
 }
 
 
@@ -654,7 +654,7 @@ function test_isolate_master_and_worker() {
 function run() {
     test_join_masters_and_worker               # TICASE-928, 930, 931, 961, 932, 957
     test_kill_master                           # TICASE-996, 958
-    test_kill_worker                           # TICASE-968, 973, 1002, 975, 969, 972, 974, 970, 971, 976, 978, 988
+    test_kill_and_isolate_worker               # TICASE-968, 973, 1002, 975, 969, 972, 974, 970, 971, 976, 978, 988
     test_kill_master_in_sync
     test_kill_worker_in_sync
     test_standalone_running                    # TICASE-929, 959, 960, 967, 977, 980, 983
