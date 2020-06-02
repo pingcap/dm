@@ -60,12 +60,14 @@ func (s *Server) electionNotify(ctx context.Context) {
 					if strings.Contains(masterStrings, s.cfg.Name) {
 						log.L().Info("fail to start leader", zap.String("failpoint", "FailToStartLeader"))
 						s.retireLeader()
+						s.election.Resign()
 						failpoint.Continue()
 					}
 				})
 
 				if !ok {
 					s.retireLeader()
+					s.election.Resign()
 					continue
 				}
 
