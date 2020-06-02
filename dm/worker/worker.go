@@ -144,6 +144,12 @@ func (w *Worker) Start(startRelay bool) {
 
 	w.l.Info("start running")
 
+	w.wg.Add(1)
+	go func() {
+		w.runBackgroundJob(w.ctx)
+		w.wg.Done()
+	}()
+
 	ticker := time.NewTicker(5 * time.Second)
 	w.closed.Set(closedFalse)
 	defer ticker.Stop()
