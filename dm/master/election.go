@@ -55,16 +55,6 @@ func (s *Server) electionNotify(ctx context.Context) {
 
 				ok := s.startLeaderComponent(ctx)
 
-				failpoint.Inject("FailToStartLeader", func(val failpoint.Value) {
-					masterStrings := val.(string)
-					if strings.Contains(masterStrings, s.cfg.Name) {
-						log.L().Info("fail to start leader", zap.String("failpoint", "FailToStartLeader"))
-						s.retireLeader()
-						s.election.Resign()
-						failpoint.Continue()
-					}
-				})
-
 				if !ok {
 					s.retireLeader()
 					s.election.Resign()
@@ -140,6 +130,15 @@ func (s *Server) startLeaderComponent(ctx context.Context) bool {
 		log.L().Error("optimist do not started", zap.Error(err))
 		return false
 	}
+
+	failpoint.Inject("FailToStartLeader", func(val failpoint.Value) {
+		masterStrings := val.(string)
+		if strings.Contains(masterStrings, s.cfg.Name) {
+			log.L().Info("fail to start leader", zap.String("failpoint", "FailToStartLeader"))
+			failpoint.Return(false)
+		}
+	})
+
 	return true
 }
 
