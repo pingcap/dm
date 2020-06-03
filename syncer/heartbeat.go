@@ -308,6 +308,9 @@ func (h *Heartbeat) calculateLag(ctx context.Context) error {
 	select {
 	case h.lock <- struct{}{}:
 		for taskName, ts := range h.slavesTs {
+			if ts == 0 {
+				continue // do not update metrics if no valid slave TS exists.
+			}
 			lag := masterTS - ts
 			reportLagFunc(taskName, lag)
 		}
