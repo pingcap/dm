@@ -34,7 +34,7 @@ import (
 // GRANT SELECT,UPDATE,INSERT,CREATE ON `your_database`.`heartbeat` to 'your_replicate_user'@'your_replicate_host';
 
 const (
-	// when we not need to support MySQL <=5.5, we can replace with `2006-01-02 15:04:05.000000`
+	// still use "2006-01-02 15:04:05" rather than `2006-01-02 15:04:05.000000` to support parse old `2006-01-02 15:04:05`.
 	timeFormat = "2006-01-02 15:04:05"
 )
 
@@ -293,8 +293,7 @@ func (h *Heartbeat) createTable() error {
 
 // updateTS use `REPLACE` statement to insert or update ts
 func (h *Heartbeat) updateTS() error {
-	// when we not need to support MySQL <=5.5, we can replace with `UTC_TIMESTAMP(6)`
-	query := fmt.Sprintf("REPLACE INTO `%s`.`%s` (`ts`, `server_id`) VALUES(UTC_TIMESTAMP(), ?)", h.schema, h.table)
+	query := fmt.Sprintf("REPLACE INTO `%s`.`%s` (`ts`, `server_id`) VALUES(UTC_TIMESTAMP(6), ?)", h.schema, h.table)
 	_, err := h.master.Exec(query, h.cfg.serverID)
 	h.logger.Debug("update ts", zap.String("sql", query), zap.Uint32("server ID", h.cfg.serverID))
 	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
