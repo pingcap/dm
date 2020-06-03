@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -96,8 +97,8 @@ func GetHeartbeat(cfg *HeartbeatConfig) (*Heartbeat, error) {
 		heartbeat = &Heartbeat{
 			lock:     make(chan struct{}, 1), // with buffer 1, no recursion supported
 			cfg:      cfg,
-			schema:   filter.DMHeartbeatSchema,
-			table:    filter.DMHeartbeatTable,
+			schema:   strings.ToUpper(filter.DMHeartbeatSchema),
+			table:    strings.ToUpper(filter.DMHeartbeatTable),
 			slavesTs: make(map[string]float64),
 			logger:   log.With(zap.String("component", "heartbeat")),
 		}
@@ -181,7 +182,7 @@ func (h *Heartbeat) RemoveTask(name string) error {
 
 // TryUpdateTaskTs tries to update task's ts
 func (h *Heartbeat) TryUpdateTaskTs(taskName, schema, table string, data [][]interface{}) {
-	if schema != h.schema || table != h.table {
+	if strings.ToUpper(schema) != h.schema || strings.ToUpper(table) != h.table {
 		h.logger.Debug("don't need to handle non-heartbeat table", zap.String("schema", schema), zap.String("table", table))
 		return // not heartbeat table
 	}
