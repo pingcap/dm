@@ -50,7 +50,6 @@ func parseExtraArgs(dumpCfg *export.Config, args []string) error {
 	var (
 		dumplingFlagSet = pflag.NewFlagSet("dumpling", pflag.ContinueOnError)
 		fileSizeStr     string
-		err             error
 	)
 
 	dumplingFlagSet.StringSliceVarP(&dumpCfg.Databases, "database", "B", nil, "Database to dump")
@@ -60,17 +59,17 @@ func parseExtraArgs(dumpCfg *export.Config, args []string) error {
 	dumplingFlagSet.StringVar(&dumpCfg.Consistency, "consistency", "auto", "Consistency level during dumping: {auto|none|flush|lock|snapshot}")
 	dumplingFlagSet.StringVar(&dumpCfg.Snapshot, "snapshot", "", "Snapshot position. Valid only when consistency=snapshot")
 	dumplingFlagSet.BoolVarP(&dumpCfg.NoViews, "no-views", "W", true, "Do not dump views")
-	dumplingFlagSet.Uint64VarP(&dumpCfg.FileSize, "rows", "r", export.UnspecifiedSize, "Split table into chunks of this many rows, default unlimited")
 	dumplingFlagSet.Uint64VarP(&dumpCfg.Rows, "rows", "r", export.UnspecifiedSize, "Split table into chunks of this many rows, default unlimited")
 	dumplingFlagSet.StringVar(&dumpCfg.Where, "where", "", "Dump only selected records")
 	dumplingFlagSet.BoolVar(&dumpCfg.EscapeBackslash, "escape-backslash", true, "use backslash to escape quotation marks")
 
-	dumpCfg.FileSize, err = parseFileSize(fileSizeStr)
+	err := dumplingFlagSet.Parse(args)
 	if err != nil {
 		return err
 	}
 
-	return dumplingFlagSet.Parse(args)
+	dumpCfg.FileSize, err = parseFileSize(fileSizeStr)
+	return err
 }
 
 func parseFileSize(fileSizeStr string) (uint64, error) {
