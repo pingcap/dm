@@ -1679,19 +1679,19 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36049]
-message = "rename table to ghost table %s not supported"
+message = "rename table to pt table %s not supported"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36050]
-message = "rename ghost table to other ghost table %s not supported"
+message = "rename pt table to other pt table %s not supported"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36051]
-message = "online ddls on ghost table `%s`.`%s`"
+message = "online ddls on pt table `%s`.`%s`"
 description = ""
 workaround = ""
 tags = ["internal", "high"]

@@ -351,9 +351,9 @@ const (
 	codeSyncerUnitGhostOnlineDDLOnGhostTbl
 	codeSyncerUnitPTApplyEmptyTable
 	codeSyncerUnitPTRenameTableNotValid
-	codeSyncerUnitPTRenameToGhostTable
-	codeSyncerUnitPTRenameGhostTblToOther
-	codeSyncerUnitPTOnlineDDLOnGhostTbl
+	codeSyncerUnitPTRenameToPTTable
+	codeSyncerUnitPTRenamePTTblToOther
+	codeSyncerUnitPTOnlineDDLOnPTTbl
 	codeSyncerUnitRemoteSteamerWithGTID
 	codeSyncerUnitRemoteSteamerStartSync
 	codeSyncerUnitGetTableFromDB
@@ -867,9 +867,9 @@ var (
 	ErrSyncerUnitGhostOnlineDDLOnGhostTbl   = New(codeSyncerUnitGhostOnlineDDLOnGhostTbl, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddls on ghost table `%s`.`%s`")
 	ErrSyncerUnitPTApplyEmptyTable          = New(codeSyncerUnitPTApplyEmptyTable, ClassSyncUnit, ScopeInternal, LevelHigh, "empty tables not valid")
 	ErrSyncerUnitPTRenameTableNotValid      = New(codeSyncerUnitPTRenameTableNotValid, ClassSyncUnit, ScopeInternal, LevelHigh, "tables should contain old and new table name")
-	ErrSyncerUnitPTRenameToGhostTable       = New(codeSyncerUnitPTRenameToGhostTable, ClassSyncUnit, ScopeInternal, LevelHigh, "rename table to ghost table %s not supported")
-	ErrSyncerUnitPTRenameGhostTblToOther    = New(codeSyncerUnitPTRenameGhostTblToOther, ClassSyncUnit, ScopeInternal, LevelHigh, "rename ghost table to other ghost table %s not supported")
-	ErrSyncerUnitPTOnlineDDLOnGhostTbl      = New(codeSyncerUnitPTOnlineDDLOnGhostTbl, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddls on ghost table `%s`.`%s`")
+	ErrSyncerUnitPTRenameToPTTable          = New(codeSyncerUnitPTRenameToPTTable, ClassSyncUnit, ScopeInternal, LevelHigh, "rename table to pt table %s not supported")
+	ErrSyncerUnitPTRenamePTTblToOther       = New(codeSyncerUnitPTRenamePTTblToOther, ClassSyncUnit, ScopeInternal, LevelHigh, "rename pt table to other pt table %s not supported")
+	ErrSyncerUnitPTOnlineDDLOnPTTbl         = New(codeSyncerUnitPTOnlineDDLOnPTTbl, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddls on pt table `%s`.`%s`")
 	ErrSyncerUnitRemoteSteamerWithGTID      = New(codeSyncerUnitRemoteSteamerWithGTID, ClassSyncUnit, ScopeInternal, LevelHigh, "open remote streamer with GTID mode not supported")
 	ErrSyncerUnitRemoteSteamerStartSync     = New(codeSyncerUnitRemoteSteamerStartSync, ClassSyncUnit, ScopeInternal, LevelHigh, "start syncing binlog from remote streamer")
 	ErrSyncerUnitGetTableFromDB             = New(codeSyncerUnitGetTableFromDB, ClassSyncUnit, ScopeInternal, LevelHigh, "invalid table `%s`.`%s`")
