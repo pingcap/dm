@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/dumpling/v4/export"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
+	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 )
@@ -183,14 +184,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	dumpConfig := export.DefaultConfig()
 	// ret is used to record the unsupported arguments for dumpling
 	var ret []string
-	extraArgs := strings.Fields(cfg.ExtraArgs)
-	if len(extraArgs) > 0 {
-		err := parseExtraArgs(dumpConfig, ParseArgLikeBash(extraArgs))
-		if err != nil {
-			m.logger.Warn("parsed some unsupported arguments", zap.Error(err))
-			ret = append(ret, extraArgs...)
-		}
-	}
+
 	// block status addr because we already have it in DM, and if we enable it, may we need more ports for the process.
 	dumpConfig.StatusAddr = ""
 
@@ -199,21 +193,25 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	dumpConfig.User = db.User
 	dumpConfig.Password = db.Password
 	dumpConfig.OutputDirPath = cfg.Dir // use LoaderConfig.Dir as output dir
-	dumpConfig.BlackWhiteList = export.BWListConf{
-		Mode: export.MySQLReplicationMode,
-		Rules: &export.MySQLReplicationConf{
-			Rules:         cfg.BWList,
-			CaseSensitive: cfg.CaseSensitive,
-		},
+	tableFilter, err := filter.ParseMySQLReplicationRules(cfg.BWList)
+	if err != nil {
+		return nil, err
 	}
+	if !cfg.CaseSensitive {
+		tableFilter = filter.CaseInsensitive(tableFilter)
+	}
+	dumpConfig.TableFilter = tableFilter
 	dumpConfig.EscapeBackslash = true
 	dumpConfig.Logger = m.logger.Logger
 
 	if cfg.Threads > 0 {
 		dumpConfig.Threads = cfg.Threads
 	}
-	if cfg.ChunkFilesize > 0 {
-		dumpConfig.FileSize = uint64(cfg.ChunkFilesize)
+	if cfg.ChunkFilesize != "" {
+		dumpConfig.FileSize, err = parseFileSize(cfg.ChunkFilesize)
+		if err != nil {
+			m.logger.Warn("parsed some unsupported arguments", zap.Error(err))
+		}
 	}
 	if cfg.StatementSize > 0 {
 		dumpConfig.StatementSize = cfg.StatementSize
@@ -228,6 +226,15 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	if cfg.SkipTzUTC {
 		// TODO: support skip-tz-utc
 		ret = append(ret, "--skip-tz-utc")
+	}
+
+	extraArgs := strings.Fields(cfg.ExtraArgs)
+	if len(extraArgs) > 0 {
+		err := parseExtraArgs(dumpConfig, ParseArgLikeBash(extraArgs))
+		if err != nil {
+			m.logger.Warn("parsed some unsupported arguments", zap.Error(err))
+			ret = append(ret, extraArgs...)
+		}
 	}
 
 	// TODO: support String for export.Config

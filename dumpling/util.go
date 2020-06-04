@@ -14,6 +14,9 @@
 package dumpling
 
 import (
+	"strconv"
+
+	"github.com/docker/go-units"
 	"github.com/pingcap/dumpling/v4/export"
 	"github.com/spf13/pflag"
 )
@@ -44,18 +47,42 @@ func trimOutQuotes(arg string) string {
 }
 
 func parseExtraArgs(dumpCfg *export.Config, args []string) error {
-	var dumplingFlagSet = pflag.NewFlagSet("dumpling", pflag.ContinueOnError)
+	var (
+		dumplingFlagSet = pflag.NewFlagSet("dumpling", pflag.ContinueOnError)
+		fileSizeStr     string
+		err             error
+	)
 
-	dumplingFlagSet.StringVarP(&dumpCfg.Database, "database", "B", "", "Database to dump")
+	dumplingFlagSet.StringSliceVarP(&dumpCfg.Databases, "database", "B", nil, "Database to dump")
 	dumplingFlagSet.IntVarP(&dumpCfg.Threads, "threads", "t", 4, "Number of goroutines to use, default 4")
-	dumplingFlagSet.Uint64VarP(&dumpCfg.FileSize, "filesize", "F", export.UnspecifiedSize, "The approximate size of output file")
+	dumplingFlagSet.StringVarP(&fileSizeStr, "filesize", "F", "", "The approximate size of output file")
 	dumplingFlagSet.Uint64VarP(&dumpCfg.StatementSize, "statement-size", "S", export.UnspecifiedSize, "Attempted size of INSERT statement in bytes")
 	dumplingFlagSet.StringVar(&dumpCfg.Consistency, "consistency", "auto", "Consistency level during dumping: {auto|none|flush|lock|snapshot}")
 	dumplingFlagSet.StringVar(&dumpCfg.Snapshot, "snapshot", "", "Snapshot position. Valid only when consistency=snapshot")
 	dumplingFlagSet.BoolVarP(&dumpCfg.NoViews, "no-views", "W", true, "Do not dump views")
 	dumplingFlagSet.Uint64VarP(&dumpCfg.FileSize, "rows", "r", export.UnspecifiedSize, "Split table into chunks of this many rows, default unlimited")
+	dumplingFlagSet.Uint64VarP(&dumpCfg.Rows, "rows", "r", export.UnspecifiedSize, "Split table into chunks of this many rows, default unlimited")
 	dumplingFlagSet.StringVar(&dumpCfg.Where, "where", "", "Dump only selected records")
 	dumplingFlagSet.BoolVar(&dumpCfg.EscapeBackslash, "escape-backslash", true, "use backslash to escape quotation marks")
 
+	dumpCfg.FileSize, err = parseFileSize(fileSizeStr)
+	if err != nil {
+		return err
+	}
+
 	return dumplingFlagSet.Parse(args)
+}
+
+func parseFileSize(fileSizeStr string) (uint64, error) {
+	var fileSize uint64
+	if len(fileSizeStr) == 0 {
+		fileSize = export.UnspecifiedSize
+	} else if fileSizeMB, err := strconv.ParseUint(fileSizeStr, 10, 64); err == nil {
+		fileSize = fileSizeMB * units.MiB
+	} else if size, err := units.RAMInBytes(fileSizeStr); err == nil {
+		fileSize = uint64(size)
+	} else {
+		return 0, err
+	}
+	return fileSize, nil
 }

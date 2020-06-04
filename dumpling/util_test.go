@@ -28,8 +28,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testDumplingSuite struct {
-}
+type testDumplingSuite struct{}
 
 func (m *testDumplingSuite) TestParseArgs(c *C) {
 	cfg := &config.SubTaskConfig{}

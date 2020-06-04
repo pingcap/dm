@@ -560,7 +560,7 @@ func generateMydumperCfg(bwList *filter.Rules) *config.MydumperConfig {
 	return &config.MydumperConfig{
 		MydumperPath:  "bin/mydumper",
 		Threads:       4,
-		ChunkFilesize: 64,
+		ChunkFilesize: "64",
 		SkipTzUTC:     true,
 		ExtraArgs:     extraArgs,
 	}
