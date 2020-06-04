@@ -7,6 +7,8 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 TASK_NAME="test"
 
+API_VERSION="v1alpha1"
+
 function run() {
     export GO_FAILPOINTS="github.com/pingcap/dm/syncer/FlushCheckpointStage=return(100)" # for all stages
 
@@ -157,6 +159,21 @@ function run() {
         "\"result\": true" 3
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    # test rotate binlog, after rotate and ddl, master binlog should be equal to sync binlog
+    run_sql "flush logs;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "truncate table incremental_mode.t1;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+
+    sleep 2
+    curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
+    SYNCER_BINLOG=`cat $WORK_DIR/status.log | sed 's/.*mysql-replica-01.*\"syncerBinlog\":\"\(.*\)\",\"syncerBinlogGtid.*mysql-replica-02.*/\1/g'`
+    MASTER_BINLOG=`cat $WORK_DIR/status.log | sed 's/.*mysql-replica-01.*\"masterBinlog\":\"\(.*\)\",\"masterBinlogGtid.*mysql-replica-02.*/\1/g'`
+
+    if [ "$MASTER_BINLOG" != "$SYNCER_BINLOG" ]; then
+        echo "master binlog is not equal to syncer binlog"
+        cat $WORK_DIR/status.log
+        exit 1
+    fi
 
     export GO_FAILPOINTS=''
 }
