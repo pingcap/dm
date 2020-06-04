@@ -39,18 +39,10 @@ func (s *Server) electionNotify(ctx context.Context) {
 			// retire from leader
 			if leaderInfo == nil {
 				if s.leader == oneselfLeader {
-					s.pessimist.Close()
-					s.optimist.Close()
-					s.scheduler.Close()
-
-					s.Lock()
-					s.leader = ""
-					s.closeLeaderClient()
-					s.Unlock()
-
+					s.retireLeader()
 					log.L().Info("current member retire from the leader", zap.String("current member", s.cfg.Name))
 				} else {
-					// this should not happen
+					// leader retire before
 					log.L().Error("current member is not the leader, can't retire", zap.String("current member", s.cfg.Name))
 				}
 
@@ -63,23 +55,9 @@ func (s *Server) electionNotify(ctx context.Context) {
 
 				ok := s.startLeaderComponent(ctx)
 
-				failpoint.Inject("FailToStartLeader", func(val failpoint.Value) {
-					masterStrings := val.(string)
-					if strings.Contains(masterStrings, s.cfg.Name) {
-						log.L().Info("fail to start leader", zap.String("failpoint", "FailToStartLeader"))
-						ok = false
-					}
-				})
-
 				if !ok {
-					s.pessimist.Close()
-					s.optimist.Close()
-					s.scheduler.Close()
+					s.retireLeader()
 					s.election.Resign()
-
-					s.Lock()
-					s.leader = ""
-					s.Unlock()
 					continue
 				}
 
@@ -152,5 +130,25 @@ func (s *Server) startLeaderComponent(ctx context.Context) bool {
 		log.L().Error("optimist do not started", zap.Error(err))
 		return false
 	}
+
+	failpoint.Inject("FailToStartLeader", func(val failpoint.Value) {
+		masterStrings := val.(string)
+		if strings.Contains(masterStrings, s.cfg.Name) {
+			log.L().Info("fail to start leader", zap.String("failpoint", "FailToStartLeader"))
+			failpoint.Return(false)
+		}
+	})
+
 	return true
+}
+
+func (s *Server) retireLeader() {
+	s.pessimist.Close()
+	s.optimist.Close()
+	s.scheduler.Close()
+
+	s.Lock()
+	s.leader = ""
+	s.closeLeaderClient()
+	s.Unlock()
 }
