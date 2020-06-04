@@ -182,9 +182,12 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	db := cfg.From
 
 	dumpConfig := export.DefaultConfig()
-	// ret is used to record the unsupported arguments for dumpling
-	var ret []string
-
+	var (
+		// ret is used to record the unsupported arguments for dumpling
+		ret         []string
+		tableFilter filter.Filter
+		err         error
+	)
 	// block status addr because we already have it in DM, and if we enable it, may we need more ports for the process.
 	dumpConfig.StatusAddr = ""
 
@@ -193,12 +196,16 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	dumpConfig.User = db.User
 	dumpConfig.Password = db.Password
 	dumpConfig.OutputDirPath = cfg.Dir // use LoaderConfig.Dir as output dir
-	tableFilter, err := filter.ParseMySQLReplicationRules(cfg.BWList)
-	if err != nil {
-		return nil, err
-	}
-	if !cfg.CaseSensitive {
-		tableFilter = filter.CaseInsensitive(tableFilter)
+	if cfg.BWList == nil {
+		tableFilter = filter.All()
+	} else {
+		tableFilter, err = filter.ParseMySQLReplicationRules(cfg.BWList)
+		if err != nil {
+			return nil, err
+		}
+		if !cfg.CaseSensitive {
+			tableFilter = filter.CaseInsensitive(tableFilter)
+		}
 	}
 	dumpConfig.TableFilter = tableFilter
 	dumpConfig.EscapeBackslash = true
