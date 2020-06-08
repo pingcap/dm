@@ -1109,7 +1109,7 @@ function DM_035_OPTIMISTIC() {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
 
     DM_035_CASE
-    sleep 2
+    sleep 5
     run_sql_tidb "select count(1) from ${shardddl}.${tb};"
     check_contains 'count(1): 12'
 
