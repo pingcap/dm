@@ -6,3 +6,4 @@ start_task
 dm_syncer
 sequence_sharding_optimistic
 sequence_sharding_removemeta
+shardddl
