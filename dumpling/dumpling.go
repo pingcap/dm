@@ -211,6 +211,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		dumpConfig.FileSize, err = parseFileSize(cfg.ChunkFilesize)
 		if err != nil {
 			m.logger.Warn("parsed some unsupported arguments", zap.Error(err))
+			return nil, err
 		}
 	}
 	if cfg.StatementSize > 0 {
