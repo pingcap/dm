@@ -1905,7 +1905,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// construct & send shard DDL info into etcd, DM-master will handle it.
 		shardInfo := s.pessimist.ConstructInfo(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, needHandleDDLs)
-		rev, err2 := s.pessimist.PutInfo(shardInfo)
+		rev, err2 := s.pessimist.PutInfo(ec.tctx.Ctx, shardInfo)
 		if err2 != nil {
 			return err2
 		}

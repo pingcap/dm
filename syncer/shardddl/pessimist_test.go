@@ -78,7 +78,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	c.Assert(p.PendingOperation(), IsNil)
 
 	// put shard DDL info.
-	rev1, err := p.PutInfo(info)
+	rev1, err := p.PutInfo(ctx, info)
 	c.Assert(err, IsNil)
 	c.Assert(rev1, Greater, int64(0))
 
@@ -124,7 +124,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	c.Assert(p.PendingOperation(), IsNil)
 
 	// put info again, but do not complete the flow.
-	_, err = p.PutInfo(info)
+	_, err = p.PutInfo(ctx, info)
 	c.Assert(err, IsNil)
 	c.Assert(p.PendingInfo(), NotNil)
 
