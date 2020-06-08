@@ -24,7 +24,7 @@ function DM_001() {
     # CASE
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
     run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
-    sleep 1
+    sleep 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "Duplicate column name 'new_col1'" 1
@@ -103,7 +103,7 @@ function DM_004() {
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values (1,1)"
-    sleep 1
+    sleep 2
     run_sql_tidb "select count(1) from ${shardddl}.${tb};"
     check_contains 'count(1): 3'
 
@@ -287,7 +287,7 @@ function DM_011() {
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col2 float;"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values (4,4.0,4.0)"
 
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/master/log/dm-master.log "is different with"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -318,7 +318,7 @@ function DM_012() {
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values (4,4,4)"
 
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/master/log/dm-master.log "is different with"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -388,7 +388,7 @@ function DM_014() {
     run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values (4,4,4)"
 
-    sleep 1
+    sleep 2
     run_sql_tidb "select count(1) from ${shardddl}.${tb};"
     check_contains 'count(1): 6'
 
@@ -411,11 +411,11 @@ function DM_015() {
             "\"result\": true" 2
 
     run_sql_source1 "drop database ${shardddl1};"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "skip event, need handled ddls is empty"
 
     run_sql_source1 "create database ${shardddl1};"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "CREATE DATABASE IF NOT EXISTS \`${shardddl1}\`"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -437,11 +437,11 @@ function DM_016() {
             "\"result\": true" 2
 
     run_sql_source1 "drop database ${shardddl1};"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "skip event, need handled ddls is empty"
 
     run_sql_source1 "create database if not exists ${shardddl1};"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "CREATE DATABASE IF NOT EXISTS \`${shardddl1}\`"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -463,11 +463,11 @@ function DM_017() {
             "\"result\": true" 2
 
     run_sql_source1 "drop table ${shardddl1}.${tb1};"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "skip event, need handled ddls is empty"
 
     run_sql_source1 "create table ${shardddl1}.${tb1}(id int);"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "CREATE TABLE IF NOT EXISTS \`${shardddl1}\`.\`${tb1}\` (\`id\` INT)"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -489,11 +489,11 @@ function DM_018() {
             "\"result\": true" 2
 
     run_sql_source1 "drop table ${shardddl1}.${tb1};"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "skip event, need handled ddls is empty"
 
     run_sql_source1 "create table if not exists ${shardddl1}.${tb1}(id int);"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "CREATE TABLE IF NOT EXISTS \`${shardddl1}\`.\`${tb1}\` (\`id\` INT)"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -515,7 +515,7 @@ function DM_019() {
             "\"result\": true" 2
 
     run_sql_source1 "truncate table ${shardddl1}.${tb1};"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "skip event, need handled ddls is empty"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -539,7 +539,7 @@ function DM_020() {
     run_sql_source1 "rename table ${shardddl1}.${tb1} to ${shardddl1}.${tb2};"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values (1);"
 
-    sleep 1
+    sleep 2
     run_sql_tidb "select count(1) from ${shardddl1}.${tb2};"
     check_contains 'count(1): 1'
 
@@ -564,7 +564,7 @@ function DM_021() {
 
     # same as "rename ${shardddl}.${tb} to ${shardddl}.${tb};"
     run_sql_source1 "rename table ${shardddl1}.${tb1} to ${shardddl1}.${tb2};"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "Table '${shardddl}.${tb}' already exist"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -585,11 +585,11 @@ function DM_022() {
             "start-task $cur/conf/dm-task-no-shard.yaml --remove-meta" \
             "\"result\": true" 2
 
-    sleep 1
+    sleep 2
     run_sql_tidb "create table ${shardddl1}.${tb2} (id int);"
 
     run_sql_source1 "rename table ${shardddl1}.${tb1} to ${shardddl1}.${tb2};"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "Table '${shardddl1}.${tb2}' already exists"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -612,7 +612,7 @@ function DM_023() {
             "\"result\": true" 3
 
     run_sql_source1 "rename table ${shardddl1}.${tb1} to ${shardddl1}.${tb3}, ${shardddl1}.${tb2} to ${shardddl1}.${tb4};"
-    sleep 1
+    sleep 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "rename table .* not supported" 1
@@ -672,7 +672,7 @@ function DM_027() {
     run_sql_source1 "insert into ${shardddl1}.${tb3} values (5,6)"
 
     # we now haven't checked table struct when create sharding table
-    sleep 1
+    sleep 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "Unknown column 'val' in 'field list'" 1
@@ -698,7 +698,7 @@ function DM_028() {
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} drop primary key;"
 
-    sleep 1
+    sleep 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "Unsupported drop primary key when alter-primary-key is false" 1
@@ -784,7 +784,7 @@ function DM_031_CASE() {
     run_sql_source2 "alter table ${shardddl1}.${tb1} add new_col1 varchar(10);"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(3,3);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(4,'dkfj');"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/master/log/dm-master.log "is different with"
 }
 
@@ -992,7 +992,7 @@ function DM_034_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(4,0);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(5);"
     run_sql_source2 "alter table ${shardddl1}.${tb2} add new_col1 int unique auto_increment;"
-    sleep 1
+    sleep 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "unsupported add column 'new_col1' constraint UNIQUE KEY when altering" 2
@@ -1109,7 +1109,7 @@ function DM_035_OPTIMISTIC() {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
 
     DM_035_CASE
-    sleep 1
+    sleep 2
     run_sql_tidb "select count(1) from ${shardddl}.${tb};"
     check_contains 'count(1): 12'
 
@@ -1159,7 +1159,7 @@ function DM_036_PESSIMISTIC() {
             "\"result\": true" 3
 
     DM_036_CASE
-    sleep 1
+    sleep 2
     run_sql_tidb "select count(1) from ${shardddl}.${tb};"
     check_contains 'count(1): 9'
 
@@ -1191,7 +1191,7 @@ function DM_036_OPTIMISTIC() {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,'ccc');"
 
     DM_036_CASE
-    sleep 1
+    sleep 2
     run_sql_tidb "select count(1) from ${shardddl}.${tb};"
     check_contains 'count(1): 12'
 
@@ -1237,7 +1237,7 @@ function DM_037_PESSIMISTIC() {
             "\"result\": true" 3
 
     DM_037_CASE
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/master/log/dm-master.log "is different with"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -1266,7 +1266,7 @@ function DM_037_OPTIMISTIC() {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
 
     DM_037_CASE
-    sleep 1
+    sleep 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "fail to handle shard ddl .* in optimistic mode," 1
@@ -1438,7 +1438,7 @@ function DM_040_CASE {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,'ddd');"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,'eee');"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,'fff');"
-    sleep 1
+    sleep 2
     check_log_contains $WORK_DIR/master/log/dm-master.log "is different with"
 }
 
