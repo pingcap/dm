@@ -50,7 +50,7 @@ func (m *testMydumperSuite) SetUpSuite(c *C) {
 			MydumperPath:  "./bin/mydumper",
 			Threads:       4,
 			SkipTzUTC:     true,
-			ChunkFilesize: 64,
+			ChunkFilesize: "64",
 		},
 		LoaderConfig: config.LoaderConfig{
 			Dir: "./dumped_data",
