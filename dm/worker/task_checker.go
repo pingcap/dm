@@ -241,23 +241,30 @@ func (tsc *realTaskStatusChecker) run() {
 // isResumableError checks the error message and returns whether we need to
 // resume the task and retry
 func isResumableError(err *pb.ProcessError) bool {
+	if err.Error == nil {
+		return true
+	}
+
 	// not elegant code, because TiDB doesn't expose some error
 	for _, msg := range retry.UnsupportedDDLMsgs {
-		if err.Error != nil && strings.Contains(err.Error.RawCause, msg) {
+		if strings.Contains(err.Error.RawCause, msg) {
 			return false
 		}
 	}
 	for _, msg := range retry.UnsupportedDMLMsgs {
-		if err.Error != nil && strings.Contains(err.Error.RawCause, msg) {
+		if strings.Contains(err.Error.RawCause, msg) {
 			return false
 		}
 	}
-	if err.Error != nil && err.Error.ErrCode == int32(terror.ErrParserParseRelayLog.Code()) {
+	if err.Error.ErrCode == int32(terror.ErrParserParseRelayLog.Code()) {
 		for _, msg := range retry.ParseRelayLogErrMsgs {
 			if strings.Contains(err.Error.Message, msg) {
 				return false
 			}
 		}
+	}
+	if _, ok := retry.UnresumableErrCodes[err.Error.ErrCode]; ok {
+		return false
 	}
 
 	return true
