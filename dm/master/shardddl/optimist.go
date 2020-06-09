@@ -483,6 +483,17 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 	} else {
 		o.logger.Info("the shard DDL lock returned some DDLs",
 			zap.String("lock", lockID), zap.Strings("ddls", newDDLs), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted))
+
+		// try to record the init schema before applied the DDL to the downstream.
+		initSchema := optimism.NewInitSchema(info.Task, info.DownSchema, info.DownTable, info.TableInfoBefore)
+		rev, putted, err2 := optimism.PutInitSchemaIfNotExist(o.cli, initSchema)
+		if err2 != nil {
+			o.logger.Warn("fail to record the initial schema", zap.Stringer("info", info), log.ShortError(err2))
+		} else if putted {
+			o.logger.Info("recorded the initial schema", zap.Stringer("info", info), zap.Int64("revision", rev))
+		} else {
+			o.logger.Debug("skip to record the initial schema", zap.Stringer("info", info), zap.Int64("revision", rev))
+		}
 	}
 
 	lock := o.lk.FindLock(lockID)
@@ -530,13 +541,15 @@ func (o *Optimist) deleteInfosOps(lock *optimism.Lock) error {
 	for source, schemaTables := range lock.Ready() {
 		for schema, tables := range schemaTables {
 			for table := range tables {
-				// NOTE: we rely on only `task`, `source`, `schema`, and `table` used for deletion.
-				infos = append(infos, optimism.NewInfo(lock.Task, source, schema, table, "", "", nil, nil, nil))
+				// NOTE: we rely on only `task`, `source`, `upSchema`, and `upTable` used for deletion.
+				infos = append(infos, optimism.NewInfo(lock.Task, source, schema, table, lock.DownSchema, lock.DownTable, nil, nil, nil))
 				ops = append(ops, optimism.NewOperation(lock.ID, lock.Task, source, schema, table, nil, optimism.ConflictNone, false))
 			}
 		}
 	}
-	rev, err := optimism.DeleteInfosOperations(o.cli, infos, ops)
+	// NOTE: we rely on only `task`, `downSchema`, and `downTable` used for deletion.
+	initSchema := optimism.NewInitSchema(lock.Task, lock.DownSchema, lock.DownTable, nil)
+	rev, err := optimism.DeleteInfosOperationsSchema(o.cli, infos, ops, initSchema)
 	if err != nil {
 		return err
 	}

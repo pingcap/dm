@@ -17,17 +17,20 @@ import (
 	. "github.com/pingcap/check"
 )
 
-func (t *testForEtcd) TestDeleteInfosOperations(c *C) {
+func (t *testForEtcd) TestDeleteInfosOperationsSchema(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		task     = "test"
-		source   = "mysql-replica-1"
-		upSchema = "foo-1"
-		upTable  = "bar-1"
-		DDLs     = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		info     = NewInfo(task, source, upSchema, upTable, "foo", "bar", DDLs, nil, nil)
-		op       = NewOperation("test-ID", task, source, upSchema, upTable, DDLs, ConflictResolved, false)
+		task       = "test"
+		source     = "mysql-replica-1"
+		upSchema   = "foo-1"
+		upTable    = "bar-1"
+		downSchema = "foo"
+		downTable  = "bar"
+		DDLs       = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		info       = NewInfo(task, source, upSchema, upTable, downSchema, downTable, DDLs, nil, nil)
+		op         = NewOperation("test-ID", task, source, upSchema, upTable, DDLs, ConflictResolved, false)
+		is         = NewInitSchema(task, downSchema, downTable, nil)
 	)
 
 	// put info.
@@ -46,8 +49,15 @@ func (t *testForEtcd) TestDeleteInfosOperations(c *C) {
 	c.Assert(opm, HasLen, 1)
 	c.Assert(opm[task][source][upSchema][upTable], DeepEquals, op)
 
+	// put init schema.
+	_, _, err = PutInitSchemaIfNotExist(etcdTestCli, is)
+	c.Assert(err, IsNil)
+	isc, _, err := GetInitSchema(etcdTestCli, is.Task, is.DownSchema, is.DownTable)
+	c.Assert(err, IsNil)
+	c.Assert(isc, DeepEquals, is)
+
 	// DELETE info and operation.
-	_, err = DeleteInfosOperations(etcdTestCli, []Info{info}, []Operation{op})
+	_, err = DeleteInfosOperationsSchema(etcdTestCli, []Info{info}, []Operation{op}, is)
 	c.Assert(err, IsNil)
 
 	// verify no info & operation exist.
@@ -57,6 +67,9 @@ func (t *testForEtcd) TestDeleteInfosOperations(c *C) {
 	opm, _, err = GetAllOperations(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(opm, HasLen, 0)
+	isc, _, err = GetInitSchema(etcdTestCli, is.Task, is.DownSchema, is.DownTable)
+	c.Assert(err, IsNil)
+	c.Assert(isc.IsEmpty(), IsTrue)
 }
 
 func (t *testForEtcd) TestSourceTablesInfo(c *C) {
