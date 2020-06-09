@@ -319,6 +319,11 @@ function test_pause_task() {
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "pause-task $name"\
             "\"result\": true" 3
+
+        # pause twice, just used to test pause by the way
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "pause-task $name"\
+            "\"result\": true" 3
         
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status $name"\
@@ -329,6 +334,11 @@ function test_pause_task() {
 
     for name in ${task_name[@]}; do
         echo "resume tasks $name"
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "resume-task $name"\
+            "\"result\": true" 3
+
+        # resume twice, just used to test resume by the way
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "resume-task $name"\
             "\"result\": true" 3
