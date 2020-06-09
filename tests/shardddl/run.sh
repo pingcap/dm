@@ -1498,11 +1498,548 @@ function DM_040() {
     echo "[$(date)] <<<<<< finish DM-040 >>>>>>"
 }
 
+function DM_041_CASE {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int as (id+1);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (id) values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (id) values(3);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int as (id+1);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values(4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (id) values(5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (id) values(6);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column new_col1 int as (id+1);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values(7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (id) values(8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (id) values(9);"
+    sleep 2
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_041_PESSIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-041 pessimistic >>>>>>"
+
+    init_table 111 211 212
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $cur/conf/dm-task-double-source.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    DM_041_CASE
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-041 pessimistic >>>>>>"
+}
+
+function DM_041_OPTIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-041 optimistic >>>>>>"
+
+    init_table 111 211 212
+
+    cp $cur/conf/dm-task-double-source.yaml $WORK_DIR/task.yaml
+    sed -i "s/shard-mode: \"pessimistic\"/shard-mode: \"optimistic\"/g" $WORK_DIR/task.yaml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $WORK_DIR/task.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    # we should remove this two line after support feature https://github.com/pingcap/dm/issues/583
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+
+    DM_041_CASE
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-041 optimistic >>>>>>"        
+}
+
+function DM_041() {
+    echo "[$(date)] <<<<<< start DM-041 >>>>>>"
+
+    DM_041_PESSIMISTIC
+    DM_041_OPTIMISTIC
+
+    echo "[$(date)] <<<<<< finish DM-041 >>>>>>"
+}
+
+function DM_043_CASE {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int as (id+1);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (id) values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (id) values(3);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int as (id+2);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values(4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (id) values(5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (id) values(6);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column new_col1 int as (id+2);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values(7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (id) values(8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (id) values(9);"
+    sleep 2
+    check_log_contains $WORK_DIR/master/log/dm-master.log "is different with"
+}
+
+function DM_043_PESSIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-043 pessimistic >>>>>>"
+
+    init_table 111 211 212
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $cur/conf/dm-task-double-source.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    DM_043_CASE
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-043 pessimistic >>>>>>"
+}
+
+function DM_043_OPTIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-043 optimistic >>>>>>"
+
+    init_table 111 211 212
+
+    cp $cur/conf/dm-task-double-source.yaml $WORK_DIR/task.yaml
+    sed -i "s/shard-mode: \"pessimistic\"/shard-mode: \"optimistic\"/g" $WORK_DIR/task.yaml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $WORK_DIR/task.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    # we should remove this two line after support feature https://github.com/pingcap/dm/issues/583
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+
+    DM_043_CASE
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-043 optimistic >>>>>>"        
+}
+
+function DM_043() {
+    echo "[$(date)] <<<<<< start DM-043 >>>>>>"
+
+    DM_043_PESSIMISTIC
+    DM_043_OPTIMISTIC
+
+    echo "[$(date)] <<<<<< finish DM-043 >>>>>>"
+}
+
+function DM_046_CASE {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,'bbb');"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column b;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,'ccc');"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop column b;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9);"
+    sleep 2
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_046_PESSIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-046 pessimistic >>>>>>"
+
+    run_sql_source1 "create table ${shardddl1}.${tb1} (a int, b varchar(10));"
+    run_sql_source2 "create table ${shardddl1}.${tb1} (a int, b varchar(10));"
+    run_sql_source2 "create table ${shardddl1}.${tb2} (a int, b varchar(10));"
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $cur/conf/dm-task-double-source.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    DM_046_CASE
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-046 pessimistic >>>>>>"
+}
+
+function DM_046_OPTIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-046 optimistic >>>>>>"
+
+    run_sql_source1 "create table ${shardddl1}.${tb1} (a int, b varchar(10));"
+    run_sql_source2 "create table ${shardddl1}.${tb1} (a int, b varchar(10));"
+    run_sql_source2 "create table ${shardddl1}.${tb2} (a int, b varchar(10));"
+
+    cp $cur/conf/dm-task-double-source.yaml $WORK_DIR/task.yaml
+    sed -i "s/shard-mode: \"pessimistic\"/shard-mode: \"optimistic\"/g" $WORK_DIR/task.yaml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $WORK_DIR/task.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    # we should remove this two line after support feature https://github.com/pingcap/dm/issues/583
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,'ccc');"
+
+    DM_046_CASE
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-046 optimistic >>>>>>"        
+}
+
+function DM_046() {
+    echo "[$(date)] <<<<<< start DM-046 >>>>>>"
+
+    DM_046_PESSIMISTIC
+    DM_046_OPTIMISTIC
+
+    echo "[$(date)] <<<<<< finish DM-046 >>>>>>"
+}
+
+function DM_047_CASE {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (a,b) values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (a,b) values(3,'ccc');"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (a,b) values(6,'fff');"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,'iii');"
+    sleep 2
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_047_PESSIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-047 pessimistic >>>>>>"
+
+    run_sql_source1 "create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) stored);"
+    run_sql_source2 "create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) stored);"
+    run_sql_source2 "create table ${shardddl1}.${tb2} (a int, b varchar(10), c int as (a+1) stored);"
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $cur/conf/dm-task-double-source.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    DM_047_CASE
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-047 pessimistic >>>>>>"
+}
+
+function DM_047_OPTIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-047 optimistic >>>>>>"
+
+    run_sql_source1 "create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) stored);"
+    run_sql_source2 "create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) stored);"
+    run_sql_source2 "create table ${shardddl1}.${tb2} (a int, b varchar(10), c int as (a+1) stored);"
+
+    cp $cur/conf/dm-task-double-source.yaml $WORK_DIR/task.yaml
+    sed -i "s/shard-mode: \"pessimistic\"/shard-mode: \"optimistic\"/g" $WORK_DIR/task.yaml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $WORK_DIR/task.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    # we should remove this two line after support feature https://github.com/pingcap/dm/issues/583
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (a,b) values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (a,b) values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (a,b) values(3,'ccc');"
+
+    DM_047_CASE
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-047 optimistic >>>>>>"        
+}
+
+function DM_047() {
+    echo "[$(date)] <<<<<< start DM-047 >>>>>>"
+
+    DM_047_PESSIMISTIC
+    DM_047_OPTIMISTIC
+
+    echo "[$(date)] <<<<<< finish DM-047 >>>>>>"
+}
+
+function DM_048_CASE {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (a,b) values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (a,b) values(3,'ccc');"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (a,b) values(6,'fff');"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,'iii');"
+    sleep 2
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_048_PESSIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-048 pessimistic >>>>>>"
+
+    run_sql_source1 "create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) virtual);"
+    run_sql_source2 "create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) virtual);"
+    run_sql_source2 "create table ${shardddl1}.${tb2} (a int, b varchar(10), c int as (a+1) virtual);"
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $cur/conf/dm-task-double-source.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    DM_048_CASE
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-048 pessimistic >>>>>>"
+}
+
+function DM_048_OPTIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-048 optimistic >>>>>>"
+
+    run_sql_source1 "create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) virtual);"
+    run_sql_source2 "create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) virtual);"
+    run_sql_source2 "create table ${shardddl1}.${tb2} (a int, b varchar(10), c int as (a+1) virtual);"
+
+    cp $cur/conf/dm-task-double-source.yaml $WORK_DIR/task.yaml
+    sed -i "s/shard-mode: \"pessimistic\"/shard-mode: \"optimistic\"/g" $WORK_DIR/task.yaml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $WORK_DIR/task.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    # we should remove this two line after support feature https://github.com/pingcap/dm/issues/583
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (a,b) values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (a,b) values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (a,b) values(3,'ccc');"
+
+    DM_048_CASE
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-048 optimistic >>>>>>"        
+}
+
+function DM_048() {
+    echo "[$(date)] <<<<<< start DM-048 >>>>>>"
+
+    DM_048_PESSIMISTIC
+    DM_048_OPTIMISTIC
+
+    echo "[$(date)] <<<<<< finish DM-048 >>>>>>"
+}
+
+function DM_049_CASE {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} change a b int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (b,c) values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (a,c) values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (a,c) values(3,'ccc');"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} change a b int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (b,c) values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (b,c) values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (a,c) values(6,'fff');"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} change a b int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (b,c) values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (b,c) values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (b,c) values(9,'iii');"
+}
+
+function DM_049_PESSIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-049 pessimistic >>>>>>"
+
+    run_sql_source1 "create table ${shardddl1}.${tb1} (a int, b varchar(10));"
+    run_sql_source2 "create table ${shardddl1}.${tb1} (a int, b varchar(10));"
+    run_sql_source2 "create table ${shardddl1}.${tb2} (a int, b varchar(10));"
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $cur/conf/dm-task-double-source.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    DM_049_CASE
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-049 pessimistic >>>>>>"
+}
+
+function DM_049_OPTIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-049 optimistic >>>>>>"
+
+    run_sql_source1 "create table ${shardddl1}.${tb1} (a int, c varchar(10));"
+    run_sql_source2 "create table ${shardddl1}.${tb1} (a int, c varchar(10));"
+    run_sql_source2 "create table ${shardddl1}.${tb2} (a int, c varchar(10));"
+
+    cp $cur/conf/dm-task-double-source.yaml $WORK_DIR/task.yaml
+    sed -i "s/shard-mode: \"pessimistic\"/shard-mode: \"optimistic\"/g" $WORK_DIR/task.yaml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $WORK_DIR/task.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    # we should remove this two line after support feature https://github.com/pingcap/dm/issues/583
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (a,c) values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (a,c) values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (a,c) values(3,'ccc');"
+
+    DM_049_CASE
+    sleep 2
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "because schema conflict detected"
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-049 optimistic >>>>>>"        
+}
+
+function DM_049() {
+    echo "[$(date)] <<<<<< start DM-049 >>>>>>"
+
+    # DM_049_PESSIMISTIC
+    DM_049_OPTIMISTIC
+
+    echo "[$(date)] <<<<<< finish DM-049 >>>>>>"
+}
+
+function DM_050_CASE {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} change a b int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (b,c) values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (a,c) values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (a,c) values(3,'ccc');"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} change a d int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (b,c) values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (d,c) values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (a,c) values(6,'fff');"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} change a d int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (b,c) values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (d,c) values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (d,c) values(9,'iii');"
+}
+
+function DM_050_PESSIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-050 pessimistic >>>>>>"
+
+    run_sql_source1 "create table ${shardddl1}.${tb1} (a int, b varchar(10));"
+    run_sql_source2 "create table ${shardddl1}.${tb1} (a int, b varchar(10));"
+    run_sql_source2 "create table ${shardddl1}.${tb2} (a int, b varchar(10));"
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $cur/conf/dm-task-double-source.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    DM_050_CASE
+    check_log_contains $WORK_DIR/master/log/dm-master.log "is different with"
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-050 pessimistic >>>>>>"
+}
+
+function DM_050_OPTIMISTIC() {
+    echo "[$(date)] <<<<<< start DM-050 optimistic >>>>>>"
+
+    run_sql_source1 "create table ${shardddl1}.${tb1} (a int, c varchar(10));"
+    run_sql_source2 "create table ${shardddl1}.${tb1} (a int, c varchar(10));"
+    run_sql_source2 "create table ${shardddl1}.${tb2} (a int, c varchar(10));"
+
+    cp $cur/conf/dm-task-double-source.yaml $WORK_DIR/task.yaml
+    sed -i "s/shard-mode: \"pessimistic\"/shard-mode: \"optimistic\"/g" $WORK_DIR/task.yaml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $WORK_DIR/task.yaml --remove-meta" \
+            "\"result\": true" 3
+
+    # we should remove this two line after support feature https://github.com/pingcap/dm/issues/583
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (a,c) values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (a,c) values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (a,c) values(3,'ccc');"
+
+    DM_050_CASE
+    sleep 2
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "because schema conflict detected"
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test" \
+            "\"result\": true" 3
+
+    clean_table
+
+    echo "[$(date)] <<<<<< finish DM-050 optimistic >>>>>>"        
+}
+
+function DM_050() {
+    echo "[$(date)] <<<<<< start DM-050 >>>>>>"
+
+    # DM_050_PESSIMISTIC
+    DM_050_OPTIMISTIC
+
+    echo "[$(date)] <<<<<< finish DM-050 >>>>>>"
+}
+
 function run() {
     init_cluster
     init_database
-    except=(024 025 029)
-    for i in $(seq -f "%03g" 1 40); do
+    except=(024 025 029 042 044 045)
+    for i in $(seq -f "%03g" 50 50); do
         if [[ ${except[@]} =~ $i ]]; then
             continue
         fi
