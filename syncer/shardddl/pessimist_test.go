@@ -132,7 +132,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 
 	// start a goroutine to delete the `done` operation in background, then we can put info again.
 	go func() {
-		time.Sleep(500*time.Millisecond) // wait `PutInfo` to start watch the deletion of the operation.
+		time.Sleep(500 * time.Millisecond) // wait `PutInfo` to start watch the deletion of the operation.
 		_, err2 := pessimism.DeleteOperations(etcdTestCli, op)
 		c.Assert(err2, IsNil)
 	}()
