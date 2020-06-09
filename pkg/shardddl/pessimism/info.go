@@ -120,14 +120,11 @@ func PutInfoIfOpNotDone(cli *clientv3.Client, info Info) (rev int64, putted bool
 	opBefore, err := operationFromJSON(string(opsResp.Kvs[0].Value))
 	if err != nil {
 		return 0, false, err
-	} else if !utils.CompareShardingDDLs(opBefore.DDLs, info.DDLs) {
-		// NOTE: different DDLs exist before, we may return an error here,
-		// but some users often `filter` the **previous** DDL if abnormal cases exist,
-		// then we may need to **overwrite** the operation for the previous DDL.
-		// so, we simple ignore this DDL mismatch error now.
 	} else if opBefore.Done {
 		// the operation with `done` exist before, abort the PUT.
 		return rev, false, nil
+	} else if utils.CompareShardingDDLs(opBefore.DDLs, info.DDLs) {
+		// TODO: try to handle put the same `done` DDL later.
 	}
 
 	// NOTE: try to PUT info if the operation still not done.

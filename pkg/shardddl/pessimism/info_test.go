@@ -156,7 +156,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task2][source1], DeepEquals, i21)
 }
 
-func (t *testForEtcd) PutInfoIfOpNotDone(c *C) {
+func (t *testForEtcd) TestPutInfoIfOpNotDone(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
@@ -201,10 +201,10 @@ func (t *testForEtcd) PutInfoIfOpNotDone(c *C) {
 	c.Assert(rev5, Equals, rev4)
 	c.Assert(putted, IsFalse)
 
-	// NOTE: we support overwrite different DDL now.
+	// try put anther info, but still can't put it.
 	info.DDLs = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
 	rev6, putted, err := PutInfoIfOpNotDone(etcdTestCli, info)
 	c.Assert(err, IsNil)
-	c.Assert(rev6, Greater, rev5)
-	c.Assert(putted, IsTrue)
+	c.Assert(rev6, Equals, rev5)
+	c.Assert(putted, IsFalse)
 }

@@ -1910,7 +1910,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			return err2
 		}
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(1) // block and wait DDL lock to be synced
-		s.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo))
+		s.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo), zap.Int64("revision", rev))
 
 		shardOp, err2 := s.pessimist.GetOperation(ec.tctx.Ctx, shardInfo, rev+1)
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
