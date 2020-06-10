@@ -1610,6 +1610,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	s.tctx.L().Info("", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation))
+	lastLocation := ec.lastLocation.Clone()
 	lastGTIDSet := ec.lastLocation.GTIDSet.Clone()
 	*ec.lastLocation = ec.currentLocation.Clone() // update lastLocation, because we have checked `isDDL`
 	*ec.latestOp = ddl
@@ -1729,6 +1730,13 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 	})
 
+	// NOTE: this DDL may be the first event for the table (no DML replicated before), so we try to save the table point (before this event) for it, then we can achieve:
+	// - can rollback tracked table info based on this checkpoint.
+	for db, tables := range sourceTbls {
+		for table := range tables {
+			s.saveTablePoint(db, table, lastLocation)
+		}
+	}
 	// flush previous DMLs and checkpoint if needing to handle the DDL.
 	// NOTE: do this flush before operations on shard groups which may lead to skip a table caused by `UnresolvedTables`.
 	if err = s.flushJobs(); err != nil {
