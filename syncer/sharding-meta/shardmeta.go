@@ -178,23 +178,25 @@ func (meta *ShardingMeta) checkItemExists(item *DDLItem) (int, bool) {
 //   active: whether the DDL will be processed in this round
 func (meta *ShardingMeta) AddItem(item *DDLItem) (active bool, err error) {
 	index, exists := meta.checkItemExists(item)
-	if !exists {
-		if source, ok := meta.sources[item.Source]; !ok {
-			meta.sources[item.Source] = &ShardingSequence{Items: []*DDLItem{item}}
-		} else {
-			source.Items = append(source.Items, item)
-		}
+	if exists {
+		return index == meta.activeIdx, nil
+	}
 
-		found := false
-		for _, globalItem := range meta.global.Items {
-			if utils.CompareShardingDDLs(item.DDLs, globalItem.DDLs) {
-				found = true
-				break
-			}
+	if source, ok := meta.sources[item.Source]; !ok {
+		meta.sources[item.Source] = &ShardingSequence{Items: []*DDLItem{item}}
+	} else {
+		source.Items = append(source.Items, item)
+	}
+
+	found := false
+	for _, globalItem := range meta.global.Items {
+		if utils.CompareShardingDDLs(item.DDLs, globalItem.DDLs) {
+			found = true
+			break
 		}
-		if !found {
-			meta.global.Items = append(meta.global.Items, item)
-		}
+	}
+	if !found {
+		meta.global.Items = append(meta.global.Items, item)
 	}
 
 	global, source := meta.global, meta.sources[item.Source]
