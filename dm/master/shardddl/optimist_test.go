@@ -893,3 +893,117 @@ func (t *testOptimist) TestOptimistLockMultipleTarget(c *C) {
 	c.Assert(o.Locks(), HasLen, 0)
 	c.Assert(o.ShowLocks("", nil), HasLen, 0)
 }
+
+func (t *testOptimist) TestOptimistInitSchema(c *C) {
+	defer clearOptimistTestSourceInfoOperation(c)
+
+	var (
+		backOff      = 30
+		waitTime     = 100 * time.Millisecond
+		watchTimeout = 2 * time.Second
+		logger       = log.L()
+		o            = NewOptimist(&logger)
+		task         = "test-optimist-init-schema"
+		source       = "mysql-replica-1"
+		upSchema     = "foo"
+		upTables     = []string{"bar-1", "bar-2"}
+		downSchema   = "foo"
+		downTable    = "bar"
+		st           = optimism.NewSourceTables(task, source)
+
+		p           = parser.New()
+		se          = mock.NewContext()
+		tblID int64 = 111
+		DDLs1       = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		DDLs2       = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
+		ti0         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 INT)`)
+		i11         = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable, DDLs1, ti0, ti1)
+		i12         = optimism.NewInfo(task, source, upSchema, upTables[1], downSchema, downTable, DDLs1, ti0, ti1)
+		i21         = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable, DDLs2, ti1, ti2)
+	)
+
+	st.AddTable(upSchema, upTables[0], downSchema, downTable)
+	st.AddTable(upSchema, upTables[1], downSchema, downTable)
+
+	// put source tables first.
+	_, err := optimism.PutSourceTables(etcdTestCli, st)
+	c.Assert(err, IsNil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(o.Locks(), HasLen, 0)
+
+	// no init schema exist now.
+	is, _, err := optimism.GetInitSchema(etcdTestCli, task, downSchema, downTable)
+	c.Assert(err, IsNil)
+	c.Assert(is.IsEmpty(), IsTrue)
+
+	// PUT i11, will creat a lock.
+	_, err = optimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		return len(o.Locks()) == 1
+	}), IsTrue)
+	time.Sleep(waitTime) // sleep one more time to wait for update of init schema.
+
+	// the init schema exist now.
+	is, _, err = optimism.GetInitSchema(etcdTestCli, task, downSchema, downTable)
+	c.Assert(err, IsNil)
+	c.Assert(is.TableInfo, DeepEquals, ti0) // the init schema.
+
+	// PUT i12, the lock will be synced.
+	rev1, err := optimism.PutInfo(etcdTestCli, i12)
+	c.Assert(err, IsNil)
+
+	// wait operation for i12 become available.
+	opCh := make(chan optimism.Operation, 10)
+	errCh := make(chan error, 10)
+	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
+	optimism.WatchOperationPut(ctx2, etcdTestCli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev1, opCh, errCh)
+	cancel2()
+	close(opCh)
+	close(errCh)
+	c.Assert(len(opCh), Equals, 1)
+	op12 := <-opCh
+	c.Assert(op12.DDLs, DeepEquals, DDLs1)
+	c.Assert(op12.ConflictStage, Equals, optimism.ConflictNone)
+	c.Assert(len(errCh), Equals, 0)
+
+	// mark op11 and op12 as done, the lock should be resolved.
+	op11c := op12
+	op11c.Done = true
+	op11c.UpTable = i11.UpTable // overwrite `UpTable`.
+	_, putted, err := optimism.PutOperation(etcdTestCli, false, op11c)
+	c.Assert(err, IsNil)
+	c.Assert(putted, IsTrue)
+	op12c := op12
+	op12c.Done = true
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op12c)
+	c.Assert(err, IsNil)
+	c.Assert(putted, IsTrue)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		return len(o.Locks()) == 0
+	}), IsTrue)
+
+	// the init schema should also be deleted.
+	is, _, err = optimism.GetInitSchema(etcdTestCli, task, downSchema, downTable)
+	c.Assert(err, IsNil)
+	c.Assert(is.IsEmpty(), IsTrue)
+
+	// PUT i21 to create the  lock again.
+	_, err = optimism.PutInfo(etcdTestCli, i21)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		return len(o.Locks()) == 1
+	}), IsTrue)
+	time.Sleep(waitTime) // sleep one more time to wait for update of init schema.
+
+	// the init schema exist now.
+	is, _, err = optimism.GetInitSchema(etcdTestCli, task, downSchema, downTable)
+	c.Assert(err, IsNil)
+	c.Assert(is.TableInfo, DeepEquals, ti1) // the init schema is ti1 now.
+}
