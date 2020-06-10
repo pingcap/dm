@@ -36,10 +36,8 @@ run() {
     run_sql_file $cur/data/db1.increment0.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment0.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
-    # use sync_diff_inspector to check schema fetching increment data.
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-
     # check database `sharding_seq_tmp` exists
+    sleep 2
     run_sql "select count(*) from sharding_seq_tmp.t1;" $TIDB_PORT $TIDB_PASSWORD
     check_contains "count(*): 1"
 
