@@ -567,17 +567,37 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origSchema, origTable)
 	}
 
-	// if the table does not exist (IsTableNotExists(err)), continue to fetch the table from downstream and create it.
-
 	if err = s.schemaTracker.CreateSchemaIfNotExists(origSchema); err != nil {
 		return nil, terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, origSchema)
 	}
 
+	// in optimistic shard mode, we should try to get the init schema (the one before modified ty other tables) first.
+	if s.cfg.ShardMode == config.ShardOptimistic {
+		ti, err = s.trackInitTableInfoOptimistic(origSchema, origTable, renamedSchema, renamedTable)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// if the table does not exist (IsTableNotExists(err)), continue to fetch the table from downstream and create it.
+	if ti == nil {
+		err = s.trackTableInfoFromDownstream(origSchema, origTable, renamedSchema, renamedTable, p)
+	}
+
+	ti, err = s.schemaTracker.GetTable(origSchema, origTable)
+	if err != nil {
+		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origSchema, origTable)
+	}
+	return ti, nil
+}
+
+// trackTableInfoFromDownstream tries to track the table info from the downstream.
+func (s *Syncer) trackTableInfoFromDownstream(origSchema, origTable, renamedSchema, renamedTable string, p *parser.Parser) error {
 	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly
 	// (and get rid of ddlDBConn).
 	rows, err := s.ddlDBConn.querySQL(s.tctx, "SHOW CREATE TABLE "+dbutil.TableName(renamedSchema, renamedTable))
 	if err != nil {
-		return nil, terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 	}
 	defer rows.Close()
 
@@ -585,14 +605,14 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 	for rows.Next() {
 		var tableName, createSQL string
 		if err = rows.Scan(&tableName, &createSQL); err != nil {
-			return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
 
 		// rename the table back to original.
 		var createNode ast.StmtNode
 		createNode, err = p.ParseOneStmt(createSQL, "", "")
 		if err != nil {
-			return nil, terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 		}
 		createStmt := createNode.(*ast.CreateTableStmt)
 		createStmt.IfNotExists = true
@@ -602,7 +622,7 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 		var newCreateSQLBuilder strings.Builder
 		restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &newCreateSQLBuilder)
 		if err = createStmt.Restore(restoreCtx); err != nil {
-			return nil, terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 		}
 		newCreateSQL := newCreateSQLBuilder.String()
 		s.tctx.L().Debug("reverse-synchronized table schema",
@@ -613,19 +633,14 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 			zap.String("sql", newCreateSQL),
 		)
 		if err = s.schemaTracker.Exec(ctx, origSchema, newCreateSQL); err != nil {
-			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origSchema, origTable)
+			return terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origSchema, origTable)
 		}
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+		return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
-
-	ti, err = s.schemaTracker.GetTable(origSchema, origTable)
-	if err != nil {
-		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origSchema, origTable)
-	}
-	return ti, nil
+	return nil
 }
 
 func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64) {

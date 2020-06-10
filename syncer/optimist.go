@@ -232,3 +232,18 @@ func (s *Syncer) handleQueryEventOptimistic(
 		zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 	return nil
 }
+
+// trackInitTableInfoOptimistic tries to get the initial table info (before modified by other tables) and track it in optimistic shard mode.
+func (s *Syncer) trackInitTableInfoOptimistic(origSchema, origTable, renamedSchema, renamedTable string) (*model.TableInfo, error) {
+	ti, err := s.optimist.GetTableInfo(renamedSchema, renamedTable)
+	if err != nil {
+		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origSchema, origTable)
+	}
+	if ti != nil {
+		err = s.schemaTracker.CreateTableIfNotExists(origSchema, origTable, ti)
+		if err != nil {
+			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origSchema, origTable)
+		}
+	}
+	return ti, nil
+}
