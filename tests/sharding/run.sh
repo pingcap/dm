@@ -139,6 +139,23 @@ function run() {
     echo "checksum before drop/truncate: $old_checksum, checksum after drop/truncate: $new_checksum"
     [ "$old_checksum" == "$new_checksum" ]
 
+    # test conflict ddl in single worker
+    run_sql "alter table sharding1.t1 add column new_col1 int;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "alter table sharding1.t2 add column new_col2 int;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "detect inconsistent DDL sequence" 1
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task test"\
+        "\"result\": true" 3
+
+    # still conflict
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "detect inconsistent DDL sequence" 1
+
     # stop twice, just used to test stop by the way
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "stop-task test"\
