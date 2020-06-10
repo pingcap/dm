@@ -570,6 +570,21 @@ func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 			}
 		}
 	}
+
+	// drop any tables in the tracker if no corresponding checkpoint exists.
+	for _, schema := range schemaTracker.AllSchemas() {
+		_, ok1 := cp.points[schema.Name.O]
+		for _, table := range schema.Tables {
+			var ok2 bool
+			if ok1 {
+				_, ok2 = cp.points[schema.Name.O][table.Name.O]
+			}
+			if !ok2 {
+				err := schemaTracker.DropTable(schema.Name.O, table.Name.O)
+				cp.logCtx.L().Info("drop table in schema tracker because no checkpoint exists", zap.String("schema", schema.Name.O), zap.String("table", table.Name.O), log.ShortError(err))
+			}
+		}
+	}
 }
 
 func (cp *RemoteCheckPoint) prepare(tctx *tcontext.Context) error {
