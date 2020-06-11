@@ -109,7 +109,7 @@ function run_sql_tidb_with_retry() {
         sleep 2
     done
     if [[ $rc = 0 ]]; then
-        echo "TEST FAILED: OUTPUT DOES NOT CONTAIN '$1'"
+        echo "TEST FAILED: OUTPUT DOES NOT CONTAIN '$2'"
         echo "____________________________________"
         cat "$TEST_DIR/sql_res.$TEST_NAME.txt"
         echo "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
