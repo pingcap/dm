@@ -36,6 +36,24 @@ function run() {
     sleep 3
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+
+    # the first ddl success while the second is conflict
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status sequence_sharding" \
+        "detect inconsistent DDL sequence" 2
+    
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task sequence_sharding" \
+        "\"result\": true" 3
+
+    # still conflict
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status sequence_sharding" \
+        "detect inconsistent DDL sequence" 2
+
 }
 
 cleanup_data sharding_target2
