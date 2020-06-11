@@ -53,10 +53,10 @@ var (
 	defaultUpdateInterval  = 1
 	defaultReportInterval  = 10
 	// MydumperConfig
-	defaultMydumperPath        = "./bin/mydumper"
-	defaultThreads             = 4
-	defaultChunkFilesize int64 = 64
-	defaultSkipTzUTC           = true
+	defaultMydumperPath  = "./bin/mydumper"
+	defaultThreads       = 4
+	defaultChunkFilesize = "64"
+	defaultSkipTzUTC     = true
 	// LoaderConfig
 	defaultPoolSize = 16
 	defaultDir      = "./dumped_data"
@@ -142,7 +142,7 @@ func (m *MySQLInstance) Verify() error {
 type MydumperConfig struct {
 	MydumperPath  string `yaml:"mydumper-path" toml:"mydumper-path" json:"mydumper-path"`    // mydumper binary path
 	Threads       int    `yaml:"threads" toml:"threads" json:"threads"`                      // -t, --threads
-	ChunkFilesize int64  `yaml:"chunk-filesize" toml:"chunk-filesize" json:"chunk-filesize"` // -F, --chunk-filesize
+	ChunkFilesize string `yaml:"chunk-filesize" toml:"chunk-filesize" json:"chunk-filesize"` // -F, --chunk-filesize
 	StatementSize uint64 `yaml:"statement-size" toml:"statement-size" json:"statement-size"` // -S, --statement-size
 	Rows          uint64 `yaml:"rows" toml:"rows" json:"rows"`                               // -r, --rows
 	Where         string `yaml:"where" toml:"where" json:"where"`                            // --where

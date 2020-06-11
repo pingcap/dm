@@ -262,8 +262,8 @@ func (m *Mydumper) constructArgs() ([]string, error) {
 	if cfg.Threads > 0 {
 		ret = append(ret, "--threads", strconv.Itoa(cfg.Threads))
 	}
-	if cfg.ChunkFilesize > 0 {
-		ret = append(ret, "--chunk-filesize", strconv.FormatInt(cfg.ChunkFilesize, 10))
+	if cfg.ChunkFilesize != "" {
+		ret = append(ret, "--chunk-filesize", cfg.ChunkFilesize)
 	}
 	if cfg.SkipTzUTC {
 		ret = append(ret, "--skip-tz-utc")
