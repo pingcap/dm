@@ -193,7 +193,6 @@ func (sg *ShardingGroup) Reset() {
 	for source := range sg.sources {
 		sg.sources[source] = false
 	}
-	sg.meta.Reinitialize()
 	sg.firstLocation = nil
 	sg.firstEndLocation = nil
 	sg.ddls = nil
@@ -481,6 +480,7 @@ func (k *ShardingGroupKeeper) ResetGroups() {
 	defer k.RUnlock()
 	for _, group := range k.groups {
 		group.Reset()
+		group.meta.Reinitialize()
 	}
 }
 
