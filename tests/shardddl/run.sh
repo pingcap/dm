@@ -1025,11 +1025,136 @@ function DM_059() {
     "clean_table" "optimistic"
 }
 
+function DM_062_CASE() {
+    # we should remove this two line after support feature https://github.com/pingcap/dm/issues/583
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify id bigint;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} modify id bigint;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} modify id bigint;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9);"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_062() {
+    run_case 062 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 062 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function DM_063_CASE() {
+    # we should remove this two line after support feature https://github.com/pingcap/dm/issues/583
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify id int(15);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} modify id int(20);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} modify id int(20);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9);"
+
+    if [[ "$1" = "pessimistic" ]]; then
+        check_log_contain_with_retry "is different with" $WORK_DIR/master/log/dm-master.log
+    else
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "because schema conflict detected" 2
+    fi
+}
+
+function DM_063() {
+    run_case 063 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 063 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function DM_064_CASE() {
+    # we should remove this two line after support feature https://github.com/pingcap/dm/issues/583
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify id int(30);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} modify id int(30);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} modify id int(30);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9);"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_064() {
+    run_case 064 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 064 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function DM_065_CASE() {
+    # we should remove this two line after support feature https://github.com/pingcap/dm/issues/583
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify a bigint after b;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} modify a bigint first;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} modify a bigint first;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    if [[ "$1" = "pessimistic" ]]; then
+        check_log_contain_with_retry "is different with" $WORK_DIR/master/log/dm-master.log
+    else
+        run_sql_tidb_with_retry "select count(1) from ${shardddl}.${tb};" "count(1): 12"
+    fi
+}
+
+function DM_065() {
+    run_case 065 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int);\"" \
+    "clean_table" "pessimistic"
+    run_case 065 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int);\"" \
+    "clean_table" "optimistic"
+}
+
+
 function run() {
     init_cluster
     init_database
-    except=(024 025 029 042 044 045 052 053 054 055 060)
-    for i in $(seq -f "%03g" 1 60); do
+    except=(024 025 029 042 044 045 052 053 054 055 060 61)
+    for i in $(seq -f "%03g" 1 65); do
         if [[ ${except[@]} =~ $i ]]; then
             continue
         fi
