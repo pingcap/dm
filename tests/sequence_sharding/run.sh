@@ -54,6 +54,20 @@ function run() {
         "query-status sequence_sharding" \
         "detect inconsistent DDL sequence" 2
 
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "stop-task sequence_sharding" \
+        "\"result\": true" 3
+    
+    cp $cur/conf/dm-task.yaml $WORK_DIR/task.yaml
+    echo "ignore-checking-items: [\"all\"]" >> $WORK_DIR/task.yaml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $WORK_DIR/task.yaml" \
+        "\"result\": true" 3
+
+    # still conflict
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status sequence_sharding" \
+        "detect inconsistent DDL sequence" 2
 }
 
 cleanup_data sharding_target2
