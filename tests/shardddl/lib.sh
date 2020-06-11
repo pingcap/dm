@@ -72,3 +72,77 @@ function clean_table() {
     run_sql_tidb "drop table if exists ${shardddl}.${tb};"
     run_sql_tidb "drop database if exists dm_meta;"
 }
+
+function run_case() {
+    case=$1
+    task_conf=$2
+    init_table_cmd=$3
+    clean_table_cmd=$4
+    shard_mode=$5
+
+    echo "[$(date)] <<<<<< start DM-${case} ${shard_mode} >>>>>>"
+
+    eval ${init_table_cmd}
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/${task_conf}.yaml --remove-meta"
+    
+    DM_${case}_CASE $5
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task test"
+
+    eval ${clean_table_cmd}
+
+    echo "[$(date)] <<<<<< finish DM-${case} ${shard_mode} >>>>>>"
+}
+
+function run_sql_tidb_with_retry() {
+    rc=0
+    for ((k=1; k<11; k++)); do
+        run_sql_tidb "$1"
+        if grep -Fq "$2" "$TEST_DIR/sql_res.$TEST_NAME.txt"; then
+            rc=1
+            break
+        fi
+        echo "run tidb sql failed $k-th time, retry later"
+        sleep 2
+    done
+    if [[ $rc = 0 ]]; then
+        echo "TEST FAILED: OUTPUT DOES NOT CONTAIN '$1'"
+        echo "____________________________________"
+        cat "$TEST_DIR/sql_res.$TEST_NAME.txt"
+        echo "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+        exit 1
+    fi
+}
+
+function check_log_contain_with_retry() {
+    text=$1
+    log1=$2
+    log2=""
+    if [[ "$#" -ge 3 ]]; then
+        log2=$3
+    fi
+    rc=0
+    for ((k=1;k<11;k++)); do
+        got=`grep "$text" $log1 | wc -l`
+        if [[ ! $got = 0 ]]; then
+            rc=1
+            break
+        fi
+        if [[ ! "$log2" = "" ]]; then
+            got=`grep "$text" $log2 | wc -l`
+            if [[ ! $got = 0 ]]; then
+                rc=1
+                break
+            fi
+        fi
+        echo "check log contain failed $k-th time, retry later"
+        sleep 2
+    done
+    if [[ $rc = 0 ]]; then
+        echo "log dosen't contain $text"
+        exit 1
+    fi
+}
