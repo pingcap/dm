@@ -1,5 +1,5 @@
 ---
-name: test
+name: test2
 task-mode: all
 is-sharding: false
 meta-schema: "dm_meta"
@@ -11,21 +11,10 @@ timezone: "Asia/Shanghai"
 target-database:
   host: "127.0.0.1"
   port: 4000
-  user: "root"
-  password: ""
-  session:
-    sql_mode: "NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES"
-    tidb_skip_utf8_check: 1
-    tidb_disable_txn_auto_retry: off
-    tidb_retry_limit: "10"
+  user: "test"
+  password: "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs="
 
 mysql-instances:
-  - source-id: "mysql-replica-01"
-    black-white-list:  "instance"
-    mydumper-config-name: "global"
-    loader-config-name: "global"
-    syncer-config-name: "global"
-
   - source-id: "mysql-replica-02"
     black-white-list:  "instance"
     mydumper-config-name: "global"
@@ -34,7 +23,7 @@ mysql-instances:
 
 black-white-list:
   instance:
-    do-dbs: ["all_mode"]
+    do-dbs: ["ha_test"]
 
 mydumpers:
   global:
@@ -52,4 +41,3 @@ syncers:
   global:
     worker-count: 16
     batch: 100
-    enable-ansi-quotes: true
