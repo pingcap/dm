@@ -2286,7 +2286,9 @@ func (s *Syncer) Close() {
 
 	s.checkpoint.Close()
 
-	s.schemaTracker.Close()
+	if err := s.schemaTracker.Close(); err != nil {
+		s.tctx.L().Error("fail to close schema tracker", log.ShortError(err))
+	}
 
 	if s.sgk != nil {
 		s.sgk.Close()
