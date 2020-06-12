@@ -2288,6 +2288,10 @@ func (s *Syncer) Close() {
 
 	s.schemaTracker.Close()
 
+	if s.sgk != nil {
+		s.sgk.Close()
+	}
+
 	s.closeOnlineDDL()
 
 	// when closing syncer by `stop-task`, remove active relay log from hub
