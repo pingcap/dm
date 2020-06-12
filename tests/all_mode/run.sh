@@ -134,8 +134,8 @@ function run() {
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    # check_metric $WORKER1_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 1
-    # check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 1
+    # check_metric $WORKER1_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
+    # check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
 
     export GO_FAILPOINTS=''
 }

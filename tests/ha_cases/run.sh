@@ -72,8 +72,8 @@ function test_multi_task_running() {
 
     sleep 3 # wait for flush checkpoint
     echo "use sync_diff_inspector to check increment data"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
-    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 5
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 5
     echo "[$(date)] <<<<<< finish test_multi_task_running >>>>>>"
 }
 
