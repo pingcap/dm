@@ -181,6 +181,12 @@ func (w *Worker) Start() {
 
 	w.l.Info("start running")
 
+	w.wg.Add(1)
+	go func() {
+		w.runBackgroundJob(w.ctx)
+		w.wg.Done()
+	}()
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {

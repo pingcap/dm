@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"sync"
 
 	"github.com/pingcap/dm/dm/config"
@@ -55,10 +56,19 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 		}
 		maxIdleConns = rawCfg.MaxIdleConns
 	}
+
+	for key, val := range config.Session {
+		// for num such as 1/"1", format as key='1'
+		// for string, format as key='string'
+		// both are valid for mysql and tidb
+		dsn += fmt.Sprintf("&%s='%s'", key, url.QueryEscape(val))
+	}
+
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
+
 	db.SetMaxIdleConns(maxIdleConns)
 
 	return NewBaseDB(db), nil
