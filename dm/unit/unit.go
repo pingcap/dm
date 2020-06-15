@@ -64,7 +64,7 @@ type Unit interface {
 func NewProcessError(errorType pb.ErrorType, err error) *pb.ProcessError {
 	result := &pb.ProcessError{
 		Type: errorType,
-		Msg: terror.Message(err),
+		Msg:  terror.Message(err),
 	}
 	if e, ok := err.(*terror.Error); ok {
 		result.Error = &pb.TError{
