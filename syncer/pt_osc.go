@@ -65,7 +65,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 			if tp1 == trashTable {
 				return nil, "", "", nil
 			} else if tp1 == ghostTable {
-				return nil, "", "", terror.ErrSyncerUnitPTRenameToGhostTable.Generate(statement)
+				return nil, "", "", terror.ErrSyncerUnitPTRenameToPTTable.Generate(statement)
 			}
 		}
 		return []string{statement}, schema, table, nil
@@ -79,7 +79,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 
 			tp1 := p.TableType(tables[1].Name)
 			if tp1 == ghostTable {
-				return nil, "", "", terror.ErrSyncerUnitPTRenameGhostTblToOther.Generate(statement)
+				return nil, "", "", terror.ErrSyncerUnitPTRenamePTTblToOther.Generate(statement)
 			}
 		}
 	case ghostTable:
@@ -106,9 +106,9 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 				if ghostInfo != nil {
 					return ghostInfo.DDLs, tables[1].Schema, tables[1].Name, nil
 				}
-				return nil, "", "", terror.ErrSyncerUnitPTOnlineDDLOnGhostTbl.Generate(schema, table)
+				return nil, "", "", terror.ErrSyncerUnitPTOnlineDDLOnPTTbl.Generate(schema, table)
 			} else if tp1 == ghostTable {
-				return nil, "", "", terror.ErrSyncerUnitPTRenameGhostTblToOther.Generate(statement)
+				return nil, "", "", terror.ErrSyncerUnitPTRenamePTTblToOther.Generate(statement)
 			}
 
 			// rename ghost table to trash table

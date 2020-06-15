@@ -255,6 +255,15 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		errs = append(errs, unit.NewProcessError(err))
 	} else if !result.Summary.Passed {
 		errs = append(errs, unit.NewProcessError(errors.New("check was failed, please see detail")))
+
+		// remove success result if not pass
+		results := result.Results[:0]
+		for _, r := range result.Results {
+			if r.State != check.StateSuccess {
+				results = append(results, r)
+			}
+		}
+		result.Results = results
 	}
 
 	c.updateInstruction(result)
