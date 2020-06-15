@@ -994,7 +994,7 @@ func (t *testOptimist) TestOptimistInitSchema(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(is.IsEmpty(), IsTrue)
 
-	// PUT i21 to create the  lock again.
+	// PUT i21 to create the lock again.
 	_, err = optimism.PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
