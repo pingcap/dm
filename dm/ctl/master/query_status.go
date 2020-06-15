@@ -18,11 +18,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-
-	"github.com/pingcap/errors"
-	"github.com/spf13/cobra"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 const stageError = "Error"
@@ -61,7 +61,7 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 
 	workers, err := common.GetWorkerArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
+		common.PrintLines("%s", terror.Message(err))
 		return
 	}
 
@@ -73,13 +73,13 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 		Workers: workers,
 	})
 	if err != nil {
-		common.PrintLines("can not query %s task's status(in workers %v):\n%s", taskName, workers, errors.ErrorStack(err))
+		common.PrintLines("can not query %s task's status(in workers %v):\n%s", taskName, workers, terror.Message(err))
 		return
 	}
 
 	more, err := cmd.Flags().GetBool("more")
 	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
+		common.PrintLines("%s", terror.Message(err))
 		return
 	}
 
