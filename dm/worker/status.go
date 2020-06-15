@@ -112,6 +112,11 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 				case pb.UnitType_Sync:
 					stStatus.Status = &pb.SubTaskStatus_Sync{Sync: us.(*pb.SyncStatus)}
 				}
+			} else if result := st.Result(); result != nil {
+				processErrorMsg := utils.JoinProcessErrors(result.Errors)
+				if len(processErrorMsg) > 0 {
+					stStatus.Status = &pb.SubTaskStatus_Msg{Msg: processErrorMsg}
+				}
 			}
 		}
 		status = append(status, &stStatus)

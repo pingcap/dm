@@ -418,6 +418,40 @@ func (t *testServer) TestGetMinPosInAllSubTasks(c *C) {
 	c.Assert(minPos.Pos, Equals, uint32(12))
 }
 
+func (t *testServer) TestQueryStatus(c *C) {
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+
+	s := NewServer(cfg)
+	s.closed.Set(false)
+
+	sourceCfg := loadSourceConfigWithoutPassword(c)
+	sourceCfg.EnableRelay = false
+	w, err := NewWorker(&sourceCfg, nil)
+	c.Assert(err, IsNil)
+	w.closed.Set(closedFalse)
+
+	subtaskCfg := config.SubTaskConfig{}
+	err = subtaskCfg.DecodeFile(subtaskSampleFile, true)
+	c.Assert(err, IsNil)
+
+	// subtask failed just after it is started
+	st := NewSubTask(&subtaskCfg, nil)
+	st.fail(errors.New("mockSubtaskFail"))
+	w.subTaskHolder.recordSubTask(st)
+	s.setWorker(w, true)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	resp, err := s.QueryStatus(ctx, &pb.QueryStatusRequest{})
+	c.Assert(err, IsNil)
+	c.Assert(resp, NotNil)
+	c.Assert(resp.Result, IsTrue)
+	c.Assert(resp.Msg, HasLen, 0)
+	c.Assert(resp.SubTaskStatus, HasLen, 1)
+	c.Assert(resp.SubTaskStatus[0].String(), Matches, `[\s\S]*mockSubtaskFail[\s\S]*`)
+}
+
 func (t *testServer) TestQueryError(c *C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
