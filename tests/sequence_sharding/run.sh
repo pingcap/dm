@@ -62,6 +62,46 @@ function run() {
         "query-status sequence_sharding" \
         "\"stage\": \"Running\"" 4 \
         "\"unit\": \"Sync\"" 2
+
+
+    run_sql_file $cur/data/db1.increment3.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment3.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+
+    sleep 2
+
+    # the first ddl success while the second is conflict
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status sequence_sharding" \
+        "detect inconsistent DDL sequence" 2
+    
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task sequence_sharding" \
+        "\"result\": true" 3
+
+    sleep 2
+
+    # still conflict
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status sequence_sharding" \
+        "detect inconsistent DDL sequence" 2
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "stop-task sequence_sharding" \
+        "\"result\": true" 3
+    
+    # now upstream schema is conflict, ignore it and restart task
+    cp $cur/conf/dm-task.yaml $WORK_DIR/task.yaml
+    echo "ignore-checking-items: [\"all\"]" >> $WORK_DIR/task.yaml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $WORK_DIR/task.yaml" \
+        "\"result\": true" 3
+    
+    sleep 2
+
+    # still conflict
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status sequence_sharding" \
+        "detect inconsistent DDL sequence" 2
 }
 
 cleanup_data sharding_target2
