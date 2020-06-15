@@ -480,6 +480,8 @@ func (k *ShardingGroupKeeper) ResetGroups() {
 	defer k.RUnlock()
 	for _, group := range k.groups {
 		group.Reset()
+		// reset ShardingMeta when start or resume task
+		// it will be reconstructed by consuming binlog event
 		group.meta.Reinitialize()
 	}
 }
