@@ -247,18 +247,18 @@ func isResumableError(err *pb.ProcessError) bool {
 
 	// not elegant code, because TiDB doesn't expose some error
 	for _, msg := range retry.UnsupportedDDLMsgs {
-		if strings.Contains(err.Error.RawCause, msg) {
+		if strings.Contains(strings.ToLower(err.Error.RawCause), strings.ToLower(msg)) {
 			return false
 		}
 	}
 	for _, msg := range retry.UnsupportedDMLMsgs {
-		if strings.Contains(err.Error.RawCause, msg) {
+		if strings.Contains(strings.ToLower(err.Error.RawCause), strings.ToLower(msg)) {
 			return false
 		}
 	}
 	if err.Error.ErrCode == int32(terror.ErrParserParseRelayLog.Code()) {
 		for _, msg := range retry.ParseRelayLogErrMsgs {
-			if strings.Contains(err.Error.Message, msg) {
+			if strings.Contains(strings.ToLower(err.Error.Message), strings.ToLower(msg)) {
 				return false
 			}
 		}

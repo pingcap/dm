@@ -1898,12 +1898,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// construct & send shard DDL info into etcd, DM-master will handle it.
 		shardInfo := s.pessimist.ConstructInfo(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, needHandleDDLs)
-		rev, err2 := s.pessimist.PutInfo(shardInfo)
+		rev, err2 := s.pessimist.PutInfo(ec.tctx.Ctx, shardInfo)
 		if err2 != nil {
 			return err2
 		}
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(1) // block and wait DDL lock to be synced
-		s.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo))
+		s.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo), zap.Int64("revision", rev))
 
 		shardOp, err2 := s.pessimist.GetOperation(ec.tctx.Ctx, shardInfo, rev+1)
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
