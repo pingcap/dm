@@ -571,7 +571,7 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 		return nil, terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, origSchema)
 	}
 
-	// in optimistic shard mode, we should try to get the init schema (the one before modified ty other tables) first.
+	// in optimistic shard mode, we should try to get the init schema (the one before modified by other tables) first.
 	if s.cfg.ShardMode == config.ShardOptimistic {
 		ti, err = s.trackInitTableInfoOptimistic(origSchema, origTable, renamedSchema, renamedTable)
 		if err != nil {
