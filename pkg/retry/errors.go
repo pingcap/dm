@@ -27,6 +27,7 @@ var (
 		"unsupported modify charset",
 		"unsupported modify collate",
 		"unsupported drop integer primary key",
+		"Unsupported collation",
 	}
 
 	// UnsupportedDMLMsgs list the error messages of some un-recoverable DML, which is used in task auto recovery
