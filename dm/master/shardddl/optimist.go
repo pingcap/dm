@@ -488,7 +488,7 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 		initSchema := optimism.NewInitSchema(info.Task, info.DownSchema, info.DownTable, info.TableInfoBefore)
 		rev, putted, err2 := optimism.PutInitSchemaIfNotExist(o.cli, initSchema)
 		if err2 != nil {
-			o.logger.Warn("fail to record the initial schema", zap.Stringer("info", info), log.ShortError(err2))
+			return err2
 		} else if putted {
 			o.logger.Info("recorded the initial schema", zap.Stringer("info", info), zap.Int64("revision", rev))
 		} else {
