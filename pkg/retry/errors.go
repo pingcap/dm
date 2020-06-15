@@ -15,8 +15,6 @@ package retry
 
 import (
 	"database/sql/driver"
-
-	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/errors"
 )
 
@@ -42,11 +40,6 @@ var (
 	ParseRelayLogErrMsgs = []string{
 		"binlog checksum mismatch, data may be corrupted",
 		"get event err EOF",
-	}
-
-	// UnresumableErrCodes is a set of unresumeable err codes.
-	UnresumableErrCodes = map[int32]struct{}{
-		int32(terror.ErrSyncUnitDDLWrongSequence.Code()): {},
 	}
 )
 

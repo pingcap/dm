@@ -259,35 +259,27 @@ func (tsc *realTaskStatusChecker) run() {
 // isResumableError checks the error message and returns whether we need to
 // resume the task and retry
 func isResumableError(err *pb.ProcessError) bool {
-	if err.Error == nil {
-		return true
-	}
-
 	switch err.Type {
 	case pb.ErrorType_ExecSQL:
 		// not elegant code, because TiDB doesn't expose some error
 		for _, msg := range retry.UnsupportedDDLMsgs {
-			if strings.Contains(strings.ToLower(err.Error.RawCause), strings.ToLower(msg)) {
+			if err.Error != nil && strings.Contains(strings.ToLower(err.Error.RawCause), strings.ToLower(msg)) {
 				return false
 			}
 		}
 		for _, msg := range retry.UnsupportedDMLMsgs {
-			if strings.Contains(strings.ToLower(err.Error.RawCause), strings.ToLower(msg)) {
+			if err.Error != nil && strings.Contains(strings.ToLower(err.Error.RawCause), strings.ToLower(msg)) {
 				return false
 			}
 		}
 	case pb.ErrorType_UnknownError:
-		if err.Error.ErrCode == int32(terror.ErrParserParseRelayLog.Code()) {
+		if err.Error != nil && err.Error.ErrCode == int32(terror.ErrParserParseRelayLog.Code()) {
 			for _, msg := range retry.ParseRelayLogErrMsgs {
 				if strings.Contains(strings.ToLower(err.Error.Message), strings.ToLower(msg)) {
 					return false
 				}
 			}
 		}
-	}
-
-	if _, ok := retry.UnresumableErrCodes[err.Error.ErrCode]; ok {
-		return false
 	}
 
 	return true
