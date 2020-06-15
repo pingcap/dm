@@ -18,12 +18,15 @@ One major feature of DM is [merging manually sharded tables](https://pingcap.com
 ![shard-table-merge](../media/shard-table-merge.png)
 
 The design difficulty on merging sharded tables is handling schema change (DDLs). Currently, DM resolves this with pessimistic replication: if a DDL statement is executed on tbl01, a [barrier](https://en.wikipedia.org/wiki/Barrier_%28computer_science%29) (known as sharding DDL lock) would be set up to pause all binlogs from tbl01 (including this DDL). The same is applied on all other tables, until the same DDL statement is executed on all of tbl01 to tblNN, where the barrier would be unlocked.
+
 This approach ignores the actual action done by the DDL statement, e.g. even if executing ddl_1; ddl_2; is equivalent to ddl_3; ddl_4;, DM cannot recognize this and will not automatically unlock the barrier, and [require human intervention](https://pingcap.com/docs/dev/reference/tools/data-migration/features/manually-handling-sharding-ddl-locks/). This makes the whole feature feel risky and error-prone.
+
 Even strictly following DDL execution, if the user [takes a long time to execute all DDLs](https://docs.google.com/document/d/154r0RGBa5uTWsWV8Q1RmIezamcAdElcLQJ3z_7Vr4nk/edit#), it would create a very long backlog and thus cripples DM’s responsiveness.
 
 ## Principles
 
 To prevent the drawbacks mentioned above to make DM more user-friendly, we want to [create a barrier-free algorithm](https://docs.google.com/document/d/19v05Cw6gWg3ccMOtP1EQfhpOirz4fF1mUNgChsmFlNw/edit#) (w.r.t. DMLs) for reconciling DDLs on sharded tables.
+
 Note: This work assumes each DM worker already [tracks the upstream schema](https://docs.google.com/document/d/1iP9yeylZfJaym_IWntn1Ge1t-_awfm23YNE-R-rP1s8/edit) independently from the downstream, so that column order is not a concern.
 
 ### DDL awareness
@@ -39,18 +42,22 @@ insert into tbl02 (col1, col2, col3) values (21, 22, 23);
 In our case, we should at least recognize these DDL statements
 
 - alter table add column [first / after]
+
 - alter table drop column
+
 - create index
+
 - drop index
+
 - alter table modify column [first / after]
 
 and know that some changes are inverse of another (e.g. adding a column and then dropping the same column is equivalent to no-op).
 
 ### CRDTs
 
-The opposite of using a barrier is optimistic replication, where replicas (schemas of different shards) are allowed to diverge. The cost to this is having to make up a conflict resolution algorithm.
+The opposite of using a barrier is [optimistic replication](https://en.wikipedia.org/wiki/Optimistic_replication), where replicas (schemas of different shards) are allowed to diverge. The cost to this is having to make up a conflict resolution algorithm.
 
-Here we borrow the idea of conflict-free replicated data type (CRDTs). This data structure is conflict-free by defining a commutative, associative and idempotent “merge” function between all states. For shard merging, we use each shard’s schema as the state, and we define the merge function below.
+Here we borrow the idea of [conflict-free replicated data type (CRDTs)](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type). This data structure is conflict-free by defining a commutative, associative and idempotent “merge” function between all states. For shard merging, we use each shard’s schema as the state, and we define the merge function below.
 
 Given a table schema S, We define its set of DMLs C(S) as all DML statements which can be successfully executed in that schema. For instance, with the table schema
 
@@ -126,6 +133,7 @@ In the rest of this document, we would express compatibility relationships using
 ![compatible](../media/compatible.png)
 
 ### From schema diffs to DDL
+
 The idea of CRDTs give us what the merged schema should look like, but it does not tell us how to construct SQL statements to reach that schema. In fact, there may be multiple pathways to the same schema. For instance, to change from T1 to T2,
 
 ```sql
@@ -161,6 +169,7 @@ When a DM worker of a sharded table receives a DDL binlog event, it must upload 
 ![dm-master-ddl](../media/dm-master-ddl.png)
 
 #### Error handling
+
 DM master should ensure only one DDL from the sharding group is processed at a time. If the DDL from tbl01 leads to errors, the master should reply to tbl01 that the DDL is unacceptable. Example:
 
 ```sql
@@ -206,7 +215,7 @@ It is difficult to programmatically decide when a DML is valid or not. Therefore
 
 ![ddl-conflict](../media/ddl-conflict.png)
 
-If certain DMLs are truly invalid, it should pause the DM worker again, and this offending binlog event could be got rid of by dmctl’s sql-skip --binlog-pos feature. The requirement of human intervention here is unfortunate but unavoidable.
+If certain DMLs are truly invalid, it should pause the DM worker again, and this offending binlog event could be got rid of by [dmctl’s sql-skip --binlog-pos feature](https://pingcap.com/docs/dev/reference/tools/data-migration/skip-replace-sqls/#sql-skip). The requirement of human intervention here is unfortunate but unavoidable.
 
 ### Modifying column types
 
@@ -429,7 +438,7 @@ alter table tbl drop column col7;
 
 ### Renaming columns
 
-Important: TiDB does not support renaming columns yet.
+**Important**: TiDB does not support renaming columns yet.
 
 #### Standard procedures
 
@@ -437,11 +446,11 @@ Important: TiDB does not support renaming columns yet.
 alter table tbl01 rename column a to b;
 ```
 
-Schematically, renaming a column is equivalent to adding a new column and dropping the old one. Therefore, the treatment would be similar to adding and removing columns. The differences are that 
+Schematically, renaming a column is equivalent to adding a new column and dropping the old one. Therefore, the treatment would be similar to adding and removing columns. The differences are that
 
-- The new column should store all data from the old column.
+1. The new column should store all data from the old column.
 
-- Values inserted/updated in the old column from tbl02 should eventually appear in the new column in downstream tbl.
+2. Values inserted/updated in the old column from tbl02 should eventually appear in the new column in downstream tbl.
 
 Therefore, this DDL at the beginning (old exists → partial; new dropped → partial), we should rename the column, then recreate the old column to capture values from tbl02:
 
@@ -557,7 +566,7 @@ DM had some [restriction](https://pingcap.com/docs/dev/reference/tools/data-migr
   
   - Renaming columns
   
-  - Incompatibly changing column types (e.g. integer ↔ char)
+  - Incompatibly changing column types (e.g. integer <-> char)
   
   - Adding or removing primary keys
 
@@ -598,10 +607,15 @@ Some restrictions are lifted, e.g.
 Programs can go wrong, and we may need to fix the states manually. We will need the following additional commands:
 
 - disable-ddl-propagation
+
   - Disallows DM master sending DDLs to downstream.
+
 - enable-ddl-propagation
+
   - Allows DM master sending DDLs to downstream. The schema diff during the period while DDL propagation was disabled are to be executed immediately.
+
 - set-schema --worker 192.168.1.10:8262 --table '`db01`.`tbl02`'
+
   - Forcibly replaces a table’s schema by a custom “create table” statement. 
 
 Commands involving DDL locks (show-ddl-locks, unlock-ddl-lock, break-ddl-lock) can be removed.
