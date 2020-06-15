@@ -1649,19 +1649,19 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36044]
-message = "rename table to ghost table %s not supported"
+message = "rename table to gh-ost temporary table %s not supported"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36045]
-message = "rename ghost table to other ghost table %s not supported"
+message = "rename gh-ost temporary table to other temporary table %s not supported"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36046]
-message = "online ddls on ghost table `%s`.`%s`"
+message = "online ddl metadata for ghost temporary table `%s`.`%s` not found"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -1679,19 +1679,19 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36049]
-message = "rename table to ghost table %s not supported"
+message = "rename table to pt temporary table %s not supported"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36050]
-message = "rename ghost table to other ghost table %s not supported"
+message = "rename pt temporary table to other temporary table %s not supported"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36051]
-message = "online ddls on ghost table `%s`.`%s`"
+message = "online ddl metadata for pt temporary table `%s`.`%s` not found"
 description = ""
 workaround = ""
 tags = ["internal", "high"]

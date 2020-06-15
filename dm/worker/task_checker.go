@@ -243,18 +243,18 @@ func (tsc *realTaskStatusChecker) run() {
 func isResumableError(err *pb.ProcessError) bool {
 	// not elegant code, because TiDB doesn't expose some error
 	for _, msg := range retry.UnsupportedDDLMsgs {
-		if err.Error != nil && strings.Contains(err.Error.RawCause, msg) {
+		if err.Error != nil && strings.Contains(strings.ToLower(err.Error.RawCause), strings.ToLower(msg)) {
 			return false
 		}
 	}
 	for _, msg := range retry.UnsupportedDMLMsgs {
-		if err.Error != nil && strings.Contains(err.Error.RawCause, msg) {
+		if err.Error != nil && strings.Contains(strings.ToLower(err.Error.RawCause), strings.ToLower(msg)) {
 			return false
 		}
 	}
 	if err.Error != nil && err.Error.ErrCode == int32(terror.ErrParserParseRelayLog.Code()) {
 		for _, msg := range retry.ParseRelayLogErrMsgs {
-			if strings.Contains(err.Error.Message, msg) {
+			if strings.Contains(strings.ToLower(err.Error.Message), strings.ToLower(msg)) {
 				return false
 			}
 		}

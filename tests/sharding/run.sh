@@ -86,30 +86,6 @@ function run() {
         "resume-task test"\
         "\"result\": true" 3
 
-    # NOTE: the lock may be locked for the next DDL, for details please see the following comments in `master/shardll/pessimist.go`,
-    # `FIXME: the following case is not supported automatically now, try to support it later`
-    # so we try to do this `pause-task` and `resume-task` in the case now.
-    sleep 3
-    # pause twice, just used to test pause by the way
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "pause-task test"\
-        "\"result\": true" 3
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "pause-task test"\
-        "\"result\": true" 3
-    # wait really paused
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
-        "Paused" 2
-
-    # resume twice, just used to test resume by the way
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "resume-task test"\
-        "\"result\": true" 3
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "resume-task test"\
-        "\"result\": true" 3
-
     # TODO: check sharding partition id
     # use sync_diff_inspector to check data now!
     echo "check sync diff for the first increment replication"

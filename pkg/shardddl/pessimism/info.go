@@ -23,6 +23,7 @@ import (
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // Info represents the shard DDL information.
@@ -93,6 +94,46 @@ func PutInfo(cli *clientv3.Client, info Info) (int64, error) {
 		return 0, err
 	}
 	return resp.Header.Revision, nil
+}
+
+// PutInfoIfOpNotDone puts the shard DDL info into etcd if the operation not exists or not `done`.
+func PutInfoIfOpNotDone(cli *clientv3.Client, info Info) (rev int64, putted bool, err error) {
+	infoValue, err := info.toJSON()
+	if err != nil {
+		return 0, false, err
+	}
+	infoKey := common.ShardDDLPessimismInfoKeyAdapter.Encode(info.Task, info.Source)
+	opKey := common.ShardDDLPessimismOperationKeyAdapter.Encode(info.Task, info.Source)
+	infoPut := clientv3.OpPut(infoKey, infoValue)
+	opGet := clientv3.OpGet(opKey)
+
+	// try to PUT info if the operation not exist.
+	resp, rev, err := etcdutil.DoOpsInOneCmpsTxnWithRetry(cli, []clientv3.Cmp{clientv3util.KeyMissing(opKey)},
+		[]clientv3.Op{infoPut}, []clientv3.Op{opGet})
+	if err != nil {
+		return 0, false, err
+	} else if resp.Succeeded {
+		return rev, resp.Succeeded, nil
+	}
+
+	opsResp := resp.Responses[0].GetResponseRange()
+	opBefore, err := operationFromJSON(string(opsResp.Kvs[0].Value))
+	if err != nil {
+		return 0, false, err
+	} else if opBefore.Done {
+		// the operation with `done` exist before, abort the PUT.
+		return rev, false, nil
+	} else if utils.CompareShardingDDLs(opBefore.DDLs, info.DDLs) {
+		// TODO: try to handle put the same `done` DDL later.
+	}
+
+	// NOTE: try to PUT info if the operation still not done.
+	opNotDone := clientv3.Compare(clientv3.Value(opKey), "=", string(opsResp.Kvs[0].Value))
+	resp, rev, err = etcdutil.DoOpsInOneCmpsTxnWithRetry(cli, []clientv3.Cmp{opNotDone}, []clientv3.Op{infoPut}, []clientv3.Op{})
+	if err != nil {
+		return 0, false, err
+	}
+	return rev, resp.Succeeded, nil
 }
 
 // GetAllInfo gets all shard DDL info in etcd currently.
