@@ -338,9 +338,9 @@ const (
 	codeSyncerUnitGhostOnlineDDLOnGhostTbl
 	codeSyncerUnitPTApplyEmptyTable
 	codeSyncerUnitPTRenameTableNotValid
-	codeSyncerUnitPTRenameToGhostTable
-	codeSyncerUnitPTRenameGhostTblToOther
-	codeSyncerUnitPTOnlineDDLOnGhostTbl
+	codeSyncerUnitPTRenameToPTTable
+	codeSyncerUnitPTRenamePTTblToOther
+	codeSyncerUnitPTOnlineDDLOnPTTbl
 	codeSyncerUnitRemoteSteamerWithGTID
 	codeSyncerUnitRemoteSteamerStartSync
 	codeSyncerUnitGetTableFromDB
@@ -781,14 +781,14 @@ var (
 	ErrSyncerUnitOnlineDDLOnMultipleTable   = New(codeSyncerUnitOnlineDDLOnMultipleTable, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl changes on multiple table: %s not supported")
 	ErrSyncerUnitGhostApplyEmptyTable       = New(codeSyncerUnitGhostApplyEmptyTable, ClassSyncUnit, ScopeInternal, LevelHigh, "empty tables not valid")
 	ErrSyncerUnitGhostRenameTableNotValid   = New(codeSyncerUnitGhostRenameTableNotValid, ClassSyncUnit, ScopeInternal, LevelHigh, "tables should contain old and new table name")
-	ErrSyncerUnitGhostRenameToGhostTable    = New(codeSyncerUnitGhostRenameToGhostTable, ClassSyncUnit, ScopeInternal, LevelHigh, "rename table to ghost table %s not supported")
-	ErrSyncerUnitGhostRenameGhostTblToOther = New(codeSyncerUnitGhostRenameGhostTblToOther, ClassSyncUnit, ScopeInternal, LevelHigh, "rename ghost table to other ghost table %s not supported")
-	ErrSyncerUnitGhostOnlineDDLOnGhostTbl   = New(codeSyncerUnitGhostOnlineDDLOnGhostTbl, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddls on ghost table `%s`.`%s`")
+	ErrSyncerUnitGhostRenameToGhostTable    = New(codeSyncerUnitGhostRenameToGhostTable, ClassSyncUnit, ScopeInternal, LevelHigh, "rename table to gh-ost temporary table %s not supported")
+	ErrSyncerUnitGhostRenameGhostTblToOther = New(codeSyncerUnitGhostRenameGhostTblToOther, ClassSyncUnit, ScopeInternal, LevelHigh, "rename gh-ost temporary table to other temporary table %s not supported")
+	ErrSyncerUnitGhostOnlineDDLOnGhostTbl   = New(codeSyncerUnitGhostOnlineDDLOnGhostTbl, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl metadata for ghost temporary table `%s`.`%s` not found")
 	ErrSyncerUnitPTApplyEmptyTable          = New(codeSyncerUnitPTApplyEmptyTable, ClassSyncUnit, ScopeInternal, LevelHigh, "empty tables not valid")
 	ErrSyncerUnitPTRenameTableNotValid      = New(codeSyncerUnitPTRenameTableNotValid, ClassSyncUnit, ScopeInternal, LevelHigh, "tables should contain old and new table name")
-	ErrSyncerUnitPTRenameToGhostTable       = New(codeSyncerUnitPTRenameToGhostTable, ClassSyncUnit, ScopeInternal, LevelHigh, "rename table to ghost table %s not supported")
-	ErrSyncerUnitPTRenameGhostTblToOther    = New(codeSyncerUnitPTRenameGhostTblToOther, ClassSyncUnit, ScopeInternal, LevelHigh, "rename ghost table to other ghost table %s not supported")
-	ErrSyncerUnitPTOnlineDDLOnGhostTbl      = New(codeSyncerUnitPTOnlineDDLOnGhostTbl, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddls on ghost table `%s`.`%s`")
+	ErrSyncerUnitPTRenameToPTTable          = New(codeSyncerUnitPTRenameToPTTable, ClassSyncUnit, ScopeInternal, LevelHigh, "rename table to pt temporary table %s not supported")
+	ErrSyncerUnitPTRenamePTTblToOther       = New(codeSyncerUnitPTRenamePTTblToOther, ClassSyncUnit, ScopeInternal, LevelHigh, "rename pt temporary table to other temporary table %s not supported")
+	ErrSyncerUnitPTOnlineDDLOnPTTbl         = New(codeSyncerUnitPTOnlineDDLOnPTTbl, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl metadata for pt temporary table `%s`.`%s` not found")
 	ErrSyncerUnitRemoteSteamerWithGTID      = New(codeSyncerUnitRemoteSteamerWithGTID, ClassSyncUnit, ScopeInternal, LevelHigh, "open remote streamer with GTID mode not supported")
 	ErrSyncerUnitRemoteSteamerStartSync     = New(codeSyncerUnitRemoteSteamerStartSync, ClassSyncUnit, ScopeInternal, LevelHigh, "start syncing binlog from remote streamer")
 	ErrSyncerUnitGetTableFromDB             = New(codeSyncerUnitGetTableFromDB, ClassSyncUnit, ScopeInternal, LevelHigh, "invalid table `%s`.`%s`")
