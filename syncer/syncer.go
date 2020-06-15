@@ -1201,13 +1201,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return nil
 		} else if err == context.DeadlineExceeded {
 			s.tctx.L().Info("deadline exceeded when fetching binlog event")
-			if s.needResync() {
-				s.tctx.L().Info("timeout when fetching binlog event, there must be some problems with replica connection, try to re-connect")
-				err = s.streamerController.ReopenWithRetry(tctx, lastLocation.Clone())
-				if err != nil {
-					return err
-				}
-			}
 			continue
 		} else if isDuplicateServerIDError(err) {
 			// if the server id is already used, need to use a new server id
@@ -1905,12 +1898,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// construct & send shard DDL info into etcd, DM-master will handle it.
 		shardInfo := s.pessimist.ConstructInfo(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, needHandleDDLs)
-		rev, err2 := s.pessimist.PutInfo(shardInfo)
+		rev, err2 := s.pessimist.PutInfo(ec.tctx.Ctx, shardInfo)
 		if err2 != nil {
 			return err2
 		}
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(1) // block and wait DDL lock to be synced
-		s.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo))
+		s.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo), zap.Int64("revision", rev))
 
 		shardOp, err2 := s.pessimist.GetOperation(ec.tctx.Ctx, shardInfo, rev+1)
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
@@ -2463,26 +2456,6 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	s.setTimezone()
 
 	return nil
-}
-
-func (s *Syncer) needResync() bool {
-	masterPos, _, err := s.getMasterStatus()
-	if err != nil {
-		s.tctx.L().Error("fail to get master status", log.ShortError(err))
-		return false
-	}
-
-	// Why 190 ?
-	// +------------------+-----+----------------+-----------+-------------+-------------------------------------------------------------------+
-	// | Log_name         | Pos | Event_type     | Server_id | End_log_pos | Info                                                              |
-	// +------------------+-----+----------------+-----------+-------------+-------------------------------------------------------------------+
-	// | mysql-bin.000002 |   4 | Format_desc    |         1 |         123 | Server ver: 5.7.18-log, Binlog ver: 4                             |
-	// | mysql-bin.000002 | 123 | Previous_gtids |         1 |         194 | 00020393-1111-1111-1111-111111111111:1-7
-	//
-	// Currently, syncer doesn't handle Format_desc and Previous_gtids events. When binlog rotate to new file with only two events like above,
-	// syncer won't save pos to 194. Actually it save pos 4 to meta file. So We got a experience value of 194 - 4 = 190.
-	// If (mpos.Pos - spos.Pos) > 190, we could say that syncer is not up-to-date.
-	return utils.CompareBinlogPos(masterPos, s.checkpoint.GlobalPoint().Position, 190) == 1
 }
 
 // assume that reset master before switching to new master, and only the new master would write

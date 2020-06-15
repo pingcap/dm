@@ -5,6 +5,7 @@ set -eu
 ha_test="ha_test"
 ha_test2="ha_test2"
 master_ports=($MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3)
+worker_ports=($WORKER1_PORT $WORKER2_PORT $WORKER3_PORT $WORKER4_PORT $WORKER5_PORT)
 
 function load_data() {
     port=$1
@@ -98,8 +99,6 @@ function start_standalone_cluster() {
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
-    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     echo "operate mysql config to worker"
     cp $cur/conf/source1.toml $WORK_DIR/source1.toml
     sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
@@ -168,11 +167,22 @@ function isolate_master() {
     port=${master_ports[$[ $1 - 1 ]]}
     if [ $2 = "isolate" ]; then
         export GO_FAILPOINTS="github.com/pingcap/dm/dm/master/FailToElect=return(\"master$1\")"
-    else
-        export GO_FAILPOINTS=''
     fi
     echo "kill dm-master$1"
     ps aux | grep dm-master$1 |awk '{print $2}'|xargs kill || true
     check_port_offline $port 20
     run_dm_master $WORK_DIR/master$1 $port $cur/conf/dm-master$1.toml
+    export GO_FAILPOINTS=''
+}
+
+function isolate_worker() {
+    port=${worker_ports[$[ $1 - 1 ]]}
+    if [ $2 = "isolate" ]; then
+        export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/FailToKeepAlive=return(\"worker$1\")"
+    fi
+    echo "kill dm-worker$1"
+    ps aux | grep dm-worker$1 |awk '{print $2}'|xargs kill || true
+    check_port_offline $port 20
+    run_dm_worker $WORK_DIR/worker$1 $port $cur/conf/dm-worker$1.toml
+    export GO_FAILPOINTS=''
 }
