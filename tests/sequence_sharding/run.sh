@@ -58,6 +58,7 @@ function run() {
         "stop-task sequence_sharding" \
         "\"result\": true" 3
     
+    # now upstream schema is conflict, ignore it and restart task
     cp $cur/conf/dm-task.yaml $WORK_DIR/task.yaml
     echo "ignore-checking-items: [\"all\"]" >> $WORK_DIR/task.yaml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
