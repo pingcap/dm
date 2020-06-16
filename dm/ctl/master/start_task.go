@@ -17,7 +17,6 @@ import (
 	"context"
 	"os"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/checker"
@@ -46,13 +45,13 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", errors.ErrorStack(err))
+		common.PrintLines("get file content error:\n%v", terror.Message(err))
 		return
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
+		common.PrintLines("%s", terror.Message(err))
 		return
 	}
 
@@ -73,7 +72,7 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 		RemoveMeta: removeMeta,
 	})
 	if err != nil {
-		common.PrintLines("can not start task:\n%v", errors.ErrorStack(err))
+		common.PrintLines("can not start task:\n%v", terror.Message(err))
 		return
 	}
 

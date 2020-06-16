@@ -19,6 +19,7 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
@@ -65,12 +66,12 @@ func offlineMemberFunc(cmd *cobra.Command, _ []string) {
 
 	offlineType, err := convertOfflineMemberType(cmd)
 	if err != nil {
-		common.PrintLines("get offline type failed, error:\n%v", errors.ErrorStack(err))
+		common.PrintLines("get offline type failed, error:\n%v", terror.Message(err))
 		return
 	}
 	name, err := cmd.Flags().GetString("name")
 	if err != nil {
-		common.PrintLines("get offline name failed, error:\n%v", errors.ErrorStack(err))
+		common.PrintLines("get offline name failed, error:\n%v", terror.Message(err))
 		return
 	} else if name == "" {
 		common.PrintLines("a member name must be specified")
@@ -85,7 +86,7 @@ func offlineMemberFunc(cmd *cobra.Command, _ []string) {
 		Name: name,
 	})
 	if err != nil {
-		common.PrintLines("offline member failed, error:\n%v", errors.ErrorStack(err))
+		common.PrintLines("offline member failed, error:\n%v", terror.Message(err))
 		return
 	}
 	if !resp.Result {

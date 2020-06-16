@@ -19,8 +19,8 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -42,7 +42,7 @@ func updateMasterConfigFunc(cmd *cobra.Command, _ []string) {
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", errors.ErrorStack(err))
+		common.PrintLines("get file content error:\n%v", terror.Message(err))
 		return
 	}
 
@@ -54,7 +54,7 @@ func updateMasterConfigFunc(cmd *cobra.Command, _ []string) {
 		Config: string(content),
 	})
 	if err != nil {
-		common.PrintLines("can not update master config:\n%v", errors.ErrorStack(err))
+		common.PrintLines("can not update master config:\n%v", terror.Message(err))
 		return
 	}
 

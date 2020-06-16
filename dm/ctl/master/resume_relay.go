@@ -17,11 +17,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewResumeRelayCmd creates a ResumeRelay command
@@ -44,7 +44,7 @@ func resumeRelayFunc(cmd *cobra.Command, _ []string) {
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
+		common.PrintLines("%s", terror.Message(err))
 		return
 	}
 	if len(sources) == 0 {
@@ -54,7 +54,7 @@ func resumeRelayFunc(cmd *cobra.Command, _ []string) {
 
 	resp, err := common.OperateRelay(pb.RelayOp_ResumeRelay, sources)
 	if err != nil {
-		common.PrintLines("can not resume relay unit:\n%v", errors.ErrorStack(err))
+		common.PrintLines("can not resume relay unit:\n%v", terror.Message(err))
 		return
 	}
 

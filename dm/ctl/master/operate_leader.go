@@ -17,11 +17,11 @@ import (
 	"context"
 	"os"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewOperateLeaderCmd creates a OperateLeader command
@@ -70,7 +70,7 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) {
 		Op: op,
 	})
 	if err != nil {
-		common.PrintLines("fail to operate leader:\n%v", errors.ErrorStack(err))
+		common.PrintLines("fail to operate leader:\n%v", terror.Message(err))
 		return
 	}
 
