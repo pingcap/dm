@@ -82,7 +82,7 @@ function run() {
             "resume-task test" \
             "\"result\": true" 1 \
             "\"result\": false" 1 \
-            "current stage is not paused not valid" 1
+            "current stage is Running but not paused, invalid" 1
 
         cleanup_process
     done
