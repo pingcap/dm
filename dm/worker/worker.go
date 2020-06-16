@@ -741,6 +741,9 @@ func (w *Worker) restoreSubTask() error {
 			return terror.Annotatef(err, "decode subtask config %s error in restoreSubTask", task.Task)
 		}
 
+		// when restarting DM-worker, some config items may need to be updated for the previous saved task config.
+		w.copyConfigFromWorker(taskCfg)
+
 		cfgDecrypted, err := taskCfg.DecryptPassword()
 		if err != nil {
 			return err
