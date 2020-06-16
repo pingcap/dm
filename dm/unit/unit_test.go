@@ -17,6 +17,7 @@ import (
 	"context"
 
 	"github.com/pingcap/check"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/errors"
 )
 
@@ -25,9 +26,9 @@ var _ = check.Suite(&testUnitSuite{})
 type testUnitSuite struct{}
 
 func (t *testUnitSuite) TestIsCtxCanceledProcessErr(c *check.C) {
-	err := NewProcessError(context.Canceled)
+	err := NewProcessError(pb.ErrorType_UnknownError, context.Canceled)
 	c.Assert(IsCtxCanceledProcessErr(err), check.IsTrue)
 
-	err = NewProcessError(errors.New("123"))
+	err = NewProcessError(pb.ErrorType_UnknownError, errors.New("123"))
 	c.Assert(IsCtxCanceledProcessErr(err), check.IsFalse)
 }
