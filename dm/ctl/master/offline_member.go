@@ -91,6 +91,7 @@ func offlineMemberFunc(cmd *cobra.Command, _ []string) {
 	}
 	if !resp.Result {
 		common.PrintLines("offline member failed:\n%v", resp.Msg)
+		return
 	}
 	common.PrettyPrintResponse(resp)
 }
