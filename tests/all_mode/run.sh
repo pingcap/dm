@@ -129,7 +129,11 @@ function run() {
 
     # restart tidb, and task will recover success
     run_tidb_server 4000 $TIDB_PASSWORD
-    sleep 10
+    sleep 2
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "fail fail fail" 1
 
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
