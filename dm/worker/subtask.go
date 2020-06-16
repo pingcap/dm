@@ -426,7 +426,7 @@ func (st *SubTask) Close() {
 // Pause pauses the running sub task
 func (st *SubTask) Pause() error {
 	if !st.stageCAS(pb.Stage_Running, pb.Stage_Paused) {
-		return terror.ErrWorkerNotRunningStage.Generate()
+		return terror.ErrWorkerNotRunningStage.Generate(st.Stage().String())
 	}
 
 	st.callCurrCancel()
@@ -448,7 +448,7 @@ func (st *SubTask) Resume() error {
 	}
 
 	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Running) {
-		return terror.ErrWorkerNotPausedStage.Generate()
+		return terror.ErrWorkerNotPausedStage.Generate(st.Stage().String())
 	}
 	ctx, cancel := context.WithCancel(st.ctx)
 	st.setCurrCtx(ctx, cancel)

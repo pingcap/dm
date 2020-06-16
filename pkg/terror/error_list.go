@@ -71,7 +71,7 @@ const (
 	codeSchemaTableNameNotValid
 	codeGenTableRouter
 	codeEncryptSecretKeyNotValid
-	codeEncryptNewCipher
+	codeEncryptGenCipher
 	codeEncryptGenIV
 	codeCiphertextLenNotValid
 	codeCiphertextContextNotValid
@@ -124,6 +124,7 @@ const (
 	codeBinlogNeedMariaDBGTIDSet
 	codeBinlogParseMariaDBGTIDSet
 	codeBinlogMariaDBAddGTIDSet
+
 	// pkg/tracing
 	codeTracingEventDataNotValid
 	codeTracingUploadData
@@ -140,6 +141,17 @@ const (
 	codeGTIDTruncateInvalid
 	// pkg/streamer
 	codeRelayLogGivenPosTooBig
+	// pkg/election
+	codeElectionCampaignFail
+	codeElectionGetLeaderIDFail
+
+	// pkg/binlog
+	codeBinlogInvalidFilenameWithUUIDSuffix
+	// dm/common
+	codeDecodeEtcdKeyFail
+
+	// pkg/shardddl/optimism
+	codeShardDDLOptimismTrySyncFail
 )
 
 // Config related error code list
@@ -176,6 +188,7 @@ const (
 	codeConfigSyncerCfgNotFound
 	codeConfigSourceIDNotFound
 	codeConfigDuplicateCfgItem
+	codeConfigShardModeNotSupport
 )
 
 // Binlog operation error code list
@@ -199,10 +212,10 @@ const (
 const (
 	codeTaskCheckSameTableName ErrCode = iota + 26001
 	codeTaskCheckFailedOpenDB
-	codeTaskCheckNewTableRouter
-	codeTaskCheckNewColumnMapping
+	codeTaskCheckGenTableRouter
+	codeTaskCheckGenColumnMapping
 	codeTaskCheckSyncConfigError
-	codeTaskCheckNewBWList
+	codeTaskCheckGenBWList
 )
 
 // Relay log utils error code
@@ -280,12 +293,12 @@ const (
 	codeLoadUnitDispatchSQLFromFile
 	codeLoadUnitInvalidInsertSQL
 	codeLoadUnitGenTableRouter
-	codeLoadUnitNewColumnMapping
+	codeLoadUnitGenColumnMapping
 	codeLoadUnitNoDBFile
 	codeLoadUnitNoTableFile
 	codeLoadUnitDumpDirNotFound
 	codeLoadUnitDuplicateTableFile
-	codeLoadUnitNewBWList
+	codeLoadUnitGenBWList
 )
 
 // Sync unit error code
@@ -319,9 +332,9 @@ const (
 	codeSyncerUnitDMLColumnNotMatch
 	codeSyncerUnitDMLOldNewValueMismatch
 	codeSyncerUnitDMLPruneColumnMismatch
-	codeSyncerUnitNewBinlogEventFilter
+	codeSyncerUnitGenBinlogEventFilter
 	codeSyncerUnitGenTableRouter
-	codeSyncerUnitNewColumnMapping
+	codeSyncerUnitGenColumnMapping
 	codeSyncerUnitDoColumnMapping
 	codeSyncerUnitCacheKeyNotFound
 	codeSyncerUnitHeartbeatCheckConfig
@@ -351,6 +364,8 @@ const (
 	codeSyncerUnitExecWithNoBlockingDDL
 	codeSyncerUnitGenBWList
 	codeSyncerUnitHandleDDLFailed
+	codeSyncerShardDDLConflict
+	codeSyncerFailpoint
 )
 
 // DM-master error code
@@ -390,6 +405,20 @@ const (
 	codeMasterOperRequestTimeout
 	codeMasterHandleHTTPApis
 	codeMasterHostPortNotValid
+	codeMasterGetHostnameFail
+	codeMasterGenEmbedEtcdConfigFail
+	codeMasterStartEmbedEtcdFail
+	codeMasterParseURLFail
+	codeMasterJoinEmbedEtcdFail
+	codeMasterInvalidOperateOp
+	codeMasterAdvertiseAddrNotValid
+	codeMasterRequestIsNotForwardToLeader
+	codeMasterIsNotAsyncRequest
+	codeMasterFailToGetExpectResult
+	codeMasterPessimistNotStarted
+	codeMasterOptimistNotStarted
+	codeMasterMasterNameNotExist
+	codeMasterInvalidOfflineType
 )
 
 // DM-worker error code
@@ -463,6 +492,11 @@ const (
 	codeWorkerWaitRelayCatchupTimeout
 	codeWorkerRelayIsPurging
 	codeWorkerHostPortNotValid
+	codeWorkerNoStart
+	codeWorkerAlreadyStarted
+	codeWorkerSourceNotMatch
+	codeWorkerFailToGetSubtaskConfigFromEtcd
+	codeWorkerFailToGetSourceConfigFromEtcd
 )
 
 // DM-tracer error code
@@ -477,6 +511,39 @@ const (
 	codeTracerEventAssertionFail
 	codeTracerEventTypeNotValid
 	codeTracerStartService
+)
+
+// Schema-tracker error code
+const (
+	codeSchemaTrackerInvalidJSON ErrCode = iota + 44001
+	codeSchemaTrackerCannotCreateSchema
+	codeSchemaTrackerCannotCreateTable
+	codeSchemaTrackerCannotSerialize
+	codeSchemaTrackerCannotGetTable
+	codeSchemaTrackerCannotExecDDL
+	codeSchemaTrackerCannotFetchDownstreamTable
+	codeSchemaTrackerCannotParseDownstreamTable
+)
+
+// HA scheduler.
+const (
+	codeSchedulerNotStarted ErrCode = iota + 46001
+	codeSchedulerStarted
+	codeSchedulerWorkerExist
+	codeSchedulerWorkerNotExist
+	codeSchedulerWorkerOnline
+	codeSchedulerWorkerInvalidTrans
+	codeSchedulerSourceCfgExist
+	codeSchedulerSourceCfgNotExist
+	codeSchedulerSourcesUnbound
+	codeSchedulerSourceOpTaskExist
+	codeSchedulerRelayStageInvalidUpdate
+	codeSchedulerRelayStageSourceNotExist
+	codeSchedulerMultiTask
+	codeSchedulerSubTaskExist
+	codeSchedulerSubTaskStageInvalidUpdate
+	codeSchedulerSubTaskOpTaskNotExist
+	codeSchedulerSubTaskOpSourceNotExist
 )
 
 // Error instances
@@ -537,7 +604,7 @@ var (
 	ErrSchemaTableNameNotValid   = New(codeSchemaTableNameNotValid, ClassFunctional, ScopeInternal, LevelHigh, "table name %s not valid")
 	ErrGenTableRouter            = New(codeGenTableRouter, ClassFunctional, ScopeInternal, LevelHigh, "generate table router")
 	ErrEncryptSecretKeyNotValid  = New(codeEncryptSecretKeyNotValid, ClassFunctional, ScopeInternal, LevelHigh, "key size should be 16, 24 or 32, but input key's size is %d")
-	ErrEncryptNewCipher          = New(codeEncryptNewCipher, ClassFunctional, ScopeInternal, LevelHigh, "new cipher")
+	ErrEncryptGenCipher          = New(codeEncryptGenCipher, ClassFunctional, ScopeInternal, LevelHigh, "generate cipher")
 	ErrEncryptGenIV              = New(codeEncryptGenIV, ClassFunctional, ScopeInternal, LevelHigh, "generate iv")
 	ErrCiphertextLenNotValid     = New(codeCiphertextLenNotValid, ClassFunctional, ScopeInternal, LevelHigh, "ciphertext's length should be greater than %d, but got %d not valid")
 	ErrCiphertextContextNotValid = New(codeCiphertextContextNotValid, ClassFunctional, ScopeInternal, LevelHigh, "ciphertext's content not valid")
@@ -590,6 +657,7 @@ var (
 	ErrBinlogNeedMariaDBGTIDSet      = New(codeBinlogNeedMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "the event should be a MariadbGTIDListEvent, but got %T")
 	ErrBinlogParseMariaDBGTIDSet     = New(codeBinlogParseMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "parse MariaDB GTID set")
 	ErrBinlogMariaDBAddGTIDSet       = New(codeBinlogMariaDBAddGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "add set %v to GTID set")
+
 	// pkg/tracing
 	ErrTracingEventDataNotValid = New(codeTracingEventDataNotValid, ClassFunctional, ScopeInternal, LevelHigh, "invalid event data for type: %s")
 	ErrTracingUploadData        = New(codeTracingUploadData, ClassFunctional, ScopeInternal, LevelHigh, "upload event")
@@ -605,6 +673,18 @@ var (
 	ErrGTIDTruncateInvalid = New(codeGTIDTruncateInvalid, ClassFunctional, ScopeInternal, LevelHigh, "truncate GTID sets %v to %v not valid")
 	// pkg/streamer
 	ErrRelayLogGivenPosTooBig = New(codeRelayLogGivenPosTooBig, ClassFunctional, ScopeInternal, LevelHigh, "the given relay log pos %s of meta config is too big, please check it again")
+	// pkg/election
+	ErrElectionCampaignFail    = New(codeElectionCampaignFail, ClassFunctional, ScopeInternal, LevelHigh, "fail to campaign leader: %s")
+	ErrElectionGetLeaderIDFail = New(codeElectionGetLeaderIDFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to get leader ID")
+
+	// pkg/binlog
+	ErrBinlogInvalidFilenameWithUUIDSuffix = New(codeBinlogInvalidFilenameWithUUIDSuffix, ClassFunctional, ScopeInternal, LevelHigh, "invalid binlog filename with uuid suffix %s")
+
+	// dm/common
+	ErrDecodeEtcdKeyFail = New(codeDecodeEtcdKeyFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to decode etcd key: %s")
+
+	// pkg/shardddl/optimism
+	ErrShardDDLOptimismTrySyncFail = New(codeShardDDLOptimismTrySyncFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to try sync the optimistic shard ddl lock %s: %s")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
@@ -639,6 +719,7 @@ var (
 	ErrConfigSyncerCfgNotFound      = New(codeConfigSyncerCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s syncer config %s not exist in syncer")
 	ErrConfigSourceIDNotFound       = New(codeConfigSourceIDNotFound, ClassConfig, ScopeInternal, LevelMedium, "source %s in deployment configuration not found")
 	ErrConfigDuplicateCfgItem       = New(codeConfigDuplicateCfgItem, ClassConfig, ScopeInternal, LevelMedium, "the following mysql configs have duplicate items, please remove the duplicates:\n%s")
+	ErrConfigShardModeNotSupport    = New(codeConfigShardModeNotSupport, ClassConfig, ScopeInternal, LevelMedium, "shard mode %s not supported")
 
 	// Binlog operation error
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "")
@@ -647,7 +728,7 @@ var (
 
 	// Checkpoint error
 	ErrCheckpointInvalidTaskMode     = New(codeCheckpointInvalidTaskMode, ClassCheckpoint, ScopeInternal, LevelMedium, "invalid task mode: %s")
-	ErrCheckpointSaveInvalidPos      = New(codeCheckpointSaveInvalidPos, ClassCheckpoint, ScopeInternal, LevelHigh, "save point %v is older than current pos %v")
+	ErrCheckpointSaveInvalidPos      = New(codeCheckpointSaveInvalidPos, ClassCheckpoint, ScopeInternal, LevelHigh, "save point %s is older than current location %s")
 	ErrCheckpointInvalidTableFile    = New(codeCheckpointInvalidTableFile, ClassCheckpoint, ScopeInternal, LevelMedium, "invalid db table sql file - %s")
 	ErrCheckpointDBNotExistInFile    = New(codeCheckpointDBNotExistInFile, ClassCheckpoint, ScopeInternal, LevelMedium, "db (%s) not exist in data files, but in checkpoint")
 	ErrCheckpointTableNotExistInFile = New(codeCheckpointTableNotExistInFile, ClassCheckpoint, ScopeInternal, LevelMedium, "table (%s) not exist in db (%s) data files, but in checkpoint")
@@ -656,17 +737,17 @@ var (
 	// Task check error
 	ErrTaskCheckSameTableName    = New(codeTaskCheckSameTableName, ClassTaskCheck, ScopeInternal, LevelMedium, "same table name in case-sensitive %v")
 	ErrTaskCheckFailedOpenDB     = New(codeTaskCheckFailedOpenDB, ClassTaskCheck, ScopeInternal, LevelHigh, "failed to open DSN %s:***@%s:%d")
-	ErrTaskCheckNewTableRouter   = New(codeTaskCheckNewTableRouter, ClassTaskCheck, ScopeInternal, LevelMedium, "new table router error")
-	ErrTaskCheckNewColumnMapping = New(codeTaskCheckNewColumnMapping, ClassTaskCheck, ScopeInternal, LevelMedium, "new column mapping error")
-	ErrTaskCheckSyncConfigError  = New(codeTaskCheckSyncConfigError, ClassTaskCheck, ScopeInternal, LevelMedium, "%s %v: %v\n detail: %v")
-	ErrTaskCheckNewBWList        = New(codeTaskCheckNewBWList, ClassTaskCheck, ScopeInternal, LevelMedium, "new black white list error")
+	ErrTaskCheckGenTableRouter   = New(codeTaskCheckGenTableRouter, ClassTaskCheck, ScopeInternal, LevelMedium, "generate table router error")
+	ErrTaskCheckGenColumnMapping = New(codeTaskCheckGenColumnMapping, ClassTaskCheck, ScopeInternal, LevelMedium, "generate column mapping error")
+	ErrTaskCheckSyncConfigError  = New(codeTaskCheckSyncConfigError, ClassTaskCheck, ScopeInternal, LevelMedium, "%s: %v\n detail: %v")
+	ErrTaskCheckGenBWList        = New(codeTaskCheckGenBWList, ClassTaskCheck, ScopeInternal, LevelMedium, "generate black white list error")
 
 	// Relay log basic API error
 	ErrRelayParseUUIDIndex         = New(codeRelayParseUUIDIndex, ClassRelayEventLib, ScopeInternal, LevelHigh, "parse server-uuid.index")
 	ErrRelayParseUUIDSuffix        = New(codeRelayParseUUIDSuffix, ClassRelayEventLib, ScopeInternal, LevelHigh, "UUID (with suffix) %s not valid")
 	ErrRelayUUIDWithSuffixNotFound = New(codeRelayUUIDWithSuffixNotFound, ClassRelayEventLib, ScopeInternal, LevelHigh, "no UUID (with suffix) matched %s found in %s, all UUIDs are %v")
 	ErrRelayGenFakeRotateEvent     = New(codeRelayGenFakeRotateEvent, ClassRelayEventLib, ScopeInternal, LevelHigh, "generate fake rotate event")
-	ErrRelayNoValidRelaySubDir     = New(codeRelayNoValidRelaySubDir, ClassRelayEventLib, ScopeInternal, LevelHigh, "no valid relay sub directory exists")
+	ErrRelayNoValidRelaySubDir     = New(codeRelayNoValidRelaySubDir, ClassRelayEventLib, ScopeInternal, LevelHigh, "there aren't any data under relay log directory %s. please check relay log using query-status")
 
 	// Relay unit error
 	ErrRelayUUIDSuffixNotValid           = New(codeRelayUUIDSuffixNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "UUID %s suffix %d should be 1 larger than previous suffix %d")
@@ -729,12 +810,12 @@ var (
 	ErrLoadUnitDispatchSQLFromFile = New(codeLoadUnitDispatchSQLFromFile, ClassLoadUnit, ScopeInternal, LevelHigh, "dispatch sql")
 	ErrLoadUnitInvalidInsertSQL    = New(codeLoadUnitInvalidInsertSQL, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid insert sql %s")
 	ErrLoadUnitGenTableRouter      = New(codeLoadUnitGenTableRouter, ClassLoadUnit, ScopeInternal, LevelHigh, "generate table router")
-	ErrLoadUnitNewColumnMapping    = New(codeLoadUnitNewColumnMapping, ClassLoadUnit, ScopeInternal, LevelHigh, "new column mapping")
+	ErrLoadUnitGenColumnMapping    = New(codeLoadUnitGenColumnMapping, ClassLoadUnit, ScopeInternal, LevelHigh, "generate column mapping")
 	ErrLoadUnitNoDBFile            = New(codeLoadUnitNoDBFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid data sql file, cannot find db - %s")
 	ErrLoadUnitNoTableFile         = New(codeLoadUnitNoTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid data sql file, cannot find table - %s")
 	ErrLoadUnitDumpDirNotFound     = New(codeLoadUnitDumpDirNotFound, ClassLoadUnit, ScopeInternal, LevelHigh, "%s does not exist or it's not a dir")
 	ErrLoadUnitDuplicateTableFile  = New(codeLoadUnitDuplicateTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid table schema file, duplicated item - %s")
-	ErrLoadUnitNewBWList           = New(codeLoadUnitNewBWList, ClassLoadUnit, ScopeInternal, LevelHigh, "new black white list")
+	ErrLoadUnitGenBWList           = New(codeLoadUnitGenBWList, ClassLoadUnit, ScopeInternal, LevelHigh, "generate black white list")
 
 	// Sync unit error
 	ErrSyncerUnitPanic                   = New(codeSyncerUnitPanic, ClassSyncUnit, ScopeInternal, LevelHigh, "panic error: %v")
@@ -767,9 +848,9 @@ var (
 	ErrSyncerUnitDMLColumnNotMatch          = New(codeSyncerUnitDMLColumnNotMatch, ClassSyncUnit, ScopeInternal, LevelHigh, "Column count doesn't match value count: %d (columns) vs %d (values)")
 	ErrSyncerUnitDMLOldNewValueMismatch     = New(codeSyncerUnitDMLOldNewValueMismatch, ClassSyncUnit, ScopeInternal, LevelHigh, "Old value count doesn't match new value count: %d (old) vs %d (new)")
 	ErrSyncerUnitDMLPruneColumnMismatch     = New(codeSyncerUnitDMLPruneColumnMismatch, ClassSyncUnit, ScopeInternal, LevelHigh, "prune DML columns and data mismatch in length: %d (columns) %d (data)")
-	ErrSyncerUnitNewBinlogEventFilter       = New(codeSyncerUnitNewBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "new binlog event filter")
+	ErrSyncerUnitGenBinlogEventFilter       = New(codeSyncerUnitGenBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "generate binlog event filter")
 	ErrSyncerUnitGenTableRouter             = New(codeSyncerUnitGenTableRouter, ClassSyncUnit, ScopeInternal, LevelHigh, "generate table router")
-	ErrSyncerUnitNewColumnMapping           = New(codeSyncerUnitNewColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "new column mapping")
+	ErrSyncerUnitGenColumnMapping           = New(codeSyncerUnitGenColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "generate column mapping")
 	ErrSyncerUnitDoColumnMapping            = New(codeSyncerUnitDoColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "mapping row data %v for table `%s`.`%s`")
 	ErrSyncerUnitCacheKeyNotFound           = New(codeSyncerUnitCacheKeyNotFound, ClassSyncUnit, ScopeInternal, LevelHigh, "cache key %s in %s not found")
 	ErrSyncerUnitHeartbeatCheckConfig       = New(codeSyncerUnitHeartbeatCheckConfig, ClassSyncUnit, ScopeInternal, LevelMedium, "")
@@ -799,43 +880,60 @@ var (
 	ErrSyncerUnitExecWithNoBlockingDDL      = New(codeSyncerUnitExecWithNoBlockingDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "process unit not waiting for sharding DDL to sync")
 	ErrSyncerUnitGenBWList                  = New(codeSyncerUnitGenBWList, ClassSyncUnit, ScopeInternal, LevelHigh, "generate black white list")
 	ErrSyncerUnitHandleDDLFailed            = New(codeSyncerUnitHandleDDLFailed, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle ddl job for %s")
+	ErrSyncerShardDDLConflict               = New(codeSyncerShardDDLConflict, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle shard ddl %v in optimistic mode, because schema conflict detected")
+	ErrSyncerFailpoint                      = New(codeSyncerFailpoint, ClassSyncUnit, ScopeInternal, LevelLow, "failpoint specified error")
 
 	// DM-master error
-	ErrMasterSQLOpNilRequest       = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid")
-	ErrMasterSQLOpNotSupport       = New(codeMasterSQLOpNotSupport, ClassDMMaster, ScopeInternal, LevelMedium, "op %s not supported")
-	ErrMasterSQLOpWithoutSharding  = New(codeMasterSQLOpWithoutSharding, ClassDMMaster, ScopeInternal, LevelMedium, "operate request without --sharding specified not valid")
-	ErrMasterGRPCCreateConn        = New(codeMasterGRPCCreateConn, ClassDMMaster, ScopeInternal, LevelHigh, "create grpc connection")
-	ErrMasterGRPCSendOnCloseConn   = New(codeMasterGRPCSendOnCloseConn, ClassDMMaster, ScopeInternal, LevelHigh, "send request on a closed client")
-	ErrMasterGRPCClientClose       = New(codeMasterGRPCClientClose, ClassDMMaster, ScopeInternal, LevelHigh, "close rpc client")
-	ErrMasterGRPCInvalidReqType    = New(codeMasterGRPCInvalidReqType, ClassDMMaster, ScopeInternal, LevelHigh, "invalid request type: %v")
-	ErrMasterGRPCRequestError      = New(codeMasterGRPCRequestError, ClassDMMaster, ScopeInternal, LevelHigh, "grpc request error")
-	ErrMasterDeployMapperVerify    = New(codeMasterDeployMapperVerify, ClassDMMaster, ScopeInternal, LevelHigh, "user should specify valid relation between source(mysql/mariadb) and dm-worker, config %+v not valid")
-	ErrMasterConfigParseFlagSet    = New(codeMasterConfigParseFlagSet, ClassDMMaster, ScopeInternal, LevelMedium, "parse config flag set")
-	ErrMasterConfigUnknownItem     = New(codeMasterConfigUnknownItem, ClassDMMaster, ScopeInternal, LevelMedium, "master config contained unknown configuration options: %s")
-	ErrMasterConfigInvalidFlag     = New(codeMasterConfigInvalidFlag, ClassDMMaster, ScopeInternal, LevelMedium, "'%s' is an invalid flag")
-	ErrMasterConfigTomlTransform   = New(codeMasterConfigTomlTransform, ClassDMMaster, ScopeInternal, LevelMedium, "config toml transform")
-	ErrMasterConfigTimeoutParse    = New(codeMasterConfigTimeoutParse, ClassDMMaster, ScopeInternal, LevelMedium, "parse rpc timeout str")
-	ErrMasterConfigUpdateCfgFile   = New(codeMasterConfigUpdateCfgFile, ClassDMMaster, ScopeInternal, LevelHigh, "update config file")
-	ErrMasterShardingDDLDiff       = New(codeMasterShardingDDLDiff, ClassDMMaster, ScopeInternal, LevelHigh, "sharding ddls in ddl lock %s is different with %s")
-	ErrMasterStartService          = New(codeMasterStartService, ClassDMMaster, ScopeInternal, LevelHigh, "start server")
-	ErrMasterNoEmitToken           = New(codeMasterNoEmitToken, ClassDMMaster, ScopeInternal, LevelHigh, "fail to get emit opportunity for worker %s")
-	ErrMasterLockNotFound          = New(codeMasterLockNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "lock with ID %s not found")
-	ErrMasterLockIsResolving       = New(codeMasterLockIsResolving, ClassDMMaster, ScopeInternal, LevelHigh, "lock %s is resolving")
-	ErrMasterWorkerCliNotFound     = New(codeMasterWorkerCliNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s relevant worker-client not found")
-	ErrMasterWorkerNotWaitLock     = New(codeMasterWorkerNotWaitLock, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s not waiting for DDL lock %s")
-	ErrMasterHandleSQLReqFail      = New(codeMasterHandleSQLReqFail, ClassDMMaster, ScopeInternal, LevelHigh, "request DDL lock %s owner %s handle SQLs request %s fail %s")
-	ErrMasterOwnerExecDDL          = New(codeMasterOwnerExecDDL, ClassDMMaster, ScopeInternal, LevelHigh, "owner %s ExecuteDDL fail")
-	ErrMasterPartWorkerExecDDLFail = New(codeMasterPartWorkerExecDDLFail, ClassDMMaster, ScopeInternal, LevelHigh, "DDL lock %s owner ExecuteDDL successfully, so DDL lock removed. but some dm-workers ExecuteDDL fail, you should to handle dm-worker directly")
-	ErrMasterWorkerExistDDLLock    = New(codeMasterWorkerExistDDLLock, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s exist ddl lock, please unlock ddl lock first")
-	ErrMasterGetWorkerCfgExtractor = New(codeMasterGetWorkerCfgExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
-	ErrMasterTaskConfigExtractor   = New(codeMasterTaskConfigExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
-	ErrMasterWorkerArgsExtractor   = New(codeMasterWorkerArgsExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
-	ErrMasterQueryWorkerConfig     = New(codeMasterQueryWorkerConfig, ClassDMMaster, ScopeInternal, LevelHigh, "")
-	ErrMasterOperNotFound          = New(codeMasterOperNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "operation %d of task %s on worker %s not found, please execute `query-status` to check status")
-	ErrMasterOperRespNotSuccess    = New(codeMasterOperRespNotSuccess, ClassDMMaster, ScopeInternal, LevelHigh, "operation %d of task %s on worker %s not success: %s")
-	ErrMasterOperRequestTimeout    = New(codeMasterOperRequestTimeout, ClassDMMaster, ScopeInternal, LevelHigh, "request to dm-worker %s is timeout, but request may be successful, please execute `query-status` to check status")
-	ErrMasterHandleHTTPApis        = New(codeMasterHandleHTTPApis, ClassDMMaster, ScopeInternal, LevelHigh, "serve http apis to grpc")
-	ErrMasterHostPortNotValid      = New(codeMasterHostPortNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "host:port '%s' not valid")
+	ErrMasterSQLOpNilRequest        = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid")
+	ErrMasterSQLOpNotSupport        = New(codeMasterSQLOpNotSupport, ClassDMMaster, ScopeInternal, LevelMedium, "op %s not supported")
+	ErrMasterSQLOpWithoutSharding   = New(codeMasterSQLOpWithoutSharding, ClassDMMaster, ScopeInternal, LevelMedium, "operate request without --sharding specified not valid")
+	ErrMasterGRPCCreateConn         = New(codeMasterGRPCCreateConn, ClassDMMaster, ScopeInternal, LevelHigh, "create grpc connection")
+	ErrMasterGRPCSendOnCloseConn    = New(codeMasterGRPCSendOnCloseConn, ClassDMMaster, ScopeInternal, LevelHigh, "send request on a closed client")
+	ErrMasterGRPCClientClose        = New(codeMasterGRPCClientClose, ClassDMMaster, ScopeInternal, LevelHigh, "close rpc client")
+	ErrMasterGRPCInvalidReqType     = New(codeMasterGRPCInvalidReqType, ClassDMMaster, ScopeInternal, LevelHigh, "invalid request type: %v")
+	ErrMasterGRPCRequestError       = New(codeMasterGRPCRequestError, ClassDMMaster, ScopeInternal, LevelHigh, "grpc request error")
+	ErrMasterDeployMapperVerify     = New(codeMasterDeployMapperVerify, ClassDMMaster, ScopeInternal, LevelHigh, "user should specify valid relation between source(mysql/mariadb) and dm-worker, config %+v not valid")
+	ErrMasterConfigParseFlagSet     = New(codeMasterConfigParseFlagSet, ClassDMMaster, ScopeInternal, LevelMedium, "parse config flag set")
+	ErrMasterConfigUnknownItem      = New(codeMasterConfigUnknownItem, ClassDMMaster, ScopeInternal, LevelMedium, "master config contained unknown configuration options: %s")
+	ErrMasterConfigInvalidFlag      = New(codeMasterConfigInvalidFlag, ClassDMMaster, ScopeInternal, LevelMedium, "'%s' is an invalid flag")
+	ErrMasterConfigTomlTransform    = New(codeMasterConfigTomlTransform, ClassDMMaster, ScopeInternal, LevelMedium, "config toml transform")
+	ErrMasterConfigTimeoutParse     = New(codeMasterConfigTimeoutParse, ClassDMMaster, ScopeInternal, LevelMedium, "parse rpc timeout str")
+	ErrMasterConfigUpdateCfgFile    = New(codeMasterConfigUpdateCfgFile, ClassDMMaster, ScopeInternal, LevelHigh, "update config file")
+	ErrMasterShardingDDLDiff        = New(codeMasterShardingDDLDiff, ClassDMMaster, ScopeInternal, LevelHigh, "sharding ddls in ddl lock %s is different with %s")
+	ErrMasterStartService           = New(codeMasterStartService, ClassDMMaster, ScopeInternal, LevelHigh, "start server")
+	ErrMasterNoEmitToken            = New(codeMasterNoEmitToken, ClassDMMaster, ScopeInternal, LevelHigh, "fail to get emit opportunity for worker %s")
+	ErrMasterLockNotFound           = New(codeMasterLockNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "lock with ID %s not found")
+	ErrMasterLockIsResolving        = New(codeMasterLockIsResolving, ClassDMMaster, ScopeInternal, LevelHigh, "lock %s is resolving")
+	ErrMasterWorkerCliNotFound      = New(codeMasterWorkerCliNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s relevant worker-client not found")
+	ErrMasterWorkerNotWaitLock      = New(codeMasterWorkerNotWaitLock, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s not waiting for DDL lock %s")
+	ErrMasterHandleSQLReqFail       = New(codeMasterHandleSQLReqFail, ClassDMMaster, ScopeInternal, LevelHigh, "request DDL lock %s owner %s handle SQLs request %s fail %s")
+	ErrMasterOwnerExecDDL           = New(codeMasterOwnerExecDDL, ClassDMMaster, ScopeInternal, LevelHigh, "owner %s ExecuteDDL fail")
+	ErrMasterPartWorkerExecDDLFail  = New(codeMasterPartWorkerExecDDLFail, ClassDMMaster, ScopeInternal, LevelHigh, "DDL lock %s owner ExecuteDDL successfully, so DDL lock removed. but some dm-workers ExecuteDDL fail, you should to handle dm-worker directly")
+	ErrMasterWorkerExistDDLLock     = New(codeMasterWorkerExistDDLLock, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s exist ddl lock, please unlock ddl lock first")
+	ErrMasterGetWorkerCfgExtractor  = New(codeMasterGetWorkerCfgExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
+	ErrMasterTaskConfigExtractor    = New(codeMasterTaskConfigExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
+	ErrMasterWorkerArgsExtractor    = New(codeMasterWorkerArgsExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
+	ErrMasterQueryWorkerConfig      = New(codeMasterQueryWorkerConfig, ClassDMMaster, ScopeInternal, LevelHigh, "")
+	ErrMasterOperNotFound           = New(codeMasterOperNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "operation %d of task %s on worker %s not found, please execute `query-status` to check status")
+	ErrMasterOperRespNotSuccess     = New(codeMasterOperRespNotSuccess, ClassDMMaster, ScopeInternal, LevelHigh, "operation %d of task %s on worker %s not success: %s")
+	ErrMasterOperRequestTimeout     = New(codeMasterOperRequestTimeout, ClassDMMaster, ScopeInternal, LevelHigh, "request to dm-worker %s is timeout, but request may be successful, please execute `query-status` to check status")
+	ErrMasterHandleHTTPApis         = New(codeMasterHandleHTTPApis, ClassDMMaster, ScopeInternal, LevelHigh, "serve http apis to grpc")
+	ErrMasterHostPortNotValid       = New(codeMasterHostPortNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "host:port '%s' not valid")
+	ErrMasterGetHostnameFail        = New(codeMasterGetHostnameFail, ClassDMMaster, ScopeInternal, LevelHigh, "get hostname fail")
+	ErrMasterGenEmbedEtcdConfigFail = New(codeMasterGenEmbedEtcdConfigFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to generate config item %s for embed etcd")
+	ErrMasterStartEmbedEtcdFail     = New(codeMasterStartEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to start embed etcd")
+	ErrMasterParseURLFail           = New(codeMasterParseURLFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to parse URL %s")
+	ErrMasterJoinEmbedEtcdFail      = New(codeMasterJoinEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to join embed etcd: %s")
+	ErrMasterInvalidOperateOp       = New(codeMasterInvalidOperateOp, ClassDMMaster, ScopeInternal, LevelMedium, "invalid op %s on %s")
+	ErrMasterAdvertiseAddrNotValid  = New(codeMasterAdvertiseAddrNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "advertise address %s not valid")
+
+	ErrMasterRequestIsNotForwardToLeader = New(codeMasterRequestIsNotForwardToLeader, ClassDMMaster, ScopeInternal, LevelHigh, "master is not leader, and can't forward request to leader")
+	ErrMasterIsNotAsyncRequest           = New(codeMasterIsNotAsyncRequest, ClassDMMaster, ScopeInternal, LevelMedium, "request %s is not an async one, needn't wait for ok")
+	ErrMasterFailToGetExpectResult       = New(codeMasterFailToGetExpectResult, ClassDMMaster, ScopeInternal, LevelMedium, "fail to get expected result")
+	ErrMasterPessimistNotStarted         = New(codeMasterPessimistNotStarted, ClassDMMaster, ScopeInternal, LevelMedium, "the shardddl pessimist has not started")
+	ErrMasterOptimistNotStarted          = New(codeMasterOptimistNotStarted, ClassDMMaster, ScopeInternal, LevelMedium, "the shardddl optimist has not started")
+	ErrMasterMasterNameNotExist          = New(codeMasterMasterNameNotExist, ClassDMMaster, ScopeInternal, LevelLow, "dm-master with name %s not exists")
+	ErrMasterInvalidOfflineType          = New(codeMasterInvalidOfflineType, ClassDMMaster, ScopeInternal, LevelLow, "offline member type %s is invalid, please use master/worker")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
@@ -886,9 +984,11 @@ var (
 	ErrWorkerSaveVersionToKV         = New(codeWorkerSaveVersionToKV, ClassDMWorker, ScopeInternal, LevelHigh, "save version %v into levelDB with key %v")
 	ErrWorkerVerAutoDowngrade        = New(codeWorkerVerAutoDowngrade, ClassDMWorker, ScopeInternal, LevelHigh, "the previous version %s is newer than current %s, automatic downgrade is not supported now, please handle it manually")
 	ErrWorkerStartService            = New(codeWorkerStartService, ClassDMWorker, ScopeInternal, LevelHigh, "start server")
+	ErrWorkerNoStart                 = New(codeWorkerNoStart, ClassDMWorker, ScopeInternal, LevelHigh, "worker has not started")
 	ErrWorkerAlreadyClosed           = New(codeWorkerAlreadyClosed, ClassDMWorker, ScopeInternal, LevelHigh, "worker already closed")
-	ErrWorkerNotRunningStage         = New(codeWorkerNotRunningStage, ClassDMWorker, ScopeInternal, LevelHigh, "current stage is not running not valid")
-	ErrWorkerNotPausedStage          = New(codeWorkerNotPausedStage, ClassDMWorker, ScopeInternal, LevelHigh, "current stage is not paused not valid")
+	ErrWorkerAlreadyStart            = New(codeWorkerAlreadyStarted, ClassDMWorker, ScopeInternal, LevelHigh, "worker already started")
+	ErrWorkerNotRunningStage         = New(codeWorkerNotRunningStage, ClassDMWorker, ScopeInternal, LevelHigh, "current stage is %s but not running, invalid")
+	ErrWorkerNotPausedStage          = New(codeWorkerNotPausedStage, ClassDMWorker, ScopeInternal, LevelHigh, "current stage is %s but not paused, invalid")
 	ErrWorkerUpdateTaskStage         = New(codeWorkerUpdateTaskStage, ClassDMWorker, ScopeInternal, LevelHigh, "can only update task on Paused stage, but current stage is %s")
 	ErrWorkerMigrateStopRelay        = New(codeWorkerMigrateStopRelay, ClassDMWorker, ScopeInternal, LevelHigh, "relay unit has stopped, can not be migrated")
 	ErrWorkerSubTaskNotFound         = New(codeWorkerSubTaskNotFound, ClassDMWorker, ScopeInternal, LevelHigh, "sub task with name %s not found")
@@ -907,6 +1007,10 @@ var (
 	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "waiting for relay binlog pos to catch up with loader end binlog pos is timeout (exceeding %s), loader end binlog pos: %s, relay binlog pos: %s")
 	ErrWorkerRelayIsPurging          = New(codeWorkerRelayIsPurging, ClassDMWorker, ScopeInternal, LevelHigh, "relay log purger is purging, cannot start sub task %s, please try again later")
 	ErrWorkerHostPortNotValid        = New(codeWorkerHostPortNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "host:port '%s' not valid")
+	ErrWorkerSourceNotMatch          = New(codeWorkerSourceNotMatch, ClassDMWorker, ScopeInternal, LevelHigh, "source of request does not match with source in worker")
+
+	ErrWorkerFailToGetSubtaskConfigFromEtcd = New(codeWorkerFailToGetSubtaskConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative subtask config for task %s in etcd")
+	ErrWorkerFailToGetSourceConfigFromEtcd  = New(codeWorkerFailToGetSourceConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative source config for source %s in etcd")
 
 	// DM-tracer error
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set")
@@ -919,4 +1023,38 @@ var (
 	ErrTracerEventAssertionFail  = New(codeTracerEventAssertionFail, ClassDMTracer, ScopeInternal, LevelHigh, "type %s event: %v not valid")
 	ErrTracerEventTypeNotValid   = New(codeTracerEventTypeNotValid, ClassDMTracer, ScopeInternal, LevelHigh, "trace event type %d not valid")
 	ErrTracerStartService        = New(codeTracerStartService, ClassDMTracer, ScopeInternal, LevelHigh, "start server")
+
+	// Schema-tracker error
+	ErrSchemaTrackerInvalidJSON        = New(codeSchemaTrackerInvalidJSON, ClassSchemaTracker, ScopeDownstream, LevelHigh, "saved schema of `%s`.`%s` is not proper JSON")
+	ErrSchemaTrackerCannotCreateSchema = New(codeSchemaTrackerCannotCreateSchema, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create database for `%s` in schema tracker")
+	ErrSchemaTrackerCannotCreateTable  = New(codeSchemaTrackerCannotCreateTable, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create table for `%s`.`%s` in schema tracker")
+	ErrSchemaTrackerCannotSerialize    = New(codeSchemaTrackerCannotSerialize, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to serialize table info for `%s`.`%s`")
+	ErrSchemaTrackerCannotGetTable     = New(codeSchemaTrackerCannotGetTable, ClassSchemaTracker, ScopeInternal, LevelHigh, "cannot get table info for `%s`.`%s` from schema tracker")
+	ErrSchemaTrackerCannotExecDDL      = New(codeSchemaTrackerCannotExecDDL, ClassSchemaTracker, ScopeInternal, LevelHigh, "cannot track DDL: %s")
+
+	ErrSchemaTrackerCannotFetchDownstreamTable = New(
+		codeSchemaTrackerCannotFetchDownstreamTable, ClassSchemaTracker, ScopeDownstream, LevelMedium,
+		"cannot fetch downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker")
+	ErrSchemaTrackerCannotParseDownstreamTable = New(
+		codeSchemaTrackerCannotParseDownstreamTable, ClassSchemaTracker, ScopeInternal, LevelHigh,
+		"cannot parse downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker")
+
+	// HA scheduler
+	ErrSchedulerNotStarted                = New(codeSchedulerNotStarted, ClassScheduler, ScopeInternal, LevelHigh, "the scheduler has not started")
+	ErrSchedulerStarted                   = New(codeSchedulerStarted, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler has already started")
+	ErrSchedulerWorkerExist               = New(codeSchedulerWorkerExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s already exists")
+	ErrSchedulerWorkerNotExist            = New(codeSchedulerWorkerNotExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s not exists")
+	ErrSchedulerWorkerOnline              = New(codeSchedulerWorkerOnline, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s is still online, must shut it down first")
+	ErrSchedulerWorkerInvalidTrans        = New(codeSchedulerWorkerInvalidTrans, ClassScheduler, ScopeInternal, LevelMedium, "invalid stage transformation for dm-worker %s, from %s to %s")
+	ErrSchedulerSourceCfgExist            = New(codeSchedulerSourceCfgExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s already exists")
+	ErrSchedulerSourceCfgNotExist         = New(codeSchedulerSourceCfgNotExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s not exists")
+	ErrSchedulerSourcesUnbound            = New(codeSchedulerSourcesUnbound, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v have not bound")
+	ErrSchedulerSourceOpTaskExist         = New(codeSchedulerSourceOpTaskExist, ClassDMMaster, ScopeInternal, LevelMedium, "source with name % need to operate with tasks %v exist")
+	ErrSchedulerRelayStageInvalidUpdate   = New(codeSchedulerRelayStageInvalidUpdate, ClassScheduler, ScopeInternal, LevelMedium, "invalid new expectant relay stage %s")
+	ErrSchedulerRelayStageSourceNotExist  = New(codeSchedulerRelayStageSourceNotExist, ClassScheduler, ScopeInternal, LevelMedium, "sources %v need to update expectant relay stage not exist")
+	ErrSchedulerMultiTask                 = New(codeSchedulerMultiTask, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler cannot perform multiple different tasks %v in one operation")
+	ErrSchedulerSubTaskExist              = New(codeSchedulerSubTaskExist, ClassScheduler, ScopeInternal, LevelMedium, "subtasks with name %s for sources %v already exist")
+	ErrSchedulerSubTaskStageInvalidUpdate = New(codeSchedulerSubTaskStageInvalidUpdate, ClassDMMaster, ScopeInternal, LevelMedium, "invalid new expectant subtask stage %s")
+	ErrSchedulerSubTaskOpTaskNotExist     = New(codeSchedulerSubTaskOpTaskNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "subtasks with name %s need to be operate not exist")
+	ErrSchedulerSubTaskOpSourceNotExist   = New(codeSchedulerSubTaskOpSourceNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v need to be operate not exist")
 )
