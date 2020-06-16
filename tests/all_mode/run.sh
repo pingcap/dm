@@ -8,6 +8,7 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
 
 function test_session_config(){
+    echo "[$(date)] <<<<<< start test_session_config >>>>>>"
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -46,6 +47,7 @@ function test_session_config(){
 
     cleanup_data all_mode
     cleanup_process $*
+    echo "[$(date)] <<<<<< finish test_session_config >>>>>>"
 }
 
 function run() {
