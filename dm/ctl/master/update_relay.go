@@ -22,7 +22,6 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewUpdateRelayCmd creates a UpdateRelay command
@@ -45,7 +44,7 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", terror.Message(err))
+		common.PrintLines("get file content error:\n%v", err)
 		return
 	}
 
@@ -65,7 +64,7 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 	})
 
 	if err != nil {
-		common.PrintLines("can not update relay config:\n%v", terror.Message(err))
+		common.PrintLines("can not update relay config:\n%v", err)
 		return
 	}
 

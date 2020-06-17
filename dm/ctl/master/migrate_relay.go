@@ -24,7 +24,6 @@ import (
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewMigrateRelayCmd creates a MigrateRelay command
@@ -49,7 +48,7 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) {
 	binlogName := cmd.Flags().Arg(1)
 	binlogPos, err := strconv.Atoi(cmd.Flags().Arg(2))
 	if err != nil {
-		common.PrintLines(terror.Message(err))
+		common.PrintLines("%v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

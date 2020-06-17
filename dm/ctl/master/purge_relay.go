@@ -25,7 +25,6 @@ import (
 	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -64,7 +63,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		fmt.Println(terror.Message(err))
+		common.PrintLines("%v", err)
 		return
 	}
 	if len(sources) == 0 {
@@ -146,7 +145,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 		SubDir:   subDir,
 	})
 	if err != nil {
-		common.PrintLines("can not purge relay log files: \n%s", terror.Message(err))
+		common.PrintLines("can not purge relay log files: \n%v", err)
 		return
 	}
 

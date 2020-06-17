@@ -20,7 +20,6 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewResumeTaskCmd creates a ResumeTask command
@@ -44,13 +43,13 @@ func resumeTaskFunc(cmd *cobra.Command, _ []string) {
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", terror.Message(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
 	resp, err := common.OperateTask(pb.TaskOp_Resume, name, sources)
 	if err != nil {
-		common.PrintLines("can not resume task %s:\n%v", name, terror.Message(err))
+		common.PrintLines("can not resume task %s:\n%v", name, err)
 		return
 	}
 

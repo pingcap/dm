@@ -22,7 +22,6 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewSQLSkipCmd creates a SQLSkip command
@@ -55,7 +54,7 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) {
 	var source string
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", terror.Message(err))
+		common.PrintLines("%v", err)
 		return
 	}
 	if sharding {
@@ -89,7 +88,7 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) {
 		Sharding:   sharding,
 	})
 	if err != nil {
-		common.PrintLines("can not skip SQL:\n%v", terror.Message(err))
+		common.PrintLines("can not skip SQL:\n%v", err)
 		return
 	}
 

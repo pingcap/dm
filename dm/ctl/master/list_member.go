@@ -21,7 +21,6 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -73,7 +72,7 @@ func listMemberFunc(cmd *cobra.Command, _ []string) {
 
 	leader, master, worker, err := convertListMemberType(cmd)
 	if err != nil {
-		common.PrintLines("%s", terror.Message(err))
+		common.PrintLines("%v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -88,7 +87,7 @@ func listMemberFunc(cmd *cobra.Command, _ []string) {
 	})
 
 	if err != nil {
-		common.PrintLines("list member failed, error:\n%v", terror.Message(err))
+		common.PrintLines("list member failed, error:\n%v", err)
 		return
 	}
 	common.PrettyPrintResponse(resp)

@@ -20,7 +20,6 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewPauseTaskCmd creates a PauseTask command
@@ -44,13 +43,13 @@ func pauseTaskFunc(cmd *cobra.Command, _ []string) {
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", terror.Message(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
 	resp, err := common.OperateTask(pb.TaskOp_Pause, name, sources)
 	if err != nil {
-		common.PrintLines("can not pause task %s:\n%v", name, terror.Message(err))
+		common.PrintLines("can not pause task %s:\n%v", name, err)
 		return
 	}
 

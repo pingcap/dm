@@ -19,7 +19,6 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/spf13/cobra"
 )
@@ -59,7 +58,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 	configFile := cmd.Flags().Arg(1)
 	content, err := common.GetFileContent(configFile)
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", terror.Message(err))
+		common.PrintLines("get file content error:\n%v", err)
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -77,7 +76,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 		Op:     op,
 	})
 	if err != nil {
-		common.PrintLines("can not update task:\n%v", terror.Message(err))
+		common.PrintLines("can not update task:\n%v", err)
 		return
 	}
 

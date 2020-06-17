@@ -22,7 +22,6 @@ import (
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewUpdateTaskCmd creates a UpdateTask command
@@ -44,13 +43,13 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) {
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", terror.Message(err))
+		common.PrintLines("get file content error:\n%v", err)
 		return
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", terror.Message(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
@@ -64,7 +63,7 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) {
 		Sources: sources,
 	})
 	if err != nil {
-		common.PrintLines("can not update task:\n%v", terror.Message(err))
+		common.PrintLines("can not update task:\n%v", err)
 		return
 	}
 

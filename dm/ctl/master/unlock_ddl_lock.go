@@ -20,7 +20,6 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/spf13/cobra"
 )
@@ -46,7 +45,7 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 	}
 	owner, err := cmd.Flags().GetString("owner")
 	if err != nil {
-		fmt.Println(terror.Message(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
@@ -60,7 +59,7 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 
 	forceRemove, err := cmd.Flags().GetBool("force-remove")
 	if err != nil {
-		fmt.Println(terror.Message(err))
+		common.PrintLines("%v", err)
 		return
 	}
 

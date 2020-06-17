@@ -22,7 +22,6 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewSQLInjectCmd creates a SQLInject command
@@ -45,7 +44,7 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", terror.Message(err))
+		common.PrintLines("%v", err)
 		return
 	}
 	if len(sources) != 1 {
@@ -62,13 +61,13 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 	extraArgs := cmd.Flags().Args()[1:]
 	realSQLs, err := common.ExtractSQLsFromArgs(extraArgs)
 	if err != nil {
-		common.PrintLines("check sqls err %s", terror.Message(err))
+		common.PrintLines("check sqls err %v", err)
 		return
 	}
 	for _, sql := range realSQLs {
 		isDDL, err2 := common.IsDDL(sql)
 		if err2 != nil {
-			common.PrintLines("check sql err %s", terror.Message(err2))
+			common.PrintLines("check sql err %v", err2)
 			return
 		}
 		if !isDDL {
@@ -87,7 +86,7 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 		Source: sources[0],
 	})
 	if err != nil {
-		common.PrintLines("can not inject sql:\n%v", terror.Message(err))
+		common.PrintLines("can not inject sql:\n%v", err)
 		return
 	}
 
