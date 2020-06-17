@@ -487,6 +487,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	err := l.Restore(newCtx)
 	close(l.runFatalChan) // Restore returned, all potential fatal sent to l.runFatalChan
+	cancel()              // cancel the goroutines created in `Restore`.
 
 	failpoint.Inject("dontWaitWorkerExit", func(_ failpoint.Value) {
 		l.logCtx.L().Info("", zap.String("failpoint", "dontWaitWorkerExit"))
