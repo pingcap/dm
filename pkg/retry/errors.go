@@ -30,6 +30,7 @@ var (
 		"unsupported modify collate",
 		"unsupported drop integer primary key",
 		"Unsupported collation",
+		"Invalid default value for",
 	}
 
 	// UnsupportedDMLMsgs list the error messages of some un-recoverable DML, which is used in task auto recovery
