@@ -29,7 +29,7 @@ function test_session_config(){
     dmctl_start_task "$WORK_DIR/dm-task.yaml"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
-        "'tidb_retry_limit' can't be set to the value" 2
+        "'tidb_retry_limit' can't be set to the value" 4
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "stop-task test" \
         "\"result\": true" 3
