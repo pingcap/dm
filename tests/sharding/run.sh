@@ -64,7 +64,7 @@ function run() {
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "pause-task test"\
-        "\"result\": true" 3
+        "current stage is Paused but not running, invalid" 2
 
     # wait really paused
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -78,7 +78,7 @@ function run() {
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task test"\
-        "\"result\": true" 3
+        "current stage is Running but not paused, invalid" 2
 
     cp $cur/conf/diff_config.toml $WORK_DIR/diff_config.toml
     printf "\n[[table-config.source-tables]]\ninstance-id = \"source-1\"\nschema = \"sharding2\"\ntable  = \"~t.*\"" >> $WORK_DIR/diff_config.toml
