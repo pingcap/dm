@@ -73,7 +73,12 @@ function run() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status sequence_sharding" \
         "detect inconsistent DDL sequence" 2
-    
+
+    # check no auto resume
+    sleep 3
+    check_log_contains $WORK_DIR/worker1/log/dm-worker.log "task can't auto resume"
+
+    # resume manually
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task sequence_sharding" \
         "\"result\": true" 3
