@@ -95,7 +95,7 @@ func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 
 func (t *testServer) TestServer(c *C) {
 	var (
-		masterAddr   = "127.0.0.1:8291"
+		masterAddr   = "127.0.0.1:8261"
 		workerAddr1  = "127.0.0.1:8262"
 		keepAliveTTL = int64(1)
 	)
@@ -224,7 +224,7 @@ func (t *testServer) TestServer(c *C) {
 
 func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	var (
-		masterAddr   = "127.0.0.1:8291"
+		masterAddr   = "127.0.0.1:8261"
 		keepAliveTTL = int64(1)
 		startRev     = int64(1)
 	)
