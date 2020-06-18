@@ -641,7 +641,7 @@ alter table tbl01 rename column d to e;
 alter table tbl01 rename column c to d;
 ```
 
-This would require downstream to accept the DML insert into tbl (d) values (...); with potentially two different types. DM master can prevent such situation by reporting error on the second DDL, by examining the column’s state transition.
+This would require downstream to accept the DML `insert into tbl (d) values (...);` with potentially two different types. DM master can prevent such situation by reporting error on the second DDL, by examining the column’s state transition.
 
 | old \ new | dropped → partial | partial → partial | partial → exists |
 | --------- | ----------------- | ----------------- | ---------------- |
