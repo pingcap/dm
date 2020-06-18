@@ -21,13 +21,13 @@ The design difficulty on merging sharded tables is handling schema change (DDLs)
 
 This approach ignores the actual action done by the DDL statement, e.g. even if executing ddl_1; ddl_2; is equivalent to ddl_3; ddl_4;, DM cannot recognize this and will not automatically unlock the barrier, and [require human intervention](https://pingcap.com/docs/dev/reference/tools/data-migration/features/manually-handling-sharding-ddl-locks/). This makes the whole feature feel risky and error-prone.
 
-Even strictly following DDL execution, if the user [takes a long time to execute all DDLs](https://docs.google.com/document/d/154r0RGBa5uTWsWV8Q1RmIezamcAdElcLQJ3z_7Vr4nk/edit#), it would create a very long backlog and thus cripples DM’s responsiveness.
+Even strictly following DDL execution, if the user takes a long time to execute all DDLs, it would create a very long backlog and thus cripples DM’s responsiveness.
 
 ## Principles
 
-To prevent the drawbacks mentioned above to make DM more user-friendly, we want to [create a barrier-free algorithm](https://docs.google.com/document/d/19v05Cw6gWg3ccMOtP1EQfhpOirz4fF1mUNgChsmFlNw/edit#) (w.r.t. DMLs) for reconciling DDLs on sharded tables.
+To prevent the drawbacks mentioned above to make DM more user-friendly, we want to create a barrier-free algorithm (w.r.t. DMLs) for reconciling DDLs on sharded tables.
 
-Note: This work assumes each DM worker already [tracks the upstream schema](https://docs.google.com/document/d/1iP9yeylZfJaym_IWntn1Ge1t-_awfm23YNE-R-rP1s8/edit) independently from the downstream, so that column order is not a concern.
+Note: This work assumes each DM worker already tracks the upstream schema independently from the downstream, so that column order is not a concern.
 
 ### DDL awareness
 
@@ -41,15 +41,15 @@ insert into tbl02 (col1, col2, col3) values (21, 22, 23);
 
 In our case, we should at least recognize these DDL statements
 
-- alter table add column [first / after]
+- `alter table add column [first / after]`
 
-- alter table drop column
+- `alter table drop column`
 
-- create index
+- `create index`
 
-- drop index
+- `drop index`
 
-- alter table modify column [first / after]
+- `alter table modify column [first / after]`
 
 and know that some changes are inverse of another (e.g. adding a column and then dropping the same column is equivalent to no-op).
 
@@ -189,9 +189,9 @@ When DM worker received an error notification from DM master, it needs to pause 
 
 To fix this, we could either
 
-- drop column b on tbl02, add column b with type datetime
+- `drop column b on tbl02, add column b with type datetime`
 
-- drop column b on tbl01, add column b with type float
+- `drop column b on tbl01, add column b with type float`
 
 In the first case, the conflict of tbl01 is resolved non-intrusively (not touching tbl01’s data and schema). The paused DML events become valid, and can continue to be propagated.
 
@@ -342,22 +342,15 @@ Since DM master has a copy of all sharded schemas, it can simply count how many 
 
 When adding a column which did not exist before, we should change the specification to include a default value if not given.
 
-| Type | Default |
-| ---- | ------- |
-| Any nullable type | null |
-| year | '0000' |
-| int | 0 |
-| date | '0000-00-00' |
-| float/double | 0.0 |
-| time | '00:00:00' |
-| decimal | 0 |
-| datetime | '0000-00-00 00:00:00' |
-| bit | 0 |
-| timestamp | '0000-00-00 00:00:00' |
-| char/varchar/text | '' |
-| enum/set | 0 |
-| binary/varbinary/blob | '' |
-| json | 'null' |
+| Type | Default | Type | Default |
+| ---- | ------- | ---- | ------- | 
+| Any nullable type | null | year | '0000' |
+| int | 0 | date | '0000-00-00' |
+| float/double | 0.0 | time | '00:00:00' |
+| decimal | 0 | datetime | '0000-00-00 00:00:00' |
+| bit | 0 | timestamp | '0000-00-00 00:00:00' |
+| char/varchar/text | '' | enum/set | 0 |
+| binary/varbinary/blob | '' | json | 'null' |
 
 For instance, these 3 DDL statements
 
