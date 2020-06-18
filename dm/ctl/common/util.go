@@ -72,7 +72,7 @@ func PrintLines(format string, a ...interface{}) {
 func PrettyPrintResponse(resp proto.Message) {
 	s, err := marshResponseToString(resp)
 	if err != nil {
-		PrintLines(errors.ErrorStack(err))
+		PrintLines("%v", err)
 	} else {
 		fmt.Println(s)
 	}
@@ -82,7 +82,7 @@ func PrettyPrintResponse(resp proto.Message) {
 func PrettyPrintInterface(resp interface{}) {
 	s, err := json.MarshalIndent(resp, "", "    ")
 	if err != nil {
-		PrintLines(errors.ErrorStack(err))
+		PrintLines("%v", err)
 	} else {
 		fmt.Println(string(s))
 	}
@@ -147,7 +147,7 @@ func PrettyPrintResponseWithCheckTask(resp proto.Message, subStr string) bool {
 	}
 
 	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
+		PrintLines("%v", err)
 	} else {
 		// add indent to make it prettily.
 		replacedStr = strings.Replace(replacedStr, "detail: {", "   \tdetail: {", 1)

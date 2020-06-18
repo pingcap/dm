@@ -15,13 +15,11 @@ package master
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +44,7 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 	}
 	owner, err := cmd.Flags().GetString("owner")
 	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
@@ -54,13 +52,13 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 
 	workers, err := common.GetWorkerArgs(cmd)
 	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
 	forceRemove, err := cmd.Flags().GetBool("force-remove")
 	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
@@ -74,7 +72,7 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 		ForceRemove:  forceRemove,
 	})
 	if err != nil {
-		common.PrintLines("can not unlock DDL lock %s (in workers %v):\n%s", lockID, workers, errors.ErrorStack(err))
+		common.PrintLines("can not unlock DDL lock %s (in workers %v):\n%v", lockID, workers, err)
 		return
 	}
 

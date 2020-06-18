@@ -20,7 +20,6 @@ import (
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -45,7 +44,7 @@ func showDDLLocksFunc(cmd *cobra.Command, _ []string) {
 
 	workers, err := common.GetWorkerArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
@@ -57,7 +56,7 @@ func showDDLLocksFunc(cmd *cobra.Command, _ []string) {
 		Workers: workers,
 	})
 	if err != nil {
-		common.PrintLines("can not show DDL locks for task %s and workers %v:\n%s", taskName, workers, errors.ErrorStack(err))
+		common.PrintLines("can not show DDL locks for task %s and workers %v:\n%v", taskName, workers, err)
 		return
 	}
 

@@ -18,7 +18,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
@@ -49,7 +48,7 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) {
 	binlogName := cmd.Flags().Arg(1)
 	binlogPos, err := strconv.Atoi(cmd.Flags().Arg(2))
 	if err != nil {
-		common.PrintLines(errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

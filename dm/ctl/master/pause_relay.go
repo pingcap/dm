@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -44,7 +43,7 @@ func pauseRelayFunc(cmd *cobra.Command, _ []string) {
 
 	workers, err := common.GetWorkerArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 	if len(workers) == 0 {
@@ -54,7 +53,7 @@ func pauseRelayFunc(cmd *cobra.Command, _ []string) {
 
 	resp, err := common.OperateRelay(pb.RelayOp_PauseRelay, workers)
 	if err != nil {
-		common.PrintLines("can not pause relay unit:\n%v", errors.ErrorStack(err))
+		common.PrintLines("can not pause relay unit:\n%v", err)
 		return
 	}
 
