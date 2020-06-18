@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.6] 2020-06-17
+
+### Improvements
+
+- Support the original plaintext passwords for upstream and downstream databases
+- Support configuring session variables for DM’s connections to upstream and downstream databases
+- Remove the call stack information in some error messages returned by the `query-status` command when the data migration task encounters an exception 
+- Filter out the items that pass the precheck from the message returned when the precheck of the data migration task fails
+
+### Bug fixes
+
+- Fix the issue that the data migration task is not automatically paused and the error cannot be identified by executing the `query-status` command if an error occurs when the load unit creates a table 
+- Fix possible DM-worker panics when data migration tasks run simultaneously 
+- Fix the issue that the existing data migration task cannot be automatically restarted when the DM-worker process is restarted if the `enable-heartbeat` parameter of the task is set to `true` 
+- Fix the issue that the shard DDL conflict error may not be returned after the task is resumed 
+- Fix the issue that the `replicate lag` information is displayed incorrectly for an initial period of time when the `enable-heartbeat` parameter of  the data migration task is set to `true` 
+- Fix the issue that `replicate lag` cannot be calculated using the heartbeat information when `lower_case_table_names` is set to `1` in the upstream database 
+- Disable the meaningless auto-resume tasks triggered by the `unsupported collation` error during data migration
+
+### Action required
+
+- When upgrading from a previous version, note that you must upgrade all DM components (dmctl/DM-master/DM-worker) together
+
+### Detailed Bug Fixes and Changes
+
+- Support the original plaintext passwords for upstream and downstream databases [#676](https://github.com/pingcap/dm/pull/676)
+- Support configuring session variables for DM’s connections to upstream and downstream databases [#692](https://github.com/pingcap/dm/pull/692)
+- Remove the call stack information in some error messages returned by the `query-status` command when the data migration task encounters an exception [#733](https://github.com/pingcap/dm/pull/733) [#747](https://github.com/pingcap/dm/pull/747)
+- Filter out the items that pass the precheck from the message returned when the precheck of the data migration task fails [#730](https://github.com/pingcap/dm/pull/730)
+- Fix the issue that the data migration task is not automatically paused and the error cannot be identified by executing the `query-status` command if an error occurs when the load unit creates a table [#747](https://github.com/pingcap/dm/pull/747)
+- Fix possible DM-worker panics when data migration tasks run simultaneously [#710](https://github.com/pingcap/dm/pull/710)
+- Fix the issue that the existing data migration task cannot be automatically restarted when the DM-worker process is restarted if the `enable-heartbeat` parameter of the task is set to `true` [#739](https://github.com/pingcap/dm/pull/739)
+- Fix the issue that the shard DDL conflict error may not be returned after the task is resumed [#739](https://github.com/pingcap/dm/pull/739) [#742](https://github.com/pingcap/dm/pull/742)
+- Fix the issue that the `replicate lag` information is displayed incorrectly for an initial period of time when the `enable-heartbeat` parameter of  the data migration task is set to `true` [#704](https://github.com/pingcap/dm/pull/704)
+- Fix the issue that `replicate lag` cannot be calculated using the heartbeat information when `lower_case_table_names` is set to `1` in the upstream database [#704](https://github.com/pingcap/dm/pull/704)
+- Disable the meaningless auto-resume tasks triggered by the `unsupported collation` error during data migration [#735](https://github.com/pingcap/dm/pull/735)
+- Optimize some logs [#660](https://github.com/pingcap/dm/pull/660) [#724](https://github.com/pingcap/dm/pull/724) [#738](https://github.com/pingcap/dm/pull/738)
+
+
 ## [1.0.5] 2020-04-27
 
 ### Improvements

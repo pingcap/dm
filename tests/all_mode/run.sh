@@ -36,21 +36,13 @@ function test_session_config(){
         "start-task $WORK_DIR/dm-task.yaml --remove-meta" \
         "'tidb_retry_limit' can't be set to the value" 1
 
-    # sql_mode: "ANSI_QUOTES"
+    # sql_mode=""
     sed -i 's/tidb_retry_limit: "fjs"/tidb_retry_limit: "10"/g'  $WORK_DIR/dm-task.yaml
-    sed -i 's/sql_mode: ".*"/sql_mode: "ANSI_QUOTES"/g'  $WORK_DIR/dm-task.yaml
+    sed -i 's/sql_mode: ".*"/sql_mode: ""/g'  $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
 
-    # dumpling works fine since it use single quote
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-    
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
-
-    # but syncer should fail
-    echo "check diff should fail"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10 "fail"
-
+    # fail because insert 0 will auto generates the next serial number
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10 'fail'
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "stop-task test"\
             "\"result\": true" 3

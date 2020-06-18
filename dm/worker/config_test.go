@@ -42,6 +42,7 @@ func (t *testConfigSuite) TestAdjustAddr(c *check.C) {
 	cfg.AdvertiseAddr = ""
 	c.Assert(terror.ErrWorkerHostPortNotValid.Equal(cfg.adjust()), check.IsTrue)
 
+	// TICASE-956
 	cfg.WorkerAddr = "127.0.0.1:8262"
 	c.Assert(cfg.adjust(), check.IsNil)
 	c.Assert(cfg.AdvertiseAddr, check.Equals, cfg.WorkerAddr)

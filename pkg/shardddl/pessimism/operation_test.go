@@ -122,6 +122,23 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev6, Greater, rev5)
 
+	// start watch with an older revision for the deleted op11.
+	wch = make(chan Operation, 10)
+	ech = make(chan error, 10)
+	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
+	WatchOperationDelete(ctx, etcdTestCli, op11.Task, op11.Source, rev5, wch, ech)
+	cancel()
+	close(wch)
+	close(ech)
+
+	// watch should got the previous deleted operation.
+	c.Assert(len(wch), Equals, 1)
+	c.Assert(len(ech), Equals, 0)
+	op11d := <-wch
+	c.Assert(op11d.IsDeleted, IsTrue)
+	op11d.IsDeleted = false // reset to false
+	c.Assert(op11d, DeepEquals, op11)
+
 	// get again, op11 should be deleted.
 	opm, _, err = GetAllOperations(etcdTestCli)
 	c.Assert(err, IsNil)

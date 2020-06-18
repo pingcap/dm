@@ -116,6 +116,26 @@ func DoOpsInOneTxnWithRetry(cli *clientv3.Client, ops ...clientv3.Op) (*clientv3
 	return resp, resp.Header.Revision, nil
 }
 
+// DoOpsInOneCmpsTxnWithRetry do multiple etcd operations in one txn and with comparisons.
+func DoOpsInOneCmpsTxnWithRetry(cli *clientv3.Client, cmps []clientv3.Cmp, opsThen, opsElse []clientv3.Op) (*clientv3.TxnResponse, int64, error) {
+	ctx, cancel := context.WithTimeout(cli.Ctx(), DefaultRequestTimeout)
+	defer cancel()
+	tctx := tcontext.NewContext(ctx, log.L())
+	ret, _, err := etcdDefaultTxnStrategy.Apply(tctx, etcdDefaultTxnRetryParam, func(t *tcontext.Context) (ret interface{}, err error) {
+		resp, err := cli.Txn(ctx).If(cmps...).Then(opsThen...).Else(opsElse...).Commit()
+		if err != nil {
+			return nil, err
+		}
+		return resp, nil
+	})
+
+	if err != nil {
+		return nil, 0, err
+	}
+	resp := ret.(*clientv3.TxnResponse)
+	return resp, resp.Header.Revision, nil
+}
+
 // IsRetryableError check whether error is retryable error for etcd to build again
 func IsRetryableError(err error) bool {
 	switch errors.Cause(err) {
