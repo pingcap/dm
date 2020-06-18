@@ -39,6 +39,7 @@ func (t *testTErrorSuite) TestTError(c *check.C) {
 		scope       = ScopeUpstream
 		level       = LevelMedium
 		message     = "bad connection"
+		workaround  = "please check your network connection"
 		messageArgs = "message with args: %s"
 		commonErr   = errors.New("common error")
 	)
@@ -53,12 +54,13 @@ func (t *testTErrorSuite) TestTError(c *check.C) {
 	c.Assert(ErrLevel(10000).String(), check.Equals, "unknown error level: 10000")
 
 	// test Error basic API
-	err := New(code, class, scope, level, message)
+	err := New(code, class, scope, level, message, workaround)
 	c.Assert(err.Code(), check.Equals, code)
 	c.Assert(err.Class(), check.Equals, class)
 	c.Assert(err.Scope(), check.Equals, scope)
 	c.Assert(err.Level(), check.Equals, level)
-	c.Assert(err.Error(), check.Equals, fmt.Sprintf(errFormat, code, class, scope, level, err.getMsg()))
+	c.Assert(err.Workaround(), check.Equals, workaround)
+	c.Assert(err.Error(), check.Equals, fmt.Sprintf(errFormat, code, class, scope, level, err.getMsg(), workaround))
 
 	setMsgErr := err.SetMessage(messageArgs)
 	c.Assert(setMsgErr.getMsg(), check.Equals, messageArgs)
@@ -68,11 +70,11 @@ func (t *testTErrorSuite) TestTError(c *check.C) {
 	// test Error Generate/Generatef
 	err2 := err.Generate("1063")
 	c.Assert(err.Equal(err2), check.IsTrue)
-	c.Assert(err2.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" "+err.message, code, class, scope, level, "1063"))
+	c.Assert(err2.Error(), check.Equals, fmt.Sprintf(errBaseFormat+", "+errMessageFormat+", "+errWorkaroundFormat, code, class, scope, level, "1063", ""))
 
-	err3 := err.Generatef("new message format: %s", "1064")
+	err3 := err.Generatef("new message format: %s, %s", "1064", "please do sth.")
 	c.Assert(err.Equal(err3), check.IsTrue)
-	c.Assert(err3.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" new message format: %s", code, class, scope, level, "1064"))
+	c.Assert(err3.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" new message format: %s, %s", code, class, scope, level, "1064", "please do sth."))
 
 	// test Error Delegate
 	c.Assert(err.Delegate(nil, "nil"), check.IsNil)
@@ -81,10 +83,10 @@ func (t *testTErrorSuite) TestTError(c *check.C) {
 	c.Assert(err4.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" "+err.message+": %s", code, class, scope, level, commonErr))
 	c.Assert(perrors.Cause(err4), check.Equals, commonErr)
 
-	argsErr := New(code, class, scope, level, messageArgs)
+	argsErr := New(code, class, scope, level, messageArgs, workaround)
 	err4 = argsErr.Delegate(commonErr, "1065")
 	c.Assert(argsErr.Equal(err4), check.IsTrue)
-	c.Assert(err4.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" "+argsErr.message+": %s", code, class, scope, level, "1065", commonErr))
+	c.Assert(err4.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" "+argsErr.message+", %s", code, class, scope, level, "1065", commonErr))
 
 	// test Error AnnotateDelegate
 	c.Assert(err.AnnotateDelegate(nil, "message", "args"), check.IsNil)
@@ -172,7 +174,7 @@ func (t *testTErrorSuite) TestTerrorWithOperate(c *check.C) {
 		scope     = ScopeUpstream
 		level     = LevelMedium
 		message   = "message with args: %s"
-		err       = New(code, class, scope, level, message)
+		err       = New(code, class, scope, level, message, "")
 		arg       = "arg"
 		commonErr = perrors.New("common error")
 	)

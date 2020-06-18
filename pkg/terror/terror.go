@@ -21,8 +21,10 @@ import (
 )
 
 const (
-	errBaseFormat = "[code=%d:class=%s:scope=%s:level=%s]"
-	errFormat     = errBaseFormat + " %s"
+	errBaseFormat       = "[code=%d:class=%s:scope=%s:level=%s]"
+	errMessageFormat    = "msg: %s"
+	errWorkaroundFormat = "workaround: %s"
+	errFormat           = errBaseFormat + ", " + errMessageFormat + ", " + errWorkaroundFormat
 )
 
 // ErrCode is used as the unique identifier of a specific error type.
@@ -131,24 +133,26 @@ func (el ErrLevel) String() string {
 
 // Error implements error interface and add more useful fields
 type Error struct {
-	code     ErrCode
-	class    ErrClass
-	scope    ErrScope
-	level    ErrLevel
-	message  string
-	args     []interface{}
-	rawCause error
-	stack    errors.StackTracer
+	code       ErrCode
+	class      ErrClass
+	scope      ErrScope
+	level      ErrLevel
+	message    string
+	workaround string
+	args       []interface{}
+	rawCause   error
+	stack      errors.StackTracer
 }
 
 // New creates a new *Error instance
-func New(code ErrCode, class ErrClass, scope ErrScope, level ErrLevel, message string) *Error {
+func New(code ErrCode, class ErrClass, scope ErrScope, level ErrLevel, message string, workaround string) *Error {
 	return &Error{
-		code:    code,
-		class:   class,
-		scope:   scope,
-		level:   level,
-		message: message,
+		code:       code,
+		class:      class,
+		scope:      scope,
+		level:      level,
+		message:    message,
+		workaround: workaround,
 	}
 }
 
@@ -177,9 +181,14 @@ func (e *Error) Message() string {
 	return e.getMsg()
 }
 
+// Workaround returns ErrWorkaround
+func (e *Error) Workaround() string {
+	return e.workaround
+}
+
 // Error implements error interface.
 func (e *Error) Error() string {
-	return fmt.Sprintf(errFormat, e.code, e.class, e.scope, e.level, e.getMsg())
+	return fmt.Sprintf(errFormat, e.code, e.class, e.scope, e.level, e.getMsg(), e.workaround)
 }
 
 // Format accepts flags that alter the printing of some verbs
@@ -266,14 +275,15 @@ func (e *Error) Delegate(err error, args ...interface{}) error {
 		return nil
 	}
 	return &Error{
-		code:     e.code,
-		class:    e.class,
-		scope:    e.scope,
-		level:    e.level,
-		message:  fmt.Sprintf("%s: %s", e.message, err),
-		args:     args,
-		rawCause: err,
-		stack:    errors.NewStack(0),
+		code:       e.code,
+		class:      e.class,
+		scope:      e.scope,
+		level:      e.level,
+		message:    fmt.Sprintf("%s: %s", e.message, err),
+		workaround: e.workaround,
+		args:       args,
+		rawCause:   err,
+		stack:      errors.NewStack(0),
 	}
 }
 

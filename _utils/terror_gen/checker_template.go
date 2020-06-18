@@ -71,12 +71,12 @@ func genErrors() {
 	w := bufio.NewWriter(f)
 	for _, item := range errors {
 		s := strings.SplitN(item.err.Error(), " ", 2)
-		w.WriteString(fmt.Sprintf("%s,%s,\"%s\"\n", item.name, s[0], strings.ReplaceAll(s[1], "\n", "\\n")))
+		w.WriteString(fmt.Sprintf("%s,%s\"%s\"\n", item.name, s[0], strings.ReplaceAll(s[1], "\n", "\\n")))
 
 		body := tomlErrorBody{
 			Message:     item.err.Message(),
 			Description: "", // empty now
-			Workaround:  "", // empyt now,
+			Workaround:  item.err.Workaround(),
 			Tags:        []string{item.err.Scope().String(), item.err.Level().String()},
 		}
 		var buf bytes.Buffer
