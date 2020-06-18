@@ -90,7 +90,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		taskName = "sub-task-name"
 		port     = 8263
 	)
-	hostName := "127.0.0.1:8291"
+	hostName := "127.0.0.1:8261"
 	etcdDir := c.MkDir()
 	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
 	c.Assert(err, IsNil)
