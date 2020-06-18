@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -45,7 +44,7 @@ func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 	if len(sources) == 0 {
@@ -60,7 +59,7 @@ func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
 		Sources: sources,
 	})
 	if err != nil {
-		common.PrintLines("can not switch relay's master server (in sources %v):\n%s", sources, errors.ErrorStack(err))
+		common.PrintLines("can not switch relay's master server (in sources %v):\n%v", sources, err)
 		return
 	}
 
