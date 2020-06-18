@@ -15,6 +15,8 @@ package retry
 
 import (
 	"database/sql/driver"
+
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/errors"
 )
 
@@ -28,6 +30,7 @@ var (
 		"unsupported modify collate",
 		"unsupported drop integer primary key",
 		"Unsupported collation",
+		"Invalid default value for",
 	}
 
 	// UnsupportedDMLMsgs list the error messages of some un-recoverable DML, which is used in task auto recovery
@@ -40,6 +43,12 @@ var (
 	ParseRelayLogErrMsgs = []string{
 		"binlog checksum mismatch, data may be corrupted",
 		"get event err EOF",
+	}
+
+	// UnresumableErrCodes is a set of unresumeable err codes.
+	UnresumableErrCodes = map[int32]struct{}{
+		int32(terror.ErrSyncUnitDDLWrongSequence.Code()): {},
+		int32(terror.ErrSyncerShardDDLConflict.Code()):   {},
 	}
 )
 
