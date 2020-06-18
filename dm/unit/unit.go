@@ -15,6 +15,7 @@ package unit
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
@@ -77,4 +78,12 @@ func NewProcessError(errorType pb.ErrorType, err error) *pb.ProcessError {
 		}
 	}
 	return result
+}
+
+// IsCtxCanceledProcessErr returns true if the err's context canceled
+func IsCtxCanceledProcessErr(err *pb.ProcessError) bool {
+	if strings.Contains(err.Msg, "context canceled") {
+		return true
+	}
+	return false
 }

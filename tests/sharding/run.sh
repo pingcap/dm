@@ -56,6 +56,30 @@ function run() {
     # test drop table, drop database, truncate table in sharding mode
     run_sql_file $cur/data/db1.increment3.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment3.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+
+    # pause twice, just used to test pause by the way
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "pause-task test"\
+        "\"result\": true" 3
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "pause-task test"\
+        "current stage is Paused but not running, invalid" 2
+
+    # wait really paused
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+	    "query-status test" \
+        "Paused" 2
+
+    # resume twice, just used to test resume by the way
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task test"\
+        "\"result\": true" 3
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task test"\
+        "current stage is Running but not paused, invalid" 2
+
     cp $cur/conf/diff_config.toml $WORK_DIR/diff_config.toml
     printf "\n[[table-config.source-tables]]\ninstance-id = \"source-1\"\nschema = \"sharding2\"\ntable  = \"~t.*\"" >> $WORK_DIR/diff_config.toml
     sed -i "s/^# range-placeholder/range = \"uid < 70000\"/g" $WORK_DIR/diff_config.toml
