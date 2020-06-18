@@ -22,7 +22,6 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/terror"
 )
 
 const stageError = "Error"
@@ -61,7 +60,7 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", terror.Message(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
@@ -73,13 +72,13 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 		Sources: sources,
 	})
 	if err != nil {
-		common.PrintLines("can not query %s task's status(in sources %v):\n%s", taskName, sources, terror.Message(err))
+		common.PrintLines("can not query %s task's status(in sources %v):\n%v", taskName, sources, err)
 		return
 	}
 
 	more, err := cmd.Flags().GetBool("more")
 	if err != nil {
-		common.PrintLines("%s", terror.Message(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
