@@ -19,7 +19,6 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/spf13/cobra"
 )
@@ -45,7 +44,7 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) {
 
 	workers, err := common.GetWorkerArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", terror.Message(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
@@ -64,7 +63,7 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) {
 		if len(workers) > 0 {
 			common.PrintLines("workers: %v", workers)
 		}
-		common.PrintLines("error: %s", terror.Message(err))
+		common.PrintLines("error: %v", err)
 		return
 	}
 

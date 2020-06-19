@@ -16,7 +16,6 @@ package master
 import (
 	"os"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -44,13 +43,13 @@ func stopTaskFunc(cmd *cobra.Command, _ []string) {
 
 	workers, err := common.GetWorkerArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
 	resp, err := common.OperateTask(pb.TaskOp_Stop, name, workers)
 	if err != nil {
-		common.PrintLines("can not stop task %s:\n%v", name, errors.ErrorStack(err))
+		common.PrintLines("can not stop task %s:\n%v", name, err)
 		return
 	}
 

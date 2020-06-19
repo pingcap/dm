@@ -20,7 +20,6 @@ import (
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -47,7 +46,7 @@ func refreshWorkerTasksFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	resp, err := cli.RefreshWorkerTasks(ctx, &pb.RefreshWorkerTasksRequest{})
 	if err != nil {
-		common.PrintLines("can not refresh workerTasks:\n%v", errors.ErrorStack(err))
+		common.PrintLines("can not refresh workerTasks:\n%v", err)
 		return
 	}
 

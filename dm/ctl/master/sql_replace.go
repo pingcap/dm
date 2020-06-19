@@ -21,7 +21,6 @@ import (
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -55,7 +54,7 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 	var worker string
 	workers, err := common.GetWorkerArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 	if sharding {
@@ -79,7 +78,7 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 	extraArgs := cmd.Flags().Args()[1:]
 	realSQLs, err := common.ExtractSQLsFromArgs(extraArgs)
 	if err != nil {
-		common.PrintLines("check SQLs error: %s", errors.ErrorStack(err))
+		common.PrintLines("check SQLs error: %v", err)
 		return
 	}
 
@@ -96,7 +95,7 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 		Sharding:   sharding,
 	})
 	if err != nil {
-		common.PrintLines("can not replace SQL:\n%v", errors.ErrorStack(err))
+		common.PrintLines("can not replace SQL:\n%v", err)
 		return
 	}
 

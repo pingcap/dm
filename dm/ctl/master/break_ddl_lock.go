@@ -21,7 +21,6 @@ import (
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -49,7 +48,7 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 
 	workers, err := common.GetWorkerArgs(cmd)
 	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 	if len(workers) == 0 {
@@ -59,19 +58,19 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 
 	removeLockID, err := cmd.Flags().GetString("remove-id")
 	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
 	exec, err := cmd.Flags().GetBool("exec")
 	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
 	skip, err := cmd.Flags().GetBool("skip")
 	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
@@ -96,7 +95,7 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 		SkipDDL:      skip,
 	})
 	if err != nil {
-		common.PrintLines("can not break DDL lock (in workers %v):\n%s", workers, errors.ErrorStack(err))
+		common.PrintLines("can not break DDL lock (in workers %v):\n%v", workers, err)
 		return
 	}
 
