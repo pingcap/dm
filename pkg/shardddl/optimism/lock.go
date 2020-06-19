@@ -33,8 +33,8 @@ type Lock struct {
 	ID   string // lock's ID
 	Task string // lock's corresponding task name
 
-	downSchema string // downstream schema name
-	downTable  string // downstream table name
+	DownSchema string // downstream schema name
+	DownTable  string // downstream table name
 
 	// current joined info.
 	joined schemacmp.Table
@@ -57,8 +57,8 @@ func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []
 	l := &Lock{
 		ID:         ID,
 		Task:       task,
-		downSchema: downSchema,
-		downTable:  downTable,
+		DownSchema: downSchema,
+		DownTable:  downTable,
 		joined:     schemacmp.Encode(ti),
 		tables:     make(map[string]map[string]map[string]schemacmp.Table),
 		done:       make(map[string]map[string]map[string]bool),
@@ -95,7 +95,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	// handle the case where <callerSource, callerSchema, callerTable>
 	// is not in old source tables and current new source tables.
 	// duplicate append is not a problem.
-	tts = append(tts, newTargetTable(l.Task, callerSource, l.downSchema, l.downTable,
+	tts = append(tts, newTargetTable(l.Task, callerSource, l.DownSchema, l.DownTable,
 		map[string]map[string]struct{}{callerSchema: {callerTable: struct{}{}}}))
 	// add any new source tables.
 	l.addTables(tts)
