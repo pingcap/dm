@@ -600,7 +600,7 @@ func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 	err := w.OperateRelay(ctx, req)
 	if err != nil {
 		log.L().Error("fail to operate relay", zap.String("request", "OperateRelay"), zap.Stringer("payload", req), zap.Error(err))
-		resp.Msg = errors.ErrorStack(err)
+		resp.Msg = err.Error()
 		return resp, nil
 	}
 
@@ -663,7 +663,7 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 	workerCfg, err := w.QueryConfig(ctx)
 	if err != nil {
 		resp.Result = false
-		resp.Msg = errors.ErrorStack(err)
+		resp.Msg = err.Error()
 		log.L().Error("fail to query worker config", zap.String("request", "QueryWorkerConfig"), zap.Stringer("payload", req), zap.Error(err))
 		return resp, nil
 	}
@@ -671,7 +671,7 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 	rawConfig, err := workerCfg.From.Toml()
 	if err != nil {
 		resp.Result = false
-		resp.Msg = errors.ErrorStack(err)
+		resp.Msg = err.Error()
 		log.L().Error("fail to marshal worker config", zap.String("request", "QueryWorkerConfig"), zap.Stringer("worker from config", &workerCfg.From), zap.Error(err))
 	}
 
@@ -808,7 +808,7 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 	}
 	if reqErr != nil {
 		resp.Result = false
-		resp.Msg = errors.ErrorStack(reqErr)
+		resp.Msg = reqErr.Error()
 	}
 	return resp
 }

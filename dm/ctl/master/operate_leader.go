@@ -17,7 +17,6 @@ import (
 	"context"
 	"os"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -70,7 +69,7 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) {
 		Op: op,
 	})
 	if err != nil {
-		common.PrintLines("fail to operate leader:\n%v", errors.ErrorStack(err))
+		common.PrintLines("fail to operate leader:\n%v", err)
 		return
 	}
 
