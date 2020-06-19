@@ -51,7 +51,7 @@ function run() {
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status -s $SOURCE_ID1" \
             "no sub task started" 1 \
-            "ERROR" 1
+            "ERROR" 2
 
         echo "start task and query status, task and relay have error message"
         task_conf="$cur/conf/dm-task.yaml"
