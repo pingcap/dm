@@ -64,6 +64,9 @@ var (
 	// ShardDDLOptimismOperationKeyAdapter used to store shard DDL operation in optimistic model.
 	// k/v: Encode(task-name, sourc-id, upstream-schema-name, upstream-table-name) -> shard DDL operation.
 	ShardDDLOptimismOperationKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/operation/")
+	// ShardDDLOptimismInitSchemaKeyAdapter used to store the initial schema (before constructed the lock) of merged tables.
+	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name) -> table schema.
+	ShardDDLOptimismInitSchemaKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/init-schema/")
 )
 
 func keyAdapterKeysLen(s KeyAdapter) int {
@@ -75,6 +78,8 @@ func keyAdapterKeysLen(s KeyAdapter) int {
 		ShardDDLPessimismInfoKeyAdapter, ShardDDLPessimismOperationKeyAdapter,
 		ShardDDLOptimismSourceTablesKeyAdapter:
 		return 2
+	case ShardDDLOptimismInitSchemaKeyAdapter:
+		return 3
 	case ShardDDLOptimismInfoKeyAdapter, ShardDDLOptimismOperationKeyAdapter:
 		return 4
 

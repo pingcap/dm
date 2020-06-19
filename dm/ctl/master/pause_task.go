@@ -16,7 +16,6 @@ package master
 import (
 	"os"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -44,13 +43,13 @@ func pauseTaskFunc(cmd *cobra.Command, _ []string) {
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
 	resp, err := common.OperateTask(pb.TaskOp_Pause, name, sources)
 	if err != nil {
-		common.PrintLines("can not pause task %s:\n%v", name, errors.ErrorStack(err))
+		common.PrintLines("can not pause task %s:\n%v", name, err)
 		return
 	}
 
