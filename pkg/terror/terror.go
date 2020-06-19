@@ -22,8 +22,8 @@ import (
 
 const (
 	errBaseFormat       = "[code=%d:class=%s:scope=%s:level=%s]"
-	errMessageFormat    = "msg: %s"
-	errWorkaroundFormat = "workaround: %s"
+	errMessageFormat    = "msg: '%s'"
+	errWorkaroundFormat = "workaround: '%s'"
 	errFormat           = errBaseFormat + ", " + errMessageFormat + ", " + errWorkaroundFormat
 )
 
@@ -258,13 +258,14 @@ func (e *Error) Generatef(format string, args ...interface{}) error {
 // stackLevelGeneratef is an inner interface to generate new *Error
 func (e *Error) stackLevelGeneratef(stackSkipLevel int, format string, args ...interface{}) error {
 	return &Error{
-		code:    e.code,
-		class:   e.class,
-		scope:   e.scope,
-		level:   e.level,
-		message: format,
-		args:    args,
-		stack:   errors.NewStack(stackSkipLevel),
+		code:       e.code,
+		class:      e.class,
+		scope:      e.scope,
+		level:      e.level,
+		message:    format,
+		workaround: e.workaround,
+		args:       args,
+		stack:      errors.NewStack(stackSkipLevel),
 	}
 }
 

@@ -78,12 +78,12 @@ mysql-instances:
 	err := taskConfig.Decode(errorTaskConfig1)
 	// field server-id is not a member of TaskConfig
 	c.Check(err, NotNil)
-	c.Assert(err, ErrorMatches, "*line 18: field server-id not found in type config.MySQLInstance*")
+	c.Assert(err, ErrorMatches, "*line 18: field server-id not found in type config.MySQLInstance.*")
 
 	err = taskConfig.Decode(errorTaskConfig2)
 	// field name duplicate
 	c.Check(err, NotNil)
-	c.Assert(err, ErrorMatches, "*line 3: field name already set in type config.TaskConfig*")
+	c.Assert(err, ErrorMatches, "*line 3: field name already set in type config.TaskConfig.*")
 
 	filepath := path.Join(c.MkDir(), "test_invalid_task.yaml")
 	configContent := []byte(`---
@@ -101,7 +101,7 @@ ignore-checking-items: ["all"]
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
 	c.Assert(err, NotNil)
-	c.Assert(err, ErrorMatches, "*line 2: field aaa not found in type config.TaskConfig*")
+	c.Assert(err, ErrorMatches, "*line 2: field aaa not found in type config.TaskConfig.*")
 
 	filepath = path.Join(c.MkDir(), "test_invalid_task.yaml")
 	configContent = []byte(`---
@@ -119,7 +119,7 @@ ignore-checking-items: ["all"]
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
 	c.Assert(err, NotNil)
-	c.Assert(err, ErrorMatches, "*line 4: field task-mode already set in type config.TaskConfig*")
+	c.Assert(err, ErrorMatches, "*line 4: field task-mode already set in type config.TaskConfig.*")
 
 	// test valid task config
 	configContent = []byte(`---

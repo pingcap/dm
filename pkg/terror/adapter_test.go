@@ -15,6 +15,7 @@ package terror
 
 import (
 	"database/sql/driver"
+	"fmt"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/check"
@@ -42,10 +43,11 @@ func (t *testTErrorSuite) TestDBAdapter(c *check.C) {
 		} else {
 			c.Assert(tc.expect.Equal(err), check.IsTrue)
 			if err != tc.err {
+				exp := tc.expect
 				obj, ok := err.(*Error)
 				c.Assert(ok, check.IsTrue)
 				c.Assert(obj.getMsg(), check.Equals, tc.expect.message+": "+tc.err.Error())
-				c.Assert(obj.Error(), check.Equals, tc.expect.Error()+": "+tc.err.Error())
+				c.Assert(obj.Error(), check.Equals, fmt.Sprintf(errBaseFormat+", "+errMessageFormat+": "+tc.err.Error()+", "+errWorkaroundFormat, exp.code, exp.class, exp.scope, exp.level, exp.message, exp.workaround))
 			}
 		}
 	}

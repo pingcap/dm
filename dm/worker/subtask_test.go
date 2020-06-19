@@ -180,7 +180,7 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 	}
 	st.Run()
 	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
-	c.Assert(strings.Contains(st.Result().Errors[0].Msg, "has no dm units for mode"), IsTrue)
+	c.Assert(strings.Contains(st.Result().Errors[0].Error.String(), "has no dm units for mode"), IsTrue)
 
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
 	mockLoader := NewMockUnit(pb.UnitType_Load)
