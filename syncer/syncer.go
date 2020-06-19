@@ -2301,6 +2301,14 @@ func (s *Syncer) Close() {
 
 	s.checkpoint.Close()
 
+	if err := s.schemaTracker.Close(); err != nil {
+		s.tctx.L().Error("fail to close schema tracker", log.ShortError(err))
+	}
+
+	if s.sgk != nil {
+		s.sgk.Close()
+	}
+
 	s.closeOnlineDDL()
 
 	// when closing syncer by `stop-task`, remove active relay log from hub
