@@ -87,7 +87,7 @@ func (t *testTErrorSuite) TestTError(c *check.C) {
 	argsErr := New(code, class, scope, level, messageArgs, workaround)
 	err4 = argsErr.Delegate(commonErr, "1065")
 	c.Assert(argsErr.Equal(err4), check.IsTrue)
-	c.Assert(err4.Error(), check.Equals, fmt.Sprintf(errBaseFormat+", msg: 'message with args: 1065: common error', workaround: 'please check your network connection'", code, class, scope, level))
+	c.Assert(err4.Error(), check.Equals, fmt.Sprintf(errBaseFormat+", msg: 'message with args: 1065: common error', workaround: '%s'", code, class, scope, level, workaround))
 
 	// test Error AnnotateDelegate
 	c.Assert(err.AnnotateDelegate(nil, "message", "args"), check.IsNil)
