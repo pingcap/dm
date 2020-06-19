@@ -8,7 +8,7 @@ CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
-PACKAGES  := github.com/pingcap/dm/pkg/terror
+PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock|_tools')
 PACKAGES_RELAY := $$(go list ./... | grep 'github.com/pingcap/dm/relay')
 PACKAGES_SYNCER := $$(go list ./... | grep 'github.com/pingcap/dm/syncer')
 PACKAGES_PKG_BINLOG := $$(go list ./... | grep 'github.com/pingcap/dm/pkg/binlog')
