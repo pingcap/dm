@@ -84,6 +84,10 @@ function run_case() {
 
     eval ${init_table_cmd}
 
+    echo $'start case ${case}\n' > $WORK_DIR/master/log/dm-master.log
+    echo $'start case ${case}\n' > $WORK_DIR/worker1/log/dm-worker.log
+    echo $'start case ${case}\n' > $WORK_DIR/worker1/log/dm-worker.log
+
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/${task_conf}.yaml --remove-meta"
     
