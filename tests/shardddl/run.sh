@@ -1287,9 +1287,6 @@ function DM_094_CASE() {
         "start-task $cur/conf/double-source-$1.yaml" \
         "\"result\": true" 3
 
-    sleep 5
-    cat $WORK_DIR/worker1/log/dm-worker.log
-    
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
@@ -1318,8 +1315,6 @@ function DM_095_CASE() {
     
     run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
     run_sql_source2 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
-
-    cat 
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task test" \
