@@ -85,8 +85,11 @@ function run_case() {
     eval ${init_table_cmd}
 
     truncate -s 0 $WORK_DIR/master/log/dm-master.log
+    truncate -s 0 $WORK_DIR/master/log/stdout.log
     truncate -s 0 $WORK_DIR/worker1/log/dm-worker.log
+    truncate -s 0 $WORK_DIR/worker1/log/stdout.log
     truncate -s 0 $WORK_DIR/worker2/log/dm-worker.log
+    truncate -s 0 $WORK_DIR/worker2/log/stdout.log
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/${task_conf}.yaml --remove-meta"
