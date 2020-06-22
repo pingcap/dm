@@ -28,12 +28,48 @@ function run_sql_both_source() {
     run_sql_source2 "$1"
 }
 
+# use redirect instead of --log-file so we can clean log file every task
+function run_master() {
+    workdir=$1
+    port=$2
+    conf=$3
+
+    binary=$PWD/bin/dm-master.test
+    cur_dir=$(pwd)
+    mkdir -p $workdir/log
+    echo "[$(date)] <<<<<< START DM-MASTER on port $port, config: $conf >>>>>>"
+    cd $workdir
+    $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.master.out" DEVEL \
+        --master-addr=:$port \
+        --config="$conf" >> $workdir/log/dm-master.log 2>$workdir/log/stdout.log &
+    cd $cur_dir
+}
+
+# use redirect instead of --log-file so we can clean log file every task
+function run_worker() {
+    workdir=$1
+    port=$2
+    conf=$3
+
+    binary=$PWD/bin/dm-worker.test
+    mkdir -p $workdir/relay_log $workdir/dumped_data $workdir/log $workdir/bin
+    cur_dir=$(pwd)
+    echo "[$(date)] <<<<<< START DM-WORKER on port $port, config: $conf >>>>>>"
+    cd $workdir
+    $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.worker.$port.$(date +"%s").out" DEVEL \
+        --worker-addr=0.0.0.0:$port \
+        --advertise-addr=127.0.0.1:$port \
+        --config="$conf" \
+        >> $workdir/log/dm-worker.log 2>$workdir/log/stdout.log &
+    cd $cur_dir
+}
+
 function init_cluster(){
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    run_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    run_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
-    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    run_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     cp $cur/conf/source1.toml $WORK_DIR/source1.toml
     cp $cur/conf/source2.toml $WORK_DIR/source2.toml
@@ -84,9 +120,9 @@ function run_case() {
 
     eval ${init_table_cmd}
 
-    truncate -s 0 $WORK_DIR/master/log/dm-master.log
-    truncate -s 0 $WORK_DIR/worker1/log/dm-worker.log
-    truncate -s 0 $WORK_DIR/worker2/log/dm-worker.log
+    echo "shardddl case ${case}" > $WORK_DIR/master/log/dm-master.log
+    echo "shardddl case ${case}" > $WORK_DIR/worker1/log/dm-worker.log
+    echo "shardddl case ${case}" > $WORK_DIR/worker2/log/dm-worker.log
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/${task_conf}.yaml --remove-meta"
