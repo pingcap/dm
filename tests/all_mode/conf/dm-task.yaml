@@ -21,7 +21,7 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    block-allow-list:  "instance"
+    black-white-list:  "instance" # compatible with deprecated config
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -32,9 +32,10 @@ mysql-instances:
     loader-config-name: "global"
     syncer-config-name: "global"
 
-block-allow-list:
+black-white-list: # compatible with deprecated config
   instance:
     do-dbs: ["all_mode"]
+    ignore-dbs: ["ignore_db"]
 
 mydumpers:
   global:

@@ -114,8 +114,8 @@ type MySQLInstance struct {
 	SyncerThread int `yaml:"syncer-thread"`
 }
 
-// Verify does verification on configs
-func (m *MySQLInstance) Verify() error {
+// VerifyAndAdjust does verification on configs, and adjust some configs
+func (m *MySQLInstance) VerifyAndAdjust() error {
 	if m == nil {
 		return terror.ErrConfigMySQLInstNotFound.Generate()
 	}
@@ -136,6 +136,10 @@ func (m *MySQLInstance) Verify() error {
 	}
 	if len(m.SyncerConfigName) > 0 && m.Syncer != nil {
 		return terror.ErrConfigSyncerCfgConflict.Generate()
+	}
+
+	if len(m.BAListName) == 0 && len(m.BWListName) != 0 {
+		m.BAListName = m.BWListName
 	}
 
 	return nil
@@ -381,7 +385,7 @@ func (c *TaskConfig) adjust() error {
 	iids := make(map[string]int) // source-id -> instance-index
 	duplicateErrorStrings := make([]string, 0)
 	for i, inst := range c.MySQLInstances {
-		if err := inst.Verify(); err != nil {
+		if err := inst.VerifyAndAdjust(); err != nil {
 			return terror.Annotatef(err, "mysql-instance: %s", humanize.Ordinal(i))
 		}
 		if iid, ok := iids[inst.SourceID]; ok {
@@ -546,7 +550,6 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 			cfg.ColumnMappingRules[j] = c.ColumnMappings[name]
 		}
 
-		//cfg.BWList = c.BWList[inst.BWListName]
 		cfg.BAList = c.BAList[inst.BAListName]
 
 		cfg.MydumperConfig = *inst.Mydumper
