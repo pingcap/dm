@@ -42,7 +42,7 @@ target-database:
 mysql-instances:
   - source-id: "mysql-replica-01"
     server-id: 101 
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-1"]
     mydumper-config-name: "global"
@@ -67,7 +67,7 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-1"]
     mydumper-config-name: "global"
@@ -140,7 +140,7 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     mydumper-thread: 11
     mydumper-config-name: "global"
     loader-thread: 22
@@ -149,18 +149,18 @@ mysql-instances:
     syncer-config-name: "global"
 
   - source-id: "mysql-replica-02"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
   - source-id: "mysql-replica-03"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     mydumper-thread: 44
     loader-thread: 55
     syncer-thread: 66
 
-black-white-list:
+block-allow-list:
   instance:
     do-dbs: ["test"]
 
@@ -221,7 +221,7 @@ mysql-instances:
   - source-id: "mysql-replica-02"
   - source-id: "mysql-replica-03"
 
-black-white-list:
+block-allow-list:
   instance:
     do-dbs: ["test"]
 

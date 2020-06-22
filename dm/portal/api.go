@@ -33,8 +33,6 @@ const (
 	routeTp  = "route_rules"
 	filterTp = "filter"
 
-	// bw_list is deprecated, use ba_list instead
-	//bwListTp = "bw_list"
 	baListTp = "ba_list"
 
 	success = "success"
