@@ -1282,6 +1282,9 @@ function DM_094_CASE() {
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/double-source-$1.yaml" \
         "\"result\": true" 3
+
+    sleep 5
+    cat $WORK_DIR/worker1/log/dm-worker.log
     
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
@@ -1307,6 +1310,8 @@ function DM_095_CASE() {
     
     run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
     run_sql_source2 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
+
+    cat 
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task test" \
@@ -1534,7 +1539,7 @@ function run() {
     init_cluster
     init_database
     except=(024 025 029 042 044 045 052 053 054 055 060 061 069 070 071 072 073 074 075 078 079 083 084 085 086 087 088 089 090 091 092 093)
-    for i in $(seq -f "%03g" 1 103); do
+    for i in $(seq -f "%03g" 80 94); do
         if [[ ${except[@]} =~ $i ]]; then
             continue
         fi
