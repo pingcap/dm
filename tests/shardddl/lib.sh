@@ -90,6 +90,13 @@ function run_case() {
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/${task_conf}.yaml --remove-meta"
+
+    # make sure worker switch to syncer
+    # otherwise we may fail because dump schema inconsistent in shardddl
+    # or fail because upstream schema change but down schema unchange in redump when restart worker
+    if grep -q "is-sharding: true" $cur/conf/${task_conf}.yaml; then
+        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    fi
     
     DM_${case}_CASE $5
 
