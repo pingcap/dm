@@ -10,12 +10,12 @@ import {
   IFullTable,
   ISourceInstance,
   IFilters,
-  IBWList,
+  IBAList,
   ITaskInfo,
   IInstances,
   IFinalConfig,
   ITargetInstance,
-  IBWTable,
+  IBATable,
   IRoute,
   IDatabase
 } from '../types'
@@ -195,7 +195,7 @@ function instancesRulesCounter() {
 
   function genRuleKey(
     instanceId: string,
-    ruleType: 'route_rules' | 'filter' | 'bw_list' = 'route_rules'
+    ruleType: 'route_rules' | 'filter' | 'ba_list' = 'route_rules'
   ) {
     const curCnt = instancesRulesCnt[instanceId] || 0
     instancesRulesCnt[instanceId] = curCnt + 1
@@ -305,27 +305,27 @@ export function genFiltersConfig(
 export function genBlackWhiteList(
   allTables: IFullTables,
   autoSycnUpstream: boolean
-): IBWList {
-  const bwList: IBWList = {}
+): IBAList {
+  const baList: IBAList = {}
   const tables = Object.keys(allTables)
     .map(tableKey => allTables[tableKey])
     .filter(table => table.type === 'table')
   tables.forEach(table => {
-    const bwListKey = `${table.sourceId}.bw_list.1`
-    if (bwList[bwListKey] === undefined) {
-      bwList[bwListKey] = { 'do-tables': [], 'ignore-tables': [] }
+    const baListKey = `${table.sourceId}.ba_list.1`
+    if (baList[baListKey] === undefined) {
+      baList[baListKey] = { 'do-tables': [], 'ignore-tables': [] }
     }
-    const bwType: 'do-tables' | 'ignore-tables' =
+    const baType: 'do-tables' | 'ignore-tables' =
       table.parentKey !== '' ? 'do-tables' : 'ignore-tables'
-    if (autoSycnUpstream && bwType === 'do-tables') {
+    if (autoSycnUpstream && baType === 'do-tables') {
       return
     }
-    bwList[bwListKey][bwType].push({
+    baList[baListKey][baType].push({
       'db-name': table.schema,
       'tbl-name': table.table
     })
   })
-  return bwList
+  return baList
 }
 
 export function genFinalConfig(
@@ -338,7 +338,7 @@ export function genFinalConfig(
 ) {
   const routes: IRoutes = genRoutesConfig(targetSchemas, allTables)
   const filters: IFilters = genFiltersConfig(sourceSchemas, allTables)
-  const bwList: IBWList = genBlackWhiteList(allTables, autoSycnUpstream)
+  const baList: IBAList = genBlackWhiteList(allTables, autoSycnUpstream)
 
   const finalConfig = {
     name: taskInfo.taskName,
@@ -356,7 +356,7 @@ export function genFinalConfig(
 
     routes,
     filters,
-    'black-white-list': bwList
+    'black-white-list': baList
   }
   console.log(finalConfig)
   return finalConfig
@@ -438,9 +438,9 @@ export function parseFinalConfig(finalConfig: IFinalConfig) {
 
   /////
 
-  function parseBWListItem(
+  function parseBAListItem(
     instance: IFullInstance,
-    table: IBWTable,
+    table: IBATable,
     migrated: boolean
   ) {
     const sourceId = instance.sourceId
@@ -475,18 +475,18 @@ export function parseFinalConfig(finalConfig: IFinalConfig) {
   const allTables: IFullTables = {}
 
   // 第一步：从 black-white-lists 中还原得到 sourceFullInstances, sourceSchemas, allTables
-  const bwList: IBWList = finalConfig['black-white-list']
-  Object.keys(bwList).forEach(bwListKey => {
-    // bwListKey => "replica-1.bw_list.1"
-    const sourceId: string = bwListKey.split('.')[0]
+  const baList: IBAList = finalConfig['black-white-list']
+  Object.keys(baList).forEach(baListKey => {
+    // baListKey => "replica-1.ba_list.1"
+    const sourceId: string = baListKey.split('.')[0]
     const sourceFullInstance: IFullInstance = genDefFullInstance(sourceId)
     sourceFullInstances[sourceId] = sourceFullInstance
 
-    const doTables: IBWTable[] = bwList[bwListKey]['do-tables']
-    const ignoreTables: IBWTable[] = bwList[bwListKey]['ignore-tables']
-    doTables.forEach(table => parseBWListItem(sourceFullInstance, table, true))
+    const doTables: IBATable[] = baList[baListKey]['do-tables']
+    const ignoreTables: IBATable[] = baList[baListKey]['ignore-tables']
+    doTables.forEach(table => parseBAListItem(sourceFullInstance, table, true))
     ignoreTables.forEach(table =>
-      parseBWListItem(sourceFullInstance, table, false)
+      parseBAListItem(sourceFullInstance, table, false)
     )
   })
 
