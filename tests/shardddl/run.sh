@@ -1382,7 +1382,7 @@ function DM_097_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
     run_sql_source2 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
 
-    run_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -1411,7 +1411,7 @@ function DM_098_CASE() {
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
     run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
 
-    run_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
     run_sql_source2 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
@@ -1441,7 +1441,7 @@ function DM_099_CASE() {
 
     run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
 
-    run_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
     run_sql_source2 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
@@ -1471,7 +1471,7 @@ function DM_100_CASE() {
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
     run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
 
-    run_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
     run_sql_source2 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
@@ -1501,7 +1501,7 @@ function DM_101_CASE() {
 
     run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
 
-    run_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
     run_sql_source2 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
