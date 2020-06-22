@@ -1865,3 +1865,78 @@ func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb
 	resp.Members = members
 	return resp, nil
 }
+
+// OperateSchema operates schema of an upstream table.
+func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest) (*pb.OperateSchemaResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateSchema"))
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.OperateSchema(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	if len(req.Sources) == 0 {
+		return &pb.OperateSchemaResponse{
+			Result: false,
+			Msg:    "must specify at least one source",
+		}, nil
+	}
+
+	workerReq := workerrpc.Request{
+		Type: workerrpc.CmdOperateSchema,
+		OperateSchema: &pb.OperateWorkerSchemaRequest{
+			Op:       req.Op,
+			Task:     req.Task,
+			Source:   "", // set below.
+			Database: req.Database,
+			Table:    req.Table,
+			Schema:   req.Schema,
+		},
+	}
+
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
+	var wg sync.WaitGroup
+	for _, source := range req.Sources {
+		wg.Add(1)
+		go func(source string) {
+			defer wg.Done()
+			worker := s.scheduler.GetWorkerBySource(source)
+			if worker == nil {
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", source), source, "")
+				return
+			}
+			workerReq2 := workerReq
+			workerReq2.OperateSchema.Source = source
+			resp, err := worker.SendRequest(ctx, &workerReq2, s.cfg.RPCTimeout)
+			workerResp := &pb.CommonWorkerResponse{}
+			if err != nil {
+				workerResp = errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name)
+			} else {
+				workerResp = resp.OperateSchema
+			}
+			workerResp.Source = source
+			workerRespCh <- workerResp
+		}(source)
+	}
+	wg.Wait()
+
+	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Sources))
+	for len(workerRespCh) > 0 {
+		workerResp := <-workerRespCh
+		workerRespMap[workerResp.Source] = workerResp
+	}
+
+	sort.Strings(req.Sources)
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Sources))
+	for _, worker := range req.Sources {
+		workerResps = append(workerResps, workerRespMap[worker])
+	}
+
+	return &pb.OperateSchemaResponse{
+		Result:  true,
+		Sources: workerResps,
+	}, nil
+}

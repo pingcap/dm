@@ -697,6 +697,12 @@ func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) 
 	return makeCommonWorkerResponse(err), nil
 }
 
+// OperateSchema operate schema for an upstream table.
+func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaRequest) (*pb.CommonWorkerResponse, error) {
+	log.L().Info("", zap.String("request", "OperateSchema"), zap.Stringer("payload", req))
+	return makeCommonWorkerResponse(nil), nil
+}
+
 func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	s.Lock()
 	defer s.Unlock()
