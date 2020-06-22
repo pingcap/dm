@@ -95,7 +95,15 @@ function run_case() {
     # otherwise we may fail because dump schema inconsistent in shardddl
     # or fail because upstream schema change but down schema unchange in redump when restart worker
     if grep -q "is-sharding: true" $cur/conf/${task_conf}.yaml; then
-        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+        if [[ "$task_conf" == *"single"* ]]; then
+            run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "query-status test" \
+                "\"unit\": \"Sync\"" 1
+        else
+            run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "query-status test" \
+                "\"unit\": \"Sync\"" 2
+        fi
     fi
     
     DM_${case}_CASE $5
