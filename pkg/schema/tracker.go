@@ -125,6 +125,16 @@ func (tr *Tracker) Reset() error {
 	return nil
 }
 
+// Close close a tracker
+func (tr *Tracker) Close() error {
+	tr.se.Close()
+	tr.dom.Close()
+	if err := tr.store.Close(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // DropTable drops a table from this tracker.
 func (tr *Tracker) DropTable(db, table string) error {
 	return tr.dom.DDL().DropTable(tr.se, ast.Ident{Schema: model.NewCIStr(db), Name: model.NewCIStr(table)})

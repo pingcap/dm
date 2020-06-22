@@ -561,7 +561,7 @@ func (s *Scheduler) RemoveWorker(name string) error {
 	if !ok {
 		return terror.ErrSchedulerWorkerNotExist.Generate(name)
 	} else if w.Stage() != WorkerOffline {
-		return terror.ErrSchedulerWorkerOnline.Generate()
+		return terror.ErrSchedulerWorkerOnline.Generate(name)
 	}
 
 	// delete the info in etcd.

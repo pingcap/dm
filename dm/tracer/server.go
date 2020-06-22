@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
@@ -139,7 +138,7 @@ func (s *Server) UploadSyncerBinlogEvent(ctx context.Context, req *pb.UploadSync
 		if err != nil {
 			return &pb.CommonUploadResponse{
 				Result: false,
-				Msg:    errors.ErrorStack(err),
+				Msg:    err.Error(),
 			}, nil
 		}
 	}
@@ -157,7 +156,7 @@ func (s *Server) UploadSyncerJobEvent(ctx context.Context, req *pb.UploadSyncerJ
 		if err != nil {
 			return &pb.CommonUploadResponse{
 				Result: false,
-				Msg:    errors.ErrorStack(err),
+				Msg:    err.Error(),
 			}, nil
 		}
 	}

@@ -65,8 +65,37 @@ func (p *Pessimist) ConstructInfo(schema, table string, DDLs []string) pessimism
 }
 
 // PutInfo puts the shard DDL info into etcd and returns the revision.
-func (p *Pessimist) PutInfo(info pessimism.Info) (int64, error) {
-	rev, err := pessimism.PutInfo(p.cli, info)
+func (p *Pessimist) PutInfo(ctx context.Context, info pessimism.Info) (int64, error) {
+	// put info only no previous operation exists or not done.
+	rev, putted, err := pessimism.PutInfoIfOpNotDone(p.cli, info)
+	if err != nil {
+		return 0, err
+	} else if putted {
+		p.mu.Lock()
+		p.pendingInfo = &info
+		p.mu.Unlock()
+
+		return rev, nil
+	}
+
+	p.logger.Warn("the previous shard DDL operation still exists, waiting for it to be deleted", zap.Stringer("info", info))
+
+	// wait for the operation to be deleted.
+	ctx2, cancel2 := context.WithCancel(ctx)
+	defer cancel2()
+	ch := make(chan pessimism.Operation, 1)
+	errCh := make(chan error, 1)
+	go pessimism.WatchOperationDelete(ctx2, p.cli, info.Task, info.Source, rev, ch, errCh)
+
+	select {
+	case <-ch: // deleted.
+	case err := <-errCh:
+		return 0, err
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
+
+	rev, err = pessimism.PutInfo(p.cli, info)
 	if err != nil {
 		return 0, err
 	}
