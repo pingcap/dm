@@ -52,8 +52,8 @@ type HeartbeatConfig struct {
 	// serverID from dm-worker (relay)
 	// now, heartbeat not be synced to downstream
 	// so it will not be used by user directly and also enough to differ from other dm-worker's
-	serverID  uint32
-	masterCfg config.DBConfig // master server's DBConfig
+	serverID   uint32
+	primaryCfg config.DBConfig // primary server's DBConfig
 }
 
 // Equal tests whether config equals to other
@@ -67,8 +67,8 @@ func (cfg *HeartbeatConfig) Equal(other *HeartbeatConfig) error {
 	if cfg.serverID != other.serverID {
 		return terror.ErrSyncerUnitHeartbeatCheckConfig.Generatef("serverID not equal, self: %d, other: %d", cfg.serverID, other.serverID)
 	}
-	if !reflect.DeepEqual(cfg.masterCfg, other.masterCfg) {
-		return terror.ErrSyncerUnitHeartbeatCheckConfig.Generatef("masterCfg not equal, self: %+v, other: %+v", cfg.masterCfg, other.masterCfg)
+	if !reflect.DeepEqual(cfg.primaryCfg, other.primaryCfg) {
+		return terror.ErrSyncerUnitHeartbeatCheckConfig.Generatef("primaryCfg not equal, self: %+v, other: %+v", cfg.primaryCfg, other.primaryCfg)
 	}
 	return nil
 }
@@ -82,8 +82,8 @@ type Heartbeat struct {
 	schema string // for which schema the heartbeat table belongs to
 	table  string // for which table the heartbeat table belongs to
 
-	master   *sql.DB
-	slavesTs map[string]float64 // task-name => slave (syncer) ts
+	primary     *sql.DB
+	secondaryTs map[string]float64 // task-name => secondary (syncer) ts
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -95,12 +95,12 @@ type Heartbeat struct {
 func GetHeartbeat(cfg *HeartbeatConfig) (*Heartbeat, error) {
 	once.Do(func() {
 		heartbeat = &Heartbeat{
-			lock:     make(chan struct{}, 1), // with buffer 1, no recursion supported
-			cfg:      cfg,
-			schema:   strings.ToUpper(filter.DMHeartbeatSchema),
-			table:    strings.ToUpper(filter.DMHeartbeatTable),
-			slavesTs: make(map[string]float64),
-			logger:   log.With(zap.String("component", "heartbeat")),
+			lock:        make(chan struct{}, 1), // with buffer 1, no recursion supported
+			cfg:         cfg,
+			schema:      strings.ToUpper(filter.DMHeartbeatSchema),
+			table:       strings.ToUpper(filter.DMHeartbeatTable),
+			secondaryTs: make(map[string]float64),
+			logger:      log.With(zap.String("component", "heartbeat")),
 		}
 	})
 	if err := heartbeat.cfg.Equal(cfg); err != nil {
@@ -115,24 +115,24 @@ func (h *Heartbeat) AddTask(name string) error {
 	defer func() {
 		<-h.lock // read from the chan, release the lock
 	}()
-	if _, ok := h.slavesTs[name]; ok {
+	if _, ok := h.secondaryTs[name]; ok {
 		return terror.ErrSyncerUnitHeartbeatRecordExists.Generate(name)
 	}
-	if h.master == nil {
+	if h.primary == nil {
 		// open DB
-		dbCfg := h.cfg.masterCfg
+		dbCfg := h.cfg.primaryCfg
 		dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8&interpolateParams=true&readTimeout=1m", dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port)
-		master, err := sql.Open("mysql", dbDSN)
+		primary, err := sql.Open("mysql", dbDSN)
 		if err != nil {
 			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 		}
-		h.master = master
+		h.primary = primary
 
 		// init table
 		err = h.init()
 		if err != nil {
-			h.master.Close()
-			h.master = nil
+			h.primary.Close()
+			h.primary = nil
 			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 		}
 
@@ -151,7 +151,7 @@ func (h *Heartbeat) AddTask(name string) error {
 			h.run(ctx)
 		}()
 	}
-	h.slavesTs[name] = 0 // init to 0
+	h.secondaryTs[name] = 0 // init to 0
 	return nil
 }
 
@@ -161,20 +161,20 @@ func (h *Heartbeat) RemoveTask(name string) error {
 	defer func() {
 		<-h.lock
 	}()
-	if _, ok := h.slavesTs[name]; !ok {
+	if _, ok := h.secondaryTs[name]; !ok {
 		return terror.ErrSyncerUnitHeartbeatRecordNotFound.Generate(name)
 	}
-	delete(h.slavesTs, name)
+	delete(h.secondaryTs, name)
 
-	if len(h.slavesTs) == 0 {
+	if len(h.secondaryTs) == 0 {
 		// cancel work
 		h.cancel()
 		h.cancel = nil
 		h.wg.Wait()
 
 		// close DB
-		h.master.Close()
-		h.master = nil
+		h.primary.Close()
+		h.primary = nil
 	}
 
 	return nil
@@ -216,8 +216,8 @@ func (h *Heartbeat) TryUpdateTaskTs(taskName, schema, table string, data [][]int
 
 	select {
 	case h.lock <- struct{}{}:
-		if _, ok := h.slavesTs[taskName]; ok {
-			h.slavesTs[taskName] = h.timeToSeconds(t)
+		if _, ok := h.secondaryTs[taskName]; ok {
+			h.secondaryTs[taskName] = h.timeToSeconds(t)
 		}
 		<-h.lock
 	default:
@@ -269,15 +269,15 @@ func (h *Heartbeat) run(ctx context.Context) {
 	}
 }
 
-// createTable creates heartbeat database if not exists in master
+// createTable creates heartbeat database if not exists in primary
 func (h *Heartbeat) createDatabase() error {
 	createDatabase := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", h.schema)
-	_, err := h.master.Exec(createDatabase)
+	_, err := h.primary.Exec(createDatabase)
 	h.logger.Info("create heartbeat schema", zap.String("sql", createDatabase))
 	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 }
 
-// createTable creates heartbeat table if not exists in master
+// createTable creates heartbeat table if not exists in primary
 func (h *Heartbeat) createTable() error {
 	tableName := fmt.Sprintf("`%s`.`%s`", h.schema, h.table)
 	createTableStmt := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
@@ -286,7 +286,7 @@ func (h *Heartbeat) createTable() error {
   PRIMARY KEY (server_id)
 )`, tableName)
 
-	_, err := h.master.Exec(createTableStmt)
+	_, err := h.primary.Exec(createTableStmt)
 	h.logger.Info("create heartbeat table", zap.String("sql", createTableStmt))
 	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 }
@@ -294,24 +294,24 @@ func (h *Heartbeat) createTable() error {
 // updateTS use `REPLACE` statement to insert or update ts
 func (h *Heartbeat) updateTS() error {
 	query := fmt.Sprintf("REPLACE INTO `%s`.`%s` (`ts`, `server_id`) VALUES(UTC_TIMESTAMP(6), ?)", h.schema, h.table)
-	_, err := h.master.Exec(query, h.cfg.serverID)
+	_, err := h.primary.Exec(query, h.cfg.serverID)
 	h.logger.Debug("update ts", zap.String("sql", query), zap.Uint32("server ID", h.cfg.serverID))
 	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 }
 
 func (h *Heartbeat) calculateLag(ctx context.Context) error {
-	masterTS, err := h.getMasterTS()
+	primaryTS, err := h.getPrimaryTS()
 	if err != nil {
 		return err
 	}
 
 	select {
 	case h.lock <- struct{}{}:
-		for taskName, ts := range h.slavesTs {
+		for taskName, ts := range h.secondaryTs {
 			if ts == 0 {
-				continue // do not update metrics if no valid slave TS exists.
+				continue // do not update metrics if no valid secondary TS exists.
 			}
-			lag := masterTS - ts
+			lag := primaryTS - ts
 			reportLagFunc(taskName, lag)
 		}
 		<-h.lock
@@ -326,8 +326,8 @@ func reportLag(taskName string, lag float64) {
 	replicationLagGauge.WithLabelValues(taskName).Set(float64(lag))
 }
 
-func (h *Heartbeat) getMasterTS() (float64, error) {
-	return h.getTS(h.master)
+func (h *Heartbeat) getPrimaryTS() (float64, error) {
+	return h.getTS(h.primary)
 }
 
 func (h *Heartbeat) getTS(db *sql.DB) (float64, error) {

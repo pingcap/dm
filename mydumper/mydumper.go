@@ -273,7 +273,7 @@ func (m *Mydumper) constructArgs() ([]string, error) {
 		ret = append(ret, ParseArgLikeBash(extraArgs)...)
 	}
 	if needToGenerateDoTables(extraArgs) {
-		m.logger.Info("Tables needed to dump are not given, now we will start to generate table list that mydumper needs to dump through black-white list from given fromDB")
+		m.logger.Info("Tables needed to dump are not given, now we will start to generate table list that mydumper needs to dump through block-allow list from given fromDB")
 		doTables, err := fetchMyDumperDoTables(cfg)
 		if err != nil {
 			return nil, err

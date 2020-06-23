@@ -35,7 +35,7 @@ func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string
 	}
 
 	if len(tables) > 0 {
-		tbs := s.bwList.ApplyOn(tables)
+		tbs := s.baList.ApplyOn(tables)
 		if len(tbs) != len(tables) {
 			return true, nil
 		}
@@ -80,7 +80,7 @@ func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication
 	}
 
 	tbs := []*filter.Table{{Schema: schema, Name: table}}
-	tbs = s.bwList.ApplyOn(tbs)
+	tbs = s.baList.ApplyOn(tbs)
 	if len(tbs) == 0 {
 		return true, nil
 	}
