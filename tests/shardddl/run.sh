@@ -1416,7 +1416,6 @@ function DM_098_CASE() {
 
     run_sql_source2 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
 
-    cat $WORK_DIR/worker1/log/dm-worker.log
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
@@ -1567,16 +1566,7 @@ function run() {
     init_cluster
     init_database
     except=(024 025 029 042 044 045 052 053 054 055 060 061 069 070 071 072 073 074 075 078 079 083 084 085 086 087 088 089 090 091 092 093)
-    for i in $(seq -f "%03g" 98 98); do
-        # we should remove this lines after fix memory leak of schemaTracker
-        case="$i"
-        if [[ ${case:2:1} -eq "0"  ]]; then
-            cleanup_data $shardddl
-            cleanup_process $*
-            init_cluster
-            init_database
-        fi
-
+    for i in $(seq -f "%03g" 1 103); do
         if [[ ${except[@]} =~ $i ]]; then
             continue
         fi
