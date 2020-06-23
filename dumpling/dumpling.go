@@ -193,7 +193,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	dumpConfig.User = db.User
 	dumpConfig.Password = db.Password
 	dumpConfig.OutputDirPath = cfg.Dir // use LoaderConfig.Dir as output dir
-	tableFilter, err := filter.ParseMySQLReplicationRules(cfg.BWList)
+	tableFilter, err := filter.ParseMySQLReplicationRules(cfg.BAList)
 	if err != nil {
 		return nil, err
 	}

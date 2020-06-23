@@ -19,7 +19,7 @@ mysql-instances:
     meta:
       binlog-name: binlog-name-placeholder-1
       binlog-pos: 4
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -28,12 +28,12 @@ mysql-instances:
     meta:
       binlog-name: binlog-name-placeholder-2
       binlog-pos: 4
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
-black-white-list:
+block-allow-list:
   instance:
     do-dbs: ["dm_syncer"]
 
