@@ -53,22 +53,22 @@ func trimOutQuotes(arg string) string {
 	return arg
 }
 
-// fetchMyDumperDoTables fetches and filters the tables that needed to be dumped through black-white list and route rules
+// fetchMyDumperDoTables fetches and filters the tables that needed to be dumped through block-allow list and route rules
 func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 	fromDB, err := applyNewBaseDB(cfg.From)
 	if err != nil {
 		return "", terror.WithClass(err, terror.ClassDumpUnit)
 	}
 	defer fromDB.Close()
-	bw, err := filter.New(cfg.CaseSensitive, cfg.BWList)
+	ba, err := filter.New(cfg.CaseSensitive, cfg.BAList)
 	if err != nil {
-		return "", terror.ErrDumpUnitGenBWList.Delegate(err)
+		return "", terror.ErrDumpUnitGenBAList.Delegate(err)
 	}
 	r, err := router.NewTableRouter(cfg.CaseSensitive, cfg.RouteRules)
 	if err != nil {
 		return "", terror.ErrDumpUnitGenTableRouter.Delegate(err)
 	}
-	sourceTables, err := fetchTargetDoTables(fromDB.DB, bw, r)
+	sourceTables, err := fetchTargetDoTables(fromDB.DB, ba, r)
 	if err != nil {
 		return "", terror.WithClass(err, terror.ClassDumpUnit)
 	}

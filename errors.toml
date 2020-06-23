@@ -851,7 +851,7 @@ workaround = ""
 tags = ["internal", "medium"]
 
 [error.DM-config-20026]
-message = "mysql-instance(%d)'s list %s not exist in black white list"
+message = "mysql-instance(%d)'s list %s not exist in block allow list"
 description = ""
 workaround = ""
 tags = ["internal", "medium"]
@@ -983,7 +983,7 @@ workaround = ""
 tags = ["internal", "medium"]
 
 [error.DM-task-check-26006]
-message = "generate black white list error"
+message = "generate block allow list error"
 description = ""
 workaround = ""
 tags = ["internal", "medium"]
@@ -1289,7 +1289,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dump-unit-32003]
-message = "generate black white list"
+message = "generate block allow list"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -1385,7 +1385,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-load-unit-34016]
-message = "generate black white list"
+message = "generate block allow list"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -1745,7 +1745,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36060]
-message = "generate black white list"
+message = "generate block allow list"
 description = ""
 workaround = ""
 tags = ["internal", "high"]

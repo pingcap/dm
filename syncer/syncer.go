@@ -127,7 +127,7 @@ type Syncer struct {
 	tableRouter   *router.Table
 	binlogFilter  *bf.BinlogEvent
 	columnMapping *cm.Mapping
-	bwList        *filter.Filter
+	baList        *filter.Filter
 
 	closed sync2.AtomicBool
 
@@ -271,9 +271,9 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 
 	s.streamerController = NewStreamerController(tctx, s.syncCfg, s.cfg.EnableGTID, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
 
-	s.bwList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BWList)
+	s.baList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BAList)
 	if err != nil {
-		return terror.ErrSyncerUnitGenBWList.Delegate(err)
+		return terror.ErrSyncerUnitGenBAList.Delegate(err)
 	}
 
 	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.CaseSensitive, s.cfg.FilterRules)
@@ -337,7 +337,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	if s.cfg.EnableHeartbeat {
 		s.heartbeat, err = GetHeartbeat(&HeartbeatConfig{
 			serverID:       s.cfg.ServerID,
-			masterCfg:      s.cfg.From,
+			primaryCfg:     s.cfg.From,
 			updateInterval: int64(s.cfg.HeartbeatUpdateInterval),
 			reportInterval: int64(s.cfg.HeartbeatReportInterval),
 		})
@@ -366,7 +366,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 // NOTE: now we don't support modify router rules after task has started
 func (s *Syncer) initShardingGroups() error {
 	// fetch tables from source and filter them
-	sourceTables, err := s.fromDB.fetchAllDoTables(s.bwList)
+	sourceTables, err := s.fromDB.fetchAllDoTables(s.baList)
 	if err != nil {
 		return err
 	}
@@ -2385,7 +2385,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 }
 
 // Update implements Unit.Update
-// now, only support to update config for routes, filters, column-mappings, black-white-list
+// now, only support to update config for routes, filters, column-mappings, block-allow-list
 // now no config diff implemented, so simply re-init use new config
 func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	if s.cfg.ShardMode == config.ShardPessimistic {
@@ -2397,7 +2397,7 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 
 	var (
 		err              error
-		oldBwList        *filter.Filter
+		oldBaList        *filter.Filter
 		oldTableRouter   *router.Table
 		oldBinlogFilter  *bf.BinlogEvent
 		oldColumnMapping *cm.Mapping
@@ -2407,8 +2407,8 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 		if err == nil {
 			return
 		}
-		if oldBwList != nil {
-			s.bwList = oldBwList
+		if oldBaList != nil {
+			s.baList = oldBaList
 		}
 		if oldTableRouter != nil {
 			s.tableRouter = oldTableRouter
@@ -2421,11 +2421,11 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 		}
 	}()
 
-	// update black-white-list
-	oldBwList = s.bwList
-	s.bwList, err = filter.New(cfg.CaseSensitive, cfg.BWList)
+	// update block-allow-list
+	oldBaList = s.baList
+	s.baList, err = filter.New(cfg.CaseSensitive, cfg.BAList)
 	if err != nil {
-		return terror.ErrSyncerUnitGenBWList.Delegate(err)
+		return terror.ErrSyncerUnitGenBAList.Delegate(err)
 	}
 
 	// update route
@@ -2469,7 +2469,7 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	}
 
 	// update l.cfg
-	s.cfg.BWList = cfg.BWList
+	s.cfg.BAList = cfg.BAList
 	s.cfg.RouteRules = cfg.RouteRules
 	s.cfg.FilterRules = cfg.FilterRules
 	s.cfg.ColumnMappingRules = cfg.ColumnMappingRules
