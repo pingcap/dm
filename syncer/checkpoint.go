@@ -310,6 +310,7 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 	}
 
 	cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil, cp.cfg.EnableGTID)
+	cp.globalPointSaveTime = time.Time{}
 	cp.points = make(map[string]map[string]*binlogPoint)
 
 	return nil
@@ -452,7 +453,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 	sqls := make([]string, 0, 100)
 	args := make([][]interface{}, 0, 100)
 
-	if cp.globalPoint.outOfDate() {
+	if cp.globalPoint.outOfDate() || cp.globalPointSaveTime.IsZero() {
 		locationG := cp.GlobalPoint()
 		sqlG, argG := cp.genUpdateSQL(globalCpSchema, globalCpTable, locationG, nil, true)
 		sqls = append(sqls, sqlG)
