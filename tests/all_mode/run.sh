@@ -140,6 +140,7 @@ function run() {
     # test block-allow-list by the way
     run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
     check_not_contains "ignore_db"
+    check_contains "all_mode"
 
     export GO_FAILPOINTS=''
 }
