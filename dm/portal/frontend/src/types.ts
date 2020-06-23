@@ -137,19 +137,19 @@ export interface IFilters {
   [key: string]: IFilter
 }
 
-// BWList: Black White List
-export interface IBWTable {
+// BAList: Block Allow List
+export interface IBATable {
   'db-name': string
   'tbl-name': string
 }
 
-export interface IBWSchema {
-  'do-tables': IBWTable[]
-  'ignore-tables': IBWTable[]
+export interface IBASchema {
+  'do-tables': IBATable[]
+  'ignore-tables': IBATable[]
 }
 
-export interface IBWList {
-  [key: string]: IBWSchema
+export interface IBAList {
+  [key: string]: IBASchema
 }
 
 export interface IMySQLInstance {
@@ -170,5 +170,5 @@ export interface IFinalConfig {
 
   routes: IRoutes
   filters: IFilters
-  'black-white-list': IBWList
+  'block-allow-list': IBAList
 }

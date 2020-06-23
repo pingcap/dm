@@ -28,7 +28,7 @@ import (
 func NewUpdateTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-task [-s source ...] <config-file>",
-		Short: "update a task's config for routes, filters, or black-white-list",
+		Short: "update a task's config for routes, filters, or block-allow-list",
 		Run:   updateTaskFunc,
 	}
 	return cmd

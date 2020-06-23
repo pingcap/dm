@@ -29,7 +29,7 @@ mysql-instances:             # one or more source database, config more source d
       binlog-pos: 4
     route-rules: ["user-route-rules-schema", "user-route-rules"]
     filter-rules: ["user-filter-1", "user-filter-2"]
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
 
     # `mydumper-config-name` and `mydumper` should only set one
     mydumper-config-name: "global"   # ref `mydumpers` config
@@ -59,7 +59,7 @@ mysql-instances:             # one or more source database, config more source d
       binlog-pos: 320
     route-rules: ["user-route-rules-schema", "user-route-rules"]
     filter-rules: ["user-filter-2"]
-    black-white-list: "instance"
+    block-allow-list: "instance"
 
     mydumper:
       threads: 4
@@ -102,16 +102,16 @@ filters:                     # filter rules, mysql instance can ref rules in it
     events: ["all dml"]             # only do all DML events
     action: Do
 
-black-white-list:
+block-allow-list:
   instance:
-    do-dbs: ["~^test.*", "do"]        # white list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
-    ignore-dbs: ["mysql", "ignored"]  # black list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
-    do-tables:                        # white list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
+    do-dbs: ["~^test.*", "do"]        # allow list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
+    ignore-dbs: ["mysql", "ignored"]  # block list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
+    do-tables:                        # allow list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
     - db-name: "~^test.*"
       tbl-name: "~^t.*"
     - db-name: "do"
       tbl-name: "do"
-    ignore-tables:                    # black list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
+    ignore-tables:                    # block list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
     - db-name: "test"
       tbl-name: "log"
 

@@ -93,7 +93,10 @@ type MySQLInstance struct {
 	FilterRules        []string `yaml:"filter-rules"`
 	ColumnMappingRules []string `yaml:"column-mapping-rules"`
 	RouteRules         []string `yaml:"route-rules"`
-	BWListName         string   `yaml:"black-white-list"`
+
+	// black-white-list is deprecated, use block-allow-list instead
+	BWListName string `yaml:"black-white-list"`
+	BAListName string `yaml:"block-allow-list"`
 
 	MydumperConfigName string          `yaml:"mydumper-config-name"`
 	Mydumper           *MydumperConfig `yaml:"mydumper"`
@@ -111,8 +114,8 @@ type MySQLInstance struct {
 	SyncerThread int `yaml:"syncer-thread"`
 }
 
-// Verify does verification on configs
-func (m *MySQLInstance) Verify() error {
+// VerifyAndAdjust does verification on configs, and adjust some configs
+func (m *MySQLInstance) VerifyAndAdjust() error {
 	if m == nil {
 		return terror.ErrConfigMySQLInstNotFound.Generate()
 	}
@@ -133,6 +136,10 @@ func (m *MySQLInstance) Verify() error {
 	}
 	if len(m.SyncerConfigName) > 0 && m.Syncer != nil {
 		return terror.ErrConfigSyncerCfgConflict.Generate()
+	}
+
+	if len(m.BAListName) == 0 && len(m.BWListName) != 0 {
+		m.BAListName = m.BWListName
 	}
 
 	return nil
@@ -275,7 +282,10 @@ type TaskConfig struct {
 	Routes         map[string]*router.TableRule   `yaml:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters"`
 	ColumnMappings map[string]*column.Rule        `yaml:"column-mappings"`
-	BWList         map[string]*filter.Rules       `yaml:"black-white-list"`
+
+	// black-white-list is deprecated, use block-allow-list instead
+	BWList map[string]*filter.Rules `yaml:"black-white-list"`
+	BAList map[string]*filter.Rules `yaml:"block-allow-list"`
 
 	Mydumpers map[string]*MydumperConfig `yaml:"mydumpers"`
 	Loaders   map[string]*LoaderConfig   `yaml:"loaders"`
@@ -296,6 +306,7 @@ func NewTaskConfig() *TaskConfig {
 		Filters:                 make(map[string]*bf.BinlogEventRule),
 		ColumnMappings:          make(map[string]*column.Rule),
 		BWList:                  make(map[string]*filter.Rules),
+		BAList:                  make(map[string]*filter.Rules),
 		Mydumpers:               make(map[string]*MydumperConfig),
 		Loaders:                 make(map[string]*LoaderConfig),
 		Syncers:                 make(map[string]*SyncerConfig),
@@ -374,7 +385,7 @@ func (c *TaskConfig) adjust() error {
 	iids := make(map[string]int) // source-id -> instance-index
 	duplicateErrorStrings := make([]string, 0)
 	for i, inst := range c.MySQLInstances {
-		if err := inst.Verify(); err != nil {
+		if err := inst.VerifyAndAdjust(); err != nil {
 			return terror.Annotatef(err, "mysql-instance: %s", humanize.Ordinal(i))
 		}
 		if iid, ok := iids[inst.SourceID]; ok {
@@ -412,8 +423,13 @@ func (c *TaskConfig) adjust() error {
 				return terror.ErrConfigColumnMappingNotFound.Generate(i, name)
 			}
 		}
-		if _, ok := c.BWList[inst.BWListName]; len(inst.BWListName) > 0 && !ok {
-			return terror.ErrConfigBWListNotFound.Generate(i, inst.BWListName)
+
+		// only when BAList is empty use BWList
+		if len(c.BAList) == 0 && len(c.BWList) != 0 {
+			c.BAList = c.BWList
+		}
+		if _, ok := c.BAList[inst.BAListName]; len(inst.BAListName) > 0 && !ok {
+			return terror.ErrConfigBAListNotFound.Generate(i, inst.BAListName)
 		}
 
 		if len(inst.MydumperConfigName) > 0 {
@@ -534,7 +550,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 			cfg.ColumnMappingRules[j] = c.ColumnMappings[name]
 		}
 
-		cfg.BWList = c.BWList[inst.BWListName]
+		cfg.BAList = c.BAList[inst.BAListName]
 
 		cfg.MydumperConfig = *inst.Mydumper
 		cfg.LoaderConfig = *inst.Loader

@@ -338,7 +338,7 @@ func (oc *syncerConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 			SafeMode:         oc.SafeMode,
 		},
 
-		BWList: &filter.Rules{
+		BAList: &filter.Rules{
 			DoTables:     oc.DoTables,
 			DoDBs:        oc.DoDBs,
 			IgnoreTables: oc.IgnoreTables,

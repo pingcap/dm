@@ -137,6 +137,11 @@ function run() {
     # check_metric $WORKER1_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
     # check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
 
+    # test block-allow-list by the way
+    run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
+    check_not_contains "ignore_db"
+    check_contains "all_mode"
+
     export GO_FAILPOINTS=''
 }
 
