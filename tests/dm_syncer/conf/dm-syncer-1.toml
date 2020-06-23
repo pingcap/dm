@@ -58,7 +58,7 @@ batch = 1000
 
 # filter
 
-# blOck allow list provides a library to filter replicate on schema/table by given rules
+# block allow list provides a library to filter replicate on schema/table by given rules
 # support regular expression , start with '~' declare use regular expression.
 # rules like replication rules in MySQL, ref document:
 # https://dev.mysql.com/doc/refman/8.0/en/replication-rules-db-options.html
