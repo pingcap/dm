@@ -170,5 +170,5 @@ export interface IFinalConfig {
 
   routes: IRoutes
   filters: IFilters
-  'black-white-list': IBAList
+  'block-allow-list': IBAList
 }

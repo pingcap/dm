@@ -302,7 +302,7 @@ export function genFiltersConfig(
   return filters
 }
 
-export function genBlackWhiteList(
+export function genBlockAllowList(
   allTables: IFullTables,
   autoSycnUpstream: boolean
 ): IBAList {
@@ -338,7 +338,7 @@ export function genFinalConfig(
 ) {
   const routes: IRoutes = genRoutesConfig(targetSchemas, allTables)
   const filters: IFilters = genFiltersConfig(sourceSchemas, allTables)
-  const baList: IBAList = genBlackWhiteList(allTables, autoSycnUpstream)
+  const baList: IBAList = genBlockAllowList(allTables, autoSycnUpstream)
 
   const finalConfig = {
     name: taskInfo.taskName,
@@ -356,7 +356,7 @@ export function genFinalConfig(
 
     routes,
     filters,
-    'black-white-list': baList
+    'block-allow-list': baList
   }
   console.log(finalConfig)
   return finalConfig
@@ -474,8 +474,8 @@ export function parseFinalConfig(finalConfig: IFinalConfig) {
   const sourceSchemas: IFullSchemas = {}
   const allTables: IFullTables = {}
 
-  // 第一步：从 black-white-lists 中还原得到 sourceFullInstances, sourceSchemas, allTables
-  const baList: IBAList = finalConfig['black-white-list']
+  // 第一步：从 block-allow-lists 中还原得到 sourceFullInstances, sourceSchemas, allTables
+  const baList: IBAList = finalConfig['block-allow-list']
   Object.keys(baList).forEach(baListKey => {
     // baListKey => "replica-1.ba_list.1"
     const sourceId: string = baListKey.split('.')[0]
