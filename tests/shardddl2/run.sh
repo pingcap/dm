@@ -68,6 +68,7 @@ function DM_038_CASE() {
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
 
+    # TODO: remove sleep after we support detect ASAP in optimistic mode
     sleep 1
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column col1 datetime default now();"
     run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values (1);"
