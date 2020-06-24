@@ -1030,7 +1030,7 @@ func (t *testMaster) TestServer(c *check.C) {
 	dupServer := NewServer(cfg)
 	err := dupServer.Start(ctx)
 	c.Assert(terror.ErrMasterStartEmbedEtcdFail.Equal(err), check.IsTrue)
-	c.Assert(err.Error(), check.Matches, ".*bind: address already in use")
+	c.Assert(err.Error(), check.Matches, ".*bind: address already in use.*")
 
 	// close
 	cancel()
