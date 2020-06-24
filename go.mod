@@ -29,7 +29,7 @@ require (
 	github.com/pingcap/log v0.0.0-20200117041106-d28c14d3b1cd
 	github.com/pingcap/parser v0.0.0-20200616075836-fab06dab2086
 	github.com/pingcap/tidb v1.1.0-beta.0.20200423094549-0ad7ce6cdae6
-	github.com/pingcap/tidb-tools v4.0.0-rc.1.0.20200514040632-f76b3e428e19+incompatible
+	github.com/pingcap/tidb-tools v4.0.2-0.20200622075412-c409811814de+incompatible
 	github.com/prometheus/client_golang v1.2.1
 	github.com/prometheus/procfs v0.0.7 // indirect
 	github.com/rakyll/statik v0.1.6
