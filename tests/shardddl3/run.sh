@@ -5,7 +5,7 @@ set -eu
 cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
-source $cur/lib.sh
+source $cur/../_utils/shardddl_lib.sh
 
 function DM_076_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} add primary key(id);"

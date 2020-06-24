@@ -5,7 +5,7 @@ set -eu
 cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
-source $cur/lib.sh
+source $cur/../_utils/shardddl_lib.sh
 
 function DM_036_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int first;"
@@ -381,11 +381,11 @@ function DM_056_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
-    run_sql_source2 "alter table ${shardddl1}.${tb1} change b c int first;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} change a c int first;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
-    run_sql_source2 "alter table ${shardddl1}.${tb2} change b c int first;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} change a c int first;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
@@ -519,15 +519,15 @@ function DM_062() {
 }
 
 function DM_063_CASE() {
-    run_sql_source1 "alter table ${shardddl1}.${tb1} modify id int(15);"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify id bigint;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
-    run_sql_source2 "alter table ${shardddl1}.${tb1} modify id int(20);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} modify id smallint;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(5);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(6);"
-    run_sql_source2 "alter table ${shardddl1}.${tb2} modify id int(20);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} modify id smallint;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(7);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(8);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9);"
@@ -535,7 +535,9 @@ function DM_063_CASE() {
     if [[ "$1" = "pessimistic" ]]; then
         check_log_contain_with_retry "is different with" $WORK_DIR/master/log/dm-master.log
     else
-        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "because schema conflict detected" 2
     fi
 }
 
