@@ -166,7 +166,10 @@ type SubTaskConfig struct {
 	RouteRules         []*router.TableRule   `toml:"route-rules" json:"route-rules"`
 	FilterRules        []*bf.BinlogEventRule `toml:"filter-rules" json:"filter-rules"`
 	ColumnMappingRules []*column.Rule        `toml:"mapping-rule" json:"mapping-rule"`
-	BWList             *filter.Rules         `toml:"black-white-list" json:"black-white-list"`
+
+	// black-white-list is deprecated, use block-allow-list instead
+	BWList *filter.Rules `toml:"black-white-list" json:"black-white-list"`
+	BAList *filter.Rules `toml:"block-allow-list" json:"block-allow-list"`
 
 	MydumperConfig // Mydumper configuration
 	LoaderConfig   // Loader configuration
@@ -289,6 +292,11 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		if err1 != nil {
 			return err1
 		}
+	}
+
+	// only when block-allow-list is nil use black-white-list
+	if c.BAList == nil && c.BWList != nil {
+		c.BAList = c.BWList
 	}
 
 	return nil

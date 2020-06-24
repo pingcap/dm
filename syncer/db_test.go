@@ -184,7 +184,7 @@ func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 }
 
 func (s *testDBSuite) TestTimezone(c *C) {
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		DoDBs:     []string{"~^tztest_.*"},
 		IgnoreDBs: []string{"stest", "~^foo.*"},
 	}

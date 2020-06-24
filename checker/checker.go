@@ -117,7 +117,7 @@ func (c *Checker) Init(ctx context.Context) (err error) {
 	_, checkSchema := c.checkingItems[config.TableSchemaChecking]
 
 	for _, instance := range c.instances {
-		bw, err := filter.New(instance.cfg.CaseSensitive, instance.cfg.BWList)
+		bw, err := filter.New(instance.cfg.CaseSensitive, instance.cfg.BAList)
 		if err != nil {
 			return terror.ErrTaskCheckGenBAList.Delegate(err)
 		}

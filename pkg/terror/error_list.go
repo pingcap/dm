@@ -712,7 +712,7 @@ var (
 	ErrConfigRouteRuleNotFound      = New(codeConfigRouteRuleNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s route-rules %s not exist in routes")
 	ErrConfigFilterRuleNotFound     = New(codeConfigFilterRuleNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s filter-rules %s not exist in filters")
 	ErrConfigColumnMappingNotFound  = New(codeConfigColumnMappingNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s column-mapping-rules %s not exist in column-mapping")
-	ErrConfigBAListNotFound         = New(codeConfigBAListNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s list %s not exist in black white list")
+	ErrConfigBAListNotFound         = New(codeConfigBAListNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s list %s not exist in block allow list")
 	ErrConfigMydumperCfgNotFound    = New(codeConfigMydumperCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s mydumper config %s not exist in mydumpers")
 	ErrConfigMydumperPathNotValid   = New(codeConfigMydumperPathNotValid, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s mydumper-path must specify a valid path to mydumper binary when task-mode is all or full")
 	ErrConfigLoaderCfgNotFound      = New(codeConfigLoaderCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s loader config %s not exist in loaders")
@@ -740,7 +740,7 @@ var (
 	ErrTaskCheckGenTableRouter   = New(codeTaskCheckGenTableRouter, ClassTaskCheck, ScopeInternal, LevelMedium, "generate table router error")
 	ErrTaskCheckGenColumnMapping = New(codeTaskCheckGenColumnMapping, ClassTaskCheck, ScopeInternal, LevelMedium, "generate column mapping error")
 	ErrTaskCheckSyncConfigError  = New(codeTaskCheckSyncConfigError, ClassTaskCheck, ScopeInternal, LevelMedium, "%s: %v\n detail: %v")
-	ErrTaskCheckGenBAList        = New(codeTaskCheckGenBAList, ClassTaskCheck, ScopeInternal, LevelMedium, "generate black white list error")
+	ErrTaskCheckGenBAList        = New(codeTaskCheckGenBAList, ClassTaskCheck, ScopeInternal, LevelMedium, "generate block allow list error")
 
 	// Relay log basic API error
 	ErrRelayParseUUIDIndex         = New(codeRelayParseUUIDIndex, ClassRelayEventLib, ScopeInternal, LevelHigh, "parse server-uuid.index")
@@ -797,7 +797,7 @@ var (
 	// Dump unit error
 	ErrDumpUnitRuntime        = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper runs with error")
 	ErrDumpUnitGenTableRouter = New(codeDumpUnitGenTableRouter, ClassDumpUnit, ScopeInternal, LevelHigh, "generate table router")
-	ErrDumpUnitGenBAList      = New(codeDumpUnitGenBAList, ClassDumpUnit, ScopeInternal, LevelHigh, "generate black white list")
+	ErrDumpUnitGenBAList      = New(codeDumpUnitGenBAList, ClassDumpUnit, ScopeInternal, LevelHigh, "generate block allow list")
 
 	// Load unit error
 	ErrLoadUnitCreateSchemaFile    = New(codeLoadUnitCreateSchemaFile, ClassLoadUnit, ScopeInternal, LevelMedium, "generate schema file")
@@ -815,7 +815,7 @@ var (
 	ErrLoadUnitNoTableFile         = New(codeLoadUnitNoTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid data sql file, cannot find table - %s")
 	ErrLoadUnitDumpDirNotFound     = New(codeLoadUnitDumpDirNotFound, ClassLoadUnit, ScopeInternal, LevelHigh, "%s does not exist or it's not a dir")
 	ErrLoadUnitDuplicateTableFile  = New(codeLoadUnitDuplicateTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid table schema file, duplicated item - %s")
-	ErrLoadUnitGenBAList           = New(codeLoadUnitGenBAList, ClassLoadUnit, ScopeInternal, LevelHigh, "generate black white list")
+	ErrLoadUnitGenBAList           = New(codeLoadUnitGenBAList, ClassLoadUnit, ScopeInternal, LevelHigh, "generate block allow list")
 
 	// Sync unit error
 	ErrSyncerUnitPanic                   = New(codeSyncerUnitPanic, ClassSyncUnit, ScopeInternal, LevelHigh, "panic error: %v")
@@ -878,7 +878,7 @@ var (
 	ErrSyncerUnitReopenStreamNotSupport     = New(codeSyncerUnitReopenStreamNotSupport, ClassSyncUnit, ScopeInternal, LevelHigh, "reopen %T not supported")
 	ErrSyncerUnitUpdateConfigInSharding     = New(codeSyncerUnitUpdateConfigInSharding, ClassSyncUnit, ScopeInternal, LevelHigh, "try update config when some tables' (%v) sharding DDL not synced not supported")
 	ErrSyncerUnitExecWithNoBlockingDDL      = New(codeSyncerUnitExecWithNoBlockingDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "process unit not waiting for sharding DDL to sync")
-	ErrSyncerUnitGenBAList                  = New(codeSyncerUnitGenBAList, ClassSyncUnit, ScopeInternal, LevelHigh, "generate black white list")
+	ErrSyncerUnitGenBAList                  = New(codeSyncerUnitGenBAList, ClassSyncUnit, ScopeInternal, LevelHigh, "generate block allow list")
 	ErrSyncerUnitHandleDDLFailed            = New(codeSyncerUnitHandleDDLFailed, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle ddl job for %s")
 	ErrSyncerShardDDLConflict               = New(codeSyncerShardDDLConflict, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle shard ddl %v in optimistic mode, because schema conflict detected")
 	ErrSyncerFailpoint                      = New(codeSyncerFailpoint, ClassSyncUnit, ScopeInternal, LevelLow, "failpoint specified error")
