@@ -15,6 +15,7 @@ package config
 
 import (
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 )
 
 func (t *testConfig) TestSubTask(c *C) {
@@ -138,4 +139,31 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 		err := cfg.Adjust(true)
 		c.Assert(err, ErrorMatches, tc.errorFormat)
 	}
+}
+
+func (t *testConfig) TestSubTaskBlockAllowList(c *C) {
+	filterRules1 := &filter.Rules{
+		DoDBs: []string{"s1"},
+	}
+
+	filterRules2 := &filter.Rules{
+		DoDBs: []string{"s2"},
+	}
+
+	cfg := &SubTaskConfig{
+		Name:     "test",
+		SourceID: "source-1",
+		BWList:   filterRules1,
+	}
+
+	// BAList is nil, will set BAList = BWList
+	err := cfg.Adjust(false)
+	c.Assert(err, IsNil)
+	c.Assert(cfg.BAList, Equals, filterRules1)
+
+	// BAList is not nil, will not update it
+	cfg.BAList = filterRules2
+	err = cfg.Adjust(false)
+	c.Assert(err, IsNil)
+	c.Assert(cfg.BAList, Equals, filterRules2)
 }

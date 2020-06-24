@@ -19,6 +19,7 @@ import (
 	"sort"
 
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	. "github.com/pingcap/check"
 )
@@ -43,7 +44,7 @@ target-database:
 mysql-instances:
   - source-id: "mysql-replica-01"
     server-id: 101 
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-1"]
     mydumper-config-name: "global"
@@ -69,7 +70,7 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-1"]
     mydumper-config-name: "global"
@@ -145,7 +146,7 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     mydumper-thread: 11
     mydumper-config-name: "global"
     loader-thread: 22
@@ -154,18 +155,18 @@ mysql-instances:
     syncer-config-name: "global"
 
   - source-id: "mysql-replica-02"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
   - source-id: "mysql-replica-03"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     mydumper-thread: 44
     loader-thread: 55
     syncer-thread: 66
 
-black-white-list:
+block-allow-list:
   instance:
     do-dbs: ["test"]
 
@@ -225,7 +226,7 @@ mysql-instances:
   - source-id: "mysql-replica-02"
   - source-id: "mysql-replica-03"
 
-black-white-list:
+block-allow-list:
   instance:
     do-dbs: ["test"]
 
@@ -265,4 +266,33 @@ func (t *testConfig) TestCheckDuplicateString(c *C) {
 	c.Assert(dupeStrings, HasLen, 3)
 	sort.Strings(dupeStrings)
 	c.Assert(dupeStrings, DeepEquals, []string{"a", "b", "c"})
+}
+
+func (t *testConfig) TestTaskBlockAllowList(c *C) {
+	filterRules1 := &filter.Rules{
+		DoDBs: []string{"s1"},
+	}
+
+	filterRules2 := &filter.Rules{
+		DoDBs: []string{"s2"},
+	}
+
+	cfg := &TaskConfig{
+		Name:           "test",
+		TaskMode:       "full",
+		TargetDB:       &DBConfig{},
+		MySQLInstances: []*MySQLInstance{{SourceID: "source-1"}},
+		BWList:         map[string]*filter.Rules{"source-1": filterRules1},
+	}
+
+	// BAList is nil, will set BAList = BWList
+	err := cfg.adjust()
+	c.Assert(err, IsNil)
+	c.Assert(cfg.BAList["source-1"], Equals, filterRules1)
+
+	// BAList is not nil, will not update it
+	cfg.BAList = map[string]*filter.Rules{"source-1": filterRules2}
+	err = cfg.adjust()
+	c.Assert(err, IsNil)
+	c.Assert(cfg.BAList["source-1"], Equals, filterRules2)
 }

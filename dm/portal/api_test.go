@@ -94,8 +94,8 @@ func (t *testPortalSuite) initTaskCfg() {
 			"source-2.filter.1": {},
 			"source-2.filter.2": {},
 		},
-		BWList: map[string]*filter.Rules{
-			"source-1.bw_list.1": {
+		BAList: map[string]*filter.Rules{
+			"source-1.ba_list.1": {
 				DoTables: []*filter.Table{
 					{
 						Schema: "db_1",
@@ -106,7 +106,7 @@ func (t *testPortalSuite) initTaskCfg() {
 					},
 				},
 			},
-			"source-2.bw_list.1": {
+			"source-2.ba_list.1": {
 				DoTables: []*filter.Table{
 					{
 						Schema: "db_1",
@@ -244,10 +244,10 @@ func (t *testPortalSuite) TestGenerateAndDownloadAndAnalyzeConfig(c *C) {
 	sort.Strings(analyzeResult.Config.MySQLInstances[1].RouteRules)
 	c.Assert(analyzeResult.Config.MySQLInstances[0].FilterRules, DeepEquals, []string{"source-1.filter.1"})
 	c.Assert(analyzeResult.Config.MySQLInstances[0].RouteRules, DeepEquals, []string{"source-1.route_rules.1", "source-1.route_rules.2"})
-	c.Assert(analyzeResult.Config.MySQLInstances[0].BWListName, DeepEquals, "source-1.bw_list.1")
+	c.Assert(analyzeResult.Config.MySQLInstances[0].BAListName, DeepEquals, "source-1.ba_list.1")
 	c.Assert(analyzeResult.Config.MySQLInstances[1].FilterRules, DeepEquals, []string{"source-2.filter.1", "source-2.filter.2"})
 	c.Assert(analyzeResult.Config.MySQLInstances[1].RouteRules, DeepEquals, []string{"source-2.route_rules.1"})
-	c.Assert(analyzeResult.Config.MySQLInstances[1].BWListName, DeepEquals, "source-2.bw_list.1")
+	c.Assert(analyzeResult.Config.MySQLInstances[1].BAListName, DeepEquals, "source-2.ba_list.1")
 }
 
 func (t *testPortalSuite) TestAnalyzeRuleName(c *C) {
@@ -294,7 +294,7 @@ func (t *testPortalSuite) getMockDB(req *http.Request, timeout int) (*sql.DB, st
 func (t *testPortalSuite) TestAdjustConfig(c *C) {
 	adjustConfig(t.taskConfig)
 
-	// test mysql instance's filter rules, route rules, bw list and mydumper config name
+	// test mysql instance's filter rules, route rules, block allow list and mydumper config name
 	c.Assert(t.taskConfig.IsSharding, IsTrue)
 	sort.Strings(t.taskConfig.MySQLInstances[0].FilterRules)
 	sort.Strings(t.taskConfig.MySQLInstances[0].RouteRules)
@@ -302,11 +302,11 @@ func (t *testPortalSuite) TestAdjustConfig(c *C) {
 	sort.Strings(t.taskConfig.MySQLInstances[1].RouteRules)
 	c.Assert(t.taskConfig.MySQLInstances[0].FilterRules, DeepEquals, []string{"source-1.filter.1"})
 	c.Assert(t.taskConfig.MySQLInstances[0].RouteRules, DeepEquals, []string{"source-1.route_rules.1", "source-1.route_rules.2"})
-	c.Assert(t.taskConfig.MySQLInstances[0].BWListName, Equals, "source-1.bw_list.1")
+	c.Assert(t.taskConfig.MySQLInstances[0].BAListName, Equals, "source-1.ba_list.1")
 	c.Assert(t.taskConfig.MySQLInstances[0].MydumperConfigName, Equals, "source-1.dump")
 	c.Assert(t.taskConfig.MySQLInstances[1].FilterRules, DeepEquals, []string{"source-2.filter.1", "source-2.filter.2"})
 	c.Assert(t.taskConfig.MySQLInstances[1].RouteRules, DeepEquals, []string{"source-2.route_rules.1"})
-	c.Assert(t.taskConfig.MySQLInstances[1].BWListName, Equals, "source-2.bw_list.1")
+	c.Assert(t.taskConfig.MySQLInstances[1].BAListName, Equals, "source-2.ba_list.1")
 	c.Assert(t.taskConfig.MySQLInstances[1].MydumperConfigName, Equals, "source-2.dump")
 
 	// test generated mydumper config
@@ -320,7 +320,7 @@ func (t *testPortalSuite) TestAdjustConfig(c *C) {
 }
 
 func (t *testPortalSuite) TestGenerateMydumperTableCfg(c *C) {
-	bwList := &filter.Rules{
+	baList := &filter.Rules{
 		DoTables: []*filter.Table{
 			{
 				Schema: "db_1",
@@ -331,11 +331,11 @@ func (t *testPortalSuite) TestGenerateMydumperTableCfg(c *C) {
 			},
 		},
 	}
-	mydumperCfg := generateMydumperCfg(bwList)
+	mydumperCfg := generateMydumperCfg(baList)
 	c.Assert(mydumperCfg.ExtraArgs, Equals, "-T db_1.t_1,db_1.t_2")
 
-	bwList = &filter.Rules{}
-	mydumperCfg = generateMydumperCfg(bwList)
+	baList = &filter.Rules{}
+	mydumperCfg = generateMydumperCfg(baList)
 	c.Assert(mydumperCfg.ExtraArgs, Equals, "")
 }
 

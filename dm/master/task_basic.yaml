@@ -11,7 +11,7 @@ target-database:
 mysql-instances:             # one or more source database, config more source database for sharding merge
   -
     source-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
 
     # number of threads to use for dump data
     mydumper-thread: 4
@@ -24,7 +24,7 @@ mysql-instances:             # one or more source database, config more source d
 
   -
     source-id: "instance118-5306"
-    black-white-list: "instance"
+    block-allow-list: "instance"
 
     # number of threads to use for dump data
     mydumper-thread: 4
@@ -35,10 +35,10 @@ mysql-instances:             # one or more source database, config more source d
     # number of threads to use for replicate binlog
     syncer-thread: 16
 
-black-white-list:
+block-allow-list:
   instance:
-    do-dbs: ["~^test.*", "do"]        # white list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
-    do-tables:                        # white list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
+    do-dbs: ["~^test.*", "do"]        # allow list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
+    do-tables:                        # allow list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
     - db-name: "~^test.*"
       tbl-name: "~^t.*"
     - db-name: "do"

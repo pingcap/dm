@@ -244,7 +244,7 @@ func (s *testSyncerSuite) mockCheckPointFlush(checkPointMock sqlmock.Sqlmock) {
 }
 
 func (s *testSyncerSuite) TestSelectDB(c *C) {
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		DoDBs: []string{"~^b.*", "s1", "stest"},
 	}
 
@@ -273,7 +273,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
-	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	err = syncer.genRouter()
 	c.Assert(err, IsNil)
@@ -305,7 +305,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 }
 
 func (s *testSyncerSuite) TestSelectTable(c *C) {
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		DoDBs: []string{"t2", "stest", "~^ptest*"},
 		DoTables: []*filter.Table{
 			{Schema: "stest", Name: "log"},
@@ -382,7 +382,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
-	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
 	i := 0
@@ -424,7 +424,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 }
 
 func (s *testSyncerSuite) TestIgnoreDB(c *C) {
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		IgnoreDBs: []string{"~^b.*", "s1", "stest"},
 	}
 
@@ -454,7 +454,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
-	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
 	i := 0
@@ -477,7 +477,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 }
 
 func (s *testSyncerSuite) TestIgnoreTable(c *C) {
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		IgnoreDBs: []string{"t2"},
 		IgnoreTables: []*filter.Table{
 			{Schema: "stest", Name: "log"},
@@ -547,7 +547,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
-	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
 
@@ -614,7 +614,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 			Action:        bf.Ignore,
 		},
 	}
-	s.cfg.BWList = nil
+	s.cfg.BAList = nil
 
 	s.resetEventsGenerator(c)
 
@@ -815,7 +815,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 
 	defer db.Exec("drop database if exists gctest_1")
 
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		DoDBs: []string{"~^gctest_.*"},
 	}
 
@@ -1181,7 +1181,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	}
 
 	s.cfg.Flavor = "mysql"
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		DoDBs: []string{"stest_1"},
 	}
 	s.cfg.IsSharding = true
@@ -1394,7 +1394,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	testJobs.jobs = testJobs.jobs[:0]
 
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		DoDBs: []string{"test_1"},
 		DoTables: []*filter.Table{
 			{Schema: "test_1", Name: "t_1"},
