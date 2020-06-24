@@ -7,3 +7,9 @@ insert into t1 (id, name) values (1, 'arya'), (2, 'catelyn');
 -- test sql_mode=NO_AUTO_VALUE_ON_ZERO
 set @@session.sql_mode='NO_AUTO_VALUE_ON_ZERO';
 insert into t1 (id, name) values (0, 'lalala');
+
+-- test block-allow-list
+drop database if exists `ignore_db`;
+create database `ignore_db`;
+use `ignore_db`;
+create table `ignore_table`(id int); 
