@@ -391,7 +391,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	if s.cfg.EnableHeartbeat {
 		s.heartbeat, err = GetHeartbeat(&HeartbeatConfig{
 			serverID:       s.cfg.ServerID,
-			masterCfg:      s.cfg.From,
+			primaryCfg:     s.cfg.From,
 			updateInterval: int64(s.cfg.HeartbeatUpdateInterval),
 			reportInterval: int64(s.cfg.HeartbeatReportInterval),
 		})

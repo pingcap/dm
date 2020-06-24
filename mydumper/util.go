@@ -60,7 +60,7 @@ func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 		return "", terror.WithClass(err, terror.ClassDumpUnit)
 	}
 	defer fromDB.Close()
-	bw, err := filter.New(cfg.CaseSensitive, cfg.BAList)
+	ba, err := filter.New(cfg.CaseSensitive, cfg.BAList)
 	if err != nil {
 		return "", terror.ErrDumpUnitGenBAList.Delegate(err)
 	}
@@ -68,7 +68,7 @@ func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 	if err != nil {
 		return "", terror.ErrDumpUnitGenTableRouter.Delegate(err)
 	}
-	sourceTables, err := fetchTargetDoTables(fromDB.DB, bw, r)
+	sourceTables, err := fetchTargetDoTables(fromDB.DB, ba, r)
 	if err != nil {
 		return "", terror.WithClass(err, terror.ClassDumpUnit)
 	}
