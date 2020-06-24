@@ -1076,6 +1076,10 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(key, Equals, "a")
 
+	if err := mock.ExpectationsWereMet(); err != nil {
+		c.Errorf("checkpoint db unfulfilled expectations: %s", err)
+	}
+
 	wg.Wait()
 }
 
