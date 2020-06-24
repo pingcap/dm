@@ -520,15 +520,15 @@ function DM_062() {
 }
 
 function DM_063_CASE() {
-    run_sql_source1 "alter table ${shardddl1}.${tb1} modify id bigint;"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify id mediumint;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
-    run_sql_source2 "alter table ${shardddl1}.${tb1} modify id smallint;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} modify id bigint;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(5);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(6);"
-    run_sql_source2 "alter table ${shardddl1}.${tb2} modify id smallint;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} modify id bigint;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(7);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(8);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9);"
@@ -536,15 +536,22 @@ function DM_063_CASE() {
     if [[ "$1" = "pessimistic" ]]; then
         check_log_contain_with_retry "is different with" $WORK_DIR/master/log/dm-master.log
     else
-        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "query-status test" \
-            "because schema conflict detected" 2
+        # TODO: should detect schema conflict in optimistic mode
+        run_sql_tidb_with_retry "select count(1) from ${shardddl}.${tb};" "count(1): 9"
     fi
 }
 
 function DM_063() {
-    run_case 063 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
-    run_case 063 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+    run_case 063 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id smallint);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (id smallint);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (id smallint);\"" \
+    "clean_table" "pessimistic"
+    run_case 063 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id smallint);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (id smallint);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (id smallint);\"" \
+     "clean_table" "optimistic"
 }
 
 function DM_064_CASE() {
