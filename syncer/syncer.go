@@ -318,7 +318,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 
 	s.bwList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BWList)
 	if err != nil {
-		return terror.ErrSyncerUnitGenBWList.Delegate(err)
+		return terror.ErrSyncerUnitGenBAList.Delegate(err)
 	}
 
 	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.CaseSensitive, s.cfg.FilterRules)
@@ -2393,7 +2393,7 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	oldBwList = s.bwList
 	s.bwList, err = filter.New(cfg.CaseSensitive, cfg.BWList)
 	if err != nil {
-		return terror.ErrSyncerUnitGenBWList.Delegate(err)
+		return terror.ErrSyncerUnitGenBAList.Delegate(err)
 	}
 
 	// update route

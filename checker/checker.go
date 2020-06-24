@@ -119,7 +119,7 @@ func (c *Checker) Init(ctx context.Context) (err error) {
 	for _, instance := range c.instances {
 		bw, err := filter.New(instance.cfg.CaseSensitive, instance.cfg.BWList)
 		if err != nil {
-			return terror.ErrTaskCheckGenBWList.Delegate(err)
+			return terror.ErrTaskCheckGenBAList.Delegate(err)
 		}
 		r, err := router.NewTableRouter(instance.cfg.CaseSensitive, instance.cfg.RouteRules)
 		if err != nil {

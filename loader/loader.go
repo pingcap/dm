@@ -421,7 +421,7 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 
 	l.bwList, err = filter.New(l.cfg.CaseSensitive, l.cfg.BWList)
 	if err != nil {
-		return terror.ErrLoadUnitGenBWList.Delegate(err)
+		return terror.ErrLoadUnitGenBAList.Delegate(err)
 	}
 
 	if l.cfg.RemoveMeta {
@@ -729,7 +729,7 @@ func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 	oldBwList = l.bwList
 	l.bwList, err = filter.New(cfg.CaseSensitive, cfg.BWList)
 	if err != nil {
-		return terror.ErrLoadUnitGenBWList.Delegate(err)
+		return terror.ErrLoadUnitGenBAList.Delegate(err)
 	}
 
 	// update route, for loader, this almost useless, because schemas often have been restored

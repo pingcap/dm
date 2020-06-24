@@ -399,7 +399,7 @@ func (c *TaskConfig) adjust() error {
 			}
 		}
 		if _, ok := c.BWList[inst.BWListName]; len(inst.BWListName) > 0 && !ok {
-			return terror.ErrConfigBWListNotFound.Generate(i, inst.BWListName)
+			return terror.ErrConfigBAListNotFound.Generate(i, inst.BWListName)
 		}
 
 		if len(inst.MydumperConfigName) > 0 {
