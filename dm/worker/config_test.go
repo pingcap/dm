@@ -82,7 +82,7 @@ aaa = "xxx"
 	c.Assert(err, IsNil)
 	err = cfg.configFromFile(configFile)
 	c.Assert(err, NotNil)
-	c.Assert(err, ErrorMatches, ".*worker config contains unknown configuration options: aaa")
+	c.Assert(err, ErrorMatches, ".*worker config contains unknown configuration options: aaa.*")
 }
 
 func (t *testServer) TestConfigVerify(c *C) {
@@ -115,7 +115,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.SourceID = "source-id-length-more-than-thirty-two"
 				return cfg
 			},
-			fmt.Sprintf(".*the length of source ID .* is more than max allowed value %d", config.MaxSourceIDLength),
+			fmt.Sprintf(".*the length of source ID .* is more than max allowed value %d.*", config.MaxSourceIDLength),
 		},
 		{
 			func() *Config {
@@ -209,7 +209,7 @@ func (t *testServer) TestAdjustFlavor(c *C) {
 	c.Assert(cfg.Flavor, Equals, mysql.MariaDBFlavor)
 	cfg.Flavor = "MongoDB"
 	err = cfg.adjustFlavor(context.Background(), nil)
-	c.Assert(err, ErrorMatches, ".*flavor MongoDB not supported")
+	c.Assert(err, ErrorMatches, ".*flavor MongoDB not supported.*")
 
 	subtestFlavor(c, cfg, "10.4.8-MariaDB-1:10.4.8+maria~bionic", mysql.MariaDBFlavor, "")
 	subtestFlavor(c, cfg, "5.7.26-log", mysql.MySQLFlavor, "")

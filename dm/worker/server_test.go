@@ -138,7 +138,7 @@ func (t *testServer) TestServer(c *C) {
 	dupServer := NewServer(cfg)
 	err = dupServer.Start()
 	c.Assert(terror.ErrWorkerStartService.Equal(err), IsTrue)
-	c.Assert(err.Error(), Matches, ".*bind: address already in use")
+	c.Assert(err.Error(), Matches, ".*bind: address already in use.*")
 
 	// close
 	s.Close()

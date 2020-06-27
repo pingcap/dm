@@ -583,7 +583,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, subtaskResp := range resp.Workers {
 		c.Assert(subtaskResp.Op, check.Equals, pauseOp)
-		c.Assert(subtaskResp.Meta.Msg, check.Matches, ".* relevant worker-client not found")
+		c.Assert(subtaskResp.Meta.Msg, check.Matches, ".*relevant worker-client not found.*")
 	}
 
 	// test pause task successfully
@@ -1510,7 +1510,7 @@ func (t *testMaster) TestServer(c *check.C) {
 	dupServer := NewServer(cfg)
 	err = dupServer.Start()
 	c.Assert(terror.ErrMasterStartService.Equal(err), check.IsTrue)
-	c.Assert(err.Error(), check.Matches, ".*bind: address already in use")
+	c.Assert(err.Error(), check.Matches, ".*bind: address already in use.*")
 
 	// close
 	s.Close()
