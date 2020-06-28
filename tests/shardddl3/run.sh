@@ -163,6 +163,7 @@ function DM_094_CASE() {
         "start-task $cur/conf/double-source-$1.yaml" \
         "\"result\": true" 3
 
+    cat $WORK_DIR/worker1/log/dm-worker.log
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
