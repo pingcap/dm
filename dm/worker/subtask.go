@@ -522,6 +522,20 @@ func (st *SubTask) SetSyncerSQLOperator(ctx context.Context, req *pb.HandleSubTa
 	return syncUnit.SetSQLOperator(req)
 }
 
+// OperateSchema operates schema for an upstream table.
+func (st *SubTask) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaRequest) (schema string, err error) {
+	if st.Stage() != pb.Stage_Paused {
+		return "", terror.ErrWorkerNotPausedStage.Generate(st.Stage().String())
+	}
+
+	syncUnit, ok := st.currUnit.(*syncer.Syncer)
+	if !ok {
+		return "", terror.ErrWorkerOperSyncUnitOnly.Generate(st.currUnit.Type())
+	}
+
+	return syncUnit.OperateSchema(ctx, req)
+}
+
 // UpdateFromConfig updates config for `From`
 func (st *SubTask) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	st.Lock()
