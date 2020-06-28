@@ -46,14 +46,14 @@ func (t *testHeartbeatSuite) reportLag(taskName string, lag float64) {
 func (t *testHeartbeatSuite) TestHeartbeatConfig(c *C) {
 	cfg1 := &HeartbeatConfig{
 		serverID:       123,
-		masterCfg:      t.from,
+		primaryCfg:     t.from,
 		updateInterval: int64(1),
 		reportInterval: int64(1),
 	}
 
 	cfg2 := &HeartbeatConfig{
 		serverID:       234,
-		masterCfg:      t.from,
+		primaryCfg:     t.from,
 		updateInterval: int64(1),
 		reportInterval: int64(1),
 	}
@@ -65,7 +65,7 @@ func (t *testHeartbeatSuite) TestHeartbeatConfig(c *C) {
 func (t *testHeartbeatSuite) TestHeartbeat(c *C) {
 	heartbeat, err := GetHeartbeat(&HeartbeatConfig{
 		serverID:       123,
-		masterCfg:      t.from,
+		primaryCfg:     t.from,
 		updateInterval: int64(1),
 		reportInterval: int64(1),
 	})

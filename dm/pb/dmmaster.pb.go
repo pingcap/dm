@@ -553,7 +553,7 @@ func (m *OperateTaskResponse) GetSources() []*CommonWorkerResponse {
 
 // UpdateTaskRequest used to update task after it has beed started
 // task: task's configuration, yaml format
-//       now, only support to update config for routes, filters, column-mappings, black-white-list
+//       now, only support to update config for routes, filters, column-mappings, block-allow-list
 //       support update partial config for syncer, loader, etc later
 // sources need to do update, empty for all sources in processing the task
 type UpdateTaskRequest struct {

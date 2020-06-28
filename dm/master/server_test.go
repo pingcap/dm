@@ -77,7 +77,7 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-1"]
     mydumper-config-name: "global"
@@ -85,14 +85,14 @@ mysql-instances:
     syncer-config-name: "global"
 
   - source-id: "mysql-replica-02"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-2"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
-black-white-list:
+block-allow-list:
   instance:
     do-dbs: ["~^sharding[\\d]+"]
     do-tables:
@@ -1030,7 +1030,7 @@ func (t *testMaster) TestServer(c *check.C) {
 	dupServer := NewServer(cfg)
 	err := dupServer.Start(ctx)
 	c.Assert(terror.ErrMasterStartEmbedEtcdFail.Equal(err), check.IsTrue)
-	c.Assert(err.Error(), check.Matches, ".*bind: address already in use")
+	c.Assert(err.Error(), check.Matches, ".*bind: address already in use.*")
 
 	// close
 	cancel()

@@ -21,7 +21,7 @@ import (
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 
-	"github.com/DATA-DOG/go-sqlmock"
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -203,13 +203,13 @@ func (s *testSyncerSuite) TestresolveDDLSQL(c *C) {
 
 	p := parser.New()
 	cfg := &config.SubTaskConfig{
-		BWList: &filter.Rules{
+		BAList: &filter.Rules{
 			DoDBs: []string{"s1"},
 		},
 	}
 	var err error
 	syncer := NewSyncer(cfg, nil)
-	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 
 	syncer.tableRouter, err = router.NewTableRouter(false, []*router.TableRule{
@@ -333,13 +333,13 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 	}
 
 	cfg := &config.SubTaskConfig{
-		BWList: &filter.Rules{
+		BAList: &filter.Rules{
 			IgnoreDBs: []string{"ignore_db"},
 		},
 	}
 	var err error
 	syncer := NewSyncer(cfg, nil)
-	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 
 	db, mock, err := sqlmock.New()

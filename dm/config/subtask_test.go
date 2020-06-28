@@ -15,6 +15,7 @@ package config
 
 import (
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 )
 
 func (t *testConfig) TestSubTask(c *C) {
@@ -98,7 +99,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				cfg.Name = ""
 				return cfg
 			},
-			"\\[.*\\] task name should not be empty",
+			"\\[.*\\], msg: 'task name should not be empty'.*",
 		},
 		{
 			func() *SubTaskConfig {
@@ -106,7 +107,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				cfg.SourceID = ""
 				return cfg
 			},
-			"\\[.*\\] empty source-id not valid",
+			"\\[.*\\], msg: 'empty source-id not valid'.*",
 		},
 		{
 			func() *SubTaskConfig {
@@ -114,7 +115,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				cfg.SourceID = "source-id-length-more-than-thirty-two"
 				return cfg
 			},
-			"\\[.*\\] too long source-id not valid",
+			"\\[.*\\], msg: 'too long source-id not valid'.*",
 		},
 		{
 			func() *SubTaskConfig {
@@ -122,7 +123,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				cfg.ShardMode = "invalid-shard-mode"
 				return cfg
 			},
-			"\\[.*\\] shard mode invalid-shard-mode not supported",
+			"\\[.*\\], msg: 'shard mode invalid-shard-mode not supported'.*",
 		},
 		{
 			func() *SubTaskConfig {
@@ -130,7 +131,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				cfg.OnlineDDLScheme = "rtc"
 				return cfg
 			},
-			"\\[.*\\] online scheme rtc not supported",
+			"\\[.*\\], msg: 'online scheme rtc not supported'.*",
 		},
 		{
 			func() *SubTaskConfig {
@@ -138,7 +139,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				cfg.Timezone = "my-house"
 				return cfg
 			},
-			"\\[.*\\] invalid timezone string: my-house:.*",
+			"\\[.*\\], msg: 'invalid timezone string: my-house:.*",
 		},
 	}
 
@@ -147,4 +148,31 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 		err := cfg.Adjust(true)
 		c.Assert(err, ErrorMatches, tc.errorFormat)
 	}
+}
+
+func (t *testConfig) TestSubTaskBlockAllowList(c *C) {
+	filterRules1 := &filter.Rules{
+		DoDBs: []string{"s1"},
+	}
+
+	filterRules2 := &filter.Rules{
+		DoDBs: []string{"s2"},
+	}
+
+	cfg := &SubTaskConfig{
+		Name:     "test",
+		SourceID: "source-1",
+		BWList:   filterRules1,
+	}
+
+	// BAList is nil, will set BAList = BWList
+	err := cfg.Adjust(false)
+	c.Assert(err, IsNil)
+	c.Assert(cfg.BAList, Equals, filterRules1)
+
+	// BAList is not nil, will not update it
+	cfg.BAList = filterRules2
+	err = cfg.Adjust(false)
+	c.Assert(err, IsNil)
+	c.Assert(cfg.BAList, Equals, filterRules2)
 }

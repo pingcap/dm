@@ -203,7 +203,9 @@ func statusProcessResult(pr *pb.ProcessResult) *pb.ProcessResult {
 	result := proto.Clone(pr).(*pb.ProcessResult)
 	if result != nil {
 		for i := range result.Errors {
-			result.Errors[i].Error = nil
+			if result.Errors[i].Error != nil {
+				result.Errors[i].Msg = ""
+			}
 		}
 	}
 	return result
