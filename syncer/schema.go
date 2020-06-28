@@ -23,6 +23,9 @@ import (
 func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaRequest) (schema string, err error) {
 	switch req.Op {
 	case pb.SchemaOp_GetSchema:
+		// we only try to get schema from schema-tracker now.
+		// in other words, we can not get the schema if any DDL/DML has been replicated, or set a schema previously.
+		return s.schemaTracker.GetCreateTable(ctx, req.Database, req.Table)
 	case pb.SchemaOp_SetSchema:
 	case pb.SchemaOp_RemoveSchema:
 	}

@@ -89,7 +89,7 @@ func (p *Pessimist) PutInfo(ctx context.Context, info pessimism.Info) (int64, er
 
 	select {
 	case <-ch: // deleted.
-	case err := <-errCh:
+	case err = <-errCh:
 		return 0, err
 	case <-ctx.Done():
 		return 0, ctx.Err()

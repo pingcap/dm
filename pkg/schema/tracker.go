@@ -15,11 +15,14 @@ package schema
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/infoschema"
@@ -90,6 +93,33 @@ func (tr *Tracker) GetTable(db, table string) (*model.TableInfo, error) {
 		return nil, err
 	}
 	return t.Meta(), nil
+}
+
+// GetCreateTable returns the `CREATE TABLE` statement of the table.
+func (tr *Tracker) GetCreateTable(ctx context.Context, db, table string) (string, error) {
+	name := dbutil.TableName(db, table)
+	// use `SHOW CREATE TABLE` now, another method maybe `executor.ConstructResultOfShowCreateTable`.
+	rs, err := tr.se.Execute(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", name))
+	if err != nil {
+		return "", err
+	}
+	defer rs[0].Close()
+
+	req := rs[0].NewChunk()
+	err = rs[0].Next(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	if req.NumRows() == 0 {
+		return "", nil // this should not happen.
+	}
+
+	row := req.GetRow(0)
+	str := row.GetString(1) // the first column is the table name.
+	// returned as single line.
+	str = strings.ReplaceAll(str, "\n", "")
+	str = strings.ReplaceAll(str, "  ", " ")
+	return str, nil
 }
 
 // AllSchemas returns all schemas visible to the tracker (excluding system tables).
