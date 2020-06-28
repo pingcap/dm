@@ -144,14 +144,18 @@ function DM_082() {
 }
 
 function DM_094_CASE() {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    # here we run ddl to make sure we flush first check point in syncer
+    # otherwise the worker may dump again when restart
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source1 "alter table ${shardddl1}.${tb2} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column col int;"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    # sleep to load first checkpoint
-    sleep 2
-
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
-    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4,4);"
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
@@ -176,14 +180,18 @@ function DM_094() {
 }
 
 function DM_095_CASE() {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # sleep to load first checkpoint
-    sleep 2
-
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
-    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
+    # here we run ddl to make sure we flush first check point in syncer
+    # otherwise the worker may dump again when restart
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source1 "alter table ${shardddl1}.${tb2} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column col int;"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+ 
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4,4);"
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
@@ -209,14 +217,18 @@ function DM_095() {
 }
 
 function DM_096_CASE() {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # sleep to load first checkpoint
-    sleep 2
-
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
-    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
+    # here we run ddl to make sure we flush first check point in syncer
+    # otherwise the worker may dump again when restart
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source1 "alter table ${shardddl1}.${tb2} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column col int;"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+ 
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4,4);"
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
@@ -244,14 +256,18 @@ function DM_096() {
 }
 
 function DM_097_CASE() {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # sleep to load first checkpoint
-    sleep 2
-
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
-    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
+    # here we run ddl to make sure we flush first check point in syncer
+    # otherwise the worker may dump again when restart
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source1 "alter table ${shardddl1}.${tb2} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column col int;"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+ 
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4,4);"
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
@@ -274,14 +290,18 @@ function DM_097() {
 }
 
 function DM_098_CASE() {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # sleep to load first checkpoint
-    sleep 2
-
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
-    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
+    # here we run ddl to make sure we flush first check point in syncer
+    # otherwise the worker may dump again when restart
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source1 "alter table ${shardddl1}.${tb2} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column col int;"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+ 
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4,4);"
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
 
@@ -304,14 +324,18 @@ function DM_098() {
 }
 
 function DM_099_CASE() {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # sleep to load first checkpoint
-    sleep 2
-
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
-    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
+    # here we run ddl to make sure we flush first check point in syncer
+    # otherwise the worker may dump again when restart
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source1 "alter table ${shardddl1}.${tb2} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column col int;"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+ 
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4,4);"
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
@@ -334,14 +358,18 @@ function DM_099() {
 }
 
 function DM_100_CASE() {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # sleep to load first checkpoint
-    sleep 2
-
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
-    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
+    # here we run ddl to make sure we flush first check point in syncer
+    # otherwise the worker may dump again when restart
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source1 "alter table ${shardddl1}.${tb2} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column col int;"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+ 
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4,4);"
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
 
@@ -364,14 +392,18 @@ function DM_100() {
 }
 
 function DM_101_CASE() {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # sleep to load first checkpoint
-    sleep 2
-
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
-    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
+    # here we run ddl to make sure we flush first check point in syncer
+    # otherwise the worker may dump again when restart
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source1 "alter table ${shardddl1}.${tb2} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column col int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column col int;"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+ 
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+    run_sql_source1 "insert into ${shardddl1}.${tb2} values(4,4);"
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
