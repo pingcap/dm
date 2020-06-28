@@ -28,6 +28,9 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 		return s.schemaTracker.GetCreateTable(ctx, req.Database, req.Table)
 	case pb.SchemaOp_SetSchema:
 	case pb.SchemaOp_RemoveSchema:
+		// we only drop the schema in the schema-tracker now,
+		// so if we drop the schema and continue to replicate any DDL/DML, it will try to get schema from downstream again.
+		return "", s.schemaTracker.DropTable(req.Database, req.Table)
 	}
 	return "", nil
 }

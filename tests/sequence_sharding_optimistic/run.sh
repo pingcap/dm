@@ -149,6 +149,13 @@ run() {
     # try to get schema for the table, the latest schema got.
     curl -X PUT ${BASE_URL}1 -d '{"task":"sequence_sharding_optimistic", "sources": ["mysql-replica-01"], "database":"sharding_seq_opt", "table":"t1"}' > ${WORK_DIR}/get_schema.log
     check_log_contains ${WORK_DIR}/get_schema.log 'CREATE TABLE `t1` ( `id` bigint(20) NOT NULL, `c2` varchar(20) DEFAULT NULL, `c3` int(11) DEFAULT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' 1
+
+    # drop the schema.
+    curl -X PUT ${BASE_URL}3 -d '{"task":"sequence_sharding_optimistic", "sources": ["mysql-replica-01"], "database":"sharding_seq_opt", "table":"t1"}'
+
+    # try to get schema again, but can't get.
+    curl -X PUT ${BASE_URL}1 -d '{"task":"sequence_sharding_optimistic", "sources": ["mysql-replica-01"], "database":"sharding_seq_opt", "table":"t1"}' > ${WORK_DIR}/get_schema.log
+    check_log_contains ${WORK_DIR}/get_schema.log "Table 'sharding_seq_opt.t1' doesn't exist" 1
 }
 
 cleanup_data sharding_target_opt
