@@ -72,8 +72,8 @@ function test_multi_task_running() {
 
     sleep 3 # wait for flush checkpoint
     echo "use sync_diff_inspector to check increment data"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 5
-    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 5
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml
     echo "[$(date)] <<<<<< finish test_multi_task_running >>>>>>"
 }
 
@@ -448,8 +448,8 @@ function test_pause_task() {
     sleep 1
 
     echo "use sync_diff_inspector to check increment data"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
-    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml
     echo "[$(date)] <<<<<< finish test_pause_task >>>>>>"
 }
 
@@ -496,8 +496,8 @@ function test_stop_task() {
     sleep 1
 
     echo "use sync_diff_inspector to check increment data"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
-    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml
     echo "[$(date)] <<<<<< finish test_stop_task >>>>>>"
 }
 
@@ -557,8 +557,8 @@ function test_multi_task_reduce_and_restart_worker() {
             wait
             sleep 2
             echo "use sync_diff_inspector to check increment data"
-            check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
-            check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
+            check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+            check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml
             echo "data checked after one worker was killed"
         else
             status_str=""
@@ -655,7 +655,7 @@ function test_isolate_master_and_worker() {
     sleep 3
 
     echo "use sync_diff_inspector to check increment data"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     echo "[$(date)] <<<<<< finish test_isolate_master_and_worker >>>>>>"
 }
