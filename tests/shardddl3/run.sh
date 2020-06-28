@@ -146,6 +146,10 @@ function DM_082() {
 function DM_094_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+
+    # sleep to load first checkpoint
+    sleep 2
+
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -163,7 +167,6 @@ function DM_094_CASE() {
         "start-task $cur/conf/double-source-$1.yaml" \
         "\"result\": true" 3
 
-    cat $WORK_DIR/worker1/log/dm-worker.log
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
@@ -175,6 +178,10 @@ function DM_094() {
 function DM_095_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+
+    # sleep to load first checkpoint
+    sleep 2
+
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -204,6 +211,10 @@ function DM_095() {
 function DM_096_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+
+    # sleep to load first checkpoint
+    sleep 2
+
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -235,6 +246,10 @@ function DM_096() {
 function DM_097_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+
+    # sleep to load first checkpoint
+    sleep 2
+
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -261,6 +276,10 @@ function DM_097() {
 function DM_098_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+
+    # sleep to load first checkpoint
+    sleep 2
+
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -287,6 +306,10 @@ function DM_098() {
 function DM_099_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+
+    # sleep to load first checkpoint
+    sleep 2
+
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -313,6 +336,10 @@ function DM_099() {
 function DM_100_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+
+    # sleep to load first checkpoint
+    sleep 2
+
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -339,6 +366,10 @@ function DM_100() {
 function DM_101_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+
+    # sleep to load first checkpoint
+    sleep 2
+
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
