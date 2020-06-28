@@ -269,7 +269,6 @@ function DM_021() {
 }
 
 function DM_022_CASE() {
-    sleep 5
     run_sql_tidb "create table ${shardddl1}.${tb2} (id int);"
     run_sql_source1 "rename table ${shardddl1}.${tb1} to ${shardddl1}.${tb2};"
     check_log_contain_with_retry "Table '${shardddl1}.${tb2}' already exists" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log 

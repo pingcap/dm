@@ -20,15 +20,15 @@ function init_database() {
 
 function extract() {
     str="$1"
-    s=${str:0:1}
-    d=${str:1:1}
-    t=${str:2:1}
+    source=${str:0:1}
+    database=${str:1:1}
+    table=${str:2:1}
 }
 
 function init_table() {
     for i in $@; do
         extract $i
-        run_sql_source${s} "create table shardddl${d}.tb${t} (id int);"
+        run_sql_source${source} "create table shardddl${database}.tb${table} (id int);"
     done
 }
 

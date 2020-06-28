@@ -627,8 +627,7 @@ function DM_066_CASE() {
 
 function DM_066() {
     run_case 066 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
-    # currently not support optimistic
-    # run_case 066 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+    run_case 066 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
 function DM_067_CASE() {

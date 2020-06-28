@@ -4,9 +4,6 @@ task-mode: all
 is-sharding: true
 shard-mode: "optimistic"
 meta-schema: "dm_meta"
-# enable-heartbeat: true
-heartbeat-update-interval: 1
-heartbeat-report-interval: 1
 timezone: "Asia/Shanghai"
 
 target-database:
@@ -17,13 +14,13 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     route-rules: ["sharding-table-rules","sharding-schema-rules"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
-black-white-list:
+block-allow-list:
   instance:
     do-dbs: ["shardddl1","shardddl2"]
 
