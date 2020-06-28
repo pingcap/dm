@@ -15,18 +15,64 @@ package syncer
 
 import (
 	"context"
+	"strings"
+
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/format"
+	"github.com/pingcap/parser/model"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // OperateSchema operates schema for an upstream table.
-func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaRequest) (schema string, err error) {
+func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaRequest) (createTableStr string, err error) {
 	switch req.Op {
 	case pb.SchemaOp_GetSchema:
 		// we only try to get schema from schema-tracker now.
 		// in other words, we can not get the schema if any DDL/DML has been replicated, or set a schema previously.
 		return s.schemaTracker.GetCreateTable(ctx, req.Database, req.Table)
 	case pb.SchemaOp_SetSchema:
+		// for set schema, we must ensure it's a valid `CREATE TABLE` statement.
+		parser2, err := s.fromDB.getParser(s.cfg.EnableANSIQuotes)
+		if err != nil {
+			return "", err
+		}
+		node, err := parser2.ParseOneStmt(req.Schema, "", "")
+		if err != nil {
+			return "", terror.ErrSchemaTrackerInvalidCreateTableStmt.Delegate(err, req.Schema)
+		}
+		stmt, ok := node.(*ast.CreateTableStmt)
+		if !ok {
+			return "", terror.ErrSchemaTrackerInvalidCreateTableStmt.Generate(req.Schema)
+		}
+		// ensure correct table name.
+		stmt.Table.Schema = model.NewCIStr(req.Database)
+		stmt.Table.Name = model.NewCIStr(req.Table)
+		stmt.IfNotExists = false // we must ensure drop the previous one.
+
+		var newCreateSQLBuilder strings.Builder
+		restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &newCreateSQLBuilder)
+		if err = stmt.Restore(restoreCtx); err != nil {
+			return "", terror.ErrSchemaTrackerRestoreStmtFail.Delegate(err)
+		}
+		newSQL := newCreateSQLBuilder.String()
+
+		// drop the previous schema fist.
+		err = s.schemaTracker.DropTable(req.Database, req.Table)
+		if err != nil && !schema.IsTableNotExists(err) {
+			return "", terror.ErrSchemaTrackerCannotDropTable.Delegate(err, req.Database, req.Table)
+		}
+		err = s.schemaTracker.CreateSchemaIfNotExists(req.Database)
+		if err != nil {
+			return "", terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, req.Database)
+		}
+		err = s.schemaTracker.Exec(ctx, req.Database, newSQL)
+		if err != nil {
+			return "", terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, req.Database, req.Table)
+		}
+		return "", nil
 	case pb.SchemaOp_RemoveSchema:
 		// we only drop the schema in the schema-tracker now,
 		// so if we drop the schema and continue to replicate any DDL/DML, it will try to get schema from downstream again.

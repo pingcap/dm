@@ -91,7 +91,7 @@ service Master {
 
     rpc OperateSchema(OperateSchemaRequest) returns(OperateSchemaResponse) {
         option (google.api.http) = {
-            put: "/apis/v1alpha1/schema/{op}"
+            put: "/apis/v1alpha1/schema"
             body: "*"
         };
     }

@@ -523,6 +523,9 @@ const (
 	codeSchemaTrackerCannotExecDDL
 	codeSchemaTrackerCannotFetchDownstreamTable
 	codeSchemaTrackerCannotParseDownstreamTable
+	codeSchemaTrackerInvalidCreateTableStmt
+	codeSchemaTrackerRestoreStmtFail
+	codeSchemaTrackerCannotDropTable
 )
 
 // HA scheduler.
@@ -1038,6 +1041,12 @@ var (
 	ErrSchemaTrackerCannotParseDownstreamTable = New(
 		codeSchemaTrackerCannotParseDownstreamTable, ClassSchemaTracker, ScopeInternal, LevelHigh,
 		"cannot parse downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker", "")
+	ErrSchemaTrackerInvalidCreateTableStmt = New(codeSchemaTrackerInvalidCreateTableStmt, ClassSchemaTracker, ScopeInternal, LevelMedium,
+		"%s is not a valid `CREATE TABLE` statement", "")
+	ErrSchemaTrackerRestoreStmtFail = New(codeSchemaTrackerRestoreStmtFail, ClassSchemaTracker, ScopeInternal, LevelMedium,
+		"fail to restore the statement", "")
+	ErrSchemaTrackerCannotDropTable = New(codeSchemaTrackerCannotDropTable, ClassSchemaTracker, ScopeInternal, LevelHigh,
+		"failed to drop table for `%s`.`%s` in schema tracker", "")
 
 	// HA scheduler
 	ErrSchedulerNotStarted                = New(codeSchedulerNotStarted, ClassScheduler, ScopeInternal, LevelHigh, "the scheduler has not started", "")

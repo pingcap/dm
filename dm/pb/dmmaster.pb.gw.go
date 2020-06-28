@@ -435,27 +435,6 @@ func request_Master_OperateSchema_0(ctx context.Context, marshaler runtime.Marsh
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	var (
-		val string
-		e   int32
-		ok  bool
-		err error
-		_   = err
-	)
-
-	val, ok = pathParams["op"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "op")
-	}
-
-	e, err = runtime.Enum(val, SchemaOp_value)
-
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "op", err)
-	}
-
-	protoReq.Op = SchemaOp(e)
-
 	msg, err := client.OperateSchema(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
@@ -472,27 +451,6 @@ func local_request_Master_OperateSchema_0(ctx context.Context, marshaler runtime
 	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
-	var (
-		val string
-		e   int32
-		ok  bool
-		err error
-		_   = err
-	)
-
-	val, ok = pathParams["op"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "op")
-	}
-
-	e, err = runtime.Enum(val, SchemaOp_value)
-
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "op", err)
-	}
-
-	protoReq.Op = SchemaOp(e)
 
 	msg, err := server.OperateSchema(ctx, &protoReq)
 	return msg, metadata, err
@@ -883,7 +841,7 @@ var (
 
 	pattern_Master_ListMember_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha1", "members"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Master_OperateSchema_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apis", "v1alpha1", "schema", "op"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Master_OperateSchema_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha1", "schema"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (
