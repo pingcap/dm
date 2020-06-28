@@ -855,7 +855,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 			defer wg.Done()
 			worker := s.scheduler.GetWorkerBySource(source)
 			if worker == nil {
-				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", source), source, "")
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("source %s relevant worker-client not found", source), source, "")
 				return
 			}
 			resp, err := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
@@ -1905,7 +1905,7 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest
 			defer wg.Done()
 			worker := s.scheduler.GetWorkerBySource(source)
 			if worker == nil {
-				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", source), source, "")
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("source %s relevant worker-client not found", source), source, "")
 				return
 			}
 			workerReq2 := workerReq
