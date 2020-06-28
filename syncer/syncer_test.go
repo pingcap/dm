@@ -218,6 +218,14 @@ func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.
 	return utils.GetParser(db, false)
 }
 
+func (s *testSyncerSuite) mockCheckPointMetaFirstTime(checkPointMock sqlmock.Sqlmock) {
+	checkPointMock.ExpectBegin()
+	// here we flush global checkpoint first time
+	checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_sharding_meta", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectCommit()
+}
+
 func (s *testSyncerSuite) mockCheckPointMeta(checkPointMock sqlmock.Sqlmock) {
 	checkPointMock.ExpectBegin()
 	checkPointMock.ExpectExec(fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_sharding_meta", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -1061,9 +1069,24 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	c.Assert(key, Equals, "b")
 
 	// will detect casuality and add a flush job
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+
+	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background())
+
+	mock.ExpectBegin()
+	mock.ExpectExec(".*INSERT INTO .* VALUES.* ON DUPLICATE KEY UPDATE.*").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 	key, err = syncer.resolveCasuality([]string{"a", "b"})
 	c.Assert(err, IsNil)
 	c.Assert(key, Equals, "a")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		c.Errorf("checkpoint db unfulfilled expectations: %s", err)
+	}
 
 	wg.Wait()
 }
@@ -1268,7 +1291,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 				AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
 
 		// mock checkpoint db after create db table1 table2
-		s.mockCheckPointMeta(checkPointMock)
+		s.mockCheckPointMetaFirstTime(checkPointMock)
 		s.mockCheckPointCreate(checkPointMock)
 		s.mockCheckPointMeta(checkPointMock)
 		s.mockCheckPointCreate(checkPointMock)
