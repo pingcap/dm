@@ -1061,9 +1061,24 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	c.Assert(key, Equals, "b")
 
 	// will detect casuality and add a flush job
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+
+	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background())
+
+	mock.ExpectBegin()
+	mock.ExpectExec(".*INSERT INTO .* VALUES.* ON DUPLICATE KEY UPDATE.*").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 	key, err = syncer.resolveCasuality([]string{"a", "b"})
 	c.Assert(err, IsNil)
 	c.Assert(key, Equals, "a")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		c.Errorf("checkpoint db unfulfilled expectations: %s", err)
+	}
 
 	wg.Wait()
 }
