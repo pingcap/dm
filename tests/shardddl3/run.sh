@@ -146,10 +146,6 @@ function DM_082() {
 function DM_094_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # remove this after fix https://github.com/pingcap/dm/issues/757
-    sleep 2
-
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -178,10 +174,6 @@ function DM_094() {
 function DM_095_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # remove this after fix https://github.com/pingcap/dm/issues/757
-    sleep 2
-
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -211,10 +203,6 @@ function DM_095() {
 function DM_096_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # remove this after fix https://github.com/pingcap/dm/issues/757
-    sleep 2
-
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -239,17 +227,13 @@ function DM_096_CASE() {
 }
 
 function DM_096() {
-    # run_case 096 "double-source-pessimistic" "init_table 111 112 211 212" "clean_table" "pessimistic"
+    run_case 096 "double-source-pessimistic" "init_table 111 112 211 212" "clean_table" "pessimistic"
     run_case 096 "double-source-optimistic" "init_table 111 112 211 212" "clean_table" "optimistic"
 }
 
 function DM_097_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # remove this after fix https://github.com/pingcap/dm/issues/757
-    sleep 2
-
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -276,10 +260,6 @@ function DM_097() {
 function DM_098_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # remove this after fix https://github.com/pingcap/dm/issues/757
-    sleep 2
-
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -306,10 +286,6 @@ function DM_098() {
 function DM_099_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # remove this after fix https://github.com/pingcap/dm/issues/757
-    sleep 2
-
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -336,10 +312,6 @@ function DM_099() {
 function DM_100_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # remove this after fix https://github.com/pingcap/dm/issues/757
-    sleep 2
-
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
@@ -366,10 +338,6 @@ function DM_100() {
 function DM_101_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
-
-    # remove this after fix https://github.com/pingcap/dm/issues/757
-    sleep 2
-
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values(4);"
 
