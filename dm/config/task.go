@@ -290,6 +290,8 @@ type TaskConfig struct {
 	Mydumpers map[string]*MydumperConfig `yaml:"mydumpers"`
 	Loaders   map[string]*LoaderConfig   `yaml:"loaders"`
 	Syncers   map[string]*SyncerConfig   `yaml:"syncers"`
+
+	RemoveFinishedDump bool `toml:"remove-finished-dump" json:"remove-finished-dump"`
 }
 
 // NewTaskConfig creates a TaskConfig
@@ -310,6 +312,7 @@ func NewTaskConfig() *TaskConfig {
 		Mydumpers:               make(map[string]*MydumperConfig),
 		Loaders:                 make(map[string]*LoaderConfig),
 		Syncers:                 make(map[string]*SyncerConfig),
+		RemoveFinishedDump:      false,
 	}
 	cfg.FlagSet = flag.NewFlagSet("task", flag.ContinueOnError)
 	return cfg
@@ -555,6 +558,8 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.MydumperConfig = *inst.Mydumper
 		cfg.LoaderConfig = *inst.Loader
 		cfg.SyncerConfig = *inst.Syncer
+
+		cfg.RemoveFinishedDump = c.RemoveFinishedDump
 
 		err := cfg.Adjust(true)
 		if err != nil {

@@ -48,6 +48,10 @@ const (
 	jobCount = 1000
 )
 
+var (
+	endOffsetM sync.Map
+)
+
 // FilePosSet represents a set in mathematics.
 type FilePosSet map[string][]int64
 
@@ -180,6 +184,25 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 					return
 				}
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
+
+				if w.cfg.RemoveFinishedDump {
+					v, ok := endOffsetM.Load(job.file)
+					if !ok {
+						w.tctx.L().Warn("failed to check automatic remove of dump file: %v",
+							zap.String("file", job.file))
+						continue
+					}
+					endOffset, ok := v.(int64)
+					if !ok {
+						w.tctx.L().Warn("failed to check automatic remove of dump file: %v",
+							zap.String("file", job.file))
+						continue
+					}
+					if job.offset == endOffset {
+						os.Remove(job.file)
+						endOffsetM.Delete(job.file)
+					}
+				}
 			}
 		}
 	}
@@ -258,6 +281,10 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 	if err != nil {
 		w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), zap.Int64("offset", offset), log.ShortError(err))
 		return err
+	}
+
+	if _, ok := endOffsetM.Load(file); !ok {
+		endOffsetM.Store(file, finfo.Size())
 	}
 
 	cur, err = f.Seek(offset, io.SeekStart)
