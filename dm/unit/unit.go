@@ -63,25 +63,32 @@ type Unit interface {
 // NewProcessError creates a new ProcessError
 // we can refine to add error scope field if needed
 func NewProcessError(err error) *pb.ProcessError {
-	result := &pb.ProcessError{
-		Msg: terror.Message(err),
-	}
 	if e, ok := err.(*terror.Error); ok {
-		result.Error = &pb.TError{
-			ErrCode:  int32(e.Code()),
-			ErrClass: int32(e.Class()),
-			ErrScope: int32(e.Scope()),
-			ErrLevel: int32(e.Level()),
-			Message:  terror.Message(e),
-			RawCause: terror.Message(e.Cause()),
+		return &pb.ProcessError{
+			ErrCode:    int32(e.Code()),
+			ErrClass:   int32(e.Class()),
+			ErrScope:   int32(e.Scope()),
+			ErrLevel:   int32(e.Level()),
+			Message:    terror.Message(e),
+			RawCause:   terror.Message(e.Cause()),
+			Workaround: e.Workaround(),
 		}
 	}
-	return result
+
+	return &pb.ProcessError{
+		ErrCode:    int32(terror.ErrDefault.Code()),
+		ErrClass:   int32(terror.ErrDefault.Class()),
+		ErrScope:   int32(terror.ErrDefault.Scope()),
+		ErrLevel:   int32(terror.ErrDefault.Level()),
+		Message:    terror.Message(terror.ErrDefault),
+		RawCause:   terror.Message(terror.ErrDefault.Cause()),
+		Workaround: terror.ErrDefault.Workaround(),
+	}
 }
 
 // IsCtxCanceledProcessErr returns true if the err's context canceled
 func IsCtxCanceledProcessErr(err *pb.ProcessError) bool {
-	if strings.Contains(err.Msg, "context canceled") {
+	if strings.Contains(err.Message, "context canceled") {
 		return true
 	}
 	return false

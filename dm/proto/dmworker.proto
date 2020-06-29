@@ -340,10 +340,10 @@ message ProcessResult {
     bytes detail = 3;
 }
 
-// TError represents error used in dm
+// ProcessError is same as terror used in dm
 // NOTE: currently stack trace is not supported, `Message` is the `terror.Error.getMsg` result
 // and `RawCause` is the `Error` result of error from `terror.Error.Cause()`.
-message TError {
+message ProcessError {
     int32 ErrCode = 1;
     int32 ErrClass = 2;
     int32 ErrScope = 3;
@@ -351,13 +351,6 @@ message TError {
     string Message = 5;
     string RawCause = 6;
     string Workaround = 7;
-}
-
-// ProcessError represents error produced by a dm unit
-// NOTE: refine later, like add error scope field
-message ProcessError {
-    string msg = 1;
-    TError error = 2;
 }
 
 // SwitchRelayMasterRequest represents a request for switching a dm-worker's relay unit to another master server

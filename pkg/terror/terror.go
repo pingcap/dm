@@ -51,6 +51,7 @@ const (
 	ClassDMTracer
 	ClassSchemaTracker
 	ClassScheduler
+	ClassNotSet
 )
 
 var errClass2Str = map[ErrClass]string{
@@ -280,7 +281,7 @@ func (e *Error) Delegate(err error, args ...interface{}) error {
 		class:      e.class,
 		scope:      e.scope,
 		level:      e.level,
-		message:    fmt.Sprintf("%s: %s", e.message, err),
+		message:    e.message,
 		workaround: e.workaround,
 		args:       args,
 		rawCause:   err,
