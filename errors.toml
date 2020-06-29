@@ -7,13 +7,13 @@ tags = ["not-set", "high"]
 [error.DM-database-10002]
 message = "database driver"
 description = ""
-workaround = ""
+workaround = "Please check the database connection, then use `stop-task` to stop the task and then use `start-task` to restart the task."
 tags = ["not-set", "high"]
 
 [error.DM-database-10003]
 message = "database driver"
 description = ""
-workaround = ""
+workaround = "Please check the database connection, then use `stop-task` to stop the task and then use `start-task` to restart the task."
 tags = ["not-set", "high"]
 
 [error.DM-database-10004]
@@ -49,31 +49,31 @@ tags = ["internal", "high"]
 [error.DM-functional-11003]
 message = "not allowed operation: drop multiple tables in one statement"
 description = ""
-workaround = ""
+workaround = "It is recommended to include only one DDL operation in a statement executed upstream. Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/skip-or-replace-abnormal-sql-statements"
 tags = ["internal", "high"]
 
 [error.DM-functional-11004]
 message = "not allowed operation: rename multiple tables in one statement"
 description = ""
-workaround = ""
+workaround = "It is recommended to include only one DDL operation in a statement executed upstream. Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/skip-or-replace-abnormal-sql-statements"
 tags = ["internal", "high"]
 
 [error.DM-functional-11005]
 message = "not allowed operation: alter multiple tables in one statement"
 description = ""
-workaround = ""
+workaround = "It is recommended to include only one DDL operation in a statement executed upstream. Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/skip-or-replace-abnormal-sql-statements"
 tags = ["internal", "high"]
 
 [error.DM-functional-11006]
 message = "parse statement"
 description = ""
-workaround = ""
+workaround = "Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/skip-or-replace-abnormal-sql-statements"
 tags = ["internal", "high"]
 
 [error.DM-functional-11007]
 message = "unknown type ddl %+v"
 description = ""
-workaround = ""
+workaround = "Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/skip-or-replace-abnormal-sql-statements"
 tags = ["internal", "high"]
 
 [error.DM-functional-11008]
@@ -289,7 +289,7 @@ tags = ["internal", "high"]
 [error.DM-functional-11043]
 message = "generate table router"
 description = ""
-workaround = ""
+workaround = "Please check `routes` config in task configuration file."
 tags = ["internal", "high"]
 
 [error.DM-functional-11044]
@@ -667,7 +667,7 @@ tags = ["internal", "high"]
 [error.DM-functional-11106]
 message = "the given relay log pos %s of meta config is too big, please check it again"
 description = ""
-workaround = ""
+workaround = "If the size of the corresponding binlog file has exceeded 4GB, please follow the solution in https://docs.pingcap.com/tidb-data-migration/stable/error-handling#the-relay-unit-throws-error-event-from--in--diff-from-passed-in-event--or-a-replication-task-is-interrupted-with-failing-to-get-or-parse-binlog-errors-like-get-binlog-error-error-1236-hy000-and-binlog-checksum-mismatch-data-may-be-corrupted-returned"
 tags = ["internal", "high"]
 
 [error.DM-functional-11107]
@@ -703,49 +703,49 @@ tags = ["internal", "medium"]
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""
-workaround = ""
+workaround = "Please check `ignore-checking-items` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20002]
 message = "%s"
 description = ""
-workaround = ""
+workaround = "Please check the configuration file has correct TOML format."
 tags = ["internal", "medium"]
 
 [error.DM-config-20003]
 message = "%s"
 description = ""
-workaround = ""
+workaround = "Please check the configuration file has correct YAML format."
 tags = ["internal", "medium"]
 
 [error.DM-config-20004]
 message = "task name should not be empty"
 description = ""
-workaround = ""
+workaround = "Please check the `name` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20005]
 message = "empty source-id not valid"
 description = ""
-workaround = ""
+workaround = "Please check the `source-id` config in configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20006]
 message = "too long source-id not valid"
 description = ""
-workaround = ""
+workaround = "Please check the `source-id` config in configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20007]
 message = "online scheme %s not supported"
 description = ""
-workaround = ""
+workaround = "Please check the `online-ddl-scheme` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20008]
 message = "invalid timezone string: %s"
 description = ""
-workaround = ""
+workaround = "Please check the `timezone` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20009]
@@ -763,43 +763,43 @@ tags = ["internal", "medium"]
 [error.DM-config-20011]
 message = "binlog-name must specify"
 description = ""
-workaround = ""
+workaround = "Please check the `meta` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20012]
 message = "mysql instance config must specify"
 description = ""
-workaround = ""
+workaround = "Please check the `mysql-instances` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20013]
 message = "must specify at least one mysql-instances"
 description = ""
-workaround = ""
+workaround = "Please check the `mysql-instances` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20014]
 message = "mysql-instance (%d) and (%d) have same source-id (%s)"
 description = ""
-workaround = ""
+workaround = "Please check the `mysql-instances` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20015]
 message = "mydumper-config-name and mydumper should only specify one"
 description = ""
-workaround = ""
+workaround = "Please check the `mydumper-config-name` and `mydumper` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20016]
 message = "loader-config-name and loader should only specify one"
 description = ""
-workaround = ""
+workaround = "Please check the `loader-config-name` and `loader` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20017]
 message = "syncer-config-name and syncer should only specify one"
 description = ""
-workaround = ""
+workaround = "Please check the `syncer-config-name` and `loader` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20018]
@@ -811,91 +811,91 @@ tags = ["internal", "medium"]
 [error.DM-config-20019]
 message = "must specify a unique task name"
 description = ""
-workaround = ""
+workaround = "Please check the `name` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20020]
 message = "please specify right task-mode, support `full`, `incremental`, `all`"
 description = ""
-workaround = ""
+workaround = "Please check the `task-mode` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20021]
 message = "must specify target-database"
 description = ""
-workaround = ""
+workaround = "Please check the `target-database` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20022]
 message = "mysql-instance(%d) must set meta for task-mode %s"
 description = ""
-workaround = ""
+workaround = "Please check the `meta` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20023]
 message = "mysql-instance(%d)'s route-rules %s not exist in routes"
 description = ""
-workaround = ""
+workaround = "Please check the `route-rules` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20024]
 message = "mysql-instance(%d)'s filter-rules %s not exist in filters"
 description = ""
-workaround = ""
+workaround = "Please check the `filter-rules` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20025]
 message = "mysql-instance(%d)'s column-mapping-rules %s not exist in column-mapping"
 description = ""
-workaround = ""
+workaround = "Please check the `column-mapping-rules` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20026]
 message = "mysql-instance(%d)'s list %s not exist in block allow list"
 description = ""
-workaround = ""
+workaround = "Please check the `block-allow-list` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20027]
 message = "mysql-instance(%d)'s mydumper config %s not exist in mydumpers"
 description = ""
-workaround = ""
+workaround = "Please check the `mydumper-config-name` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20028]
 message = "mysql-instance(%d)'s mydumper-path must specify a valid path to mydumper binary when task-mode is all or full"
 description = ""
-workaround = ""
+workaround = "Please check the `mydumper-path` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20029]
 message = "mysql-instance(%d)'s loader config %s not exist in loaders"
 description = ""
-workaround = ""
+workaround = "Please check the `loader-config-name` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20030]
 message = "mysql-instance(%d)'s syncer config %s not exist in syncer"
 description = ""
-workaround = ""
+workaround = "Please check the `syncer-config-name` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20031]
 message = "source %s in deployment configuration not found"
 description = ""
-workaround = ""
+workaround = "Please use `operate-source create source-config-file-path` to add source."
 tags = ["internal", "medium"]
 
 [error.DM-config-20032]
 message = "the following mysql configs have duplicate items, please remove the duplicates:\n%s"
 description = ""
-workaround = ""
+workaround = "Please check the `mysql-instances` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20033]
 message = "shard mode %s not supported"
 description = ""
-workaround = ""
+workaround = "Please check the `shard-mode` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-binlog-op-22001]
@@ -961,7 +961,7 @@ tags = ["internal", "medium"]
 [error.DM-task-check-26002]
 message = "failed to open DSN %s:***@%s:%d"
 description = ""
-workaround = ""
+workaround = "Please check the database config in configuration file."
 tags = ["internal", "high"]
 
 [error.DM-task-check-26003]
