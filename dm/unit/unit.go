@@ -80,7 +80,7 @@ func NewProcessError(err error) *pb.ProcessError {
 		ErrClass:   terror.ErrNotSet.Class().String(),
 		ErrScope:   terror.ErrNotSet.Scope().String(),
 		ErrLevel:   terror.ErrNotSet.Level().String(),
-		Message:    terror.Message(terror.ErrNotSet),
+		Message:    terror.Message(err),
 		RawCause:   terror.Message(terror.ErrNotSet.Cause()),
 		Workaround: terror.ErrNotSet.Workaround(),
 	}

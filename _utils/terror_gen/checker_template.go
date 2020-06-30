@@ -71,7 +71,11 @@ func genErrors() {
 	w := bufio.NewWriter(f)
 	for _, item := range errors {
 		s := strings.SplitN(item.err.Error(), " ", 2)
-		w.WriteString(fmt.Sprintf("%s,%s \"%s\"\n", item.name, s[0], strings.ReplaceAll(s[1], "\n", "\\n")))
+		if len(s) > 1 {
+			w.WriteString(fmt.Sprintf("%s,%s \"%s\"\n", item.name, s[0], strings.ReplaceAll(s[1], "\n", "\\n")))
+		} else {
+			w.WriteString(fmt.Sprintf("%s,%s\n", item.name, s[0]))
+		}
 
 		body := tomlErrorBody{
 			Message:     item.err.Message(),

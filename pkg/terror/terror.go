@@ -21,10 +21,7 @@ import (
 )
 
 const (
-	errBaseFormat       = "[code=%d:class=%s:scope=%s:level=%s]"
-	errMessageFormat    = "msg: '%s'"
-	errWorkaroundFormat = "workaround: '%s'"
-	errFormat           = errBaseFormat + ", " + errMessageFormat + ", " + errWorkaroundFormat
+	errBaseFormat = "[code=%d:class=%s:scope=%s:level=%s]"
 )
 
 // ErrCode is used as the unique identifier of a specific error type.
@@ -190,7 +187,17 @@ func (e *Error) Workaround() string {
 
 // Error implements error interface.
 func (e *Error) Error() string {
-	return fmt.Sprintf(errFormat, e.code, e.class, e.scope, e.level, e.getMsg(), e.workaround)
+	str := fmt.Sprintf(errBaseFormat, e.code, e.class, e.scope, e.level)
+	if e.getMsg() != "" {
+		str += fmt.Sprintf(", Message: %s", e.getMsg())
+	}
+	if e.rawCause != nil {
+		str += fmt.Sprintf(", RawCause: %s", Message(e.rawCause))
+	}
+	if e.workaround != "" {
+		str += fmt.Sprintf(", Workaround: %s", e.workaround)
+	}
+	return str
 }
 
 // Format accepts flags that alter the printing of some verbs
