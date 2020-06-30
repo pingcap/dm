@@ -33,7 +33,7 @@
 
 1. Run `make dm_integration_test_build` to generate DM related binary for integration test
 
-2. Setup two MySQL servers (<5.8.0) with binlog enabled first and set `GTID_MODE=ON`, export proper environment variables. Variables and their default values are showed in following table.
+2. Setup two MySQL servers (5.6.0 ~ 5.8.0) with binlog enabled first and set `GTID_MODE=ON`, export proper environment variables. Variables and their default values are showed in following table.
 
     | MySQL | Host | Port| PASSWORD |
     | :------------ | :---------- | :------ | :---- |
