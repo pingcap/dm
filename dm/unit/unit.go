@@ -66,9 +66,9 @@ func NewProcessError(err error) *pb.ProcessError {
 	if e, ok := err.(*terror.Error); ok {
 		return &pb.ProcessError{
 			ErrCode:    int32(e.Code()),
-			ErrClass:   int32(e.Class()),
-			ErrScope:   int32(e.Scope()),
-			ErrLevel:   int32(e.Level()),
+			ErrClass:   e.Class().String(),
+			ErrScope:   e.Scope().String(),
+			ErrLevel:   e.Level().String(),
 			Message:    terror.Message(e),
 			RawCause:   terror.Message(e.Cause()),
 			Workaround: e.Workaround(),
@@ -76,13 +76,13 @@ func NewProcessError(err error) *pb.ProcessError {
 	}
 
 	return &pb.ProcessError{
-		ErrCode:    int32(terror.ErrDefault.Code()),
-		ErrClass:   int32(terror.ErrDefault.Class()),
-		ErrScope:   int32(terror.ErrDefault.Scope()),
-		ErrLevel:   int32(terror.ErrDefault.Level()),
-		Message:    terror.Message(terror.ErrDefault),
-		RawCause:   terror.Message(terror.ErrDefault.Cause()),
-		Workaround: terror.ErrDefault.Workaround(),
+		ErrCode:    int32(terror.ErrNotSet.Code()),
+		ErrClass:   terror.ErrNotSet.Class().String(),
+		ErrScope:   terror.ErrNotSet.Scope().String(),
+		ErrLevel:   terror.ErrNotSet.Level().String(),
+		Message:    terror.Message(terror.ErrNotSet),
+		RawCause:   terror.Message(terror.ErrNotSet.Cause()),
+		Workaround: terror.ErrNotSet.Workaround(),
 	}
 }
 

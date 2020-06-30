@@ -1063,5 +1063,5 @@ var (
 	ErrSchedulerSubTaskOpSourceNotExist   = New(codeSchedulerSubTaskOpSourceNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v need to be operate not exist", "")
 
 	// default error code
-	ErrDefault = New(codeNotSet, ClassNotSet, ScopeNotSet, LevelHigh, "", "")
+	ErrNotSet = New(codeNotSet, ClassNotSet, ScopeNotSet, LevelHigh, "", "")
 )

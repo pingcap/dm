@@ -71,6 +71,7 @@ var errClass2Str = map[ErrClass]string{
 	ClassDMTracer:      "dm-tracer",
 	ClassSchemaTracker: "schema-tracker",
 	ClassScheduler:     "scheduler",
+	ClassNotSet:        "no-set",
 }
 
 // String implements fmt.Stringer interface

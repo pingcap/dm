@@ -451,4 +451,4 @@ ErrSchedulerSubTaskExist,[code=46014:class=scheduler:scope=internal:level=medium
 ErrSchedulerSubTaskStageInvalidUpdate,[code=46015:class=dm-master:scope=internal:level=medium], "msg: 'invalid new expectant subtask stage %s', workaround: ''"
 ErrSchedulerSubTaskOpTaskNotExist,[code=46016:class=dm-master:scope=internal:level=medium], "msg: 'subtasks with name %s need to be operate not exist', workaround: ''"
 ErrSchedulerSubTaskOpSourceNotExist,[code=46017:class=dm-master:scope=internal:level=medium], "msg: 'sources %v need to be operate not exist', workaround: ''"
-ErrDefault,[code=48001:class=unknown "error class: 17:scope=not-set:level=high], msg: '', workaround: ''"
+ErrNotSet,[code=48001:class=no-set:scope=not-set:level=high], "msg: '', workaround: ''"

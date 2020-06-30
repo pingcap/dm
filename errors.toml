@@ -2716,7 +2716,7 @@ description = ""
 workaround = ""
 tags = ["internal", "medium"]
 
-[error.DM-unknown error class: 17-48001]
+[error.DM-no-set-48001]
 message = ""
 description = ""
 workaround = ""
