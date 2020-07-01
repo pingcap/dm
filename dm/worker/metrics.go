@@ -53,7 +53,7 @@ var (
 			Namespace: "dm",
 			Subsystem: "worker",
 			Name:      "operate_error",
-			Help:      "number of different oprate error",
+			Help:      "number of different operate error",
 		}, []string{"worker", "type"})
 
 	cpuUsageGauge = prometheus.NewGauge(
