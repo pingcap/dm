@@ -111,7 +111,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 		cancel:     cancel,
 		etcdClient: etcdClient,
 	}
-	taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
+	taskState.WithLabelValues(st.cfg.Name, st.cfg.SourceID).Set(float64(st.stage))
 	return &st
 }
 
@@ -371,7 +371,7 @@ func (st *SubTask) setStage(stage pb.Stage) {
 	st.Lock()
 	defer st.Unlock()
 	st.stage = stage
-	taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
+	taskState.WithLabelValues(st.cfg.Name, st.cfg.SourceID).Set(float64(st.stage))
 }
 
 // stageCAS sets stage to newStage if its current value is oldStage
@@ -381,7 +381,7 @@ func (st *SubTask) stageCAS(oldStage, newStage pb.Stage) bool {
 
 	if st.stage == oldStage {
 		st.stage = newStage
-		taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
+		taskState.WithLabelValues(st.cfg.Name, st.cfg.SourceID).Set(float64(st.stage))
 		return true
 	}
 	return false
@@ -393,7 +393,7 @@ func (st *SubTask) setStageIfNot(oldStage, newStage pb.Stage) bool {
 	defer st.Unlock()
 	if st.stage != oldStage {
 		st.stage = newStage
-		taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
+		taskState.WithLabelValues(st.cfg.Name, st.cfg.SourceID).Set(float64(st.stage))
 		return true
 	}
 	return false
