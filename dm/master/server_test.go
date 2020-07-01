@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -1137,6 +1138,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	defer s1.Close()
 	mysqlCfg := config.NewSourceConfig()
 	mysqlCfg.LoadFromFile("./source.toml")
+	mysqlCfg.From.Password = os.Getenv("MYSQL_PSWD")
 	task, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
 	sourceID := mysqlCfg.SourceID
@@ -1147,6 +1149,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	req := &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: task}
 	resp, err := s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
+	log.L().Info("debug CI", zap.String("mysql password", mysqlCfg.From.Password))
 	log.L().Info("debug CI", zap.Stringer("resp", resp))
 	c.Assert(resp.Result, check.Equals, true)
 	c.Assert(resp.Sources, check.DeepEquals, []*pb.CommonWorkerResponse{{
