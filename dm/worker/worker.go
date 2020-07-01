@@ -78,7 +78,7 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name strin
 		subTaskHolder: newSubTaskHolder(),
 		l:             log.With(zap.String("component", "worker controller")),
 		etcdClient:    etcdClient,
-		name:		   name,
+		name:          name,
 	}
 	w.ctx, w.cancel = context.WithCancel(context.Background())
 	w.closed.Set(closedTrue)
