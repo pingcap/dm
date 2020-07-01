@@ -318,7 +318,9 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 		tables[table] = make(map[string][]int64)
 	}
 	restoringFiles := tables[table]
-	restoringFiles[filename] = []int64{0, endPos}
+	if _, ok := restoringFiles[filename]; !ok {
+		restoringFiles[filename] = []int64{0, endPos}
+	}
 	return nil
 }
 

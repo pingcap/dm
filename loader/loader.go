@@ -1126,8 +1126,11 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		l.logCtx.L().Info("finish to create schema, try to delete file", zap.String("schema file", dbFile))
-		os.Remove(dbFile)
+		l.logCtx.L().Info("finish to create schema", zap.String("schema file", dbFile))
+		if l.cfg.RemoveFinishedDump {
+			l.logCtx.L().Info("remove finished file", zap.String("schema file", dbFile))
+			os.Remove(dbFile)
+		}
 
 		tnames := make([]string, 0, len(tables))
 		for t := range tables {
@@ -1154,8 +1157,11 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			l.logCtx.L().Info("finish to create table, try to delete file", zap.String("table file", tableFile))
-			os.Remove(tableFile)
+			l.logCtx.L().Info("finish to create table", zap.String("table file", tableFile))
+			if l.cfg.RemoveFinishedDump {
+				l.logCtx.L().Info("remove finished file", zap.String("table file", tableFile))
+				os.Remove(tableFile)
+			}
 
 			restoringFiles := l.checkPoint.GetRestoringFileInfo(db, table)
 			l.logCtx.L().Debug("restoring table data", zap.String("schema", db), zap.String("table", table), zap.Reflect("data files", restoringFiles))
