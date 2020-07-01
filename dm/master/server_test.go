@@ -39,7 +39,6 @@ import (
 	tidbmock "github.com/pingcap/tidb/util/mock"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
-	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
@@ -1149,8 +1148,6 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	req := &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: task}
 	resp, err := s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
-	log.L().Info("debug CI", zap.String("mysql password", mysqlCfg.From.Password))
-	log.L().Info("debug CI", zap.Stringer("resp", resp))
 	c.Assert(resp.Result, check.Equals, true)
 	c.Assert(resp.Sources, check.DeepEquals, []*pb.CommonWorkerResponse{{
 		Result: true,
