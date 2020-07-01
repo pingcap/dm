@@ -25,7 +25,7 @@
 
 ### Unit Test
 
-1. Setup a MySQL server with [binlog enabled first](https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html), export proper environment variable `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PSWD`, default is `127.0.0.1`, `3306`, `root` and empty password.
+1. Setup a MySQL server with [binlog enabled first](https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html) and [set `GTID_MODE=ON`](https://dev.mysql.com/doc/refman/5.7/en/replication-mode-change-online-enable-gtids.html), export proper environment variable `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PSWD`, default is `127.0.0.1`, `3306`, `root` and empty password.
 
 2. Run `make unit_test` to run unit test
 
