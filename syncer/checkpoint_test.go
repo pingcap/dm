@@ -129,22 +129,10 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 		s.cfg.Dir = oldDir
 	}()
 
-	// try load from mydumper's output
 	pos1 := mysql.Position{
 		Name: "mysql-bin.000003",
 		Pos:  1943,
 	}
-	dir, err := ioutil.TempDir("", "test_global_checkpoint")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(dir)
-
-	filename := filepath.Join(dir, "metadata")
-	err = ioutil.WriteFile(filename, []byte(
-		fmt.Sprintf("SHOW MASTER STATUS:\n\tLog: %s\n\tPos: %d\n\tGTID:\n\nSHOW SLAVE STATUS:\n\tHost: %s\n\tLog: %s\n\tPos: %d\n\tGTID:\n\n", pos1.Name, pos1.Pos, "slave_host", pos1.Name, pos1.Pos+1000)),
-		0644)
-	c.Assert(err, IsNil)
-	s.cfg.Mode = config.ModeAll
-	s.cfg.Dir = dir
 
 	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
 	err = cp.Load(tctx)
@@ -236,6 +224,32 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
 	c.Assert(cp.FlushedGlobalPoint(), Equals, minCheckpoint)
+
+	// try load from mydumper's output
+	dir, err := ioutil.TempDir("", "test_global_checkpoint")
+	c.Assert(err, IsNil)
+	defer os.RemoveAll(dir)
+
+	filename := filepath.Join(dir, "metadata")
+	err = ioutil.WriteFile(filename, []byte(
+		fmt.Sprintf("SHOW MASTER STATUS:\n\tLog: %s\n\tPos: %d\n\tGTID:\n\nSHOW SLAVE STATUS:\n\tHost: %s\n\tLog: %s\n\tPos: %d\n\tGTID:\n\n", pos1.Name, pos1.Pos, "slave_host", pos1.Name, pos1.Pos+1000)),
+		0644)
+	c.Assert(err, IsNil)
+	s.cfg.Mode = config.ModeAll
+	s.cfg.Dir = dir
+	cp.LoadMeta()
+
+	// should flush because globalPointSaveTime is zero
+	s.mock.ExpectBegin()
+	s.mock.ExpectExec("(202)?"+flushCheckPointSQL).WithArgs(cpid, "", "", pos1.Name, pos1.Pos, true, pos1.Name, pos1.Pos).WillReturnResult(sqlmock.NewResult(0, 1))
+	s.mock.ExpectCommit()
+	err = cp.FlushPointsExcept(tctx, nil, nil, nil)
+	c.Assert(err, IsNil)
+	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
+	err = cp.Load(tctx)
+	c.Assert(err, IsNil)
+	c.Assert(cp.GlobalPoint(), Equals, pos1)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
 }
 
 func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
