@@ -59,7 +59,7 @@ type Tables2DataFiles map[string]DataFiles
 type dataJob struct {
 	sql        string
 	schema     string
-	table 	   string
+	table      string
 	file       string
 	absPath    string
 	offset     int64
