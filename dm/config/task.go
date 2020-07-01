@@ -291,7 +291,7 @@ type TaskConfig struct {
 	Loaders   map[string]*LoaderConfig   `yaml:"loaders"`
 	Syncers   map[string]*SyncerConfig   `yaml:"syncers"`
 
-	RemoveFinishedDump bool `toml:"remove-finished-dump" json:"remove-finished-dump"`
+	RemoveFinishedDump bool `yaml:"remove-finished-dump"`
 }
 
 // NewTaskConfig creates a TaskConfig

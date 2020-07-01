@@ -30,7 +30,6 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/cputil"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -60,7 +59,9 @@ type Tables2DataFiles map[string]DataFiles
 type dataJob struct {
 	sql        string
 	schema     string
+	table 	   string
 	file       string
+	absPath    string
 	offset     int64
 	lastOffset int64
 }
@@ -183,11 +184,11 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
 
 				if w.cfg.RemoveFinishedDump {
-					fileInfos := w.checkPoint.GetRestoringFileInfo(w.cfg.MetaSchema, cputil.LoaderCheckpoint(w.cfg.Name))
+					fileInfos := w.checkPoint.GetRestoringFileInfo(job.schema, job.table)
 					if pos, ok := fileInfos[job.file]; ok {
 						if job.offset == pos[1] {
 							w.tctx.L().Info("try to remove loaded dump file", zap.String("data file", job.file))
-							os.Remove(job.file)
+							os.Remove(job.absPath)
 						}
 					} else {
 						w.tctx.L().Warn("file not recorded in checkpoint", zap.String("data file", job.file))
@@ -332,7 +333,9 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 			j := &dataJob{
 				sql:        query,
 				schema:     table.targetSchema,
+				table:      table.targetTable,
 				file:       baseFile,
+				absPath:    file,
 				offset:     cur,
 				lastOffset: lastOffset,
 			}
@@ -1123,7 +1126,8 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		l.logCtx.L().Info("finish to create schema", zap.String("schema file", dbFile))
+		l.logCtx.L().Info("finish to create schema, try to delete file", zap.String("schema file", dbFile))
+		os.Remove(dbFile)
 
 		tnames := make([]string, 0, len(tables))
 		for t := range tables {
@@ -1150,7 +1154,8 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			l.logCtx.L().Info("finish to create table", zap.String("table file", tableFile))
+			l.logCtx.L().Info("finish to create table, try to delete file", zap.String("table file", tableFile))
+			os.Remove(tableFile)
 
 			restoringFiles := l.checkPoint.GetRestoringFileInfo(db, table)
 			l.logCtx.L().Debug("restoring table data", zap.String("schema", db), zap.String("table", table), zap.Reflect("data files", restoringFiles))
