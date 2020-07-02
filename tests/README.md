@@ -16,7 +16,7 @@
 
 2. The following programs must be installed:
 
-    * `mysql` (the CLI client)
+    * `mysql` (the CLI client, currently [not supported for mysql client 8.0](https://github.com/pingcap/tidb/issues/14021))
     * `python2.7` or `python3.x`
 
 3. The user executing the tests must have permission to create the folder `/tmp/dm_test`. All test artifacts will be written into this folder.
@@ -33,7 +33,7 @@
 
 1. Run `make dm_integration_test_build` to generate DM related binary for integration test
 
-2. Setup two MySQL servers (5.6.0 ~ 5.8.0) with [binlog enabled first](https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html) and [set `GTID_MODE=ON`](https://dev.mysql.com/doc/refman/5.7/en/replication-mode-change-online-enable-gtids.html), export proper environment variables. Variables and their default values are showed in following table.
+2. Setup two MySQL servers (5.6 ~ 5.7) with [binlog enabled first](https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html) and [set `GTID_MODE=ON`](https://dev.mysql.com/doc/refman/5.7/en/replication-mode-change-online-enable-gtids.html), export proper environment variables. Variables and their default values are showed in following table.
 
     | MySQL | Host | Port| PASSWORD |
     | :------------ | :---------- | :------ | :---- |
