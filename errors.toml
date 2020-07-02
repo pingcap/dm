@@ -1843,7 +1843,7 @@ tags = ["internal", "medium"]
 [error.DM-dm-master-38013]
 message = "config toml transform"
 description = ""
-workaround = ""
+workaround = "Please check the configuration file has correct TOML format."
 tags = ["internal", "medium"]
 
 [error.DM-dm-master-38014]
@@ -1861,7 +1861,7 @@ tags = ["internal", "high"]
 [error.DM-dm-master-38016]
 message = "sharding ddls in ddl lock %s is different with %s"
 description = ""
-workaround = ""
+workaround = "Please use show-ddl-locks command for more details."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38017]
@@ -1879,7 +1879,7 @@ tags = ["internal", "high"]
 [error.DM-dm-master-38019]
 message = "lock with ID %s not found"
 description = ""
-workaround = ""
+workaround = "Please use show-ddl-locks command to see lock id."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38020]
@@ -1919,9 +1919,9 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38026]
-message = "worker %s exist ddl lock, please unlock ddl lock first"
+message = "worker %s exist ddl lock"
 description = ""
-workaround = ""
+workaround = "Please unlock ddl lock first."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38027]
@@ -1949,21 +1949,21 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38031]
-message = "operation %d of task %s on worker %s not found, please execute `query-status` to check status"
+message = "operation %d of task %s on worker %s not found"
 description = ""
-workaround = ""
+workaround = "Please execute `query-status` to check status."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38032]
 message = "some error occurs in dm-worker: %s"
 description = ""
-workaround = ""
+workaround = "Please execute `query-status` to check status."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38033]
-message = "request to dm-worker %s is timeout, but request may be successful, please execute `query-status` to check status"
+message = "request to dm-worker %s is timeout, but request may be successful"
 description = ""
-workaround = ""
+workaround = "Please execute `query-status` to check status."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38034]
@@ -1975,7 +1975,7 @@ tags = ["internal", "high"]
 [error.DM-dm-master-38035]
 message = "host:port '%s' not valid"
 description = ""
-workaround = ""
+workaround = "Please check the `master-addr` config in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38036]
@@ -1987,7 +1987,7 @@ tags = ["internal", "high"]
 [error.DM-dm-master-38037]
 message = "fail to generate config item %s for embed etcd"
 description = ""
-workaround = ""
+workaround = "Please check configs in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38038]
@@ -1999,13 +1999,13 @@ tags = ["internal", "high"]
 [error.DM-dm-master-38039]
 message = "fail to parse URL %s"
 description = ""
-workaround = ""
+workaround = "Please check configs in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38040]
 message = "fail to join embed etcd: %s"
 description = ""
-workaround = ""
+workaround = "Please check configs in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38041]
@@ -2017,7 +2017,7 @@ tags = ["internal", "medium"]
 [error.DM-dm-master-38042]
 message = "advertise address %s not valid"
 description = ""
-workaround = ""
+workaround = "Please check the `advertise-addr` config in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38043]
@@ -2053,13 +2053,13 @@ tags = ["internal", "medium"]
 [error.DM-dm-master-38048]
 message = "dm-master with name %s not exists"
 description = ""
-workaround = ""
+workaround = "Please use list-member command to see masters."
 tags = ["internal", "low"]
 
 [error.DM-dm-master-38049]
-message = "offline member type %s is invalid, please use master/worker"
+message = "offline member type %s is invalid"
 description = ""
-workaround = ""
+workaround = "Please use master/worker."
 tags = ["internal", "low"]
 
 [error.DM-dm-worker-40001]
@@ -2077,13 +2077,13 @@ tags = ["internal", "medium"]
 [error.DM-dm-worker-40003]
 message = "toml decode file"
 description = ""
-workaround = ""
+workaround = "Please check the configuration file has correct TOML format."
 tags = ["internal", "medium"]
 
 [error.DM-dm-worker-40004]
 message = "worker config contains unknown configuration options: %s"
 description = ""
-workaround = ""
+workaround = "Please check configs in worker configurtion file."
 tags = ["internal", "medium"]
 
 [error.DM-dm-worker-40005]
@@ -2371,7 +2371,7 @@ tags = ["internal", "high"]
 [error.DM-dm-worker-40052]
 message = "can only update task on Paused stage, but current stage is %s"
 description = ""
-workaround = ""
+workaround = "Please use `pause-task` command to pause the task."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40053]
@@ -2425,7 +2425,7 @@ tags = ["internal", "high"]
 [error.DM-dm-worker-40061]
 message = "DDLLockInfo with ID %s not found"
 description = ""
-workaround = ""
+workaround = "Please use show-ddl-locks command to see lock id."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40062]
@@ -2453,9 +2453,9 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40066]
-message = "ExecuteDDL timeout (exceeding %s), try use `query-status` to query whether the DDL is still blocking"
+message = "ExecuteDDL timeout (exceeding %s)"
 description = ""
-workaround = ""
+workaround = "Please try use `query-status` to query whether the DDL is still blocking."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40067]
@@ -2465,15 +2465,15 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40068]
-message = "relay log purger is purging, cannot start sub task %s, please try again later"
+message = "relay log purger is purging, cannot start sub task %s"
 description = ""
-workaround = ""
+workaround = "Please try again later."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40069]
 message = "host:port '%s' not valid"
 description = ""
-workaround = ""
+workaround = "Please check configs in worker configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40070]
@@ -2515,7 +2515,7 @@ tags = ["internal", "medium"]
 [error.DM-dm-tracer-42002]
 message = "config toml transform"
 description = ""
-workaround = ""
+workaround = "Please check the configuration file has correct TOML format."
 tags = ["internal", "medium"]
 
 [error.DM-dm-tracer-42003]
@@ -2639,9 +2639,9 @@ workaround = ""
 tags = ["internal", "medium"]
 
 [error.DM-scheduler-46005]
-message = "dm-worker with name %s is still online, must shut it down first"
+message = "dm-worker with name %s is still online"
 description = ""
-workaround = ""
+workaround = "Please shut it down first."
 tags = ["internal", "medium"]
 
 [error.DM-scheduler-46006]
