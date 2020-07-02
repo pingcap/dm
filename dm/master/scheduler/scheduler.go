@@ -15,7 +15,6 @@ package scheduler
 
 import (
 	"context"
-	"github.com/pingcap/dm/dm/master/metrics"
 	"sort"
 	"sync"
 	"time"
@@ -24,6 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/etcdutil"

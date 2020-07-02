@@ -16,7 +16,6 @@ package master
 import (
 	"context"
 	"fmt"
-	"github.com/pingcap/dm/dm/master/metrics"
 	"net/http"
 	"sort"
 	"strings"
@@ -34,6 +33,7 @@ import (
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/master/shardddl"
 	operator "github.com/pingcap/dm/dm/master/sql-operator"
