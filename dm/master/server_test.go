@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -1136,6 +1137,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	defer s1.Close()
 	mysqlCfg := config.NewSourceConfig()
 	mysqlCfg.LoadFromFile("./source.toml")
+	mysqlCfg.From.Password = os.Getenv("MYSQL_PSWD")
 	task, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
 	sourceID := mysqlCfg.SourceID
