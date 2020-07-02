@@ -137,6 +137,8 @@ func InitStatus(lis net.Listener) {
 	}
 }
 
-func (st *SubTask) removeLabelValuesWithTaskInMetrics(task string) {
-	taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+func (st *SubTask) removeLabelValuesWithTaskInMetrics(task string, source string) {
+	taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": source})
 }
+
+// opErrCounter cleans on worker close, which is the same time dm-worker exits, so no explicit clean

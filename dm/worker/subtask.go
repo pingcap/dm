@@ -429,7 +429,7 @@ func (st *SubTask) Close() {
 
 	st.cancel()
 	st.closeUnits() // close all un-closed units
-	st.removeLabelValuesWithTaskInMetrics(st.cfg.Name)
+	st.removeLabelValuesWithTaskInMetrics(st.cfg.Name, st.cfg.SourceID)
 	st.wg.Wait()
 	st.setStageIfNot(pb.Stage_Finished, pb.Stage_Stopped)
 }
