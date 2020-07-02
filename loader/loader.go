@@ -611,10 +611,24 @@ func (l *Loader) Restore(ctx context.Context) error {
 
 	if err == nil {
 		l.logCtx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
-		// lance: here to delete structure file?
 		if l.cfg.RemoveFinishedDump {
-			l.logCtx.L().Info("remove loaded structure file")
-			l.cleanStructureFiles()
+			files := CollectDirFiles(l.cfg.Dir)
+			hasDatafile := false
+			for file := range files {
+				if strings.HasSuffix(file, ".sql") &&
+					!strings.HasSuffix(file, "-schema.sql") &&
+					!strings.HasSuffix(file, "-schema-create.sql") &&
+					!strings.Contains(file, "-schema-view.sql") &&
+					!strings.Contains(file, "-schema-triggers.sql") &&
+					!strings.Contains(file, "-schema-post.sql") {
+					hasDatafile = true
+				}
+			}
+
+			if !hasDatafile {
+				l.logCtx.L().Info("remove loaded structure file")
+				l.cleanStructureFiles()
+			}
 		}
 	} else if errors.Cause(err) != context.Canceled {
 		return err
