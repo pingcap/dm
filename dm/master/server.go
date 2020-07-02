@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/dm/dm/master/metrics"
 	"net/http"
 	"sort"
 	"strings"
@@ -155,7 +156,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	}
 
 	// HTTP handlers on etcd's client IP:port
-	// no `metrics` for DM-master now, add it later.
 	// NOTE: after received any HTTP request from chrome browser,
 	// the server may be blocked when closing sometime.
 	// And any request to etcd's builtin handler has the same problem.
@@ -163,9 +163,10 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// But I haven't figured it out.
 	// (maybe more requests are sent from chrome or its extensions).
 	userHandles := map[string]http.Handler{
-		"/apis/":  apiHandler,
-		"/status": getStatusHandle(),
-		"/debug/": getDebugHandler(),
+		"/apis/":   apiHandler,
+		"/status":  getStatusHandle(),
+		"/debug/":  getDebugHandler(),
+		"/metrics": metrics.GetMetricsHandler(),
 	}
 
 	// gRPC API server
@@ -191,6 +192,8 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
+	metrics.RegistryMetrics()
+
 	s.closed.Set(false) // the server started now.
 
 	s.bgFunWg.Add(1)
@@ -203,6 +206,12 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	go func() {
 		defer s.bgFunWg.Done()
 		s.electionNotify(ctx)
+	}()
+
+	s.bgFunWg.Add(1)
+	go func() {
+		defer s.bgFunWg.Done()
+		metrics.RunBackgroundJob(ctx)
 	}()
 
 	s.bgFunWg.Add(1)

@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/terror"
@@ -34,7 +35,7 @@ type WorkerStage string
 //   - Bound -> Offline, lost keep-live, when receive keep-alive again, it should become Free.
 //   - Bound -> Free, revoke source scheduler.
 // invalid transformation:
-//   - Offline -> WorkerBound, must become Free first.
+//   - Offline -> Bound, must become Free first.
 const (
 	WorkerOffline WorkerStage = "offline" // the worker is not online yet.
 	WorkerFree    WorkerStage = "free"    // the worker is online, but no upstream source assigned to it yet.
@@ -43,6 +44,13 @@ const (
 
 var (
 	nullBound ha.SourceBound
+
+	workerStage2Num = map[WorkerStage]float64{
+		WorkerOffline: 0.0,
+		WorkerFree:    1.0,
+		WorkerBound:   2.0,
+	}
+	unrecognizedState = -1.0
 )
 
 // Worker is an agent for a DM-worker instance.
@@ -84,6 +92,7 @@ func (w *Worker) ToOffline() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.stage = WorkerOffline
+	w.reportMetrics()
 	w.bound = nullBound
 }
 
@@ -93,6 +102,7 @@ func (w *Worker) ToFree() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.stage = WorkerFree
+	w.reportMetrics()
 	w.bound = nullBound
 }
 
@@ -105,6 +115,7 @@ func (w *Worker) ToBound(bound ha.SourceBound) error {
 		return terror.ErrSchedulerWorkerInvalidTrans.Generate(w.BaseInfo(), WorkerOffline, WorkerBound)
 	}
 	w.stage = WorkerBound
+	w.reportMetrics()
 	w.bound = bound
 	return nil
 }
@@ -133,4 +144,12 @@ func (w *Worker) Bound() ha.SourceBound {
 // SendRequest sends request to the DM-worker instance.
 func (w *Worker) SendRequest(ctx context.Context, req *workerrpc.Request, d time.Duration) (*workerrpc.Response, error) {
 	return w.cli.SendRequest(ctx, req, d)
+}
+
+func (w *Worker) reportMetrics() {
+	s := unrecognizedState
+	if n, ok := workerStage2Num[w.stage]; ok {
+		s = n
+	}
+	metrics.ReportStageToMetrics(w.baseInfo.Name, s)
 }
