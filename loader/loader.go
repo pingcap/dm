@@ -611,6 +611,11 @@ func (l *Loader) Restore(ctx context.Context) error {
 
 	if err == nil {
 		l.logCtx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
+		// lance: here to delete structure file?
+		if l.cfg.RemoveFinishedDump {
+			l.logCtx.L().Info("remove loaded structure file")
+			l.cleanStructureFiles()
+		}
 	} else if errors.Cause(err) != context.Canceled {
 		return err
 	}
@@ -1127,10 +1132,6 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			return err
 		}
 		l.logCtx.L().Info("finish to create schema", zap.String("schema file", dbFile))
-		if l.cfg.RemoveFinishedDump {
-			l.logCtx.L().Info("remove finished file", zap.String("schema file", dbFile))
-			os.Remove(dbFile)
-		}
 
 		tnames := make([]string, 0, len(tables))
 		for t := range tables {
@@ -1158,10 +1159,6 @@ func (l *Loader) restoreData(ctx context.Context) error {
 				return err
 			}
 			l.logCtx.L().Info("finish to create table", zap.String("table file", tableFile))
-			if l.cfg.RemoveFinishedDump {
-				l.logCtx.L().Info("remove finished file", zap.String("table file", tableFile))
-				os.Remove(tableFile)
-			}
 
 			restoringFiles := l.checkPoint.GetRestoringFileInfo(db, table)
 			l.logCtx.L().Debug("restoring table data", zap.String("schema", db), zap.String("table", table), zap.Reflect("data files", restoringFiles))
@@ -1234,4 +1231,16 @@ func (l *Loader) getMydumpMetadata() error {
 
 	l.metaBinlog.Set(pos.String())
 	return nil
+}
+
+// cleanStructureFiles is called optionally when finish loading data
+func (l *Loader) cleanStructureFiles() {
+	for db, tables := range l.db2Tables {
+		dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
+		os.Remove(dbFile)
+		for table := range tables {
+			tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
+			os.Remove(tableFile)
+		}
+	}
 }
