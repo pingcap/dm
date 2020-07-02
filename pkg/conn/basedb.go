@@ -69,6 +69,10 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 
+	if err = db.Ping(); err != nil {
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+
 	db.SetMaxIdleConns(maxIdleConns)
 
 	return NewBaseDB(db), nil

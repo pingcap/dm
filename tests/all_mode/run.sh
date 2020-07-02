@@ -26,13 +26,9 @@ function test_session_config(){
 
     # error config
     sed -i 's/tidb_retry_limit: "10"/tidb_retry_limit: "fjs"/g'  $WORK_DIR/dm-task.yaml
-    dmctl_start_task "$WORK_DIR/dm-task.yaml"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
-        "'tidb_retry_limit' can't be set to the value" 4
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "stop-task test" \
-        "\"result\": true" 3
+        "start-task $WORK_DIR/dm-task.yaml" \
+        "'tidb_retry_limit' can't be set to the value" 1
 
     # sql_mode=""
     sed -i 's/tidb_retry_limit: "fjs"/tidb_retry_limit: "10"/g'  $WORK_DIR/dm-task.yaml
