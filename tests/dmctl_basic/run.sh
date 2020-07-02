@@ -114,6 +114,10 @@ function run() {
     check_task_pass $TASK_CONF
     check_task_not_pass $cur/conf/dm-task2.yaml
 
+    cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task-error-database-config.yaml
+    sed -i "s/password: \"\"/password: \"wrond password\"/g" $WORK_DIR/dm-task-error-database-config.yaml
+    check_task_error_database_config $WORK_DIR/dm-task-error-database-config.yaml
+
     dmctl_start_task
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     update_task_not_paused $TASK_CONF
