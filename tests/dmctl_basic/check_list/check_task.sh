@@ -34,3 +34,10 @@ function check_task_not_pass() {
         "check-task $task_conf" \
         "\"result\": false" 1
 }
+
+function check_task_error_database_config() {
+    task_conf=$1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "check-task $task_conf" \
+        "database driver error" 1
+}
