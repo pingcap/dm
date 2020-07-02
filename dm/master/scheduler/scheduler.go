@@ -15,6 +15,7 @@ package scheduler
 
 import (
 	"context"
+	"github.com/pingcap/dm/dm/master/metrics"
 	"sort"
 	"sync"
 	"time"
@@ -1236,6 +1237,7 @@ func (s *Scheduler) deleteWorker(name string) {
 	}
 	w.Close()
 	delete(s.workers, name)
+	metrics.RemoveMetrics(w.baseInfo.Name)
 }
 
 // updateStatusForBound updates the in-memory status for bound, including:

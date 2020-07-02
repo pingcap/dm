@@ -76,6 +76,7 @@ func NewWorker(baseInfo ha.WorkerInfo) (*Worker, error) {
 		baseInfo: baseInfo,
 		stage:    WorkerOffline,
 	}
+	w.reportMetrics()
 	return w, nil
 }
 

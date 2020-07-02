@@ -48,6 +48,8 @@ func collectMetrics() {
 	cpuUsageGauge.Set(cpuUsage)
 }
 
+
+// RunBackgroundJob do periodic job
 func RunBackgroundJob(ctx context.Context) {
 	ticker := time.NewTicker(time.Second * 10)
 	defer ticker.Stop()
@@ -75,10 +77,17 @@ func RegistryMetrics() {
 	prometheus.DefaultGatherer = registry
 }
 
+// GetMetricsHandler returns prometheus HTTP Handler
 func GetMetricsHandler() http.Handler {
 	return promhttp.Handler()
 }
 
+// ReportStageToMetrics is a setter for workerState, this name is easy to understand to caller
 func ReportStageToMetrics(name string, state float64) {
 	workerState.WithLabelValues(name).Set(state)
+}
+
+// RemoveMetrics cleans state of deleted worker
+func RemoveMetrics(name string) {
+	workerState.DeleteAllAboutLabels(prometheus.Labels{"worker": name})
 }
