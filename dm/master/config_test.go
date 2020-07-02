@@ -92,7 +92,7 @@ func (t *testMaster) TestConfig(c *check.C) {
 			{
 				[]string{"invalid"},
 				true,
-				".*'invalid' is an invalid flag",
+				".*'invalid' is an invalid flag.*",
 			},
 			{
 				[]string{"--config=./dm-master.toml"},
@@ -193,5 +193,5 @@ dm-worker = "172.16.10.72:8262"`)
 	err = ioutil.WriteFile(filepath2, configContent2, 0644)
 	err = cfg.configFromFile(filepath2)
 	c.Assert(err, check.NotNil)
-	c.Assert(err, check.ErrorMatches, "*master config contained unknown configuration options: aaa*")
+	c.Assert(err, check.ErrorMatches, "*master config contained unknown configuration options: aaa.*")
 }

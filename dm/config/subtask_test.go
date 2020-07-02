@@ -98,7 +98,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				cfg.Name = ""
 				return cfg
 			},
-			"\\[.*\\] task name should not be empty",
+			"\\[.*\\], msg: 'task name should not be empty'.*",
 		},
 		{
 			func() *SubTaskConfig {
@@ -106,7 +106,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				cfg.SourceID = ""
 				return cfg
 			},
-			"\\[.*\\] empty source-id not valid",
+			"\\[.*\\], msg: 'empty source-id not valid'.*",
 		},
 		{
 			func() *SubTaskConfig {
@@ -114,7 +114,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				cfg.SourceID = "source-id-length-more-than-thirty-two"
 				return cfg
 			},
-			"\\[.*\\] too long source-id not valid",
+			"\\[.*\\], msg: 'too long source-id not valid'.*",
 		},
 		{
 			func() *SubTaskConfig {
@@ -122,7 +122,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				cfg.OnlineDDLScheme = "rtc"
 				return cfg
 			},
-			"\\[.*\\] online scheme rtc not supported",
+			"\\[.*\\], msg: 'online scheme rtc not supported'.*",
 		},
 		{
 			func() *SubTaskConfig {
@@ -130,7 +130,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				cfg.Timezone = "my-house"
 				return cfg
 			},
-			"\\[.*\\] invalid timezone string: my-house:.*",
+			"\\[.*\\], msg: 'invalid timezone string: my-house:.*",
 		},
 	}
 
