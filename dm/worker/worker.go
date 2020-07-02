@@ -333,12 +333,8 @@ func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {
 			// TODO: right operation sequences may get error when we get etcdErrCompact, need to handle it later
 			// For example, Expect: Running -(pause)-> Paused -(resume)-> Running
 			// we get an etcd compact error at the first running. If we try to "resume" it now, we will get an error
-			op, err := w.operateSubTaskStage(stage, subtaskCfg)
+			opType, err := w.operateSubTaskStage(stage, subtaskCfg)
 			if err != nil {
-				opType := opErrTypeBeforeOp
-				if op != nil {
-					opType = op.String()
-				}
 				opErrCounter.WithLabelValues(w.name, opType).Inc()
 				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage),
 					zap.String("task", subtaskCfg.Name), zap.Error(err))
@@ -412,12 +408,8 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 			log.L().Info("worker is closed, handleSubTaskStage will quit now")
 			return nil
 		case stage := <-stageCh:
-			op, err := w.operateSubTaskStageWithoutConfig(stage)
+			opType, err := w.operateSubTaskStageWithoutConfig(stage)
 			if err != nil {
-				opType := opErrTypeBeforeOp
-				if op != nil {
-					opType = op.String()
-				}
 				opErrCounter.WithLabelValues(w.name, opType).Inc()
 				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage), zap.Error(err))
 				if etcdutil.IsRetryableError(err) {
@@ -434,15 +426,16 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 	}
 }
 
-// operateSubTaskStage returns TaskOp additionally to record metrics
-func (w *Worker) operateSubTaskStage(stage ha.Stage, subTaskCfg config.SubTaskConfig) (*pb.TaskOp, error) {
+// operateSubTaskStage returns TaskOp.String() additionally to record metrics
+func (w *Worker) operateSubTaskStage(stage ha.Stage, subTaskCfg config.SubTaskConfig) (string, error) {
 	var op pb.TaskOp
 	switch {
 	case stage.Expect == pb.Stage_Running:
 		if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
 			w.StartSubTask(&subTaskCfg)
 			log.L().Info("load subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
-			return nil, nil
+			// error is nil, opErrTypeBeforeOp will be ignored
+			return opErrTypeBeforeOp, nil
 		}
 		op = pb.TaskOp_Resume
 	case stage.Expect == pb.Stage_Paused:
@@ -450,22 +443,22 @@ func (w *Worker) operateSubTaskStage(stage ha.Stage, subTaskCfg config.SubTaskCo
 	case stage.IsDeleted:
 		op = pb.TaskOp_Stop
 	}
-	return &op, w.OperateSubTask(stage.Task, op)
+	return op.String(), w.OperateSubTask(stage.Task, op)
 }
 
 // operateSubTaskStageWithoutConfig returns TaskOp additionally to record metrics
-func (w *Worker) operateSubTaskStageWithoutConfig(stage ha.Stage) (*pb.TaskOp, error) {
+func (w *Worker) operateSubTaskStageWithoutConfig(stage ha.Stage) (string, error) {
 	var subTaskCfg config.SubTaskConfig
 	if stage.Expect == pb.Stage_Running {
 		if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
 			tsm, _, err := ha.GetSubTaskCfg(w.etcdClient, stage.Source, stage.Task, stage.Revision)
 			if err != nil {
 				// TODO: need retry
-				return nil, terror.Annotate(err, "fail to get subtask config from etcd")
+				return opErrTypeBeforeOp, terror.Annotate(err, "fail to get subtask config from etcd")
 			}
 			var ok bool
 			if subTaskCfg, ok = tsm[stage.Task]; !ok {
-				return nil, terror.ErrWorkerFailToGetSubtaskConfigFromEtcd.Generate(stage.Task)
+				return opErrTypeBeforeOp, terror.ErrWorkerFailToGetSubtaskConfigFromEtcd.Generate(stage.Task)
 			}
 		}
 	}
@@ -509,12 +502,8 @@ func (w *Worker) observeRelayStage(ctx context.Context, etcdCli *clientv3.Client
 					if stage.IsEmpty() {
 						stage.IsDeleted = true
 					}
-					op, err1 := w.operateRelayStage(ctx, stage)
+					opType, err1 := w.operateRelayStage(ctx, stage)
 					if err1 != nil {
-						opType := opErrTypeBeforeOp
-						if op != nil {
-							opType = op.String()
-						}
 						opErrCounter.WithLabelValues(w.name, opType).Inc()
 						log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Error(err1))
 					}
@@ -539,12 +528,8 @@ func (w *Worker) handleRelayStage(ctx context.Context, stageCh chan ha.Stage, er
 			log.L().Info("worker is closed, handleRelayStage will quit now")
 			return nil
 		case stage := <-stageCh:
-			op, err := w.operateRelayStage(ctx, stage)
+			opType, err := w.operateRelayStage(ctx, stage)
 			if err != nil {
-				opType := opErrTypeBeforeOp
-				if op != nil {
-					opType = op.String()
-				}
 				opErrCounter.WithLabelValues(w.name, opType).Inc()
 				log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Error(err))
 			}
@@ -557,16 +542,16 @@ func (w *Worker) handleRelayStage(ctx context.Context, stageCh chan ha.Stage, er
 	}
 }
 
-// operateRelayStage returns RelayOp additionally to record metrics
+// operateRelayStage returns RelayOp.String() additionally to record metrics
 // *RelayOp is nil only when error is nil, so record on error will not meet nil-pointer deference
-func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) (*pb.RelayOp, error) {
+func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) (string, error) {
 	var op pb.RelayOp
 	switch {
 	case stage.Expect == pb.Stage_Running:
 		if w.relayHolder.Stage() == pb.Stage_New {
 			w.relayHolder.Start()
 			w.relayPurger.Start()
-			return nil, nil
+			return opErrTypeBeforeOp, nil
 		}
 		op = pb.RelayOp_ResumeRelay
 	case stage.Expect == pb.Stage_Paused:
@@ -574,7 +559,7 @@ func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) (*pb.Rel
 	case stage.IsDeleted:
 		op = pb.RelayOp_StopRelay
 	}
-	return &op, w.OperateRelay(ctx, &pb.OperateRelayRequest{Op: op})
+	return op.String(), w.OperateRelay(ctx, &pb.OperateRelayRequest{Op: op})
 }
 
 // HandleSQLs implements Handler.HandleSQLs.

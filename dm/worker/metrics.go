@@ -48,6 +48,7 @@ var (
 			Help:      "state of task, 0 - invalidStage, 1 - New, 2 - Running, 3 - Paused, 4 - Stopped, 5 - Finished",
 		}, []string{"task", "source_id"})
 
+	// opErrCounter cleans on worker close, which is the same time dm-worker exits, so no explicit clean
 	opErrCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
@@ -140,5 +141,3 @@ func InitStatus(lis net.Listener) {
 func (st *SubTask) removeLabelValuesWithTaskInMetrics(task string, source string) {
 	taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": source})
 }
-
-// opErrCounter cleans on worker close, which is the same time dm-worker exits, so no explicit clean
