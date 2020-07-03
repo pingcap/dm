@@ -68,7 +68,7 @@ var (
 	// the retry interval for dm-master to confirm the dm-workers status is expected
 	retryInterval = time.Second
 
-	// typically there's only one server running in on process, but testMaster.TestOfflineMember starts 3 servers,
+	// typically there's only one server running in one process, but testMaster.TestOfflineMember starts 3 servers,
 	// so we need sync.Once to prevent data race
 	registerOnce      sync.Once
 	runBackgroundOnce sync.Once
