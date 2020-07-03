@@ -90,7 +90,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	cfg := loadSourceConfigWithoutPassword(c)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
-	w, err := NewWorker(&cfg, nil)
+	w, err := NewWorker(&cfg, nil, "")
 	c.Assert(err, check.IsNil)
 	w.closed.Set(closedFalse)
 
@@ -207,7 +207,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 	cfg := loadSourceConfigWithoutPassword(c)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
-	w, err := NewWorker(&cfg, nil)
+	w, err := NewWorker(&cfg, nil, "")
 	c.Assert(err, check.IsNil)
 	w.closed.Set(closedFalse)
 
