@@ -48,7 +48,6 @@ func collectMetrics() {
 	cpuUsageGauge.Set(cpuUsage)
 }
 
-
 // RunBackgroundJob do periodic job
 func RunBackgroundJob(ctx context.Context) {
 	ticker := time.NewTicker(time.Second * 10)
