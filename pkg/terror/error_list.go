@@ -550,8 +550,8 @@ const (
 var (
 	// Database operation related error
 	ErrDBDriverError = New(codeDBDriverError, ClassDatabase, ScopeNotSet, LevelHigh, "database driver error", "Please check the database connection and the database config in configuration file.")
-	ErrDBBadConn     = New(codeDBBadConn, ClassDatabase, ScopeNotSet, LevelHigh, "database driver", "Please check the database connection, then use `stop-task` to stop the task and then use `start-task` to restart the task.")
-	ErrDBInvalidConn = New(codeDBInvalidConn, ClassDatabase, ScopeNotSet, LevelHigh, "database driver", "Please check the database connection, then use `stop-task` to stop the task and then use `start-task` to restart the task.")
+	ErrDBBadConn     = New(codeDBBadConn, ClassDatabase, ScopeNotSet, LevelHigh, "database driver", "Please check the database connection, then use `pause-task` to pause the task and then use `resume-task` to resume the task.")
+	ErrDBInvalidConn = New(codeDBInvalidConn, ClassDatabase, ScopeNotSet, LevelHigh, "database driver", "Please check the database connection, then use `pause-task` to stop the task and then use `resume-task` to resume the task.")
 
 	ErrDBUnExpect      = New(codeDBUnExpect, ClassDatabase, ScopeNotSet, LevelHigh, "unexpect database error: %s", "")
 	ErrDBQueryFailed   = New(codeDBQueryFailed, ClassDatabase, ScopeNotSet, LevelHigh, "query statement failed: %s", "")
@@ -579,7 +579,7 @@ var (
 	ErrReaderAlreadyRunning   = New(codeReaderAlreadyRunning, ClassFunctional, ScopeInternal, LevelHigh, "binlog reader is already running", "")
 	ErrReaderAlreadyStarted   = New(codeReaderAlreadyStarted, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, already started", "")
 	ErrReaderStateCannotClose = New(codeReaderStateCannotClose, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close", "")
-	ErrReaderShouldStartSync  = New(codeReaderShouldStartSync, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s", "Please start sync first.")
+	ErrReaderShouldStartSync  = New(codeReaderShouldStartSync, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s", "")
 	// pkg/streamer
 	ErrEmptyRelayDir            = New(codeEmptyRelayDir, ClassFunctional, ScopeInternal, LevelHigh, "empty relay dir", "Please check `relay-dir` config in task configuration file.")
 	ErrReadDir                  = New(codeReadDir, ClassFunctional, ScopeInternal, LevelHigh, "read dir: %s", "")
@@ -646,7 +646,7 @@ var (
 	ErrBinlogReadFileByGTID          = New(codeBinlogReadFileByGTID, ClassFunctional, ScopeInternal, LevelHigh, "read from file by GTID not supported", "")
 	ErrBinlogWriterNotStateNew       = New(codeBinlogWriterNotStateNew, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, already started", "")
 	ErrBinlogWriterStateCannotClose  = New(codeBinlogWriterStateCannotClose, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close", "")
-	ErrBinlogWriterNeedStart         = New(codeBinlogWriterNeedStart, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s", "Please start the writer first.")
+	ErrBinlogWriterNeedStart         = New(codeBinlogWriterNeedStart, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s", "")
 	ErrBinlogWriterOpenFile          = New(codeBinlogWriterOpenFile, ClassFunctional, ScopeInternal, LevelHigh, "open file", "")
 	ErrBinlogWriterGetFileStat       = New(codeBinlogWriterGetFileStat, ClassFunctional, ScopeInternal, LevelHigh, "get stat for %s", "")
 	ErrBinlogWriterWriteDataLen      = New(codeBinlogWriterWriteDataLen, ClassFunctional, ScopeInternal, LevelHigh, "data length %d", "")
@@ -687,12 +687,12 @@ var (
 	ErrShardDDLOptimismTrySyncFail = New(codeShardDDLOptimismTrySyncFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to try sync the optimistic shard ddl lock %s: %s", "Please use show-ddl-locks command for more details.")
 
 	// Config related error
-	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s", "Please check `ignore-checking-items` config in task configuration file.")
+	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s", "Please check `ignore-checking-items` config in task configuration file, which can be set including `all`/`dump_privilege`/`replication_privilege`/`version`/`binlog_enable`/`binlog_format`/`binlog_row_image`/`table_schema`/`schema_of_shard_tables`/`auto_increment_ID`.")
 	ErrConfigTomlTransform          = New(codeConfigTomlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s", "Please check the configuration file has correct TOML format.")
 	ErrConfigTaskYamlTransform      = New(codeConfigTaskYamlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s", "Please check the configuration file has correct YAML format.")
 	ErrConfigTaskNameEmpty          = New(codeConfigTaskNameEmpty, ClassConfig, ScopeInternal, LevelMedium, "task name should not be empty", "Please check the `name` config in task configuration file.")
 	ErrConfigEmptySourceID          = New(codeConfigEmptySourceID, ClassConfig, ScopeInternal, LevelMedium, "empty source-id not valid", "Please check the `source-id` config in configuration file.")
-	ErrConfigTooLongSourceID        = New(codeConfigTooLongSourceID, ClassConfig, ScopeInternal, LevelMedium, "too long source-id not valid", "Please check the `source-id` config in configuration file.")
+	ErrConfigTooLongSourceID        = New(codeConfigTooLongSourceID, ClassConfig, ScopeInternal, LevelMedium, "too long source-id not valid", "Please check the `source-id` config in configuration file. The max source id length is 32.")
 	ErrConfigOnlineSchemeNotSupport = New(codeConfigOnlineSchemeNotSupport, ClassConfig, ScopeInternal, LevelMedium, "online scheme %s not supported", "Please check the `online-ddl-scheme` config in task configuration file.")
 	ErrConfigInvalidTimezone        = New(codeConfigInvalidTimezone, ClassConfig, ScopeInternal, LevelMedium, "invalid timezone string: %s", "Please check the `timezone` config in task configuration file.")
 	ErrConfigParseFlagSet           = New(codeConfigParseFlagSet, ClassConfig, ScopeInternal, LevelMedium, "parse subtask config flag set", "")
@@ -719,7 +719,7 @@ var (
 	ErrConfigSyncerCfgNotFound      = New(codeConfigSyncerCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s syncer config %s not exist in syncer", "Please check the `syncer-config-name` config in task configuration file.")
 	ErrConfigSourceIDNotFound       = New(codeConfigSourceIDNotFound, ClassConfig, ScopeInternal, LevelMedium, "source %s in deployment configuration not found", "Please use `operate-source create source-config-file-path` to add source.")
 	ErrConfigDuplicateCfgItem       = New(codeConfigDuplicateCfgItem, ClassConfig, ScopeInternal, LevelMedium, "the following mysql configs have duplicate items, please remove the duplicates:\n%s", "Please check the `mysql-instances` config in task configuration file.")
-	ErrConfigShardModeNotSupport    = New(codeConfigShardModeNotSupport, ClassConfig, ScopeInternal, LevelMedium, "shard mode %s not supported", "Please check the `shard-mode` config in task configuration file.")
+	ErrConfigShardModeNotSupport    = New(codeConfigShardModeNotSupport, ClassConfig, ScopeInternal, LevelMedium, "shard mode %s not supported", "Please check the `shard-mode` config in task configuration file, which can be set to `pessimistic`/`optimistic`.")
 
 	// Binlog operation error
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
@@ -760,14 +760,14 @@ var (
 	ErrRelayLogDirpathEmpty              = New(codeRelayLogDirpathEmpty, ClassRelayUnit, ScopeInternal, LevelHigh, "dirpath is empty", "Please check the `relay-dir` config in source config file.")
 	ErrRelayReaderNotStateNew            = New(codeRelayReaderNotStateNew, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, already started", "")
 	ErrRelayReaderStateCannotClose       = New(codeRelayReaderStateCannotClose, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close", "")
-	ErrRelayReaderNeedStart              = New(codeRelayReaderNeedStart, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s", "Please start the reader first.")
+	ErrRelayReaderNeedStart              = New(codeRelayReaderNeedStart, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s", "")
 	ErrRelayTCPReaderStartSync           = New(codeRelayTCPReaderStartSync, ClassRelayUnit, ScopeUpstream, LevelHigh, "start sync from position %s", "")
 	ErrRelayTCPReaderNilGTID             = New(codeRelayTCPReaderNilGTID, ClassRelayUnit, ScopeInternal, LevelHigh, "nil GTID set not valid", "")
 	ErrRelayTCPReaderStartSyncGTID       = New(codeRelayTCPReaderStartSyncGTID, ClassRelayUnit, ScopeUpstream, LevelHigh, "start sync from GTID set %s", "")
 	ErrRelayTCPReaderGetEvent            = New(codeRelayTCPReaderGetEvent, ClassRelayUnit, ScopeUpstream, LevelHigh, "TCPReader get relay event with error", "")
 	ErrRelayWriterNotStateNew            = New(codeRelayWriterNotStateNew, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, already started", "")
 	ErrRelayWriterStateCannotClose       = New(codeRelayWriterStateCannotClose, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close", "")
-	ErrRelayWriterNeedStart              = New(codeRelayWriterNeedStart, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s", "Please start the writer first.")
+	ErrRelayWriterNeedStart              = New(codeRelayWriterNeedStart, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s", "")
 	ErrRelayWriterNotOpened              = New(codeRelayWriterNotOpened, ClassRelayUnit, ScopeInternal, LevelHigh, "no underlying writer opened", "")
 	ErrRelayWriterExpectRotateEv         = New(codeRelayWriterExpectRotateEv, ClassRelayUnit, ScopeInternal, LevelHigh, "except RotateEvent, but got %+v", "")
 	ErrRelayWriterRotateEvWithNoWriter   = New(codeRelayWriterRotateEvWithNoWriter, ClassRelayUnit, ScopeInternal, LevelHigh, "non-fake RotateEvent %+v received, but no binlog file opened", "")
@@ -858,7 +858,7 @@ var (
 	ErrSyncerUnitHeartbeatRecordNotFound    = New(codeSyncerUnitHeartbeatRecordNotFound, ClassSyncUnit, ScopeInternal, LevelMedium, "heartbeat slave record for task %s not found", "")
 	ErrSyncerUnitHeartbeatRecordNotValid    = New(codeSyncerUnitHeartbeatRecordNotValid, ClassSyncUnit, ScopeInternal, LevelMedium, "heartbeat record %s not valid", "")
 	ErrSyncerUnitOnlineDDLInvalidMeta       = New(codeSyncerUnitOnlineDDLInvalidMeta, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl meta invalid", "")
-	ErrSyncerUnitOnlineDDLSchemeNotSupport  = New(codeSyncerUnitOnlineDDLSchemeNotSupport, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl scheme (%s) not supported", "Please check the `online-ddl-scheme` config in task configuration file.")
+	ErrSyncerUnitOnlineDDLSchemeNotSupport  = New(codeSyncerUnitOnlineDDLSchemeNotSupport, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl scheme (%s) not supported", "Please check the `online-ddl-scheme` config in task configuration file. Only `ghost` and `pt` are currently supported.")
 	ErrSyncerUnitOnlineDDLOnMultipleTable   = New(codeSyncerUnitOnlineDDLOnMultipleTable, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl changes on multiple table: %s not supported", "")
 	ErrSyncerUnitGhostApplyEmptyTable       = New(codeSyncerUnitGhostApplyEmptyTable, ClassSyncUnit, ScopeInternal, LevelHigh, "empty tables not valid", "")
 	ErrSyncerUnitGhostRenameTableNotValid   = New(codeSyncerUnitGhostRenameTableNotValid, ClassSyncUnit, ScopeInternal, LevelHigh, "tables should contain old and new table name", "")

@@ -7,13 +7,13 @@ tags = ["not-set", "high"]
 [error.DM-database-10002]
 message = "database driver"
 description = ""
-workaround = "Please check the database connection, then use `stop-task` to stop the task and then use `start-task` to restart the task."
+workaround = "Please check the database connection, then use `pause-task` to pause the task and then use `resume-task` to resume the task."
 tags = ["not-set", "high"]
 
 [error.DM-database-10003]
 message = "database driver"
 description = ""
-workaround = "Please check the database connection, then use `stop-task` to stop the task and then use `start-task` to restart the task."
+workaround = "Please check the database connection, then use `pause-task` to stop the task and then use `resume-task` to resume the task."
 tags = ["not-set", "high"]
 
 [error.DM-database-10004]
@@ -163,7 +163,7 @@ tags = ["internal", "high"]
 [error.DM-functional-11022]
 message = "stage %s, expect %s"
 description = ""
-workaround = "Please start sync first."
+workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-functional-11023]
@@ -547,7 +547,7 @@ tags = ["internal", "high"]
 [error.DM-functional-11086]
 message = "stage %s, expect %s"
 description = ""
-workaround = "Please start the writer first."
+workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-functional-11087]
@@ -703,7 +703,7 @@ tags = ["internal", "medium"]
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""
-workaround = "Please check `ignore-checking-items` config in task configuration file."
+workaround = "Please check `ignore-checking-items` config in task configuration file, which can be set including `all`/`dump_privilege`/`replication_privilege`/`version`/`binlog_enable`/`binlog_format`/`binlog_row_image`/`table_schema`/`schema_of_shard_tables`/`auto_increment_ID`."
 tags = ["internal", "medium"]
 
 [error.DM-config-20002]
@@ -733,7 +733,7 @@ tags = ["internal", "medium"]
 [error.DM-config-20006]
 message = "too long source-id not valid"
 description = ""
-workaround = "Please check the `source-id` config in configuration file."
+workaround = "Please check the `source-id` config in configuration file. The max source id length is 32."
 tags = ["internal", "medium"]
 
 [error.DM-config-20007]
@@ -895,7 +895,7 @@ tags = ["internal", "medium"]
 [error.DM-config-20033]
 message = "shard mode %s not supported"
 description = ""
-workaround = "Please check the `shard-mode` config in task configuration file."
+workaround = "Please check the `shard-mode` config in task configuration file, which can be set to `pessimistic`/`optimistic`."
 tags = ["internal", "medium"]
 
 [error.DM-binlog-op-22001]
@@ -1081,7 +1081,7 @@ tags = ["internal", "high"]
 [error.DM-relay-unit-30011]
 message = "stage %s, expect %s"
 description = ""
-workaround = "Please start the reader first."
+workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-relay-unit-30012]
@@ -1123,7 +1123,7 @@ tags = ["internal", "high"]
 [error.DM-relay-unit-30018]
 message = "stage %s, expect %s"
 description = ""
-workaround = "Please start the writer first."
+workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-relay-unit-30019]
@@ -1627,7 +1627,7 @@ tags = ["internal", "high"]
 [error.DM-sync-unit-36040]
 message = "online ddl scheme (%s) not supported"
 description = ""
-workaround = "Please check the `online-ddl-scheme` config in task configuration file."
+workaround = "Please check the `online-ddl-scheme` config in task configuration file. Only `ghost` and `pt` are currently supported."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36041]
