@@ -67,6 +67,11 @@ var (
 	maxRetryNum = 30
 	// the retry interval for dm-master to confirm the dm-workers status is expected
 	retryInterval = time.Second
+
+	// typically there's only one server running in on process, but testMaster.TestOfflineMember starts 3 servers,
+	// so we need sync.Once to prevent data race
+	registerOnce      sync.Once
+	runBackgroundOnce sync.Once
 )
 
 // Server handles RPC requests for dm-master
@@ -155,7 +160,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
-	metrics.RegistryMetrics()
+	registerOnce.Do(metrics.RegistryMetrics)
 
 	// HTTP handlers on etcd's client IP:port
 	// NOTE: after received any HTTP request from chrome browser,
@@ -208,11 +213,13 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		s.electionNotify(ctx)
 	}()
 
-	s.bgFunWg.Add(1)
-	go func() {
-		defer s.bgFunWg.Done()
-		metrics.RunBackgroundJob(ctx)
-	}()
+	runBackgroundOnce.Do(func() {
+		s.bgFunWg.Add(1)
+		go func() {
+			defer s.bgFunWg.Done()
+			metrics.RunBackgroundJob(ctx)
+		}()
+	})
 
 	s.bgFunWg.Add(1)
 	go func() {
