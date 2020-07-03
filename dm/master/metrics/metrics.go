@@ -82,12 +82,12 @@ func GetMetricsHandler() http.Handler {
 	return promhttp.Handler()
 }
 
-// ReportStageToMetrics is a setter for workerState, this name is easy to understand to caller
-func ReportStageToMetrics(name string, state float64) {
+// ReportWorkerStageToMetrics is a setter for workerState, this name is easy to understand to caller
+func ReportWorkerStageToMetrics(name string, state float64) {
 	workerState.WithLabelValues(name).Set(state)
 }
 
-// RemoveMetrics cleans state of deleted worker
-func RemoveMetrics(name string) {
+// RemoveWorkerStateInMetrics cleans state of deleted worker
+func RemoveWorkerStateInMetrics(name string) {
 	workerState.DeleteAllAboutLabels(prometheus.Labels{"worker": name})
 }

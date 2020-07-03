@@ -155,6 +155,8 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
+	metrics.RegistryMetrics()
+
 	// HTTP handlers on etcd's client IP:port
 	// NOTE: after received any HTTP request from chrome browser,
 	// the server may be blocked when closing sometime.
@@ -191,8 +193,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	if err != nil {
 		return
 	}
-
-	metrics.RegistryMetrics()
 
 	s.closed.Set(false) // the server started now.
 
