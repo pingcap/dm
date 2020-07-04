@@ -1145,7 +1145,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	time.Sleep(3 * time.Second)
 
 	// 2. try to add a new mysql source
-	req := &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: task}
+	req := &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: []string{task}}
 	resp, err := s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, true)
@@ -1163,7 +1163,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	mysqlCfg.SourceID = "not-exist-source"
 	task2, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
-	req.Config = task2
+	req.Config = []string{task2}
 	resp, err = s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, false)
@@ -1188,7 +1188,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	}), check.IsTrue)
 
 	// 5. stop this source
-	req.Config = task
+	req.Config = []string{task}
 	req.Op = pb.SourceOp_StopSource
 	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 	mockRevelantWorkerClient(mockWorkerClient, "", sourceID, req)

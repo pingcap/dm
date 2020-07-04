@@ -56,7 +56,7 @@ require (
 	golang.org/x/net v0.0.0-20200421231249-e086a090c8fd // indirect
 	golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
-	golang.org/x/tools v0.0.0-20200422205258-72e4a01eba43 // indirect
+	golang.org/x/tools v0.0.0-20200702044944-0cc1aa72b347 // indirect
 	google.golang.org/genproto v0.0.0-20191114150713-6bbd007550de
 	google.golang.org/grpc v1.25.1
 	gopkg.in/yaml.v2 v2.2.8

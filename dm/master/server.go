@@ -1280,24 +1280,29 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
-func parseAndAdjustSourceConfig(cfg *config.SourceConfig, content string) error {
-	if err := cfg.Parse(content); err != nil {
-		return err
-	}
+func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, error) {
+	cfgs := make([]*config.SourceConfig, len(contents))
+	for i, content := range contents {
+		cfg := config.NewSourceConfig()
+		if err := cfg.Parse(content); err != nil {
+			return cfgs, err
+		}
 
-	dbConfig := cfg.GenerateDBConfig()
+		dbConfig := cfg.GenerateDBConfig()
 
-	fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
-	if err != nil {
-		return err
+		fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
+		if err != nil {
+			return cfgs, err
+		}
+		if err = cfg.Adjust(fromDB.DB); err != nil {
+			return cfgs, err
+		}
+		if _, err = cfg.Toml(); err != nil {
+			return cfgs, err
+		}
+		cfgs[i] = cfg
 	}
-	if err = cfg.Adjust(fromDB.DB); err != nil {
-		return err
-	}
-	if _, err = cfg.Toml(); err != nil {
-		return err
-	}
-	return nil
+	return cfgs, nil
 }
 
 // OperateSource will create or update an upstream source.
@@ -1311,8 +1316,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
-	cfg := config.NewSourceConfig()
-	err := parseAndAdjustSourceConfig(cfg, req.Config)
+	cfgs, err := parseAndAdjustSourceConfig(req.Config)
 	resp := &pb.OperateSourceResponse{
 		Result: false,
 	}
@@ -1320,23 +1324,43 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		resp.Msg = err.Error()
 		return resp, nil
 	}
-	var w *scheduler.Worker
+	var workers []*scheduler.Worker
 	switch req.Op {
 	case pb.SourceOp_StartSource:
-		err := s.scheduler.AddSourceCfg(*cfg)
-		if err != nil {
-			resp.Msg = err.Error()
+		started := make([]string, 0, len(cfgs))
+		hasError := false
+		for _, cfg := range cfgs {
+			err := s.scheduler.AddSourceCfg(*cfg)
+			if err != nil {
+				resp.Msg = err.Error()
+				hasError = true
+			}
+			started = append(started, cfg.SourceID)
+		}
+
+		if hasError {
+			for _, sid := range started {
+				err := s.scheduler.RemoveSourceCfg(sid)
+				if err != nil {
+					log.L().Error("while reverting start source, another error happens",
+						zap.String("source id", sid),
+						zap.String("error", err.Error()))
+				}
+			}
 			return resp, nil
 		}
 		// for start source, we should get worker after start source
-		w = s.scheduler.GetWorkerBySource(cfg.SourceID)
+		workers = make([]*scheduler.Worker, len(started))
+		for i, sid := range started {
+			workers[i] = s.scheduler.GetWorkerBySource(sid)
+		}
 	case pb.SourceOp_UpdateSource:
 		// TODO: support SourceOp_UpdateSource later
 		resp.Msg = "Update worker config is not supported by dm-ha now"
 		return resp, nil
 	case pb.SourceOp_StopSource:
-		w = s.scheduler.GetWorkerBySource(cfg.SourceID)
-		err := s.scheduler.RemoveSourceCfg(cfg.SourceID)
+		workers = []*scheduler.Worker{s.scheduler.GetWorkerBySource(cfgs[0].SourceID)}
+		err := s.scheduler.RemoveSourceCfg(cfgs[0].SourceID)
 		if err != nil {
 			resp.Msg = err.Error()
 			return resp, nil
@@ -1347,28 +1371,47 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 	}
 
 	resp.Result = true
-	// source is added but not bounded
-	if w == nil {
-		var msg string
-		switch req.Op {
-		case pb.SourceOp_StartSource:
-			msg = "source is added but there is no free worker to bound"
-		case pb.SourceOp_StopSource:
-			msg = "source is stopped and hasn't bound to worker before being stopped"
+	switch req.Op {
+	case pb.SourceOp_StopSource:
+		if workers[0] == nil {
+			resp.Sources = []*pb.CommonWorkerResponse{{
+				Result: true,
+				Msg:    "source is stopped and hasn't bound to worker before being stopped",
+				Source: cfgs[0].SourceID,
+			}}
+		} else {
+			resp.Sources = s.getSourceRespsAfterOperation(ctx, "", []string{cfgs[0].SourceID}, []string{workers[0].BaseInfo().Name}, req)
 		}
-		resp.Sources = []*pb.CommonWorkerResponse{{
-			Result: true,
-			Msg:    msg,
-			Source: cfg.SourceID,
-		}}
-	} else {
-		resp.Sources = s.getSourceRespsAfterOperation(ctx, "", []string{cfg.SourceID}, []string{w.BaseInfo().Name}, req)
+	case pb.SourceOp_StartSource:
+		var (
+			sourceToCheck []string
+			workerToCheck []string
+		)
+
+		for i := range workers {
+			w := workers[i]
+			if w == nil {
+				resp.Sources = append(resp.Sources, &pb.CommonWorkerResponse{
+					Result: true,
+					Msg:    "source is added but there is no free worker to bound",
+					Source: cfgs[i].SourceID,
+				})
+			} else {
+				sourceToCheck = append(sourceToCheck, cfgs[i].SourceID)
+				workerToCheck = append(workerToCheck, w.BaseInfo().Name)
+			}
+		}
+		if len(sourceToCheck) > 0 {
+			resp.Sources = append(resp.Sources, s.getSourceRespsAfterOperation(ctx, "", sourceToCheck, workerToCheck, req)...)
+		}
+	default:
+		// TODO: support SourceOp_UpdateSource later
 	}
 	return resp, nil
 }
 
 // OperateLeader implements MasterServer.OperateLeader
-// Note: this request dosen't need to forward to leader
+// Note: this request doesn't need to forward to leader
 func (s *Server) OperateLeader(ctx context.Context, req *pb.OperateLeaderRequest) (*pb.OperateLeaderResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateLeader"))
 
