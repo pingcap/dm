@@ -1327,18 +1327,24 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 	var workers []*scheduler.Worker
 	switch req.Op {
 	case pb.SourceOp_StartSource:
-		started := make([]string, 0, len(cfgs))
-		hasError := false
+		var (
+			started  []string
+			hasError = false
+			err      error
+		)
 		for _, cfg := range cfgs {
-			err := s.scheduler.AddSourceCfg(*cfg)
+			err = s.scheduler.AddSourceCfg(*cfg)
+			// return first error and try to revert, so user could copy-paste same start command after error
 			if err != nil {
 				resp.Msg = err.Error()
 				hasError = true
+				break
 			}
 			started = append(started, cfg.SourceID)
 		}
 
 		if hasError {
+			log.L().Info("reverting start source", zap.String("error", err.Error()))
 			for _, sid := range started {
 				err := s.scheduler.RemoveSourceCfg(sid)
 				if err != nil {
@@ -1359,10 +1365,36 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		resp.Msg = "Update worker config is not supported by dm-ha now"
 		return resp, nil
 	case pb.SourceOp_StopSource:
-		workers = []*scheduler.Worker{s.scheduler.GetWorkerBySource(cfgs[0].SourceID)}
-		err := s.scheduler.RemoveSourceCfg(cfgs[0].SourceID)
-		if err != nil {
-			resp.Msg = err.Error()
+		var (
+			msgs     []string
+			hasError = false
+		)
+		workers = make([]*scheduler.Worker, len(cfgs))
+		for i, cfg := range cfgs {
+			workers[i] = s.scheduler.GetWorkerBySource(cfg.SourceID)
+			err := s.scheduler.RemoveSourceCfg(cfg.SourceID)
+			if err != nil {
+				msg := err.Error()
+				msgs = append(msgs, msg)
+				// check if it's codeSchedulerSourceCfgNotExist, not very neat though.
+				// this check is to improve usability in multi-source remove scenario,
+				// user could copy-paste same command without deleting removed sources:
+				// `operate-source stop  correct-id-1     wrong-id-2`
+				//                       remove success   some error
+				// `operate-source stop  correct-id-1     correct-id-2`
+				//                       not exist, pass  remove success
+				// a test case will protect this hard-coded prefix
+				// lance: need a test case
+				if !strings.HasPrefix(msg, "[code=46008") {
+					hasError = true
+				}
+			}
+		}
+
+		if len(msgs) != 0 {
+			resp.Msg = strings.Join(msgs, "\n")
+		}
+		if hasError {
 			return resp, nil
 		}
 	default:
@@ -1371,41 +1403,34 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 	}
 
 	resp.Result = true
+	var noWorkerMsg string
 	switch req.Op {
-	case pb.SourceOp_StopSource:
-		if workers[0] == nil {
-			resp.Sources = []*pb.CommonWorkerResponse{{
-				Result: true,
-				Msg:    "source is stopped and hasn't bound to worker before being stopped",
-				Source: cfgs[0].SourceID,
-			}}
-		} else {
-			resp.Sources = s.getSourceRespsAfterOperation(ctx, "", []string{cfgs[0].SourceID}, []string{workers[0].BaseInfo().Name}, req)
-		}
 	case pb.SourceOp_StartSource:
-		var (
-			sourceToCheck []string
-			workerToCheck []string
-		)
+		noWorkerMsg = "source is added but there is no free worker to bound"
+	case pb.SourceOp_StopSource:
+		noWorkerMsg = "source is stopped and hasn't bound to worker before being stopped"
+	}
 
-		for i := range workers {
-			w := workers[i]
-			if w == nil {
-				resp.Sources = append(resp.Sources, &pb.CommonWorkerResponse{
-					Result: true,
-					Msg:    "source is added but there is no free worker to bound",
-					Source: cfgs[i].SourceID,
-				})
-			} else {
-				sourceToCheck = append(sourceToCheck, cfgs[i].SourceID)
-				workerToCheck = append(workerToCheck, w.BaseInfo().Name)
-			}
+	var (
+		sourceToCheck []string
+		workerToCheck []string
+	)
+
+	for i := range workers {
+		w := workers[i]
+		if w == nil {
+			resp.Sources = append(resp.Sources, &pb.CommonWorkerResponse{
+				Result: true,
+				Msg:    noWorkerMsg,
+				Source: cfgs[i].SourceID,
+			})
+		} else {
+			sourceToCheck = append(sourceToCheck, cfgs[i].SourceID)
+			workerToCheck = append(workerToCheck, w.BaseInfo().Name)
 		}
-		if len(sourceToCheck) > 0 {
-			resp.Sources = append(resp.Sources, s.getSourceRespsAfterOperation(ctx, "", sourceToCheck, workerToCheck, req)...)
-		}
-	default:
-		// TODO: support SourceOp_UpdateSource later
+	}
+	if len(sourceToCheck) > 0 {
+		resp.Sources = append(resp.Sources, s.getSourceRespsAfterOperation(ctx, "", sourceToCheck, workerToCheck, req)...)
 	}
 	return resp, nil
 }

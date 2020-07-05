@@ -1115,6 +1115,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 }
 
 func (t *testMaster) TestOperateSource(c *check.C) {
+	// lance: add test case here
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ctrl := gomock.NewController(c)

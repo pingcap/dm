@@ -61,12 +61,6 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	if op != pb.SourceOp_StartSource && len(cmd.Flags().Args()) > 2 {
-		cmd.SetOut(os.Stdout)
-		cmd.Usage()
-		return
-	}
-
 	i := 1
 	contents := make([]string, len(cmd.Flags().Args()) - 1)
 	for i < len(cmd.Flags().Args()) {
