@@ -62,7 +62,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	i := 1
-	contents := make([]string, len(cmd.Flags().Args()) - 1)
+	contents := make([]string, len(cmd.Flags().Args())-1)
 	for i < len(cmd.Flags().Args()) {
 		configFile := cmd.Flags().Arg(i)
 		content, err := common.GetFileContent(configFile)
@@ -70,7 +70,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 			common.PrintLines("get file content error:\n%v", err)
 			return
 		}
-		contents[i - 1] = string(content)
+		contents[i-1] = string(content)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
