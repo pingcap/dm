@@ -138,7 +138,7 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 	return false, errors.Trace(c.adjust())
 }
 
-// Validate check config is ready to execute commmand
+// Validate check config is ready to execute command
 func (c *Config) Validate() error {
 	if c.MasterAddr == "" {
 		return errors.New("--master-addr not provided")

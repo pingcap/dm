@@ -26,7 +26,7 @@ import (
 // NewOperateSourceCmd creates a OperateSource command
 func NewOperateSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "operate-source <operate-type> <config-file> [<config-file> ...]",
+		Use:   "operate-source <operate-type> <config-file> [config-file ...]",
 		Short: "create/update/stop upstream MySQL/MariaDB source",
 		Run:   operateSourceFunc,
 	}
@@ -61,9 +61,8 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	i := 1
 	contents := make([]string, len(cmd.Flags().Args())-1)
-	for i < len(cmd.Flags().Args()) {
+	for i := 1; i < len(cmd.Flags().Args()); i++ {
 		configFile := cmd.Flags().Arg(i)
 		content, err := common.GetFileContent(configFile)
 		if err != nil {

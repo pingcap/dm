@@ -1365,37 +1365,22 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		resp.Msg = "Update worker config is not supported by dm-ha now"
 		return resp, nil
 	case pb.SourceOp_StopSource:
-		var (
-			msgs     []string
-			hasError = false
-		)
 		workers = make([]*scheduler.Worker, len(cfgs))
 		for i, cfg := range cfgs {
 			workers[i] = s.scheduler.GetWorkerBySource(cfg.SourceID)
 			err := s.scheduler.RemoveSourceCfg(cfg.SourceID)
+			// TODO(lance6716):
+			// user could not copy-paste same command if encounter error halfway:
+			// `operate-source stop  correct-id-1     wrong-id-2`
+			//                       remove success   some error
+			// `operate-source stop  correct-id-1     correct-id-2`
+			//                       not exist, error
+			// find a way to distinguish this scenario and wrong source id
+			// or give a command to show existing source id
 			if err != nil {
-				msg := err.Error()
-				msgs = append(msgs, msg)
-				// check if it's codeSchedulerSourceCfgNotExist, not very neat though.
-				// this check is to improve usability in multi-source remove scenario,
-				// user could copy-paste same command without deleting removed sources:
-				// `operate-source stop  correct-id-1     wrong-id-2`
-				//                       remove success   some error
-				// `operate-source stop  correct-id-1     correct-id-2`
-				//                       not exist, pass  remove success
-				// a test case will protect this hard-coded prefix
-				// lance: need a test case
-				if !strings.HasPrefix(msg, "[code=46008") {
-					hasError = true
-				}
+				resp.Msg = err.Error()
+				return resp, nil
 			}
-		}
-
-		if len(msgs) != 0 {
-			resp.Msg = strings.Join(msgs, "\n")
-		}
-		if hasError {
-			return resp, nil
 		}
 	default:
 		resp.Msg = terror.ErrMasterInvalidOperateOp.Generate(req.Op.String(), "source").Error()
