@@ -1,19 +1,19 @@
 [error.DM-database-10001]
 message = "database driver error"
 description = ""
-workaround = ""
+workaround = "Please check the database connection and the database config in configuration file."
 tags = ["not-set", "high"]
 
 [error.DM-database-10002]
 message = "database driver"
 description = ""
-workaround = ""
+workaround = "Please check the database connection, then use `pause-task` to pause the task and then use `resume-task` to resume the task."
 tags = ["not-set", "high"]
 
 [error.DM-database-10003]
 message = "database driver"
 description = ""
-workaround = ""
+workaround = "Please check the database connection, then use `pause-task` to stop the task and then use `resume-task` to resume the task."
 tags = ["not-set", "high"]
 
 [error.DM-database-10004]
@@ -49,31 +49,31 @@ tags = ["internal", "high"]
 [error.DM-functional-11003]
 message = "not allowed operation: drop multiple tables in one statement"
 description = ""
-workaround = ""
+workaround = "It is recommended to include only one DDL operation in a statement executed upstream. Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/skip-or-replace-abnormal-sql-statements"
 tags = ["internal", "high"]
 
 [error.DM-functional-11004]
 message = "not allowed operation: rename multiple tables in one statement"
 description = ""
-workaround = ""
+workaround = "It is recommended to include only one DDL operation in a statement executed upstream. Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/skip-or-replace-abnormal-sql-statements"
 tags = ["internal", "high"]
 
 [error.DM-functional-11005]
 message = "not allowed operation: alter multiple tables in one statement"
 description = ""
-workaround = ""
+workaround = "It is recommended to include only one DDL operation in a statement executed upstream. Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/skip-or-replace-abnormal-sql-statements"
 tags = ["internal", "high"]
 
 [error.DM-functional-11006]
 message = "parse statement"
 description = ""
-workaround = ""
+workaround = "Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/skip-or-replace-abnormal-sql-statements"
 tags = ["internal", "high"]
 
 [error.DM-functional-11007]
 message = "unknown type ddl %+v"
 description = ""
-workaround = ""
+workaround = "Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/skip-or-replace-abnormal-sql-statements"
 tags = ["internal", "high"]
 
 [error.DM-functional-11008]
@@ -91,7 +91,7 @@ tags = ["internal", "high"]
 [error.DM-functional-11010]
 message = "flavor %s not supported"
 description = ""
-workaround = ""
+workaround = "Please check `flavor` config in source configuration file."
 tags = ["internal", "high"]
 
 [error.DM-functional-11011]
@@ -133,7 +133,7 @@ tags = ["internal", "high"]
 [error.DM-functional-11017]
 message = ""
 description = ""
-workaround = ""
+workaround = "Please make sure the args are correct."
 tags = ["internal", "low"]
 
 [error.DM-functional-11018]
@@ -161,7 +161,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-functional-11022]
-message = "stage %s, expect %s, please start sync first"
+message = "stage %s, expect %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -169,7 +169,7 @@ tags = ["internal", "high"]
 [error.DM-functional-11023]
 message = "empty relay dir"
 description = ""
-workaround = ""
+workaround = "Please check `relay-dir` config in task configuration file."
 tags = ["internal", "high"]
 
 [error.DM-functional-11024]
@@ -233,9 +233,9 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-functional-11034]
-message = "file size of relay log %s become smaller, please check the status of relay log and re-pull it. If you want to re-pull it, you should open relay.meta, set the binlog-name to the error pos name, set binlog-pos to 4, delete the stashed relay log and run `resume-relay` in dmctl"
+message = "file size of relay log %s become smaller"
 description = ""
-workaround = ""
+workaround = "Please check the status of relay log and re-pull it. If you want to re-pull it, you should open relay.meta, set the binlog-name to the error pos name, set binlog-pos to 4, delete the stashed relay log and run `resume-relay` in dmctl."
 tags = ["internal", "high"]
 
 [error.DM-functional-11035]
@@ -263,7 +263,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-functional-11039]
-message = "parse for previous sub relay directory finished, but no next sub directory need to switch not supported"
+message = "parse for previous sub relay directory finished, but no next sub directory need to switch"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -289,7 +289,7 @@ tags = ["internal", "high"]
 [error.DM-functional-11043]
 message = "generate table router"
 description = ""
-workaround = ""
+workaround = "Please check `routes` config in task configuration file."
 tags = ["internal", "high"]
 
 [error.DM-functional-11044]
@@ -545,7 +545,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-functional-11086]
-message = "stage %s, expect %s, please start the writer first"
+message = "stage %s, expect %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -667,7 +667,7 @@ tags = ["internal", "high"]
 [error.DM-functional-11106]
 message = "the given relay log pos %s of meta config is too big, please check it again"
 description = ""
-workaround = ""
+workaround = "If the size of the corresponding binlog file has exceeded 4GB, please follow the solution in https://docs.pingcap.com/tidb-data-migration/stable/error-handling#the-relay-unit-throws-error-event-from--in--diff-from-passed-in-event--or-a-replication-task-is-interrupted-with-failing-to-get-or-parse-binlog-errors-like-get-binlog-error-error-1236-hy000-and-binlog-checksum-mismatch-data-may-be-corrupted-returned"
 tags = ["internal", "high"]
 
 [error.DM-functional-11107]
@@ -697,55 +697,55 @@ tags = ["internal", "medium"]
 [error.DM-functional-11111]
 message = "fail to try sync the optimistic shard ddl lock %s: %s"
 description = ""
-workaround = ""
+workaround = "Please use show-ddl-locks command for more details."
 tags = ["internal", "medium"]
 
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""
-workaround = ""
+workaround = "Please check `ignore-checking-items` config in task configuration file, which can be set including `all`/`dump_privilege`/`replication_privilege`/`version`/`binlog_enable`/`binlog_format`/`binlog_row_image`/`table_schema`/`schema_of_shard_tables`/`auto_increment_ID`."
 tags = ["internal", "medium"]
 
 [error.DM-config-20002]
 message = "%s"
 description = ""
-workaround = ""
+workaround = "Please check the configuration file has correct TOML format."
 tags = ["internal", "medium"]
 
 [error.DM-config-20003]
 message = "%s"
 description = ""
-workaround = ""
+workaround = "Please check the configuration file has correct YAML format."
 tags = ["internal", "medium"]
 
 [error.DM-config-20004]
 message = "task name should not be empty"
 description = ""
-workaround = ""
+workaround = "Please check the `name` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20005]
 message = "empty source-id not valid"
 description = ""
-workaround = ""
+workaround = "Please check the `source-id` config in configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20006]
 message = "too long source-id not valid"
 description = ""
-workaround = ""
+workaround = "Please check the `source-id` config in configuration file. The max source id length is 32."
 tags = ["internal", "medium"]
 
 [error.DM-config-20007]
 message = "online scheme %s not supported"
 description = ""
-workaround = ""
+workaround = "Please check the `online-ddl-scheme` config in task configuration file. Only `ghost` and `pt` are currently supported."
 tags = ["internal", "medium"]
 
 [error.DM-config-20008]
 message = "invalid timezone string: %s"
 description = ""
-workaround = ""
+workaround = "Please check the `timezone` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20009]
@@ -763,43 +763,43 @@ tags = ["internal", "medium"]
 [error.DM-config-20011]
 message = "binlog-name must specify"
 description = ""
-workaround = ""
+workaround = "Please check the `meta` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20012]
 message = "mysql instance config must specify"
 description = ""
-workaround = ""
+workaround = "Please check the `mysql-instances` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20013]
 message = "must specify at least one mysql-instances"
 description = ""
-workaround = ""
+workaround = "Please check the `mysql-instances` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20014]
 message = "mysql-instance (%d) and (%d) have same source-id (%s)"
 description = ""
-workaround = ""
+workaround = "Please check the `mysql-instances` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20015]
 message = "mydumper-config-name and mydumper should only specify one"
 description = ""
-workaround = ""
+workaround = "Please check the `mydumper-config-name` and `mydumper` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20016]
 message = "loader-config-name and loader should only specify one"
 description = ""
-workaround = ""
+workaround = "Please check the `loader-config-name` and `loader` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20017]
 message = "syncer-config-name and syncer should only specify one"
 description = ""
-workaround = ""
+workaround = "Please check the `syncer-config-name` and `syncer` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20018]
@@ -811,91 +811,91 @@ tags = ["internal", "medium"]
 [error.DM-config-20019]
 message = "must specify a unique task name"
 description = ""
-workaround = ""
+workaround = "Please check the `name` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20020]
 message = "please specify right task-mode, support `full`, `incremental`, `all`"
 description = ""
-workaround = ""
+workaround = "Please check the `task-mode` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20021]
 message = "must specify target-database"
 description = ""
-workaround = ""
+workaround = "Please check the `target-database` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20022]
 message = "mysql-instance(%d) must set meta for task-mode %s"
 description = ""
-workaround = ""
+workaround = "Please check the `meta` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20023]
 message = "mysql-instance(%d)'s route-rules %s not exist in routes"
 description = ""
-workaround = ""
+workaround = "Please check the `route-rules` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20024]
 message = "mysql-instance(%d)'s filter-rules %s not exist in filters"
 description = ""
-workaround = ""
+workaround = "Please check the `filter-rules` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20025]
 message = "mysql-instance(%d)'s column-mapping-rules %s not exist in column-mapping"
 description = ""
-workaround = ""
+workaround = "Please check the `column-mapping-rules` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20026]
 message = "mysql-instance(%d)'s list %s not exist in block allow list"
 description = ""
-workaround = ""
+workaround = "Please check the `block-allow-list` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20027]
 message = "mysql-instance(%d)'s mydumper config %s not exist in mydumpers"
 description = ""
-workaround = ""
+workaround = "Please check the `mydumper-config-name` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20028]
 message = "mysql-instance(%d)'s mydumper-path must specify a valid path to mydumper binary when task-mode is all or full"
 description = ""
-workaround = ""
+workaround = "Please check the `mydumper-path` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20029]
 message = "mysql-instance(%d)'s loader config %s not exist in loaders"
 description = ""
-workaround = ""
+workaround = "Please check the `loader-config-name` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20030]
 message = "mysql-instance(%d)'s syncer config %s not exist in syncer"
 description = ""
-workaround = ""
+workaround = "Please check the `syncer-config-name` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20031]
 message = "source %s in deployment configuration not found"
 description = ""
-workaround = ""
+workaround = "Please use `operate-source create source-config-file-path` to add source."
 tags = ["internal", "medium"]
 
 [error.DM-config-20032]
 message = "the following mysql configs have duplicate items, please remove the duplicates:\n%s"
 description = ""
-workaround = ""
+workaround = "Please check the `mysql-instances` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20033]
 message = "shard mode %s not supported"
 description = ""
-workaround = ""
+workaround = "Please check the `shard-mode` config in task configuration file, which can be set to `pessimistic`/`optimistic`."
 tags = ["internal", "medium"]
 
 [error.DM-binlog-op-22001]
@@ -955,25 +955,25 @@ tags = ["internal", "medium"]
 [error.DM-task-check-26001]
 message = "same table name in case-sensitive %v"
 description = ""
-workaround = ""
+workaround = "Please check `target-table` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-task-check-26002]
 message = "failed to open DSN %s:***@%s:%d"
 description = ""
-workaround = ""
+workaround = "Please check the database config in configuration file."
 tags = ["internal", "high"]
 
 [error.DM-task-check-26003]
 message = "generate table router error"
 description = ""
-workaround = ""
+workaround = "Please check the `routes` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-task-check-26004]
 message = "generate column mapping error"
 description = ""
-workaround = ""
+workaround = "Please check the `column-mappings` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-task-check-26005]
@@ -985,7 +985,7 @@ tags = ["internal", "medium"]
 [error.DM-task-check-26006]
 message = "generate block allow list error"
 description = ""
-workaround = ""
+workaround = "Please check the `block-allow-list` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-relay-event-lib-28001]
@@ -1013,9 +1013,9 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-relay-event-lib-28005]
-message = "there aren't any data under relay log directory %s. please check relay log using query-status"
+message = "there aren't any data under relay log directory %s."
 description = ""
-workaround = ""
+workaround = "Please check relay log using query-status."
 tags = ["internal", "high"]
 
 [error.DM-relay-unit-30001]
@@ -1039,7 +1039,7 @@ tags = ["internal", "high"]
 [error.DM-relay-unit-30004]
 message = "relay-binlog-name %s not valid"
 description = ""
-workaround = ""
+workaround = "Please check the `relay-binlog-name` config in source config file."
 tags = ["internal", "high"]
 
 [error.DM-relay-unit-30005]
@@ -1063,7 +1063,7 @@ tags = ["internal", "high"]
 [error.DM-relay-unit-30008]
 message = "dirpath is empty"
 description = ""
-workaround = ""
+workaround = "Please check the `relay-dir` config in source config file."
 tags = ["internal", "high"]
 
 [error.DM-relay-unit-30009]
@@ -1079,7 +1079,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-relay-unit-30011]
-message = "stage %s, expect %s, please start the reader first"
+message = "stage %s, expect %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -1121,7 +1121,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-relay-unit-30018]
-message = "stage %s, expect %s, please start the writer first"
+message = "stage %s, expect %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -1219,7 +1219,7 @@ tags = ["internal", "high"]
 [error.DM-relay-unit-30034]
 message = "can only switch relay's master server when GTID enabled"
 description = ""
-workaround = ""
+workaround = "Please check `enable-gtid` config in source configuration file."
 tags = ["internal", "high"]
 
 [error.DM-relay-unit-30035]
@@ -1235,9 +1235,9 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-relay-unit-30037]
-message = "relay log purge is forbidden temporarily, because %s, please try again later"
+message = "relay log purge is forbidden temporarily, because %s"
 description = ""
-workaround = ""
+workaround = "Please try again later."
 tags = ["internal", "high"]
 
 [error.DM-relay-unit-30038]
@@ -1285,19 +1285,19 @@ tags = ["internal", "high"]
 [error.DM-dump-unit-32002]
 message = "generate table router"
 description = ""
-workaround = ""
+workaround = "Please check `routes` config in task configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dump-unit-32003]
 message = "generate block allow list"
 description = ""
-workaround = ""
+workaround = "Please check the `block-allow-list` config in task configuration file."
 tags = ["internal", "high"]
 
 [error.DM-load-unit-34001]
 message = "generate schema file"
 description = ""
-workaround = ""
+workaround = "Please check the `loaders` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-load-unit-34002]
@@ -1351,13 +1351,13 @@ tags = ["internal", "high"]
 [error.DM-load-unit-34010]
 message = "generate table router"
 description = ""
-workaround = ""
+workaround = "Please check `routes` config in task configuration file."
 tags = ["internal", "high"]
 
 [error.DM-load-unit-34011]
 message = "generate column mapping"
 description = ""
-workaround = ""
+workaround = "Please check the `column-mapping-rules` config in task configuration file."
 tags = ["internal", "high"]
 
 [error.DM-load-unit-34012]
@@ -1387,7 +1387,7 @@ tags = ["internal", "high"]
 [error.DM-load-unit-34016]
 message = "generate block allow list"
 description = ""
-workaround = ""
+workaround = "Please check the `block-allow-list` config in task configuration file."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36001]
@@ -1435,7 +1435,7 @@ tags = ["internal", "high"]
 [error.DM-sync-unit-36008]
 message = "detect inconsistent DDL sequence from source %+v, right DDL sequence should be %+v"
 description = ""
-workaround = ""
+workaround = "Please use `show-ddl-locks` command for more details."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36009]
@@ -1519,7 +1519,7 @@ tags = ["internal", "high"]
 [error.DM-sync-unit-36022]
 message = "ddl on multiple table: %s not supported"
 description = ""
-workaround = ""
+workaround = "It is recommended to include only one DDL operation in a statement executed upstream. Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/skip-or-replace-abnormal-sql-statements"
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36023]
@@ -1573,13 +1573,13 @@ tags = ["internal", "high"]
 [error.DM-sync-unit-36031]
 message = "generate table router"
 description = ""
-workaround = ""
+workaround = "Please check `routes` config in task configuration file."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36032]
 message = "generate column mapping"
 description = ""
-workaround = ""
+workaround = "Please check the `column-mappings` config in task configuration file."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36033]
@@ -1597,7 +1597,7 @@ tags = ["internal", "high"]
 [error.DM-sync-unit-36035]
 message = ""
 description = ""
-workaround = ""
+workaround = "Please check `heartbeat` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-sync-unit-36036]
@@ -1627,7 +1627,7 @@ tags = ["internal", "high"]
 [error.DM-sync-unit-36040]
 message = "online ddl scheme (%s) not supported"
 description = ""
-workaround = ""
+workaround = "Please check the `online-ddl-scheme` config in task configuration file. Only `ghost` and `pt` are currently supported."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36041]
@@ -1735,7 +1735,7 @@ tags = ["internal", "high"]
 [error.DM-sync-unit-36058]
 message = "try update config when some tables' (%v) sharding DDL not synced not supported"
 description = ""
-workaround = ""
+workaround = "Please try again later."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36059]
@@ -1747,7 +1747,7 @@ tags = ["internal", "high"]
 [error.DM-sync-unit-36060]
 message = "generate block allow list"
 description = ""
-workaround = ""
+workaround = "Please check the `block-allow-list` config in task configuration file."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36061]
@@ -1759,7 +1759,7 @@ tags = ["internal", "high"]
 [error.DM-sync-unit-36062]
 message = "fail to handle shard ddl %v in optimistic mode, because schema conflict detected"
 description = ""
-workaround = ""
+workaround = "Please use show-ddl-locks command for more details."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36063]
@@ -1843,7 +1843,7 @@ tags = ["internal", "medium"]
 [error.DM-dm-master-38013]
 message = "config toml transform"
 description = ""
-workaround = ""
+workaround = "Please check the configuration file has correct TOML format."
 tags = ["internal", "medium"]
 
 [error.DM-dm-master-38014]
@@ -1861,7 +1861,7 @@ tags = ["internal", "high"]
 [error.DM-dm-master-38016]
 message = "sharding ddls in ddl lock %s is different with %s"
 description = ""
-workaround = ""
+workaround = "Please use show-ddl-locks command for more details."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38017]
@@ -1879,7 +1879,7 @@ tags = ["internal", "high"]
 [error.DM-dm-master-38019]
 message = "lock with ID %s not found"
 description = ""
-workaround = ""
+workaround = "Please use show-ddl-locks command to see lock id."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38020]
@@ -1919,9 +1919,9 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38026]
-message = "worker %s exist ddl lock, please unlock ddl lock first"
+message = "worker %s exist ddl lock"
 description = ""
-workaround = ""
+workaround = "Please unlock ddl lock first."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38027]
@@ -1949,21 +1949,21 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38031]
-message = "operation %d of task %s on worker %s not found, please execute `query-status` to check status"
+message = "operation %d of task %s on worker %s not found"
 description = ""
-workaround = ""
+workaround = "Please execute `query-status` to check status."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38032]
 message = "some error occurs in dm-worker: %s"
 description = ""
-workaround = ""
+workaround = "Please execute `query-status` to check status."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38033]
-message = "request to dm-worker %s is timeout, but request may be successful, please execute `query-status` to check status"
+message = "request to dm-worker %s is timeout, but request may be successful"
 description = ""
-workaround = ""
+workaround = "Please execute `query-status` to check status."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38034]
@@ -1975,7 +1975,7 @@ tags = ["internal", "high"]
 [error.DM-dm-master-38035]
 message = "host:port '%s' not valid"
 description = ""
-workaround = ""
+workaround = "Please check the `master-addr` config in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38036]
@@ -1987,7 +1987,7 @@ tags = ["internal", "high"]
 [error.DM-dm-master-38037]
 message = "fail to generate config item %s for embed etcd"
 description = ""
-workaround = ""
+workaround = "Please check configs in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38038]
@@ -1999,13 +1999,13 @@ tags = ["internal", "high"]
 [error.DM-dm-master-38039]
 message = "fail to parse URL %s"
 description = ""
-workaround = ""
+workaround = "Please check configs in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38040]
 message = "fail to join embed etcd: %s"
 description = ""
-workaround = ""
+workaround = "Please check configs in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38041]
@@ -2017,7 +2017,7 @@ tags = ["internal", "medium"]
 [error.DM-dm-master-38042]
 message = "advertise address %s not valid"
 description = ""
-workaround = ""
+workaround = "Please check the `advertise-addr` config in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38043]
@@ -2053,13 +2053,13 @@ tags = ["internal", "medium"]
 [error.DM-dm-master-38048]
 message = "dm-master with name %s not exists"
 description = ""
-workaround = ""
+workaround = "Please use list-member command to see masters."
 tags = ["internal", "low"]
 
 [error.DM-dm-master-38049]
-message = "offline member type %s is invalid, please use master/worker"
+message = "offline member type %s is invalid"
 description = ""
-workaround = ""
+workaround = "Please use master/worker."
 tags = ["internal", "low"]
 
 [error.DM-dm-worker-40001]
@@ -2077,13 +2077,13 @@ tags = ["internal", "medium"]
 [error.DM-dm-worker-40003]
 message = "toml decode file"
 description = ""
-workaround = ""
+workaround = "Please check the configuration file has correct TOML format."
 tags = ["internal", "medium"]
 
 [error.DM-dm-worker-40004]
 message = "worker config contains unknown configuration options: %s"
 description = ""
-workaround = ""
+workaround = "Please check configs in worker configurtion file."
 tags = ["internal", "medium"]
 
 [error.DM-dm-worker-40005]
@@ -2371,7 +2371,7 @@ tags = ["internal", "high"]
 [error.DM-dm-worker-40052]
 message = "can only update task on Paused stage, but current stage is %s"
 description = ""
-workaround = ""
+workaround = "Please use `pause-task` command to pause the task."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40053]
@@ -2425,7 +2425,7 @@ tags = ["internal", "high"]
 [error.DM-dm-worker-40061]
 message = "DDLLockInfo with ID %s not found"
 description = ""
-workaround = ""
+workaround = "Please use show-ddl-locks command to see lock id."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40062]
@@ -2453,9 +2453,9 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40066]
-message = "ExecuteDDL timeout (exceeding %s), try use `query-status` to query whether the DDL is still blocking"
+message = "ExecuteDDL timeout (exceeding %s)"
 description = ""
-workaround = ""
+workaround = "Please try use `query-status` to query whether the DDL is still blocking."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40067]
@@ -2465,15 +2465,15 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40068]
-message = "relay log purger is purging, cannot start sub task %s, please try again later"
+message = "relay log purger is purging, cannot start sub task %s"
 description = ""
-workaround = ""
+workaround = "Please try again later."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40069]
 message = "host:port '%s' not valid"
 description = ""
-workaround = ""
+workaround = "Please check configs in worker configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40070]
@@ -2515,7 +2515,7 @@ tags = ["internal", "medium"]
 [error.DM-dm-tracer-42002]
 message = "config toml transform"
 description = ""
-workaround = ""
+workaround = "Please check the configuration file has correct TOML format."
 tags = ["internal", "medium"]
 
 [error.DM-dm-tracer-42003]
@@ -2639,9 +2639,9 @@ workaround = ""
 tags = ["internal", "medium"]
 
 [error.DM-scheduler-46005]
-message = "dm-worker with name %s is still online, must shut it down first"
+message = "dm-worker with name %s is still online"
 description = ""
-workaround = ""
+workaround = "Please shut it down first."
 tags = ["internal", "medium"]
 
 [error.DM-scheduler-46006]
