@@ -739,7 +739,7 @@ tags = ["internal", "medium"]
 [error.DM-config-20007]
 message = "online scheme %s not supported"
 description = ""
-workaround = "Please check the `online-ddl-scheme` config in task configuration file."
+workaround = "Please check the `online-ddl-scheme` config in task configuration file. Only `ghost` and `pt` are currently supported."
 tags = ["internal", "medium"]
 
 [error.DM-config-20008]
@@ -799,7 +799,7 @@ tags = ["internal", "medium"]
 [error.DM-config-20017]
 message = "syncer-config-name and syncer should only specify one"
 description = ""
-workaround = "Please check the `syncer-config-name` and `loader` config in task configuration file."
+workaround = "Please check the `syncer-config-name` and `syncer` config in task configuration file."
 tags = ["internal", "medium"]
 
 [error.DM-config-20018]
