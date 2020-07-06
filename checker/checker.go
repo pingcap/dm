@@ -301,7 +301,7 @@ func (c *Checker) updateInstruction(result *check.Results) {
 		switch r.Extra {
 		case check.AutoIncrementKeyChecking:
 			if strings.HasPrefix(r.Instruction, "please handle it by yourself") {
-				r.Instruction += ", read document https://pingcap.com/docs-cn/dev/reference/tools/data-migration/usage-scenarios/best-practice-dm-shard/#自增主键冲突处理 for more detail (only have Chinese document now, will translate to English later)"
+				r.Instruction += ",  refer to https://docs.pingcap.com/tidb-data-migration/stable/shard-merge-best-practices#handle-conflicts-of-auto-increment-primary-key) for details."
 			}
 		}
 	}
