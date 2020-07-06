@@ -142,6 +142,9 @@ function run() {
     check_not_contains "ignore_db"
     check_contains "all_mode"
 
+    ls $WORK_DIR/worker1/dumped_data.test && exit 1 || echo "worker1 auto removed dump files"
+    ls $WORK_DIR/worker2/dumped_data.test && exit 1 || echo "worker2 auto removed dump files"
+
     export GO_FAILPOINTS=''
 }
 

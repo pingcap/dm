@@ -183,7 +183,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				}
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
 
-				if w.cfg.RemoveFinishedDump {
+				if w.cfg.CleanDumpFile {
 					fileInfos := w.checkPoint.GetRestoringFileInfo(job.schema, job.table)
 					if pos, ok := fileInfos[job.file]; ok {
 						if job.offset == pos[1] {
@@ -611,7 +611,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 
 	if err == nil {
 		l.logCtx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
-		if l.cfg.RemoveFinishedDump {
+		if l.cfg.CleanDumpFile {
 			files := CollectDirFiles(l.cfg.Dir)
 			hasDatafile := false
 			for file := range files {
@@ -626,8 +626,8 @@ func (l *Loader) Restore(ctx context.Context) error {
 			}
 
 			if !hasDatafile {
-				l.logCtx.L().Info("remove loaded structure file")
-				l.cleanStructureFiles()
+				l.logCtx.L().Info("clean dump files after importing all files")
+				l.cleanDumpFiles()
 			}
 		}
 	} else if errors.Cause(err) != context.Canceled {
@@ -1248,13 +1248,19 @@ func (l *Loader) getMydumpMetadata() error {
 }
 
 // cleanStructureFiles is called optionally when finish loading data
-func (l *Loader) cleanStructureFiles() {
-	for db, tables := range l.db2Tables {
-		dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
-		os.Remove(dbFile)
-		for table := range tables {
-			tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
-			os.Remove(tableFile)
+func (l *Loader) cleanDumpFiles() {
+	if l.cfg.Mode == config.ModeFull {
+		// in full-mode all files won't be need in the future
+		os.RemoveAll(l.cfg.Dir)
+	} else {
+		// leave metadata file, only delete structure files
+		for db, tables := range l.db2Tables {
+			dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
+			os.Remove(dbFile)
+			for table := range tables {
+				tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
+				os.Remove(tableFile)
+			}
 		}
 	}
 }

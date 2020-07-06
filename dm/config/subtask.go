@@ -186,7 +186,7 @@ type SubTaskConfig struct {
 
 	ConfigFile string `toml:"-" json:"config-file"`
 
-	RemoveFinishedDump bool `toml:"remove-finished-dump" json:"remove-finished-dump"`
+	CleanDumpFile bool `toml:"clean-dump-file" json:"clean-dump-file"`
 
 	// still needed by Syncer / Loader bin
 	printVersion bool

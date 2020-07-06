@@ -16,6 +16,8 @@ package syncer
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -844,6 +846,7 @@ func (s *Syncer) flushCheckPoints() error {
 
 	tctx, cancel := s.tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
 	defer cancel()
+	// lance: here flush
 	err := s.checkpoint.FlushPointsExcept(tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
 	if err != nil {
 		return terror.Annotatef(err, "flush checkpoint %s", s.checkpoint)
@@ -1048,6 +1051,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		err = s.checkpoint.LoadMeta()
 		if err != nil {
 			return err
+		}
+
+		// for fresh and all-mode task, flush checkpoint so we could delete metadata file
+		if s.cfg.Mode == config.ModeAll {
+			if err := s.flushCheckPoints(); err != nil {
+				s.tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
+			} else {
+				s.tctx.L().Info("try to remove loaded files")
+				os.Remove(path.Join(s.cfg.Dir, "metadata"))
+				os.Remove(s.cfg.Dir)
+			}
 		}
 	}
 
