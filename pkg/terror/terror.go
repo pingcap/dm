@@ -284,6 +284,13 @@ func (e *Error) Delegate(err error, args ...interface{}) error {
 	if err == nil {
 		return nil
 	}
+
+	rawCause := err
+	// we only get the root rawCause
+	if tErr, ok := err.(*Error); ok && tErr.rawCause != nil {
+		rawCause = tErr.rawCause
+	}
+
 	return &Error{
 		code:       e.code,
 		class:      e.class,
@@ -292,7 +299,7 @@ func (e *Error) Delegate(err error, args ...interface{}) error {
 		message:    e.message,
 		workaround: e.workaround,
 		args:       args,
-		rawCause:   err,
+		rawCause:   rawCause,
 		stack:      errors.NewStack(0),
 	}
 }
