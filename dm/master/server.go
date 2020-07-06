@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/master/shardddl"
 	operator "github.com/pingcap/dm/dm/master/sql-operator"
@@ -66,6 +67,11 @@ var (
 	maxRetryNum = 30
 	// the retry interval for dm-master to confirm the dm-workers status is expected
 	retryInterval = time.Second
+
+	// typically there's only one server running in one process, but testMaster.TestOfflineMember starts 3 servers,
+	// so we need sync.Once to prevent data race
+	registerOnce      sync.Once
+	runBackgroundOnce sync.Once
 )
 
 // Server handles RPC requests for dm-master
@@ -154,8 +160,9 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
+	registerOnce.Do(metrics.RegistryMetrics)
+
 	// HTTP handlers on etcd's client IP:port
-	// no `metrics` for DM-master now, add it later.
 	// NOTE: after received any HTTP request from chrome browser,
 	// the server may be blocked when closing sometime.
 	// And any request to etcd's builtin handler has the same problem.
@@ -163,9 +170,10 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// But I haven't figured it out.
 	// (maybe more requests are sent from chrome or its extensions).
 	userHandles := map[string]http.Handler{
-		"/apis/":  apiHandler,
-		"/status": getStatusHandle(),
-		"/debug/": getDebugHandler(),
+		"/apis/":   apiHandler,
+		"/status":  getStatusHandle(),
+		"/debug/":  getDebugHandler(),
+		"/metrics": metrics.GetMetricsHandler(),
 	}
 
 	// gRPC API server
@@ -204,6 +212,14 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		defer s.bgFunWg.Done()
 		s.electionNotify(ctx)
 	}()
+
+	runBackgroundOnce.Do(func() {
+		s.bgFunWg.Add(1)
+		go func() {
+			defer s.bgFunWg.Done()
+			metrics.RunBackgroundJob(ctx)
+		}()
+	})
 
 	s.bgFunWg.Add(1)
 	go func() {
