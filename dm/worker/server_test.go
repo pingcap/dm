@@ -427,7 +427,7 @@ func (t *testServer) TestQueryError(c *C) {
 
 	sourceCfg := loadSourceConfigWithoutPassword(c)
 	sourceCfg.EnableRelay = false
-	w, err := NewWorker(&sourceCfg, nil)
+	w, err := NewWorker(&sourceCfg, nil, "")
 	c.Assert(err, IsNil)
 	w.closed.Set(closedFalse)
 
