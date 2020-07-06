@@ -348,7 +348,7 @@ func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBo
 			s.setSourceStatus(bound.Source, err, true)
 			if err != nil {
 				// record the reason for operating source bound
-				// TODO: add better metrics
+				opErrCounter.WithLabelValues(s.cfg.Name, opErrTypeSourceBound).Inc()
 				log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
 					zap.Stringer("bound", bound), zap.Error(err))
 				if etcdutil.IsRetryableError(err) {
@@ -743,7 +743,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 
 	log.L().Info("start worker", zap.String("sourceCfg", cfg.String()), zap.Reflect("subTasks", subTaskCfgs))
 
-	w, err := NewWorker(cfg, s.etcdClient)
+	w, err := NewWorker(cfg, s.etcdClient, s.cfg.Name)
 	if err != nil {
 		return err
 	}
