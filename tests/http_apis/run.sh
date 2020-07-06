@@ -33,7 +33,7 @@ function run() {
     source_data=`cat $WORK_DIR/source1.toml.bak`
     rm $WORK_DIR/source1.toml.bak
     echo $source_data
-    curl -X PUT 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/sources -d '{"op": 1, "config": "'"$source_data"'"}' > $WORK_DIR/create-source.log
+    curl -X PUT 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/sources -d '{"op": 1, "config": ["'"$source_data"'"]}' > $WORK_DIR/create-source.log
     check_log_contains $WORK_DIR/create-source.log "\"result\":true" 1
     check_log_contains $WORK_DIR/create-source.log "\"source\":\"$SOURCE_ID1\"" 1
 
