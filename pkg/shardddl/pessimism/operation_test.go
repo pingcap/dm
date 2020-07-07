@@ -15,10 +15,10 @@ package pessimism
 
 import (
 	"context"
-	"github.com/pingcap/dm/pkg/utils"
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func (t *testForEtcd) TestOperationJSON(c *C) {

@@ -16,12 +16,12 @@ package pessimism
 import (
 	"context"
 	"fmt"
-	"github.com/pingcap/dm/pkg/utils"
 	"sync"
 	"testing"
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
