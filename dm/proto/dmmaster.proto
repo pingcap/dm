@@ -88,6 +88,12 @@ service Master {
             get: "/apis/v1alpha1/members"
         };
     }
+
+    rpc GetSubTaskCfg(GetSubTaskCfgRequest) returns(GetSubTaskCfgResponse) {
+        option (google.api.http) = {
+            get: "/apis/v1alpha1/subtasks/{name}"
+        };
+    }
 }
 
 message MigrateWorkerRelayRequest {
@@ -399,4 +405,13 @@ message ListMemberResponse {
     bool result = 1;
     string msg = 2;
     repeated Members members = 3;
+}
+
+message GetSubTaskCfgRequest {
+    // the task name
+    string name = 1;
+}
+
+message GetSubTaskCfgResponse {
+    repeated string cfgs = 1;
 }
