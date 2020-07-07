@@ -105,8 +105,6 @@ func (s *Server) closeLeaderClient() {
 }
 
 func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
-	s.RLock()
-	defer s.RUnlock()
 	isLeader = (s.leader == oneselfLeader)
 	needForward = (s.leaderGrpcConn != nil)
 	return

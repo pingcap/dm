@@ -285,13 +285,17 @@ func errorCommonWorkerResponse(msg string, source, worker string) *pb.CommonWork
 // value: workerInfo
 func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "RegisterWorker"))
+
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.RegisterWorker(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	err := s.scheduler.AddWorker(req.Name, req.Address)
 	if err != nil {
@@ -313,13 +317,17 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 // value: WorkerInfo
 func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest) (*pb.OfflineMemberResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OfflineMember"))
+
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.OfflineMember(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	if req.Type == common.Worker {
 		err := s.scheduler.RemoveWorker(req.Name)
@@ -388,13 +396,16 @@ func subtaskCfgPointersToInstances(stCfgPointers ...*config.SubTaskConfig) []con
 func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "StartTask"))
 
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.StartTask(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	resp := &pb.StartTaskResponse{}
 	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
@@ -463,13 +474,16 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*pb.OperateTaskResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateTask"))
 
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.OperateTask(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	resp := &pb.OperateTaskResponse{
 		Op:     req.Op,
@@ -517,13 +531,16 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateTask"))
 
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.UpdateTask(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
@@ -648,13 +665,17 @@ func extractSources(s *Server, req hasWokers) ([]string, error) {
 // QueryStatus implements MasterServer.QueryStatus
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest) (*pb.QueryStatusListResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryStatus"))
+
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.QueryStatus(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	sources, err := extractSources(s, req)
 	if err != nil {
@@ -686,13 +707,17 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 // QueryError implements MasterServer.QueryError
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) (*pb.QueryErrorListResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryError"))
+
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.QueryError(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	sources, err := extractSources(s, req)
 	if err != nil {
@@ -726,13 +751,16 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) 
 func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) (*pb.ShowDDLLocksResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ShowDDLLocks"))
 
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.ShowDDLLocks(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	resp := &pb.ShowDDLLocksResponse{
 		Result: true,
@@ -754,13 +782,16 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
 	log.L().Info("", zap.String("lock ID", req.ID), zap.Stringer("payload", req), zap.String("request", "UnlockDDLLock"))
 
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.UnlockDDLLock(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	resp := &pb.UnlockDDLLockResponse{
 		Result: true,
@@ -779,13 +810,16 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.HandleSQLsResponse, error) {
 	log.L().Info("", zap.String("task name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
 
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.HandleSQLs(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	// save request for --sharding operation
 	if req.Sharding {
@@ -845,13 +879,16 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayRequest) (*pb.PurgeWorkerRelayResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "PurgeWorkerRelay"))
 
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.PurgeWorkerRelay(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	workerReq := &workerrpc.Request{
 		Type: workerrpc.CmdPurgeRelay,
@@ -909,13 +946,16 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWorkerRelayMasterRequest) (*pb.SwitchWorkerRelayMasterResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "SwitchWorkerRelayMaster"))
 
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.SwitchWorkerRelayMaster(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
 
@@ -979,13 +1019,17 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 // OperateWorkerRelayTask implements MasterServer.OperateWorkerRelayTask
 func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWorkerRelayRequest) (*pb.OperateWorkerRelayResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateWorkerRelayTask"))
+
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.OperateWorkerRelayTask(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	resp := &pb.OperateWorkerRelayResponse{
 		Op:     req.Op,
@@ -1156,6 +1200,9 @@ func (s *Server) checkTaskAndWorkerMatch(taskname string, targetWorker string) b
 func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateMasterConfig"))
 
+	s.Lock()
+	defer s.Unlock()
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -1164,10 +1211,8 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
-	s.Lock()
 	err := s.cfg.UpdateConfigFile(req.Config)
 	if err != nil {
-		s.Unlock()
 		return &pb.UpdateMasterConfigResponse{
 			Result: false,
 			Msg:    "Failed to write config to local file. detail: " + err.Error(),
@@ -1179,7 +1224,6 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 	cfg.ConfigFile = s.cfg.ConfigFile
 	err = cfg.Reload()
 	if err != nil {
-		s.Unlock()
 		return &pb.UpdateMasterConfigResponse{
 			Result: false,
 			Msg:    fmt.Sprintf("Failed to parse configure from file %s, detail: ", cfg.ConfigFile) + err.Error(),
@@ -1188,7 +1232,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 	log.L().Info("update dm-master config", zap.Stringer("config", cfg), zap.String("request", "UpdateMasterConfig"))
 	s.cfg = cfg
 	log.L().Info("update dm-master config file success", zap.String("request", "UpdateMasterConfig"))
-	s.Unlock()
+
 	return &pb.UpdateMasterConfigResponse{
 		Result: true,
 		Msg:    "",
@@ -1199,13 +1243,16 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateWorkerRelayConfig"))
 
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.UpdateWorkerRelayConfig(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	source := req.Source
 	content := req.Config
@@ -1243,13 +1290,16 @@ func (s *Server) getSourceConfigs(sources []*config.MySQLInstance) (map[string]c
 func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "MigrateWorkerRelay"))
 
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.MigrateWorkerRelay(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	source := req.Source
 	binlogPos := req.BinlogPos
@@ -1274,13 +1324,16 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.CheckTaskResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "CheckTask"))
 
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.CheckTask(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	_, _, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
@@ -1319,13 +1372,17 @@ func parseAndAdjustSourceConfig(cfg *config.SourceConfig, content string) error 
 // OperateSource will create or update an upstream source.
 func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest) (*pb.OperateSourceResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateSource"))
+
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.OperateSource(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	cfg := config.NewSourceConfig()
 	err := parseAndAdjustSourceConfig(cfg, req.Config)
@@ -1827,13 +1884,16 @@ func (s *Server) listMemberLeader(ctx context.Context, names []string) (*pb.Memb
 func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb.ListMemberResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ListMember"))
 
+	s.RLock()
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
+		defer s.RUnlock()
 		if needForward {
 			return s.leaderClient.ListMember(ctx, req)
 		}
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
+	s.RUnlock()
 
 	if !req.Leader && !req.Master && !req.Worker {
 		req.Leader = true
