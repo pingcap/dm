@@ -413,5 +413,7 @@ message GetSubTaskCfgRequest {
 }
 
 message GetSubTaskCfgResponse {
-    repeated string cfgs = 1;
+    bool result = 1;
+    string msg = 2;
+    repeated string cfgs = 3;
 }
