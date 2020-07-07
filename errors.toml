@@ -2716,3 +2716,9 @@ description = ""
 workaround = ""
 tags = ["internal", "medium"]
 
+[error.DM-dmctl-48001]
+message = "can not create grpc connection"
+description = ""
+workaround = "Please check your network connection."
+tags = ["internal", "high"]
+
