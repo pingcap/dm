@@ -52,7 +52,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 		op13    = NewOperation(ID1, task1, source3, DDLs, true, false)
 		op21    = NewOperation(ID2, task2, source1, DDLs, false, true)
 
-		retry   = 10
+		retry = 10
 	)
 
 	// put the same keys twice.
@@ -74,7 +74,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 		if len(wch) != 0 {
 			break
 		}
-		time.Sleep(500*time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 	cancel()
 	close(wch)
@@ -99,7 +99,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 		if len(wch) != 0 {
 			break
 		}
-		time.Sleep(500*time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 	cancel()
 	close(wch)
@@ -146,7 +146,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 		if len(wch) != 0 {
 			break
 		}
-		time.Sleep(500*time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 	cancel()
 	close(wch)

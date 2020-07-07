@@ -16,13 +16,14 @@ package pessimism
 import (
 	"context"
 	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
-	"sync"
-	"testing"
-	"time"
 
 	"github.com/pingcap/dm/dm/common"
 )
@@ -119,7 +120,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	ech := make(chan error, 10)
 	ctx, cancel := context.WithCancel(context.Background())
 	var (
-		wg      sync.WaitGroup
+		wg    sync.WaitGroup
 		retry = 10
 	)
 	wg.Add(1)
@@ -138,7 +139,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 		if len(wch) != 0 {
 			break
 		}
-		time.Sleep(500*time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 	cancel()
 	wg.Wait()
