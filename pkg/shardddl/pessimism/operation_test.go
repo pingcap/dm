@@ -15,6 +15,7 @@ package pessimism
 
 import (
 	"context"
+	"github.com/pingcap/dm/pkg/utils"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -51,8 +52,6 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 		op12    = NewOperation(ID1, task1, source2, DDLs, true, false)
 		op13    = NewOperation(ID1, task1, source3, DDLs, true, false)
 		op21    = NewOperation(ID2, task2, source1, DDLs, false, true)
-
-		retry = 10
 	)
 
 	// put the same keys twice.
@@ -70,12 +69,9 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go WatchOperationPut(ctx, etcdTestCli, task1, source1, rev2, wch, ech)
 	// wait response of WatchOperationPut, increase waiting time when resource shortage
-	for i := 0; i < retry; i++ {
-		if len(wch) != 0 {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+	utils.WaitSomething(10, 500*time.Millisecond, func() bool {
+		return len(wch) != 0
+	})
 	cancel()
 	close(wch)
 	close(ech)
@@ -95,12 +91,9 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	ech = make(chan error, 10)
 	ctx, cancel = context.WithCancel(context.Background())
 	go WatchOperationPut(ctx, etcdTestCli, "", "", rev2, wch, ech)
-	for i := 0; i < retry; i++ {
-		if len(wch) != 0 {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+	utils.WaitSomething(10, 500*time.Millisecond, func() bool {
+		return len(wch) != 0
+	})
 	cancel()
 	close(wch)
 	close(ech)
@@ -142,12 +135,9 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	ech = make(chan error, 10)
 	ctx, cancel = context.WithCancel(context.Background())
 	go WatchOperationDelete(ctx, etcdTestCli, op11.Task, op11.Source, rev5, wch, ech)
-	for i := 0; i < retry; i++ {
-		if len(wch) != 0 {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+	utils.WaitSomething(10, 500*time.Millisecond, func() bool {
+		return len(wch) != 0
+	})
 	cancel()
 	close(wch)
 	close(ech)

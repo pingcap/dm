@@ -16,6 +16,7 @@ package pessimism
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/dm/pkg/utils"
 	"sync"
 	"testing"
 	"time"
@@ -119,10 +120,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	wch := make(chan Info, 10)
 	ech := make(chan error, 10)
 	ctx, cancel := context.WithCancel(context.Background())
-	var (
-		wg    sync.WaitGroup
-		retry = 10
-	)
+	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -135,12 +133,9 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	_, err = PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
 	// wait response of WatchInfoPut, increase waiting time when resource shortage
-	for i := 0; i < retry; i++ {
-		if len(wch) != 0 {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+	utils.WaitSomething(10, 500*time.Millisecond, func() bool {
+		return len(wch) != 0
+	})
 	cancel()
 	wg.Wait()
 
