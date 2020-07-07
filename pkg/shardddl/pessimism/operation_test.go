@@ -51,6 +51,8 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 		op12    = NewOperation(ID1, task1, source2, DDLs, true, false)
 		op13    = NewOperation(ID1, task1, source3, DDLs, true, false)
 		op21    = NewOperation(ID2, task2, source1, DDLs, false, true)
+
+		retry   = 10
 	)
 
 	// put the same keys twice.
@@ -65,8 +67,15 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	// start the watcher with the same revision as the last PUT for the specified task and source.
 	wch := make(chan Operation, 10)
 	ech := make(chan error, 10)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	WatchOperationPut(ctx, etcdTestCli, task1, source1, rev2, wch, ech)
+	ctx, cancel := context.WithCancel(context.Background())
+	go WatchOperationPut(ctx, etcdTestCli, task1, source1, rev2, wch, ech)
+	// wait response of WatchOperationPut, increase waiting time when resource shortage
+	for i := 0; i < retry; i++ {
+		if len(wch) != 0 {
+			break
+		}
+		time.Sleep(500*time.Millisecond)
+	}
 	cancel()
 	close(wch)
 	close(ech)
@@ -84,8 +93,14 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	// start the watch with an older revision for all tasks and sources.
 	wch = make(chan Operation, 10)
 	ech = make(chan error, 10)
-	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
-	WatchOperationPut(ctx, etcdTestCli, "", "", rev2, wch, ech)
+	ctx, cancel = context.WithCancel(context.Background())
+	go WatchOperationPut(ctx, etcdTestCli, "", "", rev2, wch, ech)
+	for i := 0; i < retry; i++ {
+		if len(wch) != 0 {
+			break
+		}
+		time.Sleep(500*time.Millisecond)
+	}
 	cancel()
 	close(wch)
 	close(ech)
@@ -125,8 +140,14 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	// start watch with an older revision for the deleted op11.
 	wch = make(chan Operation, 10)
 	ech = make(chan error, 10)
-	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
-	WatchOperationDelete(ctx, etcdTestCli, op11.Task, op11.Source, rev5, wch, ech)
+	ctx, cancel = context.WithCancel(context.Background())
+	go WatchOperationDelete(ctx, etcdTestCli, op11.Task, op11.Source, rev5, wch, ech)
+	for i := 0; i < retry; i++ {
+		if len(wch) != 0 {
+			break
+		}
+		time.Sleep(500*time.Millisecond)
+	}
 	cancel()
 	close(wch)
 	close(ech)

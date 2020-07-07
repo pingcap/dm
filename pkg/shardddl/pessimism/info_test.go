@@ -16,14 +16,13 @@ package pessimism
 import (
 	"context"
 	"fmt"
-	"sync"
-	"testing"
-	"time"
-
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
+	"sync"
+	"testing"
+	"time"
 
 	"github.com/pingcap/dm/dm/common"
 )
@@ -118,12 +117,14 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	// start the watcher.
 	wch := make(chan Info, 10)
 	ech := make(chan error, 10)
-	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	var (
+		wg      sync.WaitGroup
+		retry = 10
+	)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-		defer cancel()
 		WatchInfoPut(ctx, etcdTestCli, rev4+1, wch, ech) // revision+1
 		close(wch)                                       // close the chan
 		close(ech)
@@ -132,6 +133,14 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	// put another key for a different task.
 	_, err = PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
+	// wait response of WatchInfoPut, increase waiting time when resource shortage
+	for i := 0; i < retry; i++ {
+		if len(wch) != 0 {
+			break
+		}
+		time.Sleep(500*time.Millisecond)
+	}
+	cancel()
 	wg.Wait()
 
 	// watch should only get i21.

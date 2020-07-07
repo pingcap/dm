@@ -1290,6 +1290,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	time.Sleep(5 * time.Second)
 	req.Name = s3.cfg.Name
 	resp, err = s2.OfflineMember(ctx, req)
+	// TODO: fix err not nil below, happens often when dm-master-3 is leader and Close by above line
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Msg, check.Equals, "")
 	c.Assert(resp.Result, check.IsTrue)
