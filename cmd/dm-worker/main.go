@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/worker"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
+	globalLog "github.com/pingcap/log"
 
 	"github.com/pingcap/errors"
 	"go.uber.org/zap"
@@ -49,6 +50,13 @@ func main() {
 		fmt.Printf("init logger error %v", errors.ErrorStack(err))
 		os.Exit(2)
 	}
+
+	// currently only schema tracker use global logger(std logger), simply replace it with `error` level
+	// may be we should support config logger in mock tidb later
+	conf := &globalLog.Config{Level: "error", File: globalLog.FileLogConfig{}}
+	lg, r, _ := globalLog.InitLogger(conf)
+	lg = lg.With(zap.String("component", "ddl tracker"))
+	globalLog.ReplaceGlobals(lg, r)
 
 	utils.PrintInfo("dm-worker", func() {
 		log.L().Info("", zap.Stringer("dm-worker config", cfg))
