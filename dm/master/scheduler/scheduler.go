@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/etcdutil"
@@ -1236,6 +1237,7 @@ func (s *Scheduler) deleteWorker(name string) {
 	}
 	w.Close()
 	delete(s.workers, name)
+	metrics.RemoveWorkerStateInMetrics(w.baseInfo.Name)
 }
 
 // updateStatusForBound updates the in-memory status for bound, including:
