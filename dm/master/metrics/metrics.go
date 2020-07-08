@@ -50,8 +50,8 @@ var (
 			Help:      "the cpu usage of master",
 		})
 
-	ddlPendingCounter = metricsproxy.NewCounterVec(
-		prometheus.CounterOpts{
+	ddlPendingCounter = metricsproxy.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "master",
 			Name:      "ddl_state_number",
@@ -108,10 +108,10 @@ func RemoveWorkerStateInMetrics(name string) {
 	workerState.DeleteAllAboutLabels(prometheus.Labels{"worker": name})
 }
 
-// ReportDDLPendingToMetrics inc/desc 1 to ddlPendingCounter
+// ReportDDLPendingToMetrics inc/dec by 1 to ddlPendingCounter
 func ReportDDLPendingToMetrics(task, old, new string) {
 	if old != DDLPendingNone {
-		ddlPendingCounter.WithLabelValues(task, old).Desc()
+		ddlPendingCounter.WithLabelValues(task, old).Dec()
 	}
 	if new != DDLPendingNone {
 		ddlPendingCounter.WithLabelValues(task, new).Inc()
