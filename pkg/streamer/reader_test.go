@@ -36,7 +36,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-var parseFileTimeout = 3 * time.Second
+var parseFileTimeout = 10 * time.Second
 
 var _ = Suite(&testReaderSuite{})
 

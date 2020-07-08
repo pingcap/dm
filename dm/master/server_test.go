@@ -152,7 +152,7 @@ var (
 	errCheckSyncConfig    = "(?m).*check sync config with error.*"
 	errCheckSyncConfigReg = fmt.Sprintf("(?m).*%s.*", errCheckSyncConfig)
 	testEtcdCluster       *integration.ClusterV3
-	keepAliveTTL          = int64(1)
+	keepAliveTTL          = int64(10)
 	etcdTestCli           *clientv3.Client
 )
 
@@ -258,7 +258,7 @@ func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sour
 		cfg := config.NewSourceConfig()
 		cfg.SourceID = sources[i]
 		cfg.From.Password = password
-		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil)
+		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil, check.Commentf("all sources: %v", sources))
 		wg.Add(1)
 		ctx1, cancel1 := context.WithCancel(ctx)
 		cancels = append(cancels, cancel1)
