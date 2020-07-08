@@ -15,7 +15,6 @@ package master
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -536,7 +535,7 @@ func (s *Server) GetSubTaskCfg(ctx context.Context, req *pb.GetSubTaskCfgRequest
 	cfgs := make([]string, 0, len(subCfgs))
 
 	for _, cfg := range subCfgs {
-		cfgBytes, err := json.Marshal(cfg)
+		cfgBytes, err := cfg.Toml()
 		if err != nil {
 			return &pb.GetSubTaskCfgResponse{
 				Result: false,

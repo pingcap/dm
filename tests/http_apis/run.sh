@@ -53,6 +53,10 @@ function run() {
     check_log_contains $WORK_DIR/status.log "\"stage\":\"Running\"" 1
     check_log_contains $WORK_DIR/status.log "\"name\":\"test\"" 1
 
+    echo "get sub task configs"
+    curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/subtasks/test > $WORK_DIR/subtask.log
+    check_log_contains $WORK_DIR/subtask.log "is-sharding = false" 1
+
     echo "pause task and check stage"
     curl -X PUT 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/tasks/test -d '{ "op": 2 }' > $WORK_DIR/pause.log
     check_log_contains $WORK_DIR/pause.log "\"op\":\"Pause\"" 1
