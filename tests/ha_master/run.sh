@@ -61,12 +61,12 @@ function test_evict_leader() {
         fi
     done
 
-    # cancel evict leader on master1, and master1 will be the leader
+    echo "cancel evict leader on master1, and master1 will be the leader"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "operate-leader cancel-evict"\
         "\"result\": true" 1
 
-    # cancel evict leader twice, and test cancel evict leader from http interface
+    echo "cancel evict leader twice, and test cancel evict leader from http interface"
     curl -X PUT 127.0.0.1:$MASTER_PORT1/apis/v1alpha1/leader/2  > $WORK_DIR/cancel_evict_leader.log
     check_log_contains $WORK_DIR/cancel_evict_leader.log "\"result\":true" 1
 
@@ -77,7 +77,7 @@ function test_evict_leader() {
         exit 1
     fi
 
-    # cancel evict leader on all masters
+    echo "cancel evict leader on all masters"
     for i in $(seq 1 4); do
         echo "cancel master port ${master_ports[$i]}"
         run_dm_ctl $WORK_DIR "127.0.0.1:${master_ports[$i]}" \
