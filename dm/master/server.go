@@ -285,6 +285,7 @@ func errorCommonWorkerResponse(msg string, source, worker string) *pb.CommonWork
 // value: workerInfo
 func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "RegisterWorker"))
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -313,6 +314,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 // value: WorkerInfo
 func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest) (*pb.OfflineMemberResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OfflineMember"))
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -512,6 +514,45 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	return resp, nil
 }
 
+// GetSubTaskCfg implements MasterServer.GetSubTaskCfg
+func (s *Server) GetSubTaskCfg(ctx context.Context, req *pb.GetSubTaskCfgRequest) (*pb.GetSubTaskCfgResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "GetSubTaskCfg"))
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.GetSubTaskCfg(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	subCfgs := s.scheduler.GetSubTaskCfgsByTask(req.Name)
+	if len(subCfgs) == 0 {
+		return &pb.GetSubTaskCfgResponse{
+			Result: false,
+			Msg:    "task not found",
+		}, nil
+	}
+
+	cfgs := make([]string, 0, len(subCfgs))
+
+	for _, cfg := range subCfgs {
+		cfgBytes, err := cfg.Toml()
+		if err != nil {
+			return &pb.GetSubTaskCfgResponse{
+				Result: false,
+				Msg:    err.Error(),
+			}, nil
+		}
+		cfgs = append(cfgs, string(cfgBytes))
+	}
+
+	return &pb.GetSubTaskCfgResponse{
+		Result: true,
+		Cfgs:   cfgs,
+	}, nil
+}
+
 // UpdateTask implements MasterServer.UpdateTask
 // TODO: support update task later
 func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
@@ -648,6 +689,7 @@ func extractSources(s *Server, req hasWokers) ([]string, error) {
 // QueryStatus implements MasterServer.QueryStatus
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest) (*pb.QueryStatusListResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryStatus"))
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -686,6 +728,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 // QueryError implements MasterServer.QueryError
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) (*pb.QueryErrorListResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryError"))
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -979,6 +1022,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 // OperateWorkerRelayTask implements MasterServer.OperateWorkerRelayTask
 func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWorkerRelayRequest) (*pb.OperateWorkerRelayResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateWorkerRelayTask"))
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -1324,6 +1368,7 @@ func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, erro
 // OperateSource will create or update an upstream source.
 func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest) (*pb.OperateSourceResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateSource"))
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
