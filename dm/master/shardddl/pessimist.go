@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
@@ -626,6 +627,7 @@ func (p *Pessimist) removeLock(lock *pessimism.Lock) error {
 		return err
 	}
 	p.lk.RemoveLock(lock.ID)
+	metrics.ReportDDLPendingToMetrics(lock.Task, metrics.DDLPendingSynced, metrics.DDLPendingNone)
 	return nil
 }
 

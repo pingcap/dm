@@ -25,6 +25,14 @@ import (
 	"github.com/pingcap/dm/pkg/metricsproxy"
 )
 
+// used for ddlPendingCounter, no "Resolved" lock because they will be
+// remove quickly and not pending anymore
+const (
+	DDLPendingNone     = "None"
+	DDLPendingUnSynced = "Un-synced"
+	DDLPendingSynced   = "Synced"
+)
+
 var (
 	workerState = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -41,6 +49,14 @@ var (
 			Name:      "cpu_usage",
 			Help:      "the cpu usage of master",
 		})
+
+	ddlPendingCounter = metricsproxy.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "dm",
+			Subsystem: "master",
+			Name:      "ddl_state_number",
+			Help:      "number of pending DDL in different states, Un-synced (waiting all upstream), Synced (all upstream finished, waiting all downstream)",
+		}, []string{"task", "type"})
 )
 
 func collectMetrics() {
@@ -72,6 +88,7 @@ func RegistryMetrics() {
 
 	registry.MustRegister(workerState)
 	registry.MustRegister(cpuUsageGauge)
+	registry.MustRegister(ddlPendingCounter)
 
 	prometheus.DefaultGatherer = registry
 }
@@ -89,4 +106,19 @@ func ReportWorkerStageToMetrics(name string, state float64) {
 // RemoveWorkerStateInMetrics cleans state of deleted worker
 func RemoveWorkerStateInMetrics(name string) {
 	workerState.DeleteAllAboutLabels(prometheus.Labels{"worker": name})
+}
+
+// ReportDDLPendingToMetrics inc/desc 1 to ddlPendingCounter
+func ReportDDLPendingToMetrics(task, old, new string) {
+	if old != DDLPendingNone {
+		ddlPendingCounter.WithLabelValues(task, old).Desc()
+	}
+	if new != DDLPendingNone {
+		ddlPendingCounter.WithLabelValues(task, new).Inc()
+	}
+}
+
+// RemoveDDLPendingInMetrics resets whole ddlPendingCounter
+func RemoveDDLPendingInMetrics() {
+	ddlPendingCounter.Reset()
 }
