@@ -1409,7 +1409,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 			for _, sid := range started {
 				err := s.scheduler.RemoveSourceCfg(sid)
 				if err != nil {
-					log.L().Error("while reverting start source, another error happens",
+					log.L().Error("while reverting started source, another error happens",
 						zap.String("source id", sid),
 						zap.String("error", err.Error()))
 				}
