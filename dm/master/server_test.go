@@ -1295,7 +1295,6 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 		}
 		return leaderID != s3.cfg.Name
 	}), check.IsTrue)
-	time.Sleep(5 * time.Second)
 	req.Name = s3.cfg.Name
 	resp, err = s2.OfflineMember(ctx, req)
 	c.Assert(err, check.IsNil)
