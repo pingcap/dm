@@ -26,6 +26,7 @@ import (
 )
 
 const (
+	// used to show error type when handle DDLs
 	InfoErrSyncLock    = "InfoPut - SyncLockError"
 	InfoErrHandleLock  = "InfoPut - HandleLockError"
 	OpErrRemoveLock    = "OperationPut - RemoveLockError"
