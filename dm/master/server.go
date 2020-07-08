@@ -512,6 +512,45 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	return resp, nil
 }
 
+// GetSubTaskCfg implements MasterServer.GetSubTaskCfg
+func (s *Server) GetSubTaskCfg(ctx context.Context, req *pb.GetSubTaskCfgRequest) (*pb.GetSubTaskCfgResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "GetSubTaskCfg"))
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.GetSubTaskCfg(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	subCfgs := s.scheduler.GetSubTaskCfgsByTask(req.Name)
+	if len(subCfgs) == 0 {
+		return &pb.GetSubTaskCfgResponse{
+			Result: false,
+			Msg:    "task not found",
+		}, nil
+	}
+
+	cfgs := make([]string, 0, len(subCfgs))
+
+	for _, cfg := range subCfgs {
+		cfgBytes, err := cfg.Toml()
+		if err != nil {
+			return &pb.GetSubTaskCfgResponse{
+				Result: false,
+				Msg:    err.Error(),
+			}, nil
+		}
+		cfgs = append(cfgs, string(cfgBytes))
+	}
+
+	return &pb.GetSubTaskCfgResponse{
+		Result: true,
+		Cfgs:   cfgs,
+	}, nil
+}
+
 // UpdateTask implements MasterServer.UpdateTask
 // TODO: support update task later
 func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
