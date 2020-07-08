@@ -11,7 +11,7 @@ function DM_076_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} add primary key(id);"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Message.*Unsupported add primary key" 1
+            "Unsupported add primary key" 1
 }
 
 function DM_076() {
@@ -22,7 +22,7 @@ function DM_077_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} drop primary key;"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Message.*Unsupported drop primary key when alter-primary-key is false" 1
+            "Unsupported drop primary key when alter-primary-key is false" 1
 }
 
 function DM_077() {

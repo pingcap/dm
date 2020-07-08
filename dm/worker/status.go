@@ -22,7 +22,6 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	"go.uber.org/zap"
 )
 
@@ -192,21 +191,4 @@ func (w *Worker) Error(stName string) []*pb.SubTaskError {
 	}
 
 	return errs
-}
-
-// statusProcessResult returns a clone of *pb.ProcessResult, but omit the `Error` field, so no duplicated
-// error message will be displayed in `query-status`, because the `Msg` field contains enough error information.
-func statusProcessResult(pr *pb.ProcessResult) *pb.ProcessResult {
-	if pr == nil {
-		return nil
-	}
-	result := proto.Clone(pr).(*pb.ProcessResult)
-	if result != nil {
-		for i := range result.Errors {
-			if result.Errors[i].Error != nil {
-				result.Errors[i].Msg = ""
-			}
-		}
-	}
-	return result
 }
