@@ -9,7 +9,7 @@ function query_status_wrong_arg() {
 function query_status_wrong_params() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status -w worker-x task-y" \
-        "can not query task-y task's status(in workers \[worker-x\]):" 1
+        "worker-x relevant worker-client not found" 1
 }
 
 function query_status_with_no_tasks() {
