@@ -26,6 +26,7 @@ import (
 	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (
@@ -118,12 +119,11 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	// start the watcher.
 	wch := make(chan Info, 10)
 	ech := make(chan error, 10)
+	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-		defer cancel()
 		WatchInfoPut(ctx, etcdTestCli, rev4+1, wch, ech) // revision+1
 		close(wch)                                       // close the chan
 		close(ech)
@@ -132,6 +132,11 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	// put another key for a different task.
 	_, err = PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
+	// wait response of WatchInfoPut, increase waiting time when resource shortage
+	utils.WaitSomething(10, 500*time.Millisecond, func() bool {
+		return len(wch) != 0
+	})
+	cancel()
 	wg.Wait()
 
 	// watch should only get i21.
