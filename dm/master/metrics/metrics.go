@@ -25,6 +25,14 @@ import (
 	"github.com/pingcap/dm/pkg/metricsproxy"
 )
 
+const (
+	InfoErrSyncLock    = "InfoPut - SyncLockError"
+	InfoErrHandleLock  = "InfoPut - HandleLockError"
+	OpErrRemoveLock    = "OperationPut - RemoveLockError"
+	OpErrLockUnSynced  = "OperationPut - LockUnSyncedError"
+	OpErrPutNonOwnerOp = "OperationPut - PutNonOwnerOpError"
+)
+
 var (
 	workerState = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -41,6 +49,14 @@ var (
 			Name:      "cpu_usage",
 			Help:      "the cpu usage of master",
 		})
+
+	ddlErrCounter = metricsproxy.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "dm",
+			Subsystem: "master",
+			Name:      "shard_ddl_error",
+			Help:      "number of shard DDL lock/info error",
+		}, []string{"task", "type"})
 )
 
 func collectMetrics() {
@@ -72,6 +88,7 @@ func RegistryMetrics() {
 
 	registry.MustRegister(workerState)
 	registry.MustRegister(cpuUsageGauge)
+	registry.MustRegister(ddlErrCounter)
 
 	prometheus.DefaultGatherer = registry
 }
@@ -89,4 +106,9 @@ func ReportWorkerStageToMetrics(name string, state float64) {
 // RemoveWorkerStateInMetrics cleans state of deleted worker
 func RemoveWorkerStateInMetrics(name string) {
 	workerState.DeleteAllAboutLabels(prometheus.Labels{"worker": name})
+}
+
+// ReportDDLErrorToMetrics is a setter for ddlErrCounter
+func ReportDDLErrorToMetrics(task, errType string) {
+	ddlErrCounter.WithLabelValues(task, errType).Inc()
 }
