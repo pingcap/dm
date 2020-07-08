@@ -2716,3 +2716,9 @@ description = ""
 workaround = ""
 tags = ["internal", "medium"]
 
+[error.DM-not-set-48001]
+message = ""
+description = ""
+workaround = ""
+tags = ["not-set", "high"]
+
