@@ -2722,3 +2722,9 @@ description = ""
 workaround = "Please check your network connection."
 tags = ["internal", "high"]
 
+[error.DM-not-set-50000]
+message = ""
+description = ""
+workaround = ""
+tags = ["not-set", "high"]
+

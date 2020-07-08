@@ -57,7 +57,7 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 		cancels = append(cancels, cancel1)
 		go func(ctx context.Context) {
 			err1 := KeepAlive(ctx, etcdTestCli, worker, keepAliveTTL)
-			c.Assert(err1, IsNil)
+			c.Assert(err1, IsNil, Commentf("if \"context canceled\", retry later\ncause: context used in `KeepAlive` exceed timeout of 10s (`etcdutil.DefaultRequestTimeout`)"))
 			atomic.AddInt32(&finished, 1)
 		}(ctx1)
 

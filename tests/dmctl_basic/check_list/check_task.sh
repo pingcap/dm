@@ -31,5 +31,6 @@ function check_task_error_database_config() {
     task_conf=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "check-task $task_conf" \
-        "database driver error" 1
+        "Access denied for user" 1 \
+        "Please check the database config in configuration file" 1
 }
