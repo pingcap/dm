@@ -21,12 +21,12 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (
