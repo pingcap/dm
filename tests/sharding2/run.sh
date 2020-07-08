@@ -79,7 +79,7 @@ function run() {
     echo "check sync diff for the increment replication"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "\"stage\": \"Running\"" 2 \
         "\"unit\": \"Sync\"" 2
