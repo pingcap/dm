@@ -12,7 +12,7 @@ function DM_001_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
-        "Message.*Duplicate column name 'new_col1'" 1
+        "Duplicate column name 'new_col1'" 1
 }
 
 function DM_001() {
@@ -313,7 +313,7 @@ function DM_027_CASE() {
     # we now haven't checked table struct when create sharding table
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Message.*Unknown column 'val' in 'field list'" 1
+            "Unknown column 'val' in 'field list'" 1
 }
 
 function DM_027() {
@@ -324,7 +324,7 @@ function DM_028_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} drop primary key;"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Message.*Unsupported drop primary key when alter-primary-key is false" 1
+            "Unsupported drop primary key when alter-primary-key is false" 1
 }
 
 function DM_028() {
@@ -420,7 +420,7 @@ function DM_034_CASE() {
     run_sql_source2 "alter table ${shardddl1}.${tb2} add new_col1 int unique auto_increment;"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Message.*unsupported add column 'new_col1' constraint UNIQUE KEY when altering" 2
+            "unsupported add column 'new_col1' constraint UNIQUE KEY when altering" 2
 }
 
 function DM_034() {
