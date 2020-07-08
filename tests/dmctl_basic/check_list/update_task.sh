@@ -12,13 +12,6 @@ function update_task_wrong_config_file() {
         "get file content error" 1
 }
 
-function update_task_while_master_down() {
-    task_conf=$1
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-task $task_conf" \
-        "can not update task:" 1
-}
-
 function update_task_worker_not_found() {
     task_conf=$1
     not_found_source_id=$2

@@ -2716,7 +2716,13 @@ description = ""
 workaround = ""
 tags = ["internal", "medium"]
 
-[error.DM-not-set-48001]
+[error.DM-dmctl-48001]
+message = "can not create grpc connection"
+description = ""
+workaround = "Please check your network connection."
+tags = ["internal", "high"]
+
+[error.DM-not-set-50000]
 message = ""
 description = ""
 workaround = ""

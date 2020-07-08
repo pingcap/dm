@@ -451,4 +451,5 @@ ErrSchedulerSubTaskExist,[code=46014:class=scheduler:scope=internal:level=medium
 ErrSchedulerSubTaskStageInvalidUpdate,[code=46015:class=dm-master:scope=internal:level=medium], "Message: invalid new expectant subtask stage %s"
 ErrSchedulerSubTaskOpTaskNotExist,[code=46016:class=dm-master:scope=internal:level=medium], "Message: subtasks with name %s need to be operate not exist"
 ErrSchedulerSubTaskOpSourceNotExist,[code=46017:class=dm-master:scope=internal:level=medium], "Message: sources %v need to be operate not exist"
-ErrNotSet,[code=48001:class=not-set:scope=not-set:level=high]
+ErrCtlGRPCCreateConn,[code=48001:class=dmctl:scope=internal:level=high], "Message: can not create grpc connection, Workaround: Please check your network connection."
+ErrNotSet,[code=50000:class=not-set:scope=not-set:level=high]
