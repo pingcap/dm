@@ -25,8 +25,8 @@ import (
 	"github.com/pingcap/dm/pkg/metricsproxy"
 )
 
+// used to show error type when handle DDLs
 const (
-	// used to show error type when handle DDLs
 	InfoErrSyncLock    = "InfoPut - SyncLockError"
 	InfoErrHandleLock  = "InfoPut - HandleLockError"
 	OpErrRemoveLock    = "OperationPut - RemoveLockError"
