@@ -14,7 +14,6 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 function usage_and_arg_test() {
     migrate_relay_wrong_arg
     migrate_relay_without_worker
-    # todo: no sense to fix
 
     switch_relay_master_wrong_arg
     switch_relay_master_without_worker

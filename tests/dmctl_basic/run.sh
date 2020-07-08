@@ -104,7 +104,7 @@ function run() {
     # start dmctl when master have not started
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "any command"\
         "can't connect to 127.0.0.1:8261" 1 \
-        "Please check your network connectionf\."
+        "Please check your network connection\." 1
 
     run_dm_master $WORK_DIR/master $MASTER_PORT $dm_master_conf
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
