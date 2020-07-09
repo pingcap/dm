@@ -1755,6 +1755,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			}
 		})
 
+		s.tctx.L().Info("start to track DDL")
 		// run trackDDL before add ddl job to make sure checkpoint can be flushed
 		for _, td := range needTrackDDLs {
 			if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
@@ -1769,7 +1770,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 				failpoint.Return(err)
 			}
 		})
-
+		s.tctx.L().Info("start to add DDL job")
 		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID, sourceTbls)
 		err = s.addJobFunc(job)
 		if err != nil {
