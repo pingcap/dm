@@ -438,7 +438,6 @@ func (p *Pessimist) recoverLocks(ifm map[string]map[string]pessimism.Info, opm m
 	for _, lock := range p.lk.Locks() {
 		synced, remain := lock.IsSynced()
 		if !synced {
-			// lance: un-synced counter
 			p.logger.Info("restored an un-synced shard DDL lock", zap.String("lock", lock.ID), zap.Int("remain", remain))
 			continue
 		}
