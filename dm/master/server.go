@@ -453,6 +453,13 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			resp.Msg = err.Error()
 			return resp, nil
 		}
+
+		err = s.scheduler.AddTask(*cfg)
+		if err != nil {
+			resp.Msg = err.Error()
+			return resp, nil
+		}
+
 		resp.Result = true
 		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, sources, []string{}, req)
 	}
@@ -501,6 +508,12 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	var err error
 	if expect == pb.Stage_Stopped {
 		err = s.scheduler.RemoveSubTasks(req.Name, sources...)
+		if err != nil {
+			resp.Msg = err.Error()
+			return resp, nil
+		}
+
+		err = s.scheduler.RemoveTask(req.Name)
 	} else {
 		err = s.scheduler.UpdateExpectSubTaskStage(expect, req.Name, sources...)
 	}
@@ -630,6 +643,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 	//	}, stCfg)
 	//}
 	//wg.Wait()
+
+	// TODO: update task config
+	// s.scheduler.UpdateTask(*cfg)
 
 	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(stCfgs))
 	workers := make([]string, 0, len(stCfgs))
@@ -1978,4 +1994,31 @@ func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb
 	resp.Result = true
 	resp.Members = members
 	return resp, nil
+}
+
+// GetTaskCfg implements MasterServer.GetSubTaskCfg
+func (s *Server) GetTaskCfg(ctx context.Context, req *pb.GetTaskCfgRequest) (*pb.GetTaskCfgResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "GetTaskCfg"))
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.GetTaskCfg(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	cfg := s.scheduler.GetTaskCfg(req.Name)
+
+	if cfg == nil {
+		return &pb.GetTaskCfgResponse{
+			Result: false,
+			Msg:    "task not found",
+		}, nil
+	}
+
+	return &pb.GetTaskCfgResponse{
+		Result: true,
+		Cfg:    cfg.String(),
+	}, nil
 }

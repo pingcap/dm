@@ -544,6 +544,8 @@ const (
 	codeSchedulerSubTaskStageInvalidUpdate
 	codeSchedulerSubTaskOpTaskNotExist
 	codeSchedulerSubTaskOpSourceNotExist
+	codeSchedulerTaskExist
+	codeSchedulerTaskNotExist
 )
 
 // dmctl error code
@@ -1063,10 +1065,12 @@ var (
 	ErrSchedulerRelayStageInvalidUpdate   = New(codeSchedulerRelayStageInvalidUpdate, ClassScheduler, ScopeInternal, LevelMedium, "invalid new expectant relay stage %s", "")
 	ErrSchedulerRelayStageSourceNotExist  = New(codeSchedulerRelayStageSourceNotExist, ClassScheduler, ScopeInternal, LevelMedium, "sources %v need to update expectant relay stage not exist", "")
 	ErrSchedulerMultiTask                 = New(codeSchedulerMultiTask, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler cannot perform multiple different tasks %v in one operation", "")
-	ErrSchedulerSubTaskExist              = New(codeSchedulerSubTaskExist, ClassScheduler, ScopeInternal, LevelMedium, "subtasks with name %s for sources %v already exist", "")
+	ErrSchedulerSubTaskExist              = New(codeSchedulerSubTaskExist, ClassScheduler, ScopeInternal, LevelMedium, "subtasks with name %s for sources %v already exist", "Please use `query-status` command to see tasks.")
 	ErrSchedulerSubTaskStageInvalidUpdate = New(codeSchedulerSubTaskStageInvalidUpdate, ClassDMMaster, ScopeInternal, LevelMedium, "invalid new expectant subtask stage %s", "")
-	ErrSchedulerSubTaskOpTaskNotExist     = New(codeSchedulerSubTaskOpTaskNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "subtasks with name %s need to be operate not exist", "")
+	ErrSchedulerSubTaskOpTaskNotExist     = New(codeSchedulerSubTaskOpTaskNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "subtasks with name %s need to be operate not exist", "Please use `query-status` command to see tasks.")
 	ErrSchedulerSubTaskOpSourceNotExist   = New(codeSchedulerSubTaskOpSourceNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v need to be operate not exist", "")
+	ErrSchedulerTaskExist                 = New(codeSchedulerTaskExist, ClassScheduler, ScopeInternal, LevelMedium, "task with name %s already exist", "Please use `query-status` command to see tasks.")
+	ErrSchedulerTaskNotExist              = New(codeSchedulerTaskNotExist, ClassScheduler, ScopeInternal, LevelMedium, "task with name %s not exist", "Please use `query-status` command to see tasks.")
 
 	// dmctl
 	ErrCtlGRPCCreateConn = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")

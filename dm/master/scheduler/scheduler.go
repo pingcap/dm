@@ -76,6 +76,14 @@ type Scheduler struct {
 	// - remove source by user request (calling `RemoveSourceCfg`).
 	sourceCfgs map[string]config.SourceConfig
 
+	// all task configs, task name -> task config.
+	// add:
+	// - add/start task by user request (calling `StartTask`).
+	// - recover from etcd (calling `recoverTasks`).
+	// delete:
+	// - remove/stop task by user request (calling `StopTask`).
+	taskCfgs map[string]config.TaskConfig
+
 	// all subtask configs, task name -> source ID -> subtask config.
 	// add:
 	// - add/start subtask by user request (calling `AddSubTasks`).
@@ -137,6 +145,7 @@ func NewScheduler(pLogger *log.Logger) *Scheduler {
 	return &Scheduler{
 		logger:              pLogger.WithFields(zap.String("component", "scheduler")),
 		sourceCfgs:          make(map[string]config.SourceConfig),
+		taskCfgs:            make(map[string]config.TaskConfig),
 		subTaskCfgs:         make(map[string]map[string]config.SubTaskConfig),
 		workers:             make(map[string]*Worker),
 		bounds:              make(map[string]*Worker),
@@ -315,6 +324,94 @@ func (s *Scheduler) RemoveSourceCfg(source string) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// GetTaskCfg gets config of task
+func (s *Scheduler) GetTaskCfg(task string) *config.TaskConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cfg, ok := s.taskCfgs[task]
+	if !ok {
+		return nil
+	}
+	clone := cfg
+	return &clone
+}
+
+// AddTask adds the config of task
+func (s *Scheduler) AddTask(cfg config.TaskConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	if len(cfg.Name) == 0 {
+		return nil
+	}
+
+	// 1. check whether exists.
+	if _, ok := s.taskCfgs[cfg.Name]; ok {
+		return terror.ErrSchedulerTaskExist.Generate(cfg.Name)
+	}
+	// 2. put the config into etcd.
+
+	// 3. record the config
+	s.taskCfgs[cfg.Name] = cfg
+
+	return nil
+}
+
+// UpdateTask update the config of task
+func (s *Scheduler) UpdateTask(cfg config.TaskConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	if len(cfg.Name) == 0 {
+		return nil
+	}
+
+	// 1. check whether exists.
+	if _, ok := s.taskCfgs[cfg.Name]; !ok {
+		return terror.ErrSchedulerTaskNotExist.Generate(cfg.Name)
+	}
+	// 2. put the config into etcd.
+
+	// 3. record the config
+	s.taskCfgs[cfg.Name] = cfg
+
+	return nil
+}
+
+// RemoveTask removes the config of task
+func (s *Scheduler) RemoveTask(task string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	if task == "" {
+		return nil
+	}
+
+	// 1. check the task exists.
+	if _, ok := s.taskCfgs[task]; !ok {
+		return terror.ErrSchedulerTaskNotExist.Generate(task)
+	}
+
+	// 2. delete the config in etcd
+
+	// 3. clear the config
+	delete(s.taskCfgs, task)
+
 	return nil
 }
 
