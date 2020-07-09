@@ -311,7 +311,7 @@ enum SourceOp {
 
 message OperateSourceRequest {
     SourceOp op = 1;
-    string config = 2;
+    repeated string config = 2;
 }
 
 message OperateSourceResponse {
