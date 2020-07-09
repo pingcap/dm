@@ -1249,7 +1249,7 @@ func (l *Loader) getMydumpMetadata() error {
 	return nil
 }
 
-// cleanStructureFiles is called when finish restoring data, to clean useless files
+// cleanDumpFiles is called when finish restoring data, to clean useless files
 func (l *Loader) cleanDumpFiles() {
 	if l.cfg.Mode == config.ModeFull {
 		// in full-mode all files won't be need in the future
