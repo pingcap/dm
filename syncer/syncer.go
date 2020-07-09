@@ -910,8 +910,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				// no need to do the shard DDL handle for `CREATE DATABASE/TABLE` now.
 				s.tctx.L().Warn("skip shard DDL handle in pessimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
 			} else if shardPessimistOp == nil {
-				// TODO(csuzhangxc): add terror.
-				err = fmt.Errorf("missing shard DDL lock operation for shard DDL info (%s)", shardInfo)
+				err = terror.ErrWorkerDDLLockOpNotFound.Generate(shardInfo)
 			} else {
 				err = s.pessimist.DoneOperationDeleteInfo(*shardPessimistOp, *shardInfo)
 			}
@@ -924,15 +923,15 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 					s.tctx.L().Warn("skip shard DDL handle in optimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
 				}
 			} else if s.optimist.PendingOperation() == nil {
-				err = fmt.Errorf("missing shard DDL lock operation for shard DDL info (%s)", shardInfo)
+				err = terror.ErrWorkerDDLLockOpNotFound.Generate(shardInfo)
 			} else {
 				err = s.optimist.DoneOperation(*(s.optimist.PendingOperation()))
 			}
 		}
 		s.jobWg.Done()
 		if err != nil {
-			s.execErrorDetected.Set(true)
 			if !utils.IsContextCanceledError(err) {
+				s.execErrorDetected.Set(true)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
 			continue
