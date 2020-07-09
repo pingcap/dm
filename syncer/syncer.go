@@ -846,7 +846,6 @@ func (s *Syncer) flushCheckPoints() error {
 
 	tctx, cancel := s.tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
 	defer cancel()
-	// lance: here flush
 	err := s.checkpoint.FlushPointsExcept(tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
 	if err != nil {
 		return terror.Annotatef(err, "flush checkpoint %s", s.checkpoint)
@@ -1059,8 +1058,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				s.tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
 			} else {
 				s.tctx.L().Info("try to remove loaded files")
-				os.Remove(path.Join(s.cfg.Dir, "metadata"))
-				os.Remove(s.cfg.Dir)
+				metadataFile := path.Join(s.cfg.Dir, "metadata")
+				if err := os.Remove(metadataFile); err != nil {
+					s.tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
+				}
+				if err := os.Remove(s.cfg.Dir); err != nil {
+					s.tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
+				}
 			}
 		}
 	}

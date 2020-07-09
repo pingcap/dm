@@ -188,7 +188,9 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 					if pos, ok := fileInfos[job.file]; ok {
 						if job.offset == pos[1] {
 							w.tctx.L().Info("try to remove loaded dump file", zap.String("data file", job.file))
-							os.Remove(job.absPath)
+							if err := os.Remove(job.absPath); err != nil {
+								w.tctx.L().Warn("error when remove loaded dump file", zap.String("data file", job.file), zap.Error(err))
+							}
 						}
 					} else {
 						w.tctx.L().Warn("file not recorded in checkpoint", zap.String("data file", job.file))
@@ -1247,19 +1249,25 @@ func (l *Loader) getMydumpMetadata() error {
 	return nil
 }
 
-// cleanStructureFiles is called optionally when finish loading data
+// cleanStructureFiles is called when finish restoring data, to clean useless files
 func (l *Loader) cleanDumpFiles() {
 	if l.cfg.Mode == config.ModeFull {
 		// in full-mode all files won't be need in the future
-		os.RemoveAll(l.cfg.Dir)
+		if err := os.RemoveAll(l.cfg.Dir); err != nil {
+			l.logCtx.L().Warn("error when remove loaded dump folder", zap.String("data folder", l.cfg.Dir), zap.Error(err))
+		}
 	} else {
 		// leave metadata file, only delete structure files
 		for db, tables := range l.db2Tables {
 			dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
-			os.Remove(dbFile)
+			if err := os.Remove(dbFile); err != nil {
+				l.logCtx.L().Warn("error when remove loaded dump file", zap.String("data file", dbFile), zap.Error(err))
+			}
 			for table := range tables {
 				tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
-				os.Remove(tableFile)
+				if err := os.Remove(tableFile); err != nil {
+					l.logCtx.L().Warn("error when remove loaded dump file", zap.String("data file", tableFile), zap.Error(err))
+				}
 			}
 		}
 	}
