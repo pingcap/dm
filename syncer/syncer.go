@@ -548,6 +548,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		s.tctx.L().Warn("something wrong with rollback global checkpoint", zap.Stringer("previous position", prePos), zap.Stringer("current position", currPos))
 	}
 
+	// lance: here
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
 		Errors:     errs,
@@ -929,9 +930,10 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			}
 		}
 		s.jobWg.Done()
+		// lance: if err is context cancel, it caused by etcd timeout
 		if err != nil {
+			s.execErrorDetected.Set(true)
 			if !utils.IsContextCanceledError(err) {
-				s.execErrorDetected.Set(true)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
 			continue
@@ -979,6 +981,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			queries = append(queries, j.sql)
 			args = append(args, j.args)
 		}
+		// lance: here?
 		affected, err := db.executeSQL(tctx, queries, args...)
 		if err != nil {
 			errCtx := &ExecErrorContext{err, jobs[affected].currentLocation.Clone(), fmt.Sprintf("%v", jobs)}
