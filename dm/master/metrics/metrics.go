@@ -56,7 +56,7 @@ var (
 			Namespace: "dm",
 			Subsystem: "master",
 			Name:      "shard_ddl_error",
-			Help:      "number of shard DDL lock/info error",
+			Help:      "number of shard DDL lock/operation error",
 		}, []string{"task", "type"})
 )
 
