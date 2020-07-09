@@ -14,19 +14,14 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 function usage_and_arg_test() {
     migrate_relay_wrong_arg
     migrate_relay_without_worker
-    # todo: no sense to fix
-    #migrate_relay_while_master_down
 
     switch_relay_master_wrong_arg
     switch_relay_master_without_worker
-    switch_relay_master_while_master_down
 
     unlock_ddl_lock_wrong_arg
     unlock_ddl_lock_invalid_force_remove
-    unlock_ddl_lock_while_master_down
 
     query_error_wrong_arg
-    query_error_while_master_down
 
     sql_skip_wrong_arg
     sql_skip_binlogpos_sqlpattern_conflict
@@ -34,13 +29,11 @@ function usage_and_arg_test() {
     sql_skip_invalid_regex
     sql_skip_sharding_with_binlogpos
     sql_skip_non_sharding_without_one_worker
-    sql_skip_while_master_down
 
     sql_replace_wrong_arg
     sql_replace_invalid_binlog_pos
     sql_replace_non_sharding_without_one_worker
     # TODO: check SQLs error test
-    sql_replace_while_master_down
 }
 
 function run() {
@@ -50,6 +43,8 @@ function run() {
     done
     cd -
 
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     usage_and_arg_test
 }
 

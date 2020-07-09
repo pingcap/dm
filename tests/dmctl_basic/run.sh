@@ -15,25 +15,20 @@ function usage_and_arg_test() {
     echo "check_task_wrong_arg"
     check_task_wrong_arg
     check_task_wrong_config_file
-    check_task_while_master_down $TASK_CONF
 
     echo "pause_relay_wrong_arg"
     pause_relay_wrong_arg
     pause_relay_wihout_worker
-    pause_relay_while_master_down
 
     echo "resume_relay_wrong_arg"
     resume_relay_wrong_arg
     resume_relay_wihout_worker
-    resume_relay_while_master_down
 
     echo "pause_task_wrong_arg"
     pause_task_wrong_arg
-    pause_task_while_master_down
 
     echo "resume_task_wrong_arg"
     resume_task_wrong_arg
-    resume_task_while_master_down
 
     echo "query_status_wrong_arg"
     query_status_wrong_arg
@@ -42,42 +37,34 @@ function usage_and_arg_test() {
     echo "start_task_wrong_arg"
     start_task_wrong_arg
     start_task_wrong_config_file
-    start_task_while_master_down $TASK_CONF
 
     echo "stop_task_wrong_arg"
     stop_task_wrong_arg
-    stop_task_while_master_down
 
     echo "show_ddl_locks_wrong_arg"
     show_ddl_locks_wrong_arg
-    show_ddl_locks_while_master_down
 
     echo "update_relay_wrong_arg"
     update_relay_wrong_arg
     update_relay_wrong_config_file
     update_relay_should_specify_one_dm_worker $MYSQL1_CONF
-    update_relay_while_master_down $MYSQL1_CONF
 
     # echo "update_task_wrong_arg"
     # update_task_wrong_arg
     # update_task_wrong_config_file
-    # update_task_while_master_down $TASK_CONF
 
     echo "update_master_config_wrong_arg"
     update_master_config_wrong_arg
     update_master_config_wrong_config_file
-    update_master_config_while_master_down $cur/conf/dm-master.toml
 
     echo "purge_relay_wrong_arg"
     purge_relay_wrong_arg
     purge_relay_wihout_worker
     purge_relay_filename_with_multi_workers
-    purge_relay_while_master_down
 
     echo "operate_source_empty_arg"
     operate_source_empty_arg
     operate_source_wrong_config_file
-    operate_source_while_master_down $MYSQL1_CONF
 }
 
 function recover_max_binlog_size() {
@@ -106,8 +93,6 @@ function run() {
     done
     cd -
 
-    usage_and_arg_test
-
     mkdir -p $WORK_DIR/master $WORK_DIR/worker1 $WORK_DIR/worker2
     dm_master_conf="$WORK_DIR/master/dm-master.toml"
     dm_worker1_conf="$WORK_DIR/worker1/dm-worker.toml"
@@ -116,8 +101,16 @@ function run() {
     cp $cur/conf/dm-worker2.toml $dm_worker2_conf
     cp $cur/conf/dm-master.toml $dm_master_conf
 
+    # start dmctl when master have not started
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "any command"\
+        "can't connect to 127.0.0.1:8261" 1 \
+        "Please check your network connection\." 1
+
     run_dm_master $WORK_DIR/master $MASTER_PORT $dm_master_conf
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    
+    usage_and_arg_test
+
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $dm_worker1_conf
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $dm_worker2_conf
