@@ -58,6 +58,9 @@ function run() {
 
     check_port_offline $WORKER1_PORT 20
 
+    # check dump files are generated before worker down
+    ls $WORK_DIR/worker1/dumped_data.test
+
     run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where cp_schema = '$TEST_NAME' and offset < $THRESHOLD" $TIDB_PORT $TIDB_PASSWORD
     check_contains "count(*): 1"
     # TODO: block for dumpling temporarily
@@ -87,6 +90,7 @@ function run() {
     check_contains "count(*): 1"
 
     export GO_FAILPOINTS=''
+    ls $WORK_DIR/worker1/dumped_data.test && exit 1 || echo "worker1 auto removed dump files"
 }
 
 cleanup_data load_interrupt
