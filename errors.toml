@@ -1751,7 +1751,7 @@ workaround = "Please check the `block-allow-list` config in task configuration f
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36061]
-message = "fail to handle ddl job for %s"
+message = "fail to handle ddl job for %s, cause: %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]

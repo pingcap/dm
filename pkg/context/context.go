@@ -115,7 +115,7 @@ func GetUserCancelFlag(ctx context.Context) bool {
 	return false
 }
 
-// ResetUserCancelFlag reset (clean) fla for context WithUserCancelFlag, this function should be called before funchtion
+// ResetUserCancelFlag reset (clean) fla for context WithUserCancelFlag, this function should be called before function
 // runs who using this context
 // return true if successful reset, false otherwise
 func ResetUserCancelFlag(ctx context.Context) bool {

@@ -493,7 +493,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	runFatalChan := make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
 	s.runFatalChan = runFatalChan
 	var (
-		errs = make([]*pb.ProcessError, 0, 2)
+		errs   = make([]*pb.ProcessError, 0, 2)
 		errsMu sync.Mutex
 	)
 
