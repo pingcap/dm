@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/optimism"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // trackedDDL keeps data needed for schema tracker.
@@ -214,8 +215,12 @@ func (s *Syncer) handleQueryEventOptimistic(
 		return err
 	}
 
-	if s.execErrorDetected.Get() {
-		return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
+	err = s.execError.Get()
+	if err != nil {
+		if !utils.IsContextCanceledError(err) {
+			return terror.ErrSyncerCtxCanceled.Generate(ev.Query)
+		}
+		return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query, err.Error())
 	}
 
 	for _, table := range onlineDDLTableNames {

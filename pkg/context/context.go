@@ -78,3 +78,57 @@ func (c *Context) WithLogger(logger log.Logger) *Context {
 func (c *Context) L() log.Logger {
 	return c.Logger
 }
+
+type userCancelFlag struct{}
+
+// WithUserCancelFlag add an flag to context, to indicate if cancel() is called by user
+func WithUserCancelFlag(ctx context.Context) context.Context {
+	// no need for a lock, because write to this variable should happens before cancel() and read happens
+	// after ctx.Done()
+	cancelByUser := false
+	return context.WithValue(ctx, userCancelFlag{}, &cancelByUser)
+}
+
+// SetUserCancelFlag set flag for context WithUserCancelFlag, this function should be called before cancel()
+// return true if successful set, false otherwise
+func SetUserCancelFlag(ctx context.Context) bool {
+	p := ctx.Value(userCancelFlag{})
+	if p == nil {
+		return false
+	}
+	if p, ok := p.(*bool); !ok {
+		return false
+	} else {
+		*p = true
+	}
+	return true
+}
+
+// GetUserCancelFlag indicate if this context is canceled by user, should be called after ctx.Done()
+func GetUserCancelFlag(ctx context.Context) bool {
+	p := ctx.Value(userCancelFlag{})
+	if p == nil {
+		return false
+	}
+	if p, ok := p.(*bool); !ok {
+		return false
+	} else {
+		return *p == true
+	}
+}
+
+// ResetUserCancelFlag reset (clean) fla for context WithUserCancelFlag, this function should be called before funchtion
+// runs who using this context
+// return true if successful reset, false otherwise
+func ResetUserCancelFlag(ctx context.Context) bool {
+	p := ctx.Value(userCancelFlag{})
+	if p == nil {
+		return false
+	}
+	if p, ok := p.(*bool); !ok {
+		return false
+	} else {
+		*p = false
+	}
+	return true
+}

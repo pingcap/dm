@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/terror"
@@ -102,7 +103,8 @@ func NewRealSubTask(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Sub
 
 // NewSubTaskWithStage creates a new SubTask with stage
 func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *clientv3.Client) *SubTask {
-	ctx, cancel := context.WithCancel(context.Background())
+	userCtx := tcontext.WithUserCancelFlag(context.Background())
+	ctx, cancel := context.WithCancel(userCtx)
 	st := SubTask{
 		cfg:        cfg,
 		stage:      stage,
@@ -245,9 +247,7 @@ func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 		// filter the context canceled error
 		errs := make([]*pb.ProcessError, 0, 2)
 		for _, err := range result.Errors {
-			if !unit.IsCtxCanceledProcessErr(err) {
-				errs = append(errs, err)
-			}
+			errs = append(errs, err)
 		}
 		result.Errors = errs
 
@@ -440,6 +440,7 @@ func (st *SubTask) Pause() error {
 		return terror.ErrWorkerNotRunningStage.Generate(st.Stage().String())
 	}
 
+	tcontext.SetUserCancelFlag(st.ctx)
 	st.callCurrCancel()
 	st.wg.Wait() // wait fetchResult return
 
@@ -464,6 +465,7 @@ func (st *SubTask) Resume() error {
 	}
 
 	ctx, cancel := context.WithCancel(st.ctx)
+	tcontext.ResetUserCancelFlag(st.ctx)
 	st.setCurrCtx(ctx, cancel)
 	// NOTE: this may block if user resume a task
 	err := st.unitTransWaitCondition(ctx)
