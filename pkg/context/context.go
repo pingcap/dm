@@ -96,12 +96,11 @@ func SetUserCancelFlag(ctx context.Context) bool {
 	if p == nil {
 		return false
 	}
-	if p, ok := p.(*bool); !ok {
-		return false
-	} else {
+	if p, ok := p.(*bool); ok {
 		*p = true
+		return true
 	}
-	return true
+	return false
 }
 
 // GetUserCancelFlag indicate if this context is canceled by user, should be called after ctx.Done()
@@ -110,11 +109,10 @@ func GetUserCancelFlag(ctx context.Context) bool {
 	if p == nil {
 		return false
 	}
-	if p, ok := p.(*bool); !ok {
-		return false
-	} else {
+	if p, ok := p.(*bool); ok {
 		return *p == true
 	}
+	return false
 }
 
 // ResetUserCancelFlag reset (clean) fla for context WithUserCancelFlag, this function should be called before funchtion
@@ -125,10 +123,9 @@ func ResetUserCancelFlag(ctx context.Context) bool {
 	if p == nil {
 		return false
 	}
-	if p, ok := p.(*bool); !ok {
-		return false
-	} else {
+	if p, ok := p.(*bool); ok {
 		*p = false
+		return true
 	}
-	return true
+	return false
 }
