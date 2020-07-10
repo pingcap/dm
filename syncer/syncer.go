@@ -603,7 +603,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, err))
+		errs = append(errs, unit.NewProcessError(err))
 	}
 
 	isCanceled := false
@@ -946,7 +946,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if err != nil {
 			s.execErrorDetected.Set(true)
 			if !utils.IsContextCanceledError(err) {
-				s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
+				s.runFatalChan <- unit.NewProcessError(err)
 			}
 			continue
 		}
@@ -975,10 +975,10 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		}
 	}
 
-	fatalF := func(err error, errType pb.ErrorType) {
+	fatalF := func(err error) {
 		s.execErrorDetected.Set(true)
 		if !utils.IsContextCanceledError(err) {
-			s.runFatalChan <- unit.NewProcessError(errType, err)
+			s.runFatalChan <- unit.NewProcessError(err)
 		}
 		clearF()
 	}
@@ -1028,7 +1028,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			if idx >= count || sqlJob.tp == flush {
 				err = executeSQLs()
 				if err != nil {
-					fatalF(err, pb.ErrorType_ExecSQL)
+					fatalF(err)
 					continue
 				}
 				clearF()
@@ -1038,7 +1038,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			if len(jobs) > 0 {
 				err = executeSQLs()
 				if err != nil {
-					fatalF(err, pb.ErrorType_ExecSQL)
+					fatalF(err)
 					continue
 				}
 				clearF()
@@ -2344,7 +2344,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 		pr <- pb.ProcessResult{
 			IsCanceled: false,
 			Errors: []*pb.ProcessError{
-				unit.NewProcessError(pb.ErrorType_UnknownError, err),
+				unit.NewProcessError(err),
 			},
 		}
 		return

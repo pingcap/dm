@@ -192,8 +192,7 @@ func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	if err != nil && errors.Cause(err) != replication.ErrSyncClosed {
 		relayExitWithErrorCounter.Inc()
 		r.tctx.L().Error("process exit", zap.Error(err))
-		// TODO: add specified error type instead of pb.ErrorType_UnknownError
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, err))
+		errs = append(errs, unit.NewProcessError(err))
 	}
 
 	isCanceled := false
