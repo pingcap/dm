@@ -217,7 +217,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 
 	err = s.execError.Get()
 	if err != nil {
-		if !utils.IsContextCanceledError(err) {
+		if utils.IsContextCanceledError(err) {
 			return terror.ErrSyncerCtxCanceled.Generate(ev.Query)
 		}
 		return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query, err.Error())
