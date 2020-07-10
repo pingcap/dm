@@ -2010,7 +2010,7 @@ func (s *Server) GetTaskCfg(ctx context.Context, req *pb.GetTaskCfgRequest) (*pb
 
 	cfg := s.scheduler.GetTaskCfg(req.Name)
 
-	if cfg == nil {
+	if len(cfg) == 0 {
 		return &pb.GetTaskCfgResponse{
 			Result: false,
 			Msg:    "task not found",
@@ -2019,6 +2019,6 @@ func (s *Server) GetTaskCfg(ctx context.Context, req *pb.GetTaskCfgRequest) (*pb
 
 	return &pb.GetTaskCfgResponse{
 		Result: true,
-		Cfg:    cfg.String(),
+		Cfg:    cfg,
 	}, nil
 }

@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -26,10 +27,11 @@ import (
 // NewGetTaskCfgCmd creates a getTaskCfg command
 func NewGetTaskCfgCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get-task-config [task-name]",
+		Use:   "get-task-config [task-name] [--file filename]",
 		Short: "get task config",
 		Run:   getTaskCfgFunc,
 	}
+	cmd.Flags().StringP("file", "f", "", "write config to file")
 	return cmd
 }
 
@@ -41,6 +43,11 @@ func getTaskCfgFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	taskName := cmd.Flags().Arg(0)
+	filename, err := cmd.Flags().GetString("file")
+	if err != nil {
+		common.PrintLines("can not get filename:\n%v", err)
+		return
+	}
 
 	cli := common.MasterClient()
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
@@ -52,6 +59,21 @@ func getTaskCfgFunc(cmd *cobra.Command, _ []string) {
 	if err != nil {
 		common.PrintLines("can not get config of task %s:\n%v", taskName, err)
 		return
+	}
+
+	if resp.Result && len(filename) != 0 {
+		file, err := os.Create(filename)
+		if err != nil {
+			common.PrintLines("can not create file %s:\n%v", filename, err)
+			return
+		}
+		_, err = file.WriteString(resp.Cfg)
+		if err != nil {
+			common.PrintLines("can not write config to file %s:\n%v", filename, err)
+			return
+		}
+		resp.Msg = fmt.Sprintf("write config to file %s succeed", filename)
+		resp.Cfg = ""
 	}
 	common.PrettyPrintResponse(resp)
 }
