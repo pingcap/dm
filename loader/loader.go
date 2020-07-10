@@ -59,7 +59,9 @@ type Tables2DataFiles map[string]DataFiles
 type dataJob struct {
 	sql        string
 	schema     string
+	table      string
 	file       string
+	absPath    string
 	offset     int64
 	lastOffset int64
 }
@@ -180,6 +182,20 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 					return
 				}
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
+
+				if w.cfg.CleanDumpFile {
+					fileInfos := w.checkPoint.GetRestoringFileInfo(job.schema, job.table)
+					if pos, ok := fileInfos[job.file]; ok {
+						if job.offset == pos[1] {
+							w.tctx.L().Info("try to remove loaded dump file", zap.String("data file", job.file))
+							if err := os.Remove(job.absPath); err != nil {
+								w.tctx.L().Warn("error when remove loaded dump file", zap.String("data file", job.file), zap.Error(err))
+							}
+						}
+					} else {
+						w.tctx.L().Warn("file not recorded in checkpoint", zap.String("data file", job.file))
+					}
+				}
 			}
 		}
 	}
@@ -319,7 +335,9 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 			j := &dataJob{
 				sql:        query,
 				schema:     table.targetSchema,
+				table:      table.targetTable,
 				file:       baseFile,
+				absPath:    file,
 				offset:     cur,
 				lastOffset: lastOffset,
 			}
@@ -599,6 +617,25 @@ func (l *Loader) Restore(ctx context.Context) error {
 
 	if err == nil {
 		l.logCtx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
+		if l.cfg.CleanDumpFile {
+			files := CollectDirFiles(l.cfg.Dir)
+			hasDatafile := false
+			for file := range files {
+				if strings.HasSuffix(file, ".sql") &&
+					!strings.HasSuffix(file, "-schema.sql") &&
+					!strings.HasSuffix(file, "-schema-create.sql") &&
+					!strings.Contains(file, "-schema-view.sql") &&
+					!strings.Contains(file, "-schema-triggers.sql") &&
+					!strings.Contains(file, "-schema-post.sql") {
+					hasDatafile = true
+				}
+			}
+
+			if !hasDatafile {
+				l.logCtx.L().Info("clean dump files after importing all files")
+				l.cleanDumpFiles()
+			}
+		}
 	} else if errors.Cause(err) != context.Canceled {
 		return err
 	}
@@ -1214,4 +1251,28 @@ func (l *Loader) getMydumpMetadata() error {
 
 	l.metaBinlog.Set(pos.String())
 	return nil
+}
+
+// cleanDumpFiles is called when finish restoring data, to clean useless files
+func (l *Loader) cleanDumpFiles() {
+	if l.cfg.Mode == config.ModeFull {
+		// in full-mode all files won't be need in the future
+		if err := os.RemoveAll(l.cfg.Dir); err != nil {
+			l.logCtx.L().Warn("error when remove loaded dump folder", zap.String("data folder", l.cfg.Dir), zap.Error(err))
+		}
+	} else {
+		// leave metadata file, only delete structure files
+		for db, tables := range l.db2Tables {
+			dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
+			if err := os.Remove(dbFile); err != nil {
+				l.logCtx.L().Warn("error when remove loaded dump file", zap.String("data file", dbFile), zap.Error(err))
+			}
+			for table := range tables {
+				tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
+				if err := os.Remove(tableFile); err != nil {
+					l.logCtx.L().Warn("error when remove loaded dump file", zap.String("data file", tableFile), zap.Error(err))
+				}
+			}
+		}
+	}
 }
