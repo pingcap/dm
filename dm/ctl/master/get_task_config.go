@@ -63,6 +63,7 @@ func getTaskCfgFunc(cmd *cobra.Command, _ []string) {
 
 	if resp.Result && len(filename) != 0 {
 		file, err := os.Create(filename)
+		defer file.Close()
 		if err != nil {
 			common.PrintLines("can not create file %s:\n%v", filename, err)
 			return

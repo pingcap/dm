@@ -454,7 +454,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			return resp, nil
 		}
 
-		err = s.scheduler.AddTask(*cfg)
+		err = s.scheduler.AddTaskCfg(*cfg)
 		if err != nil {
 			resp.Msg = err.Error()
 			return resp, nil
@@ -512,8 +512,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 			resp.Msg = err.Error()
 			return resp, nil
 		}
-
-		err = s.scheduler.RemoveTask(req.Name)
+		err = s.scheduler.RemoveTaskCfg(req.Name)
 	} else {
 		err = s.scheduler.UpdateExpectSubTaskStage(expect, req.Name, sources...)
 	}
@@ -645,7 +644,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 	//wg.Wait()
 
 	// TODO: update task config
-	// s.scheduler.UpdateTask(*cfg)
+	// s.scheduler.UpdateTaskCfg(*cfg)
 
 	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(stCfgs))
 	workers := make([]string, 0, len(stCfgs))

@@ -342,8 +342,8 @@ func (s *Scheduler) GetTaskCfg(task string) string {
 	return cfg
 }
 
-// AddTask adds the config of task
-func (s *Scheduler) AddTask(cfg config.TaskConfig) error {
+// AddTaskCfg adds the config of task
+func (s *Scheduler) AddTaskCfg(cfg config.TaskConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -378,8 +378,8 @@ func (s *Scheduler) AddTask(cfg config.TaskConfig) error {
 	return nil
 }
 
-// UpdateTask update the config of task
-func (s *Scheduler) UpdateTask(cfg config.TaskConfig) error {
+// UpdateTaskCfg update the config of task
+func (s *Scheduler) UpdateTaskCfg(cfg config.TaskConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -414,10 +414,15 @@ func (s *Scheduler) UpdateTask(cfg config.TaskConfig) error {
 	return nil
 }
 
-// RemoveTask removes the config of task
-func (s *Scheduler) RemoveTask(task string) error {
+// RemoveTaskCfg removes the config of task
+func (s *Scheduler) RemoveTaskCfg(task string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// do not remove task if has subtask
+	if _, ok := s.subTaskCfgs[task]; ok {
+		return nil
+	}
 
 	if !s.started {
 		return terror.ErrSchedulerNotStarted.Generate()
