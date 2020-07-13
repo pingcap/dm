@@ -2,7 +2,7 @@
 
 source-id = "mysql-replica-01"
 flavor = ""
-enable-gtid = true
+enable-gtid = false
 relay-binlog-name = ""
 relay-binlog-gtid = ""
 
@@ -13,4 +13,6 @@ password = "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs="
 port = 3306
 
 [checker]
-check-enable = false # disable auto resume.
+check-enable = true
+backoff-rollback = "5m"
+backoff-max = "5m"

@@ -93,7 +93,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 	// if we have other methods to judge the DDL dispatched but timeout for executing, we can update this method.
 	// NOTE: we must ensure other PK/UK exists for correctness.
 	// NOTE: when we are refactoring the shard DDL algorithm, we also need to consider supporting non-blocking `ADD INDEX`.
-	invalidConnF := func (tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn, _ string) error {
+	invalidConnF := func(tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn, _ string) error {
 		// must ensure only the last statement executed failed with the `invalid connection` error
 		if len(ddls) == 0 || index != len(ddls)-1 || errors.Cause(err) != mysql.ErrInvalidConn {
 			return err // return the original error
@@ -136,7 +136,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 	}
 
 	// for DROP COLUMN with its single-column index, try drop index first then drop column
-	dropColumnF := func (tctx *tcontext.Context, originErr error, ddls []string, index int, conn *DBConn, schema string) error {
+	dropColumnF := func(tctx *tcontext.Context, originErr error, ddls []string, index int, conn *DBConn, schema string) error {
 		tctx.L().Warn("lance test 1")
 		mysqlErr, ok := originError(originErr).(*mysql.MySQLError)
 		if !ok {
@@ -162,7 +162,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		)
 		if n, ok := stmt.(*ast.AlterTableStmt); !ok {
 			return originErr
-		// support ALTER TABLE tbl_name DROP
+			// support ALTER TABLE tbl_name DROP
 		} else if len(n.Specs) != 1 {
 			return originErr
 		} else if n.Specs[0].Tp != ast.AlterTableDropColumn {
@@ -219,7 +219,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 
 	retErr := err
 
-	toHandle := []func (*tcontext.Context, error, []string, int, *DBConn, string) error {
+	toHandle := []func(*tcontext.Context, error, []string, int, *DBConn, string) error{
 		invalidConnF,
 		dropColumnF,
 	}

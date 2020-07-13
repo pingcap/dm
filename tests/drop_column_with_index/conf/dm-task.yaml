@@ -13,15 +13,20 @@ target-database:
   port: 4000
   user: "root"
   password: ""
+  session:
+    sql_mode: "NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES"
+    tidb_skip_utf8_check: 1
+    tidb_disable_txn_auto_retry: off
+    tidb_retry_limit: "10"
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    block-allow-list:  "instance"
+    black-white-list:  "instance" # compatible with deprecated config
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
-block-allow-list:
+black-white-list: # compatible with deprecated config
   instance:
     do-dbs: ["drop_column_with_index"]
 
@@ -41,3 +46,4 @@ syncers:
   global:
     worker-count: 16
     batch: 100
+    enable-ansi-quotes: true
