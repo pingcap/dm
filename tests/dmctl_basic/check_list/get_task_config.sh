@@ -33,8 +33,6 @@ function get_task_config_recover_etcd() {
     ps aux | grep dm-master |awk '{print $2}'|xargs kill || true
     check_port_offline $MASTER_PORT1 20
 
-    sleep 5
-
     run_dm_master $WORK_DIR/master $MASTER_PORT $dm_master_conf
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
