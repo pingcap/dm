@@ -890,7 +890,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			var affected int
 			affected, err = db.executeSQLWithIgnore(tctx, ignoreDDLError, sqlJob.ddls)
 			if err != nil {
-				err = s.handleSpecialDDLError(tctx, err, sqlJob.ddls, affected, db)
+				err = s.handleSpecialDDLError(tctx, err, sqlJob.ddls, affected, db, sqlJob.targetSchema)
 				err = terror.WithScope(err, terror.ScopeDownstream)
 			}
 		}

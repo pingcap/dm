@@ -20,9 +20,11 @@ import (
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/terror"
 	tddl "github.com/pingcap/tidb/ddl"
+	"github.com/pingcap/tidb/errno"
 	"github.com/pingcap/tidb/infoschema"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
+	"strings"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
@@ -77,55 +79,151 @@ func originError(err error) error {
 }
 
 // handleSpecialDDLError handles special errors for DDL execution.
-// it only ignore `invalid connection` error (timeout or other causes) for `ADD INDEX` now.
-// `invalid connection` means some data already sent to the server,
-// and we assume that the whole SQL statement has already sent to the server for this error.
-// if we have other methods to judge the DDL dispatched but timeout for executing, we can update this method.
-// NOTE: we must ensure other PK/UK exists for correctness.
-// NOTE: when we are refactoring the shard DDL algorithm, we also need to consider supporting non-blocking `ADD INDEX`.
-func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn) error {
-	// must ensure only the last statement executed failed with the `invalid connection` error
-	if len(ddls) == 0 || index != len(ddls)-1 || errors.Cause(err) != mysql.ErrInvalidConn {
-		return err // return the original error
-	}
-
+func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn, schema string) error {
 	parser2, err2 := s.fromDB.getParser(s.cfg.EnableANSIQuotes)
 	if err2 != nil {
 		return err // return the original error
 	}
 
-	ddl2 := ddls[index]
-	stmt, err2 := parser2.ParseOneStmt(ddl2, "", "")
-	if err2 != nil {
-		return err // return the original error
-	}
-
-	handle := func() {
-		tctx.L().Warn("ignore special error for DDL", zap.String("DDL", ddl2), log.ShortError(err))
-		err2 := conn.resetConn(tctx) // also reset the `invalid connection` for later use.
-		if err2 != nil {
-			tctx.L().Warn("reset connection failed", log.ShortError(err2))
+	// it only ignore `invalid connection` error (timeout or other causes) for `ADD INDEX`.
+	// `invalid connection` means some data already sent to the server,
+	// and we assume that the whole SQL statement has already sent to the server for this error.
+	// if we have other methods to judge the DDL dispatched but timeout for executing, we can update this method.
+	// NOTE: we must ensure other PK/UK exists for correctness.
+	// NOTE: when we are refactoring the shard DDL algorithm, we also need to consider supporting non-blocking `ADD INDEX`.
+	invalidConnF := func (tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn, _ string) error {
+		// must ensure only the last statement executed failed with the `invalid connection` error
+		if len(ddls) == 0 || index != len(ddls)-1 || errors.Cause(err) != mysql.ErrInvalidConn {
+			return err // return the original error
 		}
-	}
 
-	switch v := stmt.(type) {
-	case *ast.AlterTableStmt:
-		// ddls should be split with only one spec
-		if len(v.Specs) > 1 {
-			return err
-		} else if v.Specs[0].Tp == ast.AlterTableAddConstraint {
-			// only take effect on `ADD INDEX`, no UNIQUE KEY and FOREIGN KEY
-			// UNIQUE KEY may affect correctness, FOREIGN KEY should be filtered.
-			// ref https://github.com/pingcap/tidb/blob/3cdea0dfdf28197ee65545debce8c99e6d2945e3/ddl/ddl_api.go#L1929-L1948.
-			switch v.Specs[0].Constraint.Tp {
-			case ast.ConstraintKey, ast.ConstraintIndex:
-				handle()
-				return nil // ignore the error
+		ddl2 := ddls[index]
+		stmt, err2 := parser2.ParseOneStmt(ddl2, "", "")
+		if err2 != nil {
+			return err // return the original error
+		}
+
+		handle := func() {
+			tctx.L().Warn("ignore special error for DDL", zap.String("DDL", ddl2), log.ShortError(err))
+			err2 := conn.resetConn(tctx) // also reset the `invalid connection` for later use.
+			if err2 != nil {
+				tctx.L().Warn("reset connection failed", log.ShortError(err2))
 			}
 		}
-	case *ast.CreateIndexStmt:
-		handle()
-		return nil // ignore the error
+
+		switch v := stmt.(type) {
+		case *ast.AlterTableStmt:
+			// ddls should be split with only one spec
+			if len(v.Specs) > 1 {
+				return err
+			} else if v.Specs[0].Tp == ast.AlterTableAddConstraint {
+				// only take effect on `ADD INDEX`, no UNIQUE KEY and FOREIGN KEY
+				// UNIQUE KEY may affect correctness, FOREIGN KEY should be filtered.
+				// ref https://github.com/pingcap/tidb/blob/3cdea0dfdf28197ee65545debce8c99e6d2945e3/ddl/ddl_api.go#L1929-L1948.
+				switch v.Specs[0].Constraint.Tp {
+				case ast.ConstraintKey, ast.ConstraintIndex:
+					handle()
+					return nil // ignore the error
+				}
+			}
+		case *ast.CreateIndexStmt:
+			handle()
+			return nil // ignore the error
+		}
+		return err
 	}
-	return err
+
+	// for DROP COLUMN with its single-column index, try drop index first then drop column
+	dropColumnF := func (tctx *tcontext.Context, originErr error, ddls []string, index int, conn *DBConn, schema string) error {
+		mysqlErr, ok := originError(originErr).(*mysql.MySQLError)
+		if !ok {
+			return originErr
+		}
+		// different version of TiDB has different error message, try to cover most versions
+		if !(mysqlErr.Number == errno.ErrUnsupportedDDLOperation &&
+			strings.Contains(mysqlErr.Message, "drop column") &&
+			strings.Contains(mysqlErr.Message, "with index")) {
+			return originErr
+		}
+
+		// lance: is `ddls` allowed to have multi sql?
+		ddl2 := ddls[index]
+		stmt, err2 := parser2.ParseOneStmt(ddl2, "", "")
+		if err2 != nil {
+			return err // return the original error
+		}
+
+		var (
+			table string
+			col   string
+		)
+		if n, ok := stmt.(*ast.AlterTableStmt); !ok {
+			return originErr
+		// support ALTER TABLE tbl_name DROP
+		} else if len(n.Specs) != 1 {
+			return originErr
+		} else if n.Specs[0].Tp != ast.AlterTableDropColumn {
+			return originErr
+		} else {
+			table = n.Table.Name.String()
+			col = n.Specs[0].OldColumnName.Name.String()
+		}
+		tctx.L().Warn("try to fix drop column error", zap.String("DDL", ddl2), log.ShortError(err))
+
+		// check if dependent index is single-column index on this column
+		sql := "select INDEX_NAME from information_schema.statistics where TABLE_SCHEMA = ? and TABLE_NAME = ? and COLUMN_NAME = ?"
+		indices, err := conn.querySQL(tctx, sql, schema, table, col)
+		if err != nil {
+			return originErr
+		}
+		defer indices.Close()
+		var (
+			idx      string
+			idx2Drop []string
+			count    int
+		)
+		sql = "select count(*) from information_schema.statistics where TABLE_SCHEMA = ? and TABLE_NAME = ? and INDEX_NAME = ?"
+		for indices.Next() {
+			if err := indices.Scan(&idx); err != nil {
+				return originErr
+			}
+			rows, err2 := conn.querySQL(tctx, sql, schema, table, idx)
+			if err2 != nil || !rows.Next() || rows.Scan(&count) != nil || count != 1 {
+				return originErr
+			}
+			idx2Drop = append(idx2Drop, idx)
+		}
+		sql = "alter table ?.? drop index ?"
+		args := make([]interface{}, len(idx2Drop))
+		sqls := make([]string, len(idx2Drop))
+		for i, idx := range idx2Drop {
+			sqls[i] = sql
+			args[i] = []interface{}{schema, table, idx}
+		}
+		if _, err := conn.executeSQL(tctx, sqls, args); err != nil {
+			return originErr
+		}
+		tctx.L().Info("drop indices success, try to drop column", zap.Strings("indices", idx2Drop))
+
+		if _, err = conn.executeSQLWithIgnore(tctx, ignoreDDLError, []string{ddl2}); err != nil {
+			return originErr
+		}
+
+		tctx.L().Info("execute drop column SQL success", zap.String("DDL", ddl2))
+		return nil
+	}
+
+	retErr := err
+
+	toHandle := []func (*tcontext.Context, error, []string, int, *DBConn, string) error {
+		invalidConnF,
+		dropColumnF,
+	}
+	for _, f := range toHandle {
+		retErr = f(tctx, err, ddls, index, conn, schema)
+		if retErr == nil {
+			break
+		}
+	}
+	return retErr
 }

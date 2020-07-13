@@ -174,7 +174,7 @@ func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 	c.Assert(err, IsNil)
 
 	for _, cs := range cases {
-		err2 := syncer.handleSpecialDDLError(tctx, cs.err, cs.ddls, cs.index, conn2)
+		err2 := syncer.handleSpecialDDLError(tctx, cs.err, cs.ddls, cs.index, conn2, "")
 		if cs.handled {
 			c.Assert(err2, IsNil)
 		} else {
