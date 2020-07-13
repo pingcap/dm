@@ -14,6 +14,8 @@
 package syncer
 
 import (
+	"strings"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
@@ -24,7 +26,6 @@ import (
 	"github.com/pingcap/tidb/infoschema"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
-	"strings"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"

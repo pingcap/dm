@@ -865,10 +865,10 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	var err error
 	for {
 		sqlJob, ok := <-ddlJobChan
-		s.tctx.L().Warn("lance test sqlJob %v", zap.Strings("DDL", sqlJob.ddls))
 		if !ok {
 			return
 		}
+		s.tctx.L().Warn("lance test sqlJob %v", zap.Strings("DDL", sqlJob.ddls))
 
 		var (
 			ignore           = false
