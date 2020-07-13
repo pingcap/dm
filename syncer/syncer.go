@@ -532,7 +532,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	wg.Wait()           // wait for receive all fatal from s.runFatalChan
 
 	if err != nil {
-		if terror.ErrSyncerCtxCanceled.Equal(err) && tcontext.GetUserCancelFlag(ctx) {
+		if terror.ErrSyncerCtxCanceled.Equal(err) {
 			s.tctx.L().Info("filter out error caused by user cancel")
 		} else {
 			syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()

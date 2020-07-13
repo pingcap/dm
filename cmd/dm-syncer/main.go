@@ -24,7 +24,6 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
-	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
@@ -68,13 +67,11 @@ func main() {
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
-	userCtx := tcontext.WithUserCancelFlag(context.Background())
-	ctx, cancel := context.WithCancel(userCtx)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
 		sig := <-sc
 		log.L().Info("got signal to exit", zap.Stringer("signal", sig))
-		tcontext.SetUserCancelFlag(userCtx)
 		cancel()
 	}()
 
