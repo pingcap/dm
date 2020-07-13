@@ -80,6 +80,7 @@ func originError(err error) error {
 
 // handleSpecialDDLError handles special errors for DDL execution.
 func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn, schema string) error {
+	tctx.L().Warn("lance test 0")
 	parser2, err2 := s.fromDB.getParser(s.cfg.EnableANSIQuotes)
 	if err2 != nil {
 		return err // return the original error
@@ -135,6 +136,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 
 	// for DROP COLUMN with its single-column index, try drop index first then drop column
 	dropColumnF := func (tctx *tcontext.Context, originErr error, ddls []string, index int, conn *DBConn, schema string) error {
+		tctx.L().Warn("lance test 1")
 		mysqlErr, ok := originError(originErr).(*mysql.MySQLError)
 		if !ok {
 			return originErr
@@ -145,7 +147,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 			strings.Contains(mysqlErr.Message, "with index")) {
 			return originErr
 		}
-
+		tctx.L().Warn("lance test 2")
 		// lance: is `ddls` allowed to have multi sql?
 		ddl2 := ddls[index]
 		stmt, err2 := parser2.ParseOneStmt(ddl2, "", "")
@@ -189,6 +191,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 			}
 			rows, err2 := conn.querySQL(tctx, sql, schema, table, idx)
 			if err2 != nil || !rows.Next() || rows.Scan(&count) != nil || count != 1 {
+				tctx.L().Warn("can't drop index", zap.String("index", idx))
 				return originErr
 			}
 			idx2Drop = append(idx2Drop, idx)
