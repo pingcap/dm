@@ -16,6 +16,8 @@ package syncer
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -1048,6 +1050,22 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		err = s.checkpoint.LoadMeta()
 		if err != nil {
 			return err
+		}
+
+		// for fresh and all-mode task, flush checkpoint so we could delete metadata file
+		if s.cfg.Mode == config.ModeAll {
+			if err := s.flushCheckPoints(); err != nil {
+				s.tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
+			} else {
+				s.tctx.L().Info("try to remove loaded files")
+				metadataFile := path.Join(s.cfg.Dir, "metadata")
+				if err := os.Remove(metadataFile); err != nil {
+					s.tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
+				}
+				if err := os.Remove(s.cfg.Dir); err != nil {
+					s.tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
+				}
+			}
 		}
 	}
 

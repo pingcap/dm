@@ -19,13 +19,6 @@ function update_relay_should_specify_one_dm_worker() {
         "must specify one source (\`-s\` \/ \`--source\`)" 1
 }
 
-function update_relay_while_master_down() {
-    task_conf=$1
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-relay $task_conf -s $SOURCE_ID1" \
-        "can not update relay config:" 1
-}
-
 function update_relay_success() {
     task_conf=$1
     source_id=$2
