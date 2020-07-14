@@ -27,7 +27,7 @@ import (
 // NewGetTaskCfgCmd creates a getTaskCfg command
 func NewGetTaskCfgCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get-task-config [task-name] [--file filename]",
+		Use:   "get-task-config <task-name> [--file filename]",
 		Short: "get task config",
 		Run:   getTaskCfgFunc,
 	}
