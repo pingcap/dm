@@ -1,5 +1,5 @@
 <!--
-Thank you for contributing to DM! Please read MD's [CONTRIBUTING](https://github.com/pingcap/dm/blob/master/CONTRIBUTING.md) document **BEFORE** filing this PR.
+Thank you for contributing to DM! Please read DM's [CONTRIBUTING](https://github.com/pingcap/dm/blob/master/CONTRIBUTING.md) document **BEFORE** filing this PR.
 -->
 
 ### What problem does this PR solve? <!--add issue link with summary if exists-->
