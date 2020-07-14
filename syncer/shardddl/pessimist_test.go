@@ -16,6 +16,7 @@ package shardddl
 import (
 	"context"
 	"testing"
+	"time"
 
 	. "github.com/pingcap/check"
 	"go.etcd.io/etcd/clientv3"
@@ -78,7 +79,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	c.Assert(p.PendingOperation(), IsNil)
 
 	// put shard DDL info.
-	rev1, err := p.PutInfo(info)
+	rev1, err := p.PutInfo(ctx, info)
 	c.Assert(err, IsNil)
 	c.Assert(rev1, Greater, int64(0))
 
@@ -123,8 +124,21 @@ func (t *testPessimist) TestPessimist(c *C) {
 	c.Assert(p.PendingInfo(), IsNil)
 	c.Assert(p.PendingOperation(), IsNil)
 
+	// try to put info again, but timeout because a `done` operation exist in etcd.
+	ctx2, cancel2 := context.WithTimeout(ctx, time.Second)
+	defer cancel2()
+	_, err = p.PutInfo(ctx2, info)
+	c.Assert(err, Equals, context.DeadlineExceeded)
+
+	// start a goroutine to delete the `done` operation in background, then we can put info again.
+	go func() {
+		time.Sleep(500 * time.Millisecond) // wait `PutInfo` to start watch the deletion of the operation.
+		_, err2 := pessimism.DeleteOperations(etcdTestCli, op)
+		c.Assert(err2, IsNil)
+	}()
+
 	// put info again, but do not complete the flow.
-	_, err = p.PutInfo(info)
+	_, err = p.PutInfo(ctx, info)
 	c.Assert(err, IsNil)
 	c.Assert(p.PendingInfo(), NotNil)
 

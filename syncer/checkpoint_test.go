@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/schema"
 
@@ -73,10 +74,10 @@ func (s *testCheckpointSuite) TestUpTest(c *C) {
 
 func (s *testCheckpointSuite) prepareCheckPointSQL() {
 	schemaCreateSQL = fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.cfg.MetaSchema)
-	tableCreateSQL = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_syncer_checkpoint` .*", s.cfg.MetaSchema, s.cfg.Name)
-	flushCheckPointSQL = fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint` .* VALUES.* ON DUPLICATE KEY UPDATE .*", s.cfg.MetaSchema, s.cfg.Name)
-	clearCheckPointSQL = fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_checkpoint` WHERE id = \\?", s.cfg.MetaSchema, s.cfg.Name)
-	loadCheckPointSQL = fmt.Sprintf("SELECT .* FROM `%s`.`%s_syncer_checkpoint` WHERE id = \\?", s.cfg.MetaSchema, s.cfg.Name)
+	tableCreateSQL = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s` .*", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))
+	flushCheckPointSQL = fmt.Sprintf("INSERT INTO `%s`.`%s` .* VALUES.* ON DUPLICATE KEY UPDATE .*", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))
+	clearCheckPointSQL = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE id = \\?", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))
+	loadCheckPointSQL = fmt.Sprintf("SELECT .* FROM `%s`.`%s` WHERE id = \\?", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))
 }
 
 // this test case uses sqlmock to simulate all SQL operations in tests
@@ -143,22 +144,10 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 		s.cfg.Dir = oldDir
 	}()
 
-	// try load from mydumper's output
 	pos1 := mysql.Position{
 		Name: "mysql-bin.000003",
 		Pos:  1943,
 	}
-	dir, err := ioutil.TempDir("", "test_global_checkpoint")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(dir)
-
-	filename := filepath.Join(dir, "metadata")
-	err = ioutil.WriteFile(filename, []byte(
-		fmt.Sprintf("SHOW MASTER STATUS:\n\tLog: %s\n\tPos: %d\n\tGTID:\n\nSHOW SLAVE STATUS:\n\tHost: %s\n\tLog: %s\n\tPos: %d\n\tGTID:\n\n", pos1.Name, pos1.Pos, "slave_host", pos1.Name, pos1.Pos+1000)),
-		0644)
-	c.Assert(err, IsNil)
-	s.cfg.Mode = config.ModeAll
-	s.cfg.Dir = dir
 
 	s.mock.ExpectQuery(loadCheckPointSQL).WithArgs(cpid).WillReturnRows(sqlmock.NewRows(nil))
 	err = cp.Load(tctx, s.tracker)
@@ -251,6 +240,33 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint().Position, Equals, binlog.MinPosition)
 	c.Assert(cp.FlushedGlobalPoint().Position, Equals, binlog.MinPosition)
+
+	// try load from mydumper's output
+	dir, err := ioutil.TempDir("", "test_global_checkpoint")
+	c.Assert(err, IsNil)
+	defer os.RemoveAll(dir)
+
+	filename := filepath.Join(dir, "metadata")
+	err = ioutil.WriteFile(filename, []byte(
+		fmt.Sprintf("SHOW MASTER STATUS:\n\tLog: %s\n\tPos: %d\n\tGTID:\n\nSHOW SLAVE STATUS:\n\tHost: %s\n\tLog: %s\n\tPos: %d\n\tGTID:\n\n", pos1.Name, pos1.Pos, "slave_host", pos1.Name, pos1.Pos+1000)),
+		0644)
+	c.Assert(err, IsNil)
+	s.cfg.Mode = config.ModeAll
+	s.cfg.Dir = dir
+	cp.LoadMeta()
+
+	// should flush because globalPointSaveTime is zero
+	s.mock.ExpectBegin()
+	s.mock.ExpectExec("(202)?"+flushCheckPointSQL).WithArgs(cpid, "", "", pos1.Name, pos1.Pos, "", []byte("null"), true).WillReturnResult(sqlmock.NewResult(0, 1))
+	s.mock.ExpectCommit()
+	err = cp.FlushPointsExcept(tctx, nil, nil, nil)
+	c.Assert(err, IsNil)
+	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
+	err = cp.Load(tctx, s.tracker)
+	c.Assert(err, IsNil)
+	c.Assert(cp.GlobalPoint().Position, Equals, pos1)
+	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos1)
+
 }
 
 func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {

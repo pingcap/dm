@@ -65,12 +65,51 @@ Finished dump at: 2018-12-27 19:51:22`,
 			},
 			"",
 		},
+		{ // with empty line after multiple GTID sets
+			`Started dump at: 2020-05-21 18:14:49
+SHOW MASTER STATUS:
+	Log: mysql-bin.000003
+	Pos: 1274
+	GTID:5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,
+5b642cb6-9b43-11ea-8914-0242ac170003:1-7,
+97b5142f-e19c-11e8-808c-0242ac110005:1-13
+
+SHOW SLAVE STATUS:
+	Host: 192.168.100.100
+	Log: mysql-bin.000003
+	Pos: 700
+	GTID:5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,
+5b642cb6-9b43-11ea-8914-0242ac170003:1-7,
+97b5142f-e19c-11e8-808c-0242ac110005:1-13
+
+Finished dump at: 2020-05-21 18:14:49`,
+			mysql.Position{
+				Name: "mysql-bin.000003",
+				Pos:  1274,
+			},
+			"5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,5b642cb6-9b43-11ea-8914-0242ac170003:1-7,97b5142f-e19c-11e8-808c-0242ac110005:1-13",
+		},
+		{ // without empty line after mutlple GTID sets
+			`Started dump at: 2020-05-21 18:02:33
+SHOW MASTER STATUS:
+		Log: mysql-bin.000003
+		Pos: 1274
+		GTID:5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,
+5b642cb6-9b43-11ea-8914-0242ac170003:1-7,
+97b5142f-e19c-11e8-808c-0242ac110005:1-13
+Finished dump at: 2020-05-21 18:02:44`,
+			mysql.Position{
+				Name: "mysql-bin.000003",
+				Pos:  1274,
+			},
+			"5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,5b642cb6-9b43-11ea-8914-0242ac170003:1-7,97b5142f-e19c-11e8-808c-0242ac110005:1-13",
+		},
 	}
 
 	for _, tc := range testCases {
 		err := ioutil.WriteFile(f.Name(), []byte(tc.source), 0644)
 		c.Assert(err, IsNil)
-		pos, gsetStr, err := ParseMetaData(f.Name())
+		pos, gsetStr, err := ParseMetaData(f.Name(), "mysql")
 		c.Assert(err, IsNil)
 		c.Assert(pos, DeepEquals, tc.pos)
 		c.Assert(gsetStr, Equals, tc.gsetStr)

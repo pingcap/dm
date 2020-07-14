@@ -24,6 +24,7 @@ import (
 	binlog "github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
@@ -259,7 +260,7 @@ type RemoteCheckPoint struct {
 func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) CheckPoint {
 	cp := &RemoteCheckPoint{
 		cfg:         cfg,
-		tableName:   dbutil.TableName(cfg.MetaSchema, cfg.Name+"_syncer_checkpoint"),
+		tableName:   dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)),
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
 		globalPoint: newBinlogPoint(binlog.NewLocation(cfg.Flavor), binlog.NewLocation(cfg.Flavor), nil, nil, cfg.EnableGTID),
@@ -309,6 +310,7 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 	}
 
 	cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil, cp.cfg.EnableGTID)
+	cp.globalPointSaveTime = time.Time{}
 	cp.points = make(map[string]map[string]*binlogPoint)
 
 	return nil
@@ -451,7 +453,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 	sqls := make([]string, 0, 100)
 	args := make([][]interface{}, 0, 100)
 
-	if cp.globalPoint.outOfDate() {
+	if cp.globalPoint.outOfDate() || cp.globalPointSaveTime.IsZero() {
 		locationG := cp.GlobalPoint()
 		sqlG, argG := cp.genUpdateSQL(globalCpSchema, globalCpTable, locationG, nil, true)
 		sqls = append(sqls, sqlG)
@@ -566,6 +568,21 @@ func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 						logger.Error("failed to rollback schema on schema tracker: cannot create table", log.ShortError(err))
 					}
 				}
+			}
+		}
+	}
+
+	// drop any tables in the tracker if no corresponding checkpoint exists.
+	for _, schema := range schemaTracker.AllSchemas() {
+		_, ok1 := cp.points[schema.Name.O]
+		for _, table := range schema.Tables {
+			var ok2 bool
+			if ok1 {
+				_, ok2 = cp.points[schema.Name.O][table.Name.O]
+			}
+			if !ok2 {
+				err := schemaTracker.DropTable(schema.Name.O, table.Name.O)
+				cp.logCtx.L().Info("drop table in schema tracker because no checkpoint exists", zap.String("schema", schema.Name.O), zap.String("table", table.Name.O), log.ShortError(err))
 			}
 		}
 	}
@@ -774,7 +791,7 @@ func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, error) {
 	// `metadata` is mydumper's output meta file name
 	filename := path.Join(cp.cfg.Dir, "metadata")
 	cp.logCtx.L().Info("parsing metadata from file", zap.String("file", filename))
-	pos, gsetStr, err := utils.ParseMetaData(filename)
+	pos, gsetStr, err := utils.ParseMetaData(filename, cp.cfg.Flavor)
 	if err != nil {
 		return nil, err
 	}

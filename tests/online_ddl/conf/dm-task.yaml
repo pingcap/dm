@@ -3,7 +3,6 @@ name: test
 task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
-remove-meta: false
 enable-heartbeat: false
 timezone: "Asia/Shanghai"
 online-ddl-scheme: online-ddl-scheme-placeholder
@@ -16,7 +15,7 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-1"]
     mydumper-config-name: "global"
@@ -27,14 +26,14 @@ mysql-instances:
     meta:
       binlog-name: binlog.000001
       binlog-pos: 4
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-2"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
-black-white-list:
+block-allow-list:
   instance:
     do-dbs: ["online_ddl"]
     do-tables:
@@ -71,7 +70,6 @@ column-mappings:
 
 mydumpers:
   global:
-    mydumper-path: "./bin/mydumper"
     threads: 4
     chunk-filesize: 64
     skip-tz-utc: true

@@ -112,7 +112,7 @@ type DMTaskConfig struct {
 
 	Routes  map[string]*router.TableRule   `yaml:"routes" json:"routes"`
 	Filters map[string]*bf.BinlogEventRule `yaml:"filters" json:"filters"`
-	BWList  map[string]*filter.Rules       `yaml:"black-white-list" json:"black-white-list"`
+	BAList  map[string]*filter.Rules       `yaml:"block-allow-list" json:"block-allow-list"`
 
 	Mydumpers map[string]*config.MydumperConfig `yaml:"mydumpers" json:"mydumpers"`
 }
@@ -158,7 +158,7 @@ type MySQLInstance struct {
 
 	FilterRules []string `yaml:"filter-rules" json:"filter-rules"`
 	RouteRules  []string `yaml:"route-rules" json:"route-rules"`
-	BWListName  string   `yaml:"black-white-list" json:"black-white-list"`
+	BAListName  string   `yaml:"block-allow-list" json:"block-allow-list"`
 
 	MydumperConfigName string `yaml:"mydumper-config-name" json:"mydumper-config-name"`
 }

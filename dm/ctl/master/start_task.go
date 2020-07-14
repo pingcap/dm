@@ -17,7 +17,6 @@ import (
 	"context"
 	"os"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/checker"
@@ -28,10 +27,11 @@ import (
 // NewStartTaskCmd creates a StartTask command
 func NewStartTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "start-task [-s source ...] <config-file>",
+		Use:   "start-task [-s source ...] [--remove-meta] <config-file>",
 		Short: "start a task as defined in the config file",
 		Run:   startTaskFunc,
 	}
+	cmd.Flags().BoolP("remove-meta", "", false, "whether to remove task's meta data")
 	return cmd
 }
 
@@ -44,13 +44,19 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", errors.ErrorStack(err))
+		common.PrintLines("get file content error:\n%v", err)
 		return
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
+		common.PrintLines("%v", err)
+		return
+	}
+
+	removeMeta, err := cmd.Flags().GetBool("remove-meta")
+	if err != nil {
+		common.PrintLines("%v", err)
 		return
 	}
 
@@ -60,11 +66,12 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 	// start task
 	cli := common.MasterClient()
 	resp, err := cli.StartTask(ctx, &pb.StartTaskRequest{
-		Task:    string(content),
-		Sources: sources,
+		Task:       string(content),
+		Sources:    sources,
+		RemoveMeta: removeMeta,
 	})
 	if err != nil {
-		common.PrintLines("can not start task:\n%v", errors.ErrorStack(err))
+		common.PrintLines("can not start task:\n%v", err)
 		return
 	}
 

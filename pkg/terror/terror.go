@@ -22,7 +22,6 @@ import (
 
 const (
 	errBaseFormat = "[code=%d:class=%s:scope=%s:level=%s]"
-	errFormat     = errBaseFormat + " %s"
 )
 
 // ErrCode is used as the unique identifier of a specific error type.
@@ -49,6 +48,8 @@ const (
 	ClassDMTracer
 	ClassSchemaTracker
 	ClassScheduler
+	ClassDMCtl
+	ClassNotSet
 )
 
 var errClass2Str = map[ErrClass]string{
@@ -68,6 +69,8 @@ var errClass2Str = map[ErrClass]string{
 	ClassDMTracer:      "dm-tracer",
 	ClassSchemaTracker: "schema-tracker",
 	ClassScheduler:     "scheduler",
+	ClassDMCtl:         "dmctl",
+	ClassNotSet:        "not-set",
 }
 
 // String implements fmt.Stringer interface
@@ -131,24 +134,26 @@ func (el ErrLevel) String() string {
 
 // Error implements error interface and add more useful fields
 type Error struct {
-	code     ErrCode
-	class    ErrClass
-	scope    ErrScope
-	level    ErrLevel
-	message  string
-	args     []interface{}
-	rawCause error
-	stack    errors.StackTracer
+	code       ErrCode
+	class      ErrClass
+	scope      ErrScope
+	level      ErrLevel
+	message    string
+	workaround string
+	args       []interface{}
+	rawCause   error
+	stack      errors.StackTracer
 }
 
 // New creates a new *Error instance
-func New(code ErrCode, class ErrClass, scope ErrScope, level ErrLevel, message string) *Error {
+func New(code ErrCode, class ErrClass, scope ErrScope, level ErrLevel, message string, workaround string) *Error {
 	return &Error{
-		code:    code,
-		class:   class,
-		scope:   scope,
-		level:   level,
-		message: message,
+		code:       code,
+		class:      class,
+		scope:      scope,
+		level:      level,
+		message:    message,
+		workaround: workaround,
 	}
 }
 
@@ -172,9 +177,29 @@ func (e *Error) Level() ErrLevel {
 	return e.level
 }
 
+// Message returns the formatted error message.
+func (e *Error) Message() string {
+	return e.getMsg()
+}
+
+// Workaround returns ErrWorkaround
+func (e *Error) Workaround() string {
+	return e.workaround
+}
+
 // Error implements error interface.
 func (e *Error) Error() string {
-	return fmt.Sprintf(errFormat, e.code, e.class, e.scope, e.level, e.getMsg())
+	str := fmt.Sprintf(errBaseFormat, e.code, e.class, e.scope, e.level)
+	if e.getMsg() != "" {
+		str += fmt.Sprintf(", Message: %s", e.getMsg())
+	}
+	if e.rawCause != nil {
+		str += fmt.Sprintf(", RawCause: %s", Message(e.rawCause))
+	}
+	if e.workaround != "" {
+		str += fmt.Sprintf(", Workaround: %s", e.workaround)
+	}
+	return str
 }
 
 // Format accepts flags that alter the printing of some verbs
@@ -244,13 +269,14 @@ func (e *Error) Generatef(format string, args ...interface{}) error {
 // stackLevelGeneratef is an inner interface to generate new *Error
 func (e *Error) stackLevelGeneratef(stackSkipLevel int, format string, args ...interface{}) error {
 	return &Error{
-		code:    e.code,
-		class:   e.class,
-		scope:   e.scope,
-		level:   e.level,
-		message: format,
-		args:    args,
-		stack:   errors.NewStack(stackSkipLevel),
+		code:       e.code,
+		class:      e.class,
+		scope:      e.scope,
+		level:      e.level,
+		message:    format,
+		workaround: e.workaround,
+		args:       args,
+		stack:      errors.NewStack(stackSkipLevel),
 	}
 }
 
@@ -260,15 +286,23 @@ func (e *Error) Delegate(err error, args ...interface{}) error {
 	if err == nil {
 		return nil
 	}
+
+	rawCause := err
+	// we only get the root rawCause
+	if tErr, ok := err.(*Error); ok && tErr.rawCause != nil {
+		rawCause = tErr.rawCause
+	}
+
 	return &Error{
-		code:     e.code,
-		class:    e.class,
-		scope:    e.scope,
-		level:    e.level,
-		message:  fmt.Sprintf("%s: %s", e.message, err),
-		args:     args,
-		rawCause: err,
-		stack:    errors.NewStack(0),
+		code:       e.code,
+		class:      e.class,
+		scope:      e.scope,
+		level:      e.level,
+		message:    e.message,
+		workaround: e.workaround,
+		args:       args,
+		rawCause:   rawCause,
+		stack:      errors.NewStack(0),
 	}
 }
 

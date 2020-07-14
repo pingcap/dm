@@ -177,14 +177,14 @@ func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 	mock.ExpectRollback()
 
 	n, err = conn.executeSQL(tctx, sqls)
-	c.Assert(err, ErrorMatches, ".*column a already exists")
+	c.Assert(err, ErrorMatches, ".*column a already exists.*")
 	c.Assert(n, Equals, 0)
 
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
 func (s *testDBSuite) TestTimezone(c *C) {
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		DoDBs:     []string{"~^tztest_.*"},
 		IgnoreDBs: []string{"stest", "~^foo.*"},
 	}

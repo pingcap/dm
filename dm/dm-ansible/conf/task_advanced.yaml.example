@@ -3,7 +3,6 @@ name: test # global unique
 task-mode: all  # full/incremental/all
 is-sharding: true  # whether multi dm-worker do one sharding job
 meta-schema: "dm_meta"  # meta schema in downstreaming database to store meta informaton of dm
-remove-meta: false  # remove meta from downstreaming database, now we delete checkpoint and online ddl information
 enable-heartbeat: false  # whether to enable heartbeat for calculating lag between master and syncer
 # heartbeat-update-interval: 1  # interval to do heartbeat and save timestamp, default 1s
 # heartbeat-report-interval: 10 # interval to report time lap to prometheus, default 10s
@@ -23,22 +22,20 @@ mysql-instances:             # one or more source database, config more source d
     # `full` / `all`:
     #    never be used
     # `incremental`:
-    #    if `remove-meta` is true, this will be used
-    #    else if checkpoints already exists in `meta-schema`, this will not be used
+    #    if checkpoints already exists in `meta-schema`, this will not be used
     #    otherwise, this will be used
     meta:
       binlog-name: mysql-bin.000001
       binlog-pos: 4
     route-rules: ["user-route-rules-schema", "user-route-rules"]
     filter-rules: ["user-filter-1", "user-filter-2"]
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
 
     # `mydumper-config-name` and `mydumper` should only set one
     mydumper-config-name: "global"   # ref `mydumpers` config
     # `mydumper-thread` is alias for `threads` in `mydumper` config, and its priority is higher than `threads`
     #mydumper-thread: 16
     #mydumper:
-    #  mydumper-path: "./mydumper"
     #  threads: 16
 
     # `loader-config-name` and `loader` should only set one
@@ -62,10 +59,9 @@ mysql-instances:             # one or more source database, config more source d
       binlog-pos: 320
     route-rules: ["user-route-rules-schema", "user-route-rules"]
     filter-rules: ["user-filter-2"]
-    black-white-list: "instance"
+    block-allow-list: "instance"
 
     mydumper:
-      mydumper-path: "./bin/mydumper"
       threads: 4
       chunk-filesize: 64
       skip-tz-utc: true
@@ -106,22 +102,21 @@ filters:                     # filter rules, mysql instance can ref rules in it
     events: ["all dml"]             # only do all DML events
     action: Do
 
-black-white-list:
+block-allow-list:
   instance:
-    do-dbs: ["~^test.*", "do"]        # white list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
-    ignore-dbs: ["mysql", "ignored"]  # black list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
-    do-tables:                        # white list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
+    do-dbs: ["~^test.*", "do"]        # allow list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
+    ignore-dbs: ["mysql", "ignored"]  # block list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
+    do-tables:                        # allow list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
     - db-name: "~^test.*"
       tbl-name: "~^t.*"
     - db-name: "do"
       tbl-name: "do"
-    ignore-tables:                    # black list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
+    ignore-tables:                    # block list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
     - db-name: "test"
       tbl-name: "log"
 
 mydumpers:                   # mydumper process unit specific configs, mysql instance can ref one config in it
   global:
-    mydumper-path: "./bin/mydumper"
     threads: 4
     chunk-filesize: 64
     skip-tz-utc: true

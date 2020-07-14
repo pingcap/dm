@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
@@ -220,8 +221,8 @@ func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.
 func (s *testSyncerSuite) mockCheckPointCreate(checkPointMock sqlmock.Sqlmock, tag string) {
 	checkPointMock.ExpectBegin()
 	// we encode the line number to make it easier to figure out which expectation has failed.
-	checkPointMock.ExpectExec(fmt.Sprintf("(223:"+tag+")?INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectExec(fmt.Sprintf("(224:"+tag+")?INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("(223:"+tag+")?INSERT INTO `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("(224:"+tag+")?INSERT INTO `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
 	// TODO because shardGroup DB is same as checkpoint DB, next time split them is better
 	checkPointMock.ExpectExec(fmt.Sprintf("(226:"+tag+")?DELETE FROM `%s`.`%s_syncer_sharding_meta(228)?", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 	checkPointMock.ExpectCommit()
@@ -230,16 +231,16 @@ func (s *testSyncerSuite) mockCheckPointCreate(checkPointMock sqlmock.Sqlmock, t
 func (s *testSyncerSuite) mockCheckPointFlush(checkPointMock sqlmock.Sqlmock, tagInt int) {
 	tag := fmt.Sprintf("%d", tagInt)
 	checkPointMock.ExpectBegin()
-	checkPointMock.ExpectExec(fmt.Sprintf("(242:"+tag+")?INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectExec(fmt.Sprintf("(243:"+tag+")?INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectExec(fmt.Sprintf("(244:"+tag+")?INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("(242:"+tag+")?INSERT INTO `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("(243:"+tag+")?INSERT INTO `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("(244:"+tag+")?INSERT INTO `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
 	// TODO because shardGroup DB is same as checkpoint DB, next time split them is better
 	checkPointMock.ExpectExec(fmt.Sprintf("(246:"+tag+")?DELETE FROM `%s`.`%s_syncer_sharding_meta(239)?", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 	checkPointMock.ExpectCommit()
 }
 
 func (s *testSyncerSuite) TestSelectDB(c *C) {
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		DoDBs: []string{"~^b.*", "s1", "stest"},
 	}
 
@@ -268,7 +269,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg, nil)
-	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	err = syncer.genRouter()
 	c.Assert(err, IsNil)
@@ -300,7 +301,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 }
 
 func (s *testSyncerSuite) TestSelectTable(c *C) {
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		DoDBs: []string{"t2", "stest", "~^ptest*"},
 		DoTables: []*filter.Table{
 			{Schema: "stest", Name: "log"},
@@ -377,7 +378,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg, nil)
-	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
 	i := 0
@@ -419,7 +420,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 }
 
 func (s *testSyncerSuite) TestIgnoreDB(c *C) {
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		IgnoreDBs: []string{"~^b.*", "s1", "stest"},
 	}
 
@@ -449,7 +450,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg, nil)
-	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
 	i := 0
@@ -472,7 +473,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 }
 
 func (s *testSyncerSuite) TestIgnoreTable(c *C) {
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		IgnoreDBs: []string{"t2"},
 		IgnoreTables: []*filter.Table{
 			{Schema: "stest", Name: "log"},
@@ -542,7 +543,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg, nil)
-	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
 
@@ -609,7 +610,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 			Action:        bf.Ignore,
 		},
 	}
-	s.cfg.BWList = nil
+	s.cfg.BAList = nil
 
 	s.resetEventsGenerator(c)
 
@@ -812,7 +813,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 
 	defer db.Exec("drop database if exists gctest_1")
 
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		DoDBs: []string{"~^gctest_.*"},
 	}
 
@@ -1060,9 +1061,24 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	c.Assert(key, Equals, "b")
 
 	// will detect casuality and add a flush job
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+
+	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background())
+
+	mock.ExpectBegin()
+	mock.ExpectExec(".*INSERT INTO .* VALUES.* ON DUPLICATE KEY UPDATE.*").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 	key, err = syncer.resolveCasuality([]string{"a", "b"})
 	c.Assert(err, IsNil)
 	c.Assert(key, Equals, "a")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		c.Errorf("checkpoint db unfulfilled expectations: %s", err)
+	}
 
 	wg.Wait()
 }
@@ -1086,7 +1102,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	testJobs.jobs = testJobs.jobs[:0]
 
-	s.cfg.BWList = &filter.Rules{
+	s.cfg.BAList = &filter.Rules{
 		DoDBs: []string{"test_1"},
 		DoTables: []*filter.Table{
 			{Schema: "test_1", Name: "t_1"},
@@ -1125,7 +1141,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	checkPointMock.ExpectExec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.cfg.MetaSchema)).WillReturnResult(sqlmock.NewResult(1, 1))
 	checkPointMock.ExpectCommit()
 	checkPointMock.ExpectBegin()
-	checkPointMock.ExpectExec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
 	checkPointMock.ExpectCommit()
 
 	// mock syncer.checkpoint.Init() function

@@ -27,11 +27,6 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-const (
-	// MetaTableFormat is used in meta table name constructor
-	MetaTableFormat = "%s_syncer_sharding_meta"
-)
-
 // DDLItem records ddl information used in sharding sequence organization
 type DDLItem struct {
 	FirstLocation binlog.Location `json:"-"`      // first DDL's binlog Pos, not the End_log_pos of the event
@@ -152,7 +147,8 @@ func (meta *ShardingMeta) ActiveIdx() int {
 	return meta.activeIdx
 }
 
-func (meta *ShardingMeta) reinitialize() {
+// Reinitialize reinitialize the shardingmeta
+func (meta *ShardingMeta) Reinitialize() {
 	meta.activeIdx = 0
 	meta.global = &ShardingSequence{make([]*DDLItem, 0)}
 	meta.sources = make(map[string]*ShardingSequence)
@@ -252,7 +248,7 @@ func (meta *ShardingMeta) InSequenceSharding() bool {
 func (meta *ShardingMeta) ResolveShardingDDL() bool {
 	meta.activeIdx++
 	if meta.activeIdx == len(meta.global.Items) {
-		meta.reinitialize()
+		meta.Reinitialize()
 		return true
 	}
 	return false

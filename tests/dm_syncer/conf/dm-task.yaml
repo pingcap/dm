@@ -3,11 +3,11 @@ name: test
 task-mode: "full"
 is-sharding: false
 meta-schema: "dm_meta"
-remove-meta: true
 # enable-heartbeat: true
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1
 timezone: "Asia/Shanghai"
+clean-dump-file: false
 
 target-database:
   host: "127.0.0.1"
@@ -20,7 +20,7 @@ mysql-instances:
     meta:
       binlog-name: binlog-name-placeholder-1
       binlog-pos: 4
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -29,18 +29,17 @@ mysql-instances:
     meta:
       binlog-name: binlog-name-placeholder-2
       binlog-pos: 4
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
-black-white-list:
+block-allow-list:
   instance:
     do-dbs: ["dm_syncer"]
 
 mydumpers:
   global:
-    mydumper-path: "./bin/mydumper"
     threads: 4
     chunk-filesize: 64
     skip-tz-utc: true

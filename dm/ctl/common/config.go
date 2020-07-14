@@ -32,6 +32,13 @@ const (
 
 	// EncryptCmdName is special command
 	EncryptCmdName = "encrypt"
+	// DecryptCmdName is special command
+	DecryptCmdName = "decrypt"
+
+	// Master specifies member master type
+	Master = "master"
+	// Worker specifies member worker type
+	Worker = "worker"
 )
 
 // NewConfig creates a new base config for dmctl.
@@ -51,6 +58,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.SSLCA, "ssl-ca", "", "Path of file that contains list of trusted SSL CAs for connection")
 	fs.StringVar(&cfg.SSLCert, "ssl-cert", "", "Path of file that contains X509 certificate in PEM format for connection")
 	fs.StringVar(&cfg.SSLKey, "ssl-key", "", "Path of file that contains X509 key in PEM format for connection")
+	fs.StringVar(&cfg.decrypt, DecryptCmdName, "", "decrypt ciphertext to plaintext")
 
 	return cfg
 }
@@ -70,6 +78,7 @@ type Config struct {
 	encrypt      string // string need to be encrypted
 
 	config.Security
+	decrypt string // string need to be decrypted
 }
 
 func (c *Config) String() string {
@@ -101,6 +110,15 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 		return true, nil
 	}
 
+	if len(c.decrypt) > 0 {
+		plaintext, err1 := utils.Decrypt(c.decrypt)
+		if err1 != nil {
+			return true, err1
+		}
+		fmt.Println(plaintext)
+		return true, nil
+	}
+
 	// Load config file if specified.
 	if c.ConfigFile != "" {
 		err = c.configFromFile(c.ConfigFile)
@@ -126,7 +144,7 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 	return false, errors.Trace(c.adjust())
 }
 
-// Validate check config is ready to execute commmand
+// Validate check config is ready to execute command
 func (c *Config) Validate() error {
 	if c.MasterAddr == "" {
 		return errors.New("--master-addr not provided")

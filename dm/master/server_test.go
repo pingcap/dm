@@ -16,30 +16,45 @@ package master
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/golang/mock/gomock"
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/pd/v4/pkg/tempurl"
+	tiddl "github.com/pingcap/tidb/ddl"
+	"github.com/pingcap/tidb/sessionctx"
+	tidbmock "github.com/pingcap/tidb/util/mock"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/master/scheduler"
+	"github.com/pingcap/dm/dm/master/shardddl"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
+	"github.com/pingcap/dm/pkg/conn"
+	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/shardddl/optimism"
+	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -49,8 +64,8 @@ var taskConfig = `---
 name: test
 task-mode: all
 is-sharding: true
+shard-mode: ""
 meta-schema: "dm_meta"
-remove-meta: false
 enable-heartbeat: true
 timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
@@ -63,7 +78,7 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-1"]
     mydumper-config-name: "global"
@@ -71,14 +86,14 @@ mysql-instances:
     syncer-config-name: "global"
 
   - source-id: "mysql-replica-02"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-2"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
-black-white-list:
+block-allow-list:
   instance:
     do-dbs: ["~^sharding[\\d]+"]
     do-tables:
@@ -115,7 +130,6 @@ column-mappings:
 
 mydumpers:
   global:
-    mydumper-path: "./bin/mydumper"
     threads: 4
     chunk-filesize: 64
     skip-tz-utc: true
@@ -138,7 +152,7 @@ var (
 	errCheckSyncConfig    = "(?m).*check sync config with error.*"
 	errCheckSyncConfigReg = fmt.Sprintf("(?m).*%s.*", errCheckSyncConfig)
 	testEtcdCluster       *integration.ClusterV3
-	keepAliveTTL          = int64(1)
+	keepAliveTTL          = int64(10)
 	etcdTestCli           *clientv3.Client
 )
 
@@ -244,7 +258,7 @@ func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sour
 		cfg := config.NewSourceConfig()
 		cfg.SourceID = sources[i]
 		cfg.From.Password = password
-		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil)
+		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil, check.Commentf("all sources: %v", sources))
 		wg.Add(1)
 		ctx1, cancel1 := context.WithCancel(ctx)
 		cancels = append(cancels, cancel1)
@@ -351,14 +365,14 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	c.Assert(resp.Result, check.IsFalse)
 	clearSchedulerEnv(c, cancel, &wg)
 
-	// simulate invalid password returned from scheduler, so cfg.SubTaskConfigs will fail
+	// simulate invalid password returned from scheduler, but config was supported plaintext mysql password, so cfg.SubTaskConfigs will success
 	ctx, cancel = context.WithCancel(context.Background())
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "invalid-encrypt-password", t.workerClients)
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
 	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(resp.Result, check.IsTrue)
 	clearSchedulerEnv(c, cancel, &wg)
 }
 
@@ -426,6 +440,202 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Matches, errCheckSyncConfigReg)
+	clearSchedulerEnv(c, cancel, &wg)
+}
+
+type mockDBProvider struct {
+	db *sql.DB
+}
+
+// Apply will build BaseDB with DBConfig
+func (d *mockDBProvider) Apply(config config.DBConfig) (*conn.BaseDB, error) {
+	return conn.NewBaseDB(d.db), nil
+}
+
+func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	server := testDefaultMasterServer(c)
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	server.etcdClient = etcdTestCli
+
+	// test start task successfully
+	var wg sync.WaitGroup
+	// taskName is relative to taskConfig
+	cfg := config.NewTaskConfig()
+	err := cfg.Decode(taskConfig)
+	c.Assert(err, check.IsNil)
+	taskName := cfg.Name
+	ctx, cancel := context.WithCancel(context.Background())
+	logger := log.L()
+
+	// test remove meta with pessimist
+	cfg.ShardMode = config.ShardPessimistic
+	req := &pb.StartTaskRequest{
+		Task:       strings.ReplaceAll(taskConfig, `shard-mode: ""`, fmt.Sprintf(`shard-mode: "%s"`, cfg.ShardMode)),
+		Sources:    sources,
+		RemoveMeta: true,
+	}
+	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
+		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, req))
+	server.pessimist = shardddl.NewPessimist(&logger, func(task string) []string { return sources })
+	server.optimist = shardddl.NewOptimist(&logger)
+
+	var (
+		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		schema, table = "foo", "bar"
+		ID            = fmt.Sprintf("%s-`%s`.`%s`", taskName, schema, table)
+		i11           = pessimism.NewInfo(taskName, sources[0], schema, table, DDLs)
+		op2           = pessimism.NewOperation(ID, taskName, sources[0], DDLs, true, false)
+	)
+	_, err = pessimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, check.IsNil)
+	_, succ, err := pessimism.PutOperations(etcdTestCli, false, op2)
+	c.Assert(succ, check.IsTrue)
+	c.Assert(err, check.IsNil)
+
+	c.Assert(server.pessimist.Start(ctx, etcdTestCli), check.IsNil)
+	c.Assert(server.optimist.Start(ctx, etcdTestCli), check.IsNil)
+
+	db, mock, err := sqlmock.New()
+	c.Assert(err, check.IsNil)
+	conn.DefaultDBProvider = &mockDBProvider{db: db}
+	defer func() {
+		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+	}()
+	mock.ExpectBegin()
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+	c.Assert(len(server.pessimist.Locks()), check.Greater, 0)
+
+	resp, err := server.StartTask(context.Background(), req)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		time.Sleep(10 * time.Microsecond)
+		// start another same task at the same time, should get err
+		resp1, err1 := server.StartTask(context.Background(), req)
+		c.Assert(err1, check.IsNil)
+		c.Assert(resp1.Result, check.IsFalse)
+		c.Assert(resp1.Msg, check.Equals, terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
+			"while remove-meta is true").Error())
+	}()
+	c.Assert(err, check.IsNil)
+	if !resp.Result {
+		c.Errorf("start task failed: %s", resp.Msg)
+	}
+	for _, source := range sources {
+		t.subTaskStageMatch(c, server.scheduler, taskName, source, pb.Stage_Running)
+		tcm, _, err2 := ha.GetSubTaskCfg(etcdTestCli, source, taskName, 0)
+		c.Assert(err2, check.IsNil)
+		c.Assert(tcm, check.HasKey, taskName)
+		c.Assert(tcm[taskName].Name, check.Equals, taskName)
+		c.Assert(tcm[taskName].SourceID, check.Equals, source)
+	}
+
+	c.Assert(server.pessimist.Locks(), check.HasLen, 0)
+	if err = mock.ExpectationsWereMet(); err != nil {
+		c.Errorf("db unfulfilled expectations: %s", err)
+	}
+	ifm, _, err := pessimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, check.IsNil)
+	c.Assert(ifm, check.HasLen, 0)
+	opm, _, err := pessimism.GetAllOperations(etcdTestCli)
+	c.Assert(err, check.IsNil)
+	c.Assert(opm, check.HasLen, 0)
+	clearSchedulerEnv(c, cancel, &wg)
+
+	// test remove meta with optimist
+	ctx, cancel = context.WithCancel(context.Background())
+	cfg.ShardMode = config.ShardOptimistic
+	req = &pb.StartTaskRequest{
+		Task:       strings.ReplaceAll(taskConfig, `shard-mode: ""`, fmt.Sprintf(`shard-mode: "%s"`, cfg.ShardMode)),
+		Sources:    sources,
+		RemoveMeta: true,
+	}
+	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
+		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, req))
+	server.pessimist = shardddl.NewPessimist(&logger, func(task string) []string { return sources })
+	server.optimist = shardddl.NewOptimist(&logger)
+
+	var (
+		p           = parser.New()
+		se          = tidbmock.NewContext()
+		tblID int64 = 111
+
+		st1      = optimism.NewSourceTables(taskName, sources[0])
+		DDLs1    = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		tiBefore = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		tiAfter1 = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		info1    = optimism.NewInfo(taskName, sources[0], "foo-1", "bar-1", schema, table, DDLs1, tiBefore, tiAfter1)
+		op1      = optimism.NewOperation(ID, taskName, sources[0], info1.UpSchema, info1.UpTable, DDLs1, optimism.ConflictNone, false)
+	)
+
+	_, err = optimism.PutSourceTables(etcdTestCli, st1)
+	c.Assert(err, check.IsNil)
+	_, err = optimism.PutInfo(etcdTestCli, info1)
+	c.Assert(err, check.IsNil)
+	_, succ, err = optimism.PutOperation(etcdTestCli, false, op1)
+	c.Assert(succ, check.IsTrue)
+	c.Assert(err, check.IsNil)
+
+	err = server.pessimist.Start(ctx, etcdTestCli)
+	c.Assert(err, check.IsNil)
+	err = server.optimist.Start(ctx, etcdTestCli)
+	c.Assert(err, check.IsNil)
+
+	db, mock, err = sqlmock.New()
+	c.Assert(err, check.IsNil)
+	conn.DefaultDBProvider = &mockDBProvider{db: db}
+	mock.ExpectBegin()
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+	c.Assert(len(server.optimist.Locks()), check.Greater, 0)
+
+	resp, err = server.StartTask(context.Background(), req)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		time.Sleep(10 * time.Microsecond)
+		// start another same task at the same time, should get err
+		resp1, err1 := server.StartTask(context.Background(), req)
+		c.Assert(err1, check.IsNil)
+		c.Assert(resp1.Result, check.IsFalse)
+		c.Assert(resp1.Msg, check.Equals, terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
+			"while remove-meta is true").Error())
+	}()
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	for _, source := range sources {
+		t.subTaskStageMatch(c, server.scheduler, taskName, source, pb.Stage_Running)
+		tcm, _, err2 := ha.GetSubTaskCfg(etcdTestCli, source, taskName, 0)
+		c.Assert(err2, check.IsNil)
+		c.Assert(tcm, check.HasKey, taskName)
+		c.Assert(tcm[taskName].Name, check.Equals, taskName)
+		c.Assert(tcm[taskName].SourceID, check.Equals, source)
+	}
+
+	c.Assert(server.optimist.Locks(), check.HasLen, 0)
+	if err = mock.ExpectationsWereMet(); err != nil {
+		c.Errorf("db unfulfilled expectations: %s", err)
+	}
+	ifm2, _, err := optimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, check.IsNil)
+	c.Assert(ifm2, check.HasLen, 0)
+	opm2, _, err := optimism.GetAllOperations(etcdTestCli)
+	c.Assert(err, check.IsNil)
+	c.Assert(opm2, check.HasLen, 0)
+	tbm, _, err := optimism.GetAllSourceTables(etcdTestCli)
+	c.Assert(err, check.IsNil)
+	c.Assert(tbm, check.HasLen, 0)
+
 	clearSchedulerEnv(c, cancel, &wg)
 }
 
@@ -821,7 +1031,7 @@ func (t *testMaster) TestServer(c *check.C) {
 	dupServer := NewServer(cfg)
 	err := dupServer.Start(ctx)
 	c.Assert(terror.ErrMasterStartEmbedEtcdFail.Equal(err), check.IsTrue)
-	c.Assert(err.Error(), check.Matches, ".*bind: address already in use")
+	c.Assert(err.Error(), check.Matches, ".*bind: address already in use.*")
 
 	// close
 	cancel()
@@ -927,6 +1137,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	defer s1.Close()
 	mysqlCfg := config.NewSourceConfig()
 	mysqlCfg.LoadFromFile("./source.toml")
+	mysqlCfg.From.Password = os.Getenv("MYSQL_PSWD")
 	task, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
 	sourceID := mysqlCfg.SourceID
@@ -934,7 +1145,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	time.Sleep(3 * time.Second)
 
 	// 2. try to add a new mysql source
-	req := &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: task}
+	req := &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: []string{task}}
 	resp, err := s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, true)
@@ -947,47 +1158,113 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	c.Assert(unBoundSources, check.HasLen, 1)
 	c.Assert(unBoundSources[0], check.Equals, sourceID)
 
-	// 3. try to stop a non-exist-source
-	req.Op = pb.SourceOp_StopSource
-	mysqlCfg.SourceID = "not-exist-source"
+	// 3. try to add multiple source
+	// 3.1 duplicated source id
+	sourceID2 := "mysql-replica-02"
+	mysqlCfg.SourceID = sourceID2
 	task2, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
-	req.Config = task2
+	req = &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: []string{task2, task2}}
+	resp, err = s1.OperateSource(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.Equals, false)
+	c.Assert(resp.Msg, check.Matches, ".*source config with ID "+sourceID2+" already exists.*")
+	// 3.2 run same command after correction
+	sourceID3 := "mysql-replica-03"
+	mysqlCfg.SourceID = sourceID3
+	task3, err := mysqlCfg.Toml()
+	c.Assert(err, check.IsNil)
+	req = &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: []string{task2, task3}}
+	resp, err = s1.OperateSource(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.Equals, true)
+	c.Assert(resp.Sources, check.DeepEquals, []*pb.CommonWorkerResponse{{
+		Result: true,
+		Msg:    "source is added but there is no free worker to bound",
+		Source: sourceID2,
+	}, {
+		Result: true,
+		Msg:    "source is added but there is no free worker to bound",
+		Source: sourceID3,
+	}})
+	unBoundSources = s1.scheduler.UnboundSources()
+	c.Assert(unBoundSources, check.HasLen, 3)
+	c.Assert(unBoundSources[0], check.Equals, sourceID)
+	c.Assert(unBoundSources[1], check.Equals, sourceID2)
+	c.Assert(unBoundSources[2], check.Equals, sourceID3)
+
+	// 4. try to stop a non-exist-source
+	req.Op = pb.SourceOp_StopSource
+	mysqlCfg.SourceID = "not-exist-source"
+	task4, err := mysqlCfg.Toml()
+	c.Assert(err, check.IsNil)
+	req.Config = []string{task4}
 	resp, err = s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, false)
 	c.Assert(resp.Msg, check.Matches, `[\s\S]*source config with ID `+mysqlCfg.SourceID+` not exists[\s\S]*`)
 
-	// 4. start a new worker, the unbounded source should be bounded
+	// 5. start workers, the unbounded sources should be bounded
 	var wg sync.WaitGroup
 	ctx1, cancel1 := context.WithCancel(ctx)
-	workerName := "worker1"
+	ctx2, cancel2 := context.WithCancel(ctx)
+	ctx3, cancel3 := context.WithCancel(ctx)
+	workerName1 := "worker1"
+	workerName2 := "worker2"
+	workerName3 := "worker3"
 	defer func() {
 		clearSchedulerEnv(c, cancel1, &wg)
+		clearSchedulerEnv(c, cancel2, &wg)
+		clearSchedulerEnv(c, cancel3, &wg)
 	}()
-	c.Assert(s1.scheduler.AddWorker(workerName, "172.16.10.72:8262"), check.IsNil)
+	c.Assert(s1.scheduler.AddWorker(workerName1, "172.16.10.72:8262"), check.IsNil)
 	wg.Add(1)
 	go func(ctx context.Context, workerName string) {
 		defer wg.Done()
 		c.Assert(ha.KeepAlive(ctx, s1.etcdClient, workerName, keepAliveTTL), check.IsNil)
-	}(ctx1, workerName)
+	}(ctx1, workerName1)
+	c.Assert(s1.scheduler.AddWorker(workerName2, "172.16.10.72:8263"), check.IsNil)
+	wg.Add(1)
+	go func(ctx context.Context, workerName string) {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx, s1.etcdClient, workerName, keepAliveTTL), check.IsNil)
+	}(ctx2, workerName2)
+	c.Assert(s1.scheduler.AddWorker(workerName3, "172.16.10.72:8264"), check.IsNil)
+	wg.Add(1)
+	go func(ctx context.Context, workerName string) {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx, s1.etcdClient, workerName, keepAliveTTL), check.IsNil)
+	}(ctx3, workerName3)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		w := s1.scheduler.GetWorkerBySource(sourceID)
-		return w != nil && w.BaseInfo().Name == workerName
+		return w != nil
 	}), check.IsTrue)
 
-	// 5. stop this source
-	req.Config = task
+	// 6. stop sources
+	req.Config = []string{task, task2, task3}
 	req.Op = pb.SourceOp_StopSource
+
 	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 	mockRevelantWorkerClient(mockWorkerClient, "", sourceID, req)
-	s1.scheduler.SetWorkerClientForTest(workerName, newMockRPCClient(mockWorkerClient))
+	s1.scheduler.SetWorkerClientForTest(workerName1, newMockRPCClient(mockWorkerClient))
+	mockWorkerClient2 := pbmock.NewMockWorkerClient(ctrl)
+	mockRevelantWorkerClient(mockWorkerClient2, "", sourceID2, req)
+	s1.scheduler.SetWorkerClientForTest(workerName2, newMockRPCClient(mockWorkerClient2))
+	mockWorkerClient3 := pbmock.NewMockWorkerClient(ctrl)
+	mockRevelantWorkerClient(mockWorkerClient3, "", sourceID3, req)
+	s1.scheduler.SetWorkerClientForTest(workerName3, newMockRPCClient(mockWorkerClient3))
 	resp, err = s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, true)
 	c.Assert(resp.Sources, check.DeepEquals, []*pb.CommonWorkerResponse{{
 		Result: true,
 		Source: sourceID,
+	}, {
+		Result: true,
+		Source: sourceID2,
+	}, {
+		Result: true,
+		Source: sourceID3,
 	}})
 	scm, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
 	c.Assert(err, check.IsNil)
@@ -995,50 +1272,153 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	cancel()
 }
 
-func (t *testMaster) TestOfflineWorker(c *check.C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+func generateServerConfig(c *check.C, name string) *Config {
 	// create a new cluster
 	cfg1 := NewConfig()
 	c.Assert(cfg1.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
-	cfg1.Name = "dm-master-1"
+	cfg1.Name = name
 	cfg1.DataDir = c.MkDir()
 	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg1.AdvertiseAddr = cfg1.MasterAddr
 	cfg1.PeerUrls = tempurl.Alloc()
 	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
 	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
+	return cfg1
+}
 
+func (t *testMaster) TestOfflineMember(c *check.C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	cfg1 := generateServerConfig(c, "dm-master-1")
+	cfg2 := generateServerConfig(c, "dm-master-2")
+	cfg3 := generateServerConfig(c, "dm-master-3")
+
+	initialCluster := fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls) + "," +
+		fmt.Sprintf("%s=%s", cfg2.Name, cfg2.AdvertisePeerUrls) + "," +
+		fmt.Sprintf("%s=%s", cfg3.Name, cfg3.AdvertisePeerUrls)
+	cfg1.InitialCluster = initialCluster
+	cfg2.InitialCluster = initialCluster
+	cfg3.InitialCluster = initialCluster
+
+	var wg sync.WaitGroup
 	s1 := NewServer(cfg1)
-	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
+	wg.Add(1)
+	go func() {
+		c.Assert(s1.Start(ctx), check.IsNil)
+		wg.Done()
+	}()
 
-	time.Sleep(time.Second * 2)
+	s2 := NewServer(cfg2)
+	defer s2.Close()
+	wg.Add(1)
+	go func() {
+		c.Assert(s2.Start(ctx), check.IsNil)
+		wg.Done()
+	}()
 
+	ctx3, cancel3 := context.WithCancel(ctx)
+	s3 := NewServer(cfg3)
+	c.Assert(s3.Start(ctx3), check.IsNil)
+	defer s3.Close()
+	defer cancel3()
+
+	wg.Wait()
+	time.Sleep(time.Second)
+	_, leaderID, _, err := s1.election.LeaderInfo(ctx)
+	c.Assert(err, check.IsNil)
+
+	// master related operations
+	req := &pb.OfflineMemberRequest{
+		Type: "masters",
+		Name: "xixi",
+	}
+	// test offline member with wrong type
+	resp, err := s2.OfflineMember(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(resp.Msg, check.Equals, terror.ErrMasterInvalidOfflineType.Generate(req.Type).Error())
+	// test offline member with invalid master name
+	req.Type = common.Master
+	resp, err = s2.OfflineMember(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(resp.Msg, check.Matches, `[\s\S]*dm-master with name `+req.Name+` not exists[\s\S]*`)
+	// test offline member with correct master name
+	cli := s2.etcdClient
+	listResp, err := etcdutil.ListMembers(cli)
+	c.Assert(err, check.IsNil)
+	c.Assert(listResp.Members, check.HasLen, 3)
+
+	cancel3()
+	s3.Close()
+	// make sure s3 is not the leader, otherwise OfflineMember request will send to s3
+	c.Assert(utils.WaitSomething(20, 500*time.Millisecond, func() bool {
+		_, leaderID, _, err := s1.election.LeaderInfo(ctx)
+		if err != nil {
+			return false
+		}
+		return leaderID != s3.cfg.Name
+	}), check.IsTrue)
+	req.Name = s3.cfg.Name
+	resp, err = s2.OfflineMember(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Msg, check.Equals, "")
+	c.Assert(resp.Result, check.IsTrue)
+
+	listResp, err = etcdutil.ListMembers(cli)
+	c.Assert(err, check.IsNil)
+	c.Assert(listResp.Members, check.HasLen, 2)
+	if listResp.Members[0].Name == cfg2.Name {
+		listResp.Members[0], listResp.Members[1] = listResp.Members[1], listResp.Members[0]
+	}
+	c.Assert(listResp.Members[0].Name, check.Equals, cfg1.Name)
+	c.Assert(listResp.Members[1].Name, check.Equals, cfg2.Name)
+
+	_, leaderID2, _, err := s1.election.LeaderInfo(ctx)
+	c.Assert(err, check.IsNil)
+
+	if leaderID == cfg3.Name {
+		// s3 is leader before, leader should re-campaign
+		c.Assert(leaderID != leaderID2, check.IsTrue)
+	} else {
+		// s3 isn't leader before, leader should keep the same
+		c.Assert(leaderID, check.Equals, leaderID2)
+	}
+
+	// worker related operations
 	ectx, canc := context.WithTimeout(ctx, time.Second)
 	defer canc()
 	req1 := &pb.RegisterWorkerRequest{
 		Name:    "xixi",
 		Address: "127.0.0.1:1000",
 	}
-	resp, err := s1.RegisterWorker(ectx, req1)
+	regReq, err := s1.RegisterWorker(ectx, req1)
 	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(regReq.Result, check.IsTrue)
 
-	req2 := &pb.OfflineWorkerRequest{
-		Name:    "haha",
-		Address: "127.0.0.1:1000",
+	req2 := &pb.OfflineMemberRequest{
+		Type: common.Worker,
+		Name: "haha",
 	}
 	{
-		res, err := s1.OfflineWorker(ectx, req2)
+		res, err := s1.OfflineMember(ectx, req2)
 		c.Assert(err, check.IsNil)
 		c.Assert(res.Result, check.IsFalse)
 		c.Assert(res.Msg, check.Matches, `[\s\S]*dm-worker with name `+req2.Name+` not exists[\s\S]*`)
 	}
 	{
 		req2.Name = "xixi"
-		res, err := s1.OfflineWorker(ectx, req2)
+		res, err := s1.OfflineMember(ectx, req2)
 		c.Assert(err, check.IsNil)
 		c.Assert(res.Result, check.IsTrue)
+	}
+	{
+		// register offline worker again. TICASE-962, 963
+		resp, err := s1.RegisterWorker(ectx, req1)
+		c.Assert(err, check.IsNil)
+		c.Assert(resp.Result, check.IsTrue)
 	}
 }
 
@@ -1141,4 +1521,20 @@ func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskNam
 			Name: taskName,
 		},
 	).Return(queryResp, nil).MaxTimes(maxRetryNum)
+}
+
+func createTableInfo(c *check.C, p *parser.Parser, se sessionctx.Context, tableID int64, sql string) *model.TableInfo {
+	node, err := p.ParseOneStmt(sql, "utf8mb4", "utf8mb4_bin")
+	if err != nil {
+		c.Fatalf("fail to parse stmt, %v", err)
+	}
+	createStmtNode, ok := node.(*ast.CreateTableStmt)
+	if !ok {
+		c.Fatalf("%s is not a CREATE TABLE statement", sql)
+	}
+	info, err := tiddl.MockTableInfo(se, createStmtNode, tableID)
+	if err != nil {
+		c.Fatalf("fail to create table info, %v", err)
+	}
+	return info
 }

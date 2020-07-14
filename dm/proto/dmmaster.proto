@@ -55,13 +55,45 @@ service Master {
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
 
     // Operate an upstream MySQL source.
-    rpc OperateSource(OperateSourceRequest) returns (OperateSourceResponse) {}
+    rpc OperateSource(OperateSourceRequest) returns (OperateSourceResponse) {
+        option (google.api.http) = {
+            put: "/apis/v1alpha1/sources"
+            body: "*"
+        };
+    }
 
     // RegisterWorker register the dm-workers.
     rpc RegisterWorker(RegisterWorkerRequest) returns(RegisterWorkerResponse) {}
 
-    // OfflineWorker offline the dm-workers.
-    rpc OfflineWorker(OfflineWorkerRequest) returns(OfflineWorkerResponse) {}
+    // OfflineMember offline the dm cluster's members (master/worker).
+    rpc OfflineMember(OfflineMemberRequest) returns(OfflineMemberResponse) {
+        option (google.api.http) = {
+            delete: "/apis/v1alpha1/members/{type}/{name}"
+        };
+    }
+
+    // OperateLeader do some operate on master:
+    //   - evict leader: make the master resign if it is leader, and will not campaign the leader again
+    //   - cancel evict leader: the master can campaign leader again.
+    rpc OperateLeader(OperateLeaderRequest) returns(OperateLeaderResponse) {
+        option (google.api.http) = { 
+            put: "/apis/v1alpha1/leader/{op}"
+            body: "*"
+        };
+    }
+
+    // ListMember list member information
+    rpc ListMember(ListMemberRequest) returns(ListMemberResponse) {
+        option (google.api.http) = {
+            get: "/apis/v1alpha1/members"
+        };
+    }
+
+    rpc GetSubTaskCfg(GetSubTaskCfgRequest) returns(GetSubTaskCfgResponse) {
+        option (google.api.http) = {
+            get: "/apis/v1alpha1/subtasks/{name}"
+        };
+    }
 }
 
 message MigrateWorkerRelayRequest {
@@ -78,6 +110,7 @@ message UpdateWorkerRelayConfigRequest {
 message StartTaskRequest {
     string task = 1; // task's configuration, yaml format
     repeated string sources = 2; // mysql source need to do start task, empty for all matched workers in deployment
+    bool removeMeta = 3; // whether to remove meta data for this task or not
 }
 
 message StartTaskResponse {
@@ -112,7 +145,7 @@ message OperateTaskResponse {
 
 // UpdateTaskRequest used to update task after it has beed started
 // task: task's configuration, yaml format
-//       now, only support to update config for routes, filters, column-mappings, black-white-list
+//       now, only support to update config for routes, filters, column-mappings, block-allow-list
 //       support update partial config for syncer, loader, etc later
 // sources need to do update, empty for all sources in processing the task
 message UpdateTaskRequest {
@@ -278,7 +311,7 @@ enum SourceOp {
 
 message OperateSourceRequest {
     SourceOp op = 1;
-    string config = 2;
+    repeated string config = 2;
 }
 
 message OperateSourceResponse {
@@ -297,12 +330,90 @@ message RegisterWorkerResponse {
     string msg = 2;
 }
 
-message OfflineWorkerRequest {
-    string name = 1;
-    string address = 2;
+message OfflineMemberRequest {
+    string type = 1;
+    string name = 2;
 }
 
-message OfflineWorkerResponse {
+message OfflineMemberResponse {
     bool result = 1;
     string msg = 2;
+}
+
+enum LeaderOp {
+    InvalidLeaderOp = 0;
+    EvictLeaderOp = 1;
+    CancelEvictLeaderOp = 2;
+}
+
+message OperateLeaderRequest {
+    LeaderOp op = 1;
+}
+
+message OperateLeaderResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+message MasterInfo {
+    string name = 1;
+    uint64 memberID = 2;
+    bool alive = 3;
+    repeated string peerURLs = 4;
+    repeated string clientURLs = 5;
+}
+
+message WorkerInfo {
+    string name = 1;
+    string addr = 2;
+    string stage = 3;
+    string source = 4;
+}
+
+message ListLeaderMember {
+    string msg = 1;
+    string name = 2;
+    string addr = 3;
+}
+
+message ListMasterMember {
+    string msg = 1;
+    repeated MasterInfo masters = 2;
+}
+
+message ListWorkerMember {
+    string msg = 1;
+    repeated WorkerInfo workers = 2;
+}
+
+message Members {
+    oneof member {
+        ListLeaderMember leader = 1;
+        ListMasterMember master = 2;
+        ListWorkerMember worker = 3;
+    }
+}
+
+message ListMemberRequest {
+    bool leader = 1;
+    bool master = 2;
+    bool worker = 3;
+    repeated string names = 4;
+}
+
+message ListMemberResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated Members members = 3;
+}
+
+message GetSubTaskCfgRequest {
+    // the task name
+    string name = 1;
+}
+
+message GetSubTaskCfgResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated string cfgs = 3;
 }

@@ -148,7 +148,9 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *me
 	if err != nil {
 		return 0, terror.ErrDBExecuteFailed.Delegate(err, "begin")
 	}
-	hVec.WithLabelValues("begin", task).Observe(time.Since(startTime).Seconds())
+	if hVec != nil {
+		hVec.WithLabelValues("begin", task).Observe(time.Since(startTime).Seconds())
+	}
 
 	l := len(queries)
 
@@ -165,7 +167,9 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *me
 		startTime = time.Now()
 		_, err = txn.ExecContext(tctx.Context(), query, arg...)
 		if err == nil {
-			hVec.WithLabelValues("stmt", task).Observe(time.Since(startTime).Seconds())
+			if hVec != nil {
+				hVec.WithLabelValues("stmt", task).Observe(time.Since(startTime).Seconds())
+			}
 		} else {
 			if ignoreErr != nil && ignoreErr(err) {
 				tctx.L().Warn("execute statement failed and will ignore this error",
@@ -186,7 +190,7 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *me
 					zap.String("query", utils.TruncateString(query, -1)),
 					zap.String("argument", utils.TruncateInterface(arg, -1)),
 					log.ShortError(rerr))
-			} else {
+			} else if hVec != nil {
 				hVec.WithLabelValues("rollback", task).Observe(time.Since(startTime).Seconds())
 			}
 			// we should return the exec err, instead of the rollback rerr.
@@ -198,7 +202,9 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *me
 	if err != nil {
 		return l - 1, terror.ErrDBExecuteFailed.Delegate(err, "commit") // mark failed on the last one
 	}
-	hVec.WithLabelValues("commit", task).Observe(time.Since(startTime).Seconds())
+	if hVec != nil {
+		hVec.WithLabelValues("commit", task).Observe(time.Since(startTime).Seconds())
+	}
 	return l, nil
 }
 

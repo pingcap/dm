@@ -62,17 +62,14 @@ func (t *testConfig) TestConfig(c *C) {
 	// test decrypt password
 	clone1.From.Password = "1234"
 	clone1.ServerID = 101
-	clone2, err := cfg.DecryptPassword()
-	c.Assert(err, IsNil)
+	clone2 := cfg.DecryptPassword()
 	c.Assert(clone2, DeepEquals, clone1)
 
 	cfg.From.Password = "xxx"
-	_, err = cfg.DecryptPassword()
-	c.Assert(err, NotNil)
+	cfg.DecryptPassword()
 
 	cfg.From.Password = ""
-	clone3, err := cfg.DecryptPassword()
-	c.Assert(err, IsNil)
+	clone3 := cfg.DecryptPassword()
 	c.Assert(clone3, DeepEquals, cfg)
 
 	// test toml and parse again
@@ -99,7 +96,7 @@ aaa = "xxx"
 	c.Assert(err, IsNil)
 	err = cfg.LoadFromFile(configFile)
 	c.Assert(err, NotNil)
-	c.Assert(err, ErrorMatches, ".*worker config contains unknown configuration options: aaa")
+	c.Assert(err, ErrorMatches, ".*worker config contains unknown configuration options: aaa.*")
 }
 
 func (t *testConfig) TestConfigVerify(c *C) {
@@ -133,7 +130,7 @@ func (t *testConfig) TestConfigVerify(c *C) {
 				cfg.SourceID = "source-id-length-more-than-thirty-two"
 				return cfg
 			},
-			fmt.Sprintf(".*the length of source ID .* is more than max allowed value %d", MaxSourceIDLength),
+			fmt.Sprintf(".*the length of source ID .* is more than max allowed value %d.*", MaxSourceIDLength),
 		},
 		{
 			func() *SourceConfig {
@@ -167,7 +164,31 @@ func (t *testConfig) TestConfigVerify(c *C) {
 				cfg.From.Password = "not-encrypt"
 				return cfg
 			},
-			"*decode base64 encoded password.*",
+			"",
+		},
+		{
+			func() *SourceConfig {
+				cfg := newConfig()
+				cfg.From.Password = "" // password empty
+				return cfg
+			},
+			"",
+		},
+		{
+			func() *SourceConfig {
+				cfg := newConfig()
+				cfg.From.Password = "123456" // plaintext password
+				return cfg
+			},
+			"",
+		},
+		{
+			func() *SourceConfig {
+				cfg := newConfig()
+				cfg.From.Password = "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs=" // encrypt password (123456)
+				return cfg
+			},
+			"",
 		},
 	}
 
@@ -214,7 +235,7 @@ func (t *testConfig) TestAdjustFlavor(c *C) {
 	c.Assert(cfg.Flavor, Equals, mysql.MariaDBFlavor)
 	cfg.Flavor = "MongoDB"
 	err = cfg.AdjustFlavor(context.Background(), nil)
-	c.Assert(err, ErrorMatches, ".*flavor MongoDB not supported")
+	c.Assert(err, ErrorMatches, ".*flavor MongoDB not supported.*")
 
 	subtestFlavor(c, cfg, "10.4.8-MariaDB-1:10.4.8+maria~bionic", mysql.MariaDBFlavor, "")
 	subtestFlavor(c, cfg, "5.7.26-log", mysql.MySQLFlavor, "")

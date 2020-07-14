@@ -48,11 +48,11 @@ func (t *testServer) testWorker(c *C) {
 		NewRelayHolder = NewRealRelayHolder
 	}()
 
-	_, err := NewWorker(&cfg, nil)
+	_, err := NewWorker(&cfg, nil, "")
 	c.Assert(err, ErrorMatches, "init error")
 
 	NewRelayHolder = NewDummyRelayHolder
-	w, err := NewWorker(&cfg, nil)
+	w, err := NewWorker(&cfg, nil, "")
 	c.Assert(err, IsNil)
 	c.Assert(w.StatusJSON(""), HasLen, emptyWorkerStatusInfoJSONLength)
 	//c.Assert(w.closed.Get(), Equals, closedFalse)
@@ -90,7 +90,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		taskName = "sub-task-name"
 		port     = 8263
 	)
-	hostName := "127.0.0.1:8291"
+	hostName := "127.0.0.1:8261"
 	etcdDir := c.MkDir()
 	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
 	c.Assert(err, IsNil)
@@ -226,7 +226,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	sourceCfg.EnableRelay = false
 
 	// step 1: start worker
-	w, err := NewWorker(&sourceCfg, etcdCli)
+	w, err := NewWorker(&sourceCfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -339,7 +339,7 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	sourceCfg.MetaDir = c.MkDir()
 
 	// step 1: start worker
-	w, err := NewWorker(&sourceCfg, etcdCli)
+	w, err := NewWorker(&sourceCfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

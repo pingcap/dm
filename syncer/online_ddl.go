@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/pingcap/parser/ast"
@@ -99,7 +100,7 @@ func NewOnlineDDLStorage(logCtx *tcontext.Context, cfg *config.SubTaskConfig) *O
 	s := &OnlineDDLStorage{
 		cfg:    cfg,
 		schema: cfg.MetaSchema,
-		table:  fmt.Sprintf("%s_onlineddl", cfg.Name),
+		table:  cputil.SyncerOnlineDDL(cfg.Name),
 		id:     cfg.SourceID,
 		ddls:   make(map[string]map[string]*GhostDDLInfo),
 		logCtx: logCtx,

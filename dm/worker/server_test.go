@@ -95,7 +95,7 @@ func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 
 func (t *testServer) TestServer(c *C) {
 	var (
-		masterAddr   = "127.0.0.1:8291"
+		masterAddr   = "127.0.0.1:8261"
 		workerAddr1  = "127.0.0.1:8262"
 		keepAliveTTL = int64(1)
 	)
@@ -208,7 +208,7 @@ func (t *testServer) TestServer(c *C) {
 	dupServer := NewServer(cfg)
 	err = dupServer.Start()
 	c.Assert(terror.ErrWorkerStartService.Equal(err), IsTrue)
-	c.Assert(err.Error(), Matches, ".*bind: address already in use")
+	c.Assert(err.Error(), Matches, ".*bind: address already in use.*")
 
 	t.testStopWorkerWhenLostConnect(c, s, ETCD)
 	// close
@@ -224,7 +224,7 @@ func (t *testServer) TestServer(c *C) {
 
 func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	var (
-		masterAddr   = "127.0.0.1:8291"
+		masterAddr   = "127.0.0.1:8261"
 		keepAliveTTL = int64(1)
 		startRev     = int64(1)
 	)
@@ -427,7 +427,7 @@ func (t *testServer) TestQueryError(c *C) {
 
 	sourceCfg := loadSourceConfigWithoutPassword(c)
 	sourceCfg.EnableRelay = false
-	w, err := NewWorker(&sourceCfg, nil)
+	w, err := NewWorker(&sourceCfg, nil, "")
 	c.Assert(err, IsNil)
 	w.closed.Set(closedFalse)
 

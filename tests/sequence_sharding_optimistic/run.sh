@@ -27,22 +27,17 @@ run() {
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
     # start DM task only
-    dmctl_start_task
+    dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    # TODO: now one table may fetch updated schema by another table from the downstream, this needs to be supported later.
-    # e.g the initial downstream schema is Ver1, table-A received rows binlog event and want to fetch this Ver1 schema,
-    # but it fetched Ver2 schema (updated by another table-B after applied a DDL).
-    # now we simply ensure schema tracker have tracked all tables' schema before executing shard DDL.
+    # test create and alter database ddl
     run_sql_file $cur/data/db1.increment0.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment0.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
-    # use sync_diff_inspector to check schema fetching increment data.
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-
     # check database `sharding_seq_tmp` exists
+    sleep 2
     run_sql "select count(*) from sharding_seq_tmp.t1;" $TIDB_PORT $TIDB_PASSWORD
     check_contains "count(*): 1"
 

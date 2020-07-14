@@ -35,6 +35,10 @@ type Operation struct {
 	DDLs   []string `json:"ddls"`   // DDL statements
 	Exec   bool     `json:"exec"`   // execute or skip the DDL statements
 	Done   bool     `json:"done"`   // whether the `Exec` operation has done
+
+	// only used to report to the caller of the watcher, do not marsh it.
+	// if it's true, it means the Operation has been deleted in etcd.
+	IsDeleted bool `json:"-"`
 }
 
 // NewOperation creates a new Operation instance.
@@ -165,13 +169,59 @@ func GetAllOperations(cli *clientv3.Client) (map[string]map[string]Operation, in
 	return opm, resp.Header.Revision, nil
 }
 
+// GetInfosOperationsByTask gets all DDL lock infos and operations in etcd currently.
+func GetInfosOperationsByTask(cli *clientv3.Client, task string) ([]Info, []Operation, int64, error) {
+	respTxn, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli,
+		clientv3.OpGet(common.ShardDDLPessimismInfoKeyAdapter.Encode(task), clientv3.WithPrefix()),
+		clientv3.OpGet(common.ShardDDLPessimismOperationKeyAdapter.Encode(task), clientv3.WithPrefix()))
+
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	infoResp := respTxn.Responses[0].GetResponseRange()
+	opsResp := respTxn.Responses[1].GetResponseRange()
+	var (
+		infos = make([]Info, 0, len(infoResp.Kvs))
+		ops   = make([]Operation, 0, len(opsResp.Kvs))
+	)
+	for _, kv := range infoResp.Kvs {
+		info, err2 := infoFromJSON(string(kv.Value))
+		if err2 != nil {
+			return nil, nil, 0, err2
+		}
+		infos = append(infos, info)
+	}
+	for _, kv := range opsResp.Kvs {
+		op, err2 := operationFromJSON(string(kv.Value))
+		if err2 != nil {
+			return nil, nil, 0, err2
+		}
+		ops = append(ops, op)
+	}
+	return infos, ops, respTxn.Header.Revision, nil
+}
+
 // WatchOperationPut watches PUT operations for DDL lock operation.
 // If want to watch all operations, pass empty string for `task` and `source`.
 // This function can be called by DM-worker and DM-master.
 // TODO(csuzhangxc): report error and do some retry.
 func WatchOperationPut(ctx context.Context, cli *clientv3.Client, task, source string, revision int64, outCh chan<- Operation, errCh chan<- error) {
+	watchOperation(ctx, cli, mvccpb.PUT, task, source, revision, outCh, errCh)
+}
+
+// WatchOperationDelete watches DELETE operations for DDL lock operation.
+// If want to watch all operations, pass empty string for `task` and `source`.
+// This function is often called by DM-worker.
+func WatchOperationDelete(ctx context.Context, cli *clientv3.Client, task, source string, revision int64, outCh chan<- Operation, errCh chan<- error) {
+	watchOperation(ctx, cli, mvccpb.DELETE, task, source, revision, outCh, errCh)
+}
+
+// watchOperation watches PUT or DELETE operations for DDL lock operation.
+func watchOperation(ctx context.Context, cli *clientv3.Client, watchType mvccpb.Event_EventType,
+	task, source string, revision int64,
+	outCh chan<- Operation, errCh chan<- error) {
 	ch := cli.Watch(ctx, common.ShardDDLPessimismOperationKeyAdapter.Encode(task, source),
-		clientv3.WithPrefix(), clientv3.WithRev(revision))
+		clientv3.WithPrefix(), clientv3.WithRev(revision), clientv3.WithPrevKV())
 
 	for {
 		select {
@@ -187,18 +237,25 @@ func WatchOperationPut(ctx context.Context, cli *clientv3.Client, task, source s
 			}
 
 			for _, ev := range resp.Events {
-				if ev.Type != mvccpb.PUT {
-					continue
+				var (
+					op  Operation
+					err error
+				)
+
+				if ev.Type == mvccpb.PUT && watchType == mvccpb.PUT {
+					op, err = operationFromJSON(string(ev.Kv.Value))
+				} else if ev.Type == mvccpb.DELETE && watchType == mvccpb.DELETE {
+					op, err = operationFromJSON(string(ev.PrevKv.Value))
+					op.IsDeleted = true
 				}
 
-				op, err := operationFromJSON(string(ev.Kv.Value))
 				if err != nil {
 					select {
 					case errCh <- err:
 					case <-ctx.Done():
 						return
 					}
-				} else {
+				} else if op.Task != "" { // valid operation got.
 					select {
 					case outCh <- op:
 					case <-ctx.Done():

@@ -33,8 +33,8 @@ type Lock struct {
 	ID   string // lock's ID
 	Task string // lock's corresponding task name
 
-	downSchema string // downstream schema name
-	downTable  string // downstream table name
+	DownSchema string // downstream schema name
+	DownTable  string // downstream table name
 
 	// current joined info.
 	joined schemacmp.Table
@@ -57,8 +57,8 @@ func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []
 	l := &Lock{
 		ID:         ID,
 		Task:       task,
-		downSchema: downSchema,
-		downTable:  downTable,
+		DownSchema: downSchema,
+		DownTable:  downTable,
 		joined:     schemacmp.Encode(ti),
 		tables:     make(map[string]map[string]map[string]schemacmp.Table),
 		done:       make(map[string]map[string]map[string]bool),
@@ -95,13 +95,21 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	// handle the case where <callerSource, callerSchema, callerTable>
 	// is not in old source tables and current new source tables.
 	// duplicate append is not a problem.
-	tts = append(tts, newTargetTable(l.Task, callerSource, l.downSchema, l.downTable,
+	tts = append(tts, newTargetTable(l.Task, callerSource, l.DownSchema, l.DownTable,
 		map[string]map[string]struct{}{callerSchema: {callerTable: struct{}{}}}))
 	// add any new source tables.
 	l.addTables(tts)
 
+	var emptyDDLs = []string{}
 	oldTable := l.tables[callerSource][callerSchema][callerTable]
 	newTable := schemacmp.Encode(newTI)
+
+	// special case: check whether DDLs making the schema become part of larger and another part of smaller.
+	if _, err = oldTable.Compare(newTable); err != nil {
+		return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+			err, l.ID, fmt.Sprintf("there will be conflicts if DDLs %s are applied to the downstream. old table info: %s, new table info: %s", ddls, oldTable, newTable))
+	}
+
 	oldJoined := l.joined
 	newJoined := newTable
 	l.tables[callerSource][callerSchema][callerTable] = newTable
@@ -117,7 +125,6 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	}
 
 	// try to join tables.
-	var emptyDDLs = []string{}
 	for source, schemaTables := range l.tables {
 		for schema, tables := range schemaTables {
 			for table, ti := range tables {
@@ -174,11 +181,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	// and any DML with smaller schema can fit both the larger or smaller schema.
 	// To make it easy to implement, we will temporarily choose strategy-B.
 
-	cmp, err = oldTable.Compare(newTable)
-	if err != nil {
-		return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
-			err, l.ID, fmt.Sprintf("can't compare table info (old table info) %s with (new table info) %s", oldTable, newTable)) // NOTE: this should not happen.
-	}
+	cmp, _ = oldTable.Compare(newTable) // we have checked `err` returned above.
 	if cmp < 0 {
 		// let every table to replicate the DDL.
 		return ddls, nil

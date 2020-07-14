@@ -28,12 +28,11 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testDumplingSuite struct {
-}
+type testDumplingSuite struct{}
 
 func (m *testDumplingSuite) TestParseArgs(c *C) {
 	cfg := &config.SubTaskConfig{}
-	cfg.ExtraArgs = `--statement-size=100 --where "t>10" --threads 8 -F 50`
+	cfg.ExtraArgs = `--statement-size=100 --where "t>10" --threads 8 -F 50B`
 	d := NewDumpling(cfg)
 	exportCfg, err := d.constructArgs()
 	c.Assert(err, IsNil)

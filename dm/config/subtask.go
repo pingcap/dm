@@ -27,7 +27,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
-	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
+	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
@@ -81,11 +81,12 @@ func (c *RawDBConfig) SetMaxIdleConns(value int) *RawDBConfig {
 
 // DBConfig is the DB configuration.
 type DBConfig struct {
-	Host             string `toml:"host" json:"host" yaml:"host"`
-	Port             int    `toml:"port" json:"port" yaml:"port"`
-	User             string `toml:"user" json:"user" yaml:"user"`
-	Password         string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
-	MaxAllowedPacket *int   `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
+	Host             string            `toml:"host" json:"host" yaml:"host"`
+	Port             int               `toml:"port" json:"port" yaml:"port"`
+	User             string            `toml:"user" json:"user" yaml:"user"`
+	Password         string            `toml:"password" json:"-" yaml:"password"` // omit it for privacy
+	MaxAllowedPacket *int              `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
+	Session          map[string]string `toml:"session" json:"session" yaml:"session"`
 
 	// security config
 	Security *Security `toml:"security" json:"security" yaml:"security"`
@@ -152,7 +153,6 @@ type SubTaskConfig struct {
 	ServerID                uint32 `toml:"server-id" json:"server-id"`
 	Flavor                  string `toml:"flavor" json:"flavor"`
 	MetaSchema              string `toml:"meta-schema" json:"meta-schema"`
-	RemoveMeta              bool   `toml:"remove-meta" json:"remove-meta"`
 	HeartbeatUpdateInterval int    `toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
 	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
@@ -170,7 +170,10 @@ type SubTaskConfig struct {
 	RouteRules         []*router.TableRule   `toml:"route-rules" json:"route-rules"`
 	FilterRules        []*bf.BinlogEventRule `toml:"filter-rules" json:"filter-rules"`
 	ColumnMappingRules []*column.Rule        `toml:"mapping-rule" json:"mapping-rule"`
-	BWList             *filter.Rules         `toml:"black-white-list" json:"black-white-list"`
+
+	// black-white-list is deprecated, use block-allow-list instead
+	BWList *filter.Rules `toml:"black-white-list" json:"black-white-list"`
+	BAList *filter.Rules `toml:"block-allow-list" json:"block-allow-list"`
 
 	MydumperConfig // Mydumper configuration
 	LoaderConfig   // Loader configuration
@@ -185,6 +188,8 @@ type SubTaskConfig struct {
 	StatusAddr string `toml:"status-addr" json:"status-addr"`
 
 	ConfigFile string `toml:"-" json:"config-file"`
+
+	CleanDumpFile bool `toml:"clean-dump-file" json:"clean-dump-file"`
 
 	// still needed by Syncer / Loader bin
 	printVersion bool
@@ -307,6 +312,11 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		}
 	}
 
+	// only when block-allow-list is nil use black-white-list
+	if c.BAList == nil && c.BWList != nil {
+		c.BAList = c.BWList
+	}
+
 	return nil
 }
 
@@ -356,16 +366,10 @@ func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 		pswdFrom string
 	)
 	if len(clone.To.Password) > 0 {
-		pswdTo, err = utils.Decrypt(clone.To.Password)
-		if err != nil {
-			return nil, terror.WithScope(terror.ErrConfigDecryptDBPassword.Delegate(err, clone.To.Password), terror.ScopeDownstream)
-		}
+		pswdTo = utils.DecryptOrPlaintext(clone.To.Password)
 	}
 	if len(clone.From.Password) > 0 {
-		pswdFrom, err = utils.Decrypt(clone.From.Password)
-		if err != nil {
-			return nil, terror.WithScope(terror.ErrConfigDecryptDBPassword.Delegate(err, clone.From.Password), terror.ScopeUpstream)
-		}
+		pswdFrom = utils.DecryptOrPlaintext(clone.From.Password)
 	}
 	clone.From.Password = pswdFrom
 	clone.To.Password = pswdTo

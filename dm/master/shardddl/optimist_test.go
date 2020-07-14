@@ -40,7 +40,7 @@ var _ = Suite(&testOptimist{})
 
 // clear keys in etcd test cluster.
 func clearOptimistTestSourceInfoOperation(c *C) {
-	c.Assert(optimism.ClearTestInfoOperation(etcdTestCli), IsNil)
+	c.Assert(optimism.ClearTestInfoOperationSchema(etcdTestCli), IsNil)
 }
 
 func createTableInfo(c *C, p *parser.Parser, se sessionctx.Context, tableID int64, sql string) *model.TableInfo {
@@ -156,7 +156,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	var (
 		backOff      = 30
 		waitTime     = 100 * time.Millisecond
-		watchTimeout = 2 * time.Second
+		watchTimeout = 500 * time.Millisecond
 		logger       = log.L()
 		o            = NewOptimist(&logger)
 
@@ -254,8 +254,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait operation for i11 become available.
 	opCh := make(chan optimism.Operation, 10)
 	errCh := make(chan error, 10)
-	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i11.Task, i11.Source, i11.UpSchema, i11.UpTable, rev1, opCh, errCh)
+	ctx2, cancel2 := context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i11.Task, i11.Source, i11.UpSchema, i11.UpTable, rev1, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -309,8 +312,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait operation for i12 become available.
 	opCh = make(chan optimism.Operation, 10)
 	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, opCh, errCh)
+	ctx2, cancel2 = context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -356,8 +362,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait operation for i21 become available.
 	opCh = make(chan optimism.Operation, 10)
 	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i21.Task, i21.Source, i21.UpSchema, i21.UpTable, rev1, opCh, errCh)
+	ctx2, cancel2 = context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i21.Task, i21.Source, i21.UpSchema, i21.UpTable, rev1, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -420,8 +429,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait operation for i23 become available.
 	opCh = make(chan optimism.Operation, 10)
 	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i23.Task, i23.Source, i23.UpSchema, i23.UpTable, rev3, opCh, errCh)
+	ctx2, cancel2 = context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i23.Task, i23.Source, i23.UpSchema, i23.UpTable, rev3, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -437,8 +449,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait until operation for i12 ready.
 	opCh = make(chan optimism.Operation, 10)
 	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, opCh, errCh)
+	ctx2, cancel2 = context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -537,8 +552,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait operation for i31 become available.
 	opCh = make(chan optimism.Operation, 10)
 	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i31.Task, i31.Source, i31.UpSchema, i31.UpTable, rev1, opCh, errCh)
+	ctx2, cancel2 = context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i31.Task, i31.Source, i31.UpSchema, i31.UpTable, rev1, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -587,8 +605,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait operation for i33 become available.
 	opCh = make(chan optimism.Operation, 10)
 	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i33.Task, i33.Source, i33.UpSchema, i33.UpTable, rev3, opCh, errCh)
+	ctx2, cancel2 = context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i33.Task, i33.Source, i33.UpSchema, i33.UpTable, rev3, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -892,4 +913,118 @@ func (t *testOptimist) TestOptimistLockMultipleTarget(c *C) {
 	}), IsTrue)
 	c.Assert(o.Locks(), HasLen, 0)
 	c.Assert(o.ShowLocks("", nil), HasLen, 0)
+}
+
+func (t *testOptimist) TestOptimistInitSchema(c *C) {
+	defer clearOptimistTestSourceInfoOperation(c)
+
+	var (
+		backOff      = 30
+		waitTime     = 100 * time.Millisecond
+		watchTimeout = 2 * time.Second
+		logger       = log.L()
+		o            = NewOptimist(&logger)
+		task         = "test-optimist-init-schema"
+		source       = "mysql-replica-1"
+		upSchema     = "foo"
+		upTables     = []string{"bar-1", "bar-2"}
+		downSchema   = "foo"
+		downTable    = "bar"
+		st           = optimism.NewSourceTables(task, source)
+
+		p           = parser.New()
+		se          = mock.NewContext()
+		tblID int64 = 111
+		DDLs1       = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		DDLs2       = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
+		ti0         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 INT)`)
+		i11         = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable, DDLs1, ti0, ti1)
+		i12         = optimism.NewInfo(task, source, upSchema, upTables[1], downSchema, downTable, DDLs1, ti0, ti1)
+		i21         = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable, DDLs2, ti1, ti2)
+	)
+
+	st.AddTable(upSchema, upTables[0], downSchema, downTable)
+	st.AddTable(upSchema, upTables[1], downSchema, downTable)
+
+	// put source tables first.
+	_, err := optimism.PutSourceTables(etcdTestCli, st)
+	c.Assert(err, IsNil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(o.Locks(), HasLen, 0)
+
+	// no init schema exist now.
+	is, _, err := optimism.GetInitSchema(etcdTestCli, task, downSchema, downTable)
+	c.Assert(err, IsNil)
+	c.Assert(is.IsEmpty(), IsTrue)
+
+	// PUT i11, will creat a lock.
+	_, err = optimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		return len(o.Locks()) == 1
+	}), IsTrue)
+	time.Sleep(waitTime) // sleep one more time to wait for update of init schema.
+
+	// the init schema exist now.
+	is, _, err = optimism.GetInitSchema(etcdTestCli, task, downSchema, downTable)
+	c.Assert(err, IsNil)
+	c.Assert(is.TableInfo, DeepEquals, ti0) // the init schema.
+
+	// PUT i12, the lock will be synced.
+	rev1, err := optimism.PutInfo(etcdTestCli, i12)
+	c.Assert(err, IsNil)
+
+	// wait operation for i12 become available.
+	opCh := make(chan optimism.Operation, 10)
+	errCh := make(chan error, 10)
+	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
+	optimism.WatchOperationPut(ctx2, etcdTestCli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev1, opCh, errCh)
+	cancel2()
+	close(opCh)
+	close(errCh)
+	c.Assert(len(opCh), Equals, 1)
+	op12 := <-opCh
+	c.Assert(op12.DDLs, DeepEquals, DDLs1)
+	c.Assert(op12.ConflictStage, Equals, optimism.ConflictNone)
+	c.Assert(len(errCh), Equals, 0)
+
+	// mark op11 and op12 as done, the lock should be resolved.
+	op11c := op12
+	op11c.Done = true
+	op11c.UpTable = i11.UpTable // overwrite `UpTable`.
+	_, putted, err := optimism.PutOperation(etcdTestCli, false, op11c)
+	c.Assert(err, IsNil)
+	c.Assert(putted, IsTrue)
+	op12c := op12
+	op12c.Done = true
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op12c)
+	c.Assert(err, IsNil)
+	c.Assert(putted, IsTrue)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		return len(o.Locks()) == 0
+	}), IsTrue)
+
+	// the init schema should also be deleted.
+	is, _, err = optimism.GetInitSchema(etcdTestCli, task, downSchema, downTable)
+	c.Assert(err, IsNil)
+	c.Assert(is.IsEmpty(), IsTrue)
+
+	// PUT i21 to create the lock again.
+	_, err = optimism.PutInfo(etcdTestCli, i21)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
+		return len(o.Locks()) == 1
+	}), IsTrue)
+	time.Sleep(waitTime) // sleep one more time to wait for update of init schema.
+
+	// the init schema exist now.
+	is, _, err = optimism.GetInitSchema(etcdTestCli, task, downSchema, downTable)
+	c.Assert(err, IsNil)
+	c.Assert(is.TableInfo, DeepEquals, ti1) // the init schema is ti1 now.
 }

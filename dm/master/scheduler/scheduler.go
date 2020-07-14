@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/etcdutil"
@@ -564,7 +565,7 @@ func (s *Scheduler) RemoveWorker(name string) error {
 	if !ok {
 		return terror.ErrSchedulerWorkerNotExist.Generate(name)
 	} else if w.Stage() != WorkerOffline {
-		return terror.ErrSchedulerWorkerOnline.Generate()
+		return terror.ErrSchedulerWorkerOnline.Generate(name)
 	}
 
 	// delete the info in etcd.
@@ -574,6 +575,22 @@ func (s *Scheduler) RemoveWorker(name string) error {
 	}
 	s.deleteWorker(name)
 	return nil
+}
+
+// GetAllWorkers gets all worker agent.
+func (s *Scheduler) GetAllWorkers() ([]*Worker, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if !s.started {
+		return nil, terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	workers := make([]*Worker, 0, len(s.workers))
+	for _, value := range s.workers {
+		workers = append(workers, value)
+	}
+	return workers, nil
 }
 
 // GetWorkerByName gets worker agent by worker name.
@@ -1223,6 +1240,7 @@ func (s *Scheduler) deleteWorker(name string) {
 	}
 	w.Close()
 	delete(s.workers, name)
+	metrics.RemoveWorkerStateInMetrics(w.baseInfo.Name)
 }
 
 // updateStatusForBound updates the in-memory status for bound, including:

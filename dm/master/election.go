@@ -15,10 +15,12 @@ package master
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/failpoint"
 
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/zap"
@@ -38,18 +40,10 @@ func (s *Server) electionNotify(ctx context.Context) {
 			// retire from leader
 			if leaderInfo == nil {
 				if s.leader == oneselfLeader {
-					s.pessimist.Close()
-					s.optimist.Close()
-					s.scheduler.Close()
-
-					s.Lock()
-					s.leader = ""
-					s.closeLeaderClient()
-					s.Unlock()
-
+					s.retireLeader()
 					log.L().Info("current member retire from the leader", zap.String("current member", s.cfg.Name))
 				} else {
-					// this should not happen
+					// leader retire before
 					log.L().Error("current member is not the leader, can't retire", zap.String("current member", s.cfg.Name))
 				}
 
@@ -59,18 +53,13 @@ func (s *Server) electionNotify(ctx context.Context) {
 			if leaderInfo.ID == s.cfg.Name {
 				// this member become leader
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
-				err := s.scheduler.Start(ctx, s.etcdClient)
-				if err != nil {
-					log.L().Error("scheduler do not started", zap.Error(err))
-				}
 
-				err = s.pessimist.Start(ctx, s.etcdClient)
-				if err != nil {
-					log.L().Error("pessimist do not started", zap.Error(err))
-				}
-				err = s.optimist.Start(ctx, s.etcdClient)
-				if err != nil {
-					log.L().Error("optimist do not started", zap.Error(err))
+				ok := s.startLeaderComponent(ctx)
+
+				if !ok {
+					s.retireLeader()
+					s.election.Resign()
+					continue
 				}
 
 				s.Lock()
@@ -125,7 +114,49 @@ func (s *Server) closeLeaderClient() {
 func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
 	s.RLock()
 	defer s.RUnlock()
+
 	isLeader = (s.leader == oneselfLeader)
 	needForward = (s.leaderGrpcConn != nil)
 	return
+}
+
+func (s *Server) startLeaderComponent(ctx context.Context) bool {
+	err := s.scheduler.Start(ctx, s.etcdClient)
+	if err != nil {
+		log.L().Error("scheduler do not started", zap.Error(err))
+		return false
+	}
+
+	err = s.pessimist.Start(ctx, s.etcdClient)
+	if err != nil {
+		log.L().Error("pessimist do not started", zap.Error(err))
+		return false
+	}
+
+	err = s.optimist.Start(ctx, s.etcdClient)
+	if err != nil {
+		log.L().Error("optimist do not started", zap.Error(err))
+		return false
+	}
+
+	failpoint.Inject("FailToStartLeader", func(val failpoint.Value) {
+		masterStrings := val.(string)
+		if strings.Contains(masterStrings, s.cfg.Name) {
+			log.L().Info("fail to start leader", zap.String("failpoint", "FailToStartLeader"))
+			failpoint.Return(false)
+		}
+	})
+
+	return true
+}
+
+func (s *Server) retireLeader() {
+	s.pessimist.Close()
+	s.optimist.Close()
+	s.scheduler.Close()
+
+	s.Lock()
+	s.leader = ""
+	s.closeLeaderClient()
+	s.Unlock()
 }

@@ -59,7 +59,9 @@ type Tables2DataFiles map[string]DataFiles
 type dataJob struct {
 	sql        string
 	schema     string
+	table      string
 	file       string
+	absPath    string
 	offset     int64
 	lastOffset int64
 }
@@ -180,6 +182,20 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 					return
 				}
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
+
+				if w.cfg.CleanDumpFile {
+					fileInfos := w.checkPoint.GetRestoringFileInfo(job.schema, job.table)
+					if pos, ok := fileInfos[job.file]; ok {
+						if job.offset == pos[1] {
+							w.tctx.L().Info("try to remove loaded dump file", zap.String("data file", job.file))
+							if err := os.Remove(job.absPath); err != nil {
+								w.tctx.L().Warn("error when remove loaded dump file", zap.String("data file", job.file), zap.Error(err))
+							}
+						}
+					} else {
+						w.tctx.L().Warn("file not recorded in checkpoint", zap.String("data file", job.file))
+					}
+				}
 			}
 		}
 	}
@@ -319,7 +335,9 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 			j := &dataJob{
 				sql:        query,
 				schema:     table.targetSchema,
+				table:      table.targetTable,
 				file:       baseFile,
+				absPath:    file,
 				offset:     cur,
 				lastOffset: lastOffset,
 			}
@@ -365,7 +383,7 @@ type Loader struct {
 	fileJobQueueClosed sync2.AtomicBool
 
 	tableRouter   *router.Table
-	bwList        *filter.Filter
+	baList        *filter.Filter
 	columnMapping *cm.Mapping
 
 	closed sync2.AtomicBool
@@ -423,17 +441,9 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 	l.checkPoint = checkpoint
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-checkpoint", Fn: l.checkPoint.Close})
 
-	l.bwList, err = filter.New(l.cfg.CaseSensitive, l.cfg.BWList)
+	l.baList, err = filter.New(l.cfg.CaseSensitive, l.cfg.BAList)
 	if err != nil {
-		return terror.ErrLoadUnitGenBWList.Delegate(err)
-	}
-
-	if l.cfg.RemoveMeta {
-		err2 := l.checkPoint.Clear(tctx)
-		if err2 != nil {
-			return err2
-		}
-		l.logCtx.L().Info("all previous checkpoints cleared")
+		return terror.ErrLoadUnitGenBAList.Delegate(err)
 	}
 
 	err = l.genRouter(l.cfg.RouteRules)
@@ -491,6 +501,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	err := l.Restore(newCtx)
 	close(l.runFatalChan) // Restore returned, all potential fatal sent to l.runFatalChan
+	cancel()              // cancel the goroutines created in `Restore`.
 
 	failpoint.Inject("dontWaitWorkerExit", func(_ failpoint.Value) {
 		l.logCtx.L().Info("", zap.String("failpoint", "dontWaitWorkerExit"))
@@ -541,7 +552,7 @@ func (l *Loader) skipSchemaAndTable(table *filter.Table) bool {
 	}
 
 	tbs := []*filter.Table{table}
-	tbs = l.bwList.ApplyOn(tbs)
+	tbs = l.baList.ApplyOn(tbs)
 	return len(tbs) == 0
 }
 
@@ -602,6 +613,25 @@ func (l *Loader) Restore(ctx context.Context) error {
 
 	if err == nil {
 		l.logCtx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
+		if l.cfg.CleanDumpFile {
+			files := CollectDirFiles(l.cfg.Dir)
+			hasDatafile := false
+			for file := range files {
+				if strings.HasSuffix(file, ".sql") &&
+					!strings.HasSuffix(file, "-schema.sql") &&
+					!strings.HasSuffix(file, "-schema-create.sql") &&
+					!strings.Contains(file, "-schema-view.sql") &&
+					!strings.Contains(file, "-schema-triggers.sql") &&
+					!strings.Contains(file, "-schema-post.sql") {
+					hasDatafile = true
+				}
+			}
+
+			if !hasDatafile {
+				l.logCtx.L().Info("clean dump files after importing all files")
+				l.cleanDumpFiles()
+			}
+		}
 	} else if errors.Cause(err) != context.Canceled {
 		return err
 	}
@@ -702,13 +732,13 @@ func (l *Loader) resetDBs(ctx context.Context) error {
 }
 
 // Update implements Unit.Update
-// now, only support to update config for routes, filters, column-mappings, black-white-list
+// now, only support to update config for routes, filters, column-mappings, block-allow-list
 // now no config diff implemented, so simply re-init use new config
 // no binlog filter for loader need to update
 func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 	var (
 		err              error
-		oldBwList        *filter.Filter
+		oldBaList        *filter.Filter
 		oldTableRouter   *router.Table
 		oldColumnMapping *cm.Mapping
 	)
@@ -717,8 +747,8 @@ func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 		if err == nil {
 			return
 		}
-		if oldBwList != nil {
-			l.bwList = oldBwList
+		if oldBaList != nil {
+			l.baList = oldBaList
 		}
 		if oldTableRouter != nil {
 			l.tableRouter = oldTableRouter
@@ -728,11 +758,11 @@ func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 		}
 	}()
 
-	// update black-white-list
-	oldBwList = l.bwList
-	l.bwList, err = filter.New(cfg.CaseSensitive, cfg.BWList)
+	// update block-allow-list
+	oldBaList = l.baList
+	l.baList, err = filter.New(cfg.CaseSensitive, cfg.BAList)
 	if err != nil {
-		return terror.ErrLoadUnitGenBWList.Delegate(err)
+		return terror.ErrLoadUnitGenBAList.Delegate(err)
 	}
 
 	// update route, for loader, this almost useless, because schemas often have been restored
@@ -750,7 +780,7 @@ func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 	}
 
 	// update l.cfg
-	l.cfg.BWList = cfg.BWList
+	l.cfg.BAList = cfg.BAList
 	l.cfg.RouteRules = cfg.RouteRules
 	l.cfg.ColumnMappingRules = cfg.ColumnMappingRules
 	return nil
@@ -813,7 +843,7 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 		l.logCtx.L().Warn("invalid mydumper files for there are no `-schema-create.sql` files found, and will generate later")
 	}
 	if len(l.db2Tables) == 0 {
-		l.logCtx.L().Warn("no available `-schema-create.sql` files, check mydumper parameter matches black-white-list in task config, will generate later")
+		l.logCtx.L().Warn("no available `-schema-create.sql` files, check mydumper parameter matches block-allow-list in task config, will generate later")
 	}
 
 	return nil
@@ -1209,7 +1239,7 @@ func (l *Loader) checkpointID() string {
 
 func (l *Loader) getMydumpMetadata() error {
 	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
-	pos, _, err := utils.ParseMetaData(metafile)
+	pos, _, err := utils.ParseMetaData(metafile, l.cfg.Flavor)
 	if err != nil {
 		l.logCtx.L().Error("fail to parse dump metadata", log.ShortError(err))
 		return err
@@ -1217,4 +1247,28 @@ func (l *Loader) getMydumpMetadata() error {
 
 	l.metaBinlog.Set(pos.String())
 	return nil
+}
+
+// cleanDumpFiles is called when finish restoring data, to clean useless files
+func (l *Loader) cleanDumpFiles() {
+	if l.cfg.Mode == config.ModeFull {
+		// in full-mode all files won't be need in the future
+		if err := os.RemoveAll(l.cfg.Dir); err != nil {
+			l.logCtx.L().Warn("error when remove loaded dump folder", zap.String("data folder", l.cfg.Dir), zap.Error(err))
+		}
+	} else {
+		// leave metadata file, only delete structure files
+		for db, tables := range l.db2Tables {
+			dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
+			if err := os.Remove(dbFile); err != nil {
+				l.logCtx.L().Warn("error when remove loaded dump file", zap.String("data file", dbFile), zap.Error(err))
+			}
+			for table := range tables {
+				tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
+				if err := os.Remove(tableFile); err != nil {
+					l.logCtx.L().Warn("error when remove loaded dump file", zap.String("data file", tableFile), zap.Error(err))
+				}
+			}
+		}
+	}
 }

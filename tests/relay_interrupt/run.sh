@@ -64,8 +64,8 @@ function run() {
         sleep 2
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status -s $SOURCE_ID1" \
-            "database driver error: ERROR 1152" 1 \
-            "ERROR" 1
+            "database driver error" 1 \
+            "ERROR 1152" 1
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status -s $SOURCE_ID1" \
             "there aren't any data under relay log directory" 1 \

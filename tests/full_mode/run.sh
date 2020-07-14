@@ -32,10 +32,14 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
     # start DM task only
-    dmctl_start_task
+    dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    echo "check dump files have been cleaned"
+    ls $WORK_DIR/worker1/dumped_data.test && exit 1 || echo "worker1 auto removed dump files"
+    ls $WORK_DIR/worker2/dumped_data.test && exit 1 || echo "worker2 auto removed dump files"
 }
 
 cleanup_data full_mode

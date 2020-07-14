@@ -15,8 +15,6 @@ flavor = "mysql"
 
 # meta schema in downstreaming database to store meta informaton of dm
 meta-schema = "dm_meta"
-# remove meta from downstreaming database, now we delete checkpoint and online ddl information
-remove-meta = false
 # whether to disable heartbeat for calculating lag between master and syncer
 enable-heartbeat = false
 
@@ -24,9 +22,6 @@ enable-heartbeat = false
 binlog-type = "local"
 
 # Mydumper configuration
-
-# mydumper binary path
-mydumper-path = "./mydumper"
 
 # -t, --threads
 #threads = 16
@@ -64,21 +59,21 @@ batch = 1000
 
 # filter
 
-# black white list provides a library to filter replicate on schema/table by given rules
+# block allow list provides a library to filter replicate on schema/table by given rules
 # support regular expression , start with '~' declare use regular expression.
 # rules like replication rules in MySQL, ref document:
 # https://dev.mysql.com/doc/refman/8.0/en/replication-rules-db-options.html
 # https://dev.mysql.com/doc/refman/8.0/en/replication-rules-table-options.html
-#[black-white-list]
+#[block-allow-list]
 #do-dbs = ["~^b.*","s1"]
 #
 #ignore-dbs = ["~^b.*","s1"]
 #
-#[[black-white-list.do-tables]]
+#[[block-allow-list.do-tables]]
 #db-name = "your db"
 #tbl-name = "your table"
 #
-#[[black-white-list.ignore-tables]]
+#[[block-allow-list.ignore-tables]]
 #db-name = "~^b.*"
 #tbl-name = "~^a.*"
 

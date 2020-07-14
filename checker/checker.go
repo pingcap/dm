@@ -117,9 +117,9 @@ func (c *Checker) Init(ctx context.Context) (err error) {
 	_, checkSchema := c.checkingItems[config.TableSchemaChecking]
 
 	for _, instance := range c.instances {
-		bw, err := filter.New(instance.cfg.CaseSensitive, instance.cfg.BWList)
+		bw, err := filter.New(instance.cfg.CaseSensitive, instance.cfg.BAList)
 		if err != nil {
-			return terror.ErrTaskCheckGenBWList.Delegate(err)
+			return terror.ErrTaskCheckGenBAList.Delegate(err)
 		}
 		r, err := router.NewTableRouter(instance.cfg.CaseSensitive, instance.cfg.RouteRules)
 		if err != nil {
@@ -255,6 +255,15 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		errs = append(errs, unit.NewProcessError(err))
 	} else if !result.Summary.Passed {
 		errs = append(errs, unit.NewProcessError(errors.New("check was failed, please see detail")))
+
+		// remove success result if not pass
+		results := result.Results[:0]
+		for _, r := range result.Results {
+			if r.State != check.StateSuccess {
+				results = append(results, r)
+			}
+		}
+		result.Results = results
 	}
 
 	c.updateInstruction(result)
@@ -292,7 +301,7 @@ func (c *Checker) updateInstruction(result *check.Results) {
 		switch r.Extra {
 		case check.AutoIncrementKeyChecking:
 			if strings.HasPrefix(r.Instruction, "please handle it by yourself") {
-				r.Instruction += ", read document https://pingcap.com/docs-cn/dev/reference/tools/data-migration/usage-scenarios/best-practice-dm-shard/#自增主键冲突处理 for more detail (only have Chinese document now, will translate to English later)"
+				r.Instruction += ",  refer to https://docs.pingcap.com/tidb-data-migration/stable/shard-merge-best-practices#handle-conflicts-of-auto-increment-primary-key) for details."
 			}
 		}
 	}

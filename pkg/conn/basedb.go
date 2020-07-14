@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -37,18 +38,19 @@ type DBProvider interface {
 	Apply(config config.DBConfig) (*BaseDB, error)
 }
 
-type defaultDBProvider struct {
+// DefaultDBProviderImpl is default DBProvider implement
+type DefaultDBProviderImpl struct {
 }
 
 // DefaultDBProvider is global instance of DBProvider
 var DefaultDBProvider DBProvider
 
 func init() {
-	DefaultDBProvider = &defaultDBProvider{}
+	DefaultDBProvider = &DefaultDBProviderImpl{}
 }
 
 // Apply will build BaseDB with DBConfig
-func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
+func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&maxAllowedPacket=%d",
 		config.User, config.Password, config.Host, config.Port, *config.MaxAllowedPacket)
 
@@ -80,10 +82,23 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 		}
 		maxIdleConns = rawCfg.MaxIdleConns
 	}
+
+	for key, val := range config.Session {
+		// for num such as 1/"1", format as key='1'
+		// for string, format as key='string'
+		// both are valid for mysql and tidb
+		dsn += fmt.Sprintf("&%s='%s'", key, url.QueryEscape(val))
+	}
+
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
+
+	if err = db.Ping(); err != nil {
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+
 	db.SetMaxIdleConns(maxIdleConns)
 
 	return NewBaseDB(db), nil

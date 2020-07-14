@@ -16,6 +16,8 @@ package syncer
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -127,7 +129,7 @@ type Syncer struct {
 	tableRouter   *router.Table
 	binlogFilter  *bf.BinlogEvent
 	columnMapping *cm.Mapping
-	bwList        *filter.Filter
+	baList        *filter.Filter
 
 	closed sync2.AtomicBool
 
@@ -271,9 +273,9 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 
 	s.streamerController = NewStreamerController(tctx, s.syncCfg, s.cfg.EnableGTID, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
 
-	s.bwList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BWList)
+	s.baList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BAList)
 	if err != nil {
-		return terror.ErrSyncerUnitGenBWList.Delegate(err)
+		return terror.ErrSyncerUnitGenBAList.Delegate(err)
 	}
 
 	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.CaseSensitive, s.cfg.FilterRules)
@@ -330,21 +332,6 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-checkpoint", Fn: s.checkpoint.Close})
 
-	if s.cfg.RemoveMeta {
-		err = s.checkpoint.Clear(tctx)
-		if err != nil {
-			return terror.Annotate(err, "clear checkpoint in syncer")
-		}
-
-		if s.onlineDDL != nil {
-			err = s.onlineDDL.Clear(tctx)
-			if err != nil {
-				return terror.Annotate(err, "clear online ddl in syncer")
-			}
-		}
-		s.tctx.L().Info("all previous meta cleared")
-	}
-
 	err = s.checkpoint.Load(tctx, s.schemaTracker)
 	if err != nil {
 		return err
@@ -352,7 +339,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	if s.cfg.EnableHeartbeat {
 		s.heartbeat, err = GetHeartbeat(&HeartbeatConfig{
 			serverID:       s.cfg.ServerID,
-			masterCfg:      s.cfg.From,
+			primaryCfg:     s.cfg.From,
 			updateInterval: int64(s.cfg.HeartbeatUpdateInterval),
 			reportInterval: int64(s.cfg.HeartbeatReportInterval),
 		})
@@ -381,7 +368,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 // NOTE: now we don't support modify router rules after task has started
 func (s *Syncer) initShardingGroups() error {
 	// fetch tables from source and filter them
-	sourceTables, err := s.fromDB.fetchAllDoTables(s.bwList)
+	sourceTables, err := s.fromDB.fetchAllDoTables(s.baList)
 	if err != nil {
 		return err
 	}
@@ -527,12 +514,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		<-newCtx.Done() // ctx or newCtx
 	}()
 
-	wg.Add(1)
-	go func() {
-		s.runBackgroundJob(newCtx)
-		wg.Done()
-	}()
-
 	err := s.Run(newCtx)
 	if err != nil {
 		// returned error rather than sent to runFatalChan
@@ -588,17 +569,37 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origSchema, origTable)
 	}
 
-	// if the table does not exist (IsTableNotExists(err)), continue to fetch the table from downstream and create it.
-
 	if err = s.schemaTracker.CreateSchemaIfNotExists(origSchema); err != nil {
 		return nil, terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, origSchema)
 	}
 
+	// in optimistic shard mode, we should try to get the init schema (the one before modified by other tables) first.
+	if s.cfg.ShardMode == config.ShardOptimistic {
+		ti, err = s.trackInitTableInfoOptimistic(origSchema, origTable, renamedSchema, renamedTable)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// if the table does not exist (IsTableNotExists(err)), continue to fetch the table from downstream and create it.
+	if ti == nil {
+		err = s.trackTableInfoFromDownstream(origSchema, origTable, renamedSchema, renamedTable, p)
+	}
+
+	ti, err = s.schemaTracker.GetTable(origSchema, origTable)
+	if err != nil {
+		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origSchema, origTable)
+	}
+	return ti, nil
+}
+
+// trackTableInfoFromDownstream tries to track the table info from the downstream.
+func (s *Syncer) trackTableInfoFromDownstream(origSchema, origTable, renamedSchema, renamedTable string, p *parser.Parser) error {
 	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly
 	// (and get rid of ddlDBConn).
 	rows, err := s.ddlDBConn.querySQL(s.tctx, "SHOW CREATE TABLE "+dbutil.TableName(renamedSchema, renamedTable))
 	if err != nil {
-		return nil, terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 	}
 	defer rows.Close()
 
@@ -606,14 +607,14 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 	for rows.Next() {
 		var tableName, createSQL string
 		if err = rows.Scan(&tableName, &createSQL); err != nil {
-			return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
 
 		// rename the table back to original.
 		var createNode ast.StmtNode
 		createNode, err = p.ParseOneStmt(createSQL, "", "")
 		if err != nil {
-			return nil, terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 		}
 		createStmt := createNode.(*ast.CreateTableStmt)
 		createStmt.IfNotExists = true
@@ -623,7 +624,7 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 		var newCreateSQLBuilder strings.Builder
 		restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &newCreateSQLBuilder)
 		if err = createStmt.Restore(restoreCtx); err != nil {
-			return nil, terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 		}
 		newCreateSQL := newCreateSQLBuilder.String()
 		s.tctx.L().Debug("reverse-synchronized table schema",
@@ -634,19 +635,14 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 			zap.String("sql", newCreateSQL),
 		)
 		if err = s.schemaTracker.Exec(ctx, origSchema, newCreateSQL); err != nil {
-			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origSchema, origTable)
+			return terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origSchema, origTable)
 		}
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+		return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
-
-	ti, err = s.schemaTracker.GetTable(origSchema, origTable)
-	if err != nil {
-		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origSchema, origTable)
-	}
-	return ti, nil
+	return nil
 }
 
 func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64) {
@@ -1055,6 +1051,22 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if err != nil {
 			return err
 		}
+
+		// for fresh and all-mode task, flush checkpoint so we could delete metadata file
+		if s.cfg.Mode == config.ModeAll {
+			if err := s.flushCheckPoints(); err != nil {
+				s.tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
+			} else {
+				s.tctx.L().Info("try to remove loaded files")
+				metadataFile := path.Join(s.cfg.Dir, "metadata")
+				if err := os.Remove(metadataFile); err != nil {
+					s.tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
+				}
+				if err := os.Remove(s.cfg.Dir); err != nil {
+					s.tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
+				}
+			}
+		}
 	}
 
 	// currentPos is the pos for current received event (End_log_pos in `show binlog events` for mysql)
@@ -1222,13 +1234,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return nil
 		} else if err == context.DeadlineExceeded {
 			s.tctx.L().Info("deadline exceeded when fetching binlog event")
-			if s.needResync() {
-				s.tctx.L().Info("timeout when fetching binlog event, there must be some problems with replica connection, try to re-connect")
-				err = s.streamerController.ReopenWithRetry(tctx, lastLocation.Clone())
-				if err != nil {
-					return err
-				}
-			}
 			continue
 		} else if isDuplicateServerIDError(err) {
 			// if the server id is already used, need to use a new server id
@@ -1398,7 +1403,8 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 		},
 		GTIDSet: ec.currentLocation.GTIDSet,
 	}
-	if binlog.CompareLocation(*ec.currentLocation, *ec.lastLocation, s.cfg.EnableGTID) > 0 {
+
+	if binlog.CompareLocation(*ec.currentLocation, *ec.lastLocation, s.cfg.EnableGTID) >= 0 {
 		*ec.lastLocation = ec.currentLocation.Clone()
 	}
 
@@ -1925,12 +1931,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// construct & send shard DDL info into etcd, DM-master will handle it.
 		shardInfo := s.pessimist.ConstructInfo(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, needHandleDDLs)
-		rev, err2 := s.pessimist.PutInfo(shardInfo)
+		rev, err2 := s.pessimist.PutInfo(ec.tctx.Ctx, shardInfo)
 		if err2 != nil {
 			return err2
 		}
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(1) // block and wait DDL lock to be synced
-		s.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo))
+		s.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo), zap.Int64("revision", rev))
 
 		shardOp, err2 := s.pessimist.GetOperation(ec.tctx.Ctx, shardInfo, rev+1)
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
@@ -2313,6 +2319,14 @@ func (s *Syncer) Close() {
 
 	s.checkpoint.Close()
 
+	if err := s.schemaTracker.Close(); err != nil {
+		s.tctx.L().Error("fail to close schema tracker", log.ShortError(err))
+	}
+
+	if s.sgk != nil {
+		s.sgk.Close()
+	}
+
 	s.closeOnlineDDL()
 
 	// when closing syncer by `stop-task`, remove active relay log from hub
@@ -2389,7 +2403,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 }
 
 // Update implements Unit.Update
-// now, only support to update config for routes, filters, column-mappings, black-white-list
+// now, only support to update config for routes, filters, column-mappings, block-allow-list
 // now no config diff implemented, so simply re-init use new config
 func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	if s.cfg.ShardMode == config.ShardPessimistic {
@@ -2401,7 +2415,7 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 
 	var (
 		err              error
-		oldBwList        *filter.Filter
+		oldBaList        *filter.Filter
 		oldTableRouter   *router.Table
 		oldBinlogFilter  *bf.BinlogEvent
 		oldColumnMapping *cm.Mapping
@@ -2411,8 +2425,8 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 		if err == nil {
 			return
 		}
-		if oldBwList != nil {
-			s.bwList = oldBwList
+		if oldBaList != nil {
+			s.baList = oldBaList
 		}
 		if oldTableRouter != nil {
 			s.tableRouter = oldTableRouter
@@ -2425,11 +2439,11 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 		}
 	}()
 
-	// update black-white-list
-	oldBwList = s.bwList
-	s.bwList, err = filter.New(cfg.CaseSensitive, cfg.BWList)
+	// update block-allow-list
+	oldBaList = s.baList
+	s.baList, err = filter.New(cfg.CaseSensitive, cfg.BAList)
 	if err != nil {
-		return terror.ErrSyncerUnitGenBWList.Delegate(err)
+		return terror.ErrSyncerUnitGenBAList.Delegate(err)
 	}
 
 	// update route
@@ -2473,7 +2487,7 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	}
 
 	// update l.cfg
-	s.cfg.BWList = cfg.BWList
+	s.cfg.BAList = cfg.BAList
 	s.cfg.RouteRules = cfg.RouteRules
 	s.cfg.FilterRules = cfg.FilterRules
 	s.cfg.ColumnMappingRules = cfg.ColumnMappingRules
@@ -2483,26 +2497,6 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	s.setTimezone()
 
 	return nil
-}
-
-func (s *Syncer) needResync() bool {
-	masterPos, _, err := s.getMasterStatus()
-	if err != nil {
-		s.tctx.L().Error("fail to get master status", log.ShortError(err))
-		return false
-	}
-
-	// Why 190 ?
-	// +------------------+-----+----------------+-----------+-------------+-------------------------------------------------------------------+
-	// | Log_name         | Pos | Event_type     | Server_id | End_log_pos | Info                                                              |
-	// +------------------+-----+----------------+-----------+-------------+-------------------------------------------------------------------+
-	// | mysql-bin.000002 |   4 | Format_desc    |         1 |         123 | Server ver: 5.7.18-log, Binlog ver: 4                             |
-	// | mysql-bin.000002 | 123 | Previous_gtids |         1 |         194 | 00020393-1111-1111-1111-111111111111:1-7
-	//
-	// Currently, syncer doesn't handle Format_desc and Previous_gtids events. When binlog rotate to new file with only two events like above,
-	// syncer won't save pos to 194. Actually it save pos 4 to meta file. So We got a experience value of 194 - 4 = 190.
-	// If (mpos.Pos - spos.Pos) > 190, we could say that syncer is not up-to-date.
-	return utils.CompareBinlogPos(masterPos, s.checkpoint.GlobalPoint().Position, 190) == 1
 }
 
 // assume that reset master before switching to new master, and only the new master would write

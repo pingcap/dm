@@ -17,21 +17,23 @@ import (
 
 	// for database
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/unrolled/render"
 	"go.uber.org/zap"
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 const (
 	routeTp  = "route_rules"
 	filterTp = "filter"
-	bwListTp = "bw_list"
+
+	baListTp = "ba_list"
 
 	success = "success"
 	failed  = "failed"
@@ -341,19 +343,7 @@ func (p *Handler) AnalyzeConfig(w http.ResponseWriter, req *http.Request) {
 	log.L().Info("analyze config", zap.String("config name", cfg.Name))
 
 	// decrypt password
-	dePwd, err := utils.Decrypt(cfg.TargetDB.Password)
-	log.L().Error("decrypt password failed", zap.Error(err))
-	if err != nil {
-		p.genJSONResp(w, http.StatusBadRequest, AnalyzeResult{
-			CommonResult: CommonResult{
-				Result: failed,
-				Error:  err.Error(),
-			},
-			Config: DMTaskConfig{},
-		})
-		return
-	}
-	cfg.TargetDB.Password = dePwd
+	cfg.TargetDB.Password = utils.DecryptOrPlaintext(cfg.TargetDB.Password)
 
 	p.genJSONResp(w, http.StatusOK, AnalyzeResult{
 		CommonResult: CommonResult{
@@ -459,11 +449,11 @@ func readJSON(r io.Reader, data interface{}) error {
 }
 
 func adjustConfig(cfg *DMTaskConfig) error {
-	// config from front-end will not fill FilterRules, RouteRules and BWListName
+	// config from front-end will not fill FilterRules, RouteRules and BAListName
 	// in mysql instance, need fill them by analyze rule's name
 	filterRules := make(map[string][]string)
 	routeRules := make(map[string][]string)
-	bwList := make(map[string]string)
+	baList := make(map[string]string)
 	mydumperCfg := make(map[string]string)
 	cfg.Mydumpers = make(map[string]*config.MydumperConfig)
 	// used to judge is-sharding
@@ -501,13 +491,13 @@ func adjustConfig(cfg *DMTaskConfig) error {
 		}
 	}
 
-	for name, rule := range cfg.BWList {
+	for name, rule := range cfg.BAList {
 		sourceID, _, err := analyzeRuleName(name)
 		if err != nil {
 			return errors.Trace(err)
 		}
 
-		bwList[sourceID] = name
+		baList[sourceID] = name
 
 		mydumperCfgName := generateMydumperCfgName(sourceID)
 		mydumperCfg[sourceID] = mydumperCfgName
@@ -521,8 +511,8 @@ func adjustConfig(cfg *DMTaskConfig) error {
 		if rulesName, ok := routeRules[instance.SourceID]; ok {
 			instance.RouteRules = rulesName
 		}
-		if ruleName, ok := bwList[instance.SourceID]; ok {
-			instance.BWListName = ruleName
+		if ruleName, ok := baList[instance.SourceID]; ok {
+			instance.BAListName = ruleName
 		}
 		if dumpCfgName, ok := mydumperCfg[instance.SourceID]; ok {
 			instance.MydumperConfigName = dumpCfgName
@@ -548,7 +538,7 @@ func analyzeRuleName(name string) (sourceID string, tp string, err error) {
 	}
 
 	switch items[1] {
-	case routeTp, filterTp, bwListTp:
+	case routeTp, filterTp, baListTp:
 	default:
 		return "", "", errors.Errorf("rules name %s is invalid", name)
 	}
@@ -556,10 +546,10 @@ func analyzeRuleName(name string) (sourceID string, tp string, err error) {
 	return items[0], items[1], nil
 }
 
-func generateMydumperCfg(bwList *filter.Rules) *config.MydumperConfig {
-	tables := make([]string, 0, len(bwList.DoTables))
+func generateMydumperCfg(baList *filter.Rules) *config.MydumperConfig {
+	tables := make([]string, 0, len(baList.DoTables))
 
-	for _, table := range bwList.DoTables {
+	for _, table := range baList.DoTables {
 		tables = append(tables, fmt.Sprintf("%s.%s", table.Schema, table.Name))
 	}
 
@@ -571,7 +561,7 @@ func generateMydumperCfg(bwList *filter.Rules) *config.MydumperConfig {
 	return &config.MydumperConfig{
 		MydumperPath:  "bin/mydumper",
 		Threads:       4,
-		ChunkFilesize: 64,
+		ChunkFilesize: "64",
 		SkipTzUTC:     true,
 		ExtraArgs:     extraArgs,
 	}

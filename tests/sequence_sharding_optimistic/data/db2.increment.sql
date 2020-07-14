@@ -1,13 +1,6 @@
 use `sharding_seq_opt`;
 
--- at this point:
---      t2(id, c1, c2)
---      t3(id, c1, c2)
---      t4(id, c1, c2)
-insert into t2 (id, c1, c2) values (300003, '310003', '320003');
-insert into t3 (id, c1, c2) values (400003, '410003', '420003');
-insert into t4 (id, c1, c2) values (500003, '510003', '520003');
-
+-- try to update the downstream schema before applying any DML
 alter table t4 add column c3 int;
 -- at this point:
 --      t2(id, c1, c2)

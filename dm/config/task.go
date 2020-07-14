@@ -53,10 +53,10 @@ var (
 	defaultUpdateInterval  = 1
 	defaultReportInterval  = 10
 	// MydumperConfig
-	defaultMydumperPath        = "./bin/mydumper"
-	defaultThreads             = 4
-	defaultChunkFilesize int64 = 64
-	defaultSkipTzUTC           = true
+	defaultMydumperPath  = "./bin/mydumper"
+	defaultThreads       = 4
+	defaultChunkFilesize = "64"
+	defaultSkipTzUTC     = true
 	// LoaderConfig
 	defaultPoolSize = 16
 	defaultDir      = "./dumped_data"
@@ -93,7 +93,10 @@ type MySQLInstance struct {
 	FilterRules        []string `yaml:"filter-rules"`
 	ColumnMappingRules []string `yaml:"column-mapping-rules"`
 	RouteRules         []string `yaml:"route-rules"`
-	BWListName         string   `yaml:"black-white-list"`
+
+	// black-white-list is deprecated, use block-allow-list instead
+	BWListName string `yaml:"black-white-list"`
+	BAListName string `yaml:"block-allow-list"`
 
 	MydumperConfigName string          `yaml:"mydumper-config-name"`
 	Mydumper           *MydumperConfig `yaml:"mydumper"`
@@ -111,8 +114,8 @@ type MySQLInstance struct {
 	SyncerThread int `yaml:"syncer-thread"`
 }
 
-// Verify does verification on configs
-func (m *MySQLInstance) Verify() error {
+// VerifyAndAdjust does verification on configs, and adjust some configs
+func (m *MySQLInstance) VerifyAndAdjust() error {
 	if m == nil {
 		return terror.ErrConfigMySQLInstNotFound.Generate()
 	}
@@ -135,6 +138,10 @@ func (m *MySQLInstance) Verify() error {
 		return terror.ErrConfigSyncerCfgConflict.Generate()
 	}
 
+	if len(m.BAListName) == 0 && len(m.BWListName) != 0 {
+		m.BAListName = m.BWListName
+	}
+
 	return nil
 }
 
@@ -142,7 +149,7 @@ func (m *MySQLInstance) Verify() error {
 type MydumperConfig struct {
 	MydumperPath  string `yaml:"mydumper-path" toml:"mydumper-path" json:"mydumper-path"`    // mydumper binary path
 	Threads       int    `yaml:"threads" toml:"threads" json:"threads"`                      // -t, --threads
-	ChunkFilesize int64  `yaml:"chunk-filesize" toml:"chunk-filesize" json:"chunk-filesize"` // -F, --chunk-filesize
+	ChunkFilesize string `yaml:"chunk-filesize" toml:"chunk-filesize" json:"chunk-filesize"` // -F, --chunk-filesize
 	StatementSize uint64 `yaml:"statement-size" toml:"statement-size" json:"statement-size"` // -S, --statement-size
 	Rows          uint64 `yaml:"rows" toml:"rows" json:"rows"`                               // -r, --rows
 	Where         string `yaml:"where" toml:"where" json:"where"`                            // --where
@@ -256,9 +263,7 @@ type TaskConfig struct {
 	// we store detail status in meta
 	// don't save configuration into it
 	MetaSchema string `yaml:"meta-schema"`
-	// remove meta from downstreaming database
-	// now we delete checkpoint and online ddl information
-	RemoveMeta              bool   `yaml:"remove-meta"`
+
 	EnableHeartbeat         bool   `yaml:"enable-heartbeat"`
 	HeartbeatUpdateInterval int    `yaml:"heartbeat-update-interval"`
 	HeartbeatReportInterval int    `yaml:"heartbeat-report-interval"`
@@ -277,11 +282,16 @@ type TaskConfig struct {
 	Routes         map[string]*router.TableRule   `yaml:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters"`
 	ColumnMappings map[string]*column.Rule        `yaml:"column-mappings"`
-	BWList         map[string]*filter.Rules       `yaml:"black-white-list"`
+
+	// black-white-list is deprecated, use block-allow-list instead
+	BWList map[string]*filter.Rules `yaml:"black-white-list"`
+	BAList map[string]*filter.Rules `yaml:"block-allow-list"`
 
 	Mydumpers map[string]*MydumperConfig `yaml:"mydumpers"`
 	Loaders   map[string]*LoaderConfig   `yaml:"loaders"`
 	Syncers   map[string]*SyncerConfig   `yaml:"syncers"`
+
+	CleanDumpFile bool `yaml:"clean-dump-file"`
 }
 
 // NewTaskConfig creates a TaskConfig
@@ -298,9 +308,11 @@ func NewTaskConfig() *TaskConfig {
 		Filters:                 make(map[string]*bf.BinlogEventRule),
 		ColumnMappings:          make(map[string]*column.Rule),
 		BWList:                  make(map[string]*filter.Rules),
+		BAList:                  make(map[string]*filter.Rules),
 		Mydumpers:               make(map[string]*MydumperConfig),
 		Loaders:                 make(map[string]*LoaderConfig),
 		Syncers:                 make(map[string]*SyncerConfig),
+		CleanDumpFile:           true,
 	}
 	cfg.FlagSet = flag.NewFlagSet("task", flag.ContinueOnError)
 	return cfg
@@ -376,7 +388,7 @@ func (c *TaskConfig) adjust() error {
 	iids := make(map[string]int) // source-id -> instance-index
 	duplicateErrorStrings := make([]string, 0)
 	for i, inst := range c.MySQLInstances {
-		if err := inst.Verify(); err != nil {
+		if err := inst.VerifyAndAdjust(); err != nil {
 			return terror.Annotatef(err, "mysql-instance: %s", humanize.Ordinal(i))
 		}
 		if iid, ok := iids[inst.SourceID]; ok {
@@ -414,8 +426,13 @@ func (c *TaskConfig) adjust() error {
 				return terror.ErrConfigColumnMappingNotFound.Generate(i, name)
 			}
 		}
-		if _, ok := c.BWList[inst.BWListName]; len(inst.BWListName) > 0 && !ok {
-			return terror.ErrConfigBWListNotFound.Generate(i, inst.BWListName)
+
+		// only when BAList is empty use BWList
+		if len(c.BAList) == 0 && len(c.BWList) != 0 {
+			c.BAList = c.BWList
+		}
+		if _, ok := c.BAList[inst.BAListName]; len(inst.BAListName) > 0 && !ok {
+			return terror.ErrConfigBAListNotFound.Generate(i, inst.BAListName)
 		}
 
 		if len(inst.MydumperConfigName) > 0 {
@@ -510,7 +527,6 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.Mode = c.TaskMode
 		cfg.CaseSensitive = c.CaseSensitive
 		cfg.MetaSchema = c.MetaSchema
-		cfg.RemoveMeta = c.RemoveMeta
 		cfg.EnableHeartbeat = c.EnableHeartbeat
 		cfg.HeartbeatUpdateInterval = c.HeartbeatUpdateInterval
 		cfg.HeartbeatReportInterval = c.HeartbeatReportInterval
@@ -537,11 +553,13 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 			cfg.ColumnMappingRules[j] = c.ColumnMappings[name]
 		}
 
-		cfg.BWList = c.BWList[inst.BWListName]
+		cfg.BAList = c.BAList[inst.BAListName]
 
 		cfg.MydumperConfig = *inst.Mydumper
 		cfg.LoaderConfig = *inst.Loader
 		cfg.SyncerConfig = *inst.Syncer
+
+		cfg.CleanDumpFile = c.CleanDumpFile
 
 		err := cfg.Adjust(true)
 		if err != nil {

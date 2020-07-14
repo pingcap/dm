@@ -15,15 +15,18 @@ package pessimism
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (
@@ -116,12 +119,11 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	// start the watcher.
 	wch := make(chan Info, 10)
 	ech := make(chan error, 10)
+	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-		defer cancel()
 		WatchInfoPut(ctx, etcdTestCli, rev4+1, wch, ech) // revision+1
 		close(wch)                                       // close the chan
 		close(ech)
@@ -130,6 +132,11 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	// put another key for a different task.
 	_, err = PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
+	// wait response of WatchInfoPut, increase waiting time when resource shortage
+	utils.WaitSomething(10, 500*time.Millisecond, func() bool {
+		return len(wch) != 0
+	})
+	cancel()
 	wg.Wait()
 
 	// watch should only get i21.
@@ -152,4 +159,57 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1][source1], DeepEquals, i11)
 	c.Assert(ifm[task2], HasLen, 1)
 	c.Assert(ifm[task2][source1], DeepEquals, i21)
+}
+
+func (t *testForEtcd) TestPutInfoIfOpNotDone(c *C) {
+	defer clearTestInfoOperation(c)
+
+	var (
+		source = "mysql-replica-1"
+		task   = "test-put-info-if-no-op"
+		schema = "foo"
+		table  = "bar"
+		DDLs   = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		ID     = fmt.Sprintf("%s-%s", task, dbutil.TableName(schema, table))
+		info   = NewInfo(task, source, schema, table, DDLs)
+		op     = NewOperation(ID, task, source, DDLs, false, false)
+	)
+
+	// put info success because no operation exist.
+	rev1, putted, err := PutInfoIfOpNotDone(etcdTestCli, info)
+	c.Assert(err, IsNil)
+	c.Assert(rev1, Greater, int64(0))
+	c.Assert(putted, IsTrue)
+
+	// put a non-done operation.
+	rev2, putted, err := PutOperations(etcdTestCli, false, op)
+	c.Assert(err, IsNil)
+	c.Assert(rev2, Greater, rev1)
+	c.Assert(putted, IsTrue)
+
+	// still can put info.
+	rev3, putted, err := PutInfoIfOpNotDone(etcdTestCli, info)
+	c.Assert(err, IsNil)
+	c.Assert(rev3, Greater, rev2)
+	c.Assert(putted, IsTrue)
+
+	// change op to `done` and put it.
+	op.Done = true
+	rev4, putted, err := PutOperations(etcdTestCli, false, op)
+	c.Assert(err, IsNil)
+	c.Assert(rev4, Greater, rev3)
+	c.Assert(putted, IsTrue)
+
+	// can't put info anymore.
+	rev5, putted, err := PutInfoIfOpNotDone(etcdTestCli, info)
+	c.Assert(err, IsNil)
+	c.Assert(rev5, Equals, rev4)
+	c.Assert(putted, IsFalse)
+
+	// try put anther info, but still can't put it.
+	info.DDLs = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
+	rev6, putted, err := PutInfoIfOpNotDone(etcdTestCli, info)
+	c.Assert(err, IsNil)
+	c.Assert(rev6, Equals, rev5)
+	c.Assert(putted, IsFalse)
 }

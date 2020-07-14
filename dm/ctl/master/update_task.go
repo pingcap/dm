@@ -17,7 +17,6 @@ import (
 	"context"
 	"os"
 
-	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/checker"
@@ -29,7 +28,7 @@ import (
 func NewUpdateTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-task [-s source ...] <config-file>",
-		Short: "update a task's config for routes, filters, or black-white-list",
+		Short: "update a task's config for routes, filters, or block-allow-list",
 		Run:   updateTaskFunc,
 	}
 	return cmd
@@ -44,13 +43,13 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) {
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", errors.ErrorStack(err))
+		common.PrintLines("get file content error:\n%v", err)
 		return
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
+		common.PrintLines("%v", err)
 		return
 	}
 
@@ -64,7 +63,7 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) {
 		Sources: sources,
 	})
 	if err != nil {
-		common.PrintLines("can not update task:\n%v", errors.ErrorStack(err))
+		common.PrintLines("can not update task:\n%v", err)
 		return
 	}
 

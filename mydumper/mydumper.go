@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -111,7 +112,12 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 	}
 
-	m.logger.Info("dump data finished", zap.Duration("cost time", time.Since(begin)))
+	if len(errs) == 0 {
+		m.logger.Info("dump data finished", zap.Duration("cost time", time.Since(begin)))
+	} else {
+		m.logger.Error("dump data exits with error", zap.Duration("cost time", time.Since(begin)),
+			zap.String("error", utils.JoinProcessErrors(errs)))
+	}
 
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
@@ -256,8 +262,8 @@ func (m *Mydumper) constructArgs() ([]string, error) {
 	if cfg.Threads > 0 {
 		ret = append(ret, "--threads", strconv.Itoa(cfg.Threads))
 	}
-	if cfg.ChunkFilesize > 0 {
-		ret = append(ret, "--chunk-filesize", strconv.FormatInt(cfg.ChunkFilesize, 10))
+	if cfg.ChunkFilesize != "" {
+		ret = append(ret, "--chunk-filesize", cfg.ChunkFilesize)
 	}
 	if cfg.SkipTzUTC {
 		ret = append(ret, "--skip-tz-utc")
@@ -267,7 +273,7 @@ func (m *Mydumper) constructArgs() ([]string, error) {
 		ret = append(ret, ParseArgLikeBash(extraArgs)...)
 	}
 	if needToGenerateDoTables(extraArgs) {
-		m.logger.Info("Tables needed to dump are not given, now we will start to generate table list that mydumper needs to dump through black-white list from given fromDB")
+		m.logger.Info("Tables needed to dump are not given, now we will start to generate table list that mydumper needs to dump through block-allow list from given fromDB")
 		doTables, err := fetchMyDumperDoTables(cfg)
 		if err != nil {
 			return nil, err

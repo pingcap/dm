@@ -82,7 +82,7 @@ type realRelayHolder struct {
 
 // NewRealRelayHolder creates a new RelayHolder
 func NewRealRelayHolder(cfg *config.SourceConfig) RelayHolder {
-	clone, _ := cfg.DecryptPassword()
+	clone := cfg.DecryptPassword()
 	relayCfg := &relay.Config{
 		EnableGTID:  clone.EnableGTID,
 		AutoFixGTID: clone.AutoFixGTID,
@@ -317,7 +317,7 @@ func (h *realRelayHolder) setResult(result *pb.ProcessResult) {
 func (h *realRelayHolder) Result() *pb.ProcessResult {
 	h.RLock()
 	defer h.RUnlock()
-	return statusProcessResult(h.result)
+	return h.result
 }
 
 // Update update relay config online

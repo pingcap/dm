@@ -369,6 +369,31 @@ func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, for
 	return nil
 }
 
+// RemoveMetaData removes meta data for a specified task
+// NOTE: this function can only be used when the specified task is not running
+func (p *Pessimist) RemoveMetaData(task string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return terror.ErrMasterPessimistNotStarted.Generate()
+	}
+
+	infos, ops, _, err := pessimism.GetInfosOperationsByTask(p.cli, task)
+	if err != nil {
+		return err
+	}
+	for _, info := range infos {
+		p.lk.RemoveLockByInfo(info)
+	}
+	for _, op := range ops {
+		p.lk.RemoveLock(op.ID)
+	}
+
+	// clear meta data in etcd
+	_, err = pessimism.DeleteInfosOperationsByTask(p.cli, task)
+	return err
+}
+
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.
 func (p *Pessimist) recoverLocks(ifm map[string]map[string]pessimism.Info, opm map[string]map[string]pessimism.Operation) error {
 	// construct locks based on the shard DDL info.
@@ -438,13 +463,9 @@ func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.I
 			lockID, synced, remain, err := p.lk.TrySync(info, p.taskSources(info.Task))
 			if err != nil {
 				// TODO: add & update metrics.
-				// FIXME: the following case is not supported automatically now, try to support it later.
-				// - the lock become synced, and `done` for `exec` operation received.
-				// - put `skip` operation for non-owners and the lock is still not resolved.
-				// - another new DDL from the old owner received and TrySync again with an error returned.
-				// after the old lock resolved, the new DDL from the old owner will NOT be handled again,
-				// then the lock will be block because the Pessimist thinks missing DDL from some sources.
-				// now, we need to `pause-task` and `resume-task` to let DM-workers put DDL again to trigger the process.
+				// if the lock become synced, and `done` for `exec`/`skip` operation received,
+				// but the `done` operations have not been deleted,
+				// then the DM-worker should not put any new DDL info until the old operation has been deleted.
 				p.logger.Error("fail to try sync shard DDL lock", zap.Stringer("info", info), log.ShortError(err))
 				continue
 			} else if !synced {

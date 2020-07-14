@@ -451,7 +451,7 @@ func (t *testLock) TestLockTrySyncNoDiff(c *C) {
 		DDLs1            = []string{"ALTER TABLE bar DROP COLUMN c1, ADD COLUMN c2 INT"}
 		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
 		ti1              = createTableInfo(c, p, se, tblID,
-			`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`) // `c1` not dropped, `c2` added
+			`CREATE TABLE bar (id INT PRIMARY KEY, c2 INT)`) // `c1` dropped, `c2` added
 		tables = map[string]map[string]struct{}{
 			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
 		}
@@ -468,12 +468,8 @@ func (t *testLock) TestLockTrySyncNoDiff(c *C) {
 
 	// try sync for one table.
 	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts)
-	c.Assert(err, IsNil)
-	// FIXME, the returned DDLs should only be `ALTER TABLE bar ADD COLUMN c2 INT`, but we lack schema diff mechanism now.
-	c.Assert(DDLs, DeepEquals, DDLs1)
-	synced, remain := l.IsSynced()
-	c.Assert(synced, IsFalse)
-	c.Assert(remain, Equals, 1)
+	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
+	c.Assert(DDLs, DeepEquals, []string{})
 }
 
 func (t *testLock) TestLockTrySyncNewTable(c *C) {
