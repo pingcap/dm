@@ -47,7 +47,7 @@ func (t *testTErrorSuite) TestDBAdapter(c *check.C) {
 				obj, ok := err.(*Error)
 				c.Assert(ok, check.IsTrue)
 				c.Assert(obj.getMsg(), check.Equals, tc.expect.message)
-				c.Assert(obj.Error(), check.Equals, fmt.Sprintf(errBaseFormat+", Message: %s, RawCause: %s", exp.code, exp.class, exp.scope, exp.level, exp.message, tc.err.Error()))
+				c.Assert(obj.Error(), check.Equals, fmt.Sprintf(errBaseFormat+", Message: %s, RawCause: %s, Workaround: %s", exp.code, exp.class, exp.scope, exp.level, exp.message, tc.err.Error(), exp.workaround))
 			}
 		}
 	}
