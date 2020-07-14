@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -70,7 +71,9 @@ var (
 	// the retry interval for dm-master to confirm the dm-workers status is expected
 	retryInterval = time.Second
 
-	useTLS = false
+	// 0 means not use tls
+	// 1 means use tls
+	useTLS = int32(0)
 
 	// typically there's only one server running in one process, but testMaster.TestOfflineMember starts 3 servers,
 	// so we need sync.Once to prevent data race
@@ -1540,7 +1543,12 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 }
 
 func setUseTLS(tlsCfg *config.Security) {
-	useTLS = enableTLS(tlsCfg)
+	if enableTLS(tlsCfg) {
+		atomic.StoreInt32(&useTLS, 1)
+	} else {
+		atomic.StoreInt32(&useTLS, 0)
+	}
+
 }
 
 func enableTLS(tlsCfg *config.Security) bool {

@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -416,7 +417,7 @@ func parseURLs(s string) ([]url.URL, error) {
 		if err != nil && (strings.Contains(err.Error(), "missing protocol scheme") ||
 			strings.Contains(err.Error(), "first path segment in URL cannot contain colon")) {
 			prefix := "http://"
-			if useTLS {
+			if atomic.LoadInt32(&useTLS) == 1 {
 				prefix = "https://"
 			}
 			u, err = url.Parse(prefix + item)
@@ -441,6 +442,7 @@ func genEmbedEtcdConfigWithLogger() *embed.Config {
 	// otherwise, DATA RACE occur in NewZapCoreLoggerBuilder and gRPC.
 	// NOTE: we can only increase the log level for the clone logger but not decrease.
 	logger := log.L().WithFields(zap.String("component", "embed etcd")).WithOptions(zap.IncreaseLevel(zap.ErrorLevel))
+	//logger := log.L().WithFields(zap.String("component", "embed etcd"))
 	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger, logger.Core(), log.Props().Syncer) // use global app props.
 	cfg.Logger = "zap"
 
