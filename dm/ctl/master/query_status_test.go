@@ -76,7 +76,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 				Name:  "test",
 				Stage: pb.Stage_Paused,
 				Result: &pb.ProcessResult{
-					Errors: []*pb.ProcessError{{Error: &pb.TError{}}},
+					Errors: []*pb.ProcessError{{}},
 				},
 			}},
 		},
@@ -95,7 +95,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	resp.Sources[0].SourceStatus.RelayStatus = &pb.RelayStatus{
 		Stage: pb.Stage_Paused,
 		Result: &pb.ProcessResult{
-			Errors: []*pb.ProcessError{{Error: &pb.TError{}}},
+			Errors: []*pb.ProcessError{{}},
 		}}
 	expectedResult[0].TaskStatus = stageError + " - Relay status is " + stageError + extraInfo
 	generateAndCheckTaskResult(c, resp, expectedResult)
@@ -132,7 +132,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 			Name:  "test2",
 			Stage: pb.Stage_Paused,
 			Result: &pb.ProcessResult{
-				Errors: []*pb.ProcessError{{Error: &pb.TError{}}},
+				Errors: []*pb.ProcessError{{}},
 			},
 		}},
 	})
