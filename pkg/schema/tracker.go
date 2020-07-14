@@ -105,34 +105,31 @@ func (tr *Tracker) AllSchemas() []*model.DBInfo {
 	return filteredSchemas
 }
 
-func (tr *Tracker) GetIndicesOfColumn(db, tbl, col string) ([]*model.IndexInfo, error) {
+// GetSingleColumnIndices returns indices of input column if input column only has single-column indices
+// returns nil if input column has no indices, or has multi-column indices.
+func (tr *Tracker) GetSingleColumnIndices(db, tbl, col string) ([]*model.IndexInfo, error) {
 	col = strings.ToLower(col)
 	t, err := tr.dom.InfoSchema().TableByName(model.NewCIStr(db), model.NewCIStr(tbl))
 	if err != nil {
 		return nil, err
 	}
 
-	// lance: one run will be enough
 	var idxInfos []*model.IndexInfo
 	for _, idx := range t.Indices() {
 		m := idx.Meta()
 		for _, col2 := range m.Columns {
+			// found an index covers input column
 			if col2.Name.L == col {
-				idxInfos = append(idxInfos, m)
+				if len(m.Columns) == 1 {
+					idxInfos = append(idxInfos, m)
+				} else {
+					// temporary use errors.New, won't propagate further
+					return nil, errors.New("found multi-column index")
+				}
 			}
 		}
 	}
-
-	var singleColIdxInfo []*model.IndexInfo
-	for _, info := range idxInfos {
-		if len(info.Columns) == 1 {
-			singleColIdxInfo = append(singleColIdxInfo, info)
-		} else {
-			// temporary use errors.New, won't propagate further
-			return nil, errors.New("found multi-column index")
-		}
-	}
-	return singleColIdxInfo, nil
+	return idxInfos, nil
 }
 
 // IsTableNotExists checks if err means the database or table does not exist.
@@ -171,6 +168,7 @@ func (tr *Tracker) DropTable(db, table string) error {
 	return tr.dom.DDL().DropTable(tr.se, ast.Ident{Schema: model.NewCIStr(db), Name: model.NewCIStr(table)})
 }
 
+// DropIndex drops an index from this tracker.
 func (tr *Tracker) DropIndex(db, table, index string) error {
 	return tr.dom.DDL().DropIndex(tr.se, ast.Ident{Schema: model.NewCIStr(db), Name: model.NewCIStr(table)}, model.NewCIStr(index), true)
 }

@@ -20,7 +20,6 @@ function run() {
     sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
 
-
     # start DM task only
     dmctl_start_task_standalone "$cur/conf/dm-task.yaml" "--remove-meta"
 
@@ -31,6 +30,11 @@ function run() {
 
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    # check column covered by multi-column indices won't drop, and its indices won't drop
+    run_sql "alter table drop_column_with_index.t1 drop column c2;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "show index from drop_column_with_index.t1" $TIDB_PORT $TIDB_PASSWORD
+    check_count "Column_name: c2" 3
 }
 
 cleanup_data drop_column_with_index

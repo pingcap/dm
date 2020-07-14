@@ -2043,14 +2043,14 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		}
 	}
 
-	// drop index
+	// try to drop appropriate index before drop column
 	if atStmt, ok := stmt.(*ast.AlterTableStmt); ok && len(atStmt.Specs) > 0 && atStmt.Specs[0].Tp == ast.AlterTableDropColumn {
-		// lance: rename to GetIndicesOfSingleColumn
-		indexInfos, err := s.schemaTracker.GetIndicesOfColumn(usedSchema, atStmt.Table.Name.O, atStmt.Specs[0].OldColumnName.Name.O)
-		if err == nil {
+		if indexInfos, err := s.schemaTracker.GetSingleColumnIndices(usedSchema, atStmt.Table.Name.O, atStmt.Specs[0].OldColumnName.Name.O); err == nil {
 			for _, info := range indexInfos {
 				if err2 := s.schemaTracker.DropIndex(usedSchema, atStmt.Table.Name.O, info.Name.O); err2 != nil {
-					s.tctx.L().Error("lance test", log.ShortError(err2))
+					s.tctx.L().Warn("can't auto drop index before drop column",
+						zap.String("index", info.Name.O),
+						zap.String("column", atStmt.Specs[0].OldColumnName.Name.O))
 				}
 			}
 		}

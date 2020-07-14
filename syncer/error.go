@@ -147,8 +147,6 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 			strings.Contains(mysqlErr.Message, "with index")) {
 			return originErr
 		}
-		tctx.L().Warn("lance test 2")
-		// lance: is `ddls` allowed to have multi sql?
 		ddl2 := ddls[index]
 		stmt, err2 := parser2.ParseOneStmt(ddl2, "", "")
 		if err2 != nil {
@@ -169,54 +167,55 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 			return originErr
 		} else {
 			schema = n.Table.Schema.O
-			table = n.Table.Name.String()
-			col = n.Specs[0].OldColumnName.Name.String()
+			table = n.Table.Name.O
+			col = n.Specs[0].OldColumnName.Name.O
 		}
 		tctx.L().Warn("try to fix drop column error", zap.String("DDL", ddl2), log.ShortError(err))
-		tctx.L().Warn("lance test 555", zap.String("schema", schema), zap.String("table", table), zap.String("col", col))
 
 		// check if dependent index is single-column index on this column
-		sql := "select INDEX_NAME from information_schema.statistics where TABLE_SCHEMA = ? and TABLE_NAME = ? and COLUMN_NAME = ?"
+		sql := "SELECT INDEX_NAME FROM information_schema.statistics WHERE TABLE_SCHEMA = ? and TABLE_NAME = ? and COLUMN_NAME = ?"
 		indices, err := conn.querySQL(tctx, sql, schema, table, col)
+		defer indices.Close()
 		if err != nil {
 			return originErr
 		}
-		defer indices.Close()
 		var (
-			idx      string
-			idx2Drop []string
-			count    int
+			idx       string
+			idx2Check []string
+			idx2Drop  []string
+			count     int
 		)
-		sql = "select count(*) from information_schema.statistics where TABLE_SCHEMA = ? and TABLE_NAME = ? and INDEX_NAME = ?"
 		for indices.Next() {
 			if err := indices.Scan(&idx); err != nil {
 				return originErr
 			}
-			tctx.L().Warn("lance test index name!!", zap.String("index name", idx))
-			sql2 := fmt.Sprintf("select count(*) from information_schema.statistics where TABLE_SCHEMA = `%s` and TABLE_NAME = `%s` and INDEX_NAME = `%s`", schema, table, idx)
-			rows, err2 := conn.querySQL(tctx, sql2)
-			tctx.L().Warn("lance test finish query")
+			idx2Check = append(idx2Check, idx)
+		}
+		// Close is idempotent, we could close in advance to reuse conn
+		indices.Close()
+
+		sql = "SELECT count(*) FROM information_schema.statistics WHERE TABLE_SCHEMA = ? and TABLE_NAME = ? and INDEX_NAME = ?"
+		for _, idx := range idx2Check {
+			rows, err2 := conn.querySQL(tctx, sql, schema, table, idx)
 			if err2 != nil || !rows.Next() || rows.Scan(&count) != nil || count != 1 {
-				tctx.L().Warn("can't drop index", zap.String("index", idx))
+				tctx.L().Warn("can't auto drop index", zap.String("index", idx))
+				rows.Close()
 				return originErr
 			}
-			tctx.L().Warn("lance test success query")
 			idx2Drop = append(idx2Drop, idx)
+			rows.Close()
 		}
-		tctx.L().Warn("lance test", zap.Strings("idx2Drop", idx2Drop))
-		sql = "alter table ?.? drop index ?"
-		args := make([]interface{}, len(idx2Drop))
+
 		sqls := make([]string, len(idx2Drop))
 		for i, idx := range idx2Drop {
-			sqls[i] = sql
-			args[i] = []interface{}{schema, table, idx}
+			sqls[i] = fmt.Sprintf("ALTER TABLE `%s`.`%s` DROP INDEX `%s`", schema, table, idx)
 		}
-		if _, err := conn.executeSQL(tctx, sqls, args); err != nil {
-			tctx.L().Warn("lance test error", log.ShortError(err))
+		if _, err := conn.executeSQL(tctx, sqls); err != nil {
+			tctx.L().Warn("auto drop index failed", log.ShortError(err))
 			return originErr
 		}
-		tctx.L().Info("drop indices success, try to drop column", zap.Strings("indices", idx2Drop))
 
+		tctx.L().Info("drop index success, now try to drop column", zap.Strings("index", idx2Drop))
 		if _, err = conn.executeSQLWithIgnore(tctx, ignoreDDLError, []string{ddl2}); err != nil {
 			return originErr
 		}
@@ -224,9 +223,9 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		tctx.L().Info("execute drop column SQL success", zap.String("DDL", ddl2))
 		return nil
 	}
+	
 
 	retErr := err
-
 	toHandle := []func(*tcontext.Context, error, []string, int, *DBConn) error{
 		invalidConnF,
 		dropColumnF,
