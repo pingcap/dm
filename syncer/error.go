@@ -223,7 +223,6 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		tctx.L().Info("execute drop column SQL success", zap.String("DDL", ddl2))
 		return nil
 	}
-	
 
 	retErr := err
 	toHandle := []func(*tcontext.Context, error, []string, int, *DBConn) error{
