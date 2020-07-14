@@ -1069,7 +1069,6 @@ var (
 	ErrSchedulerSubTaskStageInvalidUpdate = New(codeSchedulerSubTaskStageInvalidUpdate, ClassDMMaster, ScopeInternal, LevelMedium, "invalid new expectant subtask stage %s", "")
 	ErrSchedulerSubTaskOpTaskNotExist     = New(codeSchedulerSubTaskOpTaskNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "subtasks with name %s need to be operate not exist", "Please use `query-status` command to see tasks.")
 	ErrSchedulerSubTaskOpSourceNotExist   = New(codeSchedulerSubTaskOpSourceNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v need to be operate not exist", "")
-	ErrSchedulerTaskExist                 = New(codeSchedulerTaskExist, ClassScheduler, ScopeInternal, LevelMedium, "task with name %s already exist", "Please use `query-status` command to see tasks.")
 	ErrSchedulerTaskNotExist              = New(codeSchedulerTaskNotExist, ClassScheduler, ScopeInternal, LevelMedium, "task with name %s not exist", "Please use `query-status` command to see tasks.")
 
 	// dmctl

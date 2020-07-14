@@ -356,8 +356,9 @@ func (s *Scheduler) AddTaskCfg(cfg config.TaskConfig) error {
 	}
 
 	// 1. check whether exists.
+	// return nil because we may use `start-task -s source` for subtask
 	if _, ok := s.taskCfgs[cfg.Name]; ok {
-		return terror.ErrSchedulerTaskExist.Generate(cfg.Name)
+		return nil
 	}
 
 	// 2. put the config into etcd.
@@ -420,6 +421,7 @@ func (s *Scheduler) RemoveTaskCfg(task string) error {
 	defer s.mu.Unlock()
 
 	// do not remove task if has subtask
+	// return nil because we may use `stop-task -s source` for subtask
 	if _, ok := s.subTaskCfgs[task]; ok {
 		return nil
 	}

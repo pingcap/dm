@@ -2716,12 +2716,6 @@ description = ""
 workaround = ""
 tags = ["internal", "medium"]
 
-[error.DM-scheduler-46018]
-message = "task with name %s already exist"
-description = ""
-workaround = "Please use `query-status` command to see tasks."
-tags = ["internal", "medium"]
-
 [error.DM-scheduler-46019]
 message = "task with name %s not exist"
 description = ""
