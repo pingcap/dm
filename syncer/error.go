@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
@@ -80,8 +81,7 @@ func originError(err error) error {
 }
 
 // handleSpecialDDLError handles special errors for DDL execution.
-func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn, schema string) error {
-	tctx.L().Warn("lance test 0")
+func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn) error {
 	parser2, err2 := s.fromDB.getParser(s.cfg.EnableANSIQuotes)
 	if err2 != nil {
 		return err // return the original error
@@ -93,7 +93,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 	// if we have other methods to judge the DDL dispatched but timeout for executing, we can update this method.
 	// NOTE: we must ensure other PK/UK exists for correctness.
 	// NOTE: when we are refactoring the shard DDL algorithm, we also need to consider supporting non-blocking `ADD INDEX`.
-	invalidConnF := func(tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn, _ string) error {
+	invalidConnF := func(tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn) error {
 		// must ensure only the last statement executed failed with the `invalid connection` error
 		if len(ddls) == 0 || index != len(ddls)-1 || errors.Cause(err) != mysql.ErrInvalidConn {
 			return err // return the original error
@@ -136,8 +136,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 	}
 
 	// for DROP COLUMN with its single-column index, try drop index first then drop column
-	dropColumnF := func(tctx *tcontext.Context, originErr error, ddls []string, index int, conn *DBConn, schema string) error {
-		tctx.L().Warn("lance test 1")
+	dropColumnF := func(tctx *tcontext.Context, originErr error, ddls []string, index int, conn *DBConn) error {
 		mysqlErr, ok := originError(originErr).(*mysql.MySQLError)
 		if !ok {
 			return originErr
@@ -157,8 +156,9 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		}
 
 		var (
-			table string
-			col   string
+			schema string
+			table  string
+			col    string
 		)
 		if n, ok := stmt.(*ast.AlterTableStmt); !ok {
 			return originErr
@@ -168,10 +168,12 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		} else if n.Specs[0].Tp != ast.AlterTableDropColumn {
 			return originErr
 		} else {
+			schema = n.Table.Schema.O
 			table = n.Table.Name.String()
 			col = n.Specs[0].OldColumnName.Name.String()
 		}
 		tctx.L().Warn("try to fix drop column error", zap.String("DDL", ddl2), log.ShortError(err))
+		tctx.L().Warn("lance test 555", zap.String("schema", schema), zap.String("table", table), zap.String("col", col))
 
 		// check if dependent index is single-column index on this column
 		sql := "select INDEX_NAME from information_schema.statistics where TABLE_SCHEMA = ? and TABLE_NAME = ? and COLUMN_NAME = ?"
@@ -190,13 +192,18 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 			if err := indices.Scan(&idx); err != nil {
 				return originErr
 			}
-			rows, err2 := conn.querySQL(tctx, sql, schema, table, idx)
+			tctx.L().Warn("lance test index name!!", zap.String("index name", idx))
+			sql2 := fmt.Sprintf("select count(*) from information_schema.statistics where TABLE_SCHEMA = `%s` and TABLE_NAME = `%s` and INDEX_NAME = `%s`", schema, table, idx)
+			rows, err2 := conn.querySQL(tctx, sql2)
+			tctx.L().Warn("lance test finish query")
 			if err2 != nil || !rows.Next() || rows.Scan(&count) != nil || count != 1 {
 				tctx.L().Warn("can't drop index", zap.String("index", idx))
 				return originErr
 			}
+			tctx.L().Warn("lance test success query")
 			idx2Drop = append(idx2Drop, idx)
 		}
+		tctx.L().Warn("lance test", zap.Strings("idx2Drop", idx2Drop))
 		sql = "alter table ?.? drop index ?"
 		args := make([]interface{}, len(idx2Drop))
 		sqls := make([]string, len(idx2Drop))
@@ -205,6 +212,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 			args[i] = []interface{}{schema, table, idx}
 		}
 		if _, err := conn.executeSQL(tctx, sqls, args); err != nil {
+			tctx.L().Warn("lance test error", log.ShortError(err))
 			return originErr
 		}
 		tctx.L().Info("drop indices success, try to drop column", zap.Strings("indices", idx2Drop))
@@ -219,12 +227,12 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 
 	retErr := err
 
-	toHandle := []func(*tcontext.Context, error, []string, int, *DBConn, string) error{
+	toHandle := []func(*tcontext.Context, error, []string, int, *DBConn) error{
 		invalidConnF,
 		dropColumnF,
 	}
 	for _, f := range toHandle {
-		retErr = f(tctx, err, ddls, index, conn, schema)
+		retErr = f(tctx, err, ddls, index, conn)
 		if retErr == nil {
 			break
 		}

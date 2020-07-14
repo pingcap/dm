@@ -100,7 +100,9 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 		zap.String("query", utils.TruncateString(query, -1)),
 		zap.String("argument", utils.TruncateInterface(args, -1)))
 
+	tctx.L().Warn("lance test 22222", zap.String("query", query))
 	rows, err := conn.DBConn.QueryContext(tctx.Context(), query, args...)
+	tctx.L().Warn("lance test 33333", log.ShortError(err))
 
 	if err != nil {
 		tctx.L().ErrorFilterContextCanceled("query statement failed",

@@ -868,7 +868,6 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if !ok {
 			return
 		}
-		s.tctx.L().Warn("lance test sqlJob %v", zap.Strings("DDL", sqlJob.ddls))
 
 		var (
 			ignore           = false
@@ -891,7 +890,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			var affected int
 			affected, err = db.executeSQLWithIgnore(tctx, ignoreDDLError, sqlJob.ddls)
 			if err != nil {
-				err = s.handleSpecialDDLError(tctx, err, sqlJob.ddls, affected, db, sqlJob.targetSchema)
+				err = s.handleSpecialDDLError(tctx, err, sqlJob.ddls, affected, db)
 				err = terror.WithScope(err, terror.ScopeDownstream)
 			}
 		}
@@ -2043,6 +2042,20 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 			return err
 		}
 	}
+
+	// drop index
+	if atStmt, ok := stmt.(*ast.AlterTableStmt); ok && len(atStmt.Specs) > 0 && atStmt.Specs[0].Tp == ast.AlterTableDropColumn {
+		// lance: rename to GetIndicesOfSingleColumn
+		indexInfos, err := s.schemaTracker.GetIndicesOfColumn(usedSchema, atStmt.Table.Name.O, atStmt.Specs[0].OldColumnName.Name.O)
+		if err == nil {
+			for _, info := range indexInfos {
+				if err2 := s.schemaTracker.DropIndex(usedSchema, atStmt.Table.Name.O, info.Name.O); err2 != nil {
+					s.tctx.L().Error("lance test", log.ShortError(err2))
+				}
+			}
+		}
+	}
+
 	if shouldExecDDLOnSchemaTracker {
 		if err := s.schemaTracker.Exec(s.tctx.Ctx, usedSchema, sql); err != nil {
 			s.tctx.L().Error("cannot track DDL", zap.String("schema", usedSchema), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))

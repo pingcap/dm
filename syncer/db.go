@@ -179,7 +179,9 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {
 			startTime := time.Now()
+			tctx.L().Warn("lance test 222", zap.String("query", query))
 			ret, err := conn.baseConn.QuerySQL(ctx, query, args...)
+			tctx.L().Warn("lance test 333", log.ShortError(err))
 			if err == nil {
 				cost := time.Since(startTime)
 				queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())

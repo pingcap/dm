@@ -15,6 +15,7 @@ package schema
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -104,6 +105,36 @@ func (tr *Tracker) AllSchemas() []*model.DBInfo {
 	return filteredSchemas
 }
 
+func (tr *Tracker) GetIndicesOfColumn(db, tbl, col string) ([]*model.IndexInfo, error) {
+	col = strings.ToLower(col)
+	t, err := tr.dom.InfoSchema().TableByName(model.NewCIStr(db), model.NewCIStr(tbl))
+	if err != nil {
+		return nil, err
+	}
+
+	// lance: one run will be enough
+	var idxInfos []*model.IndexInfo
+	for _, idx := range t.Indices() {
+		m := idx.Meta()
+		for _, col2 := range m.Columns {
+			if col2.Name.L == col {
+				idxInfos = append(idxInfos, m)
+			}
+		}
+	}
+
+	var singleColIdxInfo []*model.IndexInfo
+	for _, info := range idxInfos {
+		if len(info.Columns) == 1 {
+			singleColIdxInfo = append(singleColIdxInfo, info)
+		} else {
+			// temporary use errors.New, won't propagate further
+			return nil, errors.New("found multi-column index")
+		}
+	}
+	return singleColIdxInfo, nil
+}
+
 // IsTableNotExists checks if err means the database or table does not exist.
 func IsTableNotExists(err error) bool {
 	return infoschema.ErrTableNotExists.Equal(err) || infoschema.ErrDatabaseNotExists.Equal(err)
@@ -138,6 +169,10 @@ func (tr *Tracker) Close() error {
 // DropTable drops a table from this tracker.
 func (tr *Tracker) DropTable(db, table string) error {
 	return tr.dom.DDL().DropTable(tr.se, ast.Ident{Schema: model.NewCIStr(db), Name: model.NewCIStr(table)})
+}
+
+func (tr *Tracker) DropIndex(db, table, index string) error {
+	return tr.dom.DDL().DropIndex(tr.se, ast.Ident{Schema: model.NewCIStr(db), Name: model.NewCIStr(table)}, model.NewCIStr(index), true)
 }
 
 // CreateSchemaIfNotExists creates a SCHEMA of the given name if it did not exist.
