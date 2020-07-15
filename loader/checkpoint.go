@@ -288,16 +288,17 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 	}
 
 	// fields[0] -> db name, fields[1] -> table name
+	schema, table := fields[0], fields[1]
 	sql2 := fmt.Sprintf("INSERT INTO `%s`.`%s` (`id`, `filename`, `cp_schema`, `cp_table`, `offset`, `end_pos`) VALUES(?,?,?,?,?,?)", cp.schema, cp.table)
 	cp.logCtx.L().Info("initial checkpoint record",
 		zap.String("sql", sql2),
 		zap.String("id", cp.id),
 		zap.String("filename", filename),
-		zap.String("schema", fields[0]),
-		zap.String("table", fields[1]),
+		zap.String("schema", schema),
+		zap.String("table", table),
 		zap.Int64("offset", 0),
 		zap.Int64("end position", endPos))
-	args := []interface{}{cp.id, filename, fields[0], fields[1], 0, endPos}
+	args := []interface{}{cp.id, filename, schema, table, 0, endPos}
 	cp.connMutex.Lock()
 	err := cp.conn.executeSQL(tctx, []string{sql2}, args)
 	cp.connMutex.Unlock()
@@ -307,6 +308,18 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 			return nil
 		}
 		return terror.WithScope(terror.Annotate(err, "initialize checkpoint"), terror.ScopeDownstream)
+	}
+	// checkpoint not exists and no error, cache endPos in memory
+	if _, ok := cp.restoringFiles[schema]; !ok {
+		cp.restoringFiles[schema] = make(map[string]FilePosSet)
+	}
+	tables := cp.restoringFiles[schema]
+	if _, ok := tables[table]; !ok {
+		tables[table] = make(map[string][]int64)
+	}
+	restoringFiles := tables[table]
+	if _, ok := restoringFiles[filename]; !ok {
+		restoringFiles[filename] = []int64{0, endPos}
 	}
 	return nil
 }

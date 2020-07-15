@@ -26,7 +26,7 @@ import (
 // NewOperateSourceCmd creates a OperateSource command
 func NewOperateSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "operate-source <operate-type> <config-file>",
+		Use:   "operate-source <operate-type> <config-file> [config-file ...]",
 		Short: "create/update/stop upstream MySQL/MariaDB source",
 		Run:   operateSourceFunc,
 	}
@@ -48,31 +48,36 @@ func convertCmdType(t string) pb.SourceOp {
 
 // operateMysqlFunc does migrate relay request
 func operateSourceFunc(cmd *cobra.Command, _ []string) {
-	if len(cmd.Flags().Args()) != 2 {
+	if len(cmd.Flags().Args()) < 2 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
 		return
 	}
 
 	cmdType := cmd.Flags().Arg(0)
-	configFile := cmd.Flags().Arg(1)
-	content, err := common.GetFileContent(configFile)
-	if err != nil {
-		common.PrintLines("get file content error:\n%v", err)
-		return
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	op := convertCmdType(cmdType)
 	if op == pb.SourceOp_InvalidSourceOp {
 		common.PrintLines("invalid operate '%s' on worker", cmdType)
 		return
 	}
 
+	contents := make([]string, len(cmd.Flags().Args())-1)
+	for i := 1; i < len(cmd.Flags().Args()); i++ {
+		configFile := cmd.Flags().Arg(i)
+		content, err := common.GetFileContent(configFile)
+		if err != nil {
+			common.PrintLines("get file content error:\n%v", err)
+			return
+		}
+		contents[i-1] = string(content)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	cli := common.MasterClient()
 	resp, err := cli.OperateSource(ctx, &pb.OperateSourceRequest{
-		Config: string(content),
+		Config: contents,
 		Op:     op,
 	})
 	if err != nil {

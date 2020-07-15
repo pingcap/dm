@@ -51,7 +51,7 @@ function run() {
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status -s $SOURCE_ID1" \
             "no sub task started" 1 \
-            "ERROR" 2
+            "ERROR" 1
 
         echo "start task and query status, task and relay have error message"
         task_conf="$cur/conf/dm-task.yaml"
@@ -64,12 +64,12 @@ function run() {
         sleep 2
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status -s $SOURCE_ID1" \
-            "database driver error: ERROR 1152" 1 \
-            "ERROR" 2
+            "database driver error" 1 \
+            "ERROR 1152" 1
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status -s $SOURCE_ID1" \
             "there aren't any data under relay log directory" 1 \
-            "ERROR" 2
+            "ERROR" 1
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status" \
             "\"taskName\": \"test\"" 1 \
