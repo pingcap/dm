@@ -384,8 +384,6 @@ func (c *Config) genEmbedEtcdConfig(cfg *embed.Config) (*embed.Config, error) {
 		cfg.PeerTLSInfo.InsecureSkipVerify = true
 		cfg.PeerTLSInfo.SkipClientSANVerify = true
 
-		//cfg.EnableGRPCGateway = true
-
 		// NOTE: etcd only support one allowed CN
 		// FIXME: support AllowedCN in etcd
 		/*
@@ -443,13 +441,8 @@ func genEmbedEtcdConfigWithLogger() *embed.Config {
 	// NOTE: if using zap logger for etcd, must build it before any concurrent gRPC calls,
 	// otherwise, DATA RACE occur in NewZapCoreLoggerBuilder and gRPC.
 	// NOTE: we can only increase the log level for the clone logger but not decrease.
-
-	logger := log.L().WithFields(zap.String("component", "embed etcd"))                                    // NOTE: we can only increase the log level for the clone logger but not decrease.
-	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger.Logger, logger.Core(), log.Props().Syncer) // use global app props.
-
-	//logger := log.L().WithFields(zap.String("component", "embed etcd")).WithOptions(zap.IncreaseLevel(zap.ErrorLevel))
-	//logger := log.L().WithFields(zap.String("component", "embed etcd"))
-	//cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger, logger.Core(), log.Props().Syncer) // use global app props.
+	logger := log.L().WithFields(zap.String("component", "embed etcd")).WithOptions(zap.IncreaseLevel(zap.ErrorLevel))
+	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger, logger.Core(), log.Props().Syncer) // use global app props.
 	cfg.Logger = "zap"
 
 	// TODO: we run ZapLoggerBuilder to set SetLoggerV2 before we do some etcd operations

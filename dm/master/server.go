@@ -169,11 +169,11 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return terror.ErrMasterSecurityConfigNotValid.Delegate(err)
 	}
 
+	// tls2 is used for grpc client in grpc gateway
 	tls2, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
 	if err != nil {
 		return terror.ErrMasterSecurityConfigNotValid.Delegate(err)
 	}
-	//tls2.TLSConfig().ServerName = "localhost"
 	tls2.TLSConfig().InsecureSkipVerify = true
 
 	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr, tls2.ToGRPCDialOption())
