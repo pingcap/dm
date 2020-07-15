@@ -16,14 +16,14 @@ function sql_skip_invalid_binlog_pos() {
     binlog_pos="mysql-bin:shoud-bin-digital"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "sql-skip test-task --binlog-pos $binlog_pos" \
-        "\[.*\], msg: 'invalid --binlog-pos $binlog_pos in sql operation: the pos should be digital" 1
+        "\[.*\], Message: invalid --binlog-pos $binlog_pos in sql operation: the pos should be digital" 1
 }
 
 function sql_skip_invalid_regex() {
     regex="~(\[a-z\])\\1"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "sql-skip test-task --sql-pattern $regex" \
-        "invalid --sql-pattern .* in sql operation:" 1
+        "invalid --sql-pattern .* in sql operation" 1
 }
 
 function sql_skip_sharding_with_binlogpos() {
