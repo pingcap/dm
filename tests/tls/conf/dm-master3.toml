@@ -8,4 +8,4 @@ initial-cluster = "master1=https://127.0.0.1:8291,master2=https://127.0.0.1:8292
 ssl-ca = "dir-placeholer/ca.pem"
 ssl-cert = "dir-placeholer/dm.pem"
 ssl-key = "dir-placeholer/dm.key"
-cert-allowed-cn = ["dm"]
+#cert-allowed-cn = ["dm"]

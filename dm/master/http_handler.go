@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 
+	"github.com/gogo/gateway"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"google.golang.org/grpc"
 
@@ -48,7 +49,7 @@ func getStatusHandle() http.Handler {
 func getHTTPAPIHandler(ctx context.Context, addr string, securityOpt grpc.DialOption) (http.Handler, error) {
 	// FIXME: don't support tls for grpc gateway, see https://github.com/grpc-ecosystem/grpc-gateway/issues/727
 	// will fix it later
-	securityOpt = grpc.WithInsecure()
+	//securityOpt = grpc.WithInsecure()
 
 	// dial the real API server in non-blocking mode, it may not started yet.
 	opts := []grpc.DialOption{securityOpt}
@@ -58,7 +59,18 @@ func getHTTPAPIHandler(ctx context.Context, addr string, securityOpt grpc.DialOp
 		return nil, terror.ErrMasterHandleHTTPApis.Delegate(err)
 	}
 
-	gwmux := runtime.NewServeMux()
+	jsonpb := &gateway.JSONPb{
+		EmitDefaults: true,
+		Indent:       "  ",
+		OrigName:     true,
+	}
+
+	gwmux := runtime.NewServeMux(
+		runtime.WithMarshalerOption(runtime.MIMEWildcard, jsonpb),
+		// This is necessary to get error details properly
+		// marshalled in unary requests.
+		runtime.WithProtoErrorHandler(runtime.DefaultHTTPProtoErrorHandler),
+	)
 	err = pb.RegisterMasterHandler(ctx, gwmux, conn)
 	if err != nil {
 		return nil, terror.ErrMasterHandleHTTPApis.Delegate(err)
