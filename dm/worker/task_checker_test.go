@@ -32,8 +32,8 @@ var _ = check.Suite(&testTaskCheckerSuite{})
 type testTaskCheckerSuite struct{}
 
 var (
-	unsupporteModifyColumnError = unit.NewProcessError(pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Delegate(&tmysql.SQLError{1105, "unsupported modify column length 20 is less than origin 40", tmysql.DefaultMySQLState}))
-	unknownProcessError         = unit.NewProcessError(pb.ErrorType_UnknownError, errors.New("error mesage"))
+	unsupporteModifyColumnError = unit.NewProcessError(terror.ErrDBExecuteFailed.Delegate(&tmysql.SQLError{1105, "unsupported modify column length 20 is less than origin 40", tmysql.DefaultMySQLState}))
+	unknownProcessError         = unit.NewProcessError(errors.New("error mesage"))
 )
 
 func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
@@ -316,7 +316,7 @@ func (s *testTaskCheckerSuite) TestIsResumableError(c *check.C) {
 	}
 
 	for _, tc := range testCases {
-		err := unit.NewProcessError(pb.ErrorType_UnknownError, tc.err)
+		err := unit.NewProcessError(tc.err)
 		fmt.Printf("error: %v\n", err)
 		c.Assert(isResumableError(err), check.Equals, tc.resumable)
 	}

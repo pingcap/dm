@@ -21,10 +21,7 @@ import (
 )
 
 const (
-	errBaseFormat       = "[code=%d:class=%s:scope=%s:level=%s]"
-	errMessageFormat    = "msg: '%s'"
-	errWorkaroundFormat = "workaround: '%s'"
-	errFormat           = errBaseFormat + ", " + errMessageFormat + ", " + errWorkaroundFormat
+	errBaseFormat = "[code=%d:class=%s:scope=%s:level=%s]"
 )
 
 // ErrCode is used as the unique identifier of a specific error type.
@@ -52,6 +49,7 @@ const (
 	ClassSchemaTracker
 	ClassScheduler
 	ClassDMCtl
+	ClassNotSet
 )
 
 var errClass2Str = map[ErrClass]string{
@@ -72,6 +70,7 @@ var errClass2Str = map[ErrClass]string{
 	ClassSchemaTracker: "schema-tracker",
 	ClassScheduler:     "scheduler",
 	ClassDMCtl:         "dmctl",
+	ClassNotSet:        "not-set",
 }
 
 // String implements fmt.Stringer interface
@@ -185,7 +184,17 @@ func (e *Error) Workaround() string {
 
 // Error implements error interface.
 func (e *Error) Error() string {
-	return fmt.Sprintf(errFormat, e.code, e.class, e.scope, e.level, e.getMsg(), e.workaround)
+	str := fmt.Sprintf(errBaseFormat, e.code, e.class, e.scope, e.level)
+	if e.getMsg() != "" {
+		str += fmt.Sprintf(", Message: %s", e.getMsg())
+	}
+	if e.rawCause != nil {
+		str += fmt.Sprintf(", RawCause: %s", Message(e.rawCause))
+	}
+	if e.workaround != "" {
+		str += fmt.Sprintf(", Workaround: %s", e.workaround)
+	}
+	return str
 }
 
 // Format accepts flags that alter the printing of some verbs
@@ -272,15 +281,22 @@ func (e *Error) Delegate(err error, args ...interface{}) error {
 	if err == nil {
 		return nil
 	}
+
+	rawCause := err
+	// we only get the root rawCause
+	if tErr, ok := err.(*Error); ok && tErr.rawCause != nil {
+		rawCause = tErr.rawCause
+	}
+
 	return &Error{
 		code:       e.code,
 		class:      e.class,
 		scope:      e.scope,
 		level:      e.level,
-		message:    fmt.Sprintf("%s: %s", e.message, err),
+		message:    e.message,
 		workaround: e.workaround,
 		args:       args,
-		rawCause:   err,
+		rawCause:   rawCause,
 		stack:      errors.NewStack(0),
 	}
 }

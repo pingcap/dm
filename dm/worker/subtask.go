@@ -413,7 +413,7 @@ func (st *SubTask) setResult(result *pb.ProcessResult) {
 func (st *SubTask) Result() *pb.ProcessResult {
 	st.RLock()
 	defer st.RUnlock()
-	return statusProcessResult(st.result)
+	return st.result
 }
 
 // Close stops the sub task
@@ -709,7 +709,7 @@ func (st *SubTask) fail(err error) {
 	st.setStage(pb.Stage_Paused)
 	st.setResult(&pb.ProcessResult{
 		Errors: []*pb.ProcessError{
-			unit.NewProcessError(pb.ErrorType_UnknownError, err),
+			unit.NewProcessError(err),
 		},
 	})
 }

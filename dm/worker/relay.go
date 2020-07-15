@@ -316,7 +316,7 @@ func (h *realRelayHolder) setResult(result *pb.ProcessResult) {
 func (h *realRelayHolder) Result() *pb.ProcessResult {
 	h.RLock()
 	defer h.RUnlock()
-	return statusProcessResult(h.result)
+	return h.result
 }
 
 // Update update relay config online

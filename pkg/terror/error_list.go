@@ -551,6 +551,11 @@ const (
 	codeCtlGRPCCreateConn ErrCode = iota + 48001
 )
 
+// default error code
+const (
+	codeNotSet ErrCode = iota + 50000
+)
+
 // Error instances
 var (
 	// Database operation related error
@@ -1065,4 +1070,7 @@ var (
 
 	// dmctl
 	ErrCtlGRPCCreateConn = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")
+
+	// default error code
+	ErrNotSet = New(codeNotSet, ClassNotSet, ScopeNotSet, LevelHigh, "", "")
 )
