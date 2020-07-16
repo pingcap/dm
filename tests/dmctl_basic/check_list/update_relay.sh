@@ -19,13 +19,6 @@ function update_relay_should_specify_one_dm_worker() {
         "must specify one DM-worker (\`-w\` \/ \`--worker\`)" 1
 }
 
-function update_relay_while_master_down() {
-    task_conf=$1
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-relay $task_conf -w 127.0.0.1:$WORKER1_PORT" \
-        "can not update relay config:" 1
-}
-
 function update_relay_success() {
     task_conf=$1
     worker_addr=$2

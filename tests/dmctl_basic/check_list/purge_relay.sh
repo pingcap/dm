@@ -18,12 +18,6 @@ function purge_relay_filename_with_multi_workers() {
         "for --filename, can only specify one DM-worker per time" 1
 }
 
-function purge_relay_while_master_down() {
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "purge-relay --filename bin-000001 -w 127.0.0.1:$WORKER1_PORT" \
-        "can not purge relay log files:" 1
-}
-
 function purge_relay_success() {
     binlog_file=$1
     worker_addr=$2

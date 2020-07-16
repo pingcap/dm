@@ -29,5 +29,5 @@ function break_ddl_lock_while_master_down() {
     worker_addr="127.0.0.1:$WORKER1_PORT"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "break-ddl-lock test -w $worker_addr --exec" \
-        "can not break DDL lock (in workers \[$worker_addr\]):" 1
+        "Error while dialing dial tcp" 1
 }

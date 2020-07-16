@@ -51,6 +51,9 @@ function run() {
         exit 1
     fi
 
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+
     # check dmctl command start-task output with master-addr
     # it should usage for start-task
     $PWD/bin/dmctl.test DEVEL --master-addr=:$MASTER_PORT start-task > $WORK_DIR/help.log
@@ -87,8 +90,6 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
     # start DM task with command mode
     $PWD/bin/dmctl.test DEVEL --master-addr=:$MASTER_PORT start-task $cur/conf/dm-task.yaml

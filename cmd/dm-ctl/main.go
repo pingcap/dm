@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/dm/dm/ctl"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -148,7 +149,7 @@ func main() {
 
 	err = ctl.Init(cfg)
 	if err != nil {
-		fmt.Printf("init control error %v", errors.ErrorStack(err))
+		common.PrintLines("%v", terror.Message(err))
 		os.Exit(2)
 	}
 	if lenCmdArgs > 0 {
