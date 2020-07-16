@@ -775,6 +775,23 @@ func (w *Worker) MigrateRelay(ctx context.Context, binlogName string, binlogPos 
 	return nil
 }
 
+// OperateSchema operates schema for an upstream table.
+func (w *Worker) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaRequest) (schema string, err error) {
+	w.Lock()
+	defer w.Unlock()
+
+	if w.closed.Get() == closedTrue {
+		return "", terror.ErrWorkerAlreadyClosed.Generate()
+	}
+
+	st := w.subTaskHolder.findSubTask(req.Task)
+	if st == nil {
+		return "", terror.ErrWorkerSubTaskNotFound.Generate(req.Task)
+	}
+
+	return st.OperateSchema(ctx, req)
+}
+
 // copyConfigFromWorker copies config items from dm-worker to sub task
 func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
 	cfg.From = w.cfg.From

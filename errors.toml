@@ -1889,7 +1889,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38021]
-message = "worker %s relevant worker-client not found"
+message = "source %s relevant worker-client not found"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -2616,6 +2616,24 @@ tags = ["downstream", "medium"]
 
 [error.DM-schema-tracker-44008]
 message = "cannot parse downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-schema-tracker-44009]
+message = "%s is not a valid `CREATE TABLE` statement"
+description = ""
+workaround = ""
+tags = ["internal", "medium"]
+
+[error.DM-schema-tracker-44010]
+message = "fail to restore the statement"
+description = ""
+workaround = ""
+tags = ["internal", "medium"]
+
+[error.DM-schema-tracker-44011]
+message = "failed to drop table for `%s`.`%s` in schema tracker"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
