@@ -166,13 +166,13 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
 	if err != nil {
-		return terror.ErrMasterSecurityConfigNotValid.Delegate(err)
+		return terror.ErrMasterTLSConfigNotValid.Delegate(err)
 	}
 
 	// tls2 is used for grpc client in grpc gateway
 	tls2, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
 	if err != nil {
-		return terror.ErrMasterSecurityConfigNotValid.Delegate(err)
+		return terror.ErrMasterTLSConfigNotValid.Delegate(err)
 	}
 	if tls2 != nil && tls2.TLSConfig() != nil {
 		tls2.TLSConfig().InsecureSkipVerify = true

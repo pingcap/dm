@@ -1,4 +1,4 @@
-// Copyright 2019 PingCAP, Inc.
+// Copyright 2020 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,13 +41,12 @@ func main() {
 		if err != nil {
 			utils.ExitWithError(err)
 		}
-	
+
 		tlsCfg := tls.TLSConfig()
 		tlsCfg.InsecureSkipVerify = true
 		transport.TLSClientConfig = tlsCfg
 	}
 
-	
 	client := &http.Client{Transport: transport}
 
 	resp, err := client.Get("https://" + addr + "/status")

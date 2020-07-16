@@ -27,7 +27,6 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/pingcap/errors"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
@@ -58,15 +57,13 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 		len(config.Security.SSLCert) != 0 && len(config.Security.SSLKey) != 0 {
 		tlsConfig, err := toolutils.ToTLSConfig(config.Security.SSLCA, config.Security.SSLCert, config.Security.SSLKey)
 		if err != nil {
-			// TODO: use terror
-			return nil, errors.Annotate(err, "failed to generate tls config")
+			return nil, terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}
 
 		name := "dm" + strconv.FormatInt(atomic.AddInt64(&customID, 1), 10)
 		err = mysql.RegisterTLSConfig(name, tlsConfig)
 		if err != nil {
-			// TODO: use terror
-			return nil, errors.Annotate(err, "failed to RegisterTLSConfig")
+			return nil, terror.ErrConnRegistryTLSConfig.Delegate(err)
 		}
 		dsn += "&tls=" + name
 	}

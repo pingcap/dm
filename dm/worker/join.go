@@ -41,7 +41,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 	// TODO: grpc proxy
 	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
 	if err != nil {
-		return terror.ErrWorkerSecurityConfigNotValid.Delegate(err)
+		return terror.ErrWorkerTLSConfigNotValid.Delegate(err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

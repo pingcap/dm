@@ -700,6 +700,18 @@ description = ""
 workaround = "Please use show-ddl-locks command for more details."
 tags = ["internal", "medium"]
 
+[error.DM-functional-11112]
+message = "invalid TLS config"
+description = ""
+workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config ."
+tags = ["internal", "medium"]
+
+[error.DM-functional-11113]
+message = "fail to registry TLS config"
+description = ""
+workaround = ""
+tags = ["internal", "medium"]
+
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""
@@ -2065,19 +2077,19 @@ tags = ["internal", "low"]
 [error.DM-dm-master-38050]
 message = "peer urls %s not valid"
 description = ""
-workaround = "Please check the `peer-urls` config in master configuration file"
+workaround = "Please check the `peer-urls` config in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38051]
 message = "advertise peer urls %s not valid"
 description = ""
-workaround = "Please check the `advertise-peer-urls` config in master configuration file"
+workaround = "Please check the `advertise-peer-urls` config in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38052]
-message = "security config not valid"
+message = "TLS config not valid"
 description = ""
-workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in master configuration file"
+workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in master configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40001]
@@ -2525,9 +2537,9 @@ workaround = ""
 tags = ["internal", "medium"]
 
 [error.DM-dm-worker-40075]
-message = "security config not valid"
+message = "TLS config not valid"
 description = ""
-workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in worker configuration file"
+workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in worker configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-tracer-42001]
@@ -2747,9 +2759,9 @@ workaround = "Please check your network connection."
 tags = ["internal", "high"]
 
 [error.DM-dmctl-48002]
-message = "invalid security config"
+message = "invalid TLS config"
 description = ""
-workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line"
+workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line."
 tags = ["internal", "medium"]
 
 [error.DM-not-set-50000]
