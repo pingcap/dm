@@ -102,6 +102,8 @@ func (tr *Tracker) GetCreateTable(ctx context.Context, db, table string) (string
 	rs, err := tr.se.Execute(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", name))
 	if err != nil {
 		return "", err
+	} else if len(rs) != 1 {
+		return "", nil // this should not happen.
 	}
 	defer rs[0].Close()
 
