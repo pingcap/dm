@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // GetJoinURLs gets the endpoints from the join address.
@@ -40,7 +41,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 	// TODO: grpc proxy
 	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
 	if err != nil {
-		return err
+		return terror.ErrWorkerSecurityConfigNotValid.Delegate(err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
