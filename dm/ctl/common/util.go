@@ -22,6 +22,7 @@ import (
 
 	"github.com/pingcap/dm/dm/pb"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
+	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -45,9 +46,9 @@ func InitUtils(cfg *Config) error {
 
 // InitClient initializes dm-master client
 func InitClient(addr string) error {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrCtlGRPCCreateConn.AnnotateDelegate(err, "can't connect to %s", addr)
 	}
 	masterClient = pb.NewMasterClient(conn)
 	return nil

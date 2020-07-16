@@ -18,12 +18,6 @@ function purge_relay_filename_with_multi_workers() {
         "for --filename, can only specify one source per time" 1
 }
 
-function purge_relay_while_master_down() {
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "purge-relay --filename bin-000001 -s $SOURCE_ID1" \
-        "can not purge relay log files:" 1
-}
-
 function purge_relay_success() {
     binlog_file=$1
     source_id=$2
