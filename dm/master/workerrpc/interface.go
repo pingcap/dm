@@ -43,6 +43,8 @@ const (
 	CmdMigrateRelay
 
 	CmdFetchDDLInfo
+
+	CmdOperateSchema
 )
 
 // Request wraps all dm-worker rpc requests.
@@ -64,6 +66,8 @@ type Request struct {
 	PurgeRelay        *pb.PurgeRelayRequest
 	UpdateRelay       *pb.UpdateRelayRequest
 	MigrateRelay      *pb.MigrateRelayRequest
+
+	OperateSchema *pb.OperateWorkerSchemaRequest
 }
 
 // Response wraps all dm-worker rpc responses.
@@ -85,6 +89,8 @@ type Response struct {
 	PurgeRelay        *pb.CommonWorkerResponse
 	UpdateRelay       *pb.CommonWorkerResponse
 	MigrateRelay      *pb.CommonWorkerResponse
+
+	OperateSchema *pb.CommonWorkerResponse
 }
 
 // Client is a client that sends RPC.
