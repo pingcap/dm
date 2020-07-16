@@ -61,7 +61,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 		}
 		newSQL := newCreateSQLBuilder.String()
 
-		// drop the previous schema fist.
+		// drop the previous schema first.
 		err = s.schemaTracker.DropTable(req.Database, req.Table)
 		if err != nil && !schema.IsTableNotExists(err) {
 			return "", terror.ErrSchemaTrackerCannotDropTable.Delegate(err, req.Database, req.Table)
