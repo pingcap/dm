@@ -2746,6 +2746,12 @@ description = ""
 workaround = "Please check your network connection."
 tags = ["internal", "high"]
 
+[error.DM-dmctl-48002]
+message = "invalid security config"
+description = ""
+workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line"
+tags = ["internal", "medium"]
+
 [error.DM-not-set-50000]
 message = ""
 description = ""

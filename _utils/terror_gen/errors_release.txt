@@ -456,4 +456,5 @@ ErrSchedulerSubTaskStageInvalidUpdate,[code=46015:class=dm-master:scope=internal
 ErrSchedulerSubTaskOpTaskNotExist,[code=46016:class=dm-master:scope=internal:level=medium], "Message: subtasks with name %s need to be operate not exist"
 ErrSchedulerSubTaskOpSourceNotExist,[code=46017:class=dm-master:scope=internal:level=medium], "Message: sources %v need to be operate not exist"
 ErrCtlGRPCCreateConn,[code=48001:class=dmctl:scope=internal:level=high], "Message: can not create grpc connection, Workaround: Please check your network connection."
+ErrCtlInvalidSecurityCfg,[code=48002:class=dmctl:scope=internal:level=medium], "Message: invalid security config, Workaround: Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line"
 ErrNotSet,[code=50000:class=not-set:scope=not-set:level=high]

@@ -553,6 +553,7 @@ const (
 // dmctl error code
 const (
 	codeCtlGRPCCreateConn ErrCode = iota + 48001
+	codeCtlInvalidSecurityCfg
 )
 
 // default error code
@@ -1078,7 +1079,8 @@ var (
 	ErrSchedulerSubTaskOpSourceNotExist   = New(codeSchedulerSubTaskOpSourceNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v need to be operate not exist", "")
 
 	// dmctl
-	ErrCtlGRPCCreateConn = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")
+	ErrCtlGRPCCreateConn     = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")
+	ErrCtlInvalidSecurityCfg = New(codeCtlInvalidSecurityCfg, ClassDMCtl, ScopeInternal, LevelMedium, "invalid security config", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line")
 
 	// default error
 	ErrNotSet = New(codeNotSet, ClassNotSet, ScopeNotSet, LevelHigh, "", "")

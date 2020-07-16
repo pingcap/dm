@@ -50,7 +50,7 @@ func InitUtils(cfg *Config) error {
 func InitClient(addr string, securityCfg config.Security) error {
 	tls, err := toolutils.NewTLS(securityCfg.SSLCA, securityCfg.SSLCert, securityCfg.SSLKey, "", securityCfg.CertAllowedCN)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrCtlInvalidSecurityCfg.Delegate(err)
 	}
 
 	conn, err := grpc.Dial(addr, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
