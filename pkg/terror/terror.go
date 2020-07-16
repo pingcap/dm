@@ -48,6 +48,7 @@ const (
 	ClassDMTracer
 	ClassSchemaTracker
 	ClassScheduler
+	ClassDMCtl
 	ClassNotSet
 )
 
@@ -68,6 +69,7 @@ var errClass2Str = map[ErrClass]string{
 	ClassDMTracer:      "dm-tracer",
 	ClassSchemaTracker: "schema-tracker",
 	ClassScheduler:     "scheduler",
+	ClassDMCtl:         "dmctl",
 	ClassNotSet:        "not-set",
 }
 

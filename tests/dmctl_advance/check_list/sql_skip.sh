@@ -39,9 +39,3 @@ function sql_skip_non_sharding_without_one_worker() {
         "sql-skip test-task --worker $worker1,$worker2 --binlog-pos mysql-bin:13426" \
         "should only specify one worker, but got \[$worker1 $worker2\]" 1
 }
-
-function sql_skip_while_master_down() {
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "sql-skip test-task --sharding --sql-pattern ~(?i)ALTER\\s+TABLE\\s+" \
-        "can not skip SQL:" 1
-}
