@@ -27,7 +27,7 @@ function run() {
     run_sql_file $WORK_DIR/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
 
-    echo "dm-worker paninc, doJob of import unit workers don't exit"
+    echo "dm-worker panic, doJob of import unit workers don't exit"
     # check doJobs of import unit worker exit
     inject_points=("github.com/pingcap/dm/loader/dispatchError=return(1)"
                    "github.com/pingcap/dm/loader/LoadDataSlowDown=sleep(1000)"

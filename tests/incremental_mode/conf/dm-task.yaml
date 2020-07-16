@@ -8,6 +8,7 @@ enable-heartbeat: true
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1
 timezone: "Asia/Shanghai"
+clean-dump-file: false
 
 target-database:
   host: "127.0.0.1"
