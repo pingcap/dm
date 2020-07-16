@@ -30,23 +30,24 @@ func main() {
 	sslCA := ""
 	sslCert := ""
 	sslKey := ""
+	transport := http.DefaultTransport.(*http.Transport).Clone()
 
-	//secureOpt := grpc.WithInsecure()
 	if len(os.Args) == 5 {
 		sslCA = os.Args[2]
 		sslCert = os.Args[3]
 		sslKey = os.Args[4]
+
+		tls, err := toolutils.NewTLS(sslCA, sslCert, sslKey, "", nil)
+		if err != nil {
+			utils.ExitWithError(err)
+		}
+	
+		tlsCfg := tls.TLSConfig()
+		tlsCfg.InsecureSkipVerify = true
+		transport.TLSClientConfig = tlsCfg
 	}
 
-	tls, err := toolutils.NewTLS(sslCA, sslCert, sslKey, "", nil)
-	if err != nil {
-		utils.ExitWithError(err)
-	}
-
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	tlsCfg := tls.TLSConfig()
-	tlsCfg.InsecureSkipVerify = true
-	transport.TLSClientConfig = tlsCfg
+	
 	client := &http.Client{Transport: transport}
 
 	resp, err := client.Get("https://" + addr + "/status")
