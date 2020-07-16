@@ -156,7 +156,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	var (
 		backOff      = 30
 		waitTime     = 100 * time.Millisecond
-		watchTimeout = 2 * time.Second
+		watchTimeout = 500 * time.Millisecond
 		logger       = log.L()
 		o            = NewOptimist(&logger)
 
@@ -254,8 +254,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait operation for i11 become available.
 	opCh := make(chan optimism.Operation, 10)
 	errCh := make(chan error, 10)
-	ctx2, cancel2 := context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i11.Task, i11.Source, i11.UpSchema, i11.UpTable, rev1, opCh, errCh)
+	ctx2, cancel2 := context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i11.Task, i11.Source, i11.UpSchema, i11.UpTable, rev1, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -309,8 +312,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait operation for i12 become available.
 	opCh = make(chan optimism.Operation, 10)
 	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, opCh, errCh)
+	ctx2, cancel2 = context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -356,8 +362,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait operation for i21 become available.
 	opCh = make(chan optimism.Operation, 10)
 	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i21.Task, i21.Source, i21.UpSchema, i21.UpTable, rev1, opCh, errCh)
+	ctx2, cancel2 = context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i21.Task, i21.Source, i21.UpSchema, i21.UpTable, rev1, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -420,8 +429,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait operation for i23 become available.
 	opCh = make(chan optimism.Operation, 10)
 	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i23.Task, i23.Source, i23.UpSchema, i23.UpTable, rev3, opCh, errCh)
+	ctx2, cancel2 = context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i23.Task, i23.Source, i23.UpSchema, i23.UpTable, rev3, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -437,8 +449,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait until operation for i12 ready.
 	opCh = make(chan optimism.Operation, 10)
 	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, opCh, errCh)
+	ctx2, cancel2 = context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -537,8 +552,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait operation for i31 become available.
 	opCh = make(chan optimism.Operation, 10)
 	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i31.Task, i31.Source, i31.UpSchema, i31.UpTable, rev1, opCh, errCh)
+	ctx2, cancel2 = context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i31.Task, i31.Source, i31.UpSchema, i31.UpTable, rev1, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)
@@ -587,8 +605,11 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// wait operation for i33 become available.
 	opCh = make(chan optimism.Operation, 10)
 	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
-	optimism.WatchOperationPut(ctx2, etcdTestCli, i33.Task, i33.Source, i33.UpSchema, i33.UpTable, rev3, opCh, errCh)
+	ctx2, cancel2 = context.WithCancel(ctx)
+	go optimism.WatchOperationPut(ctx2, etcdTestCli, i33.Task, i33.Source, i33.UpSchema, i33.UpTable, rev3, opCh, errCh)
+	utils.WaitSomething(10, watchTimeout, func() bool {
+		return len(opCh) != 0
+	})
 	cancel2()
 	close(opCh)
 	close(errCh)

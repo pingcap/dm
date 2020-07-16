@@ -20,12 +20,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/golang/mock/gomock"
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
@@ -151,7 +152,7 @@ var (
 	errCheckSyncConfig    = "(?m).*check sync config with error.*"
 	errCheckSyncConfigReg = fmt.Sprintf("(?m).*%s.*", errCheckSyncConfig)
 	testEtcdCluster       *integration.ClusterV3
-	keepAliveTTL          = int64(1)
+	keepAliveTTL          = int64(10)
 	etcdTestCli           *clientv3.Client
 )
 
@@ -257,7 +258,7 @@ func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sour
 		cfg := config.NewSourceConfig()
 		cfg.SourceID = sources[i]
 		cfg.From.Password = password
-		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil)
+		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil, check.Commentf("all sources: %v", sources))
 		wg.Add(1)
 		ctx1, cancel1 := context.WithCancel(ctx)
 		cancels = append(cancels, cancel1)
@@ -1136,6 +1137,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	defer s1.Close()
 	mysqlCfg := config.NewSourceConfig()
 	mysqlCfg.LoadFromFile("./source.toml")
+	mysqlCfg.From.Password = os.Getenv("MYSQL_PSWD")
 	task, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
 	sourceID := mysqlCfg.SourceID
@@ -1143,7 +1145,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	time.Sleep(3 * time.Second)
 
 	// 2. try to add a new mysql source
-	req := &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: task}
+	req := &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: []string{task}}
 	resp, err := s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, true)
@@ -1156,47 +1158,113 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	c.Assert(unBoundSources, check.HasLen, 1)
 	c.Assert(unBoundSources[0], check.Equals, sourceID)
 
-	// 3. try to stop a non-exist-source
-	req.Op = pb.SourceOp_StopSource
-	mysqlCfg.SourceID = "not-exist-source"
+	// 3. try to add multiple source
+	// 3.1 duplicated source id
+	sourceID2 := "mysql-replica-02"
+	mysqlCfg.SourceID = sourceID2
 	task2, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
-	req.Config = task2
+	req = &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: []string{task2, task2}}
+	resp, err = s1.OperateSource(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.Equals, false)
+	c.Assert(resp.Msg, check.Matches, ".*source config with ID "+sourceID2+" already exists.*")
+	// 3.2 run same command after correction
+	sourceID3 := "mysql-replica-03"
+	mysqlCfg.SourceID = sourceID3
+	task3, err := mysqlCfg.Toml()
+	c.Assert(err, check.IsNil)
+	req = &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: []string{task2, task3}}
+	resp, err = s1.OperateSource(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.Equals, true)
+	c.Assert(resp.Sources, check.DeepEquals, []*pb.CommonWorkerResponse{{
+		Result: true,
+		Msg:    "source is added but there is no free worker to bound",
+		Source: sourceID2,
+	}, {
+		Result: true,
+		Msg:    "source is added but there is no free worker to bound",
+		Source: sourceID3,
+	}})
+	unBoundSources = s1.scheduler.UnboundSources()
+	c.Assert(unBoundSources, check.HasLen, 3)
+	c.Assert(unBoundSources[0], check.Equals, sourceID)
+	c.Assert(unBoundSources[1], check.Equals, sourceID2)
+	c.Assert(unBoundSources[2], check.Equals, sourceID3)
+
+	// 4. try to stop a non-exist-source
+	req.Op = pb.SourceOp_StopSource
+	mysqlCfg.SourceID = "not-exist-source"
+	task4, err := mysqlCfg.Toml()
+	c.Assert(err, check.IsNil)
+	req.Config = []string{task4}
 	resp, err = s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, false)
 	c.Assert(resp.Msg, check.Matches, `[\s\S]*source config with ID `+mysqlCfg.SourceID+` not exists[\s\S]*`)
 
-	// 4. start a new worker, the unbounded source should be bounded
+	// 5. start workers, the unbounded sources should be bounded
 	var wg sync.WaitGroup
 	ctx1, cancel1 := context.WithCancel(ctx)
-	workerName := "worker1"
+	ctx2, cancel2 := context.WithCancel(ctx)
+	ctx3, cancel3 := context.WithCancel(ctx)
+	workerName1 := "worker1"
+	workerName2 := "worker2"
+	workerName3 := "worker3"
 	defer func() {
 		clearSchedulerEnv(c, cancel1, &wg)
+		clearSchedulerEnv(c, cancel2, &wg)
+		clearSchedulerEnv(c, cancel3, &wg)
 	}()
-	c.Assert(s1.scheduler.AddWorker(workerName, "172.16.10.72:8262"), check.IsNil)
+	c.Assert(s1.scheduler.AddWorker(workerName1, "172.16.10.72:8262"), check.IsNil)
 	wg.Add(1)
 	go func(ctx context.Context, workerName string) {
 		defer wg.Done()
 		c.Assert(ha.KeepAlive(ctx, s1.etcdClient, workerName, keepAliveTTL), check.IsNil)
-	}(ctx1, workerName)
+	}(ctx1, workerName1)
+	c.Assert(s1.scheduler.AddWorker(workerName2, "172.16.10.72:8263"), check.IsNil)
+	wg.Add(1)
+	go func(ctx context.Context, workerName string) {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx, s1.etcdClient, workerName, keepAliveTTL), check.IsNil)
+	}(ctx2, workerName2)
+	c.Assert(s1.scheduler.AddWorker(workerName3, "172.16.10.72:8264"), check.IsNil)
+	wg.Add(1)
+	go func(ctx context.Context, workerName string) {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx, s1.etcdClient, workerName, keepAliveTTL), check.IsNil)
+	}(ctx3, workerName3)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		w := s1.scheduler.GetWorkerBySource(sourceID)
-		return w != nil && w.BaseInfo().Name == workerName
+		return w != nil
 	}), check.IsTrue)
 
-	// 5. stop this source
-	req.Config = task
+	// 6. stop sources
+	req.Config = []string{task, task2, task3}
 	req.Op = pb.SourceOp_StopSource
+
 	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 	mockRevelantWorkerClient(mockWorkerClient, "", sourceID, req)
-	s1.scheduler.SetWorkerClientForTest(workerName, newMockRPCClient(mockWorkerClient))
+	s1.scheduler.SetWorkerClientForTest(workerName1, newMockRPCClient(mockWorkerClient))
+	mockWorkerClient2 := pbmock.NewMockWorkerClient(ctrl)
+	mockRevelantWorkerClient(mockWorkerClient2, "", sourceID2, req)
+	s1.scheduler.SetWorkerClientForTest(workerName2, newMockRPCClient(mockWorkerClient2))
+	mockWorkerClient3 := pbmock.NewMockWorkerClient(ctrl)
+	mockRevelantWorkerClient(mockWorkerClient3, "", sourceID3, req)
+	s1.scheduler.SetWorkerClientForTest(workerName3, newMockRPCClient(mockWorkerClient3))
 	resp, err = s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, true)
 	c.Assert(resp.Sources, check.DeepEquals, []*pb.CommonWorkerResponse{{
 		Result: true,
 		Source: sourceID,
+	}, {
+		Result: true,
+		Source: sourceID2,
+	}, {
+		Result: true,
+		Source: sourceID3,
 	}})
 	scm, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
 	c.Assert(err, check.IsNil)
@@ -1285,7 +1353,14 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 
 	cancel3()
 	s3.Close()
-	time.Sleep(5 * time.Second)
+	// make sure s3 is not the leader, otherwise OfflineMember request will send to s3
+	c.Assert(utils.WaitSomething(20, 500*time.Millisecond, func() bool {
+		_, leaderID, _, err := s1.election.LeaderInfo(ctx)
+		if err != nil {
+			return false
+		}
+		return leaderID != s3.cfg.Name
+	}), check.IsTrue)
 	req.Name = s3.cfg.Name
 	resp, err = s2.OfflineMember(ctx, req)
 	c.Assert(err, check.IsNil)

@@ -70,11 +70,20 @@ function test_multi_task_running() {
     run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test2
     run_sql_file_withdb $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test2
 
-    sleep 3 # wait for flush checkpoint
+    sleep 5 # wait for flush checkpoint
     echo "use sync_diff_inspector to check increment data"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 5
-    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 5
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10 || print_debug_status
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 10 || print_debug_status
     echo "[$(date)] <<<<<< finish test_multi_task_running >>>>>>"
+}
+
+function print_debug_status() {
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
+        "query-status test" \
+        "fail me!" 1 && \
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
+        "query-status test2" \
+        "fail me!" 1 && exit 1
 }
 
 
@@ -448,8 +457,8 @@ function test_pause_task() {
     sleep 1
 
     echo "use sync_diff_inspector to check increment data"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
-    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml
     echo "[$(date)] <<<<<< finish test_pause_task >>>>>>"
 }
 
@@ -496,8 +505,8 @@ function test_stop_task() {
     sleep 1
 
     echo "use sync_diff_inspector to check increment data"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
-    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml
     echo "[$(date)] <<<<<< finish test_stop_task >>>>>>"
 }
 
@@ -557,8 +566,8 @@ function test_multi_task_reduce_and_restart_worker() {
             wait
             sleep 2
             echo "use sync_diff_inspector to check increment data"
-            check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3
-            check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 3
+            check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+            check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml
             echo "data checked after one worker was killed"
         else
             status_str=""
@@ -655,7 +664,7 @@ function test_isolate_master_and_worker() {
     sleep 3
 
     echo "use sync_diff_inspector to check increment data"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     echo "[$(date)] <<<<<< finish test_isolate_master_and_worker >>>>>>"
 }

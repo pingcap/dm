@@ -34,6 +34,11 @@ import (
 	"github.com/pingcap/dm/syncer"
 )
 
+const (
+	opErrTypeBeforeOp    = "BeforeAnyOp"
+	opErrTypeSourceBound = "SourceBound"
+)
+
 var (
 	taskState = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -41,7 +46,16 @@ var (
 			Subsystem: "worker",
 			Name:      "task_state",
 			Help:      "state of task, 0 - invalidStage, 1 - New, 2 - Running, 3 - Paused, 4 - Stopped, 5 - Finished",
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
+
+	// opErrCounter cleans on worker close, which is the same time dm-worker exits, so no explicit clean
+	opErrCounter = metricsproxy.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "dm",
+			Subsystem: "worker",
+			Name:      "operate_error",
+			Help:      "number of different operate error",
+		}, []string{"worker", "type"})
 
 	cpuUsageGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
@@ -93,6 +107,7 @@ func RegistryMetrics() {
 	registry.MustRegister(prometheus.NewGoCollector())
 
 	registry.MustRegister(taskState)
+	registry.MustRegister(opErrCounter)
 	registry.MustRegister(cpuUsageGauge)
 
 	relay.RegisterMetrics(registry)
@@ -123,6 +138,6 @@ func InitStatus(lis net.Listener) {
 	}
 }
 
-func (st *SubTask) removeLabelValuesWithTaskInMetrics(task string) {
-	taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+func (st *SubTask) removeLabelValuesWithTaskInMetrics(task string, source string) {
+	taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": source})
 }

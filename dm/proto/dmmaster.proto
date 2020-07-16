@@ -95,6 +95,12 @@ service Master {
             body: "*"
         };
     }
+
+    rpc GetSubTaskCfg(GetSubTaskCfgRequest) returns(GetSubTaskCfgResponse) {
+        option (google.api.http) = {
+            get: "/apis/v1alpha1/subtasks/{name}"
+        };
+    }
 }
 
 message MigrateWorkerRelayRequest {
@@ -312,7 +318,7 @@ enum SourceOp {
 
 message OperateSourceRequest {
     SourceOp op = 1;
-    string config = 2;
+    repeated string config = 2;
 }
 
 message OperateSourceResponse {
@@ -421,4 +427,15 @@ message OperateSchemaResponse {
     bool result = 1;
     string msg = 2;
     repeated CommonWorkerResponse sources = 3;
+}
+
+message GetSubTaskCfgRequest {
+    // the task name
+    string name = 1;
+}
+
+message GetSubTaskCfgResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated string cfgs = 3;
 }

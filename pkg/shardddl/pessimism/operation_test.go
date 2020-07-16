@@ -18,6 +18,7 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func (t *testForEtcd) TestOperationJSON(c *C) {
@@ -65,8 +66,12 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	// start the watcher with the same revision as the last PUT for the specified task and source.
 	wch := make(chan Operation, 10)
 	ech := make(chan error, 10)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	WatchOperationPut(ctx, etcdTestCli, task1, source1, rev2, wch, ech)
+	ctx, cancel := context.WithCancel(context.Background())
+	go WatchOperationPut(ctx, etcdTestCli, task1, source1, rev2, wch, ech)
+	// wait response of WatchOperationPut, increase waiting time when resource shortage
+	utils.WaitSomething(10, 500*time.Millisecond, func() bool {
+		return len(wch) != 0
+	})
 	cancel()
 	close(wch)
 	close(ech)
@@ -84,8 +89,11 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	// start the watch with an older revision for all tasks and sources.
 	wch = make(chan Operation, 10)
 	ech = make(chan error, 10)
-	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
-	WatchOperationPut(ctx, etcdTestCli, "", "", rev2, wch, ech)
+	ctx, cancel = context.WithCancel(context.Background())
+	go WatchOperationPut(ctx, etcdTestCli, "", "", rev2, wch, ech)
+	utils.WaitSomething(10, 500*time.Millisecond, func() bool {
+		return len(wch) != 0
+	})
 	cancel()
 	close(wch)
 	close(ech)
@@ -125,8 +133,11 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	// start watch with an older revision for the deleted op11.
 	wch = make(chan Operation, 10)
 	ech = make(chan error, 10)
-	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
-	WatchOperationDelete(ctx, etcdTestCli, op11.Task, op11.Source, rev5, wch, ech)
+	ctx, cancel = context.WithCancel(context.Background())
+	go WatchOperationDelete(ctx, etcdTestCli, op11.Task, op11.Source, rev5, wch, ech)
+	utils.WaitSomething(10, 500*time.Millisecond, func() bool {
+		return len(wch) != 0
+	})
 	cancel()
 	close(wch)
 	close(ech)

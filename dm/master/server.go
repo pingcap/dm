@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/master/shardddl"
 	operator "github.com/pingcap/dm/dm/master/sql-operator"
@@ -66,6 +67,11 @@ var (
 	maxRetryNum = 30
 	// the retry interval for dm-master to confirm the dm-workers status is expected
 	retryInterval = time.Second
+
+	// typically there's only one server running in one process, but testMaster.TestOfflineMember starts 3 servers,
+	// so we need sync.Once to prevent data race
+	registerOnce      sync.Once
+	runBackgroundOnce sync.Once
 )
 
 // Server handles RPC requests for dm-master
@@ -154,8 +160,9 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
+	registerOnce.Do(metrics.RegistryMetrics)
+
 	// HTTP handlers on etcd's client IP:port
-	// no `metrics` for DM-master now, add it later.
 	// NOTE: after received any HTTP request from chrome browser,
 	// the server may be blocked when closing sometime.
 	// And any request to etcd's builtin handler has the same problem.
@@ -163,9 +170,10 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// But I haven't figured it out.
 	// (maybe more requests are sent from chrome or its extensions).
 	userHandles := map[string]http.Handler{
-		"/apis/":  apiHandler,
-		"/status": getStatusHandle(),
-		"/debug/": getDebugHandler(),
+		"/apis/":   apiHandler,
+		"/status":  getStatusHandle(),
+		"/debug/":  getDebugHandler(),
+		"/metrics": metrics.GetMetricsHandler(),
 	}
 
 	// gRPC API server
@@ -204,6 +212,14 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		defer s.bgFunWg.Done()
 		s.electionNotify(ctx)
 	}()
+
+	runBackgroundOnce.Do(func() {
+		s.bgFunWg.Add(1)
+		go func() {
+			defer s.bgFunWg.Done()
+			metrics.RunBackgroundJob(ctx)
+		}()
+	})
 
 	s.bgFunWg.Add(1)
 	go func() {
@@ -269,6 +285,7 @@ func errorCommonWorkerResponse(msg string, source, worker string) *pb.CommonWork
 // value: workerInfo
 func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "RegisterWorker"))
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -297,6 +314,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 // value: WorkerInfo
 func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest) (*pb.OfflineMemberResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OfflineMember"))
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -496,6 +514,45 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	return resp, nil
 }
 
+// GetSubTaskCfg implements MasterServer.GetSubTaskCfg
+func (s *Server) GetSubTaskCfg(ctx context.Context, req *pb.GetSubTaskCfgRequest) (*pb.GetSubTaskCfgResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "GetSubTaskCfg"))
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.GetSubTaskCfg(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	subCfgs := s.scheduler.GetSubTaskCfgsByTask(req.Name)
+	if len(subCfgs) == 0 {
+		return &pb.GetSubTaskCfgResponse{
+			Result: false,
+			Msg:    "task not found",
+		}, nil
+	}
+
+	cfgs := make([]string, 0, len(subCfgs))
+
+	for _, cfg := range subCfgs {
+		cfgBytes, err := cfg.Toml()
+		if err != nil {
+			return &pb.GetSubTaskCfgResponse{
+				Result: false,
+				Msg:    err.Error(),
+			}, nil
+		}
+		cfgs = append(cfgs, string(cfgBytes))
+	}
+
+	return &pb.GetSubTaskCfgResponse{
+		Result: true,
+		Cfgs:   cfgs,
+	}, nil
+}
+
 // UpdateTask implements MasterServer.UpdateTask
 // TODO: support update task later
 func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
@@ -632,6 +689,7 @@ func extractSources(s *Server, req hasWokers) ([]string, error) {
 // QueryStatus implements MasterServer.QueryStatus
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest) (*pb.QueryStatusListResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryStatus"))
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -670,6 +728,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 // QueryError implements MasterServer.QueryError
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) (*pb.QueryErrorListResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryError"))
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -963,6 +1022,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 // OperateWorkerRelayTask implements MasterServer.OperateWorkerRelayTask
 func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWorkerRelayRequest) (*pb.OperateWorkerRelayResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateWorkerRelayTask"))
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -1280,29 +1340,35 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
-func parseAndAdjustSourceConfig(cfg *config.SourceConfig, content string) error {
-	if err := cfg.Parse(content); err != nil {
-		return err
-	}
+func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, error) {
+	cfgs := make([]*config.SourceConfig, len(contents))
+	for i, content := range contents {
+		cfg := config.NewSourceConfig()
+		if err := cfg.Parse(content); err != nil {
+			return cfgs, err
+		}
 
-	dbConfig := cfg.GenerateDBConfig()
+		dbConfig := cfg.GenerateDBConfig()
 
-	fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
-	if err != nil {
-		return err
+		fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
+		if err != nil {
+			return cfgs, err
+		}
+		if err = cfg.Adjust(fromDB.DB); err != nil {
+			return cfgs, err
+		}
+		if _, err = cfg.Toml(); err != nil {
+			return cfgs, err
+		}
+		cfgs[i] = cfg
 	}
-	if err = cfg.Adjust(fromDB.DB); err != nil {
-		return err
-	}
-	if _, err = cfg.Toml(); err != nil {
-		return err
-	}
-	return nil
+	return cfgs, nil
 }
 
 // OperateSource will create or update an upstream source.
 func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest) (*pb.OperateSourceResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateSource"))
+
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -1311,8 +1377,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
-	cfg := config.NewSourceConfig()
-	err := parseAndAdjustSourceConfig(cfg, req.Config)
+	cfgs, err := parseAndAdjustSourceConfig(req.Config)
 	resp := &pb.OperateSourceResponse{
 		Result: false,
 	}
@@ -1320,26 +1385,63 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		resp.Msg = err.Error()
 		return resp, nil
 	}
-	var w *scheduler.Worker
+	var workers []*scheduler.Worker
 	switch req.Op {
 	case pb.SourceOp_StartSource:
-		err := s.scheduler.AddSourceCfg(*cfg)
-		if err != nil {
-			resp.Msg = err.Error()
+		var (
+			started  []string
+			hasError = false
+			err      error
+		)
+		for _, cfg := range cfgs {
+			err = s.scheduler.AddSourceCfg(*cfg)
+			// return first error and try to revert, so user could copy-paste same start command after error
+			if err != nil {
+				resp.Msg = err.Error()
+				hasError = true
+				break
+			}
+			started = append(started, cfg.SourceID)
+		}
+
+		if hasError {
+			log.L().Info("reverting start source", zap.String("error", err.Error()))
+			for _, sid := range started {
+				err := s.scheduler.RemoveSourceCfg(sid)
+				if err != nil {
+					log.L().Error("while reverting started source, another error happens",
+						zap.String("source id", sid),
+						zap.String("error", err.Error()))
+				}
+			}
 			return resp, nil
 		}
 		// for start source, we should get worker after start source
-		w = s.scheduler.GetWorkerBySource(cfg.SourceID)
+		workers = make([]*scheduler.Worker, len(started))
+		for i, sid := range started {
+			workers[i] = s.scheduler.GetWorkerBySource(sid)
+		}
 	case pb.SourceOp_UpdateSource:
 		// TODO: support SourceOp_UpdateSource later
 		resp.Msg = "Update worker config is not supported by dm-ha now"
 		return resp, nil
 	case pb.SourceOp_StopSource:
-		w = s.scheduler.GetWorkerBySource(cfg.SourceID)
-		err := s.scheduler.RemoveSourceCfg(cfg.SourceID)
-		if err != nil {
-			resp.Msg = err.Error()
-			return resp, nil
+		workers = make([]*scheduler.Worker, len(cfgs))
+		for i, cfg := range cfgs {
+			workers[i] = s.scheduler.GetWorkerBySource(cfg.SourceID)
+			err := s.scheduler.RemoveSourceCfg(cfg.SourceID)
+			// TODO(lance6716):
+			// user could not copy-paste same command if encounter error halfway:
+			// `operate-source stop  correct-id-1     wrong-id-2`
+			//                       remove success   some error
+			// `operate-source stop  correct-id-1     correct-id-2`
+			//                       not exist, error
+			// find a way to distinguish this scenario and wrong source id
+			// or give a command to show existing source id
+			if err != nil {
+				resp.Msg = err.Error()
+				return resp, nil
+			}
 		}
 	default:
 		resp.Msg = terror.ErrMasterInvalidOperateOp.Generate(req.Op.String(), "source").Error()
@@ -1347,28 +1449,40 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 	}
 
 	resp.Result = true
-	// source is added but not bounded
-	if w == nil {
-		var msg string
-		switch req.Op {
-		case pb.SourceOp_StartSource:
-			msg = "source is added but there is no free worker to bound"
-		case pb.SourceOp_StopSource:
-			msg = "source is stopped and hasn't bound to worker before being stopped"
+	var noWorkerMsg string
+	switch req.Op {
+	case pb.SourceOp_StartSource:
+		noWorkerMsg = "source is added but there is no free worker to bound"
+	case pb.SourceOp_StopSource:
+		noWorkerMsg = "source is stopped and hasn't bound to worker before being stopped"
+	}
+
+	var (
+		sourceToCheck []string
+		workerToCheck []string
+	)
+
+	for i := range workers {
+		w := workers[i]
+		if w == nil {
+			resp.Sources = append(resp.Sources, &pb.CommonWorkerResponse{
+				Result: true,
+				Msg:    noWorkerMsg,
+				Source: cfgs[i].SourceID,
+			})
+		} else {
+			sourceToCheck = append(sourceToCheck, cfgs[i].SourceID)
+			workerToCheck = append(workerToCheck, w.BaseInfo().Name)
 		}
-		resp.Sources = []*pb.CommonWorkerResponse{{
-			Result: true,
-			Msg:    msg,
-			Source: cfg.SourceID,
-		}}
-	} else {
-		resp.Sources = s.getSourceRespsAfterOperation(ctx, "", []string{cfg.SourceID}, []string{w.BaseInfo().Name}, req)
+	}
+	if len(sourceToCheck) > 0 {
+		resp.Sources = append(resp.Sources, s.getSourceRespsAfterOperation(ctx, "", sourceToCheck, workerToCheck, req)...)
 	}
 	return resp, nil
 }
 
 // OperateLeader implements MasterServer.OperateLeader
-// Note: this request dosen't need to forward to leader
+// Note: this request doesn't need to forward to leader
 func (s *Server) OperateLeader(ctx context.Context, req *pb.OperateLeaderRequest) (*pb.OperateLeaderResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateLeader"))
 
