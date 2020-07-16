@@ -95,6 +95,26 @@ func (mr *MockWorkerClientMockRecorder) OperateRelay(arg0, arg1 interface{}, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateRelay", reflect.TypeOf((*MockWorkerClient)(nil).OperateRelay), varargs...)
 }
 
+// OperateSchema mocks base method
+func (m *MockWorkerClient) OperateSchema(arg0 context.Context, arg1 *pb.OperateWorkerSchemaRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "OperateSchema", varargs...)
+	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OperateSchema indicates an expected call of OperateSchema
+func (mr *MockWorkerClientMockRecorder) OperateSchema(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateSchema", reflect.TypeOf((*MockWorkerClient)(nil).OperateSchema), varargs...)
+}
+
 // OperateSubTask mocks base method
 func (m *MockWorkerClient) OperateSubTask(arg0 context.Context, arg1 *pb.OperateSubTaskRequest, arg2 ...grpc.CallOption) (*pb.OperateSubTaskResponse, error) {
 	m.ctrl.T.Helper()
@@ -341,6 +361,21 @@ func (m *MockWorkerServer) OperateRelay(arg0 context.Context, arg1 *pb.OperateRe
 func (mr *MockWorkerServerMockRecorder) OperateRelay(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateRelay", reflect.TypeOf((*MockWorkerServer)(nil).OperateRelay), arg0, arg1)
+}
+
+// OperateSchema mocks base method
+func (m *MockWorkerServer) OperateSchema(arg0 context.Context, arg1 *pb.OperateWorkerSchemaRequest) (*pb.CommonWorkerResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OperateSchema", arg0, arg1)
+	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OperateSchema indicates an expected call of OperateSchema
+func (mr *MockWorkerServerMockRecorder) OperateSchema(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateSchema", reflect.TypeOf((*MockWorkerServer)(nil).OperateSchema), arg0, arg1)
 }
 
 // OperateSubTask mocks base method
