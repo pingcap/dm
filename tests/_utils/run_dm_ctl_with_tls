@@ -2,8 +2,10 @@
 # tools to run dmctl from command line
 # parameter 1: work directory
 # parameter 2: master-addr port
-# parameter 3: command
-# parameter 4...: check output content and count
+# parameter 3: ssl-ca path
+# parameter 4: ssl-cert path
+# parameter 5: ssl-key path
+# parameter 6: command
 
 workdir=$1
 master_addr=$2
