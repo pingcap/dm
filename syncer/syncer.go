@@ -532,7 +532,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	wg.Wait()           // wait for receive all fatal from s.runFatalChan
 
 	if err != nil {
-		if terror.ErrSyncerCtxCanceled.Equal(err) {
+		if utils.IsContextCanceledError(err) {
 			s.tctx.L().Info("filter out error caused by user cancel")
 		} else {
 			syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
@@ -1813,10 +1813,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		// if execute ddl failed, the execErrorDetected will be true.
 		err = s.execError.Get()
 		if err != nil {
-			if utils.IsContextCanceledError(err) {
-				return terror.ErrSyncerCtxCanceled.Generate(ev.Query)
-			}
-			return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query, err.Error())
+			return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 		}
 
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
@@ -2015,10 +2012,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	err = s.execError.Get()
 	if err != nil {
-		if utils.IsContextCanceledError(err) {
-			return terror.ErrSyncerCtxCanceled.Generate(ev.Query)
-		}
-		return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query, err.Error())
+		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 	}
 
 	if len(onlineDDLTableNames) > 0 {
