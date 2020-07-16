@@ -1464,7 +1464,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_worker_task_state{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_worker_task_state{task=\"$task\",source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -2234,14 +2234,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_relay_binlog_pos{instance=\"$instance\", node=\"master\"}",
+              "expr": "dm_relay_binlog_pos{source_id=\"$source\", node=\"master\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "master",
               "refId": "A"
             },
             {
-              "expr": "dm_relay_binlog_pos{instance=\"$instance\", node=\"relay\"}",
+              "expr": "dm_relay_binlog_pos{source_id=\"$source\", node=\"relay\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "relay",
@@ -2331,7 +2331,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_relay_read_binlog_duration_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_relay_read_binlog_duration_bucket{source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
@@ -2339,14 +2339,14 @@
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_relay_read_binlog_duration_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_relay_read_binlog_duration_bucket{source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_relay_read_binlog_duration_bucket{instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_relay_read_binlog_duration_bucket{source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -3395,7 +3395,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_syncer_remaining_time{task=\"$task\", instance=\"$instance\"}",
+              "expr": "dm_syncer_remaining_time{task=\"$task\", source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -3557,7 +3557,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "changes(dm_syncer_exit_with_error_count{task=\"$task\", instance=\"$instance\"}[30m])",
+              "expr": "changes(dm_syncer_exit_with_error_count{task=\"$task\", source_id=\"$source\"}[30m])",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -3614,7 +3614,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_syncer_binlog_file{instance=\"$instance\", task=\"$task\", node=\"master\"} - ON(instance, task, job) dm_syncer_binlog_file{instance=\"$instance\", task=\"$task\", node=\"syncer\"}",
+              "expr": "dm_syncer_binlog_file{source_id=\"$source\", task=\"$task\", node=\"master\"} - ON(instance, task, job) dm_syncer_binlog_file{source_id=\"$source\", task=\"$task\", node=\"syncer\"}",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 2,
@@ -3702,7 +3702,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_relay_binlog_file{instance=\"$instance\", node=\"relay\"} - ON(instance, job) dm_syncer_binlog_file{instance=\"$instance\", task=\"$task\", node=\"syncer\"}",
+              "expr": "dm_relay_binlog_file{instance=\"$instance\", node=\"relay\"} - ON(instance, job) dm_syncer_binlog_file{source_id=\"$source\", task=\"$task\", node=\"syncer\"}",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 2,
@@ -3792,28 +3792,28 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\", type=\"write_rows\"}[1m])",
+              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", source_id=\"$source\", type=\"write_rows\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "insert",
               "refId": "A"
             },
             {
-              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\", type=\"update_rows\"}[1m])",
+              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", source_id=\"$source\", type=\"update_rows\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "update",
               "refId": "B"
             },
             {
-              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\", type=\"delete_rows\"}[1m])",
+              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", source_id=\"$source\", type=\"delete_rows\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "delete",
               "refId": "C"
             },
             {
-              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\", type=\"query\"}[1m])",
+              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", source_id=\"$source\", type=\"query\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "query",
@@ -3902,14 +3902,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(dm_syncer_skip_binlog_duration_count{task=\"$task\", instance=\"$instance\", type=\"rows\"}[1m])",
+              "expr": "rate(dm_syncer_skip_binlog_duration_count{task=\"$task\", source_id=\"$source\", type=\"rows\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "rows",
               "refId": "A"
             },
             {
-              "expr": "rate(dm_syncer_skip_binlog_duration_count{task=\"$task\", instance=\"$instance\", type=\"query\"}[1m])",
+              "expr": "rate(dm_syncer_skip_binlog_duration_count{task=\"$task\", source_id=\"$source\", type=\"query\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "query",
@@ -3998,21 +3998,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -4102,21 +4102,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -4206,21 +4206,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -4414,21 +4414,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -4518,7 +4518,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_syncer_queue_size{task=\"$task\", instance=\"$instance\"}",
+              "expr": "dm_syncer_queue_size{task=\"$task\", source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{queueNo}}",
@@ -4607,7 +4607,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(dm_syncer_added_jobs_total{task=\"$task\", instance=\"$instance\"}[1m])",
+              "expr": "rate(dm_syncer_added_jobs_total{task=\"$task\", source_id=\"$source\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{queueNo}}-{{type}}",
@@ -4696,7 +4696,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(dm_syncer_finished_jobs_total{task=\"$task\", instance=\"$instance\"}[1m])",
+              "expr": "rate(dm_syncer_finished_jobs_total{task=\"$task\", source_id=\"$source\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{queueNo}}-{{type}}",
@@ -4896,21 +4896,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -5000,21 +5000,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -5104,21 +5104,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -5206,7 +5206,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_syncer_unsynced_table_number{instance=\"$instance\", task=\"$task\"}",
+              "expr": "dm_syncer_unsynced_table_number{source_id=\"$source\", task=\"$task\"}",
               "format": "time_series",
               "instant": false,
               "intervalFactor": 2,
@@ -5294,7 +5294,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_syncer_shard_lock_resolving{instance=\"$instance\", task=\"$task\"}",
+              "expr": "dm_syncer_shard_lock_resolving{source_id=\"$source\", task=\"$task\"}",
               "format": "time_series",
               "instant": false,
               "intervalFactor": 2,
@@ -5368,6 +5368,28 @@
         "name": "task",
         "options": [],
         "query": "label_values(dm_worker_task_state, task)",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      },
+      {
+        "allValue": null,
+        "current": {},
+        "datasource": "${DS_TEST-CLUSTER}",
+        "definition": "",
+        "hide": 0,
+        "includeAll": false,
+        "label": null,
+        "multi": true,
+        "name": "source",
+        "options": [],
+        "query": "label_values(dm_worker_task_state, source_id)",
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
