@@ -14,8 +14,6 @@
 package atomic2
 
 import (
-	"context"
-	"github.com/pingcap/failpoint"
 	"sync/atomic"
 	"unsafe"
 )
@@ -27,9 +25,6 @@ type AtomicError struct {
 
 // Get returns error
 func (e *AtomicError) Get() error {
-	failpoint.Inject("UserCancel", func(_ failpoint.Value) {
-		failpoint.Return(context.Canceled)
-	})
 	p := atomic.LoadPointer(&e.p)
 	if p == nil {
 		return nil

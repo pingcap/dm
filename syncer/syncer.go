@@ -1788,6 +1788,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		// when add ddl job, will execute ddl and then flush checkpoint.
 		// if execute ddl failed, the execErrorDetected will be true.
 		err = s.execError.Get()
+		failpoint.Inject("UserCancel", func(_ failpoint.Value) {
+			err = context.Canceled
+		})
 		if err != nil {
 			return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 		}
@@ -1973,6 +1976,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	err = s.execError.Get()
+	failpoint.Inject("UserCancel", func(_ failpoint.Value) {
+		err = context.Canceled
+	})
 	if err != nil {
 		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 	}
