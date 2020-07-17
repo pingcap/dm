@@ -4,6 +4,8 @@ This document outlines some of the conventions on development workflow, commit
 message formatting, contact points and other resources to make it easier to get
 your contribution accepted.
 
+See [Step by Step Contribute Example](step_by_step_contribute.md) for a more detailed example.
+
 ## Getting started
 
 - Fork the repository on GitHub.

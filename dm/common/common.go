@@ -36,6 +36,9 @@ var (
 	// UpstreamBoundWorkerKeyAdapter used to store address of worker in which MySQL-tasks which are running.
 	// k/v: Encode(name) -> the bound relationship.
 	UpstreamBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/bound-worker/")
+	// TaskConfigKeyAdapter used to store task config string.
+	// k/v: Encode(task-name) -> task-config-string
+	TaskConfigKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/task/")
 	// UpstreamSubTaskKeyAdapter used to store SubTask which are subscribing data from MySQL source.
 	// k/v: Encode(source-id, task-name) -> SubTaskConfig
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
@@ -72,7 +75,7 @@ var (
 func keyAdapterKeysLen(s KeyAdapter) int {
 	switch s {
 	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter,
-		WorkerKeepAliveKeyAdapter, StageRelayKeyAdapter:
+		WorkerKeepAliveKeyAdapter, StageRelayKeyAdapter, TaskConfigKeyAdapter:
 		return 1
 	case UpstreamSubTaskKeyAdapter, StageSubTaskKeyAdapter,
 		ShardDDLPessimismInfoKeyAdapter, ShardDDLPessimismOperationKeyAdapter,
