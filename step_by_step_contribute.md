@@ -59,12 +59,6 @@ label in the DM repository. These issues are well suited for new contributors.
 >
 > This section takes issue [UCP: retrieve the configuration of the running task from the DM cluster](https://github.com/pingcap/dm/issues/182) as an example. Steps of pick up other issues are similar.
 
-Add following comment for the github issue to pick up the issue.
-
-```
-/pick-up-issue
-```
-
 ### Step 5: Create a new branch
 
 1. Get your local master up-to-date with upstream/master.
