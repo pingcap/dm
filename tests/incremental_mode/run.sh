@@ -46,6 +46,7 @@ function run() {
     sed -i "s/root/dm_incremental/g" $WORK_DIR/dm-worker1.toml
     cat $cur/conf/dm-worker2.toml > $WORK_DIR/dm-worker2.toml
     sed -i "s/root/dm_incremental/g" $WORK_DIR/dm-worker2.toml
+    export GO_FAILPOINTS="github.com/pingcap/dm/syncer/WaitUserCancel=return(8)"
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $WORK_DIR/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $WORK_DIR/dm-worker2.toml
@@ -61,9 +62,35 @@ function run() {
     sed -i "s/binlog-pos-placeholder-1/$pos1/g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-name-placeholder-2/$name2/g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-pos-placeholder-2/$pos2/g" $WORK_DIR/dm-task.yaml
-	sleep 2
-	dmctl_start_task $WORK_DIR/dm-task.yaml
 
+    sleep 2
+    dmctl_start_task $WORK_DIR/dm-task.yaml
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "Running" 2
+    # we use failpoint to let worker sleep 8 second when executeSQLs, to increase possibility of
+    # meeting an error of context cancel.
+    # when below check pass, it means we filter out that error, or that error doesn't happen.
+    # we only focus on fails, to find any unfiltered context cancel error.
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "pause-task test" \
+        "\"result\": true" 3
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "stop-task test" \
+        "\"result\": true" 3
+    kill_dm_worker
+    check_port_offline $WORKER1_PORT 20
+    check_port_offline $WORKER2_PORT 20
+
+    export GO_FAILPOINTS=""
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $WORK_DIR/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $WORK_DIR/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    sleep 2
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
