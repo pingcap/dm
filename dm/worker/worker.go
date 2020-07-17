@@ -714,6 +714,7 @@ func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
 	// log config items, mydumper unit use it
 	cfg.LogLevel = w.cfg.LogLevel
 	cfg.LogFile = w.cfg.LogFile
+	cfg.LogFormat = w.cfg.LogFormat
 }
 
 // getAllSubTaskStatus returns all subtask status of this worker, note the field
