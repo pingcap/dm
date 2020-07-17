@@ -544,7 +544,6 @@ const (
 	codeSchedulerSubTaskStageInvalidUpdate
 	codeSchedulerSubTaskOpTaskNotExist
 	codeSchedulerSubTaskOpSourceNotExist
-	codeSchedulerTaskExist
 	codeSchedulerTaskNotExist
 )
 

@@ -420,14 +420,14 @@ func (s *Scheduler) RemoveTaskCfg(task string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
 	// do not remove task if has subtask
 	// return nil because we may use `stop-task -s source` for subtask
 	if _, ok := s.subTaskCfgs[task]; ok {
 		return nil
-	}
-
-	if !s.started {
-		return terror.ErrSchedulerNotStarted.Generate()
 	}
 
 	if task == "" {

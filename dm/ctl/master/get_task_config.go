@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -62,13 +63,7 @@ func getTaskCfgFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	if resp.Result && len(filename) != 0 {
-		file, err := os.Create(filename)
-		defer file.Close()
-		if err != nil {
-			common.PrintLines("can not create file %s:\n%v", filename, err)
-			return
-		}
-		_, err = file.WriteString(resp.Cfg)
+		err := ioutil.WriteFile(filename, []byte(resp.Cfg), 0644)
 		if err != nil {
 			common.PrintLines("can not write config to file %s:\n%v", filename, err)
 			return

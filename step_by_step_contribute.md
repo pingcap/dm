@@ -15,14 +15,14 @@ Please perform the following steps to create your Pull Request to this repositor
 
 ### Step 2: Clone the forked repository to local storage
 
-    ```sh
-    cd $working_dir # Comes to the directory that you want put the fork in, for example, "cd ~/code"
-    git clone git@github.com:$user/dm.git # Replace "$user" with your GitHub ID
+```sh
+cd $working_dir # Comes to the directory that you want put the fork in, for example, "cd ~/code"
+git clone git@github.com:$user/dm.git # Replace "$user" with your GitHub ID
 
-    cd $working_dir/dm
-    git remote add upstream git@github.com:pingcap/dm.git # Adds the upstream repo
-    git remote -v # Confirms that your remote makes sense
-    ```
+cd $working_dir/dm
+git remote add upstream git@github.com:pingcap/dm.git # Adds the upstream repo
+git remote -v # Confirms that your remote makes sense
+```
 
 ### Step 3: Setting up your development environment
 
@@ -49,21 +49,21 @@ Please perform the following steps to create your Pull Request to this repositor
 
 2. Setting up test environment. See [Test Preparations](tests/README.md#Preparations) for more details.
 
-### Step 4: Pick up a challenge program
+### Step 4: Pick up a issue
 
 You can start by finding an existing issue with the
-[UCP](https://github.com/pingcap/dm/labels/challenge-program-2)
+[help wanted](https://github.com/pingcap/dm/labels/help%20wanted)
 label in the DM repository. These issues are well suited for new contributors.
 
 > **Note:**
 >
-> This section takes challenge program [UCP: retrieve the configuration of the running task from the DM cluster](https://github.com/pingcap/dm/issues/182) as an example. Steps of pick up other challege programs are similar.
+> This section takes issue [UCP: retrieve the configuration of the running task from the DM cluster](https://github.com/pingcap/dm/issues/182) as an example. Steps of pick up other issues are similar.
 
-Add following comment for the github issue to pick up the challenge program.
+Add following comment for the github issue to pick up the issue.
 
-    ```
-    /pick-up-challenge
-    ```
+```
+/pick-up-issue
+```
 
 ### Step 5: Create a new branch
 
@@ -117,25 +117,13 @@ Edit some code on the `new-branch-name` branch and save your changes to fix the 
     make generate_mock
     ```
 
-4. Add some error instance for your new command in [error_list](pkg/terror/error_list.go)
-
-    ```golang
-    ErrSchedulerTaskExist = New(codeSchedulerTaskExist, ClassScheduler, ScopeInternal, LevelMedium, "task with name %s already exist", "Please use `query-status` command to see tasks.")
-    ```
-
-5. Generate new [errors.toml](errors.toml)
-
-    ```sh
-    make terror_check
-    ```
-
-6. Add new command for dmctl in [root commnd](dm/ctl/ctl.go)
+4. Add new command for dmctl in [root commnd](dm/ctl/ctl.go)
 
     ```
     master.NewGetTaskCfgCmd()
     ```
 
-7. Implement new command for [dmctl](dm/ctl/master/get_task_config.go)
+5. Implement new command for [dmctl](dm/ctl/master/get_task_config.go)
 
     ```golang
     // NewGetTaskCfgCmd creates a getTaskCfg command
@@ -158,7 +146,7 @@ Edit some code on the `new-branch-name` branch and save your changes to fix the 
     }
     ```
 
-8. Implement new command for [dm-master](dm/master/server.go)
+6. Implement new command for [dm-master](dm/master/server.go)
 
     ```golang
     // GetTaskCfg implements MasterServer.GetSubTaskCfg
@@ -170,6 +158,18 @@ Edit some code on the `new-branch-name` branch and save your changes to fix the 
     		Cfg:    cfg,
     	}, nil
     }
+    ```
+
+7. Add some error instance for your new command in [error_list](pkg/terror/error_list.go)
+
+    ```golang
+	ErrSchedulerTaskNotExist = New(codeSchedulerTaskNotExist, ClassScheduler, ScopeInternal, LevelMedium, "task with name %s not exist", "Please use `query-status` command to see tasks.")
+    ```
+
+8. Generate new [errors.toml](errors.toml)
+
+    ```sh
+    make terror_check
     ```
 
 9. Build your code
@@ -204,7 +204,7 @@ Edit some code on the `new-branch-name` branch and save your changes to fix the 
 
 1. Add integration test for [dmctl command](tests/dmctl_basic/check_list/get_task_config.sh)
 
-    ```golang
+    ```sh
     function get_task_config_to_file() {
         ...
     }
@@ -225,25 +225,25 @@ Edit some code on the `new-branch-name` branch and save your changes to fix the 
 
 ### Step 9: Commit your changes
 
-    ```
-    git status # Checks the local status
-    git add <file> ... # Adds the file(s) you want to commit. If you want to commit all changes, you can directly use `git add .`
-    git commit -m "commit-message: update the xx"
-    ```
+```sh
+git status # Checks the local status
+git add <file> ... # Adds the file(s) you want to commit. If you want to commit all changes, you can directly use `git add .`
+git commit -m "commit-message: update the xx"
+```
 
 ### Step 10: Keep your branch in sync with upstream/master
 
-    ```
-    # While on your new branch
-    git fetch upstream
-    git rebase upstream/master
-    ```
+```sh
+# While on your new branch
+git fetch upstream
+git rebase upstream/master
+```
 
 ### Step 11: Push your changes to the remote
 
-    ```
-    git push -u origin new-branch-name # "-u" is used to track the remote branch from origin
-    ```
+```sh
+git push -u origin new-branch-name # "-u" is used to track the remote branch from origin
+```
 
 ### Step 12: Create a pull request
 
