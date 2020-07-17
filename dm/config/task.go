@@ -238,7 +238,6 @@ type SyncerConfig struct {
 	EnableGTID       bool `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
 	DisableCausality bool `yaml:"disable-detect" toml:"disable-detect" json:"disable-detect"`
 	SafeMode         bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
-	EnableANSIQuotes bool `yaml:"enable-ansi-quotes" toml:"enable-ansi-quotes" json:"enable-ansi-quotes"`
 }
 
 func defaultSyncerConfig() SyncerConfig {
@@ -305,6 +304,8 @@ type TaskConfig struct {
 	Syncers   map[string]*SyncerConfig   `yaml:"syncers"`
 
 	CleanDumpFile bool `yaml:"clean-dump-file"`
+
+	EnableANSIQuotes bool `yaml:"enable-ansi-quotes" toml:"enable-ansi-quotes" json:"enable-ansi-quotes"`
 }
 
 // NewTaskConfig creates a TaskConfig
@@ -573,6 +574,8 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.SyncerConfig = *inst.Syncer
 
 		cfg.CleanDumpFile = c.CleanDumpFile
+
+		cfg.EnableANSIQuotes = c.EnableANSIQuotes
 
 		err := cfg.Adjust(true)
 		if err != nil {
