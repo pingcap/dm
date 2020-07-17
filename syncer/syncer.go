@@ -1007,10 +1007,6 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			queries = append(queries, j.sql)
 			args = append(args, j.args)
 		}
-		failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
-			t := v.(int)
-			time.Sleep(time.Duration(t) * time.Second)
-		})
 		affected, err := db.executeSQL(tctx, queries, args...)
 		if err != nil {
 			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}

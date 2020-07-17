@@ -46,6 +46,8 @@ function run() {
     sed -i "s/root/dm_incremental/g" $WORK_DIR/dm-worker1.toml
     cat $cur/conf/dm-worker2.toml > $WORK_DIR/dm-worker2.toml
     sed -i "s/root/dm_incremental/g" $WORK_DIR/dm-worker2.toml
+
+    export GO_FAILPOINTS="github.com/pingcap/dm/pkg/atomic2/UserCancel=return(true)"
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $WORK_DIR/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $WORK_DIR/dm-worker2.toml
@@ -64,7 +66,11 @@ function run() {
 
     sleep 2
     dmctl_start_task $WORK_DIR/dm-task.yaml
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    sleep 2
+    check_log_contains $WORK_DIR/worker1/log/dm-worker.log "filter out error caused by user cancel" ||\
+        check_log_contains $WORK_DIR/worker2/log/dm-worker.log "filter out error caused by user cancel"
+
+    export GO_FAILPOINTS=""
 }
 
 cleanup_data $TEST_NAME
