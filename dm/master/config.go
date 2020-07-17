@@ -65,6 +65,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.AdvertiseAddr, "advertise-addr", "", `advertise address for client traffic (default "${master-addr}")`)
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
+	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
 	//fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
 
 	fs.StringVar(&cfg.Name, "name", "", "human-readable name for this DM-master member")
@@ -99,6 +100,7 @@ type Config struct {
 
 	LogLevel  string `toml:"log-level" json:"log-level"`
 	LogFile   string `toml:"log-file" json:"log-file"`
+	LogFormat string `toml:"log-format" json:"log-format"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
 	RPCTimeoutStr string        `toml:"rpc-timeout" json:"rpc-timeout"`

@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/dm/syncer"
 
 	"github.com/pingcap/errors"
+	globalLog "github.com/pingcap/log"
 	"go.uber.org/zap"
 )
 
@@ -50,13 +51,21 @@ func main() {
 
 	// 2. init logger
 	err = log.InitLogger(&log.Config{
-		File:  conf.LogFile,
-		Level: strings.ToLower(conf.LogLevel),
+		File:   conf.LogFile,
+		Format: conf.LogFormat,
+		Level:  strings.ToLower(conf.LogLevel),
 	})
 	if err != nil {
 		fmt.Printf("init logger error %v", errors.ErrorStack(err))
 		os.Exit(2)
 	}
+
+	// currently only schema tracker use global logger(std logger), simply replace it with `error` level
+	// may be we should support config logger in mock tidb later
+	confG := &globalLog.Config{Level: "error", File: globalLog.FileLogConfig{}, Format: conf.LogFormat}
+	lg, r, _ := globalLog.InitLogger(confG)
+	lg = lg.With(zap.String("component", "ddl tracker"))
+	globalLog.ReplaceGlobals(lg, r)
 
 	// 3. print process version information
 	utils.PrintInfo("dm-syncer", func() {
