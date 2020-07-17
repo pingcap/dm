@@ -2234,14 +2234,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_relay_binlog_pos{source_id=\"$source\", node=\"master\"}",
+              "expr": "dm_relay_binlog_pos{instance=\"$instance\", node=\"master\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "master",
               "refId": "A"
             },
             {
-              "expr": "dm_relay_binlog_pos{source_id=\"$source\", node=\"relay\"}",
+              "expr": "dm_relay_binlog_pos{instance=\"$instance\", node=\"relay\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "relay",
@@ -2331,7 +2331,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_relay_read_binlog_duration_bucket{source_id=\"$source\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_relay_read_binlog_duration_bucket{instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
@@ -2339,14 +2339,14 @@
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_relay_read_binlog_duration_bucket{source_id=\"$source\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_relay_read_binlog_duration_bucket{instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_relay_read_binlog_duration_bucket{source_id=\"$source\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_relay_read_binlog_duration_bucket{instance=\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -3614,7 +3614,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_syncer_binlog_file{source_id=\"$source\", task=\"$task\", node=\"master\"} - ON(instance, task, job) dm_syncer_binlog_file{source_id=\"$source\", task=\"$task\", node=\"syncer\"}",
+              "expr": "dm_syncer_binlog_file{source_id=\"$source\", task=\"$task\", node=\"master\"} - ON(source, task, job) dm_syncer_binlog_file{source_id=\"$source\", task=\"$task\", node=\"syncer\"}",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 2,
@@ -3702,7 +3702,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_relay_binlog_file{instance=\"$instance\", node=\"relay\"} - ON(instance, job) dm_syncer_binlog_file{source_id=\"$source\", task=\"$task\", node=\"syncer\"}",
+              "expr": "dm_relay_binlog_file{instance=\"$instance\", node=\"relay\"} - ON(instance, job) dm_syncer_binlog_file{instance=\"$instance\", task=\"$task\", node=\"syncer\"}",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 2,
@@ -5408,7 +5408,7 @@
         "hide": 0,
         "includeAll": false,
         "label": null,
-        "multi": false,
+        "multi": true,
         "name": "instance",
         "options": [],
         "query": "label_values(dm_worker_task_state{task=\"$task\"}, instance)",
