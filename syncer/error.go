@@ -217,7 +217,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 
 		tctx.L().Info("drop index success, now try to drop column", zap.Strings("index", idx2Drop))
 		if _, err = conn.executeSQLWithIgnore(tctx, ignoreDDLError, ddls[index:]); err != nil {
-			return originErr
+			return err
 		}
 
 		tctx.L().Info("execute drop column SQL success", zap.String("DDL", ddl2))
@@ -226,11 +226,11 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 
 	retErr := err
 	toHandle := []func(*tcontext.Context, error, []string, int, *DBConn) error{
-		invalidConnF,
 		dropColumnF,
+		invalidConnF,
 	}
 	for _, f := range toHandle {
-		retErr = f(tctx, err, ddls, index, conn)
+		retErr = f(tctx, retErr, ddls, index, conn)
 		if retErr == nil {
 			break
 		}
