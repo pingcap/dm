@@ -497,7 +497,6 @@ const (
 	codeWorkerSourceNotMatch
 	codeWorkerFailToGetSubtaskConfigFromEtcd
 	codeWorkerFailToGetSourceConfigFromEtcd
-	codeWorkerDDLLockOpNotFound
 )
 
 // DM-tracer error code
