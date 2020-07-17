@@ -101,6 +101,13 @@ service Master {
             get: "/apis/v1alpha1/subtasks/{name}"
         };
     }
+
+    // GetTaskCfg get task config
+    rpc GetTaskCfg(GetTaskCfgRequest) returns(GetTaskCfgResponse) {
+        option (google.api.http) = {
+            get: "/apis/v1alpha1/tasks/{name}"
+        };
+    }
 }
 
 message MigrateWorkerRelayRequest {
@@ -438,4 +445,15 @@ message GetSubTaskCfgResponse {
     bool result = 1;
     string msg = 2;
     repeated string cfgs = 3;
+}
+
+message GetTaskCfgRequest {
+    // the task name
+    string name = 1;
+}
+
+message GetTaskCfgResponse {
+    bool result = 1;
+    string msg = 2;
+    string cfg = 3;
 }

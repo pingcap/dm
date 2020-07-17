@@ -2719,7 +2719,7 @@ tags = ["internal", "medium"]
 [error.DM-scheduler-46014]
 message = "subtasks with name %s for sources %v already exist"
 description = ""
-workaround = ""
+workaround = "Please use `query-status` command to see tasks."
 tags = ["internal", "medium"]
 
 [error.DM-dm-master-46015]
@@ -2731,13 +2731,19 @@ tags = ["internal", "medium"]
 [error.DM-dm-master-46016]
 message = "subtasks with name %s need to be operate not exist"
 description = ""
-workaround = ""
+workaround = "Please use `query-status` command to see tasks."
 tags = ["internal", "medium"]
 
 [error.DM-dm-master-46017]
 message = "sources %v need to be operate not exist"
 description = ""
 workaround = ""
+tags = ["internal", "medium"]
+
+[error.DM-scheduler-46018]
+message = "task with name %s not exist"
+description = ""
+workaround = "Please use `query-status` command to see tasks."
 tags = ["internal", "medium"]
 
 [error.DM-dmctl-48001]
