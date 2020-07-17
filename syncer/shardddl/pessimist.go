@@ -89,7 +89,7 @@ func (p *Pessimist) PutInfo(ctx context.Context, info pessimism.Info) (int64, er
 
 	select {
 	case <-ch: // deleted.
-	case err := <-errCh:
+	case err = <-errCh:
 		return 0, err
 	case <-ctx.Done():
 		return 0, ctx.Err()
@@ -144,7 +144,7 @@ func (p *Pessimist) DoneOperationDeleteInfo(op pessimism.Operation, info pessimi
 	p.pendingOp = nil
 	p.mu.Unlock()
 
-	return err
+	return nil
 }
 
 // PendingInfo returns the shard DDL info which is pending to handle.
