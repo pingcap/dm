@@ -2068,7 +2068,8 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 				if err2 := s.schemaTracker.DropIndex(usedSchema, atStmt.Table.Name.O, info.Name.O); err2 != nil {
 					s.tctx.L().Warn("can't auto drop index before drop column",
 						zap.String("index", info.Name.O),
-						zap.String("column", atStmt.Specs[0].OldColumnName.Name.O))
+						zap.String("column", atStmt.Specs[0].OldColumnName.Name.O),
+						log.ShortError(err2))
 				}
 			}
 		}

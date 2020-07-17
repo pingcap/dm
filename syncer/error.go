@@ -175,7 +175,6 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		// check if dependent index is single-column index on this column
 		sql := "SELECT INDEX_NAME FROM information_schema.statistics WHERE TABLE_SCHEMA = ? and TABLE_NAME = ? and COLUMN_NAME = ?"
 		indices, err := conn.querySQL(tctx, sql, schema, table, col)
-		defer indices.Close()
 		if err != nil {
 			return originErr
 		}
@@ -187,6 +186,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		)
 		for indices.Next() {
 			if err := indices.Scan(&idx); err != nil {
+				indices.Close()
 				return originErr
 			}
 			idx2Check = append(idx2Check, idx)
@@ -216,7 +216,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		}
 
 		tctx.L().Info("drop index success, now try to drop column", zap.Strings("index", idx2Drop))
-		if _, err = conn.executeSQLWithIgnore(tctx, ignoreDDLError, []string{ddl2}); err != nil {
+		if _, err = conn.executeSQLWithIgnore(tctx, ignoreDDLError, ddls[index:]); err != nil {
 			return originErr
 		}
 

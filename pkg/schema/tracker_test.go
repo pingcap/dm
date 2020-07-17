@@ -16,6 +16,7 @@ package schema_test
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -85,6 +86,45 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(ti2.Columns[0].IsGenerated(), IsFalse)
 	c.Assert(ti2.Columns[1].Name.L, Equals, "c")
 	c.Assert(ti2.Columns[1].IsGenerated(), IsFalse)
+}
+
+func (s *trackerSuite) TestGetSingleColumnIndices(c *C) {
+	log.SetLevel(zapcore.ErrorLevel)
+
+	tracker, err := schema.NewTracker()
+	c.Assert(err, IsNil)
+
+	ctx := context.Background()
+	err = tracker.Exec(ctx, "", "create database testdb;")
+	c.Assert(err, IsNil)
+	err = tracker.Exec(ctx, "testdb", "create table foo (a int, b int, c int)")
+	c.Assert(err, IsNil)
+
+	// check GetSingleColumnIndices could return all legal indices
+	err = tracker.Exec(ctx, "testdb", "alter table foo add index idx_a1(a)")
+	c.Assert(err, IsNil)
+	err = tracker.Exec(ctx, "testdb", "alter table foo add index idx_a2(a)")
+	c.Assert(err, IsNil)
+	infos, err := tracker.GetSingleColumnIndices("testdb", "foo", "a")
+	c.Assert(err, IsNil)
+	c.Assert(infos, HasLen, 2)
+	names := []string{infos[0].Name.L, infos[1].Name.L}
+	sort.Strings(names)
+	c.Assert(names, DeepEquals, []string{"idx_a1", "idx_a2"})
+
+	// check return nothing for both multi-column and single-column indices
+	err = tracker.Exec(ctx, "testdb", "alter table foo add index idx_ab(a, b)")
+	c.Assert(err, IsNil)
+	err = tracker.Exec(ctx, "testdb", "alter table foo add index idx_b(b)")
+	c.Assert(err, IsNil)
+	infos, err = tracker.GetSingleColumnIndices("testdb", "foo", "b")
+	c.Assert(err, NotNil)
+	c.Assert(infos, HasLen, 0)
+
+	// check no indices
+	infos, err = tracker.GetSingleColumnIndices("testdb", "foo", "c")
+	c.Assert(err, IsNil)
+	c.Assert(infos, HasLen, 0)
 }
 
 func (s *trackerSuite) TestCreateSchemaIfNotExists(c *C) {
