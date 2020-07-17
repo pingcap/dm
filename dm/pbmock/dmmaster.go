@@ -195,6 +195,26 @@ func (mr *MockMasterClientMockRecorder) OperateLeader(arg0, arg1 interface{}, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateLeader", reflect.TypeOf((*MockMasterClient)(nil).OperateLeader), varargs...)
 }
 
+// OperateSchema mocks base method
+func (m *MockMasterClient) OperateSchema(arg0 context.Context, arg1 *pb.OperateSchemaRequest, arg2 ...grpc.CallOption) (*pb.OperateSchemaResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "OperateSchema", varargs...)
+	ret0, _ := ret[0].(*pb.OperateSchemaResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OperateSchema indicates an expected call of OperateSchema
+func (mr *MockMasterClientMockRecorder) OperateSchema(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateSchema", reflect.TypeOf((*MockMasterClient)(nil).OperateSchema), varargs...)
+}
+
 // OperateSource mocks base method
 func (m *MockMasterClient) OperateSource(arg0 context.Context, arg1 *pb.OperateSourceRequest, arg2 ...grpc.CallOption) (*pb.OperateSourceResponse, error) {
 	m.ctrl.T.Helper()
@@ -616,6 +636,21 @@ func (m *MockMasterServer) OperateLeader(arg0 context.Context, arg1 *pb.OperateL
 func (mr *MockMasterServerMockRecorder) OperateLeader(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateLeader", reflect.TypeOf((*MockMasterServer)(nil).OperateLeader), arg0, arg1)
+}
+
+// OperateSchema mocks base method
+func (m *MockMasterServer) OperateSchema(arg0 context.Context, arg1 *pb.OperateSchemaRequest) (*pb.OperateSchemaResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OperateSchema", arg0, arg1)
+	ret0, _ := ret[0].(*pb.OperateSchemaResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OperateSchema indicates an expected call of OperateSchema
+func (mr *MockMasterServerMockRecorder) OperateSchema(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateSchema", reflect.TypeOf((*MockMasterServer)(nil).OperateSchema), arg0, arg1)
 }
 
 // OperateSource mocks base method
