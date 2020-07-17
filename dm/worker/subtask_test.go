@@ -343,12 +343,13 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 
 	// fail dumper
 	c.Assert(mockDumper.InjectProcessError(context.Background(), errors.New("dumper process error")), IsNil)
-	for i := 0; i < 1000; i++ {
+	// InjectProcessError need 1 second, here we wait 1.5 second
+	for i := 0; i < 15; i++ {
 		res := st.Result()
 		if res != nil {
 			break
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
 	c.Assert(st.Result(), NotNil)
