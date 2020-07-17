@@ -45,6 +45,10 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(err, ErrorMatches, `.*Table 'testdb\.foo' doesn't exist`)
 	c.Assert(schema.IsTableNotExists(err), IsTrue)
 
+	_, err = tracker.GetCreateTable(context.Background(), "testdb", "foo")
+	c.Assert(err, ErrorMatches, `.*Table 'testdb\.foo' doesn't exist`)
+	c.Assert(schema.IsTableNotExists(err), IsTrue)
+
 	ctx := context.Background()
 	err = tracker.Exec(ctx, "", "create database testdb;")
 	c.Assert(err, IsNil)
@@ -73,6 +77,10 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(ti, Equals, ti2)
 
+	cts, err := tracker.GetCreateTable(context.Background(), "testdb", "foo")
+	c.Assert(err, IsNil)
+	c.Assert(cts, Equals, "CREATE TABLE `foo` ( `a` varchar(255) NOT NULL, `b` varchar(255) GENERATED ALWAYS AS (concat(`a`, `a`)) VIRTUAL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
+
 	// Drop one column from the table.
 	err = tracker.Exec(ctx, "testdb", "alter table foo drop column b")
 	c.Assert(err, IsNil)
@@ -86,6 +94,11 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(ti2.Columns[0].IsGenerated(), IsFalse)
 	c.Assert(ti2.Columns[1].Name.L, Equals, "c")
 	c.Assert(ti2.Columns[1].IsGenerated(), IsFalse)
+
+	cts, err = tracker.GetCreateTable(context.Background(), "testdb", "foo")
+	c.Assert(err, IsNil)
+	c.Assert(cts, Equals, "CREATE TABLE `foo` ( `a` varchar(255) NOT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
+
 }
 
 func (s *trackerSuite) TestGetSingleColumnIndices(c *C) {

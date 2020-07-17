@@ -159,6 +159,11 @@ function run() {
         "\"stage\": \"Running\"" 4
     # update_task_not_paused $TASK_CONF
 
+    echo "get_task_config"
+    get_task_config_wrong_name
+    get_task_config_to_file
+    get_task_config_recover_etcd
+
     echo "show_ddl_locks_no_locks"
     show_ddl_locks_no_locks $TASK_NAME
     query_status_with_tasks
