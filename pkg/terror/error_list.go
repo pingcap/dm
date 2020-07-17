@@ -504,6 +504,7 @@ const (
 	codeWorkerSourceNotMatch
 	codeWorkerFailToGetSubtaskConfigFromEtcd
 	codeWorkerFailToGetSourceConfigFromEtcd
+	codeWorkerDDLLockOpNotFound
 	codeWorkerTLSConfigNotValid
 )
 
@@ -1043,6 +1044,8 @@ var (
 	ErrWorkerFailToGetSourceConfigFromEtcd  = New(codeWorkerFailToGetSourceConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative source config for source %s in etcd", "")
 	ErrWorkerTLSConfigNotValid              = New(codeWorkerTLSConfigNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "TLS config not valid", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in worker configuration file.")
 
+	ErrWorkerDDLLockOpNotFound = New(codeWorkerDDLLockOpNotFound, ClassDMWorker, ScopeInternal, LevelHigh, "missing shard DDL lock operation for shard DDL info (%s)", "")
+
 	// DM-tracer error
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set", "")
 	ErrTracerConfigTomlTransform = New(codeTracerConfigTomlTransform, ClassDMTracer, ScopeInternal, LevelMedium, "config toml transform", "Please check the configuration file has correct TOML format.")
@@ -1086,7 +1089,7 @@ var (
 	ErrSchedulerSourceCfgExist            = New(codeSchedulerSourceCfgExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s already exists", "")
 	ErrSchedulerSourceCfgNotExist         = New(codeSchedulerSourceCfgNotExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s not exists", "")
 	ErrSchedulerSourcesUnbound            = New(codeSchedulerSourcesUnbound, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v have not bound", "")
-	ErrSchedulerSourceOpTaskExist         = New(codeSchedulerSourceOpTaskExist, ClassDMMaster, ScopeInternal, LevelMedium, "source with name % need to operate with tasks %v exist", "")
+	ErrSchedulerSourceOpTaskExist         = New(codeSchedulerSourceOpTaskExist, ClassDMMaster, ScopeInternal, LevelMedium, "source with name %s need to operate with tasks %v exist", "")
 	ErrSchedulerRelayStageInvalidUpdate   = New(codeSchedulerRelayStageInvalidUpdate, ClassScheduler, ScopeInternal, LevelMedium, "invalid new expectant relay stage %s", "")
 	ErrSchedulerRelayStageSourceNotExist  = New(codeSchedulerRelayStageSourceNotExist, ClassScheduler, ScopeInternal, LevelMedium, "sources %v need to update expectant relay stage not exist", "")
 	ErrSchedulerMultiTask                 = New(codeSchedulerMultiTask, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler cannot perform multiple different tasks %v in one operation", "")

@@ -2537,6 +2537,12 @@ workaround = ""
 tags = ["internal", "medium"]
 
 [error.DM-dm-worker-40075]
+message = "missing shard DDL lock operation for shard DDL info (%s)"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-dm-worker-40076]
 message = "TLS config not valid"
 description = ""
 workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in worker configuration file."
@@ -2723,7 +2729,7 @@ workaround = ""
 tags = ["internal", "medium"]
 
 [error.DM-dm-master-46010]
-message = "source with name % need to operate with tasks %v exist"
+message = "source with name %s need to operate with tasks %v exist"
 description = ""
 workaround = ""
 tags = ["internal", "medium"]

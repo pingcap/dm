@@ -144,7 +144,7 @@ func (p *Pessimist) DoneOperationDeleteInfo(op pessimism.Operation, info pessimi
 	p.pendingOp = nil
 	p.mu.Unlock()
 
-	return err
+	return nil
 }
 
 // PendingInfo returns the shard DDL info which is pending to handle.
