@@ -418,6 +418,7 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 
 	cfg.LogLevel = s.cfg.LogLevel
 	cfg.LogFile = s.cfg.LogFile
+	cfg.LogFormat = s.cfg.LogFormat
 	w.StartSubTask(cfg)
 
 	if resp.Result {
@@ -756,6 +757,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	for _, subTaskCfg := range subTaskCfgm {
 		subTaskCfg.LogLevel = s.cfg.LogLevel
 		subTaskCfg.LogFile = s.cfg.LogFile
+		subTaskCfg.LogFormat = s.cfg.LogFormat
 		subTaskCfgClone := subTaskCfg
 		subTaskCfgs = append(subTaskCfgs, &subTaskCfgClone)
 	}

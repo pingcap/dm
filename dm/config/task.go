@@ -145,6 +145,19 @@ func (m *MySQLInstance) VerifyAndAdjust() error {
 	return nil
 }
 
+// RemoveDuplicateCfg remove duplicate mydumper, loader, and syncer config
+func (m *MySQLInstance) RemoveDuplicateCfg() {
+	if len(m.MydumperConfigName) > 0 && m.Mydumper != nil {
+		m.Mydumper = nil
+	}
+	if len(m.LoaderConfigName) > 0 && m.Loader != nil {
+		m.Loader = nil
+	}
+	if len(m.SyncerConfigName) > 0 && m.Syncer != nil {
+		m.Syncer = nil
+	}
+}
+
 // MydumperConfig represents mydumper process unit's specific config
 type MydumperConfig struct {
 	MydumperPath  string `yaml:"mydumper-path" toml:"mydumper-path" json:"mydumper-path"`    // mydumper binary path

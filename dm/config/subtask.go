@@ -182,6 +182,7 @@ type SubTaskConfig struct {
 	// compatible with standalone dm unit
 	LogLevel  string `toml:"log-level" json:"log-level"`
 	LogFile   string `toml:"log-file" json:"log-file"`
+	LogFormat string `toml:"log-format" json:"log-format"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
 	PprofAddr  string `toml:"pprof-addr" json:"pprof-addr"`

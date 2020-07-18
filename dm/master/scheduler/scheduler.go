@@ -76,6 +76,14 @@ type Scheduler struct {
 	// - remove source by user request (calling `RemoveSourceCfg`).
 	sourceCfgs map[string]config.SourceConfig
 
+	// all task configs string, task name -> task config string.
+	// add:
+	// - add/start task by user request (calling `StartTask`).
+	// - recover from etcd (calling `recoverTaskCfgs`).
+	// delete:
+	// - remove/stop task by user request (calling `StopTask`).
+	taskCfgs map[string]string
+
 	// all subtask configs, task name -> source ID -> subtask config.
 	// add:
 	// - add/start subtask by user request (calling `AddSubTasks`).
@@ -139,6 +147,7 @@ func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 	return &Scheduler{
 		logger:              pLogger.WithFields(zap.String("component", "scheduler")),
 		sourceCfgs:          make(map[string]config.SourceConfig),
+		taskCfgs:            make(map[string]string),
 		subTaskCfgs:         make(map[string]map[string]config.SubTaskConfig),
 		workers:             make(map[string]*Worker),
 		bounds:              make(map[string]*Worker),
@@ -165,6 +174,10 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 
 	// recover previous status from etcd.
 	err := s.recoverSources(etcdCli)
+	if err != nil {
+		return err
+	}
+	err = s.recoverTaskCfgs(etcdCli)
 	if err != nil {
 		return err
 	}
@@ -318,6 +331,126 @@ func (s *Scheduler) RemoveSourceCfg(source string) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// GetTaskCfg gets config of task
+func (s *Scheduler) GetTaskCfg(task string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cfg, ok := s.taskCfgs[task]
+	if !ok {
+		return ""
+	}
+	return cfg
+}
+
+// AddTaskCfg adds the config of task
+func (s *Scheduler) AddTaskCfg(cfg config.TaskConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	if len(cfg.Name) == 0 {
+		return nil
+	}
+
+	// 1. check whether exists.
+	// return nil because we may use `start-task -s source` for subtask
+	if _, ok := s.taskCfgs[cfg.Name]; ok {
+		return nil
+	}
+
+	// 2. put the config into etcd.
+	clone := cfg
+	for _, mysqlInstance := range clone.MySQLInstances {
+		mysqlInstance.RemoveDuplicateCfg()
+	}
+
+	taskCfg := clone.String()
+	_, err := ha.PutTaskCfg(s.etcdCli, clone.Name, taskCfg)
+	if err != nil {
+		return err
+	}
+
+	// 3. record the config
+	s.taskCfgs[clone.Name] = taskCfg
+
+	return nil
+}
+
+// UpdateTaskCfg update the config of task
+func (s *Scheduler) UpdateTaskCfg(cfg config.TaskConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	if len(cfg.Name) == 0 {
+		return nil
+	}
+
+	// 1. check whether exists.
+	if _, ok := s.taskCfgs[cfg.Name]; !ok {
+		return terror.ErrSchedulerTaskNotExist.Generate(cfg.Name)
+	}
+
+	// 2. put the config into etcd.
+	clone := cfg
+	for _, mysqlInstance := range clone.MySQLInstances {
+		mysqlInstance.RemoveDuplicateCfg()
+	}
+
+	taskCfg := clone.String()
+	_, err := ha.PutTaskCfg(s.etcdCli, clone.Name, taskCfg)
+	if err != nil {
+		return err
+	}
+
+	// 3. record the config
+	s.taskCfgs[clone.Name] = taskCfg
+
+	return nil
+}
+
+// RemoveTaskCfg removes the config of task
+func (s *Scheduler) RemoveTaskCfg(task string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	// do not remove task if has subtask
+	// return nil because we may use `stop-task -s source` for subtask
+	if _, ok := s.subTaskCfgs[task]; ok {
+		return nil
+	}
+
+	if task == "" {
+		return nil
+	}
+
+	// 1. check the task exists.
+	if _, ok := s.taskCfgs[task]; !ok {
+		return terror.ErrSchedulerTaskNotExist.Generate(task)
+	}
+
+	// 2. delete the config in etcd
+	_, err := ha.DeleteTaskCfg(s.etcdCli, task)
+	if err != nil {
+		return err
+	}
+
+	// 3. clear the config
+	delete(s.taskCfgs, task)
+
 	return nil
 }
 
@@ -815,6 +948,22 @@ func (s *Scheduler) recoverSources(cli *clientv3.Client) error {
 	}
 	for source, stage := range stageM {
 		s.expectRelayStages[source] = stage
+	}
+
+	return nil
+}
+
+// recoverTaskCfgs recovers history task config string from etcd.
+func (s *Scheduler) recoverTaskCfgs(cli *clientv3.Client) error {
+	// get all task configs.
+	cfgM, _, err := ha.GetTaskCfg(cli, "")
+	if err != nil {
+		return err
+	}
+
+	// recover in-memory data.
+	for task, cfg := range cfgM {
+		s.taskCfgs[task] = cfg
 	}
 
 	return nil

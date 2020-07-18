@@ -57,6 +57,10 @@ function run() {
     curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/subtasks/test > $WORK_DIR/subtask.log
     check_log_contains $WORK_DIR/subtask.log "is-sharding = false" 1
 
+    echo "get task config"
+    curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/tasks/test > $WORK_DIR/task.log
+    check_log_contains $WORK_DIR/task.log "is-sharding: false" 1
+
     echo "pause task and check stage"
     curl -X PUT 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/tasks/test -d '{ "op": 2 }' > $WORK_DIR/pause.log
     check_log_contains $WORK_DIR/pause.log "\"op\": \"Pause\"" 1
