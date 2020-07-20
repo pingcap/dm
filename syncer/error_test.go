@@ -16,13 +16,12 @@ package syncer
 import (
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
-	tmysql "github.com/pingcap/parser/mysql"
-
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/context"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/errors"
+	tmysql "github.com/pingcap/parser/mysql"
 )
 
 func newMysqlErr(number uint16, message string) *mysql.MySQLError {
