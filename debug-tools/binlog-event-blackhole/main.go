@@ -42,8 +42,9 @@ func main() {
 	}
 
 	err = log.InitLogger(&log.Config{
-		File:  cfg.logFile,
-		Level: strings.ToLower(cfg.logLevel),
+		File:   cfg.logFile,
+		Level:  strings.ToLower(cfg.logLevel),
+		Format: cfg.logFormat,
 	})
 	if err != nil {
 		fmt.Printf("init logger error %v", errors.ErrorStack(err))
