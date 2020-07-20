@@ -408,6 +408,7 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 
 	cfg.LogLevel = s.cfg.LogLevel
 	cfg.LogFile = s.cfg.LogFile
+	cfg.LogFormat = s.cfg.LogFormat
 	w.StartSubTask(cfg)
 
 	if resp.Result {
@@ -697,6 +698,31 @@ func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) 
 	return makeCommonWorkerResponse(err), nil
 }
 
+// OperateSchema operates schema for an upstream table.
+func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaRequest) (*pb.CommonWorkerResponse, error) {
+	log.L().Info("", zap.String("request", "OperateSchema"), zap.Stringer("payload", req))
+
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call OperateSchema, because mysql worker has not been started")
+		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
+	} else if req.Source != w.cfg.SourceID {
+		log.L().Error("fail to call OperateSchema, because source mismatch")
+		return makeCommonWorkerResponse(terror.ErrWorkerSourceNotMatch.Generate()), nil
+	}
+
+	schema, err := w.OperateSchema(ctx, req)
+	if err != nil {
+		return makeCommonWorkerResponse(err), nil
+	}
+	return &pb.CommonWorkerResponse{
+		Result: true,
+		Msg:    schema, // if any schema return for `GET`, we place it in the `msg` field now.
+		Source: req.Source,
+		Worker: s.cfg.Name,
+	}, nil
+}
+
 func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	s.Lock()
 	defer s.Unlock()
@@ -721,6 +747,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	for _, subTaskCfg := range subTaskCfgm {
 		subTaskCfg.LogLevel = s.cfg.LogLevel
 		subTaskCfg.LogFile = s.cfg.LogFile
+		subTaskCfg.LogFormat = s.cfg.LogFormat
 		subTaskCfgClone := subTaskCfg
 		subTaskCfgs = append(subTaskCfgs, &subTaskCfgClone)
 	}
