@@ -109,7 +109,7 @@ func InitLogger(cfg *Config) error {
 	}
 
 	logger, props, err := pclog.InitLogger(&pclog.Config{
-		Level: cfg.Level,
+		Level:  cfg.Level,
 		Format: cfg.Format,
 		File: pclog.FileLogConfig{
 			Filename:   cfg.File,
