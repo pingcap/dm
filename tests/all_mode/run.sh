@@ -30,6 +30,8 @@ function test_session_config(){
 
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 
+    # enable ansi-quotes
+    sed -i 's/ansi-quotes: false/ansi-quotes: true/g'  $WORK_DIR/dm-task.yaml
     # error config
     sed -i 's/tidb_retry_limit: "10"/tidb_retry_limit: "fjs"/g'  $WORK_DIR/dm-task.yaml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -81,7 +83,10 @@ function run() {
 
 
     # start DM task only
-    dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
+    cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
+    # test deprecated config
+    sed -i 's/enable-ansi-quotes: false/enable-ansi-quotes: true/g'  $WORK_DIR/dm-task.yaml
+    dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -105,7 +110,7 @@ function run() {
     sleep 10
     echo "after restart dm-worker, task should resume automatically"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "start-task $cur/conf/dm-task.yaml" \
+        "start-task $WORK_DIR/dm-task.yaml" \
         "\"result\": false" 1 \
         "subtasks with name test for sources \[mysql-replica-01 mysql-replica-02\] already exist" 1
     sleep 2

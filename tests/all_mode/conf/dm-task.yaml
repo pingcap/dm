@@ -7,7 +7,7 @@ meta-schema: "dm_meta"
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1
 timezone: "Asia/Shanghai"
-enable-ansi-quotes: true
+ansi-quotes: false
 
 target-database:
   host: "127.0.0.1"
@@ -54,3 +54,4 @@ syncers:
   global:
     worker-count: 16
     batch: 100
+    enable-ansi-quotes: false  # compatible with deprecated config
