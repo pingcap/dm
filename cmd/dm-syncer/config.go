@@ -47,6 +47,7 @@ type commonConfig struct {
 
 	LogLevel  string
 	LogFile   string
+	LogFormat string
 	LogRotate string
 
 	EnableGTID bool
@@ -71,6 +72,7 @@ func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTask
 		Meta:             c.Meta,
 		LogLevel:         c.LogLevel,
 		LogFile:          c.LogFile,
+		LogFormat:        c.LogFormat,
 		LogRotate:        c.LogRotate,
 		EnableGTID:       c.EnableGTID,
 		SafeMode:         c.SafeMode,
@@ -96,6 +98,7 @@ func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTask
 	//fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
+	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
 	fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
 	fs.BoolVar(&cfg.EnableGTID, "enable-gtid", false, "enable gtid mode")
 	fs.BoolVar(&cfg.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
@@ -160,6 +163,7 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 	//fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
+	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
 	fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
 	fs.BoolVar(&cfg.EnableGTID, "enable-gtid", false, "enable gtid mode")
 	fs.BoolVar(&cfg.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
@@ -200,6 +204,7 @@ func newCommonConfig() *commonConfig {
 	//fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
+	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
 	fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
 	fs.BoolVar(&cfg.EnableGTID, "enable-gtid", false, "enable gtid mode")
 	fs.BoolVar(&cfg.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
@@ -218,6 +223,7 @@ type syncerConfig struct {
 	Name      string `toml:"name" json:"name"`
 	LogLevel  string `toml:"log-level" json:"log-level"`
 	LogFile   string `toml:"log-file" json:"log-file"`
+	LogFormat string `toml:"log-format" json:"log-format"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
 	StatusAddr string `toml:"status-addr" json:"status-addr"`
@@ -321,6 +327,7 @@ func (oc *syncerConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 
 		LogLevel:  oc.LogLevel,
 		LogFile:   oc.LogFile,
+		LogFormat: oc.LogFormat,
 		LogRotate: oc.LogRotate,
 
 		StatusAddr: oc.StatusAddr,
