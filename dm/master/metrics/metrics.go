@@ -113,3 +113,9 @@ func RemoveWorkerStateInMetrics(name string) {
 func ReportDDLErrorToMetrics(task, errType string) {
 	ddlErrCounter.WithLabelValues(task, errType).Inc()
 }
+
+// OnRetireLeader cleans some metrics when retires
+func OnRetireLeader() {
+	workerState.Reset()
+	ddlErrCounter.Reset()
+}
