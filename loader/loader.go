@@ -1157,7 +1157,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			dataFiles := tables[table]
 			tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
 			if _, ok := l.tableInfos[tableName(db, table)]; !ok {
-				l.tableInfos[tableName(db, table)], err = parseTable(tctx, l.tableRouter, db, table, tableFile)
+				l.tableInfos[tableName(db, table)], err = parseTable(tctx, l.tableRouter, db, table, tableFile, l.cfg.EnableANSIQuotes)
 				if err != nil {
 					return terror.Annotatef(err, "parse table %s/%s", db, table)
 				}
