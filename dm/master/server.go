@@ -453,6 +453,13 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			resp.Msg = err.Error()
 			return resp, nil
 		}
+
+		err = s.scheduler.AddTaskCfg(*cfg)
+		if err != nil {
+			resp.Msg = err.Error()
+			return resp, nil
+		}
+
 		resp.Result = true
 		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, sources, []string{}, req)
 	}
@@ -501,6 +508,11 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	var err error
 	if expect == pb.Stage_Stopped {
 		err = s.scheduler.RemoveSubTasks(req.Name, sources...)
+		if err != nil {
+			resp.Msg = err.Error()
+			return resp, nil
+		}
+		err = s.scheduler.RemoveTaskCfg(req.Name)
 	} else {
 		err = s.scheduler.UpdateExpectSubTaskStage(expect, req.Name, sources...)
 	}
@@ -630,6 +642,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 	//	}, stCfg)
 	//}
 	//wg.Wait()
+
+	// TODO: update task config
+	// s.scheduler.UpdateTaskCfg(*cfg)
 
 	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(stCfgs))
 	workers := make([]string, 0, len(stCfgs))
@@ -914,7 +929,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 			defer wg.Done()
 			worker := s.scheduler.GetWorkerBySource(source)
 			if worker == nil {
-				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", source), source, "")
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("source %s relevant worker-client not found", source), source, "")
 				return
 			}
 			resp, err := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
@@ -1978,4 +1993,106 @@ func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb
 	resp.Result = true
 	resp.Members = members
 	return resp, nil
+}
+
+// OperateSchema operates schema of an upstream table.
+func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest) (*pb.OperateSchemaResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateSchema"))
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.OperateSchema(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	if len(req.Sources) == 0 {
+		return &pb.OperateSchemaResponse{
+			Result: false,
+			Msg:    "must specify at least one source",
+		}, nil
+	}
+
+	workerReq := workerrpc.Request{
+		Type: workerrpc.CmdOperateSchema,
+		OperateSchema: &pb.OperateWorkerSchemaRequest{
+			Op:       req.Op,
+			Task:     req.Task,
+			Source:   "", // set below.
+			Database: req.Database,
+			Table:    req.Table,
+			Schema:   req.Schema,
+		},
+	}
+
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
+	var wg sync.WaitGroup
+	for _, source := range req.Sources {
+		wg.Add(1)
+		go func(source string) {
+			defer wg.Done()
+			worker := s.scheduler.GetWorkerBySource(source)
+			if worker == nil {
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("source %s relevant worker-client not found", source), source, "")
+				return
+			}
+			workerReq2 := workerReq
+			workerReq2.OperateSchema.Source = source
+			resp, err := worker.SendRequest(ctx, &workerReq2, s.cfg.RPCTimeout)
+			workerResp := &pb.CommonWorkerResponse{}
+			if err != nil {
+				workerResp = errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name)
+			} else {
+				workerResp = resp.OperateSchema
+			}
+			workerResp.Source = source
+			workerRespCh <- workerResp
+		}(source)
+	}
+	wg.Wait()
+
+	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Sources))
+	for len(workerRespCh) > 0 {
+		workerResp := <-workerRespCh
+		workerRespMap[workerResp.Source] = workerResp
+	}
+
+	sort.Strings(req.Sources)
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Sources))
+	for _, worker := range req.Sources {
+		workerResps = append(workerResps, workerRespMap[worker])
+	}
+
+	return &pb.OperateSchemaResponse{
+		Result:  true,
+		Sources: workerResps,
+	}, nil
+}
+
+// GetTaskCfg implements MasterServer.GetSubTaskCfg
+func (s *Server) GetTaskCfg(ctx context.Context, req *pb.GetTaskCfgRequest) (*pb.GetTaskCfgResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "GetTaskCfg"))
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.GetTaskCfg(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	cfg := s.scheduler.GetTaskCfg(req.Name)
+
+	if len(cfg) == 0 {
+		return &pb.GetTaskCfgResponse{
+			Result: false,
+			Msg:    "task not found",
+		}, nil
+	}
+
+	return &pb.GetTaskCfgResponse{
+		Result: true,
+		Cfg:    cfg,
+	}, nil
 }

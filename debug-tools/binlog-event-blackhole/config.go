@@ -23,8 +23,9 @@ import (
 type config struct {
 	*flag.FlagSet
 
-	logLevel string
-	logFile  string
+	logLevel  string
+	logFile   string
+	logFormat string
 
 	mode int
 
@@ -45,6 +46,7 @@ func newConfig() *config {
 
 	fs.StringVar(&cfg.logLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.logFile, "log-file", "", "log file path")
+	fs.StringVar(&cfg.logFormat, "log-format", "text", `the format of the log, "text" or "json"`)
 
 	fs.IntVar(&cfg.mode, "mode", 0, "event read mode.\n1: read packet with go-mysql;\n2: read packet without go-mysql;\n3: read binary data but do nothing")
 

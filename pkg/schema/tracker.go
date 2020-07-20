@@ -15,11 +15,14 @@ package schema
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/infoschema"
@@ -92,6 +95,35 @@ func (tr *Tracker) GetTable(db, table string) (*model.TableInfo, error) {
 	return t.Meta(), nil
 }
 
+// GetCreateTable returns the `CREATE TABLE` statement of the table.
+func (tr *Tracker) GetCreateTable(ctx context.Context, db, table string) (string, error) {
+	name := dbutil.TableName(db, table)
+	// use `SHOW CREATE TABLE` now, another method maybe `executor.ConstructResultOfShowCreateTable`.
+	rs, err := tr.se.Execute(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", name))
+	if err != nil {
+		return "", err
+	} else if len(rs) != 1 {
+		return "", nil // this should not happen.
+	}
+	defer rs[0].Close()
+
+	req := rs[0].NewChunk()
+	err = rs[0].Next(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	if req.NumRows() == 0 {
+		return "", nil // this should not happen.
+	}
+
+	row := req.GetRow(0)
+	str := row.GetString(1) // the first column is the table name.
+	// returned as single line.
+	str = strings.ReplaceAll(str, "\n", "")
+	str = strings.ReplaceAll(str, "  ", " ")
+	return str, nil
+}
+
 // AllSchemas returns all schemas visible to the tracker (excluding system tables).
 func (tr *Tracker) AllSchemas() []*model.DBInfo {
 	allSchemas := tr.dom.InfoSchema().AllSchemas()
@@ -102,6 +134,33 @@ func (tr *Tracker) AllSchemas() []*model.DBInfo {
 		}
 	}
 	return filteredSchemas
+}
+
+// GetSingleColumnIndices returns indices of input column if input column only has single-column indices
+// returns nil if input column has no indices, or has multi-column indices.
+func (tr *Tracker) GetSingleColumnIndices(db, tbl, col string) ([]*model.IndexInfo, error) {
+	col = strings.ToLower(col)
+	t, err := tr.dom.InfoSchema().TableByName(model.NewCIStr(db), model.NewCIStr(tbl))
+	if err != nil {
+		return nil, err
+	}
+
+	var idxInfos []*model.IndexInfo
+	for _, idx := range t.Indices() {
+		m := idx.Meta()
+		for _, col2 := range m.Columns {
+			// found an index covers input column
+			if col2.Name.L == col {
+				if len(m.Columns) == 1 {
+					idxInfos = append(idxInfos, m)
+				} else {
+					// temporary use errors.New, won't propagate further
+					return nil, errors.New("found multi-column index")
+				}
+			}
+		}
+	}
+	return idxInfos, nil
 }
 
 // IsTableNotExists checks if err means the database or table does not exist.
@@ -138,6 +197,11 @@ func (tr *Tracker) Close() error {
 // DropTable drops a table from this tracker.
 func (tr *Tracker) DropTable(db, table string) error {
 	return tr.dom.DDL().DropTable(tr.se, ast.Ident{Schema: model.NewCIStr(db), Name: model.NewCIStr(table)})
+}
+
+// DropIndex drops an index from this tracker.
+func (tr *Tracker) DropIndex(db, table, index string) error {
+	return tr.dom.DDL().DropIndex(tr.se, ast.Ident{Schema: model.NewCIStr(db), Name: model.NewCIStr(table)}, model.NewCIStr(index), true)
 }
 
 // CreateSchemaIfNotExists creates a SCHEMA of the given name if it did not exist.

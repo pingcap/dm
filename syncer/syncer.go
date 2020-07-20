@@ -43,6 +43,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/atomic2"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/conn"
@@ -157,7 +158,7 @@ type Syncer struct {
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
 	// record whether error occurred when execute SQLs
-	execErrorDetected sync2.AtomicBool
+	execError atomic2.AtomicError
 
 	execErrors struct {
 		sync.Mutex
@@ -429,7 +430,7 @@ func (s *Syncer) reset() {
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
 
-	s.execErrorDetected.Set(false)
+	s.execError.Set(nil)
 	s.resetExecErrors()
 
 	switch s.cfg.ShardMode {
@@ -491,7 +492,10 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	runFatalChan := make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
 	s.runFatalChan = runFatalChan
-	errs := make([]*pb.ProcessError, 0, 2)
+	var (
+		errs   = make([]*pb.ProcessError, 0, 2)
+		errsMu sync.Mutex
+	)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -504,7 +508,9 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 			}
 			cancel() // cancel s.Run
 			syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
+			errsMu.Lock()
 			errs = append(errs, err)
+			errsMu.Unlock()
 		}
 	}()
 
@@ -526,8 +532,14 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	wg.Wait()           // wait for receive all fatal from s.runFatalChan
 
 	if err != nil {
-		syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
-		errs = append(errs, unit.NewProcessError(err))
+		if utils.IsContextCanceledError(err) {
+			s.tctx.L().Info("filter out error caused by user cancel")
+		} else {
+			syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
+			errsMu.Lock()
+			errs = append(errs, unit.NewProcessError(err))
+			errsMu.Unlock()
+		}
 	}
 
 	isCanceled := false
@@ -822,7 +834,7 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 //
 // we may need to refactor the concurrency model to make the work-flow more clearer later
 func (s *Syncer) flushCheckPoints() error {
-	if s.execErrorDetected.Get() {
+	if s.execError.Get() != nil {
 		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint", zap.Stringer("checkpoint", s.checkpoint))
 		return nil
 	}
@@ -912,8 +924,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				// no need to do the shard DDL handle for `CREATE DATABASE/TABLE` now.
 				s.tctx.L().Warn("skip shard DDL handle in pessimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
 			} else if shardPessimistOp == nil {
-				// TODO(csuzhangxc): add terror.
-				err = fmt.Errorf("missing shard DDL lock operation for shard DDL info (%s)", shardInfo)
+				err = terror.ErrWorkerDDLLockOpNotFound.Generate(shardInfo)
 			} else {
 				err = s.pessimist.DoneOperationDeleteInfo(*shardPessimistOp, *shardInfo)
 			}
@@ -926,14 +937,14 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 					s.tctx.L().Warn("skip shard DDL handle in optimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
 				}
 			} else if s.optimist.PendingOperation() == nil {
-				err = fmt.Errorf("missing shard DDL lock operation for shard DDL info (%s)", shardInfo)
+				err = terror.ErrWorkerDDLLockOpNotFound.Generate(shardInfo)
 			} else {
 				err = s.optimist.DoneOperation(*(s.optimist.PendingOperation()))
 			}
 		}
 		s.jobWg.Done()
 		if err != nil {
-			s.execErrorDetected.Set(true)
+			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
@@ -965,7 +976,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	}
 
 	fatalF := func(err error) {
-		s.execErrorDetected.Set(true)
+		s.execError.Set(err)
 		if !utils.IsContextCanceledError(err) {
 			s.runFatalChan <- unit.NewProcessError(err)
 		}
@@ -982,6 +993,10 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			queries = append(queries, j.sql)
 			args = append(args, j.args)
 		}
+		failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
+			t := v.(int)
+			time.Sleep(time.Duration(t) * time.Second)
+		})
 		affected, err := db.executeSQL(tctx, queries, args...)
 		if err != nil {
 			errCtx := &ExecErrorContext{err, jobs[affected].currentLocation.Clone(), fmt.Sprintf("%v", jobs)}
@@ -1796,8 +1811,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// when add ddl job, will execute ddl and then flush checkpoint.
 		// if execute ddl failed, the execErrorDetected will be true.
-		if s.execErrorDetected.Get() {
-			return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
+		err = s.execError.Get()
+		if err != nil {
+			return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 		}
 
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
@@ -1994,8 +2010,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return err
 	}
 
-	if s.execErrorDetected.Get() {
-		return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
+	err = s.execError.Get()
+	if err != nil {
+		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 	}
 
 	if len(onlineDDLTableNames) > 0 {
@@ -2060,6 +2077,21 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 			return err
 		}
 	}
+
+	// try to drop appropriate index before drop column
+	if atStmt, ok := stmt.(*ast.AlterTableStmt); ok && len(atStmt.Specs) > 0 && atStmt.Specs[0].Tp == ast.AlterTableDropColumn {
+		if indexInfos, err := s.schemaTracker.GetSingleColumnIndices(usedSchema, atStmt.Table.Name.O, atStmt.Specs[0].OldColumnName.Name.O); err == nil {
+			for _, info := range indexInfos {
+				if err2 := s.schemaTracker.DropIndex(usedSchema, atStmt.Table.Name.O, info.Name.O); err2 != nil {
+					s.tctx.L().Warn("can't auto drop index before drop column",
+						zap.String("index", info.Name.O),
+						zap.String("column", atStmt.Specs[0].OldColumnName.Name.O),
+						log.ShortError(err2))
+				}
+			}
+		}
+	}
+
 	if shouldExecDDLOnSchemaTracker {
 		if err := s.schemaTracker.Exec(s.tctx.Ctx, usedSchema, sql); err != nil {
 			s.tctx.L().Error("cannot track DDL", zap.String("schema", usedSchema), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
