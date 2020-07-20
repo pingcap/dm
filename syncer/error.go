@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/parser/ast"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/terror"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	tddl "github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/errno"
 	"github.com/pingcap/tidb/infoschema"
@@ -66,6 +67,17 @@ func isMysqlError(err error, code uint16) bool {
 	err = originError(err)
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	return ok && mysqlErr.Number == code
+}
+
+func isDropColumnWithIndexError(err error) bool {
+	mysqlErr, ok := originError(err).(*mysql.MySQLError)
+	if !ok {
+		return false
+	}
+	// different version of TiDB has different error message, try to cover most versions
+	return mysqlErr.Number == errno.ErrUnsupportedDDLOperation &&
+		strings.Contains(mysqlErr.Message, "drop column") &&
+		strings.Contains(mysqlErr.Message, "with index")
 }
 
 // originError return original error
@@ -137,14 +149,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 
 	// for DROP COLUMN with its single-column index, try drop index first then drop column
 	dropColumnF := func(tctx *tcontext.Context, originErr error, ddls []string, index int, conn *DBConn) error {
-		mysqlErr, ok := originError(originErr).(*mysql.MySQLError)
-		if !ok {
-			return originErr
-		}
-		// different version of TiDB has different error message, try to cover most versions
-		if !(mysqlErr.Number == errno.ErrUnsupportedDDLOperation &&
-			strings.Contains(mysqlErr.Message, "drop column") &&
-			strings.Contains(mysqlErr.Message, "with index")) {
+		if !isDropColumnWithIndexError(originErr) {
 			return originErr
 		}
 		ddl2 := ddls[index]
@@ -208,7 +213,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 
 		sqls := make([]string, len(idx2Drop))
 		for i, idx := range idx2Drop {
-			sqls[i] = fmt.Sprintf("ALTER TABLE `%s`.`%s` DROP INDEX `%s`", schema, table, idx)
+			sqls[i] = fmt.Sprintf("ALTER TABLE %s DROP INDEX %s", dbutil.TableName(schema, table), dbutil.ColumnName(idx))
 		}
 		if _, err := conn.executeSQL(tctx, sqls); err != nil {
 			tctx.L().Warn("auto drop index failed", log.ShortError(err))
