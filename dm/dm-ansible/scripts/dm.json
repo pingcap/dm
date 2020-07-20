@@ -4874,7 +4874,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "shard ddl error in minute",
+          "title": "shard ddl error per minute",
           "tooltip": {
             "shared": true,
             "sort": 0,
