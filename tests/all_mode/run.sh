@@ -30,15 +30,17 @@ function test_session_config(){
 
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 
+    # enable ansi-quotes
+    sed -i 's/ansi-quotes: false/ansi-quotes: true/g'  $WORK_DIR/dm-task.yaml
     # error config
     sed -i 's/tidb_retry_limit: "10"/tidb_retry_limit: "fjs"/g'  $WORK_DIR/dm-task.yaml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $WORK_DIR/dm-task.yaml --remove-meta" \
         "'tidb_retry_limit' can't be set to the value" 1
 
-    # sql_mode=""
+    # sql_mode="ANSI_QUOTES"
     sed -i 's/tidb_retry_limit: "fjs"/tidb_retry_limit: "10"/g'  $WORK_DIR/dm-task.yaml
-    sed -i 's/sql_mode: ".*"/sql_mode: ""/g'  $WORK_DIR/dm-task.yaml
+    sed -i 's/sql_mode: ".*"/sql_mode: "ANSI_QUOTES"/g'  $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
 
     # fail because insert 0 will auto generates the next serial number
@@ -52,6 +54,9 @@ function test_session_config(){
 }
 
 function run() {
+
+    run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
+
     test_session_config
 
     export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
@@ -78,7 +83,10 @@ function run() {
 
 
     # start DM task only
-    dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
+    cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
+    # test deprecated config
+    sed -i 's/enable-ansi-quotes: false/enable-ansi-quotes: true/g'  $WORK_DIR/dm-task.yaml
+    dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -102,7 +110,7 @@ function run() {
     sleep 10
     echo "after restart dm-worker, task should resume automatically"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "start-task $cur/conf/dm-task.yaml" \
+        "start-task $WORK_DIR/dm-task.yaml" \
         "\"result\": false" 1 \
         "subtasks with name test for sources \[mysql-replica-01 mysql-replica-02\] already exist" 1
     sleep 2
@@ -147,6 +155,8 @@ function run() {
     ls $WORK_DIR/worker2/dumped_data.test && exit 1 || echo "worker2 auto removed dump files"
 
     export GO_FAILPOINTS=''
+
+    run_sql_both_source "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'"
 }
 
 cleanup_data all_mode

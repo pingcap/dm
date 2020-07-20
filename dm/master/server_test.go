@@ -427,7 +427,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 
 	// test start task, but the first step check-task fails
 	bakCheckSyncConfigFunc := checker.CheckSyncConfigFunc
-	checker.CheckSyncConfigFunc = func(_ context.Context, _ []*config.SubTaskConfig) error {
+	checker.CheckSyncConfigFunc = func(_ context.Context, _ []*config.SubTaskConfig, _ bool) error {
 		return errors.New(errCheckSyncConfig)
 	}
 	defer func() {
