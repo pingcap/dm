@@ -37,6 +37,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.TracerAddr, "tracer-addr", ":8263", "tracer API server and status addr")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "log/dm-tracer.log", "log file path")
+	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
 
 	return cfg
 }
@@ -47,6 +48,7 @@ type Config struct {
 
 	LogLevel   string `toml:"log-level" json:"log-level"`
 	LogFile    string `toml:"log-file" json:"log-file"`
+	LogFormat  string `toml:"log-format" json:"log-format"`
 	TracerAddr string `toml:"tracer-addr" json:"tracer-addr"`
 	Enable     bool   `toml:"enable" json:"enable"`
 	Checksum   bool   `toml:"checksum" json:"checksum"`

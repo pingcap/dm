@@ -2,6 +2,7 @@ bin
 */*.iml
 .idea/
 */.idea
+.vscode/
 deps.sh
 syncer.meta
 dumped_data/*
