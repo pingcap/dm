@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/failpoint"
@@ -152,4 +153,6 @@ func (s *Server) retireLeader() {
 	s.leader = ""
 	s.closeLeaderClient()
 	s.Unlock()
+
+	metrics.OnRetireLeader()
 }
