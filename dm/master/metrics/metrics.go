@@ -145,5 +145,5 @@ func ReportDDLErrorToMetrics(task, errType string) {
 func OnRetireLeader() {
 	workerState.Reset()
 	ddlErrCounter.Reset()
-    ddlPendingCounter.Reset()
+	ddlPendingCounter.Reset()
 }
