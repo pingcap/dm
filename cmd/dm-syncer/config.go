@@ -54,31 +54,29 @@ type commonConfig struct {
 	SafeMode   bool
 	MaxRetry   int
 
-	EnableANSIQuotes bool
-	TimezoneStr      string
+	TimezoneStr string
 
 	SyncerConfigFormat bool
 }
 
 func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTaskConfig, error) {
 	cfg := &syncerConfig{
-		printVersion:     c.printVersion,
-		ConfigFile:       c.ConfigFile,
-		ServerID:         c.ServerID,
-		Flavor:           c.Flavor,
-		WorkerCount:      c.WorkerCount,
-		Batch:            c.Batch,
-		StatusAddr:       c.StatusAddr,
-		Meta:             c.Meta,
-		LogLevel:         c.LogLevel,
-		LogFile:          c.LogFile,
-		LogFormat:        c.LogFormat,
-		LogRotate:        c.LogRotate,
-		EnableGTID:       c.EnableGTID,
-		SafeMode:         c.SafeMode,
-		MaxRetry:         c.MaxRetry,
-		EnableANSIQuotes: c.EnableANSIQuotes,
-		TimezoneStr:      c.TimezoneStr,
+		printVersion: c.printVersion,
+		ConfigFile:   c.ConfigFile,
+		ServerID:     c.ServerID,
+		Flavor:       c.Flavor,
+		WorkerCount:  c.WorkerCount,
+		Batch:        c.Batch,
+		StatusAddr:   c.StatusAddr,
+		Meta:         c.Meta,
+		LogLevel:     c.LogLevel,
+		LogFile:      c.LogFile,
+		LogFormat:    c.LogFormat,
+		LogRotate:    c.LogRotate,
+		EnableGTID:   c.EnableGTID,
+		SafeMode:     c.SafeMode,
+		MaxRetry:     c.MaxRetry,
+		TimezoneStr:  c.TimezoneStr,
 	}
 
 	cfg.FlagSet = flag.NewFlagSet("dm-syncer", flag.ContinueOnError)
@@ -103,7 +101,6 @@ func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTask
 	fs.BoolVar(&cfg.EnableGTID, "enable-gtid", false, "enable gtid mode")
 	fs.BoolVar(&cfg.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
 	fs.IntVar(&cfg.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
-	fs.BoolVar(&cfg.EnableANSIQuotes, "enable-ansi-quotes", false, "enable ANSI_QUOTES sql_mode")
 	fs.StringVar(&cfg.TimezoneStr, "timezone", "", "target database timezone location string")
 	fs.BoolVar(&SyncerConfigFormat, "syncer-config-format", false, "read syncer config format")
 
@@ -168,7 +165,6 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 	fs.BoolVar(&cfg.EnableGTID, "enable-gtid", false, "enable gtid mode")
 	fs.BoolVar(&cfg.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
 	fs.IntVar(&cfg.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
-	fs.BoolVar(&cfg.EnableANSIQuotes, "enable-ansi-quotes", false, "enable ANSI_QUOTES sql_mode")
 	fs.StringVar(&cfg.Timezone, "timezone", "", "target database timezone location string")
 	fs.StringVar(&cfg.Name, "cp-table-prefix", "dm-syncer", "the prefix of the checkpoint table name")
 	fs.BoolVar(&syncerConfigFormat, "syncer-config-format", false, "read syncer config format")
@@ -209,7 +205,6 @@ func newCommonConfig() *commonConfig {
 	fs.BoolVar(&cfg.EnableGTID, "enable-gtid", false, "enable gtid mode")
 	fs.BoolVar(&cfg.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
 	fs.IntVar(&cfg.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
-	fs.BoolVar(&cfg.EnableANSIQuotes, "enable-ansi-quotes", false, "enable ANSI_QUOTES sql_mode")
 	fs.StringVar(&cfg.TimezoneStr, "timezone", "", "target database timezone location string")
 	fs.BoolVar(&cfg.SyncerConfigFormat, "syncer-config-format", false, "read syncer config format")
 
@@ -273,9 +268,8 @@ type syncerConfig struct {
 	//MaxDMLConnectionTimeout string `toml:"execute-dml-timeout" json:"execute-dml-timeout"`
 	//ExecutionQueueLength    int    `toml:"execute-queue-length" json:"execute-queue-length"`
 
-	EnableANSIQuotes bool           `toml:"enable-ansi-quotes" json:"enable-ansi-quotes"`
-	TimezoneStr      string         `toml:"timezone" json:"timezone"`
-	Timezone         *time.Location `json:"-"`
+	TimezoneStr string         `toml:"timezone" json:"timezone"`
+	Timezone    *time.Location `json:"-"`
 
 	printVersion bool
 }
@@ -340,7 +334,6 @@ func (oc *syncerConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 			MaxRetry:         oc.MaxRetry,
 			AutoFixGTID:      oc.AutoFixGTID,
 			EnableGTID:       oc.EnableGTID,
-			EnableANSIQuotes: oc.EnableANSIQuotes,
 			DisableCausality: oc.DisableCausality,
 			SafeMode:         oc.SafeMode,
 		},

@@ -153,5 +153,6 @@ func (s *Server) retireLeader() {
 	s.leader = ""
 	s.closeLeaderClient()
 	s.Unlock()
-	metrics.RemoveDDLPendingInMetrics()
+
+	metrics.OnRetireLeader()
 }

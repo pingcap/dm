@@ -33,6 +33,15 @@ const (
 	DDLPendingSynced   = "Synced"
 )
 
+// used to show error type when handle DDLs
+const (
+	InfoErrSyncLock    = "InfoPut - SyncLockError"
+	InfoErrHandleLock  = "InfoPut - HandleLockError"
+	OpErrRemoveLock    = "OperationPut - RemoveLockError"
+	OpErrLockUnSynced  = "OperationPut - LockUnSyncedError"
+	OpErrPutNonOwnerOp = "OperationPut - PutNonOwnerOpError"
+)
+
 var (
 	workerState = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -56,6 +65,14 @@ var (
 			Subsystem: "master",
 			Name:      "ddl_state_number",
 			Help:      "number of pending DDL in different states, Un-synced (waiting all upstream), Synced (all upstream finished, waiting all downstream)",
+		}, []string{"task", "type"})
+
+	ddlErrCounter = metricsproxy.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "dm",
+			Subsystem: "master",
+			Name:      "shard_ddl_error",
+			Help:      "number of shard DDL lock/operation error",
 		}, []string{"task", "type"})
 )
 
@@ -89,6 +106,7 @@ func RegistryMetrics() {
 	registry.MustRegister(workerState)
 	registry.MustRegister(cpuUsageGauge)
 	registry.MustRegister(ddlPendingCounter)
+	registry.MustRegister(ddlErrCounter)
 
 	prometheus.DefaultGatherer = registry
 }
@@ -118,7 +136,14 @@ func ReportDDLPendingToMetrics(task, old, new string) {
 	}
 }
 
-// RemoveDDLPendingInMetrics resets whole ddlPendingCounter
-func RemoveDDLPendingInMetrics() {
-	ddlPendingCounter.Reset()
+// ReportDDLErrorToMetrics is a setter for ddlErrCounter
+func ReportDDLErrorToMetrics(task, errType string) {
+	ddlErrCounter.WithLabelValues(task, errType).Inc()
+}
+
+// OnRetireLeader cleans some metrics when retires
+func OnRetireLeader() {
+	workerState.Reset()
+	ddlErrCounter.Reset()
+    ddlPendingCounter.Reset()
 }

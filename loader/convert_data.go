@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
+	tmysql "github.com/pingcap/parser/mysql"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 )
@@ -230,13 +231,18 @@ func tableName(schema, table string) string {
 	return fmt.Sprintf("`%s`.`%s`", schema, table)
 }
 
-func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file string) (*tableInfo, error) {
+func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file string, enableANSIQuotes bool) (*tableInfo, error) {
 	statement, err := exportStatement(file)
 	if err != nil {
 		return nil, err
 	}
 
-	stmts, err := parserpkg.Parse(parser.New(), string(statement), "", "")
+	parser2 := parser.New()
+	if enableANSIQuotes {
+		parser2.SetSQLMode(tmysql.ModeANSIQuotes)
+	}
+
+	stmts, err := parserpkg.Parse(parser2, string(statement), "", "")
 	if err != nil {
 		return nil, terror.ErrLoadUnitParseStatement.Delegate(err, statement)
 	}
