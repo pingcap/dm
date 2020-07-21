@@ -34,7 +34,7 @@ var (
 			Name:      "read_binlog_duration",
 			Help:      "bucketed histogram of read time (s) for single binlog event from the relay log or master.",
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 
 	binlogEventSizeHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -43,7 +43,7 @@ var (
 			Name:      "binlog_event_size",
 			Help:      "size of a binlog event",
 			Buckets:   prometheus.ExponentialBuckets(16, 2, 20),
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 
 	binlogEvent = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -52,7 +52,7 @@ var (
 			Name:      "binlog_transform_cost",
 			Help:      "cost of binlog event transform",
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
-		}, []string{"type", "task"})
+		}, []string{"type", "task", "source_id"})
 
 	conflictDetectDurationHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -61,7 +61,7 @@ var (
 			Name:      "conflict_detect_duration",
 			Help:      "bucketed histogram of conflict detect time (s) for single DML statement",
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 
 	addJobDurationHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -70,7 +70,7 @@ var (
 			Name:      "add_job_duration",
 			Help:      "bucketed histogram of add a job to the queue time (s)",
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
-		}, []string{"type", "task", "queueNo"})
+		}, []string{"type", "task", "queueNo", "source_id"})
 
 	// dispatch/add multiple jobs for one binlog event.
 	// NOTE: only observe for DML now.
@@ -81,7 +81,7 @@ var (
 			Name:      "dispatch_binlog_duration",
 			Help:      "bucketed histogram of dispatch a binlog event time (s)",
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
-		}, []string{"type", "task"})
+		}, []string{"type", "task", "source_id"})
 
 	skipBinlogDurationHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -90,7 +90,7 @@ var (
 			Name:      "skip_binlog_duration",
 			Help:      "bucketed histogram of skip a binlog event time (s)",
 			Buckets:   prometheus.ExponentialBuckets(0.0000005, 2, 25), // this should be very fast.
-		}, []string{"type", "task"})
+		}, []string{"type", "task", "source_id"})
 
 	addedJobsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
@@ -98,7 +98,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "added_jobs_total",
 			Help:      "total number of added jobs",
-		}, []string{"type", "task", "queueNo"})
+		}, []string{"type", "task", "queueNo", "source_id"})
 
 	finishedJobsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
@@ -106,7 +106,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "finished_jobs_total",
 			Help:      "total number of finished jobs",
-		}, []string{"type", "task", "queueNo"})
+		}, []string{"type", "task", "queueNo", "source_id"})
 
 	queueSizeGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -114,7 +114,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "queue_size",
 			Help:      "remain size of the DML queue",
-		}, []string{"task", "queueNo"})
+		}, []string{"task", "queueNo", "source_id"})
 
 	binlogPosGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -122,7 +122,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "binlog_pos",
 			Help:      "current binlog pos",
-		}, []string{"node", "task"})
+		}, []string{"node", "task", "source_id"})
 
 	binlogFileGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -130,7 +130,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "binlog_file",
 			Help:      "current binlog file index",
-		}, []string{"node", "task"})
+		}, []string{"node", "task", "source_id"})
 
 	sqlRetriesTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
@@ -174,7 +174,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "exit_with_error_count",
 			Help:      "counter for syncer exits with error",
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 
 	// some problems with it
 	replicationLagGauge = metricsproxy.NewGaugeVec(
@@ -191,7 +191,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "remaining_time",
 			Help:      "the remaining time in second to catch up master",
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 
 	unsyncedTableGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -199,7 +199,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "unsynced_table_number",
 			Help:      "number of unsynced tables in the subtask",
-		}, []string{"task", "table"})
+		}, []string{"task", "table", "source_id"})
 
 	shardLockResolving = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -207,7 +207,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "shard_lock_resolving",
 			Help:      "waiting shard DDL lock to be resolved",
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 )
 
 // RegisterMetrics registers metrics

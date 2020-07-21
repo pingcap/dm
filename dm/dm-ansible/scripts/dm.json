@@ -690,6 +690,716 @@
         "x": 0,
         "y": 15
       },
+      "id": 67,
+      "panels": [
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of error happens before operate",
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 0,
+            "y": 16
+          },
+          "id": 71,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_worker_operate_error{type=\"BeforeAnyOp\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "before any operate error",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": "5",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of error happens in operate source bound",
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 6,
+            "y": 16
+          },
+          "id": 72,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_worker_operate_error{type=\"SourceBound\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "source bound error",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": "5",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of error happens in operate start",
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 12,
+            "y": 16
+          },
+          "id": 76,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_worker_operate_error{type=\"Start\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "start error",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": "5",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of error happens in operate pause",
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 18,
+            "y": 16
+          },
+          "id": 74,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_worker_operate_error{type=\"Pause\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "pause error",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": "5",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of error happens in operate resume",
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 0,
+            "y": 23
+          },
+          "id": 78,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_worker_operate_error{type=\"Resume\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "resume error",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": "5",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of error happens in operate auto-resume",
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 6,
+            "y": 16
+          },
+          "id": 69,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_worker_operate_error{type=\"AutoResume\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "auto-resume error",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": "5",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of error happens in operate update",
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 12,
+            "y": 23
+          },
+          "id": 77,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_worker_operate_error{type=\"Update\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "update error",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": "5",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of error happens in operate stop",
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 18,
+            "y": 23
+          },
+          "id": 75,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_worker_operate_error{type=\"Stop\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "stop error",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": "5",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        }
+      ],
+      "title": "operate error",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
       "id": 54,
       "panels": [
         {
@@ -754,7 +1464,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_worker_task_state{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_worker_task_state{task=\"$task\",source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -809,7 +1519,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 31
       },
       "id": 55,
       "panels": [
@@ -1905,7 +2615,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 32
       },
       "id": 56,
       "panels": [
@@ -2619,7 +3329,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 33
       },
       "id": 57,
       "panels": [
@@ -2685,7 +3395,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_syncer_remaining_time{task=\"$task\", instance=\"$instance\"}",
+              "expr": "dm_syncer_remaining_time{task=\"$task\", source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -2847,7 +3557,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "changes(dm_syncer_exit_with_error_count{task=\"$task\", instance=\"$instance\"}[30m])",
+              "expr": "changes(dm_syncer_exit_with_error_count{task=\"$task\", source_id=\"$source\"}[30m])",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -2904,7 +3614,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_syncer_binlog_file{instance=\"$instance\", task=\"$task\", node=\"master\"} - ON(instance, task, job) dm_syncer_binlog_file{instance=\"$instance\", task=\"$task\", node=\"syncer\"}",
+              "expr": "dm_syncer_binlog_file{source_id=\"$source\", task=\"$task\", node=\"master\"} - ON(source, task, job) dm_syncer_binlog_file{source_id=\"$source\", task=\"$task\", node=\"syncer\"}",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 2,
@@ -3082,28 +3792,28 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\", type=\"write_rows\"}[1m])",
+              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", source_id=\"$source\", type=\"write_rows\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "insert",
               "refId": "A"
             },
             {
-              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\", type=\"update_rows\"}[1m])",
+              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", source_id=\"$source\", type=\"update_rows\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "update",
               "refId": "B"
             },
             {
-              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\", type=\"delete_rows\"}[1m])",
+              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", source_id=\"$source\", type=\"delete_rows\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "delete",
               "refId": "C"
             },
             {
-              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", instance=\"$instance\", type=\"query\"}[1m])",
+              "expr": "rate(dm_syncer_binlog_transform_cost_count{task=\"$task\", source_id=\"$source\", type=\"query\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "query",
@@ -3192,14 +3902,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(dm_syncer_skip_binlog_duration_count{task=\"$task\", instance=\"$instance\", type=\"rows\"}[1m])",
+              "expr": "rate(dm_syncer_skip_binlog_duration_count{task=\"$task\", source_id=\"$source\", type=\"rows\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "rows",
               "refId": "A"
             },
             {
-              "expr": "rate(dm_syncer_skip_binlog_duration_count{task=\"$task\", instance=\"$instance\", type=\"query\"}[1m])",
+              "expr": "rate(dm_syncer_skip_binlog_duration_count{task=\"$task\", source_id=\"$source\", type=\"query\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "query",
@@ -3288,21 +3998,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_read_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -3392,21 +4102,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_binlog_transform_cost_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -3496,21 +4206,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_dispatch_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -3704,21 +4414,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_binlog_event_size_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -3808,7 +4518,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_syncer_queue_size{task=\"$task\", instance=\"$instance\"}",
+              "expr": "dm_syncer_queue_size{task=\"$task\", source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{queueNo}}",
@@ -3897,7 +4607,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(dm_syncer_added_jobs_total{task=\"$task\", instance=\"$instance\"}[1m])",
+              "expr": "rate(dm_syncer_added_jobs_total{task=\"$task\", source_id=\"$source\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{queueNo}}-{{type}}",
@@ -3986,7 +4696,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(dm_syncer_finished_jobs_total{task=\"$task\", instance=\"$instance\"}[1m])",
+              "expr": "rate(dm_syncer_finished_jobs_total{task=\"$task\", source_id=\"$source\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{queueNo}}-{{type}}",
@@ -4186,21 +4896,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_add_job_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -4290,21 +5000,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_conflict_detect_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -4394,21 +5104,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_skip_binlog_duration_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -4496,7 +5206,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_syncer_unsynced_table_number{instance=\"$instance\", task=\"$task\"}",
+              "expr": "dm_syncer_unsynced_table_number{source_id=\"$source\", task=\"$task\"}",
               "format": "time_series",
               "instant": false,
               "intervalFactor": 2,
@@ -4584,7 +5294,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "dm_syncer_shard_lock_resolving{instance=\"$instance\", task=\"$task\"}",
+              "expr": "dm_syncer_shard_lock_resolving{source_id=\"$source\", task=\"$task\"}",
               "format": "time_series",
               "instant": false,
               "intervalFactor": 2,
@@ -4955,7 +5665,29 @@
         "hide": 0,
         "includeAll": false,
         "label": null,
-        "multi": false,
+        "multi": true,
+        "name": "source",
+        "options": [],
+        "query": "label_values(dm_worker_task_state, source_id)",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      },
+      {
+        "allValue": null,
+        "current": {},
+        "datasource": "${DS_TEST-CLUSTER}",
+        "definition": "",
+        "hide": 0,
+        "includeAll": false,
+        "label": null,
+        "multi": true,
         "name": "instance",
         "options": [],
         "query": "label_values(dm_worker_task_state{task=\"$task\"}, instance)",
