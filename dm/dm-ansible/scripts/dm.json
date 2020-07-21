@@ -2133,7 +2133,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "changes(dm_mydumper_exit_with_error_count{task=\"$task\",instance=\"$instance\"}[30m])",
+              "expr": "changes(dm_dumpling_exit_with_error_count{task=\"$task\",source_id=\"$source\"}[30m])",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
