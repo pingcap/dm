@@ -238,6 +238,7 @@ type SyncerConfig struct {
 	EnableGTID       bool `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
 	DisableCausality bool `yaml:"disable-detect" toml:"disable-detect" json:"disable-detect"`
 	SafeMode         bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
+	// deprecated, use `ansi-quotes` in top level config instead
 	EnableANSIQuotes bool `yaml:"enable-ansi-quotes" toml:"enable-ansi-quotes" json:"enable-ansi-quotes"`
 }
 
@@ -305,6 +306,8 @@ type TaskConfig struct {
 	Syncers   map[string]*SyncerConfig   `yaml:"syncers"`
 
 	CleanDumpFile bool `yaml:"clean-dump-file"`
+
+	EnableANSIQuotes bool `yaml:"ansi-quotes" toml:"ansi-quotes" json:"ansi-quotes"`
 }
 
 // NewTaskConfig creates a TaskConfig
@@ -501,6 +504,11 @@ func (c *TaskConfig) adjust() error {
 			inst.Syncer.WorkerCount = inst.SyncerThread
 		}
 
+		// for backward compatible, set global config `ansi-quotes: true` if any syncer is true
+		if inst.Syncer.EnableANSIQuotes == true {
+			c.EnableANSIQuotes = true
+		}
+
 		if dupeRules := checkDuplicateString(inst.RouteRules); len(dupeRules) > 0 {
 			duplicateErrorStrings = append(duplicateErrorStrings, fmt.Sprintf("mysql-instance(%d)'s route-rules: %s", i, strings.Join(dupeRules, ", ")))
 		}
@@ -573,6 +581,8 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.SyncerConfig = *inst.Syncer
 
 		cfg.CleanDumpFile = c.CleanDumpFile
+
+		cfg.EnableANSIQuotes = c.EnableANSIQuotes
 
 		err := cfg.Adjust(true)
 		if err != nil {
