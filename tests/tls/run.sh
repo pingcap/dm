@@ -93,8 +93,9 @@ function run() {
     echo "test http interface"
     check_rpc_alive $cur/../bin/check_master_online_http 127.0.0.1:$MASTER_PORT1 "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
 
-    # FIXME: should not success
-    check_rpc_alive $cur/../bin/check_master_online_http 127.0.0.1:$MASTER_PORT1 "$cur/conf/ca.pem" "$cur/conf/other.pem" "$cur/conf/other.key"
+    echo "use common name not in 'cert-allowed-cn' should not request success"
+    check_rpc_alive $cur/../bin/check_master_online_http 127.0.0.1:$MASTER_PORT1 "$cur/conf/ca.pem" "$cur/conf/other.pem" "$cur/conf/other.key" && exit 1 || true
+
 
     # TODO: curl's version is too low in ci, uncomment this after ci upgrade the version
     #echo "pause task"
