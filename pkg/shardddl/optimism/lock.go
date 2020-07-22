@@ -117,7 +117,8 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	l.tables[callerSource][callerSchema][callerTable] = newTable
 	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
 		zap.Stringer("from", oldTable), zap.Stringer("to", newTable), zap.Strings("ddls", ddls))
-	l.synced, _ = l.IsSynced()
+	_, remain := l.syncStatus()
+	l.synced = remain == 0
 
 	// special case: if the DDL does not affect the schema at all, assume it is
 	// idempotent and just execute the DDL directly.
@@ -232,7 +233,8 @@ func (l *Lock) TryRemoveTable(source, schema, table string) bool {
 	}
 
 	delete(l.tables[source][schema], table)
-	l.synced, _ = l.IsSynced()
+	_, remain := l.syncStatus()
+	l.synced = remain == 0
 	delete(l.done[source][schema], table)
 	log.L().Info("table removed from the lock", zap.String("lock", l.ID),
 		zap.String("source", source), zap.String("schema", schema), zap.String("table", table),
