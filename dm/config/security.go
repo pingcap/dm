@@ -13,6 +13,8 @@
 
 package config
 
+import "fmt"
+
 // Security config
 type Security struct {
 	SSLCA         string   `toml:"ssl-ca" json:"ssl-ca" yaml:"ssl-ca"`
@@ -25,7 +27,7 @@ type Security struct {
 type strArray []string
 
 func (i *strArray) String() string {
-	return "string array"
+	return fmt.Sprint([]string(*i))
 }
 
 func (i *strArray) Set(value string) error {
