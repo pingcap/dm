@@ -703,7 +703,7 @@ tags = ["internal", "medium"]
 [error.DM-functional-11112]
 message = "invalid TLS config"
 description = ""
-workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config ."
+workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config."
 tags = ["internal", "medium"]
 
 [error.DM-functional-11113]
