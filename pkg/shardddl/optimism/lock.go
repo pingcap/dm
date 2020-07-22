@@ -63,7 +63,7 @@ func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []
 		joined:     schemacmp.Encode(ti),
 		tables:     make(map[string]map[string]map[string]schemacmp.Table),
 		done:       make(map[string]map[string]map[string]bool),
-		synced:     false, // lance: decide true or false
+		synced:     true,
 	}
 	l.addTables(tts)
 	return l
@@ -117,14 +117,14 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	l.tables[callerSource][callerSchema][callerTable] = newTable
 	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
 		zap.Stringer("from", oldTable), zap.Stringer("to", newTable), zap.Strings("ddls", ddls))
-	_, remain := l.syncStatus()
-	l.synced = remain == 0
 
 	// special case: if the DDL does not affect the schema at all, assume it is
 	// idempotent and just execute the DDL directly.
 	// if any real conflicts after joined exist, they will be detected by the following steps.
 	var cmp int
 	if cmp, err = newTable.Compare(oldJoined); err == nil && cmp == 0 {
+		_, remain := l.syncStatus()
+		l.synced = remain == 0
 		return ddls, nil
 	}
 
@@ -147,6 +147,8 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 
 	// update the current joined table info, if it's actually changed it should be logged in `if cmp != 0` block.
 	l.joined = newJoined
+	_, remain := l.syncStatus()
+	l.synced = remain == 0
 
 	cmp, err = oldJoined.Compare(newJoined)
 	// FIXME: Compute DDLs through schema diff instead of propagating DDLs directly.
