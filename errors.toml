@@ -2075,18 +2075,12 @@ workaround = "Please use master/worker."
 tags = ["internal", "low"]
 
 [error.DM-dm-master-38050]
-message = "peer urls %s not valid"
-description = ""
-workaround = "Please check the `peer-urls` config in master configuration file."
-tags = ["internal", "high"]
-
-[error.DM-dm-master-38051]
 message = "advertise peer urls %s not valid"
 description = ""
 workaround = "Please check the `advertise-peer-urls` config in master configuration file."
 tags = ["internal", "high"]
 
-[error.DM-dm-master-38052]
+[error.DM-dm-master-38051]
 message = "TLS config not valid"
 description = ""
 workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in master configuration file."

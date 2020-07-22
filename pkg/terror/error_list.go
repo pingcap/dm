@@ -423,7 +423,6 @@ const (
 	codeMasterOptimistNotStarted
 	codeMasterMasterNameNotExist
 	codeMasterInvalidOfflineType
-	codeMasterPeerURLsNotValid
 	codeMasterAdvertisePeerURLsNotValid
 	codeMasterTLSConfigNotValid
 )
@@ -963,7 +962,6 @@ var (
 	ErrMasterMasterNameNotExist          = New(codeMasterMasterNameNotExist, ClassDMMaster, ScopeInternal, LevelLow, "dm-master with name %s not exists", "Please use list-member command to see masters.")
 	ErrMasterInvalidOfflineType          = New(codeMasterInvalidOfflineType, ClassDMMaster, ScopeInternal, LevelLow, "offline member type %s is invalid", "Please use master/worker.")
 
-	ErrMasterPeerURLsNotValid          = New(codeMasterPeerURLsNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "peer urls %s not valid", "Please check the `peer-urls` config in master configuration file.")
 	ErrMasterAdvertisePeerURLsNotValid = New(codeMasterAdvertisePeerURLsNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "advertise peer urls %s not valid", "Please check the `advertise-peer-urls` config in master configuration file.")
 	ErrMasterTLSConfigNotValid         = New(codeMasterTLSConfigNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "TLS config not valid", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in master configuration file.")
 

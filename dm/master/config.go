@@ -306,16 +306,6 @@ func (c *Config) adjust() error {
 		c.InitialClusterState = defaultInitialClusterState
 	}
 
-	if enableTLS(&c.Security) {
-		if !strings.HasPrefix(c.PeerUrls, "https://") {
-			return terror.ErrMasterPeerURLsNotValid.Generate(c.PeerUrls)
-		}
-
-		if !strings.HasPrefix(c.AdvertisePeerUrls, "https://") {
-			return terror.ErrMasterAdvertisePeerURLsNotValid.Generate(c.AdvertisePeerUrls)
-		}
-	}
-
 	return err
 }
 
