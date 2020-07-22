@@ -42,6 +42,7 @@ type Lock struct {
 	// upstream source ID -> upstream schema name -> upstream table name -> table info.
 	// if all of them are the same, then we call the lock `synced`.
 	tables map[string]map[string]map[string]schemacmp.Table
+	synced bool
 
 	// whether DDLs operations have done (execute the shard DDL) to the downstream.
 	// if all of them have done and have the same schema, then we call the lock `resolved`.
@@ -62,6 +63,7 @@ func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []
 		joined:     schemacmp.Encode(ti),
 		tables:     make(map[string]map[string]map[string]schemacmp.Table),
 		done:       make(map[string]map[string]map[string]bool),
+		synced:     false, // lance: decide true or false
 	}
 	l.addTables(tts)
 	return l
@@ -115,6 +117,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	l.tables[callerSource][callerSchema][callerTable] = newTable
 	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
 		zap.Stringer("from", oldTable), zap.Stringer("to", newTable), zap.Strings("ddls", ddls))
+	l.synced, _ = l.IsSynced()
 
 	// special case: if the DDL does not affect the schema at all, assume it is
 	// idempotent and just execute the DDL directly.
@@ -229,6 +232,7 @@ func (l *Lock) TryRemoveTable(source, schema, table string) bool {
 	}
 
 	delete(l.tables[source][schema], table)
+	l.synced, _ = l.IsSynced()
 	delete(l.done[source][schema], table)
 	log.L().Info("table removed from the lock", zap.String("lock", l.ID),
 		zap.String("source", source), zap.String("schema", schema), zap.String("table", table),

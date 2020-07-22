@@ -96,6 +96,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 				synced, remain := l.IsSynced()
 				c.Assert(synced, Equals, syncedCount == tableCount)
 				c.Assert(remain, Equals, tableCount-syncedCount)
+				c.Assert(synced, Equals, l.synced)
 			}
 		}
 	}
@@ -137,6 +138,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	synced, remain := l.IsSynced()
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, tableCount-1)
+	c.Assert(synced, Equals, l.synced)
 	cmp, err := l.tables[sources[0]][dbs[0]][tbls[0]].Compare(l.tables[sources[0]][dbs[0]][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 1)
@@ -157,6 +159,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	synced, remain = l.IsSynced()
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, tableCount-2)
+	c.Assert(synced, Equals, l.synced)
 	cmp, err = l.tables[sources[0]][dbs[0]][tbls[0]].Compare(l.tables[sources[0]][dbs[0]][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 0)
@@ -192,6 +195,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 				DDLs, err = l.TrySync(source, db, tbl, DDLs3, ti3, tts)
 				c.Assert(err, IsNil)
 				synced, remain = l.IsSynced()
+				c.Assert(synced, Equals, l.synced)
 				if syncedCount == tableCount {
 					c.Assert(DDLs, DeepEquals, DDLs3)
 					c.Assert(synced, IsTrue)
@@ -315,6 +319,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	synced, remain := l.IsSynced()
+	c.Assert(synced, Equals, l.synced)
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
 
@@ -330,6 +335,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{}) // no DDLs returned
 	synced, remain = l.IsSynced()
+	c.Assert(synced, Equals, l.synced)
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
 
@@ -1088,6 +1094,7 @@ func (t *testLock) trySyncForAllTablesLarger(c *C, l *Lock,
 
 func (t *testLock) checkLockSynced(c *C, l *Lock) {
 	synced, remain := l.IsSynced()
+	c.Assert(synced, Equals, l.synced)
 	c.Assert(synced, IsTrue)
 	c.Assert(remain, Equals, 0)
 
