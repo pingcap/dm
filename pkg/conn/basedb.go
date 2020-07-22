@@ -15,12 +15,11 @@ package conn
 
 import (
 	"context"
+	"crypto/md5"
 	"database/sql"
 	"fmt"
 	"net/url"
-	"strconv"
 	"sync"
-	"sync/atomic"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/retry"
@@ -29,8 +28,6 @@ import (
 	"github.com/go-sql-driver/mysql"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
-
-var customID int64
 
 // DBProvider providers BaseDB instance
 type DBProvider interface {
@@ -60,12 +57,12 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 			return nil, terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}
 
-		name := "dm" + strconv.FormatInt(atomic.AddInt64(&customID, 1), 10)
-		err = mysql.RegisterTLSConfig(name, tlsConfig)
+		tlsCfgHash := fmt.Sprintf("%x", md5.Sum([]byte(config.Security.String())))
+		err = mysql.RegisterTLSConfig(tlsCfgHash, tlsConfig)
 		if err != nil {
 			return nil, terror.ErrConnRegistryTLSConfig.Delegate(err)
 		}
-		dsn += "&tls=" + name
+		dsn += "&tls=" + tlsCfgHash
 	}
 
 	var maxIdleConns int
