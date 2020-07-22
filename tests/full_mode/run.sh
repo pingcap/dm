@@ -13,9 +13,9 @@ function run() {
     check_contains 'Query OK, 3 rows affected'
 
     # test load data with `"` in the table name
-    run_sql_source1 "create table full_mode.\`tb\"1\` (id int,name varchar(10));"
-    run_sql_source1 "insert into full_mode.\`tb\"1\` values(1,'haha');"
-    run_sql_source1 "insert into full_mode.\`tb\"1\` values(2,'hihi');"
+    run_sql "create table full_mode.\`tb\"1\` (id int,name varchar(10));" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "insert into full_mode.\`tb\"1\` values(1,'haha');" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "insert into full_mode.\`tb\"1\` values(2,'hihi');" $MYSQL_PORT1 $MYSQL_PASSWORD1
 
     run_sql_file $cur/data/db1.prepare.user.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_count 'Query OK, 0 rows affected' 7
