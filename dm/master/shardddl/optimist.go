@@ -454,7 +454,7 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 
 			// in optimistic mode, we always try to mark a table as done after received the `done` status of the DDLs operation.
 			// NOTE: even all tables have done their previous DDLs operations, the lock may still not resolved,
-			/// because these tables may have different schemas.
+			// because these tables may have different schemas.
 			done := lock.TryMarkDone(op.Source, op.UpSchema, op.UpTable)
 			o.logger.Info("mark operation for a table as done", zap.Bool("done", done), zap.Stringer("operation", op))
 			if !lock.IsResolved() {
