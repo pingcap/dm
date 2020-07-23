@@ -6,6 +6,7 @@ set -eu
 
 PORT=$1
 PASSWORD=$2
+
 TEST_DIR=/tmp/dm_test
 
 echo "Starting TiDB on port ${PORT}"

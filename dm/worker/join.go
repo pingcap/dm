@@ -20,12 +20,14 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // GetJoinURLs gets the endpoints from the join address.
@@ -37,6 +39,11 @@ func GetJoinURLs(addrs string) []string {
 // JoinMaster let dm-worker join the cluster with the specified master endpoints.
 func (s *Server) JoinMaster(endpoints []string) error {
 	// TODO: grpc proxy
+	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
+	if err != nil {
+		return terror.ErrWorkerTLSConfigNotValid.Delegate(err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -47,7 +54,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 
 	for _, endpoint := range endpoints {
 		ctx1, cancel1 := context.WithTimeout(ctx, 3*time.Second)
-		conn, err := grpc.DialContext(ctx1, endpoint, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+		conn, err := grpc.DialContext(ctx1, endpoint, grpc.WithBlock(), tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second))
 		cancel1()
 		if err != nil {
 			if conn != nil {
