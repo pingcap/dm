@@ -337,7 +337,7 @@ func (c *Config) genEmbedEtcdConfig(cfg *embed.Config) (*embed.Config, error) {
 	}
 	cfg.ACUrls, err = parseURLs(c.AdvertiseAddr)
 	if err != nil {
-		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "advertise-addr")
+		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "invalid advertise-addr")
 	}
 
 	cfg.LPUrls, err = parseURLs(c.PeerUrls)
