@@ -99,7 +99,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 		workerInfo2  = ha.NewWorkerInfo(workerName2, workerAddr2)
 		sourceCfg1   config.SourceConfig
 		subtaskCfg1  config.SubTaskConfig
-		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
+		keepAliveTTL = int64(2) // NOTE: this should be >= minLeaseTTL, in second.
 
 		rebuildScheduler = func(ctx context.Context) {
 			switch restart {
@@ -676,7 +676,7 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 		sourceBound1 = ha.NewSourceBound(sourceID1, workerName1)
 		sourceCfg1   config.SourceConfig
 		wg           sync.WaitGroup
-		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
+		keepAliveTTL = int64(2) // NOTE: this should be >= minLeaseTTL, in second.
 	)
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1
@@ -788,7 +788,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 		workerAddr3  = "127.0.0.1:18362"
 		workerAddr4  = "127.0.0.1:18462"
 		sourceCfg1   config.SourceConfig
-		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
+		keepAliveTTL = int64(2) // NOTE: this should be >= minLeaseTTL, in second.
 	)
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1
