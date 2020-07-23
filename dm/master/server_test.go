@@ -245,7 +245,7 @@ func testDefaultMasterServer(c *check.C) *Server {
 
 func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sources, workers []string, password string, workerClients map[string]workerrpc.Client) (*scheduler.Scheduler, []context.CancelFunc) {
 	logger := log.L()
-	scheduler2 := scheduler.NewScheduler(&logger)
+	scheduler2 := scheduler.NewScheduler(&logger, config.Security{})
 	err := scheduler2.Start(ctx, etcdTestCli)
 	c.Assert(err, check.IsNil)
 	cancels := make([]context.CancelFunc, 0, 2)
@@ -449,7 +449,7 @@ type mockDBProvider struct {
 
 // Apply will build BaseDB with DBConfig
 func (d *mockDBProvider) Apply(config config.DBConfig) (*conn.BaseDB, error) {
-	return conn.NewBaseDB(d.db), nil
+	return conn.NewBaseDB(d.db, func() {}), nil
 }
 
 func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
@@ -1089,7 +1089,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	c.Assert(s2.Start(ctx), check.IsNil)
 	defer s2.Close()
 
-	client, err := etcdutil.CreateClient(strings.Split(cfg1.AdvertisePeerUrls, ","))
+	client, err := etcdutil.CreateClient(strings.Split(cfg1.AdvertisePeerUrls, ","), nil)
 	c.Assert(err, check.IsNil)
 	defer client.Close()
 

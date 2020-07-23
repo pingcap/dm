@@ -17,6 +17,7 @@ package etcdutil
 
 import (
 	"context"
+	"crypto/tls"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -67,10 +68,11 @@ var etcdDefaultTxnRetryParam = retry.Params{
 var etcdDefaultTxnStrategy = retry.FiniteRetryStrategy{}
 
 // CreateClient creates an etcd client with some default config items.
-func CreateClient(endpoints []string) (*clientv3.Client, error) {
+func CreateClient(endpoints []string, tlsCfg *tls.Config) (*clientv3.Client, error) {
 	return clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
 		DialTimeout: DefaultDialTimeout,
+		TLS:         tlsCfg,
 	})
 }
 
