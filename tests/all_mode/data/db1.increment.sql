@@ -30,4 +30,9 @@ delete from t1 where gen_id > 124;
 
 -- test decimal type
 alter table t1 add column lat decimal(9,6) default '0.000000';
-insert into t1 (id, name, info, lat) values (8, 'gentest', '{"id":127}', '123.123')
+insert into t1 (id, name, info, lat) values (8, 'gentest', '{"id":127}', '123.123');
+
+-- test ZERO_DATE
+create table t3 (a varchar(255) primary key, b DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00');
+insert into t3(a, b) values ('haha', now());
+insert into t3(a, b) values ('hihi', '0000-00-00 00:00:00');

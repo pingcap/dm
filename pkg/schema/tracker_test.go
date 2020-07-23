@@ -34,10 +34,51 @@ var _ = Suite(&trackerSuite{})
 
 type trackerSuite struct{}
 
+func (s *trackerSuite) TestSessionCfg(c *C) {
+	log.SetLevel(zapcore.ErrorLevel)
+
+	sessionCfg := map[string]string{"sql_mode": "HaHa"}
+	tracker, err := schema.NewTracker(sessionCfg)
+	c.Assert(err, NotNil)
+
+	tracker, err = schema.NewTracker(nil)
+	ctx := context.Background()
+	err = tracker.Exec(ctx, "", "create database testdb;")
+	c.Assert(err, IsNil)
+
+	// Now create the table with ZERO_DATE
+	err = tracker.Exec(ctx, "testdb", "create table foo (a varchar(255) primary key, b DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00')")
+	c.Assert(err, NotNil)
+
+	// set session config
+	sessionCfg = map[string]string{"sql_mode": "NO_ZERO_DATE,NO_ZERO_IN_DATE,ANSI_QUOTES"}
+	tracker, err = schema.NewTracker(sessionCfg)
+	c.Assert(err, IsNil)
+
+	err = tracker.Exec(ctx, "", "create database testdb;")
+	c.Assert(err, IsNil)
+
+	// Now create the table with ANSI_QUOTES and ZERO_DATE
+	err = tracker.Exec(ctx, "testdb", "create table \"foo\" (a varchar(255) primary key, b DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00')")
+	c.Assert(err, IsNil)
+
+	cts, err := tracker.GetCreateTable(context.Background(), "testdb", "foo")
+	c.Assert(err, IsNil)
+	c.Assert(cts, Equals, "CREATE TABLE \"foo\" ( \"a\" varchar(255) NOT NULL, \"b\" datetime NOT NULL DEFAULT '0000-00-00 00:00:00', PRIMARY KEY (\"a\")) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
+
+	// Drop one column from the table.
+	err = tracker.Exec(ctx, "testdb", "alter table foo drop column \"b\"")
+	c.Assert(err, IsNil)
+
+	cts, err = tracker.GetCreateTable(context.Background(), "testdb", "foo")
+	c.Assert(err, IsNil)
+	c.Assert(cts, Equals, "CREATE TABLE \"foo\" ( \"a\" varchar(255) NOT NULL, PRIMARY KEY (\"a\")) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
+}
+
 func (s *trackerSuite) TestDDL(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
 
-	tracker, err := schema.NewTracker()
+	tracker, err := schema.NewTracker(nil)
 	c.Assert(err, IsNil)
 
 	// Table shouldn't exist before initialization.
@@ -104,7 +145,7 @@ func (s *trackerSuite) TestDDL(c *C) {
 func (s *trackerSuite) TestGetSingleColumnIndices(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
 
-	tracker, err := schema.NewTracker()
+	tracker, err := schema.NewTracker(nil)
 	c.Assert(err, IsNil)
 
 	ctx := context.Background()
@@ -143,7 +184,7 @@ func (s *trackerSuite) TestGetSingleColumnIndices(c *C) {
 func (s *trackerSuite) TestCreateSchemaIfNotExists(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
 
-	tracker, err := schema.NewTracker()
+	tracker, err := schema.NewTracker(nil)
 	c.Assert(err, IsNil)
 
 	// We cannot create a table without a database.
@@ -191,7 +232,7 @@ func (aj asJSON) String() string {
 func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
 
-	tracker, err := schema.NewTracker()
+	tracker, err := schema.NewTracker(nil)
 	c.Assert(err, IsNil)
 
 	// Create some sort of complicated table.
@@ -255,7 +296,7 @@ func (s *trackerSuite) TestAllSchemas(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
 	ctx := context.Background()
 
-	tracker, err := schema.NewTracker()
+	tracker, err := schema.NewTracker(nil)
 	c.Assert(err, IsNil)
 
 	// nothing should exist...
