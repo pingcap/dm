@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/dm/syncer"
 
 	"github.com/pingcap/errors"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
@@ -82,11 +83,16 @@ func NewServer(cfg *Config) *Server {
 
 // Start starts to serving
 func (s *Server) Start() error {
-	var err error
-	s.rootLis, err = net.Listen("tcp", s.cfg.WorkerAddr)
+	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
+	if err != nil {
+		return terror.ErrWorkerTLSConfigNotValid.Delegate(err)
+	}
+
+	rootLis, err := net.Listen("tcp", s.cfg.WorkerAddr)
 	if err != nil {
 		return terror.ErrWorkerStartService.Delegate(err)
 	}
+	s.rootLis = tls.WrapListener(rootLis)
 
 	log.L().Info("Start Server")
 	s.setWorker(nil, true)
@@ -96,6 +102,7 @@ func (s *Server) Start() error {
 		DialTimeout:          dialTimeout,
 		DialKeepAliveTime:    keepaliveTime,
 		DialKeepAliveTimeout: keepaliveTimeout,
+		TLS:                  tls.TLSConfig(),
 	})
 	if err != nil {
 		return err
@@ -133,12 +140,15 @@ func (s *Server) Start() error {
 
 	// create a cmux
 	m := cmux.New(s.rootLis)
+
 	m.SetReadTimeout(cmuxReadTimeout) // set a timeout, ref: https://github.com/pingcap/tidb-binlog/pull/352
 
 	// match connections in order: first gRPC, then HTTP
 	grpcL := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
+
 	httpL := m.Match(cmux.HTTP1Fast())
 
+	// NOTE: don't need to set tls config, because rootLis already use tls
 	s.svr = grpc.NewServer()
 	pb.RegisterWorkerServer(s.svr, s)
 	go func() {

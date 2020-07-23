@@ -81,7 +81,6 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
-
     # start DM task only
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
     # test deprecated config
@@ -116,11 +115,11 @@ function run() {
     sleep 2
 
     # wait for task running
-    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Running"' 10
     sleep 2 # still wait for subtask running on other dm-workers
 
     # wait for task running
-    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Running"' 10
     sleep 2 # still wait for subtask running on other dm-workers
 
     # kill tidb
