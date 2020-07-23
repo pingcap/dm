@@ -166,10 +166,11 @@ func (d *BaseDB) Close() error {
 		}
 	}
 	terr := d.DB.Close()
+	d.doFuncInClose()
+
 	if err == nil {
 		return terr
 	}
 
-	d.doFuncInClose()
 	return err
 }
