@@ -86,7 +86,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 
 	var (
 		logger       = log.L()
-		s            = NewScheduler(&logger)
+		s            = NewScheduler(&logger, config.Security{})
 		sourceID1    = "mysql-replica-1"
 		sourceID2    = "mysql-replica-2"
 		workerName1  = "dm-worker-1"
@@ -108,7 +108,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 				c.Assert(s.Start(ctx, etcdTestCli), IsNil)
 			case restartNewInstance:
 				s.Close()
-				s = NewScheduler(&logger)
+				s = NewScheduler(&logger, config.Security{})
 				c.Assert(s.Start(ctx, etcdTestCli), IsNil)
 			}
 		}
@@ -681,7 +681,7 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1
 
-	s := NewScheduler(&logger)
+	s := NewScheduler(&logger, config.Security{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// step 1: start scheduler
@@ -776,7 +776,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 
 	var (
 		logger       = log.L()
-		s            = NewScheduler(&logger)
+		s            = NewScheduler(&logger, config.Security{})
 		sourceID1    = "mysql-replica-1"
 		sourceID2    = "mysql-replica-2"
 		workerName1  = "dm-worker-1"

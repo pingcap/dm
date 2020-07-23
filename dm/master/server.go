@@ -16,14 +16,17 @@ package master
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
@@ -67,6 +70,10 @@ var (
 	maxRetryNum = 30
 	// the retry interval for dm-master to confirm the dm-workers status is expected
 	retryInterval = time.Second
+
+	// 0 means not use tls
+	// 1 means use tls
+	useTLS = int32(0)
 
 	// typically there's only one server running in one process, but testMaster.TestOfflineMember starts 3 servers,
 	// so we need sync.Once to prevent data race
@@ -121,7 +128,7 @@ func NewServer(cfg *Config) *Server {
 	logger := log.L()
 	server := Server{
 		cfg:               cfg,
-		scheduler:         scheduler.NewScheduler(&logger),
+		scheduler:         scheduler.NewScheduler(&logger, cfg.Security),
 		sqlOperatorHolder: operator.NewHolder(),
 		idGen:             tracing.NewIDGen(),
 		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
@@ -129,6 +136,8 @@ func NewServer(cfg *Config) *Server {
 	server.pessimist = shardddl.NewPessimist(&logger, server.getTaskResources)
 	server.optimist = shardddl.NewOptimist(&logger)
 	server.closed.Set(true)
+
+	setUseTLS(&cfg.Security)
 
 	return &server
 }
@@ -155,7 +164,21 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
-	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr)
+	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
+	if err != nil {
+		return terror.ErrMasterTLSConfigNotValid.Delegate(err)
+	}
+
+	// tls2 is used for grpc client in grpc gateway
+	tls2, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
+	if err != nil {
+		return terror.ErrMasterTLSConfigNotValid.Delegate(err)
+	}
+	if tls2 != nil && tls2.TLSConfig() != nil {
+		tls2.TLSConfig().InsecureSkipVerify = true
+	}
+
+	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr, tls2.ToGRPCDialOption())
 	if err != nil {
 		return
 	}
@@ -187,7 +210,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	// create an etcd client used in the whole server instance.
 	// NOTE: we only use the local member's address now, but we can use all endpoints of the cluster if needed.
-	s.etcdClient, err = etcdutil.CreateClient([]string{s.cfg.MasterAddr})
+	s.etcdClient, err = etcdutil.CreateClient([]string{withHost(s.cfg.MasterAddr)}, tls.TLSConfig())
 	if err != nil {
 		return
 	}
@@ -1541,6 +1564,40 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 	}
 
 	return cfg, stCfgs, nil
+}
+
+func setUseTLS(tlsCfg *config.Security) {
+	if enableTLS(tlsCfg) {
+		atomic.StoreInt32(&useTLS, 1)
+	} else {
+		atomic.StoreInt32(&useTLS, 0)
+	}
+
+}
+
+func enableTLS(tlsCfg *config.Security) bool {
+	if tlsCfg == nil {
+		return false
+	}
+
+	if len(tlsCfg.SSLCA) == 0 || len(tlsCfg.SSLCert) == 0 || len(tlsCfg.SSLKey) == 0 {
+		return false
+	}
+
+	return true
+}
+
+func withHost(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		// do nothing
+		return addr
+	}
+	if len(host) == 0 {
+		return fmt.Sprintf("127.0.0.1:%s", port)
+	}
+
+	return addr
 }
 
 func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) error {
