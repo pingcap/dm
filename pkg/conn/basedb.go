@@ -50,6 +50,7 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&maxAllowedPacket=%d",
 		config.User, config.Password, config.Host, config.Port, *config.MaxAllowedPacket)
 
+	doFuncInClose := func() {}
 	if config.Security != nil && len(config.Security.SSLCA) != 0 &&
 		len(config.Security.SSLCert) != 0 && len(config.Security.SSLKey) != 0 {
 		tlsConfig, err := toolutils.ToTLSConfig(config.Security.SSLCA, config.Security.SSLCert, config.Security.SSLKey)
@@ -63,6 +64,10 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 			return nil, terror.ErrConnRegistryTLSConfig.Delegate(err)
 		}
 		dsn += "&tls=" + tlsCfgHash
+
+		doFuncInClose = func() {
+			mysql.DeregisterTLSConfig(tlsCfgHash)
+		}
 	}
 
 	var maxIdleConns int
@@ -95,7 +100,7 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 
 	db.SetMaxIdleConns(maxIdleConns)
 
-	return NewBaseDB(db), nil
+	return NewBaseDB(db, doFuncInClose), nil
 }
 
 // BaseDB wraps *sql.DB, control the BaseConn
@@ -107,12 +112,15 @@ type BaseDB struct {
 	conns map[*BaseConn]struct{}
 
 	Retry retry.Strategy
+
+	// this function will do when close the BaseDB
+	doFuncInClose func()
 }
 
 // NewBaseDB returns *BaseDB object
-func NewBaseDB(db *sql.DB) *BaseDB {
+func NewBaseDB(db *sql.DB, doFuncInClose func()) *BaseDB {
 	conns := make(map[*BaseConn]struct{})
-	return &BaseDB{DB: db, conns: conns, Retry: &retry.FiniteRetryStrategy{}}
+	return &BaseDB{DB: db, conns: conns, Retry: &retry.FiniteRetryStrategy{}, doFuncInClose: doFuncInClose}
 }
 
 // GetBaseConn retrieves *BaseConn which has own retryStrategy
@@ -158,5 +166,7 @@ func (d *BaseDB) Close() error {
 	if err == nil {
 		return terr
 	}
+
+	d.doFuncInClose()
 	return err
 }

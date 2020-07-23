@@ -14,9 +14,9 @@
 package conn
 
 import (
-	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
@@ -29,7 +29,7 @@ func (t *testBaseDBSuite) TestGetBaseConn(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	baseDB := NewBaseDB(db)
+	baseDB := NewBaseDB(db, func() {})
 
 	tctx := tcontext.Background()
 

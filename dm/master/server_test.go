@@ -449,7 +449,7 @@ type mockDBProvider struct {
 
 // Apply will build BaseDB with DBConfig
 func (d *mockDBProvider) Apply(config config.DBConfig) (*conn.BaseDB, error) {
-	return conn.NewBaseDB(d.db), nil
+	return conn.NewBaseDB(d.db, func() {}), nil
 }
 
 func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
