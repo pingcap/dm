@@ -139,12 +139,11 @@ func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, err
 var (
 	useMasterStatusCache bool
 	masterMu             sync.Mutex
-	masterStatusCached   bool
-	masterPosCache       gmysql.Position
-	masterGTIDCache      gtid.Set
+	masterStatusCached bool
+	masterPosCache  gmysql.Position
+	masterGTIDCache gtid.Set
 )
 
-// EnableMasterStatusCache starts caching result and use it of GetMasterStatus
 func EnableMasterStatusCache() {
 	masterMu.Lock()
 	defer masterMu.Unlock()
@@ -152,7 +151,6 @@ func EnableMasterStatusCache() {
 	masterStatusCached = false
 }
 
-// DisableMasterStatusCache stops caching result and use it of GetMasterStatus
 func DisableMasterStatusCache() {
 	masterMu.Lock()
 	defer masterMu.Unlock()
