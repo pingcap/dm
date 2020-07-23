@@ -330,12 +330,15 @@ func (c *Config) genEmbedEtcdConfig(cfg *embed.Config) (*embed.Config, error) {
 	cfg.Dir = c.DataDir
 
 	// reuse the previous master-addr as the client listening URL.
-	cURL, err := parseURLs(c.MasterAddr)
+	var err error
+	cfg.LCUrls, err = parseURLs(c.MasterAddr)
 	if err != nil {
 		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "invalid master-addr")
 	}
-	cfg.LCUrls = cURL
-	cfg.ACUrls = cURL
+	cfg.ACUrls, err = parseURLs(c.AdvertiseAddr)
+	if err != nil {
+		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "invalid advertise-addr")
+	}
 
 	cfg.LPUrls, err = parseURLs(c.PeerUrls)
 	if err != nil {
