@@ -135,7 +135,8 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	err := readJSON(resp.Body, checkResult)
 	c.Assert(err, IsNil)
 	c.Assert(checkResult.Result, Equals, failed)
-	c.Assert(checkResult.Error, Equals, "Error 1045: Access denied for user 'root'@'127.0.0.1' (using password: YES)")
+	// PASSWORD in json is omited, see https://github.com/pingcap/tidb-tools/pull/364
+	c.Assert(checkResult.Error, Equals, "Error 1045: Access denied for user 'root'@'127.0.0.1' (using password: NO)")
 
 	// don't need connection to database, and will return StatusOK
 	getDBConnFunc = t.getMockDB
@@ -166,7 +167,7 @@ func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 	err := readJSON(resp.Body, schemaInfoResult)
 	c.Assert(err, IsNil)
 	c.Assert(schemaInfoResult.Result, Equals, failed)
-	c.Assert(schemaInfoResult.Error, Equals, "Error 1045: Access denied for user 'root'@'127.0.0.1' (using password: YES)")
+	c.Assert(schemaInfoResult.Error, Equals, "Error 1045: Access denied for user 'root'@'127.0.0.1' (using password: NO)")
 	c.Assert(schemaInfoResult.Tables, IsNil)
 
 	getDBConnFunc = t.getMockDB
