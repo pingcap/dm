@@ -13,10 +13,7 @@
 
 package config
 
-import (
-	"encoding/json"
-	"fmt"
-)
+import "fmt"
 
 // Security config
 type Security struct {
@@ -24,15 +21,6 @@ type Security struct {
 	SSLCert       string   `toml:"ssl-cert" json:"ssl-cert" yaml:"ssl-cert"`
 	SSLKey        string   `toml:"ssl-key" json:"ssl-key" yaml:"ssl-key"`
 	CertAllowedCN strArray `toml:"cert-allowed-cn" json:"cert-allowed-cn" yaml:"cert-allowed-cn"`
-}
-
-func (s *Security) String() string {
-	jsonBytes, err := json.Marshal(s)
-	if err != nil {
-		return fmt.Sprintf("ssl-ca: %s, ssl-cert: %s, ssl-key: %s, cert-allowed-cn: %s", s.SSLCA, s.SSLCert, s.SSLKey, s.CertAllowedCN)
-	}
-
-	return string(jsonBytes)
 }
 
 // used for parse string slice in flag
