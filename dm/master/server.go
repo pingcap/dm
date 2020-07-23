@@ -271,6 +271,9 @@ func (s *Server) Close() {
 		return
 	}
 	log.L().Info("closing server")
+	defer func() {
+		log.L().Info("closed")
+	}()
 
 	// wait for background functions returned
 	s.bgFunWg.Wait()
@@ -291,7 +294,6 @@ func (s *Server) Close() {
 		s.etcd.Close()
 	}
 	s.closed.Set(true)
-
 }
 
 func errorCommonWorkerResponse(msg string, source, worker string) *pb.CommonWorkerResponse {
