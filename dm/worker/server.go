@@ -15,6 +15,7 @@ package worker
 
 import (
 	"context"
+	"github.com/pingcap/dm/pkg/utils"
 	"io"
 	"net"
 	"sync"
@@ -250,12 +251,14 @@ func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperat
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*pb.QueryStatusResponse, error) {
 	log.L().Info("", zap.String("request", "QueryStatus"), zap.Stringer("payload", req))
 
+	utils.EnableMasterStatusCache()
 	resp := &pb.QueryStatusResponse{
 		Result:        true,
 		SubTaskStatus: s.worker.QueryStatus(req.Name),
 		RelayStatus:   s.worker.relayHolder.Status(),
 		SourceID:      s.worker.cfg.SourceID,
 	}
+	utils.DisableMasterStatusCache()
 
 	if len(resp.SubTaskStatus) == 0 {
 		resp.Msg = "no sub task started"

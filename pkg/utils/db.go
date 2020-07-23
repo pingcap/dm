@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
@@ -135,8 +136,36 @@ func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, err
 	return serverIDs, nil
 }
 
+var (
+	useMasterStatusCache bool
+	masterMu             sync.Mutex
+	masterStatusCached bool
+	masterPosCache  gmysql.Position
+	masterGTIDCache gtid.Set
+)
+
+func EnableMasterStatusCache() {
+	masterMu.Lock()
+	defer masterMu.Unlock()
+	useMasterStatusCache = true
+	masterStatusCached = false
+}
+
+func DisableMasterStatusCache() {
+	masterMu.Lock()
+	defer masterMu.Unlock()
+	useMasterStatusCache = false
+}
+
 // GetMasterStatus gets status from master
 func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
+	masterMu.Lock()
+	defer masterMu.Unlock()
+
+	if useMasterStatusCache && masterStatusCached {
+		return masterPosCache, masterGTIDCache, nil
+	}
+
 	var (
 		binlogPos gmysql.Position
 		gs        gtid.Set
@@ -197,6 +226,12 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 		if err != nil {
 			return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 		}
+	}
+
+	if useMasterStatusCache {
+		masterStatusCached = true
+		masterPosCache = binlogPos
+		masterGTIDCache = gs
 	}
 
 	return binlogPos, gs, nil
