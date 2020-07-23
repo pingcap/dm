@@ -697,8 +697,14 @@ tags = ["internal", "medium"]
 [error.DM-functional-11111]
 message = "fail to try sync the optimistic shard ddl lock %s: %s"
 description = ""
-workaround = "Please use show-ddl-locks command for more details."
+workaround = "Please use `show-ddl-locks` command for more details."
 tags = ["internal", "medium"]
+
+[error.DM-functional-11112]
+message = "fail to operate DM cluster version in etcd"
+description = ""
+workaround = "Please use `list-member --master` to confirm whether the DM-master cluster is healthy"
+tags = ["internal", "high"]
 
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
