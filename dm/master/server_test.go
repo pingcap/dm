@@ -1351,7 +1351,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(listResp.Members, check.HasLen, 3)
 
-	// make sure s3 is not the leader, otherwise it will take some time to campain a new leader, and it may cause time out
+	// make sure s3 is not the leader, otherwise it will take some time to campain a new leader after close s3, and it may cause timeout
 	c.Assert(utils.WaitSomething(20, 500*time.Millisecond, func() bool {
 		_, leaderID, _, err := s1.election.LeaderInfo(ctx)
 		if err != nil {
@@ -1364,8 +1364,6 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 			})
 			c.Assert(err, check.IsNil)
 		}
-
-		c.Log("leader is ", leaderID)
 		return leaderID != s3.cfg.Name
 	}), check.IsTrue)
 

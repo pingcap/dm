@@ -272,7 +272,7 @@ func (s *Server) Close() {
 	}
 	log.L().Info("closing server")
 	defer func() {
-		log.L().Info("closed")
+		log.L().Info("server closed")
 	}()
 
 	// wait for background functions returned
