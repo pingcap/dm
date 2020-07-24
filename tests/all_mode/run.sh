@@ -24,15 +24,17 @@ function test_session_config(){
 
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 
+    # enable ansi-quotes
+    sed -i 's/ansi-quotes: false/ansi-quotes: true/g'  $WORK_DIR/dm-task.yaml
     # error config
     sed -i 's/tidb_retry_limit: "10"/tidb_retry_limit: "fjs"/g'  $WORK_DIR/dm-task.yaml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $WORK_DIR/dm-task.yaml" \
         "'tidb_retry_limit' can't be set to the value" 1
 
-    # sql_mode=""
+    # sql_mode="ANSI_QUOTES"
     sed -i 's/tidb_retry_limit: "fjs"/tidb_retry_limit: "10"/g'  $WORK_DIR/dm-task.yaml
-    sed -i 's/sql_mode: ".*"/sql_mode: ""/g'  $WORK_DIR/dm-task.yaml
+    sed -i 's/sql_mode: ".*"/sql_mode: "ANSI_QUOTES"/g'  $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml"
 
     # fail because insert 0 will auto generates the next serial number
@@ -47,6 +49,10 @@ function test_session_config(){
 }
 
 function run() {
+
+    run_sql "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'" $MYSQL_PORT2 $MYSQL_PASSWORD2
+
     test_session_config
 
     export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
@@ -64,7 +70,10 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
     # start DM task only
-    dmctl_start_task
+    cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
+    # test deprecated config
+    sed -i 's/enable-ansi-quotes: false/enable-ansi-quotes: true/g'  $WORK_DIR/dm-task.yaml
+    dmctl_start_task "$WORK_DIR/dm-task.yaml"
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -112,6 +121,9 @@ function run() {
     ls $WORK_DIR/worker2/dumped_data.test && exit 1 || echo "worker2 auto removed dump files"
 
     export GO_FAILPOINTS=''
+
+    run_sql "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'"  $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'"  $MYSQL_PORT2 $MYSQL_PASSWORD2
 }
 
 cleanup_data all_mode
