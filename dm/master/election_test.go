@@ -69,7 +69,7 @@ func (t *testMaster) TestFailToStartLeader(c *check.C) {
 	c.Assert(s2.Start(ctx), check.IsNil)
 	defer s2.Close()
 
-	client, err := etcdutil.CreateClient(strings.Split(cfg1.AdvertisePeerUrls, ","))
+	client, err := etcdutil.CreateClient(strings.Split(cfg1.AdvertisePeerUrls, ","), nil)
 	c.Assert(err, check.IsNil)
 	defer client.Close()
 

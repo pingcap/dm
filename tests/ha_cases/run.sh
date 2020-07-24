@@ -150,7 +150,7 @@ function test_kill_master() {
     echo "waiting 5 seconds"
     sleep 5
     echo "check task is running"
-    check_http_alive 127.0.0.1:$MASTER_PORT2/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+    check_http_alive 127.0.0.1:$MASTER_PORT2/apis/${API_VERSION}/status/test '"stage": "Running"' 10
 
     echo "check master2,3 are running"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
@@ -188,7 +188,7 @@ function test_kill_and_isolate_worker() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
 
     echo "wait and check task running"
-    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Running"' 10
 
     run_dm_worker $WORK_DIR/worker4 $WORKER4_PORT $cur/conf/dm-worker4.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER4_PORT
@@ -199,7 +199,7 @@ function test_kill_and_isolate_worker() {
     rm -rf $WORK_DIR/worker3/relay_log
 
     echo "wait and check task running"
-    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Running"' 10
 
     run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
@@ -275,7 +275,7 @@ function test_kill_master_in_sync() {
 
     echo "wait and check task running"
     sleep 1
-    check_http_alive 127.0.0.1:$MASTER_PORT2/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+    check_http_alive 127.0.0.1:$MASTER_PORT2/apis/${API_VERSION}/status/test '"stage": "Running"' 10
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
         "query-status test" \
         "\"stage\": \"Running\"" 2
@@ -311,7 +311,7 @@ function test_kill_worker_in_sync() {
 
 
     echo "wait and check task running"
-    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Running"' 10
 
     echo "query-status from all dm-master"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \

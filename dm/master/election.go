@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/failpoint"
 
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -89,7 +90,13 @@ func (s *Server) electionNotify(ctx context.Context) {
 func (s *Server) createLeaderClient(leaderAddr string) {
 	s.closeLeaderClient()
 
-	conn, err := grpc.Dial(leaderAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
+	if err != nil {
+		log.L().Error("can't create grpc connection with leader, can't forward request to leader", zap.String("leader", leaderAddr), zap.Error(err))
+		return
+	}
+
+	conn, err := grpc.Dial(leaderAddr, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		log.L().Error("can't create grpc connection with leader, can't forward request to leader", zap.String("leader", leaderAddr), zap.Error(err))
 		return

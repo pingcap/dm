@@ -249,7 +249,7 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 	c.Assert(etcdCfg.Name, check.Equals, fmt.Sprintf("dm-master-%s", hostname))
 	c.Assert(etcdCfg.Dir, check.Equals, fmt.Sprintf("default.%s", etcdCfg.Name))
 	c.Assert(etcdCfg.LCUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "0.0.0.0:8261"}})
-	c.Assert(etcdCfg.ACUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "0.0.0.0:8261"}})
+	c.Assert(etcdCfg.ACUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8261"}})
 	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}})
 	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}})
 	c.Assert(etcdCfg.InitialCluster, check.DeepEquals, fmt.Sprintf("dm-master-%s=http://127.0.0.1:8291", hostname))
@@ -301,10 +301,21 @@ func (t *testConfigSuite) TestParseURLs(c *check.C) {
 			urls: []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}},
 		},
 		{
+			str:  "https://127.0.0.1:8291",
+			urls: []url.URL{{Scheme: "https", Host: "127.0.0.1:8291"}},
+		},
+		{
 			str: "http://127.0.0.1:8291,http://127.0.0.1:18291",
 			urls: []url.URL{
 				{Scheme: "http", Host: "127.0.0.1:8291"},
 				{Scheme: "http", Host: "127.0.0.1:18291"},
+			},
+		},
+		{
+			str: "https://127.0.0.1:8291,https://127.0.0.1:18291",
+			urls: []url.URL{
+				{Scheme: "https", Host: "127.0.0.1:8291"},
+				{Scheme: "https", Host: "127.0.0.1:18291"},
 			},
 		},
 		{

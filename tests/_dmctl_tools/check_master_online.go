@@ -22,12 +22,26 @@ import (
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/tests/utils"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 // use show-ddl-locks request to test DM-master is online
 func main() {
 	addr := os.Args[1]
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(2*time.Second))
+
+	secureOpt := grpc.WithInsecure()
+	if len(os.Args) == 5 {
+		sslCA := os.Args[2]
+		sslCert := os.Args[3]
+		sslKey := os.Args[4]
+		tls, err := toolutils.NewTLS(sslCA, sslCert, sslKey, "", nil)
+		if err != nil {
+			utils.ExitWithError(err)
+		}
+		secureOpt = tls.ToGRPCDialOption()
+	}
+
+	conn, err := grpc.Dial(addr, secureOpt, grpc.WithBackoffMaxDelay(2*time.Second))
 	if err != nil {
 		utils.ExitWithError(err)
 	}
