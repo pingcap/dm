@@ -478,7 +478,7 @@ func (c *TaskConfig) adjust() error {
 		}
 
 		// for backward compatible, set global config `ansi-quotes: true` if any syncer is true
-		if inst.Syncer.EnableANSIQuotes == true {
+		if inst.Syncer.EnableANSIQuotes {
 			c.EnableANSIQuotes = true
 		}
 
