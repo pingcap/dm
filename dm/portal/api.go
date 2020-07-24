@@ -426,7 +426,7 @@ func (p *Handler) genJSONResp(w io.Writer, status int, v interface{}) {
 var getDBConnFunc = getDBConnFromReq
 
 func getDBConnFromReq(req *http.Request, timeout int) (*sql.DB, string, error) {
-	dbCfg := &dbutil.DBConfig{}
+	dbCfg := &DBConfig{}
 	if err := readJSON(req.Body, dbCfg); err != nil {
 		return nil, "", errors.Trace(err)
 	}
@@ -576,7 +576,7 @@ func generateTaskFileName(taskName string) string {
 }
 
 // openDB opens a mysql connection FD
-func openDB(cfg dbutil.DBConfig, timeout int) (*sql.DB, error) {
+func openDB(cfg DBConfig, timeout int) (*sql.DB, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&timeout=%ds", cfg.User, cfg.Password, cfg.Host, cfg.Port, timeout)
 
 	dbConn, err := sql.Open("mysql", dbDSN)

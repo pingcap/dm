@@ -88,6 +88,9 @@ type DBConfig struct {
 	MaxAllowedPacket *int              `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
 	Session          map[string]string `toml:"session" json:"session" yaml:"session"`
 
+	// security config
+	Security *Security `toml:"security" json:"security" yaml:"security"`
+
 	RawDBCfg *RawDBConfig `toml:"-" json:"-" yaml:"-"`
 }
 
