@@ -85,7 +85,7 @@ func (conn *DBConn) querySQL(ctx *tcontext.Context, query string, args ...interf
 			ret, err := conn.baseConn.QuerySQL(ctx, query, args...)
 			if err == nil {
 				cost := time.Since(startTime)
-				queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+				queryHistogram.WithLabelValues(conn.cfg.Name, conn.cfg.SourceID).Observe(cost.Seconds())
 				if cost.Seconds() > 1 {
 					ctx.L().Warn("query statement",
 						zap.String("query", utils.TruncateString(query, -1)),
@@ -119,7 +119,7 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 		FirstRetryDuration: 2 * time.Second,
 		BackoffStrategy:    retry.LinearIncrease,
 		IsRetryableFn: func(retryTime int, err error) bool {
-			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
+			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name, conn.cfg.SourceID).Inc()
 			if retry.IsConnectionError(err) {
 				err = conn.resetConn(ctx)
 				if err != nil {
@@ -161,7 +161,7 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 			})
 			if err == nil {
 				cost := time.Since(startTime)
-				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+				txnHistogram.WithLabelValues(conn.cfg.Name, conn.cfg.SourceID).Observe(cost.Seconds())
 				if cost.Seconds() > 1 {
 					ctx.L().Warn("execute transaction",
 						zap.String("query", utils.TruncateInterface(queries, -1)),

@@ -2681,7 +2681,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_loader_progress{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_loader_progress{task=\"$task\",source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -2762,7 +2762,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_loader_data_size_gauge{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_loader_data_size_gauge{task=\"$task\",source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -2843,7 +2843,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "changes(dm_mydumper_exit_with_error_count{task=\"$task\",instance=\"$instance\"}[30m])",
+              "expr": "changes(dm_dumpling_exit_with_error_count{task=\"$task\",source_id=\"$source\"}[30m])",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -2924,7 +2924,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "changes(dm_loader_exit_with_error_count{task=\"$task\",instance=\"$instance\"}[30m])",
+              "expr": "changes(dm_loader_exit_with_error_count{task=\"$task\",source_id=\"$source\"}[30m])",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -3005,7 +3005,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_loader_table_gauge{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_loader_table_gauge{task=\"$task\",source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -3086,7 +3086,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_loader_data_file_gauge{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_loader_data_file_gauge{task=\"$task\",source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -3145,21 +3145,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",
@@ -5585,6 +5585,94 @@
           "timeRegions": [],
           "timeShift": null,
           "title": "shard ddl error per minute",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "number of pending shard DDL in different states, Un-synced (waiting all upstream), Synced (all upstream finished, waiting all downstream)",
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 18,
+            "y": 48
+          },
+          "id": 84,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "sum by (task, type) (dm_master_ddl_state_number)",
+              "format": "time_series",
+              "instant": false,
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "number of pending shard ddl",
           "tooltip": {
             "shared": true,
             "sort": 0,

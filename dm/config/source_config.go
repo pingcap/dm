@@ -33,6 +33,11 @@ const (
 
 var getAllServerIDFunc = utils.GetAllServerID
 
+// SampleConfigFile is sample config file of source
+// later we can read it from dm/master/source.toml
+// and assign it to SampleConfigFile while we build dm-ctl
+var SampleConfigFile string
+
 // PurgeConfig is the configuration for Purger
 type PurgeConfig struct {
 	Interval    int64 `toml:"interval" json:"interval"`         // check whether need to purge at this @Interval (seconds)

@@ -15,8 +15,12 @@ package master
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"os"
+	"strings"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 
@@ -26,10 +30,11 @@ import (
 // NewOperateSourceCmd creates a OperateSource command
 func NewOperateSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "operate-source <operate-type> <config-file> [config-file ...]",
+		Use:   "operate-source <operate-type> <config-file> [config-file ...] [--print-sample-config]",
 		Short: "create/update/stop upstream MySQL/MariaDB source",
 		Run:   operateSourceFunc,
 	}
+	cmd.Flags().BoolP("print-sample-config", "p", false, "print sample config file of source")
 	return cmd
 }
 
@@ -48,6 +53,26 @@ func convertCmdType(t string) pb.SourceOp {
 
 // operateMysqlFunc does migrate relay request
 func operateSourceFunc(cmd *cobra.Command, _ []string) {
+	printSampleConfig, err := cmd.Flags().GetBool("print-sample-config")
+	if err != nil {
+		common.PrintLines("%v", err)
+		return
+	}
+
+	if printSampleConfig {
+		if strings.TrimSpace(config.SampleConfigFile) == "" {
+			fmt.Println("sample config file of source is empty")
+		} else {
+			rawConfig, err2 := base64.StdEncoding.DecodeString(config.SampleConfigFile)
+			if err2 != nil {
+				fmt.Println("base64 decode config error:", err2)
+			} else {
+				fmt.Println(string(rawConfig))
+			}
+		}
+		return
+	}
+
 	if len(cmd.Flags().Args()) < 2 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
