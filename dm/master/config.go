@@ -23,12 +23,14 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"go.etcd.io/etcd/embed"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -74,6 +76,11 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.PeerUrls, "peer-urls", defaultPeerUrls, "URLs for peer traffic")
 	fs.StringVar(&cfg.AdvertisePeerUrls, "advertise-peer-urls", "", `advertise URLs for peer traffic (default "${peer-urls}")`)
 	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: cluster's "${master-addr}" list, e.g. "127.0.0.1:8261,127.0.0.1:18261"`)
+
+	fs.StringVar(&cfg.SSLCA, "ssl-ca", "", "path of file that contains list of trusted SSL CAs for connection")
+	fs.StringVar(&cfg.SSLCert, "ssl-cert", "", "path of file that contains X509 certificate in PEM format for connection")
+	fs.StringVar(&cfg.SSLKey, "ssl-key", "", "path of file that contains X509 key in PEM format for connection")
+	fs.Var(&cfg.CertAllowedCN, "cert-allowed-cn", "the trusted common name that allowed to visit")
 
 	return cfg
 }
@@ -128,6 +135,9 @@ type Config struct {
 	InitialClusterState string `toml:"initial-cluster-state" json:"initial-cluster-state"`
 	Join                string `toml:"join" json:"join"`   // cluster's client address (endpoints), not peer address
 	Debug               bool   `toml:"debug" json:"debug"` // only use for test
+
+	// tls config
+	config.Security
 
 	printVersion      bool
 	printSampleConfig bool
@@ -330,12 +340,15 @@ func (c *Config) genEmbedEtcdConfig(cfg *embed.Config) (*embed.Config, error) {
 	cfg.Dir = c.DataDir
 
 	// reuse the previous master-addr as the client listening URL.
-	cURL, err := parseURLs(c.MasterAddr)
+	var err error
+	cfg.LCUrls, err = parseURLs(c.MasterAddr)
 	if err != nil {
 		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "invalid master-addr")
 	}
-	cfg.LCUrls = cURL
-	cfg.ACUrls = cURL
+	cfg.ACUrls, err = parseURLs(c.AdvertiseAddr)
+	if err != nil {
+		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "invalid advertise-addr")
+	}
 
 	cfg.LPUrls, err = parseURLs(c.PeerUrls)
 	if err != nil {
@@ -353,6 +366,25 @@ func (c *Config) genEmbedEtcdConfig(cfg *embed.Config) (*embed.Config, error) {
 	err = cfg.Validate() // verify & trigger the builder
 	if err != nil {
 		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.AnnotateDelegate(err, "fail to validate embed etcd config")
+	}
+
+	// security config
+	if len(c.SSLCA) != 0 {
+		cfg.ClientTLSInfo.TrustedCAFile = c.SSLCA
+		cfg.ClientTLSInfo.CertFile = c.SSLCert
+		cfg.ClientTLSInfo.KeyFile = c.SSLKey
+
+		cfg.PeerTLSInfo.TrustedCAFile = c.SSLCA
+		cfg.PeerTLSInfo.CertFile = c.SSLCert
+		cfg.PeerTLSInfo.KeyFile = c.SSLKey
+
+		// NOTE: etcd only support one allowed CN
+		if len(c.CertAllowedCN) > 0 {
+			cfg.ClientTLSInfo.AllowedCN = c.CertAllowedCN[0]
+			cfg.PeerTLSInfo.AllowedCN = c.CertAllowedCN[0]
+			cfg.PeerTLSInfo.ClientCertAuth = len(c.SSLCA) != 0
+			cfg.ClientTLSInfo.ClientCertAuth = len(c.SSLCA) != 0
+		}
 	}
 
 	return cfg, nil
@@ -375,7 +407,11 @@ func parseURLs(s string) ([]url.URL, error) {
 		// `127.0.0.1:8261`: first path segment in URL cannot contain colon
 		if err != nil && (strings.Contains(err.Error(), "missing protocol scheme") ||
 			strings.Contains(err.Error(), "first path segment in URL cannot contain colon")) {
-			u, err = url.Parse("http://" + item)
+			prefix := "http://"
+			if atomic.LoadInt32(&useTLS) == 1 {
+				prefix = "https://"
+			}
+			u, err = url.Parse(prefix + item)
 		}
 		if err != nil {
 			return nil, terror.ErrMasterParseURLFail.Delegate(err, item)

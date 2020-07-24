@@ -18,9 +18,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -42,8 +44,13 @@ func NewGRPCClientWrap(conn *grpc.ClientConn, client pb.WorkerClient) (*GRPCClie
 }
 
 // NewGRPCClient initializes a new grpc client from worker address
-func NewGRPCClient(addr string) (*GRPCClient, error) {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second),
+func NewGRPCClient(addr string, securityCfg config.Security) (*GRPCClient, error) {
+	tls, err := toolutils.NewTLS(securityCfg.SSLCA, securityCfg.SSLCert, securityCfg.SSLKey, addr, securityCfg.CertAllowedCN)
+	if err != nil {
+		return nil, terror.ErrMasterGRPCCreateConn.Delegate(err)
+	}
+
+	conn, err := grpc.Dial(addr, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second),
 		grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff: backoff.Config{
 				BaseDelay:  100 * time.Millisecond,
