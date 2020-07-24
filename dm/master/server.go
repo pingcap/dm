@@ -1384,7 +1384,7 @@ func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, erro
 	cfgs := make([]*config.SourceConfig, len(contents))
 	for i, content := range contents {
 		cfg := config.NewSourceConfig()
-		if err := cfg.Parse(content); err != nil {
+		if err := cfg.ParseYaml(content); err != nil {
 			return cfgs, err
 		}
 
