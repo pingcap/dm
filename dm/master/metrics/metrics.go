@@ -25,6 +25,14 @@ import (
 	"github.com/pingcap/dm/pkg/metricsproxy"
 )
 
+// used for ddlPendingCounter, no "Resolved" lock because they will be
+// remove quickly and not pending anymore
+const (
+	DDLPendingNone     = "None"
+	DDLPendingUnSynced = "Un-synced"
+	DDLPendingSynced   = "Synced"
+)
+
 // used to show error type when handle DDLs
 const (
 	InfoErrSyncLock    = "InfoPut - SyncLockError"
@@ -50,6 +58,14 @@ var (
 			Name:      "cpu_usage",
 			Help:      "the cpu usage of master",
 		})
+
+	ddlPendingCounter = metricsproxy.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "master",
+			Name:      "ddl_state_number",
+			Help:      "number of pending DDL in different states, Un-synced (waiting all upstream), Synced (all upstream finished, waiting all downstream)",
+		}, []string{"task", "type"})
 
 	ddlErrCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
@@ -89,6 +105,7 @@ func RegistryMetrics() {
 
 	registry.MustRegister(workerState)
 	registry.MustRegister(cpuUsageGauge)
+	registry.MustRegister(ddlPendingCounter)
 	registry.MustRegister(ddlErrCounter)
 
 	prometheus.DefaultGatherer = registry
@@ -109,6 +126,16 @@ func RemoveWorkerStateInMetrics(name string) {
 	workerState.DeleteAllAboutLabels(prometheus.Labels{"worker": name})
 }
 
+// ReportDDLPendingToMetrics inc/dec by 1 to ddlPendingCounter
+func ReportDDLPendingToMetrics(task, old, new string) {
+	if old != DDLPendingNone {
+		ddlPendingCounter.WithLabelValues(task, old).Dec()
+	}
+	if new != DDLPendingNone {
+		ddlPendingCounter.WithLabelValues(task, new).Inc()
+	}
+}
+
 // ReportDDLErrorToMetrics is a setter for ddlErrCounter
 func ReportDDLErrorToMetrics(task, errType string) {
 	ddlErrCounter.WithLabelValues(task, errType).Inc()
@@ -118,4 +145,5 @@ func ReportDDLErrorToMetrics(task, errType string) {
 func OnRetireLeader() {
 	workerState.Reset()
 	ddlErrCounter.Reset()
+	ddlPendingCounter.Reset()
 }

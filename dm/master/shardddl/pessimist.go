@@ -629,6 +629,7 @@ func (p *Pessimist) removeLock(lock *pessimism.Lock) error {
 		return err
 	}
 	p.lk.RemoveLock(lock.ID)
+	metrics.ReportDDLPendingToMetrics(lock.Task, metrics.DDLPendingSynced, metrics.DDLPendingNone)
 	return nil
 }
 
