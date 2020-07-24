@@ -36,7 +36,7 @@ const (
 var getAllServerIDFunc = utils.GetAllServerID
 
 // SampleConfigFile is sample config file of source
-// later we can read it from dm/master/source.toml
+// later we can read it from dm/master/source.yaml
 // and assign it to SampleConfigFile while we build dm-ctl
 var SampleConfigFile string
 
