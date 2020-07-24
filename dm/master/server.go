@@ -1397,7 +1397,7 @@ func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, erro
 		if err = cfg.Adjust(fromDB.DB); err != nil {
 			return cfgs, err
 		}
-		if _, err = cfg.Toml(); err != nil {
+		if _, err = cfg.Yaml(); err != nil {
 			return cfgs, err
 		}
 		cfgs[i] = cfg

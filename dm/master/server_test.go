@@ -1138,7 +1138,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	mysqlCfg := config.NewSourceConfig()
 	mysqlCfg.LoadFromFile("./source.yaml")
 	mysqlCfg.From.Password = os.Getenv("MYSQL_PSWD")
-	task, err := mysqlCfg.Toml()
+	task, err := mysqlCfg.Yaml()
 	c.Assert(err, check.IsNil)
 	sourceID := mysqlCfg.SourceID
 	// 1. wait for scheduler to start
@@ -1162,7 +1162,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	// 3.1 duplicated source id
 	sourceID2 := "mysql-replica-02"
 	mysqlCfg.SourceID = sourceID2
-	task2, err := mysqlCfg.Toml()
+	task2, err := mysqlCfg.Yaml()
 	c.Assert(err, check.IsNil)
 	req = &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: []string{task2, task2}}
 	resp, err = s1.OperateSource(ctx, req)
@@ -1172,7 +1172,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	// 3.2 run same command after correction
 	sourceID3 := "mysql-replica-03"
 	mysqlCfg.SourceID = sourceID3
-	task3, err := mysqlCfg.Toml()
+	task3, err := mysqlCfg.Yaml()
 	c.Assert(err, check.IsNil)
 	req = &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: []string{task2, task3}}
 	resp, err = s1.OperateSource(ctx, req)
@@ -1196,7 +1196,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	// 4. try to stop a non-exist-source
 	req.Op = pb.SourceOp_StopSource
 	mysqlCfg.SourceID = "not-exist-source"
-	task4, err := mysqlCfg.Toml()
+	task4, err := mysqlCfg.Yaml()
 	c.Assert(err, check.IsNil)
 	req.Config = []string{task4}
 	resp, err = s1.OperateSource(ctx, req)
