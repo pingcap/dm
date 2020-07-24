@@ -481,7 +481,11 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse) {
 
 	// uninitialized mysql.Position is less than any initialized mysql.Position
 	if resp.RelayStatus.Stage != pb.Stage_Stopped {
-		relayMasterBinlog, _ = utils.DecodeBinlogPosition(resp.RelayStatus.MasterBinlog)
+		relayMasterBinlog, err := utils.DecodeBinlogPosition(resp.RelayStatus.MasterBinlog)
+		if err != nil {
+			log.L().Error("failed to decode relay's master binlog position", zap.Stringer("response", resp), zap.Error(err))
+			return
+		}
 		lastestMasterBinlog = *relayMasterBinlog
 	}
 
@@ -490,7 +494,11 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse) {
 			s := stStatus.Status.(*pb.SubTaskStatus_Sync)
 			syncStatus = append(syncStatus, s)
 
-			position, _ := utils.DecodeBinlogPosition(s.Sync.MasterBinlog)
+			position, err := utils.DecodeBinlogPosition(s.Sync.MasterBinlog)
+			if err != nil {
+				log.L().Error("failed to decode sync's master binlog position", zap.Stringer("response", resp), zap.Error(err))
+				return
+			}
 			if lastestMasterBinlog.Compare(*position) < 0 {
 				lastestMasterBinlog = *position
 			}
@@ -500,7 +508,11 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse) {
 
 	// re-check relay
 	if resp.RelayStatus.Stage != pb.Stage_Stopped && lastestMasterBinlog.Compare(*relayMasterBinlog) != 0 {
-		relayPos, _ := utils.DecodeBinlogPosition(resp.RelayStatus.RelayBinlog)
+		relayPos, err := utils.DecodeBinlogPosition(resp.RelayStatus.RelayBinlog)
+		if err != nil {
+			log.L().Error("failed to decode relay binlog position", zap.Stringer("response", resp), zap.Error(err))
+			return
+		}
 		catchUp := lastestMasterBinlog.Compare(*relayPos) == 0
 
 		resp.RelayStatus.MasterBinlog = lastestMasterBinlog.String()
@@ -509,7 +521,11 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse) {
 	// re-check syncer
 	for i, sStatus := range syncStatus {
 		if lastestMasterBinlog.Compare(*syncMasterBinlog[i]) != 0 {
-			syncerPos, _ := utils.DecodeBinlogPosition(sStatus.Sync.SyncerBinlog)
+			syncerPos, err := utils.DecodeBinlogPosition(sStatus.Sync.SyncerBinlog)
+			if err != nil {
+				log.L().Error("failed to decode syncer binlog position", zap.Stringer("response", resp), zap.Error(err))
+				return
+			}
 			synced := lastestMasterBinlog.Compare(*syncerPos) == 0
 
 			sStatus.Sync.MasterBinlog = lastestMasterBinlog.String()
