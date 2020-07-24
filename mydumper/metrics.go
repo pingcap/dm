@@ -27,7 +27,7 @@ var (
 			Subsystem: "mydumper",
 			Name:      "exit_with_error_count",
 			Help:      "counter for mydumper exit with error",
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 )
 
 // RegisterMetrics registers metrics.
