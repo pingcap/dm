@@ -1136,7 +1136,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
 	mysqlCfg := config.NewSourceConfig()
-	mysqlCfg.LoadFromFile("./source.toml")
+	mysqlCfg.LoadFromFile("./source.yaml")
 	mysqlCfg.From.Password = os.Getenv("MYSQL_PSWD")
 	task, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)

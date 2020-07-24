@@ -42,7 +42,7 @@ import (
 
 // do not forget to update this path if the file removed/renamed.
 const (
-	sourceSampleFile  = "./source.toml"
+	sourceSampleFile  = "./source.yaml"
 	subtaskSampleFile = "./subtask.toml"
 	mydumperPath      = "../../bin/mydumper"
 )

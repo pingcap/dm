@@ -347,7 +347,7 @@ func (c *TaskConfig) String() string {
 func (c *TaskConfig) DecodeFile(fpath string) error {
 	bs, err := ioutil.ReadFile(fpath)
 	if err != nil {
-		return terror.ErrConfigReadTaskCfgFromFile.Delegate(err, fpath)
+		return terror.ErrConfigReadCfgFromFile.Delegate(err, fpath)
 	}
 
 	err = yaml.UnmarshalStrict(bs, c)

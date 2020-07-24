@@ -5,7 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"github.com/pingcap/dm/_tools/src/gopkg.in/yaml.v2"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"strings"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/siddontang/go-mysql/mysql"
+	"gopkg.in/yaml.v2"
 
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -36,8 +37,8 @@ var getAllServerIDFunc = utils.GetAllServerID
 
 // PurgeConfig is the configuration for Purger
 type PurgeConfig struct {
-	Interval    int64 `yaml:"interval" toml:"interval" json:"interval"`         // check whether need to purge at this @Interval (seconds)
-	Expires     int64 `yaml:"expires" toml:"expires" json:"expires"`           // if file's modified time is older than @Expires (hours), then it can be purged
+	Interval    int64 `yaml:"interval" toml:"interval" json:"interval"`             // check whether need to purge at this @Interval (seconds)
+	Expires     int64 `yaml:"expires" toml:"expires" json:"expires"`                // if file's modified time is older than @Expires (hours), then it can be purged
 	RemainSpace int64 `yaml:"remain-space" toml:"remain-space" json:"remain-space"` // if remain space in @RelayBaseDir less than @RemainSpace (GB), then it can be purged
 }
 
@@ -115,8 +116,18 @@ func (c *SourceConfig) Toml() (string, error) {
 	return b.String(), nil
 }
 
+// Yaml returns YAML format representation of config
+func (c *SourceConfig) Yaml() (string, error) {
+	b, err := yaml.Marshal(c)
+	if err != nil {
+		log.L().Error("fail to marshal config to yaml", log.ShortError(err))
+	}
+
+	return string(b), nil
+}
+
 // Parse parses flag definitions from the argument list.
-// accept toml content for legacy use
+// accept toml content for legacy use (mainly used by etcd)
 func (c *SourceConfig) Parse(content string) error {
 	// Parse first to get config file.
 	metaData, err := toml.Decode(content, c)
@@ -276,8 +287,15 @@ func (c *SourceConfig) AdjustServerID(ctx context.Context, db *sql.DB) error {
 
 // LoadFromFile loads config from file.
 func (c *SourceConfig) LoadFromFile(path string) error {
-	metaData, err := toml.DecodeFile(path, c)
-	return c.check(&metaData, err)
+	content, err := ioutil.ReadFile(path)
+	if err != nil {
+		return terror.ErrConfigReadCfgFromFile.Delegate(err, path)
+	}
+	if err := yaml.UnmarshalStrict(content, c); err != nil {
+		return terror.ErrConfigYamlTransform.Delegate(err, "decode source config")
+	}
+	c.adjust()
+	return nil
 }
 
 func (c *SourceConfig) check(metaData *toml.MetaData, err error) error {
