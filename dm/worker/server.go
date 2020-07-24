@@ -341,7 +341,7 @@ func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
 				return "failed to write data in etcd"
 			}
 		} else if retryTimes <= 0 {
-			return errors.ErrorStack(err)
+			return terror.Message(err)
 		}
 		time.Sleep(time.Millisecond * 50)
 	}
