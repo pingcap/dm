@@ -53,7 +53,6 @@ func convertCmdType(t string) pb.SourceOp {
 
 // operateMysqlFunc does migrate relay request
 func operateSourceFunc(cmd *cobra.Command, _ []string) {
-
 	printSampleConfig, err := cmd.Flags().GetBool("print-sample-config")
 	if err != nil {
 		common.PrintLines("%v", err)
