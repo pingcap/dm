@@ -86,7 +86,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 
 	var (
 		logger       = log.L()
-		s            = NewScheduler(&logger)
+		s            = NewScheduler(&logger, config.Security{})
 		sourceID1    = "mysql-replica-1"
 		sourceID2    = "mysql-replica-2"
 		workerName1  = "dm-worker-1"
@@ -99,7 +99,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 		workerInfo2  = ha.NewWorkerInfo(workerName2, workerAddr2)
 		sourceCfg1   config.SourceConfig
 		subtaskCfg1  config.SubTaskConfig
-		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
+		keepAliveTTL = int64(2) // NOTE: this should be >= minLeaseTTL, in second.
 
 		rebuildScheduler = func(ctx context.Context) {
 			switch restart {
@@ -108,7 +108,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 				c.Assert(s.Start(ctx, etcdTestCli), IsNil)
 			case restartNewInstance:
 				s.Close()
-				s = NewScheduler(&logger)
+				s = NewScheduler(&logger, config.Security{})
 				c.Assert(s.Start(ctx, etcdTestCli), IsNil)
 			}
 		}
@@ -676,12 +676,12 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 		sourceBound1 = ha.NewSourceBound(sourceID1, workerName1)
 		sourceCfg1   config.SourceConfig
 		wg           sync.WaitGroup
-		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
+		keepAliveTTL = int64(2) // NOTE: this should be >= minLeaseTTL, in second.
 	)
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1
 
-	s := NewScheduler(&logger)
+	s := NewScheduler(&logger, config.Security{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// step 1: start scheduler
@@ -776,7 +776,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 
 	var (
 		logger       = log.L()
-		s            = NewScheduler(&logger)
+		s            = NewScheduler(&logger, config.Security{})
 		sourceID1    = "mysql-replica-1"
 		sourceID2    = "mysql-replica-2"
 		workerName1  = "dm-worker-1"
@@ -788,7 +788,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 		workerAddr3  = "127.0.0.1:18362"
 		workerAddr4  = "127.0.0.1:18462"
 		sourceCfg1   config.SourceConfig
-		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
+		keepAliveTTL = int64(2) // NOTE: this should be >= minLeaseTTL, in second.
 	)
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1

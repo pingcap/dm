@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -57,6 +58,12 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: dm-master cluster's "${master-addr}")`)
 	fs.StringVar(&cfg.Name, "name", "", "human-readable name for DM-worker member")
 	fs.Int64Var(&cfg.KeepAliveTTL, "keepalive-ttl", defaultKeepAliveTTL, "dm-worker's TTL for keepalive with etcd (in seconds)")
+
+	fs.StringVar(&cfg.SSLCA, "ssl-ca", "", "path of file that contains list of trusted SSL CAs for connection")
+	fs.StringVar(&cfg.SSLCert, "ssl-cert", "", "path of file that contains X509 certificate in PEM format for connection")
+	fs.StringVar(&cfg.SSLKey, "ssl-key", "", "path of file that contains X509 key in PEM format for connection")
+	fs.Var(&cfg.CertAllowedCN, "cert-allowed-cn", "the trusted common name that allowed to visit")
+
 	return cfg
 }
 
@@ -77,6 +84,9 @@ type Config struct {
 	ConfigFile string `json:"config-file"`
 	// TODO: in the future dm-workers should share a same ttl from dm-master
 	KeepAliveTTL int64 `toml:"keepalive-ttl" json:"keepalive-ttl"`
+
+	// tls config
+	config.Security
 
 	printVersion      bool
 	printSampleConfig bool

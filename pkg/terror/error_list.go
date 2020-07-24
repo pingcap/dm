@@ -152,6 +152,10 @@ const (
 
 	// pkg/shardddl/optimism
 	codeShardDDLOptimismTrySyncFail
+
+	// pkg/conn
+	codeConnInvalidTLSConfig
+	codeConnRegistryTLSConfig
 )
 
 // Config related error code list
@@ -419,6 +423,8 @@ const (
 	codeMasterOptimistNotStarted
 	codeMasterMasterNameNotExist
 	codeMasterInvalidOfflineType
+	codeMasterAdvertisePeerURLsNotValid
+	codeMasterTLSConfigNotValid
 )
 
 // DM-worker error code
@@ -498,6 +504,7 @@ const (
 	codeWorkerFailToGetSubtaskConfigFromEtcd
 	codeWorkerFailToGetSourceConfigFromEtcd
 	codeWorkerDDLLockOpNotFound
+	codeWorkerTLSConfigNotValid
 )
 
 // DM-tracer error code
@@ -554,6 +561,7 @@ const (
 // dmctl error code
 const (
 	codeCtlGRPCCreateConn ErrCode = iota + 48001
+	codeCtlInvalidTLSCfg
 )
 
 // default error code
@@ -700,6 +708,10 @@ var (
 
 	// pkg/shardddl/optimism
 	ErrShardDDLOptimismTrySyncFail = New(codeShardDDLOptimismTrySyncFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to try sync the optimistic shard ddl lock %s: %s", "Please use show-ddl-locks command for more details.")
+
+	// pkg/conn
+	ErrConnInvalidTLSConfig  = New(codeConnInvalidTLSConfig, ClassFunctional, ScopeInternal, LevelMedium, "invalid TLS config", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config.")
+	ErrConnRegistryTLSConfig = New(codeConnRegistryTLSConfig, ClassFunctional, ScopeInternal, LevelMedium, "fail to registry TLS config", "")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s", "Please check `ignore-checking-items` config in task configuration file, which can be set including `all`/`dump_privilege`/`replication_privilege`/`version`/`binlog_enable`/`binlog_format`/`binlog_row_image`/`table_schema`/`schema_of_shard_tables`/`auto_increment_ID`.")
@@ -950,6 +962,9 @@ var (
 	ErrMasterMasterNameNotExist          = New(codeMasterMasterNameNotExist, ClassDMMaster, ScopeInternal, LevelLow, "dm-master with name %s not exists", "Please use list-member command to see masters.")
 	ErrMasterInvalidOfflineType          = New(codeMasterInvalidOfflineType, ClassDMMaster, ScopeInternal, LevelLow, "offline member type %s is invalid", "Please use master/worker.")
 
+	ErrMasterAdvertisePeerURLsNotValid = New(codeMasterAdvertisePeerURLsNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "advertise peer urls %s not valid", "Please check the `advertise-peer-urls` config in master configuration file.")
+	ErrMasterTLSConfigNotValid         = New(codeMasterTLSConfigNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "TLS config not valid", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in master configuration file.")
+
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set", "")
 	ErrWorkerInvalidFlag             = New(codeWorkerInvalidFlag, ClassDMWorker, ScopeInternal, LevelMedium, "'%s' is an invalid flag", "")
@@ -1026,8 +1041,8 @@ var (
 
 	ErrWorkerFailToGetSubtaskConfigFromEtcd = New(codeWorkerFailToGetSubtaskConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative subtask config for task %s in etcd", "")
 	ErrWorkerFailToGetSourceConfigFromEtcd  = New(codeWorkerFailToGetSourceConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative source config for source %s in etcd", "")
-
-	ErrWorkerDDLLockOpNotFound = New(codeWorkerDDLLockOpNotFound, ClassDMWorker, ScopeInternal, LevelHigh, "missing shard DDL lock operation for shard DDL info (%s)", "")
+	ErrWorkerDDLLockOpNotFound              = New(codeWorkerDDLLockOpNotFound, ClassDMWorker, ScopeInternal, LevelHigh, "missing shard DDL lock operation for shard DDL info (%s)", "")
+	ErrWorkerTLSConfigNotValid              = New(codeWorkerTLSConfigNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "TLS config not valid", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in worker configuration file.")
 
 	// DM-tracer error
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set", "")
@@ -1084,6 +1099,7 @@ var (
 
 	// dmctl
 	ErrCtlGRPCCreateConn = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")
+	ErrCtlInvalidTLSCfg  = New(codeCtlInvalidTLSCfg, ClassDMCtl, ScopeInternal, LevelMedium, "invalid TLS config", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line.")
 
 	// default error
 	ErrNotSet = New(codeNotSet, ClassNotSet, ScopeNotSet, LevelHigh, "", "")
