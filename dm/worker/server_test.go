@@ -249,7 +249,7 @@ func (t *testServer) TestUnifyMasterBinlogPos(c *C) {
 		err := originReps.Unmarshal(bytes)
 		c.Assert(err, IsNil)
 
-		unifyMasterBinlogPos(resp)
+		unifyMasterBinlogPos(r, false)
 		c.Assert(r, DeepEquals, originReps)
 	}
 
@@ -268,7 +268,7 @@ func (t *testServer) TestUnifyMasterBinlogPos(c *C) {
 			MasterBinlog: pos1, RelayBinlog: pos1, RelayCatchUpMaster: true,
 		},
 	}
-	unifyMasterBinlogPos(resp)
+	unifyMasterBinlogPos(resp, false)
 
 	sync1 := resp.SubTaskStatus[1].Status.(*pb.SubTaskStatus_Sync).Sync
 	c.Assert(sync1.MasterBinlog, Equals, pos4)
@@ -279,4 +279,31 @@ func (t *testServer) TestUnifyMasterBinlogPos(c *C) {
 	relay := resp.RelayStatus
 	c.Assert(relay.MasterBinlog, Equals, pos4)
 	c.Assert(relay.RelayCatchUpMaster, IsFalse)
+
+	// 3. test unifyMasterBinlogPos(..., enableGTID = true)
+	resp = &pb.QueryStatusResponse{
+		SubTaskStatus: []*pb.SubTaskStatus{{
+			Unit: pb.UnitType_Load,
+		}, {
+			Unit:   pb.UnitType_Sync,
+			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos2, SyncerBinlog: pos2, Synced: true}},
+		}, {
+			Unit:   pb.UnitType_Sync,
+			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos4, SyncerBinlog: pos3, Synced: false}},
+		}},
+		RelayStatus: &pb.RelayStatus{
+			MasterBinlog: pos1, RelayBinlog: pos1, RelayCatchUpMaster: true,
+		},
+	}
+	unifyMasterBinlogPos(resp, true)
+
+	sync1 = resp.SubTaskStatus[1].Status.(*pb.SubTaskStatus_Sync).Sync
+	c.Assert(sync1.MasterBinlog, Equals, pos4)
+	c.Assert(sync1.Synced, IsFalse)
+	sync2 = resp.SubTaskStatus[2].Status.(*pb.SubTaskStatus_Sync).Sync
+	c.Assert(sync2.MasterBinlog, Equals, pos4)
+	c.Assert(sync2.Synced, IsFalse)
+	relay = resp.RelayStatus
+	c.Assert(relay.MasterBinlog, Equals, pos4)
+	c.Assert(relay.RelayCatchUpMaster, IsTrue)
 }

@@ -259,7 +259,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		SourceID:      s.worker.cfg.SourceID,
 	}
 
-	unifyMasterBinlogPos(resp)
+	unifyMasterBinlogPos(resp, s.worker.cfg.EnableGTID)
 
 	if len(resp.SubTaskStatus) == 0 {
 		resp.Msg = "no sub task started"
@@ -471,7 +471,7 @@ func (s *Server) splitHostPort() (host, port string, err error) {
 
 // unifyMasterBinlogPos eliminates different masterBinlog in one response
 // see https://github.com/pingcap/dm/issues/727
-func unifyMasterBinlogPos(resp *pb.QueryStatusResponse) {
+func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 	var (
 		syncStatus          []*pb.SubTaskStatus_Sync
 		syncMasterBinlog    []*mysql.Position
@@ -509,15 +509,19 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse) {
 
 	// re-check relay
 	if resp.RelayStatus.Stage != pb.Stage_Stopped && lastestMasterBinlog.Compare(*relayMasterBinlog) != 0 {
-		relayPos, err := utils.DecodeBinlogPosition(resp.RelayStatus.RelayBinlog)
-		if err != nil {
-			log.L().Error("failed to decode relay binlog position", zap.Stringer("response", resp), zap.Error(err))
-			return
-		}
-		catchUp := lastestMasterBinlog.Compare(*relayPos) == 0
-
 		resp.RelayStatus.MasterBinlog = lastestMasterBinlog.String()
-		resp.RelayStatus.RelayCatchUpMaster = catchUp
+
+		// if enableGTID, modify output binlog position doesn't affect RelayCatchUpMaster, skip check
+		if !enableGTID {
+			relayPos, err := utils.DecodeBinlogPosition(resp.RelayStatus.RelayBinlog)
+			if err != nil {
+				log.L().Error("failed to decode relay binlog position", zap.Stringer("response", resp), zap.Error(err))
+				return
+			}
+			catchUp := lastestMasterBinlog.Compare(*relayPos) == 0
+
+			resp.RelayStatus.RelayCatchUpMaster = catchUp
+		}
 	}
 	// re-check syncer
 	for i, sStatus := range syncStatus {
