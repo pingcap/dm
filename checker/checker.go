@@ -69,6 +69,8 @@ type Checker struct {
 
 	instances []*mysqlInstance
 
+	enableANSIQuotes bool
+
 	checkList     []check.Checker
 	checkingItems map[string]string
 	result        struct {
@@ -78,11 +80,12 @@ type Checker struct {
 }
 
 // NewChecker returns a checker
-func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *Checker {
+func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string, enableANSIQuotes bool) *Checker {
 	c := &Checker{
-		instances:     make([]*mysqlInstance, 0, len(cfgs)),
-		checkingItems: checkingItems,
-		logger:        log.With(zap.String("unit", "task check")),
+		instances:        make([]*mysqlInstance, 0, len(cfgs)),
+		checkingItems:    checkingItems,
+		logger:           log.With(zap.String("unit", "task check")),
+		enableANSIQuotes: enableANSIQuotes,
 	}
 
 	for _, cfg := range cfgs {
@@ -211,7 +214,7 @@ func (c *Checker) Init(ctx context.Context) (err error) {
 		dbs[instance.cfg.SourceID] = instance.sourceDB.DB
 
 		if checkSchema {
-			c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB.DB, instance.sourceDBinfo, checkTables))
+			c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB.DB, instance.sourceDBinfo, checkTables, c.enableANSIQuotes))
 		}
 	}
 
@@ -221,7 +224,7 @@ func (c *Checker) Init(ctx context.Context) (err error) {
 				continue
 			}
 
-			c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID))
+			c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID, c.enableANSIQuotes))
 		}
 	}
 

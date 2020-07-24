@@ -1872,7 +1872,7 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 
-	err = checker.CheckSyncConfigFunc(ctx, stCfgs)
+	err = checker.CheckSyncConfigFunc(ctx, stCfgs, cfg.EnableANSIQuotes)
 	if err != nil {
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
