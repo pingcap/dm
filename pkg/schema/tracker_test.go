@@ -42,6 +42,7 @@ func (s *trackerSuite) TestSessionCfg(c *C) {
 	c.Assert(err, NotNil)
 
 	tracker, err = schema.NewTracker(nil)
+	c.Assert(err, NotNil)
 	ctx := context.Background()
 	err = tracker.Exec(ctx, "", "create database testdb;")
 	c.Assert(err, IsNil)
@@ -51,6 +52,7 @@ func (s *trackerSuite) TestSessionCfg(c *C) {
 	c.Assert(err, NotNil)
 
 	// set session config
+	// no `STRICT_TRANS_TABLES`, no error now
 	sessionCfg = map[string]string{"sql_mode": "NO_ZERO_DATE,NO_ZERO_IN_DATE,ANSI_QUOTES"}
 	tracker, err = schema.NewTracker(sessionCfg)
 	c.Assert(err, IsNil)
