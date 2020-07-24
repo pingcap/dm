@@ -481,7 +481,8 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse) {
 
 	// uninitialized mysql.Position is less than any initialized mysql.Position
 	if resp.RelayStatus.Stage != pb.Stage_Stopped {
-		relayMasterBinlog, err := utils.DecodeBinlogPosition(resp.RelayStatus.MasterBinlog)
+		var err error
+		relayMasterBinlog, err = utils.DecodeBinlogPosition(resp.RelayStatus.MasterBinlog)
 		if err != nil {
 			log.L().Error("failed to decode relay's master binlog position", zap.Stringer("response", resp), zap.Error(err))
 			return
