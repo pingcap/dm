@@ -42,7 +42,7 @@ func (s *trackerSuite) TestSessionCfg(c *C) {
 	c.Assert(err, NotNil)
 
 	tracker, err = schema.NewTracker(nil)
-	c.Assert(err, NotNil)
+	c.Assert(err, IsNil)
 	ctx := context.Background()
 	err = tracker.Exec(ctx, "", "create database testdb;")
 	c.Assert(err, IsNil)
