@@ -259,52 +259,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		SourceID:      s.worker.cfg.SourceID,
 	}
 
-	// fix https://github.com/pingcap/dm/issues/727
-	// show different masterBinlog in SubTaskStatus (syncer) and RelayStatus
-	var (
-		syncStatus          []*pb.SubTaskStatus_Sync
-		syncMasterBinlog    []*mysql.Position
-		lastestMasterBinlog mysql.Position // not pointer, to make use of zero value and avoid nil check
-		relayMasterBinlog   *mysql.Position
-	)
-
-	// uninitialized mysql.Position is less than any initialized mysql.Position
-	if resp.RelayStatus.Stage != pb.Stage_Stopped {
-		relayMasterBinlog, _ = utils.DecodeBinlogPosition(resp.RelayStatus.MasterBinlog)
-		lastestMasterBinlog = *relayMasterBinlog
-	}
-
-	for _, stStatus := range resp.SubTaskStatus {
-		if stStatus.Unit == pb.UnitType_Sync {
-			s := stStatus.Status.(*pb.SubTaskStatus_Sync)
-			syncStatus = append(syncStatus, s)
-
-			position, _ := utils.DecodeBinlogPosition(s.Sync.MasterBinlog)
-			if lastestMasterBinlog.Compare(*position) < 0 {
-				lastestMasterBinlog = *position
-			}
-			syncMasterBinlog = append(syncMasterBinlog, position)
-		}
-	}
-
-	// re-check relay
-	if resp.RelayStatus.Stage != pb.Stage_Stopped && lastestMasterBinlog.Compare(*relayMasterBinlog) != 0 {
-		relayPos, _ := utils.DecodeBinlogPosition(resp.RelayStatus.RelayBinlog)
-		catchUp := lastestMasterBinlog.Compare(*relayPos) == 0
-
-		resp.RelayStatus.MasterBinlog = lastestMasterBinlog.String()
-		resp.RelayStatus.RelayCatchUpMaster = catchUp
-	}
-	// re-check syncer
-	for i, sStatus := range syncStatus {
-		if lastestMasterBinlog.Compare(*syncMasterBinlog[i]) != 0 {
-			syncerPos, _ := utils.DecodeBinlogPosition(sStatus.Sync.SyncerBinlog)
-			synced := lastestMasterBinlog.Compare(*syncerPos) == 0
-
-			sStatus.Sync.MasterBinlog = lastestMasterBinlog.String()
-			sStatus.Sync.Synced = synced
-		}
-	}
+	unifyMasterBinlogPos(resp)
 
 	if len(resp.SubTaskStatus) == 0 {
 		resp.Msg = "no sub task started"
@@ -512,4 +467,53 @@ func (s *Server) splitHostPort() (host, port string, err error) {
 		err = terror.ErrWorkerHostPortNotValid.Delegate(err, s.cfg.WorkerAddr)
 	}
 	return
+}
+
+// unifyMasterBinlogPos eliminates different masterBinlog in one response
+// see https://github.com/pingcap/dm/issues/727
+func unifyMasterBinlogPos(resp *pb.QueryStatusResponse) {
+	var (
+		syncStatus          []*pb.SubTaskStatus_Sync
+		syncMasterBinlog    []*mysql.Position
+		lastestMasterBinlog mysql.Position // not pointer, to make use of zero value and avoid nil check
+		relayMasterBinlog   *mysql.Position
+	)
+
+	// uninitialized mysql.Position is less than any initialized mysql.Position
+	if resp.RelayStatus.Stage != pb.Stage_Stopped {
+		relayMasterBinlog, _ = utils.DecodeBinlogPosition(resp.RelayStatus.MasterBinlog)
+		lastestMasterBinlog = *relayMasterBinlog
+	}
+
+	for _, stStatus := range resp.SubTaskStatus {
+		if stStatus.Unit == pb.UnitType_Sync {
+			s := stStatus.Status.(*pb.SubTaskStatus_Sync)
+			syncStatus = append(syncStatus, s)
+
+			position, _ := utils.DecodeBinlogPosition(s.Sync.MasterBinlog)
+			if lastestMasterBinlog.Compare(*position) < 0 {
+				lastestMasterBinlog = *position
+			}
+			syncMasterBinlog = append(syncMasterBinlog, position)
+		}
+	}
+
+	// re-check relay
+	if resp.RelayStatus.Stage != pb.Stage_Stopped && lastestMasterBinlog.Compare(*relayMasterBinlog) != 0 {
+		relayPos, _ := utils.DecodeBinlogPosition(resp.RelayStatus.RelayBinlog)
+		catchUp := lastestMasterBinlog.Compare(*relayPos) == 0
+
+		resp.RelayStatus.MasterBinlog = lastestMasterBinlog.String()
+		resp.RelayStatus.RelayCatchUpMaster = catchUp
+	}
+	// re-check syncer
+	for i, sStatus := range syncStatus {
+		if lastestMasterBinlog.Compare(*syncMasterBinlog[i]) != 0 {
+			syncerPos, _ := utils.DecodeBinlogPosition(sStatus.Sync.SyncerBinlog)
+			synced := lastestMasterBinlog.Compare(*syncerPos) == 0
+
+			sStatus.Sync.MasterBinlog = lastestMasterBinlog.String()
+			sStatus.Sync.Synced = synced
+		}
+	}
 }
