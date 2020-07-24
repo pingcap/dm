@@ -232,9 +232,9 @@ func (t *testServer) TestUnifyMasterBinlogPos(c *C) {
 	}
 	resp3 := &pb.QueryStatusResponse{
 		SubTaskStatus: []*pb.SubTaskStatus{{
-			Unit:   pb.UnitType_Load,
+			Unit: pb.UnitType_Load,
 		}, {
-			Unit: pb.UnitType_Sync,
+			Unit:   pb.UnitType_Sync,
 			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos2, SyncerBinlog: pos2, Synced: true}},
 		}},
 		RelayStatus: &pb.RelayStatus{
@@ -256,12 +256,12 @@ func (t *testServer) TestUnifyMasterBinlogPos(c *C) {
 	// 2. could work on multiple status
 	resp = &pb.QueryStatusResponse{
 		SubTaskStatus: []*pb.SubTaskStatus{{
-			Unit:   pb.UnitType_Load,
+			Unit: pb.UnitType_Load,
 		}, {
-			Unit: pb.UnitType_Sync,
+			Unit:   pb.UnitType_Sync,
 			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos2, SyncerBinlog: pos2, Synced: true}},
 		}, {
-			Unit: pb.UnitType_Sync,
+			Unit:   pb.UnitType_Sync,
 			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos4, SyncerBinlog: pos3, Synced: false}},
 		}},
 		RelayStatus: &pb.RelayStatus{
