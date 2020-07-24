@@ -2681,7 +2681,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_loader_progress{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_loader_progress{task=\"$task\",source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -2762,7 +2762,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_loader_data_size_gauge{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_loader_data_size_gauge{task=\"$task\",source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -2843,7 +2843,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "changes(dm_mydumper_exit_with_error_count{task=\"$task\",instance=\"$instance\"}[30m])",
+              "expr": "changes(dm_dumpling_exit_with_error_count{task=\"$task\",source_id=\"$source\"}[30m])",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -2924,7 +2924,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "changes(dm_loader_exit_with_error_count{task=\"$task\",instance=\"$instance\"}[30m])",
+              "expr": "changes(dm_loader_exit_with_error_count{task=\"$task\",source_id=\"$source\"}[30m])",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -3005,7 +3005,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_loader_table_gauge{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_loader_table_gauge{task=\"$task\",source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -3086,7 +3086,7 @@
           "tableColumn": "",
           "targets": [
             {
-              "expr": "dm_loader_data_file_gauge{task=\"$task\",instance=\"$instance\"}",
+              "expr": "dm_loader_data_file_gauge{task=\"$task\",source_id=\"$source\"}",
               "format": "time_series",
               "intervalFactor": 2,
               "refId": "A"
@@ -3145,21 +3145,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.90, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "90",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", instance=\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(dm_loader_txn_duration_time_bucket{task=\"$task\", source_id=\"$source\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "99",

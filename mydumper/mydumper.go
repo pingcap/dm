@@ -66,7 +66,7 @@ func (m *Mydumper) Init(ctx context.Context) error {
 
 // Process implements Unit.Process
 func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
-	mydumperExitWithErrorCounter.WithLabelValues(m.cfg.Name).Add(0)
+	mydumperExitWithErrorCounter.WithLabelValues(m.cfg.Name, m.cfg.SourceID).Add(0)
 
 	failpoint.Inject("dumpUnitProcessWithError", func(val failpoint.Value) {
 		m.logger.Info("dump unit runs with injected error", zap.String("failpoint", "dumpUnitProcessWithError"), zap.Reflect("error", val))
@@ -102,7 +102,7 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	output, err := m.spawn(ctx)
 
 	if err != nil {
-		mydumperExitWithErrorCounter.WithLabelValues(m.cfg.Name).Inc()
+		mydumperExitWithErrorCounter.WithLabelValues(m.cfg.Name, m.cfg.SourceID).Inc()
 		errs = append(errs, unit.NewProcessError(fmt.Errorf("%s. %s", err.Error(), output)))
 	} else {
 		select {
