@@ -27,7 +27,7 @@ var (
 			Subsystem: "loader",
 			Name:      "tidb_execution_error",
 			Help:      "Total count of tidb execution errors",
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 
 	queryHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -36,7 +36,7 @@ var (
 			Name:      "query_duration_time",
 			Help:      "Bucketed histogram of query time (s) of a txn.",
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 
 	txnHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -45,7 +45,7 @@ var (
 			Name:      "txn_duration_time",
 			Help:      "Bucketed histogram of processing time (s) of a txn.",
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 
 	stmtHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -62,7 +62,7 @@ var (
 			Subsystem: "loader",
 			Name:      "data_file_gauge",
 			Help:      "data files in total",
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 
 	tableGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -70,7 +70,7 @@ var (
 			Subsystem: "loader",
 			Name:      "table_gauge",
 			Help:      "tables in total",
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 
 	dataSizeGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -78,7 +78,7 @@ var (
 			Subsystem: "loader",
 			Name:      "data_size_gauge",
 			Help:      "data size in total",
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 
 	progressGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -86,7 +86,7 @@ var (
 			Subsystem: "loader",
 			Name:      "progress",
 			Help:      "the processing progress of loader in percentage",
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 
 	// should alert
 	loaderExitWithErrorCounter = metricsproxy.NewCounterVec(
@@ -95,7 +95,7 @@ var (
 			Subsystem: "loader",
 			Name:      "exit_with_error_count",
 			Help:      "counter for loader exits with error",
-		}, []string{"task"})
+		}, []string{"task", "source_id"})
 )
 
 // RegisterMetrics registers metrics
