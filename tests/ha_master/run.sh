@@ -184,21 +184,21 @@ function test_list_member() {
         "list-member --worker --name=worker1,worker2" \
         "\"stage\": \"bound\"" 2
     
-    dmctl_operate_source stop $WORK_DIR/source1.toml $SOURCE_ID1
+    dmctl_operate_source stop $WORK_DIR/source1.yaml $SOURCE_ID1
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --worker" \
         "\"stage\": \"bound\"" 1 \
         "\"stage\": \"free\"" 1
  
-    dmctl_operate_source stop $WORK_DIR/source2.toml $SOURCE_ID2
+    dmctl_operate_source stop $WORK_DIR/source2.yaml $SOURCE_ID2
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member" \
         "\"stage\": \"free\"" 2
  
-    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
-    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
+    dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member --name=worker1,worker2" \
@@ -280,12 +280,12 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
 
     echo "operate mysql config to worker"
-    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
-    cp $cur/conf/source2.toml $WORK_DIR/source2.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
-    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
-    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
+    cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+    cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
+    dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     test_evict_leader
     test_list_member # TICASE-942, 944, 945, 946, 947

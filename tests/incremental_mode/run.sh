@@ -22,12 +22,12 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     # operate mysql config to worker
-    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
-    cp $cur/conf/source2.toml $WORK_DIR/source2.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
-    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
-    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
+    cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+    cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
+    dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     # start a task in `full` mode
     echo "start task in full mode"
@@ -76,19 +76,19 @@ function run() {
     check_count 'Query OK, 0 rows affected' 7
 
     # update mysql config
-    sed -i "s/root/dm_incremental/g" $WORK_DIR/source1.toml
-    sed -i "s/root/dm_incremental/g" $WORK_DIR/source2.toml
+    sed -i "s/root/dm_incremental/g" $WORK_DIR/source1.yaml
+    sed -i "s/root/dm_incremental/g" $WORK_DIR/source2.yaml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source update $WORK_DIR/source1.toml" \
+        "operate-source update $WORK_DIR/source1.yaml" \
         "Update worker config is not supported by dm-ha now" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source update $WORK_DIR/source2.toml" \
+        "operate-source update $WORK_DIR/source2.yaml" \
         "Update worker config is not supported by dm-ha now" 1
     # update mysql config is not supported by dm-ha now, so we stop and start source again to update source config
-    dmctl_operate_source stop $WORK_DIR/source1.toml $SOURCE_ID1
-    dmctl_operate_source stop $WORK_DIR/source2.toml $SOURCE_ID2
-    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
-    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
+    dmctl_operate_source stop $WORK_DIR/source1.yaml $SOURCE_ID1
+    dmctl_operate_source stop $WORK_DIR/source2.yaml $SOURCE_ID2
+    dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     echo "start task in incremental mode"
     cat $cur/conf/dm-task.yaml > $WORK_DIR/dm-task.yaml

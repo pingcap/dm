@@ -74,10 +74,10 @@ function run() {
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $WORK_DIR/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
     # operate mysql config to worker
-    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
+    cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
     run_dm_ctl_with_tls $WORK_DIR "127.0.0.1:$MASTER_PORT" $cur/conf/ca.pem $cur/conf/dm.pem $cur/conf/dm.key \
-        "operate-source create $WORK_DIR/source1.toml" \
+        "operate-source create $WORK_DIR/source1.yaml" \
         "\"result\": true" 2 \
         "\"source\": \"$SOURCE_ID1\"" 1
 
