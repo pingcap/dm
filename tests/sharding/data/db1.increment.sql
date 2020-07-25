@@ -23,3 +23,11 @@ alter table t1 add key multi_col_idx(uid, id_gen);
 alter table t2 add key multi_col_idx(uid, id_gen);
 insert into t1 (uid, name, info) values (10006, 'Buenos Aires', '{"age": 100}');
 insert into t2 (uid, name, info) values (20008, 'Buenos Aires', '{"age": 200}');
+
+-- test ZERO_DATE
+alter table t2 add column create_by DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00';
+insert into t2 (uid, name, info, create_by) values (1, 'HaHa', '{"age": 300}', now());
+insert into t2 (uid, name, info, create_by) values (2, 'HiHi', '{"age": 400}', '0000-00-00 00:00:01');
+alter table t1 add column create_by DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00';
+insert into t1 (uid, name, info, create_by) values (3, 'HaHa', '{"age": 300}', now());
+insert into t1 (uid, name, info, create_by) values (4, 'HiHi', '{"age": 400}', '0000-00-00 00:00:01');
