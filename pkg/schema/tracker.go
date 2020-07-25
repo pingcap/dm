@@ -45,7 +45,7 @@ type Tracker struct {
 }
 
 // NewTracker creates a new tracker.
-func NewTracker() (*Tracker, error) {
+func NewTracker(sessionCfg map[string]string) (*Tracker, error) {
 	store, err := mockstore.NewMockTikvStore()
 	if err != nil {
 		return nil, err
@@ -62,6 +62,13 @@ func NewTracker() (*Tracker, error) {
 	se, err := session.CreateSession(store)
 	if err != nil {
 		return nil, err
+	}
+
+	for k, v := range sessionCfg {
+		err = se.GetSessionVars().SetSystemVar(k, v)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// TiDB will unconditionally create an empty "test" schema.
