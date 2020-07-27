@@ -468,7 +468,7 @@ func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.I
 				// then the DM-worker should not put any new DDL info until the old operation has been deleted.
 				p.logger.Error("fail to try sync shard DDL lock", zap.Stringer("info", info), log.ShortError(err))
 				// currently, only DDL mismatch will cause error
-				metrics.ReportDDLErrorToMetrics(info.Task, metrics.InfoErrSyncLock)
+				metrics.ReportDDLError(info.Task, metrics.InfoErrSyncLock)
 				continue
 			} else if !synced {
 				p.logger.Info("the shard DDL lock has not synced", zap.String("lock", lockID), zap.Int("remain", remain))
@@ -479,7 +479,7 @@ func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.I
 			err = p.handleLock(lockID, info.Source)
 			if err != nil {
 				p.logger.Error("fail to handle the shard DDL lock", zap.String("lock", lockID), log.ShortError(err))
-				metrics.ReportDDLErrorToMetrics(info.Task, metrics.InfoErrHandleLock)
+				metrics.ReportDDLError(info.Task, metrics.InfoErrHandleLock)
 				continue
 			}
 		}
@@ -509,7 +509,7 @@ func (p *Pessimist) handleOperationPut(ctx context.Context, opCh <-chan pessimis
 			} else if synced, _ := lock.IsSynced(); !synced {
 				// this should not happen in normal case.
 				p.logger.Warn("the lock for the shard DDL lock operation has not synced", zap.Stringer("operation", op))
-				metrics.ReportDDLErrorToMetrics(op.Task, metrics.OpErrLockUnSynced)
+				metrics.ReportDDLError(op.Task, metrics.OpErrLockUnSynced)
 				continue
 			}
 
@@ -521,7 +521,7 @@ func (p *Pessimist) handleOperationPut(ctx context.Context, opCh <-chan pessimis
 				err := p.removeLock(lock)
 				if err != nil {
 					p.logger.Error("fail to delete the shard DDL lock operations", zap.String("lock", lock.ID), log.ShortError(err))
-					metrics.ReportDDLErrorToMetrics(op.Task, metrics.OpErrRemoveLock)
+					metrics.ReportDDLError(op.Task, metrics.OpErrRemoveLock)
 				}
 				p.logger.Info("the lock info for the shard DDL lock operation has been cleared", zap.Stringer("operation", op))
 				continue
@@ -539,7 +539,7 @@ func (p *Pessimist) handleOperationPut(ctx context.Context, opCh <-chan pessimis
 			err := p.putOpsForNonOwner(lock, "", false)
 			if err != nil {
 				p.logger.Error("fail to put skip shard DDL lock operations for non-owner", zap.String("lock", lock.ID), log.ShortError(err))
-				metrics.ReportDDLErrorToMetrics(op.Task, metrics.OpErrPutNonOwnerOp)
+				metrics.ReportDDLError(op.Task, metrics.OpErrPutNonOwnerOp)
 			}
 		}
 	}
@@ -629,7 +629,7 @@ func (p *Pessimist) removeLock(lock *pessimism.Lock) error {
 		return err
 	}
 	p.lk.RemoveLock(lock.ID)
-	metrics.ReportDDLPendingToMetrics(lock.Task, metrics.DDLPendingSynced, metrics.DDLPendingNone)
+	metrics.ReportDDLPending(lock.Task, metrics.DDLPendingSynced, metrics.DDLPendingNone)
 	return nil
 }
 

@@ -56,7 +56,7 @@ func NewLock(ID, task, owner string, DDLs, sources []string) *Lock {
 		l.ready[s] = false
 		l.done[s] = false
 	}
-	metrics.ReportDDLPendingToMetrics(task, metrics.DDLPendingNone, metrics.DDLPendingUnSynced)
+	metrics.ReportDDLPending(task, metrics.DDLPendingNone, metrics.DDLPendingUnSynced)
 
 	return l
 }
@@ -87,7 +87,7 @@ func (l *Lock) TrySync(caller string, DDLs, sources []string) (bool, int, error)
 		l.remain--
 		l.ready[caller] = true
 		if l.remain == 0 {
-			metrics.ReportDDLPendingToMetrics(l.Task, metrics.DDLPendingUnSynced, metrics.DDLPendingSynced)
+			metrics.ReportDDLPending(l.Task, metrics.DDLPendingUnSynced, metrics.DDLPendingSynced)
 		}
 	}
 
@@ -100,7 +100,7 @@ func (l *Lock) ForceSynced() {
 	defer l.mu.Unlock()
 
 	if l.remain > 0 {
-		metrics.ReportDDLPendingToMetrics(l.Task, metrics.DDLPendingUnSynced, metrics.DDLPendingSynced)
+		metrics.ReportDDLPending(l.Task, metrics.DDLPendingUnSynced, metrics.DDLPendingSynced)
 	}
 	for source := range l.ready {
 		l.ready[source] = true
@@ -114,7 +114,7 @@ func (l *Lock) RevertSynced(sources []string) {
 	defer l.mu.Unlock()
 
 	if l.remain == 0 && len(sources) > 0 {
-		metrics.ReportDDLPendingToMetrics(l.Task, metrics.DDLPendingSynced, metrics.DDLPendingUnSynced)
+		metrics.ReportDDLPending(l.Task, metrics.DDLPendingSynced, metrics.DDLPendingUnSynced)
 	}
 	for _, source := range sources {
 		if synced, ok := l.ready[source]; ok && synced {
