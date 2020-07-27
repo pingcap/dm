@@ -5760,7 +5760,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "number of worker event error in 30 minutes",
+          "title": "number of worker event error",
           "tooltip": {
             "shared": true,
             "sort": 0,
