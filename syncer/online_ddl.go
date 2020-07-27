@@ -84,11 +84,11 @@ type OnlineDDLStorage struct {
 
 	cfg *config.SubTaskConfig
 
-	db         *conn.BaseDB
-	dbConn     *DBConn
-	schema     string // schema name, set through task config
-	tableName  string // table name with schema, now it's task name
-	id         string // the source ID of the upstream MySQL/MariaDB replica.
+	db        *conn.BaseDB
+	dbConn    *DBConn
+	schema    string // schema name, set through task config
+	tableName string // table name with schema, now it's task name
+	id        string // the source ID of the upstream MySQL/MariaDB replica.
 
 	// map ghost schema => [ghost table => ghost ddl info, ...]
 	ddls map[string]map[string]*GhostDDLInfo
@@ -99,12 +99,12 @@ type OnlineDDLStorage struct {
 // NewOnlineDDLStorage creates a new online ddl storager
 func NewOnlineDDLStorage(logCtx *tcontext.Context, cfg *config.SubTaskConfig) *OnlineDDLStorage {
 	s := &OnlineDDLStorage{
-		cfg:    cfg,
-		schema: dbutil.ColumnName(cfg.MetaSchema),
+		cfg:       cfg,
+		schema:    dbutil.ColumnName(cfg.MetaSchema),
 		tableName: dbutil.TableName(cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)),
-		id:     cfg.SourceID,
-		ddls:   make(map[string]map[string]*GhostDDLInfo),
-		logCtx: logCtx,
+		id:        cfg.SourceID,
+		ddls:      make(map[string]map[string]*GhostDDLInfo),
+		logCtx:    logCtx,
 	}
 
 	return s

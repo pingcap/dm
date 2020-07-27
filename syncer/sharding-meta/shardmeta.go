@@ -104,9 +104,9 @@ type ShardingMeta struct {
 // NewShardingMeta creates a new ShardingMeta
 func NewShardingMeta(schema, table string, enableGTID bool) *ShardingMeta {
 	return &ShardingMeta{
-		tableName:   dbutil.TableName(schema, table),
-		global:  &ShardingSequence{Items: make([]*DDLItem, 0)},
-		sources: make(map[string]*ShardingSequence),
+		tableName: dbutil.TableName(schema, table),
+		global:    &ShardingSequence{Items: make([]*DDLItem, 0)},
+		sources:   make(map[string]*ShardingSequence),
 
 		enableGTID: enableGTID,
 	}
