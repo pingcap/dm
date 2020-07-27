@@ -121,6 +121,7 @@ func RegistryMetrics() {
 	registry.MustRegister(cpuUsageGauge)
 	registry.MustRegister(ddlPendingCounter)
 	registry.MustRegister(ddlErrCounter)
+	registry.MustRegister(workerEventErrCounter)
 
 	prometheus.DefaultGatherer = registry
 }

@@ -5749,7 +5749,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (type) (increase(dm_master_worker_event_error[30m]))",
+              "expr": "sum by (type) (dm_master_worker_event_error)",
               "format": "time_series",
               "instant": false,
               "intervalFactor": 2,
