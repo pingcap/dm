@@ -219,7 +219,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	}
 
 	var err error
-	syncer.schemaTracker, err = schema.NewTracker()
+	syncer.schemaTracker, err = schema.NewTracker(cfg.To.Session)
 	if err != nil {
 		syncer.tctx.L().DPanic("cannot create schema tracker", zap.Error(err))
 	}

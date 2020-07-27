@@ -63,7 +63,7 @@ func (s *testCheckpointSuite) SetUpSuite(c *C) {
 
 	log.SetLevel(zapcore.ErrorLevel)
 	var err error
-	s.tracker, err = schema.NewTracker()
+	s.tracker, err = schema.NewTracker(nil)
 	c.Assert(err, IsNil)
 }
 
