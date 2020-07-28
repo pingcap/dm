@@ -11,6 +11,8 @@ target-database:
   port: 4000
   user: "root"
   password: ""
+  session:
+    sql_mode: "NO_ZERO_DATE,NO_ZERO_IN_DATE"
 
 mysql-instances:
   - source-id: "mysql-replica-01"

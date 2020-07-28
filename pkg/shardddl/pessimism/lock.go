@@ -16,6 +16,7 @@ package pessimism
 import (
 	"sync"
 
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -55,6 +56,7 @@ func NewLock(ID, task, owner string, DDLs, sources []string) *Lock {
 		l.ready[s] = false
 		l.done[s] = false
 	}
+	metrics.ReportDDLPendingToMetrics(task, metrics.DDLPendingNone, metrics.DDLPendingUnSynced)
 
 	return l
 }
@@ -84,6 +86,9 @@ func (l *Lock) TrySync(caller string, DDLs, sources []string) (bool, int, error)
 	if synced, ok := l.ready[caller]; ok && !synced {
 		l.remain--
 		l.ready[caller] = true
+		if l.remain == 0 {
+			metrics.ReportDDLPendingToMetrics(l.Task, metrics.DDLPendingUnSynced, metrics.DDLPendingSynced)
+		}
 	}
 
 	return l.remain <= 0, l.remain, nil
@@ -94,6 +99,9 @@ func (l *Lock) ForceSynced() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if l.remain > 0 {
+		metrics.ReportDDLPendingToMetrics(l.Task, metrics.DDLPendingUnSynced, metrics.DDLPendingSynced)
+	}
 	for source := range l.ready {
 		l.ready[source] = true
 	}
@@ -105,6 +113,9 @@ func (l *Lock) RevertSynced(sources []string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if l.remain == 0 && len(sources) > 0 {
+		metrics.ReportDDLPendingToMetrics(l.Task, metrics.DDLPendingSynced, metrics.DDLPendingUnSynced)
+	}
 	for _, source := range sources {
 		if synced, ok := l.ready[source]; ok && synced {
 			l.ready[source] = false
