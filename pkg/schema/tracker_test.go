@@ -228,7 +228,6 @@ func (s *trackerSuite) TestMultiDrop(c *C) {
 	    );`)
 	c.Assert(err, IsNil)
 
-	// Now creating a table should be successful
 	err = tracker.Exec(ctx, "testdb", "alter table foo drop partition p1, p2")
 	c.Assert(err, IsNil)
 
