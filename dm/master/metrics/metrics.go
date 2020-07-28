@@ -116,18 +116,18 @@ func GetMetricsHandler() http.Handler {
 	return promhttp.Handler()
 }
 
-// ReportWorkerStageToMetrics is a setter for workerState, this name is easy to understand to caller
-func ReportWorkerStageToMetrics(name string, state float64) {
+// ReportWorkerStage is a setter for workerState
+func ReportWorkerStage(name string, state float64) {
 	workerState.WithLabelValues(name).Set(state)
 }
 
-// RemoveWorkerStateInMetrics cleans state of deleted worker
-func RemoveWorkerStateInMetrics(name string) {
+// RemoveWorkerState cleans state of deleted worker
+func RemoveWorkerState(name string) {
 	workerState.DeleteAllAboutLabels(prometheus.Labels{"worker": name})
 }
 
-// ReportDDLPendingToMetrics inc/dec by 1 to ddlPendingCounter
-func ReportDDLPendingToMetrics(task, old, new string) {
+// ReportDDLPending inc/dec by 1 to ddlPendingCounter
+func ReportDDLPending(task, old, new string) {
 	if old != DDLPendingNone {
 		ddlPendingCounter.WithLabelValues(task, old).Dec()
 	}
@@ -136,8 +136,8 @@ func ReportDDLPendingToMetrics(task, old, new string) {
 	}
 }
 
-// ReportDDLErrorToMetrics is a setter for ddlErrCounter
-func ReportDDLErrorToMetrics(task, errType string) {
+// ReportDDLError is a setter for ddlErrCounter
+func ReportDDLError(task, errType string) {
 	ddlErrCounter.WithLabelValues(task, errType).Inc()
 }
 
