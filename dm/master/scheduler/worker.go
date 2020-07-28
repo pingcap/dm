@@ -153,5 +153,5 @@ func (w *Worker) reportMetrics() {
 	if n, ok := workerStage2Num[w.stage]; ok {
 		s = n
 	}
-	metrics.ReportWorkerStageToMetrics(w.baseInfo.Name, s)
+	metrics.ReportWorkerStage(w.baseInfo.Name, s)
 }
