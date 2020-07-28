@@ -715,8 +715,9 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 		return len(bounds) == 1 && bounds[0] == sourceID1
 	}), IsTrue)
 	checkSourceBoundCh := func() {
-		time.Sleep(time.Second)
-		c.Assert(sourceBoundCh, HasLen, 1)
+		c.Assert(utils.WaitSomething(10, 500*time.Millisecond, func() bool {
+			return len(sourceBoundCh) == 1
+		}), IsTrue)
 		sourceBound := <-sourceBoundCh
 		sourceBound.Revision = 0
 		c.Assert(sourceBound, DeepEquals, sourceBound1)
