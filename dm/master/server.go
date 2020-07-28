@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"net"
 	"net/http"
 	"sort"
@@ -1638,14 +1639,14 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 
 	sqls := make([]string, 0, 4)
 	// clear loader and syncer checkpoints
-	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
-		cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name)))
-	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
-		cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)))
-	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
-		cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name)))
-	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
-		cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
+		dbutil.TableName(cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
+		dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
+		dbutil.TableName(cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name))))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
+		dbutil.TableName(cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name))))
 
 	_, err = dbConn.ExecuteSQL(ctctx, nil, cfg.Name, sqls)
 	return err
