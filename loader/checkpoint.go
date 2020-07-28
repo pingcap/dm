@@ -80,7 +80,7 @@ type RemoteCheckPoint struct {
 	conn           *DBConn
 	id             string
 	schema         string
-	tableName      string
+	tableName      string // tableName contains schema name
 	restoringFiles map[string]map[string]FilePosSet
 	finishedTables map[string]struct{}
 	logCtx         *tcontext.Context
