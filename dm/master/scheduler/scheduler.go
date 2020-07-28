@@ -1140,15 +1140,16 @@ func (s *Scheduler) handleWorkerEv(ctx context.Context, evCh <-chan ha.WorkerEve
 				err = s.handleWorkerOnline(ev, true)
 			}
 			if err != nil {
-				// TODO(csuzhangxc): report the error through metrics or other methods.
 				s.logger.Error("fail to handle worker status change event", zap.Bool("delete", ev.IsDeleted), zap.Stringer("event", ev), zap.Error(err))
+				metrics.ReportWorkerEventErr(metrics.WorkerEventHandle)
 			}
 		case err, ok := <-errCh:
 			if !ok {
 				return nil
 			}
-			// TODO(csuzhangxc): we only log the `err` here, but we should update metrics and do more works for it later.
+			// error here are caused by etcd error or worker event decoding
 			s.logger.Error("receive error when watching worker status change event", zap.Error(err))
+			metrics.ReportWorkerEventErr(metrics.WorkerEventWatch)
 			if etcdutil.IsRetryableError(err) {
 				return err
 			}
@@ -1401,7 +1402,7 @@ func (s *Scheduler) deleteWorker(name string) {
 	}
 	w.Close()
 	delete(s.workers, name)
-	metrics.RemoveWorkerStateInMetrics(w.baseInfo.Name)
+	metrics.RemoveWorkerState(w.baseInfo.Name)
 }
 
 // updateStatusForBound updates the in-memory status for bound, including:
