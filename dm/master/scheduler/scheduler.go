@@ -1390,7 +1390,7 @@ func (s *Scheduler) deleteWorker(name string) {
 	}
 	w.Close()
 	delete(s.workers, name)
-	metrics.RemoveWorkerStateInMetrics(w.baseInfo.Name)
+	metrics.RemoveWorkerState(w.baseInfo.Name)
 }
 
 // updateStatusForBound updates the in-memory status for bound, including:
