@@ -452,6 +452,116 @@ func (t *testServer) TestQueryError(c *C) {
 	c.Assert(resp.SubTaskError[0].String(), Matches, `[\s\S]*mockSubtaskFail[\s\S]*`)
 }
 
+func (t *testServer) TestUnifyMasterBinlogPos(c *C) {
+	var (
+		pos1 = "(bin.000001, 3134)"
+		pos2 = "(bin.000001, 3234)"
+		pos3 = "(bin.000001, 3334)"
+		pos4 = "(bin.000001, 3434)"
+	)
+
+	// 1. should modify nothing
+	resp := &pb.QueryStatusResponse{
+		SubTaskStatus: []*pb.SubTaskStatus{{
+			Name:   "test",
+			Status: &pb.SubTaskStatus_Msg{Msg: "sub task not started"},
+		}},
+		SourceStatus: &pb.SourceStatus{},
+	}
+	resp2 := &pb.QueryStatusResponse{
+		SubTaskStatus: []*pb.SubTaskStatus{{
+			Name:   "test",
+			Status: &pb.SubTaskStatus_Msg{Msg: "sub task not started"},
+		}},
+		SourceStatus: &pb.SourceStatus{RelayStatus: &pb.RelayStatus{
+			Stage: pb.Stage_Stopped,
+		}},
+	}
+	resp3 := &pb.QueryStatusResponse{
+		SubTaskStatus: []*pb.SubTaskStatus{{
+			Name:   "test",
+			Status: &pb.SubTaskStatus_Msg{Msg: "sub task not started"},
+		}},
+		SourceStatus: &pb.SourceStatus{RelayStatus: &pb.RelayStatus{
+			MasterBinlog: pos1, RelayBinlog: pos1, RelayCatchUpMaster: true,
+		}},
+	}
+	resp4 := &pb.QueryStatusResponse{
+		SubTaskStatus: []*pb.SubTaskStatus{{
+			Unit: pb.UnitType_Load,
+		}, {
+			Unit:   pb.UnitType_Sync,
+			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos2, SyncerBinlog: pos2, Synced: true}},
+		}},
+		SourceStatus: &pb.SourceStatus{},
+	}
+
+	for _, r := range []*pb.QueryStatusResponse{resp, resp2, resp3, resp4} {
+		// clone resp
+		bytes, _ := r.Marshal()
+		originReps := &pb.QueryStatusResponse{}
+		err := originReps.Unmarshal(bytes)
+		c.Assert(err, IsNil)
+
+		unifyMasterBinlogPos(r, false)
+		c.Assert(r, DeepEquals, originReps)
+	}
+
+	// 2. could work on multiple status
+	resp = &pb.QueryStatusResponse{
+		SubTaskStatus: []*pb.SubTaskStatus{{
+			Unit: pb.UnitType_Load,
+		}, {
+			Unit:   pb.UnitType_Sync,
+			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos2, SyncerBinlog: pos2, Synced: true}},
+		}, {
+			Unit:   pb.UnitType_Sync,
+			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos4, SyncerBinlog: pos3, Synced: false}},
+		}},
+		SourceStatus: &pb.SourceStatus{RelayStatus: &pb.RelayStatus{
+			MasterBinlog: pos1, RelayBinlog: pos1, RelayCatchUpMaster: true,
+		}},
+	}
+	unifyMasterBinlogPos(resp, false)
+
+	sync1 := resp.SubTaskStatus[1].Status.(*pb.SubTaskStatus_Sync).Sync
+	c.Assert(sync1.MasterBinlog, Equals, pos4)
+	c.Assert(sync1.Synced, IsFalse)
+	sync2 := resp.SubTaskStatus[2].Status.(*pb.SubTaskStatus_Sync).Sync
+	c.Assert(sync2.MasterBinlog, Equals, pos4)
+	c.Assert(sync2.Synced, IsFalse)
+	relay := resp.SourceStatus.RelayStatus
+	c.Assert(relay.MasterBinlog, Equals, pos4)
+	c.Assert(relay.RelayCatchUpMaster, IsFalse)
+
+	// 3. test unifyMasterBinlogPos(..., enableGTID = true)
+	resp = &pb.QueryStatusResponse{
+		SubTaskStatus: []*pb.SubTaskStatus{{
+			Unit: pb.UnitType_Load,
+		}, {
+			Unit:   pb.UnitType_Sync,
+			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos2, SyncerBinlog: pos2, Synced: true}},
+		}, {
+			Unit:   pb.UnitType_Sync,
+			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos4, SyncerBinlog: pos3, Synced: false}},
+		}},
+		SourceStatus: &pb.SourceStatus{RelayStatus: &pb.RelayStatus{
+			MasterBinlog: pos1, RelayBinlog: pos1, RelayCatchUpMaster: true,
+		}},
+	}
+	unifyMasterBinlogPos(resp, true)
+
+	sync1 = resp.SubTaskStatus[1].Status.(*pb.SubTaskStatus_Sync).Sync
+	c.Assert(sync1.MasterBinlog, Equals, pos4)
+	c.Assert(sync1.Synced, IsFalse)
+	sync2 = resp.SubTaskStatus[2].Status.(*pb.SubTaskStatus_Sync).Sync
+	c.Assert(sync2.MasterBinlog, Equals, pos4)
+	c.Assert(sync2.Synced, IsFalse)
+	relay = resp.SourceStatus.RelayStatus
+	c.Assert(relay.MasterBinlog, Equals, pos4)
+	c.Assert(relay.RelayCatchUpMaster, IsTrue)
+}
+
 func getFakePosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minPos *mysql.Position, err error) {
 	switch subTaskCfg.Name {
 	case "test1":
