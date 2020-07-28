@@ -42,6 +42,12 @@ const (
 	OpErrPutNonOwnerOp = "OperationPut - PutNonOwnerOpError"
 )
 
+// used to represent worker event error type
+const (
+	WorkerEventHandle = "handle"
+	WorkerEventWatch  = "watch"
+)
+
 var (
 	workerState = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -74,6 +80,14 @@ var (
 			Name:      "shard_ddl_error",
 			Help:      "number of shard DDL lock/operation error",
 		}, []string{"task", "type"})
+
+	workerEventErrCounter = metricsproxy.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "dm",
+			Subsystem: "master",
+			Name:      "worker_event_error",
+			Help:      "number of error related to worker event, during handling or watching",
+		}, []string{"type"})
 )
 
 func collectMetrics() {
@@ -107,6 +121,7 @@ func RegistryMetrics() {
 	registry.MustRegister(cpuUsageGauge)
 	registry.MustRegister(ddlPendingCounter)
 	registry.MustRegister(ddlErrCounter)
+	registry.MustRegister(workerEventErrCounter)
 
 	prometheus.DefaultGatherer = registry
 }
@@ -141,9 +156,15 @@ func ReportDDLError(task, errType string) {
 	ddlErrCounter.WithLabelValues(task, errType).Inc()
 }
 
+// ReportWorkerEventErr is a setter for workerEventErrCounter
+func ReportWorkerEventErr(errType string) {
+	workerEventErrCounter.WithLabelValues(errType).Inc()
+}
+
 // OnRetireLeader cleans some metrics when retires
 func OnRetireLeader() {
 	workerState.Reset()
 	ddlErrCounter.Reset()
 	ddlPendingCounter.Reset()
+	workerEventErrCounter.Reset()
 }
