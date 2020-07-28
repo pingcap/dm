@@ -423,7 +423,7 @@ func (o *Optimist) handleInfo(ctx context.Context, infoCh <-chan optimism.Info) 
 			err := o.handleLock(info, tts, false)
 			if err != nil {
 				o.logger.Error("fail to handle the shard DDL lock", zap.Stringer("info", info), log.ShortError(err))
-				metrics.ReportDDLErrorToMetrics(info.Task, metrics.InfoErrHandleLock)
+				metrics.ReportDDLError(info.Task, metrics.InfoErrHandleLock)
 				continue
 			}
 		}
@@ -467,7 +467,7 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 			err := o.removeLock(lock)
 			if err != nil {
 				o.logger.Error("fail to delete the shard DDL infos and lock operations", zap.String("lock", lock.ID), log.ShortError(err))
-				metrics.ReportDDLErrorToMetrics(op.Task, metrics.OpErrRemoveLock)
+				metrics.ReportDDLError(op.Task, metrics.OpErrRemoveLock)
 			}
 			o.logger.Info("the shard DDL infos and lock operations have been cleared", zap.Stringer("operation", op))
 		}
@@ -533,6 +533,7 @@ func (o *Optimist) removeLock(lock *optimism.Lock) error {
 		return err
 	}
 	o.lk.RemoveLock(lock.ID)
+	metrics.ReportDDLPending(lock.Task, metrics.DDLPendingSynced, metrics.DDLPendingNone)
 	return nil
 }
 
