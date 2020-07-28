@@ -16,7 +16,6 @@ package master
 import (
 	"context"
 	"fmt"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"net"
 	"net/http"
 	"sort"
@@ -27,6 +26,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
