@@ -600,7 +600,8 @@ func (cp *RemoteCheckPoint) prepare(tctx *tcontext.Context) error {
 }
 
 func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
-	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.cfg.MetaSchema)
+	// TODO(lance6716): change ColumnName to IdentName or something
+	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", dbutil.ColumnName(cp.cfg.MetaSchema))
 	args := make([]interface{}, 0)
 	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
 	cp.logCtx.L().Info("create checkpoint schema", zap.String("statement", sql2))

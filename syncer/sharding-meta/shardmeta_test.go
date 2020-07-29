@@ -272,8 +272,7 @@ func (t *testShardMetaSuite) TestFlushLoadMeta(c *check.C) {
 	}
 	c.Assert(loadedMeta.activeIdx, check.Equals, meta.activeIdx)
 	c.Assert(loadedMeta.global.String(), check.Equals, meta.global.String())
-	c.Assert(loadedMeta.schema, check.Equals, meta.schema)
-	c.Assert(loadedMeta.table, check.Equals, meta.table)
+	c.Assert(loadedMeta.tableName, check.Equals, meta.tableName)
 	c.Assert(len(loadedMeta.sources), check.Equals, len(meta.sources))
 	for table, source := range loadedMeta.sources {
 		c.Assert(source.String(), check.Equals, meta.sources[table].String())
