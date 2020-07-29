@@ -82,6 +82,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
 
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 )
@@ -402,6 +403,7 @@ type ShardingGroupKeeper struct {
 
 	shardMetaSchema string
 	shardMetaTable  string
+	shardMetaTableName string
 
 	db     *conn.BaseDB
 	dbConn *DBConn
@@ -418,6 +420,7 @@ func NewShardingGroupKeeper(tctx *tcontext.Context, cfg *config.SubTaskConfig) *
 	}
 	k.shardMetaSchema = cfg.MetaSchema
 	k.shardMetaTable = fmt.Sprintf(shardmeta.MetaTableFormat, cfg.Name)
+	k.shardMetaTableName = dbutil.TableName(k.shardMetaSchema, k.shardMetaTable)
 	return k
 }
 
@@ -712,7 +715,6 @@ func (k *ShardingGroupKeeper) createSchema() error {
 }
 
 func (k *ShardingGroupKeeper) createTable() error {
-	tableName := fmt.Sprintf("`%s`.`%s`", k.shardMetaSchema, k.shardMetaTable)
 	stmt := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		source_id VARCHAR(32) NOT NULL COMMENT 'replica source id, defined in task.yaml',
 		target_table_id VARCHAR(144) NOT NULL,
@@ -723,7 +725,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 		create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		UNIQUE KEY uk_source_id_table_id_source (source_id, target_table_id, source_table_id)
-	)`, tableName)
+	)`, k.shardMetaTableName)
 	_, err := k.dbConn.executeSQL(k.tctx, []string{stmt})
 	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
 	return terror.WithScope(err, terror.ScopeDownstream)
@@ -731,7 +733,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 
 // LoadShardMeta implements CheckPoint.LoadShardMeta
 func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMeta, error) {
-	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM `%s`.`%s` WHERE `source_id`='%s'", k.shardMetaSchema, k.shardMetaTable, k.cfg.SourceID)
+	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM %s WHERE `source_id`='%s'", k.shardMetaTableName, k.cfg.SourceID)
 	rows, err := k.dbConn.querySQL(k.tctx, query)
 	if err != nil {
 		return nil, terror.WithScope(err, terror.ScopeDownstream)

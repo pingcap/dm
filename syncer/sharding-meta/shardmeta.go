@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
@@ -85,15 +86,13 @@ type ShardingMeta struct {
 	activeIdx int                          // the first unsynced DDL index
 	global    *ShardingSequence            // merged sharding sequence of all source tables
 	sources   map[string]*ShardingSequence // source table ID -> its sharding sequence
-	schema    string                       // schema name in downstream meta db
-	table     string                       // table name used in downstream meta db
+	tableName     string                       // table name (with schema) used in downstream meta db
 }
 
 // NewShardingMeta creates a new ShardingMeta
 func NewShardingMeta(schema, table string) *ShardingMeta {
 	return &ShardingMeta{
-		schema:  schema,
-		table:   table,
+		tableName:   dbutil.TableName(schema, table),
 		global:  &ShardingSequence{Items: make([]*DDLItem, 0)},
 		sources: make(map[string]*ShardingSequence),
 	}
@@ -238,14 +237,14 @@ func (meta *ShardingMeta) ActiveDDLFirstPos() (mysql.Position, error) {
 // FlushData returns sharding meta flush SQL and args
 func (meta *ShardingMeta) FlushData(sourceID, tableID string) ([]string, [][]interface{}) {
 	if len(meta.global.Items) == 0 {
-		sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` where source_id=? and target_table_id=?", meta.schema, meta.table)
+		sql2 := fmt.Sprintf("DELETE FROM %s where source_id=? and target_table_id=?", meta.tableName)
 		args2 := []interface{}{sourceID, tableID}
 		return []string{sql2}, [][]interface{}{args2}
 	}
 	var (
 		sqls    = make([]string, 1+len(meta.sources))
 		args    = make([][]interface{}, 0, 1+len(meta.sources))
-		baseSQL = fmt.Sprintf("INSERT INTO `%s`.`%s` (`source_id`, `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data`) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `data`=?, `active_index`=?", meta.schema, meta.table)
+		baseSQL = fmt.Sprintf("INSERT INTO %s (`source_id`, `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data`) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `data`=?, `active_index`=?", meta.tableName)
 	)
 	for i := range sqls {
 		sqls[i] = baseSQL

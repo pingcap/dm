@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"fmt"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"path"
 	"sync"
 	"time"
@@ -480,7 +481,7 @@ func (cp *RemoteCheckPoint) prepare(tctx *tcontext.Context) error {
 }
 
 func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
-	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
+	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", dbutil.ColumnName(cp.schema))
 	args := make([]interface{}, 0)
 	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
 	cp.logCtx.L().Info("create checkpoint schema", zap.String("statement", sql2))
