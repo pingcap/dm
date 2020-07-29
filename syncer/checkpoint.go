@@ -15,7 +15,6 @@ package syncer
 
 import (
 	"fmt"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"path"
 	"sync"
 	"time"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 )
@@ -216,7 +216,7 @@ type RemoteCheckPoint struct {
 func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) CheckPoint {
 	cp := &RemoteCheckPoint{
 		cfg:         cfg,
-		schema:      cfg.MetaSchema,
+		schema:      dbutil.ColumnName(cfg.MetaSchema),
 		tableName:   dbutil.TableName(cfg.MetaSchema, fmt.Sprintf("%s_syncer_checkpoint", cfg.Name)),
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
@@ -481,7 +481,7 @@ func (cp *RemoteCheckPoint) prepare(tctx *tcontext.Context) error {
 }
 
 func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
-	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", dbutil.ColumnName(cp.schema))
+	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", cp.schema)
 	args := make([]interface{}, 0)
 	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
 	cp.logCtx.L().Info("create checkpoint schema", zap.String("statement", sql2))
