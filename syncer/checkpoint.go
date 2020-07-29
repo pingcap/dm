@@ -190,11 +190,11 @@ type RemoteCheckPoint struct {
 
 	cfg *config.SubTaskConfig
 
-	db         *conn.BaseDB
-	dbConn     *DBConn
-	schema     string // schema name, set through task config
-	tableName  string // table name (with schema), now it's task name
-	id         string // checkpoint ID, now it is `source-id`
+	db        *conn.BaseDB
+	dbConn    *DBConn
+	schema    string // schema name, set through task config
+	tableName string // table name (with schema), now it's task name
+	id        string // checkpoint ID, now it is `source-id`
 
 	// source-schema -> source-table -> checkpoint
 	// used to filter the synced binlog when re-syncing for sharding group
