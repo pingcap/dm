@@ -43,9 +43,9 @@ function run() {
         run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
         check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
         # operate mysql config to worker
-        cp $cur/conf/source1.toml $WORK_DIR/source1.toml
-        sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-        dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
+        cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+        sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+        dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 
         echo "query status, relay log failed"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \

@@ -189,7 +189,7 @@ type rawMydumperConfig MydumperConfig
 func (m *MydumperConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	raw := rawMydumperConfig(defaultMydumperConfig())
 	if err := unmarshal(&raw); err != nil {
-		return terror.ErrConfigTaskYamlTransform.Delegate(err, "unmarshal mydumper config")
+		return terror.ErrConfigYamlTransform.Delegate(err, "unmarshal mydumper config")
 	}
 	*m = MydumperConfig(raw) // raw used only internal, so no deep copy
 	return nil
@@ -215,7 +215,7 @@ type rawLoaderConfig LoaderConfig
 func (m *LoaderConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	raw := rawLoaderConfig(defaultLoaderConfig())
 	if err := unmarshal(&raw); err != nil {
-		return terror.ErrConfigTaskYamlTransform.Delegate(err, "unmarshal loader config")
+		return terror.ErrConfigYamlTransform.Delegate(err, "unmarshal loader config")
 	}
 	*m = LoaderConfig(raw) // raw used only internal, so no deep copy
 	return nil
@@ -258,7 +258,7 @@ type rawSyncerConfig SyncerConfig
 func (m *SyncerConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	raw := rawSyncerConfig(defaultSyncerConfig())
 	if err := unmarshal(&raw); err != nil {
-		return terror.ErrConfigTaskYamlTransform.Delegate(err, "unmarshal syncer config")
+		return terror.ErrConfigYamlTransform.Delegate(err, "unmarshal syncer config")
 	}
 	*m = SyncerConfig(raw) // raw used only internal, so no deep copy
 	return nil
@@ -347,12 +347,12 @@ func (c *TaskConfig) String() string {
 func (c *TaskConfig) DecodeFile(fpath string) error {
 	bs, err := ioutil.ReadFile(fpath)
 	if err != nil {
-		return terror.ErrConfigReadTaskCfgFromFile.Delegate(err, fpath)
+		return terror.ErrConfigReadCfgFromFile.Delegate(err, fpath)
 	}
 
 	err = yaml.UnmarshalStrict(bs, c)
 	if err != nil {
-		return terror.ErrConfigTaskYamlTransform.Delegate(err)
+		return terror.ErrConfigYamlTransform.Delegate(err)
 	}
 
 	return c.adjust()
@@ -362,7 +362,7 @@ func (c *TaskConfig) DecodeFile(fpath string) error {
 func (c *TaskConfig) Decode(data string) error {
 	err := yaml.UnmarshalStrict([]byte(data), c)
 	if err != nil {
-		return terror.ErrConfigTaskYamlTransform.Delegate(err, "decode task config failed")
+		return terror.ErrConfigYamlTransform.Delegate(err, "decode task config failed")
 	}
 
 	return c.adjust()

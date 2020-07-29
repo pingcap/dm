@@ -16,9 +16,9 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
     # operate mysql config to worker
-    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
+    cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+    dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 
     # start DM task only
     dmctl_start_task_standalone "$cur/conf/dm-task.yaml" "--remove-meta"

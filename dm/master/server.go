@@ -26,6 +26,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
@@ -1384,7 +1385,7 @@ func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, erro
 	cfgs := make([]*config.SourceConfig, len(contents))
 	for i, content := range contents {
 		cfg := config.NewSourceConfig()
-		if err := cfg.Parse(content); err != nil {
+		if err := cfg.ParseYaml(content); err != nil {
 			return cfgs, err
 		}
 
@@ -1397,7 +1398,7 @@ func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, erro
 		if err = cfg.Adjust(fromDB.DB); err != nil {
 			return cfgs, err
 		}
-		if _, err = cfg.Toml(); err != nil {
+		if _, err = cfg.Yaml(); err != nil {
 			return cfgs, err
 		}
 		cfgs[i] = cfg
@@ -1650,14 +1651,14 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 
 	sqls := make([]string, 0, 4)
 	// clear loader and syncer checkpoints
-	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
-		cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name)))
-	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
-		cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)))
-	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
-		cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name)))
-	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`",
-		cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
+		dbutil.TableName(cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
+		dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
+		dbutil.TableName(cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name))))
+	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
+		dbutil.TableName(cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name))))
 
 	_, err = dbConn.ExecuteSQL(ctctx, nil, cfg.Name, sqls)
 	return err
