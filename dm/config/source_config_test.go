@@ -28,7 +28,7 @@ import (
 )
 
 // do not forget to update this path if the file removed/renamed.
-const sourceSampleFile = "../worker/source.toml"
+const sourceSampleFile = "../worker/source.yaml"
 
 func (t *testConfig) TestConfig(c *C) {
 	cfg := NewSourceConfig()
@@ -49,19 +49,31 @@ func (t *testConfig) TestConfig(c *C) {
 	tomlStr, err := clone1.Toml()
 	c.Assert(err, IsNil)
 	c.Assert(tomlStr, Matches, `(.|\n)*server-id = 100(.|\n)*`)
+	yamlStr, err := clone1.Yaml()
+	c.Assert(err, IsNil)
+	c.Assert(yamlStr, Matches, `(.|\n)*server-id: 100(.|\n)*`)
 	originCfgStr, err := cfg.Toml()
 	c.Assert(err, IsNil)
 	c.Assert(originCfgStr, Matches, `(.|\n)*server-id = 101(.|\n)*`)
+	originCfgYamlStr, err := cfg.Yaml()
+	c.Assert(err, IsNil)
+	c.Assert(originCfgYamlStr, Matches, `(.|\n)*server-id: 101(.|\n)*`)
 
 	// test update config file and reload
 	c.Assert(cfg.Parse(tomlStr), IsNil)
 	c.Assert(cfg.ServerID, Equals, uint32(100))
+	c.Assert(cfg.ParseYaml(yamlStr), IsNil)
+	c.Assert(cfg.ServerID, Equals, uint32(100))
 	c.Assert(cfg.Parse(originCfgStr), IsNil)
+	c.Assert(cfg.ServerID, Equals, uint32(101))
+	c.Assert(cfg.ParseYaml(originCfgYamlStr), IsNil)
 	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	// test decrypt password
 	clone1.From.Password = "1234"
 	clone1.ServerID = 101
+	// fix empty map after marshal/unmarshal becomes nil
+	clone1.From.Session = map[string]string{}
 	clone2 := cfg.DecryptPassword()
 	c.Assert(clone2, DeepEquals, clone1)
 
@@ -84,19 +96,26 @@ func (t *testConfig) TestConfig(c *C) {
 	var clone5 SourceConfig
 	c.Assert(clone5.Parse(clone4toml), IsNil)
 	c.Assert(clone5, DeepEquals, *clone4)
+	clone4yaml, err := clone4.Yaml()
+	c.Assert(err, IsNil)
+	c.Assert(clone4yaml, Matches, "(.|\n)*backoff-rollback: 5m(.|\n)*")
+	c.Assert(clone4yaml, Matches, "(.|\n)*backoff-max: 5m(.|\n)*")
+	var clone6 SourceConfig
+	c.Assert(clone6.ParseYaml(clone4yaml), IsNil)
+	c.Assert(clone6, DeepEquals, *clone4)
 
 	// test invalid config
 	dir2 := c.MkDir()
 	configFile := path.Join(dir2, "dm-worker-invalid.toml")
 	configContent := []byte(`
-source-id = "haha"
-aaa = "xxx"
+source-id: haha
+aaa: xxx
 `)
 	err = ioutil.WriteFile(configFile, configContent, 0644)
 	c.Assert(err, IsNil)
 	err = cfg.LoadFromFile(configFile)
 	c.Assert(err, NotNil)
-	c.Assert(err, ErrorMatches, ".*worker config contains unknown configuration options: aaa.*")
+	c.Assert(err, ErrorMatches, "(.|\n)*field aaa not found in type config.SourceConfig(.|\n)*")
 }
 
 func (t *testConfig) TestConfigVerify(c *C) {

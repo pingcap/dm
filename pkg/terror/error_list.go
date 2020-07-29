@@ -162,7 +162,7 @@ const (
 const (
 	codeConfigCheckItemNotSupport ErrCode = iota + 20001
 	codeConfigTomlTransform
-	codeConfigTaskYamlTransform
+	codeConfigYamlTransform
 	codeConfigTaskNameEmpty
 	codeConfigEmptySourceID
 	codeConfigTooLongSourceID
@@ -177,7 +177,7 @@ const (
 	codeConfigMydumperCfgConflict
 	codeConfigLoaderCfgConflict
 	codeConfigSyncerCfgConflict
-	codeConfigReadTaskCfgFromFile
+	codeConfigReadCfgFromFile
 	codeConfigNeedUniqueTaskName
 	codeConfigInvalidTaskMode
 	codeConfigNeedTargetDB
@@ -716,7 +716,7 @@ var (
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s", "Please check `ignore-checking-items` config in task configuration file, which can be set including `all`/`dump_privilege`/`replication_privilege`/`version`/`binlog_enable`/`binlog_format`/`binlog_row_image`/`table_schema`/`schema_of_shard_tables`/`auto_increment_ID`.")
 	ErrConfigTomlTransform          = New(codeConfigTomlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s", "Please check the configuration file has correct TOML format.")
-	ErrConfigTaskYamlTransform      = New(codeConfigTaskYamlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s", "Please check the configuration file has correct YAML format.")
+	ErrConfigYamlTransform          = New(codeConfigYamlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s", "Please check the configuration file has correct YAML format.")
 	ErrConfigTaskNameEmpty          = New(codeConfigTaskNameEmpty, ClassConfig, ScopeInternal, LevelMedium, "task name should not be empty", "Please check the `name` config in task configuration file.")
 	ErrConfigEmptySourceID          = New(codeConfigEmptySourceID, ClassConfig, ScopeInternal, LevelMedium, "empty source-id not valid", "Please check the `source-id` config in configuration file.")
 	ErrConfigTooLongSourceID        = New(codeConfigTooLongSourceID, ClassConfig, ScopeInternal, LevelMedium, "too long source-id not valid", "Please check the `source-id` config in configuration file. The max source id length is 32.")
@@ -731,7 +731,7 @@ var (
 	ErrConfigMydumperCfgConflict    = New(codeConfigMydumperCfgConflict, ClassConfig, ScopeInternal, LevelMedium, "mydumper-config-name and mydumper should only specify one", "Please check the `mydumper-config-name` and `mydumper` config in task configuration file.")
 	ErrConfigLoaderCfgConflict      = New(codeConfigLoaderCfgConflict, ClassConfig, ScopeInternal, LevelMedium, "loader-config-name and loader should only specify one", "Please check the `loader-config-name` and `loader` config in task configuration file.")
 	ErrConfigSyncerCfgConflict      = New(codeConfigSyncerCfgConflict, ClassConfig, ScopeInternal, LevelMedium, "syncer-config-name and syncer should only specify one", "Please check the `syncer-config-name` and `syncer` config in task configuration file.")
-	ErrConfigReadTaskCfgFromFile    = New(codeConfigReadTaskCfgFromFile, ClassConfig, ScopeInternal, LevelMedium, "read config file %v", "")
+	ErrConfigReadCfgFromFile        = New(codeConfigReadCfgFromFile, ClassConfig, ScopeInternal, LevelMedium, "read config file %v", "")
 	ErrConfigNeedUniqueTaskName     = New(codeConfigNeedUniqueTaskName, ClassConfig, ScopeInternal, LevelMedium, "must specify a unique task name", "Please check the `name` config in task configuration file.")
 	ErrConfigInvalidTaskMode        = New(codeConfigInvalidTaskMode, ClassConfig, ScopeInternal, LevelMedium, "please specify right task-mode, support `full`, `incremental`, `all`", "Please check the `task-mode` config in task configuration file.")
 	ErrConfigNeedTargetDB           = New(codeConfigNeedTargetDB, ClassConfig, ScopeInternal, LevelMedium, "must specify target-database", "Please check the `target-database` config in task configuration file.")
