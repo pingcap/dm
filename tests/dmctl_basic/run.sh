@@ -131,6 +131,9 @@ function run() {
 
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-source show" \
+        "\"result\": true" 3
 
     echo "pause_relay_success"
     pause_relay_success
