@@ -89,7 +89,7 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 
     # wait for task running
-    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/$ILLEGAL_CHAR_NAME '"name":"test","stage":"Running"' 10
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/$ILLEGAL_CHAR_NAME '"name":"'$ILLEGAL_CHAR_NAME'","stage":"Running"' 10
     sleep 2 # still wait for subtask running on other dm-workers
 
     # kill tidb
@@ -111,8 +111,8 @@ function run() {
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    check_metric $WORKER1_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
-    check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
+    check_metric $WORKER1_PORT 'dm_syncer_replication_lag{task="'$ILLEGAL_CHAR_NAME'"}' 3 0 2
+    check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="'$ILLEGAL_CHAR_NAME'"}' 3 0 2
 
      # test block-allow-list by the way
     run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
