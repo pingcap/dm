@@ -29,7 +29,7 @@ func ImportFromV10x(cli *clientv3.Client) error {
 }
 
 // TryUpgrade tries to upgrade the cluster from an older version to a new version.
-// This methods should often be called only one time after a DM-master started and it's the leader of the cluster.
+// This methods should have no side effects even calling multiple times.
 func TryUpgrade(cli *clientv3.Client) error {
 	// 1. get previous version from etcd.
 	preVer, _, err := GetVersion(cli)
