@@ -7,7 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 TASK_CONF=$cur/conf/dm-task.yaml
 TASK_NAME="test"
-MYSQL1_CONF=$cur/conf/source1.toml
+MYSQL1_CONF=$cur/conf/source1.yaml
 SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 # used to coverage wrong usage of dmctl command
@@ -119,18 +119,18 @@ function run() {
     operate_source_stop_not_created_config $MYSQL1_CONF
 
     # operate mysql config to worker
-    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
-    cp $cur/conf/source2.toml $WORK_DIR/source2.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
+    cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+    cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
     
     # operate with invalid op type
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source invalid $WORK_DIR/source1.toml" \
+        "operate-source invalid $WORK_DIR/source1.yaml" \
         "invalid operate" 1
 
-    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
-    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
+    dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     echo "pause_relay_success"
     pause_relay_success
@@ -181,8 +181,8 @@ function run() {
     query_status_running_tasks
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 20
 
-    update_relay_success $cur/conf/source1.toml $SOURCE_ID1
-    update_relay_success $cur/conf/source2.toml $SOURCE_ID2
+    update_relay_success $cur/conf/source1.yaml $SOURCE_ID1
+    update_relay_success $cur/conf/source2.yaml $SOURCE_ID2
     # check worker config backup file is correct
     [ -f $WORK_DIR/worker1/dm-worker-config.bak ] && cmp $WORK_DIR/worker1/dm-worker-config.bak $cur/conf/dm-worker1.toml
     [ -f $WORK_DIR/worker2/dm-worker-config.bak ] && cmp $WORK_DIR/worker2/dm-worker-config.bak $cur/conf/dm-worker2.toml
