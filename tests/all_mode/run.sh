@@ -6,6 +6,7 @@ cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
+ILLEGAL_CHAR_NAME='t-Ë!s`t'
 
 function test_session_config(){
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -21,14 +22,15 @@ function test_session_config(){
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     # operate mysql config to worker
-    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
-    cp $cur/conf/source2.toml $WORK_DIR/source2.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
-    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
-    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
+    cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+    cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
+    dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
+    sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
 
     # enable ansi-quotes
     sed -i 's/ansi-quotes: false/ansi-quotes: true/g'  $WORK_DIR/dm-task.yaml
@@ -46,7 +48,7 @@ function test_session_config(){
     # fail because insert 0 will auto generates the next serial number
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10 'fail'
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "stop-task test"\
+            "stop-task $ILLEGAL_CHAR_NAME"\
             "\"result\": true" 3
 
     cleanup_data all_mode
@@ -54,7 +56,6 @@ function test_session_config(){
 }
 
 function run() {
-
     run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
 
     test_session_config
@@ -74,15 +75,16 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     # operate mysql config to worker
-    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
-    cp $cur/conf/source2.toml $WORK_DIR/source2.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
-    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
-    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
+    cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+    cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
+    dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     # start DM task only
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
+    sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
     # test deprecated config
     sed -i 's/enable-ansi-quotes: false/enable-ansi-quotes: true/g'  $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
@@ -97,7 +99,7 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     # make sure worker1 have bound a source, and the source should same with bound before
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
+        "query-status $ILLEGAL_CHAR_NAME" \
         "worker1" 1
 
     # restart dm-worker2
@@ -111,15 +113,15 @@ function run() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $WORK_DIR/dm-task.yaml" \
         "\"result\": false" 1 \
-        "subtasks with name test for sources \[mysql-replica-01 mysql-replica-02\] already exist" 1
+        "subtasks with name $ILLEGAL_CHAR_NAME for sources \[mysql-replica-01 mysql-replica-02\] already exist" 1
     sleep 2
 
     # wait for task running
-    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Running"' 10
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/$ILLEGAL_CHAR_NAME '"stage": "Running"' 10
     sleep 2 # still wait for subtask running on other dm-workers
 
     # wait for task running
-    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Running"' 10
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/$ILLEGAL_CHAR_NAME '"stage": "Running"' 10
     sleep 2 # still wait for subtask running on other dm-workers
 
     # kill tidb

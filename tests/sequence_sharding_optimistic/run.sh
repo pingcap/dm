@@ -26,12 +26,12 @@ run() {
     check_log_contains ${WORK_DIR}/get_schema.log "mysql-replica-01 relevant worker-client not found" 1
 
     # operate mysql config to worker
-    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
-    cp $cur/conf/source2.toml $WORK_DIR/source2.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
-    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
-    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
+    cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+    cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
+    dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     # try to get schema for the table, the subtask has not started.
     curl -X PUT ${API_URL} -d '{"op":1, "task":"sequence_sharding_optimistic", "sources": ["mysql-replica-01"], "database":"sharding_seq_opt", "table":"t1"}' > ${WORK_DIR}/get_schema.log

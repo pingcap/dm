@@ -26,7 +26,7 @@ import (
 
 const (
 	// do not forget to update this path if the file removed/renamed.
-	sourceSampleFile = "../../dm/worker/source.toml"
+	sourceSampleFile = "../../dm/worker/source.yaml"
 )
 
 var (

@@ -15,9 +15,9 @@ package tracing
 
 // Config is the configuration for tracer
 type Config struct {
-	Enable     bool   `toml:"enable" json:"enable"`           // whether to enable tracing
-	Source     string `toml:"source" json:"source"`           // trace event source id
-	TracerAddr string `toml:"tracer-addr" json:"tracer-addr"` // tracing service rpc address
-	BatchSize  int    `toml:"batch-size" json:"batch-size"`   // upload trace event batch size
-	Checksum   bool   `toml:"checksum" json:"checksum"`       // whether to caclculate checksum of data
+	Enable     bool   `yaml:"enable" toml:"enable" json:"enable"`                // whether to enable tracing
+	Source     string `yaml:"source" toml:"source" json:"source"`                // trace event source id
+	TracerAddr string `yaml:"tracer-addr" toml:"tracer-addr" json:"tracer-addr"` // tracing service rpc address
+	BatchSize  int    `yaml:"batch-size" toml:"batch-size" json:"batch-size"`    // upload trace event batch size
+	Checksum   bool   `yaml:"checksum" toml:"checksum" json:"checksum"`          // whether to caclculate checksum of data
 }
