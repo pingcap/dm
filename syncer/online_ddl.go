@@ -84,11 +84,11 @@ type OnlineDDLStorage struct {
 
 	cfg *config.SubTaskConfig
 
-	db     *conn.BaseDB
-	dbConn *DBConn
-	schema string // schema name, set through task config
-	tableName  string // table name with schema, now it's task name
-	id     string // now it is `server-id` used as MySQL slave
+	db        *conn.BaseDB
+	dbConn    *DBConn
+	schema    string // schema name, set through task config
+	tableName string // table name with schema, now it's task name
+	id        string // now it is `server-id` used as MySQL slave
 
 	// map ghost schema => [ghost table => ghost ddl info, ...]
 	ddls map[string]map[string]*GhostDDLInfo
@@ -99,12 +99,12 @@ type OnlineDDLStorage struct {
 // NewOnlineDDLStorage creates a new online ddl storager
 func NewOnlineDDLStorage(logCtx *tcontext.Context, cfg *config.SubTaskConfig) *OnlineDDLStorage {
 	s := &OnlineDDLStorage{
-		cfg:    cfg,
+		cfg:       cfg,
 		schema:    dbutil.ColumnName(cfg.MetaSchema),
-		tableName:  dbutil.TableName(cfg.MetaSchema, fmt.Sprintf("%s_onlineddl", cfg.Name)),
-		id:     strconv.FormatUint(uint64(cfg.ServerID), 10),
-		ddls:   make(map[string]map[string]*GhostDDLInfo),
-		logCtx: logCtx,
+		tableName: dbutil.TableName(cfg.MetaSchema, fmt.Sprintf("%s_onlineddl", cfg.Name)),
+		id:        strconv.FormatUint(uint64(cfg.ServerID), 10),
+		ddls:      make(map[string]map[string]*GhostDDLInfo),
+		logCtx:    logCtx,
 	}
 
 	return s

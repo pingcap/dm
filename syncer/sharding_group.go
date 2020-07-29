@@ -401,8 +401,8 @@ type ShardingGroupKeeper struct {
 	groups map[string]*ShardingGroup // target table ID -> ShardingGroup
 	cfg    *config.SubTaskConfig
 
-	shardMetaSchema string
-	shardMetaTable  string
+	shardMetaSchema    string
+	shardMetaTable     string
 	shardMetaTableName string
 
 	db     *conn.BaseDB

@@ -86,15 +86,15 @@ type ShardingMeta struct {
 	activeIdx int                          // the first unsynced DDL index
 	global    *ShardingSequence            // merged sharding sequence of all source tables
 	sources   map[string]*ShardingSequence // source table ID -> its sharding sequence
-	tableName     string                       // table name (with schema) used in downstream meta db
+	tableName string                       // table name (with schema) used in downstream meta db
 }
 
 // NewShardingMeta creates a new ShardingMeta
 func NewShardingMeta(schema, table string) *ShardingMeta {
 	return &ShardingMeta{
-		tableName:   dbutil.TableName(schema, table),
-		global:  &ShardingSequence{Items: make([]*DDLItem, 0)},
-		sources: make(map[string]*ShardingSequence),
+		tableName: dbutil.TableName(schema, table),
+		global:    &ShardingSequence{Items: make([]*DDLItem, 0)},
+		sources:   make(map[string]*ShardingSequence),
 	}
 }
 
