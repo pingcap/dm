@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -155,7 +156,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		ddl2 := ddls[index]
 		stmt, err2 := parser2.ParseOneStmt(ddl2, "", "")
 		if err2 != nil {
-			return err // return the original error
+			return originErr // return the original error
 		}
 
 		var (
@@ -175,12 +176,13 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 			table = n.Table.Name.O
 			col = n.Specs[0].OldColumnName.Name.O
 		}
-		tctx.L().Warn("try to fix drop column error", zap.String("DDL", ddl2), log.ShortError(err))
+		tctx.L().Warn("try to fix drop column error", zap.String("DDL", ddl2), log.ShortError(originErr))
 
 		// check if dependent index is single-column index on this column
-		sql := "SELECT INDEX_NAME FROM information_schema.statistics WHERE TABLE_SCHEMA = ? and TABLE_NAME = ? and COLUMN_NAME = ?"
-		indices, err := conn.querySQL(tctx, sql, schema, table, col)
-		if err != nil {
+		sql2 := "SELECT INDEX_NAME FROM information_schema.statistics WHERE TABLE_SCHEMA = ? and TABLE_NAME = ? and COLUMN_NAME = ?"
+		var rows *sql.Rows
+		rows, err2 = conn.querySQL(tctx, sql2, schema, table, col)
+		if err2 != nil {
 			return originErr
 		}
 		var (
@@ -189,19 +191,19 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 			idx2Drop  []string
 			count     int
 		)
-		for indices.Next() {
-			if err := indices.Scan(&idx); err != nil {
-				indices.Close()
+		for rows.Next() {
+			if err2 = rows.Scan(&idx); err2 != nil {
+				rows.Close()
 				return originErr
 			}
 			idx2Check = append(idx2Check, idx)
 		}
 		// Close is idempotent, we could close in advance to reuse conn
-		indices.Close()
+		rows.Close()
 
-		sql = "SELECT count(*) FROM information_schema.statistics WHERE TABLE_SCHEMA = ? and TABLE_NAME = ? and INDEX_NAME = ?"
+		sql2 = "SELECT count(*) FROM information_schema.statistics WHERE TABLE_SCHEMA = ? and TABLE_NAME = ? and INDEX_NAME = ?"
 		for _, idx := range idx2Check {
-			rows, err2 := conn.querySQL(tctx, sql, schema, table, idx)
+			rows, err2 = conn.querySQL(tctx, sql2, schema, table, idx)
 			if err2 != nil || !rows.Next() || rows.Scan(&count) != nil || count != 1 {
 				tctx.L().Warn("can't auto drop index", zap.String("index", idx))
 				rows.Close()
@@ -215,14 +217,14 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		for i, idx := range idx2Drop {
 			sqls[i] = fmt.Sprintf("ALTER TABLE %s DROP INDEX %s", dbutil.TableName(schema, table), dbutil.ColumnName(idx))
 		}
-		if _, err := conn.executeSQL(tctx, sqls); err != nil {
-			tctx.L().Warn("auto drop index failed", log.ShortError(err))
+		if _, err2 = conn.executeSQL(tctx, sqls); err2 != nil {
+			tctx.L().Warn("auto drop index failed", log.ShortError(err2))
 			return originErr
 		}
 
 		tctx.L().Info("drop index success, now try to drop column", zap.Strings("index", idx2Drop))
-		if _, err = conn.executeSQLWithIgnore(tctx, ignoreDDLError, ddls[index:]); err != nil {
-			return err
+		if _, err2 = conn.executeSQLWithIgnore(tctx, ignoreDDLError, ddls[index:]); err2 != nil {
+			return err2
 		}
 
 		tctx.L().Info("execute drop column SQL success", zap.String("DDL", ddl2))

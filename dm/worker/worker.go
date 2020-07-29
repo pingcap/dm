@@ -333,11 +333,11 @@ func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {
 			// TODO: right operation sequences may get error when we get etcdErrCompact, need to handle it later
 			// For example, Expect: Running -(pause)-> Paused -(resume)-> Running
 			// we get an etcd compact error at the first running. If we try to "resume" it now, we will get an error
-			opType, err := w.operateSubTaskStage(stage, subtaskCfg)
-			if err != nil {
+			opType, err2 := w.operateSubTaskStage(stage, subtaskCfg)
+			if err2 != nil {
 				opErrCounter.WithLabelValues(w.name, opType).Inc()
 				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage),
-					zap.String("task", subtaskCfg.Name), zap.Error(err))
+					zap.String("task", subtaskCfg.Name), zap.Error(err2))
 
 			}
 			delete(sts, name)
