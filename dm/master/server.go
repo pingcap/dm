@@ -1847,7 +1847,7 @@ func (s *Server) handleOperationResult(ctx context.Context, cli *scheduler.Worke
 func sortCommonWorkerResults(sourceRespCh chan *pb.CommonWorkerResponse) []*pb.CommonWorkerResponse {
 	sourceResps := make([]*pb.CommonWorkerResponse, 0, cap(sourceRespCh))
 	for len(sourceRespCh) > 0 {
-		r := <- sourceRespCh
+		r := <-sourceRespCh
 		sourceResps = append(sourceResps, r)
 	}
 	sort.Slice(sourceResps, func(i, j int) bool {
