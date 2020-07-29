@@ -8,7 +8,7 @@ CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
-PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock|_tools')
+PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pb|pbmock|_tools')
 PACKAGES_RELAY := $$(go list ./... | grep 'github.com/pingcap/dm/relay')
 PACKAGES_SYNCER := $$(go list ./... | grep 'github.com/pingcap/dm/syncer')
 PACKAGES_PKG_BINLOG := $$(go list ./... | grep 'github.com/pingcap/dm/pkg/binlog')
@@ -104,6 +104,10 @@ endef
 
 unit_test: retool_setup
 	$(call run_unit_test,$(PACKAGES),unit_test)
+
+# run unit test for the specified pkg only, like `make unit_test_pkg PKG=github.com/pingcap/dm/dm/master`
+unit_test_pkg: retool_setup
+	$(call run_unit_test,$(PKG),unit_test_syncer)
 
 unit_test_relay: retool_setup
 	$(call run_unit_test,$(PACKAGES_RELAY),unit_test_relay)
