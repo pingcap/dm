@@ -40,7 +40,7 @@ func TryUpgrade(cli *clientv3.Client) error {
 	// 2. check if any previous version exists.
 	if preVer.NotSet() {
 		// no initialization operations exist for Ver1 now,
-		// and any operations (may includes `upgrades`) if needed later.
+		// add any operations (may includes `upgrades`) if needed later.
 		// put the current version into etcd.
 		_, err = PutVersion(cli, CurrentVersion)
 		return err
