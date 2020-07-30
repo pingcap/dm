@@ -13,58 +13,58 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 # used to coverage wrong usage of dmctl command
 function usage_and_arg_test() {
     echo "check_task_wrong_arg"
-    ! check_task_wrong_arg
-    ! check_task_wrong_config_file
+    check_task_wrong_arg
+    check_task_wrong_config_file
 
     echo "pause_relay_wrong_arg"
-    ! pause_relay_wrong_arg
-    ! pause_relay_wihout_worker
+    pause_relay_wrong_arg
+    pause_relay_wihout_worker
 
     echo "resume_relay_wrong_arg"
-    ! resume_relay_wrong_arg
-    ! resume_relay_wihout_worker
+    resume_relay_wrong_arg
+    resume_relay_wihout_worker
 
     echo "pause_task_wrong_arg"
-    ! pause_task_wrong_arg
+    pause_task_wrong_arg
 
     echo "resume_task_wrong_arg"
-    ! resume_task_wrong_arg
+    resume_task_wrong_arg
 
     echo "query_status_wrong_arg"
-    ! query_status_wrong_arg
-    ! query_status_wrong_params
+    query_status_wrong_arg
+    query_status_wrong_params
 
     echo "start_task_wrong_arg"
-    ! start_task_wrong_arg
-    ! start_task_wrong_config_file
+    start_task_wrong_arg
+    start_task_wrong_config_file
 
     echo "stop_task_wrong_arg"
-    ! stop_task_wrong_arg
+    stop_task_wrong_arg
 
     echo "show_ddl_locks_wrong_arg"
-    ! show_ddl_locks_wrong_arg
+    show_ddl_locks_wrong_arg
 
     echo "update_relay_wrong_arg"
-    ! update_relay_wrong_arg
-    ! update_relay_wrong_config_file
-    ! update_relay_should_specify_one_dm_worker $MYSQL1_CONF
+    update_relay_wrong_arg
+    update_relay_wrong_config_file
+    update_relay_should_specify_one_dm_worker $MYSQL1_CONF
 
     # echo "update_task_wrong_arg"
     # update_task_wrong_arg
     # update_task_wrong_config_file
 
     echo "update_master_config_wrong_arg"
-    ! update_master_config_wrong_arg
-    ! update_master_config_wrong_config_file
+    update_master_config_wrong_arg
+    update_master_config_wrong_config_file
 
     echo "purge_relay_wrong_arg"
-    ! purge_relay_wrong_arg
-    ! purge_relay_wihout_worker
-    ! purge_relay_filename_with_multi_workers
+    purge_relay_wrong_arg
+    purge_relay_wihout_worker
+    purge_relay_filename_with_multi_workers
 
     echo "operate_source_empty_arg"
-    ! operate_source_empty_arg
-    ! operate_source_wrong_config_file
+    operate_source_empty_arg
+    operate_source_wrong_config_file
 }
 
 function recover_max_binlog_size() {
