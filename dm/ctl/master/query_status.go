@@ -55,14 +55,13 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 	taskName := cmd.Flags().Arg(0) // maybe empty
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 
@@ -74,13 +73,13 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) (err error) {
 		Sources: sources,
 	})
 	if err != nil {
-		common.PrintLines("can not query %s task's status(in sources %v):\n%v", taskName, sources, err)
+		common.PrintLines("can not query %s task's status(in sources %v)", taskName, sources)
 		return
 	}
 
 	more, err := cmd.Flags().GetBool("more")
 	if err != nil {
-		common.PrintLines("%v", err)
+		common.PrintLines("error in parse more")
 		return
 	}
 

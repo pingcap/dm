@@ -39,14 +39,13 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 	taskName := cmd.Flags().Arg(0) // maybe empty
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 
@@ -65,7 +64,6 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 		if len(sources) > 0 {
 			common.PrintLines("sources: %v", sources)
 		}
-		common.PrintLines("error: %v", err)
 		return
 	}
 

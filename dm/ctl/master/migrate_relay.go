@@ -19,12 +19,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
-
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/log"
+	"github.com/spf13/cobra"
 )
 
 // NewMigrateRelayCmd creates a MigrateRelay command
@@ -42,7 +39,7 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 3 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -63,7 +60,6 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 		Source:     source,
 	})
 	if err != nil {
-		log.L().Error("can not migrate relay", zap.Error(err))
 		return
 	}
 

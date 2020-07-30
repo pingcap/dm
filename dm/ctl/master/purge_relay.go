@@ -58,7 +58,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -69,7 +69,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	}
 	if len(sources) == 0 {
 		fmt.Println("must specify at least one source (`-s` / `--source`)")
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -87,13 +87,13 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	filename, err := cmd.Flags().GetString("filename")
 	if err != nil {
-		fmt.Println(errors.Trace(err))
+		common.PrintLines("error in parse filename")
 		return
 	}
 
 	subDir, err := cmd.Flags().GetString("sub-dir")
 	if err != nil {
-		fmt.Println(errors.Trace(err))
+		common.PrintLines("error in parse sub-dir")
 		return
 	}
 
@@ -126,7 +126,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	if len(filename) > 0 && len(sources) > 1 {
 		fmt.Println("for --filename, can only specify one source per time")
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 	if len(subDir) > 0 {
@@ -148,7 +148,6 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 		SubDir:   subDir,
 	})
 	if err != nil {
-		common.PrintLines("can not purge relay log files: \n%v", err)
 		return
 	}
 

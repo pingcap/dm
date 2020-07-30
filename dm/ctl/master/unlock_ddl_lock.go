@@ -42,12 +42,12 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 	owner, err := cmd.Flags().GetString("owner")
 	if err != nil {
-		common.PrintLines("%v", err)
+		common.PrintLines("error in parse owner")
 		return
 	}
 
@@ -56,13 +56,12 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) (err error) {
 	sources, _ := common.GetSourceArgs(cmd)
 	if len(sources) > 0 {
 		fmt.Println("shoud not specify any sources")
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	forceRemove, err := cmd.Flags().GetBool("force-remove")
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 
@@ -75,7 +74,7 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) (err error) {
 		ForceRemove:  forceRemove,
 	})
 	if err != nil {
-		common.PrintLines("can not unlock DDL lock %s \n%s", lockID, err.Error())
+		common.PrintLines("can not unlock DDL lock %s", lockID)
 		return
 	}
 

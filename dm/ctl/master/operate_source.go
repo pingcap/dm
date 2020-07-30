@@ -56,8 +56,7 @@ func convertCmdType(t string) pb.SourceOp {
 func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 	printSampleConfig, err := cmd.Flags().GetBool("print-sample-config")
 	if err != nil {
-		common.PrintLines("%v", err)
-		err = errors.New("dummy error to trigger exit code")
+		common.PrintLines("error in parse print-sample-config")
 		return
 	}
 
@@ -68,7 +67,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 			var rawConfig []byte
 			rawConfig, err = base64.StdEncoding.DecodeString(config.SampleConfigFile)
 			if err != nil {
-				fmt.Println("base64 decode config error:", err)
+				fmt.Println("base64 decode config error")
 			} else {
 				fmt.Println(string(rawConfig))
 			}
@@ -79,7 +78,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) < 2 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -87,7 +86,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 	op := convertCmdType(cmdType)
 	if op == pb.SourceOp_InvalidSourceOp {
 		common.PrintLines("invalid operate '%s' on worker", cmdType)
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -97,7 +96,6 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 		var content []byte
 		content, err = common.GetFileContent(configFile)
 		if err != nil {
-			common.PrintLines("get file content error:\n%v", err)
 			return
 		}
 		contents[i-1] = string(content)
@@ -112,7 +110,6 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 		Op:     op,
 	})
 	if err != nil {
-		common.PrintLines("can not update task:\n%v", err)
 		return
 	}
 

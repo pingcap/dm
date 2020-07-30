@@ -43,20 +43,18 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) < 2 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	binlogPos, sqlPattern, sharding, err := extractBinlogPosSQLPattern(cmd)
 	if err != nil {
-		common.PrintLines("%s", err.Error())
 		return
 	}
 
 	var source string
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 	if sharding {
@@ -66,7 +64,7 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) (err error) {
 	} else {
 		if len(sources) != 1 {
 			common.PrintLines("should only specify one source, but got %v", sources)
-			err = errors.New("dummy error to trigger exit code")
+			err = errors.New("please check output to see error")
 			return
 		}
 		source = sources[0]
@@ -75,14 +73,14 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) (err error) {
 	taskName := cmd.Flags().Arg(0)
 	if strings.TrimSpace(taskName) == "" {
 		common.PrintLines("must specify the task-name")
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	extraArgs := cmd.Flags().Args()[1:]
 	realSQLs, err := common.ExtractSQLsFromArgs(extraArgs)
 	if err != nil {
-		common.PrintLines("check SQLs error: %v", err)
+		common.PrintLines("check SQLs error")
 		return
 	}
 
@@ -99,7 +97,6 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) (err error) {
 		Sharding:   sharding,
 	})
 	if err != nil {
-		common.PrintLines("can not replace SQL:\n%v", err)
 		return
 	}
 

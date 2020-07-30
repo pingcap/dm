@@ -60,22 +60,22 @@ func offlineMemberFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	offlineType, err := convertOfflineMemberType(cmd)
 	if err != nil {
-		common.PrintLines("get offline type failed, error:\n%v", err)
+		common.PrintLines("get offline type failed")
 		return
 	}
 	name, err := cmd.Flags().GetString("name")
 	if err != nil {
-		common.PrintLines("get offline name failed, error:\n%v", err)
+		common.PrintLines("get offline name failed")
 		return
 	} else if name == "" {
 		common.PrintLines("a member name must be specified")
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -87,12 +87,11 @@ func offlineMemberFunc(cmd *cobra.Command, _ []string) (err error) {
 		Name: name,
 	})
 	if err != nil {
-		common.PrintLines("offline member failed, error:\n%v", err)
 		return
 	}
 	if !resp.Result {
 		common.PrintLines("offline member failed:\n%v", resp.Msg)
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 	common.PrettyPrintResponse(resp)

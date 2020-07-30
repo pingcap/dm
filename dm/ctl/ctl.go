@@ -50,6 +50,8 @@ func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dmctl",
 		Short: "DM control",
+		//SilenceErrors: true,
+		SilenceUsage: true,
 	}
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
 	cmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "source", "s", []string{}, "MySQL Source ID")
@@ -136,7 +138,7 @@ func Start(args []string) (err error) {
 	rootCmd = NewRootCmd()
 	rootCmd.SetArgs(args)
 	if err = rootCmd.Execute(); err != nil {
-		fmt.Println(rootCmd.UsageString())
+		//fmt.Println(rootCmd.UsageString())
 	}
 	return
 }

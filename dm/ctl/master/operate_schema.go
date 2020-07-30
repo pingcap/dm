@@ -54,7 +54,7 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) < 2 || len(cmd.Flags().Args()) > 3 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -66,17 +66,16 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 	switch op {
 	case pb.SchemaOp_InvalidSchemaOp:
 		common.PrintLines("invalid operate '%s' on schema", opType)
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	case pb.SchemaOp_SetSchema:
 		if schemaFile == "" {
 			common.PrintLines("must sepcify schema file for 'set' operation")
-			err = errors.New("dummy error to trigger exit code")
+			err = errors.New("please check output to see error")
 			return
 		}
 		schemaContent, err = common.GetFileContent(schemaFile)
 		if err != nil {
-			common.PrintLines("get file content error:\n%v", err)
 			return
 		}
 	default:
@@ -87,29 +86,26 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	} else if len(sources) == 0 {
 		common.PrintLines("must specify at least one source (`-s` / `--source`)")
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 	database, err := cmd.Flags().GetString("database")
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	} else if database == "" {
 		common.PrintLines("must specify 'database'")
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 	table, err := cmd.Flags().GetString("table")
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	} else if table == "" {
 		common.PrintLines("must specify 'table'")
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -126,7 +122,6 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 		Schema:   string(schemaContent),
 	})
 	if err != nil {
-		common.PrintLines("fail to operate schema:\n%v", err)
 		return
 	}
 	common.PrettyPrintResponse(resp)

@@ -40,7 +40,7 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) < 2 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -51,33 +51,33 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) (err error) {
 	}
 	if len(sources) != 1 {
 		common.PrintLines("want only one source, but got %v", sources)
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	taskName := cmd.Flags().Arg(0)
 	if strings.TrimSpace(taskName) == "" {
 		common.PrintLines("task-name is empty")
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	extraArgs := cmd.Flags().Args()[1:]
 	realSQLs, err := common.ExtractSQLsFromArgs(extraArgs)
 	if err != nil {
-		common.PrintLines("check sqls err %v", err)
+		common.PrintLines("check sqls err")
 		return
 	}
 	for _, sql := range realSQLs {
 		var isDDL bool
 		isDDL, err = common.IsDDL(sql)
 		if err != nil {
-			common.PrintLines("check sql err %v", err)
+			common.PrintLines("check sql err")
 			return
 		}
 		if !isDDL {
 			common.PrintLines("only support inject DDL currently, but got '%s'", sql)
-			err = errors.New("dummy error to trigger exit code")
+			err = errors.New("please check output to see error")
 			return
 		}
 	}
@@ -92,7 +92,6 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) (err error) {
 		Source: sources[0],
 	})
 	if err != nil {
-		common.PrintLines("can not inject sql:\n%v", err)
 		return
 	}
 

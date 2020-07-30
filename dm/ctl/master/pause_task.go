@@ -38,20 +38,19 @@ func pauseTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 	name := cmd.Flags().Arg(0)
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 
 	resp, err := common.OperateTask(pb.TaskOp_Pause, name, sources)
 	if err != nil {
-		common.PrintLines("can not pause task %s:\n%v", name, err)
+		common.PrintLines("can not pause task %s", name)
 		return
 	}
 

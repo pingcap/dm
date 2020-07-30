@@ -43,20 +43,18 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	binlogPos, sqlPattern, sharding, err := extractBinlogPosSQLPattern(cmd)
 	if err != nil {
-		common.PrintLines("%s", err.Error())
 		return
 	}
 
 	var source string
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 	if sharding {
@@ -66,7 +64,7 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) (err error) {
 	} else {
 		if len(sources) != 1 {
 			common.PrintLines("should only specify one source, but got %v", sources)
-			err = errors.New("dummy error to trigger exit code")
+			err = errors.New("please check output to see error")
 			return
 		}
 		source = sources[0]
@@ -75,7 +73,7 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) (err error) {
 	taskName := cmd.Flags().Arg(0)
 	if strings.TrimSpace(taskName) == "" {
 		common.PrintLines("must specify the task-name")
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -92,7 +90,6 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) (err error) {
 		Sharding:   sharding,
 	})
 	if err != nil {
-		common.PrintLines("can not skip SQL:\n%v", err)
 		return
 	}
 

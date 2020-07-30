@@ -50,7 +50,7 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -59,7 +59,7 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) (err error) {
 	op := convertOpType(opType)
 	if op == pb.LeaderOp_InvalidLeaderOp {
 		common.PrintLines("invalid operate '%s' on leader", opType)
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -72,7 +72,6 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) (err error) {
 		Op: op,
 	})
 	if err != nil {
-		common.PrintLines("fail to operate leader:\n%v", err)
 		return
 	}
 

@@ -38,12 +38,11 @@ func updateMasterConfigFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
-		err = errors.New("dummy error to trigger exit code")
+		err = errors.New("please check output to see error")
 		return
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", err)
 		return
 	}
 
@@ -55,7 +54,6 @@ func updateMasterConfigFunc(cmd *cobra.Command, _ []string) (err error) {
 		Config: string(content),
 	})
 	if err != nil {
-		common.PrintLines("can not update master config:\n%v", err)
 		return
 	}
 
