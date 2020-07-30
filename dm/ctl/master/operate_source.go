@@ -88,7 +88,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if op != pb.SourceOp_ShowSource && len(cmd.Flags().Args()) == 1 {
-		common.PrintLines("operate-source create/update/stop should input config-files")
+		common.PrintLines("operate-source create/update/stop should specify config-file(s)")
 		return
 	}
 

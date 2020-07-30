@@ -1427,11 +1427,9 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		return resp, nil
 	}
 
-	// sourceIDs and workers are used to query status from worker, to return a more real status
-	var (
-		sourceIDs []string
-		workers   []*scheduler.Worker
-	)
+	// boundM: sourceID -> worker are used to query status from worker, to return a more real status
+	boundM := map[string]*scheduler.Worker{}
+
 	switch req.Op {
 	case pb.SourceOp_StartSource:
 		var (
@@ -1462,21 +1460,17 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 			}
 			return resp, nil
 		}
-		sourceIDs = started
 		// for start source, we should get worker after start source
-		workers = make([]*scheduler.Worker, len(started))
-		for i, sid := range started {
-			workers[i] = s.scheduler.GetWorkerBySource(sid)
+		for _, sid := range started {
+			boundM[sid] = s.scheduler.GetWorkerBySource(sid)
 		}
 	case pb.SourceOp_UpdateSource:
 		// TODO: support SourceOp_UpdateSource later
 		resp.Msg = "Update worker config is not supported by dm-ha now"
 		return resp, nil
 	case pb.SourceOp_StopSource:
-		workers = make([]*scheduler.Worker, len(cfgs))
-		for i, cfg := range cfgs {
-			sourceIDs = append(sourceIDs, cfg.SourceID)
-			workers[i] = s.scheduler.GetWorkerBySource(cfg.SourceID)
+		for _, cfg := range cfgs {
+			boundM[cfg.SourceID] = s.scheduler.GetWorkerBySource(cfg.SourceID)
 			err := s.scheduler.RemoveSourceCfg(cfg.SourceID)
 			// TODO(lance6716):
 			// user could not copy-paste same command if encounter error halfway:
@@ -1492,10 +1486,8 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 			}
 		}
 	case pb.SourceOp_ShowSource:
-		sourceIDs = s.scheduler.GetSourceCfgIDs()
-		workers = make([]*scheduler.Worker, len(sourceIDs))
-		for i, id := range sourceIDs {
-			workers[i] = s.scheduler.GetWorkerBySource(id)
+		for _, id := range s.scheduler.GetSourceCfgIDs() {
+			boundM[id] = s.scheduler.GetWorkerBySource(id)
 		}
 	default:
 		resp.Msg = terror.ErrMasterInvalidOperateOp.Generate(req.Op.String(), "source").Error()
@@ -1516,15 +1508,15 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		workerToCheck []string
 	)
 
-	for i, w := range workers {
+	for id, w := range boundM {
 		if w == nil {
 			resp.Sources = append(resp.Sources, &pb.CommonWorkerResponse{
 				Result: true,
 				Msg:    noWorkerMsg,
-				Source: cfgs[i].SourceID,
+				Source: id,
 			})
 		} else {
-			sourceToCheck = append(sourceToCheck, sourceIDs[i])
+			sourceToCheck = append(sourceToCheck, id)
 			workerToCheck = append(workerToCheck, w.BaseInfo().Name)
 		}
 	}
