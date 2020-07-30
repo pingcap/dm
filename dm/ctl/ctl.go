@@ -48,8 +48,8 @@ func init() {
 // NewRootCmd generates a new rootCmd
 func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "dmctl",
-		Short: "DM control",
+		Use:          "dmctl",
+		Short:        "DM control",
 		SilenceUsage: true,
 	}
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
