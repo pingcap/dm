@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 
@@ -29,16 +30,17 @@ func NewSQLInjectCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sql-inject <-s source> <task-name> <sql1;sql2;>",
 		Short: "inject (limited) SQLs into binlog replication unit as binlog events",
-		Run:   sqlInjectFunc,
+		RunE:  sqlInjectFunc,
 	}
 	return cmd
 }
 
 // sqlInjectFunc does sql inject request
-func sqlInjectFunc(cmd *cobra.Command, _ []string) {
+func sqlInjectFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) < 2 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -49,12 +51,14 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 	}
 	if len(sources) != 1 {
 		common.PrintLines("want only one source, but got %v", sources)
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
 	taskName := cmd.Flags().Arg(0)
 	if strings.TrimSpace(taskName) == "" {
 		common.PrintLines("task-name is empty")
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -65,13 +69,15 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	for _, sql := range realSQLs {
-		isDDL, err2 := common.IsDDL(sql)
-		if err2 != nil {
-			common.PrintLines("check sql err %v", err2)
+		var isDDL bool
+		isDDL, err = common.IsDDL(sql)
+		if err != nil {
+			common.PrintLines("check sql err %v", err)
 			return
 		}
 		if !isDDL {
 			common.PrintLines("only support inject DDL currently, but got '%s'", sql)
+			err = errors.New("dummy error to trigger exit code")
 			return
 		}
 	}
@@ -91,4 +97,5 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

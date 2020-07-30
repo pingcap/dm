@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -29,16 +30,17 @@ func NewUpdateTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-task [-s source ...] <config-file>",
 		Short: "update a task's config for routes, filters, or block-allow-list",
-		Run:   updateTaskFunc,
+		RunE:  updateTaskFunc,
 	}
 	return cmd
 }
 
 // updateTaskFunc does update task request
-func updateTaskFunc(cmd *cobra.Command, _ []string) {
+func updateTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
@@ -70,4 +72,5 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) {
 	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
 		common.PrettyPrintResponse(resp)
 	}
+	return
 }

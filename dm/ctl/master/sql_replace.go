@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 
@@ -29,7 +30,7 @@ func NewSQLReplaceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sql-replace <-s source> [-b binlog-pos] [-p sql-pattern] [--sharding] <task-name> <sql1;sql2;>",
 		Short: "replace SQLs matched by a specific binlog position (binlog-pos) or a SQL pattern (sql-pattern); each SQL must end with a semicolon",
-		Run:   sqlReplaceFunc,
+		RunE:  sqlReplaceFunc,
 	}
 	cmd.Flags().StringP("binlog-pos", "b", "", "position used to match binlog event if matched the sql-replace operation will be applied. The format like \"mysql-bin|000001.000003:3270\"")
 	cmd.Flags().StringP("sql-pattern", "p", "", "SQL pattern used to match the DDL converted by optional router-rules if matched the sql-replace operation will be applied. The format like \"~(?i)ALTER\\s+TABLE\\s+`db1`.`tbl1`\\s+ADD\\s+COLUMN\\s+col1\\s+INT\". Whitespace is not supported, and must be replaced by \"\\s\". Staring with ~ as regular expression. This can only be used for DDL (converted by optional router-rules), and if multi DDLs in one binlog event, one of them matched is enough, but all of them will be replaced")
@@ -38,10 +39,11 @@ func NewSQLReplaceCmd() *cobra.Command {
 }
 
 // sqlReplaceFunc does sql replace request
-func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
+func sqlReplaceFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) < 2 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -64,6 +66,7 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 	} else {
 		if len(sources) != 1 {
 			common.PrintLines("should only specify one source, but got %v", sources)
+			err = errors.New("dummy error to trigger exit code")
 			return
 		}
 		source = sources[0]
@@ -72,6 +75,7 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 	taskName := cmd.Flags().Arg(0)
 	if strings.TrimSpace(taskName) == "" {
 		common.PrintLines("must specify the task-name")
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -100,4 +104,5 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

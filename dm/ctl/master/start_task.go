@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -29,17 +30,18 @@ func NewStartTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start-task [-s source ...] [--remove-meta] <config-file>",
 		Short: "start a task as defined in the config file",
-		Run:   startTaskFunc,
+		RunE:  startTaskFunc,
 	}
 	cmd.Flags().BoolP("remove-meta", "", false, "whether to remove task's meta data")
 	return cmd
 }
 
 // startTaskFunc does start task request
-func startTaskFunc(cmd *cobra.Command, _ []string) {
+func startTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
@@ -78,4 +80,5 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
 		common.PrettyPrintResponse(resp)
 	}
+	return
 }

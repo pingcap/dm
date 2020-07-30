@@ -14,6 +14,7 @@
 package master
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -28,16 +29,17 @@ func NewResumeRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "resume-relay <-s source ...>",
 		Short: "resume DM-worker's relay unit",
-		Run:   resumeRelayFunc,
+		RunE:  resumeRelayFunc,
 	}
 	return cmd
 }
 
 // resumeRelayFunc does resume relay request
-func resumeRelayFunc(cmd *cobra.Command, _ []string) {
+func resumeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -48,6 +50,7 @@ func resumeRelayFunc(cmd *cobra.Command, _ []string) {
 	}
 	if len(sources) == 0 {
 		fmt.Println("must specify at least one source (`-s` / `--source`)")
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -58,4 +61,5 @@ func resumeRelayFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

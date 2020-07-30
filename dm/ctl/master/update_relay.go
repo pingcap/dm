@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -29,16 +30,17 @@ func NewUpdateRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-relay [-s source ...] <config-file>",
 		Short: "update the relay unit config of the DM-worker",
-		Run:   updateRelayFunc,
+		RunE:  updateRelayFunc,
 	}
 	return cmd
 }
 
 // updateRealyFunc does update relay request
-func updateRelayFunc(cmd *cobra.Command, _ []string) {
+func updateRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -51,6 +53,7 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 	sources, _ := common.GetSourceArgs(cmd)
 	if len(sources) != 1 {
 		fmt.Println("must specify one source (`-s` / `--source`)")
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -69,4 +72,5 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

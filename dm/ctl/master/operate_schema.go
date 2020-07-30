@@ -29,7 +29,7 @@ func NewOperateSchemaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operate-schema <operate-type> <-s source ...> <task-name> <-d database> <-t table> [schema-file]",
 		Short: "get/set/remove the schema for an upstream table",
-		RunE:   operateSchemaCmd,
+		RunE:  operateSchemaCmd,
 	}
 	cmd.Flags().StringP("database", "d", "", "database name of the table")
 	cmd.Flags().StringP("table", "t", "", "table name")
@@ -50,7 +50,7 @@ func convertSchemaOpType(t string) pb.SchemaOp {
 }
 
 // operateSchemaCmd does the operate schema request.
-func operateSchemaCmd(cmd *cobra.Command, _ []string)(err error) {
+func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) < 2 || len(cmd.Flags().Args()) > 3 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()

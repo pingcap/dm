@@ -43,7 +43,7 @@ func NewPurgeRelayCmd() *cobra.Command {
 		//Short: "purge dm-worker's relay log files, choose 1 of 2 methods",
 		Use:   "purge-relay <-s source> [--filename] [--sub-dir]",
 		Short: "purge relay log files of the DM-worker according to the specified filename",
-		Run:   purgeRelayFunc,
+		RunE:  purgeRelayFunc,
 	}
 	//cmd.Flags().BoolP("inactive", "i", false, "whether try to purge all inactive relay log files")
 	//cmd.Flags().StringP("time", "t", "", fmt.Sprintf("whether try to purge relay log files before this time, the format is \"%s\"(_ between date and time)", timeFormat))
@@ -54,10 +54,11 @@ func NewPurgeRelayCmd() *cobra.Command {
 }
 
 // purgeRelayFunc does purge relay log files
-func purgeRelayFunc(cmd *cobra.Command, _ []string) {
+func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -68,6 +69,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 	}
 	if len(sources) == 0 {
 		fmt.Println("must specify at least one source (`-s` / `--source`)")
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -124,6 +126,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 
 	if len(filename) > 0 && len(sources) > 1 {
 		fmt.Println("for --filename, can only specify one source per time")
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 	if len(subDir) > 0 {
@@ -150,4 +153,5 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

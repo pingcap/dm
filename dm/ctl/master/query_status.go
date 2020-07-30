@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 
@@ -43,17 +44,18 @@ func NewQueryStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query-status [-s source ...] [task-name] [--more]",
 		Short: "query task status",
-		Run:   queryStatusFunc,
+		RunE:  queryStatusFunc,
 	}
 	cmd.Flags().BoolP("more", "", false, "whether to print the detailed task information")
 	return cmd
 }
 
 // queryStatusFunc does query task's status
-func queryStatusFunc(cmd *cobra.Command, _ []string) {
+func queryStatusFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 	taskName := cmd.Flags().Arg(0) // maybe empty
@@ -88,6 +90,7 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 	} else {
 		common.PrettyPrintResponse(resp)
 	}
+	return
 }
 
 // errorOccurred checks ProcessResult and return true if some error occurred

@@ -29,7 +29,7 @@ func NewOperateLeaderCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operate-leader <operate-type>",
 		Short: "operate-type can be 'evict' or 'cancel-evict', used to evict leader or cancel evict",
-		RunE:   operateLeaderFunc,
+		RunE:  operateLeaderFunc,
 	}
 	return cmd
 }
@@ -46,7 +46,7 @@ func convertOpType(op string) pb.LeaderOp {
 }
 
 // operateLeaderFunc does operate leader request
-func operateLeaderFunc(cmd *cobra.Command, _ []string) (err error){
+func operateLeaderFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()

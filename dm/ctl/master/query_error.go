@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -28,16 +29,17 @@ func NewQueryErrorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query-error [-s source ...] [task-name]",
 		Short: "query task error",
-		Run:   queryErrorFunc,
+		RunE:  queryErrorFunc,
 	}
 	return cmd
 }
 
 // queryErrorFunc does query task's error
-func queryErrorFunc(cmd *cobra.Command, _ []string) {
+func queryErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 	taskName := cmd.Flags().Arg(0) // maybe empty
@@ -68,4 +70,5 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

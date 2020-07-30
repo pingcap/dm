@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -28,15 +29,16 @@ func NewUpdateMasterConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-master-config <config-file>",
 		Short: "update the config of the DM-master",
-		Run:   updateMasterConfigFunc,
+		RunE:  updateMasterConfigFunc,
 	}
 	return cmd
 }
 
-func updateMasterConfigFunc(cmd *cobra.Command, _ []string) {
+func updateMasterConfigFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
@@ -58,4 +60,5 @@ func updateMasterConfigFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

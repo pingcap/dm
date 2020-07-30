@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -29,16 +30,17 @@ func NewSwitchRelayMasterCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "switch-relay-master <-s source ...>",
 		Short: "switch the master server of the DM-worker's relay unit",
-		Run:   switchRelayMasterFunc,
+		RunE:  switchRelayMasterFunc,
 	}
 	return cmd
 }
 
 // switchRelayMasterFunc does switch relay master server
-func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
+func switchRelayMasterFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -49,6 +51,7 @@ func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
 	}
 	if len(sources) == 0 {
 		fmt.Println("must specify at least one source (`-s` / `--source`)")
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -64,4 +67,5 @@ func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

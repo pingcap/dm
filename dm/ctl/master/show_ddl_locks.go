@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -28,16 +29,17 @@ func NewShowDDLLocksCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show-ddl-locks [-s source ...] [task-name]",
 		Short: "show un-resolved DDL locks",
-		Run:   showDDLLocksFunc,
+		RunE:  showDDLLocksFunc,
 	}
 	return cmd
 }
 
 // showDDLLocksFunc does show DDL locks
-func showDDLLocksFunc(cmd *cobra.Command, _ []string) {
+func showDDLLocksFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 	taskName := cmd.Flags().Arg(0) // maybe empty
@@ -61,4 +63,5 @@ func showDDLLocksFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

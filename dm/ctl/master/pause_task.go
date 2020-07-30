@@ -14,6 +14,7 @@
 package master
 
 import (
+	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -27,16 +28,17 @@ func NewPauseTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pause-task [-s source ...] <task-name>",
 		Short: "pause a specified running task",
-		Run:   pauseTaskFunc,
+		RunE:  pauseTaskFunc,
 	}
 	return cmd
 }
 
 // pauseTaskFunc does pause task request
-func pauseTaskFunc(cmd *cobra.Command, _ []string) {
+func pauseTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 	name := cmd.Flags().Arg(0)
@@ -54,4 +56,5 @@ func pauseTaskFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

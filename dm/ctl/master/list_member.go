@@ -38,7 +38,7 @@ func NewListMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list-member [--leader] [--master] [--worker] [--name master-name/worker-name ...]",
 		Short: "list member information",
-		RunE:   listMemberFunc,
+		RunE:  listMemberFunc,
 	}
 	cmd.Flags().BoolP("leader", "l", false, "only to list leader information")
 	cmd.Flags().BoolP("master", "m", false, "only to list master information")

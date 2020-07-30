@@ -14,6 +14,7 @@
 package master
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -28,16 +29,17 @@ func NewPauseRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pause-relay <-s source ...>",
 		Short: "pause DM-worker's relay unit",
-		Run:   pauseRelayFunc,
+		RunE:  pauseRelayFunc,
 	}
 	return cmd
 }
 
 // pauseRelayFunc does pause relay request
-func pauseRelayFunc(cmd *cobra.Command, _ []string) {
+func pauseRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -48,6 +50,7 @@ func pauseRelayFunc(cmd *cobra.Command, _ []string) {
 	}
 	if len(sources) == 0 {
 		fmt.Println("must specify at least one source (`-s` / `--source`)")
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -58,4 +61,5 @@ func pauseRelayFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }
