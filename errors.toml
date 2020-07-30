@@ -1558,30 +1558,6 @@ description = ""
 workaround = "It is recommended to include only one DDL operation in a statement executed upstream. Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/skip-or-replace-abnormal-sql-statements"
 tags = ["internal", "high"]
 
-[error.DM-sync-unit-36023]
-message = "only support inject DDL for sharding group to be synced currently, but got %s"
-description = ""
-workaround = ""
-tags = ["internal", "low"]
-
-[error.DM-sync-unit-36024]
-message = "injected DDL %s without schema name not valid"
-description = ""
-workaround = ""
-tags = ["internal", "low"]
-
-[error.DM-sync-unit-36025]
-message = "op %s not supported"
-description = ""
-workaround = ""
-tags = ["internal", "medium"]
-
-[error.DM-sync-unit-36026]
-message = "nil request not valid"
-description = ""
-workaround = ""
-tags = ["internal", "medium"]
-
 [error.DM-sync-unit-36027]
 message = "Column count doesn't match value count: %d (columns) vs %d (values)"
 description = ""
@@ -1804,24 +1780,6 @@ description = ""
 workaround = ""
 tags = ["internal", "low"]
 
-[error.DM-dm-master-38001]
-message = "nil request not valid"
-description = ""
-workaround = ""
-tags = ["internal", "medium"]
-
-[error.DM-dm-master-38002]
-message = "op %s not supported"
-description = ""
-workaround = ""
-tags = ["internal", "medium"]
-
-[error.DM-dm-master-38003]
-message = "operate request without --sharding specified not valid"
-description = ""
-workaround = ""
-tags = ["internal", "medium"]
-
 [error.DM-dm-master-38004]
 message = "create grpc connection"
 description = ""
@@ -1932,12 +1890,6 @@ tags = ["internal", "high"]
 
 [error.DM-dm-master-38022]
 message = "worker %s not waiting for DDL lock %s"
-description = ""
-workaround = ""
-tags = ["internal", "high"]
-
-[error.DM-dm-master-38023]
-message = "request DDL lock %s owner %s handle SQLs request %s fail %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]

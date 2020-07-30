@@ -59,7 +59,6 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/shardddl"
-	operator "github.com/pingcap/dm/syncer/sql-operator"
 )
 
 var (
@@ -165,8 +164,6 @@ type Syncer struct {
 		errors []*ExecErrorContext
 	}
 
-	sqlOperatorHolder *operator.Holder
-
 	heartbeat *Heartbeat
 
 	readerHub *streamer.ReaderHub
@@ -210,7 +207,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.setSyncCfg()
 
 	syncer.binlogType = toBinlogType(cfg.UseRelay)
-	syncer.sqlOperatorHolder = operator.NewHolder()
 	syncer.readerHub = streamer.GetReaderHub()
 
 	if cfg.ShardMode == config.ShardPessimistic {
@@ -1235,14 +1231,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		// we only inject sqls  in global streaming to avoid DDL position confusion
 		if shardingReSync == nil {
-			e = s.tryInject(latestOp, currentLocation.Clone())
 			latestOp = null
 		}
 
 		startTime := time.Now()
-		if e == nil {
-			e, err = s.streamerController.GetEvent(tctx)
-		}
+		e, err = s.streamerController.GetEvent(tctx)
 
 		if err == context.Canceled {
 			s.tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last location", lastLocation))
@@ -1521,13 +1514,6 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		args    [][]interface{}
 	)
 
-	// for RowsEvent, one event may have multi SQLs and multi keys, (eg. INSERT INTO t1 VALUES (11, 12), (21, 22) )
-	// to cover them dispatched to different channels, we still apply operator here
-	// ugly, but I have no better solution yet.
-	applied, sqls, err = s.tryApplySQLOperator(ec.currentLocation.Clone(), nil) // forbidden sql-pattern for DMLs
-	if err != nil {
-		return err
-	}
 	param := &genDMLParam{
 		schema:            schemaName,
 		table:             tableName,
@@ -1652,8 +1638,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		onlineDDLTableNames map[string]*filter.Table
 	)
 
-	// for DDL, we don't apply operator until we try to execute it.
-	// so can handle sharding cases
 	sqls, onlineDDLTableNames, err = s.resolveDDLSQL(ec.tctx, ec.parser2, parseResult.stmt, usedSchema)
 	if err != nil {
 		s.tctx.L().Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
@@ -1770,15 +1754,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	if s.cfg.ShardMode == "" {
 		s.tctx.L().Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
-		// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
-		applied, appliedSQLs, applyErr := s.tryApplySQLOperator(ec.currentLocation.Clone(), needHandleDDLs)
-		if applyErr != nil {
-			return terror.Annotatef(applyErr, "try apply SQL operator on binlog-location %s with DDLs %v", ec.currentLocation, needHandleDDLs)
-		}
-		if applied {
-			s.tctx.L().Info("replace ddls to preset ddls by sql operator in normal mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
-			needHandleDDLs = appliedSQLs // maybe nil
-		}
 
 		// interrupted after flush old checkpoint and before track DDL.
 		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
@@ -1985,16 +1960,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	s.tctx.L().Info("start to handle ddls in shard mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
-
-	// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
-	applied, appliedSQLs, err := s.tryApplySQLOperator(ec.currentLocation.Clone(), needHandleDDLs)
-	if err != nil {
-		return terror.Annotatef(err, "try apply SQL operator on binlog-location %s with DDLs %v", ec.currentLocation, needHandleDDLs)
-	}
-	if applied {
-		s.tctx.L().Info("replace ddls to preset ddls by sql operator in shard mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
-		needHandleDDLs = appliedSQLs // maybe nil
-	}
 
 	// interrupted after track DDL and before execute DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {

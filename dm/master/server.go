@@ -40,7 +40,6 @@ import (
 	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/master/shardddl"
-	operator "github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
@@ -112,9 +111,6 @@ type Server struct {
 	// shard DDL optimist
 	optimist *shardddl.Optimist
 
-	// SQL operator holder
-	sqlOperatorHolder *operator.Holder
-
 	// trace group id generator
 	idGen *tracing.IDGenerator
 
@@ -128,11 +124,10 @@ type Server struct {
 func NewServer(cfg *Config) *Server {
 	logger := log.L()
 	server := Server{
-		cfg:               cfg,
-		scheduler:         scheduler.NewScheduler(&logger, cfg.Security),
-		sqlOperatorHolder: operator.NewHolder(),
-		idGen:             tracing.NewIDGen(),
-		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
+		cfg:       cfg,
+		scheduler: scheduler.NewScheduler(&logger, cfg.Security),
+		idGen:     tracing.NewIDGen(),
+		ap:        NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
 	}
 	server.pessimist = shardddl.NewPessimist(&logger, server.getTaskResources)
 	server.optimist = shardddl.NewOptimist(&logger)
@@ -856,72 +851,6 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 		resp.Msg = err.Error()
 	}
 
-	return resp, nil
-}
-
-// HandleSQLs implements MasterServer.HandleSQLs
-func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.HandleSQLsResponse, error) {
-	log.L().Info("", zap.String("task name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
-
-	isLeader, needForward := s.isLeaderAndNeedForward()
-	if !isLeader {
-		if needForward {
-			return s.leaderClient.HandleSQLs(ctx, req)
-		}
-		return nil, terror.ErrMasterRequestIsNotForwardToLeader
-	}
-
-	// save request for --sharding operation
-	if req.Sharding {
-		err := s.sqlOperatorHolder.Set(req)
-		if err != nil {
-			return &pb.HandleSQLsResponse{
-				Result: false,
-				Msg:    fmt.Sprintf("save request with --sharding error:\n%v", err),
-			}, nil
-		}
-		log.L().Info("handle sqls request was saved", zap.String("task name", req.Name), zap.String("request", "HandleSQLs"))
-		return &pb.HandleSQLsResponse{
-			Result: true,
-			Msg:    "request with --sharding saved and will be sent to DDL lock's owner when resolving DDL lock",
-		}, nil
-	}
-
-	resp := &pb.HandleSQLsResponse{
-		Result: false,
-		Msg:    "",
-	}
-
-	if !s.checkTaskAndWorkerMatch(req.Name, req.Source) {
-		resp.Msg = fmt.Sprintf("task %s and worker %s not match, can try `refresh-worker-tasks` cmd first", req.Name, req.Source)
-		return resp, nil
-	}
-
-	// execute grpc call
-	subReq := &workerrpc.Request{
-		Type: workerrpc.CmdHandleSubTaskSQLs,
-		HandleSubTaskSQLs: &pb.HandleSubTaskSQLsRequest{
-			Name:       req.Name,
-			Op:         req.Op,
-			Args:       req.Args,
-			BinlogPos:  req.BinlogPos,
-			SqlPattern: req.SqlPattern,
-		},
-	}
-	worker := s.scheduler.GetWorkerBySource(req.Source)
-	if worker == nil {
-		resp.Msg = fmt.Sprintf("source %s not found in bound sources %v", req.Source, s.scheduler.BoundSources())
-		return resp, nil
-	}
-	response, err := worker.SendRequest(ctx, subReq, s.cfg.RPCTimeout)
-	workerResp := &pb.CommonWorkerResponse{}
-	if err != nil {
-		workerResp = errorCommonWorkerResponse(err.Error(), req.Source, worker.BaseInfo().Name)
-	} else {
-		workerResp = response.HandleSubTaskSQLs
-	}
-	resp.Sources = []*pb.CommonWorkerResponse{workerResp}
-	resp.Result = true
 	return resp, nil
 }
 

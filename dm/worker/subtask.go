@@ -507,21 +507,6 @@ func (st *SubTask) Update(cfg *config.SubTaskConfig) error {
 	return nil
 }
 
-// SetSyncerSQLOperator sets an operator to syncer.
-func (st *SubTask) SetSyncerSQLOperator(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) error {
-	syncUnit, ok := st.currUnit.(*syncer.Syncer)
-	if !ok {
-		return terror.ErrWorkerOperSyncUnitOnly.Generate(st.currUnit.Type())
-	}
-
-	// special handle for INJECT
-	if req.Op == pb.SQLOp_INJECT {
-		return syncUnit.InjectSQLs(ctx, req.Args)
-	}
-
-	return syncUnit.SetSQLOperator(req)
-}
-
 // OperateSchema operates schema for an upstream table.
 func (st *SubTask) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaRequest) (schema string, err error) {
 	if st.Stage() != pb.Stage_Paused {

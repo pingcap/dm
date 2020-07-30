@@ -35,26 +35,6 @@ func (m *MockWorkerClient) EXPECT() *MockWorkerClientMockRecorder {
 	return m.recorder
 }
 
-// HandleSQLs mocks base method
-func (m *MockWorkerClient) HandleSQLs(arg0 context.Context, arg1 *pb.HandleSubTaskSQLsRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "HandleSQLs", varargs...)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// HandleSQLs indicates an expected call of HandleSQLs
-func (mr *MockWorkerClientMockRecorder) HandleSQLs(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSQLs", reflect.TypeOf((*MockWorkerClient)(nil).HandleSQLs), varargs...)
-}
-
 // MigrateRelay mocks base method
 func (m *MockWorkerClient) MigrateRelay(arg0 context.Context, arg1 *pb.MigrateRelayRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
 	m.ctrl.T.Helper()
@@ -316,21 +296,6 @@ func NewMockWorkerServer(ctrl *gomock.Controller) *MockWorkerServer {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockWorkerServer) EXPECT() *MockWorkerServerMockRecorder {
 	return m.recorder
-}
-
-// HandleSQLs mocks base method
-func (m *MockWorkerServer) HandleSQLs(arg0 context.Context, arg1 *pb.HandleSubTaskSQLsRequest) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleSQLs", arg0, arg1)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// HandleSQLs indicates an expected call of HandleSQLs
-func (mr *MockWorkerServerMockRecorder) HandleSQLs(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSQLs", reflect.TypeOf((*MockWorkerServer)(nil).HandleSQLs), arg0, arg1)
 }
 
 // MigrateRelay mocks base method

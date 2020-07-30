@@ -562,20 +562,6 @@ func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) (string,
 	return op.String(), w.OperateRelay(ctx, &pb.OperateRelayRequest{Op: op})
 }
 
-// HandleSQLs implements Handler.HandleSQLs.
-func (w *Worker) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) error {
-	if w.closed.Get() == closedTrue {
-		return terror.ErrWorkerAlreadyClosed.Generate()
-	}
-
-	st := w.subTaskHolder.findSubTask(req.Name)
-	if st == nil {
-		return terror.ErrWorkerSubTaskNotFound.Generate(req.Name)
-	}
-
-	return st.SetSyncerSQLOperator(ctx, req)
-}
-
 // SwitchRelayMaster switches relay unit's master server
 func (w *Worker) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
 	if w.closed.Get() == closedTrue {

@@ -37,8 +37,6 @@ service Master {
 
     rpc UpdateWorkerRelayConfig(UpdateWorkerRelayConfigRequest) returns (CommonWorkerResponse) {}
 
-    rpc HandleSQLs (HandleSQLsRequest) returns (HandleSQLsResponse) {}
-
     // SwitchWorkerRelayMaster requests some dm-workers to switch relay unit's master server
     rpc SwitchWorkerRelayMaster(SwitchWorkerRelayMasterRequest) returns (SwitchWorkerRelayMasterResponse) {}
 
@@ -269,22 +267,6 @@ message OperateWorkerRelayResponse {
     bool result = 2;
     string msg = 3;
     repeated CommonWorkerResponse sources = 4;
-}
-
-message HandleSQLsRequest {
-    string name = 1; // sub task's name
-    SQLOp op = 2; // operation type
-    repeated string args = 3; // args for operation
-    string binlogPos = 4; // binlog-pos (that's file:pos format)
-    string source = 5; // source
-    string sqlPattern = 6; // sql-pattern (for regexp, starts with ~)
-    bool sharding = 7; // whether are handing sharding DDL, which will only take effect on DDL lock's owner
-}
-
-message HandleSQLsResponse {
-    bool result = 1;
-    string msg = 2;
-    repeated CommonWorkerResponse sources = 3;
 }
 
 // PurgeWorkerRelayRequest represents a request to purge relay log files for some dm-workers

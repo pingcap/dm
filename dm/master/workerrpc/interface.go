@@ -34,8 +34,6 @@ const (
 	CmdQueryTaskOperation
 	CmdQueryWorkerConfig
 
-	CmdHandleSubTaskSQLs
-
 	CmdSwitchRelayMaster
 	CmdOperateRelay
 	CmdPurgeRelay
@@ -59,8 +57,6 @@ type Request struct {
 	QueryError        *pb.QueryErrorRequest
 	QueryWorkerConfig *pb.QueryWorkerConfigRequest
 
-	HandleSubTaskSQLs *pb.HandleSubTaskSQLsRequest
-
 	SwitchRelayMaster *pb.SwitchRelayMasterRequest
 	OperateRelay      *pb.OperateRelayRequest
 	PurgeRelay        *pb.PurgeRelayRequest
@@ -81,8 +77,6 @@ type Response struct {
 	QueryStatus       *pb.QueryStatusResponse
 	QueryError        *pb.QueryErrorResponse
 	QueryWorkerConfig *pb.QueryWorkerConfigResponse
-
-	HandleSubTaskSQLs *pb.CommonWorkerResponse
 
 	SwitchRelayMaster *pb.CommonWorkerResponse
 	OperateRelay      *pb.OperateRelayResponse
