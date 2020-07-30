@@ -41,6 +41,10 @@ func (t *testForEtcd) TestVersionFunc(c *C) {
 
 	v11 := v1
 	c.Assert(v11.Compare(v1), Equals, 0)
+
+	// we only compare InternalNo now, if we should compare release version later, this should be fail.
+	v12 := NewVersion(v1.InternalNo, "another-release-ver")
+	c.Assert(v12.Compare(v1), Equals, 0)
 }
 
 func (t *testForEtcd) TestVersionEtcd(c *C) {
