@@ -46,7 +46,7 @@ require (
 	github.com/spf13/cobra v0.0.6
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.5.1 // indirect
-	github.com/syndtr/goleveldb v1.0.1-0.20190318030020-c3a204f8e965 // indirect
+	github.com/syndtr/goleveldb v1.0.1-0.20190318030020-c3a204f8e965
 	github.com/twitchtv/retool v1.3.8-0.20180918173430-41330f8b4e07
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v2.16.0+incompatible // indirect

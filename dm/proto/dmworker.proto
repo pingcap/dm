@@ -419,3 +419,11 @@ message OperateWorkerSchemaRequest {
     string table = 5; // table name
     string schema = 6; // schema content, a `CREATE TABLE` statement
 }
+
+// copied from release-1.0 branch.
+message TaskMeta {
+    TaskOp op = 1;
+    Stage stage = 2; // the stage of sub-task after we apply some operations
+    string name = 3; // sub task's name
+    bytes task = 4; // (sub) task's configuration
+}
