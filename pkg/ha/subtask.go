@@ -120,7 +120,7 @@ func subTaskCfgFromResp(source, task string, resp *clientv3.GetResponse) (map[st
 		return cfgs, nil
 	} else if source != "" && task != "" && resp.Count > 1 {
 		// this should not happen.
-		return cfgs, terror.ErrConfigMoreThanOne.Generate(resp.Count, "config", "(source: " + source + ", task: " + task + ")")
+		return cfgs, terror.ErrConfigMoreThanOne.Generate(resp.Count, "config", "(source: "+source+", task: "+task+")")
 	}
 
 	for _, kvs := range resp.Kvs {

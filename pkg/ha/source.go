@@ -79,7 +79,7 @@ func sourceCfgFromResp(source string, resp *clientv3.GetResponse) (map[string]co
 		return scm, nil
 	} else if source != "" && resp.Count > 1 {
 		// this should not happen.
-		return scm, terror.ErrConfigMoreThanOne.Generate(resp.Count, "config", "source: " + source)
+		return scm, terror.ErrConfigMoreThanOne.Generate(resp.Count, "config", "source: "+source)
 	}
 
 	for _, kv := range resp.Kvs {

@@ -291,7 +291,7 @@ func sourceBoundFromResp(worker string, resp *clientv3.GetResponse) (map[string]
 		return sbm, nil
 	} else if worker != "" && resp.Count > 1 {
 		// this should not happen.
-		return sbm, terror.ErrConfigMoreThanOne.Generate(resp.Count, "bound relationship", "worker: " + worker)
+		return sbm, terror.ErrConfigMoreThanOne.Generate(resp.Count, "bound relationship", "worker: "+worker)
 	}
 
 	for _, kvs := range resp.Kvs {

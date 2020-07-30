@@ -29,7 +29,7 @@ func taskCfgFromResp(task string, resp *clientv3.GetResponse) (map[string]string
 		return tcm, nil
 	} else if task != "" && resp.Count > 1 {
 		// this should not happen.
-		return tcm, terror.ErrConfigMoreThanOne.Generate(resp.Count, "task", "task name: " + task)
+		return tcm, terror.ErrConfigMoreThanOne.Generate(resp.Count, "task", "task name: "+task)
 	}
 
 	for _, kvs := range resp.Kvs {

@@ -126,7 +126,7 @@ func GetRelayStage(cli *clientv3.Client, source string) (Stage, int64, error) {
 		return stage, resp.Header.Revision, nil
 	} else if resp.Count > 1 {
 		// this should not happen.
-		return stage, 0, terror.ErrConfigMoreThanOne.Generate(resp.Count, "relay stage", "source: " + source)
+		return stage, 0, terror.ErrConfigMoreThanOne.Generate(resp.Count, "relay stage", "source: "+source)
 	}
 
 	stage, err = stageFromJSON(string(resp.Kvs[0].Value))
@@ -298,7 +298,7 @@ func subTaskStageFromResp(source, task string, resp *clientv3.GetResponse) (map[
 		return stages, nil
 	} else if source != "" && task != "" && resp.Count > 1 {
 		// this should not happen.
-		return stages, terror.ErrConfigMoreThanOne.Generate(resp.Count, "stage", "(source " + source + ", task " + task + ")")
+		return stages, terror.ErrConfigMoreThanOne.Generate(resp.Count, "stage", "(source "+source+", task "+task+")")
 	}
 
 	for _, kvs := range resp.Kvs {
