@@ -50,7 +50,6 @@ func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dmctl",
 		Short: "DM control",
-		//SilenceErrors: true,
 		SilenceUsage: true,
 	}
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
