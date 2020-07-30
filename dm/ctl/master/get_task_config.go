@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -30,17 +31,18 @@ func NewGetTaskCfgCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get-task-config <task-name> [--file filename]",
 		Short: "get task config",
-		Run:   getTaskCfgFunc,
+		RunE:   getTaskCfgFunc,
 	}
 	cmd.Flags().StringP("file", "f", "", "write config to file")
 	return cmd
 }
 
 // getTaskCfgFunc does get task's config
-func getTaskCfgFunc(cmd *cobra.Command, _ []string) {
+func getTaskCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 	taskName := cmd.Flags().Arg(0)
@@ -72,4 +74,5 @@ func getTaskCfgFunc(cmd *cobra.Command, _ []string) {
 		resp.Cfg = ""
 	}
 	common.PrettyPrintResponse(resp)
+	return
 }

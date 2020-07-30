@@ -131,11 +131,12 @@ func PrintHelp(args []string) {
 }
 
 // Start starts running a command
-func Start(args []string) {
+func Start(args []string) (err error) {
 	commandMasterFlags.Reset()
 	rootCmd = NewRootCmd()
 	rootCmd.SetArgs(args)
-	if err := rootCmd.Execute(); err != nil {
+	if err = rootCmd.Execute(); err != nil {
 		fmt.Println(rootCmd.UsageString())
 	}
+	return
 }

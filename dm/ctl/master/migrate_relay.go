@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strconv"
 
@@ -31,16 +32,17 @@ func NewMigrateRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate-relay <source> <binlogName> <binlogPos>",
 		Short: "migrate DM-worker's relay unit",
-		Run:   migrateRelayFunc,
+		RunE:   migrateRelayFunc,
 	}
 	return cmd
 }
 
 // MigrateRealyFunc does migrate relay request
-func migrateRelayFunc(cmd *cobra.Command, _ []string) {
+func migrateRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 3 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("dummy error to trigger exit code")
 		return
 	}
 
@@ -66,4 +68,5 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }
