@@ -74,7 +74,6 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 			err = errors.New("dummy error to trigger exit code")
 			return
 		}
-		var err error
 		schemaContent, err = common.GetFileContent(schemaFile)
 		if err != nil {
 			common.PrintLines("get file content error:\n%v", err)
