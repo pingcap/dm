@@ -16,7 +16,7 @@ package ha
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"github.com/pingcap/dm/pkg/terror"
 
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
@@ -125,9 +125,8 @@ func GetRelayStage(cli *clientv3.Client, source string) (Stage, int64, error) {
 	if resp.Count == 0 {
 		return stage, resp.Header.Revision, nil
 	} else if resp.Count > 1 {
-		// TODO(csuzhangxc): add terror.
 		// this should not happen.
-		return stage, 0, fmt.Errorf("too many relay stage (%d) exist for source %s", resp.Count, source)
+		return stage, 0, terror.ErrConfigMoreThanOne.Generate(resp.Count, "relay stage", "source: " + source)
 	}
 
 	stage, err = stageFromJSON(string(resp.Kvs[0].Value))
@@ -298,9 +297,8 @@ func subTaskStageFromResp(source, task string, resp *clientv3.GetResponse) (map[
 	if resp.Count == 0 {
 		return stages, nil
 	} else if source != "" && task != "" && resp.Count > 1 {
-		// TODO: add terror.
 		// this should not happen.
-		return stages, fmt.Errorf("too many stage (%d) exist for subtask {sourceID: %s, task name: %s}", resp.Count, source, task)
+		return stages, terror.ErrConfigMoreThanOne.Generate(resp.Count, "stage", "(source " + source + ", task " + task + ")")
 	}
 
 	for _, kvs := range resp.Kvs {

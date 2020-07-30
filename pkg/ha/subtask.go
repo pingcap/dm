@@ -15,7 +15,7 @@ package ha
 
 import (
 	"context"
-	"fmt"
+	"github.com/pingcap/dm/pkg/terror"
 
 	"go.etcd.io/etcd/clientv3"
 
@@ -119,9 +119,8 @@ func subTaskCfgFromResp(source, task string, resp *clientv3.GetResponse) (map[st
 	if resp.Count == 0 {
 		return cfgs, nil
 	} else if source != "" && task != "" && resp.Count > 1 {
-		// TODO(lichunzhu): add terror.
 		// this should not happen.
-		return cfgs, fmt.Errorf("too many config (%d) exist for the subtask {sourceID: %s, task name: %s}", resp.Count, source, task)
+		return cfgs, terror.ErrConfigMoreThanOne.Generate(resp.Count, "config", "(source: " + source + ", task: " + task + ")")
 	}
 
 	for _, kvs := range resp.Kvs {

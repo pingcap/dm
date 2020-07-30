@@ -193,6 +193,7 @@ const (
 	codeConfigSourceIDNotFound
 	codeConfigDuplicateCfgItem
 	codeConfigShardModeNotSupport
+	codeConfigMoreThanOne
 )
 
 // Binlog operation error code list
@@ -505,6 +506,7 @@ const (
 	codeWorkerFailToGetSourceConfigFromEtcd
 	codeWorkerDDLLockOpNotFound
 	codeWorkerTLSConfigNotValid
+	codeWorkerFailConnectMaster
 )
 
 // DM-tracer error code
@@ -747,6 +749,7 @@ var (
 	ErrConfigSourceIDNotFound       = New(codeConfigSourceIDNotFound, ClassConfig, ScopeInternal, LevelMedium, "source %s in deployment configuration not found", "Please use `operate-source create source-config-file-path` to add source.")
 	ErrConfigDuplicateCfgItem       = New(codeConfigDuplicateCfgItem, ClassConfig, ScopeInternal, LevelMedium, "the following mysql configs have duplicate items, please remove the duplicates:\n%s", "Please check the `mysql-instances` config in task configuration file.")
 	ErrConfigShardModeNotSupport    = New(codeConfigShardModeNotSupport, ClassConfig, ScopeInternal, LevelMedium, "shard mode %s not supported", "Please check the `shard-mode` config in task configuration file, which can be set to `pessimistic`/`optimistic`.")
+	ErrConfigMoreThanOne            = New(codeConfigMoreThanOne, ClassConfig, ScopeInternal, LevelHigh, "found %d %s for %s which should <= 1", "")
 
 	// Binlog operation error
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
@@ -1043,6 +1046,7 @@ var (
 	ErrWorkerFailToGetSourceConfigFromEtcd  = New(codeWorkerFailToGetSourceConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative source config for source %s in etcd", "")
 	ErrWorkerDDLLockOpNotFound              = New(codeWorkerDDLLockOpNotFound, ClassDMWorker, ScopeInternal, LevelHigh, "missing shard DDL lock operation for shard DDL info (%s)", "")
 	ErrWorkerTLSConfigNotValid              = New(codeWorkerTLSConfigNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "TLS config not valid", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in worker configuration file.")
+	ErrWorkerFailConnectMaster              = New(codeWorkerFailConnectMaster, ClassDMWorker, ScopeInternal, LevelHigh, "cannot connect with master endpoints: %v", "Please check network connection of worker")
 
 	// DM-tracer error
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set", "")

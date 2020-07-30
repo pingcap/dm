@@ -15,7 +15,7 @@ package ha
 
 import (
 	"context"
-	"fmt"
+	"github.com/pingcap/dm/pkg/terror"
 
 	"go.etcd.io/etcd/clientv3"
 
@@ -28,9 +28,8 @@ func taskCfgFromResp(task string, resp *clientv3.GetResponse) (map[string]string
 	if resp.Count == 0 {
 		return tcm, nil
 	} else if task != "" && resp.Count > 1 {
-		// TODO: add terror.
 		// this should not happen.
-		return tcm, fmt.Errorf("%d tasks found with name %s", resp.Count, task)
+		return tcm, terror.ErrConfigMoreThanOne.Generate(resp.Count, "task", "task name: " + task)
 	}
 
 	for _, kvs := range resp.Kvs {

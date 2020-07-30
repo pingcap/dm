@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 const (
@@ -289,9 +290,8 @@ func sourceBoundFromResp(worker string, resp *clientv3.GetResponse) (map[string]
 	if resp.Count == 0 {
 		return sbm, nil
 	} else if worker != "" && resp.Count > 1 {
-		// TODO(csuzhangxc): add terror.
 		// this should not happen.
-		return sbm, fmt.Errorf("too many bound relationship (%d) exist for the DM-worker %s", resp.Count, worker)
+		return sbm, terror.ErrConfigMoreThanOne.Generate(resp.Count, "bound relationship", "worker: " + worker)
 	}
 
 	for _, kvs := range resp.Kvs {
