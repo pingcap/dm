@@ -31,8 +31,8 @@ import (
 // NewOperateSourceCmd creates a OperateSource command
 func NewOperateSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "operate-source <operate-type> <config-file> [config-file ...] [--print-sample-config]",
-		Short: "create/update/stop upstream MySQL/MariaDB source",
+		Use:   "operate-source <operate-type> [config-file ...] [--print-sample-config]",
+		Short: "create/update/stop/show upstream MySQL/MariaDB source",
 		RunE:  operateSourceFunc,
 	}
 	cmd.Flags().BoolP("print-sample-config", "p", false, "print sample config file of source")
@@ -47,6 +47,8 @@ func convertCmdType(t string) pb.SourceOp {
 		return pb.SourceOp_UpdateSource
 	case "stop":
 		return pb.SourceOp_StopSource
+	case "show":
+		return pb.SourceOp_ShowSource
 	default:
 		return pb.SourceOp_InvalidSourceOp
 	}
@@ -75,7 +77,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 
-	if len(cmd.Flags().Args()) < 2 {
+	if len(cmd.Flags().Args()) < 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
 		err = errors.New("please check output to see error")
@@ -87,6 +89,10 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 	if op == pb.SourceOp_InvalidSourceOp {
 		common.PrintLines("invalid operate '%s' on worker", cmdType)
 		err = errors.New("please check output to see error")
+		return
+	}
+	if op != pb.SourceOp_ShowSource && len(cmd.Flags().Args()) == 1 {
+		common.PrintLines("operate-source create/update/stop should specify config-file(s)")
 		return
 	}
 

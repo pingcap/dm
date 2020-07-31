@@ -321,6 +321,7 @@ enum SourceOp {
     StartSource = 1;
     UpdateSource = 2;
     StopSource = 3;
+    ShowSource = 4;
 }
 
 message OperateSourceRequest {

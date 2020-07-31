@@ -454,6 +454,18 @@ func (s *Scheduler) RemoveTaskCfg(task string) error {
 	return nil
 }
 
+// GetSourceCfgIDs gets all added source ID
+func (s *Scheduler) GetSourceCfgIDs() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	id := make([]string, 0, len(s.sourceCfgs))
+	for i := range s.sourceCfgs {
+		id = append(id, i)
+	}
+	return id
+}
+
 // GetSourceCfgByID gets source config by source ID.
 func (s *Scheduler) GetSourceCfgByID(source string) *config.SourceConfig {
 	s.mu.RLock()
