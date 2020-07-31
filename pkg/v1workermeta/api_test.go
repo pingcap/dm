@@ -60,12 +60,16 @@ func (t *testAPI) TestAPI(c *C) {
 	c.Assert(meta, HasKey, "task_shard")
 	c.Assert(meta["task_single"].Stage, Equals, pb.Stage_Running)
 	c.Assert(meta["task_shard"].Stage, Equals, pb.Stage_Paused)
-	//var (
-	//	taskSingleCfg config.SubTaskConfig
-	//	taskShardCfg  config.SubTaskConfig
-	//)
-	//c.Assert(taskSingleCfg.Decode(string(meta["task_single"].Task), true), IsNil)
-	//c.Assert(taskShardCfg.Decode(string(meta["task_shard"].Task), true), IsNil)
+
+	taskSingleCfg, err := SubTaskConfigFromV1TOML(meta["task_single"].Task)
+	c.Assert(err, IsNil)
+	c.Assert(taskSingleCfg.IsSharding, IsFalse)
+	c.Assert(taskSingleCfg.MydumperConfig.ChunkFilesize, Equals, "64")
+
+	taskShardCfg, err := SubTaskConfigFromV1TOML(meta["task_shard"].Task)
+	c.Assert(err, IsNil)
+	c.Assert(taskShardCfg.IsSharding, IsTrue)
+	c.Assert(taskSingleCfg.MydumperConfig.ChunkFilesize, Equals, "64")
 }
 
 func copyDir(c *C, src string, dst string) {

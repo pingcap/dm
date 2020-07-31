@@ -14,7 +14,13 @@
 package v1workermeta
 
 import (
+	"strconv"
+
+	"github.com/BurntSushi/toml"
+
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -25,6 +31,19 @@ var (
 	// dbPath is the levelDB path in v1.0.x.
 	dbPath = "./dm_worker_meta/kv"
 )
+
+// v1SubTaskConfig represents the subtask config in v1.0.x.
+type v1SubTaskConfig struct {
+	config.SubTaskConfig // embed the subtask config in v2.0.x.
+
+	// NOTE: in v1.0.x, `ChunkFilesize` is `int64`, but in v2.0.x it's `string`.
+	// (ref: https://github.com/pingcap/dm/pull/713).
+	// if we decode data with v1.0.x from TOML directly,
+	// an error of `toml: cannot load TOML value of type int64 into a Go string` will be reported,
+	// so we overwrite it with another filed which has the same struct tag `chunk-filesize` here.
+	// but if set `chunk-filesize: 64` in a YAML file, both v1.0.x (int64) and v2.0.x (string) can support it.
+	ChunkFilesize int64 `yaml:"chunk-filesize" toml:"chunk-filesize" json:"chunk-filesize"` // -F, --chunk-filesize
+}
 
 // GetSubtasksMeta gets all subtasks' meta (config and status) from `dm_worker_meta` in v1.0.x.
 func GetSubtasksMeta() (map[string]*pb.TaskMeta, error) {
@@ -47,4 +66,17 @@ func GetSubtasksMeta() (map[string]*pb.TaskMeta, error) {
 	}
 
 	return meta.TasksMeta(), nil
+}
+
+// SubTaskConfigFromV1TOML gets SubTaskConfig from subtask's TOML data with v1.0.x.
+func SubTaskConfigFromV1TOML(data []byte) (config.SubTaskConfig, error) {
+	var v1Cfg v1SubTaskConfig
+	_, err := toml.Decode(string(data), &v1Cfg)
+	if err != nil {
+		return config.SubTaskConfig{}, terror.ErrConfigTomlTransform.Delegate(err, "decode v1 subtask config from data")
+	}
+
+	cfg := v1Cfg.SubTaskConfig
+	cfg.MydumperConfig.ChunkFilesize = strconv.FormatInt(v1Cfg.ChunkFilesize, 10)
+	return cfg, cfg.Adjust(true)
 }
