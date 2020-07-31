@@ -70,6 +70,19 @@ func (t *testAPI) TestAPI(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(taskShardCfg.IsSharding, IsTrue)
 	c.Assert(taskSingleCfg.MydumperConfig.ChunkFilesize, Equals, "64")
+
+	// try to get meta again, the same as before.
+	meta2, err := GetSubtasksMeta()
+	c.Assert(err, IsNil)
+	c.Assert(meta2, DeepEquals, meta)
+
+	// remove all metadata.
+	c.Assert(RemoveSubtasksMeta(), IsNil)
+
+	// try to get meta again, nothing exists.
+	meta3, err := GetSubtasksMeta()
+	c.Assert(err, IsNil)
+	c.Assert(meta3, IsNil)
 }
 
 func copyDir(c *C, src string, dst string) {

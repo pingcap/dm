@@ -14,6 +14,7 @@
 package v1workermeta
 
 import (
+	"os"
 	"strconv"
 
 	"github.com/BurntSushi/toml"
@@ -66,6 +67,13 @@ func GetSubtasksMeta() (map[string]*pb.TaskMeta, error) {
 	}
 
 	return meta.TasksMeta(), nil
+}
+
+// RemoveSubtasksMeta removes subtasks' metadata.
+// this is often called after upgraded from v1.0.x to v2.0.x,
+// so no need to handle again after re-started the DM-worker process.
+func RemoveSubtasksMeta() error {
+	return os.RemoveAll(metaPath)
 }
 
 // SubTaskConfigFromV1TOML gets SubTaskConfig from subtask's TOML data with v1.0.x.
