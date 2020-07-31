@@ -916,6 +916,24 @@ description = ""
 workaround = "Please check the `shard-mode` config in task configuration file, which can be set to `pessimistic`/`optimistic`."
 tags = ["internal", "medium"]
 
+[error.DM-config-20034]
+message = "found %d %s for %s which should <= 1"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-config-20035]
+message = "incapable config of %s from etcd"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-config-20036]
+message = "source bound %s doesn't have related source config in etcd"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
 [error.DM-binlog-op-22001]
 message = ""
 description = ""
@@ -2092,6 +2110,12 @@ description = ""
 workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in master configuration file."
 tags = ["internal", "high"]
 
+[error.DM-dm-master-38052]
+message = "source bound is changed too frequently, last old bound %s:, new bound %s"
+description = ""
+workaround = "Please try again later"
+tags = ["internal", "low"]
+
 [error.DM-dm-worker-40001]
 message = "parse dm-worker config flag set"
 description = ""
@@ -2546,6 +2570,12 @@ tags = ["internal", "high"]
 message = "TLS config not valid"
 description = ""
 workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in worker configuration file."
+tags = ["internal", "high"]
+
+[error.DM-dm-worker-40077]
+message = "cannot connect with master endpoints: %v"
+description = ""
+workaround = "Please check network connection of worker"
 tags = ["internal", "high"]
 
 [error.DM-dm-tracer-42001]

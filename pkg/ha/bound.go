@@ -16,7 +16,6 @@ package ha
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"go.etcd.io/etcd/clientv3"
@@ -27,6 +26,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 const (
@@ -203,16 +203,14 @@ func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, con
 		cfg, ok = scm[bound.Source]
 		// ok == false means we have got source bound but there is no source config, this shouldn't happen
 		if !ok {
-			// TODO: add terror.
 			// this should not happen.
-			return bound, cfg, 0, fmt.Errorf("source bound %s doesn't have related source config in etcd", bound)
+			return bound, cfg, 0, terror.ErrConfigMissingForBound.Generate(bound)
 		}
 
 		return bound, cfg, rev2, nil
 	}
 
-	// TODO: add terror.
-	return bound, cfg, 0, fmt.Errorf("source bound is changed too frequently, last old bound %s:, new bound %s", bound, newBound)
+	return bound, cfg, 0, terror.ErrMasterBoundChanging.Generate(bound, newBound)
 }
 
 // WatchSourceBound watches PUT & DELETE operations for the bound relationship of the specified DM-worker.
@@ -289,9 +287,8 @@ func sourceBoundFromResp(worker string, resp *clientv3.GetResponse) (map[string]
 	if resp.Count == 0 {
 		return sbm, nil
 	} else if worker != "" && resp.Count > 1 {
-		// TODO(csuzhangxc): add terror.
 		// this should not happen.
-		return sbm, fmt.Errorf("too many bound relationship (%d) exist for the DM-worker %s", resp.Count, worker)
+		return sbm, terror.ErrConfigMoreThanOne.Generate(resp.Count, "bound relationship", "worker: "+worker)
 	}
 
 	for _, kvs := range resp.Kvs {
