@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -29,27 +30,26 @@ func NewUpdateTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-task [-s source ...] <config-file>",
 		Short: "update a task's config for routes, filters, or block-allow-list",
-		Run:   updateTaskFunc,
+		RunE:  updateTaskFunc,
 	}
 	return cmd
 }
 
 // updateTaskFunc does update task request
-func updateTaskFunc(cmd *cobra.Command, _ []string) {
+func updateTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", err)
 		return
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 
@@ -63,11 +63,11 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) {
 		Sources: sources,
 	})
 	if err != nil {
-		common.PrintLines("can not update task:\n%v", err)
 		return
 	}
 
 	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
 		common.PrettyPrintResponse(resp)
 	}
+	return
 }

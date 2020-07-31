@@ -55,7 +55,7 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     # check dmctl command start-task output with master-addr
     # it should usage for start-task
-    $PWD/bin/dmctl.test DEVEL --master-addr=:$MASTER_PORT start-task > $WORK_DIR/help.log
+    $PWD/bin/dmctl.test DEVEL --master-addr=:$MASTER_PORT start-task > $WORK_DIR/help.log 2>&1 && exit 1 || echo "exit code should be not zero"
     help_msg=$(cat $WORK_DIR/help.log)
 
     echo $help_msg | grep -q "dmctl start-task"
@@ -66,7 +66,7 @@ function run() {
 
     # check dmctl command start-task output with master-addr and unknown flag
     # it should print parse cmd flags err: 'xxxx' is an invalid flag%
-    $PWD/bin/dmctl.test DEVEL --master-addr=:$MASTER_PORT xxxx start-task > $WORK_DIR/help.log 2>&1 || true
+    $PWD/bin/dmctl.test DEVEL --master-addr=:$MASTER_PORT xxxx start-task > $WORK_DIR/help.log 2>&1 && exit 1 || echo "exit code should be not zero"
     help_msg=$(cat $WORK_DIR/help.log)
     help_msg_cnt=$(echo "${help_msg}" | wc -l |xargs)
     if [ "$help_msg_cnt" != 1 ]; then

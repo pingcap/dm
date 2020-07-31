@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -29,21 +30,21 @@ func NewCheckTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check-task <config-file>",
 		Short: "check the config file of the task",
-		Run:   checkTaskFunc,
+		RunE:  checkTaskFunc,
 	}
 	return cmd
 }
 
 // checkTaskFunc does check task request
-func checkTaskFunc(cmd *cobra.Command, _ []string) {
+func checkTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", err)
 		return
 	}
 
@@ -56,11 +57,11 @@ func checkTaskFunc(cmd *cobra.Command, _ []string) {
 		Task: string(content),
 	})
 	if err != nil {
-		common.PrintLines("fail to check task:\n%v", err)
 		return
 	}
 
 	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
 		common.PrettyPrintResponse(resp)
 	}
+	return
 }

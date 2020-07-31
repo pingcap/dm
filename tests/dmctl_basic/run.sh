@@ -111,26 +111,39 @@ function run() {
     
     usage_and_arg_test
 
-    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $dm_worker1_conf
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
-    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $dm_worker2_conf
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-
-    operate_source_stop_not_created_config $MYSQL1_CONF
-
     # operate mysql config to worker
     cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
     cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
     sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
     sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
-    
+
     # operate with invalid op type
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source invalid $WORK_DIR/source1.yaml" \
         "invalid operate" 1
 
+    operate_source_stop_not_created_config $MYSQL1_CONF
+
     dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
+
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $dm_worker1_conf
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-source show" \
+        "\"result\": true" 3 \
+        'msg": "source is added but there is no free worker to bound"' 1 \
+        '"worker": "worker1"' 1
+
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $dm_worker2_conf
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-source show" \
+        "\"result\": true" 3 \
+        '"worker": "worker1"' 1 \
+        '"worker": "worker2"' 1
 
     echo "pause_relay_success"
     pause_relay_success

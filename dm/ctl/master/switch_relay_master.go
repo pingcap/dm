@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -29,26 +30,27 @@ func NewSwitchRelayMasterCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "switch-relay-master <-s source ...>",
 		Short: "switch the master server of the DM-worker's relay unit",
-		Run:   switchRelayMasterFunc,
+		RunE:  switchRelayMasterFunc,
 	}
 	return cmd
 }
 
 // switchRelayMasterFunc does switch relay master server
-func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
+func switchRelayMasterFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 	if len(sources) == 0 {
 		fmt.Println("must specify at least one source (`-s` / `--source`)")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -59,9 +61,10 @@ func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
 		Sources: sources,
 	})
 	if err != nil {
-		common.PrintLines("can not switch relay's master server (in sources %v):\n%v", sources, err)
+		common.PrintLines("can not switch relay's master server (in sources %v)", sources)
 		return
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 
@@ -43,24 +44,24 @@ func NewQueryStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query-status [-s source ...] [task-name] [--more]",
 		Short: "query task status",
-		Run:   queryStatusFunc,
+		RunE:  queryStatusFunc,
 	}
 	cmd.Flags().BoolP("more", "", false, "whether to print the detailed task information")
 	return cmd
 }
 
 // queryStatusFunc does query task's status
-func queryStatusFunc(cmd *cobra.Command, _ []string) {
+func queryStatusFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 	taskName := cmd.Flags().Arg(0) // maybe empty
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 
@@ -72,13 +73,13 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 		Sources: sources,
 	})
 	if err != nil {
-		common.PrintLines("can not query %s task's status(in sources %v):\n%v", taskName, sources, err)
+		common.PrintLines("can not query %s task's status(in sources %v)", taskName, sources)
 		return
 	}
 
 	more, err := cmd.Flags().GetBool("more")
 	if err != nil {
-		common.PrintLines("%v", err)
+		common.PrintLines("error in parse `--more`")
 		return
 	}
 
@@ -88,6 +89,7 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 	} else {
 		common.PrettyPrintResponse(resp)
 	}
+	return
 }
 
 // errorOccurred checks ProcessResult and return true if some error occurred

@@ -3,13 +3,13 @@
 function operate_source_empty_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source" \
-        "operate-source <operate-type> <config-file> \[config-file ...\] \[--print-sample-config\] \[flags\]" 1
+        "operate-source <operate-type> \[config-file ...\] \[--print-sample-config\] \[flags\]" 1
 }
 
 function operate_source_wrong_config_file() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source create not_exists_config_file" \
-        "get file content error" 1
+        "error in get file content" 1
 }
 
 function operate_source_stop_not_created_config() {

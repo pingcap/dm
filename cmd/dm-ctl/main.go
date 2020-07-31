@@ -153,7 +153,9 @@ func main() {
 		os.Exit(2)
 	}
 	if lenCmdArgs > 0 {
-		commandMode(cmdArgs)
+		if err = commandMode(cmdArgs); err != nil {
+			os.Exit(2)
+		}
 	} else {
 		interactionMode()
 	}
@@ -186,8 +188,8 @@ func extractSubCommand(args []string) []string {
 	return collectedArgs
 }
 
-func commandMode(args []string) {
-	ctl.Start(args)
+func commandMode(args []string) error {
+	return ctl.Start(args)
 }
 
 func interactionMode() {

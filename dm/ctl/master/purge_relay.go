@@ -43,7 +43,7 @@ func NewPurgeRelayCmd() *cobra.Command {
 		//Short: "purge dm-worker's relay log files, choose 1 of 2 methods",
 		Use:   "purge-relay <-s source> [--filename] [--sub-dir]",
 		Short: "purge relay log files of the DM-worker according to the specified filename",
-		Run:   purgeRelayFunc,
+		RunE:  purgeRelayFunc,
 	}
 	//cmd.Flags().BoolP("inactive", "i", false, "whether try to purge all inactive relay log files")
 	//cmd.Flags().StringP("time", "t", "", fmt.Sprintf("whether try to purge relay log files before this time, the format is \"%s\"(_ between date and time)", timeFormat))
@@ -54,10 +54,11 @@ func NewPurgeRelayCmd() *cobra.Command {
 }
 
 // purgeRelayFunc does purge relay log files
-func purgeRelayFunc(cmd *cobra.Command, _ []string) {
+func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -68,6 +69,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 	}
 	if len(sources) == 0 {
 		fmt.Println("must specify at least one source (`-s` / `--source`)")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -85,13 +87,13 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 
 	filename, err := cmd.Flags().GetString("filename")
 	if err != nil {
-		fmt.Println(errors.Trace(err))
+		common.PrintLines("error in parse `--filename`")
 		return
 	}
 
 	subDir, err := cmd.Flags().GetString("sub-dir")
 	if err != nil {
-		fmt.Println(errors.Trace(err))
+		common.PrintLines("error in parse `--sub-dir`")
 		return
 	}
 
@@ -124,6 +126,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 
 	if len(filename) > 0 && len(sources) > 1 {
 		fmt.Println("for --filename, can only specify one source per time")
+		err = errors.New("please check output to see error")
 		return
 	}
 	if len(subDir) > 0 {
@@ -145,9 +148,9 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 		SubDir:   subDir,
 	})
 	if err != nil {
-		common.PrintLines("can not purge relay log files: \n%v", err)
 		return
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

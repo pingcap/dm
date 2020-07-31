@@ -211,6 +211,30 @@ func (s *trackerSuite) TestCreateSchemaIfNotExists(c *C) {
 	c.Assert(ti.Name.L, Equals, "foo")
 }
 
+func (s *trackerSuite) TestMultiDrop(c *C) {
+	log.SetLevel(zapcore.ErrorLevel)
+
+	tracker, err := schema.NewTracker(nil)
+	c.Assert(err, IsNil)
+
+	ctx := context.Background()
+	err = tracker.CreateSchemaIfNotExists("testdb")
+	c.Assert(err, IsNil)
+	err = tracker.Exec(ctx, "testdb", `create table foo(a int, b int, c int)
+        partition by range( a ) (
+			partition p1 values less than (1991),
+			partition p2 values less than (1996),
+			partition p3 values less than (2001)
+	    );`)
+	c.Assert(err, IsNil)
+
+	err = tracker.Exec(ctx, "testdb", "alter table foo drop partition p1, p2")
+	c.Assert(err, IsNil)
+
+	err = tracker.Exec(ctx, "testdb", "alter table foo drop b, drop c")
+	c.Assert(err, IsNil)
+}
+
 // clearVolatileInfo removes generated information like TS and ID so DeepEquals
 // of two compatible schemas can pass.
 func clearVolatileInfo(ti *model.TableInfo) {

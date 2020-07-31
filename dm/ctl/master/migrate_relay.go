@@ -15,15 +15,13 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strconv"
 
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
-
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/log"
+	"github.com/spf13/cobra"
 )
 
 // NewMigrateRelayCmd creates a MigrateRelay command
@@ -31,16 +29,17 @@ func NewMigrateRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate-relay <source> <binlogName> <binlogPos>",
 		Short: "migrate DM-worker's relay unit",
-		Run:   migrateRelayFunc,
+		RunE:  migrateRelayFunc,
 	}
 	return cmd
 }
 
 // MigrateRealyFunc does migrate relay request
-func migrateRelayFunc(cmd *cobra.Command, _ []string) {
+func migrateRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 3 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -61,9 +60,9 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) {
 		Source:     source,
 	})
 	if err != nil {
-		log.L().Error("can not migrate relay", zap.Error(err))
 		return
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

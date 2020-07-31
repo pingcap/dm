@@ -14,6 +14,7 @@
 package master
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -28,34 +29,35 @@ func NewResumeRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "resume-relay <-s source ...>",
 		Short: "resume DM-worker's relay unit",
-		Run:   resumeRelayFunc,
+		RunE:  resumeRelayFunc,
 	}
 	return cmd
 }
 
 // resumeRelayFunc does resume relay request
-func resumeRelayFunc(cmd *cobra.Command, _ []string) {
+func resumeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 	if len(sources) == 0 {
 		fmt.Println("must specify at least one source (`-s` / `--source`)")
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	resp, err := common.OperateRelay(pb.RelayOp_ResumeRelay, sources)
 	if err != nil {
-		common.PrintLines("can not resume relay unit:\n%v", err)
 		return
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }
