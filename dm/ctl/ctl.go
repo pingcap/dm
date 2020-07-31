@@ -136,8 +136,6 @@ func Start(args []string) (err error) {
 	commandMasterFlags.Reset()
 	rootCmd = NewRootCmd()
 	rootCmd.SetArgs(args)
-	if err = rootCmd.Execute(); err != nil {
-		//fmt.Println(rootCmd.UsageString())
-	}
+	rootCmd.Execute()
 	return
 }
