@@ -255,7 +255,12 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
 
     # wait for master raft log to catch up
-    sleep 2
+    sleep 5
+    
+    # a valid version should exist after the cluster bootstrapped.
+    version_key=$(echo -n '/dm-cluster/version' | base64)
+    curl http://127.0.0.1:$MASTER_PORT1/v3/kv/range -X POST -d '{"key": "'"${version_key}"'"}' > $WORK_DIR/cluster_version.log
+    check_log_contains $WORK_DIR/cluster_version.log "value" 1 # only check the version exist but do not check the value now
 
     # kill dm-master1 and dm-master2 to simulate the first two dm-master addr in join config are invalid
     echo "kill dm-master1 and kill dm-master2"
