@@ -6,6 +6,7 @@ cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
+ILLEGAL_CHAR_NAME='t-Ë!s`t'
 
 function test_session_config(){
     echo "[$(date)] <<<<<< start test_session_config >>>>>>"
@@ -23,6 +24,7 @@ function test_session_config(){
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
+    sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
 
     # enable ansi-quotes
     sed -i 's/ansi-quotes: false/ansi-quotes: true/g'  $WORK_DIR/dm-task.yaml
@@ -40,7 +42,7 @@ function test_session_config(){
     # fail because insert 0 will auto generates the next serial number
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10 'fail'
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "stop-task test"\
+            "stop-task $ILLEGAL_CHAR_NAME"\
             "\"result\": true" 3
 
     cleanup_data all_mode
@@ -71,6 +73,7 @@ function run() {
 
     # start DM task only
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
+    sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
     # test deprecated config
     sed -i 's/enable-ansi-quotes: false/enable-ansi-quotes: true/g'  $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml"
@@ -86,7 +89,7 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 
     # wait for task running
-    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/$ILLEGAL_CHAR_NAME '"name":"'$ILLEGAL_CHAR_NAME'","stage":"Running"' 10
     sleep 2 # still wait for subtask running on other dm-workers
 
     # kill tidb
@@ -108,8 +111,8 @@ function run() {
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    check_metric $WORKER1_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
-    check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
+    check_metric $WORKER1_PORT 'dm_syncer_replication_lag{task="'$ILLEGAL_CHAR_NAME'"}' 3 0 2
+    check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="'$ILLEGAL_CHAR_NAME'"}' 3 0 2
 
      # test block-allow-list by the way
     run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD

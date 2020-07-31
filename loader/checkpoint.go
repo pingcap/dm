@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.uber.org/zap"
 )
 
@@ -78,7 +79,7 @@ type RemoteCheckPoint struct {
 	conn           *DBConn
 	id             string
 	schema         string
-	table          string
+	tableName      string // tableName contains schema name
 	restoringFiles map[string]map[string]FilePosSet
 	finishedTables map[string]struct{}
 	logCtx         *tcontext.Context
@@ -96,8 +97,8 @@ func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 		id:             id,
 		restoringFiles: make(map[string]map[string]FilePosSet),
 		finishedTables: make(map[string]struct{}),
-		schema:         cfg.MetaSchema,
-		table:          fmt.Sprintf("%s_loader_checkpoint", cfg.Name),
+		schema:         dbutil.ColumnName(cfg.MetaSchema),
+		tableName:      dbutil.TableName(cfg.MetaSchema, fmt.Sprintf("%s_loader_checkpoint", cfg.Name)),
 		logCtx:         tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
 	}
 
@@ -122,7 +123,7 @@ func (cp *RemoteCheckPoint) prepare(tctx *tcontext.Context) error {
 }
 
 func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
-	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
+	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", cp.schema)
 	cp.connMutex.Lock()
 	err := cp.conn.executeSQL(tctx, []string{sql2})
 	cp.connMutex.Unlock()
@@ -130,7 +131,6 @@ func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
 }
 
 func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
-	tableName := fmt.Sprintf("`%s`.`%s`", cp.schema, cp.table)
 	createTable := `CREATE TABLE IF NOT EXISTS %s (
 		id char(32) NOT NULL,
 		filename varchar(255) NOT NULL,
@@ -143,7 +143,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 		UNIQUE KEY uk_id_f (id,filename)
 	);
 `
-	sql2 := fmt.Sprintf(createTable, tableName)
+	sql2 := fmt.Sprintf(createTable, cp.tableName)
 	cp.connMutex.Lock()
 	err := cp.conn.executeSQL(tctx, []string{sql2})
 	cp.connMutex.Unlock()
@@ -157,7 +157,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 		cp.logCtx.L().Info("load checkpoint", zap.Duration("cost time", time.Since(begin)))
 	}()
 
-	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`=?", cp.schema, cp.table)
+	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from %s where `id`=?", cp.tableName)
 	cp.connMutex.Lock()
 	rows, err := cp.conn.querySQL(tctx, query, cp.id)
 	cp.connMutex.Unlock()
@@ -288,7 +288,7 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 
 	// fields[0] -> db name, fields[1] -> table name
 	schema, table := fields[0], fields[1]
-	sql2 := fmt.Sprintf("INSERT INTO `%s`.`%s` (`id`, `filename`, `cp_schema`, `cp_table`, `offset`, `end_pos`) VALUES(?,?,?,?,?,?)", cp.schema, cp.table)
+	sql2 := fmt.Sprintf("INSERT INTO %s (`id`, `filename`, `cp_schema`, `cp_table`, `offset`, `end_pos`) VALUES(?,?,?,?,?,?)", cp.tableName)
 	cp.logCtx.L().Info("initial checkpoint record",
 		zap.String("sql", sql2),
 		zap.String("id", cp.id),
@@ -340,14 +340,14 @@ func (cp *RemoteCheckPoint) Close() {
 
 // GenSQL implements CheckPoint.GenSQL
 func (cp *RemoteCheckPoint) GenSQL(filename string, offset int64) string {
-	sql := fmt.Sprintf("UPDATE `%s`.`%s` SET `offset`=%d WHERE `id` ='%s' AND `filename`='%s';",
-		cp.schema, cp.table, offset, cp.id, filename)
+	sql := fmt.Sprintf("UPDATE %s SET `offset`=%d WHERE `id` ='%s' AND `filename`='%s';",
+		cp.tableName, offset, cp.id, filename)
 	return sql
 }
 
 // Clear implements CheckPoint.Clear
 func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
-	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
+	sql2 := fmt.Sprintf("DELETE FROM %s WHERE `id` = '%s'", cp.tableName, cp.id)
 	cp.connMutex.Lock()
 	err := cp.conn.executeSQL(tctx, []string{sql2})
 	cp.connMutex.Unlock()
@@ -356,7 +356,7 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 
 // Count implements CheckPoint.Count
 func (cp *RemoteCheckPoint) Count(tctx *tcontext.Context) (int, error) {
-	query := fmt.Sprintf("SELECT COUNT(id) FROM `%s`.`%s` WHERE `id` = ?", cp.schema, cp.table)
+	query := fmt.Sprintf("SELECT COUNT(id) FROM %s WHERE `id` = ?", cp.tableName)
 	cp.connMutex.Lock()
 	rows, err := cp.conn.querySQL(tctx, query, cp.id)
 	cp.connMutex.Unlock()
