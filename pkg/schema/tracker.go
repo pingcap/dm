@@ -46,7 +46,7 @@ type Tracker struct {
 
 // NewTracker creates a new tracker.
 func NewTracker(sessionCfg map[string]string) (*Tracker, error) {
-	store, err := mockstore.NewMockTikvStore()
+	store, err := mockstore.NewMockStore(mockstore.WithStoreType(mockstore.MockTiKV))
 	if err != nil {
 		return nil, err
 	}

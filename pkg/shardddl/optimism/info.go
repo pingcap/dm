@@ -105,7 +105,7 @@ func PutInfo(cli *clientv3.Client, info Info) (int64, error) {
 		return 0, err
 	}
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, op)
-	return rev, nil
+	return rev, err
 }
 
 // GetAllInfo gets all shard DDL info in etcd currently.

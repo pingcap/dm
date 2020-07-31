@@ -95,9 +95,9 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 	contents := make([]string, len(cmd.Flags().Args())-1)
 	for i := 1; i < len(cmd.Flags().Args()); i++ {
 		configFile := cmd.Flags().Arg(i)
-		content, err := common.GetFileContent(configFile)
-		if err != nil {
-			common.PrintLines("get file content error:\n%v", err)
+		content, err2 := common.GetFileContent(configFile)
+		if err2 != nil {
+			common.PrintLines("get file content error:\n%v", err2)
 			return
 		}
 		contents[i-1] = string(content)

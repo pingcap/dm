@@ -2,7 +2,7 @@
   "Tools": [
     {
       "Repository": "github.com/pingcap/failpoint/failpoint-ctl",
-      "Commit": "e7b1061e6e81d44326c449cf518992e0e2d47e98"
+      "Commit": "9f69995143ce72aacd9ca60896f4139eb0de9715"
     },
     {
       "Repository": "github.com/kisielk/errcheck",

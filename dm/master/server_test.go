@@ -1353,7 +1353,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 
 	// make sure s3 is not the leader, otherwise it will take some time to campain a new leader after close s3, and it may cause timeout
 	c.Assert(utils.WaitSomething(20, 500*time.Millisecond, func() bool {
-		_, leaderID, _, err := s1.election.LeaderInfo(ctx)
+		_, leaderID, _, err = s1.election.LeaderInfo(ctx)
 		if err != nil {
 			return false
 		}
