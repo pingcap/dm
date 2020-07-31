@@ -105,7 +105,7 @@ func main() {
 		Level: "info",
 	})
 	if err != nil {
-		fmt.Printf("init logger error %v", errors.ErrorStack(err))
+		common.PrintLines("init logger error %s", terror.Message(err))
 		os.Exit(2)
 	}
 
@@ -137,13 +137,13 @@ func main() {
 		}
 		os.Exit(0)
 	default:
-		fmt.Printf("parse cmd flags err: %s", err)
+		common.PrintLines("parse cmd flags err: %s", terror.Message(err))
 		os.Exit(2)
 	}
 
 	err = cfg.Validate()
 	if err != nil {
-		fmt.Printf("flags are not validate: %s", err)
+		common.PrintLines("flags are not validate: %s", terror.Message(err))
 		os.Exit(2)
 	}
 
