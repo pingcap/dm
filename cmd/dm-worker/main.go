@@ -23,8 +23,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/worker"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/errors"
@@ -41,7 +43,7 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		fmt.Printf("parse cmd flags err: %s", errors.ErrorStack(err))
+		common.PrintLines("parse cmd flags err: %s", terror.Message(err))
 		os.Exit(2)
 	}
 
@@ -51,7 +53,7 @@ func main() {
 		Format: cfg.LogFormat,
 	})
 	if err != nil {
-		fmt.Printf("init logger error %v", errors.ErrorStack(err))
+		common.PrintLines("init logger error %s", terror.Message(err))
 		os.Exit(2)
 	}
 
