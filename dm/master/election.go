@@ -21,8 +21,9 @@ import (
 	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/failpoint"
+	"github.com/pingcap/dm/pkg/upgrade"
 
+	"github.com/pingcap/failpoint"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -122,7 +123,16 @@ func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
 }
 
 func (s *Server) startLeaderComponent(ctx context.Context) bool {
-	err := s.scheduler.Start(ctx, s.etcdClient)
+	// try to upgrade the cluster version if a member become the leader.
+	// so if the old leader failed when upgrading, the new leader can try again.
+	// NOTE: if the cluster has been upgraded, calling this method again should have no side effects.
+	err := upgrade.TryUpgrade(s.etcdClient)
+	if err != nil {
+		log.L().Error("fail to upgrade the cluster version", zap.Error(err))
+		return false
+	}
+
+	err = s.scheduler.Start(ctx, s.etcdClient)
 	if err != nil {
 		log.L().Error("scheduler do not started", zap.Error(err))
 		return false
