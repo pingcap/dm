@@ -9,7 +9,7 @@ function update_relay_wrong_arg() {
 function update_relay_wrong_config_file() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "update-relay not_exists_config_file" \
-        "get file content error" 1
+        "error in get file content" 1
 }
 
 function update_relay_should_specify_one_dm_worker() {

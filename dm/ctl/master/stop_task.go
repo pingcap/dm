@@ -14,6 +14,7 @@
 package master
 
 import (
+	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -27,31 +28,31 @@ func NewStopTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop-task [-s source ...] <task-name>",
 		Short: "stop a specified task",
-		Run:   stopTaskFunc,
+		RunE:  stopTaskFunc,
 	}
 	return cmd
 }
 
 // stopTaskFunc does stop task request
-func stopTaskFunc(cmd *cobra.Command, _ []string) {
+func stopTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 	name := cmd.Flags().Arg(0)
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 
 	resp, err := common.OperateTask(pb.TaskOp_Stop, name, sources)
 	if err != nil {
-		common.PrintLines("can not stop task %s:\n%v", name, err)
 		return
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

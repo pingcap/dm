@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -28,20 +29,20 @@ func NewUpdateMasterConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-master-config <config-file>",
 		Short: "update the config of the DM-master",
-		Run:   updateMasterConfigFunc,
+		RunE:  updateMasterConfigFunc,
 	}
 	return cmd
 }
 
-func updateMasterConfigFunc(cmd *cobra.Command, _ []string) {
+func updateMasterConfigFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", err)
 		return
 	}
 
@@ -53,9 +54,9 @@ func updateMasterConfigFunc(cmd *cobra.Command, _ []string) {
 		Config: string(content),
 	})
 	if err != nil {
-		common.PrintLines("can not update master config:\n%v", err)
 		return
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

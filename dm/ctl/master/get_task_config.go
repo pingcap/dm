@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -30,23 +31,24 @@ func NewGetTaskCfgCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get-task-config <task-name> [--file filename]",
 		Short: "get task config",
-		Run:   getTaskCfgFunc,
+		RunE:  getTaskCfgFunc,
 	}
 	cmd.Flags().StringP("file", "f", "", "write config to file")
 	return cmd
 }
 
 // getTaskCfgFunc does get task's config
-func getTaskCfgFunc(cmd *cobra.Command, _ []string) {
+func getTaskCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 	taskName := cmd.Flags().Arg(0)
 	filename, err := cmd.Flags().GetString("file")
 	if err != nil {
-		common.PrintLines("can not get filename:\n%v", err)
+		common.PrintLines("can not get filename")
 		return
 	}
 
@@ -58,18 +60,19 @@ func getTaskCfgFunc(cmd *cobra.Command, _ []string) {
 		Name: taskName,
 	})
 	if err != nil {
-		common.PrintLines("can not get config of task %s:\n%v", taskName, err)
+		common.PrintLines("can not get config of task %s", taskName)
 		return
 	}
 
 	if resp.Result && len(filename) != 0 {
-		err := ioutil.WriteFile(filename, []byte(resp.Cfg), 0644)
+		err = ioutil.WriteFile(filename, []byte(resp.Cfg), 0644)
 		if err != nil {
-			common.PrintLines("can not write config to file %s:\n%v", filename, err)
+			common.PrintLines("can not write config to file %s", filename)
 			return
 		}
 		resp.Msg = fmt.Sprintf("write config to file %s succeed", filename)
 		resp.Cfg = ""
 	}
 	common.PrettyPrintResponse(resp)
+	return
 }

@@ -48,8 +48,9 @@ func init() {
 // NewRootCmd generates a new rootCmd
 func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "dmctl",
-		Short: "DM control",
+		Use:          "dmctl",
+		Short:        "DM control",
+		SilenceUsage: true,
 	}
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
 	cmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "source", "s", []string{}, "MySQL Source ID")
@@ -131,11 +132,9 @@ func PrintHelp(args []string) {
 }
 
 // Start starts running a command
-func Start(args []string) {
+func Start(args []string) (err error) {
 	commandMasterFlags.Reset()
 	rootCmd = NewRootCmd()
 	rootCmd.SetArgs(args)
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(rootCmd.UsageString())
-	}
+	return rootCmd.Execute()
 }

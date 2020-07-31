@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -29,28 +30,29 @@ func NewUpdateRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-relay [-s source ...] <config-file>",
 		Short: "update the relay unit config of the DM-worker",
-		Run:   updateRelayFunc,
+		RunE:  updateRelayFunc,
 	}
 	return cmd
 }
 
 // updateRealyFunc does update relay request
-func updateRelayFunc(cmd *cobra.Command, _ []string) {
+func updateRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", err)
 		return
 	}
 
 	sources, _ := common.GetSourceArgs(cmd)
 	if len(sources) != 1 {
 		fmt.Println("must specify one source (`-s` / `--source`)")
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -64,9 +66,9 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 	})
 
 	if err != nil {
-		common.PrintLines("can not update relay config:\n%v", err)
 		return
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

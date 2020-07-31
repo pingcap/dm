@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -28,7 +29,7 @@ func NewOperateLeaderCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operate-leader <operate-type>",
 		Short: "operate-type can be 'evict' or 'cancel-evict', used to evict leader or cancel evict",
-		Run:   operateLeaderFunc,
+		RunE:  operateLeaderFunc,
 	}
 	return cmd
 }
@@ -45,10 +46,11 @@ func convertOpType(op string) pb.LeaderOp {
 }
 
 // operateLeaderFunc does operate leader request
-func operateLeaderFunc(cmd *cobra.Command, _ []string) {
+func operateLeaderFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -57,6 +59,7 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) {
 	op := convertOpType(opType)
 	if op == pb.LeaderOp_InvalidLeaderOp {
 		common.PrintLines("invalid operate '%s' on leader", opType)
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -69,9 +72,9 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) {
 		Op: op,
 	})
 	if err != nil {
-		common.PrintLines("fail to operate leader:\n%v", err)
 		return
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

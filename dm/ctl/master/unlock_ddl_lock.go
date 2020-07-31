@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -29,7 +30,7 @@ func NewUnlockDDLLockCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unlock-ddl-lock [-s source ...] <lock-ID>",
 		Short: "forcefully unlock DDL lock",
-		Run:   unlockDDLLockFunc,
+		RunE:  unlockDDLLockFunc,
 	}
 	cmd.Flags().StringP("owner", "o", "", "source to replace the default owner")
 	cmd.Flags().BoolP("force-remove", "f", false, "force to remove DDL lock")
@@ -37,15 +38,16 @@ func NewUnlockDDLLockCmd() *cobra.Command {
 }
 
 // unlockDDLLockFunc does unlock DDL lock
-func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
+func unlockDDLLockFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 	owner, err := cmd.Flags().GetString("owner")
 	if err != nil {
-		common.PrintLines("%v", err)
+		common.PrintLines("error in parse `--owner`")
 		return
 	}
 
@@ -54,12 +56,12 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 	sources, _ := common.GetSourceArgs(cmd)
 	if len(sources) > 0 {
 		fmt.Println("shoud not specify any sources")
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	forceRemove, err := cmd.Flags().GetBool("force-remove")
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 
@@ -72,9 +74,10 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 		ForceRemove:  forceRemove,
 	})
 	if err != nil {
-		common.PrintLines("can not unlock DDL lock %s \n%s", lockID, err.Error())
+		common.PrintLines("can not unlock DDL lock %s", lockID)
 		return
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }

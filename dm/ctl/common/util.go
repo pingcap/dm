@@ -168,14 +168,18 @@ func PrettyPrintResponseWithCheckTask(resp proto.Message, subStr string) bool {
 func GetFileContent(fpath string) ([]byte, error) {
 	content, err := ioutil.ReadFile(fpath)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.Annotate(err, "error in get file content")
 	}
 	return content, nil
 }
 
 // GetSourceArgs extracts sources from cmd
 func GetSourceArgs(cmd *cobra.Command) ([]string, error) {
-	return cmd.Flags().GetStringSlice("source")
+	ret, err := cmd.Flags().GetStringSlice("source")
+	if err != nil {
+		PrintLines("error in parse `-s` / `--source`")
+	}
+	return ret, err
 }
 
 // ExtractSQLsFromArgs extract multiple sql from args.

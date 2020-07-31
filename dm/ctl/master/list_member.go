@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -37,7 +38,7 @@ func NewListMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list-member [--leader] [--master] [--worker] [--name master-name/worker-name ...]",
 		Short: "list member information",
-		Run:   listMemberFunc,
+		RunE:  listMemberFunc,
 	}
 	cmd.Flags().BoolP("leader", "l", false, "only to list leader information")
 	cmd.Flags().BoolP("master", "m", false, "only to list master information")
@@ -63,10 +64,11 @@ func convertListMemberType(cmd *cobra.Command) (bool, bool, bool, error) {
 }
 
 // listMemberFunc does list member request
-func listMemberFunc(cmd *cobra.Command, _ []string) {
+func listMemberFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 0 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -87,8 +89,8 @@ func listMemberFunc(cmd *cobra.Command, _ []string) {
 	})
 
 	if err != nil {
-		common.PrintLines("list member failed, error:\n%v", err)
 		return
 	}
 	common.PrettyPrintResponse(resp)
+	return
 }

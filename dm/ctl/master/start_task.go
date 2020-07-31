@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -29,34 +30,33 @@ func NewStartTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start-task [-s source ...] [--remove-meta] <config-file>",
 		Short: "start a task as defined in the config file",
-		Run:   startTaskFunc,
+		RunE:  startTaskFunc,
 	}
 	cmd.Flags().BoolP("remove-meta", "", false, "whether to remove task's meta data")
 	return cmd
 }
 
 // startTaskFunc does start task request
-func startTaskFunc(cmd *cobra.Command, _ []string) {
+func startTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		common.PrintLines("get file content error:\n%v", err)
 		return
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 
 	removeMeta, err := cmd.Flags().GetBool("remove-meta")
 	if err != nil {
-		common.PrintLines("%v", err)
+		common.PrintLines("error in parse `--remove-meta`")
 		return
 	}
 
@@ -71,11 +71,11 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 		RemoveMeta: removeMeta,
 	})
 	if err != nil {
-		common.PrintLines("can not start task:\n%v", err)
 		return
 	}
 
 	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
 		common.PrettyPrintResponse(resp)
 	}
+	return
 }

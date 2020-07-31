@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -32,7 +33,7 @@ func NewOperateSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operate-source <operate-type> [config-file ...] [--print-sample-config]",
 		Short: "create/update/stop/show upstream MySQL/MariaDB source",
-		Run:   operateSourceFunc,
+		RunE:  operateSourceFunc,
 	}
 	cmd.Flags().BoolP("print-sample-config", "p", false, "print sample config file of source")
 	return cmd
@@ -54,10 +55,10 @@ func convertCmdType(t string) pb.SourceOp {
 }
 
 // operateMysqlFunc does migrate relay request
-func operateSourceFunc(cmd *cobra.Command, _ []string) {
+func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 	printSampleConfig, err := cmd.Flags().GetBool("print-sample-config")
 	if err != nil {
-		common.PrintLines("%v", err)
+		common.PrintLines("error in parse `--print-sample-config`")
 		return
 	}
 
@@ -65,9 +66,10 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 		if strings.TrimSpace(config.SampleConfigFile) == "" {
 			fmt.Println("sample config file of source is empty")
 		} else {
-			rawConfig, err2 := base64.StdEncoding.DecodeString(config.SampleConfigFile)
-			if err2 != nil {
-				fmt.Println("base64 decode config error:", err2)
+			var rawConfig []byte
+			rawConfig, err = base64.StdEncoding.DecodeString(config.SampleConfigFile)
+			if err != nil {
+				fmt.Println("base64 decode config error")
 			} else {
 				fmt.Println(string(rawConfig))
 			}
@@ -78,6 +80,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) < 1 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -85,6 +88,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 	op := convertCmdType(cmdType)
 	if op == pb.SourceOp_InvalidSourceOp {
 		common.PrintLines("invalid operate '%s' on worker", cmdType)
+		err = errors.New("please check output to see error")
 		return
 	}
 	if op != pb.SourceOp_ShowSource && len(cmd.Flags().Args()) == 1 {
@@ -95,9 +99,9 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 	contents := make([]string, len(cmd.Flags().Args())-1)
 	for i := 1; i < len(cmd.Flags().Args()); i++ {
 		configFile := cmd.Flags().Arg(i)
-		content, err2 := common.GetFileContent(configFile)
-		if err2 != nil {
-			common.PrintLines("get file content error:\n%v", err2)
+		var content []byte
+		content, err = common.GetFileContent(configFile)
+		if err != nil {
 			return
 		}
 		contents[i-1] = string(content)
@@ -112,9 +116,9 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) {
 		Op:     op,
 	})
 	if err != nil {
-		common.PrintLines("can not update task:\n%v", err)
 		return
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }
