@@ -1426,7 +1426,10 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		resp.Msg = err.Error()
 		return resp, nil
 	}
-	var workers []*scheduler.Worker
+
+	// boundM: sourceID -> worker are used to query status from worker, to return a more real status
+	boundM := map[string]*scheduler.Worker{}
+
 	switch req.Op {
 	case pb.SourceOp_StartSource:
 		var (
@@ -1458,18 +1461,16 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 			return resp, nil
 		}
 		// for start source, we should get worker after start source
-		workers = make([]*scheduler.Worker, len(started))
-		for i, sid := range started {
-			workers[i] = s.scheduler.GetWorkerBySource(sid)
+		for _, sid := range started {
+			boundM[sid] = s.scheduler.GetWorkerBySource(sid)
 		}
 	case pb.SourceOp_UpdateSource:
 		// TODO: support SourceOp_UpdateSource later
 		resp.Msg = "Update worker config is not supported by dm-ha now"
 		return resp, nil
 	case pb.SourceOp_StopSource:
-		workers = make([]*scheduler.Worker, len(cfgs))
-		for i, cfg := range cfgs {
-			workers[i] = s.scheduler.GetWorkerBySource(cfg.SourceID)
+		for _, cfg := range cfgs {
+			boundM[cfg.SourceID] = s.scheduler.GetWorkerBySource(cfg.SourceID)
 			err := s.scheduler.RemoveSourceCfg(cfg.SourceID)
 			// TODO(lance6716):
 			// user could not copy-paste same command if encounter error halfway:
@@ -1484,6 +1485,10 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 				return resp, nil
 			}
 		}
+	case pb.SourceOp_ShowSource:
+		for _, id := range s.scheduler.GetSourceCfgIDs() {
+			boundM[id] = s.scheduler.GetWorkerBySource(id)
+		}
 	default:
 		resp.Msg = terror.ErrMasterInvalidOperateOp.Generate(req.Op.String(), "source").Error()
 		return resp, nil
@@ -1492,7 +1497,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 	resp.Result = true
 	var noWorkerMsg string
 	switch req.Op {
-	case pb.SourceOp_StartSource:
+	case pb.SourceOp_StartSource, pb.SourceOp_ShowSource:
 		noWorkerMsg = "source is added but there is no free worker to bound"
 	case pb.SourceOp_StopSource:
 		noWorkerMsg = "source is stopped and hasn't bound to worker before being stopped"
@@ -1503,16 +1508,15 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		workerToCheck []string
 	)
 
-	for i := range workers {
-		w := workers[i]
+	for id, w := range boundM {
 		if w == nil {
 			resp.Sources = append(resp.Sources, &pb.CommonWorkerResponse{
 				Result: true,
 				Msg:    noWorkerMsg,
-				Source: cfgs[i].SourceID,
+				Source: id,
 			})
 		} else {
-			sourceToCheck = append(sourceToCheck, cfgs[i].SourceID)
+			sourceToCheck = append(sourceToCheck, id)
 			workerToCheck = append(workerToCheck, w.BaseInfo().Name)
 		}
 	}
@@ -1685,7 +1689,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 	case *pb.OperateSourceRequest:
 		req := masterReq.(*pb.OperateSourceRequest)
 		switch req.Op {
-		case pb.SourceOp_StartSource, pb.SourceOp_UpdateSource:
+		case pb.SourceOp_StartSource, pb.SourceOp_UpdateSource, pb.SourceOp_ShowSource:
 			expect = pb.Stage_Running
 		case pb.SourceOp_StopSource:
 			expect = pb.Stage_Stopped
@@ -1833,19 +1837,14 @@ func (s *Server) handleOperationResult(ctx context.Context, cli *scheduler.Worke
 }
 
 func sortCommonWorkerResults(sourceRespCh chan *pb.CommonWorkerResponse) []*pb.CommonWorkerResponse {
-	sourceRespMap := make(map[string]*pb.CommonWorkerResponse, cap(sourceRespCh))
-	sources := make([]string, 0, cap(sourceRespCh))
+	sourceResps := make([]*pb.CommonWorkerResponse, 0, cap(sourceRespCh))
 	for len(sourceRespCh) > 0 {
-		sourceResp := <-sourceRespCh
-		sourceRespMap[sourceResp.Source] = sourceResp
-		sources = append(sources, sourceResp.Source)
+		r := <-sourceRespCh
+		sourceResps = append(sourceResps, r)
 	}
-	// TODO: simplify logic of response sort
-	sort.Strings(sources)
-	sourceResps := make([]*pb.CommonWorkerResponse, 0, len(sources))
-	for _, source := range sources {
-		sourceResps = append(sourceResps, sourceRespMap[source])
-	}
+	sort.Slice(sourceResps, func(i, j int) bool {
+		return sourceResps[i].Source < sourceResps[j].Source
+	})
 	return sourceResps
 }
 
