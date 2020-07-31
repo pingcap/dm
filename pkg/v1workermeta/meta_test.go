@@ -38,13 +38,13 @@ var (
 		Name:     "task1",
 		SourceID: "replica-1",
 	}
-	testTask1Meta *pb.TaskMeta
+	testTask1Meta *pb.V1SubTaskMeta
 
 	testTask2 = &config.SubTaskConfig{
 		Name:     "task2",
 		SourceID: "replica-1",
 	}
-	testTask2Meta *pb.TaskMeta
+	testTask2Meta *pb.V1SubTaskMeta
 )
 
 func testSetUpDB(c *C) *leveldb.DB {
@@ -53,7 +53,7 @@ func testSetUpDB(c *C) *leveldb.DB {
 
 	testTask1Str, err := testTask1.Toml()
 	c.Assert(err, IsNil)
-	testTask1Meta = &pb.TaskMeta{
+	testTask1Meta = &pb.V1SubTaskMeta{
 		Op:    pb.TaskOp_Start,
 		Name:  testTask1.Name,
 		Stage: pb.Stage_New,
@@ -62,7 +62,7 @@ func testSetUpDB(c *C) *leveldb.DB {
 
 	testTask2Str, err := testTask2.Toml()
 	c.Assert(err, IsNil)
-	testTask2Meta = &pb.TaskMeta{
+	testTask2Meta = &pb.V1SubTaskMeta{
 		Op:    pb.TaskOp_Start,
 		Name:  testTask2.Name,
 		Stage: pb.Stage_New,
@@ -102,7 +102,7 @@ func (t *testMeta) TestTask(c *C) {
 	err := setTaskMeta(db, nil)
 	c.Assert(err, ErrorMatches, ".*empty task.*")
 
-	err = setTaskMeta(db, &pb.TaskMeta{})
+	err = setTaskMeta(db, &pb.V1SubTaskMeta{})
 	c.Assert(err, ErrorMatches, ".*empty task.*")
 
 	c.Assert(setTaskMeta(db, testTask1Meta), IsNil)
@@ -115,7 +115,7 @@ func (t *testMeta) TestTask(c *C) {
 
 	metaDB, err = newMeta(db)
 	c.Assert(err, IsNil)
-	c.Assert(metaDB.tasks, DeepEquals, map[string]*pb.TaskMeta{
+	c.Assert(metaDB.tasks, DeepEquals, map[string]*pb.V1SubTaskMeta{
 		"task1": testTask1Meta,
 		"task2": testTask2Meta,
 	})
@@ -126,7 +126,7 @@ func (t *testMeta) TestTask(c *C) {
 	// load task meta
 	metaDB, err = newMeta(db)
 	c.Assert(err, IsNil)
-	c.Assert(metaDB.tasks, DeepEquals, map[string]*pb.TaskMeta{
+	c.Assert(metaDB.tasks, DeepEquals, map[string]*pb.V1SubTaskMeta{
 		"task2": testTask2Meta,
 	})
 

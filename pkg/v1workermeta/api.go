@@ -47,7 +47,7 @@ type v1SubTaskConfig struct {
 }
 
 // GetSubtasksMeta gets all subtasks' meta (config and status) from `dm_worker_meta` in v1.0.x.
-func GetSubtasksMeta() (map[string]*pb.TaskMeta, error) {
+func GetSubtasksMeta() (map[string]*pb.V1SubTaskMeta, error) {
 	// check if meta data exist.
 	if !utils.IsDirExists(metaPath) || !utils.IsDirExists(dbPath) {
 		return nil, nil

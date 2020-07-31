@@ -33,6 +33,8 @@ service Worker {
     // a `set`/`remove` operation should be an one-time operation (only take effect once),
     // so we use a gRPC method rather than a etcd operation now (no persistent operation state).
     rpc OperateSchema(OperateWorkerSchemaRequest) returns(CommonWorkerResponse) {}
+
+    rpc OperateV1Meta(OperateV1MetaRequest) returns(OperateV1MetaResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -420,10 +422,26 @@ message OperateWorkerSchemaRequest {
     string schema = 6; // schema content, a `CREATE TABLE` statement
 }
 
-// copied from release-1.0 branch.
-message TaskMeta {
+// copied `TaskMeta` from release-1.0 branch.
+message V1SubTaskMeta {
     TaskOp op = 1;
     Stage stage = 2; // the stage of sub-task after we apply some operations
     string name = 3; // sub task's name
     bytes task = 4; // (sub) task's configuration
+}
+
+enum V1MetaOp {
+    InvalidV1MetaOp = 0;
+    GetV1Meta = 1;
+    RemoveV1Meta = 2;
+}
+
+message OperateV1MetaRequest {
+    V1MetaOp op = 1;
+}
+
+message OperateV1MetaResponse {
+    bool result = 1;
+    string msg = 2; // error message if failed.
+    map<string, V1SubTaskMeta> meta = 3; // subtasks' meta for `get` operation.
 }

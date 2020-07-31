@@ -25,7 +25,7 @@ import (
 
 // meta stores metadata of tasks.
 type meta struct {
-	tasks map[string]*pb.TaskMeta
+	tasks map[string]*pb.V1SubTaskMeta
 }
 
 // newMeta returns a meta object.
@@ -41,10 +41,10 @@ func newMeta(db *leveldb.DB) (*meta, error) {
 }
 
 // TasksMeta returns meta of all tasks.
-func (meta *meta) TasksMeta() map[string]*pb.TaskMeta {
-	tasks := make(map[string]*pb.TaskMeta, len(meta.tasks))
+func (meta *meta) TasksMeta() map[string]*pb.V1SubTaskMeta {
+	tasks := make(map[string]*pb.V1SubTaskMeta, len(meta.tasks))
 	for name, task := range meta.tasks {
-		tasks[name] = proto.Clone(task).(*pb.TaskMeta)
+		tasks[name] = proto.Clone(task).(*pb.V1SubTaskMeta)
 	}
 	return tasks
 }
@@ -59,20 +59,20 @@ func encodeTaskMetaKey(name string) []byte {
 }
 
 // loadTaskMetas loads all task metas from kv db.
-func loadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
+func loadTaskMetas(db *leveldb.DB) (map[string]*pb.V1SubTaskMeta, error) {
 	if helper.IsNil(db) {
 		return nil, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	var (
-		tasks = make(map[string]*pb.TaskMeta)
+		tasks = make(map[string]*pb.V1SubTaskMeta)
 		err   error
 	)
 
 	iter := db.NewIterator(util.BytesPrefix(taskMetaPrefix), nil)
 	for iter.Next() {
 		taskBytes := iter.Value()
-		task := &pb.TaskMeta{}
+		task := &pb.V1SubTaskMeta{}
 		err = task.Unmarshal(taskBytes)
 		if err != nil {
 			err = terror.ErrWorkerLogUnmarshalTaskMeta.Delegate(err, taskBytes)
@@ -96,7 +96,7 @@ func loadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
 
 // setTaskMeta saves task meta into kv db.
 // it's used for testing.
-func setTaskMeta(db *leveldb.DB, task *pb.TaskMeta) error {
+func setTaskMeta(db *leveldb.DB, task *pb.V1SubTaskMeta) error {
 	if helper.IsNil(db) {
 		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
@@ -136,7 +136,7 @@ func deleteTaskMeta(db *leveldb.DB, name string) error {
 
 // verifyTaskMeta verifies legality of take meta.
 // it's used for testing.
-func verifyTaskMeta(task *pb.TaskMeta) error {
+func verifyTaskMeta(task *pb.V1SubTaskMeta) error {
 	if task == nil {
 		return terror.ErrWorkerLogVerifyTaskMeta.New("empty task not valid")
 	}
