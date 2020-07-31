@@ -136,6 +136,5 @@ func Start(args []string) (err error) {
 	commandMasterFlags.Reset()
 	rootCmd = NewRootCmd()
 	rootCmd.SetArgs(args)
-	rootCmd.Execute()
-	return
+	return rootCmd.Execute()
 }
