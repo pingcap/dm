@@ -24,6 +24,8 @@ import (
 
 var (
 	useOfClosedErrMsg = "use of closed network connection"
+	// ClusterVersionKey used to store the version of the cluster.
+	ClusterVersionKey string = "/dm-cluster/version"
 	// WorkerRegisterKeyAdapter used to encode and decode register key.
 	// k/v: Encode(name) -> the information of the DM-worker node.
 	WorkerRegisterKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/r/")
