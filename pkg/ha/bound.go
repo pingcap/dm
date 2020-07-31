@@ -16,7 +16,6 @@ package ha
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"go.etcd.io/etcd/clientv3"
@@ -204,16 +203,14 @@ func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, con
 		cfg, ok = scm[bound.Source]
 		// ok == false means we have got source bound but there is no source config, this shouldn't happen
 		if !ok {
-			// TODO: add terror.
 			// this should not happen.
-			return bound, cfg, 0, fmt.Errorf("source bound %s doesn't have related source config in etcd", bound)
+			return bound, cfg, 0, terror.ErrConfigMissingForBound.Generate(bound)
 		}
 
 		return bound, cfg, rev2, nil
 	}
 
-	// TODO: add terror.
-	return bound, cfg, 0, fmt.Errorf("source bound is changed too frequently, last old bound %s:, new bound %s", bound, newBound)
+	return bound, cfg, 0, terror.ErrMasterBoundChanging.Generate(bound, newBound)
 }
 
 // WatchSourceBound watches PUT & DELETE operations for the bound relationship of the specified DM-worker.

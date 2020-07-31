@@ -86,8 +86,7 @@ func sourceCfgFromResp(source string, resp *clientv3.GetResponse) (map[string]co
 		var cfg config.SourceConfig
 		err := cfg.Parse(string(kv.Value))
 		if err != nil {
-			// TODO(csuzhangxc): add terror and including `key`.
-			return scm, err
+			return scm, terror.ErrConfigEtcdParse.Delegate(err, kv.Key)
 		}
 		scm[cfg.SourceID] = cfg
 	}
