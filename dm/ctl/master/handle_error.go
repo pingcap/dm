@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -29,7 +30,7 @@ func NewHandleErrorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "handle-error <task-name> [-s source ...] [-b binlog-pos] <skip/replace> [replace-sql1;replace-sql2;]",
 		Short: "skip/replace the current error event or a specific binlog position (binlog-pos) event",
-		Run:   handleErrorFunc,
+		RunE:  handleErrorFunc,
 	}
 	cmd.Flags().StringP("binlog-pos", "b", "", "position used to match binlog event if matched the handler-error operation will be applied. The format like \"mysql-bin|000001.000003:3270\"")
 	return cmd
@@ -47,10 +48,11 @@ func convertOp(t string) pb.ErrorOp {
 }
 
 // handleErrorFunc does handle error request
-func handleErrorFunc(cmd *cobra.Command, _ []string) {
+func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) < 2 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
+		err = errors.New("please check output to see error")
 		return
 	}
 
@@ -67,36 +69,33 @@ func handleErrorFunc(cmd *cobra.Command, _ []string) {
 	case pb.ErrorOp_Replace:
 		if len(cmd.Flags().Args()) <= 2 {
 			common.PrintLines("must specify the replace-sqls for replace operation")
+			err = errors.New("please check output to see error")
 			return
 		}
 
-		var err error
 		sqls, err = common.ExtractSQLsFromArgs(cmd.Flags().Args()[2:])
 		if err != nil {
-			common.PrintLines("%v", err)
 			return
 		}
 	default:
 		common.PrintLines("invalid operation '%s', please use `skip` or `relpace`", operation)
+		err = errors.New("please check output to see error")
 		return
 	}
 
 	binlogPos, err := cmd.Flags().GetString("binlog-pos")
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 	if len(binlogPos) != 0 {
 		_, err = command.VerifyBinlogPos(binlogPos)
 		if err != nil {
-			common.PrintLines("%v", err)
 			return
 		}
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 
@@ -112,9 +111,9 @@ func handleErrorFunc(cmd *cobra.Command, _ []string) {
 		Sources:   sources,
 	})
 	if err != nil {
-		common.PrintLines("can not handle error:\n%v", err)
 		return
 	}
 
 	common.PrettyPrintResponse(resp)
+	return
 }
