@@ -15,12 +15,12 @@ package ha
 
 import (
 	"context"
-	"github.com/pingcap/dm/pkg/terror"
 
 	"go.etcd.io/etcd/clientv3"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 func taskCfgFromResp(task string, resp *clientv3.GetResponse) (map[string]string, error) {

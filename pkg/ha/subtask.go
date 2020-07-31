@@ -15,13 +15,13 @@ package ha
 
 import (
 	"context"
-	"github.com/pingcap/dm/pkg/terror"
 
 	"go.etcd.io/etcd/clientv3"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/etcdutil"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // PutSubTaskCfg puts the subtask configs of the specified source and task name into etcd.

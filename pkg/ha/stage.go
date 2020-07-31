@@ -16,7 +16,6 @@ package ha
 import (
 	"context"
 	"encoding/json"
-	"github.com/pingcap/dm/pkg/terror"
 
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
@@ -27,6 +26,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // Stage represents the running stage for a relay or subtask.
