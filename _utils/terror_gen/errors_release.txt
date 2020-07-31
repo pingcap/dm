@@ -151,6 +151,9 @@ ErrConfigSyncerCfgNotFound,[code=20030:class=config:scope=internal:level=medium]
 ErrConfigSourceIDNotFound,[code=20031:class=config:scope=internal:level=medium], "Message: source %s in deployment configuration not found, Workaround: Please use `operate-source create source-config-file-path` to add source."
 ErrConfigDuplicateCfgItem,[code=20032:class=config:scope=internal:level=medium], "Message: the following mysql configs have duplicate items, please remove the duplicates:\n%s, Workaround: Please check the `mysql-instances` config in task configuration file."
 ErrConfigShardModeNotSupport,[code=20033:class=config:scope=internal:level=medium], "Message: shard mode %s not supported, Workaround: Please check the `shard-mode` config in task configuration file, which can be set to `pessimistic`/`optimistic`."
+ErrConfigMoreThanOne,[code=20034:class=config:scope=internal:level=high], "Message: found %d %s for %s which should <= 1"
+ErrConfigEtcdParse,[code=20035:class=config:scope=internal:level=high], "Message: incapable config of %s from etcd"
+ErrConfigMissingForBound,[code=20036:class=config:scope=internal:level=high], "Message: source bound %s doesn't have related source config in etcd"
 ErrBinlogExtractPosition,[code=22001:class=binlog-op:scope=internal:level=high]
 ErrBinlogInvalidFilename,[code=22002:class=binlog-op:scope=internal:level=high], "Message: invalid binlog filename"
 ErrBinlogParsePosFromStr,[code=22003:class=binlog-op:scope=internal:level=high]
@@ -347,6 +350,7 @@ ErrMasterMasterNameNotExist,[code=38048:class=dm-master:scope=internal:level=low
 ErrMasterInvalidOfflineType,[code=38049:class=dm-master:scope=internal:level=low], "Message: offline member type %s is invalid, Workaround: Please use master/worker."
 ErrMasterAdvertisePeerURLsNotValid,[code=38050:class=dm-master:scope=internal:level=high], "Message: advertise peer urls %s not valid, Workaround: Please check the `advertise-peer-urls` config in master configuration file."
 ErrMasterTLSConfigNotValid,[code=38051:class=dm-master:scope=internal:level=high], "Message: TLS config not valid, Workaround: Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in master configuration file."
+ErrMasterBoundChanging,[code=38052:class=dm-master:scope=internal:level=low], "Message: source bound is changed too frequently, last old bound %s:, new bound %s, Workaround: Please try again later"
 ErrWorkerParseFlagSet,[code=40001:class=dm-worker:scope=internal:level=medium], "Message: parse dm-worker config flag set"
 ErrWorkerInvalidFlag,[code=40002:class=dm-worker:scope=internal:level=medium], "Message: '%s' is an invalid flag"
 ErrWorkerDecodeConfigFromFile,[code=40003:class=dm-worker:scope=internal:level=medium], "Message: toml decode file, Workaround: Please check the configuration file has correct TOML format."
@@ -423,6 +427,7 @@ ErrWorkerFailToGetSubtaskConfigFromEtcd,[code=40073:class=dm-worker:scope=intern
 ErrWorkerFailToGetSourceConfigFromEtcd,[code=40074:class=dm-worker:scope=internal:level=medium], "Message: there is no relative source config for source %s in etcd"
 ErrWorkerDDLLockOpNotFound,[code=40075:class=dm-worker:scope=internal:level=high], "Message: missing shard DDL lock operation for shard DDL info (%s)"
 ErrWorkerTLSConfigNotValid,[code=40076:class=dm-worker:scope=internal:level=high], "Message: TLS config not valid, Workaround: Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in worker configuration file."
+ErrWorkerFailConnectMaster,[code=40077:class=dm-worker:scope=internal:level=high], "Message: cannot connect with master endpoints: %v, Workaround: Please check network connection of worker"
 ErrTracerParseFlagSet,[code=42001:class=dm-tracer:scope=internal:level=medium], "Message: parse dm-tracer config flag set"
 ErrTracerConfigTomlTransform,[code=42002:class=dm-tracer:scope=internal:level=medium], "Message: config toml transform, Workaround: Please check the configuration file has correct TOML format."
 ErrTracerConfigInvalidFlag,[code=42003:class=dm-tracer:scope=internal:level=medium], "Message: '%s' is an invalid flag"

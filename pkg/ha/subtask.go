@@ -15,13 +15,13 @@ package ha
 
 import (
 	"context"
-	"fmt"
 
 	"go.etcd.io/etcd/clientv3"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/etcdutil"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // PutSubTaskCfg puts the subtask configs of the specified source and task name into etcd.
@@ -119,9 +119,8 @@ func subTaskCfgFromResp(source, task string, resp *clientv3.GetResponse) (map[st
 	if resp.Count == 0 {
 		return cfgs, nil
 	} else if source != "" && task != "" && resp.Count > 1 {
-		// TODO(lichunzhu): add terror.
 		// this should not happen.
-		return cfgs, fmt.Errorf("too many config (%d) exist for the subtask {sourceID: %s, task name: %s}", resp.Count, source, task)
+		return cfgs, terror.ErrConfigMoreThanOne.Generate(resp.Count, "config", "(source: "+source+", task: "+task+")")
 	}
 
 	for _, kvs := range resp.Kvs {

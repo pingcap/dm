@@ -15,13 +15,13 @@ package ha
 
 import (
 	"context"
-	"fmt"
 
 	"go.etcd.io/etcd/clientv3"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/etcdutil"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // PutSourceCfg puts the config of the upstream source into etcd.
@@ -78,17 +78,15 @@ func sourceCfgFromResp(source string, resp *clientv3.GetResponse) (map[string]co
 	if resp.Count == 0 {
 		return scm, nil
 	} else if source != "" && resp.Count > 1 {
-		// TODO(csuzhangxc): add terror.
 		// this should not happen.
-		return scm, fmt.Errorf("too many config (%d) exist for the source %s", resp.Count, source)
+		return scm, terror.ErrConfigMoreThanOne.Generate(resp.Count, "config", "source: "+source)
 	}
 
 	for _, kv := range resp.Kvs {
 		var cfg config.SourceConfig
 		err := cfg.Parse(string(kv.Value))
 		if err != nil {
-			// TODO(csuzhangxc): add terror and including `key`.
-			return scm, err
+			return scm, terror.ErrConfigEtcdParse.Delegate(err, kv.Key)
 		}
 		scm[cfg.SourceID] = cfg
 	}

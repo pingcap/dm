@@ -18,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/zap"
@@ -78,8 +77,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 		}
 		return nil
 	}
-	// TODO: use terror here
-	return errors.Errorf("cannot connect with master endpoints: %v", endpoints)
+	return terror.ErrWorkerFailConnectMaster.Generate(endpoints)
 }
 
 // KeepAlive attempts to keep the lease of the server alive forever.
