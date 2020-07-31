@@ -2084,3 +2084,79 @@ func (s *Server) GetTaskCfg(ctx context.Context, req *pb.GetTaskCfgRequest) (*pb
 		Cfg:    cfg,
 	}, nil
 }
+
+// HandleError implements MasterServer.HandleError
+func (s *Server) HandleError(ctx context.Context, req *pb.HandleErrorRequest) (*pb.HandleErrorResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "HandleError"))
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.HandleError(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
+	}
+
+	sources := req.Sources
+	if len(sources) == 0 {
+		sources = s.getTaskResources(req.Task)
+		log.L().Info(fmt.Sprintf("sources: %s", sources))
+		if len(sources) == 0 {
+			return &pb.HandleErrorResponse{
+				Result: false,
+				Msg:    fmt.Sprintf("task %s has no source or not exist, please check the task name and status", req.Task),
+			}, nil
+		}
+	}
+
+	workerReq := workerrpc.Request{
+		Type: workerrpc.CmdHandleError,
+		HandleError: &pb.HandleWorkerErrorRequest{
+			Op:        req.Op,
+			Task:      req.Task,
+			BinlogPos: req.BinlogPos,
+			Sqls:      req.Sqls,
+		},
+	}
+
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(sources))
+	var wg sync.WaitGroup
+	for _, source := range sources {
+		wg.Add(1)
+		go func(source string) {
+			defer wg.Done()
+			worker := s.scheduler.GetWorkerBySource(source)
+			if worker == nil {
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("source %s relevant worker-client not found", source), source, "")
+				return
+			}
+			resp, err := worker.SendRequest(ctx, &workerReq, s.cfg.RPCTimeout)
+			workerResp := &pb.CommonWorkerResponse{}
+			if err != nil {
+				workerResp = errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name)
+			} else {
+				workerResp = resp.HandleError
+			}
+			workerResp.Source = source
+			workerRespCh <- workerResp
+		}(source)
+	}
+	wg.Wait()
+
+	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(sources))
+	for len(workerRespCh) > 0 {
+		workerResp := <-workerRespCh
+		workerRespMap[workerResp.Source] = workerResp
+	}
+
+	sort.Strings(sources)
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(sources))
+	for _, worker := range sources {
+		workerResps = append(workerResps, workerRespMap[worker])
+	}
+
+	return &pb.HandleErrorResponse{
+		Result:  true,
+		Sources: workerResps,
+	}, nil
+}

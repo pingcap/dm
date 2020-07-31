@@ -959,3 +959,24 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 		}
 	}
 }
+
+// HandleError handle error
+func (s *Server) HandleError(ctx context.Context, req *pb.HandleWorkerErrorRequest) (*pb.CommonWorkerResponse, error) {
+	log.L().Info("", zap.String("request", "HandleError"), zap.Stringer("payload", req))
+
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call HandleError, because mysql worker has not been started")
+		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
+	}
+
+	msg, err := w.HandleError(ctx, req)
+	if err != nil {
+		return makeCommonWorkerResponse(err), nil
+	}
+	return &pb.CommonWorkerResponse{
+		Result: true,
+		Msg:    msg,
+		Worker: s.cfg.Name,
+	}, nil
+}

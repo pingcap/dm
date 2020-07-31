@@ -106,6 +106,13 @@ service Master {
             get: "/apis/v1alpha1/tasks/{name}"
         };
     }
+
+    rpc HandleError(HandleErrorRequest) returns(HandleErrorResponse) {
+        option (google.api.http) = {
+            put: "/apis/v1alpha1/errors"
+            body: "*"
+        };
+    }
 }
 
 message MigrateWorkerRelayRequest {
@@ -439,4 +446,18 @@ message GetTaskCfgResponse {
     bool result = 1;
     string msg = 2;
     string cfg = 3;
+}
+
+message HandleErrorRequest {
+    ErrorOp op = 1; // operation type
+    string task = 2; // the task name
+    repeated string sources = 3; // source ID list
+    string binlogPos = 4; // binlog-pos (that's file:pos format)
+    repeated string sqls = 5; // sqls (use for replace)
+}
+
+message HandleErrorResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated CommonWorkerResponse sources = 3;
 }

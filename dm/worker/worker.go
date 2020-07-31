@@ -811,3 +811,20 @@ func (w *Worker) getAllSubTaskStatus() map[string]*pb.SubTaskStatus {
 	}
 	return result
 }
+
+// HandleError handle worker error
+func (w *Worker) HandleError(ctx context.Context, req *pb.HandleWorkerErrorRequest) (string, error) {
+	w.Lock()
+	defer w.Unlock()
+
+	if w.closed.Get() == closedTrue {
+		return "", terror.ErrWorkerAlreadyClosed.Generate()
+	}
+
+	st := w.subTaskHolder.findSubTask(req.Task)
+	if st == nil {
+		return "", terror.ErrWorkerSubTaskNotFound.Generate(req.Task)
+	}
+
+	return st.HandleError(ctx, req)
+}

@@ -130,12 +130,6 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
-[error.DM-functional-11017]
-message = ""
-description = ""
-workaround = "Please make sure the args are correct."
-tags = ["internal", "low"]
-
 [error.DM-functional-11018]
 message = "get file statfs"
 description = ""
@@ -717,6 +711,12 @@ message = "fail to operate DM cluster version in etcd"
 description = ""
 workaround = "Please use `list-member --master` to confirm whether the DM-master cluster is healthy"
 tags = ["internal", "high"]
+
+[error.DM-functional-11115]
+message = ""
+description = ""
+workaround = "Please make sure the args are correct."
+tags = ["internal", "low"]
 
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"

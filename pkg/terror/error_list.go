@@ -159,6 +159,8 @@ const (
 
 	// pkg/upgrade
 	codeUpgradeVersionEtcdFail
+
+	codeVerifyHandleErrorArgs
 )
 
 // Config related error code list
@@ -605,12 +607,12 @@ var (
 	ErrMariaDBDomainID        = New(codeMariaDBDomainID, ClassFunctional, ScopeInternal, LevelHigh, "%v is not uint32", "")
 	ErrInvalidServerID        = New(codeInvalidServerID, ClassFunctional, ScopeInternal, LevelHigh, "invalid server id %s", "")
 	ErrGetSQLModeFromStr      = New(codeGetSQLModeFromStr, ClassFunctional, ScopeInternal, LevelHigh, "get sql mode from string literal %s", "")
-	ErrVerifySQLOperateArgs   = New(codeVerifySQLOperateArgs, ClassFunctional, ScopeInternal, LevelLow, "", "Please make sure the args are correct.")
 	ErrStatFileSize           = New(codeStatFileSize, ClassFunctional, ScopeInternal, LevelHigh, "get file statfs", "")
 	ErrReaderAlreadyRunning   = New(codeReaderAlreadyRunning, ClassFunctional, ScopeInternal, LevelHigh, "binlog reader is already running", "")
 	ErrReaderAlreadyStarted   = New(codeReaderAlreadyStarted, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, already started", "")
 	ErrReaderStateCannotClose = New(codeReaderStateCannotClose, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close", "")
 	ErrReaderShouldStartSync  = New(codeReaderShouldStartSync, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s", "")
+	ErrVerifyHandleErrorArgs  = New(codeVerifyHandleErrorArgs, ClassFunctional, ScopeInternal, LevelLow, "", "Please make sure the args are correct.")
 	// pkg/streamer
 	ErrEmptyRelayDir            = New(codeEmptyRelayDir, ClassFunctional, ScopeInternal, LevelHigh, "empty relay dir", "Please check `relay-dir` config in task configuration file.")
 	ErrReadDir                  = New(codeReadDir, ClassFunctional, ScopeInternal, LevelHigh, "read dir: %s", "")

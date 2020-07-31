@@ -23,6 +23,11 @@ function usage_and_arg_test() {
 
     query_error_wrong_arg
 
+    handle_error_wrong_arg
+    handle_error_invalid_binlogpos
+    handle_error_invalid_sqls
+    handle_error_invalid_op
+
     # TODO: check SQLs error test
 }
 
