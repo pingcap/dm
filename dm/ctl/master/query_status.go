@@ -79,7 +79,7 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	more, err := cmd.Flags().GetBool("more")
 	if err != nil {
-		common.PrintLines("error in parse more")
+		common.PrintLines("error in parse `--more`")
 		return
 	}
 

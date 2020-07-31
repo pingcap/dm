@@ -56,7 +56,7 @@ func convertCmdType(t string) pb.SourceOp {
 func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 	printSampleConfig, err := cmd.Flags().GetBool("print-sample-config")
 	if err != nil {
-		common.PrintLines("error in parse print-sample-config")
+		common.PrintLines("error in parse `--print-sample-config`")
 		return
 	}
 

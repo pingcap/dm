@@ -87,13 +87,13 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	filename, err := cmd.Flags().GetString("filename")
 	if err != nil {
-		common.PrintLines("error in parse filename")
+		common.PrintLines("error in parse `--filename`")
 		return
 	}
 
 	subDir, err := cmd.Flags().GetString("sub-dir")
 	if err != nil {
-		common.PrintLines("error in parse sub-dir")
+		common.PrintLines("error in parse `--sub-dir`")
 		return
 	}
 

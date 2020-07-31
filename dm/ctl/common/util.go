@@ -177,7 +177,7 @@ func GetFileContent(fpath string) ([]byte, error) {
 func GetSourceArgs(cmd *cobra.Command) ([]string, error) {
 	ret, err := cmd.Flags().GetStringSlice("source")
 	if err != nil {
-		PrintLines("error in parse source")
+		PrintLines("error in parse `-s` / `--source`")
 	}
 	return ret, err
 }

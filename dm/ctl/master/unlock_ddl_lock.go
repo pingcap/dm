@@ -47,7 +47,7 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) (err error) {
 	}
 	owner, err := cmd.Flags().GetString("owner")
 	if err != nil {
-		common.PrintLines("error in parse owner")
+		common.PrintLines("error in parse `--owner`")
 		return
 	}
 
