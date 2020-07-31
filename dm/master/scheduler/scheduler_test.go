@@ -34,7 +34,7 @@ import (
 
 const (
 	// do not forget to update this path if the file removed/renamed.
-	sourceSampleFile = "../../worker/source.toml"
+	sourceSampleFile = "../../worker/source.yaml"
 	// do not forget to update this path if the file removed/renamed.
 	subTaskSampleFile = "../../worker/subtask.toml"
 )

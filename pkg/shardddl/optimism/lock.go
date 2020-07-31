@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -66,6 +67,8 @@ func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []
 		synced:     true,
 	}
 	l.addTables(tts)
+	metrics.ReportDDLPending(task, metrics.DDLPendingNone, metrics.DDLPendingSynced)
+
 	return l
 }
 
@@ -118,9 +121,17 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
 		zap.Stringer("from", oldTable), zap.Stringer("to", newTable), zap.Strings("ddls", ddls))
 
+	oldSynced := l.synced
 	defer func() {
 		_, remain := l.syncStatus()
 		l.synced = remain == 0
+		if oldSynced != l.synced {
+			if oldSynced {
+				metrics.ReportDDLPending(l.Task, metrics.DDLPendingSynced, metrics.DDLPendingUnSynced)
+			} else {
+				metrics.ReportDDLPending(l.Task, metrics.DDLPendingUnSynced, metrics.DDLPendingSynced)
+			}
+		}
 	}()
 
 	// special case: if the DDL does not affect the schema at all, assume it is

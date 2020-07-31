@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/siddontang/go-mysql/mysql"
+	"gopkg.in/yaml.v2"
 
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -34,45 +36,45 @@ const (
 var getAllServerIDFunc = utils.GetAllServerID
 
 // SampleConfigFile is sample config file of source
-// later we can read it from dm/master/source.toml
+// later we can read it from dm/master/source.yaml
 // and assign it to SampleConfigFile while we build dm-ctl
 var SampleConfigFile string
 
 // PurgeConfig is the configuration for Purger
 type PurgeConfig struct {
-	Interval    int64 `toml:"interval" json:"interval"`         // check whether need to purge at this @Interval (seconds)
-	Expires     int64 `toml:"expires" json:"expires"`           // if file's modified time is older than @Expires (hours), then it can be purged
-	RemainSpace int64 `toml:"remain-space" json:"remain-space"` // if remain space in @RelayBaseDir less than @RemainSpace (GB), then it can be purged
+	Interval    int64 `yaml:"interval" toml:"interval" json:"interval"`             // check whether need to purge at this @Interval (seconds)
+	Expires     int64 `yaml:"expires" toml:"expires" json:"expires"`                // if file's modified time is older than @Expires (hours), then it can be purged
+	RemainSpace int64 `yaml:"remain-space" toml:"remain-space" json:"remain-space"` // if remain space in @RelayBaseDir less than @RemainSpace (GB), then it can be purged
 }
 
 // SourceConfig is the configuration for Worker
 type SourceConfig struct {
-	EnableGTID  bool   `toml:"enable-gtid" json:"enable-gtid"`
-	AutoFixGTID bool   `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
-	RelayDir    string `toml:"relay-dir" json:"relay-dir"`
-	MetaDir     string `toml:"meta-dir" json:"meta-dir"`
-	Flavor      string `toml:"flavor" json:"flavor"`
-	Charset     string `toml:"charset" json:"charset"`
+	EnableGTID  bool   `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
+	AutoFixGTID bool   `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
+	RelayDir    string `yaml:"relay-dir" toml:"relay-dir" json:"relay-dir"`
+	MetaDir     string `yaml:"meta-dir" toml:"meta-dir" json:"meta-dir"`
+	Flavor      string `yaml:"flavor" toml:"flavor" json:"flavor"`
+	Charset     string `yaml:"charset" toml:"charset" json:"charset"`
 
-	EnableRelay bool `toml:"enable-relay" json:"enable-relay"`
+	EnableRelay bool `yaml:"enable-relay" toml:"enable-relay" json:"enable-relay"`
 	// relay synchronous starting point (if specified)
-	RelayBinLogName string `toml:"relay-binlog-name" json:"relay-binlog-name"`
-	RelayBinlogGTID string `toml:"relay-binlog-gtid" json:"relay-binlog-gtid"`
+	RelayBinLogName string `yaml:"relay-binlog-name" toml:"relay-binlog-name" json:"relay-binlog-name"`
+	RelayBinlogGTID string `yaml:"relay-binlog-gtid" toml:"relay-binlog-gtid" json:"relay-binlog-gtid"`
 
-	SourceID string   `toml:"source-id" json:"source-id"`
-	From     DBConfig `toml:"from" json:"from"`
+	SourceID string   `yaml:"source-id" toml:"source-id" json:"source-id"`
+	From     DBConfig `yaml:"from" toml:"from" json:"from"`
 
 	// config items for purger
-	Purge PurgeConfig `toml:"purge" json:"purge"`
+	Purge PurgeConfig `yaml:"purge" toml:"purge" json:"purge"`
 
 	// config items for task status checker
-	Checker CheckerConfig `toml:"checker" json:"checker"`
+	Checker CheckerConfig `yaml:"checker" toml:"checker" json:"checker"`
 
 	// config items for tracer
-	Tracer tracing.Config `toml:"tracer" json:"tracer"`
+	Tracer tracing.Config `yaml:"tracer" toml:"tracer" json:"tracer"`
 
 	// id of the worker on which this task run
-	ServerID uint32 `toml:"server-id" json:"server-id"`
+	ServerID uint32 `yaml:"server-id" toml:"server-id" json:"server-id"`
 }
 
 // NewSourceConfig creates a new base config for upstream MySQL/MariaDB source.
@@ -119,11 +121,31 @@ func (c *SourceConfig) Toml() (string, error) {
 	return b.String(), nil
 }
 
+// Yaml returns YAML format representation of config
+func (c *SourceConfig) Yaml() (string, error) {
+	b, err := yaml.Marshal(c)
+	if err != nil {
+		log.L().Error("fail to marshal config to yaml", log.ShortError(err))
+	}
+
+	return string(b), nil
+}
+
 // Parse parses flag definitions from the argument list.
+// accept toml content for legacy use (mainly used by etcd)
 func (c *SourceConfig) Parse(content string) error {
 	// Parse first to get config file.
 	metaData, err := toml.Decode(content, c)
 	return c.check(&metaData, err)
+}
+
+// ParseYaml parses flag definitions from the argument list, content should be yaml format
+func (c *SourceConfig) ParseYaml(content string) error {
+	if err := yaml.UnmarshalStrict([]byte(content), c); err != nil {
+		return terror.ErrConfigYamlTransform.Delegate(err, "decode source config")
+	}
+	c.adjust()
+	return nil
 }
 
 // EncodeToml encodes config.
@@ -270,8 +292,15 @@ func (c *SourceConfig) AdjustServerID(ctx context.Context, db *sql.DB) error {
 
 // LoadFromFile loads config from file.
 func (c *SourceConfig) LoadFromFile(path string) error {
-	metaData, err := toml.DecodeFile(path, c)
-	return c.check(&metaData, err)
+	content, err := ioutil.ReadFile(path)
+	if err != nil {
+		return terror.ErrConfigReadCfgFromFile.Delegate(err, path)
+	}
+	if err := yaml.UnmarshalStrict(content, c); err != nil {
+		return terror.ErrConfigYamlTransform.Delegate(err, "decode source config")
+	}
+	c.adjust()
+	return nil
 }
 
 func (c *SourceConfig) check(metaData *toml.MetaData, err error) error {
