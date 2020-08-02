@@ -1330,10 +1330,19 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
 			err = s.handleRotateEvent(ev, ec)
+			if err = s.handleEventError(err, &currentLocation); err != nil {
+				return err
+			}
 		case *replication.RowsEvent:
 			err = s.handleRowsEvent(ev, ec)
+			if err = s.handleEventError(err, &currentLocation); err != nil {
+				return err
+			}
 		case *replication.QueryEvent:
 			err = s.handleQueryEvent(ev, ec)
+			if err = s.handleEventError(err, &currentLocation); err != nil {
+				return err
+			}
 		case *replication.XIDEvent:
 			if shardingReSync != nil {
 				shardingReSync.currLocation.Position.Pos = e.Header.LogPos
@@ -1360,6 +1369,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			job := newXIDJob(currentLocation, currentLocation, traceID)
 			err = s.addJobFunc(job)
+			if err = s.handleEventError(err, &currentLocation); err != nil {
+				return err
+			}
 		case *replication.GenericEvent:
 			switch e.Header.EventType {
 			case replication.HEARTBEAT_EVENT:
@@ -1367,11 +1379,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if s.checkpoint.CheckGlobalPoint() {
 					s.tctx.L().Info("meet heartbeat event and then flush jobs")
 					err = s.flushJobs()
+					if err = s.handleEventError(err, &currentLocation); err != nil {
+						return err
+					}
 				}
 			}
-		}
-		if err = s.handleEventError(err, &currentLocation); err != nil {
-			return err
 		}
 	}
 }
