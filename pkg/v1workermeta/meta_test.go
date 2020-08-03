@@ -89,7 +89,7 @@ func (t *testMeta) TestNewMetaDB(c *C) {
 
 	// check nil db
 	metaDB, err = newMeta(nil)
-	c.Assert(err, NotNil)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(err), IsTrue)
 	c.Assert(metaDB, IsNil)
 }
 
@@ -109,11 +109,7 @@ func (t *testMeta) TestTask(c *C) {
 	c.Assert(setTaskMeta(db, testTask2Meta), IsNil)
 
 	// load task meta
-	metaDB, err := newMeta(nil)
-	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(err), IsTrue)
-	c.Assert(metaDB, IsNil)
-
-	metaDB, err = newMeta(db)
+	metaDB, err := newMeta(db)
 	c.Assert(err, IsNil)
 	c.Assert(metaDB.tasks, DeepEquals, map[string]*pb.V1SubTaskMeta{
 		"task1": testTask1Meta,
