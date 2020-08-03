@@ -1,4 +1,4 @@
-CREATE TABLE `dm_meta`.`task_single_syncer_checkpoint` (
+CREATE TABLE IF NOT EXISTS `dm_meta_v106_test`.`test_syncer_checkpoint` (
     `id` varchar(32) NOT NULL,
     `cp_schema` varchar(128) NOT NULL,
     `cp_table` varchar(128) NOT NULL,
