@@ -47,7 +47,7 @@ func (t *testAPI) TestAPI(c *C) {
 	dbPath = filepath.Join(metaPath, "kv")
 
 	// copy test data to a temp directory.
-	copyDir(c, srcDBPath, dbPath)
+	copyDir(c, dbPath, srcDBPath)
 
 	// get subtasks meta.
 	meta, err := GetSubtasksMeta()
@@ -100,7 +100,7 @@ func (t *testAPI) TestAPI(c *C) {
 	c.Assert(terror.ErrInvalidV1WorkerMetaPath.Equal(RemoveSubtasksMeta()), IsTrue)
 }
 
-func copyDir(c *C, src string, dst string) {
+func copyDir(c *C, dst, src string) {
 	si, err := os.Stat(src)
 	c.Assert(err, IsNil)
 	if !si.IsDir() {
@@ -126,18 +126,18 @@ func copyDir(c *C, src string, dst string) {
 		dstPath := filepath.Join(dst, entry.Name())
 
 		if entry.IsDir() {
-			copyDir(c, srcPath, dstPath)
+			copyDir(c, dstPath, srcPath)
 		} else {
 			// Skip symlinks.
 			if entry.Mode()&os.ModeSymlink != 0 {
 				continue
 			}
-			copyFile(c, srcPath, dstPath)
+			copyFile(c, dstPath, srcPath)
 		}
 	}
 }
 
-func copyFile(c *C, src, dst string) {
+func copyFile(c *C, dst, src string) {
 	in, err := os.Open(src)
 	c.Assert(err, IsNil)
 	defer in.Close()
