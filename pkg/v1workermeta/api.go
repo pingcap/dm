@@ -15,6 +15,7 @@ package v1workermeta
 
 import (
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/BurntSushi/toml"
@@ -73,6 +74,18 @@ func GetSubtasksMeta() (map[string]*pb.V1SubTaskMeta, error) {
 // this is often called after upgraded from v1.0.x to v2.0.x,
 // so no need to handle again after re-started the DM-worker process.
 func RemoveSubtasksMeta() error {
+	// check is a valid v1.0.x meta path.
+	if !utils.IsDirExists(metaPath) || !utils.IsDirExists(dbPath) {
+		return terror.ErrInvalidV1WorkerMetaPath.Generate(filepath.Abs(metaPath))
+	}
+
+	// try to open levelDB to check.
+	db, err := openDB(dbPath, defaultKVConfig)
+	if err != nil {
+		return terror.ErrInvalidV1WorkerMetaPath.Generate(filepath.Abs(metaPath))
+	}
+	defer db.Close()
+
 	return os.RemoveAll(metaPath)
 }
 
@@ -86,5 +99,10 @@ func SubTaskConfigFromV1TOML(data []byte) (config.SubTaskConfig, error) {
 
 	cfg := v1Cfg.SubTaskConfig
 	cfg.MydumperConfig.ChunkFilesize = strconv.FormatInt(v1Cfg.ChunkFilesize, 10)
-	return cfg, cfg.Adjust(true)
+	err = cfg.Adjust(true)
+	if err != nil {
+		return config.SubTaskConfig{}, terror.ErrConfigTomlTransform.Delegate(err, "transform `chunk-filesize`")
+	}
+
+	return cfg, nil
 }

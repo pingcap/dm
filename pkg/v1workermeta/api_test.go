@@ -23,6 +23,8 @@ import (
 	. "github.com/pingcap/check"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 type testAPI struct{}
@@ -79,10 +81,22 @@ func (t *testAPI) TestAPI(c *C) {
 	// remove all metadata.
 	c.Assert(RemoveSubtasksMeta(), IsNil)
 
+	// verify removed.
+	c.Assert(utils.IsDirExists(metaPath), IsFalse)
+
 	// try to get meta again, nothing exists.
 	meta3, err := GetSubtasksMeta()
 	c.Assert(err, IsNil)
 	c.Assert(meta3, IsNil)
+
+	// remove empty path is invalid.
+	c.Assert(terror.ErrInvalidV1WorkerMetaPath.Equal(RemoveSubtasksMeta()), IsTrue)
+
+	// remove an invalid meta path.
+	metaPath = c.MkDir()
+	dbPath = filepath.Join(metaPath, "kv")
+	c.Assert(os.Mkdir(dbPath, 0644), IsNil)
+	c.Assert(terror.ErrInvalidV1WorkerMetaPath.Equal(RemoveSubtasksMeta()), IsTrue)
 }
 
 func copyDir(c *C, src string, dst string) {

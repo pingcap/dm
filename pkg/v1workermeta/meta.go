@@ -19,7 +19,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/helper"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -60,7 +59,7 @@ func encodeTaskMetaKey(name string) []byte {
 
 // loadTaskMetas loads all task metas from kv db.
 func loadTaskMetas(db *leveldb.DB) (map[string]*pb.V1SubTaskMeta, error) {
-	if helper.IsNil(db) {
+	if db == nil {
 		return nil, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -75,16 +74,13 @@ func loadTaskMetas(db *leveldb.DB) (map[string]*pb.V1SubTaskMeta, error) {
 		task := &pb.V1SubTaskMeta{}
 		err = task.Unmarshal(taskBytes)
 		if err != nil {
-			err = terror.ErrWorkerLogUnmarshalTaskMeta.Delegate(err, taskBytes)
-			break
+			iter.Release()
+			return nil, terror.ErrWorkerLogUnmarshalTaskMeta.Delegate(err, taskBytes)
 		}
 
 		tasks[task.Name] = task
 	}
 	iter.Release()
-	if err != nil {
-		return nil, terror.ErrWorkerLogFetchTaskFromMeta.Delegate(err, taskMetaPrefix)
-	}
 
 	err = iter.Error()
 	if err != nil {
@@ -97,7 +93,7 @@ func loadTaskMetas(db *leveldb.DB) (map[string]*pb.V1SubTaskMeta, error) {
 // setTaskMeta saves task meta into kv db.
 // it's used for testing.
 func setTaskMeta(db *leveldb.DB, task *pb.V1SubTaskMeta) error {
-	if helper.IsNil(db) {
+	if db == nil {
 		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -122,7 +118,7 @@ func setTaskMeta(db *leveldb.DB, task *pb.V1SubTaskMeta) error {
 // deleteTaskMeta deletes task meta from kv DB.
 // it's used for testing.
 func deleteTaskMeta(db *leveldb.DB, name string) error {
-	if helper.IsNil(db) {
+	if db == nil {
 		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
