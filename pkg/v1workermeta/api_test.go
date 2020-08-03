@@ -56,6 +56,7 @@ func (t *testAPI) TestAPI(c *C) {
 	// verify tasks meta.
 	// - task_single:
 	//   - no shard task, Running stage.
+	// - task_shard
 	//   - shard task, Paused stage.
 	c.Assert(meta, HasLen, 2)
 	c.Assert(meta, HasKey, "task_single")
