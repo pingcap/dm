@@ -123,6 +123,8 @@ func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
 }
 
 func (s *Server) startLeaderComponent(ctx context.Context) bool {
+	metrics.ReportStartLeader()
+	
 	// try to upgrade the cluster version if a member become the leader.
 	// so if the old leader failed when upgrading, the new leader can try again.
 	// NOTE: if the cluster has been upgraded, calling this method again should have no side effects.
