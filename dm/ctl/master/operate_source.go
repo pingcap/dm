@@ -31,7 +31,7 @@ import (
 // NewOperateSourceCmd creates a OperateSource command
 func NewOperateSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "operate-source <operate-type> [config-file ...] [--print-sample-config]",
+		Use:   "operate-source <operate-type> [config-file | sourceID ...] [--print-sample-config]",
 		Short: "create/update/stop/show upstream MySQL/MariaDB source",
 		RunE:  operateSourceFunc,
 	}
@@ -96,15 +96,20 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 
-	contents := make([]string, len(cmd.Flags().Args())-1)
+	contents := make([]string, 0, len(cmd.Flags().Args())-1)
+	sourceID := make([]string, 0, len(cmd.Flags().Args())-1)
 	for i := 1; i < len(cmd.Flags().Args()); i++ {
-		configFile := cmd.Flags().Arg(i)
+		arg := cmd.Flags().Arg(i)
 		var content []byte
-		content, err = common.GetFileContent(configFile)
+		content, err = common.GetFileContent(arg)
 		if err != nil {
+			if op == pb.SourceOp_StopSource {
+				sourceID = append(sourceID, arg)
+				continue
+			}
 			return
 		}
-		contents[i-1] = string(content)
+		contents = append(contents, string(content))
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -112,8 +117,9 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	cli := common.MasterClient()
 	resp, err := cli.OperateSource(ctx, &pb.OperateSourceRequest{
-		Config: contents,
-		Op:     op,
+		Config:   contents,
+		Op:       op,
+		SourceID: sourceID,
 	})
 	if err != nil {
 		return
