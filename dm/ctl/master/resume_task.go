@@ -26,7 +26,7 @@ import (
 // NewResumeTaskCmd creates a ResumeTask command
 func NewResumeTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "resume-task [-s source ...] <task-name>",
+		Use:   "resume-task [-s source ...] <task-name | task-file>",
 		Short: "resume a specified paused task",
 		RunE:  resumeTaskFunc,
 	}

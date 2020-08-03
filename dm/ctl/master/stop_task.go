@@ -26,7 +26,7 @@ import (
 // NewStopTaskCmd creates a StopTask command
 func NewStopTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "stop-task [-s source ...] <task-name>",
+		Use:   "stop-task [-s source ...] <task-name | task-file>",
 		Short: "stop a specified task",
 		RunE:  stopTaskFunc,
 	}
