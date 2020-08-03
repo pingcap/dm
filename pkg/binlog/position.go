@@ -175,6 +175,8 @@ type Location struct {
 	Position gmysql.Position
 
 	GTIDSet gtid.Set
+
+	Suffix int // use for replace event
 }
 
 // NewLocation returns a new Location
@@ -186,7 +188,10 @@ func NewLocation(flavor string) Location {
 }
 
 func (l Location) String() string {
-	return fmt.Sprintf("position: %v, gtid-set: %s", l.Position, l.GTIDSetStr())
+	if l.Suffix == 0 {
+		return fmt.Sprintf("position: %v, gtid-set: %s", l.Position, l.GTIDSetStr())
+	}
+	return fmt.Sprintf("position: %v, gtid-set: %s, suffix: %d", l.Position, l.GTIDSetStr(), l.Suffix)
 }
 
 // GTIDSetStr returns gtid set's string
@@ -219,6 +224,7 @@ func (l Location) CloneWithFlavor(flavor string) Location {
 			Pos:  l.Position.Pos,
 		},
 		GTIDSet: newGTIDSet,
+		Suffix:  l.Suffix,
 	}
 }
 
@@ -230,14 +236,21 @@ func CompareLocation(location1, location2 Location, cmpGTID bool) int {
 	if cmpGTID {
 		cmp, canCmp := CompareGTID(location1.GTIDSet, location2.GTIDSet)
 		if canCmp {
-			return cmp
+			if cmp != 0 {
+				return cmp
+			}
+			return compareIndex(location1.Suffix, location2.Suffix)
 		}
 
 		// if can't compare by GTIDSet, then compare by position
 		log.L().Warn("gtidSet can't be compared, will compare by position", zap.Stringer("location1", location1), zap.Stringer("location2", location2))
 	}
 
-	return ComparePosition(location1.Position, location2.Position)
+	cmp := ComparePosition(location1.Position, location2.Position)
+	if cmp != 0 {
+		return cmp
+	}
+	return compareIndex(location1.Suffix, location2.Suffix)
 }
 
 // CompareGTID returns:
@@ -273,4 +286,14 @@ func CompareGTID(gSet1, gSet2 gtid.Set) (int, bool) {
 	}
 
 	return 0, false
+}
+
+func compareIndex(lhs, rhs int) int {
+	if lhs < rhs {
+		return -1
+	} else if lhs > rhs {
+		return 1
+	} else {
+		return 0
+	}
 }
