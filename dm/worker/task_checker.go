@@ -274,12 +274,16 @@ func isResumableError(err *pb.ProcessError) bool {
 			return false
 		}
 	}
-	if err.ErrCode == int32(terror.ErrParserParseRelayLog.Code()) {
+
+	switch err.ErrCode {
+	case int32(terror.ErrParserParseRelayLog.Code()):
 		for _, msg := range retry.ParseRelayLogErrMsgs {
 			if strings.Contains(strings.ToLower(err.Message), strings.ToLower(msg)) {
 				return false
 			}
 		}
+	case int32(terror.ErrDumpUnitGlobalLock.Code()):
+		return false
 	}
 
 	if _, ok := retry.UnresumableErrCodes[err.ErrCode]; ok {
@@ -296,6 +300,7 @@ func (tsc *realTaskStatusChecker) getResumeStrategy(stStatus *pb.SubTaskStatus, 
 	}
 
 	// TODO: use different strategies based on the error detail
+	// lance: here
 	for _, processErr := range stStatus.Result.Errors {
 		if !isResumableError(processErr) {
 			return ResumeNoSense

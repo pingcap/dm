@@ -168,11 +168,18 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 				continue
 			case "ERROR":
 				m.logger.Error(string(msg))
+				if strings.HasPrefix(string(msg), "Couldn't acquire global lock") {
+					err = terror.ErrDumpUnitGlobalLock
+				}
 				continue
 			}
 		}
 		stderr.Write(line)
 		stderr.WriteByte('\n')
+		if err != nil {
+			stdout.Write(stderr.Bytes())
+			return stdout.Bytes(), err
+		}
 	}
 	if err = scanner.Err(); err != nil {
 		stdout.Write(stderr.Bytes())
