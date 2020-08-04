@@ -36,7 +36,8 @@ function fail_acquire_global_lock() {
     check_log_contains $WORK_DIR/worker2/log/dm-worker.log "Couldn't acquire global lock"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
-        "\"stage\": \"Paused\"" 4
+        "\"stage\": \"Paused\"" 4 \
+        "Please check upstream privilege about FTWRL" 2
 
     cleanup_data full_mode
     cleanup_process $*
