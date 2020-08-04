@@ -18,13 +18,21 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/errno"
+	gmysql "github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/binlog/reader"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
+	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // UpdateSchema updates the DB schema from v1.0.x to v2.0.x, including:
@@ -34,18 +42,37 @@ func UpdateSchema(tctx *tcontext.Context, db *conn.BaseDB, cfg *config.SubTaskCo
 	// get db connection.
 	dbConn, err := db.GetBaseConn(tctx.Context())
 	if err != nil {
-		return err
+		return terror.ErrFailUpdateV1DBSchema.Delegate(err)
 	}
 
-	// update checkpoint.
-	err = updateSyncerCheckpoint(tctx, dbConn, cfg.Name, dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)), cfg.EnableGTID)
+	// setup SQL parser.
+	parser2, err := utils.GetParser(db.DB, cfg.EnableANSIQuotes)
 	if err != nil {
-		return err
+		return terror.ErrFailUpdateV1DBSchema.Delegate(err)
+	}
+
+	// setup a TCP binlog reader (because no relay can be used when upgrading).
+	syncCfg := replication.BinlogSyncerConfig{
+		ServerID:       cfg.ServerID,
+		Flavor:         cfg.Flavor,
+		Host:           cfg.From.Host,
+		Port:           uint16(cfg.From.Port),
+		User:           cfg.From.User,
+		Password:       cfg.From.Password, // plaintext.
+		UseDecimal:     true,
+		VerifyChecksum: true,
+	}
+	tcpReader := reader.NewTCPReader(syncCfg)
+
+	// update checkpoint.
+	err = updateSyncerCheckpoint(tctx, dbConn, cfg.Name, dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)), cfg.SourceID, cfg.EnableGTID, tcpReader, parser2)
+	if err != nil {
+		return terror.ErrFailUpdateV1DBSchema.Delegate(err)
 	}
 
 	// update online DDL meta.
 	err = updateSyncerOnlineDDLMeta(tctx, dbConn, cfg.Name, dbutil.TableName(cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)), cfg.SourceID, cfg.ServerID)
-	return err
+	return terror.ErrFailUpdateV1DBSchema.Delegate(err)
 }
 
 // updateSyncerCheckpoint updates the checkpoint table of sync unit, including:
@@ -55,30 +82,97 @@ func UpdateSchema(tctx *tcontext.Context, db *conn.BaseDB, cfg *config.SubTaskCo
 // - update column value:
 //   - fill `binlog_gtid` based on `binlog_name` and `binlog_pos` if GTID mode enable.
 // NOTE: no need to update the value of `table_info` because DM can get schema automatically from downstream when replicating DML.
-func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName string, fillGTIDs bool) error {
+func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName, sourceID string, fillGTIDs bool, tcpReader reader.Reader, parser2 *parser.Parser) error {
+	var gs gtid.Set
 	if fillGTIDs {
-		// TODO(csuzhangxc): fill `binlog_gtid` based on `binlog_name` and `binlog_pos`.
-		return errors.New("Not Implemented")
+		// NOTE: get GTID sets for all (global & tables) binlog position has many problems, at least including:
+		//   - it is a heavy work because it should read binlog events once for each position
+		//   - some binlog file for the position may have already been purge
+		//  so we only get GTID sets for the global position now,
+		// and this should only have side effects for in-syncing shard tables, but we can mention and warn this case in the user docs.
+		pos, err := getGlobalPos(tctx, dbConn, tableName, sourceID)
+		if err != nil {
+			return err
+		}
+		if pos.Name != "" {
+			realPos, err := binlog.RealMySQLPos(pos)
+			if err != nil {
+				return err
+			}
+			gs, err = reader.GetGTIDsForPos(tctx.Ctx, tcpReader, realPos, parser2)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	// try to add columns.
 	// NOTE: ignore already exists error to continue the process.
-	sqls := []string{
+	queries := []string{
 		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN binlog_gtid VARCHAR(256) AFTER binlog_pos`, tableName),
 		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN table_info JSON NOT NULL AFTER binlog_gtid`, tableName),
 	}
-	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreError, sqls)
-	return err
+	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreError, queries)
+	if err != nil {
+		return err
+	}
+
+	if fillGTIDs && gs != nil {
+		// set binlog_gtid, `gs` should valid here.
+		err = setGlobalGTIDs(tctx, dbConn, taskName, tableName, sourceID, gs.String())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // updateSyncerOnlineDDLMeta updates the online DDL meta data, including:
 // - update the value of `id` from `server-id` to `source-id`.
 func updateSyncerOnlineDDLMeta(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName, sourceID string, serverID uint32) error {
-	sqls := []string{
+	queries := []string{
 		fmt.Sprintf(`UPDATE %s SET id=? WHERE id=?`, tableName), // for multiple columns.
 	}
 	args := []interface{}{sourceID, serverID}
-	_, err := dbConn.ExecuteSQL(tctx, nil, taskName, sqls, args)
+	_, err := dbConn.ExecuteSQL(tctx, nil, taskName, queries, args)
+	return err
+}
+
+// getGlobalPos tries to get the global checkpoint position.
+func getGlobalPos(tctx *tcontext.Context, dbConn *conn.BaseConn, tableName, sourceID string) (gmysql.Position, error) {
+	query := fmt.Sprintf(`SELECT binlog_name, binlog_pos FROM %s WHERE id=? AND is_global=? LIMIT 1`, tableName)
+	args := []interface{}{sourceID, true}
+	rows, err := dbConn.QuerySQL(tctx, query, args...)
+	if err != nil {
+		return gmysql.Position{}, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return gmysql.Position{}, nil // no global checkpoint position exists.
+	}
+
+	var (
+		name string
+		pos  uint32
+	)
+	err = rows.Scan(&name, &pos)
+	if err != nil {
+		return gmysql.Position{}, err
+	}
+
+	return gmysql.Position{
+		Name: name,
+		Pos:  pos,
+	}, rows.Err()
+}
+
+// setGlobalGTIDs tries to set `binlog_gtid` for the global checkpoint.
+func setGlobalGTIDs(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName, sourceID, gs string) error {
+	queries := []string{
+		fmt.Sprintf(`UPDATE %s SET binlog_gtid=? WHERE id=? AND is_global=? LIMIT 1`, tableName),
+	}
+	args := []interface{}{gs, sourceID, true}
+	_, err := dbConn.ExecuteSQL(tctx, nil, taskName, queries, args)
 	return err
 }
 
