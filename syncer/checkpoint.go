@@ -28,6 +28,7 @@ import (
 
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 )
@@ -189,11 +190,11 @@ type RemoteCheckPoint struct {
 
 	cfg *config.SubTaskConfig
 
-	db     *conn.BaseDB
-	dbConn *DBConn
-	schema string // schema name, set through task config
-	table  string // table name, now it's task name
-	id     string // checkpoint ID, now it is `source-id`
+	db        *conn.BaseDB
+	dbConn    *DBConn
+	schema    string // schema name, set through task config
+	tableName string // table name (with schema), now it's task name
+	id        string // checkpoint ID, now it is `source-id`
 
 	// source-schema -> source-table -> checkpoint
 	// used to filter the synced binlog when re-syncing for sharding group
@@ -215,8 +216,8 @@ type RemoteCheckPoint struct {
 func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) CheckPoint {
 	cp := &RemoteCheckPoint{
 		cfg:         cfg,
-		schema:      cfg.MetaSchema,
-		table:       fmt.Sprintf("%s_syncer_checkpoint", cfg.Name),
+		schema:      dbutil.ColumnName(cfg.MetaSchema),
+		tableName:   dbutil.TableName(cfg.MetaSchema, fmt.Sprintf("%s_syncer_checkpoint", cfg.Name)),
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
 		globalPoint: newBinlogPoint(minCheckpoint, minCheckpoint),
@@ -256,7 +257,7 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 	defer cp.Unlock()
 
 	// delete all checkpoints
-	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
+	sql2 := fmt.Sprintf("DELETE FROM %s WHERE `id` = '%s'", cp.tableName, cp.id)
 	args := make([]interface{}, 0)
 	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
 	if err != nil {
@@ -316,7 +317,7 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(tctx *tcontext.Context, sourceSchem
 
 	cp.logCtx.L().Info("delete table checkpoint", zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	// delete  checkpoint
-	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' AND `cp_schema` = '%s' AND `cp_table` = '%s'", cp.schema, cp.table, cp.id, sourceSchema, sourceTable)
+	sql2 := fmt.Sprintf("DELETE FROM %s WHERE `id` = '%s' AND `cp_schema` = '%s' AND `cp_table` = '%s'", cp.tableName, cp.id, sourceSchema, sourceTable)
 	args := make([]interface{}, 0)
 	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
 	if err != nil {
@@ -480,7 +481,7 @@ func (cp *RemoteCheckPoint) prepare(tctx *tcontext.Context) error {
 }
 
 func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
-	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
+	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", cp.schema)
 	args := make([]interface{}, 0)
 	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
 	cp.logCtx.L().Info("create checkpoint schema", zap.String("statement", sql2))
@@ -488,7 +489,6 @@ func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
 }
 
 func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
-	tableName := fmt.Sprintf("`%s`.`%s`", cp.schema, cp.table)
 	sql2 := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 			id VARCHAR(32) NOT NULL,
 			cp_schema VARCHAR(128) NOT NULL,
@@ -499,7 +499,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 			create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			UNIQUE KEY uk_id_schema_table (id, cp_schema, cp_table)
-		)`, tableName)
+		)`, cp.tableName)
 	args := make([]interface{}, 0)
 	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
 	cp.logCtx.L().Info("create checkpoint table", zap.String("statement", sql2))
@@ -508,7 +508,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 
 // Load implements CheckPoint.Load
 func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
-	query := fmt.Sprintf("SELECT `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global` FROM `%s`.`%s` WHERE `id`='%s'", cp.schema, cp.table, cp.id)
+	query := fmt.Sprintf("SELECT `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global` FROM %s WHERE `id`='%s'", cp.tableName, cp.id)
 	rows, err := cp.dbConn.querySQL(tctx, query)
 	defer func() {
 		if rows != nil {
@@ -602,8 +602,8 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, binlogName string, binlogPos uint32, isGlobal bool) (string, []interface{}) {
 	// use `INSERT INTO ... ON DUPLICATE KEY UPDATE` rather than `REPLACE INTO`
 	// to keep `create_time`, `update_time` correctly
-	sql2 := fmt.Sprintf("INSERT INTO `%s`.`%s` (`id`, `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global`) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `binlog_name`=?, `binlog_pos`=?",
-		cp.schema, cp.table)
+	sql2 := fmt.Sprintf("INSERT INTO %s (`id`, `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global`) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `binlog_name`=?, `binlog_pos`=?",
+		cp.tableName)
 	if isGlobal {
 		cpSchema = globalCpSchema
 		cpTable = globalCpTable
