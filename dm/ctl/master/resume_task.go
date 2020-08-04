@@ -41,7 +41,7 @@ func resumeTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 		err = errors.New("please check output to see error")
 		return
 	}
-	name := common.GetNameFromArgOrFile(cmd.Flags().Arg(0))
+	name := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0))
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {

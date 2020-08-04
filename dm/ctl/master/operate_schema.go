@@ -59,7 +59,7 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 	}
 
 	opType := cmd.Flags().Arg(0)
-	taskName := cmd.Flags().Arg(1)
+	taskName := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(1))
 	schemaFile := cmd.Flags().Arg(2)
 	var schemaContent []byte
 	op := convertSchemaOpType(opType)
