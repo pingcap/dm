@@ -36,7 +36,7 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position, parse
 	// start to get and parse binlog event from the beginning of the file.
 	startPos := gmysql.Position{
 		Name: endPos.Name,
-		Pos:  0,
+		Pos:  4,
 	}
 	err := r.StartSyncByPos(startPos)
 	if err != nil {
