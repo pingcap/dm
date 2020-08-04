@@ -29,7 +29,7 @@ import (
 // NewGetTaskCfgCmd creates a getTaskCfg command
 func NewGetTaskCfgCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get-task-config <task-name> [--file filename]",
+		Use:   "get-task-config <task-name | task-file> [--file filename]",
 		Short: "get task config",
 		RunE:  getTaskCfgFunc,
 	}
@@ -45,7 +45,7 @@ func getTaskCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 		err = errors.New("please check output to see error")
 		return
 	}
-	taskName := cmd.Flags().Arg(0)
+	taskName := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0))
 	filename, err := cmd.Flags().GetString("file")
 	if err != nil {
 		common.PrintLines("can not get filename")
