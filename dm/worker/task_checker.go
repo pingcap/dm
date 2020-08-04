@@ -300,7 +300,6 @@ func (tsc *realTaskStatusChecker) getResumeStrategy(stStatus *pb.SubTaskStatus, 
 	}
 
 	// TODO: use different strategies based on the error detail
-	// lance: here
 	for _, processErr := range stStatus.Result.Errors {
 		if !isResumableError(processErr) {
 			return ResumeNoSense
