@@ -15,25 +15,50 @@ package v1dbschema
 
 import (
 	"fmt"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/errno"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/cputil"
 )
 
-// UpdateSyncerCheckpoint updates the checkpoint table of sync unit, including:
-// - update table schema:
-//   - add column `binlog_gtid VARCHAR(256)`
-//   - add column `table_info JSON NOT NULL`
-// - update column value:
-//   - fill `binlog_gtid` based on `binlog_name` and `binlog_pos` if GTID mode enable
-func UpdateSyncerCheckpoint(tctx *tcontext.Context, taskName, tableName string, db *conn.BaseDB, fillGTIDs bool) error {
-	// get DB connection.
-	dbConn, err := db.GetBaseConn(tctx.Ctx)
+// UpdateSchema updates the DB schema from v1.0.x to v2.0.x, including:
+// - update checkpoint.
+// - update online DDL meta.
+func UpdateSchema(tctx *tcontext.Context, db *conn.BaseDB, cfg *config.SubTaskConfig) error {
+	// get db connection.
+	dbConn, err := db.GetBaseConn(tctx.Context())
 	if err != nil {
 		return err
+	}
+
+	// update checkpoint.
+	err = updateSyncerCheckpoint(tctx, dbConn, cfg.Name, dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)), cfg.EnableGTID)
+	if err != nil {
+		return err
+	}
+
+	// update online DDL meta.
+	err = updateSyncerOnlineDDLMeta(tctx, dbConn, cfg.Name, dbutil.TableName(cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)), cfg.SourceID, cfg.ServerID)
+	return err
+}
+
+// updateSyncerCheckpoint updates the checkpoint table of sync unit, including:
+// - update table schema:
+//   - add column `binlog_gtid VARCHAR(256)`.
+//   - add column `table_info JSON NOT NULL`.
+// - update column value:
+//   - fill `binlog_gtid` based on `binlog_name` and `binlog_pos` if GTID mode enable.
+// NOTE: no need to update the value of `table_info` because DM can get schema automatically from downstream when replicating DML.
+func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName string, fillGTIDs bool) error {
+	if fillGTIDs {
+		// TODO(csuzhangxc): fill `binlog_gtid` based on `binlog_name` and `binlog_pos`.
+		return errors.New("Not Implemented")
 	}
 
 	// try to add columns.
@@ -42,35 +67,18 @@ func UpdateSyncerCheckpoint(tctx *tcontext.Context, taskName, tableName string, 
 		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN binlog_gtid VARCHAR(256) AFTER binlog_pos`, tableName),
 		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN table_info JSON NOT NULL AFTER binlog_gtid`, tableName),
 	}
-
-	_, err = dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreError, sqls)
-	if err != nil {
-		return err
-	}
-
-	if !fillGTIDs {
-		return nil
-	}
-
-	// TODO(csuzhangxc): fill `binlog_gtid` based on `binlog_name` and `binlog_pos`.
-	return errors.New("Not Implemented")
+	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreError, sqls)
+	return err
 }
 
-// UpdateOnlineDDLMeta updates the online DDL meta data, including:
+// updateSyncerOnlineDDLMeta updates the online DDL meta data, including:
 // - update the value of `id` from `server-id` to `source-id`.
-func UpdateSyncerOnlineDDLMeta(tctx *tcontext.Context, taskName, sourceID, tableName string, serverID uint32, db *conn.BaseDB) error {
-	// get DB connection.
-	dbConn, err := db.GetBaseConn(tctx.Ctx)
-	if err != nil {
-		return err
-	}
-
-	// update `id` from `server-id` to `source-id`.
+func updateSyncerOnlineDDLMeta(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName, sourceID string, serverID uint32) error {
 	sqls := []string{
-		fmt.Sprintf(`UPDATE %s SET id=? WHERE id=?`, tableName),
+		fmt.Sprintf(`UPDATE %s SET id=? WHERE id=?`, tableName), // for multiple columns.
 	}
 	args := []interface{}{sourceID, serverID}
-	_, err = dbConn.ExecuteSQL(tctx, nil, taskName, sqls, args)
+	_, err := dbConn.ExecuteSQL(tctx, nil, taskName, sqls, args)
 	return err
 }
 

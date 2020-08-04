@@ -14,6 +14,7 @@
 package v1dbschema
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -27,6 +28,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/cputil"
 )
 
 func TestSuite(t *testing.T) {
@@ -72,12 +74,13 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 		_, currFile, _, _ = runtime.Caller(0)
 		v1DataDir         = filepath.Join(filepath.Dir(currFile), "v106_data_for_test")
 		tctx              = tcontext.Background()
-		taskName          = "test"
-		sourceID          = "mysql-replica-01"
-		serverID          = uint32(429523137)
-		dbName            = "dm_meta_v106_test"
-		syncerCpTableName = dbutil.TableName(dbName, taskName+"_syncer_checkpoint")
-		syncerOnTableName = dbutil.TableName(dbName, taskName+"_onlineddl")
+
+		cfg = &config.SubTaskConfig{
+			Name:       "test",
+			SourceID:   "mysql-replica-01",
+			ServerID:   429523137,
+			MetaSchema: "dm_meta_v106_test",
+		}
 	)
 
 	db := t.setUpDBConn(c)
@@ -86,44 +89,56 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	c.Assert(err, IsNil)
 
 	defer func() {
-		_, err = dbConn.ExecuteSQL(tctx, nil, taskName, []string{
-			`DROP DATABASE ` + dbName,
+		_, err = dbConn.ExecuteSQL(tctx, nil, cfg.Name, []string{
+			`DROP DATABASE ` + cfg.MetaSchema,
 		})
 	}()
 
 	// create metadata schema.
-	_, err = dbConn.ExecuteSQL(tctx, nil, taskName, []string{
-		`CREATE DATABASE IF NOT EXISTS ` + dbName,
+	_, err = dbConn.ExecuteSQL(tctx, nil, cfg.Name, []string{
+		`CREATE DATABASE IF NOT EXISTS ` + cfg.MetaSchema,
 	})
 	c.Assert(err, IsNil)
 
 	// create v1.0.6 checkpoint table.
 	createCpV106, err := ioutil.ReadFile(filepath.Join(v1DataDir, "v106_syncer_checkpoint-schema.sql"))
 	c.Assert(err, IsNil)
-	_, err = dbConn.ExecuteSQL(tctx, nil, taskName, []string{
+	_, err = dbConn.ExecuteSQL(tctx, nil, cfg.Name, []string{
 		string(createCpV106),
 	})
 	c.Assert(err, IsNil)
 
-	c.Assert(UpdateSyncerCheckpoint(tctx, taskName, syncerCpTableName, db, false), IsNil)
-
-	c.Assert(UpdateSyncerCheckpoint(tctx, taskName, syncerCpTableName, db, true), ErrorMatches, ".*Not Implemented.*")
-
 	// create v1.0.6 online DDL metadata table.
 	createOnV106, err := ioutil.ReadFile(filepath.Join(v1DataDir, "v106_syncer_onlineddl-schema.sql"))
 	c.Assert(err, IsNil)
-	_, err = dbConn.ExecuteSQL(tctx, nil, taskName, []string{
+	_, err = dbConn.ExecuteSQL(tctx, nil, cfg.Name, []string{
 		string(createOnV106),
 	})
 	c.Assert(err, IsNil)
 
-	// load metadata into table.
+	// load online DDL metadata into table.
 	insertOnV106, err := ioutil.ReadFile(filepath.Join(v1DataDir, "v106_syncer_onlineddl.sql"))
 	c.Assert(err, IsNil)
-	_, err = dbConn.ExecuteSQL(tctx, nil, taskName, []string{
+	_, err = dbConn.ExecuteSQL(tctx, nil, cfg.Name, []string{
 		string(insertOnV106),
 	})
 	c.Assert(err, IsNil)
 
-	c.Assert(UpdateSyncerOnlineDDLMeta(tctx, taskName, sourceID, syncerOnTableName, serverID, db), IsNil)
+	// update schema without GTID enabled.
+	c.Assert(UpdateSchema(tctx, db, cfg), IsNil)
+
+	// verify the column data of online DDL already updated.
+	rows, err := dbConn.QuerySQL(tctx, fmt.Sprintf(`SELECT count(*) FROM %s`, dbutil.TableName(cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name))))
+	c.Assert(err, IsNil)
+	c.Assert(rows.Next(), IsTrue)
+	var count int
+	err = rows.Scan(&count)
+	c.Assert(err, IsNil)
+	c.Assert(count, Equals, 2)
+	c.Assert(rows.Next(), IsFalse)
+	c.Assert(rows.Err(), IsNil)
+
+	// update schema with GTID enabled.
+	cfg.EnableGTID = true
+	c.Assert(UpdateSchema(tctx, db, cfg), ErrorMatches, ".*Not Implemented.*")
 }
