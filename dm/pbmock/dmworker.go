@@ -135,6 +135,26 @@ func (mr *MockWorkerClientMockRecorder) OperateSubTask(arg0, arg1 interface{}, a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateSubTask", reflect.TypeOf((*MockWorkerClient)(nil).OperateSubTask), varargs...)
 }
 
+// OperateV1Meta mocks base method
+func (m *MockWorkerClient) OperateV1Meta(arg0 context.Context, arg1 *pb.OperateV1MetaRequest, arg2 ...grpc.CallOption) (*pb.OperateV1MetaResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "OperateV1Meta", varargs...)
+	ret0, _ := ret[0].(*pb.OperateV1MetaResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OperateV1Meta indicates an expected call of OperateV1Meta
+func (mr *MockWorkerClientMockRecorder) OperateV1Meta(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateV1Meta", reflect.TypeOf((*MockWorkerClient)(nil).OperateV1Meta), varargs...)
+}
+
 // PurgeRelay mocks base method
 func (m *MockWorkerClient) PurgeRelay(arg0 context.Context, arg1 *pb.PurgeRelayRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
 	m.ctrl.T.Helper()
@@ -391,6 +411,21 @@ func (m *MockWorkerServer) OperateSubTask(arg0 context.Context, arg1 *pb.Operate
 func (mr *MockWorkerServerMockRecorder) OperateSubTask(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateSubTask", reflect.TypeOf((*MockWorkerServer)(nil).OperateSubTask), arg0, arg1)
+}
+
+// OperateV1Meta mocks base method
+func (m *MockWorkerServer) OperateV1Meta(arg0 context.Context, arg1 *pb.OperateV1MetaRequest) (*pb.OperateV1MetaResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OperateV1Meta", arg0, arg1)
+	ret0, _ := ret[0].(*pb.OperateV1MetaResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OperateV1Meta indicates an expected call of OperateV1Meta
+func (mr *MockWorkerServerMockRecorder) OperateV1Meta(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateV1Meta", reflect.TypeOf((*MockWorkerServer)(nil).OperateV1Meta), arg0, arg1)
 }
 
 // PurgeRelay mocks base method

@@ -160,6 +160,10 @@ const (
 	// pkg/upgrade
 	codeUpgradeVersionEtcdFail
 
+	// pkg/v1workermeta
+	codeInvalidV1WorkerMetaPath
+
+	// dm/command
 	codeVerifyHandleErrorArgs
 )
 
@@ -727,6 +731,10 @@ var (
 	// pkg/upgrade
 	ErrUpgradeVersionEtcdFail = New(codeUpgradeVersionEtcdFail, ClassFunctional, ScopeInternal, LevelHigh, "fail to operate DM cluster version in etcd", "Please use `list-member --master` to confirm whether the DM-master cluster is healthy")
 
+	// pkg/v1workermeta
+	ErrInvalidV1WorkerMetaPath = New(codeInvalidV1WorkerMetaPath, ClassFunctional, ScopeInternal, LevelMedium, "%s is an invalid v1.0.x DM-worker meta path", "Please check no `meta-dir` set for v1.0.x DM-worker")
+
+	// Functional error
 	ErrVerifyHandleErrorArgs = New(codeVerifyHandleErrorArgs, ClassFunctional, ScopeInternal, LevelLow, "", "Please make sure the args are correct.")
 
 	// Config related error

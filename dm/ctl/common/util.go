@@ -223,3 +223,22 @@ func IsDDL(sql string) (bool, error) {
 		return false, nil
 	}
 }
+
+// GetTaskNameFromArgOrFile tries to retrieve name field from the file if arg is filename-like, otherwise returns arg directly
+func GetTaskNameFromArgOrFile(arg string) string {
+	if !strings.HasSuffix(arg, ".yaml") {
+		return arg
+	}
+	var (
+		content []byte
+		err     error
+	)
+	if content, err = GetFileContent(arg); err != nil {
+		return arg
+	}
+	cfg := config.NewTaskConfig()
+	if err := cfg.Decode(string(content)); err != nil {
+		return arg
+	}
+	return cfg.Name
+}

@@ -194,6 +194,10 @@ function run() {
     query_status_running_tasks
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 20
 
+    # test use task file instead of task name
+    pause_task_success "$cur/conf/dm-task.yaml"
+    resume_task_success "$cur/conf/dm-task.yaml"
+
     update_relay_success $cur/conf/source1.yaml $SOURCE_ID1
     update_relay_success $cur/conf/source2.yaml $SOURCE_ID2
     # check worker config backup file is correct

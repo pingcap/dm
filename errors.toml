@@ -719,6 +719,12 @@ workaround = "Please use `list-member --master` to confirm whether the DM-master
 tags = ["internal", "high"]
 
 [error.DM-functional-11115]
+message = "%s is an invalid v1.0.x DM-worker meta path"
+description = ""
+workaround = "Please check no `meta-dir` set for v1.0.x DM-worker"
+tags = ["internal", "medium"]
+
+[error.DM-functional-11116]
 message = ""
 description = ""
 workaround = "Please make sure the args are correct."
