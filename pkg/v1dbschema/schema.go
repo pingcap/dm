@@ -14,6 +14,7 @@
 package v1dbschema
 
 import (
+	"fmt"
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/errno"
@@ -38,8 +39,8 @@ func UpdateSyncerCheckpoint(tctx *tcontext.Context, taskName, tableName string, 
 	// try to add columns.
 	// NOTE: ignore already exists error to continue the process.
 	sqls := []string{
-		`ALTER TABLE ` + tableName + ` ADD COLUMN binlog_gtid VARCHAR(256) AFTER binlog_pos`,
-		`ALTER TABLE ` + tableName + ` ADD COLUMN table_info JSON NOT NULL AFTER binlog_gtid`,
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN binlog_gtid VARCHAR(256) AFTER binlog_pos`, tableName),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN table_info JSON NOT NULL AFTER binlog_gtid`, tableName),
 	}
 
 	_, err = dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreError, sqls)
@@ -53,6 +54,24 @@ func UpdateSyncerCheckpoint(tctx *tcontext.Context, taskName, tableName string, 
 
 	// TODO(csuzhangxc): fill `binlog_gtid` based on `binlog_name` and `binlog_pos`.
 	return errors.New("Not Implemented")
+}
+
+// UpdateOnlineDDLMeta updates the online DDL meta data, including:
+// - update the value of `id` from `server-id` to `source-id`.
+func UpdateSyncerOnlineDDLMeta(tctx *tcontext.Context, taskName, sourceID, tableName string, serverID uint32, db *conn.BaseDB) error {
+	// get DB connection.
+	dbConn, err := db.GetBaseConn(tctx.Ctx)
+	if err != nil {
+		return err
+	}
+
+	// update `id` from `server-id` to `source-id`.
+	sqls := []string{
+		fmt.Sprintf(`UPDATE %s SET id=? WHERE id=?`, tableName),
+	}
+	args := []interface{}{sourceID, serverID}
+	_, err = dbConn.ExecuteSQL(tctx, nil, taskName, sqls, args)
+	return err
 }
 
 func ignoreError(err error) bool {

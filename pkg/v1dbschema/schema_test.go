@@ -69,10 +69,15 @@ func (t *testSchema) setUpDBConn(c *C) *conn.BaseDB {
 
 func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	var (
+		_, currFile, _, _ = runtime.Caller(0)
+		v1DataDir         = filepath.Join(filepath.Dir(currFile), "v106_data_for_test")
 		tctx              = tcontext.Background()
 		taskName          = "test"
+		sourceID          = "mysql-replica-01"
+		serverID          = uint32(429523137)
 		dbName            = "dm_meta_v106_test"
-		syncerCptableName = dbutil.TableName(dbName, taskName+"_syncer_checkpoint")
+		syncerCpTableName = dbutil.TableName(dbName, taskName+"_syncer_checkpoint")
+		syncerOnTableName = dbutil.TableName(dbName, taskName+"_onlineddl")
 	)
 
 	db := t.setUpDBConn(c)
@@ -93,16 +98,32 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	c.Assert(err, IsNil)
 
 	// create v1.0.6 checkpoint table.
-	_, currFile, _, _ := runtime.Caller(0)
-	v1DataDir := filepath.Join(filepath.Dir(currFile), "v106_data_for_test")
-	createV106, err := ioutil.ReadFile(filepath.Join(v1DataDir, "v106_syncer_checkpoint-schema.sql"))
+	createCpV106, err := ioutil.ReadFile(filepath.Join(v1DataDir, "v106_syncer_checkpoint-schema.sql"))
 	c.Assert(err, IsNil)
 	_, err = dbConn.ExecuteSQL(tctx, nil, taskName, []string{
-		string(createV106),
+		string(createCpV106),
 	})
 	c.Assert(err, IsNil)
 
-	c.Assert(UpdateSyncerCheckpoint(tctx, taskName, syncerCptableName, db, false), IsNil)
+	c.Assert(UpdateSyncerCheckpoint(tctx, taskName, syncerCpTableName, db, false), IsNil)
 
-	c.Assert(UpdateSyncerCheckpoint(tctx, taskName, syncerCptableName, db, true), ErrorMatches, ".*Not Implemented.*")
+	c.Assert(UpdateSyncerCheckpoint(tctx, taskName, syncerCpTableName, db, true), ErrorMatches, ".*Not Implemented.*")
+
+	// create v1.0.6 online DDL metadata table.
+	createOnV106, err := ioutil.ReadFile(filepath.Join(v1DataDir, "v106_syncer_onlineddl-schema.sql"))
+	c.Assert(err, IsNil)
+	_, err = dbConn.ExecuteSQL(tctx, nil, taskName, []string{
+		string(createOnV106),
+	})
+	c.Assert(err, IsNil)
+
+	// load metadata into table.
+	insertOnV106, err := ioutil.ReadFile(filepath.Join(v1DataDir, "v106_syncer_onlineddl.sql"))
+	c.Assert(err, IsNil)
+	_, err = dbConn.ExecuteSQL(tctx, nil, taskName, []string{
+		string(insertOnV106),
+	})
+	c.Assert(err, IsNil)
+
+	c.Assert(UpdateSyncerOnlineDDLMeta(tctx, taskName, sourceID, syncerOnTableName, serverID, db), IsNil)
 }
