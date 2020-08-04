@@ -3,9 +3,7 @@
 function operate_source_empty_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source" \
-        "operate-source create|update \[config-file ...\] \[--print-sample-config\] \[flags\]" 1 \
-        "operate-source stop \[config-file | sourceID ...\] \[--print-sample-config\] \[flags\]" 1 \
-        "operate-source show \[--print-sample-config\] \[flags\]" 1
+        "operate-source <operate-type> \[config-file ...\] \[--print-sample-config\] \[flags\]" 1
 }
 
 function operate_source_wrong_config_file() {

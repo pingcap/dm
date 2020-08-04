@@ -31,11 +31,7 @@ import (
 // NewOperateSourceCmd creates a OperateSource command
 func NewOperateSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		// the leading space could provide more friendly terminal printing
-		// cobra.Command doesn't support multi-line usage well
-		Use: `operate-source create|update [config-file ...] [--print-sample-config] [flags]
-        operate-source stop [config-file | sourceID ...] [--print-sample-config] [flags]
-        operate-source show [--print-sample-config] [flags]`,
+		Use:   "operate-source <operate-type> [config-file ...] [--print-sample-config]",
 		Short: "create/update/stop/show upstream MySQL/MariaDB source",
 		RunE:  operateSourceFunc,
 	}
