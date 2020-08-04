@@ -2143,17 +2143,15 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleErrorRequest) (*
 	}
 	wg.Wait()
 
-	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(sources))
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(sources))
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
-		workerRespMap[workerResp.Source] = workerResp
+		workerResps = append(workerResps, workerResp)
 	}
 
-	sort.Strings(sources)
-	workerResps := make([]*pb.CommonWorkerResponse, 0, len(sources))
-	for _, worker := range sources {
-		workerResps = append(workerResps, workerRespMap[worker])
-	}
+	sort.Slice(workerResps, func(i, j int) bool {
+		return workerResps[i].Source < workerResps[j].Source
+	})
 
 	return &pb.HandleErrorResponse{
 		Result:  true,
