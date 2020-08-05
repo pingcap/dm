@@ -163,6 +163,9 @@ const (
 	// pkg/v1workermeta
 	codeInvalidV1WorkerMetaPath
 
+	// pkg/v1dbschema
+	codeFailUpdateV1DBSchema
+
 	// dm/command
 	codeVerifyHandleErrorArgs
 )
@@ -732,7 +735,10 @@ var (
 	ErrUpgradeVersionEtcdFail = New(codeUpgradeVersionEtcdFail, ClassFunctional, ScopeInternal, LevelHigh, "fail to operate DM cluster version in etcd", "Please use `list-member --master` to confirm whether the DM-master cluster is healthy")
 
 	// pkg/v1workermeta
-	ErrInvalidV1WorkerMetaPath = New(codeInvalidV1WorkerMetaPath, ClassFunctional, ScopeInternal, LevelMedium, "%s is an invalid v1.0.x DM-worker meta path", "Please check no `meta-dir` set for v1.0.x DM-worker")
+	ErrInvalidV1WorkerMetaPath = New(codeInvalidV1WorkerMetaPath, ClassFunctional, ScopeInternal, LevelMedium, "%s is an invalid v1.0.x DM-worker meta path", "Please check no `meta-dir` set for v1.0.x DM-worker.")
+
+	// pkg/v1dbschema
+	ErrFailUpdateV1DBSchema = New(codeFailUpdateV1DBSchema, ClassFunctional, ScopeInternal, LevelMedium, "fail to upgrade v1.0.x DB schema", "Please confirm that you have not violated any restrictions in the upgrade documentation.")
 
 	// Functional error
 	ErrVerifyHandleErrorArgs = New(codeVerifyHandleErrorArgs, ClassFunctional, ScopeInternal, LevelLow, "", "Please make sure the args are correct.")
