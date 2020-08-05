@@ -761,8 +761,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -848,8 +846,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -935,8 +931,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -1022,8 +1016,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -1109,8 +1101,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -1196,8 +1186,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -1283,8 +1271,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -1370,8 +1356,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
