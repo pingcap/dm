@@ -721,7 +721,13 @@ tags = ["internal", "high"]
 [error.DM-functional-11115]
 message = "%s is an invalid v1.0.x DM-worker meta path"
 description = ""
-workaround = "Please check no `meta-dir` set for v1.0.x DM-worker"
+workaround = "Please check no `meta-dir` set for v1.0.x DM-worker."
+tags = ["internal", "medium"]
+
+[error.DM-functional-11116]
+message = "fail to upgrade v1.0.x DB schema"
+description = ""
+workaround = "Please confirm that you have not violated any restrictions in the upgrade documentation."
 tags = ["internal", "medium"]
 
 [error.DM-config-20001]
