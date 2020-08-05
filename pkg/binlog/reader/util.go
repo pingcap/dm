@@ -42,6 +42,7 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position, parse
 	if err != nil {
 		return nil, err
 	}
+	defer r.Close()
 
 	var (
 		flavor      string
@@ -129,7 +130,7 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position, parse
 			}
 			return latestGTIDs, nil
 		} else if latestPos > endPos.Pos {
-			return nil, errors.Errorf("no GTIDs get for position %s", endPos)
+			return nil, errors.Errorf("invalid position %s or GTID not enabled in upstream", endPos)
 		}
 	}
 }

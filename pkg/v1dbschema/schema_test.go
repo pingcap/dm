@@ -78,7 +78,7 @@ func (t *testSchema) setUpDBConn(c *C) {
 		Port:     t.port,
 		User:     t.user,
 		Password: t.password,
-		Session:  map[string]string{"sql_log_bin ": "off"}, // do not enable binlog to break other unit test cases.
+		Session:  map[string]string{"sql_log_bin": "off"}, // do not enable binlog to break other unit test cases.
 	}
 	cfg.Adjust()
 

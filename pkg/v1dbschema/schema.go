@@ -47,6 +47,7 @@ func UpdateSchema(tctx *tcontext.Context, db *conn.BaseDB, cfg *config.SubTaskCo
 	if err != nil {
 		return terror.ErrFailUpdateV1DBSchema.Delegate(err)
 	}
+	defer db.CloseBaseConn(dbConn)
 
 	// setup SQL parser.
 	parser2, err := utils.GetParser(db.DB, cfg.EnableANSIQuotes)
@@ -91,7 +92,7 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 		// NOTE: get GTID sets for all (global & tables) binlog position has many problems, at least including:
 		//   - it is a heavy work because it should read binlog events once for each position
 		//   - some binlog file for the position may have already been purge
-		//  so we only get GTID sets for the global position now,
+		// so we only get GTID sets for the global position now,
 		// and this should only have side effects for in-syncing shard tables, but we can mention and warn this case in the user docs.
 		pos, err := getGlobalPos(tctx, dbConn, tableName, sourceID)
 		if err != nil {

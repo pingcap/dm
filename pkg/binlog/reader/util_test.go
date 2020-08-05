@@ -63,6 +63,6 @@ func (t *testTCPReaderSuite) TestGetGTIDsForPos(c *C) {
 		Name: endPos.Name,
 		Pos:  endPos.Pos - 1,
 	}, parser2)
-	c.Assert(err, ErrorMatches, ".*no GTIDs get for position.*")
+	c.Assert(err, ErrorMatches, ".*invalid position .* or GTID not enabled in upstream.*")
 	c.Assert(gs, IsNil)
 }
