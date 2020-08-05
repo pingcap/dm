@@ -102,7 +102,6 @@ type Syncer struct {
 	sgk           *ShardingGroupKeeper          // keeper to keep all sharding (sub) group in this syncer
 	pessimist     *shardddl.Pessimist           // shard DDL pessimist
 	optimist      *shardddl.Optimist            // shard DDL optimist
-	injectEventCh chan *replication.BinlogEvent // extra binlog event chan, used to inject binlog event into the main for loop
 
 	binlogType         BinlogType
 	streamerController *StreamerController
@@ -207,7 +206,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.count.Set(0)
 	syncer.c = newCausality()
 	syncer.done = nil
-	syncer.injectEventCh = make(chan *replication.BinlogEvent)
 	syncer.tracer = tracing.GetTracer()
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
