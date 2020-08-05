@@ -133,7 +133,6 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	var (
 		stdout bytes.Buffer
 		stderr bytes.Buffer
-		errMsg []byte
 	)
 	cmd := exec.CommandContext(ctx, m.cfg.MydumperPath, m.args...)
 	cmd.Stdout = &stdout
@@ -152,6 +151,11 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	//
 	// so we parse all these lines and translate into our own logs.
 	scanner := bufio.NewScanner(stderrPipe)
+	// store first error detected in mydumper's log
+	var (
+		firstErr error
+		errMsg   []byte
+	)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if loc := mydumperLogRegexp.FindSubmatchIndex(line); len(loc) == 4 {
@@ -160,27 +164,30 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 			switch level {
 			case "DEBUG":
 				m.logger.Debug(string(msg))
+				continue
 			case "INFO":
 				m.logger.Info(string(msg))
+				continue
 			case "WARNING":
 				m.logger.Warn(string(msg))
+				continue
 			case "ERROR":
 				m.logger.Error(string(msg))
-				if strings.HasPrefix(string(msg), "Couldn't acquire global lock") {
-					err = terror.ErrDumpUnitGlobalLock
+				if firstErr == nil && strings.HasPrefix(string(msg), "Couldn't acquire global lock") {
+					firstErr = terror.ErrDumpUnitGlobalLock
 					errMsg = msg
 				}
+				continue
 			}
-		} else {
-			stderr.Write(line)
-			stderr.WriteByte('\n')
 		}
-
-		// handle errors in scanning
-		if err != nil {
-			return errMsg, err
-		}
+		stderr.Write(line)
+		stderr.WriteByte('\n')
 	}
+
+	if firstErr != nil {
+		return errMsg, firstErr
+	}
+
 	if err = scanner.Err(); err != nil {
 		stdout.Write(stderr.Bytes())
 		return stdout.Bytes(), terror.ErrDumpUnitRuntime.Delegate(err)
