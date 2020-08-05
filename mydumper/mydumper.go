@@ -152,6 +152,8 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	// so we parse all these lines and translate into our own logs.
 	scanner := bufio.NewScanner(stderrPipe)
 	// store first error detected in mydumper's log
+	// TODO(lance6716): if mydumper will not exit when detected error happens, we should return firstErr earlier
+	// and using non-block IO to drain and output mydumper's stderr
 	var (
 		firstErr error
 		errMsg   []byte
