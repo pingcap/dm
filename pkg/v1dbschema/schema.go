@@ -15,6 +15,7 @@ package v1dbschema
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
@@ -94,12 +95,12 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 		// and this should only have side effects for in-syncing shard tables, but we can mention and warn this case in the user docs.
 		pos, err := getGlobalPos(tctx, dbConn, tableName, sourceID)
 		if err != nil {
-			return err
+			return terror.Annotatef(err, "get global checkpoint position for source %s", sourceID)
 		}
 		if pos.Name != "" {
 			gs, err = getGTIDsForPos(tctx, pos, tcpReader, parser2)
 			if err != nil {
-				return err
+				return terror.Annotatef(err, "get GTID sets for position %s", pos)
 			}
 		}
 	}
@@ -112,14 +113,14 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 	}
 	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreError, queries)
 	if err != nil {
-		return err
+		return terror.Annotatef(err, "add columns for checkpoint table")
 	}
 
 	if fillGTIDs && gs != nil {
 		// set binlog_gtid, `gs` should valid here.
 		err = setGlobalGTIDs(tctx, dbConn, taskName, tableName, sourceID, gs.String())
 		if err != nil {
-			return err
+			return terror.Annotatef(err, "set GTID sets %s for checkpoint table", gs.String())
 		}
 	}
 	return nil
@@ -131,9 +132,9 @@ func updateSyncerOnlineDDLMeta(tctx *tcontext.Context, dbConn *conn.BaseConn, ta
 	queries := []string{
 		fmt.Sprintf(`UPDATE %s SET id=? WHERE id=?`, tableName), // for multiple columns.
 	}
-	args := []interface{}{sourceID, serverID}
+	args := []interface{}{sourceID, strconv.FormatUint(uint64(serverID), 10)}
 	_, err := dbConn.ExecuteSQL(tctx, nil, taskName, queries, args)
-	return err
+	return terror.Annotatef(err, "update id column for online DDL meta table")
 }
 
 // getGlobalPos tries to get the global checkpoint position.
