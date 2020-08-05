@@ -86,13 +86,13 @@ func (h *Holder) Set(pos string, op pb.ErrorOp, events []*replication.BinlogEven
 
 // GetEvent return a replace binlog event
 // for example:
-//						startLocation			endLocation
-// event 1				1000, 0					1010, 0
-// event 2				1010, 0					1020, 0	<--	replace it with event a,b,c
-// replace event a		1010, 0					1010, 1
-// replace event b		1010, 1					1010, 2
-// replace event c		1010, 2					1020, 0
-// event 3				1020, 0					1030, 0
+//			startLocation		endLocation
+// event 1		1000, 0			1010, 0
+// event 2		1010, 0			1020, 0	<--replace it with event a,b,c
+// replace event a	1010, 0			1010, 1
+// replace event b	1010, 1			1010, 2
+// replace event c	1010, 2			1020, 0
+// event 3		1020, 0			1030, 0
 func (h *Holder) GetEvent(startLocation *binlog.Location) (*replication.BinlogEvent, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
