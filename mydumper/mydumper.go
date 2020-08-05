@@ -133,6 +133,7 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	var (
 		stdout bytes.Buffer
 		stderr bytes.Buffer
+		errMsg []byte
 	)
 	cmd := exec.CommandContext(ctx, m.cfg.MydumperPath, m.args...)
 	cmd.Stdout = &stdout
@@ -167,6 +168,7 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 				m.logger.Error(string(msg))
 				if strings.HasPrefix(string(msg), "Couldn't acquire global lock") {
 					err = terror.ErrDumpUnitGlobalLock
+					errMsg = msg
 				}
 			}
 		} else {
@@ -176,8 +178,7 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 
 		// handle errors in scanning
 		if err != nil {
-			stdout.Write(stderr.Bytes())
-			return stdout.Bytes(), err
+			return errMsg, err
 		}
 	}
 	if err = scanner.Err(); err != nil {
