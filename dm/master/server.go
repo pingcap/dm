@@ -1398,9 +1398,17 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		resp.Msg = "Update worker config is not supported by dm-ha now"
 		return resp, nil
 	case pb.SourceOp_StopSource:
+		toRemove := make([]string, 0, len(cfgs)+len(req.SourceID))
+		for _, sid := range req.SourceID {
+			toRemove = append(toRemove, sid)
+		}
 		for _, cfg := range cfgs {
-			boundM[cfg.SourceID] = s.scheduler.GetWorkerBySource(cfg.SourceID)
-			err := s.scheduler.RemoveSourceCfg(cfg.SourceID)
+			toRemove = append(toRemove, cfg.SourceID)
+		}
+
+		for _, sid := range toRemove {
+			boundM[sid] = s.scheduler.GetWorkerBySource(sid)
+			err := s.scheduler.RemoveSourceCfg(sid)
 			// TODO(lance6716):
 			// user could not copy-paste same command if encounter error halfway:
 			// `operate-source stop  correct-id-1     wrong-id-2`
