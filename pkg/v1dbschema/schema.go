@@ -18,11 +18,13 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/errno"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -95,11 +97,7 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 			return err
 		}
 		if pos.Name != "" {
-			realPos, err := binlog.RealMySQLPos(pos)
-			if err != nil {
-				return err
-			}
-			gs, err = reader.GetGTIDsForPos(tctx.Ctx, tcpReader, realPos, parser2)
+			gs, err = getGTIDsForPos(tctx, pos, tcpReader, parser2)
 			if err != nil {
 				return err
 			}
@@ -164,6 +162,28 @@ func getGlobalPos(tctx *tcontext.Context, dbConn *conn.BaseConn, tableName, sour
 		Name: name,
 		Pos:  pos,
 	}, rows.Err()
+}
+
+// getGTIDsForPos gets the GTID sets for the position.
+func getGTIDsForPos(tctx *tcontext.Context, pos gmysql.Position, tcpReader reader.Reader, parser2 *parser.Parser) (gtid.Set, error) {
+	// NOTE: because we have multiple unit test cases updating/clearing binlog in the upstream,
+	// we may encounter errors when reading binlog event but cleared by another test case.
+	failpoint.Inject("MockGetGTIDsForPos", func(val failpoint.Value) {
+		str := val.(string)
+		gs, _ := gtid.ParserGTID(gmysql.MySQLFlavor, str)
+		tctx.L().Info("set gs for position", zap.String("failpoint", "MockGetGTIDsForPos"), zap.Stringer("pos", pos))
+		failpoint.Return(gs, nil)
+	})
+
+	realPos, err := binlog.RealMySQLPos(pos)
+	if err != nil {
+		return nil, err
+	}
+	gs, err := reader.GetGTIDsForPos(tctx.Ctx, tcpReader, realPos, parser2)
+	if err != nil {
+		return nil, err
+	}
+	return gs, nil
 }
 
 // setGlobalGTIDs tries to set `binlog_gtid` for the global checkpoint.

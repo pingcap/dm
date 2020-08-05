@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 
@@ -32,7 +33,7 @@ import (
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
-	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/pkg/gtid"
 )
 
 func TestSuite(t *testing.T) {
@@ -45,7 +46,6 @@ type testSchema struct {
 	user     string
 	password string
 	db       *conn.BaseDB
-	sqlDB    *sql.DB
 }
 
 var _ = Suite(&testSchema{})
@@ -56,7 +56,6 @@ func (t *testSchema) SetUpSuite(c *C) {
 
 func (t *testSchema) TestTearDown(c *C) {
 	t.db.Close()
-	t.sqlDB.Close()
 }
 
 func (t *testSchema) setUpDBConn(c *C) {
@@ -86,10 +85,6 @@ func (t *testSchema) setUpDBConn(c *C) {
 	var err error
 	t.db, err = conn.DefaultDBProvider.Apply(cfg)
 	c.Assert(err, IsNil)
-
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&sql_log_bin=off", t.user, t.password, t.host, t.port)
-	t.sqlDB, err = sql.Open("mysql", dsn)
-	c.Assert(err, IsNil)
 }
 
 func (t *testSchema) TestSchemaV106ToV20x(c *C) {
@@ -110,7 +105,16 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 				Password: t.password,
 			},
 		}
+
+		endPos = gmysql.Position{
+			Name: "mysql-bin|000001.000001",
+			Pos:  3574,
+		}
+		endGS, _ = gtid.ParserGTID(gmysql.MySQLFlavor, "ccb992ad-a557-11ea-ba6a-0242ac140002:1-16")
 	)
+
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGTIDsForPos", `return("ccb992ad-a557-11ea-ba6a-0242ac140002:1-16")`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGTIDsForPos")
 
 	dbConn, err := t.db.GetBaseConn(tctx.Ctx)
 	c.Assert(err, IsNil)
@@ -143,9 +147,7 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	// update position according to the current real position.
-	endPos, endGS, err := utils.GetMasterStatus(t.sqlDB, gmysql.MySQLFlavor)
-	c.Assert(err, IsNil)
+	// update position.
 	insertCpV106, err := ioutil.ReadFile(filepath.Join(v1DataDir, "v106_syncer_checkpoint.sql"))
 	c.Assert(err, IsNil)
 	insertCpV106s := strings.ReplaceAll(string(insertCpV106), "123456", strconv.FormatUint(uint64(endPos.Pos), 10))
@@ -172,10 +174,10 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	c.Assert(rows.Next(), IsTrue)
 	var count int
 	c.Assert(rows.Scan(&count), IsNil)
-	c.Assert(count, Equals, 2)
 	c.Assert(rows.Next(), IsFalse)
 	c.Assert(rows.Err(), IsNil)
 	rows.Close()
+	c.Assert(count, Equals, 2)
 
 	// verify the column data of checkpoint not updated.
 	rows, err = dbConn.QuerySQL(tctx, fmt.Sprintf(`SELECT binlog_gtid FROM %s`, dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))))
@@ -198,10 +200,10 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	c.Assert(rows.Next(), IsTrue)
 	var gs sql.NullString
 	c.Assert(rows.Scan(&gs), IsNil)
-	c.Assert(gs.String, Equals, endGS.String())
 	c.Assert(rows.Next(), IsFalse)
 	c.Assert(rows.Err(), IsNil)
 	rows.Close()
+	c.Assert(gs.String, Equals, endGS.String())
 
 	rows, err = dbConn.QuerySQL(tctx, fmt.Sprintf(`SELECT binlog_gtid FROM %s WHERE is_global!=1`, dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))))
 	c.Assert(err, IsNil)
