@@ -99,9 +99,9 @@ type Syncer struct {
 	cfg     *config.SubTaskConfig
 	syncCfg replication.BinlogSyncerConfig
 
-	sgk           *ShardingGroupKeeper          // keeper to keep all sharding (sub) group in this syncer
-	pessimist     *shardddl.Pessimist           // shard DDL pessimist
-	optimist      *shardddl.Optimist            // shard DDL optimist
+	sgk       *ShardingGroupKeeper // keeper to keep all sharding (sub) group in this syncer
+	pessimist *shardddl.Pessimist  // shard DDL pessimist
+	optimist  *shardddl.Optimist   // shard DDL optimist
 
 	binlogType         BinlogType
 	streamerController *StreamerController
