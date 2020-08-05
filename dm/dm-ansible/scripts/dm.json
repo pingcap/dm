@@ -5350,7 +5350,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "Is waiting shard DDL lock to be resolved, >0 means waiting",
+          "description": "Number of error happens when update heartbeat",
           "fill": 1,
           "gridPos": {
             "h": 7,
@@ -5434,7 +5434,7 @@
         }
       ],
       "repeat": null,
-      "title": "binlog  replication",
+      "title": "binlog replication",
       "type": "row"
     },
     {
