@@ -183,7 +183,8 @@ type Syncer struct {
 
 	errLocation struct {
 		sync.RWMutex
-		location *binlog.Location // record the error location
+		startLocation *binlog.Location
+		endLocation   *binlog.Location
 	}
 
 	addJobFunc func(*job) error
@@ -439,7 +440,7 @@ func (s *Syncer) reset() {
 
 	s.execError.Set(nil)
 	s.resetExecErrors()
-	s.setErrLocation(nil)
+	s.setErrLocation(nil, nil)
 	s.firstReplace = false
 
 	switch s.cfg.ShardMode {
@@ -955,7 +956,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if err != nil {
 			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
-				err = s.handleEventError(err, &sqlJob.currentLocation)
+				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
 			continue
@@ -988,7 +989,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	fatalF := func(err error, affected int) {
 		s.execError.Set(err)
 		if !utils.IsContextCanceledError(err) {
-			err = s.handleEventError(err, &jobs[affected].currentLocation)
+			err = s.handleEventError(err, &jobs[affected].startLocation, &jobs[affected].currentLocation)
 			s.runFatalChan <- unit.NewProcessError(err)
 		}
 		clearF()
@@ -1102,6 +1103,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	// we use lastPos to update global checkpoint and table checkpoint
 	var (
 		currentLocation = s.checkpoint.GlobalPoint() // also init to global checkpoint
+		startLocation   = s.checkpoint.GlobalPoint()
 		lastLocation    = s.checkpoint.GlobalPoint()
 	)
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastLocation))
@@ -1245,7 +1247,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		var e *replication.BinlogEvent
 
-		// we only inject sqls  in global streaming to avoid DDL position confusion
 		if shardingReSync == nil {
 			latestOp = null
 		}
@@ -1318,13 +1319,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		s.tctx.L().Debug("receive binlog event", zap.Reflect("header", e.Header))
 
+		startLocation = currentLocation.Clone()
 		// TODO: support all event
-		// we calculate startLocation and endLocation(currentLocation) here for Rows/Query event here
-		var startLocation *binlog.Location
+		// we calculate endLocation(currentLocation) for Rows/Query event here
 		switch e.Event.(type) {
 		case *replication.RowsEvent, *replication.QueryEvent:
-			location := currentLocation.Clone()
-			startLocation = &location
 			endSuffix := startLocation.Suffix
 			if s.firstReplace {
 				endSuffix = 1
@@ -1341,7 +1340,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				GTIDSet: lastLocation.GTIDSet.Clone(),
 				Suffix:  endSuffix,
 			}
-			apply, op := s.errOperatorHolder.Apply(startLocation, &currentLocation)
+			if ev, ok := e.Event.(*replication.QueryEvent); ok {
+				currentLocation.GTIDSet.Set(ev.GSet)
+			}
+
+			apply, op := s.errOperatorHolder.Apply(&startLocation, &currentLocation)
 			if apply {
 				if op == pb.ErrorOp_Replace {
 					s.firstReplace = true
@@ -1361,7 +1364,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		ec := eventContext{
 			tctx:                tctx,
 			header:              e.Header,
-			startLocation:       startLocation,
+			startLocation:       &startLocation,
 			currentLocation:     &currentLocation,
 			lastLocation:        &lastLocation,
 			shardingReSync:      shardingReSync,
@@ -1379,17 +1382,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
 			err = s.handleRotateEvent(ev, ec)
-			if err = s.handleEventError(err, &currentLocation); err != nil {
+			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
 				return err
 			}
 		case *replication.RowsEvent:
 			err = s.handleRowsEvent(ev, ec)
-			if err = s.handleEventError(err, &currentLocation); err != nil {
+			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
 				return err
 			}
 		case *replication.QueryEvent:
 			err = s.handleQueryEvent(ev, ec)
-			if err = s.handleEventError(err, &currentLocation); err != nil {
+			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
 				return err
 			}
 		case *replication.XIDEvent:
@@ -1417,9 +1420,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			lastLocation.Position.Pos = e.Header.LogPos // update lastPos
 			lastLocation.GTIDSet.Set(ev.GSet)
 
-			job := newXIDJob(currentLocation, currentLocation, traceID)
+			job := newXIDJob(currentLocation, startLocation, currentLocation, traceID)
 			err = s.addJobFunc(job)
-			if err = s.handleEventError(err, &currentLocation); err != nil {
+			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
 				return err
 			}
 		case *replication.GenericEvent:
@@ -1429,7 +1432,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if s.checkpoint.CheckGlobalPoint() {
 					s.tctx.L().Info("meet heartbeat event and then flush jobs")
 					err = s.flushJobs()
-					if err = s.handleEventError(err, &currentLocation); err != nil {
+					if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
 						return err
 					}
 				}
@@ -1624,7 +1627,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if keys != nil {
 			key = keys[i]
 		}
-		err = s.commitJob(*ec.latestOp, originSchema, originTable, schemaName, tableName, sqls[i], arg, key, true, *ec.lastLocation, *ec.currentLocation, *ec.traceID)
+		err = s.commitJob(*ec.latestOp, originSchema, originTable, schemaName, tableName, sqls[i], arg, key, true, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, *ec.traceID)
 		if err != nil {
 			return err
 		}
@@ -1634,8 +1637,6 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 }
 
 func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) error {
-	ec.currentLocation.GTIDSet.Set(ev.GSet)
-
 	sql := strings.TrimSpace(string(ev.Query))
 	usedSchema := string(ev.Schema)
 	parseResult, err := s.parseDDLSQL(sql, ec.parser2, usedSchema)
@@ -1822,7 +1823,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			}
 		})
 
-		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID, sourceTbls)
+		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, *ec.traceID, sourceTbls)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err
@@ -2007,7 +2008,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 	})
 
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.currentLocation, *ec.traceID, nil)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, *ec.traceID, nil)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
@@ -2105,7 +2106,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	return nil
 }
 
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, location, cmdLocation binlog.Location, traceID string) error {
+func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, location, startLocation, cmdLocation binlog.Location, traceID string) error {
 	startTime := time.Now()
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
@@ -2114,7 +2115,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 	conflictDetectDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 
-	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, location, cmdLocation, traceID)
+	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, location, startLocation, cmdLocation, traceID)
 	return s.addJobFunc(job)
 }
 
@@ -2629,34 +2630,36 @@ func (s *Syncer) ShardDDLOperation() *pessimism.Operation {
 	return s.pessimist.PendingOperation()
 }
 
-func (s *Syncer) setErrLocation(location *binlog.Location) {
+func (s *Syncer) setErrLocation(startLocation, endLocation *binlog.Location) {
 	s.errLocation.Lock()
 	defer s.errLocation.Unlock()
 
-	if s.errLocation.location == nil || location == nil {
-		s.errLocation.location = location
-		return
+	if s.errLocation.startLocation == nil || startLocation == nil {
+		s.errLocation.startLocation = startLocation
+	} else if binlog.CompareLocation(*startLocation, *s.errLocation.startLocation, s.cfg.EnableGTID) < 0 {
+		s.errLocation.startLocation = startLocation
 	}
 
-	// only record the first error location
-	if binlog.CompareLocation(*location, *s.errLocation.location, s.cfg.EnableGTID) < 0 {
-		s.errLocation.location = location
+	if s.errLocation.endLocation == nil || endLocation == nil {
+		s.errLocation.endLocation = endLocation
+	} else if binlog.CompareLocation(*endLocation, *s.errLocation.endLocation, s.cfg.EnableGTID) < 0 {
+		s.errLocation.endLocation = endLocation
 	}
 }
 
 func (s *Syncer) getErrLocation() *binlog.Location {
 	s.errLocation.Lock()
 	defer s.errLocation.Unlock()
-	return s.errLocation.location
+	return s.errLocation.startLocation
 }
 
-func (s *Syncer) handleEventError(err error, location *binlog.Location) error {
+func (s *Syncer) handleEventError(err error, startLocation, endLocation *binlog.Location) error {
 	if err == nil {
 		return nil
 	}
 
-	s.setErrLocation(location)
-	return terror.Annotatef(err, "error location %s", location)
+	s.setErrLocation(startLocation, endLocation)
+	return terror.Annotatef(err, "[startLocation: %s, endLocation: %s]", startLocation, endLocation)
 }
 
 // getEvent gets an event from streamerController or errOperatorHolder

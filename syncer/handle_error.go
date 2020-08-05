@@ -32,11 +32,11 @@ func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 	pos := req.BinlogPos
 
 	if len(pos) == 0 {
-		location := s.getErrLocation()
-		if location == nil {
+		startLocation := s.getErrLocation()
+		if startLocation == nil {
 			return fmt.Sprintf("source '%s' has no error", s.cfg.SourceID), nil
 		}
-		pos = location.Position.String()
+		pos = startLocation.Position.String()
 	}
 
 	events := make([]*replication.BinlogEvent, 0)

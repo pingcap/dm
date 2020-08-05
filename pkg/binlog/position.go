@@ -297,3 +297,8 @@ func compareIndex(lhs, rhs int) int {
 		return 0
 	}
 }
+
+// ResetSuffix set suffix to 0
+func (l *Location) ResetSuffix() {
+	l.Suffix = 0
+}

@@ -58,16 +58,14 @@ func (o *Operator) String() string {
 
 // Holder holds error operator
 type Holder struct {
-	mu            sync.Mutex
-	operators     map[string]*Operator
-	replaceEvents map[string][]*replication.BinlogEvent // startLocation -> events
+	mu        sync.Mutex
+	operators map[string]*Operator
 }
 
 // NewHolder creates a new Holder
 func NewHolder() *Holder {
 	return &Holder{
-		operators:     make(map[string]*Operator),
-		replaceEvents: make(map[string][]*replication.BinlogEvent),
+		operators: make(map[string]*Operator),
 	}
 }
 
@@ -100,16 +98,16 @@ func (h *Holder) GetEvent(startLocation *binlog.Location) (*replication.BinlogEv
 	defer h.mu.Unlock()
 
 	key := startLocation.Position.String()
-	events, ok := h.replaceEvents[key]
+	operator, ok := h.operators[key]
 	if !ok {
 		return nil, nil
 	}
 
-	if len(events) <= startLocation.Suffix {
+	if len(operator.events) <= startLocation.Suffix {
 		return nil, terror.ErrSyncerReplaceEvent.New("replace events out of index")
 	}
 
-	e := events[startLocation.Suffix]
+	e := operator.events[startLocation.Suffix]
 	buf := new(bytes.Buffer)
 	e.Dump(buf)
 	log.L().Info("get replace event", zap.Stringer("event", buf))
@@ -118,11 +116,7 @@ func (h *Holder) GetEvent(startLocation *binlog.Location) (*replication.BinlogEv
 }
 
 // Apply tries to apply operation for event by location
-// We use endLocation to set operator for user
-// Use startLocation to get replace	event
-// When meet endLocation first time, copy events to replaceEvents
-// Ugly code, but have no better idea now.
-func (h *Holder) Apply(startLocation *binlog.Location, endLocation *binlog.Location) (bool, pb.ErrorOp) {
+func (h *Holder) Apply(startLocation, endLocation *binlog.Location) (bool, pb.ErrorOp) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -131,7 +125,7 @@ func (h *Holder) Apply(startLocation *binlog.Location, endLocation *binlog.Locat
 		return false, pb.ErrorOp_InvalidErrorOp
 	}
 
-	key := endLocation.Position.String()
+	key := startLocation.Position.String()
 	operator, ok := h.operators[key]
 	if !ok {
 		return false, pb.ErrorOp_InvalidErrorOp
@@ -146,17 +140,21 @@ func (h *Holder) Apply(startLocation *binlog.Location, endLocation *binlog.Locat
 		// set LogPos as start position
 		for _, ev := range operator.events {
 			ev.Header.LogPos = startLocation.Position.Pos
+			if e, ok := ev.Event.(*replication.QueryEvent); ok {
+				e.GSet = startLocation.GTIDSet.Origin()
+			}
 		}
 
 		// set the last replace event as end position
 		operator.events[len(operator.events)-1].Header.EventSize = endLocation.Position.Pos - startLocation.Position.Pos
 		operator.events[len(operator.events)-1].Header.LogPos = endLocation.Position.Pos
-
-		// copy events to replaceEvents
-		h.replaceEvents[startLocation.Position.String()] = operator.events
+		e := operator.events[len(operator.events)-1]
+		if e, ok := e.Event.(*replication.QueryEvent); ok {
+			e.GSet = endLocation.GTIDSet.Origin()
+		}
 	}
 
-	log.L().Info("apply a operator", zap.Stringer("operator", operator))
+	log.L().Info("apply a operator", zap.Stringer("startlocation", startLocation), zap.Stringer("endlocation", endLocation), zap.Stringer("operator", operator))
 
 	return true, operator.op
 }
