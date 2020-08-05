@@ -152,6 +152,11 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	// so we parse all these lines and translate into our own logs.
 	scanner := bufio.NewScanner(stderrPipe)
 	for scanner.Scan() {
+		// handle errors in scanning
+		if err != nil {
+			stdout.Write(stderr.Bytes())
+			return stdout.Bytes(), err
+		}
 		line := scanner.Bytes()
 		if loc := mydumperLogRegexp.FindSubmatchIndex(line); len(loc) == 4 {
 			level := string(line[loc[2]:loc[3]])
@@ -176,10 +181,6 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 		}
 		stderr.Write(line)
 		stderr.WriteByte('\n')
-		if err != nil {
-			stdout.Write(stderr.Bytes())
-			return stdout.Bytes(), err
-		}
 	}
 	if err = scanner.Err(); err != nil {
 		stdout.Write(stderr.Bytes())
