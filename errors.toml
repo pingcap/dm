@@ -718,6 +718,12 @@ description = ""
 workaround = "Please use `list-member --master` to confirm whether the DM-master cluster is healthy"
 tags = ["internal", "high"]
 
+[error.DM-functional-11115]
+message = "%s is an invalid v1.0.x DM-worker meta path"
+description = ""
+workaround = "Please check no `meta-dir` set for v1.0.x DM-worker"
+tags = ["internal", "medium"]
+
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""

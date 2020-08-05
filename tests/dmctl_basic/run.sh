@@ -65,6 +65,8 @@ function usage_and_arg_test() {
     echo "operate_source_empty_arg"
     operate_source_empty_arg
     operate_source_wrong_config_file
+    operate_source_invalid_op $MYSQL1_CONF
+    operate_source_stop_not_created_config $MYSQL1_CONF
 }
 
 function recover_max_binlog_size() {
@@ -117,12 +119,12 @@ function run() {
     sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
     sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
 
-    # operate with invalid op type
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source invalid $WORK_DIR/source1.yaml" \
-        "invalid operate" 1
+    dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
-    operate_source_stop_not_created_config $MYSQL1_CONF
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-source stop $cur/conf/source1.yaml $SOURCE_ID2" \
+        "\"result\": true" 3
 
     dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
@@ -193,6 +195,10 @@ function run() {
     resume_task_success $TASK_NAME
     query_status_running_tasks
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 20
+
+    # test use task file instead of task name
+    pause_task_success "$cur/conf/dm-task.yaml"
+    resume_task_success "$cur/conf/dm-task.yaml"
 
     update_relay_success $cur/conf/source1.yaml $SOURCE_ID1
     update_relay_success $cur/conf/source2.yaml $SOURCE_ID2
