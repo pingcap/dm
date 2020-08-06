@@ -970,6 +970,12 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+[error.DM-binlog-op-22004]
+message = ""
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
 [error.DM-checkpoint-24001]
 message = "invalid task mode: %s"
 description = ""

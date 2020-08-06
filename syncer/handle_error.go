@@ -53,6 +53,12 @@ func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 		return "", err
 	}
 
+	// remove outdated operators when add operator
+	err = s.errOperatorHolder.RemoveOutdated(s.checkpoint.FlushedGlobalPoint())
+	if err != nil {
+		return "", err
+	}
+
 	return "", nil
 }
 

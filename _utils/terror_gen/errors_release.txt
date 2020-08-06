@@ -160,6 +160,7 @@ ErrConfigMissingForBound,[code=20036:class=config:scope=internal:level=high], "M
 ErrBinlogExtractPosition,[code=22001:class=binlog-op:scope=internal:level=high]
 ErrBinlogInvalidFilename,[code=22002:class=binlog-op:scope=internal:level=high], "Message: invalid binlog filename"
 ErrBinlogParsePosFromStr,[code=22003:class=binlog-op:scope=internal:level=high]
+ErrBinlogParsePosFromPosStr,[code=22004:class=binlog-op:scope=internal:level=high]
 ErrCheckpointInvalidTaskMode,[code=24001:class=checkpoint:scope=internal:level=medium], "Message: invalid task mode: %s"
 ErrCheckpointSaveInvalidPos,[code=24002:class=checkpoint:scope=internal:level=high], "Message: save point %s is older than current location %s"
 ErrCheckpointInvalidTableFile,[code=24003:class=checkpoint:scope=internal:level=medium], "Message: invalid db table sql file - %s"

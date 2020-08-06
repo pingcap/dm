@@ -2657,7 +2657,7 @@ func (s *Syncer) handleEventError(err error, startLocation, endLocation *binlog.
 	}
 
 	s.setErrLocation(startLocation, endLocation)
-	return terror.Annotatef(err, "[startLocation: %s, endLocation: %s]", startLocation, endLocation)
+	return terror.Annotatef(err, "startLocation: [%s], endLocation: [%s]", startLocation, endLocation)
 }
 
 // getEvent gets an event from streamerController or errOperatorHolder

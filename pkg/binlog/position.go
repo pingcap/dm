@@ -59,6 +59,31 @@ func PositionFromStr(s string) (gmysql.Position, error) {
 	}, nil
 }
 
+func trimBrackets(s string) string {
+	if len(s) > 2 && s[0] == '(' && s[len(s)-1] == ')' {
+		return s[1 : len(s)-1]
+	}
+	return s
+}
+
+// PositionFromPosStr constructs a mysql.Position from a string representation like `(mysql-bin.000001, 2345)`
+func PositionFromPosStr(str string) (gmysql.Position, error) {
+	s := trimBrackets(str)
+	parsed := strings.Split(s, ", ")
+	if len(parsed) != 2 {
+		return gmysql.Position{}, terror.ErrBinlogParsePosFromStr.Generatef("invalid binlog pos, position string %s", str)
+	}
+	pos, err := strconv.ParseUint(parsed[1], 10, 32)
+	if err != nil {
+		return gmysql.Position{}, terror.ErrBinlogParsePosFromStr.Generatef("the pos should be digital, position string %s", str)
+	}
+
+	return gmysql.Position{
+		Name: parsed[0],
+		Pos:  uint32(pos),
+	}, nil
+}
+
 // RealMySQLPos parses a relay position and returns a mysql position and whether error occurs
 // if parsed successfully and `UUIDSuffix` exists, sets position Name to
 // `originalPos.NamePrefix + binlogFilenameSep + originalPos.NameSuffix`.
