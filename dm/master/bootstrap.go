@@ -35,6 +35,13 @@ import (
 	"github.com/pingcap/dm/pkg/v1workermeta"
 )
 
+var (
+	// interval when waiting for the specified count of DM-worker instances become registered when importing from v1.0.x.
+	waitWorkerV1Interval = time.Second
+	// timeout when waiting for the specified count of DM-worker instances become registered when importing from v1.0.x.
+	waitWorkerV1Timeout = 5 * time.Minute
+)
+
 // bootstrap bootstraps the cluster, now including:
 // - upgrade the cluster from v1.0.x if needed.
 // - upgrade the cluster from a previous v2.0.x version to the current version.
@@ -129,17 +136,17 @@ func (s *Server) collectSourceConfigFilesV1Import() (map[string]config.SourceCon
 // waitWorkersReadyV1Import waits for DM-worker instances ready for v1.0.x importing.
 // NOTE: in v1.0.x, `count of DM-worker instances` equals `count of source config files`.
 func (s *Server) waitWorkersReadyV1Import(ctx context.Context, sourceCfgs map[string]config.SourceConfig) error {
-	var (
-		// now, we simply check count repeatedly, and hardcode timeout now (refine if needed later).
-		count    = len(sourceCfgs)
-		interval = time.Second
-		timeout  = 5 * time.Minute
-	)
+	// now, we simply check count repeatedly.
+	count := len(sourceCfgs)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), waitWorkerV1Timeout)
+	defer cancel2()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(interval):
+		case <-ctx2.Done():
+			return errors.Errorf("wait for DM-worker instances timeout in %v", waitWorkerV1Timeout)
+		case <-time.After(waitWorkerV1Interval):
 			workers, err := s.scheduler.GetAllWorkers()
 			if err != nil {
 				return err
@@ -147,8 +154,6 @@ func (s *Server) waitWorkersReadyV1Import(ctx context.Context, sourceCfgs map[st
 			if len(workers) >= count {
 				return nil
 			}
-		case <-time.After(timeout):
-			return errors.Errorf("wait for DM-worker instances timeout in %v", timeout)
 		}
 	}
 }
