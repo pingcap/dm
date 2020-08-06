@@ -136,3 +136,38 @@ groups:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
       value: '{{ $value }}'
       summary: dm syncer binlog file not catch up relay exceed 10 min
+
+  - alert: DM_worker_offline
+    expr: dm_master_worker_state == 0
+    for: 1h
+    labels:
+      env: ENV_LABELS_ENV
+      level: critical
+      expr: dm_master_worker_state == 0
+    annotations:
+      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
+      value: '{{ $value }}'
+      summary: dm worker offline exceed 1h
+
+  - alert: DM_pending_DDL
+    expr: dm_master_ddl_state_number > 0
+    for: 1h
+    labels:
+      env: ENV_LABELS_ENV
+      level: critical
+      expr: dm_master_ddl_state_number > 0
+    annotations:
+      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
+      value: '{{ $value }}'
+      summary: DDL pending exceed 1h
+
+  - alert: DM_DDL_error
+    expr: increase(dm_master_shard_ddl_error[1m]) > 0
+    labels:
+      env: ENV_LABELS_ENV
+      level: critical
+      expr: increase(dm_master_shard_ddl_error[1m]) > 0
+    annotations:
+      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
+      value: '{{ $value }}'
+      summary: DDL error happens

@@ -88,6 +88,14 @@ var (
 			Name:      "worker_event_error",
 			Help:      "number of error related to worker event, during handling or watching",
 		}, []string{"type"})
+
+	startLeaderCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: "dm",
+			Subsystem: "master",
+			Name:      "start_leader_counter",
+			Help:      "number of this dm-master try to start leader components",
+		})
 )
 
 func collectMetrics() {
@@ -122,6 +130,7 @@ func RegistryMetrics() {
 	registry.MustRegister(ddlPendingCounter)
 	registry.MustRegister(ddlErrCounter)
 	registry.MustRegister(workerEventErrCounter)
+	registry.MustRegister(startLeaderCounter)
 
 	prometheus.DefaultGatherer = registry
 }
@@ -159,6 +168,11 @@ func ReportDDLError(task, errType string) {
 // ReportWorkerEventErr is a setter for workerEventErrCounter
 func ReportWorkerEventErr(errType string) {
 	workerEventErrCounter.WithLabelValues(errType).Inc()
+}
+
+// ReportStartLeader increases startLeaderCounter by one
+func ReportStartLeader() {
+	startLeaderCounter.Inc()
 }
 
 // OnRetireLeader cleans some metrics when retires
