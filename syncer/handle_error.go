@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/pb"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
@@ -37,6 +38,12 @@ func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 			return fmt.Sprintf("source '%s' has no error", s.cfg.SourceID), nil
 		}
 		pos = startLocation.Position.String()
+	} else {
+		startLocation, err := command.VerifyBinlogPos(pos)
+		if err != nil {
+			return "", err
+		}
+		pos = startLocation.String()
 	}
 
 	events := make([]*replication.BinlogEvent, 0)

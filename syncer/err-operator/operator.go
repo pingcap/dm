@@ -149,7 +149,9 @@ func (h *Holder) Apply(startLocation, endLocation *binlog.Location) (bool, pb.Er
 		for _, ev := range operator.events {
 			ev.Header.LogPos = startLocation.Position.Pos
 			if e, ok := ev.Event.(*replication.QueryEvent); ok {
-				e.GSet = startLocation.GTIDSet.Origin()
+				if startLocation.GTIDSet != nil {
+					e.GSet = startLocation.GTIDSet.Origin()
+				}
 			}
 		}
 
@@ -158,7 +160,9 @@ func (h *Holder) Apply(startLocation, endLocation *binlog.Location) (bool, pb.Er
 		operator.events[len(operator.events)-1].Header.LogPos = endLocation.Position.Pos
 		e := operator.events[len(operator.events)-1]
 		if e, ok := e.Event.(*replication.QueryEvent); ok {
-			e.GSet = endLocation.GTIDSet.Origin()
+			if endLocation.GTIDSet != nil {
+				e.GSet = endLocation.GTIDSet.Origin()
+			}
 		}
 	}
 
