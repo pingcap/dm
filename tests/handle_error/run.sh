@@ -348,6 +348,14 @@ function DM_REPLACE_ERROR_MULTIPLE_CASE() {
             "query-status test" \
             "Duplicate column name 'a'" 2
 
+    # test handle-error revert
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test revert" \
+            "\"result\": true" 3
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "unsupported add column 'a' constraint UNIQUE KEY" 2
+
     # now we only replace with ddl2
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test replace \"alter table ${db}.${tb1} add column b int;\"" \
@@ -368,11 +376,11 @@ function DM_REPLACE_ERROR_MULTIPLE() {
 function run() {
     init_cluster
     init_database
-  #  DM_SKIP_ERROR
-  #  DM_SKIP_ERROR_SHARDING
-  #  DM_REPLACE_ERROR
+    DM_SKIP_ERROR
+    DM_SKIP_ERROR_SHARDING
+    DM_REPLACE_ERROR
     DM_REPLACE_ERROR_SHARDING
-  #  DM_REPLACE_ERROR_MULTIPLE
+    DM_REPLACE_ERROR_MULTIPLE
 }
 
 cleanup_data $db

@@ -28,8 +28,8 @@ import (
 // NewHandleErrorCmd creates a HandleError command
 func NewHandleErrorCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "handle-error <task-name> [-s source ...] [-b binlog-pos] <skip/replace> [replace-sql1;replace-sql2;]",
-		Short: "skip/replace the current error event or a specific binlog position (binlog-pos) event",
+		Use:   "handle-error <task-name> [-s source ...] [-b binlog-pos] <skip | replace | revert> [replace-sql1;replace-sql2;]",
+		Short: "skip/replace/revert the current error event or a specific binlog position (binlog-pos) event",
 		RunE:  handleErrorFunc,
 	}
 	cmd.Flags().StringP("binlog-pos", "b", "", "position used to match binlog event if matched the handler-error operation will be applied. The format like \"mysql-bin|000001.000003:3270\"")
@@ -42,6 +42,8 @@ func convertOp(t string) pb.ErrorOp {
 		return pb.ErrorOp_Skip
 	case "replace":
 		return pb.ErrorOp_Replace
+	case "revert":
+		return pb.ErrorOp_Revert
 	default:
 		return pb.ErrorOp_InvalidErrorOp
 	}
@@ -62,9 +64,9 @@ func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	op := convertOp(operation)
 	switch op {
-	case pb.ErrorOp_Skip:
+	case pb.ErrorOp_Skip, pb.ErrorOp_Revert:
 		if len(cmd.Flags().Args()) > 2 {
-			common.PrintLines("replace-sqls will be ignored for 'skip' operation")
+			common.PrintLines("replace-sqls will be ignored for 'skip/revert' operation")
 		}
 	case pb.ErrorOp_Replace:
 		if len(cmd.Flags().Args()) <= 2 {
@@ -78,7 +80,7 @@ func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 			return
 		}
 	default:
-		common.PrintLines("invalid operation '%s', please use `skip` or `relpace`", operation)
+		common.PrintLines("invalid operation '%s', please use `skip`, `replace`, or `revert`", operation)
 		err = errors.New("please check output to see error")
 		return
 	}

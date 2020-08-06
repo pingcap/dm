@@ -48,7 +48,10 @@ func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 		}
 	}
 
-	s.errOperatorHolder.Set(pos, req.Op, events)
+	err = s.errOperatorHolder.Set(pos, req.Op, events)
+	if err != nil {
+		return "", err
+	}
 
 	return "", nil
 }

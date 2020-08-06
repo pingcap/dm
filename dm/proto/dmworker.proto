@@ -434,7 +434,8 @@ message OperateV1MetaResponse {
 enum ErrorOp {
     Skip = 0; // skip the error event
     Replace = 1; // replace the error event with a specified SQL
-    InvalidErrorOp = 2;
+    Revert = 2; // remove the error operator
+    InvalidErrorOp = 3;
 }
 
 message HandleWorkerErrorRequest {

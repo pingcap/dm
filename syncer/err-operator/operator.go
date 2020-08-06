@@ -74,6 +74,14 @@ func (h *Holder) Set(pos string, op pb.ErrorOp, events []*replication.BinlogEven
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	if op == pb.ErrorOp_Revert {
+		if _, ok := h.operators[pos]; !ok {
+			return terror.ErrSyncerOperatorNotExist.Generate(pos)
+		}
+		delete(h.operators, pos)
+		return nil
+	}
+
 	oper := newOperator(op, events)
 	pre, ok := h.operators[pos]
 	if ok {
@@ -104,7 +112,7 @@ func (h *Holder) GetEvent(startLocation *binlog.Location) (*replication.BinlogEv
 	}
 
 	if len(operator.events) <= startLocation.Suffix {
-		return nil, terror.ErrSyncerReplaceEvent.New("replace events out of index")
+		return nil, terror.ErrSyncerReplaceEvent.Generatef("replace events out of range, index: %d, total: %d", startLocation.Suffix, len(operator.events))
 	}
 
 	e := operator.events[startLocation.Suffix]
