@@ -19,6 +19,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.14.3
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/klauspost/cpuid v1.2.1 // indirect
+	github.com/lance6716/retool v1.3.8-0.20200806070832-3469f70b2afe // indirect
 	github.com/montanaflynn/stats v0.5.0 // indirect
 	github.com/onsi/ginkgo v1.9.0 // indirect
 	github.com/onsi/gomega v1.6.0 // indirect
