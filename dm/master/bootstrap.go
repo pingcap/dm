@@ -195,7 +195,8 @@ func (s *Server) getSubtaskCfgsStagesV1Import(ctx context.Context) (
 	subtaskCfgs := make(map[string]map[string]config.SubTaskConfig)
 	subtaskStages := make(map[string]map[string]pb.Stage)
 	errorMsgs := make([]string, 0)
-	for resp := range respCh {
+	for len(respCh) > 0 {
+		resp := <-respCh
 		if !resp.Result {
 			errorMsgs = append(errorMsgs, resp.Msg)
 			continue
