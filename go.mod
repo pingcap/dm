@@ -16,7 +16,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.14.3
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
-	github.com/lance6716/retool v1.3.8-0.20200806070832-3469f70b2afe // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
 	github.com/pingcap/dumpling v0.0.0-20200605144140-0175843056a6
 	github.com/pingcap/errcode v0.3.0 // indirect
