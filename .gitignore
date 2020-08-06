@@ -11,7 +11,6 @@ dm-worker.log*
 dm-master.log*
 dmctl.log
 relay_log/*
-/_tools/
 vendor
 */*.DS_Store
 tidb-slow.log
