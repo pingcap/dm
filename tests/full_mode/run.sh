@@ -7,6 +7,8 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function fail_acquire_global_lock() {
+    export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
+
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -32,8 +34,14 @@ function fail_acquire_global_lock() {
     sed -i '/timezone/i\ignore-checking-items: ["dump_privilege"]' $WORK_DIR/dm-task.yaml
     dmctl_start_task $WORK_DIR/dm-task.yaml
 
+    # TaskCheckInterval set to 500ms
+    sleep 1
+
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "Couldn't acquire global lock"
+    check_log_contains $WORK_DIR/worker1/log/dm-worker.log "error is not resumable"
     check_log_contains $WORK_DIR/worker2/log/dm-worker.log "Couldn't acquire global lock"
+    check_log_contains $WORK_DIR/worker2/log/dm-worker.log "error is not resumable"
+
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "\"stage\": \"Paused\"" 4 \

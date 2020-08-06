@@ -17,7 +17,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
@@ -99,11 +98,11 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 
 	// Cmd cannot be reused, so we create a new cmd when begin processing
-	output, err := m.spawn(ctx)
+	err = m.spawn(ctx)
 
 	if err != nil {
 		mydumperExitWithErrorCounter.WithLabelValues(m.cfg.Name).Inc()
-		errs = append(errs, unit.NewProcessError(fmt.Errorf("%s. %s", err.Error(), output)))
+		errs = append(errs, unit.NewProcessError(err))
 	} else {
 		select {
 		case <-ctx.Done():
@@ -129,9 +128,9 @@ var mydumperLogRegexp = regexp.MustCompile(
 	`^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[(DEBUG|INFO|WARNING|ERROR)\] - `,
 )
 
-func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
+func (m *Mydumper) spawn(ctx context.Context) error {
 	failpoint.Inject("dumpRuntimeError", func(_ failpoint.Value) {
-		failpoint.Return(0, terror.ErrDumpUnitRuntime)
+		failpoint.Return(terror.ErrDumpUnitRuntime)
 	})
 
 	var (
@@ -142,10 +141,10 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	cmd.Stdout = &stdout
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		return nil, terror.ErrDumpUnitRuntime.Delegate(err)
+		return terror.ErrDumpUnitRuntime.Delegate(err, "")
 	}
 	if err = cmd.Start(); err != nil {
-		return nil, terror.ErrDumpUnitRuntime.Delegate(err)
+		return terror.ErrDumpUnitRuntime.Delegate(err, "")
 	}
 
 	// Read the stderr from mydumper, which contained the logs.
@@ -158,10 +157,8 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	// store first error detected in mydumper's log
 	// TODO(lance6716): if mydumper will not exit when detected error happens, we should return firstErr earlier
 	// and using non-block IO to drain and output mydumper's stderr
-	var (
-		firstErr error
-		errMsg   []byte
-	)
+	var firstErr error
+
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if loc := mydumperLogRegexp.FindSubmatchIndex(line); len(loc) == 4 {
@@ -181,7 +178,6 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 				m.logger.Error(string(msg))
 				if firstErr == nil && strings.HasPrefix(string(msg), "Couldn't acquire global lock") {
 					firstErr = terror.ErrDumpUnitGlobalLock
-					errMsg = msg
 				}
 				continue
 			}
@@ -191,17 +187,17 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	}
 
 	if firstErr != nil {
-		return errMsg, firstErr
+		return firstErr
 	}
 
 	if err = scanner.Err(); err != nil {
 		stdout.Write(stderr.Bytes())
-		return stdout.Bytes(), terror.ErrDumpUnitRuntime.Delegate(err)
+		return terror.ErrDumpUnitRuntime.Delegate(err, stdout.Bytes())
 	}
 
 	err = cmd.Wait()
 	stdout.Write(stderr.Bytes())
-	return stdout.Bytes(), terror.ErrDumpUnitRuntime.Delegate(err)
+	return terror.ErrDumpUnitRuntime.Delegate(err, stdout.Bytes())
 }
 
 // Close implements Unit.Close

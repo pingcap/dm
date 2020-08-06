@@ -294,8 +294,10 @@ func (tsc *realTaskStatusChecker) getResumeStrategy(stStatus *pb.SubTaskStatus, 
 	// TODO: use different strategies based on the error detail
 	for _, processErr := range stStatus.Result.Errors {
 		if !isResumableError(processErr) {
+			tsc.l.Info("error is not resumable", zap.Stringer("error", processErr))
 			return ResumeNoSense
 		}
+		tsc.l.Info("error is resumable", zap.Stringer("error", processErr))
 	}
 
 	// auto resume interval does not exceed backoff duration, skip this paused task
