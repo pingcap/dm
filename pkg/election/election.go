@@ -223,7 +223,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 	var (
 		oldLeaderID string
-		compaignWg  sync.WaitGroup
+		campaignWg  sync.WaitGroup
 	)
 	for {
 		// check context canceled/timeout
@@ -249,20 +249,20 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		e.campaignMu.Lock()
 		e.cancelCampaign = func() {
 			cancel2()
-			compaignWg.Wait()
+			campaignWg.Wait()
 		}
 		e.campaignMu.Unlock()
 
-		compaignWg.Add(1)
+		campaignWg.Add(1)
 		go func() {
-			defer compaignWg.Done()
+			defer campaignWg.Done()
 
 			if e.evictLeader.Get() == 1 {
 				// skip campaign
 				return
 			}
 
-			e.l.Debug("begin to compaign", zap.Stringer("current member", e.info))
+			e.l.Debug("begin to campaign", zap.Stringer("current member", e.info))
 
 			err2 := elec.Campaign(ctx2, e.infoStr)
 			if err2 != nil {
@@ -309,7 +309,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 		if leaderInfo == nil || len(leaderInfo.ID) == 0 {
 			cancel2()
-			compaignWg.Wait()
+			campaignWg.Wait()
 			continue
 		}
 
@@ -317,7 +317,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 			e.l.Info("current member is not the leader", zap.Stringer("current member", e.info), zap.Stringer("leader", leaderInfo))
 			e.notifyLeader(ctx, leaderInfo)
 			cancel2()
-			compaignWg.Wait()
+			campaignWg.Wait()
 			continue
 		}
 
@@ -329,7 +329,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		oldLeaderID = ""
 
 		cancel2()
-		compaignWg.Wait()
+		campaignWg.Wait()
 	}
 }
 
@@ -417,7 +417,7 @@ func (e *Election) EvictLeader() {
 
 // Resign resign the leader
 func (e *Election) Resign() {
-	// cancel campagin or current member is leader and then resign
+	// cancel campaign or current member is leader and then resign
 	e.campaignMu.Lock()
 	if e.cancelCampaign != nil {
 		e.cancelCampaign()

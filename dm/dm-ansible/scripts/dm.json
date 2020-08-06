@@ -761,8 +761,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -848,8 +846,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -935,8 +931,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -1022,8 +1016,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -1109,8 +1101,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -1196,8 +1186,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -1283,8 +1271,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -1370,8 +1356,6 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": "5",
-              "min": "0",
               "show": true
             },
             {
@@ -1519,7 +1503,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 31
+        "y": 100
       },
       "id": 55,
       "panels": [
@@ -2511,7 +2495,7 @@
           "gridPos": {
             "h": 7,
             "w": 6,
-            "x": 18,
+            "x": 12,
             "y": 17
           },
           "id": 25,
@@ -5343,10 +5327,98 @@
             "align": false,
             "alignLevel": null
           }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Number of error happens when update heartbeat",
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 47
+          },
+          "id": 90,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_syncer_heartbeat_update_error",
+              "format": "time_series",
+              "instant": false,
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "heartbeat update error",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": "",
+              "logBase": 1,
+              "max": "1",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         }
       ],
       "repeat": null,
-      "title": "binlog  replication",
+      "title": "binlog replication",
       "type": "row"
     },
     {
@@ -5370,7 +5442,7 @@
           "gridPos": {
             "h": 7,
             "w": 6,
-            "x": 0,
+            "x": 6,
             "y": 48
           },
           "id": 83,
@@ -5458,7 +5530,7 @@
           "gridPos": {
             "h": 7,
             "w": 6,
-            "x": 6,
+            "x": 12,
             "y": 48
           },
           "id": 81,
@@ -5545,9 +5617,9 @@
           "fill": 1,
           "gridPos": {
             "h": 7,
-            "w": 6,
-            "x": 12,
-            "y": 48
+            "w": 12,
+            "x": 0,
+            "y": 55
           },
           "id": 82,
           "legend": {
@@ -5633,9 +5705,9 @@
           "fill": 1,
           "gridPos": {
             "h": 7,
-            "w": 6,
-            "x": 18,
-            "y": 48
+            "w": 12,
+            "x": 12,
+            "y": 55
           },
           "id": 84,
           "legend": {
@@ -5722,8 +5794,8 @@
           "gridPos": {
             "h": 7,
             "w": 6,
-            "x": 0,
-            "y": 55
+            "x": 18,
+            "y": 48
           },
           "id": 85,
           "legend": {
@@ -5761,6 +5833,94 @@
           "timeRegions": [],
           "timeShift": null,
           "title": "number of worker event error",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "number of dm-masters try to start leader components per minute",
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 0,
+            "y": 48
+          },
+          "id": 86,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_master_start_leader_counter",
+              "format": "time_series",
+              "instant": false,
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "number of dm-masters start leader components per minute",
           "tooltip": {
             "shared": true,
             "sort": 0,
