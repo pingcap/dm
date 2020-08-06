@@ -270,6 +270,12 @@ func isResumableError(err *pb.ProcessError) bool {
 		}
 	}
 
+	for _, msg := range retry.UnsupportedDMLMsgs {
+		if strings.Contains(strings.ToLower(err.RawCause), strings.ToLower(msg)) {
+			return false
+		}
+	}
+
 	if err.ErrCode == int32(terror.ErrParserParseRelayLog.Code()) {
 		for _, msg := range retry.ParseRelayLogErrMsgs {
 			if strings.Contains(strings.ToLower(err.Message), strings.ToLower(msg)) {
