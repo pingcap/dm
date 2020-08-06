@@ -130,6 +130,10 @@ var mydumperLogRegexp = regexp.MustCompile(
 )
 
 func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
+	failpoint.Inject("dumpRuntimeError", func(_ failpoint.Value) {
+		failpoint.Return(0, terror.ErrDumpUnitRuntime)
+	})
+
 	var (
 		stdout bytes.Buffer
 		stderr bytes.Buffer
