@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -254,6 +255,7 @@ func (h *Heartbeat) run(ctx context.Context) {
 		case <-updateTicker.C:
 			err := h.updateTS()
 			if err != nil {
+				heartbeatUpdateErr.WithLabelValues(strconv.Itoa(int(h.cfg.serverID))).Inc()
 				h.logger.Error("update heartbeat ts", zap.Error(err))
 			}
 
