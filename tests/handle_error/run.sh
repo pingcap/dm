@@ -163,6 +163,8 @@ function DM_REPLACE_ERROR_CASE() {
     run_sql_source1 "insert into ${db}.${tb2} values(5,5);"
     run_sql_source1 "insert into ${db}.${tb1} values(6,5);"
 
+    run_sql_tidb_with_retry "select count(1) from ${db}.${tb1};" "count(1): 4"
+    run_sql_tidb_with_retry "select count(1) from ${db}.${tb2};" "count(1): 4"
 }
 
 function DM_REPLACE_ERROR() {
