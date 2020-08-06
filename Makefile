@@ -80,7 +80,7 @@ dm-portal-frontend:
 
 retool_setup:
 	@echo "setup retool"
-	go get github.com/twitchtv/retool
+	go get github.com/lance6716/retool@dev
 	GO111MODULE=off retool sync
 
 generate_proto: retool_setup
