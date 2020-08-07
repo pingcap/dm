@@ -3,7 +3,7 @@
 function handle_error_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "handle-error" \
-        "handle-error <task-name> \[-s source ...\] \[-b binlog-pos\] <skip\/replace\/revert> \[replace-sql1;replace-sql2;\] \[flags\]" 1
+        "handle-error <task-name | task-file> \[-s source ...\] \[-b binlog-pos\] <skip\/replace\/revert> \[replace-sql1;replace-sql2;\] \[flags\]" 1
 }
 
 function handle_error_invalid_binlogpos() {
