@@ -142,34 +142,39 @@ func (t *testMaster) TestSubtaskCfgsStagesV1Import(c *C) {
 		sourceID2   = "mysql-replica-02"
 	)
 
-	var cfg11 config.SubTaskConfig
+	cfg11 := config.NewSubTaskConfig()
 	c.Assert(cfg11.DecodeFile(subTaskSampleFile, true), IsNil)
+	cfg11.Dir = "./dump_data"
+	cfg11.ChunkFilesize = "64"
 	cfg11.Name = taskName1
 	cfg11.SourceID = sourceID1
+	c.Assert(cfg11.Adjust(true), IsNil) // adjust again after manually modified some items.
 	data11, err := cfg11.Toml()
 	c.Assert(err, IsNil)
-	data11 = strings.ReplaceAll(data11, `chunk-filesize = ""`, `chunk-filesize = 0`)
+	data11 = strings.ReplaceAll(data11, `chunk-filesize = "64"`, `chunk-filesize = 64`) // different type between v1.0.x and v2.0.x.
 
 	cfg12, err := cfg11.Clone()
 	c.Assert(err, IsNil)
 	cfg12.SourceID = sourceID2
 	data12, err := cfg12.Toml()
 	c.Assert(err, IsNil)
-	data12 = strings.ReplaceAll(data12, `chunk-filesize = ""`, `chunk-filesize = 0`)
+	data12 = strings.ReplaceAll(data12, `chunk-filesize = "64"`, `chunk-filesize = 64`)
 
 	cfg21, err := cfg11.Clone()
 	c.Assert(err, IsNil)
+	cfg21.Dir = "./dump_data"
 	cfg21.Name = taskName2
+	c.Assert(cfg21.Adjust(true), IsNil)
 	data21, err := cfg21.Toml()
 	c.Assert(err, IsNil)
-	data21 = strings.ReplaceAll(data21, `chunk-filesize = ""`, `chunk-filesize = 0`)
+	data21 = strings.ReplaceAll(data21, `chunk-filesize = "64"`, `chunk-filesize = 64`)
 
 	cfg22, err := cfg21.Clone()
 	c.Assert(err, IsNil)
 	cfg22.SourceID = sourceID2
 	data22, err := cfg22.Toml()
 	c.Assert(err, IsNil)
-	data22 = strings.ReplaceAll(data22, `chunk-filesize = ""`, `chunk-filesize = 0`)
+	data22 = strings.ReplaceAll(data22, `chunk-filesize = "64"`, `chunk-filesize = 64`)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -178,6 +183,12 @@ func (t *testMaster) TestSubtaskCfgsStagesV1Import(c *C) {
 	defer s.Close()
 	s.cfg.V1SourcesPath = c.MkDir()
 	c.Assert(s.scheduler.Start(ctx, etcdTestCli), IsNil)
+
+	// no workers exist, no config and status need to get.
+	cfgs, stages, err := s.getSubtaskCfgsStagesV1Import(ctx)
+	c.Assert(err, IsNil)
+	c.Assert(cfgs, HasLen, 0)
+	c.Assert(stages, HasLen, 0)
 
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
@@ -235,8 +246,70 @@ func (t *testMaster) TestSubtaskCfgsStagesV1Import(c *C) {
 	}, nil)
 
 	// all workers return valid config and stage.
-	cfgs, stages, err := s.getSubtaskCfgsStagesV1Import(ctx)
+	cfgs, stages, err = s.getSubtaskCfgsStagesV1Import(ctx)
 	c.Assert(err, IsNil)
 	c.Assert(cfgs, HasLen, 2)
 	c.Assert(stages, HasLen, 2)
+	c.Assert(cfgs[taskName1], HasLen, 2)
+	c.Assert(cfgs[taskName2], HasLen, 2)
+	c.Assert(cfgs[taskName1][sourceID1], DeepEquals, *cfg11)
+	c.Assert(cfgs[taskName1][sourceID2], DeepEquals, *cfg12)
+	c.Assert(cfgs[taskName2][sourceID1], DeepEquals, *cfg21)
+	c.Assert(cfgs[taskName2][sourceID2], DeepEquals, *cfg22)
+	c.Assert(stages[taskName1], HasLen, 2)
+	c.Assert(stages[taskName2], HasLen, 2)
+	c.Assert(stages[taskName1][sourceID1], Equals, pb.Stage_Running)
+	c.Assert(stages[taskName1][sourceID2], Equals, pb.Stage_Running)
+	c.Assert(stages[taskName2][sourceID1], Equals, pb.Stage_Paused)
+	c.Assert(stages[taskName2][sourceID2], Equals, pb.Stage_Running)
+
+	// one of workers return invalid config.
+	mockWCli1.EXPECT().OperateV1Meta(
+		gomock.Any(),
+		&pb.OperateV1MetaRequest{
+			Op: pb.V1MetaOp_GetV1Meta,
+		},
+	).Return(&pb.OperateV1MetaResponse{
+		Result: true,
+		Meta: map[string]*pb.V1SubTaskMeta{
+			taskName1: {
+				Op:    pb.TaskOp_Start,
+				Stage: pb.Stage_Running,
+				Name:  taskName1,
+				Task:  []byte(data11),
+			},
+			taskName2: {
+				Op:    pb.TaskOp_Pause,
+				Stage: pb.Stage_Paused,
+				Name:  taskName2,
+				Task:  []byte(data21),
+			},
+		},
+	}, nil)
+	mockWCli2.EXPECT().OperateV1Meta(
+		gomock.Any(),
+		&pb.OperateV1MetaRequest{
+			Op: pb.V1MetaOp_GetV1Meta,
+		},
+	).Return(&pb.OperateV1MetaResponse{
+		Result: true,
+		Meta: map[string]*pb.V1SubTaskMeta{
+			taskName1: {
+				Op:    pb.TaskOp_Resume,
+				Stage: pb.Stage_Running,
+				Name:  taskName1,
+				Task:  []byte("invalid subtask data"),
+			},
+			taskName2: {
+				Op:    pb.TaskOp_Start,
+				Stage: pb.Stage_Running,
+				Name:  taskName2,
+				Task:  []byte(data22),
+			},
+		},
+	}, nil)
+	cfgs, stages, err = s.getSubtaskCfgsStagesV1Import(ctx)
+	c.Assert(err, ErrorMatches, ".*fail to get subtask config and stage.*")
+	c.Assert(cfgs, HasLen, 0)
+	c.Assert(stages, HasLen, 0)
 }
