@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/dumpling/v4/export"
@@ -90,7 +91,7 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	err := os.RemoveAll(m.cfg.Dir)
 	if err != nil {
 		m.logger.Error("fail to remove output directory", zap.String("directory", m.cfg.Dir), log.ShortError(err))
-		errs = append(errs, unit.NewProcessError(err))
+		errs = append(errs, unit.NewProcessError(terror.ErrDumpUnitRuntime.Delegate(err, "fail to remove output directory: "+m.cfg.Dir)))
 		pr <- pb.ProcessResult{
 			IsCanceled: false,
 			Errors:     errs,
@@ -103,7 +104,7 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		dumplingExitWithErrorCounter.WithLabelValues(m.cfg.Name, m.cfg.SourceID).Inc()
-		errs = append(errs, unit.NewProcessError(err))
+		errs = append(errs, unit.NewProcessError(terror.ErrDumpUnitRuntime.Delegate(err, "")))
 	}
 
 	if len(errs) == 0 {
