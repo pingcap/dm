@@ -353,7 +353,10 @@ func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBo
 		case <-ctx.Done():
 			log.L().Info("worker server is closed, handleSourceBound will quit now")
 			return nil
-		case bound := <-boundCh:
+		case bound, ok := <-boundCh:
+			if !ok {
+				continue
+			}
 			err := s.operateSourceBound(bound)
 			s.setSourceStatus(bound.Source, err, true)
 			if err != nil {
