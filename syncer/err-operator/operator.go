@@ -156,9 +156,9 @@ func (h *Holder) Apply(startLocation, endLocation *binlog.Location) (bool, pb.Er
 		}
 
 		// set the last replace event as end position
-		operator.events[len(operator.events)-1].Header.EventSize = endLocation.Position.Pos - startLocation.Position.Pos
-		operator.events[len(operator.events)-1].Header.LogPos = endLocation.Position.Pos
 		e := operator.events[len(operator.events)-1]
+		e.Header.EventSize = endLocation.Position.Pos - startLocation.Position.Pos
+		e.Header.LogPos = endLocation.Position.Pos
 		if e, ok := e.Event.(*replication.QueryEvent); ok {
 			if endLocation.GTIDSet != nil {
 				e.GSet = endLocation.GTIDSet.Origin()

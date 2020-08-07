@@ -28,7 +28,7 @@ import (
 // NewHandleErrorCmd creates a HandleError command
 func NewHandleErrorCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "handle-error <task-name> [-s source ...] [-b binlog-pos] <skip/replace/revert> [replace-sql1;replace-sql2;]",
+		Use:   "handle-error <task-name | task-file> [-s source ...] [-b binlog-pos] <skip/replace/revert> [replace-sql1;replace-sql2;]",
 		Short: "skip/replace/revert the current error event or a specific binlog position (binlog-pos) event",
 		RunE:  handleErrorFunc,
 	}
@@ -58,7 +58,7 @@ func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 
-	taskName := cmd.Flags().Arg(0)
+	taskName := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0))
 	operation := cmd.Flags().Arg(1)
 	var sqls []string
 
