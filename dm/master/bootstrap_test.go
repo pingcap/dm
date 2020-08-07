@@ -26,6 +26,8 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -83,6 +85,8 @@ func (t *testMaster) TestWaitWorkersReadyV1Import(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	tctx := tcontext.NewContext(ctx, log.L())
+
 	s := testDefaultMasterServer(c)
 	defer s.Close()
 	s.cfg.V1SourcesPath = c.MkDir()
@@ -98,7 +102,7 @@ func (t *testMaster) TestWaitWorkersReadyV1Import(c *C) {
 	}
 
 	// no worker registered, timeout.
-	err := s.waitWorkersReadyV1Import(context.Background(), cfgs)
+	err := s.waitWorkersReadyV1Import(tctx, cfgs)
 	c.Assert(err, ErrorMatches, ".*wait for DM-worker instances timeout.*")
 
 	// register one worker.
@@ -111,7 +115,7 @@ func (t *testMaster) TestWaitWorkersReadyV1Import(c *C) {
 	c.Assert(resp1.Result, IsTrue)
 
 	// still timeout because no enough workers.
-	err = s.waitWorkersReadyV1Import(context.Background(), cfgs)
+	err = s.waitWorkersReadyV1Import(tctx, cfgs)
 	c.Assert(err, ErrorMatches, ".*wait for DM-worker instances timeout.*")
 
 	// register another worker.
@@ -121,12 +125,12 @@ func (t *testMaster) TestWaitWorkersReadyV1Import(c *C) {
 			Name:    "worker-2",
 			Address: "127.0.0.1:8263",
 		}
-		resp2, err := s.RegisterWorker(ctx, req2)
-		c.Assert(err, IsNil)
+		resp2, err2 := s.RegisterWorker(ctx, req2)
+		c.Assert(err2, IsNil)
 		c.Assert(resp2.Result, IsTrue)
 	}()
 
-	err = s.waitWorkersReadyV1Import(context.Background(), cfgs)
+	err = s.waitWorkersReadyV1Import(tctx, cfgs)
 	c.Assert(err, IsNil)
 }
 
@@ -178,6 +182,7 @@ func (t *testMaster) TestSubtaskCfgsStagesV1Import(c *C) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	tctx := tcontext.NewContext(ctx, log.L())
 
 	s := testDefaultMasterServer(c)
 	defer s.Close()
@@ -185,7 +190,7 @@ func (t *testMaster) TestSubtaskCfgsStagesV1Import(c *C) {
 	c.Assert(s.scheduler.Start(ctx, etcdTestCli), IsNil)
 
 	// no workers exist, no config and status need to get.
-	cfgs, stages, err := s.getSubtaskCfgsStagesV1Import(ctx)
+	cfgs, stages, err := s.getSubtaskCfgsStagesV1Import(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(cfgs, HasLen, 0)
 	c.Assert(stages, HasLen, 0)
@@ -246,7 +251,7 @@ func (t *testMaster) TestSubtaskCfgsStagesV1Import(c *C) {
 	}, nil)
 
 	// all workers return valid config and stage.
-	cfgs, stages, err = s.getSubtaskCfgsStagesV1Import(ctx)
+	cfgs, stages, err = s.getSubtaskCfgsStagesV1Import(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(cfgs, HasLen, 2)
 	c.Assert(stages, HasLen, 2)
@@ -308,7 +313,7 @@ func (t *testMaster) TestSubtaskCfgsStagesV1Import(c *C) {
 			},
 		},
 	}, nil)
-	cfgs, stages, err = s.getSubtaskCfgsStagesV1Import(ctx)
+	cfgs, stages, err = s.getSubtaskCfgsStagesV1Import(tctx)
 	c.Assert(err, ErrorMatches, ".*fail to get subtask config and stage.*")
 	c.Assert(cfgs, HasLen, 0)
 	c.Assert(stages, HasLen, 0)
