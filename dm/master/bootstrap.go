@@ -270,9 +270,15 @@ func (s *Server) addSourcesV1Import(tctx *tcontext.Context, cfgs map[string]conf
 	for _, cfg := range cfgs {
 		err = s.scheduler.AddSourceCfg(cfg)
 		if err != nil {
-			break
+			if terror.ErrSchedulerSourceCfgExist.Equal(err) {
+				err = nil // reset error
+				tctx.Logger.Warn("source already exists", zap.String("source", cfg.SourceID))
+			} else {
+				break
+			}
+		} else {
+			added = append(added, cfg.SourceID)
 		}
-		added = append(added, cfg.SourceID)
 	}
 
 	if err != nil {

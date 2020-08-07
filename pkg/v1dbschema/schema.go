@@ -112,7 +112,7 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN binlog_gtid VARCHAR(256) AFTER binlog_pos`, tableName),
 		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN table_info JSON NOT NULL AFTER binlog_gtid`, tableName),
 	}
-	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreError, queries)
+	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreErrorCheckpoint, queries)
 	if err != nil {
 		return terror.Annotatef(err, "add columns for checkpoint table")
 	}
@@ -129,12 +129,13 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 
 // updateSyncerOnlineDDLMeta updates the online DDL meta data, including:
 // - update the value of `id` from `server-id` to `source-id`.
+// NOTE: online DDL may not exist if not enabled.
 func updateSyncerOnlineDDLMeta(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName, sourceID string, serverID uint32) error {
 	queries := []string{
 		fmt.Sprintf(`UPDATE %s SET id=? WHERE id=?`, tableName), // for multiple columns.
 	}
 	args := []interface{}{sourceID, strconv.FormatUint(uint64(serverID), 10)}
-	_, err := dbConn.ExecuteSQL(tctx, nil, taskName, queries, args)
+	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreErrorOnlineDDL, queries, args)
 	return terror.Annotatef(err, "update id column for online DDL meta table")
 }
 
@@ -198,7 +199,7 @@ func setGlobalGTIDs(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tab
 	return err
 }
 
-func ignoreError(err error) bool {
+func ignoreErrorCheckpoint(err error) bool {
 	err = errors.Cause(err) // check the original error
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if !ok {
@@ -207,6 +208,21 @@ func ignoreError(err error) bool {
 
 	switch mysqlErr.Number {
 	case errno.ErrDupFieldName:
+		return true
+	default:
+		return false
+	}
+}
+
+func ignoreErrorOnlineDDL(err error) bool {
+	err = errors.Cause(err) // check the original error
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	if !ok {
+		return false
+	}
+
+	switch mysqlErr.Number {
+	case errno.ErrNoSuchTable:
 		return true
 	default:
 		return false

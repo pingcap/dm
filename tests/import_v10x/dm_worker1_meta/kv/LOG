@@ -1,0 +1,47 @@
+=============== Aug 7, 2020 (CST) ===============
+17:38:06.162498 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+17:38:06.174639 db@open opening
+17:38:06.177079 version@stat F·[] S·0B[] Sc·[]
+17:38:06.180323 db@janitor F·2 G·0
+17:38:06.180872 db@open done T·6.196708ms
+17:38:06.181165 db@close closing
+17:38:06.181361 db@close done T·186.891µs
+=============== Aug 7, 2020 (CST) ===============
+17:38:06.181937 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+17:38:06.182230 version@stat F·[] S·0B[] Sc·[]
+17:38:06.182310 db@open opening
+17:38:06.182426 journal@recovery F·1
+17:38:06.184511 journal@recovery recovering @1
+17:38:06.189397 memdb@flush created L0@2 N·1 S·169B "!DM..ion,v1":"!DM..ion,v1"
+17:38:06.190840 version@stat F·[1] S·169B[169B] Sc·[0.12]
+17:38:06.201112 db@janitor F·3 G·0
+17:38:06.201629 db@open done T·19.291593ms
+17:38:10.339615 memdb@flush N·1 S·1KiB
+17:38:10.344927 memdb@flush created L0@6 N·1 S·1KiB "!DM..\x00\x00\x01,v3":"!DM..\x00\x00\x01,v3"
+17:38:10.345082 version@stat F·[2] S·1KiB[1KiB] Sc·[0.25]
+17:38:10.351017 memdb@flush committed F·1 T·11.202577ms
+17:38:10.351104 journal@remove removed @3
+17:38:10.355294 transaction@flush created L0@7 N·3 S·1KiB "!DM..\x00\x00\x01,v4":"!DM..ter,v5"
+17:38:10.355381 version@stat F·[3] S·2KiB[2KiB] Sc·[0.38]
+17:38:11.625966 db@close closing
+17:38:11.626405 db@close done T·443.28µs
+=============== Aug 7, 2020 (CST) ===============
+17:38:13.194934 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+17:38:13.195205 version@stat F·[3] S·2KiB[2KiB] Sc·[0.38]
+17:38:13.195292 db@open opening
+17:38:13.195483 journal@recovery F·1
+17:38:13.197563 journal@recovery recovering @5
+17:38:13.200772 version@stat F·[3] S·2KiB[2KiB] Sc·[0.38]
+17:38:13.215605 db@janitor F·5 G·0
+17:38:13.216291 db@open done T·20.973428ms
+17:38:13.216870 db@close closing
+17:38:13.217070 db@close done T·187.891µs
+=============== Aug 7, 2020 (CST) ===============
+17:38:13.218010 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+17:38:13.218396 version@stat F·[3] S·2KiB[2KiB] Sc·[0.38]
+17:38:13.218492 db@open opening
+17:38:13.218776 journal@recovery F·1
+17:38:13.220665 journal@recovery recovering @8
+17:38:13.247475 version@stat F·[3] S·2KiB[2KiB] Sc·[0.38]
+17:38:13.258447 db@janitor F·5 G·0
+17:38:13.259000 db@open done T·40.475325ms
