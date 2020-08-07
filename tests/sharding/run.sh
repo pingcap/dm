@@ -60,7 +60,7 @@ function run() {
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
-    # the task should paused by `FlushCheckpointStage` failpont before flush old checkpoint.
+    # the task should paused by `FlushCheckpointStage` failpoint before flush old checkpoint.
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "failpoint error for FlushCheckpointStage before flush old checkpoint" 1
