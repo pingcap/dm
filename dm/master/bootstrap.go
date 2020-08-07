@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -92,7 +93,7 @@ func (s *Server) importFromV10x(ctx context.Context) error {
 
 	// 4. get subtasks config and stage from DM-worker instances.
 	logger.Info("getting subtask config and status from DM-worker")
-	subtaskCfgs, _, err := s.getSubtaskCfgsStagesV1Import(tctx)
+	subtaskCfgs, subtaskStages, err := s.getSubtaskCfgsStagesV1Import(tctx)
 	if err != nil {
 		return err
 	}
@@ -113,13 +114,24 @@ func (s *Server) importFromV10x(ctx context.Context) error {
 
 	// 7. create subtasks with the specified stage.
 	logger.Info("creating subtasks")
+	err = s.createSubtaskV1Import(tctx, subtaskCfgs, subtaskStages)
+	if err != nil {
+		return err
+	}
 
 	// 8. mark the upgrade operation as done.
 	logger.Info("marking upgrade from v1.0.x as done")
+	_, err = upgrade.PutVersion(s.etcdClient, upgrade.MinVersion)
+	if err != nil {
+		return err
+	}
 
 	// 9. clear v1.0.x data (source config files, DM-worker metadata), failed is not a problem.
 	logger.Info("clearing v1.0.x data")
+	s.clearOldDataV1Import(tctx)
 
+	// NOTE: add any other mechanisms to report the `done` of processing if needed later.
+	logger.Info("importing from v1.0.x has done")
 	return nil
 }
 
@@ -304,8 +316,82 @@ func (s *Server) upgradeDBSchemaV1Import(tctx *tcontext.Context, cfgs map[string
 }
 
 // createSubtaskV1Import tries to create subtasks with the specified stage.
-func (s *Server) createSubtaskV1Import(tctx tcontext.Context,
-	cfgs map[string]map[string]config.SubTaskConfig,
-	stages map[string]map[string]pb.Stage) error {
-	return nil
+// NOTE: now we only have two different APIs to:
+//   - create a new (running) subtask.
+//   - update the subtask to the specified stage.
+// in other words, if we want to create a `Paused` task,
+// we need to create a `Running` one first and then `Pause` it.
+// this is not a big problem now, but if needed we can refine it later.
+// NOTE: we do not stopping previous subtasks if any later one failed (because some side effects may have taken),
+// and let the user to check & fix the problem.
+// TODO(csuzhangxc): merge subtask configs to support `get-task-config`.
+func (s *Server) createSubtaskV1Import(tctx *tcontext.Context,
+	cfgs map[string]map[string]config.SubTaskConfig, stages map[string]map[string]pb.Stage) error {
+	var err error
+outerLoop:
+	for taskName, taskCfgs := range cfgs {
+		for sourceID, cfg := range taskCfgs {
+			stage := stages[taskName][sourceID]
+			switch stage {
+			case pb.Stage_Running, pb.Stage_Paused:
+			default:
+				tctx.Logger.Warn("skip to create subtask because only support to create subtasks with Running/Paused stage now", zap.Stringer("stage", stage))
+				continue
+			}
+			var cfg2 *config.SubTaskConfig
+			cfg2, err = cfg.DecryptPassword()
+			if err != nil {
+				break outerLoop
+			}
+			// create and update subtasks one by one (this should be quick enough because only updating etcd).
+			err = s.scheduler.AddSubTasks(*cfg2)
+			if err != nil {
+				if terror.ErrSchedulerSubTaskExist.Equal(err) {
+					tctx.Logger.Warn("subtask already exists", zap.String("task", taskName), zap.String("source", sourceID))
+				} else {
+					break outerLoop
+				}
+			}
+			err = s.scheduler.UpdateExpectSubTaskStage(stage, taskName, sourceID)
+			if err != nil {
+				break outerLoop
+			}
+		}
+	}
+	return err
+}
+
+// clearOldDataV1Import tries to clear v1.0.x data after imported, now these data including:
+// - source config files.
+// - DM-worker metadata.
+func (s *Server) clearOldDataV1Import(tctx *tcontext.Context) {
+	tctx.Logger.Info("removing source config files", zap.String("path", s.cfg.V1SourcesPath))
+	err := os.RemoveAll(s.cfg.V1SourcesPath)
+	if err != nil {
+		tctx.Logger.Error("fail to remove source config files", zap.String("path", s.cfg.V1SourcesPath))
+	}
+
+	workers, err := s.scheduler.GetAllWorkers()
+	if err != nil {
+		tctx.Logger.Error("fail to get DM-worker agents")
+		return
+	}
+
+	req := workerrpc.Request{
+		Type:          workerrpc.CmdOperateV1Meta,
+		OperateV1Meta: &pb.OperateV1MetaRequest{Op: pb.V1MetaOp_RemoveV1Meta},
+	}
+	var wg sync.WaitGroup
+	for _, worker := range workers {
+		wg.Add(1)
+		go func(worker *scheduler.Worker) {
+			defer wg.Done()
+			tctx.Logger.Info("removing DM-worker metadata", zap.Stringer("worker", worker.BaseInfo()))
+			_, err2 := worker.SendRequest(tctx.Ctx, &req, s.cfg.RPCTimeout)
+			if err2 != nil {
+				tctx.Logger.Error("fail to remove metadata for DM-worker", zap.Stringer("worker", worker.BaseInfo()))
+			}
+		}(worker)
+	}
+	wg.Wait()
 }
