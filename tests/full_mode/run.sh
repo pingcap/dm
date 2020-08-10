@@ -13,7 +13,7 @@ function run() {
     check_contains 'Query OK, 3 rows affected'
 
     # test load data with `"` in the table name
-    run_sql_source1 "create table full_mode.\`tb\"1\` (id int,name varchar(10));"
+    run_sql_source1 "create table full_mode.\`tb\"1\` (id int,name varchar(10), primary key(\`id\`));"
     run_sql_source1 "insert into full_mode.\`tb\"1\` values(1,'haha');"
     run_sql_source1 "insert into full_mode.\`tb\"1\` values(2,'hihi');"
 

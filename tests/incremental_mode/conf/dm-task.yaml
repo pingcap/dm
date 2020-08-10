@@ -8,7 +8,6 @@ heartbeat-update-interval: 1
 heartbeat-report-interval: 1
 timezone: "Asia/Shanghai"
 clean-dump-file: false
-ignore-checking-items: ["table_schema"]
 
 target-database:
   host: "127.0.0.1"
