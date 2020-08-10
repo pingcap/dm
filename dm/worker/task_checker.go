@@ -279,6 +279,9 @@ func (tsc *realTaskStatusChecker) getResumeStrategy(stStatus *pb.SubTaskStatus, 
 	// TODO: use different strategies based on the error detail
 	for _, processErr := range stStatus.Result.Errors {
 		if !isResumableError(processErr) {
+			failpoint.Inject("TaskCheckInterval", func(_ failpoint.Value) {
+				tsc.l.Info("error is not resumable", zap.Stringer("error", processErr))
+			})
 			return ResumeNoSense
 		}
 	}
