@@ -154,14 +154,13 @@ func (s *Server) collectSourceConfigFilesV1Import() (map[string]config.SourceCon
 			return nil, err
 		}
 
-		var cfg config.SourceConfig
-		err = cfg.ParseYaml(string(content))
+		cfgs2, err := parseAndAdjustSourceConfig([]string{string(content)})
 		if err != nil {
 			// abort importing if any invalid source config files exist.
 			return nil, err
 		}
 
-		cfgs[cfg.SourceID] = cfg
+		cfgs[cfgs2[0].SourceID] = *cfgs2[0]
 	}
 
 	return cfgs, nil
