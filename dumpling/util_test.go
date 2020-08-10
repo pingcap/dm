@@ -41,7 +41,9 @@ func (m *testDumplingSuite) TestParseArgs(c *C) {
 	c.Assert(exportCfg.Threads, Equals, 8)
 	c.Assert(exportCfg.FileSize, Equals, uint64(50))
 
-	extraArgs := `--statement-size=100 --skip-tz-utc`
+	extraArgs := `--threads 16 --skip-tz-utc`
 	err = parseExtraArgs(exportCfg, strings.Fields(extraArgs))
 	c.Assert(err, NotNil)
+	c.Assert(exportCfg.Threads, Equals, 16)
+	c.Assert(exportCfg.StatementSize, Equals, uint64(100))
 }
