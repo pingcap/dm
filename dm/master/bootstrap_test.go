@@ -16,7 +16,9 @@ package master
 import (
 	"context"
 	"io/ioutil"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,10 +53,28 @@ func (t *testMaster) TestCollectSourceConfigFilesV1Import(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(cfgs, HasLen, 0)
 
+	host := os.Getenv("MYSQL_HOST")
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
+	if port == 0 {
+		port = 3306
+	}
+	user := os.Getenv("MYSQL_USER")
+	if user == "" {
+		user = "root"
+	}
+	password := os.Getenv("MYSQL_PSWD")
+
 	// load a valid source file.
 	cfg1 := config.NewSourceConfig()
 	cfg1.From.Session = map[string]string{} // fix empty map after marshal/unmarshal becomes nil
 	c.Assert(cfg1.LoadFromFile("./source.yaml"), IsNil)
+	cfg1.From.Host = host
+	cfg1.From.Port = port
+	cfg1.From.User = user
+	cfg1.From.Password = password
 	cfg2 := cfg1.Clone()
 	cfg2.SourceID = "mysql-replica-02"
 
