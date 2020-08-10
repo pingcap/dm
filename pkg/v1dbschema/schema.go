@@ -114,7 +114,7 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 	// try to add columns.
 	// NOTE: ignore already exists error to continue the process.
 	queries := []string{
-		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN binlog_gtid VARCHAR(65535) DEFAULT '' AFTER binlog_pos`, tableName),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN binlog_gtid VARCHAR(16383) DEFAULT '' AFTER binlog_pos`, tableName),
 		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN table_info JSON NOT NULL AFTER binlog_gtid`, tableName),
 	}
 	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreErrorCheckpoint, queries)
