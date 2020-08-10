@@ -356,14 +356,17 @@ outerLoop:
 			err = s.scheduler.AddSubTasks(*cfg2)
 			if err != nil {
 				if terror.ErrSchedulerSubTaskExist.Equal(err) {
+					err = nil // reset error
 					tctx.Logger.Warn("subtask already exists", zap.String("task", taskName), zap.String("source", sourceID))
 				} else {
 					break outerLoop
 				}
 			}
-			err = s.scheduler.UpdateExpectSubTaskStage(stage, taskName, sourceID)
-			if err != nil {
-				break outerLoop
+			if stage == pb.Stage_Paused { // no more operation needed for `Running`.
+				err = s.scheduler.UpdateExpectSubTaskStage(stage, taskName, sourceID)
+				if err != nil {
+					break outerLoop
+				}
 			}
 		}
 	}
