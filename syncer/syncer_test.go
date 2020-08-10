@@ -802,8 +802,6 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	if err != nil {
 		c.Fatal(err)
 	}
-	p, err := utils.GetParser(db, false)
-	c.Assert(err, IsNil)
 
 	_, err = db.Exec("SET GLOBAL binlog_format = 'ROW';")
 	c.Assert(err, IsNil)
@@ -975,7 +973,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 			case *replication.RowsEvent:
 				schemaName := string(ev.Table.Schema)
 				tableName := string(ev.Table.Table)
-				ti, err := syncer.getTable(schemaName, tableName, schemaName, tableName, p)
+				ti, err := syncer.getTable(schemaName, tableName, schemaName, tableName)
 				c.Assert(err, IsNil)
 				var (
 					sqls []string
