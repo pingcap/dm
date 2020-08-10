@@ -616,7 +616,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 			cp_table VARCHAR(128) NOT NULL,
 			binlog_name VARCHAR(128),
 			binlog_pos INT UNSIGNED,
-			binlog_gtid VARCHAR(256),
+			binlog_gtid VARCHAR(65535) DEFAULT '',
 			table_info JSON NOT NULL,
 			is_global BOOLEAN,
 			create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
