@@ -16,25 +16,25 @@ fix-sql-file = "fix.sql"
 
 # tables need to check.
 [[check-tables]]
-schema = "all_mode"
+schema = "import_v10x"
 tables = ["~t.*"]
 
 [[table-config]]
-schema = "all_mode"
+schema = "import_v10x"
 table = "t1"
 
 [[table-config.source-tables]]
 instance-id = "source-1"
-schema = "all_mode"
+schema = "import_v10x"
 table  = "t1"
 
 [[table-config]]
-schema = "all_mode"
+schema = "import_v10x"
 table = "t2"
 
 [[table-config.source-tables]]
 instance-id = "source-2"
-schema = "all_mode"
+schema = "import_v10x"
 table  = "t2"
 
 [[source-db]]

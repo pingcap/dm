@@ -35,8 +35,7 @@ mysql-instances:
 
 black-white-list: # compatible with deprecated config
   instance:
-    do-dbs: ["all_mode"]
-    ignore-dbs: ["ignore_db"]
+    do-dbs: ["import_v10x"]
 
 mydumpers:
   global:
