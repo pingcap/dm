@@ -30,4 +30,10 @@ delete from t1 where gen_id > 124;
 
 -- test decimal type
 alter table t1 add column lat decimal(9,6) default '0.000000';
-insert into t1 (id, name, info, lat) values (8, 'gentest', '{"id":127}', '123.123')
+insert into t1 (id, name, info, lat) values (8, 'gentest', '{"id":127}', '123.123');
+
+-- test bit type
+alter table t1 add column bin bit(1) default NULL;
+insert into t1 (id, name, info, lat, bin) values (9, 'gentest', '{"id":128}', '123.123', b'0');
+insert into t1 (id, name, info, lat, bin) values (10, 'gentest', '{"id":129}', '123.123', b'1');
+
