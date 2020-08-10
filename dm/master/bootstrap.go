@@ -79,7 +79,7 @@ func (s *Server) importFromV10x(ctx context.Context) error {
 
 	// 2. collect source config files.
 	logger.Info("collecting source config files", zap.String("path", s.cfg.V1SourcesPath))
-	sourceCfgs, err := s.collectSourceConfigFilesV1Import()
+	sourceCfgs, err := s.collectSourceConfigFilesV1Import(tctx)
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func (s *Server) importFromV10x(ctx context.Context) error {
 }
 
 // collectSourceConfigFilesV1Import tries to collect source config files for v1.0.x importing.
-func (s *Server) collectSourceConfigFilesV1Import() (map[string]config.SourceConfig, error) {
+func (s *Server) collectSourceConfigFilesV1Import(tctx *tcontext.Context) (map[string]config.SourceConfig, error) {
 	files, err := ioutil.ReadDir(s.cfg.V1SourcesPath)
 	if err != nil {
 		return nil, err
@@ -161,6 +161,7 @@ func (s *Server) collectSourceConfigFilesV1Import() (map[string]config.SourceCon
 		}
 
 		cfgs[cfgs2[0].SourceID] = *cfgs2[0]
+		tctx.Logger.Info("collected source config", zap.Stringer("config", cfgs2[0]))
 	}
 
 	return cfgs, nil
@@ -185,8 +186,10 @@ func (s *Server) waitWorkersReadyV1Import(tctx *tcontext.Context, sourceCfgs map
 				return err
 			}
 			if len(workers) >= count {
+				tctx.Logger.Info("all DM-worker instances ready", zap.Int("ready count", len(workers)))
 				return nil
 			}
+			tctx.Logger.Info("waiting for DM-worker instances ready", zap.Int("ready count", len(workers)))
 		}
 	}
 }
@@ -249,6 +252,7 @@ func (s *Server) getSubtaskCfgsStagesV1Import(tctx *tcontext.Context) (
 			}
 			subtaskCfgs[taskName][cfg.SourceID] = cfg
 			subtaskStages[taskName][cfg.SourceID] = meta.Stage
+			tctx.Logger.Info("got subtask config and stage", zap.Stringer("config", &cfg), zap.Stringer("stage", meta.Stage))
 		}
 	}
 

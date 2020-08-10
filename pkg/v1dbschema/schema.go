@@ -34,6 +34,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -87,6 +88,8 @@ func UpdateSchema(tctx *tcontext.Context, db *conn.BaseDB, cfg *config.SubTaskCo
 //   - fill `binlog_gtid` based on `binlog_name` and `binlog_pos` if GTID mode enable.
 // NOTE: no need to update the value of `table_info` because DM can get schema automatically from downstream when replicating DML.
 func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName, sourceID string, fillGTIDs bool, tcpReader reader.Reader, parser2 *parser.Parser) error {
+	logger := log.L().WithFields(zap.String("task", taskName), zap.String("source", sourceID))
+	logger.Info("updating syncer checkpoint", zap.Bool("fill GTID", fillGTIDs))
 	var gs gtid.Set
 	if fillGTIDs {
 		// NOTE: get GTID sets for all (global & tables) binlog position has many problems, at least including:
@@ -95,6 +98,7 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 		// so we only get GTID sets for the global position now,
 		// and this should only have side effects for in-syncing shard tables, but we can mention and warn this case in the user docs.
 		pos, err := getGlobalPos(tctx, dbConn, tableName, sourceID)
+		logger.Info("got global checkpoint position", zap.Stringer("position", pos))
 		if err != nil {
 			return terror.Annotatef(err, "get global checkpoint position for source %s", sourceID)
 		}
@@ -103,6 +107,7 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 			if err != nil {
 				return terror.Annotatef(err, "get GTID sets for position %s", pos)
 			}
+			logger.Info("got global checkpoint GTID sets", log.WrapStringerField("GTID sets", gs))
 		}
 	}
 
@@ -123,6 +128,7 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 		if err != nil {
 			return terror.Annotatef(err, "set GTID sets %s for checkpoint table", gs.String())
 		}
+		logger.Info("filled global checkpoint GTID sets", zap.Stringer("GTID sets", gs))
 	}
 	return nil
 }
@@ -131,6 +137,8 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 // - update the value of `id` from `server-id` to `source-id`.
 // NOTE: online DDL may not exist if not enabled.
 func updateSyncerOnlineDDLMeta(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName, sourceID string, serverID uint32) error {
+	logger := log.L().WithFields(zap.String("task", taskName), zap.String("source", sourceID))
+	logger.Info("updating syncer online DDL meta")
 	queries := []string{
 		fmt.Sprintf(`UPDATE %s SET id=? WHERE id=?`, tableName), // for multiple columns.
 	}
