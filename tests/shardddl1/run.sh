@@ -16,7 +16,7 @@ function DM_001_CASE() {
 }
 
 function DM_001() {
-    run_case 001 "no-sharding" "init_table 111 112" "clean_table" ""
+    run_case 001 "single-source-no-sharding" "init_table 111 112" "clean_table" ""
 }
 
 function DM_002_CASE() {

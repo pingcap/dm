@@ -52,16 +52,16 @@ func parseExtraArgs(dumpCfg *export.Config, args []string) error {
 		fileSizeStr     string
 	)
 
-	dumplingFlagSet.StringSliceVarP(&dumpCfg.Databases, "database", "B", nil, "Database to dump")
-	dumplingFlagSet.IntVarP(&dumpCfg.Threads, "threads", "t", 4, "Number of goroutines to use, default 4")
+	dumplingFlagSet.StringSliceVarP(&dumpCfg.Databases, "database", "B", dumpCfg.Databases, "Database to dump")
+	dumplingFlagSet.IntVarP(&dumpCfg.Threads, "threads", "t", dumpCfg.Threads, "Number of goroutines to use, default 4")
 	dumplingFlagSet.StringVarP(&fileSizeStr, "filesize", "F", "", "The approximate size of output file")
-	dumplingFlagSet.Uint64VarP(&dumpCfg.StatementSize, "statement-size", "S", export.UnspecifiedSize, "Attempted size of INSERT statement in bytes")
-	dumplingFlagSet.StringVar(&dumpCfg.Consistency, "consistency", "auto", "Consistency level during dumping: {auto|none|flush|lock|snapshot}")
-	dumplingFlagSet.StringVar(&dumpCfg.Snapshot, "snapshot", "", "Snapshot position. Valid only when consistency=snapshot")
-	dumplingFlagSet.BoolVarP(&dumpCfg.NoViews, "no-views", "W", true, "Do not dump views")
-	dumplingFlagSet.Uint64VarP(&dumpCfg.Rows, "rows", "r", export.UnspecifiedSize, "Split table into chunks of this many rows, default unlimited")
-	dumplingFlagSet.StringVar(&dumpCfg.Where, "where", "", "Dump only selected records")
-	dumplingFlagSet.BoolVar(&dumpCfg.EscapeBackslash, "escape-backslash", true, "use backslash to escape quotation marks")
+	dumplingFlagSet.Uint64VarP(&dumpCfg.StatementSize, "statement-size", "S", dumpCfg.StatementSize, "Attempted size of INSERT statement in bytes")
+	dumplingFlagSet.StringVar(&dumpCfg.Consistency, "consistency", dumpCfg.Consistency, "Consistency level during dumping: {auto|none|flush|lock|snapshot}")
+	dumplingFlagSet.StringVar(&dumpCfg.Snapshot, "snapshot", dumpCfg.Snapshot, "Snapshot position. Valid only when consistency=snapshot")
+	dumplingFlagSet.BoolVarP(&dumpCfg.NoViews, "no-views", "W", dumpCfg.NoViews, "Do not dump views")
+	dumplingFlagSet.Uint64VarP(&dumpCfg.Rows, "rows", "r", dumpCfg.Rows, "Split table into chunks of this many rows, default unlimited")
+	dumplingFlagSet.StringVar(&dumpCfg.Where, "where", dumpCfg.Where, "Dump only selected records")
+	dumplingFlagSet.BoolVar(&dumpCfg.EscapeBackslash, "escape-backslash", dumpCfg.EscapeBackslash, "use backslash to escape quotation marks")
 
 	err := dumplingFlagSet.Parse(args)
 	if err != nil {
