@@ -1003,9 +1003,9 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		clearF()
 	}
 
-	executeSQLs := func() (error, int) {
+	executeSQLs := func() (int, error) {
 		if len(jobs) == 0 {
-			return nil, 0
+			return 0, nil
 		}
 		queries := make([]string, 0, len(jobs))
 		args := make([][]interface{}, 0, len(jobs))
@@ -1022,7 +1022,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			errCtx := &ExecErrorContext{err, jobs[affected].currentLocation.Clone(), fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
 		}
-		return err, affected
+		return affected, err
 	}
 
 	var err error
@@ -1042,7 +1042,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			}
 
 			if idx >= count || sqlJob.tp == flush {
-				err, affect = executeSQLs()
+				affect, err = executeSQLs()
 				if err != nil {
 					fatalF(err, affect)
 					continue
@@ -1052,7 +1052,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 
 		case <-time.After(waitTime):
 			if len(jobs) > 0 {
-				err, affect = executeSQLs()
+				affect, err = executeSQLs()
 				if err != nil {
 					fatalF(err, affect)
 					continue
@@ -2675,7 +2675,7 @@ func (s *Syncer) handleEventError(err error, startLocation, endLocation *binlog.
 func (s *Syncer) getEvent(tctx *tcontext.Context, startLocation *binlog.Location) (*replication.BinlogEvent, error) {
 	// next event is a replace event
 	if s.firstReplace || startLocation.Suffix > 0 {
-		log.L().Info(fmt.Sprintf("try to get replace event, firstReplace: %v", s.firstReplace), zap.Stringer("location", startLocation))
+		s.tctx.L().Info(fmt.Sprintf("try to get replace event, firstReplace: %v", s.firstReplace), zap.Stringer("location", startLocation))
 		return s.errOperatorHolder.GetEvent(startLocation)
 	}
 

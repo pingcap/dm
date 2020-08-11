@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = Suite(&testOperatorSuite{})
@@ -79,7 +80,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 
 	// revert not exist operator
 	err := h.Set(startLocation.Position.String(), pb.ErrorOp_Revert, nil)
-	c.Assert(err, NotNil)
+	c.Assert(terror.ErrSyncerOperatorNotExist.Equal(err), IsTrue)
 
 	// skip event
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Skip, nil)
@@ -90,6 +91,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 
 	// overwrite operator
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Replace, []*replication.BinlogEvent{event1, event2})
+	c.Assert(err, IsNil)
 	apply, op = h.Apply(&startLocation, &endLocation)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Replace)
@@ -108,6 +110,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	// get second event
 	startLocation.Suffix++
 	e, err = h.GetEvent(&startLocation)
+	c.Assert(err, IsNil)
 	c.Assert(e.Header.LogPos, Equals, endLocation.Position.Pos)
 	c.Assert(e.Header.EventSize, Equals, endLocation.Position.Pos-startLocation.Position.Pos)
 	c.Assert(e.Event, Equals, event2.Event)
@@ -118,6 +121,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 
 	// revert exist operator
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Revert, nil)
+	c.Assert(err, IsNil)
 	apply, op = h.Apply(&startLocation, &endLocation)
 	c.Assert(apply, IsFalse)
 	c.Assert(op, Equals, pb.ErrorOp_InvalidErrorOp)

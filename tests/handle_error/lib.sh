@@ -18,8 +18,7 @@ function init_database() {
 function extract() {
     str="$1"
     source=${str:0:1}
-    database=${str:1:1}
-    table=${str:2:1}
+    table=${str:1:1}
 }
 
 function init_table() {

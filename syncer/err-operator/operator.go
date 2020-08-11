@@ -175,6 +175,8 @@ func (h *Holder) Apply(startLocation, endLocation *binlog.Location) (bool, pb.Er
 
 // RemoveOutdated remove outdated operator
 func (h *Holder) RemoveOutdated(flushLocation binlog.Location) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	for pos := range h.operators {
 		position, err := binlog.PositionFromPosStr(pos)
 		if err != nil {

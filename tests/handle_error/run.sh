@@ -57,7 +57,7 @@ function DM_SKIP_ERROR_CASE() {
             "query-status test" \
             "\"stage\": \"Running\"" 2
 
-    # '111' -> 111, '222' -> 222, no error
+    # '11' -> 11, '22' -> 22, no error
     run_sql_source1 "insert into ${db}.${tb1} values('111',7)"
     run_sql_source2 "insert into ${db}.${tb2} values('222',8)"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -69,7 +69,7 @@ function DM_SKIP_ERROR_CASE() {
 }
 
 function DM_SKIP_ERROR() {
-    run_case SKIP_ERROR "double-source-no-sharding" "init_table 111 212" "clean_table" ""
+    run_case SKIP_ERROR "double-source-no-sharding" "init_table 11 22" "clean_table" ""
 }
 
 # skip modify column, two sources, 4 tables, sharding
@@ -136,8 +136,8 @@ function DM_SKIP_ERROR_SHARDING_CASE() {
 }
 
 function DM_SKIP_ERROR_SHARDING() {
-    run_case SKIP_ERROR_SHARDING "double-source-pessimistic" "init_table 111 112 211 212" "clean_table" "pessimistic"
-    run_case SKIP_ERROR_SHARDING "double-source-optimistic" "init_table 111 112 211 212" "clean_table" "optimistic"
+    run_case SKIP_ERROR_SHARDING "double-source-pessimistic" "init_table 11 12 21 22" "clean_table" "pessimistic"
+    run_case SKIP_ERROR_SHARDING "double-source-optimistic" "init_table 11 12 21 22" "clean_table" "optimistic"
 }
 
 # replace add foreign key with database name
@@ -371,8 +371,8 @@ function DM_REPLACE_ERROR_MULTIPLE_CASE() {
 }
 
 function DM_REPLACE_ERROR_MULTIPLE() {
-    run_case REPLACE_ERROR_MULTIPLE "double-source-pessimistic" "init_table 111 211" "clean_table" "pessimistic"
-    run_case REPLACE_ERROR_MULTIPLE "double-source-optimistic" "init_table 111 211" "clean_table" "optimistic"
+    run_case REPLACE_ERROR_MULTIPLE "double-source-pessimistic" "init_table 11 21" "clean_table" "pessimistic"
+    run_case REPLACE_ERROR_MULTIPLE "double-source-optimistic" "init_table 11 21" "clean_table" "optimistic"
 }
 
 function run() {
