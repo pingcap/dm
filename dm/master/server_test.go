@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -1178,7 +1179,9 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	resp, err = s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, true)
-	c.Logf("%s, %s", resp.Sources[0].String(), resp.Sources[1].String())
+	sort.Slice(resp.Sources, func(i, j int) bool {
+		return resp.Sources[i].Source < resp.Sources[j].Source
+	})
 	c.Assert(resp.Sources, check.DeepEquals, []*pb.CommonWorkerResponse{{
 		Result: true,
 		Msg:    "source is added but there is no free worker to bound",
