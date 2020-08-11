@@ -68,9 +68,9 @@ type job struct {
 	args            []interface{}
 	key             string
 	retry           bool
-	location        binlog.Location
-	startLocation   binlog.Location
-	currentLocation binlog.Location // exactly binlog position of current SQL
+	location        binlog.Location // location of last received (ROTATE / QUERY / XID) event, for global/table checkpoint
+	startLocation   binlog.Location // start location of the sql in binlog, for handle_error
+	currentLocation binlog.Location // end location of the sql in binlog, for user to skip sql manually by changing checkpoint
 	ddls            []string
 	traceID         string
 	traceGID        string

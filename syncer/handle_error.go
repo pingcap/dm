@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
+
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	tmysql "github.com/pingcap/parser/mysql"
