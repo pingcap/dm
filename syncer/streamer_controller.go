@@ -229,7 +229,7 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 			tctx.L().Warn(fmt.Sprintf("cannot conver %s to string", val))
 		}
 
-		t, err2 := time.Parse(time.RFC3339, str)
+		t, err2 := time.Parse(time.UnixDate, str)
 		if err2 != nil {
 			tctx.L().Warn(fmt.Sprintf("cannot parse %s to time: %s", str, err2))
 		} else {

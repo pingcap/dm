@@ -9,7 +9,7 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 function run() {
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
-    now=$(date -Is)
+    now=$(date)
     export GO_FAILPOINTS="github.com/pingcap/dm/syncer/SyncerGetEventError=return(\"$now\")"
 
     # start DM worker and master
