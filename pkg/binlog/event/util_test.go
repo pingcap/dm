@@ -41,7 +41,7 @@ func (t *testUtilSuite) TestStatusVarsToKV(c *C) {
 		{
 			[]byte{0, 0, 0, 0, 0},
 			map[byte][]byte{
-				0: []byte{0, 0, 0, 0},
+				0: {0, 0, 0, 0},
 			},
 			nil,
 		},
