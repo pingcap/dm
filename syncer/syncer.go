@@ -572,7 +572,7 @@ func (s *Syncer) getMasterStatus() (mysql.Position, gtid.Set, error) {
 	return s.fromDB.getMasterStatus(s.cfg.Flavor)
 }
 
-func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable string, p *parser.Parser) (*model.TableInfo, error) {
+func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable string) (*model.TableInfo, error) {
 	ti, err := s.schemaTracker.GetTable(origSchema, origTable)
 	if err == nil {
 		return ti, nil
@@ -595,7 +595,10 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 
 	// if the table does not exist (IsTableNotExists(err)), continue to fetch the table from downstream and create it.
 	if ti == nil {
-		err = s.trackTableInfoFromDownstream(origSchema, origTable, renamedSchema, renamedTable, p)
+		err = s.trackTableInfoFromDownstream(origSchema, origTable, renamedSchema, renamedTable)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	ti, err = s.schemaTracker.GetTable(origSchema, origTable)
@@ -606,7 +609,7 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 }
 
 // trackTableInfoFromDownstream tries to track the table info from the downstream.
-func (s *Syncer) trackTableInfoFromDownstream(origSchema, origTable, renamedSchema, renamedTable string, p *parser.Parser) error {
+func (s *Syncer) trackTableInfoFromDownstream(origSchema, origTable, renamedSchema, renamedTable string) error {
 	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly
 	// (and get rid of ddlDBConn).
 	rows, err := s.ddlDBConn.querySQL(s.tctx, "SHOW CREATE TABLE "+dbutil.TableName(renamedSchema, renamedTable))
@@ -614,6 +617,13 @@ func (s *Syncer) trackTableInfoFromDownstream(origSchema, origTable, renamedSche
 		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 	}
 	defer rows.Close()
+
+	// use parser for downstream.
+	// NOTE: refine the definition of `ansi-quotes` with `sql_mode` in `session` later.
+	parser2, err := utils.GetParser(s.ddlDB.DB, s.cfg.EnableANSIQuotes)
+	if err != nil {
+		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+	}
 
 	ctx := context.Background()
 	for rows.Next() {
@@ -624,7 +634,7 @@ func (s *Syncer) trackTableInfoFromDownstream(origSchema, origTable, renamedSche
 
 		// rename the table back to original.
 		var createNode ast.StmtNode
-		createNode, err = p.ParseOneStmt(createSQL, "", "")
+		createNode, err = parser2.ParseOneStmt(createSQL, "", "")
 		if err != nil {
 			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 		}
@@ -1501,7 +1511,8 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 	}
 
-	ti, err := s.getTable(originSchema, originTable, schemaName, tableName, ec.parser2)
+	// TODO(csuzhangxc): check performance of `getTabel` from schema tracker.
+	ti, err := s.getTable(originSchema, originTable, schemaName, tableName)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -2073,7 +2084,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	}
 	if shouldTableExist {
 		targetTable := tableNames[1][0]
-		if _, err := s.getTable(srcTable.Schema, srcTable.Name, targetTable.Schema, targetTable.Name, ec.parser2); err != nil {
+		if _, err := s.getTable(srcTable.Schema, srcTable.Name, targetTable.Schema, targetTable.Name); err != nil {
 			return err
 		}
 	}

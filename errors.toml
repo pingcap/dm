@@ -2134,6 +2134,12 @@ description = ""
 workaround = "Please try again later"
 tags = ["internal", "low"]
 
+[error.DM-dm-master-38053]
+message = "fail to import DM cluster from v1.0.x"
+description = ""
+workaround = "Please confirm that you have not violated any restrictions in the upgrade documentation."
+tags = ["internal", "high"]
+
 [error.DM-dm-worker-40001]
 message = "parse dm-worker config flag set"
 description = ""

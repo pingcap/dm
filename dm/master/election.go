@@ -21,8 +21,6 @@ import (
 	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/upgrade"
-
 	"github.com/pingcap/failpoint"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/zap"
@@ -68,6 +66,18 @@ func (s *Server) electionNotify(ctx context.Context) {
 				s.leader = oneselfLeader
 				s.closeLeaderClient()
 				s.Unlock()
+
+				// try to upgrade the cluster version if a member BECOME the leader.
+				// so if the old leader failed when upgrading, the new leader can try again.
+				// NOTE: if the cluster has been upgraded, calling this method again should have no side effects.
+				// NOTE: now, bootstrap relies on scheduler to handle DM-worker instances, sources, tasks, etcd.
+				err := s.bootstrap(ctx)
+				if err != nil {
+					log.L().Error("fail to bootstrap the cluster", zap.Error(err))
+					s.retireLeader()
+					s.election.Resign()
+					continue
+				}
 			} else {
 				// this member is not leader
 				log.L().Info("get new leader", zap.String("leader", leaderInfo.ID), zap.String("current member", s.cfg.Name))
@@ -125,16 +135,7 @@ func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
 func (s *Server) startLeaderComponent(ctx context.Context) bool {
 	metrics.ReportStartLeader()
 
-	// try to upgrade the cluster version if a member become the leader.
-	// so if the old leader failed when upgrading, the new leader can try again.
-	// NOTE: if the cluster has been upgraded, calling this method again should have no side effects.
-	err := upgrade.TryUpgrade(s.etcdClient)
-	if err != nil {
-		log.L().Error("fail to upgrade the cluster version", zap.Error(err))
-		return false
-	}
-
-	err = s.scheduler.Start(ctx, s.etcdClient)
+	err := s.scheduler.Start(ctx, s.etcdClient)
 	if err != nil {
 		log.L().Error("scheduler do not started", zap.Error(err))
 		return false
