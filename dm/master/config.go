@@ -82,6 +82,8 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.SSLKey, "ssl-key", "", "path of file that contains X509 key in PEM format for connection")
 	fs.Var(&cfg.CertAllowedCN, "cert-allowed-cn", "the trusted common name that allowed to visit")
 
+	fs.StringVar(&cfg.V1SourcesPath, "v1-sources-path", "", "directory path used to store source config files when upgrading from v1.0.x")
+
 	return cfg
 }
 
@@ -135,6 +137,10 @@ type Config struct {
 	InitialClusterState string `toml:"initial-cluster-state" json:"initial-cluster-state"`
 	Join                string `toml:"join" json:"join"`   // cluster's client address (endpoints), not peer address
 	Debug               bool   `toml:"debug" json:"debug"` // only use for test
+
+	// directory path used to store source config files when upgrading from v1.0.x.
+	// if this path set, DM-master leader will try to upgrade from v1.0.x to the current version.
+	V1SourcesPath string `toml:"v1-sources-path" json:"v1-sources-path"`
 
 	// tls config
 	config.Security

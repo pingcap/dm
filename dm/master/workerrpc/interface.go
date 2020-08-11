@@ -44,6 +44,7 @@ const (
 
 	CmdOperateSchema
 
+	CmdOperateV1Meta
 	CmdHandleError
 )
 
@@ -67,7 +68,8 @@ type Request struct {
 
 	OperateSchema *pb.OperateWorkerSchemaRequest
 
-	HandleError *pb.HandleWorkerErrorRequest
+	OperateV1Meta *pb.OperateV1MetaRequest
+	HandleError   *pb.HandleWorkerErrorRequest
 }
 
 // Response wraps all dm-worker rpc responses.
@@ -90,7 +92,8 @@ type Response struct {
 
 	OperateSchema *pb.CommonWorkerResponse
 
-	HandleError *pb.CommonWorkerResponse
+	OperateV1Meta *pb.OperateV1MetaResponse
+	HandleError   *pb.CommonWorkerResponse
 }
 
 // Client is a client that sends RPC.

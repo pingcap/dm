@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -619,7 +620,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 			cp_table VARCHAR(128) NOT NULL,
 			binlog_name VARCHAR(128),
 			binlog_pos INT UNSIGNED,
-			binlog_gtid VARCHAR(256),
+			binlog_gtid TEXT,
 			table_info JSON NOT NULL,
 			is_global BOOLEAN,
 			create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -661,7 +662,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 		cpTable       string
 		binlogName    string
 		binlogPos     uint32
-		binlogGTIDSet string
+		binlogGTIDSet sql.NullString
 		tiBytes       []byte
 		isGlobal      bool
 	)
@@ -671,7 +672,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
 
-		gset, err := gtid.ParserGTID(cp.cfg.Flavor, binlogGTIDSet)
+		gset, err := gtid.ParserGTID(cp.cfg.Flavor, binlogGTIDSet.String) // default to "".
 		if err != nil {
 			return err
 		}
