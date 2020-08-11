@@ -442,6 +442,7 @@ const (
 	codeMasterAdvertisePeerURLsNotValid
 	codeMasterTLSConfigNotValid
 	codeMasterBoundChanging
+	codeMasterFailToImportFromV10x
 )
 
 // DM-worker error code
@@ -998,6 +999,8 @@ var (
 	ErrMasterTLSConfigNotValid         = New(codeMasterTLSConfigNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "TLS config not valid", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in master configuration file.")
 
 	ErrMasterBoundChanging = New(codeMasterBoundChanging, ClassDMMaster, ScopeInternal, LevelLow, "source bound is changed too frequently, last old bound %s:, new bound %s", "Please try again later")
+
+	ErrMasterFailToImportFromV10x = New(codeMasterFailToImportFromV10x, ClassDMMaster, ScopeInternal, LevelHigh, "fail to import DM cluster from v1.0.x", "Please confirm that you have not violated any restrictions in the upgrade documentation.")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set", "")
