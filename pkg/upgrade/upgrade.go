@@ -22,12 +22,6 @@ var (
 	}
 )
 
-// ImportFromV10x does special upgrade/import handle from DM v1.0.x to v2.0.x.
-func ImportFromV10x(cli *clientv3.Client) error {
-	// TODO(csuzhangxc)
-	return nil
-}
-
 // TryUpgrade tries to upgrade the cluster from an older version to a new version.
 // This methods should have no side effects even calling multiple times.
 func TryUpgrade(cli *clientv3.Client) error {
