@@ -34,7 +34,7 @@ import (
 type Operator struct {
 	uuid   string // add a UUID, make it more friendly to be traced in log
 	op     pb.ErrorOp
-	events []*replication.BinlogEvent // endLocation -> events
+	events []*replication.BinlogEvent // startLocation -> events
 }
 
 // newOperator creates a new operator with a random UUID
@@ -53,19 +53,21 @@ func (o *Operator) String() string {
 		e.Dump(buf)
 		events = append(events, buf.String())
 	}
-	return fmt.Sprintf("uuid: %s, op: %s, events: %s", o.uuid, o.op, strings.Join(events, " "))
+	return fmt.Sprintf("uuid: %s, op: %s, events: %s", o.uuid, o.op, strings.Join(events, "\n"))
 }
 
 // Holder holds error operator
 type Holder struct {
 	mu        sync.Mutex
 	operators map[string]*Operator
+	logger    log.Logger
 }
 
 // NewHolder creates a new Holder
-func NewHolder() *Holder {
+func NewHolder(pLogger *log.Logger) *Holder {
 	return &Holder{
 		operators: make(map[string]*Operator),
+		logger:    pLogger.WithFields(zap.String("component", "error operator holder")),
 	}
 }
 
@@ -85,10 +87,10 @@ func (h *Holder) Set(pos string, op pb.ErrorOp, events []*replication.BinlogEven
 	oper := newOperator(op, events)
 	pre, ok := h.operators[pos]
 	if ok {
-		log.L().Warn("overwrite operator", zap.String("position", pos), zap.Stringer("old operator", pre))
+		h.logger.Warn("overwrite operator", zap.String("position", pos), zap.Stringer("old operator", pre))
 	}
 	h.operators[pos] = oper
-	log.L().Info("set a new operator", zap.String("position", pos), zap.Stringer("new operator", oper))
+	h.logger.Info("set a new operator", zap.String("position", pos), zap.Stringer("new operator", oper))
 	return nil
 }
 
@@ -118,7 +120,7 @@ func (h *Holder) GetEvent(startLocation *binlog.Location) (*replication.BinlogEv
 	e := operator.events[startLocation.Suffix]
 	buf := new(bytes.Buffer)
 	e.Dump(buf)
-	log.L().Info("get replace event", zap.Stringer("event", buf))
+	h.logger.Info("get replace event", zap.Stringer("event", buf))
 
 	return e, nil
 }
@@ -166,7 +168,7 @@ func (h *Holder) Apply(startLocation, endLocation *binlog.Location) (bool, pb.Er
 		}
 	}
 
-	log.L().Info("apply a operator", zap.Stringer("startlocation", startLocation), zap.Stringer("endlocation", endLocation), zap.Stringer("operator", operator))
+	h.logger.Info("apply a operator", zap.Stringer("startlocation", startLocation), zap.Stringer("endlocation", endLocation), zap.Stringer("operator", operator))
 
 	return true, operator.op
 }

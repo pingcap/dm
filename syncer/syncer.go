@@ -216,7 +216,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.setSyncCfg()
 
 	syncer.binlogType = toBinlogType(cfg.UseRelay)
-	syncer.errOperatorHolder = operator.NewHolder()
+	syncer.errOperatorHolder = operator.NewHolder(&logger)
 	syncer.readerHub = streamer.GetReaderHub()
 
 	if cfg.ShardMode == config.ShardPessimistic {

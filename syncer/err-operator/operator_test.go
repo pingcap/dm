@@ -22,6 +22,7 @@ import (
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 var _ = Suite(&testOperatorSuite{})
@@ -34,7 +35,8 @@ type testOperatorSuite struct {
 }
 
 func (o *testOperatorSuite) TestOperator(c *C) {
-	h := NewHolder()
+	logger := log.L()
+	h := NewHolder(&logger)
 
 	startLocation := binlog.Location{
 		Position: mysql.Position{

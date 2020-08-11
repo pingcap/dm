@@ -69,7 +69,7 @@ function DM_SKIP_ERROR_CASE() {
 }
 
 function DM_SKIP_ERROR() {
-    run_case SKIP_ERROR "no-sharding" "init_table 111 212" "clean_table" ""
+    run_case SKIP_ERROR "double-source-no-sharding" "init_table 111 212" "clean_table" ""
 }
 
 # skip modify column, two sources, 4 tables, sharding
@@ -168,7 +168,7 @@ function DM_REPLACE_ERROR_CASE() {
 }
 
 function DM_REPLACE_ERROR() {
-    run_case REPLACE_ERROR "no-sharding" \
+    run_case REPLACE_ERROR "double-source-no-sharding" \
     "run_sql_source1 \"create table ${db}.${tb2} (a int unique, b int);\"; \
      run_sql_source1 \"create table ${db}.${tb1} (a int unique, b int);\"" \
     "clean_table" ""
