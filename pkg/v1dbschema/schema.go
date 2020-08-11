@@ -34,6 +34,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -87,6 +88,8 @@ func UpdateSchema(tctx *tcontext.Context, db *conn.BaseDB, cfg *config.SubTaskCo
 //   - fill `binlog_gtid` based on `binlog_name` and `binlog_pos` if GTID mode enable.
 // NOTE: no need to update the value of `table_info` because DM can get schema automatically from downstream when replicating DML.
 func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName, sourceID string, fillGTIDs bool, tcpReader reader.Reader, parser2 *parser.Parser) error {
+	logger := log.L().WithFields(zap.String("task", taskName), zap.String("source", sourceID))
+	logger.Info("updating syncer checkpoint", zap.Bool("fill GTID", fillGTIDs))
 	var gs gtid.Set
 	if fillGTIDs {
 		// NOTE: get GTID sets for all (global & tables) binlog position has many problems, at least including:
@@ -95,6 +98,7 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 		// so we only get GTID sets for the global position now,
 		// and this should only have side effects for in-syncing shard tables, but we can mention and warn this case in the user docs.
 		pos, err := getGlobalPos(tctx, dbConn, tableName, sourceID)
+		logger.Info("got global checkpoint position", zap.Stringer("position", pos))
 		if err != nil {
 			return terror.Annotatef(err, "get global checkpoint position for source %s", sourceID)
 		}
@@ -103,16 +107,17 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 			if err != nil {
 				return terror.Annotatef(err, "get GTID sets for position %s", pos)
 			}
+			logger.Info("got global checkpoint GTID sets", log.WrapStringerField("GTID sets", gs))
 		}
 	}
 
 	// try to add columns.
 	// NOTE: ignore already exists error to continue the process.
 	queries := []string{
-		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN binlog_gtid VARCHAR(256) AFTER binlog_pos`, tableName),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN binlog_gtid TEXT AFTER binlog_pos`, tableName),
 		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN table_info JSON NOT NULL AFTER binlog_gtid`, tableName),
 	}
-	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreError, queries)
+	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreErrorCheckpoint, queries)
 	if err != nil {
 		return terror.Annotatef(err, "add columns for checkpoint table")
 	}
@@ -123,18 +128,22 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 		if err != nil {
 			return terror.Annotatef(err, "set GTID sets %s for checkpoint table", gs.String())
 		}
+		logger.Info("filled global checkpoint GTID sets", zap.Stringer("GTID sets", gs))
 	}
 	return nil
 }
 
 // updateSyncerOnlineDDLMeta updates the online DDL meta data, including:
 // - update the value of `id` from `server-id` to `source-id`.
+// NOTE: online DDL may not exist if not enabled.
 func updateSyncerOnlineDDLMeta(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName, sourceID string, serverID uint32) error {
+	logger := log.L().WithFields(zap.String("task", taskName), zap.String("source", sourceID))
+	logger.Info("updating syncer online DDL meta")
 	queries := []string{
 		fmt.Sprintf(`UPDATE %s SET id=? WHERE id=?`, tableName), // for multiple columns.
 	}
 	args := []interface{}{sourceID, strconv.FormatUint(uint64(serverID), 10)}
-	_, err := dbConn.ExecuteSQL(tctx, nil, taskName, queries, args)
+	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreErrorOnlineDDL, queries, args)
 	return terror.Annotatef(err, "update id column for online DDL meta table")
 }
 
@@ -198,7 +207,7 @@ func setGlobalGTIDs(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tab
 	return err
 }
 
-func ignoreError(err error) bool {
+func ignoreErrorCheckpoint(err error) bool {
 	err = errors.Cause(err) // check the original error
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if !ok {
@@ -207,6 +216,21 @@ func ignoreError(err error) bool {
 
 	switch mysqlErr.Number {
 	case errno.ErrDupFieldName:
+		return true
+	default:
+		return false
+	}
+}
+
+func ignoreErrorOnlineDDL(err error) bool {
+	err = errors.Cause(err) // check the original error
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	if !ok {
+		return false
+	}
+
+	switch mysqlErr.Number {
+	case errno.ErrNoSuchTable:
 		return true
 	default:
 		return false

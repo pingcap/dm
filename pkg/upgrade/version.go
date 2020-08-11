@@ -29,11 +29,16 @@ const (
 	// NOTE: +1 when a new incompatible version is introduced, so it's different from the release version.
 	// NOTE: it's the version of the cluster (= the version of DM-master leader now), other component versions are not recorded yet.
 	currentInternalNo uint64 = 1
+	// The minimum internal version number of the DM cluster used when importing from v1.0.x.
+	minInternalNo uint64 = 0
 )
 
 var (
 	// CurrentVersion represents the current version of the cluster.
 	CurrentVersion = NewVersion(currentInternalNo, utils.ReleaseVersion)
+	// MinVersion represents the minimum version of the cluster.
+	// this version only be set after finished importing from v1.0.x, but has not upgraded to the current version.
+	MinVersion = NewVersion(minInternalNo, "min-ver")
 )
 
 // Version represents the version of the DM cluster used when upgrading from an older version.

@@ -128,6 +128,8 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.MigrateRelay, err = client.MigrateRelay(ctx, req.MigrateRelay)
 	case CmdOperateSchema:
 		resp.OperateSchema, err = client.OperateSchema(ctx, req.OperateSchema)
+	case CmdOperateV1Meta:
+		resp.OperateV1Meta, err = client.OperateV1Meta(ctx, req.OperateV1Meta)
 	default:
 		return nil, terror.ErrMasterGRPCInvalidReqType.Generate(req.Type)
 	}
