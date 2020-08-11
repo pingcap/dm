@@ -29,19 +29,19 @@ import (
 )
 
 // HandleError handle error for syncer
-func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorRequest) (string, error) {
+func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorRequest) error {
 	pos := req.BinlogPos
 
 	if len(pos) == 0 {
 		startLocation := s.getErrLocation()
 		if startLocation == nil {
-			return fmt.Sprintf("source '%s' has no error", s.cfg.SourceID), nil
+			return fmt.Errorf("source '%s' has no error", s.cfg.SourceID)
 		}
 		pos = startLocation.Position.String()
 	} else {
 		startLocation, err := command.VerifyBinlogPos(pos)
 		if err != nil {
-			return "", err
+			return err
 		}
 		pos = startLocation.String()
 	}
@@ -51,22 +51,22 @@ func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 	if req.Op == pb.ErrorOp_Replace {
 		events, err = s.genEvents(req.Sqls)
 		if err != nil {
-			return "", err
+			return err
 		}
 	}
 
 	err = s.errOperatorHolder.Set(pos, req.Op, events)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// remove outdated operators when add operator
 	err = s.errOperatorHolder.RemoveOutdated(s.checkpoint.FlushedGlobalPoint())
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return "", nil
+	return nil
 }
 
 func (s *Syncer) genEvents(sqls []string) ([]*replication.BinlogEvent, error) {

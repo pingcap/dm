@@ -973,13 +973,12 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
 	}
 
-	msg, err := w.HandleError(ctx, req)
+	err := w.HandleError(ctx, req)
 	if err != nil {
 		return makeCommonWorkerResponse(err), nil
 	}
 	return &pb.CommonWorkerResponse{
 		Result: true,
-		Msg:    msg,
 		Worker: s.cfg.Name,
 	}, nil
 }

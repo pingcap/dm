@@ -637,19 +637,19 @@ func (st *SubTask) fail(err error) {
 }
 
 // HandleError handle error for syncer unit
-func (st *SubTask) HandleError(ctx context.Context, req *pb.HandleWorkerErrorRequest) (string, error) {
+func (st *SubTask) HandleError(ctx context.Context, req *pb.HandleWorkerErrorRequest) error {
 	syncUnit, ok := st.currUnit.(*syncer.Syncer)
 	if !ok {
-		return "", terror.ErrWorkerOperSyncUnitOnly.Generate(st.currUnit.Type())
+		return terror.ErrWorkerOperSyncUnitOnly.Generate(st.currUnit.Type())
 	}
 
-	msg, err := syncUnit.HandleError(ctx, req)
+	err := syncUnit.HandleError(ctx, req)
 	if err != nil {
-		return msg, err
+		return err
 	}
 
 	if st.Stage() == pb.Stage_Paused {
 		err = st.Resume()
 	}
-	return msg, err
+	return err
 }
