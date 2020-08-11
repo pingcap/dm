@@ -44,7 +44,7 @@ func (s *testSyncerSuite) TestCastUnsigned(c *C) {
 		{int32(-math.Exp2(31)), false, mysql.TypeLong, int32(-math.Exp2(31))}, // INT
 		{int32(-math.Exp2(31)), true, mysql.TypeLong, uint32(math.Exp2(31))},
 		{int64(-math.Exp2(63)), false, mysql.TypeLonglong, int64(-math.Exp2(63))}, // BIGINT
-		{int64(-math.Exp2(63)), true, mysql.TypeLonglong, uint64(math.Exp2(63))},  // special case use string to represent uint64
+		{int64(-math.Exp2(63)), true, mysql.TypeLonglong, uint64(math.Exp2(63))},
 	}
 	for _, cs := range cases {
 		ft := types.NewFieldType(cs.Type)
