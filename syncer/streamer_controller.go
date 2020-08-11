@@ -231,7 +231,7 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 
 		t, err2 := time.Parse(time.RFC3339, str)
 		if err2 != nil {
-			tctx.L().Warn(fmt.Sprintf("cannot parser %s to time", str))
+			tctx.L().Warn(fmt.Sprintf("cannot parse %s to time: %s", str, err2))
 		} else {
 			// mock upstream instance restart from 5-20s
 			startTime := t.Add(5 * time.Second)
