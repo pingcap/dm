@@ -17,7 +17,11 @@
 package event
 
 import (
+	"io"
+
 	. "github.com/pingcap/check"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = Suite(&testUtilSuite{})
@@ -28,7 +32,7 @@ type testUtilSuite struct {
 type testCase struct {
 	input  []byte
 	output map[byte][]byte
-	hasErr bool
+	err    error
 }
 
 func (t *testUtilSuite) TestStatusVarsToKV(c *C) {
@@ -39,7 +43,7 @@ func (t *testUtilSuite) TestStatusVarsToKV(c *C) {
 			map[byte][]byte{
 				0: []byte{0, 0, 0, 0},
 			},
-			false,
+			nil,
 		},
 		// copied from a integration test
 		{
@@ -51,20 +55,20 @@ func (t *testUtilSuite) TestStatusVarsToKV(c *C) {
 				4:  {33, 0, 33, 0, 8, 0},
 				12: {1, 97, 108, 108, 95, 109, 111, 100, 101, 0},
 			},
-			false,
+			nil,
 		},
 		// wrong input
 		{
 			[]byte{0, 0, 0, 0, 0, 1},
 			nil,
-			true,
+			terror.ErrBinlogStatusVarsParse.Delegate(io.EOF, []byte{0, 0, 0, 0, 0, 1}, 6),
 		},
 	}
 
 	for _, t := range testCases {
 		vars, err := statusVarsToKV(t.input)
-		if t.hasErr {
-			c.Assert(err, NotNil)
+		if t.err != nil {
+			c.Assert(err.Error(), Equals, t.err.Error())
 		} else {
 			c.Assert(err, IsNil)
 			c.Assert(vars, DeepEquals, t.output)

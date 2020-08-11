@@ -325,6 +325,7 @@ func GetAnsiQuotesMode(statusVars []byte) (bool, error) {
 	return v&0x00000004 != 0, nil
 }
 
+// if returned error is `io.EOF`, it means UnexpectedEOF because we handled expected `io.EOF` as success
 func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 	r := bytes.NewReader(statusVars)
 	vars := make(map[byte][]byte)
@@ -346,15 +347,15 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 			return err
 		}
 		if n != int(length) {
-			return errors.New("unexpected EOF")
+			return io.EOF
 		}
 		value = append(value, buf...)
 		return nil
 	}
 
-	generateError := func() (map[byte][]byte, error) {
+	generateError := func(err error) (map[byte][]byte, error) {
 		offset, _ := r.Seek(0, io.SeekCurrent)
-		return nil, terror.ErrBinlogStatusVarsParse.Generate(statusVars, offset)
+		return nil, terror.ErrBinlogStatusVarsParse.Delegate(err, statusVars, offset)
 	}
 
 	for {
@@ -365,18 +366,21 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 			break
 		}
 		if err != nil {
-			return generateError()
+			return generateError(err)
 		}
 
 		if _, ok := vars[key]; ok {
-			return generateError()
+			return generateError(errors.New("duplicate key"))
 		}
 
 		if length, ok := statusVarsFixedLength[key]; ok {
 			value = make([]byte, length)
 			n, err := r.Read(value)
-			if err != nil || n != length {
-				return generateError()
+			if err != nil {
+				return generateError(io.EOF)
+			}
+			if n != length {
+				return generateError(io.EOF)
 			}
 
 			vars[key] = value
@@ -388,32 +392,32 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 		// 1-byte length + <length> chars of the catalog + '0'-char
 		case QCatalog:
 			if err = appendLengthThenCharsToValue(); err != nil {
-				return generateError()
+				return generateError(err)
 			}
 
 			b, err := r.ReadByte()
 			if err != nil {
-				return generateError()
+				return generateError(err)
 			}
 			value = append(value, b)
 		// 1-byte length + <length> chars of the timezone/catalog
 		case QTimeZoneCode, QCatalogNzCode:
 			if err = appendLengthThenCharsToValue(); err != nil {
-				return generateError()
+				return generateError(err)
 			}
 		// 1-byte length + <length> bytes username and 1-byte length + <length> bytes hostname
 		case QInvokers:
 			if err = appendLengthThenCharsToValue(); err != nil {
-				return generateError()
+				return generateError(err)
 			}
 			if err = appendLengthThenCharsToValue(); err != nil {
-				return generateError()
+				return generateError(err)
 			}
 		// 1-byte count + <count> \0 terminated string
 		case QUpdatedDbNames:
 			count, err := r.ReadByte()
 			if err != nil {
-				return generateError()
+				return generateError(err)
 			}
 			value = append(value, count)
 
@@ -424,14 +428,14 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 				for b != 0 {
 					b, err = r.ReadByte()
 					if err != nil {
-						return generateError()
+						return generateError(err)
 					}
 					buf = append(buf, b)
 				}
 			}
 			value = append(value, buf...)
 		default:
-			return generateError()
+			return generateError(errors.New("unrecognized key"))
 		}
 		vars[key] = value
 	}
