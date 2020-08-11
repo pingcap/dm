@@ -66,7 +66,9 @@ func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 	switch op {
 	case pb.ErrorOp_Skip, pb.ErrorOp_Revert:
 		if len(cmd.Flags().Args()) > 2 {
-			common.PrintLines("replace-sqls will be ignored for 'skip/revert' operation")
+			common.PrintLines("replace-sqls can not be used for 'skip/revert' operation")
+			err = errors.New("please check output to see error")
+			return
 		}
 	case pb.ErrorOp_Replace:
 		if len(cmd.Flags().Args()) <= 2 {
@@ -80,7 +82,7 @@ func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 			return
 		}
 	default:
-		common.PrintLines("invalid operation '%s', please use `skip`, `replace`, or `revert`", operation)
+		common.PrintLines("invalid operation '%s', please use `skip`, `replace` or `revert`", operation)
 		err = errors.New("please check output to see error")
 		return
 	}

@@ -215,7 +215,6 @@ const (
 	codeBinlogExtractPosition ErrCode = iota + 22001
 	codeBinlogInvalidFilename
 	codeBinlogParsePosFromStr
-	codeBinlogParsePosFromPosStr
 )
 
 // Checkpoint error code
@@ -785,10 +784,9 @@ var (
 	ErrConfigMissingForBound        = New(codeConfigMissingForBound, ClassConfig, ScopeInternal, LevelHigh, "source bound %s doesn't have related source config in etcd", "")
 
 	// Binlog operation error
-	ErrBinlogExtractPosition    = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
-	ErrBinlogInvalidFilename    = New(codeBinlogInvalidFilename, ClassBinlogOp, ScopeInternal, LevelHigh, "invalid binlog filename", "")
-	ErrBinlogParsePosFromStr    = New(codeBinlogParsePosFromStr, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
-	ErrBinlogParsePosFromPosStr = New(codeBinlogParsePosFromPosStr, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
+	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
+	ErrBinlogInvalidFilename = New(codeBinlogInvalidFilename, ClassBinlogOp, ScopeInternal, LevelHigh, "invalid binlog filename", "")
+	ErrBinlogParsePosFromStr = New(codeBinlogParsePosFromStr, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
 
 	// Checkpoint error
 	ErrCheckpointInvalidTaskMode     = New(codeCheckpointInvalidTaskMode, ClassCheckpoint, ScopeInternal, LevelMedium, "invalid task mode: %s", "")

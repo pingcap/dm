@@ -3051,7 +3051,7 @@ func (m *HandleErrorRequest) GetOp() ErrorOp {
 	if m != nil {
 		return m.Op
 	}
-	return ErrorOp_Skip
+	return ErrorOp_InvalidErrorOp
 }
 
 func (m *HandleErrorRequest) GetTask() string {
