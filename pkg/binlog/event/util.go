@@ -274,34 +274,34 @@ func writeStringColumnValue(buf *bytes.Buffer, value interface{}) error {
 
 // https://dev.mysql.com/doc/internals/en/query-event.html#q-sql-mode-code
 const (
-	Q_FLAGS2_CODE = iota
-	Q_SQL_MODE_CODE
-	Q_CATALOG
-	Q_AUTO_INCREMENT
-	Q_CHARSET_CODE
-	Q_TIME_ZONE_CODE
-	Q_CATALOG_NZ_CODE
-	Q_LC_TIME_NAMES_CODE
-	Q_CHARSET_DATABASE_CODE
-	Q_TABLE_MAP_FOR_UPDATE_CODE
-	Q_MASTER_DATA_WRITTEN_CODE
-	Q_INVOKERS
-	Q_UPDATED_DB_NAMES
-	Q_MICROSECONDS
+	QFlags2Code = iota
+	QSqlModeCode
+	QCatalog
+	QAutoIncrement
+	QCharsetCode
+	QTimeZoneCode
+	QCatalogNzCode
+	QLcTimeNamesCode
+	QCharsetDatabaseCode
+	QTableMapForUpdateCode
+	QMasterDataWrittenCode
+	QInvokers
+	QUpdatedDbNames
+	QMicroseconds
 )
 
 var (
 	// https://dev.mysql.com/doc/internals/en/query-event.html#q-sql-mode-code
 	statusVarsFixedLength = map[byte]int{
-		Q_FLAGS2_CODE:               4,
-		Q_SQL_MODE_CODE:             8,
-		Q_AUTO_INCREMENT:            2 + 2,
-		Q_CHARSET_CODE:              2 + 2 + 2,
-		Q_LC_TIME_NAMES_CODE:        2,
-		Q_CHARSET_DATABASE_CODE:     2,
-		Q_TABLE_MAP_FOR_UPDATE_CODE: 8,
-		Q_MASTER_DATA_WRITTEN_CODE:  4,
-		Q_MICROSECONDS:              3,
+		QFlags2Code:            4,
+		QSqlModeCode:           8,
+		QAutoIncrement:         2 + 2,
+		QCharsetCode:           2 + 2 + 2,
+		QLcTimeNamesCode:       2,
+		QCharsetDatabaseCode:   2,
+		QTableMapForUpdateCode: 8,
+		QMasterDataWrittenCode: 4,
+		QMicroseconds:          3,
 	}
 )
 
@@ -311,7 +311,7 @@ func GetAnsiQuotesMode(statusVars []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	b, ok := vars[Q_SQL_MODE_CODE]
+	b, ok := vars[QSqlModeCode]
 	if !ok {
 		// TODO(lance6716): if this will happen, create a terror
 		return false, errors.New("Q_SQL_MODE_CODE not found in status_vars")
@@ -386,7 +386,7 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 		// get variable-length value of according key and save it in `value`
 		switch key {
 		// 1-byte length + <length> chars of the catalog + '0'-char
-		case Q_CATALOG:
+		case QCatalog:
 			if err = appendLengthThenCharsToValue(); err != nil {
 				return generateError()
 			}
@@ -397,12 +397,12 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 			}
 			value = append(value, b)
 		// 1-byte length + <length> chars of the timezone/catalog
-		case Q_TIME_ZONE_CODE, Q_CATALOG_NZ_CODE:
+		case QTimeZoneCode, QCatalogNzCode:
 			if err = appendLengthThenCharsToValue(); err != nil {
 				return generateError()
 			}
 		// 1-byte length + <length> bytes username and 1-byte length + <length> bytes hostname
-		case Q_INVOKERS:
+		case QInvokers:
 			if err = appendLengthThenCharsToValue(); err != nil {
 				return generateError()
 			}
@@ -410,7 +410,7 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 				return generateError()
 			}
 		// 1-byte count + <count> \0 terminated string
-		case Q_UPDATED_DB_NAMES:
+		case QUpdatedDbNames:
 			count, err := r.ReadByte()
 			if err != nil {
 				return generateError()
