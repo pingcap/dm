@@ -45,6 +45,9 @@ func (t *testForEtcd) TestVersionFunc(c *C) {
 	// we only compare InternalNo now, if we should compare release version later, this should be fail.
 	v12 := NewVersion(v1.InternalNo, "another-release-ver")
 	c.Assert(v12.Compare(v1), Equals, 0)
+
+	// MinVersion should < any current version.
+	c.Assert(MinVersion.Compare(CurrentVersion), Equals, -1)
 }
 
 func (t *testForEtcd) TestVersionEtcd(c *C) {
