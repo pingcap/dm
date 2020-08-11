@@ -272,7 +272,7 @@ func writeStringColumnValue(buf *bytes.Buffer, value interface{}) error {
 	return terror.ErrBinlogWriteBinaryData.Delegate(err)
 }
 
-// https://dev.mysql.com/doc/internals/en/query-event.html#q-sql-mode-code
+// https://dev.mysql.com/doc/internals/en/query-event.html
 const (
 	QFlags2Code = iota
 	QSqlModeCode
@@ -291,7 +291,7 @@ const (
 )
 
 var (
-	// https://dev.mysql.com/doc/internals/en/query-event.html#q-sql-mode-code
+	// https://dev.mysql.com/doc/internals/en/query-event.html
 	statusVarsFixedLength = map[byte]int{
 		QFlags2Code:            4,
 		QSqlModeCode:           8,
@@ -321,7 +321,7 @@ func GetAnsiQuotesMode(statusVars []byte) (bool, error) {
 	var v int64
 	_ = binary.Read(r, binary.LittleEndian, &v)
 
-	// MODE_ANSI_QUOTES = 0x00000004
+	// MODE_ANSI_QUOTES = 0x00000004 ref: https://dev.mysql.com/doc/internals/en/query-event.html#q-sql-mode-code
 	return v&0x00000004 != 0, nil
 }
 
