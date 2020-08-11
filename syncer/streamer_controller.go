@@ -222,6 +222,25 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 		}
 	})
 
+	failpoint.Inject("SyncerGetEventError", func(val failpoint.Value) {
+		str, ok := val.(string)
+		if !ok {
+			return
+		}
+		t, err2 := time.Parse(time.RFC3339, str)
+		if err2 != nil {
+			return
+		}
+		// mock upstream instance restart from 5-20s
+		startTime := t.Add(5 * time.Second)
+		endTime := startTime.Add(20 * time.Second)
+		now := time.Now()
+		if now.Before(endTime) && now.After(startTime) {
+			tctx.L().Info("mock upstream instance restart", zap.String("failpoint", "SyncerGetEventError"), zap.Stringer("startTime", startTime), zap.Stringer("endTime", endTime))
+			failpoint.Return(nil, terror.ErrDBBadConn.Generate())
+		}
+	})
+
 	c.RLock()
 	streamer := c.streamer
 	c.RUnlock()
