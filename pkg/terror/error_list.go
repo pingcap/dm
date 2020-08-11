@@ -165,6 +165,9 @@ const (
 
 	// pkg/v1dbschema
 	codeFailUpdateV1DBSchema
+
+	// pkg/binlog
+	codeBinlogStatusVarsParse
 )
 
 // Config related error code list
@@ -695,6 +698,7 @@ var (
 	ErrBinlogNeedMariaDBGTIDSet      = New(codeBinlogNeedMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "the event should be a MariadbGTIDListEvent, but got %T", "")
 	ErrBinlogParseMariaDBGTIDSet     = New(codeBinlogParseMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "parse MariaDB GTID set", "")
 	ErrBinlogMariaDBAddGTIDSet       = New(codeBinlogMariaDBAddGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "add set %v to GTID set", "")
+	ErrBinlogStatusVarsParse         = New(codeBinlogStatusVarsParse, ClassFunctional, ScopeInternal, LevelMedium, "fail to parse binglog status_vars: %v, offset: %d", "")
 
 	// pkg/tracing
 	ErrTracingEventDataNotValid = New(codeTracingEventDataNotValid, ClassFunctional, ScopeInternal, LevelHigh, "invalid event data for type: %s", "")

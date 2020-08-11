@@ -19,7 +19,9 @@ package event
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
+	"io"
 	"math"
 	"reflect"
 
@@ -268,4 +270,171 @@ func writeStringColumnValue(buf *bytes.Buffer, value interface{}) error {
 		}
 	}
 	return terror.ErrBinlogWriteBinaryData.Delegate(err)
+}
+
+// https://dev.mysql.com/doc/internals/en/query-event.html#q-sql-mode-code
+const (
+	Q_FLAGS2_CODE = iota
+	Q_SQL_MODE_CODE
+	Q_CATALOG
+	Q_AUTO_INCREMENT
+	Q_CHARSET_CODE
+	Q_TIME_ZONE_CODE
+	Q_CATALOG_NZ_CODE
+	Q_LC_TIME_NAMES_CODE
+	Q_CHARSET_DATABASE_CODE
+	Q_TABLE_MAP_FOR_UPDATE_CODE
+	Q_MASTER_DATA_WRITTEN_CODE
+	Q_INVOKERS
+	Q_UPDATED_DB_NAMES
+	Q_MICROSECONDS
+)
+
+var (
+	// https://dev.mysql.com/doc/internals/en/query-event.html#q-sql-mode-code
+	statusVarsFixedLength = map[byte]int{
+		Q_FLAGS2_CODE:               4,
+		Q_SQL_MODE_CODE:             8,
+		Q_AUTO_INCREMENT:            2 + 2,
+		Q_CHARSET_CODE:              2 + 2 + 2,
+		Q_LC_TIME_NAMES_CODE:        2,
+		Q_CHARSET_DATABASE_CODE:     2,
+		Q_TABLE_MAP_FOR_UPDATE_CODE: 8,
+		Q_MASTER_DATA_WRITTEN_CODE:  4,
+		Q_MICROSECONDS:              3,
+	}
+)
+
+// GetAnsiQuotesMode gets ansi-quotes mode from binlog statusVars
+func GetAnsiQuotesMode(statusVars []byte) (bool, error) {
+	vars, err := statusVarsToKV(statusVars)
+	if err != nil {
+		return false, err
+	}
+	b, ok := vars[Q_SQL_MODE_CODE]
+	if !ok {
+		// TODO(lance6716): if this will happen, create a terror
+		return false, errors.New("Q_SQL_MODE_CODE not found in status_vars")
+	}
+
+	r := bytes.NewReader(b)
+	var v int64
+	_ = binary.Read(r, binary.LittleEndian, &v)
+
+	// MODE_ANSI_QUOTES = 0x00000004
+	return v&0x00000004 != 0, nil
+}
+
+func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
+	r := bytes.NewReader(statusVars)
+	vars := make(map[byte][]byte)
+	var (
+		value []byte
+	)
+
+	// NOTE: this closure modifies variable `value`
+	appendLengthThenCharsToValue := func() error {
+		length, err := r.ReadByte()
+		if err != nil {
+			return err
+		}
+		value = append(value, length)
+
+		buf := make([]byte, length)
+		n, err := r.Read(buf)
+		if err != nil {
+			return err
+		}
+		if n != int(length) {
+			return errors.New("unexpected EOF")
+		}
+		value = append(value, buf...)
+		return nil
+	}
+
+	generateError := func() (map[byte][]byte, error) {
+		offset, _ := r.Seek(0, io.SeekCurrent)
+		return nil, terror.ErrBinlogStatusVarsParse.Generate(statusVars, offset)
+	}
+
+	for {
+		// reset value
+		value = make([]byte, 0)
+		key, err := r.ReadByte()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return generateError()
+		}
+
+		if _, ok := vars[key]; ok {
+			return generateError()
+		}
+
+		if length, ok := statusVarsFixedLength[key]; ok {
+			value = make([]byte, length)
+			n, err := r.Read(value)
+			if err != nil || n != length {
+				return generateError()
+			}
+
+			vars[key] = value
+			continue
+		}
+
+		// get variable-length value of according key and save it in `value`
+		switch key {
+		// 1-byte length + <length> chars of the catalog + '0'-char
+		case Q_CATALOG:
+			if err = appendLengthThenCharsToValue(); err != nil {
+				return generateError()
+			}
+
+			b, err := r.ReadByte()
+			if err != nil {
+				return generateError()
+			}
+			value = append(value, b)
+		// 1-byte length + <length> chars of the timezone/catalog
+		case Q_TIME_ZONE_CODE, Q_CATALOG_NZ_CODE:
+			if err = appendLengthThenCharsToValue(); err != nil {
+				return generateError()
+			}
+		// 1-byte length + <length> bytes username and 1-byte length + <length> bytes hostname
+		case Q_INVOKERS:
+			if err = appendLengthThenCharsToValue(); err != nil {
+				return generateError()
+			}
+			if err = appendLengthThenCharsToValue(); err != nil {
+				return generateError()
+			}
+		// 1-byte count + <count> \0 terminated string
+		case Q_UPDATED_DB_NAMES:
+			count, err := r.ReadByte()
+			if err != nil {
+				return generateError()
+			}
+			value = append(value, count)
+
+			buf := make([]byte, 0, 128)
+			b := byte(1) // initialize to any non-zero value
+			for ; count > 0; count-- {
+				// read one zero-terminated string
+				for b != 0 {
+					b, err = r.ReadByte()
+					if err != nil {
+						return generateError()
+					}
+					buf = append(buf, b)
+				}
+			}
+			value = append(value, buf...)
+		default:
+			return generateError()
+		}
+		vars[key] = value
+	}
+
+	return vars, nil
 }
