@@ -305,6 +305,7 @@ ErrSyncerShardDDLConflict,[code=36062:class=sync-unit:scope=internal:level=high]
 ErrSyncerFailpoint,[code=36063:class=sync-unit:scope=internal:level=low], "Message: failpoint specified error"
 ErrSyncerReplaceEvent,[code=36064:class=sync-unit:scope=internal:level=high]
 ErrSyncerOperatorNotExist,[code=36065:class=sync-unit:scope=internal:level=low], "Message: error operator not exist, position: %s"
+ErrSyncerReplaceEventNotExist,[code=36066:class=sync-unit:scope=internal:level=high], "Message: replace event not exist, location: %s"
 ErrMasterSQLOpNilRequest,[code=38001:class=dm-master:scope=internal:level=medium], "Message: nil request not valid"
 ErrMasterSQLOpNotSupport,[code=38002:class=dm-master:scope=internal:level=medium], "Message: op %s not supported"
 ErrMasterSQLOpWithoutSharding,[code=38003:class=dm-master:scope=internal:level=medium], "Message: operate request without --sharding specified not valid"

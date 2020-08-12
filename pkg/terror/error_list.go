@@ -388,6 +388,7 @@ const (
 	codeSyncerFailpoint
 	codeSyncerReplaceEvent
 	codeSyncerOperatorNotExist
+	codeSyncerReplcaeEventNotExist
 )
 
 // DM-master error code
@@ -948,6 +949,7 @@ var (
 	ErrSyncerFailpoint                      = New(codeSyncerFailpoint, ClassSyncUnit, ScopeInternal, LevelLow, "failpoint specified error", "")
 	ErrSyncerReplaceEvent                   = New(codeSyncerReplaceEvent, ClassSyncUnit, ScopeInternal, LevelHigh, "", "")
 	ErrSyncerOperatorNotExist               = New(codeSyncerOperatorNotExist, ClassSyncUnit, ScopeInternal, LevelLow, "error operator not exist, position: %s", "")
+	ErrSyncerReplaceEventNotExist           = New(codeSyncerReplcaeEventNotExist, ClassSyncUnit, ScopeInternal, LevelHigh, "replace event not exist, location: %s", "")
 
 	// DM-master error
 	ErrMasterSQLOpNilRequest        = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid", "")

@@ -110,7 +110,7 @@ func (h *Holder) GetEvent(startLocation *binlog.Location) (*replication.BinlogEv
 	key := startLocation.Position.String()
 	operator, ok := h.operators[key]
 	if !ok {
-		return nil, nil
+		return nil, terror.ErrSyncerReplaceEventNotExist.Generate(startLocation)
 	}
 
 	if len(operator.events) <= startLocation.Suffix {
@@ -184,6 +184,7 @@ func (h *Holder) RemoveOutdated(flushLocation binlog.Location) error {
 			return err
 		}
 		if binlog.ComparePosition(position, flushLocation.Position) == -1 {
+			h.logger.Info("remove a outdated operator", zap.Stringer("position", position), zap.Stringer("flush postion", flushLocation.Position), zap.Stringer("operator", h.operators[pos]))
 			delete(h.operators, pos)
 		}
 	}
