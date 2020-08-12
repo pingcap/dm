@@ -23,19 +23,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/failpoint"
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	gmysql "github.com/siddontang/go-mysql/mysql"
-	"go.uber.org/zap"
 )
 
 var (
@@ -247,10 +248,36 @@ func GetMariaDBGTID(db *sql.DB) (gtid.Set, error) {
 
 // GetGlobalVariable gets server's global variable
 func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
+	failpoint.Inject("GetGlobalVariableFailed", func(val failpoint.Value) {
+		items := strings.Split(val.(string), ",")
+		log.L().Fatal("lance test -1")
+		log.L().Fatal("lance test", zap.Any("items", items))
+		log.L().Fatal("lance test 0")
+		if len(items) != 2 {
+			log.L().Fatal("failpoint GetGlobalVariableFailed's value is invalid", zap.String("val", val.(string)))
+		}
+		log.L().Fatal("lance test 0.5")
+		variableName := items[0]
+		log.L().Fatal("lance test 1")
+		errCode, err1 := strconv.ParseUint(items[1], 10, 16)
+		log.L().Fatal("lance test 2")
+		if err1 != nil {
+			log.L().Fatal("failpoint GetGlobalVariableFailed's value is invalid", zap.String("val", val.(string)))
+		}
+		log.L().Fatal("lance test 3")
+		if variable == variableName {
+			log.L().Fatal("lance test 4")
+			err = tmysql.NewErr(uint16(errCode))
+			log.L().Warn("GetGlobalVariable failed", zap.String("variable", variable), zap.String("failpoint", "GetGlobalVariableFailed"), zap.Error(err))
+			failpoint.Return("", terror.DBErrorAdapt(err, terror.ErrDBDriverError))
+		}
+		log.L().Fatal("lance test 6")
+	})
 	conn, err := db.Conn(context.Background())
 	if err != nil {
 		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
+	defer conn.Close()
 	return getVariable(conn, variable, true)
 }
 
@@ -268,23 +295,6 @@ func getVariable(conn *sql.Conn, variable string, isGlobal bool) (value string, 
 	}
 	query := fmt.Sprintf(template, variable)
 	row := conn.QueryRowContext(context.Background(), query)
-
-	failpoint.Inject("GetGlobalVariableFailed", func(val failpoint.Value) {
-		items := strings.Split(val.(string), ",")
-		if len(items) != 2 {
-			log.L().Fatal("failpoint GetGlobalVariableFailed's value is invalid", zap.String("val", val.(string)))
-		}
-		variableName := items[0]
-		errCode, err1 := strconv.ParseUint(items[1], 10, 16)
-		if err1 != nil {
-			log.L().Fatal("failpoint GetGlobalVariableFailed's value is invalid", zap.String("val", val.(string)))
-		}
-
-		if variable == variableName {
-			err = tmysql.NewErr(uint16(errCode))
-			log.L().Warn("GetGlobalVariable failed", zap.String("variable", variable), zap.String("failpoint", "GetGlobalVariableFailed"), zap.Error(err))
-		}
-	})
 
 	// Show an example.
 	/*
