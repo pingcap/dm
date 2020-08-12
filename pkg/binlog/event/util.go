@@ -19,7 +19,9 @@ package event
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
+	"io"
 	"math"
 	"reflect"
 
@@ -268,4 +270,172 @@ func writeStringColumnValue(buf *bytes.Buffer, value interface{}) error {
 		}
 	}
 	return terror.ErrBinlogWriteBinaryData.Delegate(err)
+}
+
+// https://dev.mysql.com/doc/internals/en/query-event.html
+const (
+	QFlags2Code = iota
+	QSqlModeCode
+	QCatalog
+	QAutoIncrement
+	QCharsetCode
+	QTimeZoneCode
+	QCatalogNzCode
+	QLcTimeNamesCode
+	QCharsetDatabaseCode
+	QTableMapForUpdateCode
+	QMasterDataWrittenCode
+	QInvokers
+	QUpdatedDbNames
+	QMicroseconds
+)
+
+var (
+	// https://dev.mysql.com/doc/internals/en/query-event.html
+	statusVarsFixedLength = map[byte]int{
+		QFlags2Code:            4,
+		QSqlModeCode:           8,
+		QAutoIncrement:         2 + 2,
+		QCharsetCode:           2 + 2 + 2,
+		QLcTimeNamesCode:       2,
+		QCharsetDatabaseCode:   2,
+		QTableMapForUpdateCode: 8,
+		QMasterDataWrittenCode: 4,
+		QMicroseconds:          3,
+	}
+)
+
+// GetAnsiQuotesMode gets ansi-quotes mode from binlog statusVars
+func GetAnsiQuotesMode(statusVars []byte) (bool, error) {
+	vars, err := statusVarsToKV(statusVars)
+	if err != nil {
+		return false, err
+	}
+	b, ok := vars[QSqlModeCode]
+	if !ok {
+		// TODO(lance6716): if this will happen, create a terror
+		return false, errors.New("Q_SQL_MODE_CODE not found in status_vars")
+	}
+
+	r := bytes.NewReader(b)
+	var v int64
+	_ = binary.Read(r, binary.LittleEndian, &v)
+
+	// MODE_ANSI_QUOTES = 0x00000004 ref: https://dev.mysql.com/doc/internals/en/query-event.html#q-sql-mode-code
+	return v&0x00000004 != 0, nil
+}
+
+// if returned error is `io.EOF`, it means UnexpectedEOF because we handled expected `io.EOF` as success
+func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
+	r := bytes.NewReader(statusVars)
+	vars := make(map[byte][]byte)
+	var (
+		value []byte
+	)
+
+	// NOTE: this closure modifies variable `value`
+	appendLengthThenCharsToValue := func() error {
+		length, err := r.ReadByte()
+		if err != nil {
+			return err
+		}
+		value = append(value, length)
+
+		buf := make([]byte, length)
+		n, err := r.Read(buf)
+		if err != nil {
+			return err
+		}
+		if n != int(length) {
+			return io.EOF
+		}
+		value = append(value, buf...)
+		return nil
+	}
+
+	generateError := func(err error) (map[byte][]byte, error) {
+		offset, _ := r.Seek(0, io.SeekCurrent)
+		return nil, terror.ErrBinlogStatusVarsParse.Delegate(err, statusVars, offset)
+	}
+
+	for {
+		// reset value
+		value = make([]byte, 0)
+		key, err := r.ReadByte()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return generateError(err)
+		}
+
+		if _, ok := vars[key]; ok {
+			return generateError(errors.New("duplicate key"))
+		}
+
+		if length, ok := statusVarsFixedLength[key]; ok {
+			value = make([]byte, length)
+			n, err := r.Read(value)
+			if err != nil || n != length {
+				return generateError(io.EOF)
+			}
+
+			vars[key] = value
+			continue
+		}
+
+		// get variable-length value of according key and save it in `value`
+		switch key {
+		// 1-byte length + <length> chars of the catalog + '0'-char
+		case QCatalog:
+			if err = appendLengthThenCharsToValue(); err != nil {
+				return generateError(err)
+			}
+
+			b, err := r.ReadByte()
+			if err != nil {
+				return generateError(err)
+			}
+			value = append(value, b)
+		// 1-byte length + <length> chars of the timezone/catalog
+		case QTimeZoneCode, QCatalogNzCode:
+			if err = appendLengthThenCharsToValue(); err != nil {
+				return generateError(err)
+			}
+		// 1-byte length + <length> bytes username and 1-byte length + <length> bytes hostname
+		case QInvokers:
+			if err = appendLengthThenCharsToValue(); err != nil {
+				return generateError(err)
+			}
+			if err = appendLengthThenCharsToValue(); err != nil {
+				return generateError(err)
+			}
+		// 1-byte count + <count> \0 terminated string
+		case QUpdatedDbNames:
+			count, err := r.ReadByte()
+			if err != nil {
+				return generateError(err)
+			}
+			value = append(value, count)
+
+			buf := make([]byte, 0, 128)
+			b := byte(1) // initialize to any non-zero value
+			for ; count > 0; count-- {
+				// read one zero-terminated string
+				for b != 0 {
+					b, err = r.ReadByte()
+					if err != nil {
+						return generateError(err)
+					}
+					buf = append(buf, b)
+				}
+			}
+			value = append(value, buf...)
+		default:
+			return generateError(errors.New("unrecognized key"))
+		}
+		vars[key] = value
+	}
+
+	return vars, nil
 }
