@@ -130,11 +130,6 @@ func (h *Holder) Apply(startLocation, endLocation *binlog.Location) (bool, pb.Er
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// only apply the origin event
-	if endLocation.Suffix != 0 {
-		return false, pb.ErrorOp_InvalidErrorOp
-	}
-
 	key := startLocation.Position.String()
 	operator, ok := h.operators[key]
 	if !ok {

@@ -170,7 +170,7 @@ type Syncer struct {
 
 	errOperatorHolder *operator.Holder
 
-	firstReplace bool // true if we replace first event by handle-error
+	inReplaceErr bool // true if we are in replace events by handle-error
 
 	// TODO: re-implement tracer flow for binlog event later.
 	tracer *tracing.Tracer
@@ -439,7 +439,7 @@ func (s *Syncer) reset() {
 	s.execError.Set(nil)
 	s.resetExecErrors()
 	s.setErrLocation(nil, nil)
-	s.firstReplace = false
+	s.inReplaceErr = false
 
 	switch s.cfg.ShardMode {
 	case config.ShardPessimistic:
@@ -1218,6 +1218,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			currentLocation = savedGlobalLastLocation.Clone()
 			lastLocation = savedGlobalLastLocation.Clone() // restore global last pos
 		}
+		s.inReplaceErr = (currentLocation.Suffix != 0)
 
 		err3 := s.streamerController.RedirectStreamer(s.tctx, currentLocation.Clone())
 		if err3 != nil {
@@ -1242,6 +1243,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			lastLocation = shardingReSync.currLocation.Clone()
 
 			currentLocation = shardingReSync.currLocation.Clone()
+			s.inReplaceErr = (currentLocation.Suffix != 0)
 			err = s.streamerController.RedirectStreamer(s.tctx, shardingReSync.currLocation.Clone())
 			if err != nil {
 				return err
@@ -1333,13 +1335,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		switch e.Event.(type) {
 		case *replication.RowsEvent, *replication.QueryEvent:
 			endSuffix := startLocation.Suffix
-			if s.firstReplace {
-				endSuffix = 1
-				s.firstReplace = false
-			} else if endSuffix > 0 {
+			if s.inReplaceErr {
 				endSuffix++
 			}
-
 			currentLocation = binlog.Location{
 				Position: mysql.Position{
 					Name: lastLocation.Position.Name,
@@ -1352,19 +1350,22 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				currentLocation.GTIDSet.Set(ev.GSet)
 			}
 
-			apply, op := s.errOperatorHolder.Apply(&startLocation, &currentLocation)
-			if apply {
-				if op == pb.ErrorOp_Replace {
-					s.firstReplace = true
-					// revert currentLocation to startLocation
-					currentLocation = startLocation.Clone()
+			if !s.inReplaceErr {
+				apply, op := s.errOperatorHolder.Apply(&startLocation, &currentLocation)
+				if apply {
+					if op == pb.ErrorOp_Replace {
+						s.inReplaceErr = true
+						// revert currentLocation to startLocation
+						currentLocation = startLocation.Clone()
+					}
+					// skip the event
+					continue
 				}
-				// skip the event
-				continue
 			}
 			// set endLocation.Suffix=0 of last replace event
 			if currentLocation.Suffix > 0 && e.Header.EventSize > 0 {
 				currentLocation.Suffix = 0
+				s.inReplaceErr = false
 			}
 		default:
 		}
@@ -2674,8 +2675,8 @@ func (s *Syncer) handleEventError(err error, startLocation, endLocation *binlog.
 // getEvent gets an event from streamerController or errOperatorHolder
 func (s *Syncer) getEvent(tctx *tcontext.Context, startLocation *binlog.Location) (*replication.BinlogEvent, error) {
 	// next event is a replace event
-	if s.firstReplace || startLocation.Suffix > 0 {
-		s.tctx.L().Info(fmt.Sprintf("try to get replace event, firstReplace: %v", s.firstReplace), zap.Stringer("location", startLocation))
+	if s.inReplaceErr {
+		s.tctx.L().Info(fmt.Sprintf("try to get replace event"), zap.Stringer("location", startLocation))
 		return s.errOperatorHolder.GetEvent(startLocation)
 	}
 
