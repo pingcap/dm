@@ -20,6 +20,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/terror"
@@ -95,10 +96,7 @@ func originError(err error) error {
 
 // handleSpecialDDLError handles special errors for DDL execution.
 func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn) error {
-	parser2, err2 := s.fromDB.getParser(s.cfg.EnableANSIQuotes)
-	if err2 != nil {
-		return err // return the original error
-	}
+	parser2 := parser.New()
 
 	// it only ignore `invalid connection` error (timeout or other causes) for `ADD INDEX`.
 	// `invalid connection` means some data already sent to the server,

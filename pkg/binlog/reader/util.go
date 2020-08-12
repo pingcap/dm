@@ -19,12 +19,15 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
+	tmysql "github.com/pingcap/parser/mysql"
 	uuid "github.com/satori/go.uuid"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/relay/common"
 )
@@ -32,7 +35,7 @@ import (
 // GetGTIDsForPos tries to get GTID sets for the specified binlog position (for the corresponding txn).
 // NOTE: this method is very similar with `relay/writer/file_util.go/getTxnPosGTIDs`, unify them if needed later.
 // NOTE: this method is not well tested directly, but more tests have already been done for `relay/writer/file_util.go/getTxnPosGTIDs`.
-func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position, parser2 *parser.Parser) (gtid.Set, error) {
+func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid.Set, error) {
 	// start to get and parse binlog event from the beginning of the file.
 	startPos := gmysql.Position{
 		Name: endPos.Name,
@@ -60,7 +63,16 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position, parse
 		// NOTE: only update endPos/GTIDs for DDL/XID to get an complete transaction.
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
-			// TODO(lance6716): first blood!
+			parser2 := parser.New()
+			ansiQuotes, err := event.GetAnsiQuotesMode(ev.StatusVars)
+			if err != nil {
+				log.L().Warn("can't determine ANSI_QUOTES from binlog status_vars, use no ANSI_QUOTES instead", zap.Error(err))
+				ansiQuotes = false
+			}
+			if ansiQuotes {
+				parser2.SetSQLMode(tmysql.ModeANSIQuotes)
+			}
+
 			isDDL := common.CheckIsDDL(string(ev.Query), parser2)
 			if isDDL {
 				if latestGSet == nil {

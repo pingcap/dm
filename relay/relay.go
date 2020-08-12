@@ -225,7 +225,7 @@ func (r *Relay) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterReque
 }
 
 func (r *Relay) process(parentCtx context.Context) error {
-	parser2, err := utils.GetParser(r.db, false) // refine to use user config later
+	parser2, err := utils.GetParser(r.db) // refine to use user config later
 	if err != nil {
 		return err
 	}

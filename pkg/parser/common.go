@@ -94,6 +94,7 @@ func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, erro
 
 // RenameDDLTable renames table names in ddl by given `targetTableNames`
 // argument `targetTableNames` is same with return value of FetchDDLTableNames
+// returned DDL is formatted like StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string, error) {
 	switch v := stmt.(type) {
 	case *ast.AlterDatabaseStmt:

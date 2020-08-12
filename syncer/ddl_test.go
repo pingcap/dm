@@ -77,7 +77,7 @@ func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
 			AddRow("sql_mode", "ANSI_QUOTES"))
 	c.Assert(err, IsNil)
 
-	parser, err := utils.GetParser(db, false)
+	parser, err := utils.GetParser(db)
 	c.Assert(err, IsNil)
 
 	for _, sql := range ansiQuotesCases {

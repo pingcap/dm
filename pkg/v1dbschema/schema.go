@@ -20,7 +20,6 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/errno"
 	gmysql "github.com/siddontang/go-mysql/mysql"
@@ -36,7 +35,6 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
 )
 
 // UpdateSchema updates the DB schema from v1.0.x to v2.0.x, including:
@@ -49,13 +47,6 @@ func UpdateSchema(tctx *tcontext.Context, db *conn.BaseDB, cfg *config.SubTaskCo
 		return terror.ErrFailUpdateV1DBSchema.Delegate(err)
 	}
 	defer db.CloseBaseConn(dbConn)
-
-	// setup SQL parser.
-	// TODO(lance6716): remove this and call parser in binlog
-	parser2, err := utils.GetParser(db.DB, cfg.EnableANSIQuotes)
-	if err != nil {
-		return terror.ErrFailUpdateV1DBSchema.Delegate(err)
-	}
 
 	// setup a TCP binlog reader (because no relay can be used when upgrading).
 	syncCfg := replication.BinlogSyncerConfig{
@@ -71,7 +62,7 @@ func UpdateSchema(tctx *tcontext.Context, db *conn.BaseDB, cfg *config.SubTaskCo
 	tcpReader := reader.NewTCPReader(syncCfg)
 
 	// update checkpoint.
-	err = updateSyncerCheckpoint(tctx, dbConn, cfg.Name, dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)), cfg.SourceID, cfg.EnableGTID, tcpReader, parser2)
+	err = updateSyncerCheckpoint(tctx, dbConn, cfg.Name, dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)), cfg.SourceID, cfg.EnableGTID, tcpReader)
 	if err != nil {
 		return terror.ErrFailUpdateV1DBSchema.Delegate(err)
 	}
@@ -88,7 +79,7 @@ func UpdateSchema(tctx *tcontext.Context, db *conn.BaseDB, cfg *config.SubTaskCo
 // - update column value:
 //   - fill `binlog_gtid` based on `binlog_name` and `binlog_pos` if GTID mode enable.
 // NOTE: no need to update the value of `table_info` because DM can get schema automatically from downstream when replicating DML.
-func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName, sourceID string, fillGTIDs bool, tcpReader reader.Reader, parser2 *parser.Parser) error {
+func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tableName, sourceID string, fillGTIDs bool, tcpReader reader.Reader) error {
 	logger := log.L().WithFields(zap.String("task", taskName), zap.String("source", sourceID))
 	logger.Info("updating syncer checkpoint", zap.Bool("fill GTID", fillGTIDs))
 	var gs gtid.Set
@@ -104,7 +95,7 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 			return terror.Annotatef(err, "get global checkpoint position for source %s", sourceID)
 		}
 		if pos.Name != "" {
-			gs, err = getGTIDsForPos(tctx, pos, tcpReader, parser2)
+			gs, err = getGTIDsForPos(tctx, pos, tcpReader)
 			if err != nil {
 				return terror.Annotatef(err, "get GTID sets for position %s", pos)
 			}
@@ -177,7 +168,7 @@ func getGlobalPos(tctx *tcontext.Context, dbConn *conn.BaseConn, tableName, sour
 }
 
 // getGTIDsForPos gets the GTID sets for the position.
-func getGTIDsForPos(tctx *tcontext.Context, pos gmysql.Position, tcpReader reader.Reader, parser2 *parser.Parser) (gtid.Set, error) {
+func getGTIDsForPos(tctx *tcontext.Context, pos gmysql.Position, tcpReader reader.Reader) (gtid.Set, error) {
 	// NOTE: because we have multiple unit test cases updating/clearing binlog in the upstream,
 	// we may encounter errors when reading binlog event but cleared by another test case.
 	failpoint.Inject("MockGetGTIDsForPos", func(val failpoint.Value) {
@@ -191,7 +182,7 @@ func getGTIDsForPos(tctx *tcontext.Context, pos gmysql.Position, tcpReader reade
 	if err != nil {
 		return nil, err
 	}
-	gs, err := reader.GetGTIDsForPos(tctx.Ctx, tcpReader, realPos, parser2)
+	gs, err := reader.GetGTIDsForPos(tctx.Ctx, tcpReader, realPos)
 	if err != nil {
 		return nil, err
 	}

@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/format"
 	"github.com/pingcap/parser/model"
+	tmysql "github.com/pingcap/parser/mysql"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -46,6 +47,7 @@ import (
 	"github.com/pingcap/dm/pkg/atomic2"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/common"
+	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
@@ -619,8 +621,7 @@ func (s *Syncer) trackTableInfoFromDownstream(origSchema, origTable, renamedSche
 	defer rows.Close()
 
 	// use parser for downstream.
-	// NOTE: refine the definition of `ansi-quotes` with `sql_mode` in `session` later.
-	parser2, err := utils.GetParser(s.ddlDB.DB, s.cfg.EnableANSIQuotes)
+	parser2, err := utils.GetParser(s.ddlDB.DB)
 	if err != nil {
 		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 	}
@@ -1062,11 +1063,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}()
 
-	parser2, err := s.fromDB.getParser(s.cfg.EnableANSIQuotes)
-	if err != nil {
-		return err
-	}
-
 	fresh, err := s.IsFreshTask(ctx)
 	if err != nil {
 		return err
@@ -1331,7 +1327,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			tryReSync:           tryReSync,
 			startTime:           startTime,
 			traceID:             &traceID,
-			parser2:             parser2,
 			shardingReSyncCh:    &shardingReSyncCh,
 		}
 
@@ -1617,8 +1612,17 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	sql := strings.TrimSpace(string(ev.Query))
 	usedSchema := string(ev.Schema)
-	// TODO(lance6716): second blood
-	parseResult, err := s.parseDDLSQL(sql, ec.parser2, usedSchema)
+	parser2 := parser.New()
+	ansiQuotes, err := event.GetAnsiQuotesMode(ev.StatusVars)
+	if err != nil {
+		log.L().Warn("can't determine ANSI_QUOTES from binlog status_vars, use no ANSI_QUOTES instead", zap.Error(err))
+		ansiQuotes = false
+	}
+	if ansiQuotes {
+		parser2.SetSQLMode(tmysql.ModeANSIQuotes)
+	}
+
+	parseResult, err := s.parseDDLSQL(sql, parser2, usedSchema)
 	if err != nil {
 		s.tctx.L().Error("fail to parse statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
 		return err
