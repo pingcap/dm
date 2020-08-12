@@ -100,7 +100,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	// get by endLocation
 	e, err := h.GetEvent(&endLocation)
 	c.Assert(e, IsNil)
-	c.Assert(err, IsNil)
+	c.Assert(terror.ErrSyncerReplaceEventNotExist.Equal(err), IsTrue)
 	// get first event
 	e, err = h.GetEvent(&startLocation)
 	c.Assert(err, IsNil)
@@ -117,7 +117,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	// get third event, out of index
 	startLocation.Suffix++
 	e, err = h.GetEvent(&startLocation)
-	c.Assert(err, NotNil)
+	c.Assert(terror.ErrSyncerReplaceEvent.Equal(err), IsTrue)
 
 	// revert exist operator
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Revert, nil)
