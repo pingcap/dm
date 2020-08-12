@@ -1173,11 +1173,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	resultCh := make(chan pb.ProcessResult)
 
-	// mock get parser
-	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
-		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-
 	go syncer.Process(ctx, resultCh)
 
 	expectJobs1 := []*expectJob{
@@ -1271,10 +1266,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), "c"}}}},
 		mockBinlogEvent{typ: Delete, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), "c"}}}},
 	}
-
-	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
-		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
 
 	ctx, cancel = context.WithCancel(context.Background())
 	resultCh = make(chan pb.ProcessResult)
