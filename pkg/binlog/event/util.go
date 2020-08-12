@@ -376,10 +376,7 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 		if length, ok := statusVarsFixedLength[key]; ok {
 			value = make([]byte, length)
 			n, err := r.Read(value)
-			if err != nil {
-				return generateError(io.EOF)
-			}
-			if n != length {
+			if err != nil || n != length {
 				return generateError(io.EOF)
 			}
 
