@@ -100,6 +100,7 @@ ErrBinlogDecodeMySQLGTIDSet,[code=11093:class=functional:scope=internal:level=hi
 ErrBinlogNeedMariaDBGTIDSet,[code=11094:class=functional:scope=internal:level=high], "Message: the event should be a MariadbGTIDListEvent, but got %T"
 ErrBinlogParseMariaDBGTIDSet,[code=11095:class=functional:scope=internal:level=high], "Message: parse MariaDB GTID set"
 ErrBinlogMariaDBAddGTIDSet,[code=11096:class=functional:scope=internal:level=high], "Message: add set %v to GTID set"
+ErrBinlogStatusVarsParse,[code=11117:class=functional:scope=internal:level=medium], "Message: fail to parse binglog status_vars: %v, offset: %d"
 ErrTracingEventDataNotValid,[code=11097:class=functional:scope=internal:level=high], "Message: invalid event data for type: %s"
 ErrTracingUploadData,[code=11098:class=functional:scope=internal:level=high], "Message: upload event"
 ErrTracingEventTypeNotValid,[code=11099:class=functional:scope=internal:level=high], "Message: invalid event type %s, will not process"
