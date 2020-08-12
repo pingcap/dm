@@ -102,6 +102,7 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 // newDDL job is used to create a new ddl job
 // when cfg.ShardMode == "", ddlInfo == nil，sourceTbls != nil, we use sourceTbls to record ddl affected tables.
 // when cfg.ShardMode == ShardOptimistic || ShardPessimistic, ddlInfo != nil, sourceTbls == nil.
+// TODO(lance6716): check where ddls came from: noshard: backquotes
 func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation binlog.Location,
 	traceID string, sourceTbls map[string]map[string]struct{}) *job {
 	location1 := location.Clone()

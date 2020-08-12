@@ -362,6 +362,7 @@ func HasAnsiQuotesMode(db *sql.DB) (bool, error) {
 }
 
 // GetParser gets a parser which maybe enabled `ANSI_QUOTES` sql_mode
+// TODO(lance6716): check remove second param
 func GetParser(db *sql.DB, ansiQuotesMode bool) (*parser.Parser, error) {
 	if !ansiQuotesMode {
 		// try get from DB

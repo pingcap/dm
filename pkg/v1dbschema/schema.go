@@ -51,6 +51,7 @@ func UpdateSchema(tctx *tcontext.Context, db *conn.BaseDB, cfg *config.SubTaskCo
 	defer db.CloseBaseConn(dbConn)
 
 	// setup SQL parser.
+	// TODO(lance6716): remove this and call parser in binlog
 	parser2, err := utils.GetParser(db.DB, cfg.EnableANSIQuotes)
 	if err != nil {
 		return terror.ErrFailUpdateV1DBSchema.Delegate(err)

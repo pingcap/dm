@@ -173,6 +173,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 }
 
 // SplitDDL splits multiple operations in one DDL statement into multiple DDL statements
+// returned DDL is formatted like StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 // if fail to restore, it would not restore the value of `stmt` (it changes it's values if `stmt` is one of  DropTableStmt, RenameTableStmt, AlterTableStmt)
 func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 	var (

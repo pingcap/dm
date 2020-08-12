@@ -178,6 +178,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	}
 
 	// updated needHandleDDLs to DDLs received from DM-master.
+	// TODO(lance6716): check optimism could handle different ANSI_QUOTES
 	needHandleDDLs = op.DDLs
 
 	s.tctx.L().Info("start to handle ddls in optimistic shard mode", zap.String("event", "query"),

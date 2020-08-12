@@ -307,7 +307,6 @@ type TaskConfig struct {
 
 	CleanDumpFile bool `yaml:"clean-dump-file"`
 
-	// TODO(lance6716): check usage of this
 	EnableANSIQuotes bool `yaml:"ansi-quotes" toml:"ansi-quotes" json:"ansi-quotes"`
 }
 
