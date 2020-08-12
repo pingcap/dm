@@ -247,8 +247,27 @@ func GetMariaDBGTID(db *sql.DB) (gtid.Set, error) {
 
 // GetGlobalVariable gets server's global variable
 func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
-	query := fmt.Sprintf("SHOW GLOBAL VARIABLES LIKE '%s'", variable)
-	rows, err := db.Query(query)
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	return getVariable(conn, variable, true)
+}
+
+// GetSessionVariable gets connection's session variable
+func GetSessionVariable(conn *sql.Conn, variable string) (value string, err error) {
+	return getVariable(conn, variable, false)
+}
+
+func getVariable(conn *sql.Conn, variable string, isGlobal bool) (value string, err error) {
+	var template string
+	if isGlobal {
+		template = "SHOW GLOBAL VARIABLES LIKE '%s'"
+	} else {
+		template = "SHOW VARIABLES LIKE '%s'"
+	}
+	query := fmt.Sprintf(template, variable)
+	row := conn.QueryRowContext(context.Background(), query)
 
 	failpoint.Inject("GetGlobalVariableFailed", func(val failpoint.Value) {
 		items := strings.Split(val.(string), ",")
@@ -267,11 +286,6 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 		}
 	})
 
-	if err != nil {
-		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-	defer rows.Close()
-
 	// Show an example.
 	/*
 		mysql> SHOW GLOBAL VARIABLES LIKE "binlog_format";
@@ -282,17 +296,10 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 		+---------------+-------+
 	*/
 
-	for rows.Next() {
-		err = rows.Scan(&variable, &value)
-		if err != nil {
-			return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-		}
+	err = row.Scan(&variable, &value)
+	if err != nil {
+		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
-
-	if rows.Err() != nil {
-		return "", terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
-	}
-
 	return value, nil
 }
 
@@ -341,36 +348,32 @@ func GetMariaDBUUID(db *sql.DB) (string, error) {
 	return fmt.Sprintf("%d%s%d", domainID, domainServerIDSeparator, serverID), nil
 }
 
-// GetSQLMode returns sql_mode.
-func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
+// GetParser gets a parser for sql.DB which maybe enabled `ANSI_QUOTES` sql_mode
+func GetParser(db *sql.DB) (*parser.Parser, error) {
 	sqlMode, err := GetGlobalVariable(db, "sql_mode")
 	if err != nil {
-		return tmysql.ModeNone, err
+		return nil, err
 	}
-
-	mode, err := tmysql.GetSQLMode(sqlMode)
-	return mode, terror.ErrGetSQLModeFromStr.Delegate(err, sqlMode)
+	return getParserFromSQLModeStr(sqlMode)
 }
 
-// HasAnsiQuotesMode checks whether database has `ANSI_QUOTES` set
-func HasAnsiQuotesMode(db *sql.DB) (bool, error) {
-	mode, err := GetSQLMode(db)
+// GetParserForConn gets a parser for sql.Conn which maybe enabled `ANSI_QUOTES` sql_mode
+func GetParserForConn(conn *sql.Conn) (*parser.Parser, error) {
+	sqlMode, err := GetSessionVariable(conn, "sql_mode")
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	return mode.HasANSIQuotesMode(), nil
+	return getParserFromSQLModeStr(sqlMode)
 }
 
-// GetParser gets a parser which maybe enabled `ANSI_QUOTES` sql_mode
-func GetParser(db *sql.DB) (*parser.Parser, error) {
-	// try get from DB
-	ansiQuotesMode, err := HasAnsiQuotesMode(db)
+func getParserFromSQLModeStr(sqlMode string) (*parser.Parser, error) {
+	mode, err := tmysql.GetSQLMode(sqlMode)
 	if err != nil {
 		return nil, err
 	}
 
 	parser2 := parser.New()
-	if ansiQuotesMode {
+	if mode.HasANSIQuotesMode() {
 		parser2.SetSQLMode(tmysql.ModeANSIQuotes)
 	}
 	return parser2, nil

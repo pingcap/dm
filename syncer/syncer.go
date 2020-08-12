@@ -614,17 +614,17 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 func (s *Syncer) trackTableInfoFromDownstream(origSchema, origTable, renamedSchema, renamedTable string) error {
 	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly
 	// (and get rid of ddlDBConn).
+	// use parser for downstream.
+	parser2, err := utils.GetParserForConn(s.ddlDBConn.baseConn.DBConn)
+	if err != nil {
+		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+	}
+
 	rows, err := s.ddlDBConn.querySQL(s.tctx, "SHOW CREATE TABLE "+dbutil.TableName(renamedSchema, renamedTable))
 	if err != nil {
 		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 	}
 	defer rows.Close()
-
-	// use parser for downstream.
-	parser2, err := utils.GetParser(s.ddlDB.DB)
-	if err != nil {
-		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
-	}
 
 	ctx := context.Background()
 	for rows.Next() {
