@@ -705,7 +705,6 @@ var (
 	ErrBinlogNeedMariaDBGTIDSet      = New(codeBinlogNeedMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "the event should be a MariadbGTIDListEvent, but got %T", "")
 	ErrBinlogParseMariaDBGTIDSet     = New(codeBinlogParseMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "parse MariaDB GTID set", "")
 	ErrBinlogMariaDBAddGTIDSet       = New(codeBinlogMariaDBAddGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "add set %v to GTID set", "")
-	ErrBinlogStatusVarsParse         = New(codeBinlogStatusVarsParse, ClassFunctional, ScopeInternal, LevelMedium, "fail to parse binglog status_vars: %v, offset: %d", "")
 
 	// pkg/tracing
 	ErrTracingEventDataNotValid = New(codeTracingEventDataNotValid, ClassFunctional, ScopeInternal, LevelHigh, "invalid event data for type: %s", "")
@@ -747,6 +746,9 @@ var (
 
 	// pkg/v1dbschema
 	ErrFailUpdateV1DBSchema = New(codeFailUpdateV1DBSchema, ClassFunctional, ScopeInternal, LevelMedium, "fail to upgrade v1.0.x DB schema", "Please confirm that you have not violated any restrictions in the upgrade documentation.")
+
+	// pkg/binlog
+	ErrBinlogStatusVarsParse = New(codeBinlogStatusVarsParse, ClassFunctional, ScopeInternal, LevelMedium, "fail to parse binglog status_vars: %v, offset: %d", "")
 
 	// Functional error
 	ErrVerifyHandleErrorArgs = New(codeVerifyHandleErrorArgs, ClassFunctional, ScopeInternal, LevelLow, "", "Please make sure the args are correct.")

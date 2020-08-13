@@ -994,7 +994,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		}
 	}
 
-	fatalF := func(err error, affected int) {
+	fatalF := func(affected int, err error) {
 		s.execError.Set(err)
 		if !utils.IsContextCanceledError(err) {
 			err = s.handleEventError(err, &jobs[affected].startLocation, &jobs[affected].currentLocation)
@@ -1044,7 +1044,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			if idx >= count || sqlJob.tp == flush {
 				affect, err = executeSQLs()
 				if err != nil {
-					fatalF(err, affect)
+					fatalF(affect, err)
 					continue
 				}
 				clearF()
@@ -1054,7 +1054,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			if len(jobs) > 0 {
 				affect, err = executeSQLs()
 				if err != nil {
-					fatalF(err, affect)
+					fatalF(affect, err)
 					continue
 				}
 				clearF()
@@ -2644,16 +2644,19 @@ func (s *Syncer) setErrLocation(startLocation, endLocation *binlog.Location) {
 	s.errLocation.Lock()
 	defer s.errLocation.Unlock()
 
-	if s.errLocation.startLocation == nil || startLocation == nil {
-		s.errLocation.startLocation = startLocation
-	} else if binlog.CompareLocation(*startLocation, *s.errLocation.startLocation, s.cfg.EnableGTID) < 0 {
-		s.errLocation.startLocation = startLocation
+	cloneStartLocation := startLocation.ClonePtr()
+	cloneEndLocation := endLocation.ClonePtr()
+
+	if s.errLocation.startLocation == nil || cloneStartLocation == nil {
+		s.errLocation.startLocation = cloneStartLocation
+	} else if binlog.CompareLocation(*cloneStartLocation, *s.errLocation.startLocation, s.cfg.EnableGTID) < 0 {
+		s.errLocation.startLocation = cloneStartLocation
 	}
 
-	if s.errLocation.endLocation == nil || endLocation == nil {
-		s.errLocation.endLocation = endLocation
-	} else if binlog.CompareLocation(*endLocation, *s.errLocation.endLocation, s.cfg.EnableGTID) < 0 {
-		s.errLocation.endLocation = endLocation
+	if s.errLocation.endLocation == nil || cloneEndLocation == nil {
+		s.errLocation.endLocation = cloneEndLocation
+	} else if binlog.CompareLocation(*cloneEndLocation, *s.errLocation.endLocation, s.cfg.EnableGTID) < 0 {
+		s.errLocation.endLocation = cloneEndLocation
 	}
 }
 

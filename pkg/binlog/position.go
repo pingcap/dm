@@ -234,6 +234,15 @@ func (l Location) Clone() Location {
 	return l.CloneWithFlavor("")
 }
 
+// ClonePtr clones a same Location pointer
+func (l *Location) ClonePtr() *Location {
+	if l == nil {
+		return nil
+	}
+	newLocation := l.Clone()
+	return &newLocation
+}
+
 // CloneWithFlavor clones the location, and if the GTIDSet is nil, will create a GTIDSet with specified flavor.
 func (l Location) CloneWithFlavor(flavor string) Location {
 	var newGTIDSet gtid.Set
