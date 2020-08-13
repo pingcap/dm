@@ -68,7 +68,7 @@ func parseExtraArgs(dumpCfg *export.Config, args []string) error {
 	dumplingFlagSet.BoolVarP(&dumpCfg.NoViews, "no-views", "W", dumpCfg.NoViews, "Do not dump views")
 	dumplingFlagSet.Uint64VarP(&dumpCfg.Rows, "rows", "r", dumpCfg.Rows, "Split table into chunks of this many rows, default unlimited")
 	dumplingFlagSet.StringVar(&dumpCfg.Where, "where", dumpCfg.Where, "Dump only selected records")
-	dumplingFlagSet.BoolVar(&dumpCfg.EscapeBackslash, "escape-backslash", dumpCfg.EscapeBackslash, "use backslash to escape quotation marks")
+	dumplingFlagSet.BoolVar(&dumpCfg.EscapeBackslash, "escape-backslash", dumpCfg.EscapeBackslash, "Use backslash to escape quotation marks")
 	dumplingFlagSet.StringArrayVarP(&filters, "filter", "f", []string{"*.*"}, "filter to select which tables to dump")
 
 	err := dumplingFlagSet.Parse(args)
