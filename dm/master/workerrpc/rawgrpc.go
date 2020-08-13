@@ -114,8 +114,6 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.QueryError, err = client.QueryError(ctx, req.QueryError)
 	case CmdQueryWorkerConfig:
 		resp.QueryWorkerConfig, err = client.QueryWorkerConfig(ctx, req.QueryWorkerConfig)
-	case CmdHandleSubTaskSQLs:
-		resp.HandleSubTaskSQLs, err = client.HandleSQLs(ctx, req.HandleSubTaskSQLs)
 	case CmdSwitchRelayMaster:
 		resp.SwitchRelayMaster, err = client.SwitchRelayMaster(ctx, req.SwitchRelayMaster)
 	case CmdOperateRelay:
@@ -130,6 +128,8 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.OperateSchema, err = client.OperateSchema(ctx, req.OperateSchema)
 	case CmdOperateV1Meta:
 		resp.OperateV1Meta, err = client.OperateV1Meta(ctx, req.OperateV1Meta)
+	case CmdHandleError:
+		resp.HandleError, err = client.HandleError(ctx, req.HandleError)
 	default:
 		return nil, terror.ErrMasterGRPCInvalidReqType.Generate(req.Type)
 	}

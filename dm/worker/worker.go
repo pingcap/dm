@@ -562,20 +562,6 @@ func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) (string,
 	return op.String(), w.OperateRelay(ctx, &pb.OperateRelayRequest{Op: op})
 }
 
-// HandleSQLs implements Handler.HandleSQLs.
-func (w *Worker) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) error {
-	if w.closed.Get() == closedTrue {
-		return terror.ErrWorkerAlreadyClosed.Generate()
-	}
-
-	st := w.subTaskHolder.findSubTask(req.Name)
-	if st == nil {
-		return terror.ErrWorkerSubTaskNotFound.Generate(req.Name)
-	}
-
-	return st.SetSyncerSQLOperator(ctx, req)
-}
-
 // SwitchRelayMaster switches relay unit's master server
 func (w *Worker) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
 	if w.closed.Get() == closedTrue {
@@ -824,4 +810,21 @@ func (w *Worker) getAllSubTaskStatus() map[string]*pb.SubTaskStatus {
 		st.RUnlock()
 	}
 	return result
+}
+
+// HandleError handle worker error
+func (w *Worker) HandleError(ctx context.Context, req *pb.HandleWorkerErrorRequest) error {
+	w.Lock()
+	defer w.Unlock()
+
+	if w.closed.Get() == closedTrue {
+		return terror.ErrWorkerAlreadyClosed.Generate()
+	}
+
+	st := w.subTaskHolder.findSubTask(req.Task)
+	if st == nil {
+		return terror.ErrWorkerSubTaskNotFound.Generate(req.Task)
+	}
+
+	return st.HandleError(ctx, req)
 }

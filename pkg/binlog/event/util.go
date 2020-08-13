@@ -375,8 +375,8 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 
 		if length, ok := statusVarsFixedLength[key]; ok {
 			value = make([]byte, length)
-			n, err := r.Read(value)
-			if err != nil || n != length {
+			n, err2 := r.Read(value)
+			if err2 != nil || n != length {
 				return generateError(io.EOF)
 			}
 
@@ -392,8 +392,8 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 				return generateError(err)
 			}
 
-			b, err := r.ReadByte()
-			if err != nil {
+			b, err2 := r.ReadByte()
+			if err2 != nil {
 				return generateError(err)
 			}
 			value = append(value, b)

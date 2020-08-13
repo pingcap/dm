@@ -330,7 +330,6 @@ func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, for
 	}()
 
 	// 6. put `exec` operation for the owner, and wait for the owner to be done.
-	// TODO: `sql-skip`/`sql-replace` supported later.
 	done, err := p.waitOwnerToBeDone(ctx, lock, owner)
 	if err != nil {
 		revertLockSync = true

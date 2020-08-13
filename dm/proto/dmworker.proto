@@ -11,8 +11,6 @@ service Worker {
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
     rpc QueryError (QueryErrorRequest) returns (QueryErrorResponse) {}
 
-    rpc HandleSQLs (HandleSubTaskSQLsRequest) returns (CommonWorkerResponse) {}
-
     // SwitchRelayMaster request a dm-worker's relay unit switching to another master server
     rpc SwitchRelayMaster (SwitchRelayMasterRequest) returns (CommonWorkerResponse) {}
 
@@ -35,6 +33,8 @@ service Worker {
     rpc OperateSchema(OperateWorkerSchemaRequest) returns(CommonWorkerResponse) {}
 
     rpc OperateV1Meta(OperateV1MetaRequest) returns(OperateV1MetaResponse) {}
+
+    rpc HandleError(HandleWorkerErrorRequest) returns(CommonWorkerResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -82,21 +82,6 @@ message QueryStatusRequest {
 
 message QueryErrorRequest {
     string name = 1; // sub task's name, empty for all sub tasks
-}
-
-enum SQLOp {
-    SKIP = 0; // skip the SQL
-    REPLACE = 1; // replace the SQL with a specified SQL
-    INJECT = 2; // inject the SQL to syncer as binlog event
-}
-
-// NOTE: we can extract some common(optional) arguments from `args`, like `meta`
-message HandleSubTaskSQLsRequest {
-    string name = 1; // sub task's name
-    SQLOp op = 2; // operation type
-    repeated string args = 3; // args for operation
-    string binlogPos = 4; // binlog-pos (that's file:pos format)
-    string sqlPattern = 5; // sql-pattern (for regexp, starts with ~)
 }
 
 message CommonWorkerResponse {
@@ -444,4 +429,18 @@ message OperateV1MetaResponse {
     bool result = 1;
     string msg = 2; // error message if failed.
     map<string, V1SubTaskMeta> meta = 3; // subtasks' meta for `get` operation.
+}
+
+enum ErrorOp {
+    InvalidErrorOp = 0;
+    Skip = 1; // skip the error event
+    Replace = 2; // replace the error event with a specified SQL
+    Revert = 3; // remove the error operator
+}
+
+message HandleWorkerErrorRequest {
+    ErrorOp op = 1; // operation type
+    string task = 2; // task name
+    string binlogPos = 3; // binlog-pos (that's file:pos format)
+    repeated string sqls = 4; // sqls (use for replace)
 }

@@ -101,6 +101,9 @@ func (b *binlogPoint) flush() {
 func (b *binlogPoint) rollback(schemaTracker *schema.Tracker, schema string) (isSchemaChanged bool) {
 	b.Lock()
 	defer b.Unlock()
+
+	// set suffix to 0 when we meet error
+	b.flushedLocation.ResetSuffix()
 	b.location = b.flushedLocation.Clone()
 	if b.ti == nil {
 		return // for global checkpoint, no need to rollback the schema.
