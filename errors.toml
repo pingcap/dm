@@ -731,6 +731,12 @@ workaround = "Please confirm that you have not violated any restrictions in the 
 tags = ["internal", "medium"]
 
 [error.DM-functional-11117]
+message = "fail to parse binglog status_vars: %v, offset: %d"
+description = ""
+workaround = ""
+tags = ["internal", "medium"]
+
+[error.DM-functional-11118]
 message = ""
 description = ""
 workaround = "Please make sure the args are correct."

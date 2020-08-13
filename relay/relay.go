@@ -38,6 +38,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/common"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
@@ -373,6 +374,27 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 		if result.Recovered {
 			r.tctx.L().Warn("relay log file recovered",
 				zap.Stringer("from position", latestPos), zap.Stringer("to position", result.LatestPos), log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
+
+			if result.LatestGTIDs != nil {
+				if mysqlGS, ok := result.LatestGTIDs.(*gtid.MySQLGTIDSet); ok {
+					// in MySQL, we expect `PreviousGTIDsEvent` contains ALL previous GTID sets, but in fact it may lack a part of them sometimes,
+					// e.g we expect `00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100`,
+					// but may be `00c04543-f584-11e9-a765-0242ac120002:50-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:60-100`.
+					// and when DM requesting MySQL to send binlog events with this EXCLUDED GTID sets, some errors like
+					// `ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.`
+					// may occur, so we force to reset the START part of any GTID set.
+					oldGs1 := mysqlGS.Clone()
+					if mysqlGS.ResetStart() {
+						r.tctx.L().Warn("force to reset the start part of recovered GTID sets", zap.Stringer("from GTID set", oldGs1), zap.Stringer("to GTID set", mysqlGS))
+						// also need to reset start for `latestGTID`.
+						oldGs2 := latestGTID.Clone()
+						if latestGTID.(*gtid.MySQLGTIDSet).ResetStart() {
+							r.tctx.L().Warn("force to reset the start part of latest GTID sets", zap.Stringer("from GTID set", oldGs2), zap.Stringer("to GTID set", latestGTID))
+						}
+					}
+				}
+			}
+
 			if result.LatestGTIDs != nil && !result.LatestGTIDs.Equal(latestGTID) && result.LatestGTIDs.Contain(latestGTID) {
 				r.tctx.L().Warn("some GTIDs are missing in the meta data, this is usually due to the process was interrupted while writing the meta data. force to update GTIDs",
 					log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
