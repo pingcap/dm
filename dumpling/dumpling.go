@@ -99,7 +99,9 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		return
 	}
 
-	err = export.Dump(ctx, m.dumpConfig)
+	newCtx, cancel := context.WithCancel(ctx)
+	err = export.Dump(newCtx, m.dumpConfig)
+	cancel()
 
 	if err != nil {
 		if utils.IsContextCanceledError(err) {
