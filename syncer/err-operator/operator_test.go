@@ -85,14 +85,14 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	// skip event
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Skip, nil)
 	c.Assert(err, IsNil)
-	apply, op := h.Apply(&startLocation, &endLocation)
+	apply, op := h.MatchAndApply(&startLocation, &endLocation)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Skip)
 
 	// overwrite operator
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Replace, []*replication.BinlogEvent{event1, event2})
 	c.Assert(err, IsNil)
-	apply, op = h.Apply(&startLocation, &endLocation)
+	apply, op = h.MatchAndApply(&startLocation, &endLocation)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Replace)
 
@@ -122,7 +122,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	// revert exist operator
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Revert, nil)
 	c.Assert(err, IsNil)
-	apply, op = h.Apply(&startLocation, &endLocation)
+	apply, op = h.MatchAndApply(&startLocation, &endLocation)
 	c.Assert(apply, IsFalse)
 	c.Assert(op, Equals, pb.ErrorOp_InvalidErrorOp)
 
@@ -135,17 +135,17 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	// test removeOutdated
 	flushLocation := startLocation
 	h.RemoveOutdated(flushLocation)
-	apply, op = h.Apply(&startLocation, &endLocation)
+	apply, op = h.MatchAndApply(&startLocation, &endLocation)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Replace)
 
 	flushLocation = endLocation
 	h.RemoveOutdated(flushLocation)
-	apply, op = h.Apply(&startLocation, &endLocation)
+	apply, op = h.MatchAndApply(&startLocation, &endLocation)
 	c.Assert(apply, IsFalse)
 	c.Assert(op, Equals, pb.ErrorOp_InvalidErrorOp)
 
-	apply, op = h.Apply(&endLocation, &nextLocation)
+	apply, op = h.MatchAndApply(&endLocation, &nextLocation)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Replace)
 }

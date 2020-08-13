@@ -125,8 +125,8 @@ func (h *Holder) GetEvent(startLocation *binlog.Location) (*replication.BinlogEv
 	return e, nil
 }
 
-// Apply tries to apply operation for event by location
-func (h *Holder) Apply(startLocation, endLocation *binlog.Location) (bool, pb.ErrorOp) {
+// MatchAndApply tries to match operation for event by location and apply it on replace events
+func (h *Holder) MatchAndApply(startLocation, endLocation *binlog.Location) (bool, pb.ErrorOp) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -163,7 +163,7 @@ func (h *Holder) Apply(startLocation, endLocation *binlog.Location) (bool, pb.Er
 		}
 	}
 
-	h.logger.Info("apply a operator", zap.Stringer("startlocation", startLocation), zap.Stringer("endlocation", endLocation), zap.Stringer("operator", operator))
+	h.logger.Info("match and apply a operator", zap.Stringer("startlocation", startLocation), zap.Stringer("endlocation", endLocation), zap.Stringer("operator", operator))
 
 	return true, operator.op
 }
