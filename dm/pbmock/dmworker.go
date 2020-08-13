@@ -35,24 +35,24 @@ func (m *MockWorkerClient) EXPECT() *MockWorkerClientMockRecorder {
 	return m.recorder
 }
 
-// HandleSQLs mocks base method
-func (m *MockWorkerClient) HandleSQLs(arg0 context.Context, arg1 *pb.HandleSubTaskSQLsRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
+// HandleError mocks base method
+func (m *MockWorkerClient) HandleError(arg0 context.Context, arg1 *pb.HandleWorkerErrorRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0, arg1}
 	for _, a := range arg2 {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "HandleSQLs", varargs...)
+	ret := m.ctrl.Call(m, "HandleError", varargs...)
 	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// HandleSQLs indicates an expected call of HandleSQLs
-func (mr *MockWorkerClientMockRecorder) HandleSQLs(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+// HandleError indicates an expected call of HandleError
+func (mr *MockWorkerClientMockRecorder) HandleError(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSQLs", reflect.TypeOf((*MockWorkerClient)(nil).HandleSQLs), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleError", reflect.TypeOf((*MockWorkerClient)(nil).HandleError), varargs...)
 }
 
 // MigrateRelay mocks base method
@@ -338,19 +338,19 @@ func (m *MockWorkerServer) EXPECT() *MockWorkerServerMockRecorder {
 	return m.recorder
 }
 
-// HandleSQLs mocks base method
-func (m *MockWorkerServer) HandleSQLs(arg0 context.Context, arg1 *pb.HandleSubTaskSQLsRequest) (*pb.CommonWorkerResponse, error) {
+// HandleError mocks base method
+func (m *MockWorkerServer) HandleError(arg0 context.Context, arg1 *pb.HandleWorkerErrorRequest) (*pb.CommonWorkerResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleSQLs", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleError", arg0, arg1)
 	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// HandleSQLs indicates an expected call of HandleSQLs
-func (mr *MockWorkerServerMockRecorder) HandleSQLs(arg0, arg1 interface{}) *gomock.Call {
+// HandleError indicates an expected call of HandleError
+func (mr *MockWorkerServerMockRecorder) HandleError(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSQLs", reflect.TypeOf((*MockWorkerServer)(nil).HandleSQLs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleError", reflect.TypeOf((*MockWorkerServer)(nil).HandleError), arg0, arg1)
 }
 
 // MigrateRelay mocks base method

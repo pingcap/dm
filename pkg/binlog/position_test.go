@@ -355,8 +355,10 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 		flavor  string
 		pos1    gmysql.Position
 		gset1   string
+		suffix1 int
 		pos2    gmysql.Position
 		gset2   string
+		suffix2 int
 		cmpGTID int
 		cmpPos  int
 	}{
@@ -368,11 +370,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"",
+			0,
 			gmysql.Position{
 				Name: "binlog.00001",
 				Pos:  123,
 			},
 			"",
+			0,
 			0,
 			0,
 		}, {
@@ -383,11 +387,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"",
+			0,
 			gmysql.Position{
 				Name: "binlog.00001",
 				Pos:  123,
 			},
 			"",
+			0,
 			0,
 			0,
 		}, {
@@ -398,11 +404,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"",
+			0,
 			gmysql.Position{
 				Name: "binlog.00002",
 				Pos:  122,
 			},
 			"",
+			0,
 			0,
 			-1,
 		}, {
@@ -413,11 +421,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"",
+			0,
 			gmysql.Position{
 				Name: "binlog.00002",
 				Pos:  122,
 			},
 			"",
+			0,
 			0,
 			1,
 		}, {
@@ -428,11 +438,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-4",
+			0,
 			gmysql.Position{
 				Name: "binlog.00002",
 				Pos:  122,
 			},
 			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-4",
+			0,
 			0,
 			-1,
 		}, {
@@ -443,11 +455,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-2,53ea0ed1-9bf8-11e6-8bea-64006a897c74:1-2",
+			0,
 			gmysql.Position{
 				Name: "binlog.00002",
 				Pos:  124,
 			},
 			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-4,53ea0ed1-9bf8-11e6-8bea-64006a897c74:1-3",
+			0,
 			-1,
 			-1,
 		}, {
@@ -458,11 +472,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-2,53ea0ed1-9bf8-11e6-8bea-64006a897c74:1-3",
+			0,
 			gmysql.Position{
 				Name: "binlog.00002",
 				Pos:  124,
 			},
 			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-2",
+			0,
 			1,
 			-1,
 		}, {
@@ -473,11 +489,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-2,53ea0ed1-9bf8-11e6-8bea-64006a897c74:2-4",
+			0,
 			gmysql.Position{
 				Name: "binlog.00002",
 				Pos:  124,
 			},
 			"53ea0ed1-9bf8-11e6-8bea-64006a897c73:1-2,53ea0ed1-9bf8-11e6-8bea-64006a897c74:1-3",
+			0,
 			-1,
 			-1,
 		}, {
@@ -488,11 +506,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"1-1-1,2-2-2",
+			0,
 			gmysql.Position{
 				Name: "binlog.00002",
 				Pos:  122,
 			},
 			"1-1-1,2-2-2",
+			0,
 			0,
 			-1,
 		}, {
@@ -503,11 +523,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"1-1-1,2-2-2",
+			0,
 			gmysql.Position{
 				Name: "binlog.00002",
 				Pos:  124,
 			},
 			"1-1-1,2-2-2,3-3-3",
+			0,
 			-1,
 			-1,
 		}, {
@@ -518,11 +540,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"1-1-1,2-2-3",
+			0,
 			gmysql.Position{
 				Name: "binlog.00002",
 				Pos:  124,
 			},
 			"1-1-1,2-2-2",
+			0,
 			1,
 			-1,
 		}, {
@@ -533,11 +557,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"1-1-1,2-2-2",
+			0,
 			gmysql.Position{
 				Name: "binlog.00002",
 				Pos:  124,
 			},
 			"2-2-2,3-3-3",
+			0,
 			-1,
 			-1,
 		}, {
@@ -548,11 +574,13 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"",
+			0,
 			gmysql.Position{
 				Name: "binlog.00002",
 				Pos:  124,
 			},
 			"2-2-2,3-3-3",
+			0,
 			-1,
 			-1,
 		}, {
@@ -563,13 +591,83 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 				Pos:  123,
 			},
 			"",
+			0,
 			gmysql.Position{
 				Name: "binlog.00002",
 				Pos:  124,
 			},
 			"",
 			0,
+			0,
 			-1,
+		}, {
+			// both gset1 and gset2 is nil, gset1 = gset2, pos1 < pos2
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"",
+			0,
+			gmysql.Position{
+				Name: "binlog.00002",
+				Pos:  124,
+			},
+			"",
+			0,
+			0,
+			-1,
+		}, {
+			// gset1 = gset2, pos1 = pos2, suffix1 < suffix2
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"1-1-1,2-2-2",
+			0,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"1-1-1,2-2-2",
+			1,
+			-1,
+			-1,
+		}, {
+			// gset1 = gset2, pos1 = pos2, suffix1 = suffix2
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"1-1-1,2-2-2",
+			1,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"1-1-1,2-2-2",
+			1,
+			0,
+			0,
+		}, {
+			// gset1 = gset2, pos1 = pos2, suffix1 > suffix2
+			gmysql.MariaDBFlavor,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"1-1-1,2-2-2",
+			2,
+			gmysql.Position{
+				Name: "binlog.00001",
+				Pos:  123,
+			},
+			"1-1-1,2-2-2",
+			1,
+			1,
+			1,
 		},
 	}
 
@@ -580,10 +678,10 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 		gset2, err := gtid.ParserGTID(cs.flavor, cs.gset2)
 		c.Assert(err, IsNil)
 
-		cmpGTID := CompareLocation(Location{cs.pos1, gset1}, Location{cs.pos2, gset2}, true)
+		cmpGTID := CompareLocation(Location{cs.pos1, gset1, cs.suffix1}, Location{cs.pos2, gset2, cs.suffix2}, true)
 		c.Assert(cmpGTID, Equals, cs.cmpGTID)
 
-		cmpPos := CompareLocation(Location{cs.pos1, gset1}, Location{cs.pos2, gset2}, false)
+		cmpPos := CompareLocation(Location{cs.pos1, gset1, cs.suffix1}, Location{cs.pos2, gset2, cs.suffix2}, false)
 		c.Assert(cmpPos, Equals, cs.cmpPos)
 	}
 

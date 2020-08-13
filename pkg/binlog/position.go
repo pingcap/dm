@@ -59,6 +59,31 @@ func PositionFromStr(s string) (gmysql.Position, error) {
 	}, nil
 }
 
+func trimBrackets(s string) string {
+	if len(s) > 2 && s[0] == '(' && s[len(s)-1] == ')' {
+		return s[1 : len(s)-1]
+	}
+	return s
+}
+
+// PositionFromPosStr constructs a mysql.Position from a string representation like `(mysql-bin.000001, 2345)`
+func PositionFromPosStr(str string) (gmysql.Position, error) {
+	s := trimBrackets(str)
+	parsed := strings.Split(s, ", ")
+	if len(parsed) != 2 {
+		return gmysql.Position{}, terror.ErrBinlogParsePosFromStr.Generatef("invalid binlog pos, position string %s", str)
+	}
+	pos, err := strconv.ParseUint(parsed[1], 10, 32)
+	if err != nil {
+		return gmysql.Position{}, terror.ErrBinlogParsePosFromStr.Generatef("the pos should be digital, position string %s", str)
+	}
+
+	return gmysql.Position{
+		Name: parsed[0],
+		Pos:  uint32(pos),
+	}, nil
+}
+
 // RealMySQLPos parses a relay position and returns a mysql position and whether error occurs
 // if parsed successfully and `UUIDSuffix` exists, sets position Name to
 // `originalPos.NamePrefix + binlogFilenameSep + originalPos.NameSuffix`.
@@ -175,6 +200,8 @@ type Location struct {
 	Position gmysql.Position
 
 	GTIDSet gtid.Set
+
+	Suffix int // use for replace event
 }
 
 // NewLocation returns a new Location
@@ -186,7 +213,10 @@ func NewLocation(flavor string) Location {
 }
 
 func (l Location) String() string {
-	return fmt.Sprintf("position: %v, gtid-set: %s", l.Position, l.GTIDSetStr())
+	if l.Suffix == 0 {
+		return fmt.Sprintf("position: %v, gtid-set: %s", l.Position, l.GTIDSetStr())
+	}
+	return fmt.Sprintf("position: %v, gtid-set: %s, suffix: %d", l.Position, l.GTIDSetStr(), l.Suffix)
 }
 
 // GTIDSetStr returns gtid set's string
@@ -204,6 +234,15 @@ func (l Location) Clone() Location {
 	return l.CloneWithFlavor("")
 }
 
+// ClonePtr clones a same Location pointer
+func (l *Location) ClonePtr() *Location {
+	if l == nil {
+		return nil
+	}
+	newLocation := l.Clone()
+	return &newLocation
+}
+
 // CloneWithFlavor clones the location, and if the GTIDSet is nil, will create a GTIDSet with specified flavor.
 func (l Location) CloneWithFlavor(flavor string) Location {
 	var newGTIDSet gtid.Set
@@ -219,6 +258,7 @@ func (l Location) CloneWithFlavor(flavor string) Location {
 			Pos:  l.Position.Pos,
 		},
 		GTIDSet: newGTIDSet,
+		Suffix:  l.Suffix,
 	}
 }
 
@@ -230,14 +270,21 @@ func CompareLocation(location1, location2 Location, cmpGTID bool) int {
 	if cmpGTID {
 		cmp, canCmp := CompareGTID(location1.GTIDSet, location2.GTIDSet)
 		if canCmp {
-			return cmp
+			if cmp != 0 {
+				return cmp
+			}
+			return compareIndex(location1.Suffix, location2.Suffix)
 		}
 
 		// if can't compare by GTIDSet, then compare by position
 		log.L().Warn("gtidSet can't be compared, will compare by position", zap.Stringer("location1", location1), zap.Stringer("location2", location2))
 	}
 
-	return ComparePosition(location1.Position, location2.Position)
+	cmp := ComparePosition(location1.Position, location2.Position)
+	if cmp != 0 {
+		return cmp
+	}
+	return compareIndex(location1.Suffix, location2.Suffix)
 }
 
 // CompareGTID returns:
@@ -273,4 +320,19 @@ func CompareGTID(gSet1, gSet2 gtid.Set) (int, bool) {
 	}
 
 	return 0, false
+}
+
+func compareIndex(lhs, rhs int) int {
+	if lhs < rhs {
+		return -1
+	} else if lhs > rhs {
+		return 1
+	} else {
+		return 0
+	}
+}
+
+// ResetSuffix set suffix to 0
+func (l *Location) ResetSuffix() {
+	l.Suffix = 0
 }

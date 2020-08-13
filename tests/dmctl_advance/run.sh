@@ -23,16 +23,11 @@ function usage_and_arg_test() {
 
     query_error_wrong_arg
 
-    sql_skip_wrong_arg
-    sql_skip_binlogpos_sqlpattern_conflict
-    sql_skip_invalid_binlog_pos
-    sql_skip_invalid_regex
-    sql_skip_sharding_with_binlogpos
-    sql_skip_non_sharding_without_one_worker
+    handle_error_wrong_arg
+    handle_error_invalid_binlogpos
+    handle_error_invalid_sqls
+    handle_error_invalid_op
 
-    sql_replace_wrong_arg
-    sql_replace_invalid_binlog_pos
-    sql_replace_non_sharding_without_one_worker
     # TODO: check SQLs error test
 }
 

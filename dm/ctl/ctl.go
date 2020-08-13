@@ -63,9 +63,6 @@ func NewRootCmd() *cobra.Command {
 		master.NewUpdateTaskCmd(),
 		master.NewQueryStatusCmd(),
 		master.NewQueryErrorCmd(),
-		master.NewSQLReplaceCmd(),
-		master.NewSQLSkipCmd(),
-		master.NewSQLInjectCmd(),
 		master.NewShowDDLLocksCmd(),
 		master.NewUnlockDDLLockCmd(),
 		master.NewSwitchRelayMasterCmd(),
@@ -81,6 +78,7 @@ func NewRootCmd() *cobra.Command {
 		master.NewListMemberCmd(),
 		master.NewOperateSchemaCmd(),
 		master.NewGetTaskCfgCmd(),
+		master.NewHandleErrorCmd(),
 	)
 	return cmd
 }

@@ -565,23 +565,6 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb
 	return resp, nil
 }
 
-// HandleSQLs implements WorkerServer.HandleSQLs
-func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) (*pb.CommonWorkerResponse, error) {
-	log.L().Info("", zap.String("request", "HandleSQLs"), zap.Stringer("payload", req))
-	w := s.getWorker(true)
-	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
-	}
-
-	err := w.HandleSQLs(ctx, req)
-	if err != nil {
-		log.L().Error("fail to handle sqls", zap.String("request", "HandleSQLs"), zap.Stringer("payload", req), zap.Error(err))
-	}
-	// TODO: check whether this interface need to store message in ETCD
-	return makeCommonWorkerResponse(err), nil
-}
-
 // SwitchRelayMaster implements WorkerServer.SwitchRelayMaster
 func (s *Server) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "SwitchRelayMaster"), zap.Stringer("payload", req))
@@ -978,4 +961,24 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 			sStatus.Sync.Synced = synced
 		}
 	}
+}
+
+// HandleError handle error
+func (s *Server) HandleError(ctx context.Context, req *pb.HandleWorkerErrorRequest) (*pb.CommonWorkerResponse, error) {
+	log.L().Info("", zap.String("request", "HandleError"), zap.Stringer("payload", req))
+
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call HandleError, because mysql worker has not been started")
+		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
+	}
+
+	err := w.HandleError(ctx, req)
+	if err != nil {
+		return makeCommonWorkerResponse(err), nil
+	}
+	return &pb.CommonWorkerResponse{
+		Result: true,
+		Worker: s.cfg.Name,
+	}, nil
 }

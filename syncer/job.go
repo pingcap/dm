@@ -68,8 +68,9 @@ type job struct {
 	args            []interface{}
 	key             string
 	retry           bool
-	location        binlog.Location
-	currentLocation binlog.Location // exactly binlog position of current SQL
+	location        binlog.Location // location of last received (ROTATE / QUERY / XID) event, for global/table checkpoint
+	startLocation   binlog.Location // start location of the sql in binlog, for handle_error
+	currentLocation binlog.Location // end location of the sql in binlog, for user to skip sql manually by changing checkpoint
 	ddls            []string
 	traceID         string
 	traceGID        string
@@ -77,10 +78,10 @@ type job struct {
 
 func (j *job) String() string {
 	// only output some important information, maybe useful in execution.
-	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_location: %s, current_location: %s", j.tp, j.sql, j.args, j.key, j.ddls, j.location, j.currentLocation)
+	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.sql, j.args, j.key, j.ddls, j.location, j.startLocation, j.currentLocation)
 }
 
-func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, location, cmdLocation binlog.Location, traceID string) *job {
+func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, location, startLocation, cmdLocation binlog.Location, traceID string) *job {
 	location1 := location.Clone()
 	cmdLocation1 := cmdLocation.Clone()
 
@@ -92,6 +93,7 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 		sql:             sql,
 		args:            args,
 		key:             key,
+		startLocation:   startLocation,
 		location:        location1,
 		currentLocation: cmdLocation1,
 		retry:           true,
@@ -102,7 +104,7 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 // newDDL job is used to create a new ddl job
 // when cfg.ShardMode == "", ddlInfo == nil，sourceTbls != nil, we use sourceTbls to record ddl affected tables.
 // when cfg.ShardMode == ShardOptimistic || ShardPessimistic, ddlInfo != nil, sourceTbls == nil.
-func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation binlog.Location,
+func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation, cmdLocation binlog.Location,
 	traceID string, sourceTbls map[string]map[string]struct{}) *job {
 	location1 := location.Clone()
 	cmdLocation1 := cmdLocation.Clone()
@@ -111,6 +113,7 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation bi
 		tp:              ddl,
 		ddls:            ddls,
 		location:        location1,
+		startLocation:   startLocation,
 		currentLocation: cmdLocation1,
 		traceID:         traceID,
 	}
@@ -135,13 +138,14 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, cmdLocation bi
 	return j
 }
 
-func newXIDJob(location, cmdLocation binlog.Location, traceID string) *job {
+func newXIDJob(location, startLocation, cmdLocation binlog.Location, traceID string) *job {
 	location1 := location.Clone()
 	cmdLocation1 := cmdLocation.Clone()
 
 	return &job{
 		tp:              xid,
 		location:        location1,
+		startLocation:   startLocation,
 		currentLocation: cmdLocation1,
 		traceID:         traceID,
 	}
