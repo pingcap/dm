@@ -1,7 +1,7 @@
 drop database if exists `full_mode`;
 create database `full_mode`;
 use `full_mode`;
-create table t1 (id int, name varchar(20));
+create table t1 (id int, name varchar(20), primary key(`id`));
 insert into t1 (id, name) values (1, 'arya'), (2, 'catelyn');
 insert into t1 (id, name) values (3, 'Eddard Stark');
 update t1 set name = 'Arya Stark' where id = 1;
