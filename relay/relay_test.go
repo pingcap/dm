@@ -145,7 +145,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 		previousGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
 		latestGTIDStr1     = "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
 		latestGTIDStr2     = "53bfca22-690d-11e7-8a62-18ded7a37b78:495"
-		genGTIDSetStr      = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-505,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
+		recoverGTIDSetStr  = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-505,406a3f61-690d-11e7-87c5-6c92bf46f384:1-456" // 406a3f61-690d-11e7-87c5-6c92bf46f384:123-456 --> 406a3f61-690d-11e7-87c5-6c92bf46f384:1-456
 		greaterGITDSetStr  = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-20,53bfca22-690d-11e7-8a62-18ded7a37b78:1-510,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
 		filename           = "mysql-bin.000001"
 		startPos           = gmysql.Position{Name: filename, Pos: 123}
@@ -212,9 +212,9 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	_, latestPos := r.meta.Pos()
 	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})
 	_, latestGTIDs := r.meta.GTID()
-	genGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, genGTIDSetStr)
+	recoverGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, recoverGTIDSetStr)
 	c.Assert(err, IsNil)
-	c.Assert(latestGTIDs.Equal(genGTIDSet), IsTrue) // verifyMetadata is not enough
+	c.Assert(latestGTIDs.Equal(recoverGTIDSet), IsTrue) // verifyMetadata is not enough
 
 	// no relay log file need to recover
 	c.Assert(r.meta.Save(minCheckpoint, latestGTIDs), IsNil)
@@ -231,7 +231,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 		previousGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
 		latestGTIDStr1     = "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
 		latestGTIDStr2     = "53bfca22-690d-11e7-8a62-18ded7a37b78:495"
-		genGTIDSetStr      = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-505,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
+		recoverGTIDSetStr  = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-505,406a3f61-690d-11e7-87c5-6c92bf46f384:1-456" // 406a3f61-690d-11e7-87c5-6c92bf46f384:123-456 --> 406a3f61-690d-11e7-87c5-6c92bf46f384:1-456
 		filename           = "mysql-bin.000001"
 		startPos           = gmysql.Position{Name: filename, Pos: 123}
 
@@ -243,7 +243,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 		r = NewRelay(relayCfg).(*Relay)
 	)
 
-	genGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, genGTIDSetStr)
+	recoverGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, recoverGTIDSetStr)
 	c.Assert(err, IsNil)
 
 	c.Assert(r.meta.AddDir(uuid, &startPos, nil), IsNil)
@@ -273,7 +273,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	_, latestPos := r.meta.Pos()
 	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})
 	_, latestGTIDs := r.meta.GTID()
-	c.Assert(latestGTIDs.Equal(genGTIDSet), IsTrue)
+	c.Assert(latestGTIDs.Equal(recoverGTIDSet), IsTrue)
 
 	// write some invalid data into the relay log file again.
 	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
@@ -288,7 +288,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	_, latestPos = r.meta.Pos()
 	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})
 	_, latestGTIDs = r.meta.GTID()
-	c.Assert(latestGTIDs.Equal(genGTIDSet), IsTrue)
+	c.Assert(latestGTIDs.Equal(recoverGTIDSet), IsTrue)
 }
 
 // genBinlogEventsWithGTIDs generates some binlog events used by testFileUtilSuite and testFileWriterSuite.

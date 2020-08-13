@@ -168,21 +168,39 @@ func getGlobalPos(tctx *tcontext.Context, dbConn *conn.BaseConn, tableName, sour
 }
 
 // getGTIDsForPos gets the GTID sets for the position.
-func getGTIDsForPos(tctx *tcontext.Context, pos gmysql.Position, tcpReader reader.Reader) (gtid.Set, error) {
+func getGTIDsForPos(tctx *tcontext.Context, pos gmysql.Position, tcpReader reader.Reader) (gs gtid.Set, err error) {
+	// in MySQL, we expect `PreviousGTIDsEvent` contains ALL previous GTID sets, but in fact it may lack a part of them sometimes,
+	// e.g we expect `00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100`,
+	// but may be `00c04543-f584-11e9-a765-0242ac120002:50-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:60-100`.
+	// and when DM requesting MySQL to send binlog events with this EXCLUDED GTID sets, some errors like
+	// `ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.`
+	// may occur, so we force to reset the START part of any GTID set.
+	defer func() {
+		if err == nil && gs != nil {
+			oldGs := gs.Clone()
+			if mysqlGs, ok := gs.(*gtid.MySQLGTIDSet); ok {
+				if mysqlGs.ResetStart() {
+					tctx.L().Warn("force to reset the start part of GTID sets", zap.Stringer("from GTID set", oldGs), zap.Stringer("to GTID set", mysqlGs))
+				}
+			}
+		}
+	}()
+
 	// NOTE: because we have multiple unit test cases updating/clearing binlog in the upstream,
 	// we may encounter errors when reading binlog event but cleared by another test case.
 	failpoint.Inject("MockGetGTIDsForPos", func(val failpoint.Value) {
 		str := val.(string)
-		gs, _ := gtid.ParserGTID(gmysql.MySQLFlavor, str)
+		gs, _ = gtid.ParserGTID(gmysql.MySQLFlavor, str)
 		tctx.L().Info("set gs for position", zap.String("failpoint", "MockGetGTIDsForPos"), zap.Stringer("pos", pos))
 		failpoint.Return(gs, nil)
 	})
 
-	realPos, err := binlog.RealMySQLPos(pos)
+	var realPos gmysql.Position
+	realPos, err = binlog.RealMySQLPos(pos)
 	if err != nil {
 		return nil, err
 	}
-	gs, err := reader.GetGTIDsForPos(tctx.Ctx, tcpReader, realPos)
+	gs, err = reader.GetGTIDsForPos(tctx.Ctx, tcpReader, realPos)
 	if err != nil {
 		return nil, err
 	}
