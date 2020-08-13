@@ -237,6 +237,29 @@ func (g *MySQLGTIDSet) Truncate(end Set) error {
 	return nil
 }
 
+// ResetStart resets the start part of GTID sets,
+// like `00c04543-f584-11e9-a765-0242ac120002:40-60` will be reset to `00c04543-f584-11e9-a765-0242ac120002:1-60`.
+// return `true` if reset real happen.
+// NOTE: for MariaDB GTID, no this function exists because its format is `domainID-serverID-SeqNum`.
+func (g *MySQLGTIDSet) ResetStart() bool {
+	if g == nil || g.set == nil {
+		return false
+	}
+
+	reset := false
+	for _, set := range g.set.Sets {
+		for i, inter := range set.Intervals {
+			if inter.Start > 1 {
+				inter.Start = 1
+				set.Intervals[i] = inter // re-assign
+				reset = true
+			}
+		}
+	}
+
+	return reset
+}
+
 func (g *MySQLGTIDSet) String() string {
 	if g.set == nil {
 		return ""
