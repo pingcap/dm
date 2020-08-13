@@ -250,29 +250,21 @@ func GetMariaDBGTID(db *sql.DB) (gtid.Set, error) {
 func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 	failpoint.Inject("GetGlobalVariableFailed", func(val failpoint.Value) {
 		items := strings.Split(val.(string), ",")
-		log.L().Fatal("lance test -1")
-		log.L().Fatal("lance test", zap.Any("items", items))
-		log.L().Fatal("lance test 0")
 		if len(items) != 2 {
 			log.L().Fatal("failpoint GetGlobalVariableFailed's value is invalid", zap.String("val", val.(string)))
 		}
-		log.L().Fatal("lance test 0.5")
 		variableName := items[0]
-		log.L().Fatal("lance test 1")
 		errCode, err1 := strconv.ParseUint(items[1], 10, 16)
-		log.L().Fatal("lance test 2")
 		if err1 != nil {
 			log.L().Fatal("failpoint GetGlobalVariableFailed's value is invalid", zap.String("val", val.(string)))
 		}
-		log.L().Fatal("lance test 3")
 		if variable == variableName {
-			log.L().Fatal("lance test 4")
 			err = tmysql.NewErr(uint16(errCode))
 			log.L().Warn("GetGlobalVariable failed", zap.String("variable", variable), zap.String("failpoint", "GetGlobalVariableFailed"), zap.Error(err))
 			failpoint.Return("", terror.DBErrorAdapt(err, terror.ErrDBDriverError))
 		}
-		log.L().Fatal("lance test 6")
 	})
+
 	conn, err := db.Conn(context.Background())
 	if err != nil {
 		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
