@@ -23,6 +23,8 @@ import (
 	"github.com/pingcap/dumpling/v4/export"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"github.com/spf13/pflag"
+
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // ParseArgLikeBash parses list arguments like bash, which helps us to run
@@ -50,7 +52,7 @@ func trimOutQuotes(arg string) string {
 	return arg
 }
 
-func parseExtraArgs(dumpCfg *export.Config, args []string) error {
+func parseExtraArgs(logger *log.Logger, dumpCfg *export.Config, args []string) error {
 	var (
 		dumplingFlagSet = pflag.NewFlagSet("dumpling", pflag.ContinueOnError)
 		fileSizeStr     string
@@ -84,6 +86,7 @@ func parseExtraArgs(dumpCfg *export.Config, args []string) error {
 			return err2
 		}
 		dumpCfg.TableFilter = ff // overwrite `block-allow-list`.
+		logger.Warn("overwrite `block-allow-list` by `tables-list` or `filter`")
 	}
 
 	return err

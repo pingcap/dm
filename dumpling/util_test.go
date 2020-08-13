@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
 
 	. "github.com/pingcap/check"
 )
@@ -31,6 +32,8 @@ func TestSuite(t *testing.T) {
 type testDumplingSuite struct{}
 
 func (m *testDumplingSuite) TestParseArgs(c *C) {
+	logger := log.L()
+
 	cfg := &config.SubTaskConfig{}
 	cfg.ExtraArgs = `--statement-size=100 --where "t>10" --threads 8 -F 50B`
 	d := NewDumpling(cfg)
@@ -42,7 +45,7 @@ func (m *testDumplingSuite) TestParseArgs(c *C) {
 	c.Assert(exportCfg.FileSize, Equals, uint64(50))
 
 	extraArgs := `--threads 16 --skip-tz-utc`
-	err = parseExtraArgs(exportCfg, strings.Fields(extraArgs))
+	err = parseExtraArgs(&logger, exportCfg, strings.Fields(extraArgs))
 	c.Assert(err, NotNil)
 	c.Assert(exportCfg.Threads, Equals, 16)
 	c.Assert(exportCfg.StatementSize, Equals, uint64(100))
@@ -53,19 +56,19 @@ func (m *testDumplingSuite) TestParseArgs(c *C) {
 
 	// specify `--tables-list`.
 	extraArgs = `--threads 16 --tables-list=foo.bar`
-	err = parseExtraArgs(exportCfg, strings.Fields(extraArgs))
+	err = parseExtraArgs(&logger, exportCfg, strings.Fields(extraArgs))
 	c.Assert(err, IsNil)
 	c.Assert(exportCfg.TableFilter.MatchTable("foo", "bar"), IsTrue)
 	c.Assert(exportCfg.TableFilter.MatchTable("bar", "foo"), IsFalse)
 
 	// specify `--tables-list` and `--filter`
 	extraArgs = `--threads 16 --tables-list=foo.bar --filter=*.foo`
-	err = parseExtraArgs(exportCfg, strings.Fields(extraArgs))
+	err = parseExtraArgs(&logger, exportCfg, strings.Fields(extraArgs))
 	c.Assert(err, ErrorMatches, ".*cannot pass --tables-list and --filter together.*")
 
 	// only specify `--filter`.
 	extraArgs = `--threads 16 --filter=*.foo`
-	err = parseExtraArgs(exportCfg, strings.Fields(extraArgs))
+	err = parseExtraArgs(&logger, exportCfg, strings.Fields(extraArgs))
 	c.Assert(err, IsNil)
 	c.Assert(exportCfg.TableFilter.MatchTable("foo", "bar"), IsFalse)
 	c.Assert(exportCfg.TableFilter.MatchTable("bar", "foo"), IsTrue)
