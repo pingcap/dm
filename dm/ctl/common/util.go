@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
@@ -209,4 +210,23 @@ func IsDDL(sql string) (bool, error) {
 	default:
 		return false, nil
 	}
+}
+
+// GetTaskNameFromArgOrFile tries to retrieve name from the file if arg is yaml-filename-like, otherwise returns arg directly
+func GetTaskNameFromArgOrFile(arg string) string {
+	if !(strings.HasSuffix(arg, ".yaml") || strings.HasSuffix(arg, ".yml")) {
+		return arg
+	}
+	var (
+		content []byte
+		err     error
+	)
+	if content, err = GetFileContent(arg); err != nil {
+		return arg
+	}
+	cfg := config.NewTaskConfig()
+	if err := cfg.Decode(string(content)); err != nil {
+		return arg
+	}
+	return cfg.Name
 }
