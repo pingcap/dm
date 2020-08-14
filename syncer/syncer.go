@@ -1063,68 +1063,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	}
 }
 
-// Run starts running for sync, we should guarantee it can rerun when paused.
-func (s *Syncer) Run(ctx context.Context) (err error) {
-	tctx := s.tctx.WithContext(ctx)
-
-	defer func() {
-		if s.done != nil {
-			close(s.done)
-		}
-	}()
-
-	parser2, err := s.fromDB.getParser(s.cfg.EnableANSIQuotes)
-	if err != nil {
-		return err
-	}
-
-	fresh, err := s.IsFreshTask(ctx)
-	if err != nil {
-		return err
-	} else if fresh {
-		// for fresh task, we try to load checkpoints from meta (file or config item)
-		err = s.checkpoint.LoadMeta()
-		if err != nil {
-			return err
-		}
-
-		// for fresh and all-mode task, flush checkpoint so we could delete metadata file
-		if s.cfg.Mode == config.ModeAll {
-			if err = s.flushCheckPoints(); err != nil {
-				s.tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
-			} else {
-				s.tctx.L().Info("try to remove loaded files")
-				metadataFile := path.Join(s.cfg.Dir, "metadata")
-				if err = os.Remove(metadataFile); err != nil {
-					s.tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
-				}
-				if err = os.Remove(s.cfg.Dir); err != nil {
-					s.tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
-				}
-			}
-		}
-	}
-
-	// startLocation is the start location for current received event
-	// currentLocation is the end location for current received event (End_log_pos in `show binlog events` for mysql)
-	// lastLocation is the end location for last received (ROTATE / QUERY / XID) event
-	// we use startLocation to replace and skip binlog event of specified position
-	// we use currentLocation and update table checkpoint in sharding ddl
-	// we use lastLocation to update global checkpoint and table checkpoint
-	var (
-		currentLocation = s.checkpoint.GlobalPoint() // also init to global checkpoint
-		startLocation   = s.checkpoint.GlobalPoint()
-		lastLocation    = s.checkpoint.GlobalPoint()
-	)
-	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastLocation))
-
-	if s.streamerController.IsClosed() {
-		err = s.streamerController.Start(tctx, lastLocation.Clone())
-		if err != nil {
-			return terror.Annotate(err, "fail to restart streamer controller")
-		}
-	}
-
+func (s *Syncer) startBackgroundJobs(ctx context.Context) {
 	s.queueBucketMapping = make([]string, 0, s.cfg.WorkerCount+1)
 	for i := 0; i < s.cfg.WorkerCount; i++ {
 		s.wg.Add(1)
@@ -1153,10 +1092,62 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.printStatus(ctx2)
 		cancel()
 	}()
+}
+
+// Run starts running for sync, we should guarantee it can rerun when paused.
+func (s *Syncer) Run(ctx context.Context) (err error) {
+	tctx := s.tctx.WithContext(ctx)
+
+	defer func() {
+		if s.done != nil {
+			close(s.done)
+		}
+	}()
+
+	parser2, err := s.fromDB.getParser(s.cfg.EnableANSIQuotes)
+	if err != nil {
+		return err
+	}
+
+	fresh, err := s.IsFreshTask(ctx)
+	if err != nil {
+		return err
+	} else if fresh {
+		// for fresh task, we try to load checkpoints from meta (file or config item)
+		// for fresh and all-mode task, flush checkpoint so we could delete metadata file
+		tryPurge := s.cfg.Mode == config.ModeAll
+		if err := s.loadCheckpoint(tryPurge); err != nil {
+			return err
+		}
+	}
+
+	// startLocation is the start location for current received event
+	// nextLocation is the end location for current received event (End_log_pos in `show binlog events` for mysql),
+	//     which means the start location of next event
+	// currentLocation is the end location for current received event (End_log_pos in `show binlog events` for mysql)
+	// lastLocation is the end location for last received (ROTATE / QUERY / XID) event
+	// we use startLocation to replace and skip binlog event of specified position
+	// we use currentLocation and update table checkpoint in sharding ddl
+	// we use lastLocation to update global checkpoint and table checkpoint
+	var (
+		currentLocation = s.checkpoint.GlobalPoint() // also init to global checkpoint
+		startLocation   = s.checkpoint.GlobalPoint()
+		lastLocation    = s.checkpoint.GlobalPoint()
+	)
+	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastLocation))
+
+	if s.streamerController.IsClosed() {
+		err = s.streamerController.Start(tctx, lastLocation.Clone())
+		if err != nil {
+			return terror.Annotate(err, "fail to restart streamer controller")
+		}
+	}
+
+	s.startBackgroundJobs(ctx)
 
 	defer func() {
 		if err1 := recover(); err1 != nil {
-			s.tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("statck"))
+			s.tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("stack"))
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
 		}
 
@@ -2703,4 +2694,30 @@ func (s *Syncer) getEvent(tctx *tcontext.Context, startLocation *binlog.Location
 	}
 
 	return s.streamerController.GetEvent(tctx)
+}
+
+// returned error means if checkpoint was successful loaded, purging file just log error
+func (s *Syncer) loadCheckpoint(tryPurge bool) error {
+	err := s.checkpoint.LoadMeta()
+	if err != nil {
+		return err
+	}
+
+	if !tryPurge {
+		return nil
+	}
+
+	if err = s.flushCheckPoints(); err != nil {
+		s.tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
+	} else {
+		s.tctx.L().Info("try to remove loaded files")
+		metadataFile := path.Join(s.cfg.Dir, "metadata")
+		if err = os.Remove(metadataFile); err != nil {
+			s.tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
+		}
+		if err = os.Remove(s.cfg.Dir); err != nil {
+			s.tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
+		}
+	}
+	return nil
 }
