@@ -1105,10 +1105,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}
 
-	// startLocation is the start location for current received event 
+	// startLocation is the start location for current received event
 	// currentLocation is the end location for current received event (End_log_pos in `show binlog events` for mysql)
 	// lastLocation is the end location for last received (ROTATE / QUERY / XID) event
-	// we use startLocation to replace and skip binlog event of specified position 
+	// we use startLocation to replace and skip binlog event of specified position
 	// we use currentLocation and update table checkpoint in sharding ddl
 	// we use lastLocation to update global checkpoint and table checkpoint
 	var (
