@@ -212,9 +212,9 @@ func IsDDL(sql string) (bool, error) {
 	}
 }
 
-// GetTaskNameFromArgOrFile tries to retrieve name field from the file if arg is filename-like, otherwise returns arg directly
+// GetTaskNameFromArgOrFile tries to retrieve name from the file if arg is yaml-filename-like, otherwise returns arg directly
 func GetTaskNameFromArgOrFile(arg string) string {
-	if !strings.HasSuffix(arg, ".yaml") {
+	if !(strings.HasSuffix(arg, ".yaml") || strings.HasSuffix(arg, ".yml")) {
 		return arg
 	}
 	var (
