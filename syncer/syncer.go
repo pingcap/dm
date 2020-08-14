@@ -175,9 +175,9 @@ type Syncer struct {
 	// TODO: re-implement tracer flow for binlog event later.
 	tracer *tracing.Tracer
 
-	currentLocationMu struct {
+	nextLocation struct {
 		sync.RWMutex
-		currentLocation binlog.Location // use to calc remain binlog size
+		location binlog.Location // use to calc remain binlog size
 	}
 
 	errLocation struct {
@@ -368,57 +368,6 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	rollbackHolder.Add(fr.FuncRollback{Name: "remove-active-realylog", Fn: s.removeActiveRelayLog})
 
 	s.reset()
-	return nil
-}
-
-// initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
-// NOTE: now we don't support modify router rules after task has started
-func (s *Syncer) initShardingGroups() error {
-	// fetch tables from source and filter them
-	sourceTables, err := s.fromDB.fetchAllDoTables(s.baList)
-	if err != nil {
-		return err
-	}
-
-	// convert according to router rules
-	// target-schema -> target-table -> source-IDs
-	mapper := make(map[string]map[string][]string, len(sourceTables))
-	for schema, tables := range sourceTables {
-		for _, table := range tables {
-			targetSchema, targetTable := s.renameShardingSchema(schema, table)
-			mSchema, ok := mapper[targetSchema]
-			if !ok {
-				mapper[targetSchema] = make(map[string][]string, len(tables))
-				mSchema = mapper[targetSchema]
-			}
-			_, ok = mSchema[targetTable]
-			if !ok {
-				mSchema[targetTable] = make([]string, 0, len(tables))
-			}
-			ID, _ := GenTableID(schema, table)
-			mSchema[targetTable] = append(mSchema[targetTable], ID)
-		}
-	}
-
-	loadMeta, err2 := s.sgk.LoadShardMeta(s.cfg.Flavor, s.cfg.EnableGTID)
-	if err2 != nil {
-		return err2
-	}
-
-	// add sharding group
-	for targetSchema, mSchema := range mapper {
-		for targetTable, sourceIDs := range mSchema {
-			tableID, _ := GenTableID(targetSchema, targetTable)
-			_, _, _, _, err := s.sgk.AddGroup(targetSchema, targetTable, sourceIDs, loadMeta[tableID], false)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	shardGroup := s.sgk.Groups()
-	s.tctx.L().Debug("initial sharding groups", zap.Int("shard group length", len(shardGroup)), zap.Reflect("shard group", shardGroup))
-
 	return nil
 }
 
@@ -1121,18 +1070,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}
 
-	// startLocation is the start location for current received event
-	// nextLocation is the end location for current received event (End_log_pos in `show binlog events` for mysql),
-	//     which means the start location of next event
-	// currentLocation is the end location for current received event (End_log_pos in `show binlog events` for mysql)
+	// nextLocation is the expected location where we will get a binlog event (End_log_pos in `show binlog events` for mysql), which means the start location of next event
 	// lastLocation is the end location for last received (ROTATE / QUERY / XID) event
-	// we use startLocation to replace and skip binlog event of specified position
-	// we use currentLocation and update table checkpoint in sharding ddl
+	// we use nextLocation to determine whether replace or skip some event, and update table checkpoint in sharding ddl
 	// we use lastLocation to update global checkpoint and table checkpoint
 	var (
-		currentLocation = s.checkpoint.GlobalPoint() // also init to global checkpoint
-		startLocation   = s.checkpoint.GlobalPoint()
-		lastLocation    = s.checkpoint.GlobalPoint()
+		nextLocation = s.checkpoint.GlobalPoint()
+		lastLocation = s.checkpoint.GlobalPoint()
 	)
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastLocation))
 
@@ -1200,21 +1144,21 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		// if remaining DDLs in sequence, redirect global stream to the next sharding DDL position
 		if !shardingReSync.allResolved {
-			nextLocation, err2 := s.sgk.ActiveDDLFirstLocation(shardingReSync.targetSchema, shardingReSync.targetTable)
+			nextLocation2, err2 := s.sgk.ActiveDDLFirstLocation(shardingReSync.targetSchema, shardingReSync.targetTable)
 			if err2 != nil {
 				return err2
 			}
 
-			currentLocation = nextLocation.Clone()
-			lastLocation = nextLocation.Clone()
+			nextLocation = nextLocation2.Clone()
+			lastLocation = nextLocation2.Clone()
 		} else {
-			currentLocation = savedGlobalLastLocation.Clone()
+			nextLocation = savedGlobalLastLocation.Clone()
 			lastLocation = savedGlobalLastLocation.Clone() // restore global last pos
 		}
 		// if suffix>0, we are replacing error
-		s.isReplacingErr = (currentLocation.Suffix != 0)
+		s.isReplacingErr = (nextLocation.Suffix != 0)
 
-		err3 := s.streamerController.RedirectStreamer(s.tctx, currentLocation.Clone())
+		err3 := s.streamerController.RedirectStreamer(s.tctx, nextLocation.Clone())
 		if err3 != nil {
 			return err3
 		}
@@ -1224,9 +1168,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 
 	for {
-		s.currentLocationMu.Lock()
-		s.currentLocationMu.currentLocation = currentLocation.Clone()
-		s.currentLocationMu.Unlock()
+		s.nextLocation.Lock()
+		s.nextLocation.location = nextLocation.Clone()
+		s.nextLocation.Unlock()
 
 		// fetch from sharding resync channel if needed, and redirect global
 		// stream to current binlog position recorded by ShardingReSync
@@ -1236,9 +1180,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			savedGlobalLastLocation = lastLocation.Clone() // save global last location
 			lastLocation = shardingReSync.currLocation.Clone()
 
-			currentLocation = shardingReSync.currLocation.Clone()
+			nextLocation = shardingReSync.currLocation.Clone()
 			// if suffix>0, we are replacing error
-			s.isReplacingErr = (currentLocation.Suffix != 0)
+			s.isReplacingErr = (nextLocation.Suffix != 0)
 			err = s.streamerController.RedirectStreamer(s.tctx, shardingReSync.currLocation.Clone())
 			if err != nil {
 				return err
@@ -1257,7 +1201,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		startTime := time.Now()
-		e, err = s.getEvent(tctx, &currentLocation)
+		e, err = s.getEvent(tctx, &nextLocation)
 
 		if err == context.Canceled {
 			s.tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last location", lastLocation))
@@ -1325,9 +1269,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.tctx.L().Debug("receive binlog event", zap.Reflect("header", e.Header))
 
 		// TODO: support all event
-		// we calculate startLocation and endLocation(currentLocation) for Rows/Query event here
-		// set startLocation empty for other events to avoid misuse
-		startLocation = binlog.Location{}
+		// we calculate startLocation and update nextLocation for Rows/Query event here
+		var startLocation binlog.Location
 		switch e.Event.(type) {
 		case *replication.RowsEvent, *replication.QueryEvent:
 			startLocation = binlog.Location{
@@ -1336,14 +1279,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					Pos:  e.Header.LogPos - e.Header.EventSize,
 				},
 				GTIDSet: lastLocation.GTIDSet.Clone(),
-				Suffix:  currentLocation.Suffix,
+				Suffix:  nextLocation.Suffix,
 			}
 
 			endSuffix := startLocation.Suffix
 			if s.isReplacingErr {
 				endSuffix++
 			}
-			currentLocation = binlog.Location{
+			nextLocation = binlog.Location{
 				Position: mysql.Position{
 					Name: lastLocation.Position.Name,
 					Pos:  e.Header.LogPos,
@@ -1352,16 +1295,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				Suffix:  endSuffix,
 			}
 			if ev, ok := e.Event.(*replication.QueryEvent); ok {
-				currentLocation.GTIDSet.Set(ev.GSet)
+				nextLocation.GTIDSet.Set(ev.GSet)
 			}
 
 			if !s.isReplacingErr {
-				apply, op := s.errOperatorHolder.MatchAndApply(&startLocation, &currentLocation)
+				apply, op := s.errOperatorHolder.MatchAndApply(&startLocation, &nextLocation)
 				if apply {
 					if op == pb.ErrorOp_Replace {
 						s.isReplacingErr = true
-						// revert currentLocation to startLocation
-						currentLocation = startLocation.Clone()
+						// revert nextLocation to startLocation
+						nextLocation = startLocation.Clone()
 					}
 					// skip the event
 					continue
@@ -1369,10 +1312,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 			// set endLocation.Suffix=0 of last replace event
 			// also redirect stream to next event
-			if currentLocation.Suffix > 0 && e.Header.EventSize > 0 {
-				currentLocation.Suffix = 0
+			if nextLocation.Suffix > 0 && e.Header.EventSize > 0 {
+				nextLocation.Suffix = 0
 				s.isReplacingErr = false
-				err = s.streamerController.RedirectStreamer(s.tctx, currentLocation.Clone())
+				err = s.streamerController.RedirectStreamer(s.tctx, nextLocation.Clone())
 				if err != nil {
 					return err
 				}
@@ -1384,7 +1327,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			tctx:                tctx,
 			header:              e.Header,
 			startLocation:       &startLocation,
-			currentLocation:     &currentLocation,
+			currentLocation:     &nextLocation,
 			lastLocation:        &lastLocation,
 			shardingReSync:      shardingReSync,
 			latestOp:            &latestOp,
@@ -1401,23 +1344,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
 			err = s.handleRotateEvent(ev, ec)
-			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
-				return err
-			}
 		case *replication.RowsEvent:
 			err = s.handleRowsEvent(ev, ec)
-			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
-				return err
-			}
 		case *replication.QueryEvent:
 			err = s.handleQueryEvent(ev, ec)
-			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
-				return err
-			}
 		case *replication.XIDEvent:
 			if shardingReSync != nil {
 				shardingReSync.currLocation.Position.Pos = e.Header.LogPos
-				shardingReSync.currLocation.Suffix = currentLocation.Suffix
+				shardingReSync.currLocation.Suffix = nextLocation.Suffix
 				shardingReSync.currLocation.GTIDSet.Set(ev.GSet)
 
 				// only need compare binlog position?
@@ -1433,17 +1367,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			latestOp = xid
-			currentLocation.Position.Pos = e.Header.LogPos
-			currentLocation.GTIDSet.Set(ev.GSet)
-			s.tctx.L().Debug("", zap.String("event", "XID"), zap.Stringer("last location", lastLocation), log.WrapStringerField("location", currentLocation))
+			nextLocation.Position.Pos = e.Header.LogPos
+			nextLocation.GTIDSet.Set(ev.GSet)
+			s.tctx.L().Debug("", zap.String("event", "XID"), zap.Stringer("last location", lastLocation), log.WrapStringerField("location", nextLocation))
 			lastLocation.Position.Pos = e.Header.LogPos // update lastPos
 			lastLocation.GTIDSet.Set(ev.GSet)
 
-			job := newXIDJob(currentLocation, startLocation, currentLocation, traceID)
+			job := newXIDJob(nextLocation, startLocation, nextLocation, traceID)
 			err = s.addJobFunc(job)
-			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
-				return err
-			}
 		case *replication.GenericEvent:
 			switch e.Header.EventType {
 			case replication.HEARTBEAT_EVENT:
@@ -1451,11 +1382,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if s.checkpoint.CheckGlobalPoint() {
 					s.tctx.L().Info("meet heartbeat event and then flush jobs")
 					err = s.flushJobs()
-					if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
-						return err
-					}
 				}
 			}
+		}
+		if err = s.handleEventError(err, &startLocation, &nextLocation); err != nil {
+			return err
 		}
 	}
 }
@@ -1543,7 +1474,13 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return nil
 	}
 
-	s.tctx.L().Debug("", zap.String("event", "row"), zap.String("origin schema", originSchema), zap.String("origin table", originTable), zap.String("target schema", schemaName), zap.String("target table", tableName), log.WrapStringerField("location", ec.currentLocation), zap.Reflect("raw event data", ev.Rows))
+	s.tctx.L().Debug("", zap.String("event", "row"),
+		zap.String("origin schema", originSchema),
+		zap.String("origin table", originTable),
+		zap.String("target schema", schemaName),
+		zap.String("target table", tableName),
+		log.WrapStringerField("location", ec.currentLocation),
+		zap.Reflect("raw event data", ev.Rows))
 
 	if s.cfg.EnableHeartbeat {
 		s.heartbeat.TryUpdateTaskTs(s.cfg.Name, originSchema, originTable, ev.Rows)
@@ -1555,7 +1492,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 	if ignore {
 		skipBinlogDurationHistogram.WithLabelValues("rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
-		// for RowsEvent, we should record lastLocation rather than currentLocation
+		// for RowsEvent, we should record lastLocation rather than nextLocation
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
 	}
 
@@ -1817,103 +1754,14 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return err
 	}
 
-	if s.cfg.ShardMode == "" {
-		s.tctx.L().Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
-
-		// interrupted after flush old checkpoint and before track DDL.
-		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-			err = handleFlushCheckpointStage(1, val.(int), "before track DDL")
-			if err != nil {
-				failpoint.Return(err)
-			}
-		})
-
-		// run trackDDL before add ddl job to make sure checkpoint can be flushed
-		for _, td := range needTrackDDLs {
-			if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
-				return err
-			}
-		}
-
-		// interrupted after track DDL and before execute DDL.
-		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-			err = handleFlushCheckpointStage(2, val.(int), "before execute DDL")
-			if err != nil {
-				failpoint.Return(err)
-			}
-		})
-
-		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, *ec.traceID, sourceTbls)
-		err = s.addJobFunc(job)
-		if err != nil {
-			return err
-		}
-
-		// when add ddl job, will execute ddl and then flush checkpoint.
-		// if execute ddl failed, the execErrorDetected will be true.
-		err = s.execError.Get()
-		if err != nil {
-			return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
-		}
-
-		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
-
-		for _, table := range onlineDDLTableNames {
-			s.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.String("schema", table.Schema), zap.String("table", table.Name))
-			err = s.onlineDDL.Finish(ec.tctx, table.Schema, table.Name)
-			if err != nil {
-				return terror.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
-			}
-		}
-
-		return nil
-	}
-
-	// handle shard DDL in optimistic mode.
+	// handle shard DDL
 	if s.cfg.ShardMode == config.ShardOptimistic {
 		return s.handleQueryEventOptimistic(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames)
+	} else if s.cfg.ShardMode == config.ShardPessimistic {
+		return s.handleQueryEventPessimistic(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames, ddlInfo, sqls)
 	}
 
-	// handle sharding ddl
-	var (
-		needShardingHandle bool
-		group              *ShardingGroup
-		synced             bool
-		active             bool
-		remain             int
-		source             string
-	)
-	// for sharding DDL, the firstPos should be the `Pos` of the binlog, not the `End_log_pos`
-	// so when restarting before sharding DDLs synced, this binlog can be re-sync again to trigger the TrySync
-	startLocation := ec.startLocation.Clone()
-
-	source, _ = GenTableID(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name)
-
-	var annotate string
-	switch ddlInfo.stmt.(type) {
-	case *ast.CreateDatabaseStmt:
-		// for CREATE DATABASE, we do nothing. when CREATE TABLE under this DATABASE, sharding groups will be added
-	case *ast.CreateTableStmt:
-		// for CREATE TABLE, we add it to group
-		needShardingHandle, group, synced, remain, err = s.sgk.AddGroup(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, []string{source}, nil, true)
-		if err != nil {
-			return err
-		}
-		annotate = "add table to shard group"
-	default:
-		needShardingHandle, group, synced, active, remain, err = s.sgk.TrySync(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, source, startLocation.Clone(), ec.currentLocation.Clone(), needHandleDDLs)
-		if err != nil {
-			return err
-		}
-		annotate = "try to sync table in shard group"
-		// meets DDL that will not be processed in sequence sharding
-		if !active {
-			s.tctx.L().Info("skip in-activeDDL", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Bool("in-sharding", needShardingHandle), zap.Stringer("start location", startLocation), zap.Bool("is-synced", synced), zap.Int("unsynced", remain))
-			return nil
-		}
-	}
-
-	s.tctx.L().Info(annotate, zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Bool("in-sharding", needShardingHandle), zap.Stringer("start location", startLocation), zap.Bool("is-synced", synced), zap.Int("unsynced", remain))
+	s.tctx.L().Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 
 	// interrupted after flush old checkpoint and before track DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
@@ -1923,102 +1771,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 	})
 
+	// run trackDDL before add ddl job to make sure checkpoint can be flushed
 	for _, td := range needTrackDDLs {
 		if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
 			return err
 		}
 	}
-
-	if needShardingHandle {
-		target, _ := GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
-		unsyncedTableGauge.WithLabelValues(s.cfg.Name, target, s.cfg.SourceID).Set(float64(remain))
-		err = ec.safeMode.IncrForTable(s.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
-		if err != nil {
-			return err
-		}
-
-		// save checkpoint in memory, don't worry, if error occurred, we can rollback it
-		// for non-last sharding DDL's table, this checkpoint will be used to skip binlog event when re-syncing
-		// NOTE: when last sharding DDL executed, all this checkpoints will be flushed in the same txn
-		s.tctx.L().Info("save table checkpoint for source", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
-		s.saveTablePoint(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name, ec.currentLocation.Clone())
-		if !synced {
-			s.tctx.L().Info("source shard group is not synced", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
-			return nil
-		}
-
-		s.tctx.L().Info("source shard group is synced", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
-		err = ec.safeMode.DescForTable(s.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try disable safe-mode after sharding group synced
-		if err != nil {
-			return err
-		}
-		// maybe multi-groups' sharding DDL synced in this for-loop (one query-event, multi tables)
-		if cap(*ec.shardingReSyncCh) < len(sqls) {
-			*ec.shardingReSyncCh = make(chan *ShardingReSync, len(sqls))
-		}
-		firstEndLocation := group.FirstEndPosUnresolved()
-		if firstEndLocation == nil {
-			return terror.ErrSyncerUnitFirstEndPosNotFound.Generate(source)
-		}
-
-		allResolved, err2 := s.sgk.ResolveShardingDDL(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
-		if err2 != nil {
-			return err2
-		}
-		*ec.shardingReSyncCh <- &ShardingReSync{
-			currLocation:   firstEndLocation.Clone(),
-			latestLocation: ec.currentLocation.Clone(),
-			targetSchema:   ddlInfo.tableNames[1][0].Schema,
-			targetTable:    ddlInfo.tableNames[1][0].Name,
-			allResolved:    allResolved,
-		}
-
-		// Don't send new DDLInfo to dm-master until all local sql jobs finished
-		// since jobWg is flushed by flushJobs before, we don't wait here any more
-
-		// NOTE: if we need singleton Syncer (without dm-master) to support sharding DDL sync
-		// we should add another config item to differ, and do not save DDLInfo, and not wait for ddlExecInfo
-
-		// construct & send shard DDL info into etcd, DM-master will handle it.
-		shardInfo := s.pessimist.ConstructInfo(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, needHandleDDLs)
-		rev, err2 := s.pessimist.PutInfo(ec.tctx.Ctx, shardInfo)
-		if err2 != nil {
-			return err2
-		}
-		shardLockResolving.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Set(1) // block and wait DDL lock to be synced
-		s.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo), zap.Int64("revision", rev))
-
-		shardOp, err2 := s.pessimist.GetOperation(ec.tctx.Ctx, shardInfo, rev+1)
-		shardLockResolving.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Set(0)
-		if err2 != nil {
-			return err2
-		}
-
-		if shardOp.Exec {
-			failpoint.Inject("ShardSyncedExecutionExit", func() {
-				s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ShardSyncedExecutionExit"))
-				s.flushCheckPoints()
-				utils.OsExit(1)
-			})
-			failpoint.Inject("SequenceShardSyncedExecutionExit", func() {
-				group := s.sgk.Group(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
-				if group != nil {
-					// exit in the first round sequence sharding DDL only
-					if group.meta.ActiveIdx() == 1 {
-						s.tctx.L().Warn("exit triggered", zap.String("failpoint", "SequenceShardSyncedExecutionExit"))
-						s.flushCheckPoints()
-						utils.OsExit(1)
-					}
-				}
-			})
-
-			s.tctx.L().Info("execute DDL job", zap.String("event", "query"), zap.String("source", source), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation), zap.Stringer("operation", shardOp))
-		} else {
-			s.tctx.L().Info("ignore DDL job", zap.String("event", "query"), zap.String("source", source), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation), zap.Stringer("operation", shardOp))
-		}
-	}
-
-	s.tctx.L().Info("start to handle ddls in shard mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
 
 	// interrupted after track DDL and before execute DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
@@ -2028,26 +1786,38 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 	})
 
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, *ec.traceID, nil)
+	job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, *ec.traceID, sourceTbls)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
 	}
 
+	// when add ddl job, will execute ddl and then flush checkpoint.
+	// if execute ddl failed, the execErrorDetected will be true.
 	err = s.execError.Get()
 	if err != nil {
 		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 	}
 
-	if len(onlineDDLTableNames) > 0 {
-		err = s.clearOnlineDDL(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+	s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
+
+	for _, table := range onlineDDLTableNames {
+		s.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.String("schema", table.Schema), zap.String("table", table.Name))
+		err = s.onlineDDL.Finish(ec.tctx, table.Schema, table.Name)
 		if err != nil {
-			return err
+			return terror.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
 		}
 	}
 
-	s.tctx.L().Info("finish to handle ddls in shard mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
 	return nil
+
+}
+
+// trackedDDL keeps data needed for schema tracker.
+type trackedDDL struct {
+	rawSQL     string
+	stmt       ast.StmtNode
+	tableNames [][]*filter.Table
 }
 
 func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.Table, stmt ast.StmtNode, ec *eventContext) error {
@@ -2216,9 +1986,9 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				tps = (total - last) / seconds
 				totalTps = total / totalSeconds
 
-				s.currentLocationMu.RLock()
-				currentLocation := s.currentLocationMu.currentLocation.Clone()
-				s.currentLocationMu.RUnlock()
+				s.nextLocation.RLock()
+				currentLocation := s.nextLocation.location.Clone()
+				s.nextLocation.RUnlock()
 
 				remainingSize, err2 := s.fromDB.countBinaryLogsSize(currentLocation.Position)
 				if err2 != nil {
@@ -2686,11 +2456,11 @@ func (s *Syncer) handleEventError(err error, startLocation, endLocation *binlog.
 }
 
 // getEvent gets an event from streamerController or errOperatorHolder
-func (s *Syncer) getEvent(tctx *tcontext.Context, startLocation *binlog.Location) (*replication.BinlogEvent, error) {
+func (s *Syncer) getEvent(tctx *tcontext.Context, location *binlog.Location) (*replication.BinlogEvent, error) {
 	// next event is a replace event
 	if s.isReplacingErr {
-		s.tctx.L().Info(fmt.Sprintf("try to get replace event"), zap.Stringer("location", startLocation))
-		return s.errOperatorHolder.GetEvent(startLocation)
+		s.tctx.L().Info(fmt.Sprintf("try to get replace event"), zap.Stringer("location", location))
+		return s.errOperatorHolder.GetEvent(location)
 	}
 
 	return s.streamerController.GetEvent(tctx)
