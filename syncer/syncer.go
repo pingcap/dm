@@ -1341,13 +1341,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			shardingReSyncCh:    &shardingReSyncCh,
 		}
 
+		var err2 error
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
-			err = s.handleRotateEvent(ev, ec)
+			err2 = s.handleRotateEvent(ev, ec)
 		case *replication.RowsEvent:
-			err = s.handleRowsEvent(ev, ec)
+			err2 = s.handleRowsEvent(ev, ec)
 		case *replication.QueryEvent:
-			err = s.handleQueryEvent(ev, ec)
+			err2 = s.handleQueryEvent(ev, ec)
 		case *replication.XIDEvent:
 			if shardingReSync != nil {
 				shardingReSync.currLocation.Position.Pos = e.Header.LogPos
@@ -1374,18 +1375,18 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			lastLocation.GTIDSet.Set(ev.GSet)
 
 			job := newXIDJob(nextLocation, startLocation, nextLocation, traceID)
-			err = s.addJobFunc(job)
+			err2 = s.addJobFunc(job)
 		case *replication.GenericEvent:
 			switch e.Header.EventType {
 			case replication.HEARTBEAT_EVENT:
 				// flush checkpoint even if there are no real binlog events
 				if s.checkpoint.CheckGlobalPoint() {
 					s.tctx.L().Info("meet heartbeat event and then flush jobs")
-					err = s.flushJobs()
+					err2 = s.flushJobs()
 				}
 			}
 		}
-		if err = s.handleEventError(err, &startLocation, &nextLocation); err != nil {
+		if err := s.handleEventError(err2, &startLocation, &nextLocation); err != nil {
 			return err
 		}
 	}
