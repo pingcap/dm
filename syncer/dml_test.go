@@ -15,7 +15,6 @@ package syncer
 
 import (
 	"math"
-	"strconv"
 
 	. "github.com/pingcap/check"
 )
@@ -36,8 +35,8 @@ func (s *testSyncerSuite) TestCastUnsigned(c *C) {
 		{int32(-math.Exp2(23)), true, "mediumint(8) unsigned", uint32(math.Exp2(23))},
 		{int32(-math.Exp2(31)), false, "int(11)", int32(-math.Exp2(31))}, // INT
 		{int32(-math.Exp2(31)), true, "int(10) unsigned", uint32(math.Exp2(31))},
-		{int64(-math.Exp2(63)), false, "bigint(20)", int64(-math.Exp2(63))},                                 // BIGINT
-		{int64(-math.Exp2(63)), true, "bigint(20) unsigned", strconv.FormatUint(uint64(math.Exp2(63)), 10)}, // special case use string to represent uint64
+		{int64(-math.Exp2(63)), false, "bigint(20)", int64(-math.Exp2(63))}, // BIGINT
+		{int64(-math.Exp2(63)), true, "bigint(20) unsigned", uint64(math.Exp2(63))},
 	}
 	for _, cs := range cases {
 		obtained := castUnsigned(cs.data, cs.unsigned, cs.Type)

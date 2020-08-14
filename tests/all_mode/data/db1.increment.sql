@@ -29,4 +29,16 @@ alter database all_mode CHARACTER SET = utf8mb4;
 
 -- test decimal type
 alter table t1 add column lat decimal(9,6) default '0.000000';
-insert into t1 (id, name, info, lat) values (8, 'gentest', '{"id":127}', '123.123')
+insert into t1 (id, name, info, lat) values (8, 'gentest', '{"id":127}', '123.123');
+
+-- test bit type
+alter table t1 add column bin bit(1) default NULL;
+insert into t1 (id, name, info, lat, bin) values (9, 'gentest', '{"id":128}', '123.123', b'0');
+insert into t1 (id, name, info, lat, bin) values (10, 'gentest', '{"id":129}', '123.123', b'1');
+
+-- test bigint, min and max value for bigint/bigint unsigned
+alter table t1 add column big1 bigint;
+alter table t1 add column big2 bigint unsigned;
+insert into t1 (id, name, info, lat, big1, big2) values (11, 'gentest', '{"id":130}', '123.123', -9223372036854775808, 0);
+insert into t1 (id, name, info, lat, big1, big2) values (12, 'gentest', '{"id":131}', '123.123', 9223372036854775807, 18446744073709551615);
+
