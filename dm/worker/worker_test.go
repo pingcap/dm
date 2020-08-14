@@ -97,8 +97,8 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	defer ETCD.Close()
 
 	cfg := NewConfig()
-	sourceConfig := loadSourceConfigWithoutPassword(c)
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	sourceConfig := loadSourceConfigWithoutPassword(c)
 	sourceConfig.Checker.CheckEnable = true
 	sourceConfig.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}
 	sourceConfig.Checker.BackoffMin = config.Duration{Duration: 20 * time.Millisecond}
@@ -124,8 +124,6 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/loader/ignoreLoadCheckpointErr", `return()`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/loader/ignoreLoadCheckpointErr")
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/TaskCheckInterval", `return("500ms")`), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/TaskCheckInterval")
 
 	s := NewServer(cfg)
 
