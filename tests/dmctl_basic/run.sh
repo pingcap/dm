@@ -131,8 +131,12 @@ function run() {
     resume_task_success $TASK_NAME
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 20
 
+    # test use task file instead of task name
+    pause_task_success "$cur/conf/dm-task.yaml"
+    resume_task_success "$cur/conf/dm-task.yaml"
     update_relay_success $dm_worker1_conf 127.0.0.1:$WORKER1_PORT
     update_relay_success $dm_worker2_conf 127.0.0.1:$WORKER2_PORT
+
     # check worker config backup file is correct
     [ -f $WORK_DIR/worker1/dm-worker-config.bak ] && cmp $WORK_DIR/worker1/dm-worker-config.bak $cur/conf/dm-worker1.toml
     [ -f $WORK_DIR/worker2/dm-worker-config.bak ] && cmp $WORK_DIR/worker2/dm-worker-config.bak $cur/conf/dm-worker2.toml
