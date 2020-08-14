@@ -206,9 +206,9 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
             "unsupported add column .* constraint UNIQUE KEY" 2
 
     # begin to handle error
-    # replace 11/21 first ddl without unique
+    # split 11/21 first ddl into two ddls
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test replace alter table ${db}.${tb1} add column c int;" \
+            "handle-error test replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c)" \
             "\"result\": true" 3
 
     if [[ "$1" = "pessimistic" ]]; then
@@ -218,9 +218,9 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
                 "query-status test" \
                 "detect inconsistent DDL sequence from source" 2
 
-        # replace 12,22 first ddl without unique
+        # split 12,22 first ddl into two ddls
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-                "handle-error test -s mysql-replica-01,mysql-replica-02 replace alter table ${db}.${tb2} add column c int;" \
+                "handle-error test -s mysql-replica-01,mysql-replica-02 replace alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c)" \
                 "\"result\": true" 3
 
         # 11/21 second ddl: no database selected

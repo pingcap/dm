@@ -1105,10 +1105,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}
 
-	// currentPos is the pos for current received event (End_log_pos in `show binlog events` for mysql)
-	// lastPos is the pos for last received (ROTATE / QUERY / XID) event (End_log_pos in `show binlog events` for mysql)
-	// we use currentPos to replace and skip binlog event of specified position and update table checkpoint in sharding ddl
-	// we use lastPos to update global checkpoint and table checkpoint
+	// startLocation is the start location for current received event
+	// currentLocation is the end location for current received event (End_log_pos in `show binlog events` for mysql)
+	// lastLocation is the end location for last received (ROTATE / QUERY / XID) event
+	// we use startLocation to replace and skip binlog event of specified position
+	// we use currentLocation and update table checkpoint in sharding ddl
+	// we use lastLocation to update global checkpoint and table checkpoint
 	var (
 		currentLocation = s.checkpoint.GlobalPoint() // also init to global checkpoint
 		startLocation   = s.checkpoint.GlobalPoint()
@@ -1331,11 +1333,21 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		s.tctx.L().Debug("receive binlog event", zap.Reflect("header", e.Header))
 
-		startLocation = currentLocation.Clone()
 		// TODO: support all event
-		// we calculate endLocation(currentLocation) for Rows/Query event here
+		// we calculate startLocation and endLocation(currentLocation) for Rows/Query event here
+		// set startLocation empty for other events to avoid misuse
+		startLocation = binlog.Location{}
 		switch e.Event.(type) {
 		case *replication.RowsEvent, *replication.QueryEvent:
+			startLocation = binlog.Location{
+				Position: mysql.Position{
+					Name: lastLocation.Position.Name,
+					Pos:  e.Header.LogPos - e.Header.EventSize,
+				},
+				GTIDSet: lastLocation.GTIDSet.Clone(),
+				Suffix:  currentLocation.Suffix,
+			}
+
 			endSuffix := startLocation.Suffix
 			if s.isReplacingErr {
 				endSuffix++
@@ -1365,9 +1377,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			}
 			// set endLocation.Suffix=0 of last replace event
+			// also redirect stream to next event
 			if currentLocation.Suffix > 0 && e.Header.EventSize > 0 {
 				currentLocation.Suffix = 0
 				s.isReplacingErr = false
+				err = s.streamerController.RedirectStreamer(s.tctx, currentLocation.Clone())
+				if err != nil {
+					return err
+				}
 			}
 		default:
 		}
