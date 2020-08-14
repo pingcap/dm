@@ -363,7 +363,7 @@ func castUnsigned(data interface{}, unsigned bool, tp string) interface{} {
 		}
 		return uint32(v)
 	case int64:
-		return strconv.FormatUint(uint64(v), 10)
+		return uint64(v)
 	}
 
 	return data
