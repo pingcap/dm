@@ -174,7 +174,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	needHandleDDLs = op.DDLs
 
 	s.tctx.L().Info("start to handle ddls in optimistic shard mode", zap.String("event", "query"),
-		zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
+		zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.nextLocation))
 
 	// interrupted after track DDL and before execute DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
@@ -189,7 +189,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 		tableNames: needTrackDDLs[0].tableNames,
 		stmt:       needTrackDDLs[0].stmt,
 	}
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, *ec.traceID, nil)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.nextLocation, *ec.traceID, nil)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
@@ -211,7 +211,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	}
 
 	s.tctx.L().Info("finish to handle ddls in optimistic shard mode", zap.String("event", "query"),
-		zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
+		zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.nextLocation))
 	return nil
 }
 

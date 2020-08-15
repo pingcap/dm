@@ -766,7 +766,7 @@ func (k *ShardingGroupKeeper) LoadShardMeta(flavor string, enableGTID bool) (map
 
 // ShardingReSync represents re-sync info for a sharding DDL group
 type ShardingReSync struct {
-	currLocation   binlog.Location // current DDL's binlog location, initialize to first DDL's location
+	nextLocation   binlog.Location // current DDL's binlog end location, initialize to first DDL's location
 	latestLocation binlog.Location // latest DDL's binlog location
 	targetSchema   string
 	targetTable    string
@@ -775,5 +775,5 @@ type ShardingReSync struct {
 
 // String implements stringer.String
 func (s *ShardingReSync) String() string {
-	return fmt.Sprintf("{schema: %s, table: %s, current location: %v, latest location: %v, all resolved: %v}", s.targetSchema, s.targetTable, s.currLocation, s.latestLocation, s.allResolved)
+	return fmt.Sprintf("{schema: %s, table: %s, next location: %v, latest location: %v, all resolved: %v}", s.targetSchema, s.targetTable, s.nextLocation, s.latestLocation, s.allResolved)
 }
