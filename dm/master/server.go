@@ -841,14 +841,31 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
-	resp := &pb.UnlockDDLLockResponse{
-		Result: true,
+	resp := &pb.UnlockDDLLockResponse{}
+
+	task := utils.ExtractTaskFromLockID(req.ID)
+	if task == "" {
+		resp.Msg = "can't find task name from lock-ID"
+		return resp, nil
 	}
+	cfgStr := s.scheduler.GetTaskCfg(task)
+	cfg := config.NewTaskConfig()
+	if err := cfg.Decode(cfgStr); err != nil {
+		resp.Msg = err.Error()
+		return resp, nil
+	}
+
+	if cfg.ShardMode != config.ShardPessimistic {
+		resp.Msg = "`unlock-ddl-lock` is only supported in pessimistic shard mode currently"
+		return resp, nil
+	}
+
 	// TODO: add `unlock-ddl-lock` support for Optimist later.
 	err := s.pessimist.UnlockLock(ctx, req.ID, req.ReplaceOwner, req.ForceRemove)
 	if err != nil {
-		resp.Result = false
 		resp.Msg = err.Error()
+	} else {
+		resp.Result = true
 	}
 
 	return resp, nil

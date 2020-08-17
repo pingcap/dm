@@ -16,6 +16,8 @@ package utils
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -231,4 +233,20 @@ func CompareShardingDDLs(s, t []string) bool {
 	}
 
 	return true
+}
+
+// GenDDLLockID returns lock ID used in shard-DDL
+func GenDDLLockID(task, schema, table string) string {
+	return fmt.Sprintf("%s-%s", task, dbutil.TableName(schema, table))
+}
+
+// ExtractTaskFromLockID extract task from lockID
+func ExtractTaskFromLockID(lockID string) string {
+	pattern := regexp.MustCompile("(.*)\\-\\`(.*)\\`.\\`(.*)\\`")
+	strs := pattern.FindStringSubmatch(lockID)
+	// strs should be [full-lock-ID, task, db, table] if successful matched
+	if len(strs) < 4 {
+		return ""
+	}
+	return strs[1]
 }

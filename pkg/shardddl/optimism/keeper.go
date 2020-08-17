@@ -14,11 +14,10 @@
 package optimism
 
 import (
-	"fmt"
 	"sort"
 	"sync"
 
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // LockKeeper used to keep and handle DDL lock conveniently.
@@ -106,7 +105,7 @@ func (lk *LockKeeper) Clear() {
 
 // genDDLLockID generates DDL lock ID from its info.
 func genDDLLockID(info Info) string {
-	return fmt.Sprintf("%s-%s", info.Task, dbutil.TableName(info.DownSchema, info.DownTable))
+	return utils.GenDDLLockID(info.Task, info.DownSchema, info.DownTable)
 }
 
 // TableKeeper used to keep initial tables for a task in optimism mode.
