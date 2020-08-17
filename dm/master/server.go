@@ -849,6 +849,10 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 		return resp, nil
 	}
 	cfgStr := s.scheduler.GetTaskCfg(task)
+	if cfgStr == "" {
+		resp.Msg = "task (" + task + ") which extracted from lock-ID is not found in DM"
+		return resp, nil
+	}
 	cfg := config.NewTaskConfig()
 	if err := cfg.Decode(cfgStr); err != nil {
 		resp.Msg = err.Error()
