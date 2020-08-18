@@ -76,15 +76,10 @@ package master
  */
 
 import (
-	"fmt"
 	"sync"
-)
 
-// genDDLLockID generates a DDL lock ID
-// NOTE: refine to include DDL type or other info?
-func genDDLLockID(task, schema, table string) string {
-	return fmt.Sprintf("%s-`%s`.`%s`", task, schema, table)
-}
+	"github.com/pingcap/dm/pkg/utils"
+)
 
 // LockKeeper used to keep and handle DDL lock
 type LockKeeper struct {
@@ -102,7 +97,7 @@ func NewLockKeeper() *LockKeeper {
 
 // TrySync tries to sync the lock
 func (lk *LockKeeper) TrySync(task, schema, table, worker string, stmts []string, workers []string) (string, bool, int, error) {
-	lockID := genDDLLockID(task, schema, table)
+	lockID := utils.GenDDLLockID(task, schema, table)
 	var (
 		l  *Lock
 		ok bool
