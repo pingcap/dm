@@ -72,6 +72,9 @@ func parseExtraArgs(logger *log.Logger, dumpCfg *export.Config, args []string) e
 	dumplingFlagSet.StringVar(&dumpCfg.Where, "where", dumpCfg.Where, "Dump only selected records")
 	dumplingFlagSet.BoolVar(&dumpCfg.EscapeBackslash, "escape-backslash", dumpCfg.EscapeBackslash, "Use backslash to escape quotation marks")
 	dumplingFlagSet.StringArrayVarP(&filters, "filter", "f", []string{"*.*"}, "Filter to select which tables to dump")
+	dumplingFlagSet.StringVar(&dumpCfg.Security.CAPath, "ca", dumpCfg.Security.CAPath, "The path name to the certificate authority file for TLS connection")
+	dumplingFlagSet.StringVar(&dumpCfg.Security.CertPath, "cert", dumpCfg.Security.CertPath, "The path name to the client certificate file for TLS connection")
+	dumplingFlagSet.StringVar(&dumpCfg.Security.KeyPath, "key", dumpCfg.Security.KeyPath, "The path name to the client private key file for TLS connection")
 
 	err := dumplingFlagSet.Parse(args)
 	if err != nil {

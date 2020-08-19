@@ -239,6 +239,12 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		ret = append(ret, "--skip-tz-utc")
 	}
 
+	if db.Security != nil {
+		dumpConfig.Security.CAPath = db.Security.SSLCA
+		dumpConfig.Security.CertPath = db.Security.SSLCert
+		dumpConfig.Security.KeyPath = db.Security.SSLKey
+	}
+
 	extraArgs := strings.Fields(cfg.ExtraArgs)
 	if len(extraArgs) > 0 {
 		err := parseExtraArgs(&m.logger, dumpConfig, ParseArgLikeBash(extraArgs))
