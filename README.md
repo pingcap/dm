@@ -1,6 +1,6 @@
 # Data Migration Platform
 
-[![Build Status](https://internal.pingcap.net/idc-jenkins/job/build_dm_multi_branch/job/master/badge/icon)
+[![Build Status](https://internal.pingcap.net/idc-jenkins/job/build_dm_multi_branch/job/master/badge/icon)](https://internal.pingcap.net/idc-jenkins/job/build_dm_multi_branch/job/master)
 ![GitHub release](https://img.shields.io/github/tag/pingcap/dm.svg)
 [![Coverage Status](https://coveralls.io/repos/github/pingcap/dm/badge.svg)](https://coveralls.io/github/pingcap/dm)
 [![codecov](https://codecov.io/gh/pingcap/dm/branch/master/graph/badge.svg)](https://codecov.io/gh/pingcap/dm)
