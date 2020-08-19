@@ -1569,11 +1569,7 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 	toDB := *cfg.TargetDB
 	toDB.Adjust()
 	if len(toDB.Password) > 0 {
-		pswdTo, err := utils.Decrypt(toDB.Password)
-		if err != nil {
-			return err
-		}
-		toDB.Password = pswdTo
+		toDB.Password = utils.DecryptOrPlaintext(toDB.Password)
 	}
 
 	// clear shard meta data for pessimistic/optimist
