@@ -88,7 +88,7 @@ var (
 	}
 	builtInSkipDDLPatterns *regexp.Regexp
 
-	passwordPatterns = `(password: \\*"?)(.*?)(\\*"?\\n)`
+	passwordPatterns = `(password: (\\")?)(.*?)((\\")?\\n)`
 	passwordRegexp   *regexp.Regexp
 )
 
@@ -167,6 +167,6 @@ func IsBuildInSkipDDL(sql string) bool {
 
 // HidePassword replace password with ******
 func HidePassword(input string) string {
-	output := passwordRegexp.ReplaceAllString(input, "$1******$3")
+	output := passwordRegexp.ReplaceAllString(input, "$1******$4")
 	return output
 }
