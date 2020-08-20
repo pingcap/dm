@@ -87,11 +87,15 @@ var (
 		"^SET\\s+PASSWORD",
 	}
 	builtInSkipDDLPatterns *regexp.Regexp
+
+	passwordPatterns = `(password: \\*"?)(.*?)(\\*"?\\n)`
+	passwordRegexp   *regexp.Regexp
 )
 
 func init() {
 	OsExit = os.Exit
 	builtInSkipDDLPatterns = regexp.MustCompile("(?i)" + strings.Join(builtInSkipDDLs, "|"))
+	passwordRegexp = regexp.MustCompile(passwordPatterns)
 }
 
 // DecodeBinlogPosition parses a mysql.Position from string format
@@ -159,4 +163,10 @@ func IsContextCanceledError(err error) bool {
 // IsBuildInSkipDDL return true when checked sql that will be skipped for syncer
 func IsBuildInSkipDDL(sql string) bool {
 	return builtInSkipDDLPatterns.FindStringIndex(sql) != nil
+}
+
+// HidePassword replace password with ******
+func HidePassword(input string) string {
+	output := passwordRegexp.ReplaceAllString(input, "$1******$3")
+	return output
 }

@@ -409,7 +409,7 @@ func subtaskCfgPointersToInstances(stCfgPointers ...*config.SubTaskConfig) []con
 
 // StartTask implements MasterServer.StartTask
 func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "StartTask"))
+	log.L().Info("", zap.String("payload", utils.HidePassword(req.String())), zap.String("request", "StartTask"))
 
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
@@ -1358,7 +1358,7 @@ func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, erro
 
 // OperateSource will create or update an upstream source.
 func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest) (*pb.OperateSourceResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateSource"))
+	log.L().Info("", zap.String("payload", utils.HidePassword(req.String())), zap.String("request", "OperateSource"))
 
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
