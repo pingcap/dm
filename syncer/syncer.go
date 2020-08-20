@@ -1800,8 +1800,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 					return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
 				}
 			}
-		}
-		if s.cfg.ShardMode == config.ShardOptimistic {
+		} else if s.cfg.ShardMode == config.ShardOptimistic {
 			switch stmt.(type) {
 			case *ast.TruncateTableStmt:
 				s.tctx.L().Info("ignore truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
