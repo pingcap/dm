@@ -12,16 +12,16 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 # used to coverage wrong usage of dmctl command
 function usage_and_arg_test() {
-    migrate_relay_wrong_arg
-    migrate_relay_without_worker
+#    migrate_relay_wrong_arg
+#    migrate_relay_without_worker
 
-    switch_relay_master_wrong_arg
-    switch_relay_master_without_worker
+#    switch_relay_master_wrong_arg
+#    switch_relay_master_without_worker
 
     unlock_ddl_lock_wrong_arg
     unlock_ddl_lock_invalid_force_remove
 
-    query_error_wrong_arg
+#    query_error_wrong_arg
 
     handle_error_wrong_arg
     handle_error_invalid_binlogpos

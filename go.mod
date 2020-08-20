@@ -28,7 +28,7 @@ require (
 	github.com/pingcap/parser v0.0.0-20200810083003-f0edf4170630
 	github.com/pingcap/pd/v4 v4.0.0-rc.2.0.20200730093003-dc8c75cf7ca0
 	github.com/pingcap/tidb v1.1.0-beta.0.20200812070147-92bf05fb0901
-	github.com/pingcap/tidb-tools v4.0.5-0.20200805025317-02a16e0521cb+incompatible
+	github.com/pingcap/tidb-tools v4.0.5-0.20200819060105-3ac93f6b99d4+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
 	github.com/satori/go.uuid v1.2.0
