@@ -464,7 +464,7 @@ func (t *testConfig) TestFromSubTaskConfigs(c *C) {
 	stCfg2.BAList = &baList2
 
 	var cfg TaskConfig
-	c.Assert(cfg.FromSubTaskConfigs(stCfg1, stCfg2), IsNil)
+	cfg.FromSubTaskConfigs(stCfg1, stCfg2)
 	c.Log(cfg.String())
 
 	cfg2 := TaskConfig{

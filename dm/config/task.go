@@ -596,7 +596,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 
 // FromSubTaskConfigs constructs task configs from a list of valid subtask configs.
 // this method is only used to construct config when importing from v1.0.x now.
-func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) error {
+func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) {
 	// global configs.
 	stCfg0 := stCfgs[0]
 	c.Name = stCfg0.Name
@@ -672,8 +672,6 @@ func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) error {
 			SyncerConfigName:   syncName,
 		})
 	}
-
-	return nil
 }
 
 // checkDuplicateString checks whether the given string array has duplicate string item

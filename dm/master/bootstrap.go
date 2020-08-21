@@ -376,11 +376,7 @@ outerLoop:
 			return cfgLists[i].SourceID < cfgLists[j].SourceID
 		})
 		var mergedCfg config.TaskConfig
-		err2 := mergedCfg.FromSubTaskConfigs(cfgLists...)
-		if err2 != nil {
-			tctx.Logger.Error("fail to construct task config from subtask configs") // only log it.
-			continue
-		}
+		mergedCfg.FromSubTaskConfigs(cfgLists...)
 		err2 = s.scheduler.AddTaskCfg(mergedCfg)
 		if err2 != nil {
 			tctx.Logger.Error("fail to add task config into the cluster") // only log it
