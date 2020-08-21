@@ -28,7 +28,7 @@ import (
 func NewShowDDLLocksCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show-ddl-locks [-s source ...] [task-name]",
-		Short: "show un-resolved DDL locks",
+		Short: "Shows un-resolved DDL locks.",
 		RunE:  showDDLLocksFunc,
 	}
 	return cmd

@@ -53,7 +53,7 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage: true,
 	}
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
-	cmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "source", "s", []string{}, "MySQL Source ID")
+	cmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "source", "s", []string{}, "MySQL Source ID.")
 	cmd.AddCommand(
 		master.NewStartTaskCmd(),
 		master.NewStopTaskCmd(),

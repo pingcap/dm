@@ -29,7 +29,7 @@ import (
 func NewStartTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start-task [-s source ...] [--remove-meta] <config-file>",
-		Short: "start a task as defined in the config file",
+		Short: "Starts a task as defined in the configuration file.",
 		RunE:  startTaskFunc,
 	}
 	cmd.Flags().BoolP("remove-meta", "", false, "whether to remove task's meta data")
