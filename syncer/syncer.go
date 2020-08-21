@@ -1391,6 +1391,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		default:
 		}
 
+		// check pass DumpExitLocation and try disable safe mode, but not in sharding or replacing error
+		if s.cfg.DumpExitLocation != nil && !s.isReplacingErr && shardingReSync == nil {
+			if binlog.CompareLocation(currentLocation, *s.cfg.DumpExitLocation, s.cfg.EnableGTID) >= 0 {
+				s.cfg.DumpExitLocation = nil
+				safeMode.Add(tctx, -1)
+			}
+		}
+
 		ec := eventContext{
 			tctx:                tctx,
 			header:              e.Header,
