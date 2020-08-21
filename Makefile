@@ -147,7 +147,7 @@ terror_check:
 
 tidy_mod:
 	@echo "tidy go.mod"
-	go mod tidy
+	_utils/mod_check/check.sh
 
 dm_integration_test_build: retool_setup
 	$(FAILPOINT_ENABLE)
