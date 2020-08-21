@@ -276,6 +276,7 @@ func (m *Dumpling) detectAnsiQuotes() {
 	if err != nil {
 		return
 	}
+	defer db.Close()
 	enable, err := utils.HasAnsiQuotesMode(db)
 	if err != nil {
 		return
