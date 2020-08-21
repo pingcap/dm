@@ -602,6 +602,86 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 	return cfgs, nil
 }
 
+// FromSubTaskConfigs constructs task configs from a list of valid subtask configs.
+// this method is only used to construct config when importing from v1.0.x now.
+func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) {
+	// global configs.
+	stCfg0 := stCfgs[0]
+	c.Name = stCfg0.Name
+	c.TaskMode = stCfg0.Mode
+	c.IsSharding = stCfg0.IsSharding
+	c.ShardMode = stCfg0.ShardMode
+	c.IgnoreCheckingItems = stCfg0.IgnoreCheckingItems
+	c.MetaSchema = stCfg0.MetaSchema
+	c.EnableHeartbeat = stCfg0.EnableHeartbeat
+	c.HeartbeatUpdateInterval = stCfg0.HeartbeatUpdateInterval
+	c.HeartbeatReportInterval = stCfg0.HeartbeatReportInterval
+	c.Timezone = stCfg0.Timezone
+	c.CaseSensitive = stCfg0.CaseSensitive
+	c.TargetDB = &stCfg0.To // just ref
+	c.OnlineDDLScheme = stCfg0.OnlineDDLScheme
+	c.CleanDumpFile = stCfg0.CleanDumpFile
+	c.EnableANSIQuotes = stCfg0.EnableANSIQuotes
+	c.MySQLInstances = make([]*MySQLInstance, 0, len(stCfgs))
+	c.BAList = make(map[string]*filter.Rules)
+	c.Routes = make(map[string]*router.TableRule)
+	c.Filters = make(map[string]*bf.BinlogEventRule)
+	c.ColumnMappings = make(map[string]*column.Rule)
+	c.Mydumpers = make(map[string]*MydumperConfig)
+	c.Loaders = make(map[string]*LoaderConfig)
+	c.Syncers = make(map[string]*SyncerConfig)
+
+	// NOTE:
+	// - we choose to ref global configs for instances now.
+	// - no DeepEqual for rules now, so not combine REAL same rule into only one.
+	for i, stCfg := range stCfgs {
+		BAListName := fmt.Sprintf("balist-%02d", i+1)
+		c.BAList[BAListName] = stCfg.BAList
+
+		routeNames := make([]string, 0, len(stCfg.RouteRules))
+		for j, rule := range stCfg.RouteRules {
+			routeName := fmt.Sprintf("route-%02d-%02d", i+1, j+1)
+			routeNames = append(routeNames, routeName)
+			c.Routes[routeName] = rule
+		}
+
+		filterNames := make([]string, 0, len(stCfg.FilterRules))
+		for j, rule := range stCfg.FilterRules {
+			filterName := fmt.Sprintf("filter-%02d-%02d", i+1, j+1)
+			filterNames = append(filterNames, filterName)
+			c.Filters[filterName] = rule
+		}
+
+		dumpName := fmt.Sprintf("dump-%02d", i+1)
+		c.Mydumpers[dumpName] = &stCfg.MydumperConfig
+
+		loadName := fmt.Sprintf("load-%02d", i+1)
+		c.Loaders[loadName] = &stCfg.LoaderConfig
+
+		syncName := fmt.Sprintf("sync-%02d", i+1)
+		c.Syncers[syncName] = &stCfg.SyncerConfig
+
+		cmNames := make([]string, 0, len(stCfg.ColumnMappingRules))
+		for j, rule := range stCfg.ColumnMappingRules {
+			cmName := fmt.Sprintf("cm-%02d-%02d", i+1, j+1)
+			cmNames = append(cmNames, cmName)
+			c.ColumnMappings[cmName] = rule
+		}
+
+		c.MySQLInstances = append(c.MySQLInstances, &MySQLInstance{
+			SourceID:           stCfg.SourceID,
+			Meta:               stCfg.Meta,
+			FilterRules:        filterNames,
+			ColumnMappingRules: cmNames,
+			RouteRules:         routeNames,
+			BAListName:         BAListName,
+			MydumperConfigName: dumpName,
+			LoaderConfigName:   loadName,
+			SyncerConfigName:   syncName,
+		})
+	}
+}
+
 // checkDuplicateString checks whether the given string array has duplicate string item
 // if there is duplicate, it will return **all** the duplicate strings
 func checkDuplicateString(ruleNames []string) []string {

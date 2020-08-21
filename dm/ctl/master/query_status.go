@@ -43,7 +43,7 @@ type taskInfo struct {
 func NewQueryStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query-status [-s source ...] [task-name] [--more]",
-		Short: "query task status",
+		Short: "Queries task status.",
 		RunE:  queryStatusFunc,
 	}
 	cmd.Flags().BoolP("more", "", false, "whether to print the detailed task information")
