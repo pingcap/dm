@@ -13,10 +13,6 @@ target-database:
   port: 4000
   user: "root"
   password: ""
-  session:
-    tidb_skip_utf8_check: 1
-    tidb_disable_txn_auto_retry: off
-    tidb_retry_limit: "10"
 
 mysql-instances:
   - source-id: "mysql-replica-01"
