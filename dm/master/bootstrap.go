@@ -377,7 +377,7 @@ outerLoop:
 		})
 		var mergedCfg config.TaskConfig
 		mergedCfg.FromSubTaskConfigs(cfgLists...)
-		err2 = s.scheduler.AddTaskCfg(mergedCfg)
+		err2 := s.scheduler.AddTaskCfg(mergedCfg)
 		if err2 != nil {
 			tctx.Logger.Error("fail to add task config into the cluster") // only log it
 		}
