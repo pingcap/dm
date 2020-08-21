@@ -28,7 +28,7 @@ import (
 func NewOfflineMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "offline-member <--master/--worker> <--name master-name/worker-name>",
-		Short: "offline member which has been closed",
+		Short: "Offlines member which has been closed.",
 		RunE:  offlineMemberFunc,
 	}
 	cmd.Flags().BoolP("master", "m", false, "to offline a master")
