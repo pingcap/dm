@@ -245,6 +245,7 @@ function DM_019_CASE() {
 
 function DM_019() {
     run_case 019 "single-source-pessimistic" "init_table 111" "clean_table" ""
+    run_case 019 "single-source-optimistic" "init_table 111" "clean_table" ""
 }
 
 function DM_020_CASE() {
