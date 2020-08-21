@@ -9,18 +9,18 @@ All notable changes to this project will be documented in this file.
 - Support high availability for data migration tasks
 - Add an optimistic mode for sharding DDL statements
 - Add the `handle-error` command to handle errors during DDL incremental replication
-- Add a `workaround` field to the error returned by `query-status` to describe how to manually handle it
+- Add a `workaround` field in the error returned by `query-status` to suggest the error handling method
 - Improve the monitoring dashboards and alert rules
-- Replace mydumper with dumpling as the full export unit
+- Replace Mydumper with Dumpling as the full export unit
 - Support the GTID mode when performing incremental replication to the downstream
 - Support TLS connections between upstream and downstream databases, and between DM components
 - Support the incremental replication scenarios where the table of the downstream has more columns than that of the upstream
 - Add a `--remove-meta` option to the `start-task` command to clean up metadata related to data migration tasks
 - Support dropping columns with single-column indices
 - Support automatically cleaning up temporary files after a successful full import
-- Support checking whether the table to be migrated has a primary key or an unique key before starting a migration task
-- Support the connectivity check between dmctl and DM-master while starting dmctl
-- Support connectivity check for downstream TiDB during `start-task`/`check-task`
+- Support checking whether the table to be migrated has a primary key or a unique key before starting a migration task
+- Support connectivity check between dmctl and DM-master while starting dmctl
+- Support connectivity check for downstream TiDB during the execution of `start-task`/`check-task`
 - Support replacing task names with task configuration files for some commands such as `pause-task`
 - Support logs in `json` format for DM-master and DM-worker components
 - Remove the call stack information and redundant fields in the error message returned by `query-status`
@@ -30,9 +30,9 @@ All notable changes to this project will be documented in this file.
 ### Bug fixes
 
 - Fix the issue of goroutine leak after executing `stop-task`
-- Fix the issue that the task may not be paused after executing `pause-task`
-- Fix the issue that the checkpoint may not be saved correctly in the initial stage of incremental replication
-- Fix the issue that the `BIT` data type could not be correctly handled during incremental replication
+- Fix the issue that the task might not be paused after executing `pause-task`
+- Fix the issue that the checkpoint might not be saved correctly in the initial stage of incremental replication
+- Fix the issue that the `BIT` data type is incorrectly handled during incremental replication
 
 ### Action required
 
@@ -43,18 +43,18 @@ All notable changes to this project will be documented in this file.
 - Support high availability for data migration tasks [#473](https://github.com/pingcap/dm/pull/473)
 - Add an optimistic mode for sharding DDL statements [#568](https://github.com/pingcap/dm/pull/568)
 - Add the `handle-error` command to handle errors during DDL incremental replication [#850](https://github.com/pingcap/dm/pull/850)
-- Add a `workaround` field to the error returned by `query-status` to describe how to manually handle it [#753](https://github.com/pingcap/dm/pull/753)
+- Add a `workaround` field in the error returned by `query-status` to suggest the error handling method [#753](https://github.com/pingcap/dm/pull/753)
 - Improve the monitoring dashboards and alert rules [#853](https://github.com/pingcap/dm/pull/853)
-- Replace mydumper with dumpling as the full export unit [#540](https://github.com/pingcap/dm/pull/540)
+- Replace Mydumper with Dumpling as the full export unit [#540](https://github.com/pingcap/dm/pull/540)
 - Support the GTID mode when performing incremental replication to the downstream [#521](https://github.com/pingcap/dm/pull/521)
 - Support TLS connections between upstream and downstream databases, and between DM components [#569](https://github.com/pingcap/dm/pull/569)
 - Support the incremental replication scenarios where the table of the downstream has more columns than that of the upstream [#379](https://github.com/pingcap/dm/pull/379)
 - Add a `--remove-meta` option to the `start-task` command to clean up metadata related to data migration tasks [#651](https://github.com/pingcap/dm/pull/651)
 - Support dropping columns with single-column indices [#801](https://github.com/pingcap/dm/pull/801)
 - Support automatically cleaning up temporary files after a successful full import [#770](https://github.com/pingcap/dm/pull/770)
-- Support checking whether the table to be migrated has a primary key or an unique key before starting a migration task [#870](https://github.com/pingcap/dm/pull/870)
-- Support the connectivity check between dmctl and DM-master while starting dmctl [#786](https://github.com/pingcap/dm/pull/786)
-- Support connectivity check for downstream TiDB during `start-task`/`check-task` [#769](https://github.com/pingcap/dm/pull/769) 
+- Support checking whether the table to be migrated has a primary key or a unique key before starting a migration task [#870](https://github.com/pingcap/dm/pull/870)
+- Support connectivity check between dmctl and DM-master while starting dmctl [#786](https://github.com/pingcap/dm/pull/786)
+- Support connectivity check for downstream TiDB during the execution of `start-task`/`check-task` [#769](https://github.com/pingcap/dm/pull/769) 
 - Support replacing task names with task configuration files for some commands such as `pause-task` [#854](https://github.com/pingcap/dm/pull/854)
 - Support logs in `json` format for DM-master and DM-worker components [#808](https://github.com/pingcap/dm/pull/808)
 - Remove the call stack information in the error message returned by `query-status` [#746](https://github.com/pingcap/dm/pull/746)
@@ -62,9 +62,9 @@ All notable changes to this project will be documented in this file.
 - Improve the binlog position information of the upstream database returned by `query-status` [#830](https://github.com/pingcap/dm/pull/830)
 - Improve the processing of `auto resume` when an error is encountered during the full export [#872](https://github.com/pingcap/dm/pull/872)
 - Fix the issue of goroutine leak after executing `stop-task` [#731](https://github.com/pingcap/dm/pull/731)
-- Fix the issue that the task may not be paused after executing `pause-task` [#644](https://github.com/pingcap/dm/pull/644)
-- Fix the issue that the checkpoint may not be saved correctly in the initial stage of incremental replication [#758](https://github.com/pingcap/dm/pull/758)
-- Fix the issue that the `BIT` data type could not be correctly handled during incremental replication [#876](https://github.com/pingcap/dm/pull/876)
+- Fix the issue that the task might not be paused after executing `pause-task` [#644](https://github.com/pingcap/dm/pull/644)
+- Fix the issue that the checkpoint might not be saved correctly in the initial stage of incremental replication [#758](https://github.com/pingcap/dm/pull/758)
+- Fix the issue that the `BIT` data type is incorrectly handled during incremental replication [#876](https://github.com/pingcap/dm/pull/876)
 
 ## [1.0.6] 2020-06-17
 
