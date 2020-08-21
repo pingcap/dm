@@ -553,5 +553,5 @@ func (t *testConfig) TestFromSubTaskConfigs(c *C) {
 		EnableANSIQuotes: stCfg1.EnableANSIQuotes,
 	}
 
-	c.Assert(cfg.String(), Equals, cfg2.String()) // some pointers compare may not equal, so use YAML format to compare.
+	c.Assert(cfg.String(), Equals, cfg2.String()) // some nil/(null value) compare may not equal, so use YAML format to compare.
 }
