@@ -21,7 +21,10 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 
 	. "github.com/pingcap/check"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
 func (t *testConfig) TestInvalidTaskConfig(c *C) {
@@ -293,4 +296,262 @@ func (t *testConfig) TestTaskBlockAllowList(c *C) {
 	err = cfg.adjust()
 	c.Assert(err, IsNil)
 	c.Assert(cfg.BAList["source-1"], Equals, filterRules2)
+}
+
+func (t *testConfig) TestFromSubTaskConfigs(c *C) {
+	var (
+		shardMode           = ShardOptimistic
+		onlineDDLScheme     = "pt"
+		name                = "from-sub-tasks"
+		taskMode            = "incremental"
+		ignoreCheckingItems = []string{VersionChecking, BinlogRowImageChecking}
+		source1             = "mysql-replica-01"
+		source2             = "mysql-replica-02"
+		serverID1           = uint32(123)
+		serverID2           = uint32(456)
+		metaSchema          = "meta-sub-tasks"
+		heartbeatUI         = 12
+		heartbeatRI         = 21
+		timezone            = "Asia/Shanghai"
+		relayDir            = "/path/to/relay"
+		maxAllowedPacket    = 10244201
+		session             = map[string]string{
+			"sql_mode": " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
+		}
+		security = Security{
+			SSLCA:         "/path/to/ca",
+			SSLCert:       "/path/to/cert",
+			SSLKey:        "/path/to/key",
+			CertAllowedCN: []string{"allowed-cn"},
+		}
+		rawDBCfg = RawDBConfig{
+			MaxIdleConns: 333,
+			ReadTimeout:  "2m",
+			WriteTimeout: "1m",
+		}
+		routeRule1 = router.TableRule{
+			SchemaPattern: "db*",
+			TablePattern:  "tbl*",
+		}
+		routeRule2 = router.TableRule{
+			SchemaPattern: "db*",
+			TablePattern:  "tbl*",
+			TargetSchema:  "db",
+			TargetTable:   "tbl",
+		}
+		filterRule1 = bf.BinlogEventRule{
+			SchemaPattern: "db*",
+			TablePattern:  "tbl1*",
+			Events:        []bf.EventType{bf.CreateIndex, bf.AlertTable},
+			Action:        bf.Do,
+		}
+		filterRule2 = bf.BinlogEventRule{
+			SchemaPattern: "db*",
+			TablePattern:  "tbl2",
+			SQLPattern:    []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"},
+			Action:        bf.Ignore,
+		}
+		baList1 = filter.Rules{
+			DoDBs: []string{"db1", "db2"},
+			DoTables: []*filter.Table{
+				{Schema: "db1", Name: "tbl1"},
+				{Schema: "db2", Name: "tbl2"},
+			},
+		}
+		baList2 = filter.Rules{
+			IgnoreDBs: []string{"bd1", "bd2"},
+			IgnoreTables: []*filter.Table{
+				{Schema: "bd1", Name: "lbt1"},
+				{Schema: "bd2", Name: "lbt2"},
+			},
+		}
+
+		stCfg1 = &SubTaskConfig{
+			IsSharding:              true,
+			ShardMode:               shardMode,
+			OnlineDDLScheme:         onlineDDLScheme,
+			CaseSensitive:           true,
+			Name:                    name,
+			Mode:                    taskMode,
+			IgnoreCheckingItems:     ignoreCheckingItems,
+			SourceID:                source1,
+			ServerID:                serverID1,
+			Flavor:                  gmysql.MariaDBFlavor,
+			MetaSchema:              metaSchema,
+			HeartbeatUpdateInterval: heartbeatUI,
+			HeartbeatReportInterval: heartbeatRI,
+			EnableHeartbeat:         true,
+			Meta: &Meta{
+				BinLogName: "mysql-bin.000123",
+				BinLogPos:  456,
+				BinLogGTID: "1-1-12,4-4-4",
+			},
+			Timezone: timezone,
+			RelayDir: relayDir,
+			UseRelay: true,
+			From: DBConfig{
+				Host:             "127.0.0.1",
+				Port:             3306,
+				User:             "user_from_1",
+				Password:         "123",
+				MaxAllowedPacket: &maxAllowedPacket,
+				Session:          session,
+				Security:         &security,
+				RawDBCfg:         &rawDBCfg,
+			},
+			To: DBConfig{
+				Host:             "127.0.0.1",
+				Port:             4000,
+				User:             "user_to",
+				Password:         "abc",
+				MaxAllowedPacket: &maxAllowedPacket,
+				Session:          session,
+				Security:         &security,
+				RawDBCfg:         &rawDBCfg,
+			},
+			RouteRules:  []*router.TableRule{&routeRule1, &routeRule2},
+			FilterRules: []*bf.BinlogEventRule{&filterRule1, &filterRule2},
+			BAList:      &baList1,
+			MydumperConfig: MydumperConfig{
+				MydumperPath:  "",
+				Threads:       16,
+				ChunkFilesize: "64",
+				StatementSize: 1000000,
+				Rows:          1024,
+				Where:         "",
+				SkipTzUTC:     true,
+				ExtraArgs:     "--escape-backslash",
+			},
+			LoaderConfig: LoaderConfig{
+				PoolSize: 32,
+				Dir:      "./dumpped_data",
+			},
+			SyncerConfig: SyncerConfig{
+				WorkerCount:             32,
+				Batch:                   100,
+				QueueSize:               512,
+				CheckpointFlushInterval: 15,
+				MaxRetry:                10,
+				AutoFixGTID:             true,
+				EnableGTID:              true,
+				DisableCausality:        false,
+				SafeMode:                true,
+			},
+			CleanDumpFile:    true,
+			EnableANSIQuotes: true,
+		}
+	)
+
+	stCfg2, err := stCfg1.Clone()
+	c.Assert(err, IsNil)
+	stCfg2.SourceID = source2
+	stCfg2.ServerID = serverID2
+	stCfg2.Meta = &Meta{
+		BinLogName: "mysql-bin.000321",
+		BinLogPos:  123,
+		BinLogGTID: "1-1-21,2-2-2",
+	}
+	stCfg2.From = DBConfig{
+		Host:             "127.0.0.1",
+		Port:             3307,
+		User:             "user_from_2",
+		Password:         "abc",
+		MaxAllowedPacket: &maxAllowedPacket,
+		Session:          session,
+		Security:         &security,
+		RawDBCfg:         &rawDBCfg,
+	}
+	stCfg2.BAList = &baList2
+
+	var cfg TaskConfig
+	c.Assert(cfg.FromSubTaskConfigs(stCfg1, stCfg2), IsNil)
+	c.Log(cfg.String())
+
+	cfg2 := TaskConfig{
+		Name:                    name,
+		TaskMode:                taskMode,
+		IsSharding:              stCfg1.IsSharding,
+		ShardMode:               shardMode,
+		IgnoreCheckingItems:     ignoreCheckingItems,
+		MetaSchema:              metaSchema,
+		EnableHeartbeat:         stCfg1.EnableHeartbeat,
+		HeartbeatUpdateInterval: heartbeatUI,
+		HeartbeatReportInterval: heartbeatRI,
+		Timezone:                timezone,
+		CaseSensitive:           stCfg1.CaseSensitive,
+		TargetDB:                &stCfg1.To,
+		MySQLInstances: []*MySQLInstance{
+			{
+				SourceID:           source1,
+				Meta:               stCfg1.Meta,
+				FilterRules:        []string{"filter-01-01", "filter-01-02"},
+				ColumnMappingRules: []string{},
+				RouteRules:         []string{"route-01-01", "route-01-02"},
+				BWListName:         "",
+				BAListName:         "balist-01",
+				MydumperConfigName: "dump-01",
+				Mydumper:           nil,
+				MydumperThread:     0,
+				LoaderConfigName:   "load-01",
+				Loader:             nil,
+				LoaderThread:       0,
+				SyncerConfigName:   "sync-01",
+				Syncer:             nil,
+				SyncerThread:       0,
+			},
+			{
+				SourceID:           source2,
+				Meta:               stCfg2.Meta,
+				FilterRules:        []string{"filter-02-01", "filter-02-02"},
+				ColumnMappingRules: []string{},
+				RouteRules:         []string{"route-02-01", "route-02-02"},
+				BWListName:         "",
+				BAListName:         "balist-02",
+				MydumperConfigName: "dump-02",
+				Mydumper:           nil,
+				MydumperThread:     0,
+				LoaderConfigName:   "load-02",
+				Loader:             nil,
+				LoaderThread:       0,
+				SyncerConfigName:   "sync-02",
+				Syncer:             nil,
+				SyncerThread:       0,
+			},
+		},
+		OnlineDDLScheme: onlineDDLScheme,
+		Routes: map[string]*router.TableRule{
+			"route-01-01": stCfg1.RouteRules[0],
+			"route-01-02": stCfg1.RouteRules[1],
+			"route-02-01": stCfg2.RouteRules[0],
+			"route-02-02": stCfg2.RouteRules[1],
+		},
+		Filters: map[string]*bf.BinlogEventRule{
+			"filter-01-01": stCfg1.FilterRules[0],
+			"filter-01-02": stCfg1.FilterRules[1],
+			"filter-02-01": stCfg2.FilterRules[0],
+			"filter-02-02": stCfg2.FilterRules[1],
+		},
+		ColumnMappings: nil,
+		BWList:         nil,
+		BAList: map[string]*filter.Rules{
+			"balist-01": stCfg1.BAList,
+			"balist-02": stCfg2.BAList,
+		},
+		Mydumpers: map[string]*MydumperConfig{
+			"dump-01": &stCfg1.MydumperConfig,
+			"dump-02": &stCfg2.MydumperConfig,
+		},
+		Loaders: map[string]*LoaderConfig{
+			"load-01": &stCfg1.LoaderConfig,
+			"load-02": &stCfg2.LoaderConfig,
+		},
+		Syncers: map[string]*SyncerConfig{
+			"sync-01": &stCfg1.SyncerConfig,
+			"sync-02": &stCfg2.SyncerConfig,
+		},
+		CleanDumpFile:    stCfg1.CleanDumpFile,
+		EnableANSIQuotes: stCfg1.EnableANSIQuotes,
+	}
+
+	c.Assert(cfg.String(), Equals, cfg2.String()) // some pointers compare may not equal, so use YAML format to compare.
 }

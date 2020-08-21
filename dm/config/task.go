@@ -615,41 +615,47 @@ func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) error {
 	c.CleanDumpFile = stCfg0.CleanDumpFile
 	c.EnableANSIQuotes = stCfg0.EnableANSIQuotes
 	c.MySQLInstances = make([]*MySQLInstance, 0, len(stCfgs))
+	c.BAList = make(map[string]*filter.Rules)
+	c.Routes = make(map[string]*router.TableRule)
 	c.Filters = make(map[string]*bf.BinlogEventRule)
+	c.ColumnMappings = make(map[string]*column.Rule)
+	c.Mydumpers = make(map[string]*MydumperConfig)
+	c.Loaders = make(map[string]*LoaderConfig)
+	c.Syncers = make(map[string]*SyncerConfig)
 
 	// NOTE:
 	// - we choose to ref global configs for instances now.
 	// - no DeepEqual for rules now, so not combine REAL same rule into only one.
 	for i, stCfg := range stCfgs {
-		BAListName := fmt.Sprintf("balist-%2d", i)
+		BAListName := fmt.Sprintf("balist-%02d", i+1)
 		c.BAList[BAListName] = stCfg.BAList
 
 		routeNames := make([]string, 0, len(stCfg.RouteRules))
 		for j, rule := range stCfg.RouteRules {
-			routeName := fmt.Sprintf("route-%2d-%2d", i, j)
+			routeName := fmt.Sprintf("route-%02d-%02d", i+1, j+1)
 			routeNames = append(routeNames, routeName)
 			c.Routes[routeName] = rule
 		}
 
 		filterNames := make([]string, 0, len(stCfg.FilterRules))
 		for j, rule := range stCfg.FilterRules {
-			filterName := fmt.Sprintf("filter-%2d-%2d", i, j)
+			filterName := fmt.Sprintf("filter-%02d-%02d", i+1, j+1)
 			filterNames = append(filterNames, filterName)
 			c.Filters[filterName] = rule
 		}
 
-		dumpName := fmt.Sprintf("dump-%2d", i)
+		dumpName := fmt.Sprintf("dump-%02d", i+1)
 		c.Mydumpers[dumpName] = &stCfg.MydumperConfig
 
-		loadName := fmt.Sprintf("load-%2d", i)
+		loadName := fmt.Sprintf("load-%02d", i+1)
 		c.Loaders[loadName] = &stCfg.LoaderConfig
 
-		syncName := fmt.Sprintf("sync-%2d", i)
+		syncName := fmt.Sprintf("sync-%02d", i+1)
 		c.Syncers[syncName] = &stCfg.SyncerConfig
 
 		cmNames := make([]string, 0, len(stCfg.ColumnMappingRules))
 		for j, rule := range stCfg.ColumnMappingRules {
-			cmName := fmt.Sprintf("cm-%2d-%2d", i, j)
+			cmName := fmt.Sprintf("cm-%02d-%02d", i+1, j+1)
 			cmNames = append(cmNames, cmName)
 			c.ColumnMappings[cmName] = rule
 		}
