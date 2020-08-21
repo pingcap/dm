@@ -29,7 +29,7 @@ import (
 func NewHandleErrorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "handle-error <task-name | task-file> [-s source ...] [-b binlog-pos] <skip/replace/revert> [replace-sql1;replace-sql2;]",
-		Short: "skip/replace/revert the current error event or a specific binlog position (binlog-pos) event",
+		Short: "skip/replace/revert the current error event or a specific binlog position (binlog-pos) event.",
 		RunE:  handleErrorFunc,
 	}
 	cmd.Flags().StringP("binlog-pos", "b", "", "position used to match binlog event if matched the handler-error operation will be applied. The format like \"mysql-bin|000001.000003:3270\"")

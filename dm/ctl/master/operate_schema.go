@@ -28,7 +28,7 @@ import (
 func NewOperateSchemaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operate-schema <operate-type> <-s source ...> <task-name | task-file> <-d database> <-t table> [schema-file]",
-		Short: "get/set/remove the schema for an upstream table",
+		Short: "get/set/remove the schema for an upstream table.",
 		RunE:  operateSchemaCmd,
 	}
 	cmd.Flags().StringP("database", "d", "", "database name of the table")

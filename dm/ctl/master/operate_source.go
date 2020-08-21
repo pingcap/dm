@@ -32,7 +32,7 @@ import (
 func NewOperateSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operate-source <operate-type> [config-file ...] [--print-sample-config]",
-		Short: "create/update/stop/show upstream MySQL/MariaDB source",
+		Short: "create/update/stop/show upstream MySQL/MariaDB source.",
 		RunE:  operateSourceFunc,
 	}
 	cmd.Flags().BoolP("print-sample-config", "p", false, "print sample config file of source")

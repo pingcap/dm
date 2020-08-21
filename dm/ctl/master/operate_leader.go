@@ -28,7 +28,7 @@ import (
 func NewOperateLeaderCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operate-leader <operate-type>",
-		Short: "operate-type can be 'evict' or 'cancel-evict', used to evict leader or cancel evict",
+		Short: "evict/cancel-evict the leader.",
 		RunE:  operateLeaderFunc,
 	}
 	return cmd
