@@ -255,8 +255,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		}
 	}
 
-	// TODO: support String for export.Config
-	m.logger.Info("create dumpling", zap.Reflect("config", dumpConfig))
+	m.logger.Info("create dumpling", zap.Stringer("config", dumpConfig))
 	if len(ret) > 0 {
 		m.logger.Warn("meeting some unsupported arguments", zap.Strings("argument", ret))
 	}

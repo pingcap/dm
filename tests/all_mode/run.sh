@@ -156,9 +156,8 @@ function run() {
     check_log_not_contains $WORK_DIR/worker1/log/dm-worker.log "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs="
     check_log_not_contains $WORK_DIR/worker2/log/dm-worker.log "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs="
     check_log_not_contains $WORK_DIR/master/log/dm-master.log "123456"
-   # uncomment after hide password in dumpling
-   # check_log_not_contains $WORK_DIR/worker1/log/dm-worker.log "123456"
-   # check_log_not_contains $WORK_DIR/worker2/log/dm-worker.log "123456"
+    check_log_not_contains $WORK_DIR/worker1/log/dm-worker.log "123456"
+    check_log_not_contains $WORK_DIR/worker2/log/dm-worker.log "123456"
 
     export GO_FAILPOINTS=''
 
