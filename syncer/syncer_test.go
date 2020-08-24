@@ -1138,7 +1138,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	c.Assert(err, IsNil)
 	syncer.genRouter()
 
-	syncer.setupCheckpoint(checkPointDBConn, checkPointMock)
+	syncer.setupMockCheckpoint(checkPointDBConn, checkPointMock)
 
 	syncer.reset()
 	events1 := mockBinlogEvents{
@@ -1344,7 +1344,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 
 	syncer.genRouter()
 
-	syncer.setupCheckpoint(checkPointDBConn, checkPointMock)
+	syncer.setupMockCheckpoint(checkPointDBConn, checkPointMock)
 
 	syncer.reset()
 
@@ -1531,7 +1531,7 @@ func (s *Syncer) addJobToMemory(job *job) error {
 	return nil
 }
 
-func (s *Syncer) setupCheckpoint(checkPointDBConn *sql.Conn, checkPointMock sqlmock.Sqlmock) {
+func (s *Syncer) setupMockCheckpoint(checkPointDBConn *sql.Conn, checkPointMock sqlmock.Sqlmock) {
 	checkPointMock.ExpectBegin()
 	checkPointMock.ExpectExec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.cfg.MetaSchema)).WillReturnResult(sqlmock.NewResult(1, 1))
 	checkPointMock.ExpectCommit()
