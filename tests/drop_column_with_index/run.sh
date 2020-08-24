@@ -9,8 +9,7 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 function run() {
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
-    now=$(date)
-    export GO_FAILPOINTS="github.com/pingcap/dm/syncer/SyncerGetEventError=return(\"$now\")"
+    export GO_FAILPOINTS="github.com/pingcap/dm/syncer/SyncerGetEventError=return"
 
     # start DM worker and master
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
@@ -35,7 +34,7 @@ function run() {
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
     # use sync_diff_inspector to check data now!
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 30
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # check column covered by multi-column indices won't drop, and its indices won't drop
     run_sql "alter table drop_column_with_index.t1 drop column c2;" $MYSQL_PORT1 $MYSQL_PASSWORD1
