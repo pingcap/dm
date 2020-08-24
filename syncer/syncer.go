@@ -1692,6 +1692,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			continue
 		}
 
+		// pre-filter of sharding
 		if s.cfg.ShardMode == config.ShardPessimistic {
 			switch stmt.(type) {
 			case *ast.DropDatabaseStmt:
@@ -1727,6 +1728,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 				if ddlInfo.name != tableNames[0][0].String() {
 					return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
 				}
+			}
+		} else if s.cfg.ShardMode == config.ShardOptimistic {
+			switch stmt.(type) {
+			case *ast.TruncateTableStmt:
+				s.tctx.L().Info("ignore truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
+				continue
 			}
 		}
 

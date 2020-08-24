@@ -170,3 +170,27 @@ func (t *testUtilsSuite) TestWaitSomething(c *C) {
 	c.Assert(WaitSomething(backoff, waitTime, f2), IsTrue)
 	c.Assert(count, Equals, 5)
 }
+
+func (t *testUtilsSuite) TestHidePassword(c *C) {
+	strs := []struct {
+		old string
+		new string
+	}{
+		{ // operate source
+			`from:\n  host: 127.0.0.1\n  user: root\n  password: /Q7B9DizNLLTTfiZHv9WoEAKamfpIUs=\n  port: 3306\n`,
+			`from:\n  host: 127.0.0.1\n  user: root\n  password: ******\n  port: 3306\n`,
+		}, { // operate source empty password
+			`from:\n  host: 127.0.0.1\n  user: root\n  password: \n  port: 3306\n`,
+			`from:\n  host: 127.0.0.1\n  user: root\n  password: ******\n  port: 3306\n`,
+		}, { // start task
+			`\n\ntarget-database:\n  host: \"127.0.0.1\"\n  port: 4000\n  user: \"test\"\n  password: \"/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs=\"\n\nmysql-instances:\n  - source-id: \"mysql-replica-01\"\n`,
+			`\n\ntarget-database:\n  host: \"127.0.0.1\"\n  port: 4000\n  user: \"test\"\n  password: \"******\"\n\nmysql-instances:\n  - source-id: \"mysql-replica-01\"\n`,
+		}, { // start task empty passowrd
+			`\n\ntarget-database:\n  host: \"127.0.0.1\"\n  port: 4000\n  user: \"test\"\n  password: \"\"\n\nmysql-instances:\n  - source-id: \"mysql-replica-01\"\n`,
+			`\n\ntarget-database:\n  host: \"127.0.0.1\"\n  port: 4000\n  user: \"test\"\n  password: \"******\"\n\nmysql-instances:\n  - source-id: \"mysql-replica-01\"\n`,
+		},
+	}
+	for _, str := range strs {
+		c.Assert(HidePassword(str.old), Equals, str.new)
+	}
+}
