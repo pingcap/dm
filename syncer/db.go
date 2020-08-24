@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 	"time"
@@ -92,7 +93,11 @@ func (conn *UpStreamConn) getServerUUID(flavor string) (string, error) {
 }
 
 func (conn *UpStreamConn) getParser() (*parser.Parser, error) {
-	return utils.GetParser(conn.BaseDB.DB)
+	c, err := conn.BaseDB.DB.Conn(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return utils.GetParserForConn(c)
 }
 
 func (conn *UpStreamConn) killConn(connID uint32) error {
