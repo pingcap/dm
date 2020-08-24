@@ -53,34 +53,32 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage: true,
 	}
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
-	cmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "source", "s", []string{}, "MySQL Source ID")
+	cmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "source", "s", []string{}, "MySQL Source ID.")
 	cmd.AddCommand(
 		master.NewStartTaskCmd(),
 		master.NewStopTaskCmd(),
 		master.NewPauseTaskCmd(),
 		master.NewResumeTaskCmd(),
 		master.NewCheckTaskCmd(),
-		master.NewUpdateTaskCmd(),
+		//	master.NewUpdateTaskCmd(),
 		master.NewQueryStatusCmd(),
-		master.NewQueryErrorCmd(),
-		master.NewSQLReplaceCmd(),
-		master.NewSQLSkipCmd(),
-		master.NewSQLInjectCmd(),
+		//	master.NewQueryErrorCmd(),
 		master.NewShowDDLLocksCmd(),
 		master.NewUnlockDDLLockCmd(),
-		master.NewSwitchRelayMasterCmd(),
-		master.NewPauseRelayCmd(),
-		master.NewResumeRelayCmd(),
-		master.NewUpdateMasterConfigCmd(),
-		master.NewUpdateRelayCmd(),
-		master.NewPurgeRelayCmd(),
-		master.NewMigrateRelayCmd(),
+		//	master.NewSwitchRelayMasterCmd(),
+		//	master.NewPauseRelayCmd(),
+		//	master.NewResumeRelayCmd(),
+		//	master.NewUpdateMasterConfigCmd(),
+		//	master.NewUpdateRelayCmd(),
+		//	master.NewPurgeRelayCmd(),
+		//	master.NewMigrateRelayCmd(),
 		master.NewOperateSourceCmd(),
 		master.NewOfflineMemberCmd(),
 		master.NewOperateLeaderCmd(),
 		master.NewListMemberCmd(),
 		master.NewOperateSchemaCmd(),
 		master.NewGetTaskCfgCmd(),
+		master.NewHandleErrorCmd(),
 	)
 	return cmd
 }

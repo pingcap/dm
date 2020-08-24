@@ -121,7 +121,7 @@ unit_test_pkg_binlog: retool_setup
 unit_test_others: retool_setup
 	$(call run_unit_test,$(PACKAGES_OTHERS),unit_test_others)
 
-check: retool_setup fmt lint vet terror_check
+check: retool_setup fmt lint vet terror_check tidy_mod
 
 fmt:
 	@echo "gofmt (simplify)"
@@ -144,6 +144,10 @@ vet:
 terror_check:
 	@echo "check terror conflict"
 	_utils/terror_gen/check.sh
+
+tidy_mod:
+	@echo "tidy go.mod"
+	_utils/mod_check/check.sh
 
 dm_integration_test_build: retool_setup
 	$(FAILPOINT_ENABLE)

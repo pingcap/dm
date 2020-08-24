@@ -97,8 +97,8 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	defer ETCD.Close()
 
 	cfg := NewConfig()
-	sourceConfig := loadSourceConfigWithoutPassword(c)
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	sourceConfig := loadSourceConfigWithoutPassword(c)
 	sourceConfig.Checker.CheckEnable = true
 	sourceConfig.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}
 	sourceConfig.Checker.BackoffMin = config.Duration{Duration: 20 * time.Millisecond}

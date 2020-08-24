@@ -14,6 +14,7 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -266,46 +267,46 @@ func (m *SyncerConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // TaskConfig is the configuration for Task
 type TaskConfig struct {
-	*flag.FlagSet `yaml:"-"`
+	*flag.FlagSet `yaml:"-" toml:"-" json:"-"`
 
-	Name       string `yaml:"name"`
-	TaskMode   string `yaml:"task-mode"`
-	IsSharding bool   `yaml:"is-sharding"`
-	ShardMode  string `yaml:"shard-mode"` // when `shard-mode` set, we always enable sharding support.
+	Name       string `yaml:"name" toml:"name" json:"name"`
+	TaskMode   string `yaml:"task-mode" toml:"task-mode" json:"task-mode"`
+	IsSharding bool   `yaml:"is-sharding" toml:"is-sharding" json:"is-sharding"`
+	ShardMode  string `yaml:"shard-mode" toml:"shard-mode" json:"shard-mode"` // when `shard-mode` set, we always enable sharding support.
 	//  treat it as hidden configuration
-	IgnoreCheckingItems []string `yaml:"ignore-checking-items"`
+	IgnoreCheckingItems []string `yaml:"ignore-checking-items" toml:"ignore-checking-items" json:"ignore-checking-items"`
 	// we store detail status in meta
 	// don't save configuration into it
-	MetaSchema string `yaml:"meta-schema"`
+	MetaSchema string `yaml:"meta-schema" toml:"meta-schema" json:"meta-schema"`
 
-	EnableHeartbeat         bool   `yaml:"enable-heartbeat"`
-	HeartbeatUpdateInterval int    `yaml:"heartbeat-update-interval"`
-	HeartbeatReportInterval int    `yaml:"heartbeat-report-interval"`
-	Timezone                string `yaml:"timezone"`
+	EnableHeartbeat         bool   `yaml:"enable-heartbeat" toml:"enable-heartbeat" json:"enable-heartbeat"`
+	HeartbeatUpdateInterval int    `yaml:"heartbeat-update-interval" toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
+	HeartbeatReportInterval int    `yaml:"heartbeat-report-interval" toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
+	Timezone                string `yaml:"timezone" toml:"timezone" json:"timezone"`
 
 	// handle schema/table name mode, and only for schema/table name
 	// if case insensitive, we would convert schema/table name to lower case
-	CaseSensitive bool `yaml:"case-sensitive"`
+	CaseSensitive bool `yaml:"case-sensitive" toml:"case-sensitive" json:"case-sensitive"`
 
-	TargetDB *DBConfig `yaml:"target-database"`
+	TargetDB *DBConfig `yaml:"target-database" toml:"target-database" json:"target-database"`
 
-	MySQLInstances []*MySQLInstance `yaml:"mysql-instances"`
+	MySQLInstances []*MySQLInstance `yaml:"mysql-instances" toml:"mysql-instances" json:"mysql-instances"`
 
-	OnlineDDLScheme string `yaml:"online-ddl-scheme"`
+	OnlineDDLScheme string `yaml:"online-ddl-scheme" toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
-	Routes         map[string]*router.TableRule   `yaml:"routes"`
-	Filters        map[string]*bf.BinlogEventRule `yaml:"filters"`
-	ColumnMappings map[string]*column.Rule        `yaml:"column-mappings"`
+	Routes         map[string]*router.TableRule   `yaml:"routes" toml:"routes" json:"routes"`
+	Filters        map[string]*bf.BinlogEventRule `yaml:"filters" toml:"filters" json:"filters"`
+	ColumnMappings map[string]*column.Rule        `yaml:"column-mappings" toml:"column-mappings" json:"column-mappings"`
 
 	// black-white-list is deprecated, use block-allow-list instead
-	BWList map[string]*filter.Rules `yaml:"black-white-list"`
-	BAList map[string]*filter.Rules `yaml:"block-allow-list"`
+	BWList map[string]*filter.Rules `yaml:"black-white-list" toml:"black-white-list" json:"black-white-list"`
+	BAList map[string]*filter.Rules `yaml:"block-allow-list" toml:"block-allow-list" json:"block-allow-list"`
 
-	Mydumpers map[string]*MydumperConfig `yaml:"mydumpers"`
-	Loaders   map[string]*LoaderConfig   `yaml:"loaders"`
-	Syncers   map[string]*SyncerConfig   `yaml:"syncers"`
+	Mydumpers map[string]*MydumperConfig `yaml:"mydumpers" toml:"mydumpers" json:"mydumpers"`
+	Loaders   map[string]*LoaderConfig   `yaml:"loaders" toml:"loaders" json:"loaders"`
+	Syncers   map[string]*SyncerConfig   `yaml:"syncers" toml:"syncers" json:"syncers"`
 
-	CleanDumpFile bool `yaml:"clean-dump-file"`
+	CleanDumpFile bool `yaml:"clean-dump-file" toml:"clean-dump-file" json:"clean-dump-file"`
 
 	EnableANSIQuotes bool `yaml:"ansi-quotes" toml:"ansi-quotes" json:"ansi-quotes"`
 }
@@ -339,6 +340,15 @@ func (c *TaskConfig) String() string {
 	cfg, err := yaml.Marshal(c)
 	if err != nil {
 		log.L().Error("marshal task config to yaml", zap.String("task", c.Name), log.ShortError(err))
+	}
+	return string(cfg)
+}
+
+// JSON returns the config's json string
+func (c *TaskConfig) JSON() string {
+	cfg, err := json.Marshal(c)
+	if err != nil {
+		log.L().Error("marshal task config to json", zap.String("task", c.Name), log.ShortError(err))
 	}
 	return string(cfg)
 }
@@ -592,6 +602,86 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfgs[i] = cfg
 	}
 	return cfgs, nil
+}
+
+// FromSubTaskConfigs constructs task configs from a list of valid subtask configs.
+// this method is only used to construct config when importing from v1.0.x now.
+func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) {
+	// global configs.
+	stCfg0 := stCfgs[0]
+	c.Name = stCfg0.Name
+	c.TaskMode = stCfg0.Mode
+	c.IsSharding = stCfg0.IsSharding
+	c.ShardMode = stCfg0.ShardMode
+	c.IgnoreCheckingItems = stCfg0.IgnoreCheckingItems
+	c.MetaSchema = stCfg0.MetaSchema
+	c.EnableHeartbeat = stCfg0.EnableHeartbeat
+	c.HeartbeatUpdateInterval = stCfg0.HeartbeatUpdateInterval
+	c.HeartbeatReportInterval = stCfg0.HeartbeatReportInterval
+	c.Timezone = stCfg0.Timezone
+	c.CaseSensitive = stCfg0.CaseSensitive
+	c.TargetDB = &stCfg0.To // just ref
+	c.OnlineDDLScheme = stCfg0.OnlineDDLScheme
+	c.CleanDumpFile = stCfg0.CleanDumpFile
+	c.EnableANSIQuotes = stCfg0.EnableANSIQuotes
+	c.MySQLInstances = make([]*MySQLInstance, 0, len(stCfgs))
+	c.BAList = make(map[string]*filter.Rules)
+	c.Routes = make(map[string]*router.TableRule)
+	c.Filters = make(map[string]*bf.BinlogEventRule)
+	c.ColumnMappings = make(map[string]*column.Rule)
+	c.Mydumpers = make(map[string]*MydumperConfig)
+	c.Loaders = make(map[string]*LoaderConfig)
+	c.Syncers = make(map[string]*SyncerConfig)
+
+	// NOTE:
+	// - we choose to ref global configs for instances now.
+	// - no DeepEqual for rules now, so not combine REAL same rule into only one.
+	for i, stCfg := range stCfgs {
+		BAListName := fmt.Sprintf("balist-%02d", i+1)
+		c.BAList[BAListName] = stCfg.BAList
+
+		routeNames := make([]string, 0, len(stCfg.RouteRules))
+		for j, rule := range stCfg.RouteRules {
+			routeName := fmt.Sprintf("route-%02d-%02d", i+1, j+1)
+			routeNames = append(routeNames, routeName)
+			c.Routes[routeName] = rule
+		}
+
+		filterNames := make([]string, 0, len(stCfg.FilterRules))
+		for j, rule := range stCfg.FilterRules {
+			filterName := fmt.Sprintf("filter-%02d-%02d", i+1, j+1)
+			filterNames = append(filterNames, filterName)
+			c.Filters[filterName] = rule
+		}
+
+		dumpName := fmt.Sprintf("dump-%02d", i+1)
+		c.Mydumpers[dumpName] = &stCfg.MydumperConfig
+
+		loadName := fmt.Sprintf("load-%02d", i+1)
+		c.Loaders[loadName] = &stCfg.LoaderConfig
+
+		syncName := fmt.Sprintf("sync-%02d", i+1)
+		c.Syncers[syncName] = &stCfg.SyncerConfig
+
+		cmNames := make([]string, 0, len(stCfg.ColumnMappingRules))
+		for j, rule := range stCfg.ColumnMappingRules {
+			cmName := fmt.Sprintf("cm-%02d-%02d", i+1, j+1)
+			cmNames = append(cmNames, cmName)
+			c.ColumnMappings[cmName] = rule
+		}
+
+		c.MySQLInstances = append(c.MySQLInstances, &MySQLInstance{
+			SourceID:           stCfg.SourceID,
+			Meta:               stCfg.Meta,
+			FilterRules:        filterNames,
+			ColumnMappingRules: cmNames,
+			RouteRules:         routeNames,
+			BAListName:         BAListName,
+			MydumperConfigName: dumpName,
+			LoaderConfigName:   loadName,
+			SyncerConfigName:   syncName,
+		})
+	}
 }
 
 // checkDuplicateString checks whether the given string array has duplicate string item

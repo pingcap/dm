@@ -16,13 +16,13 @@ function usage_and_arg_test() {
     check_task_wrong_arg
     check_task_wrong_config_file
 
-    echo "pause_relay_wrong_arg"
-    pause_relay_wrong_arg
-    pause_relay_wihout_worker
-
-    echo "resume_relay_wrong_arg"
-    resume_relay_wrong_arg
-    resume_relay_wihout_worker
+#    echo "pause_relay_wrong_arg"
+#    pause_relay_wrong_arg
+#    pause_relay_wihout_worker
+#
+#    echo "resume_relay_wrong_arg"
+#    resume_relay_wrong_arg
+#    resume_relay_wihout_worker
 
     echo "pause_task_wrong_arg"
     pause_task_wrong_arg
@@ -44,23 +44,23 @@ function usage_and_arg_test() {
     echo "show_ddl_locks_wrong_arg"
     show_ddl_locks_wrong_arg
 
-    echo "update_relay_wrong_arg"
-    update_relay_wrong_arg
-    update_relay_wrong_config_file
-    update_relay_should_specify_one_dm_worker $MYSQL1_CONF
+#    echo "update_relay_wrong_arg"
+#    update_relay_wrong_arg
+#    update_relay_wrong_config_file
+#    update_relay_should_specify_one_dm_worker $MYSQL1_CONF
 
     # echo "update_task_wrong_arg"
     # update_task_wrong_arg
     # update_task_wrong_config_file
 
-    echo "update_master_config_wrong_arg"
-    update_master_config_wrong_arg
-    update_master_config_wrong_config_file
-
-    echo "purge_relay_wrong_arg"
-    purge_relay_wrong_arg
-    purge_relay_wihout_worker
-    purge_relay_filename_with_multi_workers
+#    echo "update_master_config_wrong_arg"
+#    update_master_config_wrong_arg
+#    update_master_config_wrong_config_file
+#
+#    echo "purge_relay_wrong_arg"
+#    purge_relay_wrong_arg
+#    purge_relay_wihout_worker
+#    purge_relay_filename_with_multi_workers
 
     echo "operate_source_empty_arg"
     operate_source_empty_arg
@@ -147,13 +147,13 @@ function run() {
         '"worker": "worker1"' 1 \
         '"worker": "worker2"' 1
 
-    echo "pause_relay_success"
-    pause_relay_success
-    query_status_stopped_relay
-    # pause twice won't receive an error now
-    # pause_relay_fail
-    resume_relay_success
-    query_status_with_no_tasks
+#    echo "pause_relay_success"
+#    pause_relay_success
+#    query_status_stopped_relay
+#    # pause twice won't receive an error now
+#    # pause_relay_fail
+#    resume_relay_success
+#    query_status_with_no_tasks
 
     echo "dmctl_check_task"
     check_task_pass $TASK_CONF
@@ -200,8 +200,8 @@ function run() {
     pause_task_success "$cur/conf/dm-task.yaml"
     resume_task_success "$cur/conf/dm-task.yaml"
 
-    update_relay_success $cur/conf/source1.yaml $SOURCE_ID1
-    update_relay_success $cur/conf/source2.yaml $SOURCE_ID2
+#    update_relay_success $cur/conf/source1.yaml $SOURCE_ID1
+#    update_relay_success $cur/conf/source2.yaml $SOURCE_ID2
     # check worker config backup file is correct
     [ -f $WORK_DIR/worker1/dm-worker-config.bak ] && cmp $WORK_DIR/worker1/dm-worker-config.bak $cur/conf/dm-worker1.toml
     [ -f $WORK_DIR/worker2/dm-worker-config.bak ] && cmp $WORK_DIR/worker2/dm-worker-config.bak $cur/conf/dm-worker2.toml
@@ -213,8 +213,8 @@ function run() {
     [ "md5_new_worker1" != "md5_old_worker1" ]
     [ "md5_new_worker2" != "md5_old_worker2" ]
 
-    update_master_config_success $dm_master_conf
-    cmp $dm_master_conf $cur/conf/dm-master.toml
+#    update_master_config_success $dm_master_conf
+#    cmp $dm_master_conf $cur/conf/dm-master.toml
 
 #   TODO: The ddl sharding part for DM-HA still has some problem. This should be uncommented when it's fixed.
 #    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -249,7 +249,7 @@ function run() {
     binlog_count=$(grep Log_name "$SQL_RESULT_FILE" | wc -l)
     relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
     [ "$binlog_count" -eq "$relay_log_count" ]
-    purge_relay_success $max_binlog_name $SOURCE_ID1
+#    purge_relay_success $max_binlog_name $SOURCE_ID1
     new_relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
     [ "$new_relay_log_count" -eq 1 ]
 }

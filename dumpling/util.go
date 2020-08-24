@@ -14,11 +14,17 @@
 package dumpling
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/docker/go-units"
 	"github.com/pingcap/dumpling/v4/export"
+	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"github.com/spf13/pflag"
+
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // ParseArgLikeBash parses list arguments like bash, which helps us to run
@@ -46,13 +52,16 @@ func trimOutQuotes(arg string) string {
 	return arg
 }
 
-func parseExtraArgs(dumpCfg *export.Config, args []string) error {
+func parseExtraArgs(logger *log.Logger, dumpCfg *export.Config, args []string) error {
 	var (
 		dumplingFlagSet = pflag.NewFlagSet("dumpling", pflag.ContinueOnError)
 		fileSizeStr     string
+		tablesList      []string
+		filters         []string
 	)
 
 	dumplingFlagSet.StringSliceVarP(&dumpCfg.Databases, "database", "B", dumpCfg.Databases, "Database to dump")
+	dumplingFlagSet.StringSliceVarP(&tablesList, "tables-list", "T", nil, "Comma delimited table list to dump; must be qualified table names")
 	dumplingFlagSet.IntVarP(&dumpCfg.Threads, "threads", "t", dumpCfg.Threads, "Number of goroutines to use, default 4")
 	dumplingFlagSet.StringVarP(&fileSizeStr, "filesize", "F", "", "The approximate size of output file")
 	dumplingFlagSet.Uint64VarP(&dumpCfg.StatementSize, "statement-size", "S", dumpCfg.StatementSize, "Attempted size of INSERT statement in bytes")
@@ -61,7 +70,11 @@ func parseExtraArgs(dumpCfg *export.Config, args []string) error {
 	dumplingFlagSet.BoolVarP(&dumpCfg.NoViews, "no-views", "W", dumpCfg.NoViews, "Do not dump views")
 	dumplingFlagSet.Uint64VarP(&dumpCfg.Rows, "rows", "r", dumpCfg.Rows, "Split table into chunks of this many rows, default unlimited")
 	dumplingFlagSet.StringVar(&dumpCfg.Where, "where", dumpCfg.Where, "Dump only selected records")
-	dumplingFlagSet.BoolVar(&dumpCfg.EscapeBackslash, "escape-backslash", dumpCfg.EscapeBackslash, "use backslash to escape quotation marks")
+	dumplingFlagSet.BoolVar(&dumpCfg.EscapeBackslash, "escape-backslash", dumpCfg.EscapeBackslash, "Use backslash to escape quotation marks")
+	dumplingFlagSet.StringArrayVarP(&filters, "filter", "f", []string{"*.*"}, "Filter to select which tables to dump")
+	dumplingFlagSet.StringVar(&dumpCfg.Security.CAPath, "ca", dumpCfg.Security.CAPath, "The path name to the certificate authority file for TLS connection")
+	dumplingFlagSet.StringVar(&dumpCfg.Security.CertPath, "cert", dumpCfg.Security.CertPath, "The path name to the client certificate file for TLS connection")
+	dumplingFlagSet.StringVar(&dumpCfg.Security.KeyPath, "key", dumpCfg.Security.KeyPath, "The path name to the client private key file for TLS connection")
 
 	err := dumplingFlagSet.Parse(args)
 	if err != nil {
@@ -69,6 +82,16 @@ func parseExtraArgs(dumpCfg *export.Config, args []string) error {
 	}
 
 	dumpCfg.FileSize, err = parseFileSize(fileSizeStr)
+
+	if len(tablesList) > 0 || (len(filters) != 1 || filters[0] != "*.*") {
+		ff, err2 := parseTableFilter(tablesList, filters)
+		if err2 != nil {
+			return err2
+		}
+		dumpCfg.TableFilter = ff // overwrite `block-allow-list`.
+		logger.Warn("overwrite `block-allow-list` by `tables-list` or `filter`")
+	}
+
 	return err
 }
 
@@ -84,4 +107,28 @@ func parseFileSize(fileSizeStr string) (uint64, error) {
 		return 0, err
 	}
 	return fileSize, nil
+}
+
+// parseTableFilter parses `--tables-list` and `--filter`.
+// copy (and update) from https://github.com/pingcap/dumpling/blob/6f74c686e54183db7b869775af1c32df46462a6a/cmd/dumpling/main.go#L222.
+func parseTableFilter(tablesList, filters []string) (filter.Filter, error) {
+	if len(tablesList) == 0 {
+		return filter.Parse(filters)
+	}
+
+	// only parse -T when -f is default value. otherwise bail out.
+	if len(filters) != 1 || filters[0] != "*.*" {
+		return nil, errors.New("cannot pass --tables-list and --filter together")
+	}
+
+	tableNames := make([]filter.Table, 0, len(tablesList))
+	for _, table := range tablesList {
+		parts := strings.SplitN(table, ".", 2)
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("--tables-list only accepts qualified table names, but `%s` lacks a dot", table)
+		}
+		tableNames = append(tableNames, filter.Table{Schema: parts[0], Name: parts[1]})
+	}
+
+	return filter.NewTablesFilter(tableNames...), nil
 }

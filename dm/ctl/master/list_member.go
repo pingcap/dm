@@ -37,7 +37,7 @@ type ListMemberFlags struct {
 func NewListMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list-member [--leader] [--master] [--worker] [--name master-name/worker-name ...]",
-		Short: "list member information",
+		Short: "Lists member information.",
 		RunE:  listMemberFunc,
 	}
 	cmd.Flags().BoolP("leader", "l", false, "only to list leader information")

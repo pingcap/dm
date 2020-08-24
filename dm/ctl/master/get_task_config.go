@@ -30,7 +30,7 @@ import (
 func NewGetTaskCfgCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get-task-config <task-name | task-file> [--file filename]",
-		Short: "get task config",
+		Short: "Gets the task configuration.",
 		RunE:  getTaskCfgFunc,
 	}
 	cmd.Flags().StringP("file", "f", "", "write config to file")

@@ -34,8 +34,6 @@ const (
 	CmdQueryTaskOperation
 	CmdQueryWorkerConfig
 
-	CmdHandleSubTaskSQLs
-
 	CmdSwitchRelayMaster
 	CmdOperateRelay
 	CmdPurgeRelay
@@ -47,6 +45,7 @@ const (
 	CmdOperateSchema
 
 	CmdOperateV1Meta
+	CmdHandleError
 )
 
 // Request wraps all dm-worker rpc requests.
@@ -61,8 +60,6 @@ type Request struct {
 	QueryError        *pb.QueryErrorRequest
 	QueryWorkerConfig *pb.QueryWorkerConfigRequest
 
-	HandleSubTaskSQLs *pb.HandleSubTaskSQLsRequest
-
 	SwitchRelayMaster *pb.SwitchRelayMasterRequest
 	OperateRelay      *pb.OperateRelayRequest
 	PurgeRelay        *pb.PurgeRelayRequest
@@ -72,6 +69,7 @@ type Request struct {
 	OperateSchema *pb.OperateWorkerSchemaRequest
 
 	OperateV1Meta *pb.OperateV1MetaRequest
+	HandleError   *pb.HandleWorkerErrorRequest
 }
 
 // Response wraps all dm-worker rpc responses.
@@ -86,8 +84,6 @@ type Response struct {
 	QueryError        *pb.QueryErrorResponse
 	QueryWorkerConfig *pb.QueryWorkerConfigResponse
 
-	HandleSubTaskSQLs *pb.CommonWorkerResponse
-
 	SwitchRelayMaster *pb.CommonWorkerResponse
 	OperateRelay      *pb.OperateRelayResponse
 	PurgeRelay        *pb.CommonWorkerResponse
@@ -97,6 +93,7 @@ type Response struct {
 	OperateSchema *pb.CommonWorkerResponse
 
 	OperateV1Meta *pb.OperateV1MetaResponse
+	HandleError   *pb.CommonWorkerResponse
 }
 
 // Client is a client that sends RPC.

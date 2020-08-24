@@ -99,12 +99,24 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		return
 	}
 
-	// TODO: dumpling can't be canceled now, we may add that in the future
-	err = export.Dump(m.dumpConfig)
+	newCtx, cancel := context.WithCancel(ctx)
+	err = export.Dump(newCtx, m.dumpConfig)
+	cancel()
 
 	if err != nil {
-		dumplingExitWithErrorCounter.WithLabelValues(m.cfg.Name, m.cfg.SourceID).Inc()
-		errs = append(errs, unit.NewProcessError(terror.ErrDumpUnitRuntime.Delegate(err, "")))
+		if utils.IsContextCanceledError(err) {
+			m.logger.Info("filter out error caused by user cancel")
+		} else {
+			dumplingExitWithErrorCounter.WithLabelValues(m.cfg.Name, m.cfg.SourceID).Inc()
+			errs = append(errs, unit.NewProcessError(terror.ErrDumpUnitRuntime.Delegate(err, "")))
+		}
+	}
+
+	isCanceled := false
+	select {
+	case <-ctx.Done():
+		isCanceled = true
+	default:
 	}
 
 	if len(errs) == 0 {
@@ -115,7 +127,7 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 
 	pr <- pb.ProcessResult{
-		IsCanceled: false,
+		IsCanceled: isCanceled,
 		Errors:     errs,
 	}
 }
@@ -198,11 +210,9 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !cfg.CaseSensitive {
-		tableFilter = filter.CaseInsensitive(tableFilter)
-	}
 	dumpConfig.TableFilter = tableFilter
 	dumpConfig.EscapeBackslash = true
+	dumpConfig.CompleteInsert = true // always keep column name in `INSERT INTO` statements.
 	dumpConfig.Logger = m.logger.Logger
 
 	if cfg.Threads > 0 {
@@ -230,19 +240,28 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		ret = append(ret, "--skip-tz-utc")
 	}
 
+	if db.Security != nil {
+		dumpConfig.Security.CAPath = db.Security.SSLCA
+		dumpConfig.Security.CertPath = db.Security.SSLCert
+		dumpConfig.Security.KeyPath = db.Security.SSLKey
+	}
+
 	extraArgs := strings.Fields(cfg.ExtraArgs)
 	if len(extraArgs) > 0 {
-		err := parseExtraArgs(dumpConfig, ParseArgLikeBash(extraArgs))
+		err := parseExtraArgs(&m.logger, dumpConfig, ParseArgLikeBash(extraArgs))
 		if err != nil {
 			m.logger.Warn("parsed some unsupported arguments", zap.Error(err))
 			ret = append(ret, extraArgs...)
 		}
 	}
 
-	// TODO: support String for export.Config
-	m.logger.Info("create dumpling", zap.Reflect("config", dumpConfig))
+	m.logger.Info("create dumpling", zap.Stringer("config", dumpConfig))
 	if len(ret) > 0 {
 		m.logger.Warn("meeting some unsupported arguments", zap.Strings("argument", ret))
+	}
+
+	if !cfg.CaseSensitive {
+		dumpConfig.TableFilter = filter.CaseInsensitive(dumpConfig.TableFilter)
 	}
 
 	return dumpConfig, nil

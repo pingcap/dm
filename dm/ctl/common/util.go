@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
@@ -189,6 +190,7 @@ func ExtractSQLsFromArgs(args []string) ([]string, error) {
 	}
 
 	concat := strings.TrimSpace(strings.Join(args, " "))
+	concat = command.TrimQuoteMark(concat)
 
 	parser := parser.New()
 	nodes, err := parserpkg.Parse(parser, concat, "", "")
@@ -222,9 +224,9 @@ func IsDDL(sql string) (bool, error) {
 	}
 }
 
-// GetTaskNameFromArgOrFile tries to retrieve name field from the file if arg is filename-like, otherwise returns arg directly
+// GetTaskNameFromArgOrFile tries to retrieve name from the file if arg is yaml-filename-like, otherwise returns arg directly
 func GetTaskNameFromArgOrFile(arg string) string {
-	if !strings.HasSuffix(arg, ".yaml") {
+	if !(strings.HasSuffix(arg, ".yaml") || strings.HasSuffix(arg, ".yml")) {
 		return arg
 	}
 	var (
