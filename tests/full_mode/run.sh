@@ -40,8 +40,7 @@ function fail_acquire_global_lock() {
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
     sed -i '/timezone/i\ignore-checking-items: ["dump_privilege"]' $WORK_DIR/dm-task.yaml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "start-task $WORK_DIR/dm-task.yaml --remove-meta" \
-        "\"result\": true" 1
+        "start-task $WORK_DIR/dm-task.yaml --remove-meta"
 
     # TaskCheckInterval set to 500ms
     sleep 1
@@ -50,11 +49,6 @@ function fail_acquire_global_lock() {
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "error is not resumable"
     check_log_contains $WORK_DIR/worker2/log/dm-worker.log "you need (at least one of) the RELOAD privilege(s) for this operation"
     check_log_contains $WORK_DIR/worker2/log/dm-worker.log "error is not resumable"
-
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
-        "\"stage\": \"Paused\"" 2 \
-        "you need (at least one of) the RELOAD privilege(s) for this operation" 2
 
     cleanup_data full_mode
     cleanup_process $*
