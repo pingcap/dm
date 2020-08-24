@@ -1466,6 +1466,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	if err := checkPointMock.ExpectationsWereMet(); err != nil {
 		c.Errorf("checkpointDB unfulfilled expectations: %s", err)
 	}
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds"), IsNil)
 }
 
 func executeSQLAndWait(expectJobNum int) {
