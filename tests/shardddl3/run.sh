@@ -239,9 +239,10 @@ function DM_096_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
     run_sql_source2 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
 
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-task $cur/conf/double-source-$1.yaml" \
-        "\"result\": true" 1
+    # TODO: uncomment after we support update-task
+    # run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    #     "update-task $cur/conf/double-source-$1.yaml" \
+    #     "\"result\": true" 1
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task test" \

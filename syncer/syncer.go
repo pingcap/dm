@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"os"
 	"path"
@@ -60,6 +61,7 @@ import (
 	operator "github.com/pingcap/dm/syncer/err-operator"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/shardddl"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 var (
@@ -2363,7 +2365,11 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 		return err
 	}
 
-	s.setSyncCfg()
+	err = s.setSyncCfg()
+	if err != nil {
+		return err
+	}
+
 	if s.streamerController != nil {
 		s.streamerController.UpdateSyncCfg(s.syncCfg, s.fromDB)
 	}
@@ -2398,7 +2404,19 @@ func (s *Syncer) setTimezone() {
 	s.timezone = loc
 }
 
-func (s *Syncer) setSyncCfg() {
+func (s *Syncer) setSyncCfg() error {
+	var tlsConfig *tls.Config
+	var err error
+	if s.cfg.From.Security != nil {
+		tlsConfig, err = toolutils.ToTLSConfig(s.cfg.From.Security.SSLCA, s.cfg.From.Security.SSLCert, s.cfg.From.Security.SSLKey)
+		if err != nil {
+			return terror.ErrConnInvalidTLSConfig.Delegate(err)
+		}
+		if tlsConfig != nil {
+			tlsConfig.InsecureSkipVerify = true
+		}
+	}
+
 	syncCfg := replication.BinlogSyncerConfig{
 		ServerID:                uint32(s.cfg.ServerID),
 		Flavor:                  s.cfg.Flavor,
@@ -2407,12 +2425,14 @@ func (s *Syncer) setSyncCfg() {
 		User:                    s.cfg.From.User,
 		Password:                s.cfg.From.Password,
 		TimestampStringLocation: s.timezone,
+		TLSConfig:               tlsConfig,
 	}
 	// when retry count > 1, go-mysql will retry sync from the previous GTID set in GTID mode,
 	// which may get duplicate binlog event after retry success. so just set retry count = 1, and task
 	// will exit when meet error, and then auto resume by DM itself.
 	common.SetDefaultReplicationCfg(&syncCfg, 1)
 	s.syncCfg = syncCfg
+	return nil
 }
 
 // ShardDDLInfo returns the current pending to handle shard DDL info.

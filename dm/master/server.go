@@ -841,14 +841,35 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
-	resp := &pb.UnlockDDLLockResponse{
-		Result: true,
+	resp := &pb.UnlockDDLLockResponse{}
+
+	task := utils.ExtractTaskFromLockID(req.ID)
+	if task == "" {
+		resp.Msg = "can't find task name from lock-ID"
+		return resp, nil
 	}
+	cfgStr := s.scheduler.GetTaskCfg(task)
+	if cfgStr == "" {
+		resp.Msg = "task (" + task + ") which extracted from lock-ID is not found in DM"
+		return resp, nil
+	}
+	cfg := config.NewTaskConfig()
+	if err := cfg.Decode(cfgStr); err != nil {
+		resp.Msg = err.Error()
+		return resp, nil
+	}
+
+	if cfg.ShardMode != config.ShardPessimistic {
+		resp.Msg = "`unlock-ddl-lock` is only supported in pessimistic shard mode currently"
+		return resp, nil
+	}
+
 	// TODO: add `unlock-ddl-lock` support for Optimist later.
 	err := s.pessimist.UnlockLock(ctx, req.ID, req.ReplaceOwner, req.ForceRemove)
 	if err != nil {
-		resp.Result = false
 		resp.Msg = err.Error()
+	} else {
+		resp.Result = true
 	}
 
 	return resp, nil
@@ -1548,11 +1569,7 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 	toDB := *cfg.TargetDB
 	toDB.Adjust()
 	if len(toDB.Password) > 0 {
-		pswdTo, err := utils.Decrypt(toDB.Password)
-		if err != nil {
-			return err
-		}
-		toDB.Password = pswdTo
+		toDB.Password = utils.DecryptOrPlaintext(toDB.Password)
 	}
 
 	// clear shard meta data for pessimistic/optimist
