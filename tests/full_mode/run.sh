@@ -55,7 +55,6 @@ function fail_acquire_global_lock() {
         "\"stage\": \"Paused\"" 2 \
         "you need (at least one of) the RELOAD privilege(s) for this operation" 2
 
-
     cleanup_data full_mode
     cleanup_process $*
 }
