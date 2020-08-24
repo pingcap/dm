@@ -1755,18 +1755,23 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return err
 	}
 
-	// handle shard DDL
-	if s.cfg.ShardMode == config.ShardOptimistic {
+	switch s.cfg.ShardMode {
+	case config.ShardOptimistic:
 		return s.handleQueryEventOptimistic(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames)
-	} else if s.cfg.ShardMode == config.ShardPessimistic {
+	case config.ShardPessimistic:
 		return s.handleQueryEventPessimistic(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames, ddlInfo, sqls)
+	default: // No sharding
+		return s.handleQueryEventNoSharding(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames, sourceTbls)
 	}
+}
 
+func (s *Syncer) handleQueryEventNoSharding(ev *replication.QueryEvent, ec eventContext, needHandleDDLs []string,
+	needTrackDDLs []trackedDDL, onlineDDLTableNames map[string]*filter.Table, sourceTbls map[string]map[string]struct{}) error {
 	s.tctx.L().Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.nextLocation))
 
 	// interrupted after flush old checkpoint and before track DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-		err = handleFlushCheckpointStage(1, val.(int), "before track DDL")
+		err := handleFlushCheckpointStage(1, val.(int), "before track DDL")
 		if err != nil {
 			failpoint.Return(err)
 		}
@@ -1774,21 +1779,21 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	// run trackDDL before add ddl job to make sure checkpoint can be flushed
 	for _, td := range needTrackDDLs {
-		if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+		if err := s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
 			return err
 		}
 	}
 
 	// interrupted after track DDL and before execute DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-		err = handleFlushCheckpointStage(2, val.(int), "before execute DDL")
+		err := handleFlushCheckpointStage(2, val.(int), "before execute DDL")
 		if err != nil {
 			failpoint.Return(err)
 		}
 	})
 
 	job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.nextLocation, *ec.traceID, sourceTbls)
-	err = s.addJobFunc(job)
+	err := s.addJobFunc(job)
 	if err != nil {
 		return err
 	}
@@ -1811,7 +1816,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	return nil
-
 }
 
 // trackedDDL keeps data needed for schema tracker.
