@@ -59,7 +59,7 @@ jobs:
          kubectl get svc -o wide
          kubectl get sts -o wide
          kubectl get po -o wide
-         kubectl get events -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
+         kubectl describe po mysql-0
          kubectl wait -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml --for=condition=Ready --timeout=0s
 
     # TODO: build & deploy DM; run chaos mesh action
