@@ -345,6 +345,12 @@ func (t *testConfigSuite) TestParseURLs(c *check.C) {
 				{Scheme: "http", Host: "127.0.0.1:18291"},
 			},
 		},
+		{
+			str: "LancedeMacBook-Pro.local:8661",
+			urls: []url.URL{
+				{Scheme: "http", Host: "LancedeMacBook-Pro.local:8661"},
+			},
+		},
 	}
 
 	for _, cs := range cases {
