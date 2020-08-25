@@ -9,7 +9,7 @@ heartbeat-report-interval: 1
 timezone: "Asia/Shanghai"
 
 target-database:
-  host: "127.0.0.1"
+  host: "localhost"
   port: 4000
   user: "root"
   password: ""
