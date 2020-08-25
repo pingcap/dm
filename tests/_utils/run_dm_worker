@@ -26,5 +26,5 @@ $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.worker.$port.$(date +"%s").
     --worker-addr=0.0.0.0:$port \
     --advertise-addr=127.0.0.1:$port \
     --log-file="$workdir/log/dm-worker.log" -L=debug --config="$conf" \
-    >> /dev/null 2>&1 & # revert after https://github.com/pingcap/tidb/pull/18844 merge
+    >> $workdir/log/stdout.log 2>&1 &
 cd $PWD
