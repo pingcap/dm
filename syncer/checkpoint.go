@@ -421,6 +421,9 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 
 // GlobalPoint implements CheckPoint.GlobalPoint
 func (cp *RemoteCheckPoint) GlobalPoint() mysql.Position {
+	cp.RLock()
+	defer cp.RUnlock()
+
 	return cp.globalPoint.MySQLPos()
 }
 
@@ -446,6 +449,9 @@ func (cp *RemoteCheckPoint) FlushedGlobalPoint() mysql.Position {
 
 // String implements CheckPoint.String
 func (cp *RemoteCheckPoint) String() string {
+	cp.RLock()
+	defer cp.RUnlock()
+
 	return cp.globalPoint.String()
 }
 
@@ -562,6 +568,9 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 
 // LoadMeta implements CheckPoint.LoadMeta
 func (cp *RemoteCheckPoint) LoadMeta() error {
+	cp.Lock()
+	defer cp.Unlock()
+
 	var (
 		pos *mysql.Position
 		err error
