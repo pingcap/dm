@@ -40,6 +40,7 @@ jobs:
         kubectl cluster-info
         kubectl get nodes
         kubectl get pods -n kube-system
+        kubectl get sc
         helm version
         kubectl version
 
