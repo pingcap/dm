@@ -45,11 +45,11 @@ jobs:
         kubectl version
 
      # Set up upstream MySQL instances
-     - name: Set up MySQL
-       run: |
+    - name: Set up MySQL
+      run: |
          kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
-     - name: Wait for MySQL ready
-       run: |
+    - name: Wait for MySQL ready
+      run: |
          kubectl wait -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml --for=condition=Ready --timeout=180s
          kubectl get pv
          kubectl get svc
