@@ -26,7 +26,6 @@ require (
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
 	github.com/pingcap/log v0.0.0-20200511115504-543df19646ad
 	github.com/pingcap/parser v0.0.0-20200810083003-f0edf4170630
-	github.com/pingcap/pd/v4 v4.0.0-rc.2.0.20200730093003-dc8c75cf7ca0
 	github.com/pingcap/tidb v1.1.0-beta.0.20200812070147-92bf05fb0901
 	github.com/pingcap/tidb-tools v4.0.5-0.20200819060105-3ac93f6b99d4+incompatible
 	github.com/prometheus/client_golang v1.5.1
@@ -41,6 +40,7 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285
+	github.com/tikv/pd v2.1.19+incompatible
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/unrolled/render v1.0.1
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738
