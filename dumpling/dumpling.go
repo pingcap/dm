@@ -280,5 +280,10 @@ func (m *Dumpling) detectAnsiQuotes() {
 	if err != nil {
 		return
 	}
+	if enable != m.cfg.EnableANSIQuotes {
+		m.logger.Warn("found mismatched ANSI_QUOTES setting, going to overwrite it to DB specified",
+			zap.Bool("DB specified", enable),
+			zap.Bool("config file specified", m.cfg.EnableANSIQuotes))
+	}
 	m.cfg.EnableANSIQuotes = enable
 }
