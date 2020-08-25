@@ -21,7 +21,7 @@ import (
 
 	"github.com/pingcap/check"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/pd/v4/pkg/tempurl"
+	"github.com/tikv/pd/pkg/tempurl"
 
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/utils"
