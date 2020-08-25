@@ -52,9 +52,10 @@ jobs:
          kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
     - name: Wait for MySQL ready
       run: |
-         kubectl wait -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml --for=condition=Ready --timeout=180s
+         kubectl wait -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml --for=condition=Ready --timeout=120s || true
          kubectl get -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
          kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
+         kubectl wait -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml --for=condition=Ready --timeout=0s
 
     # TODO: build & deploy DM; run chaos mesh action
     # Runs a single command using the runners shell
