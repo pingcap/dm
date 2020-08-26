@@ -355,7 +355,7 @@ func GetParser(db *sql.DB) (*parser.Parser, error) {
 	if err != nil {
 		return nil, err
 	}
-	return getParserFromSQLModeStr(sqlMode)
+	return GetParserFromSQLModeStr(sqlMode)
 }
 
 // GetParserForConn gets a parser for sql.Conn which maybe enabled `ANSI_QUOTES` sql_mode
@@ -364,19 +364,18 @@ func GetParserForConn(conn *sql.Conn) (*parser.Parser, error) {
 	if err != nil {
 		return nil, err
 	}
-	return getParserFromSQLModeStr(sqlMode)
+	return GetParserFromSQLModeStr(sqlMode)
 }
 
-func getParserFromSQLModeStr(sqlMode string) (*parser.Parser, error) {
+// GetParserFromSQLModeStr gets a parser and applies given sqlMode
+func GetParserFromSQLModeStr(sqlMode string) (*parser.Parser, error) {
 	mode, err := tmysql.GetSQLMode(sqlMode)
 	if err != nil {
 		return nil, err
 	}
 
 	parser2 := parser.New()
-	if mode.HasANSIQuotesMode() {
-		parser2.SetSQLMode(tmysql.ModeANSIQuotes)
-	}
+	parser2.SetSQLMode(mode)
 	return parser2, nil
 }
 

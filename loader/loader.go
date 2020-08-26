@@ -1157,8 +1157,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			dataFiles := tables[table]
 			tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
 			if _, ok := l.tableInfos[tableName(db, table)]; !ok {
-				// TODO(lance6716): check whether mydumper/dumpling follows upstream SQLMode, thus need us specify
-				l.tableInfos[tableName(db, table)], err = parseTable(tctx, l.tableRouter, db, table, tableFile, l.cfg.EnableANSIQuotes)
+				l.tableInfos[tableName(db, table)], err = parseTable(tctx, l.tableRouter, db, table, tableFile, l.cfg.LoaderConfig.SQLMode)
 				if err != nil {
 					return terror.Annotatef(err, "parse table %s/%s", db, table)
 				}

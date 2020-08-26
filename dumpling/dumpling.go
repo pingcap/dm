@@ -58,7 +58,7 @@ func NewDumpling(cfg *config.SubTaskConfig) *Dumpling {
 func (m *Dumpling) Init(ctx context.Context) error {
 	var err error
 	m.dumpConfig, err = m.constructArgs()
-	m.detectAnsiQuotes()
+	m.detectSQLMode()
 	return err
 }
 
@@ -269,21 +269,18 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	return dumpConfig, nil
 }
 
-// detectAnsiQuotes tries to detect ANSI_QUOTES from upstream. If success, change EnableANSIQuotes in subtask config
-func (m *Dumpling) detectAnsiQuotes() {
+// detectSQLMode tries to detect SQL mode from upstream. If success, write it to LoaderConfig
+func (m *Dumpling) detectSQLMode() {
 	db, err := sql.Open("mysql", m.dumpConfig.GetDSN(""))
 	if err != nil {
 		return
 	}
 	defer db.Close()
-	enable, err := utils.HasAnsiQuotesMode(db)
+
+	sqlMode, err := utils.GetGlobalVariable(db, "sql_mode")
 	if err != nil {
 		return
 	}
-	if enable != m.cfg.EnableANSIQuotes {
-		m.logger.Warn("found mismatched ANSI_QUOTES setting, going to overwrite it to DB specified",
-			zap.Bool("DB specified", enable),
-			zap.Bool("config file specified", m.cfg.EnableANSIQuotes))
-	}
-	m.cfg.EnableANSIQuotes = enable
+	m.logger.Info("found upstream SQL mode", zap.String("SQL mode", sqlMode))
+	m.cfg.LoaderConfig.SQLMode = sqlMode
 }

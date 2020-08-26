@@ -200,6 +200,7 @@ func (m *MydumperConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 type LoaderConfig struct {
 	PoolSize int    `yaml:"pool-size" toml:"pool-size" json:"pool-size"`
 	Dir      string `yaml:"dir" toml:"dir" json:"dir"`
+	SQLMode  string `yaml:"-" toml:"-" json:"-"` // wrote by dump unit
 }
 
 func defaultLoaderConfig() LoaderConfig {
