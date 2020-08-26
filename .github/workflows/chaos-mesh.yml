@@ -48,7 +48,7 @@ jobs:
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
-     # Set up upstream MySQL instances
+    # Set up upstream MySQL instances
     - name: Set up MySQL
       run: |
          kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
@@ -60,15 +60,15 @@ jobs:
          sleep 10
          kubectl wait --for=condition=Ready pod/mysql-1 --timeout=120s || true
          echo show pvc
-         kubectl get pvc -o wide
+         kubectl get pvc -l app=mysql -o wide
          echo show pv
          kubectl get pv -o wide
          echo show svc
-         kubectl get svc -o wide
+         kubectl get svc -l app=mysql -o wide
          echo show sts
-         kubectl get sts -o wide
+         kubectl get sts -l app=mysql -o wide
          echo show po
-         kubectl get po -o wide
+         kubectl get po -l app=mysql -o wide
          echo describe po
          kubectl describe po mysql-0
          kubectl describe po mysql-1
@@ -81,8 +81,35 @@ jobs:
          kubectl wait --for=condition=Ready pod/mysql-0 --timeout=0s
          kubectl wait --for=condition=Ready pod/mysql-1 --timeout=0s
 
+    # Set up downstream TiDB instance (deploy a TiDB with mockTiKV, not a TidbCluster managed by TiDB-operator)
+    - name: Set up TiDB
+      run: |
+        kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/tidb.yaml
+        kubectl get -f $GITHUB_WORKSPACE/chaos/manifests/tidb.yaml
+        kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/tidb.yaml
+    - name: Wait for TiDB ready
+      run: |
+        kubectl wait --for=condition=Ready pod/tidb-0 --timeout=120s || true
+        echo show pvc
+        kubectl get pvc -l app=tidb -o wide
+        echo show pv
+        kubectl get pv -o wide
+        echo show svc
+        kubectl get svc -l app=tidb -o wide
+        echo show sts
+        kubectl get sts -l app=tidb -o wide
+        echo show po
+        kubectl get po -l app=tidb -o wide
+        echo describe po
+        kubectl describe po tidb-0
+        echo describe pvc
+        kubectl describe pvc tidb-tidb-0
+        echo log po
+        kubectl logs tidb-0
+        kubectl wait --for=condition=Ready pod/tidb-0 --timeout=0s
+
     # Debug through SSH
-    # - name: Setup tmate session
+    # - name: Set up tmate session
     #   uses: mxschmitt/action-tmate@v2
 
     # TODO: build & deploy DM; run chaos mesh action
