@@ -170,3 +170,13 @@ func HidePassword(input string) string {
 	output := passwordRegexp.ReplaceAllString(input, "$1******$4")
 	return output
 }
+
+// UnwrapScheme removes http or https scheme from input
+func UnwrapScheme(s string) string {
+	if strings.HasPrefix(s, "http://") {
+		return s[len("http://"):]
+	} else if strings.HasPrefix(s, "https://") {
+		return s[len("https://"):]
+	}
+	return s
+}
