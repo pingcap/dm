@@ -32,6 +32,8 @@ jobs:
     # Set up Kubernetes IN Docker
     - name: Set up kind cluster 
       uses: helm/kind-action@v1.0.0
+      with:
+        cluster_name: dm-chaos 
     - name: Print cluster information
       run: |
         kubectl config view
@@ -60,7 +62,7 @@ jobs:
     # Load DM docker image into KIND
     - name: Load DM docker image into KIND
       run: |
-        kind load docker-image dm:chaos
+        kind load docker-image dm:chaos --name dm-chaos
 
     # Set up upstream MySQL instances
     - name: Set up MySQL
