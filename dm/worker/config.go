@@ -169,7 +169,7 @@ func (c *Config) Parse(arguments []string) error {
 
 // adjust adjusts the config.
 func (c *Config) adjust() error {
-	host, port, err := net.SplitHostPort(c.WorkerAddr)
+	host, port, err := net.SplitHostPort(utils.UnwrapScheme(c.WorkerAddr))
 	if err != nil {
 		return terror.ErrWorkerHostPortNotValid.Delegate(err, c.WorkerAddr)
 	}
@@ -180,7 +180,7 @@ func (c *Config) adjust() error {
 		}
 		c.AdvertiseAddr = c.WorkerAddr
 	} else {
-		host, port, err = net.SplitHostPort(c.AdvertiseAddr)
+		host, port, err = net.SplitHostPort(utils.UnwrapScheme(c.AdvertiseAddr))
 		if err != nil {
 			return terror.ErrWorkerHostPortNotValid.Delegate(err, c.AdvertiseAddr)
 		}
