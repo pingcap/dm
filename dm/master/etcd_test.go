@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/pingcap/check"
-	"github.com/pingcap/pd/v4/pkg/tempurl"
+	"github.com/tikv/pd/pkg/tempurl"
 	"go.etcd.io/etcd/embed"
 
 	"github.com/pingcap/dm/pkg/log"
