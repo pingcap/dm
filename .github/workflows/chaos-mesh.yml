@@ -77,8 +77,12 @@ jobs:
          echo log po
          kubectl logs mysql-0
          kubectl logs mysql-1
-         kubectl wait --for=condition=Ready pod/mysql-0 --timeout=0s
-         kubectl wait --for=condition=Ready pod/mysql-1 --timeout=0s
+         # kubectl wait --for=condition=Ready pod/mysql-0 --timeout=0s
+         # kubectl wait --for=condition=Ready pod/mysql-1 --timeout=0s
+
+    # Debug through SSH
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v2
 
     # TODO: build & deploy DM; run chaos mesh action
     # Runs a single command using the runners shell
