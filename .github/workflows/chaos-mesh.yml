@@ -48,12 +48,6 @@ jobs:
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
-    # Install make to build binaries of DM
-    - name: Install make
-      run: |
-        sudo apt install make
-        make -v
-
     # Build DM binary
     - name: Build DM binary
       run: make dm-master dm-worker dmctl

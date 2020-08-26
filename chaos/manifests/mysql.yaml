@@ -24,6 +24,7 @@ spec:
       app: mysql
   serviceName: mysql
   replicas: 2 # 2 MySQL instances
+  podManagementPolicy: Parallel
   template:
     metadata:
       labels:
