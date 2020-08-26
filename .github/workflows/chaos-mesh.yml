@@ -43,6 +43,12 @@ jobs:
         kubectl get sc
         helm version
         kubectl version
+    
+    # Disable AppArmor for MySQL, see https://github.com/moby/moby/issues/7512#issuecomment-61787845
+    - name: Disable AppArmor for MySQL
+      run: |
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
      # Set up upstream MySQL instances
     - name: Set up MySQL
