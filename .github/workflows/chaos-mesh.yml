@@ -48,6 +48,22 @@ jobs:
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
+    # Install make to build binaries of DM
+    - name: Install make
+      run: |
+        sudo apt install make
+        make -v
+
+    # Build DM binary
+    - name: Build DM binary
+      run: make dm-master dm-worker dmctl
+    
+    # Build DM docker image
+    - name: Build DM docker image
+      run: |
+        docker build -f $GITHUB_WORKSPACE/chaos/manifests/Dockerfile -t dm:chaos $GITHUB_WORKSPACE/bin
+        docker image list
+
     # Set up upstream MySQL instances
     - name: Set up MySQL
       run: |
