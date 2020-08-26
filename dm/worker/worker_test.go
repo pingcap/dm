@@ -122,8 +122,8 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/loader/ignoreLoadCheckpointErr", `return()`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/loader/ignoreLoadCheckpointErr")
-
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError", `return("test auto resume inject error")`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 
 	s := NewServer(cfg)
 
