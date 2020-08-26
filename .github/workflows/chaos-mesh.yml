@@ -80,14 +80,9 @@ jobs:
          echo show po
          kubectl get po -l app=mysql -o wide
          echo describe po
-         kubectl describe po mysql-0
-         kubectl describe po mysql-1
+         kubectl describe po -l app=mysql
          echo describe pvc
-         kubectl describe pvc mysql-mysql-0
-         kubectl describe pvc mysql-mysql-1
-         echo log po
-         kubectl logs mysql-0
-         kubectl logs mysql-1
+         kubectl describe pvc -l app=mysql
          kubectl wait --for=condition=Ready pod/mysql-0 --timeout=0s
          kubectl wait --for=condition=Ready pod/mysql-1 --timeout=0s
 
@@ -111,11 +106,9 @@ jobs:
         echo show po
         kubectl get po -l app=tidb -o wide
         echo describe po
-        kubectl describe po tidb-0
+        kubectl describe po -l app=tidb
         echo describe pvc
-        kubectl describe pvc tidb-tidb-0
-        echo log po
-        kubectl logs tidb-0
+        kubectl describe pvc -l app=tidb
         kubectl wait --for=condition=Ready pod/tidb-0 --timeout=0s
 
     # Set up DM
@@ -126,24 +119,30 @@ jobs:
         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/dm.yaml
     - name: Wait for DM ready
       run: |
-        kubectl wait --for=condition=Ready pod -l app=dm --all || true
+        kubectl wait --for=condition=Ready pod -l app=dm-master --all || true
+        kubectl wait --for=condition=Ready pod -l app=dm-worker --all || true
         echo show pvc
-        kubectl get pvc -l app=dm -o wide
+        kubectl get pvc -l app=dm-master -o wide
+        kubectl get pvc -l app=dm-worker -o wide
         echo show pv
         kubectl get pv -o wide
         echo show svc
-        kubectl get svc -l app=dm -o wide
+        kubectl get svc -l app=dm-master -o wide
+        kubectl get svc -l app=dm-worker -o wide
         echo show sts
-        kubectl get sts -l app=dm -o wide
+        kubectl get sts -l app=dm-master -o wide
+        kubectl get sts -l app=dm-worker -o wide
         echo show po
-        kubectl get po -l app=dm -o wide
+        kubectl get po -l app=dm-master -o wide
+        kubectl get po -l app=dm-worker -o wide
         echo describe po
-        kubectl describe po dm-0
+        kubectl describe po -l app=dm-master
+        kubectl describe po -l app=dm-worker
         echo describe pvc
-        kubectl describe pvc dm-dm-0
-        echo log po
-        kubectl logs dm-0
-        kubectl wait --for=condition=Ready pod -l app=dm --all --timeout=0s
+        kubectl describe pvc -l app=dm-master
+        kubectl describe pvc -l app=dm-worker
+        kubectl wait --for=condition=Ready pod -l app=dm-master --all --timeout=0s
+        kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=0s
 
     # Debug through SSH
     - name: Set up tmate session
