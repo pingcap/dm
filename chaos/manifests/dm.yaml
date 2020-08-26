@@ -50,7 +50,7 @@ spec:
       containers:
         - name: dm-master
           image: dm:chaos # build this image in GitHub action workflow
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           volumeMounts:
             - mountPath: /data
               name: dm-master
@@ -109,7 +109,7 @@ spec:
       containers:
         - name: dm-worker
           image: dm:chaos # build this image in GitHub action workflow
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           volumeMounts:
             - mountPath: /data
               name: dm-worker

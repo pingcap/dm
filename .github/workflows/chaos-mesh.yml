@@ -141,8 +141,8 @@ jobs:
         echo describe pvc
         kubectl describe pvc -l app=dm-master
         kubectl describe pvc -l app=dm-worker
-        kubectl wait --for=condition=Ready pod -l app=dm-master --all --timeout=0s
-        kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=0s
+#        kubectl wait --for=condition=Ready pod -l app=dm-master --all --timeout=0s
+#        kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=0s
 
     # Debug through SSH
     - name: Set up tmate session
