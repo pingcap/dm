@@ -54,9 +54,11 @@ jobs:
          kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
          kubectl get -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
          kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
-    - name: Wait for MySQL ready
+    - name: Wait for MySQL ready # kubectl wait --all not working
       run: |
-         kubectl wait --for=condition=Ready pod -l app=mysql --all --timeout=120s || true
+         kubectl wait --for=condition=Ready pod/mysql-0 --timeout=120s || true
+         sleep 10
+         kubectl wait --for=condition=Ready pod/mysql-1 --timeout=120s || true
          echo show pvc
          kubectl get pvc -o wide
          echo show pv
@@ -76,7 +78,8 @@ jobs:
          echo log po
          kubectl logs mysql-0
          kubectl logs mysql-1
-         kubectl wait --for=condition=Ready pod -l app=mysql --all --timeout=0s
+         kubectl wait --for=condition=Ready pod/mysql-0 --timeout=0s
+         kubectl wait --for=condition=Ready pod/mysql-1 --timeout=0s
 
     # Debug through SSH
     # - name: Setup tmate session
