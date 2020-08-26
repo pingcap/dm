@@ -59,8 +59,7 @@ jobs:
     - name: Wait for MySQL ready
       run: |
          kubectl wait --for=condition=Ready pod/mysql-0 --timeout=120s || true
-         kubectl get -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
-         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
+         kubectl wait --for=condition=Ready pod/mysql-1 --timeout=120s || true
          echo show pv
          kubectl get pv -o wide
          echo show svc
@@ -74,6 +73,7 @@ jobs:
          echo log po
          kubectl logs mysql-0
          kubectl wait --for=condition=Ready pod/mysql-0 --timeout=0s
+         kubectl wait --for=condition=Ready pod/mysql-1 --timeout=0s
 
     # TODO: build & deploy DM; run chaos mesh action
     # Runs a single command using the runners shell

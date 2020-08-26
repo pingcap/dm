@@ -25,7 +25,7 @@ spec:
     matchLabels:
       app: mysql
   serviceName: mysql
-  replicas: 1 # 2 MySQL instances
+  replicas: 2 # 2 MySQL instances
   template:
     metadata:
       labels:
