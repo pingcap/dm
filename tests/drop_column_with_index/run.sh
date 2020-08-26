@@ -35,7 +35,7 @@ function run() {
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
     # use sync_diff_inspector to check data now!
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 30
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # check column covered by multi-column indices won't drop, and its indices won't drop
     run_sql "alter table drop_column_with_index.t1 drop column c2;" $MYSQL_PORT1 $MYSQL_PASSWORD1
