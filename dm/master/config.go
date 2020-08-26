@@ -224,8 +224,8 @@ func (c *Config) configFromFile(path string) error {
 
 // adjust adjusts configs
 func (c *Config) adjust() error {
-	// MasterAddr's format may be "host:port" or ":port"
-	host, port, err := net.SplitHostPort(c.MasterAddr)
+	// MasterAddr's format may be "scheme://host:port", "host:port" or ":port"
+	host, port, err := net.SplitHostPort(utils.UnwrapScheme(c.MasterAddr))
 	if err != nil {
 		return terror.ErrMasterHostPortNotValid.Delegate(err, c.MasterAddr)
 	}
@@ -236,8 +236,8 @@ func (c *Config) adjust() error {
 		}
 		c.AdvertiseAddr = c.MasterAddr
 	} else {
-		// AdvertiseAddr's format must be "host:port"
-		host, port, err = net.SplitHostPort(c.AdvertiseAddr)
+		// AdvertiseAddr's format may be "scheme://host:port" or "host:port"
+		host, port, err = net.SplitHostPort(utils.UnwrapScheme(c.AdvertiseAddr))
 		if err != nil {
 			return terror.ErrMasterAdvertiseAddrNotValid.Delegate(err, c.AdvertiseAddr)
 		}
@@ -407,18 +407,15 @@ func parseURLs(s string) ([]url.URL, error) {
 	items := strings.Split(s, ",")
 	urls := make([]url.URL, 0, len(items))
 	for _, item := range items {
-		u, err := url.Parse(item)
-		// tolerate valid `master-addr`, but invalid URL format, like:
-		// `:8261`: missing protocol scheme
-		// `127.0.0.1:8261`: first path segment in URL cannot contain colon
-		if err != nil && (strings.Contains(err.Error(), "missing protocol scheme") ||
-			strings.Contains(err.Error(), "first path segment in URL cannot contain colon")) {
+		// tolerate valid `master-addr`, but invalid URL format. mainly caused by no protocol scheme
+		if !(strings.HasPrefix(item, "http://") || strings.HasPrefix(item, "https://")) {
 			prefix := "http://"
 			if atomic.LoadInt32(&useTLS) == 1 {
 				prefix = "https://"
 			}
-			u, err = url.Parse(prefix + item)
+			item = prefix + item
 		}
+		u, err := url.Parse(item)
 		if err != nil {
 			return nil, terror.ErrMasterParseURLFail.Delegate(err, item)
 		}
