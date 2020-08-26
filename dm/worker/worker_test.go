@@ -118,12 +118,12 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever", `return(true)`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever")
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError", `2*return("test auto resume inject error")`), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly", `return(true)`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/loader/ignoreLoadCheckpointErr", `return()`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/loader/ignoreLoadCheckpointErr")
+
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError", `return("test auto resume inject error")`), IsNil)
 
 	s := NewServer(cfg)
 
@@ -154,6 +154,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		}
 		return false
 	}), IsTrue)
+	failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 
 	rtsc, ok := s.getWorker(true).taskStatusChecker.(*realTaskStatusChecker)
 	c.Assert(ok, IsTrue)
