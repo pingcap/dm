@@ -49,8 +49,8 @@ spec:
     spec:
       containers:
         - name: dm-master
-          image: dm:chaos # build this image in GitHub action workflow
-          imagePullPolicy: Never
+          image: localhost:5000/dm:chaos # build this image in GitHub action workflow
+          imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: /data
               name: dm-master
@@ -108,8 +108,8 @@ spec:
     spec:
       containers:
         - name: dm-worker
-          image: dm:chaos # build this image in GitHub action workflow
-          imagePullPolicy: Never
+          image: localhost:5000/dm:chaos # build this image in GitHub action workflow
+          imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: /data
               name: dm-worker
@@ -130,7 +130,7 @@ spec:
             - "--name=$(MY_POD_NAME)"
             - "--worker-addr=:8262"
             - "--advertise-addr=$(MY_POD_NAME).dm-worker.$(MY_POD_NAMESPACE):8262"
-            - "--join=dm-master.$(MY_POS_NAMESPACE):8261"
+            - "--join=dm-master.$(MY_POD_NAMESPACE):8261"
           readinessProbe:
             httpGet:
               port: 8262
