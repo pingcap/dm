@@ -402,12 +402,15 @@ func (w *Worker) observeSubtaskStage(ctx context.Context, etcdCli *clientv3.Clie
 }
 
 func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) error {
+	closed := false
 	for {
 		select {
 		case <-ctx.Done():
-			log.L().Info("worker is closed, handleSubTaskStage will quit now")
-			return nil
-		case stage := <-stageCh:
+			closed = true
+		case stage, ok := <-stageCh:
+			if !ok {
+				closed = true
+			}
 			opType, err := w.operateSubTaskStageWithoutConfig(stage)
 			if err != nil {
 				opErrCounter.WithLabelValues(w.name, opType).Inc()
@@ -416,12 +419,19 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 					return err
 				}
 			}
-		case err := <-errCh:
+		case err, ok := <-errCh:
+			if !ok {
+				closed = true
+			}
 			// TODO: deal with err
 			log.L().Error("WatchSubTaskStage received an error", zap.Error(err))
 			if etcdutil.IsRetryableError(err) {
 				return err
 			}
+		}
+		if closed {
+			log.L().Info("worker is closed, handleSubTaskStage will quit now")
+			return nil
 		}
 	}
 }
