@@ -57,11 +57,10 @@ jobs:
       run: |
         docker build -f $GITHUB_WORKSPACE/chaos/manifests/Dockerfile -t dm:chaos $GITHUB_WORKSPACE/bin
         docker image list
-    # Push docker image to KIND's local registry
-    - name: Push DM docker image
+    # Load DM docker image into KIND
+    - name: Load DM docker image into KIND
       run: |
-        docker tag dm:chaos localhost:5000/dm:chaos
-        docker push localhost:5000/dm:chaos
+        kind load docker-image dm:chaos
 
     # Set up upstream MySQL instances
     - name: Set up MySQL
