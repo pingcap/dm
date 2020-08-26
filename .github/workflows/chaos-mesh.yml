@@ -13,7 +13,7 @@ jobs:
   # This workflow contains a single job called "base"
   base:
     # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -28,8 +28,6 @@ jobs:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - name: Check out code
       uses: actions/checkout@v2
-    - name: Print current git commit hash
-      run: git rev-parse HEAD
     
     # Set up Kubernetes IN Docker
     - name: Set up kind cluster 
@@ -60,6 +58,8 @@ jobs:
       run: |
          kubectl wait --for=condition=Ready pod/mysql-0 --timeout=120s || true
          kubectl wait --for=condition=Ready pod/mysql-1 --timeout=120s || true
+         echo show pvc
+         kubectl get pvc -o wide
          echo show pv
          kubectl get pv -o wide
          echo show svc
@@ -68,10 +68,15 @@ jobs:
          kubectl get sts -o wide
          echo show po
          kubectl get po -o wide
-         echo descirbe po
+         echo describe po
          kubectl describe po mysql-0
+         kubectl describe po mysql-1
+         echo describe pvc
+         kubectl describe pvc mysql-mysql-0
+         kubectl describe pvc mysql-mysql-1
          echo log po
          kubectl logs mysql-0
+         kubectl logs mysql-1
          kubectl wait --for=condition=Ready pod/mysql-0 --timeout=0s
          kubectl wait --for=condition=Ready pod/mysql-1 --timeout=0s
 
