@@ -273,7 +273,7 @@ type TaskConfig struct {
 	TaskMode   string `yaml:"task-mode" toml:"task-mode" json:"task-mode"`
 	IsSharding bool   `yaml:"is-sharding" toml:"is-sharding" json:"is-sharding"`
 	ShardMode  string `yaml:"shard-mode" toml:"shard-mode" json:"shard-mode"` // when `shard-mode` set, we always enable sharding support.
-	//  treat it as hidden configuration
+	// treat it as hidden configuration
 	IgnoreCheckingItems []string `yaml:"ignore-checking-items" toml:"ignore-checking-items" json:"ignore-checking-items"`
 	// we store detail status in meta
 	// don't save configuration into it
@@ -307,7 +307,7 @@ type TaskConfig struct {
 	Syncers   map[string]*SyncerConfig   `yaml:"syncers" toml:"syncers" json:"syncers"`
 
 	CleanDumpFile bool `yaml:"clean-dump-file" toml:"clean-dump-file" json:"clean-dump-file"`
-
+	// deprecated
 	EnableANSIQuotes bool `yaml:"ansi-quotes" toml:"ansi-quotes" json:"ansi-quotes"`
 }
 
@@ -516,7 +516,7 @@ func (c *TaskConfig) adjust() error {
 
 		// for backward compatible, set global config `ansi-quotes: true` if any syncer is true
 		if inst.Syncer.EnableANSIQuotes == true {
-			c.EnableANSIQuotes = true
+			log.L().Warn("DM could discover proper ANSI_QUOTES, `enable-ansi-quotes` is no longer take effect")
 		}
 
 		if dupeRules := checkDuplicateString(inst.RouteRules); len(dupeRules) > 0 {
@@ -621,7 +621,6 @@ func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) {
 	c.TargetDB = &stCfg0.To // just ref
 	c.OnlineDDLScheme = stCfg0.OnlineDDLScheme
 	c.CleanDumpFile = stCfg0.CleanDumpFile
-	c.EnableANSIQuotes = stCfg0.EnableANSIQuotes
 	c.MySQLInstances = make([]*MySQLInstance, 0, len(stCfgs))
 	c.BAList = make(map[string]*filter.Rules)
 	c.Routes = make(map[string]*router.TableRule)

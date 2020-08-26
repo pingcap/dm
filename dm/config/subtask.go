@@ -192,7 +192,7 @@ type SubTaskConfig struct {
 
 	CleanDumpFile bool `toml:"clean-dump-file" json:"clean-dump-file"`
 
-	// TODO(lance6716): remove this (and parent config) after updating tidb-tools "diff" and checking if dump unit need this
+	// TODO(lance6716): deprecated it (and parent config) after checking if dump unit need this
 	EnableANSIQuotes bool `toml:"ansi-quotes" json:"ansi-quotes"`
 
 	// still needed by Syncer / Loader bin
