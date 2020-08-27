@@ -160,7 +160,7 @@ jobs:
     - name: Run chaos mesh action
       uses: chaos-mesh/chaos-mesh-action@master
       env:
-        CFG_BASE64: ${CFG_BASE64}
+        CFG_BASE64: YXBpVmVyc2lvbjogY2hhb3MtbWVzaC5vcmcvdjFhbHBoYTEKa2luZDogUG9kQ2hhb3MKbWV0YWRhdGE6CiAgbmFtZTogcG9kLWtpbGwtZG0KICBsYWJlbHM6CiAgICBhcHA6IHBvZC1raWxsLWRtCnNwZWM6CiAgYWN0aW9uOiBwb2Qta2lsbAogIG1vZGU6IG9uZQogIHNlbGVjdG9yOgogICAgbWF0Y2hFeHByZXNzaW9uczoKICAgICAgLSBrZXk6IGFwcAogICAgICAgIG9wZXJhdG9yOiBJbgogICAgICAgIHZhbHVlczoKICAgICAgICAgIC0gZG0tbWFzdGVyCiAgICAgICAgICAtIGRtLXdvcmtlcgogIHNjaGVkdWxlcjoKICAgIGNyb246ICJAZXZlcnkgMW0iCg==
 
       # Debug through SSH
     - name: Set up tmate session
