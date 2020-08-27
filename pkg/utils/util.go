@@ -194,7 +194,7 @@ func wrapScheme(s string, https bool) string {
 	return "http://" + s
 }
 
-// WrapScheme adds http or https scheme to input if missing. input could be a comma-separated list
+// WrapSchemes adds http or https scheme to input if missing. input could be a comma-separated list
 // if input has wrong scheme, don't correct it (maybe user deliberately?)
 func WrapSchemes(s string, https bool) string {
 	items := strings.Split(s, ",")
