@@ -56,10 +56,8 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 	)
 
 	// lock with 2 sources.
-	l1, newDDLs, err := lk.TrySync(i11, tts1)
+	lockID1, newDDLs, err := lk.TrySync(i11, tts1)
 	c.Assert(err, IsNil)
-	c.Assert(l1, NotNil)
-	lockID1 := l1.ID
 	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
 	lock1 := lk.FindLock(lockID1)
@@ -70,10 +68,8 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
 
-	l1, newDDLs, err = lk.TrySync(i12, tts1)
+	lockID1, newDDLs, err = lk.TrySync(i12, tts1)
 	c.Assert(err, IsNil)
-	c.Assert(l1, NotNil)
-	lockID1 = l1.ID
 	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
 	lock1 = lk.FindLock(lockID1)
@@ -84,10 +80,8 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 	c.Assert(remain, Equals, 0)
 
 	// lock with only 1 source.
-	l2, newDDLs, err := lk.TrySync(i21, tts2)
+	lockID2, newDDLs, err := lk.TrySync(i21, tts2)
 	c.Assert(err, IsNil)
-	c.Assert(l2, NotNil)
-	lockID2 := l2.ID
 	c.Assert(lockID2, Equals, "task2-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
 	lock2 := lk.FindLock(lockID2)
@@ -155,18 +149,14 @@ func (t *testKeeper) TestLockKeeperMultipleTarget(c *C) {
 	)
 
 	// lock for target1.
-	l1, newDDLs, err := lk.TrySync(i11, tts1)
+	lockID1, newDDLs, err := lk.TrySync(i11, tts1)
 	c.Assert(err, IsNil)
-	c.Assert(l1, NotNil)
-	lockID1 := l1.ID
 	c.Assert(lockID1, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
 
 	// lock for target2.
-	l2, newDDLs, err := lk.TrySync(i21, tts2)
+	lockID2, newDDLs, err := lk.TrySync(i21, tts2)
 	c.Assert(err, IsNil)
-	c.Assert(l2, NotNil)
-	lockID2 := l2.ID
 	c.Assert(lockID2, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`rab`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
 
@@ -187,16 +177,12 @@ func (t *testKeeper) TestLockKeeperMultipleTarget(c *C) {
 	c.Assert(remain, Equals, 1)
 
 	// sync for two locks.
-	l1, newDDLs, err = lk.TrySync(i12, tts1)
+	lockID1, newDDLs, err = lk.TrySync(i12, tts1)
 	c.Assert(err, IsNil)
-	c.Assert(l1, NotNil)
-	lockID1 = l1.ID
 	c.Assert(lockID1, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
-	l2, newDDLs, err = lk.TrySync(i22, tts2)
+	lockID2, newDDLs, err = lk.TrySync(i22, tts2)
 	c.Assert(err, IsNil)
-	c.Assert(l2, NotNil)
-	lockID2 = l2.ID
 	c.Assert(lockID2, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`rab`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
 
