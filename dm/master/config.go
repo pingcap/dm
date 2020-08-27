@@ -224,8 +224,9 @@ func (c *Config) configFromFile(path string) error {
 
 // adjust adjusts configs
 func (c *Config) adjust() error {
-	// MasterAddr's format may be "scheme://host:port", "host:port" or ":port"
-	host, port, err := net.SplitHostPort(utils.UnwrapScheme(c.MasterAddr))
+	c.MasterAddr = utils.UnwrapScheme(c.MasterAddr)
+	// MasterAddr's format may be "host:port" or ":port"
+	host, port, err := net.SplitHostPort(c.MasterAddr)
 	if err != nil {
 		return terror.ErrMasterHostPortNotValid.Delegate(err, c.MasterAddr)
 	}
@@ -236,8 +237,9 @@ func (c *Config) adjust() error {
 		}
 		c.AdvertiseAddr = c.MasterAddr
 	} else {
-		// AdvertiseAddr's format may be "scheme://host:port" or "host:port"
-		host, port, err = net.SplitHostPort(utils.UnwrapScheme(c.AdvertiseAddr))
+		c.AdvertiseAddr = utils.UnwrapScheme(c.AdvertiseAddr)
+		// AdvertiseAddr's format should be "host:port"
+		host, port, err = net.SplitHostPort(c.AdvertiseAddr)
 		if err != nil {
 			return terror.ErrMasterAdvertiseAddrNotValid.Delegate(err, c.AdvertiseAddr)
 		}
@@ -294,10 +296,14 @@ func (c *Config) adjust() error {
 
 	if c.PeerUrls == "" {
 		c.PeerUrls = defaultPeerUrls
+	} else {
+		c.PeerUrls = utils.WrapSchemes(c.PeerUrls, c.SSLCA != "")
 	}
 
 	if c.AdvertisePeerUrls == "" {
 		c.AdvertisePeerUrls = c.PeerUrls
+	} else {
+		c.AdvertiseAddr = utils.WrapSchemes(c.AdvertiseAddr, c.SSLCA != "")
 	}
 
 	if c.InitialCluster == "" {
@@ -306,10 +312,16 @@ func (c *Config) adjust() error {
 			items[i] = fmt.Sprintf("%s=%s", c.Name, item)
 		}
 		c.InitialCluster = strings.Join(items, ",")
+	} else {
+		c.InitialCluster = utils.WrapSchemes(c.InitialCluster, c.SSLCA != "")
 	}
 
 	if c.InitialClusterState == "" {
 		c.InitialClusterState = defaultInitialClusterState
+	}
+
+	if c.Join != "" {
+		c.Join = utils.WrapSchemes(c.Join, c.SSLCA != "")
 	}
 
 	return err
