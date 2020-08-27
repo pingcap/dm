@@ -303,7 +303,7 @@ func (c *Config) adjust() error {
 	if c.AdvertisePeerUrls == "" {
 		c.AdvertisePeerUrls = c.PeerUrls
 	} else {
-		c.AdvertiseAddr = utils.WrapSchemes(c.AdvertiseAddr, c.SSLCA != "")
+		c.AdvertisePeerUrls = utils.WrapSchemes(c.AdvertisePeerUrls, c.SSLCA != "")
 	}
 
 	if c.InitialCluster == "" {
