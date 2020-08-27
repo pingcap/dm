@@ -153,14 +153,14 @@ jobs:
     # Encode chaos mesh action to base64
     - name: Encode chaos mesh action to base64
       run: |
-        export CFG_BASE64=$(base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/pod-kill-dm.yaml)
+        export CFG_BASE64=$(base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/pod-failure-dm.yaml)
         echo ${CFG_BASE64}
 
     # Set up chaos-mesh-action
     - name: Run chaos mesh action
       uses: chaos-mesh/chaos-mesh-action@master
       env:
-        CFG_BASE64: YXBpVmVyc2lvbjogY2hhb3MtbWVzaC5vcmcvdjFhbHBoYTEKa2luZDogUG9kQ2hhb3MKbWV0YWRhdGE6CiAgbmFtZTogcG9kLWtpbGwtZG0KICBsYWJlbHM6CiAgICBhcHA6IHBvZC1raWxsLWRtCnNwZWM6CiAgYWN0aW9uOiBwb2Qta2lsbAogIG1vZGU6IG9uZQogIHNlbGVjdG9yOgogICAgbWF0Y2hFeHByZXNzaW9uczoKICAgICAgLSBrZXk6IGFwcAogICAgICAgIG9wZXJhdG9yOiBJbgogICAgICAgIHZhbHVlczoKICAgICAgICAgIC0gZG0tbWFzdGVyCiAgICAgICAgICAtIGRtLXdvcmtlcgogIHNjaGVkdWxlcjoKICAgIGNyb246ICJAZXZlcnkgMW0iCg==
+        CFG_BASE64: YXBpVmVyc2lvbjogY2hhb3MtbWVzaC5vcmcvdjFhbHBoYTENCmtpbmQ6IFBvZENoYW9zDQptZXRhZGF0YToNCiAgbmFtZTogcG9kLWZhaWx1cmUtZG0NCiAgbGFiZWxzOg0KICAgIGFwcDogcG9kLWZhaWx1cmUtZG0NCnNwZWM6DQogIGFjdGlvbjogcG9kLWZhaWx1cmUNCiAgbW9kZTogb25lDQogIGR1cmF0aW9uOiAiMzBzIg0KICBzZWxlY3RvcjoNCiAgICBtYXRjaEV4cHJlc3Npb25zOg0KICAgICAgLSBrZXk6IGFwcA0KICAgICAgICBvcGVyYXRvcjogSW4NCiAgICAgICAgdmFsdWVzOg0KICAgICAgICAgIC0gZG0tbWFzdGVyDQogICAgICAgICAgLSBkbS13b3JrZXINCiAgc2NoZWR1bGVyOg0KICAgIGNyb246ICJAZXZlcnkgMm0iDQo=
 
       # Debug through SSH
     - name: Set up tmate session

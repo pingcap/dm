@@ -1,0 +1,19 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-failure-dm
+  labels:
+    app: pod-failure-dm
+spec:
+  action: pod-failure
+  mode: one
+  duration: "30s"
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - dm-master
+          - dm-worker
+  scheduler:
+    cron: "@every 2m"
