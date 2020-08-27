@@ -152,7 +152,9 @@ jobs:
 
     # Encode chaos mesh action to base64
     - name: Encode chaos mesh action to base64
-      run: export CFG_BASE64=$(base64 $GITHUB_WORKSPACE/chaos/manifests/pod-kill-dm.yaml)
+      run: |
+        export CFG_BASE64=$(base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/pod-kill-dm.yaml)
+        echo ${CFG_BASE64}
 
     # Set up chaos-mesh-action
     - name: Run chaos mesh action
