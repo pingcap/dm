@@ -476,15 +476,15 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 
 // handleLock handles a single shard DDL lock.
 func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, skipDone bool) error {
-	lockID, newDDLs, err := o.lk.TrySync(info, tts)
+	l, newDDLs, err := o.lk.TrySync(info, tts)
 	var cfStage = optimism.ConflictNone
 	if err != nil {
 		cfStage = optimism.ConflictDetected // we treat any errors returned from `TrySync` as conflict detected now.
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
-			zap.String("lock", lockID), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
+			zap.String("lock", l.ID), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
 	} else {
 		o.logger.Info("the shard DDL lock returned some DDLs",
-			zap.String("lock", lockID), zap.Strings("ddls", newDDLs), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted))
+			zap.String("lock", l.ID), zap.Strings("ddls", newDDLs), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted))
 
 		// try to record the init schema before applied the DDL to the downstream.
 		initSchema := optimism.NewInitSchema(info.Task, info.DownSchema, info.DownTable, info.TableInfoBefore)
@@ -498,11 +498,11 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 		}
 	}
 
-	lock := o.lk.FindLock(lockID)
+	lock := o.lk.FindLock(l.ID)
 	if lock == nil {
-		// this should not happen.
-		o.logger.Warn("lock not found after try sync for shard DDL info", zap.String("lock", lockID), zap.Stringer("info", info))
-		return nil
+		// the lock was remove by others, revert it back
+		o.logger.Info("lock not found after try sync for shard DDL info, revert it back", zap.String("lock", l.ID), zap.Stringer("info", info))
+		lock = l
 	}
 
 	// check whether the lock has resolved.
@@ -516,12 +516,12 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 		return nil
 	}
 
-	op := optimism.NewOperation(lockID, lock.Task, info.Source, info.UpSchema, info.UpTable, newDDLs, cfStage, false)
+	op := optimism.NewOperation(lock.ID, lock.Task, info.Source, info.UpSchema, info.UpTable, newDDLs, cfStage, false)
 	rev, succ, err := optimism.PutOperation(o.cli, skipDone, op)
 	if err != nil {
 		return err
 	}
-	o.logger.Info("put shard DDL lock operation", zap.String("lock", lockID),
+	o.logger.Info("put shard DDL lock operation", zap.String("lock", lock.ID),
 		zap.Stringer("operation", op), zap.Bool("already exist", !succ), zap.Int64("revision", rev))
 	return nil
 }

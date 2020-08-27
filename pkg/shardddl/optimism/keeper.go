@@ -35,7 +35,7 @@ func NewLockKeeper() *LockKeeper {
 }
 
 // TrySync tries to sync the lock.
-func (lk *LockKeeper) TrySync(info Info, tts []TargetTable) (string, []string, error) {
+func (lk *LockKeeper) TrySync(info Info, tts []TargetTable) (*Lock, []string, error) {
 	var (
 		lockID = genDDLLockID(info)
 		l      *Lock
@@ -51,7 +51,7 @@ func (lk *LockKeeper) TrySync(info Info, tts []TargetTable) (string, []string, e
 	}
 
 	newDDLs, err := l.TrySync(info.Source, info.UpSchema, info.UpTable, info.DDLs, info.TableInfoAfter, tts)
-	return lockID, newDDLs, err
+	return l, newDDLs, err
 }
 
 // RemoveLock removes a lock.
