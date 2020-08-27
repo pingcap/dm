@@ -517,7 +517,7 @@ func (t *testReaderSuite) TestStartSync(c *C) {
 	c.Assert(err, IsNil)
 
 	// get events from the streamer
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	obtainBaseEvents := make([]*replication.BinlogEvent, 0, (1+2+3)*len(baseEvents))
 	for {
