@@ -1,0 +1,18 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-kill-dm
+  labels:
+    app: pod-kill-dm
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - dm-master
+          - dm-worker
+  scheduler:
+    cron: "@every 1m"
