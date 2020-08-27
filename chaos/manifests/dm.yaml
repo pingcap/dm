@@ -83,7 +83,7 @@ spec:
       spec:
         accessModes:
           - ReadWriteOnce
-        storageClassName: shared-nvme-disks # standard, rancher.io/local-path
+        storageClassName: standard # standard, rancher.io/local-path
         resources:
           requests:
             storage: 1Gi
@@ -145,7 +145,7 @@ spec:
       spec:
         accessModes:
           - ReadWriteOnce
-        storageClassName: shared-nvme-disks # standard, rancher.io/local-path
+        storageClassName: standard # standard, rancher.io/local-path
         resources:
           requests:
             storage: 1Gi

@@ -59,7 +59,7 @@ jobs:
       run: |
         docker build -f $GITHUB_WORKSPACE/chaos/manifests/Dockerfile -t dm:chaos $GITHUB_WORKSPACE/bin
         docker image list
-    # Load DM docker image into KIND
+    # Load DM docker image into KIND, see https://kind.sigs.k8s.io/docs/user/quick-start/#loading-an-image-into-your-cluster
     - name: Load DM docker image into KIND
       run: |
         kind load docker-image dm:chaos --name dm-chaos
