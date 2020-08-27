@@ -52,7 +52,7 @@ jobs:
 
     # Build DM binary
     - name: Build DM binary
-      run: make dm-master dm-worker dmctl
+      run: make dm-master dm-worker dmctl chaos-case
     
     # Build DM docker image
     - name: Build DM docker image
