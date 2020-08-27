@@ -40,7 +40,7 @@ spec:
     matchLabels:
       app: dm-master
   serviceName: dm-master
-  replicas: 3 # 3 DM-master instances
+  replicas: 1 # TODO: 1 for debug; 3 DM-master instances
   podManagementPolicy: Parallel
   template:
     metadata:
