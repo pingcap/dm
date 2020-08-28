@@ -15,8 +15,11 @@ package conn
 
 import (
 	. "github.com/pingcap/check"
+	"github.com/pingcap/failpoint"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+
+	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
@@ -56,4 +59,18 @@ func (t *testBaseDBSuite) TestGetBaseConn(c *C) {
 	affected, err := dbConn.ExecuteSQL(tctx, testStmtHistogram, "test", []string{"create database test"})
 	c.Assert(err, IsNil)
 	c.Assert(affected, Equals, 1)
+}
+
+func (t *testBaseDBSuite) TestFailDBPing(c *C) {
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/conn/failDBPing", "return"), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/conn/failDBPing")
+
+	cfg := config.DBConfig{User: "root", Host: "127.0.0.1", Port: 3306}
+	cfg.Adjust()
+	db, err := DefaultDBProvider.Apply(cfg)
+	c.Assert(db, IsNil)
+	c.Assert(err, NotNil)
+
+	err = mock.ExpectationsWereMet()
+	c.Assert(err, IsNil)
 }
