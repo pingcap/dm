@@ -12,4 +12,6 @@ CREATE TABLE IF NOT EXISTS `dm_meta`.`test_syncer_checkpoint` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 INSERT INTO `dm_meta`.`test_syncer_checkpoint` VALUES
 ('mysql-replica-01','','','BINLOG_NAME1',BINLOG_POS1,1,'2020-07-31 18:10:40','2020-07-31 18:11:40'),
-('mysql-replica-02','','','BINLOG_NAME2',BINLOG_POS2,1,'2020-07-31 18:10:40','2020-07-31 18:11:40');
+('mysql-replica-01','import_v10x','t1','BINLOG_NAME1',BINLOG_POS1,0,'2020-07-31 18:10:40','2020-07-31 18:11:40'),
+('mysql-replica-02','','','BINLOG_NAME2',BINLOG_POS2,1,'2020-07-31 18:10:40','2020-07-31 18:11:40'),
+('mysql-replica-02','import_v10x','t2','BINLOG_NAME2',BINLOG_POS2,0,'2020-07-31 18:10:40','2020-07-31 18:11:40');
