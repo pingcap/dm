@@ -194,3 +194,30 @@ func (t *testUtilsSuite) TestHidePassword(c *C) {
 		c.Assert(HidePassword(str.old), Equals, str.new)
 	}
 }
+
+func (t *testUtilsSuite) TestUnwrapScheme(c *C) {
+	cases := []struct {
+		old string
+		new string
+	}{
+		{
+			"http://0.0.0.0:123",
+			"0.0.0.0:123",
+		},
+		{
+			"https://0.0.0.0:123",
+			"0.0.0.0:123",
+		},
+		{
+			"http://abc.com:123",
+			"abc.com:123",
+		},
+		{
+			"httpsdfpoje.com",
+			"httpsdfpoje.com",
+		},
+	}
+	for _, ca := range cases {
+		c.Assert(UnwrapScheme(ca.old), Equals, ca.new)
+	}
+}
