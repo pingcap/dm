@@ -510,6 +510,9 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 
 // GlobalPoint implements CheckPoint.GlobalPoint
 func (cp *RemoteCheckPoint) GlobalPoint() binlog.Location {
+	cp.RLock()
+	defer cp.RUnlock()
+
 	return cp.globalPoint.MySQLLocation()
 }
 
@@ -538,6 +541,9 @@ func (cp *RemoteCheckPoint) FlushedGlobalPoint() binlog.Location {
 
 // String implements CheckPoint.String
 func (cp *RemoteCheckPoint) String() string {
+	cp.RLock()
+	defer cp.RUnlock()
+
 	return cp.globalPoint.String()
 }
 
@@ -723,6 +729,9 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 
 // LoadMeta implements CheckPoint.LoadMeta
 func (cp *RemoteCheckPoint) LoadMeta() error {
+	cp.Lock()
+	defer cp.Unlock()
+
 	var (
 		location *binlog.Location
 		err      error
