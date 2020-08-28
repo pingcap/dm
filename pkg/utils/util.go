@@ -204,3 +204,19 @@ func WrapSchemes(s string, https bool) string {
 	}
 	return strings.Join(output, ",")
 }
+
+// WrapSchemesForInitialCluster acts like WrapSchemes, except input is "name=URL,..."
+func WrapSchemesForInitialCluster(s string, https bool) string {
+	items := strings.Split(s, ",")
+	output := make([]string, 0, len(items))
+	for _, item := range items {
+		kv := strings.Split(item, "=")
+		if len(kv) != 2 {
+			output = append(output, item)
+			continue
+		}
+
+		output = append(output, kv[0]+"="+wrapScheme(kv[1], https))
+	}
+	return strings.Join(output, ",")
+}
