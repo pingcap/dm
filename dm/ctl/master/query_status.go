@@ -42,7 +42,7 @@ type taskInfo struct {
 // NewQueryStatusCmd creates a QueryStatus command
 func NewQueryStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "query-status [-s source ...] [task-name] [--more]",
+		Use:   "query-status [-s source ...] [task-name | task-file] [--more]",
 		Short: "Queries task status.",
 		RunE:  queryStatusFunc,
 	}
@@ -58,7 +58,7 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) (err error) {
 		err = errors.New("please check output to see error")
 		return
 	}
-	taskName := cmd.Flags().Arg(0) // maybe empty
+	taskName := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0)) // maybe empty
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {

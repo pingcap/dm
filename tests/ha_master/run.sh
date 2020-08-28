@@ -270,7 +270,7 @@ function run() {
     check_port_offline $MASTER_PORT2 20
 
     # wait for master switch leader and re-setup
-    sleep 2
+    get_leader $WORK_DIR 127.0.0.1:$MASTER_PORT3
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
