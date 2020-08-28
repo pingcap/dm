@@ -99,6 +99,7 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 
 	if err = db.Ping(); err != nil {
 		db.Close()
+		doFuncInClose()
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 
