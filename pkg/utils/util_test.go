@@ -216,8 +216,46 @@ func (t *testUtilsSuite) TestUnwrapScheme(c *C) {
 			"httpsdfpoje.com",
 			"httpsdfpoje.com",
 		},
+		{
+			"",
+			"",
+		},
 	}
 	for _, ca := range cases {
 		c.Assert(UnwrapScheme(ca.old), Equals, ca.new)
+	}
+}
+
+func (t *testUtilsSuite) TestWrapSchemes(c *C) {
+	cases := []struct {
+		old   string
+		http  string
+		https string
+	}{
+		{
+			"0.0.0.0:123",
+			"http://0.0.0.0:123",
+			"https://0.0.0.0:123",
+		},
+		{
+			"abc.com:123",
+			"http://abc.com:123",
+			"https://abc.com:123",
+		},
+		{
+			// if input has wrong scheme, don't correct it (maybe user deliberately?)
+			"abc.com:123,http://abc.com:123,0.0.0.0:123,https://0.0.0.0:123",
+			"http://abc.com:123,http://abc.com:123,http://0.0.0.0:123,https://0.0.0.0:123",
+			"https://abc.com:123,http://abc.com:123,https://0.0.0.0:123,https://0.0.0.0:123",
+		},
+		{
+			"",
+			"",
+			"",
+		},
+	}
+	for _, ca := range cases {
+		c.Assert(WrapSchemes(ca.old, false), Equals, ca.http)
+		c.Assert(WrapSchemes(ca.old, true), Equals, ca.https)
 	}
 }
