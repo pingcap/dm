@@ -180,3 +180,43 @@ func UnwrapScheme(s string) string {
 	}
 	return s
 }
+
+func wrapScheme(s string, https bool) string {
+	if s == "" {
+		return s
+	}
+	if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
+		return s
+	}
+	if https {
+		return "https://" + s
+	}
+	return "http://" + s
+}
+
+// WrapSchemes adds http or https scheme to input if missing. input could be a comma-separated list
+// if input has wrong scheme, don't correct it (maybe user deliberately?)
+func WrapSchemes(s string, https bool) string {
+	items := strings.Split(s, ",")
+	output := make([]string, 0, len(items))
+	for _, s := range items {
+		output = append(output, wrapScheme(s, https))
+	}
+	return strings.Join(output, ",")
+}
+
+// WrapSchemesForInitialCluster acts like WrapSchemes, except input is "name=URL,..."
+func WrapSchemesForInitialCluster(s string, https bool) string {
+	items := strings.Split(s, ",")
+	output := make([]string, 0, len(items))
+	for _, item := range items {
+		kv := strings.Split(item, "=")
+		if len(kv) != 2 {
+			output = append(output, item)
+			continue
+		}
+
+		output = append(output, kv[0]+"="+wrapScheme(kv[1], https))
+	}
+	return strings.Join(output, ",")
+}
