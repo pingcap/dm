@@ -318,3 +318,18 @@ func (c *SourceConfig) check(metaData *toml.MetaData, err error) error {
 	c.adjust()
 	return nil
 }
+
+// PreCheck check valify source config
+func (c *SourceConfig) PreCheck(db *sql.DB) error {
+	if c.EnableGTID {
+		val, err := utils.GetGTID(db)
+		if err != nil {
+			return err
+		}
+		if val != "ON" {
+			return terror.ErrSourceCheckGTID.Generate(c.SourceID, val)
+		}
+	}
+
+	return nil
+}
