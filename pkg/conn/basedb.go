@@ -16,9 +16,13 @@ package conn
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"sync"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/pingcap/failpoint"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/retry"
@@ -39,6 +43,9 @@ var DefaultDBProvider DBProvider
 func init() {
 	DefaultDBProvider = &defaultDBProvider{}
 }
+
+// mock is used in unit test
+var mock sqlmock.Sqlmock
 
 // Apply will build BaseDB with DBConfig
 func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
@@ -68,8 +75,18 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
+	failpoint.Inject("failDBPing", func(_ failpoint.Value) {
+		db.Close()
+		db, mock, _ = sqlmock.New()
+		mock.ExpectClose()
+	})
 
-	if err = db.Ping(); err != nil {
+	err = db.Ping()
+	failpoint.Inject("failDBPing", func(_ failpoint.Value) {
+		err = errors.New("injected error")
+	})
+	if err != nil {
+		db.Close()
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 
