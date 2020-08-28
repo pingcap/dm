@@ -500,9 +500,10 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 
 	lock := o.lk.FindLock(lockID)
 	if lock == nil {
-		// this should not happen.
-		o.logger.Warn("lock not found after try sync for shard DDL info", zap.String("lock", lockID), zap.Stringer("info", info))
-		return nil
+		// this aways means others remove the lock concurrently when resolved ddl.
+		// simply try again.
+		o.logger.Warn("lock not found after try sync for shard DDL info, try handle lock again", zap.String("lock", lockID), zap.Stringer("info", info))
+		return o.handleLock(info, tts, skipDone)
 	}
 
 	// check whether the lock has resolved.
