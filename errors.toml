@@ -1048,6 +1048,12 @@ description = ""
 workaround = "Please check the `block-allow-list` config in task configuration file."
 tags = ["internal", "medium"]
 
+[error.DM-task-check-26007]
+message = "%s has GTID_MODE = %s instead of ON"
+description = ""
+workaround = "Please check the `enable-gtid` config in source configuration file."
+tags = ["internal", "medium"]
+
 [error.DM-relay-event-lib-28001]
 message = "parse server-uuid.index"
 description = ""
