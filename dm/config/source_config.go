@@ -241,6 +241,16 @@ func (c *SourceConfig) Adjust(db *sql.DB) (err error) {
 		}
 	}
 
+	if c.EnableGTID {
+		val, err := utils.GetGTID(db)
+		if err != nil {
+			return err
+		}
+		if val != "ON" {
+			return terror.ErrSourceCheckGTID.Generate(c.SourceID, val)
+		}
+	}
+
 	return nil
 }
 
@@ -316,20 +326,5 @@ func (c *SourceConfig) check(metaData *toml.MetaData, err error) error {
 		return terror.ErrWorkerUndecodedItemFromFile.Generate(strings.Join(undecodedItems, ","))
 	}
 	c.adjust()
-	return nil
-}
-
-// PreCheck check valify source config
-func (c *SourceConfig) PreCheck(db *sql.DB) error {
-	if c.EnableGTID {
-		val, err := utils.GetGTID(db)
-		if err != nil {
-			return err
-		}
-		if val != "ON" {
-			return terror.ErrSourceCheckGTID.Generate(c.SourceID, val)
-		}
-	}
-
 	return nil
 }
