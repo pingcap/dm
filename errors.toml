@@ -1337,7 +1337,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dump-unit-32001]
-message = "mydumper runs with error, with output (may empty): %s"
+message = "mydumper/dumpling runs with error, with output (may empty): %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
