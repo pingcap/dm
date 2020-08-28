@@ -313,7 +313,7 @@ func (c *Config) adjust() error {
 		}
 		c.InitialCluster = strings.Join(items, ",")
 	} else {
-		c.InitialCluster = utils.WrapSchemes(c.InitialCluster, c.SSLCA != "")
+		c.InitialCluster = utils.WrapSchemesForInitialCluster(c.InitialCluster, c.SSLCA != "")
 	}
 
 	if c.InitialClusterState == "" {
