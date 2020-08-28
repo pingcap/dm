@@ -15,7 +15,6 @@ package syncer
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -212,6 +211,8 @@ func (c *StreamerController) RedirectStreamer(tctx *tcontext.Context, location b
 	return c.resetReplicationSyncer(tctx, location)
 }
 
+var mockRestarted = false
+
 // GetEvent returns binlog event, should only have one thread call this function.
 func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replication.BinlogEvent, err error) {
 	ctx, cancel := context.WithTimeout(tctx.Context(), common.SlaveReadTimeout)
@@ -223,24 +224,11 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 		}
 	})
 
-	failpoint.Inject("SyncerGetEventError", func(val failpoint.Value) {
-		str, ok := val.(string)
-		if !ok {
-			tctx.L().Warn(fmt.Sprintf("cannot conver %s to string", val))
-		}
-
-		t, err2 := time.Parse(time.UnixDate, str)
-		if err2 != nil {
-			tctx.L().Warn(fmt.Sprintf("cannot parse %s to time: %s", str, err2))
-		} else {
-			// mock upstream instance restart from 5-20s
-			startTime := t.Add(5 * time.Second)
-			endTime := startTime.Add(20 * time.Second)
-			now := time.Now()
-			if now.Before(endTime) && now.After(startTime) {
-				tctx.L().Info("mock upstream instance restart", zap.String("failpoint", "SyncerGetEventError"), zap.Stringer("startTime", startTime), zap.Stringer("endTime", endTime))
-				failpoint.Return(nil, terror.ErrDBBadConn.Generate())
-			}
+	failpoint.Inject("SyncerGetEventError", func(_ failpoint.Value) {
+		if !mockRestarted {
+			mockRestarted = true
+			tctx.L().Info("mock upstream instance restart", zap.String("failpoint", "SyncerGetEventError"))
+			failpoint.Return(nil, terror.ErrDBBadConn.Generate())
 		}
 	})
 
