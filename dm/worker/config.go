@@ -169,6 +169,7 @@ func (c *Config) Parse(arguments []string) error {
 
 // adjust adjusts the config.
 func (c *Config) adjust() error {
+	c.WorkerAddr = utils.UnwrapScheme(c.WorkerAddr)
 	host, port, err := net.SplitHostPort(c.WorkerAddr)
 	if err != nil {
 		return terror.ErrWorkerHostPortNotValid.Delegate(err, c.WorkerAddr)
@@ -180,6 +181,7 @@ func (c *Config) adjust() error {
 		}
 		c.AdvertiseAddr = c.WorkerAddr
 	} else {
+		c.AdvertiseAddr = utils.UnwrapScheme(c.AdvertiseAddr)
 		host, port, err = net.SplitHostPort(c.AdvertiseAddr)
 		if err != nil {
 			return terror.ErrWorkerHostPortNotValid.Delegate(err, c.AdvertiseAddr)
@@ -192,6 +194,10 @@ func (c *Config) adjust() error {
 	if c.Name == "" {
 		fmt.Printf("worker name is not given, we will set AdvertiseAddr %s as the worker name\n", c.AdvertiseAddr)
 		c.Name = c.AdvertiseAddr
+	}
+
+	if c.Join != "" {
+		c.Join = utils.WrapSchemes(c.Join, c.SSLCA != "")
 	}
 
 	return nil

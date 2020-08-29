@@ -1,6 +1,6 @@
 # Master Configuration.
 name = "master4"
 master-addr = ":8561"
-advertise-addr = "127.0.0.1:8561"
-peer-urls = "127.0.0.1:8294"
-initial-cluster = "master1=http://127.0.0.1:8291,master2=http://127.0.0.1:8292,master3=http://127.0.0.1:8293,master4=http://127.0.0.1:8294,master5=http://127.0.0.1:8295"
+advertise-addr = "localhost:8561"
+peer-urls = "localhost:8294"
+initial-cluster = "master1=http://localhost:8291,master2=http://localhost:8292,master3=http://localhost:8293,master4=http://localhost:8294,master5=http://localhost:8295"

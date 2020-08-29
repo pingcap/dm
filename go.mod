@@ -20,15 +20,14 @@ require (
 	github.com/mattn/go-colorable v0.1.7 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
-	github.com/pingcap/dumpling v0.0.0-20200821062544-fd4568290bec
+	github.com/pingcap/dumpling v0.0.0-20200825093428-8e00b826f68d
 	github.com/pingcap/errcode v0.3.0 // indirect
-	github.com/pingcap/errors v0.11.5-0.20200729012136-4e113ddee29e
+	github.com/pingcap/errors v0.11.5-0.20200820035142-66eb5bf1d1cd
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
 	github.com/pingcap/log v0.0.0-20200511115504-543df19646ad
-	github.com/pingcap/parser v0.0.0-20200810083003-f0edf4170630
-	github.com/pingcap/pd/v4 v4.0.0-rc.2.0.20200730093003-dc8c75cf7ca0
-	github.com/pingcap/tidb v1.1.0-beta.0.20200812070147-92bf05fb0901
-	github.com/pingcap/tidb-tools v4.0.5-0.20200819060105-3ac93f6b99d4+incompatible
+	github.com/pingcap/parser v0.0.0-20200821073936-cf85e80665c4
+	github.com/pingcap/tidb v1.1.0-beta.0.20200825092018-e52cb3714e24
+	github.com/pingcap/tidb-tools v4.0.5-0.20200828085514-03575b185007+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
 	github.com/satori/go.uuid v1.2.0
@@ -41,11 +40,12 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285
+	github.com/tikv/pd v1.1.0-beta.0.20200825090122-aeda6d60f107
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/unrolled/render v1.0.1
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738
 	go.uber.org/zap v1.15.0
-	golang.org/x/sys v0.0.0-20200810151505-1b9f1253b3ed
+	golang.org/x/sys v0.0.0-20200824131525-c12d262b63d8
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/genproto v0.0.0-20191230161307-f3c370f40bfb
 	google.golang.org/grpc v1.26.0

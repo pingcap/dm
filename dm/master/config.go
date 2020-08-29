@@ -224,6 +224,7 @@ func (c *Config) configFromFile(path string) error {
 
 // adjust adjusts configs
 func (c *Config) adjust() error {
+	c.MasterAddr = utils.UnwrapScheme(c.MasterAddr)
 	// MasterAddr's format may be "host:port" or ":port"
 	host, port, err := net.SplitHostPort(c.MasterAddr)
 	if err != nil {
@@ -236,7 +237,8 @@ func (c *Config) adjust() error {
 		}
 		c.AdvertiseAddr = c.MasterAddr
 	} else {
-		// AdvertiseAddr's format must be "host:port"
+		c.AdvertiseAddr = utils.UnwrapScheme(c.AdvertiseAddr)
+		// AdvertiseAddr's format should be "host:port"
 		host, port, err = net.SplitHostPort(c.AdvertiseAddr)
 		if err != nil {
 			return terror.ErrMasterAdvertiseAddrNotValid.Delegate(err, c.AdvertiseAddr)
@@ -294,10 +296,14 @@ func (c *Config) adjust() error {
 
 	if c.PeerUrls == "" {
 		c.PeerUrls = defaultPeerUrls
+	} else {
+		c.PeerUrls = utils.WrapSchemes(c.PeerUrls, c.SSLCA != "")
 	}
 
 	if c.AdvertisePeerUrls == "" {
 		c.AdvertisePeerUrls = c.PeerUrls
+	} else {
+		c.AdvertisePeerUrls = utils.WrapSchemes(c.AdvertisePeerUrls, c.SSLCA != "")
 	}
 
 	if c.InitialCluster == "" {
@@ -306,10 +312,16 @@ func (c *Config) adjust() error {
 			items[i] = fmt.Sprintf("%s=%s", c.Name, item)
 		}
 		c.InitialCluster = strings.Join(items, ",")
+	} else {
+		c.InitialCluster = utils.WrapSchemesForInitialCluster(c.InitialCluster, c.SSLCA != "")
 	}
 
 	if c.InitialClusterState == "" {
 		c.InitialClusterState = defaultInitialClusterState
+	}
+
+	if c.Join != "" {
+		c.Join = utils.WrapSchemes(c.Join, c.SSLCA != "")
 	}
 
 	return err
@@ -407,18 +419,15 @@ func parseURLs(s string) ([]url.URL, error) {
 	items := strings.Split(s, ",")
 	urls := make([]url.URL, 0, len(items))
 	for _, item := range items {
-		u, err := url.Parse(item)
-		// tolerate valid `master-addr`, but invalid URL format, like:
-		// `:8261`: missing protocol scheme
-		// `127.0.0.1:8261`: first path segment in URL cannot contain colon
-		if err != nil && (strings.Contains(err.Error(), "missing protocol scheme") ||
-			strings.Contains(err.Error(), "first path segment in URL cannot contain colon")) {
+		// tolerate valid `master-addr`, but invalid URL format. mainly caused by no protocol scheme
+		if !(strings.HasPrefix(item, "http://") || strings.HasPrefix(item, "https://")) {
 			prefix := "http://"
 			if atomic.LoadInt32(&useTLS) == 1 {
 				prefix = "https://"
 			}
-			u, err = url.Parse(prefix + item)
+			item = prefix + item
 		}
+		u, err := url.Parse(item)
 		if err != nil {
 			return nil, terror.ErrMasterParseURLFail.Delegate(err, item)
 		}

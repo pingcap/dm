@@ -59,6 +59,7 @@ func NewDumpling(cfg *config.SubTaskConfig) *Dumpling {
 func (m *Dumpling) Init(ctx context.Context) error {
 	var err error
 	m.dumpConfig, err = m.constructArgs()
+	m.detectAnsiQuotes()
 	return err
 }
 
@@ -294,4 +295,23 @@ func (m *Dumpling) recordExitLocation() (*binlog.Location, error) {
 	location.Position = pos
 	location.GTIDSet = gset
 	return &location, nil
+}
+
+// detectAnsiQuotes tries to detect ANSI_QUOTES from upstream. If success, change EnableANSIQuotes in subtask config
+func (m *Dumpling) detectAnsiQuotes() {
+	db, err := sql.Open("mysql", m.dumpConfig.GetDSN(""))
+	if err != nil {
+		return
+	}
+	defer db.Close()
+	enable, err := utils.HasAnsiQuotesMode(db)
+	if err != nil {
+		return
+	}
+	if enable != m.cfg.EnableANSIQuotes {
+		m.logger.Warn("found mismatched ANSI_QUOTES setting, going to overwrite it to DB specified",
+			zap.Bool("DB specified", enable),
+			zap.Bool("config file specified", m.cfg.EnableANSIQuotes))
+	}
+	m.cfg.EnableANSIQuotes = enable
 }
