@@ -58,13 +58,20 @@ func parseExtraArgs(logger *log.Logger, dumpCfg *export.Config, args []string) e
 		fileSizeStr     string
 		tablesList      []string
 		filters         []string
+		newargs         []string
 	)
 
+	// compatibility for `--no-locks`
 	for i, arg := range args {
 		if arg == "--no-locks" {
 			logger.Warn("`--no-locks` is replaced by `--consistency none` since v2.0.0")
-			args[i] = "--consistency none"
+			newargs = args[:i]
+			newargs = append(newargs, "--consistency", "none")
+			newargs = append(newargs, args[i+1:]...)
 		}
+	}
+	if len(newargs) > 0 {
+		args = newargs
 	}
 
 	dumplingFlagSet.StringSliceVarP(&dumpCfg.Databases, "database", "B", dumpCfg.Databases, "Database to dump")
