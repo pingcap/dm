@@ -241,6 +241,16 @@ func (c *SourceConfig) Adjust(db *sql.DB) (err error) {
 		}
 	}
 
+	if c.EnableGTID {
+		val, err := utils.GetGTID(db)
+		if err != nil {
+			return err
+		}
+		if val != "ON" {
+			return terror.ErrSourceCheckGTID.Generate(c.SourceID, val)
+		}
+	}
+
 	return nil
 }
 
