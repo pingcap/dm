@@ -26,6 +26,9 @@ function run() {
     echo "use sync_diff_inspector to check full dump loader"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    check_log_contains $WORK_DIR/worker1/log/dm-worker.log "\`--no-locks\` is replaced by \`--consistency none\` since v2.0.0"
+    check_log_contains $WORK_DIR/worker2/log/dm-worker.log "\`--no-locks\` is replaced by \`--consistency none\` since v2.0.0"
+
     pkill -hup dm-worker.test.previous 2>/dev/null || true
     wait_process_exit dm-worker.test.previous
 

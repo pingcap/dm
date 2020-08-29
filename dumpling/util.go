@@ -60,6 +60,13 @@ func parseExtraArgs(logger *log.Logger, dumpCfg *export.Config, args []string) e
 		filters         []string
 	)
 
+	for i, arg := range args {
+		if arg == "--no-locks" {
+			logger.Warn("`--no-locks` is replaced by `--consistency none` since v2.0.0")
+			args[i] = "--consistency none"
+		}
+	}
+
 	dumplingFlagSet.StringSliceVarP(&dumpCfg.Databases, "database", "B", dumpCfg.Databases, "Database to dump")
 	dumplingFlagSet.StringSliceVarP(&tablesList, "tables-list", "T", nil, "Comma delimited table list to dump; must be qualified table names")
 	dumplingFlagSet.IntVarP(&dumpCfg.Threads, "threads", "t", dumpCfg.Threads, "Number of goroutines to use, default 4")
