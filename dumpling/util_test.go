@@ -72,4 +72,10 @@ func (m *testDumplingSuite) TestParseArgs(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(exportCfg.TableFilter.MatchTable("foo", "bar"), IsFalse)
 	c.Assert(exportCfg.TableFilter.MatchTable("bar", "foo"), IsTrue)
+
+	// compatibility for `--no-locks`
+	extraArgs = `--no-locks`
+	err = parseExtraArgs(&logger, exportCfg, strings.Fields(extraArgs))
+	c.Assert(err, IsNil)
+	c.Assert(exportCfg.Consistency, Equals, "none")
 }
