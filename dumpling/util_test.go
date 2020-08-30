@@ -85,6 +85,11 @@ func (m *testDumplingSuite) TestParseArgs(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(exportCfg.Consistency, Equals, "none")
 
+	extraArgs = `--consistency lock`
+	err = parseExtraArgs(&logger, exportCfg, strings.Fields(extraArgs))
+	c.Assert(err, IsNil)
+	c.Assert(exportCfg.Consistency, Equals, "lock")
+
 	// compatibility for `--no-locks`
 	extraArgs = `--no-locks --consistency lock`
 	err = parseExtraArgs(&logger, exportCfg, strings.Fields(extraArgs))
