@@ -403,3 +403,9 @@ func IsErrBinlogPurged(err error) bool {
 func IsNoSuchThreadError(err error) bool {
 	return IsMySQLError(err, tmysql.ErrNoSuchThread)
 }
+
+// GetGTID return GTID_MODE
+func GetGTID(db *sql.DB) (string, error) {
+	val, err := GetGlobalVariable(db, "GTID_MODE")
+	return val, err
+}

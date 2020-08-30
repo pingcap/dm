@@ -132,6 +132,8 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	s.cfg.UseRelay = false
 
 	s.resetEventsGenerator(c)
+
+	log.InitLogger(&log.Config{})
 }
 
 func (s *testSyncerSuite) generateEvents(binlogEvents mockBinlogEvents, c *C) []*replication.BinlogEvent {
@@ -1373,6 +1375,35 @@ func (s *Syncer) addJobToMemory(job *job) error {
 		testJobs.Lock()
 		testJobs.jobs = append(testJobs.jobs, job)
 		testJobs.Unlock()
+	}
+
+	switch job.tp {
+	case xid:
+		s.saveGlobalPoint(job.location)
+		s.checkpoint.(*RemoteCheckPoint).globalPoint.flush()
+	case ddl:
+		s.saveGlobalPoint(job.location)
+		s.checkpoint.(*RemoteCheckPoint).globalPoint.flush()
+		for sourceSchema, tbs := range job.sourceTbl {
+			if len(sourceSchema) == 0 {
+				continue
+			}
+			for _, sourceTable := range tbs {
+				s.saveTablePoint(sourceSchema, sourceTable, job.location)
+				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable].flush()
+			}
+		}
+		s.resetShardingGroup(job.targetSchema, job.targetTable)
+	case insert, update, del:
+		for sourceSchema, tbs := range job.sourceTbl {
+			if len(sourceSchema) == 0 {
+				continue
+			}
+			for _, sourceTable := range tbs {
+				s.saveTablePoint(sourceSchema, sourceTable, job.currentLocation)
+				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable].flush()
+			}
+		}
 	}
 
 	return nil

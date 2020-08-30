@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // GetJoinURLs gets the endpoints from the join address.
@@ -53,7 +54,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 
 	for _, endpoint := range endpoints {
 		ctx1, cancel1 := context.WithTimeout(ctx, 3*time.Second)
-		conn, err := grpc.DialContext(ctx1, endpoint, grpc.WithBlock(), tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second))
+		conn, err := grpc.DialContext(ctx1, utils.UnwrapScheme(endpoint), grpc.WithBlock(), tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second))
 		cancel1()
 		if err != nil {
 			if conn != nil {
