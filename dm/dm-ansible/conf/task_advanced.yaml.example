@@ -120,7 +120,7 @@ mydumpers:                   # mydumper process unit specific configs, mysql ins
     threads: 4
     chunk-filesize: 64
     skip-tz-utc: true
-    extra-args: "-B test -T t1,t2 --no-locks"
+    extra-args: "-B test -T t1,t2 --consistency none"
 
 loaders:                     # loader process unit specific configs, mysql instance can ref one config in it
   global:

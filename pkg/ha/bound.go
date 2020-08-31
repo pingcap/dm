@@ -223,7 +223,10 @@ func WatchSourceBound(ctx context.Context, cli *clientv3.Client,
 		select {
 		case <-ctx.Done():
 			return
-		case resp := <-ch:
+		case resp, ok := <-ch:
+			if !ok {
+				return
+			}
 			if resp.Canceled {
 				// TODO(csuzhangxc): do retry here.
 				if resp.Err() != nil {
