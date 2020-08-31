@@ -1094,7 +1094,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if s.cfg.Mode == config.ModeAll {
 			if err = s.flushCheckPoints(); err != nil {
 				s.tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
-			} else {
+			} else if s.cfg.CleanDumpFile {
 				s.tctx.L().Info("try to remove loaded files")
 				metadataFile := path.Join(s.cfg.Dir, "metadata")
 				if err = os.Remove(metadataFile); err != nil {
