@@ -238,6 +238,7 @@ const (
 	codeTaskCheckGenColumnMapping
 	codeTaskCheckSyncConfigError
 	codeTaskCheckGenBAList
+	codeSourceCheckGTID
 )
 
 // Relay log utils error code
@@ -811,6 +812,7 @@ var (
 	ErrTaskCheckGenColumnMapping = New(codeTaskCheckGenColumnMapping, ClassTaskCheck, ScopeInternal, LevelMedium, "generate column mapping error", "Please check the `column-mappings` config in task configuration file.")
 	ErrTaskCheckSyncConfigError  = New(codeTaskCheckSyncConfigError, ClassTaskCheck, ScopeInternal, LevelMedium, "%s: %v\n detail: %v", "")
 	ErrTaskCheckGenBAList        = New(codeTaskCheckGenBAList, ClassTaskCheck, ScopeInternal, LevelMedium, "generate block allow list error", "Please check the `block-allow-list` config in task configuration file.")
+	ErrSourceCheckGTID           = New(codeSourceCheckGTID, ClassTaskCheck, ScopeInternal, LevelMedium, "%s has GTID_MODE = %s instead of ON", "Please check the `enable-gtid` config in source configuration file.")
 
 	// Relay log basic API error
 	ErrRelayParseUUIDIndex         = New(codeRelayParseUUIDIndex, ClassRelayEventLib, ScopeInternal, LevelHigh, "parse server-uuid.index", "")
@@ -865,10 +867,10 @@ var (
 	ErrPreviousGTIDsNotValid             = New(codePreviousGTIDsNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "previousGTIDs %s not valid", "")
 
 	// Dump unit error
-	ErrDumpUnitRuntime        = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper runs with error, with output (may empty): %s", "")
+	ErrDumpUnitRuntime        = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper/dumpling runs with error, with output (may empty): %s", "")
 	ErrDumpUnitGenTableRouter = New(codeDumpUnitGenTableRouter, ClassDumpUnit, ScopeInternal, LevelHigh, "generate table router", "Please check `routes` config in task configuration file.")
 	ErrDumpUnitGenBAList      = New(codeDumpUnitGenBAList, ClassDumpUnit, ScopeInternal, LevelHigh, "generate block allow list", "Please check the `block-allow-list` config in task configuration file.")
-	ErrDumpUnitGlobalLock     = New(codeDumpUnitGlobalLock, ClassDumpUnit, ScopeInternal, LevelHigh, "Couldn't acquire global lock", "Please check upstream privilege about FTWRL, or add `--no-locks` to extra-args of mydumpers")
+	ErrDumpUnitGlobalLock     = New(codeDumpUnitGlobalLock, ClassDumpUnit, ScopeInternal, LevelHigh, "Couldn't acquire global lock", "Please check upstream privilege about FTWRL, or add `--no-locks` or `--consistency none` to extra-args of mydumpers")
 
 	// Load unit error
 	ErrLoadUnitCreateSchemaFile    = New(codeLoadUnitCreateSchemaFile, ClassLoadUnit, ScopeInternal, LevelMedium, "generate schema file", "Please check the `loaders` config in task configuration file.")

@@ -130,7 +130,10 @@ func WatchWorkerEvent(ctx context.Context, cli *clientv3.Client, rev int64, outC
 		case <-ctx.Done():
 			log.L().Info("watch keepalive worker quit due to context canceled")
 			return
-		case resp := <-ch:
+		case resp, ok := <-ch:
+			if !ok {
+				return
+			}
 			if resp.Canceled {
 				select {
 				case errCh <- resp.Err():

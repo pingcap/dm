@@ -1048,6 +1048,12 @@ description = ""
 workaround = "Please check the `block-allow-list` config in task configuration file."
 tags = ["internal", "medium"]
 
+[error.DM-task-check-26007]
+message = "%s has GTID_MODE = %s instead of ON"
+description = ""
+workaround = "Please check the `enable-gtid` config in source configuration file."
+tags = ["internal", "medium"]
+
 [error.DM-relay-event-lib-28001]
 message = "parse server-uuid.index"
 description = ""
@@ -1337,7 +1343,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dump-unit-32001]
-message = "mydumper runs with error, with output (may empty): %s"
+message = "mydumper/dumpling runs with error, with output (may empty): %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -1357,7 +1363,7 @@ tags = ["internal", "high"]
 [error.DM-dump-unit-32004]
 message = "Couldn't acquire global lock"
 description = ""
-workaround = "Please check upstream privilege about FTWRL, or add `--no-locks` to extra-args of mydumpers"
+workaround = "Please check upstream privilege about FTWRL, or add `--no-locks` or `--consistency none` to extra-args of mydumpers"
 tags = ["internal", "high"]
 
 [error.DM-load-unit-34001]
