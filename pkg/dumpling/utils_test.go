@@ -11,17 +11,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package utils
+package dumpling
 
 import (
 	"io/ioutil"
 	"os"
+	"testing"
 
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
-func (t *testUtilsSuite) TestParseMetaData(c *C) {
+var _ = Suite(&testSuite{})
+
+func TestSuite(t *testing.T) {
+	TestingT(t)
+}
+
+type testSuite struct {
+}
+
+func (t *testSuite) TestParseMetaData(c *C) {
 	f, err := ioutil.TempFile("", "metadata")
 	c.Assert(err, IsNil)
 	defer os.Remove(f.Name())
@@ -109,9 +119,9 @@ Finished dump at: 2020-05-21 18:02:44`,
 	for _, tc := range testCases {
 		err := ioutil.WriteFile(f.Name(), []byte(tc.source), 0644)
 		c.Assert(err, IsNil)
-		pos, gsetStr, err := ParseMetaData(f.Name(), "mysql")
+		loc, _, err := ParseMetaData(f.Name(), "mysql")
 		c.Assert(err, IsNil)
-		c.Assert(pos, DeepEquals, tc.pos)
-		c.Assert(gsetStr, Equals, tc.gsetStr)
+		c.Assert(loc.Position, DeepEquals, tc.pos)
+		c.Assert(loc.GTIDSet, Equals, tc.gsetStr)
 	}
 }

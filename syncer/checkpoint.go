@@ -22,23 +22,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/failpoint"
+	"github.com/pingcap/parser/model"
+	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/dm/config"
-	binlog "github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
+	"github.com/pingcap/dm/pkg/dumpling"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
-
-	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser/model"
-	tmysql "github.com/pingcap/parser/mysql"
-	"github.com/siddontang/go-mysql/mysql"
-	"go.uber.org/zap"
 )
 
 /*
@@ -809,18 +809,7 @@ func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, error) {
 	// `metadata` is mydumper's output meta file name
 	filename := path.Join(cp.cfg.Dir, "metadata")
 	cp.logCtx.L().Info("parsing metadata from file", zap.String("file", filename))
-	pos, gsetStr, err := utils.ParseMetaData(filename, cp.cfg.Flavor)
-	if err != nil {
-		return nil, err
-	}
+	loc, _, err := dumpling.ParseMetaData(filename, cp.cfg.Flavor)
 
-	gset, err := gtid.ParserGTID(cp.cfg.Flavor, gsetStr)
-	if err != nil {
-		return nil, err
-	}
-
-	return &binlog.Location{
-		Position: pos,
-		GTIDSet:  gset,
-	}, nil
+	return loc, err
 }

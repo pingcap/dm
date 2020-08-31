@@ -23,7 +23,6 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
-	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -105,15 +104,6 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	newCtx, cancel := context.WithCancel(ctx)
 	err = export.Dump(newCtx, m.dumpConfig)
 	cancel()
-
-	if m.dumpConfig.Consistency == "none" {
-		if location, err := m.recordExitLocation(); err != nil {
-			m.logger.Error("failed to record exit location", zap.Error(err))
-		} else {
-			m.cfg.SyncerConfig.DumpExitLocation = location
-			m.logger.Info("successful record exit location", zap.Stringer("location", location))
-		}
-	}
 
 	if err != nil {
 		if utils.IsContextCanceledError(err) {
@@ -267,6 +257,11 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		}
 	}
 
+	// record exit position when consistency is none, to support scenarios like Aurora upstream
+	if dumpConfig.Consistency == "none" {
+		dumpConfig.PosAfterConnect = true
+	}
+
 	m.logger.Info("create dumpling", zap.Stringer("config", dumpConfig))
 	if len(ret) > 0 {
 		m.logger.Warn("meeting some unsupported arguments", zap.Strings("argument", ret))
@@ -277,24 +272,6 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	}
 
 	return dumpConfig, nil
-}
-
-// recordExitLocation writes exit location to config, which could be used in sync unit.
-// when using inconsistent dump, sync unit should enable safe mode between start location and this location.
-func (m *Dumpling) recordExitLocation() (*binlog.Location, error) {
-	var location binlog.Location
-	db, err := sql.Open("mysql", m.dumpConfig.GetDSN(""))
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
-	pos, gset, err := utils.GetMasterStatus(db, m.cfg.Flavor)
-	if err != nil {
-		return nil, err
-	}
-	location.Position = pos
-	location.GTIDSet = gset
-	return &location, nil
 }
 
 // detectAnsiQuotes tries to detect ANSI_QUOTES from upstream. If success, change EnableANSIQuotes in subtask config
