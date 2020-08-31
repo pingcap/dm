@@ -322,7 +322,10 @@ func watchStage(ctx context.Context, watchCh clientv3.WatchChan,
 		select {
 		case <-ctx.Done():
 			return
-		case resp := <-watchCh:
+		case resp, ok := <-watchCh:
+			if !ok {
+				return
+			}
 			if resp.Canceled {
 				// TODO(csuzhangxc): do retry here.
 				if resp.Err() != nil {
