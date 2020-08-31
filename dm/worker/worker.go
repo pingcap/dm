@@ -532,24 +532,32 @@ func (w *Worker) observeRelayStage(ctx context.Context, etcdCli *clientv3.Client
 }
 
 func (w *Worker) handleRelayStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) error {
+OUTER:
 	for {
 		select {
 		case <-ctx.Done():
-			log.L().Info("worker is closed, handleRelayStage will quit now")
-			return nil
-		case stage := <-stageCh:
+			break OUTER
+		case stage, ok := <-stageCh:
+			if !ok {
+				break OUTER
+			}
 			opType, err := w.operateRelayStage(ctx, stage)
 			if err != nil {
 				opErrCounter.WithLabelValues(w.name, opType).Inc()
 				log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Error(err))
 			}
-		case err := <-errCh:
+		case err, ok := <-errCh:
+			if !ok {
+				break OUTER
+			}
 			log.L().Error("WatchRelayStage received an error", zap.Error(err))
 			if etcdutil.IsRetryableError(err) {
 				return err
 			}
 		}
 	}
+	log.L().Info("worker is closed, handleRelayStage will quit now")
+	return nil
 }
 
 // operateRelayStage returns RelayOp.String() additionally to record metrics
