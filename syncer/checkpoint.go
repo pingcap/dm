@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
+
 	"github.com/pingcap/dm/dm/config"
 	binlog "github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
@@ -32,7 +34,6 @@ import (
 	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/model"
