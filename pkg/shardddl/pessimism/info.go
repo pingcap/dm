@@ -174,7 +174,10 @@ func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64, out
 		select {
 		case <-ctx.Done():
 			return
-		case resp := <-ch:
+		case resp, ok := <-ch:
+			if !ok {
+				return
+			}
 			if resp.Canceled {
 				select {
 				case errCh <- resp.Err():

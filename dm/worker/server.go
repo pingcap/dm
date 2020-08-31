@@ -348,14 +348,14 @@ func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
 }
 
 func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBound, errCh chan error) error {
+OUTER:
 	for {
 		select {
 		case <-ctx.Done():
-			log.L().Info("worker server is closed, handleSourceBound will quit now")
-			return nil
+			break OUTER
 		case bound, ok := <-boundCh:
 			if !ok {
-				continue
+				break OUTER
 			}
 			err := s.operateSourceBound(bound)
 			s.setSourceStatus(bound.Source, err, true)
@@ -368,7 +368,10 @@ func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBo
 					return err
 				}
 			}
-		case err := <-errCh:
+		case err, ok := <-errCh:
+			if !ok {
+				break OUTER
+			}
 			// TODO: Deal with err
 			log.L().Error("WatchSourceBound received an error", zap.Error(err))
 			if etcdutil.IsRetryableError(err) {
@@ -376,6 +379,8 @@ func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBo
 			}
 		}
 	}
+	log.L().Info("worker server is closed, handleSourceBound will quit now")
+	return nil
 }
 
 func (s *Server) operateSourceBound(bound ha.SourceBound) error {
