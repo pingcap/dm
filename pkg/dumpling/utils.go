@@ -96,12 +96,13 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 			continue
 		}
 
-		if line == "SHOW MASTER STATUS:" {
+		switch line {
+		case "SHOW MASTER STATUS:":
 			if err := parsePosAndGTID(&pos, &gtidStr); err != nil {
 				return nil, nil, terror.ErrParseMydumperMeta.Generate(err)
 			}
+		case "SHOW SLAVE STATUS:":
 			// ref: https://github.com/maxbube/mydumper/blob/master/mydumper.c#L434
-		} else if line == "SHOW SLAVE STATUS:" {
 			for {
 				line, err := br.ReadString('\n')
 				if err != nil {
@@ -112,11 +113,13 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 					break
 				}
 			}
-		} else if line == "SHOW MASTER STATUS: /* AFTER CONNECTION POOL ESTABLISHED */" {
+		case "SHOW MASTER STATUS: /* AFTER CONNECTION POOL ESTABLISHED */":
 			useLocation2 = true
 			if err := parsePosAndGTID(&pos2, &gtidStr2); err != nil {
 				return nil, nil, terror.ErrParseMydumperMeta.Generate(err)
 			}
+		default:
+			// do nothing for Started dump, Finished dump...
 		}
 	}
 

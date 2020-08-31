@@ -39,9 +39,12 @@ func (t *testSuite) TestParseMetaData(c *C) {
 	defer os.Remove(f.Name())
 
 	testCases := []struct {
-		source  string
-		pos     mysql.Position
-		gsetStr string
+		source   string
+		pos      mysql.Position
+		gsetStr  string
+		loc2     bool
+		pos2     mysql.Position
+		gsetStr2 string
 	}{
 		{
 			`Started dump at: 2018-12-28 07:20:49
@@ -56,6 +59,9 @@ Finished dump at: 2018-12-28 07:20:51`,
 				Pos:  2479,
 			},
 			"97b5142f-e19c-11e8-808c-0242ac110005:1-13",
+			false,
+			mysql.Position{},
+			"",
 		},
 		{
 			`Started dump at: 2018-12-27 19:51:22
@@ -75,6 +81,9 @@ Finished dump at: 2018-12-27 19:51:22`,
 				Name: "mysql-bin.000003",
 				Pos:  3295817,
 			},
+			"",
+			false,
+			mysql.Position{},
 			"",
 		},
 		{ // with empty line after multiple GTID sets
@@ -100,6 +109,9 @@ Finished dump at: 2020-05-21 18:14:49`,
 				Pos:  1274,
 			},
 			"5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,5b642cb6-9b43-11ea-8914-0242ac170003:1-7,97b5142f-e19c-11e8-808c-0242ac110005:1-13",
+			false,
+			mysql.Position{},
+			"",
 		},
 		{ // without empty line after mutlple GTID sets
 			`Started dump at: 2020-05-21 18:02:33
@@ -115,16 +127,100 @@ Finished dump at: 2020-05-21 18:02:44`,
 				Pos:  1274,
 			},
 			"5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,5b642cb6-9b43-11ea-8914-0242ac170003:1-7,97b5142f-e19c-11e8-808c-0242ac110005:1-13",
+			false,
+			mysql.Position{},
+			"",
+		},
+		{ // with empty line after multiple GTID sets
+			`Started dump at: 2020-05-21 18:14:49
+SHOW MASTER STATUS:
+	Log: mysql-bin.000003
+	Pos: 1274
+	GTID:5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,
+5b642cb6-9b43-11ea-8914-0242ac170003:1-7,
+97b5142f-e19c-11e8-808c-0242ac110005:1-13
+
+SHOW SLAVE STATUS:
+	Host: 192.168.100.100
+	Log: mysql-bin.000003
+	Pos: 700
+	GTID:5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,
+5b642cb6-9b43-11ea-8914-0242ac170003:1-7,
+97b5142f-e19c-11e8-808c-0242ac110005:1-13
+
+SHOW MASTER STATUS: /* AFTER CONNECTION POOL ESTABLISHED */
+	Log: mysql-bin.000003
+	Pos: 1280
+	GTID:5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,
+5b642cb6-9b43-11ea-8914-0242ac170003:1-7,
+97b5142f-e19c-11e8-808c-0242ac110005:1-14
+
+Finished dump at: 2020-05-21 18:14:49`,
+			mysql.Position{
+				Name: "mysql-bin.000003",
+				Pos:  1274,
+			},
+			"5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,5b642cb6-9b43-11ea-8914-0242ac170003:1-7,97b5142f-e19c-11e8-808c-0242ac110005:1-13",
+			true,
+			mysql.Position{
+				Name: "mysql-bin.000003",
+				Pos:  1280,
+			},
+			"5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,5b642cb6-9b43-11ea-8914-0242ac170003:1-7,97b5142f-e19c-11e8-808c-0242ac110005:1-14",
+		},
+		{ // with empty line after multiple GTID sets
+			`Started dump at: 2020-05-21 18:14:49
+SHOW MASTER STATUS:
+	Log: mysql-bin.000003
+	Pos: 1274
+	GTID:5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,
+5b642cb6-9b43-11ea-8914-0242ac170003:1-7,
+97b5142f-e19c-11e8-808c-0242ac110005:1-13
+
+SHOW SLAVE STATUS:
+	Host: 192.168.100.100
+	Log: mysql-bin.000003
+	Pos: 700
+	GTID:5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,
+5b642cb6-9b43-11ea-8914-0242ac170003:1-7,
+97b5142f-e19c-11e8-808c-0242ac110005:1-13
+
+SHOW MASTER STATUS: /* AFTER CONNECTION POOL ESTABLISHED */
+	Log: mysql-bin.000004
+	Pos: 4
+	GTID:5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,
+5b642cb6-9b43-11ea-8914-0242ac170003:1-9,
+97b5142f-e19c-11e8-808c-0242ac110005:1-13
+
+Finished dump at: 2020-05-21 18:14:49`,
+			mysql.Position{
+				Name: "mysql-bin.000003",
+				Pos:  1274,
+			},
+			"5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,5b642cb6-9b43-11ea-8914-0242ac170003:1-7,97b5142f-e19c-11e8-808c-0242ac110005:1-13",
+			true,
+			mysql.Position{
+				Name: "mysql-bin.000004",
+				Pos:  4,
+			},
+			"5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,5b642cb6-9b43-11ea-8914-0242ac170003:1-9,97b5142f-e19c-11e8-808c-0242ac110005:1-13",
 		},
 	}
 
 	for _, tc := range testCases {
 		err := ioutil.WriteFile(f.Name(), []byte(tc.source), 0644)
 		c.Assert(err, IsNil)
-		loc, _, err := ParseMetaData(f.Name(), "mysql")
+		loc, loc2, err := ParseMetaData(f.Name(), "mysql")
 		c.Assert(err, IsNil)
 		c.Assert(loc.Position, DeepEquals, tc.pos)
 		gs, _ := gtid.ParserGTID("mysql", tc.gsetStr)
 		c.Assert(loc.GTIDSet, DeepEquals, gs)
+		if tc.loc2 {
+			c.Assert(loc2.Position, DeepEquals, tc.pos2)
+			gs2, _ := gtid.ParserGTID("mysql", tc.gsetStr2)
+			c.Assert(loc2.GTIDSet, DeepEquals, gs2)
+		} else {
+			c.Assert(loc2, IsNil)
+		}
 	}
 }

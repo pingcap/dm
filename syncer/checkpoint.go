@@ -733,14 +733,15 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 	defer cp.Unlock()
 
 	var (
-		location *binlog.Location
-		err      error
+		location    *binlog.Location
+		dumpExitLoc *binlog.Location
+		err         error
 	)
 	switch cp.cfg.Mode {
 	case config.ModeAll:
 		// NOTE: syncer must continue the syncing follow loader's tail, so we parse mydumper's output
 		// refine when master / slave switching added and checkpoint mechanism refactored
-		location, err = cp.parseMetaData()
+		location, dumpExitLoc, err = cp.parseMetaData()
 		if err != nil {
 			return err
 		}
@@ -772,6 +773,10 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 	if location != nil {
 		cp.globalPoint = newBinlogPoint(location.Clone(), location.Clone(), nil, nil, cp.cfg.EnableGTID)
 		cp.logCtx.L().Info("loaded checkpoints from meta", log.WrapStringerField("global checkpoint", cp.globalPoint))
+	}
+	if dumpExitLoc != nil {
+		cp.cfg.DumpExitLocation = dumpExitLoc
+		cp.logCtx.L().Info("set DumpExitLocation from meta", zap.Stringer("DumpExitLocation", dumpExitLoc))
 	}
 
 	return nil
@@ -805,11 +810,11 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location binl
 	return sql2, args
 }
 
-func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, error) {
+func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, *binlog.Location, error) {
 	// `metadata` is mydumper's output meta file name
 	filename := path.Join(cp.cfg.Dir, "metadata")
 	cp.logCtx.L().Info("parsing metadata from file", zap.String("file", filename))
-	loc, _, err := dumpling.ParseMetaData(filename, cp.cfg.Flavor)
+	loc, dumpExitLoc, err := dumpling.ParseMetaData(filename, cp.cfg.Flavor)
 
-	return loc, err
+	return loc, dumpExitLoc, err
 }
