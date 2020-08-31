@@ -20,6 +20,8 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/pkg/gtid"
 )
 
 var _ = Suite(&testSuite{})
@@ -122,6 +124,7 @@ Finished dump at: 2020-05-21 18:02:44`,
 		loc, _, err := ParseMetaData(f.Name(), "mysql")
 		c.Assert(err, IsNil)
 		c.Assert(loc.Position, DeepEquals, tc.pos)
-		c.Assert(loc.GTIDSet, Equals, tc.gsetStr)
+		gs, _ := gtid.ParserGTID("mysql", tc.gsetStr)
+		c.Assert(loc.GTIDSet, DeepEquals, gs)
 	}
 }

@@ -38,10 +38,16 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 	}
 	defer fd.Close()
 
-	pos := mysql.Position{}
-	gtidStr := ""
-	pos2 := mysql.Position{}
-	gtidStr2 := ""
+	var (
+		pos          mysql.Position
+		gtidStr      string
+		useLocation2 = false
+		pos2         mysql.Position
+		gtidStr2     string
+
+		loc  *binlog.Location
+		loc2 *binlog.Location
+	)
 
 	br := bufio.NewReader(fd)
 
@@ -107,13 +113,14 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 				}
 			}
 		} else if line == "SHOW MASTER STATUS: /* AFTER CONNECTION POOL ESTABLISHED */" {
+			useLocation2 = true
 			if err := parsePosAndGTID(&pos2, &gtidStr2); err != nil {
 				return nil, nil, terror.ErrParseMydumperMeta.Generate(err)
 			}
 		}
 	}
 
-	if len(pos.Name) == 0 || pos.Pos == uint32(0) || len(pos2.Name) == 0 || pos2.Pos == uint32(0) {
+	if len(pos.Name) == 0 || pos.Pos == uint32(0) {
 		return nil, nil, terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
 	}
 
@@ -121,17 +128,23 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 	if err != nil {
 		return nil, nil, terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
 	}
-	loc := &binlog.Location{
+	loc = &binlog.Location{
 		Position: pos,
 		GTIDSet:  gset,
 	}
-	gset2, err := gtid.ParserGTID(flavor, gtidStr2)
-	if err != nil {
-		return nil, nil, terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
-	}
-	loc2 := &binlog.Location{
-		Position: pos2,
-		GTIDSet:  gset2,
+
+	if useLocation2 {
+		if len(pos2.Name) == 0 || pos2.Pos == uint32(0) {
+			return nil, nil, terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
+		}
+		gset2, err := gtid.ParserGTID(flavor, gtidStr2)
+		if err != nil {
+			return nil, nil, terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
+		}
+		loc2 = &binlog.Location{
+			Position: pos2,
+			GTIDSet:  gset2,
+		}
 	}
 
 	return loc, loc2, nil
