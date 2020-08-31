@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
-
 	"github.com/pingcap/dm/dm/config"
 	binlog "github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
@@ -38,6 +36,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/model"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 )
