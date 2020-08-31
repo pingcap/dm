@@ -124,3 +124,4 @@ syncers:
     enable-ansi-quotes: false
 clean-dump-file: false
 ansi-quotes: false
+remove-meta: false
