@@ -157,10 +157,10 @@ jobs:
         echo ${CFG_BASE64}
 
     # Set up chaos-mesh-action
-    - name: Run chaos mesh action
-      uses: chaos-mesh/chaos-mesh-action@master
-      env:
-        CFG_BASE64: YXBpVmVyc2lvbjogY2hhb3MtbWVzaC5vcmcvdjFhbHBoYTENCmtpbmQ6IFBvZENoYW9zDQptZXRhZGF0YToNCiAgbmFtZTogcG9kLWZhaWx1cmUtZG0NCiAgbGFiZWxzOg0KICAgIGFwcDogcG9kLWZhaWx1cmUtZG0NCnNwZWM6DQogIGFjdGlvbjogcG9kLWZhaWx1cmUNCiAgbW9kZTogb25lDQogIGR1cmF0aW9uOiAiMzBzIg0KICBzZWxlY3RvcjoNCiAgICBtYXRjaEV4cHJlc3Npb25zOg0KICAgICAgLSBrZXk6IGFwcA0KICAgICAgICBvcGVyYXRvcjogSW4NCiAgICAgICAgdmFsdWVzOg0KICAgICAgICAgIC0gZG0tbWFzdGVyDQogICAgICAgICAgLSBkbS13b3JrZXINCiAgc2NoZWR1bGVyOg0KICAgIGNyb246ICJAZXZlcnkgMm0iDQo=
+    #- name: Run chaos mesh action
+    #  uses: chaos-mesh/chaos-mesh-action@master
+    #  env:
+    #    CFG_BASE64: YXBpVmVyc2lvbjogY2hhb3MtbWVzaC5vcmcvdjFhbHBoYTENCmtpbmQ6IFBvZENoYW9zDQptZXRhZGF0YToNCiAgbmFtZTogcG9kLWZhaWx1cmUtZG0NCiAgbGFiZWxzOg0KICAgIGFwcDogcG9kLWZhaWx1cmUtZG0NCnNwZWM6DQogIGFjdGlvbjogcG9kLWZhaWx1cmUNCiAgbW9kZTogb25lDQogIGR1cmF0aW9uOiAiMzBzIg0KICBzZWxlY3RvcjoNCiAgICBtYXRjaEV4cHJlc3Npb25zOg0KICAgICAgLSBrZXk6IGFwcA0KICAgICAgICBvcGVyYXRvcjogSW4NCiAgICAgICAgdmFsdWVzOg0KICAgICAgICAgIC0gZG0tbWFzdGVyDQogICAgICAgICAgLSBkbS13b3JrZXINCiAgc2NoZWR1bGVyOg0KICAgIGNyb246ICJAZXZlcnkgMm0iDQo=
 
       # Debug through SSH
     - name: Set up tmate session
