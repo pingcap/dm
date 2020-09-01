@@ -1864,9 +1864,13 @@ func (s *Server) listMemberMaster(ctx context.Context, names []string) (*pb.Memb
 		}
 
 		alive := true
-		_, err := client.Get(etcdMember.ClientURLs[0] + "/health")
-		if err != nil {
+		if len(etcdMember.ClientURLs) == 0 {
 			alive = false
+		} else {
+			_, err := client.Get(etcdMember.ClientURLs[0] + "/health")
+			if err != nil {
+				alive = false
+			}
 		}
 
 		masters = append(masters, &pb.MasterInfo{
