@@ -24,9 +24,9 @@ require (
 	github.com/pingcap/errcode v0.3.0 // indirect
 	github.com/pingcap/errors v0.11.5-0.20200820035142-66eb5bf1d1cd
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
-	github.com/pingcap/log v0.0.0-20200511115504-543df19646ad
+	github.com/pingcap/log v0.0.0-20200828042413-fce0951f1463
 	github.com/pingcap/parser v0.0.0-20200821073936-cf85e80665c4
-	github.com/pingcap/tidb v1.1.0-beta.0.20200825092018-e52cb3714e24
+	github.com/pingcap/tidb v1.1.0-beta.0.20200901032733-f82e5320ad75
 	github.com/pingcap/tidb-tools v4.0.5-0.20200828085514-03575b185007+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
