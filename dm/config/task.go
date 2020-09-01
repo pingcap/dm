@@ -312,6 +312,9 @@ type TaskConfig struct {
 	CleanDumpFile bool `yaml:"clean-dump-file" toml:"clean-dump-file" json:"clean-dump-file"`
 
 	EnableANSIQuotes bool `yaml:"ansi-quotes" toml:"ansi-quotes" json:"ansi-quotes"`
+
+	// deprecated, replaced by `start-task --remove-meta`
+	RemoveMeta bool `yaml:"remove-meta"`
 }
 
 // NewTaskConfig creates a TaskConfig
@@ -538,6 +541,10 @@ func (c *TaskConfig) adjust() error {
 		if err != nil {
 			return terror.ErrConfigInvalidTimezone.Delegate(err, c.Timezone)
 		}
+	}
+
+	if c.RemoveMeta {
+		log.L().Warn("`remove-meta` in task config is deprecated, please use `start-task ... --remove-meta` instead")
 	}
 
 	return nil

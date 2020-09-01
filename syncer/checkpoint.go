@@ -22,13 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser/model"
-	tmysql "github.com/pingcap/parser/mysql"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/siddontang/go-mysql/mysql"
-	"go.uber.org/zap"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
@@ -39,6 +32,13 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
+
+	"github.com/pingcap/failpoint"
+	"github.com/pingcap/parser/model"
+	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 )
 
 /*
