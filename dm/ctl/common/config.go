@@ -179,6 +179,6 @@ func (c *Config) adjust() error {
 
 // validate host:port format address
 func validateAddr(addr string) error {
-	_, _, err := net.SplitHostPort(utils.UnwrapScheme(addr))
+	_, _, err := net.SplitHostPort(addr)
 	return errors.Trace(err)
 }

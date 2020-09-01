@@ -1557,7 +1557,7 @@ func enableTLS(tlsCfg *config.Security) bool {
 }
 
 func withHost(addr string) string {
-	host, port, err := net.SplitHostPort(utils.UnwrapScheme(addr))
+	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		// do nothing
 		return addr
