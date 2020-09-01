@@ -211,6 +211,8 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
             "handle-error test replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c)" \
             "\"result\": true" 3
 
+    read -p 123
+
     if [[ "$1" = "pessimistic" ]]; then
         # 11 second ddl bypass, 12 first ddl detect conflict
         # 22 first ddl: detect conflict
@@ -222,6 +224,8 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
                 "handle-error test -s mysql-replica-01,mysql-replica-02 replace alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c)" \
                 "\"result\": true" 3
+
+        read -p 123
 
         # 11/21 second ddl: no database selected
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -378,9 +382,9 @@ function DM_REPLACE_ERROR_MULTIPLE() {
 function run() {
     init_cluster
     init_database
-    DM_SKIP_ERROR
-    DM_SKIP_ERROR_SHARDING
-    DM_REPLACE_ERROR
+#    DM_SKIP_ERROR
+#    DM_SKIP_ERROR_SHARDING
+#    DM_REPLACE_ERROR
     DM_REPLACE_ERROR_SHARDING
     DM_REPLACE_ERROR_MULTIPLE
 }
