@@ -1363,7 +1363,7 @@ tags = ["internal", "high"]
 [error.DM-dump-unit-32004]
 message = "Couldn't acquire global lock"
 description = ""
-workaround = "Please check upstream privilege about FTWRL, or add `--no-locks` to extra-args of mydumpers"
+workaround = "Please check upstream privilege about FTWRL, or add `--no-locks` or `--consistency none` to extra-args of mydumpers"
 tags = ["internal", "high"]
 
 [error.DM-load-unit-34001]
