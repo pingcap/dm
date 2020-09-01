@@ -38,7 +38,7 @@ function run() {
     task_name="sequence_sharding_removemeta"
     lock_id="$task_name-\`sharding_target3\`.\`t_target\`"
     ddl="ALTER TABLE \`sharding_target3\`.\`t_target\` ADD COLUMN \`d\` INT"
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "show-ddl-locks" \
         "\"ID\": \"$lock_id\"" 1 \
         "$ddl" 1
