@@ -237,7 +237,10 @@ func WatchSourceTables(ctx context.Context, cli *clientv3.Client, revision int64
 		select {
 		case <-ctx.Done():
 			return
-		case resp := <-ch:
+		case resp, ok := <-ch:
+			if !ok {
+				return
+			}
 			if resp.Canceled {
 				select {
 				case errCh <- resp.Err():
