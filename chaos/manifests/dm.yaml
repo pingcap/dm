@@ -72,7 +72,7 @@ spec:
             - "/dm-master"
             - "--data-dir=/data"
             - "--name=$(MY_POD_NAME)"
-            - "--master-addr=:8261"
+            - "--master-addr=0.0.0.0:8261"
             - "--advertise-addr=http://$(MY_POD_NAME).dm-master.$(MY_POD_NAMESPACE):8261"
             - "--peer-urls=:8291"
             - "--advertise-peer-urls=http://$(MY_POD_NAME).dm-master.$(MY_POD_NAMESPACE):8291"
@@ -128,7 +128,7 @@ spec:
           command:
             - "/dm-worker"
             - "--name=$(MY_POD_NAME)"
-            - "--worker-addr=:8262"
+            - "--worker-addr=0.0.0.0:8262"
             - "--advertise-addr=$(MY_POD_NAME).dm-worker.$(MY_POD_NAMESPACE):8262"
             - "--join=dm-master.$(MY_POD_NAMESPACE):8261"
           readinessProbe:
