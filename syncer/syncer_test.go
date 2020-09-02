@@ -1360,13 +1360,13 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	}
 
 	generatedEvents1 := s.generateEvents(events1, c)
-	// make sure [18] is last event, and use [18]'s position as dumpExitLocation
+	// make sure [18] is last event, and use [18]'s position as safeModeExitLocation
 	c.Assert(len(generatedEvents1), Equals, 19)
-	dumpExitLocation := binlog.NewLocation("")
-	dumpExitLocation.Position.Pos = generatedEvents1[18].Header.LogPos
-	syncer.cfg.DumpExitLocation = &dumpExitLocation
+	safeModeExitLocation := binlog.NewLocation("")
+	safeModeExitLocation.Position.Pos = generatedEvents1[18].Header.LogPos
+	syncer.cfg.SafeModeExitLoc = &safeModeExitLocation
 
-	// check after dumpExitLocation, safe mode is turned off
+	// check after safeModeExitLocation, safe mode is turned off
 	events2 := mockBinlogEvents{
 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(1), "a"}}}},
 		mockBinlogEvent{typ: Delete, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(1), "a"}}}},
@@ -1433,7 +1433,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int32(1), "b"},
 		}, {
-			// start from this event, location passes dumpExitLocation and safe mode should exit
+			// start from this event, location passes safeModeExitLocation and safe mode should exit
 			insert,
 			"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int32(1), "a"},

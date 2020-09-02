@@ -32,9 +32,9 @@ func (s *Syncer) enableSafeModeInitializationPhase(tctx *tcontext.Context, safeM
 		safeMode.Add(tctx, 1) // add 1 but should no corresponding -1, so keeps enabled
 		s.tctx.L().Info("enable safe-mode by config")
 	}
-	if s.cfg.DumpExitLocation != nil {
-		safeMode.Add(tctx, 1) // enable and will revert after pass DumpExitLocation
-		s.tctx.L().Info("enable safe-mode because of inconsistent dump, will exit at", zap.Stringer("location", *s.cfg.DumpExitLocation))
+	if s.cfg.SafeModeExitLoc != nil {
+		safeMode.Add(tctx, 1) // enable and will revert after pass SafeModeExitLoc
+		s.tctx.L().Info("enable safe-mode because of inconsistent dump, will exit at", zap.Stringer("location", *s.cfg.SafeModeExitLoc))
 	}
 
 	go func() {
