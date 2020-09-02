@@ -177,9 +177,6 @@ func (meta *ShardingMeta) checkItemExists(item *DDLItem) (int, bool) {
 // returns:
 //   active: whether the DDL will be processed in this round
 func (meta *ShardingMeta) AddItem(item *DDLItem) (active bool, err error) {
-	if len(meta.global.Items) > 0 {
-		log.L().Warn("lance test", zap.Any("activeDDL", meta.global.Items[meta.activeIdx]), zap.Any("globalItems", meta.global.Items))
-	}
 	index, exists := meta.checkItemExists(item)
 	if exists {
 		return index == meta.activeIdx, nil
