@@ -53,9 +53,9 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 
 	parsePosAndGTID := func(pos *mysql.Position, gtid *string) error {
 		for {
-			line, err := br.ReadString('\n')
-			if err != nil {
-				return err
+			line, err2 := br.ReadString('\n')
+			if err2 != nil {
+				return err2
 			}
 			parts := strings.SplitN(line, ":", 2)
 			if len(parts) != 2 {
@@ -67,16 +67,16 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 			case "Log":
 				pos.Name = value
 			case "Pos":
-				pos64, err := strconv.ParseUint(value, 10, 32)
-				if err != nil {
-					return err
+				pos64, err3 := strconv.ParseUint(value, 10, 32)
+				if err3 != nil {
+					return err3
 				}
 				pos.Pos = uint32(pos64)
 			case "GTID":
 				// multiple GTID sets may cross multiple lines, continue to read them.
-				following, err := readFollowingGTIDs(br, flavor)
-				if err != nil {
-					return err
+				following, err3 := readFollowingGTIDs(br, flavor)
+				if err3 != nil {
+					return err3
 				}
 				*gtid = value + following
 				return nil
@@ -85,11 +85,11 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 	}
 
 	for {
-		line, err := br.ReadString('\n')
-		if err == io.EOF {
+		line, err2 := br.ReadString('\n')
+		if err2 == io.EOF {
 			break
-		} else if err != nil {
-			return nil, nil, terror.ErrParseMydumperMeta.Generate(err)
+		} else if err2 != nil {
+			return nil, nil, terror.ErrParseMydumperMeta.Generate(err2)
 		}
 		line = strings.TrimSpace(line)
 		if len(line) == 0 {
@@ -98,15 +98,15 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 
 		switch line {
 		case "SHOW MASTER STATUS:":
-			if err := parsePosAndGTID(&pos, &gtidStr); err != nil {
-				return nil, nil, terror.ErrParseMydumperMeta.Generate(err)
+			if err3 := parsePosAndGTID(&pos, &gtidStr); err3 != nil {
+				return nil, nil, terror.ErrParseMydumperMeta.Generate(err3)
 			}
 		case "SHOW SLAVE STATUS:":
 			// ref: https://github.com/maxbube/mydumper/blob/master/mydumper.c#L434
 			for {
-				line, err := br.ReadString('\n')
-				if err != nil {
-					return nil, nil, terror.ErrParseMydumperMeta.Generate(err)
+				line, err3 := br.ReadString('\n')
+				if err3 != nil {
+					return nil, nil, terror.ErrParseMydumperMeta.Generate(err3)
 				}
 				line = strings.TrimSpace(line)
 				if len(line) == 0 {
@@ -115,8 +115,8 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 			}
 		case "SHOW MASTER STATUS: /* AFTER CONNECTION POOL ESTABLISHED */":
 			useLocation2 = true
-			if err := parsePosAndGTID(&pos2, &gtidStr2); err != nil {
-				return nil, nil, terror.ErrParseMydumperMeta.Generate(err)
+			if err3 := parsePosAndGTID(&pos2, &gtidStr2); err3 != nil {
+				return nil, nil, terror.ErrParseMydumperMeta.Generate(err3)
 			}
 		default:
 			// do nothing for Started dump, Finished dump...
