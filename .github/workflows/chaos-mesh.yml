@@ -126,31 +126,31 @@ jobs:
     - name: Wait for DM-master ready
       run: |
         kubectl wait --for=condition=Ready pod -l app=dm-master --all || true
-        echo "\n" show pvc
+        echo "<<<<< show pvc >>>>>"
         kubectl get pvc -l app=dm-master -o wide
-        echo "\n" show pv
+        echo "<<<<< show pv >>>>>"
         kubectl get pv -o wide
-        echo "\n" show svc
+        echo "<<<<< show svc >>>>>"
         kubectl get svc -l app=dm-master -o wide
-        echo "\n" show sts
+        echo "<<<<< show sts >>>>>"
         kubectl get sts -l app=dm-master -o wide
-        echo "\n" show po
+        echo "<<<<< show po >>>>>"
         kubectl get po -l app=dm-master -o wide
-        echo "\n" describe po
+        echo "<<<<< describe po >>>>>"
         kubectl describe po -l app=dm-master
-        echo "\n" describe pvc
+        echo "<<<<< describe pvc >>>>>"
         kubectl describe pvc -l app=dm-master
-        echo "\n" show current log for dm-master-0
+        echo "<<<<< show current log for dm-master-0 >>>>>"
         kubectl logs dm-master-0 || true
-        echo "\n" show previous log for dm-master-0
+        echo "<<<<< show previous log for dm-master-0 >>>>>"
         kubectl logs dm-master-0 -p || true
-        echo "\n" show current log for dm-master-1
+        echo "<<<<< show current log for dm-master-1 >>>>>"
         kubectl logs dm-master-1 || true
-        echo "\n" show previous log for dm-master-1
+        echo "<<<<< show previous log for dm-master-1 >>>>>"
         kubectl logs dm-master-1 -p || true
-        echo "\n" show current log for dm-master-2
+        echo "<<<<< show current log for dm-master-2 >>>>>"
         kubectl logs dm-master-2 || true
-        echo "\n" show previous log for dm-master-2
+        echo "<<<<< show previous log for dm-master-2 >>>>>"
         kubectl logs dm-master-2 -p || true
 #        kubectl wait --for=condition=Ready pod -l app=dm-master --all --timeout=0s
 
@@ -163,31 +163,31 @@ jobs:
     - name: Wait for DM-worker ready
       run: |
         kubectl wait --for=condition=Ready pod -l app=dm-worker --all || true
-        echo "\n" show pvc
+        echo "<<<<< show pvc >>>>>"
         kubectl get pvc -l app=dm-worker -o wide
-        echo "\n" show pv
+        echo "<<<<< show pv >>>>>"
         kubectl get pv -o wide
-        echo "\n" show svc
+        echo "<<<<< show svc >>>>>"
         kubectl get svc -l app=dm-worker -o wide
-        echo "\n" show sts
+        echo "<<<<< show sts >>>>>"
         kubectl get sts -l app=dm-worker -o wide
-        echo "\n" show po
+        echo "<<<<< show po >>>>>"
         kubectl get po -l app=dm-worker -o wide
-        echo "\n" describe po
+        echo "<<<<< describe po >>>>>"
         kubectl describe po -l app=dm-worker
-        echo "\n" describe pvc
+        echo "<<<<< describe pvc >>>>>"
         kubectl describe pvc -l app=dm-worker
-        echo "\n" show current log for dm-worker-0
+        echo "<<<<< show current log for dm-worker-0 >>>>>"
         kubectl logs dm-worker-0 || true
-        echo "\n" show previous log for dm-worker-0
+        echo "<<<<< show previous log for dm-worker-0 >>>>>"
         kubectl logs dm-worker-0 -p || true
-        echo "\n" show current log for dm-worker-1
+        echo "<<<<< show current log for dm-worker-1 >>>>>"
         kubectl logs dm-worker-1 || true
-        echo "\n" show previous log for worker-master-1
+        echo "<<<<< show previous log for worker-master-1 >>>>>"
         kubectl logs dm-worker-1 -p || true
-        echo "\n" show current log for dm-worker-2
+        echo "<<<<< show current log for dm-worker-2 >>>>>"
         kubectl logs dm-worker-2 || true
-        echo "\n" show previous log for dm-worker-2
+        echo "<<<<< show previous log for dm-worker-2 >>>>>"
         kubectl logs dm-worker-2 -p || true
   #        kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=0s
 
@@ -200,7 +200,7 @@ jobs:
     - name: Run chaos mesh action
       uses: chaos-mesh/chaos-mesh-action@master
       env:
-        CFG_BASE64: $(CFG_BASE64)
+        CFG_BASE64: ${{ env.CFG_BASE64 }}
 
     # Debug via SSH if previous steps failed
     - name: Set up tmate session
