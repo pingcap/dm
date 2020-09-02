@@ -482,6 +482,9 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		}
 
 		resp.Result = true
+		if cfg.RemoveMeta {
+			resp.Msg = "`remove-meta` in task config is deprecated, please use `start-task ... --remove-meta` instead"
+		}
 		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, sources, []string{}, req)
 	}
 
@@ -1864,9 +1867,13 @@ func (s *Server) listMemberMaster(ctx context.Context, names []string) (*pb.Memb
 		}
 
 		alive := true
-		_, err := client.Get(etcdMember.ClientURLs[0] + "/health")
-		if err != nil {
+		if len(etcdMember.ClientURLs) == 0 {
 			alive = false
+		} else {
+			_, err := client.Get(etcdMember.ClientURLs[0] + "/health")
+			if err != nil {
+				alive = false
+			}
 		}
 
 		masters = append(masters, &pb.MasterInfo{

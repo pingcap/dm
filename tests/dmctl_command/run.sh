@@ -98,7 +98,10 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     # start DM task with command mode
-    $PWD/bin/dmctl.test DEVEL --master-addr=:$MASTER_PORT start-task $cur/conf/dm-task.yaml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/dm-task.yaml" \
+        "\`remove-meta\` in task config is deprecated, please use \`start-task ... --remove-meta\` instead" 1
+    check_log_contains $WORK_DIR/master/log/dm-master.log "\`remove-meta\` in task config is deprecated, please use \`start-task ... --remove-meta\` instead"
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
