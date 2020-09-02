@@ -50,11 +50,9 @@ jobs:
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
-    # Build DM binary
     - name: Build DM binary
       run: make dm-master dm-worker dmctl chaos-case
     
-    # Build DM docker image
     - name: Build DM docker image
       run: |
         docker build -f $GITHUB_WORKSPACE/chaos/manifests/Dockerfile -t dm:chaos $GITHUB_WORKSPACE/bin
@@ -117,7 +115,6 @@ jobs:
         kubectl describe pvc -l app=tidb
         kubectl wait --for=condition=Ready pod/tidb-0 --timeout=0s
 
-    # Set up DM-master
     - name: Set up DM-master
       run: |
         kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/dm-master.yaml
@@ -155,7 +152,6 @@ jobs:
         kubectl logs dm-master-2 -p || true
         kubectl wait --for=condition=Ready pod -l app=dm-master --all --timeout=0s
 
-    # Set up DM-worker
     - name: Set up DM-worker
       run: |
         kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/dm-worker.yaml
@@ -193,16 +189,33 @@ jobs:
         kubectl logs dm-worker-2 -p || true
         kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=0s
 
-    # Encode chaos-mesh action
+    - name: Set up chaos test cases
+      run: |
+        kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
+        kubectl get -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
+        kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
+    - name: Wait for chaos test cases ready
+      run: |
+        kubectl wait --for=condition=Ready pod -l app=chaos-test-case --all --timeout=120s || true
+        echo "<<<<< show po >>>>>"
+        kubectl get po -l app=chaos-test-case -o wide
+        echo "<<<<< describe po >>>>>"
+        kubectl describe po -l app=chaos-test-case
+        kubectl wait --for=condition=Ready pod -l app=chaos-test-case --all --timeout=0s
+
     - name: Encode chaos-mesh action
       run: |
         echo "::set-env name=CFG_BASE64::$(base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/pod-failure-dm.yaml)"
 
-    # Set up chaos-mesh-action
     - name: Run chaos mesh action
       uses: chaos-mesh/chaos-mesh-action@master
       env:
         CFG_BASE64: ${{ env.CFG_BASE64 }}
+
+    # TODO: use timeout to start the binary of chaos-case.
+    - name: Wait for chaos test case complete
+      run: |
+        kubectl wait --for=condition=complete job/chaos-test-case --timeout=3600s
 
     # Debug via SSH if previous steps failed
     - name: Set up tmate session
