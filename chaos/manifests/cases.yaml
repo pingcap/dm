@@ -20,6 +20,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+          ports:
+            - containerPort: 80
+              name: chaos-test-case
           command:
             - "/chaos-case"
             - "--master-addr=dm-master.$(MY_POD_NAMESPACE)" # use the address of the DM-master service

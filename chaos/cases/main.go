@@ -17,6 +17,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -48,6 +50,10 @@ func main() {
 		fmt.Println("init logger error:", err.Error())
 		os.Exit(2)
 	}
+
+	go func() {
+		http.ListenAndServe("0.0.0.0:80", nil) // for pprof
+	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
