@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0-rc.2] 2020-09-01
+
+### Improvements
+
+- Support more AWS Aurora-specific privileges when pre-checking the data migration task [#950](https://github.com/pingcap/dm/pull/950)
+- Check whether GTID is enabled for the upstream MySQL/MariaDB when configuring `enable-gtid: true` and creating a data source [#957](https://github.com/pingcap/dm/pull/957)
+
+### Bug fixes
+
+- Fix the `Column count doesn't match value count` error that occurs in the running migration task after automatically upgrading the DM cluster from v1.0.x to v2.0.0-rc [#952](https://github.com/pingcap/dm/pull/952)
+- Fix the issue that the DM-worker or DM-master component might not correctly exit [#963](https://github.com/pingcap/dm/pull/963)
+- Fix the issue that the `--no-locks` argument does not take effect on the dump processing unit in DM v2.0 [#961](https://github.com/pingcap/dm/pull/961)
+- Fix the `field remove-meta not found in type config.TaskConfig` error that occurs when using the task configuration file of the v1.0.x cluster to start the task of a v2.0 cluster [#965](https://github.com/pingcap/dm/pull/965)
+- Fix the issue that when the domain name is used as the connection address of each component, the component might not be correctly started [#955](https://github.com/pingcap/dm/pull/955)
+- Fix the issue that the connection between the upstream and downstream might not be released after the migration task is stopped [#943](https://github.com/pingcap/dm/pull/943)
+- Fix the issue that in the optimistic sharding DDL mode, concurrently executing the DDL statement on multiple sharded tables might block the sharding DDL coordination [#944](https://github.com/pingcap/dm/pull/944)
+- Fix the issue that the newly started DM-master might cause the `list-member` to panic [#970](https://github.com/pingcap/dm/pull/970)
+
+### Action required
+
+- When upgrading from a previous version, note that you must upgrade all DM components (dmctl/DM-master/DM-worker) together
+
 ## [2.0.0-rc] 2020-08-21
 
 ### Improvements
