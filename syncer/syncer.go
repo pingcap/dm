@@ -923,7 +923,6 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if !ignore {
 			var affected int
 			affected, err = db.executeSQLWithIgnore(tctx, ignoreDDLError, sqlJob.ddls)
-			// TODO(lance6716): why doesn't return?
 			if err != nil {
 				err = s.handleSpecialDDLError(tctx, err, sqlJob.ddls, affected, db)
 				err = terror.WithScope(err, terror.ScopeDownstream)
@@ -935,6 +934,13 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				location: sqlJob.currentLocation.Clone(),
 				jobs:     fmt.Sprintf("%v", sqlJob.ddls),
 			})
+			s.execError.Set(err)
+			if !utils.IsContextCanceledError(err) {
+				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
+				s.runFatalChan <- unit.NewProcessError(err)
+				s.jobWg.Done()
+				continue
+			}
 		}
 
 		switch s.cfg.ShardMode {
