@@ -934,6 +934,13 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				location: sqlJob.currentLocation.Clone(),
 				jobs:     fmt.Sprintf("%v", sqlJob.ddls),
 			})
+			s.execError.Set(err)
+			if !utils.IsContextCanceledError(err) {
+				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
+				s.runFatalChan <- unit.NewProcessError(err)
+				s.jobWg.Done()
+				continue
+			}
 		}
 
 		switch s.cfg.ShardMode {

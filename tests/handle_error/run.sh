@@ -153,18 +153,18 @@ function DM_REPLACE_ERROR_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "No database selected" 1
+            "No database selected" 2
 
     # replace sql
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test -s mysql-replica-01 replace alter table ${db}.${tb1} add constraint fk foreign key (b) references ${tb2}(a);" \
+            "handle-error test -s mysql-replica-01 replace alter table ${db}.${tb1} add constraint fk foreign key (b) references ${db}.${tb2}(a);" \
             "\"result\": true" 2
 
     run_sql_source1 "insert into ${db}.${tb2} values(5,5);"
     run_sql_source1 "insert into ${db}.${tb1} values(6,5);"
 
-    run_sql_tidb_with_retry "select count(1) from ${db}.${tb1};" "count(1): 4"
-    run_sql_tidb_with_retry "select count(1) from ${db}.${tb2};" "count(1): 4"
+    run_sql_tidb_with_retry "select count(1) from ${db}.${tb1};" "count(1): 3"
+    run_sql_tidb_with_retry "select count(1) from ${db}.${tb2};" "count(1): 3"
 }
 
 function DM_REPLACE_ERROR() {
@@ -378,9 +378,9 @@ function DM_REPLACE_ERROR_MULTIPLE() {
 function run() {
     init_cluster
     init_database
-    DM_SKIP_ERROR
-    DM_SKIP_ERROR_SHARDING
-    DM_REPLACE_ERROR
+#    DM_SKIP_ERROR
+#    DM_SKIP_ERROR_SHARDING
+#    DM_REPLACE_ERROR
     DM_REPLACE_ERROR_SHARDING
     DM_REPLACE_ERROR_MULTIPLE
 }
