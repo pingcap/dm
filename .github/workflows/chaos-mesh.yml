@@ -126,20 +126,32 @@ jobs:
     - name: Wait for DM-master ready
       run: |
         kubectl wait --for=condition=Ready pod -l app=dm-master --all || true
-        echo show pvc
+        echo "\n" show pvc
         kubectl get pvc -l app=dm-master -o wide
-        echo show pv
+        echo "\n" show pv
         kubectl get pv -o wide
-        echo show svc
+        echo "\n" show svc
         kubectl get svc -l app=dm-master -o wide
-        echo show sts
+        echo "\n" show sts
         kubectl get sts -l app=dm-master -o wide
-        echo show po
+        echo "\n" show po
         kubectl get po -l app=dm-master -o wide
-        echo describe po
+        echo "\n" describe po
         kubectl describe po -l app=dm-master
-        echo describe pvc
+        echo "\n" describe pvc
         kubectl describe pvc -l app=dm-master
+        echo "\n" show current log for dm-master-0
+        kubectl logs dm-master-0 || true
+        echo "\n" show previous log for dm-master-0
+        kubectl logs dm-master-0 -p || true
+        echo "\n" show current log for dm-master-1
+        kubectl logs dm-master-1 || true
+        echo "\n" show previous log for dm-master-1
+        kubectl logs dm-master-1 -p || true
+        echo "\n" show current log for dm-master-2
+        kubectl logs dm-master-2 || true
+        echo "\n" show previous log for dm-master-2
+        kubectl logs dm-master-2 -p || true
 #        kubectl wait --for=condition=Ready pod -l app=dm-master --all --timeout=0s
 
     # Set up DM-worker
@@ -151,45 +163,41 @@ jobs:
     - name: Wait for DM-worker ready
       run: |
         kubectl wait --for=condition=Ready pod -l app=dm-worker --all || true
-        echo show pvc
+        echo "\n" show pvc
         kubectl get pvc -l app=dm-worker -o wide
-        echo show pv
+        echo "\n" show pv
         kubectl get pv -o wide
-        echo show svc
+        echo "\n" show svc
         kubectl get svc -l app=dm-worker -o wide
-        echo show sts
+        echo "\n" show sts
         kubectl get sts -l app=dm-worker -o wide
-        echo show po
+        echo "\n" show po
         kubectl get po -l app=dm-worker -o wide
-        echo describe po
+        echo "\n" describe po
         kubectl describe po -l app=dm-worker
-        echo describe pvc
+        echo "\n" describe pvc
         kubectl describe pvc -l app=dm-worker
+        echo "\n" show current log for dm-worker-0
+        kubectl logs dm-worker-0 || true
+        echo "\n" show previous log for dm-worker-0
+        kubectl logs dm-worker-0 -p || true
+        echo "\n" show current log for dm-worker-1
+        kubectl logs dm-worker-1 || true
+        echo "\n" show previous log for worker-master-1
+        kubectl logs dm-worker-1 -p || true
+        echo "\n" show current log for dm-worker-2
+        kubectl logs dm-worker-2 || true
+        echo "\n" show previous log for dm-worker-2
+        kubectl logs dm-worker-2 -p || true
   #        kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=0s
 
-    # Encode chaos mesh action to base64
-    - name: Encode chaos mesh action to base64
-      run: |
-        export CFG_BASE64=$(base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/pod-failure-dm.yaml)
-        echo ${CFG_BASE64}
-
     # Set up chaos-mesh-action
-    #- name: Run chaos mesh action
-    #  uses: chaos-mesh/chaos-mesh-action@master
-    #  env:
-    #    CFG_BASE64: YXBpVmVyc2lvbjogY2hhb3MtbWVzaC5vcmcvdjFhbHBoYTENCmtpbmQ6IFBvZENoYW9zDQptZXRhZGF0YToNCiAgbmFtZTogcG9kLWZhaWx1cmUtZG0NCiAgbGFiZWxzOg0KICAgIGFwcDogcG9kLWZhaWx1cmUtZG0NCnNwZWM6DQogIGFjdGlvbjogcG9kLWZhaWx1cmUNCiAgbW9kZTogb25lDQogIGR1cmF0aW9uOiAiMzBzIg0KICBzZWxlY3RvcjoNCiAgICBtYXRjaEV4cHJlc3Npb25zOg0KICAgICAgLSBrZXk6IGFwcA0KICAgICAgICBvcGVyYXRvcjogSW4NCiAgICAgICAgdmFsdWVzOg0KICAgICAgICAgIC0gZG0tbWFzdGVyDQogICAgICAgICAgLSBkbS13b3JrZXINCiAgc2NoZWR1bGVyOg0KICAgIGNyb246ICJAZXZlcnkgMm0iDQo=
+    - name: Run chaos mesh action
+      uses: chaos-mesh/chaos-mesh-action@master
+      env:
+        CFG_BASE64: base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/pod-failure-dm.yaml
 
-      # Debug through SSH
+    # Debug via SSH if previous steps failed
     - name: Set up tmate session
+      if: ${{ failure() }}
       uses: mxschmitt/action-tmate@v2
-
-    # TODO: build & deploy DM; run chaos mesh action
-    # Runs a single command using the runners shell
-    - name: Run a one-line script
-      run: echo Hello, world!
-
-    # Runs a set of commands using the runners shell
-    - name: Run a multi-line script
-      run: |
-        echo Add other actions to build,
-        echo test, and deploy your project.
