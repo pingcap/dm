@@ -191,11 +191,16 @@ jobs:
         kubectl logs dm-worker-2 -p || true
   #        kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=0s
 
+    # Encode chaos-mesh action
+    - name: Encode chaos-mesh action
+      run: |
+        echo "::set-env name=CFG_BASE64::$(base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/pod-failure-dm.yaml)"
+
     # Set up chaos-mesh-action
     - name: Run chaos mesh action
       uses: chaos-mesh/chaos-mesh-action@master
       env:
-        CFG_BASE64: base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/pod-failure-dm.yaml
+        CFG_BASE64: $(CFG_BASE64)
 
     # Debug via SSH if previous steps failed
     - name: Set up tmate session
