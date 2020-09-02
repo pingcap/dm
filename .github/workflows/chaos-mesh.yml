@@ -152,7 +152,7 @@ jobs:
         kubectl logs dm-master-2 || true
         echo "<<<<< show previous log for dm-master-2 >>>>>"
         kubectl logs dm-master-2 -p || true
-#        kubectl wait --for=condition=Ready pod -l app=dm-master --all --timeout=0s
+        kubectl wait --for=condition=Ready pod -l app=dm-master --all --timeout=0s
 
     # Set up DM-worker
     - name: Set up DM-worker
@@ -189,7 +189,7 @@ jobs:
         kubectl logs dm-worker-2 || true
         echo "<<<<< show previous log for dm-worker-2 >>>>>"
         kubectl logs dm-worker-2 -p || true
-  #        kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=0s
+        kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=0s
 
     # Encode chaos-mesh action
     - name: Encode chaos-mesh action
