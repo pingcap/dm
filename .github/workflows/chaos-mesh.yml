@@ -125,7 +125,8 @@ jobs:
         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/dm-master.yaml
     - name: Wait for DM-master ready
       run: |
-        kubectl wait --for=condition=Ready pod -l app=dm-master --all || true
+        sleep 10
+        kubectl wait --for=condition=Ready pod -l app=dm-master --all --timeout=120s || true
         echo "<<<<< show pvc >>>>>"
         kubectl get pvc -l app=dm-master -o wide
         echo "<<<<< show pv >>>>>"
@@ -162,7 +163,8 @@ jobs:
         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/dm-worker.yaml
     - name: Wait for DM-worker ready
       run: |
-        kubectl wait --for=condition=Ready pod -l app=dm-worker --all || true
+        sleep 10
+        kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=120s || true
         echo "<<<<< show pvc >>>>>"
         kubectl get pvc -l app=dm-worker -o wide
         echo "<<<<< show pv >>>>>"
