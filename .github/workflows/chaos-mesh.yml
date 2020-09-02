@@ -196,12 +196,12 @@ jobs:
         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
     - name: Wait for chaos test cases ready
       run: |
-        kubectl wait --for=condition=Ready pod -l app=chaos-test-case --all --timeout=120s || true
+        kubectl wait --for=condition=Ready job/chaos-test-case --timeout=120s || true
         echo "<<<<< show po >>>>>"
         kubectl get po -l app=chaos-test-case -o wide
         echo "<<<<< describe po >>>>>"
         kubectl describe po -l app=chaos-test-case
-        kubectl wait --for=condition=Ready pod -l app=chaos-test-case --all --timeout=0s
+        kubectl wait --for=condition=Ready job/chaos-test-case --timeout=0s
 
     - name: Encode chaos-mesh action
       run: |
