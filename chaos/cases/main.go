@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/pingcap/errors"
 	"go.uber.org/zap"
@@ -70,7 +71,9 @@ func main() {
 		cancel()
 	}()
 
-	masterConn, err := grpc.DialContext(ctx, cfg.MasterAddr, grpc.WithBlock(), grpc.WithInsecure()) // no TLS support in chaos cases now.
+	ctx2, cancel2 := context.WithTimeout(ctx, 60 * time.Second)
+	defer cancel2()
+	masterConn, err := grpc.DialContext(ctx2, cfg.MasterAddr, grpc.WithBlock(), grpc.WithInsecure()) // no TLS support in chaos cases now.
 	if err != nil {
 		log.L().Error("fail to dail DM-master", zap.String("address", cfg.MasterAddr), zap.Error(err))
 		os.Exit(2)
