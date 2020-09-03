@@ -803,7 +803,7 @@ workaround = ""
 tags = ["internal", "medium"]
 
 [error.DM-config-20011]
-message = "binlog-name must specify"
+message = "must specify `binlog-name` without GTID enabled for the source or specify `binlog-gtid` with GTID enabled for the source"
 description = ""
 workaround = "Please check the `meta` config in task configuration file."
 tags = ["internal", "medium"]
