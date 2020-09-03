@@ -1090,7 +1090,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if s.cfg.Mode == config.ModeAll {
 			if err = s.flushCheckPoints(); err != nil {
 				s.tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
-			} else {
+			} else if s.cfg.CleanDumpFile {
 				s.tctx.L().Info("try to remove loaded files")
 				metadataFile := path.Join(s.cfg.Dir, "metadata")
 				if err = os.Remove(metadataFile); err != nil {
@@ -1385,6 +1385,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			}
 		default:
+		}
+
+		// check pass SafeModeExitLoc and try disable safe mode, but not in sharding or replacing error
+		if s.cfg.SafeModeExitLoc != nil && !s.isReplacingErr && shardingReSync == nil {
+			if binlog.CompareLocation(currentLocation, *s.cfg.SafeModeExitLoc, s.cfg.EnableGTID) >= 0 {
+				s.cfg.SafeModeExitLoc = nil
+				safeMode.Add(tctx, -1)
+			}
 		}
 
 		ec := eventContext{
