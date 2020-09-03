@@ -1727,8 +1727,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		onlineDDLTableNames map[string]*filter.Table
 	)
 
-	// for DDL, we don't apply operator until we try to execute it.
-	// so can handle sharding cases
+	// for DDL, we don't apply operator until we try to execute it. so can handle sharding cases
+	// We use default parser because ddls are came from *Syncer.handleDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 	sqls, onlineDDLTableNames, err = s.resolveDDLSQL(ec.tctx, parser.New(), parseResult.stmt, usedSchema)
 	if err != nil {
 		s.tctx.L().Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
@@ -1761,6 +1761,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		sourceTbls     = make(map[string]map[string]struct{}) // db name -> tb name
 	)
 	for _, sql := range sqls {
+		// We use default parser because sqls are came from above *Syncer.resolveDDLSQL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 		sqlDDL, tableNames, stmt, handleErr := s.handleDDL(parser.New(), usedSchema, sql)
 		if handleErr != nil {
 			return handleErr
