@@ -97,6 +97,7 @@ func (conn *UpStreamConn) getParser() (*parser.Parser, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer c.Close()
 	return utils.GetParserForConn(c)
 }
 
