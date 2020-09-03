@@ -426,6 +426,7 @@ func (s *Syncer) initShardingGroups() error {
 
 // IsFreshTask implements Unit.IsFreshTask
 func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
+	// TODO(lance6716): add check for downstream table select count not zero, and load that checkpoint
 	globalPoint := s.checkpoint.GlobalPoint()
 	tablePoint := s.checkpoint.TablePoint()
 	return binlog.CompareLocation(globalPoint, binlog.NewLocation(s.cfg.Flavor), s.cfg.EnableGTID) <= 0 && len(tablePoint) == 0, nil
@@ -1392,9 +1393,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		// check pass SafeModeExitLoc and try disable safe mode, but not in sharding or replacing error
-		if s.cfg.SafeModeExitLoc != nil && !s.isReplacingErr && shardingReSync == nil {
-			if binlog.CompareLocation(currentLocation, *s.cfg.SafeModeExitLoc, s.cfg.EnableGTID) >= 0 {
-				s.cfg.SafeModeExitLoc = nil
+		safeModeExitLoc := s.checkpoint.SafeModeExitPoint()
+		if safeModeExitLoc != nil && !s.isReplacingErr && shardingReSync == nil {
+			if binlog.CompareLocation(currentLocation, *safeModeExitLoc, s.cfg.EnableGTID) >= 0 {
+				s.checkpoint.SaveSafeModeExitPoint(nil)
 				safeMode.Add(tctx, -1)
 			}
 		}

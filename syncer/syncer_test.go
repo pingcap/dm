@@ -1364,7 +1364,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	c.Assert(len(generatedEvents1), Equals, 19)
 	safeModeExitLocation := binlog.NewLocation("")
 	safeModeExitLocation.Position.Pos = generatedEvents1[18].Header.LogPos
-	syncer.cfg.SafeModeExitLoc = &safeModeExitLocation
+	syncer.checkpoint.SaveSafeModeExitPoint(&safeModeExitLocation)
 
 	// check after safeModeExitLocation, safe mode is turned off
 	events2 := mockBinlogEvents{

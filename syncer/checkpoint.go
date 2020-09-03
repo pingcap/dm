@@ -213,6 +213,13 @@ type CheckPoint interface {
 	// corresponding to Meta.Pos and Meta.GTID
 	GlobalPoint() binlog.Location
 
+	// SaveSafeModeExitPoint saves the pointer to location which indicates safe mode exit
+	// this location is used when dump unit can't assure consistency
+	SaveSafeModeExitPoint(point *binlog.Location)
+
+	// SafeModeExitPoint returns the location where safe mode could safely turn off after
+	SafeModeExitPoint() *binlog.Location
+
 	// TablePoint returns all table's stream checkpoint
 	TablePoint() map[string]map[string]binlog.Location
 
@@ -257,6 +264,8 @@ type RemoteCheckPoint struct {
 	//   this global checkpoint is next-binlog-pos
 	globalPoint         *binlogPoint
 	globalPointSaveTime time.Time
+
+	safeModeExitPoint *binlog.Location
 
 	logCtx *tcontext.Context
 }
@@ -347,6 +356,17 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, loc
 	} else if err := point.save(location, ti); err != nil {
 		cp.logCtx.L().Error("fail to save table point", zap.String("schema", sourceSchema), zap.String("table", sourceTable), log.ShortError(err))
 	}
+}
+
+// SaveSafeModeExitPoint implements CheckPoint.SaveSafeModeExitPoint
+// shouldn't call concurrently (only called before loop in Syncer.Run and in loop to reset)
+func (cp *RemoteCheckPoint) SaveSafeModeExitPoint(point *binlog.Location) {
+	cp.safeModeExitPoint = point
+}
+
+// SafeModeExitPoint implements CheckPoint.SafeModeExitPoint
+func (cp *RemoteCheckPoint) SafeModeExitPoint() *binlog.Location {
+	return cp.safeModeExitPoint
 }
 
 // DeleteTablePoint implements CheckPoint.DeleteTablePoint
@@ -460,7 +480,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 
 	if cp.globalPoint.outOfDate() || cp.globalPointSaveTime.IsZero() {
 		locationG := cp.GlobalPoint()
-		sqlG, argG := cp.genUpdateSQL(globalCpSchema, globalCpTable, locationG, nil, true)
+		sqlG, argG := cp.genUpdateSQL(globalCpSchema, globalCpTable, locationG, cp.safeModeExitPoint, nil, true)
 		sqls = append(sqls, sqlG)
 		args = append(args, argG)
 	}
@@ -481,7 +501,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 				}
 
 				location := point.MySQLLocation()
-				sql2, arg := cp.genUpdateSQL(schema, table, location, tiBytes, false)
+				sql2, arg := cp.genUpdateSQL(schema, table, location, nil, tiBytes, false)
 				sqls = append(sqls, sql2)
 				args = append(args, arg)
 
@@ -558,6 +578,7 @@ func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
+	// TODO(lance6716): check rollback need change
 	cp.globalPoint.rollback(schemaTracker, "")
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
@@ -620,6 +641,7 @@ func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
 }
 
 func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
+	// TODO(lance6716): version update
 	sqls := []string{
 		`CREATE TABLE IF NOT EXISTS ` + cp.tableName + ` (
 			id VARCHAR(32) NOT NULL,
@@ -628,6 +650,9 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 			binlog_name VARCHAR(128),
 			binlog_pos INT UNSIGNED,
 			binlog_gtid TEXT,
+			exit_safe_binlog_name VARCHAR(128) DEFAULT '',
+			exit_safe_binlog_pos INT UNSIGNED DEFAULT 0,
+			exit_safe_binlog_gtid TEXT DEFAULT '',
 			table_info JSON NOT NULL,
 			is_global BOOLEAN,
 			create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -642,10 +667,11 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 
 // Load implements CheckPoint.Load
 func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.Tracker) error {
+	// TODO(lance6716): where use Load?
 	cp.Lock()
 	defer cp.Unlock()
 
-	query := `SELECT cp_schema, cp_table, binlog_name, binlog_pos, binlog_gtid, table_info, is_global FROM ` + cp.tableName + ` WHERE id = ?`
+	query := `SELECT cp_schema, cp_table, binlog_name, binlog_pos, binlog_gtid, exit_safe_binlog_name, exit_safe_binlog_pos, exit_safe_binlog_gtid, table_info, is_global FROM ` + cp.tableName + ` WHERE id = ?`
 	rows, err := cp.dbConn.querySQL(tctx, query, cp.id)
 	defer func() {
 		if rows != nil {
@@ -663,18 +689,21 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 	}
 
 	// checkpoints in DB have higher priority
-	// if don't want to use checkpoint in DB, set `remove-previous-checkpoint` to `true`
+	// if don't want to use checkpoint in DB, set `remove-meta` to `true`
 	var (
-		cpSchema      string
-		cpTable       string
-		binlogName    string
-		binlogPos     uint32
-		binlogGTIDSet sql.NullString
-		tiBytes       []byte
-		isGlobal      bool
+		cpSchema              string
+		cpTable               string
+		binlogName            string
+		binlogPos             uint32
+		binlogGTIDSet         sql.NullString
+		exitSafeBinlogName    string
+		exitSafeBinlogPos     uint32
+		exitSafeBinlogGTIDSet sql.NullString
+		tiBytes               []byte
+		isGlobal              bool
 	)
 	for rows.Next() {
-		err := rows.Scan(&cpSchema, &cpTable, &binlogName, &binlogPos, &binlogGTIDSet, &tiBytes, &isGlobal)
+		err := rows.Scan(&cpSchema, &cpTable, &binlogName, &binlogPos, &binlogGTIDSet, &exitSafeBinlogName, &exitSafeBinlogPos, &exitSafeBinlogGTIDSet, &tiBytes, &isGlobal)
 		if err != nil {
 			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
@@ -695,6 +724,34 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			if binlog.CompareLocation(location, binlog.NewLocation(cp.cfg.Flavor), cp.cfg.EnableGTID) > 0 {
 				cp.globalPoint = newBinlogPoint(location.Clone(), location.Clone(), nil, nil, cp.cfg.EnableGTID)
 				cp.logCtx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
+			}
+
+			if cp.cfg.EnableGTID {
+				// gtid set default is "" rather than null
+				if exitSafeBinlogGTIDSet.String != "" {
+					gset2, err2 := gtid.ParserGTID(cp.cfg.Flavor, exitSafeBinlogGTIDSet.String)
+					if err2 != nil {
+						return err2
+					}
+					exitSafeModeLoc := binlog.Location{
+						Position: mysql.Position{
+							Name: exitSafeBinlogName,
+							Pos:  exitSafeBinlogPos,
+						},
+						GTIDSet: gset2,
+					}
+					cp.SaveSafeModeExitPoint(&exitSafeModeLoc)
+				}
+			} else {
+				if exitSafeBinlogName != "" {
+					exitSafeModeLoc := binlog.Location{
+						Position: mysql.Position{
+							Name: exitSafeBinlogName,
+							Pos:  exitSafeBinlogPos,
+						},
+					}
+					cp.SaveSafeModeExitPoint(&exitSafeModeLoc)
+				}
 			}
 			continue // skip global checkpoint
 		}
@@ -775,7 +832,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 		cp.logCtx.L().Info("loaded checkpoints from meta", log.WrapStringerField("global checkpoint", cp.globalPoint))
 	}
 	if safeModeExitLoc != nil {
-		cp.cfg.SafeModeExitLoc = safeModeExitLoc
+		cp.SaveSafeModeExitPoint(safeModeExitLoc)
 		cp.logCtx.L().Info("set SafeModeExitLoc from meta", zap.Stringer("SafeModeExitLoc", safeModeExitLoc))
 	}
 
@@ -783,16 +840,19 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 }
 
 // genUpdateSQL generates SQL and arguments for update checkpoint
-func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location binlog.Location, tiBytes []byte, isGlobal bool) (string, []interface{}) {
+func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location binlog.Location, safeModeExitLoc *binlog.Location, tiBytes []byte, isGlobal bool) (string, []interface{}) {
 	// use `INSERT INTO ... ON DUPLICATE KEY UPDATE` rather than `REPLACE INTO`
 	// to keep `create_time`, `update_time` correctly
 	sql2 := `INSERT INTO ` + cp.tableName + `
-		(id, cp_schema, cp_table, binlog_name, binlog_pos, binlog_gtid, table_info, is_global) VALUES
-		(?, ?, ?, ?, ?, ?, ?, ?)
+		(id, cp_schema, cp_table, binlog_name, binlog_pos, binlog_gtid, exit_safe_binlog_name, exit_safe_binlog_pos, exit_safe_binlog_gtid, table_info, is_global) VALUES
+		(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			binlog_name = VALUES(binlog_name),
 			binlog_pos = VALUES(binlog_pos),
 			binlog_gtid = VALUES(binlog_gtid),
+			exit_safe_binlog_name = VALUES(exit_safe_binlog_name),
+			exit_safe_binlog_pos = VALUES(exit_safe_binlog_pos),
+			exit_safe_binlog_gtid = VALUES(exit_safe_binlog_gtid),
 			table_info = VALUES(table_info),
 			is_global = VALUES(is_global);
 	`
@@ -806,7 +866,19 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location binl
 		tiBytes = []byte("null")
 	}
 
-	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSetStr(), tiBytes, isGlobal}
+	var (
+		exitSafeName    string
+		exitSafePos     uint32
+		exitSafeGTIDStr string
+	)
+	if safeModeExitLoc != nil {
+		exitSafeName = safeModeExitLoc.Position.Name
+		exitSafePos = safeModeExitLoc.Position.Pos
+		exitSafeGTIDStr = safeModeExitLoc.GTIDSetStr()
+	}
+
+	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSetStr(),
+		exitSafeName, exitSafePos, exitSafeGTIDStr, tiBytes, isGlobal}
 	return sql2, args
 }
 
