@@ -194,14 +194,7 @@ jobs:
         kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
         kubectl get -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
-    - name: Wait for chaos test cases ready
-      run: |
-        kubectl wait --for=condition=Initialized job/chaos-test-case --timeout=120s || true
-        echo "<<<<< show po >>>>>"
-        kubectl get po -l job-name=chaos-test-case -o wide
-        echo "<<<<< describe po >>>>>"
-        kubectl describe po -l job-name=chaos-test-case
-        kubectl wait --for=condition=Initialized job/chaos-test-case --timeout=0s
+        sleep 10
 
     - name: Encode chaos-mesh action
       run: |
