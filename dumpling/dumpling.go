@@ -257,6 +257,11 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		}
 	}
 
+	// record exit position when consistency is none, to support scenarios like Aurora upstream
+	if dumpConfig.Consistency == "none" {
+		dumpConfig.PosAfterConnect = true
+	}
+
 	m.logger.Info("create dumpling", zap.Stringer("config", dumpConfig))
 	if len(ret) > 0 {
 		m.logger.Warn("meeting some unsupported arguments", zap.Strings("argument", ret))
