@@ -558,7 +558,7 @@ func (t *testConfig) TestFromSubTaskConfigs(c *C) {
 
 func (t *testConfig) TestMetaVerify(c *C) {
 	var m *Meta
-	c.Assert(m.Verify(), IsNil) // nit meta is fine (for not incremental task mode)
+	c.Assert(m.Verify(), IsNil) // nil meta is fine (for not incremental task mode)
 
 	// none
 	m = &Meta{}
