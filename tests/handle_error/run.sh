@@ -140,65 +140,65 @@ function DM_SKIP_ERROR_SHARDING() {
     run_case SKIP_ERROR_SHARDING "double-source-optimistic" "init_table 11 12 21 22" "clean_table" "optimistic"
 }
 
-# replace add foreign key with database name
-# two source, no sharding
+# replace add column unique
+# one source, one table, no sharding
 function DM_REPLACE_ERROR_CASE() {
-    run_sql_source1 "insert into ${db}.${tb2} values(1,1);"
-    run_sql_source1 "insert into ${db}.${tb1} values(2,1);"
+    run_sql_source1 "insert into ${db}.${tb1} values(1,1);"
 
     # error in TiDB
-    run_sql_source1 "alter table ${db}.${tb1} add constraint fk foreign key (b) references ${tb2}(a);"
-    run_sql_source1 "insert into ${db}.${tb2} values(3,3);"
-    run_sql_source1 "insert into ${db}.${tb1} values(4,3);"
+    run_sql_source1 "alter table ${db}.${tb1} add column c int unique;"
+    run_sql_source1 "insert into ${db}.${tb1} values(2,2,2);"
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "No database selected" 2
+            "unsupported add column .* constraint UNIQUE KEY" 1
 
     # replace sql
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test -s mysql-replica-01 replace alter table ${db}.${tb1} add constraint fk foreign key (b) references ${db}.${tb2}(a);" \
+            "handle-error test replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
             "\"result\": true" 2
 
-    run_sql_source1 "insert into ${db}.${tb2} values(5,5);"
-    run_sql_source1 "insert into ${db}.${tb1} values(6,5);"
+    run_sql_source1 "insert into ${db}.${tb1} values(3,3,3);"
 
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb1};" "count(1): 3"
-    run_sql_tidb_with_retry "select count(1) from ${db}.${tb2};" "count(1): 3"
 }
 
 function DM_REPLACE_ERROR() {
     run_case REPLACE_ERROR "double-source-no-sharding" \
-    "run_sql_source1 \"create table ${db}.${tb2} (a int unique, b int);\"; \
-     run_sql_source1 \"create table ${db}.${tb1} (a int unique, b int);\"" \
+    "run_sql_source1 \"create table ${db}.${tb1} (a int unique, b int);\"" \
     "clean_table" ""
 }
 
-# replace add column without unique, add foreign key with database name
+# replace add column unique twice
 # two source, 4 tables
 # source1: tb1 first ddl -> tb1 second ddl -> tb2 first ddl -> tb2 second ddl 
 # source2: tb1 first ddl -> tb2 first ddl -> tb1 second ddl -> tb2 second ddl 
 function DM_REPLACE_ERROR_SHARDING_CASE() {
-    run_sql_source1 "insert into ${db}.${ta1} values(1,1),(3,3),(5,5),(7,7);"
-    run_sql_source2 "insert into ${db}.${ta1} values(2,2),(4,4),(6,6),(8,8);"
-
     # 11/21 first ddl
     run_sql_source1 "alter table ${db}.${tb1} add column c int unique;"
     run_sql_source2 "alter table ${db}.${tb1} add column c int unique;"
-    # 11 second ddl
-    run_sql_source1 "alter table ${db}.${tb1} add constraint foreign key (c) references ${ta1}(a);"
     run_sql_source1 "insert into ${db}.${tb1} values(1,1,1);"
+    run_sql_source2 "insert into ${db}.${tb1} values(2,2,2);"
+
+    # 11 second ddl
+    run_sql_source1 "alter table ${db}.${tb1} add column d int unique;"
+    run_sql_source1 "insert into ${db}.${tb1} values(3,3,3,3);"
+
     # 12/22 first ddl
     run_sql_source1 "alter table ${db}.${tb2} add column c int unique;"
     run_sql_source2 "alter table ${db}.${tb2} add column c int unique;"
+    run_sql_source1 "insert into ${db}.${tb2} values(4,4,4);"
+    run_sql_source2 "insert into ${db}.${tb2} values(5,5,5);"
+
     # 21 second ddl
-    run_sql_source2 "alter table ${db}.${tb1} add constraint foreign key (c) references ${ta1}(a);"
-    run_sql_source2 "insert into ${db}.${tb1} values(2,2,2);"
+    run_sql_source2 "alter table ${db}.${tb1} add column d int unique;"
+    run_sql_source2 "insert into ${db}.${tb1} values(6,6,6,6);"
+
     # 12/22 second ddl
-    run_sql_source1 "alter table ${db}.${tb2} add constraint foreign key (c) references ${ta1}(a);"
-    run_sql_source1 "insert into ${db}.${tb2} values(3,3,3);"
-    run_sql_source2 "alter table ${db}.${tb2} add constraint foreign key (c) references ${ta1}(a);"
-    run_sql_source2 "insert into ${db}.${tb2} values(4,4,4);"
+    run_sql_source1 "alter table ${db}.${tb2} add column d int unique;"
+    run_sql_source2 "alter table ${db}.${tb2} add column d int unique;"
+    run_sql_source1 "insert into ${db}.${tb2} values(7,7,7,7);"
+    run_sql_source2 "insert into ${db}.${tb2} values(8,8,8,8);"
 
     # 11/21 first ddl: unsupport error
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -220,17 +220,17 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
 
         # split 12,22 first ddl into two ddls
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-                "handle-error test -s mysql-replica-01,mysql-replica-02 replace alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c)" \
+                "handle-error test -s mysql-replica-01,mysql-replica-02 replace alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c);" \
                 "\"result\": true" 3
 
-        # 11/21 second ddl: no database selected
+        # 11/21 second ddl: unspport error
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
                 "query-status test" \
-                "No database selected" 2
-        
-        # replace 11/21 second ddl with database name
+                "unsupported add column .* constraint UNIQUE KEY" 2
+
+        # split 11/21 second ddl into two ddls
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test replace alter table ${db}.${tb1} add constraint foreign key (c) references ${db}.${ta1}(a);" \
+            "handle-error test replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
             "\"result\": true" 3
 
         # 12/22 second ddl: detect conflict
@@ -238,54 +238,52 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
                 "query-status test" \
                 "detect inconsistent DDL sequence from source" 2
 
-        # replace 12/22 second ddl with database name one by one
+        # split 11/21 second ddl into two ddls one by one
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test -s mysql-replica-01 replace alter table ${db}.${tb2} add constraint foreign key (c) references ${db}.${ta1}(a);" \
+            "handle-error test -s mysql-replica-01 replace alter table ${db}.${tb2} add column d int;alter table ${db}.${tb2} add unique(d);" \
             "\"result\": true" 2
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test -s mysql-replica-02 replace alter table ${db}.${tb2} add constraint foreign key (c) references ${db}.${ta1}(a);" \
+            "handle-error test -s mysql-replica-02 replace alter table ${db}.${tb2} add column d int;alter table ${db}.${tb2} add unique(d);" \
             "\"result\": true" 2
     else
-        # 11 second ddl: no database selected, 22 first ddl: unsupport error
+        # 11 second ddl, 22 first ddl: unsupport error
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
                 "query-status test" \
-                "unsupported add column .* constraint UNIQUE KEY" 1 \
-                "No database selected" 1
+                "unsupported add column .* constraint UNIQUE KEY" 2
 
         # replace 11 second ddl
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-                "handle-error test -s mysql-replica-01 replace alter table ${db}.${tb1} add constraint foreign key (c) references ${db}.${ta1}(a);" \
+                "handle-error test -s mysql-replica-01 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
                 "\"result\": true" 2
 
         # replace 22 first ddl
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-                "handle-error test -s mysql-replica-02 replace alter table ${db}.${tb2} add column c int;" \
+                "handle-error test -s mysql-replica-02 replace alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c);" \
                 "\"result\": true" 2
 
-        # 12 first ddl: unsupport error, 21 second ddl: no database selected
+        # 12 first ddl, 21 second ddl: unsupport error
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
                 "query-status test" \
-                "unsupported add column .* constraint UNIQUE KEY" 1 \
-                "No database selected" 1
+                "unsupported add column .* constraint UNIQUE KEY" 2
 
         # replace 12 first ddl
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-                "handle-error test -s mysql-replica-01 replace alter table ${db}.${tb2} add column c int;" \
+                "handle-error test -s mysql-replica-01 replace alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c);" \
                 "\"result\": true" 2
 
         # replace 21 second ddl
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-                "handle-error test -s mysql-replica-02 replace alter table ${db}.${tb1} add constraint foreign key (c) references ${db}.${ta1}(a);" \
+                "handle-error test -s mysql-replica-02 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
                 "\"result\": true" 2
 
-        # 12 first ddl, 22 second ddl: no database selected
+        # 12 first ddl, 22 second ddl: unspport error
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
                 "query-status test" \
-                "No database selected" 2
+                "unsupported add column .* constraint UNIQUE KEY" 2
 
-        # replace 12/22 second ddl with database name
+        # replace 12/22 second ddl
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test replace alter table ${db}.${tb2} add constraint foreign key (c) references ${db}.${ta1}(a);" \
+            "handle-error test replace alter table ${db}.${tb2} add column d int;alter table ${db}.${tb1} add unique(d);" \
             "\"result\": true" 3
 
     fi
@@ -294,7 +292,7 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
             "query-status test" \
             "\"stage\": \"Running\"" 2 \
 
-    run_sql_tidb_with_retry "select count(1) from ${db}.${tb}" "count(1): 4"
+    run_sql_tidb_with_retry "select count(1) from ${db}.${tb}" "count(1): 8"
 }
 
 function DM_REPLACE_ERROR_SHARDING() {
@@ -302,18 +300,14 @@ function DM_REPLACE_ERROR_SHARDING() {
     "run_sql_source1 \"create table ${db}.${tb1} (a int, b int);\"; \
      run_sql_source1 \"create table ${db}.${tb2} (a int, b int);\"; \
      run_sql_source2 \"create table ${db}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${db}.${tb2} (a int, b int);\"; \
-     run_sql_source1 \"create table ${db}.${ta1} (a int unique, b int);\"; \
-     run_sql_source2 \"create table ${db}.${ta1} (a int unique, b int);\"" \
+     run_sql_source2 \"create table ${db}.${tb2} (a int, b int);\"" \
      "clean_table" "pessimistic"
 
     run_case REPLACE_ERROR_SHARDING "double-source-optimistic" \
     "run_sql_source1 \"create table ${db}.${tb1} (a int, b int);\"; \
      run_sql_source1 \"create table ${db}.${tb2} (a int, b int);\"; \
      run_sql_source2 \"create table ${db}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${db}.${tb2} (a int, b int);\"; \
-     run_sql_source1 \"create table ${db}.${ta1} (a int unique, b int);\"; \
-     run_sql_source2 \"create table ${db}.${ta1} (a int unique, b int);\"" \
+     run_sql_source2 \"create table ${db}.${tb2} (a int, b int);\"" \
      "clean_table" "optimistic"
 }
 
@@ -378,9 +372,9 @@ function DM_REPLACE_ERROR_MULTIPLE() {
 function run() {
     init_cluster
     init_database
-#    DM_SKIP_ERROR
-#    DM_SKIP_ERROR_SHARDING
-#    DM_REPLACE_ERROR
+    DM_SKIP_ERROR
+    DM_SKIP_ERROR_SHARDING
+    DM_REPLACE_ERROR
     DM_REPLACE_ERROR_SHARDING
     DM_REPLACE_ERROR_MULTIPLE
 }
