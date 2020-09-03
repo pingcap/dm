@@ -37,6 +37,7 @@ var (
 	UnsupportedDMLMsgs = []string{
 		"Error 1062: Duplicate entry",
 		"Error 1406: Data too long for column",
+		"Error 1366",
 	}
 
 	// ParseRelayLogErrMsgs list the error messages of some un-recoverable relay log parsing error, which is used in task auto recovery.

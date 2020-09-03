@@ -23,6 +23,8 @@ import (
 	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/pingcap/failpoint"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -1138,16 +1140,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	c.Assert(err, IsNil)
 	syncer.genRouter()
 
-	checkPointMock.ExpectBegin()
-	checkPointMock.ExpectExec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.cfg.MetaSchema)).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectCommit()
-	checkPointMock.ExpectBegin()
-	checkPointMock.ExpectExec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectCommit()
-
-	// mock syncer.checkpoint.Init() function
-	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
-	syncer.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background())
+	syncer.setupMockCheckpoint(checkPointDBConn, checkPointMock)
 
 	syncer.reset()
 	events1 := mockBinlogEvents{
@@ -1326,6 +1319,158 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 }
 
+func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+	checkPointDB, checkPointMock, err := sqlmock.New()
+	checkPointDBConn, err := checkPointDB.Conn(context.Background())
+	c.Assert(err, IsNil)
+
+	testJobs.jobs = testJobs.jobs[:0]
+
+	s.cfg.BAList = &filter.Rules{
+		DoDBs: []string{"test_1"},
+		DoTables: []*filter.Table{
+			{Schema: "test_1", Name: "t_1"},
+		},
+	}
+
+	syncer := NewSyncer(s.cfg, nil)
+	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
+	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
+	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
+
+	syncer.genRouter()
+
+	syncer.setupMockCheckpoint(checkPointDBConn, checkPointMock)
+
+	syncer.reset()
+
+	events1 := mockBinlogEvents{
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"test_1"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"test_1", "create table test_1.t_1(id int primary key, name varchar(24))"}},
+
+		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(1), "a"}}}},
+		mockBinlogEvent{typ: Delete, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(1), "a"}}}},
+		mockBinlogEvent{typ: Update, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(2), "b"}, {int32(1), "b"}}}},
+	}
+
+	generatedEvents1 := s.generateEvents(events1, c)
+	// make sure [18] is last event, and use [18]'s position as safeModeExitLocation
+	c.Assert(len(generatedEvents1), Equals, 19)
+	safeModeExitLocation := binlog.NewLocation("")
+	safeModeExitLocation.Position.Pos = generatedEvents1[18].Header.LogPos
+	syncer.cfg.SafeModeExitLoc = &safeModeExitLocation
+
+	// check after safeModeExitLocation, safe mode is turned off
+	events2 := mockBinlogEvents{
+		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(1), "a"}}}},
+		mockBinlogEvent{typ: Delete, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(1), "a"}}}},
+		mockBinlogEvent{typ: Update, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(2), "b"}, {int32(1), "b"}}}},
+	}
+	generatedEvents2 := s.generateEvents(events2, c)
+
+	generatedEvents := append(generatedEvents1, generatedEvents2...)
+
+	mockStreamerProducer := &MockStreamProducer{generatedEvents}
+	mockStreamer, err := mockStreamerProducer.generateStreamer(binlog.NewLocation(""))
+	c.Assert(err, IsNil)
+	syncer.streamerController = &StreamerController{
+		streamerProducer: mockStreamerProducer,
+		streamer:         mockStreamer,
+	}
+
+	syncer.addJobFunc = syncer.addJobToMemory
+
+	ctx, cancel := context.WithCancel(context.Background())
+	resultCh := make(chan pb.ProcessResult)
+
+	// mock get parser
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
+		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
+
+	// disable 5-minute safe mode
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds", "return(0)"), IsNil)
+	go syncer.Process(ctx, resultCh)
+
+	expectJobs := []*expectJob{
+		// now every ddl job will start with a flush job
+		{
+			flush,
+			"",
+			nil,
+		}, {
+			ddl,
+			"CREATE DATABASE IF NOT EXISTS `test_1`",
+			nil,
+		}, {
+			flush,
+			"",
+			nil,
+		}, {
+			ddl,
+			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			nil,
+		}, {
+			insert,
+			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
+			[]interface{}{int32(1), "a"},
+		}, {
+			del,
+			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
+			[]interface{}{int32(1)},
+		}, {
+			update,
+			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
+			[]interface{}{int32(2)},
+		}, {
+			update,
+			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
+			[]interface{}{int32(1), "b"},
+		}, {
+			// start from this event, location passes safeModeExitLocation and safe mode should exit
+			insert,
+			"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
+			[]interface{}{int32(1), "a"},
+		}, {
+			del,
+			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
+			[]interface{}{int32(1)},
+		}, {
+			update,
+			"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1",
+			[]interface{}{int32(1), "b", int32(2)},
+		},
+	}
+
+	executeSQLAndWait(len(expectJobs))
+	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(0))
+	syncer.mockFinishJob(expectJobs)
+
+	testJobs.Lock()
+	checkJobs(c, testJobs.jobs, expectJobs)
+	testJobs.jobs = testJobs.jobs[:0]
+	testJobs.Unlock()
+
+	cancel()
+	syncer.Close()
+	c.Assert(syncer.isClosed(), IsTrue)
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		c.Errorf("db unfulfilled expectations: %s", err)
+	}
+
+	if err := checkPointMock.ExpectationsWereMet(); err != nil {
+		c.Errorf("checkpointDB unfulfilled expectations: %s", err)
+	}
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds"), IsNil)
+}
+
 func executeSQLAndWait(expectJobNum int) {
 	for i := 0; i < 10; i++ {
 		time.Sleep(time.Second)
@@ -1416,4 +1561,17 @@ func (s *Syncer) addJobToMemory(job *job) error {
 	}
 
 	return nil
+}
+
+func (s *Syncer) setupMockCheckpoint(checkPointDBConn *sql.Conn, checkPointMock sqlmock.Sqlmock) {
+	checkPointMock.ExpectBegin()
+	checkPointMock.ExpectExec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.cfg.MetaSchema)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectCommit()
+	checkPointMock.ExpectBegin()
+	checkPointMock.ExpectExec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectCommit()
+
+	// mock syncer.checkpoint.Init() function
+	s.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
+	s.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background())
 }
