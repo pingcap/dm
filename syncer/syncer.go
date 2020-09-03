@@ -2126,20 +2126,6 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		}
 	}
 
-	// try to drop appropriate index before drop column
-	if atStmt, ok := stmt.(*ast.AlterTableStmt); ok && len(atStmt.Specs) > 0 && atStmt.Specs[0].Tp == ast.AlterTableDropColumn {
-		if indexInfos, err := s.schemaTracker.GetSingleColumnIndices(usedSchema, atStmt.Table.Name.O, atStmt.Specs[0].OldColumnName.Name.O); err == nil {
-			for _, info := range indexInfos {
-				if err2 := s.schemaTracker.DropIndex(usedSchema, atStmt.Table.Name.O, info.Name.O); err2 != nil {
-					s.tctx.L().Warn("can't auto drop index before drop column",
-						zap.String("index", info.Name.O),
-						zap.String("column", atStmt.Specs[0].OldColumnName.Name.O),
-						log.ShortError(err2))
-				}
-			}
-		}
-	}
-
 	if shouldExecDDLOnSchemaTracker {
 		if err := s.schemaTracker.Exec(s.tctx.Ctx, usedSchema, sql); err != nil {
 			s.tctx.L().Error("cannot track DDL", zap.String("schema", usedSchema), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))

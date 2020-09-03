@@ -35,5 +35,8 @@ function clean_table() {
     run_sql_both_source "drop table if exists ${db}.${ta2};"
     run_sql_tidb "drop table if exists ${db}.${tb};"
     run_sql_tidb "drop table if exists ${db}.${ta};"
+    run_sql_tidb "drop table if exists ${db}.${tb1};"
+    run_sql_tidb "drop table if exists ${db}.${tb2};"
+
     run_sql_tidb "drop database if exists dm_meta;"
 }
