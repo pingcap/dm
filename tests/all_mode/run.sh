@@ -159,6 +159,16 @@ function run() {
     check_log_not_contains $WORK_DIR/worker1/log/dm-worker.log "123456"
     check_log_not_contains $WORK_DIR/worker2/log/dm-worker.log "123456"
 
+    # test drop table if exists
+    run_sql_source1 "drop table if exists \`all_mode\`.\`tb1\`;"
+    run_sql_source1 "drop table if exists \`all_mode\`.\`tb1\`;"
+    run_sql_source2 "drop table if exists \`all_mode\`.\`tb2\`;"
+    run_sql_source2 "drop table if exists \`all_mode\`.\`tb2\`;"
+    sleep 2
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status $ILLEGAL_CHAR_NAME" \
+        "\"stage\": \"Running\"" 2
+
     export GO_FAILPOINTS=''
 
     run_sql_both_source "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'"
