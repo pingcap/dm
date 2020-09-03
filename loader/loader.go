@@ -15,7 +15,9 @@ package loader
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -153,7 +155,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 					return
 				}
 				sqls := make([]string, 0, 3)
-				sqls = append(sqls, fmt.Sprintf("USE `%s`;", job.schema))
+				sqls = append(sqls, fmt.Sprintf("USE `%s`;", unescapePercent(job.schema, w.tctx.L())))
 				sqls = append(sqls, job.sql)
 
 				offsetSQL := w.checkPoint.GenSQL(job.file, job.offset)
@@ -547,10 +549,40 @@ func (l *Loader) closeFileJobQueue() {
 	l.fileJobQueueClosed.Set(true)
 }
 
+// align with https://github.com/pingcap/dumpling/pull/140
+// if input is malformed, return original string and print log
+func unescapePercent(input string, logger log.Logger) string {
+	buf := bytes.Buffer{}
+	buf.Grow(len(input))
+	i := 0
+	for i < len(input) {
+		if input[i] != '%' {
+			buf.WriteByte(input[i])
+			i++
+		} else {
+			if i+2 >= len(input) {
+				logger.Error("malformed filename while unescapePercent", zap.String("filename", input))
+				return input
+			}
+			ascii, err := hex.DecodeString(input[i+1 : i+3])
+			if err != nil {
+				logger.Error("malformed filename while unescapePercent", zap.String("filename", input))
+				return input
+			}
+			buf.WriteString(fmt.Sprintf("%s", ascii))
+			i = i + 3
+		}
+	}
+	return buf.String()
+}
+
 func (l *Loader) skipSchemaAndTable(table *filter.Table) bool {
 	if filter.IsSystemSchema(table.Schema) {
 		return true
 	}
+
+	table.Schema = unescapePercent(table.Schema, l.logCtx.L())
+	table.Name = unescapePercent(table.Name, l.logCtx.L())
 
 	tbs := []*filter.Table{table}
 	tbs = l.baList.ApplyOn(tbs)
@@ -1060,7 +1092,7 @@ func (l *Loader) restoreStructure(ctx context.Context, conn *DBConn, sqlFile str
 			dstSchema, dstTable := fetchMatchedLiteral(tctx, l.tableRouter, schema, table)
 			// for table
 			if table != "" {
-				sqls = append(sqls, fmt.Sprintf("USE `%s`;", dstSchema))
+				sqls = append(sqls, fmt.Sprintf("USE `%s`;", unescapePercent(dstSchema, l.logCtx.L())))
 				query = renameShardingTable(query, table, dstTable)
 			} else {
 				query = renameShardingSchema(query, schema, dstSchema)
