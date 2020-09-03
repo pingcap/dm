@@ -1380,11 +1380,6 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	resultCh := make(chan pb.ProcessResult)
 
-	// mock get parser
-	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
-		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-
 	// disable 5-minute safe mode
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds", "return(0)"), IsNil)
 	go syncer.Process(ctx, resultCh)
