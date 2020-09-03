@@ -106,6 +106,7 @@ function escape_schema() {
 
 function run() {
     fail_acquire_global_lock
+    escape_schema
 
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
