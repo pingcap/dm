@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/dumpling"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -1239,13 +1240,13 @@ func (l *Loader) checkpointID() string {
 
 func (l *Loader) getMydumpMetadata() error {
 	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
-	pos, _, err := utils.ParseMetaData(metafile, l.cfg.Flavor)
+	loc, _, err := dumpling.ParseMetaData(metafile, l.cfg.Flavor)
 	if err != nil {
 		l.logCtx.L().Error("fail to parse dump metadata", log.ShortError(err))
 		return err
 	}
 
-	l.metaBinlog.Set(pos.String())
+	l.metaBinlog.Set(loc.Position.String())
 	return nil
 }
 
