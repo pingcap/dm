@@ -223,7 +223,7 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
                 "handle-error test -s mysql-replica-01,mysql-replica-02 replace alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c);" \
                 "\"result\": true" 3
 
-        # 11/21 second ddl: unspport error
+        # 11/21 second ddl: unsupport error
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
                 "query-status test" \
                 "unsupported add column .* constraint UNIQUE KEY" 2
