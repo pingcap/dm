@@ -555,3 +555,38 @@ func (t *testConfig) TestFromSubTaskConfigs(c *C) {
 
 	c.Assert(cfg.String(), Equals, cfg2.String()) // some nil/(null value) compare may not equal, so use YAML format to compare.
 }
+
+func (t *testConfig) TestMetaVerify(c *C) {
+	var m *Meta
+	c.Assert(m.Verify(), IsNil) // nit meta is fine (for not incremental task mode)
+
+	// none
+	m = &Meta{}
+	c.Assert(terror.ErrConfigMetaInvalid.Equal(m.Verify()), IsTrue)
+
+	// only `binlog-name`.
+	m = &Meta{
+		BinLogName: "mysql-bin.000123",
+	}
+	c.Assert(m.Verify(), IsNil)
+
+	// only `binlog-pos`.
+	m = &Meta{
+		BinLogPos: 456,
+	}
+	c.Assert(terror.ErrConfigMetaInvalid.Equal(m.Verify()), IsTrue)
+
+	// only `binlog-gtid`.
+	m = &Meta{
+		BinLogGTID: "1-1-12,4-4-4",
+	}
+	c.Assert(m.Verify(), IsNil)
+
+	// all
+	m = &Meta{
+		BinLogName: "mysql-bin.000123",
+		BinLogPos:  456,
+		BinLogGTID: "1-1-12,4-4-4",
+	}
+	c.Assert(m.Verify(), IsNil)
+}
