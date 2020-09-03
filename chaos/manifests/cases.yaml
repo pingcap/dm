@@ -2,8 +2,6 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: chaos-test-case
-  labels:
-    app: chaos-test-case
 spec:
   template:
     spec:
