@@ -58,7 +58,7 @@ func (s *Server) bootstrap(ctx context.Context) error {
 		}
 	}
 
-	uctx := upgrade.UpgradeContext{
+	uctx := upgrade.Context{
 		Context:        ctx,
 		SubTaskConfigs: s.scheduler.GetSubTaskCfgs(),
 	}

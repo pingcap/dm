@@ -31,27 +31,29 @@ import (
 
 var (
 	// upgrades records all functions used to upgrade from one version to the later version.
-	upgrades = []func(cli *clientv3.Client, uctx UpgradeContext) error{
+	upgrades = []func(cli *clientv3.Client, uctx Context) error{
 		upgradeToVer1,
 		upgradeToVer2,
 	}
 )
 
+// Context is used to pass something to TryUpgrade
 // NOTE that zero value of Context is nil, be aware of nil-dereference
-type UpgradeContext struct {
-	Context        context.Context
+type Context struct {
+	context.Context
 	SubTaskConfigs map[string]map[string]config.SubTaskConfig
 }
 
-func NewUpgradeContext() UpgradeContext {
-	return UpgradeContext{
+// NewUpgradeContext creates a Context, avoid nil Context member
+func NewUpgradeContext() Context {
+	return Context{
 		Context: context.Background(),
 	}
 }
 
 // TryUpgrade tries to upgrade the cluster from an older version to a new version.
 // This methods should have no side effects even calling multiple times.
-func TryUpgrade(cli *clientv3.Client, uctx UpgradeContext) error {
+func TryUpgrade(cli *clientv3.Client, uctx Context) error {
 	// 1. get previous version from etcd.
 	preVer, _, err := GetVersion(cli)
 	if err != nil {
@@ -92,12 +94,12 @@ func TryUpgrade(cli *clientv3.Client, uctx UpgradeContext) error {
 
 // upgradeToVer1 does upgrade operations from Ver0 to Ver1.
 // in fact, this do nothing now, and just for demonstration.
-func upgradeToVer1(cli *clientv3.Client, uctx UpgradeContext) error {
+func upgradeToVer1(cli *clientv3.Client, uctx Context) error {
 	return nil
 }
 
 // upgradeToVer2 does upgrade operations from Ver1 to Ver2 (v2.0.0-rc3) to upgrade syncer checkpoint schema
-func upgradeToVer2(cli *clientv3.Client, uctx UpgradeContext) error {
+func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 	upgradeTaskName := "upgradeToVer2"
 	logger := log.L().WithFields(zap.String("task", upgradeTaskName))
 
@@ -109,12 +111,12 @@ func upgradeToVer2(cli *clientv3.Client, uctx UpgradeContext) error {
 	// tableName -> DBConfig
 	dbConfigs := map[string]config.DBConfig{}
 	for task, m := range uctx.SubTaskConfigs {
-		for sourceId, subCfg := range m {
+		for sourceID, subCfg := range m {
 			tableName := dbutil.TableName(subCfg.MetaSchema, cputil.SyncerCheckpoint(subCfg.Name))
 			subCfg2, err := subCfg.DecryptPassword()
 			if err != nil {
 				log.L().Error("skip subconfig when upgrading", zap.String("task", task),
-					zap.String("source id", sourceId), zap.Error(err))
+					zap.String("source id", sourceID), zap.Error(err))
 			}
 			dbConfigs[tableName] = subCfg2.To
 		}

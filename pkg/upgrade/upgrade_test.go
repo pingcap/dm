@@ -56,8 +56,8 @@ func (t *testForEtcd) TestTryUpgrade(c *C) {
 		upgrades = oldUpgrades
 	}()
 	mockVerNo := uint64(0)
-	upgrades = []func(cli *clientv3.Client, uctx UpgradeContext) error{
-		func(cli *clientv3.Client, uctx UpgradeContext) error {
+	upgrades = []func(cli *clientv3.Client, uctx Context) error{
+		func(cli *clientv3.Client, uctx Context) error {
 			mockVerNo = currentInternalNo + 1
 			return nil
 		},
