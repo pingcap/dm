@@ -753,6 +753,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		subTaskCfg.LogFile = s.cfg.LogFile
 		subTaskCfg.LogFormat = s.cfg.LogFormat
 		subTaskCfgClone := subTaskCfg
+		copyConfigFromSource(&subTaskCfgClone, cfg)
 		subTaskCfgs = append(subTaskCfgs, &subTaskCfgClone)
 	}
 
