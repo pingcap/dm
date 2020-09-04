@@ -71,7 +71,7 @@ func main() {
 		cancel()
 	}()
 
-	ctx2, cancel2 := context.WithTimeout(ctx, 60 * time.Second)
+	ctx2, cancel2 := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel2()
 	masterConn, err := grpc.DialContext(ctx2, cfg.MasterAddr, grpc.WithBlock(), grpc.WithInsecure()) // no TLS support in chaos cases now.
 	if err != nil {
@@ -80,12 +80,10 @@ func main() {
 	}
 	masterCli := pb.NewMasterClient(masterConn)
 
-	// list all members in the cluster.
-	resp, err := masterCli.ListMember(ctx, &pb.ListMemberRequest{})
+	// check whether all members are ready.
+	err = checkMembersReady(ctx2, masterCli) // ctx2, should be done in 60s.
 	if err != nil {
-		log.L().Error("fail to list member", zap.Error(err))
+		log.L().Error("fail to check members ready", zap.Error(err))
+		os.Exit(2)
 	}
-
-	// TODO(csuzhangxc): test logic from here.
-	log.L().Info(resp.String())
 }
