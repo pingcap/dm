@@ -450,6 +450,7 @@ func genEmbedEtcdConfigWithLogger(logLevel string) *embed.Config {
 	logger := log.L().WithFields(zap.String("component", "embed etcd"))
 	// if logLevel is info, set etcd log level to WARN to reduce log
 	if strings.ToLower(logLevel) == "info" {
+		log.L().Info("Set log level of etcd to `warn`, if you want to log more message about etcd, change log-level to `debug` in master configuration file")
 		logger.Logger = logger.WithOptions(zap.IncreaseLevel(zap.WarnLevel))
 	}
 
