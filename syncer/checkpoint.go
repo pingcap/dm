@@ -578,7 +578,6 @@ func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
-	// TODO(lance6716): check rollback need change
 	cp.globalPoint.rollback(schemaTracker, "")
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
@@ -667,7 +666,6 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 
 // Load implements CheckPoint.Load
 func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.Tracker) error {
-	// TODO(lance6716): where use Load?
 	cp.Lock()
 	defer cp.Unlock()
 

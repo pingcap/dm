@@ -117,7 +117,7 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN binlog_gtid TEXT AFTER binlog_pos`, tableName),
 		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN table_info JSON NOT NULL AFTER binlog_gtid`, tableName),
 	}
-	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, ignoreErrorCheckpoint, queries)
+	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, utils.IgnoreErrorCheckpoint, queries)
 	if err != nil {
 		return terror.Annotatef(err, "add columns for checkpoint table")
 	}
@@ -223,21 +223,6 @@ func setGlobalGTIDs(tctx *tcontext.Context, dbConn *conn.BaseConn, taskName, tab
 	args := []interface{}{gs, sourceID, true}
 	_, err := dbConn.ExecuteSQL(tctx, nil, taskName, queries, args)
 	return err
-}
-
-func ignoreErrorCheckpoint(err error) bool {
-	err = errors.Cause(err) // check the original error
-	mysqlErr, ok := err.(*mysql.MySQLError)
-	if !ok {
-		return false
-	}
-
-	switch mysqlErr.Number {
-	case errno.ErrDupFieldName:
-		return true
-	default:
-		return false
-	}
 }
 
 func ignoreErrorOnlineDDL(err error) bool {
