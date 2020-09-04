@@ -84,7 +84,7 @@ func main() {
 	masterCli := pb.NewMasterClient(masterConn)
 
 	// check whether all members are ready.
-	err = checkMembersReady(ctx2, masterCli) // ctx2, should be done in 60s.
+	err = checkMembersReadyLoop(ctx2, masterCli) // ctx2, should be done in 60s.
 	if err != nil {
 		log.L().Error("fail to check members ready", zap.Error(err))
 		os.Exit(2)

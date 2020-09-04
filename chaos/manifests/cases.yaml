@@ -27,4 +27,4 @@ spec:
             - "--master-addr=dm-master.$(MY_POD_NAMESPACE):8261" # use the address of the DM-master service
             - "--duration=120s" # TODO: 120s only for dev
       restartPolicy: Never
-  backoffLimit: 1000 # fail immediately
+  backoffLimit: 0 # fail immediately

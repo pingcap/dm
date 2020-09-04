@@ -21,8 +21,19 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// checkMembersReady checks whether all DM-master and DM-worker members have been ready.
+// checkMembersReadyLoop checks whether all DM-master and DM-worker members have been ready.
 // NOTE: in this chaos case, we ensure 3 DM-master and 3 DM-worker started.
+func checkMembersReadyLoop(ctx context.Context, cli pb.MasterClient) (err error) {
+	// check 5 times now.
+	for i := 0; i < 5; i++ {
+		err = checkMembersReady(ctx, cli)
+		if err == nil {
+			return nil
+		}
+	}
+	return err
+}
+
 func checkMembersReady(ctx context.Context, cli pb.MasterClient) error {
 	resp, err := cli.ListMember(ctx, &pb.ListMemberRequest{})
 	if err != nil {
