@@ -24,6 +24,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/chaos-mesh/go-sqlsmith"
 	"github.com/pingcap/errors"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
