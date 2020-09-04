@@ -132,7 +132,7 @@ ErrConfigOnlineSchemeNotSupport,[code=20007:class=config:scope=internal:level=me
 ErrConfigInvalidTimezone,[code=20008:class=config:scope=internal:level=medium], "Message: invalid timezone string: %s, Workaround: Please check the `timezone` config in task configuration file."
 ErrConfigParseFlagSet,[code=20009:class=config:scope=internal:level=medium], "Message: parse subtask config flag set"
 ErrConfigDecryptDBPassword,[code=20010:class=config:scope=internal:level=medium], "Message: decrypt DB password %s failed"
-ErrConfigMetaNoBinlogName,[code=20011:class=config:scope=internal:level=medium], "Message: binlog-name must specify, Workaround: Please check the `meta` config in task configuration file."
+ErrConfigMetaInvalid,[code=20011:class=config:scope=internal:level=medium], "Message: must specify `binlog-name` without GTID enabled for the source or specify `binlog-gtid` with GTID enabled for the source, Workaround: Please check the `meta` config in task configuration file."
 ErrConfigMySQLInstNotFound,[code=20012:class=config:scope=internal:level=medium], "Message: mysql instance config must specify, Workaround: Please check the `mysql-instances` config in task configuration file."
 ErrConfigMySQLInstsAtLeastOne,[code=20013:class=config:scope=internal:level=medium], "Message: must specify at least one mysql-instances, Workaround: Please check the `mysql-instances` config in task configuration file."
 ErrConfigMySQLInstSameSourceID,[code=20014:class=config:scope=internal:level=medium], "Message: mysql-instance (%d) and (%d) have same source-id (%s), Workaround: Please check the `mysql-instances` config in task configuration file."
