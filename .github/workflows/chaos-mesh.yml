@@ -199,7 +199,7 @@ jobs:
         kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
         kubectl get -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
-        sleep 10
+        sleep 20
 
     - name: Encode chaos-mesh action
       run: |
