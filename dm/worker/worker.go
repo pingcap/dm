@@ -214,7 +214,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
 	defer w.Unlock()
 
 	// copy some config item from dm-worker's config
-	w.copyConfigFromWorker(cfg)
+	copyConfigFromSource(cfg, w.cfg)
 	// directly put cfg into subTaskHolder
 	// the unique of subtask should be assured by etcd
 	st := NewSubTask(cfg, w.etcdClient)
@@ -796,18 +796,18 @@ func (w *Worker) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 	return st.OperateSchema(ctx, req)
 }
 
-// copyConfigFromWorker copies config items from dm-worker to sub task
-func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
-	cfg.From = w.cfg.From
+// copyConfigFromSource copies config items from source config to sub task
+func copyConfigFromSource(cfg *config.SubTaskConfig, sourceCfg *config.SourceConfig) {
+	cfg.From = sourceCfg.From
 
-	cfg.Flavor = w.cfg.Flavor
-	cfg.ServerID = w.cfg.ServerID
-	cfg.RelayDir = w.cfg.RelayDir
-	cfg.EnableGTID = w.cfg.EnableGTID
-	cfg.UseRelay = w.cfg.EnableRelay
+	cfg.Flavor = sourceCfg.Flavor
+	cfg.ServerID = sourceCfg.ServerID
+	cfg.RelayDir = sourceCfg.RelayDir
+	cfg.EnableGTID = sourceCfg.EnableGTID
+	cfg.UseRelay = sourceCfg.EnableRelay
 
 	// we can remove this from SubTaskConfig later, because syncer will always read from relay
-	cfg.AutoFixGTID = w.cfg.AutoFixGTID
+	cfg.AutoFixGTID = sourceCfg.AutoFixGTID
 
 	// log config items, mydumper unit use it
 
