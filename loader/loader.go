@@ -569,7 +569,7 @@ func unescapePercent(input string, logger log.Logger) string {
 				logger.Error("malformed filename while unescapePercent", zap.String("filename", input))
 				return input
 			}
-			buf.WriteString(fmt.Sprintf("%s", ascii))
+			buf.Write(ascii)
 			i = i + 3
 		}
 	}
