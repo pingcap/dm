@@ -1673,6 +1673,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) error {
 	sql := strings.TrimSpace(string(ev.Query))
 	usedSchema := string(ev.Schema)
+	// TODO(lance6716): getParserForStatusVars
 	parser2 := parser.New()
 	ansiQuotes, err := event.GetAnsiQuotesMode(ev.StatusVars)
 	if err != nil {

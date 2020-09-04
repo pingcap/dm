@@ -63,6 +63,7 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 		// NOTE: only update endPos/GTIDs for DDL/XID to get an complete transaction.
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
+			// TODO(lance6716): getParserForStatusVars
 			parser2 := parser.New()
 			ansiQuotes, err := event.GetAnsiQuotesMode(ev.StatusVars)
 			if err != nil {
