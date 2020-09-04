@@ -87,4 +87,11 @@ func main() {
 		log.L().Error("fail to check members ready", zap.Error(err))
 		os.Exit(2)
 	}
+
+	// create two sources.
+	err = createSources(ctx, masterCli)
+	if err != nil {
+		log.L().Error("fail to create source", zap.Error(err))
+		os.Exit(2)
+	}
 }
