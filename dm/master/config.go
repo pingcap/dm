@@ -439,7 +439,7 @@ func parseURLs(s string) ([]url.URL, error) {
 	return urls, nil
 }
 
-func genEmbedEtcdConfigWithLogger() *embed.Config {
+func genEmbedEtcdConfigWithLogger(logLevel string) *embed.Config {
 	cfg := embed.NewConfig()
 	cfg.EnableGRPCGateway = true // enable gRPC gateway for the internal etcd.
 
@@ -447,9 +447,13 @@ func genEmbedEtcdConfigWithLogger() *embed.Config {
 	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.
 	// NOTE: if using zap logger for etcd, must build it before any concurrent gRPC calls,
 	// otherwise, DATA RACE occur in NewZapCoreLoggerBuilder and gRPC.
-	// NOTE: we can only increase the log level for the clone logger but not decrease.
-	logger := log.L().WithFields(zap.String("component", "embed etcd")).WithOptions(zap.IncreaseLevel(zap.ErrorLevel))
-	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger, logger.Core(), log.Props().Syncer) // use global app props.
+	logger := log.L().WithFields(zap.String("component", "embed etcd"))
+	// if logLevel is info, set etcd log level to WARN to reduce log
+	if strings.ToLower(logLevel) == "info" {
+		logger.Logger = logger.WithOptions(zap.IncreaseLevel(zap.WarnLevel))
+	}
+
+	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger.Logger, logger.Core(), log.Props().Syncer) // use global app props.
 	cfg.Logger = "zap"
 
 	// TODO: we run ZapLoggerBuilder to set SetLoggerV2 before we do some etcd operations
