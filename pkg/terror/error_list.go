@@ -185,7 +185,7 @@ const (
 	codeConfigInvalidTimezone
 	codeConfigParseFlagSet
 	codeConfigDecryptDBPassword
-	codeConfigMetaNoBinlogName
+	codeConfigMetaInvalid
 	codeConfigMySQLInstNotFound
 	codeConfigMySQLInstsAtLeastOne
 	codeConfigMySQLInstSameSourceID
@@ -765,7 +765,7 @@ var (
 	ErrConfigInvalidTimezone        = New(codeConfigInvalidTimezone, ClassConfig, ScopeInternal, LevelMedium, "invalid timezone string: %s", "Please check the `timezone` config in task configuration file.")
 	ErrConfigParseFlagSet           = New(codeConfigParseFlagSet, ClassConfig, ScopeInternal, LevelMedium, "parse subtask config flag set", "")
 	ErrConfigDecryptDBPassword      = New(codeConfigDecryptDBPassword, ClassConfig, ScopeInternal, LevelMedium, "decrypt DB password %s failed", "")
-	ErrConfigMetaNoBinlogName       = New(codeConfigMetaNoBinlogName, ClassConfig, ScopeInternal, LevelMedium, "binlog-name must specify", "Please check the `meta` config in task configuration file.")
+	ErrConfigMetaInvalid            = New(codeConfigMetaInvalid, ClassConfig, ScopeInternal, LevelMedium, "must specify `binlog-name` without GTID enabled for the source or specify `binlog-gtid` with GTID enabled for the source", "Please check the `meta` config in task configuration file.")
 	ErrConfigMySQLInstNotFound      = New(codeConfigMySQLInstNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql instance config must specify", "Please check the `mysql-instances` config in task configuration file.")
 	ErrConfigMySQLInstsAtLeastOne   = New(codeConfigMySQLInstsAtLeastOne, ClassConfig, ScopeInternal, LevelMedium, "must specify at least one mysql-instances", "Please check the `mysql-instances` config in task configuration file.")
 	ErrConfigMySQLInstSameSourceID  = New(codeConfigMySQLInstSameSourceID, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance (%d) and (%d) have same source-id (%s)", "Please check the `mysql-instances` config in task configuration file.")
