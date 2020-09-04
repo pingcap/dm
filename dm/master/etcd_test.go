@@ -55,7 +55,7 @@ func (t *testEtcdSuite) TestStartEtcdFail(c *check.C) {
 	c.Assert(cfgCluster.adjust(), check.IsNil)
 
 	// start an etcd cluster
-	cfgClusterEtcd := genEmbedEtcdConfigWithLogger()
+	cfgClusterEtcd := genEmbedEtcdConfigWithLogger("info")
 	cfgClusterEtcd, err := cfgCluster.genEmbedEtcdConfig(cfgClusterEtcd)
 	c.Assert(err, check.IsNil)
 	e, err := startEtcd(cfgClusterEtcd, nil, nil, 3*time.Second)
@@ -71,7 +71,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	cfgCluster.AdvertiseAddr = tempurl.Alloc()[len("http://"):]
 	cfgCluster.PeerUrls = tempurl.Alloc()
 	c.Assert(cfgCluster.adjust(), check.IsNil)
-	cfgClusterEtcd := genEmbedEtcdConfigWithLogger()
+	cfgClusterEtcd := genEmbedEtcdConfigWithLogger("info")
 	cfgClusterEtcd, err := cfgCluster.genEmbedEtcdConfig(cfgClusterEtcd)
 	c.Assert(err, check.IsNil)
 
@@ -178,7 +178,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: there is a member that has not joined successfully, continue the join or remove it.*")
 
 	// start the joining etcd
-	cfgAfterEtcd := genEmbedEtcdConfigWithLogger()
+	cfgAfterEtcd := genEmbedEtcdConfigWithLogger("info")
 	cfgAfterEtcd, err = cfgAfter.genEmbedEtcdConfig(cfgAfterEtcd)
 	c.Assert(err, check.IsNil)
 	e2, err := startEtcd(cfgAfterEtcd, nil, nil, etcdStartTimeout)
