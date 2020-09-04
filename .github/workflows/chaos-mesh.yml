@@ -52,9 +52,14 @@ jobs:
 
     - name: Build DM binary
       run: make dm-master dm-worker dmctl chaos-case
-    
+
+    # NOTE: we also copy config files into `bin` directory,
+    # so we only need to send `bin` as the context into docker daemon when building image.
     - name: Build DM docker image
       run: |
+        cp $GITHUB_WORKSPACE/chaos/conf/source1.yaml $GITHUB_WORKSPACE/bin/source1.yaml
+        cp $GITHUB_WORKSPACE/chaos/conf/source2.yaml $GITHUB_WORKSPACE/bin/source2.yaml
+        cp $GITHUB_WORKSPACE/chaos/conf/task-single.yaml $GITHUB_WORKSPACE/bin/task-single.yaml
         docker build -f $GITHUB_WORKSPACE/chaos/manifests/Dockerfile -t dm:chaos $GITHUB_WORKSPACE/bin
         docker image list
     # Load DM docker image into KIND, see https://kind.sigs.k8s.io/docs/user/quick-start/#loading-an-image-into-your-cluster
@@ -208,7 +213,7 @@ jobs:
     # TODO: use timeout to start the binary of chaos-case.
     - name: Wait for chaos test case complete
       run: |
-        kubectl wait --for=condition=complete job/chaos-test-case --timeout=3600s
+        kubectl wait --for=condition=complete job/chaos-test-case --timeout=140s
 
     # Debug via SSH if previous steps failed
     - name: Set up tmate session

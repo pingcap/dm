@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/pingcap/dm/dm/pb"
@@ -26,10 +25,7 @@ import (
 
 // createSources does `operate-source create` operation for two sources.
 // NOTE: we put two source config files (`source1.yaml` and `source2.yaml`) in `conf` directory.
-func createSources(ctx context.Context, cli pb.MasterClient) error {
-	_, currFile, _, _ := runtime.Caller(0)
-	confDir := filepath.Join(filepath.Dir(currFile), "conf")
-
+func createSources(ctx context.Context, cli pb.MasterClient, confDir string) error {
 	s1Path := filepath.Join(confDir, "source1.yaml")
 	s2Path := filepath.Join(confDir, "source2.yaml")
 
@@ -48,7 +44,7 @@ func createSources(ctx context.Context, cli pb.MasterClient) error {
 	})
 	if err != nil {
 		return err
-	} else if !resp.Result && !strings.Contains(resp.Msg, "already exists") {
+	} else if !resp.Result && !strings.Contains(resp.Msg, "already exists") { // imprecise match
 		return fmt.Errorf("fail to create source: %s", resp.Msg)
 	}
 	return nil

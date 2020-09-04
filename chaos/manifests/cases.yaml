@@ -23,6 +23,8 @@ spec:
               name: chaos-test-case
           command:
             - "/chaos-case"
+            - "config-dir=/" # we put config files into the root directory when building the docker image
             - "--master-addr=dm-master.$(MY_POD_NAMESPACE):8261" # use the address of the DM-master service
+            - "--duration=120s" # TODO: 120s only for dev
       restartPolicy: Never
   backoffLimit: 0 # fail immediately

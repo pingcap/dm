@@ -27,10 +27,12 @@ import (
 	_ "github.com/chaos-mesh/go-sqlsmith"
 	"github.com/pingcap/errors"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // main starts to run the test case logic after MySQL, TiDB and DM have been set up.
@@ -89,9 +91,29 @@ func main() {
 	}
 
 	// create two sources.
-	err = createSources(ctx, masterCli)
+	err = createSources(ctx, masterCli, cfg.ConfigDir)
 	if err != nil {
 		log.L().Error("fail to create source", zap.Error(err))
+		os.Exit(2)
+	}
+
+	// context for the duration of running.
+	ctx3, cancel3 := context.WithTimeout(ctx, cfg.Duration)
+	defer cancel3()
+
+	// run tests cases
+	var eg errgroup.Group
+	eg.Go(func() error {
+		err2 := runSingleTaskCase(ctx3, masterCli, cfg.ConfigDir)
+		if utils.IsContextCanceledError(err2) {
+			err2 = nil // clear err
+		}
+		return err2
+	})
+
+	err = eg.Wait()
+	if err != nil {
+		log.L().Error("run cases failed", zap.Error(err))
 		os.Exit(2)
 	}
 }

@@ -13,13 +13,18 @@
 
 package main
 
-import "flag"
+import (
+	"flag"
+	"time"
+)
 
 // config is used to run chaos tests.
 type config struct {
 	*flag.FlagSet `toml:"-" yaml:"-" json:"-"`
 
-	MasterAddr string `toml:"master-addr" yaml:"master-addr" json:"master-addr"`
+	ConfigDir  string        `toml:"config-dir" yaml:"config-dir" json:"config-dir"`
+	MasterAddr string        `toml:"master-addr" yaml:"master-addr" json:"master-addr"`
+	Duration   time.Duration `toml:"duration" yaml:"duration" json:"duration"`
 }
 
 // newConfig creates a config for this chaos testing suite.
@@ -28,7 +33,9 @@ func newConfig() *config {
 	cfg.FlagSet = flag.NewFlagSet("chaos-case", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
+	fs.StringVar(&cfg.ConfigDir, "config-dir", "", "path of the source and task config files")
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "address of dm-master")
+	fs.DurationVar(&cfg.Duration, "duration", 20*time.Minute, "duration of cases running")
 
 	return cfg
 }
