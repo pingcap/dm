@@ -213,7 +213,7 @@ jobs:
     # TODO: use timeout to start the binary of chaos-case.
     - name: Wait for chaos test case complete
       run: |
-        kubectl wait --for=condition=complete job/chaos-test-case --timeout=140s
+        kubectl wait --for=condition=complete job/chaos-test-case --timeout=10s
 
     # Debug via SSH if previous steps failed
     - name: Set up tmate session
