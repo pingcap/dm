@@ -138,8 +138,9 @@ func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 		// try to add columns.
 		// NOTE: ignore already exists error to continue the process.
 		queries := []string{
-			fmt.Sprintf(`ALTER TABLE %s ADD COLUMN binlog_gtid TEXT AFTER binlog_pos`, tableName),
-			fmt.Sprintf(`ALTER TABLE %s ADD COLUMN table_info JSON NOT NULL AFTER binlog_gtid`, tableName),
+			fmt.Sprintf(`ALTER TABLE %s ADD COLUMN exit_safe_binlog_name VARCHAR(128) DEFAULT '' AFTER binlog_gtid`, tableName),
+			fmt.Sprintf(`ALTER TABLE %s ADD COLUMN exit_safe_binlog_pos INT UNSIGNED DEFAULT 0 AFTER exit_safe_binlog_name`, tableName),
+			fmt.Sprintf(`ALTER TABLE %s ADD COLUMN exit_safe_binlog_gtid TEXT AFTER exit_safe_binlog_pos`, tableName),
 		}
 		tctx := tcontext.NewContext(uctx.Context, logger)
 		dbConn, err := targetDB.GetBaseConn(tctx.Ctx)

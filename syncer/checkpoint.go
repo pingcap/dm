@@ -640,7 +640,6 @@ func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
 }
 
 func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
-	// TODO(lance6716): version update
 	sqls := []string{
 		`CREATE TABLE IF NOT EXISTS ` + cp.tableName + ` (
 			id VARCHAR(32) NOT NULL,
@@ -651,7 +650,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 			binlog_gtid TEXT,
 			exit_safe_binlog_name VARCHAR(128) DEFAULT '',
 			exit_safe_binlog_pos INT UNSIGNED DEFAULT 0,
-			exit_safe_binlog_gtid TEXT DEFAULT '',
+			exit_safe_binlog_gtid TEXT,
 			table_info JSON NOT NULL,
 			is_global BOOLEAN,
 			create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -725,8 +724,8 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			}
 
 			if cp.cfg.EnableGTID {
-				// gtid set default is "" rather than null
-				if exitSafeBinlogGTIDSet.String != "" {
+				// gtid set default is "", but upgrade may cause NULL value
+				if exitSafeBinlogGTIDSet.Valid && exitSafeBinlogGTIDSet.String != "" {
 					gset2, err2 := gtid.ParserGTID(cp.cfg.Flavor, exitSafeBinlogGTIDSet.String)
 					if err2 != nil {
 						return err2
