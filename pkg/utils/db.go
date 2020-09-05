@@ -349,16 +349,17 @@ func GetMariaDBUUID(db *sql.DB) (string, error) {
 	return fmt.Sprintf("%d%s%d", domainID, domainServerIDSeparator, serverID), nil
 }
 
-// GetParser gets a parser for sql.DB which maybe enabled `ANSI_QUOTES` sql_mode
+// GetParser gets a parser for sql.DB which is suitable for session variable sql_mode
 func GetParser(db *sql.DB) (*parser.Parser, error) {
-	sqlMode, err := GetGlobalVariable(db, "sql_mode")
+	c, err := db.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	return GetParserFromSQLModeStr(sqlMode)
+	defer c.Close()
+	return GetParserForConn(c)
 }
 
-// GetParserForConn gets a parser for sql.Conn which maybe enabled `ANSI_QUOTES` sql_mode
+// GetParserForConn gets a parser for sql.Conn which is suitable for session variable sql_mode
 func GetParserForConn(conn *sql.Conn) (*parser.Parser, error) {
 	sqlMode, err := GetSessionVariable(conn, "sql_mode")
 	if err != nil {
