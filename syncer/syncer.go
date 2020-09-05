@@ -30,7 +30,6 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/format"
 	"github.com/pingcap/parser/model"
-	tmysql "github.com/pingcap/parser/mysql"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -41,6 +40,8 @@ import (
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
+
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -63,7 +64,6 @@ import (
 	operator "github.com/pingcap/dm/syncer/err-operator"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/shardddl"
-	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 var (
@@ -1673,15 +1673,10 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) error {
 	sql := strings.TrimSpace(string(ev.Query))
 	usedSchema := string(ev.Schema)
-	// TODO(lance6716): getParserForStatusVars
-	parser2 := parser.New()
-	ansiQuotes, err := event.GetAnsiQuotesMode(ev.StatusVars)
+	parser2, err := event.GetParserForStatusVars(ev.StatusVars)
 	if err != nil {
 		log.L().Warn("can't determine ANSI_QUOTES from binlog status_vars, use no ANSI_QUOTES instead", zap.Error(err))
-		ansiQuotes = false
-	}
-	if ansiQuotes {
-		parser2.SetSQLMode(tmysql.ModeANSIQuotes)
+		parser2 = parser.New()
 	}
 
 	parseResult, err := s.parseDDLSQL(sql, parser2, usedSchema)

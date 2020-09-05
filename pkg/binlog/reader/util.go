@@ -19,7 +19,6 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
-	tmysql "github.com/pingcap/parser/mysql"
 	uuid "github.com/satori/go.uuid"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
@@ -63,15 +62,10 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 		// NOTE: only update endPos/GTIDs for DDL/XID to get an complete transaction.
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
-			// TODO(lance6716): getParserForStatusVars
-			parser2 := parser.New()
-			ansiQuotes, err := event.GetAnsiQuotesMode(ev.StatusVars)
+			parser2, err := event.GetParserForStatusVars(ev.StatusVars)
 			if err != nil {
 				log.L().Warn("can't determine ANSI_QUOTES from binlog status_vars, use no ANSI_QUOTES instead", zap.Error(err))
-				ansiQuotes = false
-			}
-			if ansiQuotes {
-				parser2.SetSQLMode(tmysql.ModeANSIQuotes)
+				parser2 = parser.New()
 			}
 
 			isDDL := common.CheckIsDDL(string(ev.Query), parser2)
