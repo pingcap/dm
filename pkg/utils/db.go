@@ -23,19 +23,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/failpoint"
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	gmysql "github.com/siddontang/go-mysql/mysql"
-	"go.uber.org/zap"
 )
 
 var (
@@ -274,6 +275,22 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 
 // GetSessionVariable gets connection's session variable
 func GetSessionVariable(conn *sql.Conn, variable string) (value string, err error) {
+	failpoint.Inject("GetSessionVariableFailed", func(val failpoint.Value) {
+		items := strings.Split(val.(string), ",")
+		if len(items) != 2 {
+			log.L().Fatal("failpoint GetSessionVariableFailed's value is invalid", zap.String("val", val.(string)))
+		}
+		variableName := items[0]
+		errCode, err1 := strconv.ParseUint(items[1], 10, 16)
+		if err1 != nil {
+			log.L().Fatal("failpoint GetSessionVariableFailed's value is invalid", zap.String("val", val.(string)))
+		}
+		if variable == variableName {
+			err = tmysql.NewErr(uint16(errCode))
+			log.L().Warn("GetSessionVariable failed", zap.String("variable", variable), zap.String("failpoint", "GetSessionVariableFailed"), zap.Error(err))
+			failpoint.Return("", terror.DBErrorAdapt(err, terror.ErrDBDriverError))
+		}
+	})
 	return getVariable(conn, variable, false)
 }
 
