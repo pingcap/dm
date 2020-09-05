@@ -140,7 +140,7 @@ func NewServer(cfg *Config) *Server {
 
 // Start starts to serving
 func (s *Server) Start(ctx context.Context) (err error) {
-	etcdCfg := genEmbedEtcdConfigWithLogger()
+	etcdCfg := genEmbedEtcdConfigWithLogger(s.cfg.LogLevel)
 	// prepare config to join an existing cluster
 	err = prepareJoinEtcd(s.cfg)
 	if err != nil {
