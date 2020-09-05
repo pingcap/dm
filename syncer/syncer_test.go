@@ -216,7 +216,7 @@ func (s *testSyncerSuite) resetEventsGenerator(c *C) {
 func (s *testSyncerSuite) TearDownSuite(c *C) {}
 
 func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.Parser, error) {
-	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
+	mock.ExpectQuery("SHOW VARIABLES LIKE").
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
 	return utils.GetParser(db)
