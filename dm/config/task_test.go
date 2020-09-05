@@ -550,7 +550,6 @@ func (t *testConfig) TestFromSubTaskConfigs(c *C) {
 			"sync-02": &stCfg2.SyncerConfig,
 		},
 		CleanDumpFile: stCfg1.CleanDumpFile,
-		//EnableANSIQuotes: stCfg1.EnableANSIQuotes,
 	}
 
 	c.Assert(cfg.String(), Equals, cfg2.String()) // some nil/(null value) compare may not equal, so use YAML format to compare.

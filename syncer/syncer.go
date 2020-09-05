@@ -1675,7 +1675,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	usedSchema := string(ev.Schema)
 	parser2, err := event.GetParserForStatusVars(ev.StatusVars)
 	if err != nil {
-		log.L().Warn("can't determine ANSI_QUOTES from binlog status_vars, use no ANSI_QUOTES instead", zap.Error(err))
+		log.L().Warn("can't determine sql_mode from binlog status_vars, use default parser instead", zap.Error(err))
 		parser2 = parser.New()
 	}
 
