@@ -2098,7 +2098,6 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		shouldSchemaExist = true
 	case *ast.DropDatabaseStmt:
 		shouldExecDDLOnSchemaTracker = true
-		shouldSchemaExist = true
 		if s.cfg.ShardMode == "" {
 			if err := s.checkpoint.DeleteSchemaPoint(ec.tctx, srcTable.Schema); err != nil {
 				return err
@@ -2109,8 +2108,6 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		shouldSchemaExist = true
 	case *ast.DropTableStmt:
 		shouldExecDDLOnSchemaTracker = true
-		shouldSchemaExist = true
-		shouldTableExist = true
 		if err := s.checkpoint.DeleteTablePoint(ec.tctx, srcTable.Schema, srcTable.Name); err != nil {
 			return err
 		}
