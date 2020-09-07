@@ -844,10 +844,11 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 }
 
 // flushCheckPoints flushes previous saved checkpoint in memory to persistent storage, like TiDB
-// we flush checkpoints in three cases:
+// we flush checkpoints in four cases:
 //   1. DDL executed
 //   2. at intervals (and job executed)
 //   3. pausing / stopping the sync (driven by `s.flushJobs`)
+//   4. IsFreshTask return true
 // but when error occurred, we can not flush checkpoint, otherwise data may lost
 // and except rejecting to flush the checkpoint, we also need to rollback the checkpoint saved before
 //   this should be handled when `s.Run` returned
@@ -1091,14 +1092,18 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		// for fresh and all-mode task, flush checkpoint so we could delete metadata file
-		if s.cfg.Mode == config.ModeAll && s.cfg.CleanDumpFile {
-			s.tctx.L().Info("try to remove loaded files")
-			metadataFile := path.Join(s.cfg.Dir, "metadata")
-			if err = os.Remove(metadataFile); err != nil {
-				s.tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
-			}
-			if err = os.Remove(s.cfg.Dir); err != nil {
-				s.tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
+		if s.cfg.Mode == config.ModeAll {
+			if err = s.flushCheckPoints(); err != nil {
+				s.tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
+			} else if s.cfg.CleanDumpFile {
+				s.tctx.L().Info("try to remove loaded files")
+				metadataFile := path.Join(s.cfg.Dir, "metadata")
+				if err = os.Remove(metadataFile); err != nil {
+					s.tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
+				}
+				if err = os.Remove(s.cfg.Dir); err != nil {
+					s.tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
+				}
 			}
 		}
 	}
