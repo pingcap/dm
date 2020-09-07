@@ -242,7 +242,6 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(cp.FlushedGlobalPoint().Position, Equals, binlog.MinPosition)
 
 	// try load from mydumper's output
-	// TODO(lance6717): test exitSafeModeLocation
 	dir, err := ioutil.TempDir("", "test_global_checkpoint")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(dir)
@@ -254,7 +253,7 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(err, IsNil)
 	s.cfg.Mode = config.ModeAll
 	s.cfg.Dir = dir
-	cp.LoadMeta()
+	c.Assert(cp.LoadMeta(), IsNil)
 
 	// should flush because globalPointSaveTime is zero
 	s.mock.ExpectBegin()
@@ -267,6 +266,46 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint().Position, Equals, pos1)
 	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos1)
+
+	s.mock.ExpectBegin()
+	s.mock.ExpectExec(clearCheckPointSQL).WithArgs(cpid).WillReturnResult(sqlmock.NewResult(0, 1))
+	s.mock.ExpectCommit()
+	err = cp.Clear(tctx)
+	c.Assert(err, IsNil)
+
+	// check dumpling write exitSafeModeLocation in metadata
+	err = ioutil.WriteFile(filename, []byte(
+		fmt.Sprintf(`SHOW MASTER STATUS:
+	Log: %s
+	Pos: %d
+	GTID:
+
+SHOW SLAVE STATUS:
+	Host: %s
+	Log: %s
+	Pos: %d
+	GTID:
+
+SHOW MASTER STATUS: /* AFTER CONNECTION POOL ESTABLISHED */
+	Log: %s
+	Pos: %d
+	GTID:
+`, pos1.Name, pos1.Pos, "slave_host", pos1.Name, pos1.Pos+1000, pos2.Name, pos2.Pos)), 0644)
+	c.Assert(err, IsNil)
+	c.Assert(cp.LoadMeta(), IsNil)
+
+	// should flush because globalPointSaveTime is zero
+	s.mock.ExpectBegin()
+	s.mock.ExpectExec("(202)?"+flushCheckPointSQL).WithArgs(cpid, "", "", pos1.Name, pos1.Pos, "", pos2.Name, pos2.Pos, "", []byte("null"), true).WillReturnResult(sqlmock.NewResult(0, 1))
+	s.mock.ExpectCommit()
+	err = cp.FlushPointsExcept(tctx, nil, nil, nil)
+	c.Assert(err, IsNil)
+	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
+	err = cp.Load(tctx, s.tracker)
+	c.Assert(err, IsNil)
+	c.Assert(cp.GlobalPoint().Position, Equals, pos1)
+	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos1)
+	c.Assert(cp.SafeModeExitPoint().Position, Equals, pos2)
 }
 
 func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
