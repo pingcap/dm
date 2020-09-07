@@ -107,7 +107,6 @@ ignore-checking-items: ["all"]
 	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, "*line 2: field aaa not found in type config.TaskConfig.*")
 
-	filepath = path.Join(c.MkDir(), "test_invalid_task.yaml")
 	configContent = []byte(`---
 name: test
 task-mode: all
@@ -124,6 +123,20 @@ ignore-checking-items: ["all"]
 	err = taskConfig.DecodeFile(filepath)
 	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, "*line 4: field task-mode already set in type config.TaskConfig.*")
+
+	configContent = []byte(`---
+name: test
+is-sharding: true
+meta-schema: "dm_meta"
+enable-heartbeat: true
+timezone: "Asia/Shanghai"
+ignore-checking-items: ["all"]
+`)
+	err = ioutil.WriteFile(filepath, configContent, 0644)
+	c.Assert(err, IsNil)
+	taskConfig = NewTaskConfig()
+	err = taskConfig.DecodeFile(filepath)
+	c.Assert(terror.ErrConfigInvalidTaskMode.Equal(err), IsTrue)
 
 	// test valid task config
 	configContent = []byte(`---
@@ -589,4 +602,36 @@ func (t *testConfig) TestMetaVerify(c *C) {
 		BinLogGTID: "1-1-12,4-4-4",
 	}
 	c.Assert(m.Verify(), IsNil)
+}
+
+func (t *testConfig) TestMySQLInstance(c *C) {
+	var m *MySQLInstance
+	err := m.VerifyAndAdjust()
+	c.Assert(terror.ErrConfigMySQLInstNotFound.Equal(err), IsTrue)
+
+	m = &MySQLInstance{}
+	err = m.VerifyAndAdjust()
+	c.Assert(terror.ErrConfigEmptySourceID.Equal(err), IsTrue)
+	m.SourceID = "123"
+
+	m.Mydumper = &MydumperConfig{}
+	m.MydumperConfigName = "test"
+	err = m.VerifyAndAdjust()
+	c.Assert(terror.ErrConfigMydumperCfgConflict.Equal(err), IsTrue)
+	m.RemoveDuplicateCfg()
+
+	m.Loader = &LoaderConfig{}
+	m.LoaderConfigName = "test"
+	err = m.VerifyAndAdjust()
+	c.Assert(terror.ErrConfigLoaderCfgConflict.Equal(err), IsTrue)
+	m.RemoveDuplicateCfg()
+
+	m.Syncer = &SyncerConfig{}
+	m.SyncerConfigName = "test"
+	err = m.VerifyAndAdjust()
+	c.Assert(terror.ErrConfigSyncerCfgConflict.Equal(err), IsTrue)
+	m.RemoveDuplicateCfg()
+
+	c.Assert(m.VerifyAndAdjust(), IsNil)
+
 }
