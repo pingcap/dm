@@ -430,7 +430,11 @@ function DM_102_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int default 0;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values (1,1);"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int default -1;"
-    
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "\"ID\": \"test-\`shardddl\`.\`tb\`\"" 1
+
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "unlock-ddl-lock test-\`shardddl\`.\`tb\`" \
         "\"result\": true" 1
