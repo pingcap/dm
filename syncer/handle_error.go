@@ -17,15 +17,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pingcap/parser"
+
 	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/pb"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 
-	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
-	tmysql "github.com/pingcap/parser/mysql"
-
 	"github.com/siddontang/go-mysql/replication"
 )
 
@@ -73,9 +72,10 @@ func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 func (s *Syncer) genEvents(sqls []string) ([]*replication.BinlogEvent, error) {
 	events := make([]*replication.BinlogEvent, 0)
 
-	parser2 := parser.New()
-	if s.cfg.EnableANSIQuotes {
-		parser2.SetSQLMode(tmysql.ModeANSIQuotes)
+	parser2, err := s.fromDB.getParser()
+	if err != nil {
+		s.tctx.L().Error("failed to get SQL mode specified parser from upstream, using default SQL mode instead")
+		parser2 = parser.New()
 	}
 
 	for _, sql := range sqls {

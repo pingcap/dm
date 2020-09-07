@@ -31,12 +31,12 @@ type testChecker struct{}
 var _ = tc.Suite(&testChecker{})
 
 func (t *testChecker) TestCheckSyncConfig(c *tc.C) {
-	c.Assert(CheckSyncConfig(context.Background(), nil, false), tc.IsNil)
+	c.Assert(CheckSyncConfig(context.Background(), nil), tc.IsNil)
 
 	cfgs := []*config.SubTaskConfig{
 		{
 			IgnoreCheckingItems: []string{config.AllChecking},
 		},
 	}
-	c.Assert(CheckSyncConfig(context.Background(), cfgs, false), tc.IsNil)
+	c.Assert(CheckSyncConfig(context.Background(), cfgs), tc.IsNil)
 }

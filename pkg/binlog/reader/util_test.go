@@ -44,14 +44,11 @@ func (t *testTCPReaderSuite) TestGetGTIDsForPos(c *C) {
 	endPos, endGS, err := utils.GetMasterStatus(t.db, flavor)
 	c.Assert(err, IsNil)
 
-	parser2, err := utils.GetParser(t.db, false)
-	c.Assert(err, IsNil)
-
 	r1 := NewTCPReader(cfg)
 	c.Assert(r1, NotNil)
 	defer r1.Close()
 
-	gs, err := GetGTIDsForPos(ctx, r1, endPos, parser2)
+	gs, err := GetGTIDsForPos(ctx, r1, endPos)
 	c.Assert(err, IsNil)
 	c.Assert(gs.Equal(endGS), IsTrue)
 
@@ -62,7 +59,7 @@ func (t *testTCPReaderSuite) TestGetGTIDsForPos(c *C) {
 	gs, err = GetGTIDsForPos(ctx, r2, gmysql.Position{
 		Name: endPos.Name,
 		Pos:  endPos.Pos - 1,
-	}, parser2)
+	})
 	c.Assert(err, ErrorMatches, ".*invalid position .* or GTID not enabled in upstream.*")
 	c.Assert(gs, IsNil)
 }
