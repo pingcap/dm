@@ -24,7 +24,6 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/chaos-mesh/go-sqlsmith"
 	"github.com/pingcap/errors"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -84,14 +83,14 @@ func main() {
 	masterCli := pb.NewMasterClient(masterConn)
 
 	// check whether all members are ready.
-	err = checkMembersReadyLoop(ctx2, masterCli) // ctx2, should be done in 60s.
+	err = checkMembersReadyLoop(ctx2, masterCli, cfg.MasterCount, cfg.WorkerCount) // ctx2, should be done in 60s.
 	if err != nil {
 		log.L().Error("fail to check members ready", zap.Error(err))
 		os.Exit(2)
 	}
 
 	// create two sources.
-	err = createSources(ctx, masterCli, cfg.ConfigDir)
+	err = createSources(ctx, masterCli, cfg)
 	if err != nil {
 		log.L().Error("fail to create source", zap.Error(err))
 		os.Exit(2)
@@ -104,7 +103,11 @@ func main() {
 	// run tests cases
 	var eg errgroup.Group
 	eg.Go(func() error {
-		err2 := runSingleTaskCase(ctx3, masterCli, cfg.ConfigDir)
+		st, err2 := newSingleTask(ctx3, masterCli, cfg.ConfigDir, cfg.Target, cfg.Source1)
+		if err2 != nil {
+			return err2
+		}
+		err2 = st.run()
 		if utils.IsContextCanceledError(err2) {
 			err2 = nil // clear err
 		}

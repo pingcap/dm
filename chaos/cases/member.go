@@ -23,10 +23,10 @@ import (
 
 // checkMembersReadyLoop checks whether all DM-master and DM-worker members have been ready.
 // NOTE: in this chaos case, we ensure 3 DM-master and 3 DM-worker started.
-func checkMembersReadyLoop(ctx context.Context, cli pb.MasterClient) (err error) {
+func checkMembersReadyLoop(ctx context.Context, cli pb.MasterClient, masterCount, workerCount int) (err error) {
 	// check 5 times now.
 	for i := 0; i < 5; i++ {
-		err = checkMembersReady(ctx, cli)
+		err = checkMembersReady(ctx, cli, masterCount, workerCount)
 		if err == nil {
 			return nil
 		}
@@ -34,7 +34,7 @@ func checkMembersReadyLoop(ctx context.Context, cli pb.MasterClient) (err error)
 	return err
 }
 
-func checkMembersReady(ctx context.Context, cli pb.MasterClient) error {
+func checkMembersReady(ctx context.Context, cli pb.MasterClient, masterCount, workerCount int) error {
 	resp, err := cli.ListMember(ctx, &pb.ListMemberRequest{})
 	if err != nil {
 		return err
@@ -58,7 +58,7 @@ func checkMembersReady(ctx context.Context, cli pb.MasterClient) error {
 					aliveCount++
 				}
 			}
-			allMasterAlive = aliveCount == 3
+			allMasterAlive = aliveCount == masterCount
 		} else if lw := m.GetWorker(); lw != nil {
 			var onlineCount int
 			for _, worker := range lw.Workers {
@@ -66,7 +66,7 @@ func checkMembersReady(ctx context.Context, cli pb.MasterClient) error {
 					onlineCount++
 				}
 			}
-			allWorkerOnline = onlineCount == 3
+			allWorkerOnline = onlineCount == workerCount
 		}
 	}
 

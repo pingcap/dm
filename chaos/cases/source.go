@@ -20,14 +20,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	config2 "github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 )
 
 // createSources does `operate-source create` operation for two sources.
 // NOTE: we put two source config files (`source1.yaml` and `source2.yaml`) in `conf` directory.
-func createSources(ctx context.Context, cli pb.MasterClient, confDir string) error {
-	s1Path := filepath.Join(confDir, "source1.yaml")
-	s2Path := filepath.Join(confDir, "source2.yaml")
+func createSources(ctx context.Context, cli pb.MasterClient, cfg *config) error {
+	s1Path := filepath.Join(cfg.ConfigDir, "source1.yaml")
+	s2Path := filepath.Join(cfg.ConfigDir, "source2.yaml")
 
 	s1Content, err := ioutil.ReadFile(s1Path)
 	if err != nil {
@@ -38,9 +39,30 @@ func createSources(ctx context.Context, cli pb.MasterClient, confDir string) err
 		return err
 	}
 
+	var cfg1 config2.SourceConfig
+	var cfg2 config2.SourceConfig
+	if err = cfg1.ParseYaml(string(s1Content)); err != nil {
+		return err
+	}
+	if err = cfg2.ParseYaml(string(s2Content)); err != nil {
+		return err
+	}
+
+	// replace DB config.
+	cfg1.From = cfg.Source1
+	cfg2.From = cfg.Source2
+	s1Content2, err := cfg1.Yaml()
+	if err != nil {
+		return err
+	}
+	s2Content2, err := cfg2.Yaml()
+	if err != nil {
+		return err
+	}
+
 	resp, err := cli.OperateSource(ctx, &pb.OperateSourceRequest{
 		Op:     pb.SourceOp_StartSource,
-		Config: []string{string(s1Content), string(s2Content)},
+		Config: []string{s1Content2, s2Content2},
 	})
 	if err != nil {
 		return err
