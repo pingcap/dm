@@ -26,7 +26,7 @@ var (
 	ErrorMsgHeader = "fail to check synchronization configuration with type"
 
 	// CheckSyncConfigFunc holds the CheckSyncConfig function
-	CheckSyncConfigFunc func(ctx context.Context, cfgs []*config.SubTaskConfig, enableANSIQuotes bool) error
+	CheckSyncConfigFunc func(ctx context.Context, cfgs []*config.SubTaskConfig) error
 )
 
 func init() {
@@ -34,7 +34,7 @@ func init() {
 }
 
 // CheckSyncConfig checks synchronization configuration
-func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig, enableANSIQuotes bool) error {
+func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig) error {
 	if len(cfgs) == 0 {
 		return nil
 	}
@@ -56,7 +56,7 @@ func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig, enableAN
 		return nil
 	}
 
-	c := NewChecker(cfgs, checkingItems, enableANSIQuotes)
+	c := NewChecker(cfgs, checkingItems)
 
 	err := c.Init(ctx)
 	if err != nil {
