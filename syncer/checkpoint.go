@@ -326,6 +326,7 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 	cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil, cp.cfg.EnableGTID)
 	cp.globalPointSaveTime = time.Time{}
 	cp.points = make(map[string]map[string]*binlogPoint)
+	cp.safeModeExitPoint = nil
 
 	return nil
 }
