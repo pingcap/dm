@@ -125,6 +125,7 @@ jobs:
         kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/dm-master.yaml
         kubectl get -f $GITHUB_WORKSPACE/chaos/manifests/dm-master.yaml
         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/dm-master.yaml
+    # NOTE: even some DM-master instances are not ready, we still continue and let chaos test cases to check again.
     - name: Wait for DM-master ready
       run: |
         sleep 10
@@ -155,13 +156,13 @@ jobs:
         kubectl logs dm-master-2 || true
         echo "<<<<< show previous log for dm-master-2 >>>>>"
         kubectl logs dm-master-2 -p || true
-        kubectl wait --for=condition=Ready pod -l app=dm-master --all --timeout=0s
 
     - name: Set up DM-worker
       run: |
         kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/dm-worker.yaml
         kubectl get -f $GITHUB_WORKSPACE/chaos/manifests/dm-worker.yaml
         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/dm-worker.yaml
+    # NOTE: even some DM-worker instances are not ready, we still continue and let chaos test cases to check again.
     - name: Wait for DM-worker ready
       run: |
         sleep 10
@@ -192,7 +193,6 @@ jobs:
         kubectl logs dm-worker-2 || true
         echo "<<<<< show previous log for dm-worker-2 >>>>>"
         kubectl logs dm-worker-2 -p || true
-        kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=0s
 
     - name: Set up chaos test cases
       run: |
