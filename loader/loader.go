@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1274,8 +1275,12 @@ func (l *Loader) getMydumpMetadata() error {
 	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
 	loc, _, err := dumpling.ParseMetaData(metafile, l.cfg.Flavor)
 	if err != nil {
+		toPrint, err := ioutil.ReadFile(metafile)
+		if err != nil {
+			toPrint = []byte(err.Error())
+		}
 		l.logCtx.L().Error("fail to parse dump metadata", log.ShortError(err))
-		return err
+		return terror.ErrParseMydumperMeta.Generate(err, toPrint)
 	}
 
 	l.metaBinlog.Set(loc.Position.String())
