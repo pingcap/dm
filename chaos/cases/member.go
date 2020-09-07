@@ -16,19 +16,29 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/pb"
 )
 
+const (
+	checkMemberTimes    = 10
+	checkMemberInterval = 10 * time.Second
+)
+
 // checkMembersReadyLoop checks whether all DM-master and DM-worker members have been ready.
 // NOTE: in this chaos case, we ensure 3 DM-master and 3 DM-worker started.
 func checkMembersReadyLoop(ctx context.Context, cli pb.MasterClient, masterCount, workerCount int) (err error) {
-	// check 5 times now.
 	for i := 0; i < 5; i++ {
-		err = checkMembersReady(ctx, cli, masterCount, workerCount)
-		if err == nil {
+		select {
+		case <-ctx.Done():
 			return nil
+		case <-time.After(checkMemberInterval):
+			err = checkMembersReady(ctx, cli, masterCount, workerCount)
+			if err == nil {
+				return nil
+			}
 		}
 	}
 	return err
