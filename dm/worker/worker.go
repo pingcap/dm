@@ -213,7 +213,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
 	w.Lock()
 	defer w.Unlock()
 
-	// copy some config item from dm-worker's config
+	// copy some config item from dm-worker's source config
 	copyConfigFromSource(cfg, w.cfg)
 	// directly put cfg into subTaskHolder
 	// the unique of subtask should be assured by etcd
