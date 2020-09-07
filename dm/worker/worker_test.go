@@ -25,11 +25,13 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/tikv/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
+	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/ha"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -85,7 +87,22 @@ func (t *testServer) testWorker(c *C) {
 	c.Assert(err, ErrorMatches, ".*worker already closed.*")
 }
 
-func (t *testServer) TestTaskAutoResume(c *C) {
+type testServer2 struct{}
+
+var _ = Suite(&testServer2{})
+
+func (t *testServer2) SetUpSuite(c *C) {
+	err := log.InitLogger(&log.Config{})
+	c.Assert(err, IsNil)
+
+	getMinPosForSubTaskFunc = getFakePosForSubTask
+}
+
+func (t *testServer2) TearDownSuite(c *C) {
+	getMinPosForSubTaskFunc = getMinPosForSubTask
+}
+
+func (t *testServer2) TestTaskAutoResume(c *C) {
 	var (
 		taskName = "sub-task-name"
 		port     = 8263
@@ -175,6 +192,12 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		c.Log(sts)
 		return false
 	}), IsTrue)
+}
+
+func (t *testServer2) createClient(c *C, addr string) pb.WorkerClient {
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+	c.Assert(err, IsNil)
+	return pb.NewWorkerClient(conn)
 }
 
 type testWorkerEtcdCompact struct{}
