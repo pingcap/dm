@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"path"
 	"sync"
 	"time"
@@ -883,7 +884,11 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location binl
 func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, *binlog.Location, error) {
 	// `metadata` is mydumper's output meta file name
 	filename := path.Join(cp.cfg.Dir, "metadata")
-	cp.logCtx.L().Info("parsing metadata from file", zap.String("file", filename))
+	toPrint, err := ioutil.ReadFile(filename)
+	if err != nil {
+		toPrint = []byte(err.Error())
+	}
+	cp.logCtx.L().Info("parsing metadata from file", zap.String("file", filename), zap.ByteString("content or error", toPrint))
 
 	return dumpling.ParseMetaData(filename, cp.cfg.Flavor)
 }
