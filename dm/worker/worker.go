@@ -808,9 +808,6 @@ func copyConfigFromSource(cfg *config.SubTaskConfig, sourceCfg *config.SourceCon
 
 	// we can remove this from SubTaskConfig later, because syncer will always read from relay
 	cfg.AutoFixGTID = sourceCfg.AutoFixGTID
-
-	// log config items, mydumper unit use it
-
 }
 
 // getAllSubTaskStatus returns all subtask status of this worker, note the field
