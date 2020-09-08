@@ -110,7 +110,8 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN binlog_gtid TEXT AFTER binlog_pos`, tableName),
 		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN table_info JSON NOT NULL AFTER binlog_gtid`, tableName),
 	}
-	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, taskName, utils.IgnoreErrorCheckpoint, queries)
+	updateTaskName := "importFromV10x"
+	_, err := dbConn.ExecuteSQLWithIgnoreError(tctx, nil, updateTaskName, utils.IgnoreErrorCheckpoint, queries)
 	if err != nil {
 		return terror.Annotatef(err, "add columns for checkpoint table")
 	}
