@@ -194,12 +194,13 @@ jobs:
         echo "<<<<< show previous log for dm-worker-2 >>>>>"
         kubectl logs dm-worker-2 -p || true
 
+    # NOTE: we sleep a while when check members ready in cases before applying any chaos operations.
     - name: Set up chaos test cases
       run: |
         kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
         kubectl get -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
-        sleep 20
+        sleep 60
 
     - name: Encode chaos-mesh action
       run: |

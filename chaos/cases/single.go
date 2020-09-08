@@ -27,8 +27,9 @@ import (
 )
 
 const (
-	singleDB         = "db_single" // specified in `source1.yaml`.
-	singleTableCount = 10          // tables count for the table.
+	singleDB              = "db_single" // specified in `source1.yaml`.
+	singleTableCount      = 10          // tables count for the table.
+	singleFullInsertCount = 100         // `INSERT INTO` count (not rows count) for tables in full stage.
 )
 
 // singleTask is a test case with only one upstream source.
@@ -41,7 +42,6 @@ type singleTask struct {
 	targetDB   *conn.BaseDB
 	sourceConn *conn.BaseConn
 	targetConn *conn.BaseConn
-	tables     []string
 	taskCfg    config2.TaskConfig
 }
 
@@ -95,6 +95,9 @@ func (st *singleTask) run() error {
 		st.targetDB.Close()
 	}()
 
+	if err := st.stopPreviousTask(); err != nil {
+		return err
+	}
 	if err := st.clearPreviousData(); err != nil {
 		return err
 	}
@@ -106,6 +109,20 @@ func (st *singleTask) run() error {
 		return err
 	}
 
+	return nil
+}
+
+// stopPreviousTask stops the previous task with the same name if exists.
+func (st *singleTask) stopPreviousTask() error {
+	resp, err := st.cli.OperateTask(st.ctx, &pb.OperateTaskRequest{
+		Op:   pb.TaskOp_Stop,
+		Name: st.taskCfg.Name,
+	})
+	if err != nil {
+		return err
+	} else if !resp.Result && !strings.Contains(resp.Msg, "not exist") {
+		return fmt.Errorf("fail to stop task: %s", resp.Msg)
+	}
 	return nil
 }
 
@@ -131,13 +148,39 @@ func (st *singleTask) genFullData() error {
 		return err
 	}
 
+	var (
+		columns = make([][5]string, 0)
+		indexes = make(map[string][]string)
+	)
+
+	// generate `CREATE TABLE` statements.
 	for i := 0; i < singleTableCount; i++ {
 		query, name, err := st.ss.CreateTableStmt()
 		if err != nil {
 			return err
 		}
 		err = execSQLs(st.ctx, st.sourceConn, query)
-		st.tables = append(st.tables, name)
+
+		col2, idx2, err := createTableToSmithSchema(singleDB, query)
+		if err != nil {
+			return err
+		}
+		columns = append(columns, col2...)
+		indexes[name] = idx2
+	}
+
+	// go-sqlsmith needs to load schema before generating DML and `ALTER TABLE` statements.
+	st.ss.LoadSchema(columns, indexes)
+
+	for i := 0; i < singleFullInsertCount; i++ {
+		query, _, err := st.ss.InsertStmt(false)
+		if err != nil {
+			return err
+		}
+		err = execSQLs(st.ctx, st.sourceConn, query)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
