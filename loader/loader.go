@@ -1275,9 +1275,9 @@ func (l *Loader) getMydumpMetadata() error {
 	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
 	loc, _, err := dumpling.ParseMetaData(metafile, l.cfg.Flavor)
 	if err != nil {
-		toPrint, err := ioutil.ReadFile(metafile)
-		if err != nil {
-			toPrint = []byte(err.Error())
+		toPrint, err2 := ioutil.ReadFile(metafile)
+		if err2 != nil {
+			toPrint = []byte(err2.Error())
 		}
 		l.logCtx.L().Error("fail to parse dump metadata", log.ShortError(err))
 		return terror.ErrParseMydumperMeta.Generate(err, toPrint)
