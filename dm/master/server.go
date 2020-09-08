@@ -311,7 +311,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 		resp2 *pb.RegisterWorkerResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -339,7 +339,7 @@ func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest
 		resp2 *pb.OfflineMemberResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -409,7 +409,7 @@ func subtaskCfgPointersToInstances(stCfgPointers ...*config.SubTaskConfig) []con
 
 // StartTask implements MasterServer.StartTask
 func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
-	// can't use s.SharedLogic because utils.HidePassword
+	// can't use s.sharedLogic because utils.HidePassword
 	log.L().Info("", zap.String("payload", utils.HidePassword(req.String())), zap.String("request", "StartTask"))
 
 	isLeader, needForward := s.isLeaderAndNeedForward()
@@ -499,7 +499,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 		resp2 *pb.OperateTaskResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -556,7 +556,7 @@ func (s *Server) GetSubTaskCfg(ctx context.Context, req *pb.GetSubTaskCfgRequest
 		resp2 *pb.GetSubTaskCfgResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -595,7 +595,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		resp2 *pb.UpdateTaskResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -729,7 +729,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 		resp2 *pb.QueryStatusListResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -767,7 +767,7 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) 
 		resp2 *pb.QueryErrorListResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -806,7 +806,7 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 		resp2 *pb.ShowDDLLocksResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -833,7 +833,7 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 		resp2 *pb.UnlockDDLLockResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -878,7 +878,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 		resp2 *pb.PurgeWorkerRelayResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -941,7 +941,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 		resp2 *pb.SwitchWorkerRelayMasterResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -1011,7 +1011,7 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 		resp2 *pb.OperateWorkerRelayResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -1187,7 +1187,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 		resp2 *pb.UpdateMasterConfigResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -1229,7 +1229,7 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 		resp2 *pb.CommonWorkerResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -1272,7 +1272,7 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 		resp2 *pb.CommonWorkerResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -1302,7 +1302,7 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 		resp2 *pb.CheckTaskResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -1353,7 +1353,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		resp2 *pb.OperateSourceResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -1949,7 +1949,7 @@ func (s *Server) ListMember(ctx context.Context, req *pb.ListMemberRequest) (*pb
 		resp2 *pb.ListMemberResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -2007,7 +2007,7 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest
 		resp2 *pb.OperateSchemaResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -2081,7 +2081,7 @@ func (s *Server) GetTaskCfg(ctx context.Context, req *pb.GetTaskCfgRequest) (*pb
 		resp2 *pb.GetTaskCfgResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -2107,7 +2107,7 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleErrorRequest) (*
 		resp2 *pb.HandleErrorResponse
 		err2  error
 	)
-	shouldRet := s.SharedLogic(ctx, req, &resp2, &err2)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
@@ -2174,10 +2174,10 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleErrorRequest) (*
 	}, nil
 }
 
-// SharedLogic does some shared logic for each RPC implementation
+// sharedLogic does some shared logic for each RPC implementation
 // arguments with `Pointer` suffix should be pointer to that variable its name indicated
 // return `true` means caller should return with variable that `xxPointer` modified
-func (s *Server) SharedLogic(ctx context.Context, req interface{}, respPointer interface{}, errPointer *error) bool {
+func (s *Server) sharedLogic(ctx context.Context, req interface{}, respPointer interface{}, errPointer *error) bool {
 	pc, _, _, _ := runtime.Caller(1)
 	fullMethodName := runtime.FuncForPC(pc).Name()
 	methodName := fullMethodName[strings.LastIndexByte(fullMethodName, '.')+1:]
