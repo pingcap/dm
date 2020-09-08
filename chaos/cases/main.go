@@ -55,7 +55,7 @@ func main() {
 	}
 
 	go func() {
-		http.ListenAndServe("0.0.0.0:80", nil) // for pprof
+		http.ListenAndServe("0.0.0.0:8899", nil) // for pprof
 	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -85,8 +85,7 @@ func main() {
 	// check whether all members are ready.
 	err = checkMembersReadyLoop(ctx2, masterCli, cfg.MasterCount, cfg.WorkerCount) // ctx2, should be done in 60s.
 	if err != nil {
-		log.L().Error("fail to check members ready", zap.Error(err))
-		os.Exit(2)
+		log.L().Error("fail to check members ready", zap.Error(err)) // only log a error, still try to do other things.
 	}
 
 	// create two sources.

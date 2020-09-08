@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/chaos-mesh/go-sqlsmith"
 
@@ -27,9 +28,11 @@ import (
 )
 
 const (
-	singleDB              = "db_single" // specified in `source1.yaml`.
-	singleTableCount      = 10          // tables count for the table.
-	singleFullInsertCount = 100         // `INSERT INTO` count (not rows count) for tables in full stage.
+	singleDB              = "db_single"      // specified in `source1.yaml`.
+	singleTableCount      = 10               // tables count for the table.
+	singleFullInsertCount = 100              // `INSERT INTO` count (not rows count) for tables in full stage.
+	singleDiffCount       = 10               // diff data check count
+	singleDiffInterval    = 10 * time.Second // diff data check interval
 )
 
 // singleTask is a test case with only one upstream source.
@@ -42,6 +45,7 @@ type singleTask struct {
 	targetDB   *conn.BaseDB
 	sourceConn *conn.BaseConn
 	targetConn *conn.BaseConn
+	tables     []string
 	taskCfg    config2.TaskConfig
 }
 
@@ -109,6 +113,10 @@ func (st *singleTask) run() error {
 		return err
 	}
 
+	if err := diffDataLoop(st.ctx, singleDiffCount, singleDiffInterval, singleDB, st.tables, st.targetDB.DB, st.sourceDB.DB); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -160,6 +168,7 @@ func (st *singleTask) genFullData() error {
 			return err
 		}
 		err = execSQLs(st.ctx, st.sourceConn, query)
+		st.tables = append(st.tables, name)
 
 		col2, idx2, err := createTableToSmithSchema(singleDB, query)
 		if err != nil {
