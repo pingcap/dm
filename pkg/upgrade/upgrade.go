@@ -98,7 +98,8 @@ func upgradeToVer1(cli *clientv3.Client, uctx Context) error {
 	return nil
 }
 
-// upgradeToVer2 does upgrade operations from Ver1 to Ver2 (v2.0.0-rc3) to upgrade syncer checkpoint schema
+// upgradeToVer2 does upgrade operations from Ver1 to Ver2 (v2.0.0-rc.3) to upgrade syncer checkpoint schema
+// TODO: determine v2.0.0-rc.3 or another version in above line
 func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 	upgradeTaskName := "upgradeToVer2"
 	logger := log.L().WithFields(zap.String("task", upgradeTaskName))
