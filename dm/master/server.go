@@ -1349,13 +1349,15 @@ func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, erro
 
 // OperateSource will create or update an upstream source.
 func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest) (*pb.OperateSourceResponse, error) {
-	var (
-		resp2 *pb.OperateSourceResponse
-		err2  error
-	)
-	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
-	if shouldRet {
-		return resp2, err2
+	// can't use s.sharedLogic because utils.HidePassword
+	log.L().Info("", zap.String("payload", utils.HidePassword(req.String())), zap.String("request", "OperateSource"))
+
+	isLeader, needForward := s.isLeaderAndNeedForward()
+	if !isLeader {
+		if needForward {
+			return s.leaderClient.OperateSource(ctx, req)
+		}
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	cfgs, err := parseAndAdjustSourceConfig(req.Config)
@@ -2210,7 +2212,8 @@ func (s *Server) sharedLogic(ctx context.Context, req interface{}, respPointer i
 			}
 			return true
 		}
-		reflect.ValueOf(respPointer).Elem().Set(reflect.ValueOf(nil))
+		respType := reflect.ValueOf(respPointer).Elem().Type()
+		reflect.ValueOf(respPointer).Elem().Set(reflect.Zero(respType))
 		*errPointer = terror.ErrMasterRequestIsNotForwardToLeader
 		return true
 	}
