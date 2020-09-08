@@ -24,8 +24,8 @@ require (
 	github.com/pingcap/errors v0.11.5-0.20200820035142-66eb5bf1d1cd
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
 	github.com/pingcap/log v0.0.0-20200828042413-fce0951f1463
-	github.com/pingcap/parser v0.0.0-20200902143951-126c14c456eb
-	github.com/pingcap/tidb v1.1.0-beta.0.20200904065405-82a37247485a
+	github.com/pingcap/parser v0.0.0-20200905070518-a6534dd22500
+	github.com/pingcap/tidb v1.1.0-beta.0.20200901032733-f82e5320ad75
 	github.com/pingcap/tidb-tools v4.0.5-0.20200828085514-03575b185007+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
@@ -44,7 +44,6 @@ require (
 	github.com/unrolled/render v1.0.1
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738
 	go.uber.org/zap v1.16.0
-	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	golang.org/x/sys v0.0.0-20200824131525-c12d262b63d8
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/genproto v0.0.0-20191230161307-f3c370f40bfb
