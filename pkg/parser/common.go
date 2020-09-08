@@ -94,6 +94,7 @@ func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, erro
 
 // RenameDDLTable renames table names in ddl by given `targetTableNames`
 // argument `targetTableNames` is same with return value of FetchDDLTableNames
+// returned DDL is formatted like StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string, error) {
 	switch v := stmt.(type) {
 	case *ast.AlterDatabaseStmt:
@@ -173,6 +174,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 }
 
 // SplitDDL splits multiple operations in one DDL statement into multiple DDL statements
+// returned DDL is formatted like StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 // if fail to restore, it would not restore the value of `stmt` (it changes it's values if `stmt` is one of  DropTableStmt, RenameTableStmt, AlterTableStmt)
 func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 	var (

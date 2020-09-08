@@ -24,7 +24,7 @@ function run() {
     failpoints=(
         # 1152 is ErrAbortingConnection
         "github.com/pingcap/dm/pkg/utils/GetGlobalVariableFailed=return(\"server_uuid,1152\")"
-        "github.com/pingcap/dm/pkg/utils/GetGlobalVariableFailed=return(\"sql_mode,1152\")"
+        "github.com/pingcap/dm/pkg/utils/GetSessionVariableFailed=return(\"sql_mode,1152\")"
     )
 
     for(( i=0;i<${#failpoints[@]};i++)) do

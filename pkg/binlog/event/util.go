@@ -25,6 +25,8 @@ import (
 	"math"
 	"reflect"
 
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
@@ -305,24 +307,34 @@ var (
 	}
 )
 
-// GetAnsiQuotesMode gets ansi-quotes mode from binlog statusVars
-func GetAnsiQuotesMode(statusVars []byte) (bool, error) {
+// getSQLMode gets SQL mode from binlog statusVars
+func getSQLMode(statusVars []byte) (mysql.SQLMode, error) {
 	vars, err := statusVarsToKV(statusVars)
 	if err != nil {
-		return false, err
+		return mysql.ModeNone, err
 	}
 	b, ok := vars[QSqlModeCode]
 	if !ok {
-		// TODO(lance6716): if this will happen, create a terror
-		return false, errors.New("Q_SQL_MODE_CODE not found in status_vars")
+		// should not happen
+		return mysql.ModeNone, errors.New("Q_SQL_MODE_CODE not found in status_vars")
 	}
 
 	r := bytes.NewReader(b)
 	var v int64
 	_ = binary.Read(r, binary.LittleEndian, &v)
 
-	// MODE_ANSI_QUOTES = 0x00000004 ref: https://dev.mysql.com/doc/internals/en/query-event.html#q-sql-mode-code
-	return v&0x00000004 != 0, nil
+	return mysql.SQLMode(v), nil
+}
+
+// GetParserForStatusVars gets a parser for binlog which is suitable for its sql_mode in statusVars
+func GetParserForStatusVars(statusVars []byte) (*parser.Parser, error) {
+	parser2 := parser.New()
+	mode, err := getSQLMode(statusVars)
+	if err != nil {
+		return nil, err
+	}
+	parser2.SetSQLMode(mode)
+	return parser2, nil
 }
 
 // if returned error is `io.EOF`, it means UnexpectedEOF because we handled expected `io.EOF` as success
