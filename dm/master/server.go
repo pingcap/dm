@@ -2180,8 +2180,6 @@ func (s *Server) sharedLogic(ctx context.Context, req interface{}, respPointer i
 	fullMethodName := runtime.FuncForPC(pc).Name()
 	methodName := fullMethodName[strings.LastIndexByte(fullMethodName, '.')+1:]
 
-	// origin code:
-	//	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ListMember"))
 	log.L().Info("", zap.Any("payload", req), zap.String("request", methodName))
 
 	// origin code:
@@ -2193,25 +2191,26 @@ func (s *Server) sharedLogic(ctx context.Context, req interface{}, respPointer i
 	//		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	//	}
 	isLeader, needForward := s.isLeaderAndNeedForward()
-	if !isLeader {
-		if needForward {
-			params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(req)}
-			results := reflect.ValueOf(s.leaderClient).MethodByName(methodName).Call(params)
-			// result's inner types should be (*pb.XXResponse, error), which is same as s.leaderClient.XXRPCMethod
-			reflect.ValueOf(respPointer).Elem().Set(results[0])
-			errInterface := results[1].Interface()
-			// nil can't pass type conversion, so we handle it separately
-			if errInterface == nil {
-				*errPointer = nil
-			} else {
-				*errPointer = errInterface.(error)
-			}
-			return true
+	if isLeader {
+		return false
+	}
+	if needForward {
+		log.L().Info("forwarding", zap.String("from", s.cfg.Name), zap.String("to", s.leader), zap.String("request", methodName))
+		params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(req)}
+		results := reflect.ValueOf(s.leaderClient).MethodByName(methodName).Call(params)
+		// result's inner types should be (*pb.XXResponse, error), which is same as s.leaderClient.XXRPCMethod
+		reflect.ValueOf(respPointer).Elem().Set(results[0])
+		errInterface := results[1].Interface()
+		// nil can't pass type conversion, so we handle it separately
+		if errInterface == nil {
+			*errPointer = nil
+		} else {
+			*errPointer = errInterface.(error)
 		}
-		respType := reflect.ValueOf(respPointer).Elem().Type()
-		reflect.ValueOf(respPointer).Elem().Set(reflect.Zero(respType))
-		*errPointer = terror.ErrMasterRequestIsNotForwardToLeader
 		return true
 	}
-	return false
+	respType := reflect.ValueOf(respPointer).Elem().Type()
+	reflect.ValueOf(respPointer).Elem().Set(reflect.Zero(respType))
+	*errPointer = terror.ErrMasterRequestIsNotForwardToLeader
+	return true
 }
