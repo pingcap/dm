@@ -1,3 +1,5 @@
+enable PR
+
 # Data Migration Platform
 
 [![Build Status](https://internal.pingcap.net/idc-jenkins/job/build_dm_multi_branch/job/master/badge/icon)](https://internal.pingcap.net/idc-jenkins/job/build_dm_multi_branch/job/master)
