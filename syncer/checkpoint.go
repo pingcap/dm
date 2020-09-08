@@ -266,6 +266,12 @@ type RemoteCheckPoint struct {
 	globalPoint         *binlogPoint
 	globalPointSaveTime time.Time
 
+	// safeModeExitPoint is set in RemoteCheckPoint.Load (from downstream DB) and LoadMeta (from metadata file).
+	// it is unset (set nil) in RemoteCheckPoint.Clear, and when syncer's stream pass its location.
+	// it is flushed along with globalPoint which called by Syncer.flushCheckPoints.
+	// this variable is mainly used to decide status of safe mode, so it is access when
+	//  - init safe mode
+	//  - checking in sync and if passed, unset it
 	safeModeExitPoint *binlog.Location
 
 	logCtx *tcontext.Context
