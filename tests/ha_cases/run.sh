@@ -118,6 +118,8 @@ function test_join_masters_and_worker {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker-join2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
+    run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT2 "list-member --worker --name=worker2" '"stage": "free",' 1
+
     echo "kill dm-master-join1"
     ps aux | grep dm-master-join1 | awk '{print $2}' | xargs kill || true
     check_port_offline $MASTER_PORT1 20

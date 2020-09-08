@@ -192,6 +192,7 @@ type SubTaskConfig struct {
 
 	CleanDumpFile bool `toml:"clean-dump-file" json:"clean-dump-file"`
 
+	// deprecated, will auto discover SQL mode
 	EnableANSIQuotes bool `toml:"ansi-quotes" json:"ansi-quotes"`
 
 	// still needed by Syncer / Loader bin

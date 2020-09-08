@@ -23,19 +23,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/failpoint"
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	gmysql "github.com/siddontang/go-mysql/mysql"
-	"go.uber.org/zap"
 )
 
 var (
@@ -247,9 +248,6 @@ func GetMariaDBGTID(db *sql.DB) (gtid.Set, error) {
 
 // GetGlobalVariable gets server's global variable
 func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
-	query := fmt.Sprintf("SHOW GLOBAL VARIABLES LIKE '%s'", variable)
-	rows, err := db.Query(query)
-
 	failpoint.Inject("GetGlobalVariableFailed", func(val failpoint.Value) {
 		items := strings.Split(val.(string), ",")
 		if len(items) != 2 {
@@ -260,17 +258,51 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 		if err1 != nil {
 			log.L().Fatal("failpoint GetGlobalVariableFailed's value is invalid", zap.String("val", val.(string)))
 		}
-
 		if variable == variableName {
 			err = tmysql.NewErr(uint16(errCode))
 			log.L().Warn("GetGlobalVariable failed", zap.String("variable", variable), zap.String("failpoint", "GetGlobalVariableFailed"), zap.Error(err))
+			failpoint.Return("", terror.DBErrorAdapt(err, terror.ErrDBDriverError))
 		}
 	})
 
+	conn, err := db.Conn(context.Background())
 	if err != nil {
 		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
-	defer rows.Close()
+	defer conn.Close()
+	return getVariable(conn, variable, true)
+}
+
+// GetSessionVariable gets connection's session variable
+func GetSessionVariable(conn *sql.Conn, variable string) (value string, err error) {
+	failpoint.Inject("GetSessionVariableFailed", func(val failpoint.Value) {
+		items := strings.Split(val.(string), ",")
+		if len(items) != 2 {
+			log.L().Fatal("failpoint GetSessionVariableFailed's value is invalid", zap.String("val", val.(string)))
+		}
+		variableName := items[0]
+		errCode, err1 := strconv.ParseUint(items[1], 10, 16)
+		if err1 != nil {
+			log.L().Fatal("failpoint GetSessionVariableFailed's value is invalid", zap.String("val", val.(string)))
+		}
+		if variable == variableName {
+			err = tmysql.NewErr(uint16(errCode))
+			log.L().Warn("GetSessionVariable failed", zap.String("variable", variable), zap.String("failpoint", "GetSessionVariableFailed"), zap.Error(err))
+			failpoint.Return("", terror.DBErrorAdapt(err, terror.ErrDBDriverError))
+		}
+	})
+	return getVariable(conn, variable, false)
+}
+
+func getVariable(conn *sql.Conn, variable string, isGlobal bool) (value string, err error) {
+	var template string
+	if isGlobal {
+		template = "SHOW GLOBAL VARIABLES LIKE '%s'"
+	} else {
+		template = "SHOW VARIABLES LIKE '%s'"
+	}
+	query := fmt.Sprintf(template, variable)
+	row := conn.QueryRowContext(context.Background(), query)
 
 	// Show an example.
 	/*
@@ -282,17 +314,10 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 		+---------------+-------+
 	*/
 
-	for rows.Next() {
-		err = rows.Scan(&variable, &value)
-		if err != nil {
-			return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-		}
+	err = row.Scan(&variable, &value)
+	if err != nil {
+		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
-
-	if rows.Err() != nil {
-		return "", terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
-	}
-
 	return value, nil
 }
 
@@ -341,41 +366,34 @@ func GetMariaDBUUID(db *sql.DB) (string, error) {
 	return fmt.Sprintf("%d%s%d", domainID, domainServerIDSeparator, serverID), nil
 }
 
-// GetSQLMode returns sql_mode.
-func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
-	sqlMode, err := GetGlobalVariable(db, "sql_mode")
+// GetParser gets a parser for sql.DB which is suitable for session variable sql_mode
+func GetParser(db *sql.DB) (*parser.Parser, error) {
+	c, err := db.Conn(context.Background())
 	if err != nil {
-		return tmysql.ModeNone, err
+		return nil, err
 	}
+	defer c.Close()
+	return GetParserForConn(c)
+}
 
+// GetParserForConn gets a parser for sql.Conn which is suitable for session variable sql_mode
+func GetParserForConn(conn *sql.Conn) (*parser.Parser, error) {
+	sqlMode, err := GetSessionVariable(conn, "sql_mode")
+	if err != nil {
+		return nil, err
+	}
+	return GetParserFromSQLModeStr(sqlMode)
+}
+
+// GetParserFromSQLModeStr gets a parser and applies given sqlMode
+func GetParserFromSQLModeStr(sqlMode string) (*parser.Parser, error) {
 	mode, err := tmysql.GetSQLMode(sqlMode)
-	return mode, terror.ErrGetSQLModeFromStr.Delegate(err, sqlMode)
-}
-
-// HasAnsiQuotesMode checks whether database has `ANSI_QUOTES` set
-func HasAnsiQuotesMode(db *sql.DB) (bool, error) {
-	mode, err := GetSQLMode(db)
 	if err != nil {
-		return false, err
-	}
-	return mode.HasANSIQuotesMode(), nil
-}
-
-// GetParser gets a parser which maybe enabled `ANSI_QUOTES` sql_mode
-func GetParser(db *sql.DB, ansiQuotesMode bool) (*parser.Parser, error) {
-	if !ansiQuotesMode {
-		// try get from DB
-		var err error
-		ansiQuotesMode, err = HasAnsiQuotesMode(db)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	parser2 := parser.New()
-	if ansiQuotesMode {
-		parser2.SetSQLMode(tmysql.ModeANSIQuotes)
-	}
+	parser2.SetSQLMode(mode)
 	return parser2, nil
 }
 

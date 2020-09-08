@@ -41,12 +41,15 @@ import (
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/atomic2"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/common"
+	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
@@ -61,7 +64,6 @@ import (
 	operator "github.com/pingcap/dm/syncer/err-operator"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/shardddl"
-	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 var (
@@ -622,18 +624,17 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 func (s *Syncer) trackTableInfoFromDownstream(origSchema, origTable, renamedSchema, renamedTable string) error {
 	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly
 	// (and get rid of ddlDBConn).
+	// use parser for downstream.
+	parser2, err := utils.GetParserForConn(s.ddlDBConn.baseConn.DBConn)
+	if err != nil {
+		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+	}
+
 	rows, err := s.ddlDBConn.querySQL(s.tctx, "SHOW CREATE TABLE "+dbutil.TableName(renamedSchema, renamedTable))
 	if err != nil {
 		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 	}
 	defer rows.Close()
-
-	// use parser for downstream.
-	// NOTE: refine the definition of `ansi-quotes` with `sql_mode` in `session` later.
-	parser2, err := utils.GetParser(s.ddlDB.DB, s.cfg.EnableANSIQuotes)
-	if err != nil {
-		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
-	}
 
 	ctx := context.Background()
 	for rows.Next() {
@@ -1076,11 +1077,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}()
 
-	parser2, err := s.fromDB.getParser(s.cfg.EnableANSIQuotes)
-	if err != nil {
-		return err
-	}
-
 	fresh, err := s.IsFreshTask(ctx)
 	if err != nil {
 		return err
@@ -1415,7 +1411,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			tryReSync:           tryReSync,
 			startTime:           startTime,
 			traceID:             &traceID,
-			parser2:             parser2,
 			shardingReSyncCh:    &shardingReSyncCh,
 		}
 
@@ -1680,7 +1675,13 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) error {
 	sql := strings.TrimSpace(string(ev.Query))
 	usedSchema := string(ev.Schema)
-	parseResult, err := s.parseDDLSQL(sql, ec.parser2, usedSchema)
+	parser2, err := event.GetParserForStatusVars(ev.StatusVars)
+	if err != nil {
+		log.L().Warn("can't determine sql_mode from binlog status_vars, use default parser instead", zap.Error(err))
+		parser2 = parser.New()
+	}
+
+	parseResult, err := s.parseDDLSQL(sql, parser2, usedSchema)
 	if err != nil {
 		s.tctx.L().Error("fail to parse statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
 		return err
@@ -1724,7 +1725,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		onlineDDLTableNames map[string]*filter.Table
 	)
 
-	sqls, onlineDDLTableNames, err = s.resolveDDLSQL(ec.tctx, ec.parser2, parseResult.stmt, usedSchema)
+	// for DDL, we don't apply operator until we try to execute it. so can handle sharding cases
+	// We use default parser because inside function where need parser, sqls are came from parserpkg.SplitDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
+	sqls, onlineDDLTableNames, err = s.resolveDDLSQL(ec.tctx, parser.New(), parseResult.stmt, usedSchema)
 	if err != nil {
 		s.tctx.L().Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
 		return err
@@ -1756,7 +1759,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		sourceTbls     = make(map[string]map[string]struct{}) // db name -> tb name
 	)
 	for _, sql := range sqls {
-		sqlDDL, tableNames, stmt, handleErr := s.handleDDL(ec.parser2, usedSchema, sql)
+		// We use default parser because sqls are came from above *Syncer.resolveDDLSQL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
+		sqlDDL, tableNames, stmt, handleErr := s.handleDDL(parser.New(), usedSchema, sql)
 		if handleErr != nil {
 			return handleErr
 		}
