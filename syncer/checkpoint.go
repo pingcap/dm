@@ -887,9 +887,9 @@ func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, *binlog.Location,
 
 	loc, loc2, err := dumpling.ParseMetaData(filename, cp.cfg.Flavor)
 	if err != nil {
-		toPrint, err := ioutil.ReadFile(filename)
-		if err != nil {
-			toPrint = []byte(err.Error())
+		toPrint, err2 := ioutil.ReadFile(filename)
+		if err2 != nil {
+			toPrint = []byte(err2.Error())
 		}
 		err = terror.ErrParseMydumperMeta.Generate(err, toPrint)
 	}
