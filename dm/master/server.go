@@ -170,11 +170,8 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	if err != nil {
 		return terror.ErrMasterTLSConfigNotValid.Delegate(err)
 	}
-	if tls2 != nil && tls2.TLSConfig() != nil {
-		tls2.TLSConfig().InsecureSkipVerify = true
-	}
 
-	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr, tls2.ToGRPCDialOption())
+	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.AdvertiseAddr, tls2.ToGRPCDialOption())
 	if err != nil {
 		return
 	}
