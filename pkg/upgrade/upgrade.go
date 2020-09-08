@@ -116,8 +116,9 @@ func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 			tableName := dbutil.TableName(subCfg.MetaSchema, cputil.SyncerCheckpoint(subCfg.Name))
 			subCfg2, err := subCfg.DecryptPassword()
 			if err != nil {
-				log.L().Error("skip subconfig when upgrading", zap.String("task", task),
-					zap.String("source id", sourceID), zap.Error(err))
+				log.L().Error("subconfig error when upgrading", zap.String("task", task),
+					zap.String("source id", sourceID), zap.String("subtask config", subCfg.String()), zap.Error(err))
+				return err
 			}
 			dbConfigs[tableName] = subCfg2.To
 		}
@@ -132,7 +133,7 @@ func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 	for tableName, cfg := range dbConfigs {
 		targetDB, err := conn.DefaultDBProvider.Apply(cfg)
 		if err != nil {
-			logger.Error("skip target DB when upgrading", zap.String("table name", tableName))
+			logger.Error("target DB error when upgrading", zap.String("table name", tableName))
 			return err
 		}
 		toClose = append(toClose, targetDB)
