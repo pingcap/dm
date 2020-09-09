@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -22,10 +23,12 @@ import (
 
 	"github.com/chaos-mesh/go-sqlsmith"
 	"github.com/pingcap/errors"
+	"go.uber.org/zap"
 
 	config2 "github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 const (
@@ -49,6 +52,22 @@ type singleTask struct {
 	targetConn *dbConn
 	tables     []string
 	taskCfg    config2.TaskConfig
+	result     *singleResult
+}
+
+// singleResult holds the result of the single source task case.
+type singleResult struct {
+	Insert int `json:"insert"`
+	Update int `json:"update"`
+	Delete int `json:"delete"`
+}
+
+func (sr *singleResult) String() string {
+	data, err := json.Marshal(sr)
+	if err != nil {
+		return err.Error()
+	}
+	return string(data)
 }
 
 // newSingleTask creates a new singleTask instance.
@@ -89,6 +108,7 @@ func newSingleTask(ctx context.Context, cli pb.MasterClient, confDir string,
 		sourceConn: sourceConn,
 		targetConn: targetConn,
 		taskCfg:    taskCfg,
+		result:     &singleResult{},
 	}
 	st.ss.SetDB(singleDB)
 	return st, nil
@@ -99,6 +119,8 @@ func (st *singleTask) run() error {
 	defer func() {
 		st.sourceDB.Close()
 		st.targetDB.Close()
+
+		log.L().Info("single task run result", zap.Stringer("result", st.result))
 	}()
 
 	if err := st.stopPreviousTask(); err != nil {
@@ -256,13 +278,23 @@ func (st *singleTask) genIncrData(ctx context.Context) (err error) {
 			return nil
 		default:
 		}
-		query, err := randDML(st.ss)
+		query, dmlType, err := randDML(st.ss)
 		if err != nil {
 			return err
 		}
 		err = st.sourceConn.execSQLs(ctx, query)
 		if err != nil {
 			return err
+		}
+
+		switch dmlType {
+		case insertDML:
+			st.result.Insert++
+		case updateDML:
+			st.result.Update++
+		case deleteDML:
+			st.result.Delete++
+		default:
 		}
 	}
 }
