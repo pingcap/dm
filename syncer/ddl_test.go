@@ -72,12 +72,12 @@ func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
 	}
 
 	db, mock, err := sqlmock.New()
-	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
+	mock.ExpectQuery("SHOW VARIABLES LIKE").
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "ANSI_QUOTES"))
 	c.Assert(err, IsNil)
 
-	parser, err := utils.GetParser(db, false)
+	parser, err := utils.GetParser(db)
 	c.Assert(err, IsNil)
 
 	for _, sql := range ansiQuotesCases {
