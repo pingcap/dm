@@ -319,15 +319,12 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		ignoreCheckingItems = []string{VersionChecking, BinlogRowImageChecking}
 		source1             = "mysql-replica-01"
 		source2             = "mysql-replica-02"
-		//serverID1           = uint32(123)
-		//serverID2           = uint32(456)
-		metaSchema  = "meta-sub-tasks"
-		heartbeatUI = 12
-		heartbeatRI = 21
-		timezone    = "Asia/Shanghai"
-		//relayDir            = "/path/to/relay"
-		maxAllowedPacket = 10244201
-		session          = map[string]string{
+		metaSchema          = "meta-sub-tasks"
+		heartbeatUI         = 12
+		heartbeatRI         = 21
+		timezone            = "Asia/Shanghai"
+		maxAllowedPacket    = 10244201
+		session             = map[string]string{
 			"sql_mode": " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
 		}
 		security = Security{
@@ -399,16 +396,14 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		}
 
 		stCfg1 = &SubTaskConfig{
-			IsSharding:          true,
-			ShardMode:           shardMode,
-			OnlineDDLScheme:     onlineDDLScheme,
-			CaseSensitive:       true,
-			Name:                name,
-			Mode:                taskMode,
-			IgnoreCheckingItems: ignoreCheckingItems,
-			SourceID:            source1,
-			//ServerID:                serverID1,
-			//Flavor:                  gmysql.MariaDBFlavor,
+			IsSharding:              true,
+			ShardMode:               shardMode,
+			OnlineDDLScheme:         onlineDDLScheme,
+			CaseSensitive:           true,
+			Name:                    name,
+			Mode:                    taskMode,
+			IgnoreCheckingItems:     ignoreCheckingItems,
+			SourceID:                source1,
 			MetaSchema:              metaSchema,
 			HeartbeatUpdateInterval: heartbeatUI,
 			HeartbeatReportInterval: heartbeatRI,
@@ -419,9 +414,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				BinLogGTID: "1-1-12,4-4-4",
 			},
 			Timezone: timezone,
-			//RelayDir: relayDir,
-			//UseRelay: true,
-			From: source1DBCfg,
+			From:     source1DBCfg,
 			To: DBConfig{
 				Host:             "127.0.0.1",
 				Port:             4000,
@@ -468,7 +461,6 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	stCfg2, err := stCfg1.Clone()
 	c.Assert(err, IsNil)
 	stCfg2.SourceID = source2
-	//stCfg2.ServerID = serverID2
 	stCfg2.Meta = &Meta{
 		BinLogName: "mysql-bin.000321",
 		BinLogPos:  123,
