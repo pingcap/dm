@@ -63,7 +63,7 @@ func ignoreExcept(itemMap map[string]struct{}) []string {
 		config.ShardTableSchemaChecking,
 		config.ShardAutoIncrementIDChecking,
 	}
-	ignoreCheckingItems := make([]string, len(items)-len(itemMap))
+	ignoreCheckingItems := make([]string, 0, len(items)-len(itemMap))
 	for _, i := range items {
 		if _, ok := itemMap[i]; !ok {
 			ignoreCheckingItems = append(ignoreCheckingItems, i)
