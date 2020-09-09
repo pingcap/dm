@@ -371,5 +371,5 @@ func (s *testCheckerSuite) TestSameTargetTableDetection(c *tc.C) {
 	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
 	mock.ExpectQuery("SHOW CREATE TABLE .*").WillReturnRows(sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow(tb1, fmt.Sprintf(createTable1, tb1)))
 	mock.ExpectQuery("SHOW CREATE TABLE .*").WillReturnRows(sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow(tb1, fmt.Sprintf(createTable1, tb2)))
-	c.Assert(CheckSyncConfig(context.Background(), cfgs), tc.ErrorMatches, "(.|\n)*same table name in case-sensitive(.|\n)*")
+	c.Assert(CheckSyncConfig(context.Background(), cfgs), tc.ErrorMatches, "(.|\n)*same table name in case-insensitive(.|\n)*")
 }
