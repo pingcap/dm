@@ -32,11 +32,12 @@ import (
 // dbConn holds a connection to a database and supports to reset the connection.
 type dbConn struct {
 	baseConn  *conn.BaseConn
+	currDB    string // current database (will `USE` it when reseting the connection).
 	resetFunc func(ctx context.Context, baseConn *conn.BaseConn) (*conn.BaseConn, error)
 }
 
 // createDBConn creates a dbConn instance.
-func createDBConn(ctx context.Context, db *conn.BaseDB) (*dbConn, error) {
+func createDBConn(ctx context.Context, db *conn.BaseDB, currDB string) (*dbConn, error) {
 	c, err := db.GetBaseConn(ctx)
 	if err != nil {
 		return nil, err
@@ -44,6 +45,7 @@ func createDBConn(ctx context.Context, db *conn.BaseDB) (*dbConn, error) {
 
 	return &dbConn{
 		baseConn: c,
+		currDB:   currDB,
 		resetFunc: func(ctx context.Context, baseConn *conn.BaseConn) (*conn.BaseConn, error) {
 			db.CloseBaseConn(baseConn)
 			return db.GetBaseConn(ctx)
@@ -57,6 +59,12 @@ func (c *dbConn) resetConn(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	_, err = baseConn.ExecuteSQL(tcontext.NewContext(ctx, log.L()), nil, "chaos-cases", []string{fmt.Sprintf("USE %s", c.currDB)})
+	if err != nil {
+		return err
+	}
+
 	c.baseConn = baseConn
 	return nil
 }

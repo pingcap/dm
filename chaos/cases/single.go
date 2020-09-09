@@ -79,7 +79,7 @@ func newSingleTask(ctx context.Context, cli pb.MasterClient, confDir string,
 	if err != nil {
 		return nil, err
 	}
-	sourceConn, err := createDBConn(ctx, sourceDB)
+	sourceConn, err := createDBConn(ctx, sourceDB, singleDB)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func newSingleTask(ctx context.Context, cli pb.MasterClient, confDir string,
 	if err != nil {
 		return nil, err
 	}
-	targetConn, err := createDBConn(ctx, targetDB)
+	targetConn, err := createDBConn(ctx, targetDB, singleDB)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func newSingleTask(ctx context.Context, cli pb.MasterClient, confDir string,
 	taskCfg.TargetDB = &targetCfg
 
 	st := &singleTask{
-		logger: log.L().WithFields(zap.String("case", "single-task")),
+		logger:     log.L().WithFields(zap.String("case", "single-task")),
 		ctx:        ctx,
 		cli:        cli,
 		confDir:    confDir,
