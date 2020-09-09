@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/tidb/errno"
 	"github.com/siddontang/go-mysql/mysql"
 
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -98,6 +99,7 @@ func init() {
 	OsExit = os.Exit
 	builtInSkipDDLPatterns = regexp.MustCompile("(?i)" + strings.Join(builtInSkipDDLs, "|"))
 	passwordRegexp = regexp.MustCompile(passwordPatterns)
+	pb.HidePwdFunc = HidePassword
 }
 
 // DecodeBinlogPosition parses a mysql.Position from string format
