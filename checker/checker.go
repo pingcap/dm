@@ -69,8 +69,6 @@ type Checker struct {
 
 	instances []*mysqlInstance
 
-	enableANSIQuotes bool
-
 	checkList     []check.Checker
 	checkingItems map[string]string
 	result        struct {
@@ -80,12 +78,11 @@ type Checker struct {
 }
 
 // NewChecker returns a checker
-func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string, enableANSIQuotes bool) *Checker {
+func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *Checker {
 	c := &Checker{
-		instances:        make([]*mysqlInstance, 0, len(cfgs)),
-		checkingItems:    checkingItems,
-		logger:           log.With(zap.String("unit", "task check")),
-		enableANSIQuotes: enableANSIQuotes,
+		instances:     make([]*mysqlInstance, 0, len(cfgs)),
+		checkingItems: checkingItems,
+		logger:        log.With(zap.String("unit", "task check")),
 	}
 
 	for _, cfg := range cfgs {

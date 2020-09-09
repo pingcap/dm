@@ -298,7 +298,7 @@ func (t *testTCPReaderSuite) verifyInitialEvents(c *C, reader Reader) {
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	parser2, err := utils.GetParser(t.db, false)
+	parser2, err := utils.GetParser(t.db)
 	c.Assert(err, IsNil)
 
 forLoop:

@@ -91,8 +91,8 @@ func (conn *UpStreamConn) getServerUUID(flavor string) (string, error) {
 	return utils.GetServerUUID(conn.BaseDB.DB, flavor)
 }
 
-func (conn *UpStreamConn) getParser(ansiQuotesMode bool) (*parser.Parser, error) {
-	return utils.GetParser(conn.BaseDB.DB, ansiQuotesMode)
+func (conn *UpStreamConn) getParser() (*parser.Parser, error) {
+	return utils.GetParser(conn.BaseDB.DB)
 }
 
 func (conn *UpStreamConn) killConn(connID uint32) error {
