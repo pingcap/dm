@@ -19,19 +19,19 @@ import (
 	"github.com/chaos-mesh/go-sqlsmith"
 )
 
-type DMLType int
+type dmlType int
 
 const (
-	insertDML DMLType = iota + 1
+	insertDML dmlType = iota + 1
 	updateDML
 	deleteDML
 )
 
 // randDML generates DML (INSERT, UPDATE or DELETE).
 // NOTE: 3 DML types have the same weight now.
-func randDML(ss *sqlsmith.SQLSmith) (dml string, dmlType DMLType, err error) {
-	dmlType = DMLType(rand.Intn(3) + 1)
-	switch dmlType {
+func randDML(ss *sqlsmith.SQLSmith) (dml string, t dmlType, err error) {
+	t = dmlType(rand.Intn(3) + 1)
+	switch t {
 	case insertDML:
 		dml, _, err = ss.InsertStmt(false)
 	case updateDML:

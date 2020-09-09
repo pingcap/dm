@@ -42,6 +42,8 @@ const (
 
 // singleTask is a test case with only one upstream source.
 type singleTask struct {
+	logger log.Logger
+
 	ctx        context.Context
 	cli        pb.MasterClient
 	confDir    string
@@ -99,6 +101,7 @@ func newSingleTask(ctx context.Context, cli pb.MasterClient, confDir string,
 	taskCfg.TargetDB = &targetCfg
 
 	st := &singleTask{
+		logger: log.L().WithFields(zap.String("case", "single-task")),
 		ctx:        ctx,
 		cli:        cli,
 		confDir:    confDir,
@@ -120,7 +123,7 @@ func (st *singleTask) run() error {
 		st.sourceDB.Close()
 		st.targetDB.Close()
 
-		log.L().Info("single task run result", zap.Stringer("result", st.result))
+		st.logger.Info("single task run result", zap.Stringer("result", st.result))
 	}()
 
 	if err := st.stopPreviousTask(); err != nil {
@@ -138,6 +141,7 @@ func (st *singleTask) run() error {
 		return err
 	}
 
+	st.logger.Info("check data for full stage")
 	if err := diffDataLoop(st.ctx, singleDiffCount, singleDiffInterval, singleDB, st.tables, st.targetDB.DB, st.sourceDB.DB); err != nil {
 		return err
 	}
@@ -151,6 +155,7 @@ func (st *singleTask) run() error {
 
 // stopPreviousTask stops the previous task with the same name if exists.
 func (st *singleTask) stopPreviousTask() error {
+	st.logger.Info("stopping previous task")
 	resp, err := st.cli.OperateTask(st.ctx, &pb.OperateTaskRequest{
 		Op:   pb.TaskOp_Stop,
 		Name: st.taskCfg.Name,
@@ -165,6 +170,7 @@ func (st *singleTask) stopPreviousTask() error {
 
 // clearPreviousData clears previous data in upstream source and downstream target.
 func (st *singleTask) clearPreviousData() error {
+	st.logger.Info("clearing previous source and target data")
 	if err := dropDatabase(st.ctx, st.sourceConn, singleDB); err != nil {
 		return err
 	}
@@ -176,6 +182,7 @@ func (st *singleTask) clearPreviousData() error {
 
 // genFullData generates data for the full stage.
 func (st *singleTask) genFullData() error {
+	st.logger.Info("generating data for full stage")
 	if err := createDatabase(st.ctx, st.sourceConn, singleDB); err != nil {
 		return err
 	}
@@ -226,6 +233,7 @@ func (st *singleTask) genFullData() error {
 
 // createSingleTask creates a single source task.
 func (st *singleTask) createTask() error {
+	st.logger.Info("starting task")
 	resp, err := st.cli.StartTask(st.ctx, &pb.StartTaskRequest{
 		Task: st.taskCfg.String(),
 	})
@@ -266,9 +274,18 @@ func (st *singleTask) incrLoop() error {
 // genIncrData generates data for the incremental stage in one round.
 // NOTE: it return nil for context done.
 func (st *singleTask) genIncrData(ctx context.Context) (err error) {
+	st.logger.Info("generating data for incremental stage")
+
 	defer func() {
 		if errors.Cause(err) == context.Canceled || errors.Cause(err) == context.DeadlineExceeded {
 			err = nil // clear error for context done.
+		} else if err != nil {
+			select {
+			case <-ctx.Done():
+				st.logger.Warn("ignore error when generating data for incremental stage", zap.Error(err))
+				err = nil // some other errors like `connection is already closed` may also be reported for context done.
+			default:
+			}
 		}
 	}()
 
@@ -278,7 +295,7 @@ func (st *singleTask) genIncrData(ctx context.Context) (err error) {
 			return nil
 		default:
 		}
-		query, dmlType, err := randDML(st.ss)
+		query, t, err := randDML(st.ss)
 		if err != nil {
 			return err
 		}
@@ -287,7 +304,7 @@ func (st *singleTask) genIncrData(ctx context.Context) (err error) {
 			return err
 		}
 
-		switch dmlType {
+		switch t {
 		case insertDML:
 			st.result.Insert++
 		case updateDML:
@@ -302,9 +319,18 @@ func (st *singleTask) genIncrData(ctx context.Context) (err error) {
 // diffIncrData checks data equal for the incremental stage in one round.
 // NOTE: it return nil for context done.
 func (st *singleTask) diffIncrData(ctx context.Context) (err error) {
+	st.logger.Info("check data for incremental stage")
+
 	defer func() {
 		if errors.Cause(err) == context.Canceled || errors.Cause(err) == context.DeadlineExceeded {
 			err = nil // clear error for context done.
+		} else if err != nil {
+			select {
+			case <-ctx.Done():
+				st.logger.Warn("ignore error when check data for incremental stage", zap.Error(err))
+				err = nil // some other errors like `connection is already closed` may also be reported for context done.
+			default:
+			}
 		}
 	}()
 
