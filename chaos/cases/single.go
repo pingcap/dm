@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/chaos-mesh/go-sqlsmith"
+	"github.com/pingcap/errors"
 
 	config2 "github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -33,6 +34,7 @@ const (
 	singleFullInsertCount = 100              // `INSERT INTO` count (not rows count) for tables in full stage.
 	singleDiffCount       = 10               // diff data check count
 	singleDiffInterval    = 10 * time.Second // diff data check interval
+	singleIncrRoundTime   = 20 * time.Second // time to generate incremental data in one round
 )
 
 // singleTask is a test case with only one upstream source.
@@ -43,8 +45,8 @@ type singleTask struct {
 	ss         *sqlsmith.SQLSmith
 	sourceDB   *conn.BaseDB
 	targetDB   *conn.BaseDB
-	sourceConn *conn.BaseConn
-	targetConn *conn.BaseConn
+	sourceConn *dbConn
+	targetConn *dbConn
 	tables     []string
 	taskCfg    config2.TaskConfig
 }
@@ -56,7 +58,7 @@ func newSingleTask(ctx context.Context, cli pb.MasterClient, confDir string,
 	if err != nil {
 		return nil, err
 	}
-	sourceConn, err := sourceDB.GetBaseConn(ctx)
+	sourceConn, err := createDBConn(ctx, sourceDB)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +67,7 @@ func newSingleTask(ctx context.Context, cli pb.MasterClient, confDir string,
 	if err != nil {
 		return nil, err
 	}
-	targetConn, err := targetDB.GetBaseConn(ctx)
+	targetConn, err := createDBConn(ctx, targetDB)
 	if err != nil {
 		return nil, err
 	}
@@ -105,6 +107,7 @@ func (st *singleTask) run() error {
 	if err := st.clearPreviousData(); err != nil {
 		return err
 	}
+
 	if err := st.genFullData(); err != nil {
 		return err
 	}
@@ -114,6 +117,10 @@ func (st *singleTask) run() error {
 	}
 
 	if err := diffDataLoop(st.ctx, singleDiffCount, singleDiffInterval, singleDB, st.tables, st.targetDB.DB, st.sourceDB.DB); err != nil {
+		return err
+	}
+
+	if err := st.incrLoop(); err != nil {
 		return err
 	}
 
@@ -145,14 +152,14 @@ func (st *singleTask) clearPreviousData() error {
 	return nil
 }
 
-// genSingleTaskFullData generates data for the full stage.
+// genFullData generates data for the full stage.
 func (st *singleTask) genFullData() error {
 	if err := createDatabase(st.ctx, st.sourceConn, singleDB); err != nil {
 		return err
 	}
 
 	// NOTE: we set CURRENT database here.
-	if err := execSQLs(st.ctx, st.sourceConn, fmt.Sprintf("USE %s", singleDB)); err != nil {
+	if err := st.sourceConn.execSQLs(st.ctx, fmt.Sprintf("USE %s", singleDB)); err != nil {
 		return err
 	}
 
@@ -167,7 +174,7 @@ func (st *singleTask) genFullData() error {
 		if err != nil {
 			return err
 		}
-		err = execSQLs(st.ctx, st.sourceConn, query)
+		err = st.sourceConn.execSQLs(st.ctx, query)
 		st.tables = append(st.tables, name)
 
 		col2, idx2, err := createTableToSmithSchema(singleDB, query)
@@ -186,7 +193,7 @@ func (st *singleTask) genFullData() error {
 		if err != nil {
 			return err
 		}
-		err = execSQLs(st.ctx, st.sourceConn, query)
+		err = st.sourceConn.execSQLs(st.ctx, query)
 		if err != nil {
 			return err
 		}
@@ -206,4 +213,68 @@ func (st *singleTask) createTask() error {
 		return fmt.Errorf("fail to start task: %s", resp.Msg)
 	}
 	return nil
+}
+
+// incrLoop enters the loop of generating incremental data and diff them.
+func (st *singleTask) incrLoop() error {
+	for {
+		select {
+		case <-st.ctx.Done():
+			return nil
+		default:
+			ctx2, cancel2 := context.WithTimeout(st.ctx, singleIncrRoundTime)
+			// generate data
+			err := st.genIncrData(ctx2)
+			if err != nil {
+				cancel2()
+				return err
+			}
+
+			// diff data
+			err = st.diffIncrData(ctx2)
+			if err != nil {
+				cancel2()
+				return err
+			}
+			cancel2()
+		}
+	}
+}
+
+// genIncrData generates data for the incremental stage in one round.
+// NOTE: it return nil for context done.
+func (st *singleTask) genIncrData(ctx context.Context) (err error) {
+	defer func() {
+		if errors.Cause(err) == context.Canceled || errors.Cause(err) == context.DeadlineExceeded {
+			err = nil // clear error for context done.
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		query, err := randDML(st.ss)
+		if err != nil {
+			return err
+		}
+		err = st.sourceConn.execSQLs(ctx, query)
+		if err != nil {
+			return err
+		}
+	}
+}
+
+// diffIncrData checks data equal for the incremental stage in one round.
+// NOTE: it return nil for context done.
+func (st *singleTask) diffIncrData(ctx context.Context) (err error) {
+	defer func() {
+		if errors.Cause(err) == context.Canceled || errors.Cause(err) == context.DeadlineExceeded {
+			err = nil // clear error for context done.
+		}
+	}()
+
+	return diffDataLoop(ctx, singleDiffCount, singleDiffInterval, singleDB, st.tables, st.targetDB.DB, st.sourceDB.DB)
 }

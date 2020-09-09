@@ -17,6 +17,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -57,6 +58,8 @@ func main() {
 	go func() {
 		http.ListenAndServe("0.0.0.0:8899", nil) // for pprof
 	}()
+
+	rand.Seed(time.Now().UnixNano())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
