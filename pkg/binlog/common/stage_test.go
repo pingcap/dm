@@ -24,13 +24,13 @@ func TestSuite(t *testing.T) {
 }
 
 var (
-	_ = Suite(&testStageSuite{})
+	_ = Suite(&testCommonSuite{})
 )
 
-type testStageSuite struct {
+type testCommonSuite struct {
 }
 
-func (t *testStageSuite) TestStageString(c *C) {
+func (t *testCommonSuite) TestStageString(c *C) {
 	cases := []struct {
 		stage Stage
 		str   string
