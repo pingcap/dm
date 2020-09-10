@@ -15,10 +15,16 @@ package unit
 
 import (
 	"context"
+	"testing"
 
 	"github.com/pingcap/check"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/errors"
 )
+
+func TestSuite(t *testing.T) {
+	check.TestingT(t)
+}
 
 var _ = check.Suite(&testUnitSuite{})
 
@@ -30,4 +36,12 @@ func (t *testUnitSuite) TestIsCtxCanceledProcessErr(c *check.C) {
 
 	err = NewProcessError(errors.New("123"))
 	c.Assert(IsCtxCanceledProcessErr(err), check.IsFalse)
+
+	terr := terror.ErrDBBadConn
+	err = NewProcessError(terror.ErrDBBadConn)
+	c.Assert(err.GetErrCode(), check.Equals, int32(terr.Code()))
+	c.Assert(err.GetErrClass(), check.Equals, terr.Class().String())
+	c.Assert(err.GetErrLevel(), check.Equals, terr.Level().String())
+	c.Assert(err.GetMessage(), check.Equals, terr.Message())
+	c.Assert(err.GetRawCause(), check.Equals, "")
 }
