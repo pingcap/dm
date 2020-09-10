@@ -25,16 +25,16 @@ import (
 
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
-	"github.com/pingcap/dm/pkg/terror"
 )
 
 // ParseMetaData parses mydumper's output meta file and returns binlog location.
 // since v2.0.0, dumpling maybe configured to output master status after connection pool is established,
 // we return this location as well.
 func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location, error) {
+	invalidErr := fmt.Errorf("file %s invalid format", filename)
 	fd, err := os.Open(filename)
 	if err != nil {
-		return nil, nil, terror.ErrParseMydumperMeta.Generate(err)
+		return nil, nil, err
 	}
 	defer fd.Close()
 
@@ -89,7 +89,7 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 		if err2 == io.EOF {
 			break
 		} else if err2 != nil {
-			return nil, nil, terror.ErrParseMydumperMeta.Generate(err2)
+			return nil, nil, err2
 		}
 		line = strings.TrimSpace(line)
 		if len(line) == 0 {
@@ -99,14 +99,14 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 		switch line {
 		case "SHOW MASTER STATUS:":
 			if err3 := parsePosAndGTID(&pos, &gtidStr); err3 != nil {
-				return nil, nil, terror.ErrParseMydumperMeta.Generate(err3)
+				return nil, nil, err3
 			}
 		case "SHOW SLAVE STATUS:":
 			// ref: https://github.com/maxbube/mydumper/blob/master/mydumper.c#L434
 			for {
 				line, err3 := br.ReadString('\n')
 				if err3 != nil {
-					return nil, nil, terror.ErrParseMydumperMeta.Generate(err3)
+					return nil, nil, err3
 				}
 				line = strings.TrimSpace(line)
 				if len(line) == 0 {
@@ -116,7 +116,7 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 		case "SHOW MASTER STATUS: /* AFTER CONNECTION POOL ESTABLISHED */":
 			useLocation2 = true
 			if err3 := parsePosAndGTID(&pos2, &gtidStr2); err3 != nil {
-				return nil, nil, terror.ErrParseMydumperMeta.Generate(err3)
+				return nil, nil, err3
 			}
 		default:
 			// do nothing for Started dump, Finished dump...
@@ -124,12 +124,12 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 	}
 
 	if len(pos.Name) == 0 || pos.Pos == uint32(0) {
-		return nil, nil, terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
+		return nil, nil, invalidErr
 	}
 
 	gset, err := gtid.ParserGTID(flavor, gtidStr)
 	if err != nil {
-		return nil, nil, terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
+		return nil, nil, invalidErr
 	}
 	loc = &binlog.Location{
 		Position: pos,
@@ -138,11 +138,11 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 
 	if useLocation2 {
 		if len(pos2.Name) == 0 || pos2.Pos == uint32(0) {
-			return nil, nil, terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
+			return nil, nil, invalidErr
 		}
 		gset2, err := gtid.ParserGTID(flavor, gtidStr2)
 		if err != nil {
-			return nil, nil, terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
+			return nil, nil, invalidErr
 		}
 		loc2 = &binlog.Location{
 			Position: pos2,
