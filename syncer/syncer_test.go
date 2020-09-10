@@ -17,6 +17,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -119,14 +122,20 @@ func (mp *MockStreamProducer) generateStreamer(location binlog.Location) (stream
 }
 
 func (s *testSyncerSuite) SetUpSuite(c *C) {
+	loaderDir, err := ioutil.TempDir("", "loader")
+	c.Assert(err, IsNil)
+	loaderCfg := config.LoaderConfig{
+		Dir: loaderDir,
+	}
 	s.cfg = &config.SubTaskConfig{
-		From:       getDBConfigFromEnv(),
-		To:         getDBConfigFromEnv(),
-		ServerID:   101,
-		MetaSchema: "test",
-		Name:       "syncer_ut",
-		Mode:       config.ModeIncrement,
-		Flavor:     "mysql",
+		From:         getDBConfigFromEnv(),
+		To:           getDBConfigFromEnv(),
+		ServerID:     101,
+		MetaSchema:   "test",
+		Name:         "syncer_ut",
+		Mode:         config.ModeIncrement,
+		Flavor:       "mysql",
+		LoaderConfig: loaderCfg,
 	}
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()
@@ -213,7 +222,9 @@ func (s *testSyncerSuite) resetEventsGenerator(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TearDownSuite(c *C) {}
+func (s *testSyncerSuite) TearDownSuite(c *C) {
+	os.RemoveAll(s.cfg.Dir)
+}
 
 func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.Parser, error) {
 	mock.ExpectQuery("SHOW VARIABLES LIKE").
@@ -1355,7 +1366,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	c.Assert(len(generatedEvents1), Equals, 19)
 	safeModeExitLocation := binlog.NewLocation("")
 	safeModeExitLocation.Position.Pos = generatedEvents1[18].Header.LogPos
-	syncer.cfg.SafeModeExitLoc = &safeModeExitLocation
+	syncer.checkpoint.SaveSafeModeExitPoint(&safeModeExitLocation)
 
 	// check after safeModeExitLocation, safe mode is turned off
 	events2 := mockBinlogEvents{
@@ -1455,6 +1466,34 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 		c.Errorf("checkpointDB unfulfilled expectations: %s", err)
 	}
 	c.Assert(failpoint.Disable("github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds"), IsNil)
+}
+
+func (s *testSyncerSuite) TestRemoveMetadataIsFine(c *C) {
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	cfg.Mode = config.ModeAll
+	syncer := NewSyncer(cfg, nil)
+	fresh, err := syncer.IsFreshTask(context.Background())
+	c.Assert(err, IsNil)
+	c.Assert(fresh, IsTrue)
+
+	filename := filepath.Join(s.cfg.Dir, "metadata")
+	err = ioutil.WriteFile(filename, []byte(
+		fmt.Sprintf("SHOW MASTER STATUS:\n\tLog: BAD METADATA")), 0644)
+	c.Assert(err, IsNil)
+	c.Assert(syncer.checkpoint.LoadMeta(), NotNil)
+
+	err = ioutil.WriteFile(filename, []byte(
+		fmt.Sprintf("SHOW MASTER STATUS:\n\tLog: mysql-bin.000003\n\tPos: 1234\n\tGTID:\n\n")), 0644)
+	c.Assert(err, IsNil)
+	c.Assert(syncer.checkpoint.LoadMeta(), IsNil)
+
+	c.Assert(os.Remove(filename), IsNil)
+
+	// after successful LoadMeta, IsFreshTask should return false so don't load again
+	fresh, err = syncer.IsFreshTask(context.Background())
+	c.Assert(err, IsNil)
+	c.Assert(fresh, IsFalse)
 }
 
 func executeSQLAndWait(expectJobNum int) {

@@ -65,3 +65,21 @@ func makeTestLogger() (Logger, *zaptest.Buffer) {
 	))
 	return Logger{Logger: logger}, buffer
 }
+
+func (s *testLogSuite) TestLogLevel(c *C) {
+	logLevel := "warning"
+	cfg := &Config{
+		Level: logLevel,
+	}
+	cfg.Adjust()
+
+	InitLogger(cfg)
+	c.Assert(Props().Level.String(), Equals, zap.WarnLevel.String())
+	c.Assert(L().Check(zap.InfoLevel, "This is an info log"), IsNil)
+	c.Assert(L().Check(zap.ErrorLevel, "This is an error log"), NotNil)
+
+	SetLevel(zap.InfoLevel)
+	c.Assert(Props().Level.String(), Equals, zap.InfoLevel.String())
+	c.Assert(L().Check(zap.WarnLevel, "This is a warn log"), NotNil)
+	c.Assert(L().Check(zap.DebugLevel, "This is a debug log"), IsNil)
+}
