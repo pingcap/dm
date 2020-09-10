@@ -14,6 +14,7 @@
 package common
 
 import (
+	"net"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -58,6 +59,16 @@ func (t *testCommon) TestKeyAdapter(c *C) {
 			adapter: UpstreamSubTaskKeyAdapter,
 			want:    "/dm-master/upstream/subtask/6d7973716c31/74657374",
 		},
+		{
+			keys:    []string{"test", "target_db", "target_table"},
+			adapter: ShardDDLOptimismInitSchemaKeyAdapter,
+			want:    "/dm-master/shardddl-optimism/init-schema/74657374/7461726765745f6462/7461726765745f7461626c65",
+		},
+		{
+			keys:    []string{"test", "mysql_replica_01", "target_db", "target_table"},
+			adapter: ShardDDLOptimismInfoKeyAdapter,
+			want:    "/dm-master/shardddl-optimism/info/74657374/6d7973716c5f7265706c6963615f3031/7461726765745f6462/7461726765745f7461626c65",
+		},
 	}
 
 	for _, ca := range testCases {
@@ -67,4 +78,13 @@ func (t *testCommon) TestKeyAdapter(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(decKey, DeepEquals, ca.keys)
 	}
+}
+
+func (t *testCommon) TestIsErrNetClosing(c *C) {
+	server, err := net.Listen("tcp", "localhost:0")
+	c.Assert(err, IsNil)
+	err = server.Close()
+	c.Assert(IsErrNetClosing(err), IsFalse)
+	_, err = server.Accept()
+	c.Assert(IsErrNetClosing(err), IsTrue)
 }
