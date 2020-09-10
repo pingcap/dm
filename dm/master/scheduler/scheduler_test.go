@@ -221,6 +221,11 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	rebuildScheduler(ctx)
 
 	// CASE 2.6: start a task with only one source.
+	// wait source bound recovered
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		bounds := s.BoundSources()
+		return len(bounds) == 1 && bounds[0] == sourceID1
+	}), IsTrue)
 	// no subtask config exists before start.
 	c.Assert(s.AddSubTasks(), IsNil) // can call without configs, return without error, but take no effect.
 	t.subTaskCfgNotExist(c, s, taskName1, sourceID1)
