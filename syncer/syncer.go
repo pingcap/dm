@@ -2673,11 +2673,6 @@ func (s *Syncer) setSyncCfg() error {
 	return nil
 }
 
-// ShardDDLInfo returns the current pending to handle shard DDL info.
-func (s *Syncer) ShardDDLInfo() *pessimism.Info {
-	return s.pessimist.PendingInfo()
-}
-
 // ShardDDLOperation returns the current pending to handle shard DDL lock operation.
 func (s *Syncer) ShardDDLOperation() *pessimism.Operation {
 	return s.pessimist.PendingOperation()
