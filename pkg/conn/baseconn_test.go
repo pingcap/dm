@@ -15,6 +15,7 @@ package conn
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -87,8 +88,9 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	_, err = baseConn.QuerySQL(tctx, "select 1")
 	c.Assert(terror.ErrDBQueryFailed.Equal(err), IsTrue)
 
-	affected, _ := baseConn.ExecuteSQL(tctx, testStmtHistogram, "test", []string{""})
+	affected, err := baseConn.ExecuteSQL(tctx, testStmtHistogram, "test", []string{})
 	c.Assert(affected, Equals, 0)
+	c.Assert(err, IsNil)
 
 	mock.ExpectBegin()
 	mock.ExpectExec("create database test").WillReturnResult(sqlmock.NewResult(1, 1))
@@ -107,7 +109,22 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	_, err = baseConn.ExecuteSQL(tctx, testStmtHistogram, "test", []string{"create database test"})
 	c.Assert(terror.ErrDBExecuteFailed.Equal(err), IsTrue)
 
-	if err = mock.ExpectationsWereMet(); err != nil {
-		c.Fatal("thers were unexpected:", err)
+	mock.ExpectBegin()
+	mock.ExpectExec("create database test").WillReturnError(errors.New("ignore me"))
+	mock.ExpectExec("create database test").WillReturnError(errors.New("don't ignore me"))
+	mock.ExpectRollback()
+	ignoreF := func(err error) bool {
+		if err.Error() == "ignore me" {
+			return true
+		}
+		return false
 	}
+	affected, err = baseConn.ExecuteSQLWithIgnoreError(tctx, testStmtHistogram, "test", ignoreF, []string{"create database test", "create database test"})
+	c.Assert(strings.Contains(err.Error(), "don't ignore me"), IsTrue)
+	c.Assert(affected, Equals, 1)
+
+	if err = mock.ExpectationsWereMet(); err != nil {
+		c.Fatal("there were unexpected:", err)
+	}
+	c.Assert(baseConn.close(), IsNil)
 }
