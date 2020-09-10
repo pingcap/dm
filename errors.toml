@@ -35,7 +35,7 @@ workaround = ""
 tags = ["not-set", "high"]
 
 [error.DM-functional-11001]
-message = "parse mydumper metadata error: %s"
+message = "parse mydumper metadata error: %s, metadata: %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
