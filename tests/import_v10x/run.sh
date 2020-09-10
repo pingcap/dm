@@ -79,6 +79,11 @@ function run() {
         "\"result\": true" 1
 
     diff $cur/conf/task.yaml $WORK_DIR/task.yaml || exit 1
+    
+    run_sql "show create table \`dm_meta\`.\`test_syncer_checkpoint\`" $TIDB_PORT $TIDB_PASSWORD
+    check_contains "\`exit_safe_binlog_name\` varchar(128) DEFAULT ''"
+    check_contains "\`exit_safe_binlog_pos\` int(10) unsigned DEFAULT 0"
+    check_contains "\`exit_safe_binlog_gtid\` text DEFAULT NULL"
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2

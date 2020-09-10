@@ -845,10 +845,11 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 }
 
 // flushCheckPoints flushes previous saved checkpoint in memory to persistent storage, like TiDB
-// we flush checkpoints in three cases:
+// we flush checkpoints in four cases:
 //   1. DDL executed
 //   2. at intervals (and job executed)
 //   3. pausing / stopping the sync (driven by `s.flushJobs`)
+//   4. IsFreshTask return true
 // but when error occurred, we can not flush checkpoint, otherwise data may lost
 // and except rejecting to flush the checkpoint, we also need to rollback the checkpoint saved before
 //   this should be handled when `s.Run` returned
@@ -1388,9 +1389,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		// check pass SafeModeExitLoc and try disable safe mode, but not in sharding or replacing error
-		if s.cfg.SafeModeExitLoc != nil && !s.isReplacingErr && shardingReSync == nil {
-			if binlog.CompareLocation(currentLocation, *s.cfg.SafeModeExitLoc, s.cfg.EnableGTID) >= 0 {
-				s.cfg.SafeModeExitLoc = nil
+		safeModeExitLoc := s.checkpoint.SafeModeExitPoint()
+		if safeModeExitLoc != nil && !s.isReplacingErr && shardingReSync == nil {
+			if binlog.CompareLocation(currentLocation, *safeModeExitLoc, s.cfg.EnableGTID) >= 0 {
+				s.checkpoint.SaveSafeModeExitPoint(nil)
 				safeMode.Add(tctx, -1)
 			}
 		}

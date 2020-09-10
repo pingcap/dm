@@ -660,6 +660,26 @@ func (s *Scheduler) GetSubTaskCfgsByTask(task string) map[string]*config.SubTask
 	return cloneM
 }
 
+// GetSubTaskCfgs gets all subconfig, return nil when error happens
+func (s *Scheduler) GetSubTaskCfgs() map[string]map[string]config.SubTaskConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	clone := make(map[string]map[string]config.SubTaskConfig, len(s.subTaskCfgs))
+	for task, m := range s.subTaskCfgs {
+		clone2 := make(map[string]config.SubTaskConfig, len(m))
+		for source, cfg := range m {
+			cfg2, err := cfg.Clone()
+			if err != nil {
+				return nil
+			}
+			clone2[source] = *cfg2
+		}
+		clone[task] = clone2
+	}
+
+	return clone
+}
+
 // AddWorker adds the information of the DM-worker when registering a new instance.
 // This only adds the information of the DM-worker,
 // in order to know whether it's online (ready to handle works),
