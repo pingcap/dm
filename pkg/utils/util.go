@@ -22,7 +22,9 @@ import (
 	"strings"
 	"time"
 
+	gmysql "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/errno"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/pb"
@@ -160,6 +162,22 @@ func WaitSomething(backoff int, waitTime time.Duration, fn func() bool) bool {
 // IsContextCanceledError checks whether err is context.Canceled
 func IsContextCanceledError(err error) bool {
 	return errors.Cause(err) == context.Canceled
+}
+
+// IgnoreErrorCheckpoint is used in checkpoint update
+func IgnoreErrorCheckpoint(err error) bool {
+	err = errors.Cause(err) // check the original error
+	mysqlErr, ok := err.(*gmysql.MySQLError)
+	if !ok {
+		return false
+	}
+
+	switch mysqlErr.Number {
+	case errno.ErrDupFieldName:
+		return true
+	default:
+		return false
+	}
 }
 
 // IsBuildInSkipDDL return true when checked sql that will be skipped for syncer
