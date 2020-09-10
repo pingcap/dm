@@ -63,20 +63,25 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 	doFuncInClose := func() {}
 	if config.Security != nil && len(config.Security.SSLCA) != 0 &&
 		len(config.Security.SSLCert) != 0 && len(config.Security.SSLKey) != 0 {
-		tlsConfig, err := toolutils.ToTLSConfig(config.Security.SSLCA, config.Security.SSLCert, config.Security.SSLKey)
-		if err != nil {
-			return nil, terror.ErrConnInvalidTLSConfig.Delegate(err)
-		}
+		if config.Security.VerifyServer {
+			tlsConfig, err := toolutils.ToTLSConfig(config.Security.SSLCA, config.Security.SSLCert, config.Security.SSLKey)
+			if err != nil {
+				return nil, terror.ErrConnInvalidTLSConfig.Delegate(err)
+			}
 
-		name := "dm" + strconv.FormatInt(atomic.AddInt64(&customID, 1), 10)
-		err = mysql.RegisterTLSConfig(name, tlsConfig)
-		if err != nil {
-			return nil, terror.ErrConnRegistryTLSConfig.Delegate(err)
-		}
-		dsn += "&tls=" + name
+			name := "dm" + strconv.FormatInt(atomic.AddInt64(&customID, 1), 10)
+			err = mysql.RegisterTLSConfig(name, tlsConfig)
+			if err != nil {
+				return nil, terror.ErrConnRegistryTLSConfig.Delegate(err)
+			}
 
-		doFuncInClose = func() {
-			mysql.DeregisterTLSConfig(name)
+			dsn += "&tls=" + name
+
+			doFuncInClose = func() {
+				mysql.DeregisterTLSConfig(name)
+			}
+		} else {
+			dsn += "&tls=skip-verify"
 		}
 	}
 

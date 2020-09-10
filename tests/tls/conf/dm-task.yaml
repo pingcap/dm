@@ -15,6 +15,7 @@ target-database:
     ssl-ca: "dir-placeholer/ca.pem"
     ssl-cert: "dir-placeholer/dm.pem"
     ssl-key: "dir-placeholer/dm.key"
+    verify-server: true
 
 mysql-instances:
   - source-id: "mysql-replica-01"

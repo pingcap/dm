@@ -21,6 +21,7 @@ type Security struct {
 	SSLCert       string   `toml:"ssl-cert" json:"ssl-cert" yaml:"ssl-cert"`
 	SSLKey        string   `toml:"ssl-key" json:"ssl-key" yaml:"ssl-key"`
 	CertAllowedCN strArray `toml:"cert-allowed-cn" json:"cert-allowed-cn" yaml:"cert-allowed-cn"`
+	VerifyServer  bool     `toml:"verify-server" json:"verify-server" yaml:"verify-server"`
 }
 
 // used for parse string slice in flag
