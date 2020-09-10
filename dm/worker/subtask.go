@@ -552,20 +552,6 @@ func (st *SubTask) CheckUnit() bool {
 	return flag
 }
 
-// ShardDDLInfo returns the current shard DDL info.
-func (st *SubTask) ShardDDLInfo() *pessimism.Info {
-	st.RLock()
-	defer st.RUnlock()
-
-	cu := st.currUnit
-	syncer2, ok := cu.(*syncer.Syncer)
-	if !ok {
-		return nil
-	}
-
-	return syncer2.ShardDDLInfo()
-}
-
 // ShardDDLOperation returns the current shard DDL lock operation.
 func (st *SubTask) ShardDDLOperation() *pessimism.Operation {
 	st.RLock()
