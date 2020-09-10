@@ -59,6 +59,7 @@ func (t *testBaseDBSuite) TestGetBaseConn(c *C) {
 	affected, err := dbConn.ExecuteSQL(tctx, testStmtHistogram, "test", []string{"create database test"})
 	c.Assert(err, IsNil)
 	c.Assert(affected, Equals, 1)
+	c.Assert(baseDB.Close(), IsNil)
 }
 
 func (t *testBaseDBSuite) TestFailDBPing(c *C) {
