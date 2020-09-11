@@ -1329,9 +1329,23 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	defer cancel3()
 
 	wg.Wait()
-	time.Sleep(time.Second)
-	_, leaderID, _, err := s1.election.LeaderInfo(ctx)
-	c.Assert(err, check.IsNil)
+
+	var leaderID string
+	// ensure s2 has got the right leader info, because it will be used to `OfflineMember`.
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		s2.RLock()
+		leader := s2.leader
+		s2.RUnlock()
+		if leader == "" {
+			return false
+		}
+		if leader == oneselfLeader {
+			leaderID = s2.cfg.Name
+		} else {
+			leaderID = s2.leader
+		}
+		return true
+	}), check.IsTrue)
 
 	// master related operations
 	req := &pb.OfflineMemberRequest{
