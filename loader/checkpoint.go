@@ -44,7 +44,7 @@ type CheckPoint interface {
 	// GetAllRestoringFileInfo return all restoring files position
 	GetAllRestoringFileInfo() map[string][]int64
 
-	// IsTableCreated checks if db / table was not created. set `table` to "" when check db
+	// IsTableCreated checks if db / table was created. set `table` to "" when check db
 	IsTableCreated(db, table string) bool
 
 	// IsTableFinished query if table has finished
