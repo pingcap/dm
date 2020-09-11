@@ -78,7 +78,7 @@ func (t *testPessimist) testPessimistProgress(c *C, restart int) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		watchTimeout  = 2 * time.Second
+		watchTimeout  = 3 * time.Second
 		task1         = "task-pessimist-1"
 		task2         = "task-pessimist-2"
 		source1       = "mysql-replica-1"
@@ -161,8 +161,8 @@ func (t *testPessimist) testPessimistProgress(c *C, restart int) {
 	cancel2()
 	close(opCh)
 	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
 	c.Assert(len(errCh), Equals, 0)
+	c.Assert(len(opCh), Equals, 1)
 	op11 := <-opCh
 	c.Assert(op11.Exec, IsTrue)
 	c.Assert(op11.Done, IsFalse)
@@ -185,8 +185,8 @@ func (t *testPessimist) testPessimistProgress(c *C, restart int) {
 	cancel2()
 	close(opCh)
 	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
 	c.Assert(len(errCh), Equals, 0)
+	c.Assert(len(opCh), Equals, 1)
 	op12 := <-opCh
 	c.Assert(op12.Exec, IsFalse)
 	c.Assert(op12.Done, IsFalse)
@@ -266,8 +266,8 @@ func (t *testPessimist) testPessimistProgress(c *C, restart int) {
 	cancel2()
 	close(opCh)
 	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
 	c.Assert(len(errCh), Equals, 0)
+	c.Assert(len(opCh), Equals, 1)
 	op21 := <-opCh
 	c.Assert(op21.Exec, IsTrue)
 	c.Assert(op21.Done, IsFalse)
@@ -341,7 +341,7 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		watchTimeout  = 2 * time.Second
+		watchTimeout  = 3 * time.Second
 		task          = "task-source-re-entrant"
 		source1       = "mysql-replica-1"
 		source2       = "mysql-replica-2"
@@ -408,8 +408,8 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 		cancel2()
 		close(opCh)
 		close(errCh)
-		c.Assert(len(opCh), Equals, 1)
 		c.Assert(len(errCh), Equals, 0)
+		c.Assert(len(opCh), Equals, 1)
 		op := <-opCh
 		c.Assert(op.Exec, IsTrue)
 		c.Assert(op.Done, IsFalse)
@@ -432,8 +432,8 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 	cancel2()
 	close(opCh)
 	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
 	c.Assert(len(errCh), Equals, 0)
+	c.Assert(len(opCh), Equals, 1)
 	op11 := <-opCh
 	c.Assert(op11.Exec, IsTrue)
 	c.Assert(op11.Done, IsFalse)
@@ -449,8 +449,8 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 		cancel2()
 		close(opCh)
 		close(errCh)
-		c.Assert(len(opCh), Equals, 1)
 		c.Assert(len(errCh), Equals, 0)
+		c.Assert(len(opCh), Equals, 1)
 		op := <-opCh
 		c.Assert(op.Exec, IsFalse)
 		c.Assert(op.Done, IsFalse)
@@ -479,8 +479,8 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 	cancel2()
 	close(opCh)
 	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
 	c.Assert(len(errCh), Equals, 0)
+	c.Assert(len(opCh), Equals, 1)
 	op12 := <-opCh
 	c.Assert(op12.Exec, IsFalse)
 	c.Assert(op12.Done, IsFalse)
@@ -507,8 +507,8 @@ func (t *testPessimist) TestSourceReEntrant(c *C) {
 	cancel2()
 	close(opCh)
 	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
 	c.Assert(len(errCh), Equals, 0)
+	c.Assert(len(opCh), Equals, 1)
 	op13 := <-opCh
 	c.Assert(op13.Exec, IsFalse)
 	c.Assert(op13.Done, IsFalse)
@@ -538,7 +538,7 @@ func (t *testPessimist) TestUnlockSourceMissBeforeSynced(c *C) {
 	}()
 
 	var (
-		watchTimeout  = 2 * time.Second
+		watchTimeout  = 3 * time.Second
 		task          = "task-unlock-source-lack-before-synced"
 		source1       = "mysql-replica-1"
 		source2       = "mysql-replica-2"
@@ -631,7 +631,7 @@ func (t *testPessimist) TestUnlockSourceInterrupt(c *C) {
 	}()
 
 	var (
-		watchTimeout  = 2 * time.Second
+		watchTimeout  = 3 * time.Second
 		task          = "task-unlock-source-interrupt"
 		source1       = "mysql-replica-1"
 		source2       = "mysql-replica-2"
@@ -689,8 +689,8 @@ func (t *testPessimist) TestUnlockSourceInterrupt(c *C) {
 	cancel2()
 	close(opCh)
 	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
 	c.Assert(len(errCh), Equals, 0)
+	c.Assert(len(opCh), Equals, 1)
 	op := <-opCh
 	c.Assert(op.Source, Equals, source1)
 	c.Assert(op.Exec, IsTrue)
@@ -747,7 +747,7 @@ func (t *testPessimist) TestUnlockSourceOwnerRemoved(c *C) {
 	}()
 
 	var (
-		watchTimeout  = 2 * time.Second
+		watchTimeout  = 3 * time.Second
 		task          = "task-unlock-source-owner-removed"
 		source1       = "mysql-replica-1"
 		source2       = "mysql-replica-2"
@@ -828,7 +828,7 @@ func (t *testPessimist) TestMeetEtcdCompactError(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		watchTimeout  = 2 * time.Second
+		watchTimeout  = 3 * time.Second
 		task1         = "task-pessimist-1"
 		task2         = "task-pessimist-2"
 		source1       = "mysql-replica-1"
@@ -942,8 +942,8 @@ func (t *testPessimist) TestMeetEtcdCompactError(c *C) {
 		cancel3()
 		close(opCh)
 		close(errCh)
-		c.Assert(len(opCh), Equals, 1)
 		c.Assert(len(errCh), Equals, 0)
+		c.Assert(len(opCh), Equals, 1)
 		op11 := <-opCh
 		c.Assert(op11.Exec, IsTrue)
 		c.Assert(op11.Done, IsFalse)
@@ -966,8 +966,8 @@ func (t *testPessimist) TestMeetEtcdCompactError(c *C) {
 		cancel3()
 		close(opCh)
 		close(errCh)
-		c.Assert(len(opCh), Equals, 1)
 		c.Assert(len(errCh), Equals, 0)
+		c.Assert(len(opCh), Equals, 1)
 		op12 := <-opCh
 		c.Assert(op12.Exec, IsFalse)
 		c.Assert(op12.Done, IsFalse)
