@@ -179,6 +179,11 @@ function run() {
     get_task_config_to_file
     get_task_config_recover_etcd
 
+    # retry to wait for recovered from etcd ready
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 4 # relay enabled
+
     echo "show_ddl_locks_no_locks"
     show_ddl_locks_no_locks $TASK_NAME
     query_status_with_tasks

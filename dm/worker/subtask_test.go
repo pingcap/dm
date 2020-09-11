@@ -210,7 +210,7 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 	c.Assert(mockLoader.InjectProcessError(context.Background(), errors.New("loader process error")), IsNil)
 	for i := 0; i < 10; i++ {
 		res := st.Result()
-		if res != nil {
+		if res != nil && st.Stage() == pb.Stage_Paused {
 			break
 		}
 		time.Sleep(time.Millisecond)

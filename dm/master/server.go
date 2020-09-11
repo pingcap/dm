@@ -2195,7 +2195,8 @@ func (s *Server) sharedLogic(ctx context.Context, req interface{}, respPointer i
 		return false
 	}
 	if needForward {
-		log.L().Info("forwarding", zap.String("from", s.cfg.Name), zap.String("to", s.leader), zap.String("request", methodName))
+		log.L().Info("will forward after a short interval", zap.String("from", s.cfg.Name), zap.String("to", s.leader), zap.String("request", methodName))
+		time.Sleep(100 * time.Millisecond)
 		params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(req)}
 		results := reflect.ValueOf(s.leaderClient).MethodByName(methodName).Call(params)
 		// result's inner types should be (*pb.XXResponse, error), which is same as s.leaderClient.XXRPCMethod
