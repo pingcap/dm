@@ -44,6 +44,9 @@ type CheckPoint interface {
 	// GetAllRestoringFileInfo return all restoring files position
 	GetAllRestoringFileInfo() map[string][]int64
 
+	// IsTableCreated checks if db / table was not created. set `table` to "" when check db
+	IsTableCreated(db, table string) bool
+
 	// IsTableFinished query if table has finished
 	IsTableFinished(db, table string) bool
 
@@ -80,8 +83,8 @@ type RemoteCheckPoint struct {
 	conn           *DBConn
 	id             string
 	schema         string
-	tableName      string // tableName contains schema name
-	restoringFiles map[string]map[string]FilePosSet
+	tableName      string                           // tableName contains schema name
+	restoringFiles map[string]map[string]FilePosSet // schema -> table -> FilePosSet(filename -> [cur, end])
 	finishedTables map[string]struct{}
 	logCtx         *tcontext.Context
 }
@@ -217,6 +220,19 @@ func (cp *RemoteCheckPoint) GetAllRestoringFileInfo() map[string][]int64 {
 		}
 	}
 	return results
+}
+
+// IsTableCreated implements CheckPoint.IsTableCreated
+func (cp *RemoteCheckPoint) IsTableCreated(db, table string) bool {
+	tables, ok := cp.restoringFiles[db]
+	if !ok {
+		return false
+	}
+	if table == "" {
+		return true
+	}
+	_, ok = tables[table]
+	return ok
 }
 
 // IsTableFinished implements CheckPoint.IsTableFinished
