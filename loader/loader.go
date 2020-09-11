@@ -49,7 +49,8 @@ import (
 )
 
 const (
-	jobCount = 1000
+	jobCount            = 1000
+	uninitializedOffset = -1
 )
 
 // FilePosSet represents a set in mathematics.
@@ -248,22 +249,27 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 		cur int64
 	)
 
-	f, err = os.Open(file)
-	if err != nil {
-		return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err)
-	}
-	defer f.Close()
-
-	finfo, err := f.Stat()
-	if err != nil {
-		return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err)
-	}
-
 	baseFile := filepath.Base(file)
-	err = w.checkPoint.Init(w.tctx.WithContext(ctx), baseFile, finfo.Size())
-	if err != nil {
-		w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), zap.Int64("offset", offset), log.ShortError(err))
-		return err
+
+	// file was not found in checkpoint
+	if offset == uninitializedOffset {
+		offset = 0
+		f, err = os.Open(file)
+		if err != nil {
+			return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err)
+		}
+		defer f.Close()
+
+		finfo, err := f.Stat()
+		if err != nil {
+			return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err)
+		}
+
+		err = w.checkPoint.Init(w.tctx.WithContext(ctx), baseFile, finfo.Size())
+		if err != nil {
+			w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), zap.Int64("offset", offset), log.ShortError(err))
+			return err
+		}
 	}
 
 	cur, err = f.Seek(offset, io.SeekStart)
@@ -631,7 +637,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 	l.closeFileJobQueue() // all data file dispatched, close it
 	l.workerWg.Wait()
 
-	if err == nil {
+	if err == nil && l.checkPoint.AllFinished() {
 		l.logCtx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
 		if l.cfg.CleanDumpFile {
 			l.cleanDumpFiles()
@@ -1202,7 +1208,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 
 				l.logCtx.L().Debug("dispatch data file", zap.String("schema", db), zap.String("table", table), zap.String("data file", file))
 
-				var offset int64
+				offset := int64(uninitializedOffset)
 				posSet, ok := restoringFiles[file]
 				if ok {
 					offset = posSet[0]
@@ -1266,6 +1272,7 @@ func (l *Loader) getMydumpMetadata() error {
 
 // cleanDumpFiles is called when finish restoring data, to clean useless files
 func (l *Loader) cleanDumpFiles() {
+	l.logCtx.L().Info("clean dump files")
 	if l.cfg.Mode == config.ModeFull {
 		// in full-mode all files won't be need in the future
 		if err := os.RemoveAll(l.cfg.Dir); err != nil {
