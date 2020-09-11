@@ -70,6 +70,9 @@ type CheckPoint interface {
 
 	// GenSQL generates sql to update checkpoint to DB
 	GenSQL(filename string, offset int64) string
+
+	// AllFinished returns `true` when all restoring job are finished
+	AllFinished() bool
 }
 
 // RemoteCheckPoint implements CheckPoint by saving status in remote database system, mostly in TiDB.
@@ -274,7 +277,7 @@ func (cp *RemoteCheckPoint) CalcProgress(allFiles map[string]Tables2DataFiles) e
 		}
 	}
 
-	cp.logCtx.L().Info("calculate checkpoint finished.", zap.Reflect("finished tables", cp.finishedTables))
+	cp.logCtx.L().Info("calculate checkpoint finished.", zap.Any("finished tables", cp.finishedTables))
 	return nil
 }
 
@@ -286,6 +289,18 @@ func (cp *RemoteCheckPoint) allFilesFinished(files map[string][]int64) bool {
 		}
 		if pos[0] != pos[1] {
 			return false
+		}
+	}
+	return true
+}
+
+// AllFinished implements CheckPoint.AllFinished
+func (cp *RemoteCheckPoint) AllFinished() bool {
+	for _, tables := range cp.restoringFiles {
+		for _, restoringFiles := range tables {
+			if !cp.allFilesFinished(restoringFiles) {
+				return false
+			}
 		}
 	}
 	return true
@@ -320,7 +335,7 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 	cp.connMutex.Unlock()
 	if err != nil {
 		if isErrDupEntry(err) {
-			cp.logCtx.L().Info("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
+			cp.logCtx.L().Error("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
 			return nil
 		}
 		return terror.WithScope(terror.Annotate(err, "initialize checkpoint"), terror.ScopeDownstream)
