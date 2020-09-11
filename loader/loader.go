@@ -1085,7 +1085,6 @@ func (l *Loader) restoreStructure(ctx context.Context, conn *DBConn, sqlFile str
 				return terror.WithScope(err, terror.ScopeDownstream)
 			}
 		}
-
 	}
 
 	return nil
@@ -1282,7 +1281,7 @@ func (l *Loader) cleanDumpFiles() {
 			}
 		}
 		if lastErr != nil {
-			l.logCtx.L().Warn("error when remove loaded dump sql files", zap.String("data folder", l.cfg.Dir), zap.Errors("last error", []error{lastErr}))
+			l.logCtx.L().Warn("show last error when remove loaded dump sql files", zap.String("data folder", l.cfg.Dir), zap.Error(lastErr))
 		}
 	}
 }
