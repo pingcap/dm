@@ -186,6 +186,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 					}
 					return
 				}
+				w.loader.checkPoint.UpdateOffset(job.schema, job.table, job.file, job.offset)
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
 			}
 		}
@@ -251,14 +252,15 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 
 	baseFile := filepath.Base(file)
 
+	f, err = os.Open(file)
+	if err != nil {
+		return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err)
+	}
+	defer f.Close()
+
 	// file was not found in checkpoint
 	if offset == uninitializedOffset {
 		offset = 0
-		f, err = os.Open(file)
-		if err != nil {
-			return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err)
-		}
-		defer f.Close()
 
 		finfo, err := f.Stat()
 		if err != nil {
@@ -637,11 +639,8 @@ func (l *Loader) Restore(ctx context.Context) error {
 	l.closeFileJobQueue() // all data file dispatched, close it
 	l.workerWg.Wait()
 
-	if err == nil && l.checkPoint.AllFinished() {
+	if err == nil {
 		l.logCtx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
-		if l.cfg.CleanDumpFile {
-			l.cleanDumpFiles()
-		}
 	} else if errors.Cause(err) != context.Canceled {
 		return err
 	}
@@ -669,6 +668,9 @@ func (l *Loader) Close() {
 	err := l.toDB.Close()
 	if err != nil {
 		l.logCtx.L().Error("close downstream DB error", log.ShortError(err))
+	}
+	if l.checkPoint.AllFinished() {
+		l.cleanDumpFiles()
 	}
 	l.checkPoint.Close()
 	l.removeLabelValuesWithTaskInMetrics(l.cfg.Name)
