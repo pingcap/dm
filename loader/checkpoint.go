@@ -71,6 +71,10 @@ type CheckPoint interface {
 	// GenSQL generates sql to update checkpoint to DB
 	GenSQL(filename string, offset int64) string
 
+	// UpdateOffset keeps `cp.restoringFiles` in memory same with checkpoint in DB,
+	// should be called after update checkpoint in DB
+	UpdateOffset(db, table, filename string, offset int64)
+
 	// AllFinished returns `true` when all restoring job are finished
 	AllFinished() bool
 }
@@ -375,6 +379,11 @@ func (cp *RemoteCheckPoint) GenSQL(filename string, offset int64) string {
 	sql := fmt.Sprintf("UPDATE %s SET `offset`=%d WHERE `id` ='%s' AND `filename`='%s';",
 		cp.tableName, offset, cp.id, filename)
 	return sql
+}
+
+// UpdateOffset implements CheckPoint.UpdateOffset
+func (cp *RemoteCheckPoint) UpdateOffset(db, table, filename string, offset int64) {
+	cp.restoringFiles[db][table][filename][0] = offset
 }
 
 // Clear implements CheckPoint.Clear
