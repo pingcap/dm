@@ -30,7 +30,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -206,22 +205,6 @@ func ExtractSQLsFromArgs(args []string) ([]string, error) {
 	}
 
 	return realSQLs, nil
-}
-
-// IsDDL tests whether the input is a valid DDL statement
-func IsDDL(sql string) (bool, error) {
-	parser2 := parser.New()
-	node, err := parser2.ParseOneStmt(sql, "", "")
-	if err != nil {
-		return false, errors.Annotatef(err, "invalid sql '%s'", sql)
-	}
-
-	switch node.(type) {
-	case ast.DDLNode:
-		return true, nil
-	default:
-		return false, nil
-	}
 }
 
 // GetTaskNameFromArgOrFile tries to retrieve name from the file if arg is yaml-filename-like, otherwise returns arg directly
