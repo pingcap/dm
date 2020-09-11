@@ -186,20 +186,6 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 					return
 				}
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
-
-				if w.cfg.CleanDumpFile {
-					fileInfos := w.checkPoint.GetRestoringFileInfo(job.schema, job.table)
-					if pos, ok := fileInfos[job.file]; ok {
-						if job.offset == pos[1] {
-							w.tctx.L().Info("try to remove loaded dump file", zap.String("data file", job.file))
-							if err := os.Remove(job.absPath); err != nil {
-								w.tctx.L().Warn("error when remove loaded dump file", zap.String("data file", job.file), zap.Error(err))
-							}
-						}
-					} else {
-						w.tctx.L().Warn("file not recorded in checkpoint", zap.String("data file", job.file))
-					}
-				}
 			}
 		}
 	}
@@ -1034,6 +1020,10 @@ func (l *Loader) prepare() error {
 
 // restoreSchema creates schema
 func (l *Loader) restoreSchema(ctx context.Context, conn *DBConn, sqlFile, schema string) error {
+	if l.checkPoint.IsTableCreated(schema, "") {
+		l.logCtx.L().Info("database already exists in checkpoint, skip creating it", zap.String("schema", schema), zap.String("db schema file", sqlFile))
+		return nil
+	}
 	err := l.restoreStructure(ctx, conn, sqlFile, schema, "")
 	if err != nil {
 		if isErrDBExists(err) {
@@ -1047,6 +1037,10 @@ func (l *Loader) restoreSchema(ctx context.Context, conn *DBConn, sqlFile, schem
 
 // restoreTable creates table
 func (l *Loader) restoreTable(ctx context.Context, conn *DBConn, sqlFile, schema, table string) error {
+	if l.checkPoint.IsTableCreated(schema, table) {
+		l.logCtx.L().Info("table already exists in checkpoint, skip creating it", zap.String("schema", schema), zap.String("table", table), zap.String("db schema file", sqlFile))
+		return nil
+	}
 	err := l.restoreStructure(ctx, conn, sqlFile, schema, table)
 	if err != nil {
 		if isErrTableExists(err) {
@@ -1295,18 +1289,16 @@ func (l *Loader) cleanDumpFiles() {
 			l.logCtx.L().Warn("error when remove loaded dump folder", zap.String("data folder", l.cfg.Dir), zap.Error(err))
 		}
 	} else {
-		// leave metadata file, only delete structure files
-		for db, tables := range l.db2Tables {
-			dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
-			if err := os.Remove(dbFile); err != nil {
-				l.logCtx.L().Warn("error when remove loaded dump file", zap.String("data file", dbFile), zap.Error(err))
+		// leave metadata file, only delete sql files
+		files := CollectDirFiles(l.cfg.Dir)
+		var lastErr error
+		for f := range files {
+			if strings.HasSuffix(f, ".sql") {
+				lastErr = os.Remove(f)
 			}
-			for table := range tables {
-				tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
-				if err := os.Remove(tableFile); err != nil {
-					l.logCtx.L().Warn("error when remove loaded dump file", zap.String("data file", tableFile), zap.Error(err))
-				}
-			}
+		}
+		if lastErr != nil {
+			l.logCtx.L().Warn("error when remove loaded dump sql files", zap.String("data folder", l.cfg.Dir), zap.Errors("last error", []error{lastErr}))
 		}
 	}
 }
