@@ -24,7 +24,6 @@ import (
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
 func (t *testConfig) TestInvalidTaskConfig(c *C) {
@@ -107,7 +106,6 @@ ignore-checking-items: ["all"]
 	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, "*line 2: field aaa not found in type config.TaskConfig.*")
 
-	filepath = path.Join(c.MkDir(), "test_invalid_task.yaml")
 	configContent = []byte(`---
 name: test
 task-mode: all
@@ -124,6 +122,20 @@ ignore-checking-items: ["all"]
 	err = taskConfig.DecodeFile(filepath)
 	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, "*line 4: field task-mode already set in type config.TaskConfig.*")
+
+	configContent = []byte(`---
+name: test
+is-sharding: true
+meta-schema: "dm_meta"
+enable-heartbeat: true
+timezone: "Asia/Shanghai"
+ignore-checking-items: ["all"]
+`)
+	err = ioutil.WriteFile(filepath, configContent, 0644)
+	c.Assert(err, IsNil)
+	taskConfig = NewTaskConfig()
+	err = taskConfig.DecodeFile(filepath)
+	c.Assert(terror.ErrConfigInvalidTaskMode.Equal(err), IsTrue)
 
 	// test valid task config
 	configContent = []byte(`---
@@ -298,7 +310,7 @@ func (t *testConfig) TestTaskBlockAllowList(c *C) {
 	c.Assert(cfg.BAList["source-1"], Equals, filterRules2)
 }
 
-func (t *testConfig) TestFromSubTaskConfigs(c *C) {
+func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	var (
 		shardMode           = ShardOptimistic
 		onlineDDLScheme     = "pt"
@@ -307,13 +319,10 @@ func (t *testConfig) TestFromSubTaskConfigs(c *C) {
 		ignoreCheckingItems = []string{VersionChecking, BinlogRowImageChecking}
 		source1             = "mysql-replica-01"
 		source2             = "mysql-replica-02"
-		serverID1           = uint32(123)
-		serverID2           = uint32(456)
 		metaSchema          = "meta-sub-tasks"
 		heartbeatUI         = 12
 		heartbeatRI         = 21
 		timezone            = "Asia/Shanghai"
-		relayDir            = "/path/to/relay"
 		maxAllowedPacket    = 10244201
 		session             = map[string]string{
 			"sql_mode": " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
@@ -365,6 +374,26 @@ func (t *testConfig) TestFromSubTaskConfigs(c *C) {
 				{Schema: "bd2", Name: "lbt2"},
 			},
 		}
+		source1DBCfg = DBConfig{
+			Host:             "127.0.0.1",
+			Port:             3306,
+			User:             "user_from_1",
+			Password:         "123",
+			MaxAllowedPacket: &maxAllowedPacket,
+			Session:          session,
+			Security:         &security,
+			RawDBCfg:         &rawDBCfg,
+		}
+		source2DBCfg = DBConfig{
+			Host:             "127.0.0.1",
+			Port:             3307,
+			User:             "user_from_2",
+			Password:         "abc",
+			MaxAllowedPacket: &maxAllowedPacket,
+			Session:          session,
+			Security:         &security,
+			RawDBCfg:         &rawDBCfg,
+		}
 
 		stCfg1 = &SubTaskConfig{
 			IsSharding:              true,
@@ -375,8 +404,6 @@ func (t *testConfig) TestFromSubTaskConfigs(c *C) {
 			Mode:                    taskMode,
 			IgnoreCheckingItems:     ignoreCheckingItems,
 			SourceID:                source1,
-			ServerID:                serverID1,
-			Flavor:                  gmysql.MariaDBFlavor,
 			MetaSchema:              metaSchema,
 			HeartbeatUpdateInterval: heartbeatUI,
 			HeartbeatReportInterval: heartbeatRI,
@@ -387,18 +414,7 @@ func (t *testConfig) TestFromSubTaskConfigs(c *C) {
 				BinLogGTID: "1-1-12,4-4-4",
 			},
 			Timezone: timezone,
-			RelayDir: relayDir,
-			UseRelay: true,
-			From: DBConfig{
-				Host:             "127.0.0.1",
-				Port:             3306,
-				User:             "user_from_1",
-				Password:         "123",
-				MaxAllowedPacket: &maxAllowedPacket,
-				Session:          session,
-				Security:         &security,
-				RawDBCfg:         &rawDBCfg,
-			},
+			From:     source1DBCfg,
 			To: DBConfig{
 				Host:             "127.0.0.1",
 				Port:             4000,
@@ -445,27 +461,16 @@ func (t *testConfig) TestFromSubTaskConfigs(c *C) {
 	stCfg2, err := stCfg1.Clone()
 	c.Assert(err, IsNil)
 	stCfg2.SourceID = source2
-	stCfg2.ServerID = serverID2
 	stCfg2.Meta = &Meta{
 		BinLogName: "mysql-bin.000321",
 		BinLogPos:  123,
 		BinLogGTID: "1-1-21,2-2-2",
 	}
-	stCfg2.From = DBConfig{
-		Host:             "127.0.0.1",
-		Port:             3307,
-		User:             "user_from_2",
-		Password:         "abc",
-		MaxAllowedPacket: &maxAllowedPacket,
-		Session:          session,
-		Security:         &security,
-		RawDBCfg:         &rawDBCfg,
-	}
+	stCfg2.From = source2DBCfg
 	stCfg2.BAList = &baList2
 
 	var cfg TaskConfig
 	cfg.FromSubTaskConfigs(stCfg1, stCfg2)
-	c.Log(cfg.String())
 
 	cfg2 := TaskConfig{
 		Name:                    name,
@@ -553,6 +558,25 @@ func (t *testConfig) TestFromSubTaskConfigs(c *C) {
 	}
 
 	c.Assert(cfg.String(), Equals, cfg2.String()) // some nil/(null value) compare may not equal, so use YAML format to compare.
+
+	c.Assert(cfg.adjust(), IsNil)
+	stCfgs, err := cfg.SubTaskConfigs(map[string]DBConfig{source1: source1DBCfg, source2: source2DBCfg})
+	c.Assert(err, IsNil)
+	// revert ./dumpped_data.from-sub-tasks
+	stCfgs[0].LoaderConfig.Dir = stCfg1.LoaderConfig.Dir
+	stCfgs[1].LoaderConfig.Dir = stCfg2.LoaderConfig.Dir
+	// fix empty list and nil
+	c.Assert(stCfgs[0].ColumnMappingRules, HasLen, 0)
+	c.Assert(stCfg1.ColumnMappingRules, HasLen, 0)
+	c.Assert(stCfgs[1].ColumnMappingRules, HasLen, 0)
+	c.Assert(stCfg2.ColumnMappingRules, HasLen, 0)
+	stCfgs[0].ColumnMappingRules = stCfg1.ColumnMappingRules
+	stCfgs[1].ColumnMappingRules = stCfg2.ColumnMappingRules
+	// deprecated config will not recover
+	stCfgs[0].EnableANSIQuotes = stCfg1.EnableANSIQuotes
+	stCfgs[1].EnableANSIQuotes = stCfg2.EnableANSIQuotes
+	c.Assert(stCfgs[0].String(), Equals, stCfg1.String())
+	c.Assert(stCfgs[1].String(), Equals, stCfg2.String())
 }
 
 func (t *testConfig) TestMetaVerify(c *C) {
@@ -588,4 +612,36 @@ func (t *testConfig) TestMetaVerify(c *C) {
 		BinLogGTID: "1-1-12,4-4-4",
 	}
 	c.Assert(m.Verify(), IsNil)
+}
+
+func (t *testConfig) TestMySQLInstance(c *C) {
+	var m *MySQLInstance
+	err := m.VerifyAndAdjust()
+	c.Assert(terror.ErrConfigMySQLInstNotFound.Equal(err), IsTrue)
+
+	m = &MySQLInstance{}
+	err = m.VerifyAndAdjust()
+	c.Assert(terror.ErrConfigEmptySourceID.Equal(err), IsTrue)
+	m.SourceID = "123"
+
+	m.Mydumper = &MydumperConfig{}
+	m.MydumperConfigName = "test"
+	err = m.VerifyAndAdjust()
+	c.Assert(terror.ErrConfigMydumperCfgConflict.Equal(err), IsTrue)
+	m.RemoveDuplicateCfg()
+
+	m.Loader = &LoaderConfig{}
+	m.LoaderConfigName = "test"
+	err = m.VerifyAndAdjust()
+	c.Assert(terror.ErrConfigLoaderCfgConflict.Equal(err), IsTrue)
+	m.RemoveDuplicateCfg()
+
+	m.Syncer = &SyncerConfig{}
+	m.SyncerConfigName = "test"
+	err = m.VerifyAndAdjust()
+	c.Assert(terror.ErrConfigSyncerCfgConflict.Equal(err), IsTrue)
+	m.RemoveDuplicateCfg()
+
+	c.Assert(m.VerifyAndAdjust(), IsNil)
+
 }
