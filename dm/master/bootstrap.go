@@ -58,7 +58,12 @@ func (s *Server) bootstrap(ctx context.Context) error {
 		}
 	}
 
-	err := upgrade.TryUpgrade(s.etcdClient)
+	uctx := upgrade.Context{
+		Context:        ctx,
+		SubTaskConfigs: s.scheduler.GetSubTaskCfgs(),
+	}
+	err := upgrade.TryUpgrade(s.etcdClient, uctx)
+
 	if err != nil {
 		return err
 	}

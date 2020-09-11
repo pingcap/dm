@@ -35,7 +35,7 @@ workaround = ""
 tags = ["not-set", "high"]
 
 [error.DM-functional-11001]
-message = "parse mydumper metadata error: %s"
+message = "parse mydumper metadata error: %s, metadata: %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -1013,7 +1013,7 @@ workaround = ""
 tags = ["internal", "medium"]
 
 [error.DM-task-check-26001]
-message = "same table name in case-sensitive %v"
+message = "same table name in case-insensitive %v"
 description = ""
 workaround = "Please check `target-table` config in task configuration file."
 tags = ["internal", "medium"]
