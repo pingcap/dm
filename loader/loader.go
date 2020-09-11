@@ -186,7 +186,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 					}
 					return
 				}
-				w.loader.checkPoint.UpdateOffset(job.schema, job.table, job.file, job.offset)
+				w.loader.checkPoint.UpdateOffset(job.file, job.offset)
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
 			}
 		}
