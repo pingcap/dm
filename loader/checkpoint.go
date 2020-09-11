@@ -73,7 +73,7 @@ type CheckPoint interface {
 
 	// UpdateOffset keeps `cp.restoringFiles` in memory same with checkpoint in DB,
 	// should be called after update checkpoint in DB
-	UpdateOffset(db, table, filename string, offset int64)
+	UpdateOffset(filename string, offset int64)
 
 	// AllFinished returns `true` when all restoring job are finished
 	AllFinished() bool
@@ -382,7 +382,12 @@ func (cp *RemoteCheckPoint) GenSQL(filename string, offset int64) string {
 }
 
 // UpdateOffset implements CheckPoint.UpdateOffset
-func (cp *RemoteCheckPoint) UpdateOffset(db, table, filename string, offset int64) {
+func (cp *RemoteCheckPoint) UpdateOffset(filename string, offset int64) {
+	fields := strings.Split(filename, ".")
+	if len(fields) != 2 && len(fields) != 3 {
+		cp.logCtx.L().Error("can't get db and table from filename in checkpoint UpdateOffset", zap.String("filename", filename))
+	}
+	db, table := fields[0], fields[1]
 	cp.restoringFiles[db][table][filename][0] = offset
 }
 
