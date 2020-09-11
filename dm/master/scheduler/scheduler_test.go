@@ -221,7 +221,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	rebuildScheduler(ctx)
 
 	// CASE 2.6: start a task with only one source.
-	// wait source bound recovered
+	// wait for source bound recovered
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		bounds := s.BoundSources()
 		return len(bounds) == 1 && bounds[0] == sourceID1
@@ -362,6 +362,11 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	rebuildScheduler(ctx)
 
 	// CASE 4.4: add source config2.
+	// wait for source bound recovered
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		bounds := s.BoundSources()
+		return len(bounds) == 1 && bounds[0] == sourceID1
+	}), IsTrue)
 	// source2 not exists before.
 	t.sourceCfgNotExist(c, s, sourceID2)
 	// add source2.
@@ -415,6 +420,11 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	rebuildScheduler(ctx)
 
 	// CASE 4.6: try remove source when subtasks exist.
+	// wait for source bound recovered
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		bounds := s.BoundSources()
+		return len(bounds) == 2 && bounds[0] == sourceID1 && bounds[1] == sourceID2
+	}), IsTrue)
 	c.Assert(terror.ErrSchedulerSourceOpTaskExist.Equal(s.RemoveSourceCfg(sourceID2)), IsTrue)
 	// source2 keep there.
 	t.sourceCfgExist(c, s, sourceCfg2)
