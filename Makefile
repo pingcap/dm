@@ -135,11 +135,10 @@ lint: retool_setup
 	@echo "golint"
 	@retool do golint -set_exit_status $(PACKAGES)
 
-vet:
-	$(GO) build -o bin/shadow golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow
+vet: retool_setup
 	@echo "vet"
 	@$(GO) vet -composites=false $(PACKAGES)
-	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) || true
+	@$(GO) vet -vettool=$(CURDIR)/_tools/bin/shadow $(PACKAGES) || true
 
 terror_check:
 	@echo "check terror conflict"

@@ -7,5 +7,6 @@
   "github.com/pingcap/failpoint/failpoint-ctl": "9f69995143ce72aacd9ca60896f4139eb0de9715",
   "github.com/rakyll/statik": "3bac566d30cdbeddef402a80f3d6305860e59f12",
   "github.com/zhouqiang-cl/gocovmerge": "5256314471af44fe8bccbf0a1db1dd1f85637c1a",
-  "golang.org/x/lint/golint": "fdd1cda4f05fd1fd86124f0ef9ce31a0b72c8448"
+  "golang.org/x/lint/golint": "fdd1cda4f05fd1fd86124f0ef9ce31a0b72c8448",
+  "golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow": "12e1bf57a1127781f45269846d85dbf8beb31bee"
 }

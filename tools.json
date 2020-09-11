@@ -35,6 +35,10 @@
     {
       "Repository": "github.com/rakyll/statik",
       "Commit": "3bac566d30cdbeddef402a80f3d6305860e59f12"
+    },
+    {
+      "Repository": "golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow",
+      "Commit": "12e1bf57a1127781f45269846d85dbf8beb31bee"
     }
   ],
   "RetoolVersion": "1.3.7"
