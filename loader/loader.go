@@ -669,7 +669,7 @@ func (l *Loader) Close() {
 	if err != nil {
 		l.logCtx.L().Error("close downstream DB error", log.ShortError(err))
 	}
-	if l.checkPoint.AllFinished() {
+	if l.cfg.CleanDumpFile && l.checkPoint.AllFinished() {
 		l.cleanDumpFiles()
 	}
 	l.checkPoint.Close()
