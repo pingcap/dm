@@ -235,7 +235,7 @@ func (t *testEtcdUtilSuite) TestDoOpsInOneTxnWithRetry(c *C) {
 	c.Assert(resp.Responses, HasLen, 2)
 
 	// enable failpoint
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/etcdutil/ErrNoSpace", `return(1)`), IsNil)
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/etcdutil/ErrNoSpace", `3*return()`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/etcdutil/ErrNoSpace")
 
 	// put again
