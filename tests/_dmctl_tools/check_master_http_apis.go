@@ -49,7 +49,7 @@ func main() {
 
 	client := &http.Client{Transport: transport}
 
-	resp, err := client.Get("https://" + addr + "/status")
+	resp, err := client.Get("https://" + addr + "/apis/v1alpha1/members")
 	if err != nil {
 		utils.ExitWithError(err)
 	}
