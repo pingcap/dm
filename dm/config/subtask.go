@@ -126,12 +126,6 @@ func (db *DBConfig) Decode(data string) error {
 func (db *DBConfig) Adjust() {
 }
 
-// DBWithTrackerConfig is used for downstream DB configuration as well as tracker
-type DBWithTrackerConfig struct {
-	DBConfig
-	Tracker *tidbConfig.Config `toml:"tracker" json:"tracker"`
-}
-
 // SubTaskConfig is the configuration for SubTask
 type SubTaskConfig struct {
 	// BurntSushi/toml seems have a bug for flag "-"
@@ -168,9 +162,10 @@ type SubTaskConfig struct {
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`
 
 	// UseRelay get value from dm-worker config
-	UseRelay bool                `toml:"use-relay" json:"use-relay"`
-	From     DBConfig            `toml:"from" json:"from"`
-	To       DBWithTrackerConfig `toml:"to" json:"to"`
+	UseRelay bool               `toml:"use-relay" json:"use-relay"`
+	From     DBConfig           `toml:"from" json:"from"`
+	To       DBConfig           `toml:"to" json:"to"`
+	Tracker  *tidbConfig.Config `toml:"inner-tidb" json:"inner-tidb"`
 
 	RouteRules         []*router.TableRule   `toml:"route-rules" json:"route-rules"`
 	FilterRules        []*bf.BinlogEventRule `toml:"filter-rules" json:"filter-rules"`

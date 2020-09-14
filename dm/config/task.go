@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	tidbConfig "github.com/pingcap/tidb/config"
+
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
@@ -290,7 +292,8 @@ type TaskConfig struct {
 	// if case insensitive, we would convert schema/table name to lower case
 	CaseSensitive bool `yaml:"case-sensitive" toml:"case-sensitive" json:"case-sensitive"`
 
-	TargetDB *DBConfig `yaml:"target-database" toml:"target-database" json:"target-database"`
+	TargetDB *DBConfig          `yaml:"target-database" toml:"target-database" json:"target-database"`
+	Tracker  *tidbConfig.Config `yaml:"inner-tidb" toml:"inner-tidb" json:"inner-tidb"`
 
 	MySQLInstances []*MySQLInstance `yaml:"mysql-instances" toml:"mysql-instances" json:"mysql-instances"`
 
@@ -574,7 +577,8 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.Meta = inst.Meta
 
 		cfg.From = dbCfg
-		cfg.To = DBWithTrackerConfig{*c.TargetDB, nil}
+		cfg.To = *c.TargetDB
+		cfg.Tracker = c.Tracker
 
 		cfg.SourceID = inst.SourceID
 
@@ -627,7 +631,7 @@ func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) {
 	c.HeartbeatReportInterval = stCfg0.HeartbeatReportInterval
 	c.Timezone = stCfg0.Timezone
 	c.CaseSensitive = stCfg0.CaseSensitive
-	c.TargetDB = &stCfg0.To.DBConfig // just ref
+	c.TargetDB = &stCfg0.To // just ref
 	c.OnlineDDLScheme = stCfg0.OnlineDDLScheme
 	c.CleanDumpFile = stCfg0.CleanDumpFile
 	c.MySQLInstances = make([]*MySQLInstance, 0, len(stCfgs))

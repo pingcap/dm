@@ -275,7 +275,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
 
-	s.schemaTracker, err = schema.NewTracker(s.cfg.To.Session, s.cfg.To.Tracker, s.ddlDBConn.baseConn)
+	s.schemaTracker, err = schema.NewTracker(s.cfg.To.Session, s.cfg.Tracker, s.ddlDBConn.baseConn)
 	if err != nil {
 		return terror.ErrSyncerUnitNewTracker.Delegate(err)
 	}
@@ -2294,7 +2294,7 @@ func (s *Syncer) createDBs() error {
 		return err
 	}
 
-	dbCfg = s.cfg.To.DBConfig
+	dbCfg = s.cfg.To
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().
 		SetReadTimeout(maxDMLConnectionTimeout).
 		SetMaxIdleConns(s.cfg.WorkerCount)
@@ -2305,7 +2305,7 @@ func (s *Syncer) createDBs() error {
 		return err
 	}
 	// baseConn for ddl
-	dbCfg = s.cfg.To.DBConfig
+	dbCfg = s.cfg.To
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDDLConnectionTimeout)
 
 	var ddlDBConns []*DBConn
