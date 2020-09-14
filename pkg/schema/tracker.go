@@ -24,17 +24,25 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	tidbConfig "github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/meta"
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/store/mockstore"
+
+	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 const (
 	waitDDLRetryCount = 10
 	schemaLeaseTime   = 10 * time.Millisecond
+)
+
+var (
+	sessionVars = []string{"sql_mode", "max_allowed_packet"}
 )
 
 // Tracker is used to track schema locally.
@@ -44,8 +52,54 @@ type Tracker struct {
 	se    session.Session
 }
 
-// NewTracker creates a new tracker.
-func NewTracker(sessionCfg map[string]string) (*Tracker, error) {
+// NewTracker creates a new tracker. `sessionCfg` will be set as tracker's session variables if specified, or retrieve
+// some variable from downstream TiDB using `tidbConn`. `tidbConn` is also used to get some TiDB config
+func NewTracker(sessionCfg map[string]string, tidbConn *conn.BaseConn) (*Tracker, error) {
+	var ignoredColumn interface{}
+
+	// mysql> show config where name = 'alter-primary-key';
+	// +------+--------------+-------------------+-------+
+	// | Type | Instance     | Name              | Value |
+	// +------+--------------+-------------------+-------+
+	// | tidb | 0.0.0.0:4000 | alter-primary-key | false |
+	// +------+--------------+-------------------+-------+
+	rows, err := tidbConn.QuerySQL(tcontext.Background(), "show config where name = 'alter-primary-key'")
+	if err != nil {
+		// TIDB version less than 4.0 will return what? alter-pk min support version?
+		return nil, err
+	}
+	if rows.Next() {
+		var value bool
+		if err2 := rows.Scan(&ignoredColumn, ignoredColumn, ignoredColumn, &value); err2 != nil {
+			return nil, err2
+		}
+		tidbcfg := tidbConfig.Config{AlterPrimaryKey: value}
+		tidbConfig.StoreGlobalConfig(&tidbcfg)
+	}
+	if err = rows.Close(); err != nil {
+		return nil, err
+	}
+
+	if len(sessionCfg) == 0 {
+		sessionCfg = make(map[string]string)
+		for _, k := range sessionVars {
+			rows, err2 := tidbConn.QuerySQL(tcontext.Background(), fmt.Sprintf("show session variables like '%s'", k))
+			if err2 != nil {
+				return nil, err2
+			}
+			if rows.Next() {
+				var value string
+				if err3 := rows.Scan(&ignoredColumn, &value); err3 != nil {
+					return nil, err3
+				}
+				sessionCfg[k] = value
+			}
+			if err2 = rows.Close(); err2 != nil {
+				return nil, err2
+			}
+		}
+	}
+
 	store, err := mockstore.NewMockStore(mockstore.WithStoreType(mockstore.MockTiKV))
 	if err != nil {
 		return nil, err
