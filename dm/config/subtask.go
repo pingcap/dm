@@ -126,6 +126,7 @@ func (db *DBConfig) Decode(data string) error {
 func (db *DBConfig) Adjust() {
 }
 
+// DBWithTrackerConfig is used for downstream DB configuration as well as tracker
 type DBWithTrackerConfig struct {
 	DBConfig
 	Tracker *tidbConfig.Config `toml:"tracker" json:"tracker"`
