@@ -387,11 +387,15 @@ func (o *Optimist) handleInfo(ctx context.Context, infoCh <-chan optimism.Info) 
 			}
 			o.logger.Info("receive a shard DDL info", zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted))
 
+			// avoid new ddl added while previous ddl resolved and remove lock
+			// change lock granularity if needed
+			o.mu.Lock()
 			if info.IsDeleted {
 				lock := o.lk.FindLockByInfo(info)
 				if lock == nil {
 					// this often happen after the lock resolved.
 					o.logger.Debug("lock for info not found", zap.Stringer("info", info))
+					o.mu.Unlock()
 					continue
 				}
 				// handle `DROP TABLE`, need to remove the table schema from the lock,
@@ -400,6 +404,7 @@ func (o *Optimist) handleInfo(ctx context.Context, infoCh <-chan optimism.Info) 
 				o.logger.Debug("the table name remove from the table keeper", zap.Bool("removed", removed), zap.Stringer("info", info))
 				removed = o.tk.RemoveTable(info.Task, info.Source, info.UpSchema, info.UpTable, info.DownSchema, info.DownTable)
 				o.logger.Debug("a table removed for info from the lock", zap.Bool("removed", removed), zap.Stringer("info", info))
+				o.mu.Unlock()
 				continue
 			}
 
@@ -424,8 +429,10 @@ func (o *Optimist) handleInfo(ctx context.Context, infoCh <-chan optimism.Info) 
 			if err != nil {
 				o.logger.Error("fail to handle the shard DDL lock", zap.Stringer("info", info), log.ShortError(err))
 				metrics.ReportDDLError(info.Task, metrics.InfoErrHandleLock)
+				o.mu.Unlock()
 				continue
 			}
+			o.mu.Unlock()
 		}
 	}
 }
@@ -446,9 +453,13 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 				continue
 			}
 
+			// avoid new ddl added while previous ddl resolved and remove lock
+			// change lock granularity if needed
+			o.mu.Lock()
 			lock := o.lk.FindLock(op.ID)
 			if lock == nil {
 				o.logger.Warn("no lock for the shard DDL lock operation exist", zap.Stringer("operation", op))
+				o.mu.Unlock()
 				continue
 			}
 
@@ -459,17 +470,21 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 			o.logger.Info("mark operation for a table as done", zap.Bool("done", done), zap.Stringer("operation", op))
 			if !lock.IsResolved() {
 				o.logger.Info("the lock is still not resolved", zap.Stringer("operation", op))
+				o.mu.Unlock()
 				continue
 			}
 
 			// the lock has done, remove the lock.
 			o.logger.Info("the lock for the shard DDL lock operation has been resolved", zap.Stringer("operation", op))
-			err := o.removeLock(lock)
+			deleted, err := o.removeLock(lock)
 			if err != nil {
 				o.logger.Error("fail to delete the shard DDL infos and lock operations", zap.String("lock", lock.ID), log.ShortError(err))
 				metrics.ReportDDLError(op.Task, metrics.OpErrRemoveLock)
 			}
-			o.logger.Info("the shard DDL infos and lock operations have been cleared", zap.Stringer("operation", op))
+			if deleted {
+				o.logger.Info("the shard DDL infos and lock operations have been cleared", zap.Stringer("operation", op))
+			}
+			o.mu.Unlock()
 		}
 	}
 }
@@ -510,7 +525,7 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 	if lock.IsResolved() {
 		// remove all operations for this shard DDL lock.
 		// this is to handle the case where dm-master exit before deleting operations for them.
-		err = o.removeLock(lock)
+		_, err = o.removeLock(lock)
 		if err != nil {
 			return err
 		}
@@ -528,35 +543,45 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 }
 
 // removeLock removes the lock in memory and its information in etcd.
-func (o *Optimist) removeLock(lock *optimism.Lock) error {
-	err := o.deleteInfosOps(lock)
+func (o *Optimist) removeLock(lock *optimism.Lock) (bool, error) {
+	deleted, err := o.deleteInfosOps(lock)
 	if err != nil {
-		return err
+		return deleted, err
+	}
+	if !deleted {
+		o.logger.Info("fail to delete lock", zap.String("lock", lock.ID))
+		return false, nil
 	}
 	o.lk.RemoveLock(lock.ID)
 	metrics.ReportDDLPending(lock.Task, metrics.DDLPendingSynced, metrics.DDLPendingNone)
-	return nil
+	return true, nil
 }
 
 // deleteInfosOps DELETEs shard DDL lock info and operations.
-func (o *Optimist) deleteInfosOps(lock *optimism.Lock) error {
+func (o *Optimist) deleteInfosOps(lock *optimism.Lock) (bool, error) {
 	infos := make([]optimism.Info, 0)
 	ops := make([]optimism.Operation, 0)
 	for source, schemaTables := range lock.Ready() {
 		for schema, tables := range schemaTables {
 			for table := range tables {
-				// NOTE: we rely on only `task`, `source`, `upSchema`, and `upTable` used for deletion.
-				infos = append(infos, optimism.NewInfo(lock.Task, source, schema, table, lock.DownSchema, lock.DownTable, nil, nil, nil))
+				// NOTE: we rely on only `task`, `source`, `upSchema`, `upTable` and `Version` used for deletion.
+				info := optimism.NewInfo(lock.Task, source, schema, table, lock.DownSchema, lock.DownTable, nil, nil, nil)
+				info.Version = lock.Versions[source][schema][table]
+				infos = append(infos, info)
 				ops = append(ops, optimism.NewOperation(lock.ID, lock.Task, source, schema, table, nil, optimism.ConflictNone, false))
 			}
 		}
 	}
 	// NOTE: we rely on only `task`, `downSchema`, and `downTable` used for deletion.
 	initSchema := optimism.NewInitSchema(lock.Task, lock.DownSchema, lock.DownTable, nil)
-	rev, err := optimism.DeleteInfosOperationsSchema(o.cli, infos, ops, initSchema)
+	rev, deleted, err := optimism.DeleteInfosOperationsSchema(o.cli, infos, ops, initSchema)
 	if err != nil {
-		return err
+		return deleted, err
 	}
-	o.logger.Info("delete shard DDL infos and lock operations", zap.String("lock", lock.ID), zap.Int64("revision", rev))
-	return nil
+	if deleted {
+		o.logger.Info("delete shard DDL infos and lock operations", zap.String("lock", lock.ID), zap.Int64("revision", rev))
+	} else {
+		o.logger.Info("fail to delete shard DDL infos and lock operations", zap.String("lock", lock.ID), zap.Int64("revision", rev))
+	}
+	return deleted, nil
 }
