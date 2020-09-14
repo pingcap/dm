@@ -262,15 +262,15 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 	if offset == uninitializedOffset {
 		offset = 0
 
-		finfo, err := f.Stat()
-		if err != nil {
-			return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err)
+		finfo, err2 := f.Stat()
+		if err2 != nil {
+			return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err2)
 		}
 
-		err = w.checkPoint.Init(w.tctx.WithContext(ctx), baseFile, finfo.Size())
-		if err != nil {
-			w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), zap.Int64("offset", offset), log.ShortError(err))
-			return err
+		err2 = w.checkPoint.Init(w.tctx.WithContext(ctx), baseFile, finfo.Size())
+		if err2 != nil {
+			w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), zap.Int64("offset", offset), log.ShortError(err2))
+			return err2
 		}
 	}
 
