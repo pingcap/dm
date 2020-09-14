@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	tidbConfig "github.com/pingcap/tidb/config"
+
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -81,10 +83,11 @@ func (c *RawDBConfig) SetMaxIdleConns(value int) *RawDBConfig {
 
 // DBConfig is the DB configuration.
 type DBConfig struct {
-	Host             string            `toml:"host" json:"host" yaml:"host"`
-	Port             int               `toml:"port" json:"port" yaml:"port"`
-	User             string            `toml:"user" json:"user" yaml:"user"`
-	Password         string            `toml:"password" json:"-" yaml:"password"` // omit it for privacy
+	Host     string `toml:"host" json:"host" yaml:"host"`
+	Port     int    `toml:"port" json:"port" yaml:"port"`
+	User     string `toml:"user" json:"user" yaml:"user"`
+	Password string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
+	// deprecated, mysql driver could automatically fetch this value
 	MaxAllowedPacket *int              `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
 	Session          map[string]string `toml:"session" json:"session" yaml:"session"`
 
@@ -121,10 +124,11 @@ func (db *DBConfig) Decode(data string) error {
 
 // Adjust adjusts the config.
 func (db *DBConfig) Adjust() {
-	if db.MaxAllowedPacket == nil {
-		cloneV := defaultMaxAllowedPacket
-		db.MaxAllowedPacket = &cloneV
-	}
+}
+
+type DBWithTrackerConfig struct {
+	DBConfig
+	Tracker *tidbConfig.Config `toml:"tracker" json:"tracker"`
 }
 
 // SubTaskConfig is the configuration for SubTask
@@ -163,9 +167,9 @@ type SubTaskConfig struct {
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`
 
 	// UseRelay get value from dm-worker config
-	UseRelay bool     `toml:"use-relay" json:"use-relay"`
-	From     DBConfig `toml:"from" json:"from"`
-	To       DBConfig `toml:"to" json:"to"`
+	UseRelay bool                `toml:"use-relay" json:"use-relay"`
+	From     DBConfig            `toml:"from" json:"from"`
+	To       DBWithTrackerConfig `toml:"to" json:"to"`
 
 	RouteRules         []*router.TableRule   `toml:"route-rules" json:"route-rules"`
 	FilterRules        []*bf.BinlogEventRule `toml:"filter-rules" json:"filter-rules"`
