@@ -83,14 +83,14 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	_, err = NewTracker(sessionCfg, defaultTestTrackerCfg, baseConn)
 	c.Assert(err, NotNil)
 
-	// user give correct session session and wrong tracker config, will return error when run sql
+	// user give correct session session and wrong (empty) tracker config, will not return error since we only use `alter-primary-key`
 	wrongCfg := &tidbConfig.Config{}
 	tracker, err := NewTracker(defaultTestSessionCfg, wrongCfg, baseConn)
 	c.Assert(err, IsNil)
 	err = tracker.Exec(context.Background(), "", "create database testdb;")
 	c.Assert(err, IsNil)
-	err = tracker.Exec(context.Background(), "testdb", "create table foo (a varchar(255) primary key, b DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00')")
-	c.Assert(err, NotNil)
+	err = tracker.Exec(context.Background(), "testdb", "create table foo (a varchar(255) primary key, b DATETIME)")
+	c.Assert(err, IsNil)
 
 	// discover tracker config failed, will not return error
 	// tidb before v4.0.0 doesn't support show config
