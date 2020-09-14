@@ -126,15 +126,10 @@ func DoOpsInOneCmpsTxnWithRetry(cli *clientv3.Client, cmps []clientv3.Cmp, opsTh
 	defer cancel()
 	tctx := tcontext.NewContext(ctx, log.L())
 
-	failpointCount := 0
 	ret, _, err := etcdDefaultTxnStrategy.Apply(tctx, etcdDefaultTxnRetryParam, func(t *tcontext.Context) (ret interface{}, err error) {
-		failpoint.Inject("ErrNoSpace", func(val failpoint.Value) {
-			maxCount := val.(int)
-			if failpointCount < maxCount {
-				failpointCount++
-				tctx.L().Info("fail to do ops in etcd", zap.String("failpoint", "ErrNoSpace"))
-				failpoint.Return(nil, v3rpc.ErrNoSpace)
-			}
+		failpoint.Inject("ErrNoSpace", func() {
+			tctx.L().Info("fail to do ops in etcd", zap.String("failpoint", "ErrNoSpace"))
+			failpoint.Return(nil, v3rpc.ErrNoSpace)
 		})
 		resp, err := cli.Txn(ctx).If(cmps...).Then(opsThen...).Else(opsElse...).Commit()
 		if err != nil {
