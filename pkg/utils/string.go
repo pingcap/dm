@@ -41,9 +41,6 @@ func TruncateString(s string, n int) string {
 // If the converted string is truncated, a `...` tail will be appended.
 // It is not effective for large structure now.
 func TruncateInterface(v interface{}, n int) string {
-	if bs, ok := v.([]byte); ok {
-		return TruncateString(fmt.Sprintf("%s", bs), n)
-	}
 	return TruncateString(fmt.Sprintf("%+v", v), n)
 }
 

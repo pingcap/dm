@@ -71,11 +71,13 @@ func (t *testServer) TearDownSuite(c *C) {
 func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 	cfg := embed.NewConfig()
 	cfg.Dir = dir
-	// lpurl, _ := url.Parse(host)
 	lcurl, _ := url.Parse(host)
-	// cfg.LPUrls = []url.URL{*lpurl}
 	cfg.LCUrls = []url.URL{*lcurl}
 	cfg.ACUrls = []url.URL{*lcurl}
+	lpurl, _ := url.Parse(tempurl.Alloc())
+	cfg.LPUrls = []url.URL{*lpurl}
+	cfg.APUrls = []url.URL{*lpurl}
+	cfg.InitialCluster = "default=" + lpurl.String()
 	cfg.Logger = "zap"
 	metricsURL, _ := url.Parse(tempurl.Alloc())
 	cfg.ListenMetricsUrls = []url.URL{*metricsURL}

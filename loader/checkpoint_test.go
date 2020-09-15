@@ -70,6 +70,14 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 		{"db1.tbl3.sql", 789},
 	}
 
+	allFiles := map[string]Tables2DataFiles{
+		"db1": {
+			"tbl1": {cases[0].filename},
+			"tbl2": {cases[1].filename},
+			"tbl3": {cases[2].filename},
+		},
+	}
+
 	id := "test_for_db"
 	tctx := tcontext.Background()
 	cp, err := newRemoteCheckPoint(tctx, t.cfg, id)
@@ -89,11 +97,25 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(count, Equals, 0)
 
+	c.Assert(cp.IsTableCreated("db1", ""), IsFalse)
+	c.Assert(cp.IsTableCreated("db1", "tbl1"), IsFalse)
+	c.Assert(cp.CalcProgress(allFiles), IsNil)
+	c.Assert(cp.IsTableFinished("db1", "tbl1"), IsFalse)
+
 	// insert default checkpoints
 	for _, cs := range cases {
 		err = cp.Init(tctx, cs.filename, cs.endPos)
 		c.Assert(err, IsNil)
 	}
+
+	c.Assert(cp.IsTableCreated("db1", ""), IsTrue)
+	c.Assert(cp.IsTableCreated("db1", "tbl1"), IsTrue)
+	c.Assert(cp.CalcProgress(allFiles), IsNil)
+	c.Assert(cp.IsTableFinished("db1", "tbl1"), IsFalse)
+
+	info := cp.GetRestoringFileInfo("db1", "tbl1")
+	c.Assert(info, HasLen, 1)
+	c.Assert(info[cases[0].filename], DeepEquals, []int64{0, cases[0].endPos})
 
 	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
@@ -129,6 +151,15 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
 
+	c.Assert(cp.IsTableCreated("db1", ""), IsTrue)
+	c.Assert(cp.IsTableCreated("db1", "tbl1"), IsTrue)
+	c.Assert(cp.CalcProgress(allFiles), IsNil)
+	c.Assert(cp.IsTableFinished("db1", "tbl1"), IsTrue)
+
+	info = cp.GetRestoringFileInfo("db1", "tbl1")
+	c.Assert(info, HasLen, 1)
+	c.Assert(info[cases[0].filename], DeepEquals, []int64{cases[0].endPos, cases[0].endPos})
+
 	infos = cp.GetAllRestoringFileInfo()
 	c.Assert(len(infos), Equals, len(cases))
 	for _, cs := range cases {
@@ -149,6 +180,11 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	// no checkpoint exist
 	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
+
+	c.Assert(cp.IsTableCreated("db1", ""), IsFalse)
+	c.Assert(cp.IsTableCreated("db1", "tbl1"), IsFalse)
+	c.Assert(cp.CalcProgress(allFiles), IsNil)
+	c.Assert(cp.IsTableFinished("db1", "tbl1"), IsFalse)
 
 	infos = cp.GetAllRestoringFileInfo()
 	c.Assert(len(infos), Equals, 0)
