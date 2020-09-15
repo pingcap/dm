@@ -65,25 +65,24 @@ func NewTracker(sessionCfg map[string]string, trackerCfg *tidbConfig.Config, tid
 	} else {
 		// fetch downstream config, currently only `alter-primary-key`
 
-		// mysql> show config where name = 'alter-primary-key';
-		// +------+--------------+-------------------+-------+
-		// | Type | Instance     | Name              | Value |
-		// +------+--------------+-------------------+-------+
-		// | tidb | 0.0.0.0:4000 | alter-primary-key | false |
-		// +------+--------------+-------------------+-------+
-		rows, err := tidbConn.QuerySQL(tcontext.Background(), "show config where name = 'alter-primary-key'")
+		// mysql> select json_extract(@@tidb_config, '$."alter-primary-key"');
+		// +------------------------------------------------------+
+		// | json_extract(@@tidb_config, '$."alter-primary-key"') |
+		// +------------------------------------------------------+
+		// | false                                                |
+		// +------------------------------------------------------+
+		rows, err := tidbConn.QuerySQL(tcontext.Background(), "select json_extract(@@tidb_config, '$.\"alter-primary-key\"');")
 		if err != nil {
-			// TODO(lance6716): SHOW CONFIG is added in v4.0 and alter-primary-key is added in v3.0.6, how to handle version between these two?
 			goto SKIP
 		}
 		if rows.Next() {
 			var value bool
-			if err2 := rows.Scan(&ignoredColumn, &ignoredColumn, &ignoredColumn, &value); err2 != nil {
+			if err2 := rows.Scan(&value); err2 != nil {
 				goto SKIP
 			}
-			tidbcfg := tidbConfig.NewConfig()
-			tidbcfg.AlterPrimaryKey = value
-			tidbConfig.StoreGlobalConfig(tidbcfg)
+			tidbCfg := tidbConfig.NewConfig()
+			tidbCfg.AlterPrimaryKey = value
+			tidbConfig.StoreGlobalConfig(tidbCfg)
 		}
 		rows.Close()
 	}
