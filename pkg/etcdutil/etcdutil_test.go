@@ -40,12 +40,9 @@ var tt *testing.T
 type testEtcdUtilSuite struct {
 }
 
-func (t *testEtcdUtilSuite) SetUpSuite(c *C) {
+func TestSuite(t *testing.T) {
 	// initialized the logger to make genEmbedEtcdConfig working.
 	log.InitLogger(&log.Config{})
-}
-
-func TestSuite(t *testing.T) {
 	tt = t // record in t
 	TestingT(t)
 }
