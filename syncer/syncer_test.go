@@ -974,6 +974,8 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	syncer.ddlDB = syncer.fromDB.BaseDB
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
+	syncer.schemaTracker, err = schema.NewTracker(defaultTestSessionCfg, defaultTestTrackerCfg, syncer.ddlDBConn.baseConn)
+	c.Assert(err, IsNil)
 	syncer.reset()
 
 	syncer.streamerController = NewStreamerController(tcontext.Background(), syncer.syncCfg, true, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone)
