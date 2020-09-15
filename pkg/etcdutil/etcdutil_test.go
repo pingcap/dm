@@ -40,9 +40,12 @@ var tt *testing.T
 type testEtcdUtilSuite struct {
 }
 
-func TestSuite(t *testing.T) {
+func (t *testEtcdUtilSuite) SetUpSuite(c *C) {
 	// initialized the logger to make genEmbedEtcdConfig working.
 	log.InitLogger(&log.Config{})
+}
+
+func TestSuite(t *testing.T) {
 	tt = t // record in t
 	TestingT(t)
 }
@@ -122,6 +125,9 @@ func (t *testEtcdUtilSuite) TestMemberUtil(c *C) {
 	for i := 1; i <= 3; i++ {
 		t.testMemberUtilInternal(c, i)
 	}
+
+	t.testRemoveMember(c)
+	t.testDoOpsInOneTxnWithRetry(c)
 }
 
 func (t *testEtcdUtilSuite) testMemberUtilInternal(c *C, portCount int) {
@@ -168,7 +174,7 @@ func (t *testEtcdUtilSuite) testMemberUtilInternal(c *C, portCount int) {
 	}
 }
 
-func (t *testEtcdUtilSuite) TestRemoveMember(c *C) {
+func (t *testEtcdUtilSuite) testRemoveMember(c *C) {
 	cluster := integration.NewClusterV3(tt, &integration.ClusterConfig{Size: 3})
 	defer cluster.Terminate(tt)
 
@@ -195,7 +201,7 @@ func (t *testEtcdUtilSuite) TestRemoveMember(c *C) {
 	c.Assert(respList.Members, HasLen, 2)
 }
 
-func (t *testEtcdUtilSuite) TestDoOpsInOneTxnWithRetry(c *C) {
+func (t *testEtcdUtilSuite) testDoOpsInOneTxnWithRetry(c *C) {
 	var (
 		key1 = "/test/etcdutil/do-ops-in-one-txn-with-retry-1"
 		key2 = "/test/etcdutil/do-ops-in-one-txn-with-retry-2"
