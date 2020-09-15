@@ -21,16 +21,21 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/failpoint"
 	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/clientv3/clientv3util"
 	"go.etcd.io/etcd/embed"
 	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 	"go.etcd.io/etcd/etcdserver/etcdserverpb"
+	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = Suite(&testEtcdUtilSuite{})
+
+var tt *testing.T
 
 type testEtcdUtilSuite struct {
 }
@@ -41,6 +46,7 @@ func (t *testEtcdUtilSuite) SetUpSuite(c *C) {
 }
 
 func TestSuite(t *testing.T) {
+	tt = t // record in t
 	TestingT(t)
 }
 
@@ -115,10 +121,13 @@ func (t *testEtcdUtilSuite) checkMember(c *C, mid uint64, m *etcdserverpb.Member
 	c.Assert(m.PeerURLs, DeepEquals, t.urlsToStrings(cfg.APUrls))
 }
 
-func (t *testEtcdUtilSuite) TestMemberUtil(c *C) {
+func (t *testEtcdUtilSuite) TestEtcdUtil(c *C) {
 	for i := 1; i <= 3; i++ {
 		t.testMemberUtilInternal(c, i)
 	}
+
+	t.testRemoveMember(c)
+	t.testDoOpsInOneTxnWithRetry(c)
 }
 
 func (t *testEtcdUtilSuite) testMemberUtilInternal(c *C, portCount int) {
@@ -165,7 +174,82 @@ func (t *testEtcdUtilSuite) testMemberUtilInternal(c *C, portCount int) {
 	}
 }
 
-func (t *testEtcdUtilSuite) testIsRetryableError(c *C) {
+func (t *testEtcdUtilSuite) testRemoveMember(c *C) {
+	cluster := integration.NewClusterV3(tt, &integration.ClusterConfig{Size: 3})
+	defer cluster.Terminate(tt)
+
+	i := cluster.WaitLeader(tt)
+	c.Assert(i, Not(Equals), -1)
+
+	cli := cluster.Client(i) // client to the leader.
+
+	respList, err := ListMembers(cli)
+	c.Assert(err, IsNil)
+	c.Assert(respList.Members, HasLen, 3)
+
+	// always try to remove the first member, may or may not the leader
+	respRemove, err := RemoveMember(cli, respList.Members[0].ID)
+	c.Assert(err, IsNil)
+	c.Assert(respRemove.Members, HasLen, 2)
+
+	// get another client
+	cli = cluster.RandClient()
+
+	// only 2 members exist now
+	respList, err = ListMembers(cli)
+	c.Assert(err, IsNil)
+	c.Assert(respList.Members, HasLen, 2)
+}
+
+func (t *testEtcdUtilSuite) testDoOpsInOneTxnWithRetry(c *C) {
+	var (
+		key1 = "/test/etcdutil/do-ops-in-one-txn-with-retry-1"
+		key2 = "/test/etcdutil/do-ops-in-one-txn-with-retry-2"
+		val1 = "foo"
+		val2 = "bar"
+		val  = "foo-bar"
+	)
+	cluster := integration.NewClusterV3(tt, &integration.ClusterConfig{Size: 1})
+	defer cluster.Terminate(tt)
+
+	cli := cluster.RandClient()
+
+	resp, rev1, err := DoOpsInOneTxnWithRetry(cli, clientv3.OpPut(key1, val1), clientv3.OpPut(key2, val2))
+	c.Assert(err, IsNil)
+	c.Assert(rev1, Greater, int64(0))
+	c.Assert(resp.Responses, HasLen, 2)
+
+	// both cmps are true
+	cmp1 := clientv3.Compare(clientv3.Value(key1), "=", val1)
+	cmp2 := clientv3.Compare(clientv3.Value(key2), "=", val2)
+	resp, rev2, err := DoOpsInOneCmpsTxnWithRetry(cli, []clientv3.Cmp{cmp1, cmp2}, []clientv3.Op{
+		clientv3.OpPut(key1, val), clientv3.OpPut(key2, val)}, []clientv3.Op{})
+	c.Assert(err, IsNil)
+	c.Assert(rev2, Greater, rev1)
+	c.Assert(resp.Responses, HasLen, 2)
+
+	// one of cmps are false
+	cmp1 = clientv3.Compare(clientv3.Value(key1), "=", val)
+	cmp2 = clientv3.Compare(clientv3.Value(key2), "=", val2)
+	resp, rev3, err := DoOpsInOneCmpsTxnWithRetry(cli, []clientv3.Cmp{cmp1, cmp2}, []clientv3.Op{}, []clientv3.Op{
+		clientv3.OpDelete(key1), clientv3.OpDelete(key2)})
+	c.Assert(err, IsNil)
+	c.Assert(rev3, Greater, rev2)
+	c.Assert(resp.Responses, HasLen, 2)
+
+	// enable failpoint
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/etcdutil/ErrNoSpace", `3*return()`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/etcdutil/ErrNoSpace")
+
+	// put again
+	resp, rev2, err = DoOpsInOneCmpsTxnWithRetry(cli, []clientv3.Cmp{clientv3util.KeyMissing(key1), clientv3util.KeyMissing(key2)}, []clientv3.Op{
+		clientv3.OpPut(key1, val), clientv3.OpPut(key2, val)}, []clientv3.Op{})
+	c.Assert(err, IsNil)
+	c.Assert(rev2, Greater, rev1)
+	c.Assert(resp.Responses, HasLen, 2)
+}
+
+func (t *testEtcdUtilSuite) TestIsRetryableError(c *C) {
 	c.Assert(IsRetryableError(v3rpc.ErrCompacted), IsTrue)
 	c.Assert(IsRetryableError(v3rpc.ErrNoLeader), IsTrue)
 	c.Assert(IsRetryableError(v3rpc.ErrNoSpace), IsTrue)
