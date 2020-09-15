@@ -41,9 +41,6 @@ func (s *Syncer) Status() interface{} {
 	}
 
 	syncerLocation := s.checkpoint.FlushedGlobalPoint()
-	if err != nil {
-		s.tctx.L().Warn("fail to get flushed global point", zap.Error(err))
-	}
 	st := &pb.SyncStatus{
 		TotalEvents:  total,
 		TotalTps:     totalTps,
