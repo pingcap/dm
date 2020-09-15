@@ -59,6 +59,11 @@ import (
 
 var _ = Suite(&testSyncerSuite{})
 
+var (
+	defaultTestSessionCfg = map[string]string{"sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"}
+	defaultTestTrackerCfg = tidbConfig.NewConfig()
+)
+
 func TestSuite(t *testing.T) {
 	TestingT(t)
 }
@@ -1147,6 +1152,8 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.schemaTracker, err = schema.NewTracker(defaultTestSessionCfg, defaultTestTrackerCfg, syncer.ddlDBConn.baseConn)
+	c.Assert(err, IsNil)
 	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
 
 	syncer.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
@@ -1331,11 +1338,6 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	checkPointDB, checkPointMock, err := sqlmock.New()
 	checkPointDBConn, err := checkPointDB.Conn(context.Background())
 	c.Assert(err, IsNil)
-
-	var (
-		defaultTestSessionCfg = map[string]string{"sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"}
-		defaultTestTrackerCfg = tidbConfig.NewConfig()
-	)
 
 	testJobs.jobs = testJobs.jobs[:0]
 
