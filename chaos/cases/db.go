@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -77,7 +78,7 @@ func (c *dbConn) execSQLs(ctx context.Context, queries ...string) error {
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsConnectionError(err) || forceIgnoreExecSQLError(err) {
-				// HACK: for some errors like `invalid connection`, we can ignore them just for testing.
+				// HACK: for some errors like `invalid connection`, `sql: connection is already closed`, we can ignore them just for testing.
 				err = c.resetConn(ctx)
 				if err != nil {
 					return false
@@ -130,6 +131,8 @@ func forceIgnoreExecSQLError(err error) bool {
 	err = errors.Cause(err)
 	switch err {
 	case mysql.ErrInvalidConn:
+		return true
+	case sql.ErrConnDone:
 		return true
 	}
 	return false
