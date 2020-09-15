@@ -27,6 +27,7 @@ import (
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/failpoint"
+	tidbConfig "github.com/pingcap/tidb/config"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -39,6 +40,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/retry"
+	"github.com/pingcap/dm/pkg/schema"
 	streamer2 "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 
@@ -1330,6 +1332,11 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	checkPointDBConn, err := checkPointDB.Conn(context.Background())
 	c.Assert(err, IsNil)
 
+	var (
+		defaultTestSessionCfg = map[string]string{"sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"}
+		defaultTestTrackerCfg = tidbConfig.NewConfig()
+	)
+
 	testJobs.jobs = testJobs.jobs[:0]
 
 	s.cfg.BAList = &filter.Rules{
@@ -1344,6 +1351,8 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.schemaTracker, err = schema.NewTracker(defaultTestSessionCfg, defaultTestTrackerCfg, syncer.ddlDBConn.baseConn)
+	c.Assert(err, IsNil)
 	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
 
 	syncer.genRouter()

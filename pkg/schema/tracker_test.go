@@ -93,9 +93,8 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	c.Assert(err, IsNil)
 
 	// discover tracker config failed, will not return error
-	// tidb before v4.0.0 doesn't support show config
-	mock.ExpectQuery("show config where name = 'alter-primary-key'").WillReturnError(
-		&mysql.MySQLError{Number: 1064, Message: "You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 11 near \"config\""})
+	mock.ExpectQuery("select json_extract\\(@@tidb_config, '\\$.\"alter-primary-key\"'\\)").WillReturnError(
+		&mysql.MySQLError{Number: 1064, Message: "You have an error in your SQL syntax blahblah"})
 	tracker, err = NewTracker(defaultTestSessionCfg, nil, baseConn)
 	c.Assert(err, IsNil)
 	c.Assert(tidbConfig.GetGlobalConfig().AlterPrimaryKey, IsFalse)
@@ -109,9 +108,9 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	c.Assert(err, NotNil)
 
 	// empty or default config in downstream
-	mock.ExpectQuery("show config where name = 'alter-primary-key'").WillReturnRows(
-		sqlmock.NewRows([]string{"Type", "Instance", "Name", "Value"}).
-			AddRow("tidb", "0.0.0.0:4000", "alter-primary-key", "false"))
+	mock.ExpectQuery("select json_extract\\(@@tidb_config, '\\$.\"alter-primary-key\"'\\)").WillReturnRows(
+		sqlmock.NewRows([]string{"json_extract(@@tidb_config, '$.\"alter-primary-key\"')"}).
+			AddRow("false"))
 	mock.ExpectQuery("show variables like 'sql_mode'").WillReturnRows(
 		sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", ""))
@@ -142,9 +141,9 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	// user set session config, get tracker config from downstream
 	// no `STRICT_TRANS_TABLES`, no error now
 	sessionCfg = map[string]string{"sql_mode": "NO_ZERO_DATE,NO_ZERO_IN_DATE,ANSI_QUOTES"}
-	mock.ExpectQuery("show config where name = 'alter-primary-key'").WillReturnRows(
-		sqlmock.NewRows([]string{"Type", "Instance", "Name", "Value"}).
-			AddRow("tidb", "0.0.0.0:4000", "alter-primary-key", "true"))
+	mock.ExpectQuery("select json_extract\\(@@tidb_config, '\\$.\"alter-primary-key\"'\\)").WillReturnRows(
+		sqlmock.NewRows([]string{"json_extract(@@tidb_config, '$.\"alter-primary-key\"')"}).
+			AddRow("true"))
 	tracker, err = NewTracker(sessionCfg, nil, baseConn)
 	c.Assert(err, IsNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
