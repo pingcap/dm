@@ -121,7 +121,7 @@ func (t *testEtcdUtilSuite) checkMember(c *C, mid uint64, m *etcdserverpb.Member
 	c.Assert(m.PeerURLs, DeepEquals, t.urlsToStrings(cfg.APUrls))
 }
 
-func (t *testEtcdUtilSuite) TestMemberUtil(c *C) {
+func (t *testEtcdUtilSuite) TestEtcdUtil(c *C) {
 	for i := 1; i <= 3; i++ {
 		t.testMemberUtilInternal(c, i)
 	}
