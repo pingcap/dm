@@ -39,16 +39,6 @@ const (
 	retryTimeout  = 3 * time.Second
 )
 
-// ExtractTable extracts schema and table from `schema`.`table`
-func ExtractTable(name string) (string, string, error) {
-	parts := strings.Split(name, "`.`")
-	if len(parts) != 2 {
-		return "", "", terror.ErrSchemaTableNameNotValid.Generate(name)
-	}
-
-	return strings.TrimLeft(parts[0], "`"), strings.TrimRight(parts[1], "`"), nil
-}
-
 // TrimCtrlChars returns a slice of the string s with all leading
 // and trailing control characters removed.
 func TrimCtrlChars(s string) string {
