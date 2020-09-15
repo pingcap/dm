@@ -21,8 +21,10 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"go.etcd.io/etcd/clientv3"
 	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
+	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
@@ -123,7 +125,12 @@ func DoOpsInOneCmpsTxnWithRetry(cli *clientv3.Client, cmps []clientv3.Cmp, opsTh
 	ctx, cancel := context.WithTimeout(cli.Ctx(), DefaultRequestTimeout)
 	defer cancel()
 	tctx := tcontext.NewContext(ctx, log.L())
+
 	ret, _, err := etcdDefaultTxnStrategy.Apply(tctx, etcdDefaultTxnRetryParam, func(t *tcontext.Context) (ret interface{}, err error) {
+		failpoint.Inject("ErrNoSpace", func() {
+			tctx.L().Info("fail to do ops in etcd", zap.String("failpoint", "ErrNoSpace"))
+			failpoint.Return(nil, v3rpc.ErrNoSpace)
+		})
 		resp, err := cli.Txn(ctx).If(cmps...).Then(opsThen...).Else(opsElse...).Commit()
 		if err != nil {
 			return nil, err
