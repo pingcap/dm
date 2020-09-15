@@ -1499,7 +1499,7 @@ type eventContext struct {
 func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext) error {
 	if ec.header.Timestamp == 0 || ec.header.LogPos == 0 { // fake rotate event
 		if string(ev.NextLogName) <= ec.lastLocation.Position.Name {
-			return nil // not rotate to the next binlgo file, ignore it
+			return nil // not rotate to the next binlog file, ignore it
 		}
 	}
 
