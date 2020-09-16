@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
@@ -515,8 +516,7 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 
 	lock := o.lk.FindLock(lockID)
 	if lock == nil {
-		// this aways means others remove the lock concurrently when resolved ddl.
-		// simply try again.
+		// should not happen
 		o.logger.Warn("lock not found after try sync for shard DDL info, try handle lock again", zap.String("lock", lockID), zap.Stringer("info", info))
 		return o.handleLock(info, tts, skipDone)
 	}
@@ -544,6 +544,11 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 
 // removeLock removes the lock in memory and its information in etcd.
 func (o *Optimist) removeLock(lock *optimism.Lock) (bool, error) {
+	failpoint.Inject("SleepWhenRemoveLock", func(val failpoint.Value) {
+		t := val.(int)
+		log.L().Info("wait new ddl info putted into etcd", zap.String("failpoint", "SleepWhenRemoveLock"))
+		time.Sleep(time.Duration(t) * time.Second)
+	})
 	deleted, err := o.deleteInfosOps(lock)
 	if err != nil {
 		return deleted, err
