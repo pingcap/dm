@@ -130,18 +130,16 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 	workerCli.EXPECT().OperateV1Meta(gomock.Any(), reqs[12].OperateV1Meta)
 	workerCli.EXPECT().HandleError(gomock.Any(), reqs[13].HandleError)
 
-	for _, req := range reqs {
-		_, err = rpcCli.SendRequest(ctx, req, timeout)
-		c.Assert(err, IsNil)
-	}
-
 	// others cmds are not supported.
 	// NOTE: update the end cmd in the below `for` loop when adding new cmds.
 OUTER:
 	for cmd := CmdStartSubTask; cmd <= CmdHandleError; cmd++ {
 		for _, req := range reqs {
 			if req.Type == cmd {
-				continue OUTER // supported cmd
+				// supported cmd
+				_, err = rpcCli.SendRequest(ctx, req, timeout)
+				c.Assert(err, IsNil)
+				continue OUTER
 			}
 		}
 		_, err = rpcCli.SendRequest(ctx, &Request{Type: cmd}, timeout)
