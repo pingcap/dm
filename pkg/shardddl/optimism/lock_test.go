@@ -375,7 +375,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 
 	// try sync for another table, also got `DROP INDEX` now.
 	vers[source][db][tbls[1]]++
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, tts, vers[source][db][tbls[0]])
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, tts, vers[source][db][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	c.Assert(l.versions, DeepEquals, vers)
