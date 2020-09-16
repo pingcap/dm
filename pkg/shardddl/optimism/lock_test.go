@@ -103,7 +103,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 				DDLs, err := l.TrySync(source, db, tbl, DDLs1, ti1, tts, vers[source][db][tbl])
 				c.Assert(err, IsNil)
 				c.Assert(DDLs, DeepEquals, DDLs1)
-				c.Assert(l.Versions, DeepEquals, vers)
+				c.Assert(l.versions, DeepEquals, vers)
 
 				syncedCount++
 				synced, remain := l.IsSynced()
@@ -122,7 +122,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	DDLs, err := l.TrySync(sources[0], dbs[0], tbls[0], DDLs1, ti1, tts, vers[sources[0]][dbs[0]][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
 
@@ -132,7 +132,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs2, ti2, tts, vers[sources[0]][dbs[0]][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready := l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[0]], IsTrue)
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
@@ -142,7 +142,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs2, ti2, tts, vers[sources[0]][dbs[0]][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[0]], IsTrue)
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
@@ -152,7 +152,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[0:1], ti2_1, tts, vers[sources[0]][dbs[0]][tbls[1]]) // use ti2_1 info
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2[0:1])
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[0]], IsTrue)
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
@@ -169,7 +169,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[0:1], ti2_1, tts, vers[sources[0]][dbs[0]][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{}) // NOTE: special case, joined has larger schema.
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
 
@@ -178,7 +178,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[1:2], ti2, tts, vers[sources[0]][dbs[0]][tbls[1]]) // use ti2 info.
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2[1:2])
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsTrue) // ready now.
 	synced, remain = l.IsSynced()
@@ -194,7 +194,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs2[1:2], ti2, tts, vers[sources[0]][dbs[0]][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2[1:2])
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 
 	// try add columns for all tables to reach the same schema.
 	t.trySyncForAllTablesLarger(c, l, DDLs2, ti2, tts, vers)
@@ -222,7 +222,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 				vers[source][db][tbl]++
 				DDLs, err = l.TrySync(source, db, tbl, DDLs3, ti3, tts, vers[source][db][tbl])
 				c.Assert(err, IsNil)
-				c.Assert(l.Versions, DeepEquals, vers)
+				c.Assert(l.versions, DeepEquals, vers)
 				synced, remain = l.IsSynced()
 				c.Assert(synced, Equals, l.synced)
 				if syncedCount == tableCount {
@@ -246,7 +246,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs4, ti4, tts, vers[sources[0]][dbs[0]][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[0]], IsFalse)
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsTrue)
@@ -256,7 +256,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs4, ti4, tts, vers[sources[0]][dbs[0]][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[0]], IsFalse)
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsTrue)
@@ -266,7 +266,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[0:1], ti4_1, tts, vers[sources[0]][dbs[0]][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[0]], IsFalse)
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
@@ -279,14 +279,14 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[0:1], ti4_1, tts, vers[sources[0]][dbs[0]][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 
 	// drop the second column for another table.
 	vers[sources[0]][dbs[0]][tbls[1]]++
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[1:2], ti4, tts, vers[sources[0]][dbs[0]][tbls[1]]) // use ti4 info.
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[0]], IsFalse)
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
@@ -299,7 +299,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[1], DDLs4[1:2], ti4, tts, vers[sources[0]][dbs[0]][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 
 	// try drop columns for other tables to reach the same schema.
 	remain = tableCount - 2
@@ -309,7 +309,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 				if synced2 { // do not `TrySync` again for previous two (un-synced now).
 					DDLs, err = l.TrySync(source, schema, table, DDLs4, ti4, tts, vers[source][schema][table])
 					c.Assert(err, IsNil)
-					c.Assert(l.Versions, DeepEquals, vers)
+					c.Assert(l.versions, DeepEquals, vers)
 					remain--
 					if remain == 0 {
 						c.Assert(DDLs, DeepEquals, DDLs4)
@@ -367,7 +367,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	synced, remain := l.IsSynced()
 	c.Assert(synced, Equals, l.synced)
 	c.Assert(synced, IsFalse)
@@ -378,7 +378,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	t.checkLockSynced(c, l)
 
 	// try sync for one table, `ADD INDEX` not returned directly (to keep the schema more compatible).
@@ -387,7 +387,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{}) // no DDLs returned
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	synced, remain = l.IsSynced()
 	c.Assert(synced, Equals, l.synced)
 	c.Assert(synced, IsFalse)
@@ -398,7 +398,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, tts, vers[source][db][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	t.checkLockSynced(c, l)
 }
 
@@ -446,28 +446,28 @@ func (t *testLock) TestLockTrySyncNullNotNull(c *C) {
 		DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts, vers[source][db][tbls[0]])
 		c.Assert(err, IsNil)
 		c.Assert(DDLs, DeepEquals, []string{})
-		c.Assert(l.Versions, DeepEquals, vers)
+		c.Assert(l.versions, DeepEquals, vers)
 
 		// try sync for another table, DDLs returned.
 		vers[source][db][tbls[1]]++
 		DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, tts, vers[source][db][tbls[1]])
 		c.Assert(err, IsNil)
 		c.Assert(DDLs, DeepEquals, DDLs1)
-		c.Assert(l.Versions, DeepEquals, vers)
+		c.Assert(l.versions, DeepEquals, vers)
 
 		// try sync for one table, from `NOT NULL` to `NULL`, DDLs returned.
 		vers[source][db][tbls[0]]++
 		DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, tts, vers[source][db][tbls[0]])
 		c.Assert(err, IsNil)
 		c.Assert(DDLs, DeepEquals, DDLs2)
-		c.Assert(l.Versions, DeepEquals, vers)
+		c.Assert(l.versions, DeepEquals, vers)
 
 		// try sync for another table, from `NOT NULL` to `NULL`, DDLs, returned.
 		vers[source][db][tbls[1]]++
 		DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, tts, vers[source][db][tbls[1]])
 		c.Assert(err, IsNil)
 		c.Assert(DDLs, DeepEquals, DDLs2)
-		c.Assert(l.Versions, DeepEquals, vers)
+		c.Assert(l.versions, DeepEquals, vers)
 	}
 }
 
@@ -512,14 +512,14 @@ func (t *testLock) TestLockTrySyncIntBigint(c *C) {
 	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 
 	// try sync for another table, DDLs returned.
 	vers[source][db][tbls[1]]++
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, tts, vers[source][db][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 }
 
 func (t *testLock) TestLockTrySyncNoDiff(c *C) {
@@ -563,7 +563,7 @@ func (t *testLock) TestLockTrySyncNoDiff(c *C) {
 	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts, vers[source][db][tbls[0]])
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 }
 
 func (t *testLock) TestLockTrySyncNewTable(c *C) {
@@ -607,7 +607,7 @@ func (t *testLock) TestLockTrySyncNewTable(c *C) {
 	DDLs, err := l.TrySync(source2, db2, tbl2, DDLs1, ti1, tts, vers[source2][db2][tbl2])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 
 	ready := l.Ready()
 	c.Assert(ready, HasLen, 2)
@@ -631,7 +631,7 @@ func (t *testLock) TestLockTrySyncNewTable(c *C) {
 	DDLs, err = l.TrySync(source1, db1, tbl1, DDLs1, ti1, tts, vers[source1][db1][tbl1])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 
 	ready = l.Ready()
 	c.Assert(ready, HasLen, 2)
@@ -699,7 +699,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready := l.Ready()
 	c.Assert(ready[source][db][tbls[0]], IsTrue)
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
@@ -715,7 +715,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, ti2, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
 
@@ -725,7 +725,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[0]], IsTrue)
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
@@ -741,7 +741,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs4, ti4, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs4)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 	cmp, err = l.tables[source][db][tbls[0]].Compare(l.Joined())
@@ -756,7 +756,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs5, ti5, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs5)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
 
@@ -766,7 +766,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs6, ti6, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs6)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 	cmp, err = l.tables[source][db][tbls[0]].Compare(l.Joined())
@@ -781,7 +781,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs7, ti7, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs7)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 	cmp, err = l.tables[source][db][tbls[0]].Compare(l.Joined())
@@ -796,7 +796,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs8, ti8, tts, vers[source][db][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs8)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
 }
@@ -843,7 +843,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready := l.Ready()
 	c.Assert(ready[source][db][tbls[0]], IsTrue)
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
@@ -859,7 +859,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, tts, vers[source][db][tbls[1]])
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
 	c.Assert(err, ErrorMatches, ".*at tuple index.*")
 	c.Assert(cmp, Equals, 0)
@@ -871,7 +871,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[0]], IsFalse)
 	c.Assert(ready[source][db][tbls[1]], IsTrue) // the second table become synced now.
@@ -887,7 +887,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs4, ti4, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs4)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
 }
@@ -945,7 +945,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready := l.Ready()
 	c.Assert(ready[source][db][tbls[0]], IsTrue)
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
@@ -961,7 +961,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, tts, vers[source][db][tbls[1]])
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
 	c.Assert(err, ErrorMatches, ".*at tuple index.*")
 	c.Assert(cmp, Equals, 0)
@@ -973,7 +973,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, tts, vers[source][db][tbls[1]])
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
 	c.Assert(err, ErrorMatches, ".*at tuple index.*")
 	c.Assert(cmp, Equals, 0)
@@ -983,7 +983,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs3, ti3, tts, vers[source][db][tbls[1]])
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
 	c.Assert(err, ErrorMatches, ".*at tuple index.*")
 	c.Assert(cmp, Equals, 0)
@@ -995,7 +995,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs4, ti4, tts, vers[source][db][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, -1)
@@ -1007,7 +1007,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, ti1, tts, vers[source][db][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 0)
@@ -1020,7 +1020,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs5, ti5, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs5)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[0]], IsTrue)
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
@@ -1039,7 +1039,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
 	c.Assert(err, ErrorMatches, ".*at tuple index.*")
 	c.Assert(cmp, Equals, 0)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 
@@ -1049,7 +1049,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs7, ti7, tts, vers[source][db][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs7) // special case: these DDLs should not be replicated to the downstream.
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[0]], IsFalse)
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
@@ -1121,7 +1121,7 @@ func (t *testLock) TestTryRemoveTable(c *C) {
 	DDLs, err := l.TrySync(source, db, tbl1, DDLs1, ti1, tts, vers[source][db][tbl1])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready := l.Ready()
 	c.Assert(ready, HasLen, 1)
 	c.Assert(ready[source], HasLen, 1)
@@ -1137,7 +1137,7 @@ func (t *testLock) TestTryRemoveTable(c *C) {
 	c.Assert(ready[source], HasLen, 1)
 	c.Assert(ready[source][db], HasLen, 1)
 	c.Assert(ready[source][db][tbl1], IsTrue)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 
 	// CASE: remove a table will not rebuild joined schema now.
 	// TrySync to add the second back.
@@ -1145,7 +1145,7 @@ func (t *testLock) TestTryRemoveTable(c *C) {
 	DDLs, err = l.TrySync(source, db, tbl2, DDLs2, ti2, tts, vers[source][db][tbl1])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready, HasLen, 1)
 	c.Assert(ready[source], HasLen, 1)
@@ -1161,7 +1161,7 @@ func (t *testLock) TestTryRemoveTable(c *C) {
 	c.Assert(ready[source], HasLen, 1)
 	c.Assert(ready[source][db], HasLen, 1)
 	c.Assert(ready[source][db][tbl1], IsFalse) // the joined schema is not rebuild.
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 
 	// CASE: try to remove for not-exists table.
 	c.Assert(l.TryRemoveTable(source, db, "not-exist"), IsFalse)
@@ -1210,7 +1210,7 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, ti1, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 	t.checkLockNoDone(c, l)
 	c.Assert(l.IsResolved(), IsFalse)
 
@@ -1225,7 +1225,7 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, ti2, tts, vers[source][db][tbls[1]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 
 	// the first table is still keep `done` (for the previous DDLs operation)
 	c.Assert(l.IsDone(source, db, tbls[0]), IsTrue)
@@ -1244,7 +1244,7 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, ti3, tts, vers[source][db][tbls[0]])
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
-	c.Assert(l.Versions, DeepEquals, vers)
+	c.Assert(l.versions, DeepEquals, vers)
 
 	// the first table become not-done, and the lock is un-resolved.
 	c.Assert(l.IsDone(source, db, tbls[0]), IsFalse)

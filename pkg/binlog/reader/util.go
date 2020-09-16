@@ -64,7 +64,7 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 		case *replication.QueryEvent:
 			parser2, err2 := event.GetParserForStatusVars(ev.StatusVars)
 			if err2 != nil {
-				log.L().Warn("can't determine sql_mode from binlog status_vars, use default parser instead", zap.Error(err))
+				log.L().Warn("can't determine sql_mode from binlog status_vars, use default parser instead", zap.Error(err2))
 				parser2 = parser.New()
 			}
 
@@ -76,7 +76,7 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 				}
 				err2 = latestGSet.Update(nextGTIDStr)
 				if err2 != nil {
-					return nil, terror.Annotatef(err, "update GTID set %v with GTID %s", latestGSet, nextGTIDStr)
+					return nil, terror.Annotatef(err2, "update GTID set %v with GTID %s", latestGSet, nextGTIDStr)
 				}
 				latestPos = e.Header.LogPos
 			}
