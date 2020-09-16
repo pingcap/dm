@@ -1838,9 +1838,16 @@ func (s *Server) listMemberMaster(ctx context.Context, names []string) (*pb.Memb
 
 	etcdMembers := memberList.Members
 	masters := make([]*pb.MasterInfo, 0, len(etcdMembers))
-	client := http.Client{
-		Timeout: 1 * time.Second,
+
+	client := &http.Client{}
+	if len(s.cfg.SSLCA) != 0 {
+		inner, err := toolutils.ToTLSConfigWithVerify(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.CertAllowedCN)
+		if err != nil {
+			return resp, err
+		}
+		client = toolutils.ClientWithTLS(inner)
 	}
+	client.Timeout = 1 * time.Second
 
 	for _, etcdMember := range etcdMembers {
 		if !all && !set[etcdMember.Name] {
