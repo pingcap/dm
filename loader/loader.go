@@ -913,15 +913,11 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 			continue
 		}
 
-		idx := strings.Index(file, ".sql")
-		name := file[:idx]
-		fields := strings.Split(name, ".")
-		if len(fields) != 2 && len(fields) != 3 {
-			l.logCtx.L().Warn("invalid db table sql file", zap.String("file", file))
+		db, table, err := getDBAndTableFromFilename(file)
+		if err != nil {
+			l.logCtx.L().Warn("invalid db table sql file", zap.String("file", file), zap.Error(err))
 			continue
 		}
-
-		db, table := fields[0], fields[1]
 		if l.skipSchemaAndTable(&filter.Table{Schema: db, Name: table}) {
 			l.logCtx.L().Warn("ignore data file", zap.String("data file", file))
 			continue
@@ -1261,6 +1257,7 @@ func (l *Loader) cleanDumpFiles() {
 			l.logCtx.L().Warn("error when remove loaded dump folder", zap.String("data folder", l.cfg.Dir), zap.Error(err))
 		}
 	} else {
+<<<<<<< HEAD
 		// leave metadata file, only delete structure files
 		for db, tables := range l.db2Tables {
 			dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
@@ -1272,6 +1269,14 @@ func (l *Loader) cleanDumpFiles() {
 				if err := os.Remove(tableFile); err != nil {
 					l.logCtx.L().Warn("error when remove loaded dump file", zap.String("data file", tableFile), zap.Error(err))
 				}
+=======
+		// leave metadata file, only delete sql files
+		files := CollectDirFiles(l.cfg.Dir)
+		var lastErr error
+		for f := range files {
+			if strings.HasSuffix(f, ".sql") {
+				lastErr = os.Remove(filepath.Join(l.cfg.Dir, f))
+>>>>>>> edc887d7... loader, test: fix bug of clean dump file and update checkpoint (#1042)
 			}
 		}
 	}

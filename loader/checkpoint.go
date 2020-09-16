@@ -276,18 +276,12 @@ func (cp *RemoteCheckPoint) allFilesFinished(files map[string][]int64) bool {
 
 // Init implements CheckPoint.Init
 func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos int64) error {
-	idx := strings.Index(filename, ".sql")
-	if idx < 0 {
-		return terror.ErrCheckpointInvalidTableFile.Generate(filename)
-	}
-	fname := filename[:idx]
-	fields := strings.Split(fname, ".")
-	if len(fields) != 2 && len(fields) != 3 {
-		return terror.ErrCheckpointInvalidTableFile.Generate(filename)
-	}
-
 	// fields[0] -> db name, fields[1] -> table name
-	schema, table := fields[0], fields[1]
+	schema, table, err := getDBAndTableFromFilename(filename)
+	if err != nil {
+		return terror.ErrCheckpointInvalidTableFile.Generate(filename)
+
+	}
 	sql2 := fmt.Sprintf("INSERT INTO %s (`id`, `filename`, `cp_schema`, `cp_table`, `offset`, `end_pos`) VALUES(?,?,?,?,?,?)", cp.tableName)
 	cp.logCtx.L().Info("initial checkpoint record",
 		zap.String("sql", sql2),
@@ -299,7 +293,7 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 		zap.Int64("end position", endPos))
 	args := []interface{}{cp.id, filename, schema, table, 0, endPos}
 	cp.connMutex.Lock()
-	err := cp.conn.executeSQL(tctx, []string{sql2}, args)
+	err = cp.conn.executeSQL(tctx, []string{sql2}, args)
 	cp.connMutex.Unlock()
 	if err != nil {
 		if isErrDupEntry(err) {
@@ -345,6 +339,19 @@ func (cp *RemoteCheckPoint) GenSQL(filename string, offset int64) string {
 	return sql
 }
 
+<<<<<<< HEAD
+=======
+// UpdateOffset implements CheckPoint.UpdateOffset
+func (cp *RemoteCheckPoint) UpdateOffset(filename string, offset int64) {
+	db, table, err := getDBAndTableFromFilename(filename)
+	if err != nil {
+		cp.logCtx.L().Error("error in checkpoint UpdateOffset", zap.Error(err))
+		return
+	}
+	cp.restoringFiles[db][table][filename][0] = offset
+}
+
+>>>>>>> edc887d7... loader, test: fix bug of clean dump file and update checkpoint (#1042)
 // Clear implements CheckPoint.Clear
 func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 	sql2 := fmt.Sprintf("DELETE FROM %s WHERE `id` = '%s'", cp.tableName, cp.id)
