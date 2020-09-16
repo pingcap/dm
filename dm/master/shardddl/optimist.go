@@ -517,8 +517,7 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 	lock := o.lk.FindLock(lockID)
 	if lock == nil {
 		// should not happen
-		o.logger.Warn("lock not found after try sync for shard DDL info, try handle lock again", zap.String("lock", lockID), zap.Stringer("info", info))
-		return o.handleLock(info, tts, skipDone)
+		return terror.ErrMasterLockNotFound.Generate(lockID)
 	}
 
 	// check whether the lock has resolved.
@@ -554,7 +553,6 @@ func (o *Optimist) removeLock(lock *optimism.Lock) (bool, error) {
 		return deleted, err
 	}
 	if !deleted {
-		o.logger.Info("fail to delete lock", zap.String("lock", lock.ID))
 		return false, nil
 	}
 	o.lk.RemoveLock(lock.ID)
@@ -571,7 +569,7 @@ func (o *Optimist) deleteInfosOps(lock *optimism.Lock) (bool, error) {
 			for table := range tables {
 				// NOTE: we rely on only `task`, `source`, `upSchema`, `upTable` and `Version` used for deletion.
 				info := optimism.NewInfo(lock.Task, source, schema, table, lock.DownSchema, lock.DownTable, nil, nil, nil)
-				info.Version = lock.Versions[source][schema][table]
+				info.Version = lock.GetVersion(source, schema, table)
 				infos = append(infos, info)
 				ops = append(ops, optimism.NewOperation(lock.ID, lock.Task, source, schema, table, nil, optimism.ConflictNone, false))
 			}
