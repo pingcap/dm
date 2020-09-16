@@ -1497,9 +1497,10 @@ type eventContext struct {
 // TODO: Further split into smaller functions and group common arguments into
 // a context struct.
 func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext) error {
-	if ec.header.Timestamp == 0 || ec.header.LogPos == 0 {
-		// it is fake rotate event, ignore it
-		return nil
+	if ec.header.Timestamp == 0 || ec.header.LogPos == 0 { // fake rotate event
+		if string(ev.NextLogName) <= ec.lastLocation.Position.Name {
+			return nil // not rotate to the next binlog file, ignore it
+		}
 	}
 
 	*ec.currentLocation = binlog.Location{
