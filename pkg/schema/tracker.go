@@ -53,42 +53,17 @@ type Tracker struct {
 }
 
 // NewTracker creates a new tracker. `sessionCfg` will be set as tracker's session variables if specified, or retrieve
-// some variable from downstream TiDB using `tidbConn`. `tidbConn` is also used to get some TiDB config
-func NewTracker(sessionCfg map[string]string, trackerCfg *tidbConfig.Config, tidbConn *conn.BaseConn) (*Tracker, error) {
-	var ignoredColumn interface{}
+// some variable from downstream TiDB using `tidbConn`.
+func NewTracker(sessionCfg map[string]string, tidbConn *conn.BaseConn) (*Tracker, error) {
+	// NOTE: tidb uses a **global** config so can't isolate tracker's config from each other. If that isolation is needed,
+	// we might SetGlobalConfig before every call to tracker, or use some patch like https://github.com/bouk/monkey
+	toSet := tidbConfig.NewConfig()
+	toSet.AlterPrimaryKey = true
+	tidbConfig.StoreGlobalConfig(toSet)
 
-	if trackerCfg != nil {
-		toSet := tidbConfig.NewConfig()
-		// hard to find which field is specified by user, which field is default value by decoding, so only set `alter-primary-key` for now
-		toSet.AlterPrimaryKey = trackerCfg.AlterPrimaryKey
-		tidbConfig.StoreGlobalConfig(toSet)
-	} else {
-		// fetch downstream config, currently only `alter-primary-key`
-
-		// mysql> select json_extract(@@tidb_config, '$."alter-primary-key"');
-		// +------------------------------------------------------+
-		// | json_extract(@@tidb_config, '$."alter-primary-key"') |
-		// +------------------------------------------------------+
-		// | false                                                |
-		// +------------------------------------------------------+
-		rows, err := tidbConn.QuerySQL(tcontext.Background(), "select json_extract(@@tidb_config, '$.\"alter-primary-key\"');")
-		if err != nil {
-			goto SKIP
-		}
-		if rows.Next() {
-			var value bool
-			if err2 := rows.Scan(&value); err2 != nil {
-				goto SKIP
-			}
-			tidbCfg := tidbConfig.NewConfig()
-			tidbCfg.AlterPrimaryKey = value
-			tidbConfig.StoreGlobalConfig(tidbCfg)
-		}
-		rows.Close()
-	}
-SKIP:
 	if len(sessionCfg) == 0 {
 		sessionCfg = make(map[string]string)
+		var ignoredColumn interface{}
 		for _, k := range sessionVars {
 			rows, err2 := tidbConn.QuerySQL(tcontext.Background(), fmt.Sprintf("show variables like '%s'", k))
 			if err2 != nil {

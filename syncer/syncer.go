@@ -275,7 +275,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
 
-	s.schemaTracker, err = schema.NewTracker(s.cfg.To.Session, s.cfg.Tracker, s.ddlDBConn.baseConn)
+	s.schemaTracker, err = schema.NewTracker(s.cfg.To.Session, s.ddlDBConn.baseConn)
 	if err != nil {
 		return terror.ErrSyncerUnitNewTracker.Delegate(err)
 	}

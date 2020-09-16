@@ -21,8 +21,6 @@ import (
 	"strings"
 	"time"
 
-	tidbConfig "github.com/pingcap/tidb/config"
-
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -162,10 +160,9 @@ type SubTaskConfig struct {
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`
 
 	// UseRelay get value from dm-worker config
-	UseRelay bool               `toml:"use-relay" json:"use-relay"`
-	From     DBConfig           `toml:"from" json:"from"`
-	To       DBConfig           `toml:"to" json:"to"`
-	Tracker  *tidbConfig.Config `toml:"inner-tidb" json:"inner-tidb"`
+	UseRelay bool     `toml:"use-relay" json:"use-relay"`
+	From     DBConfig `toml:"from" json:"from"`
+	To       DBConfig `toml:"to" json:"to"`
 
 	RouteRules         []*router.TableRule   `toml:"route-rules" json:"route-rules"`
 	FilterRules        []*bf.BinlogEventRule `toml:"filter-rules" json:"filter-rules"`

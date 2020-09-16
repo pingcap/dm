@@ -21,11 +21,9 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
-	tidbConfig "github.com/pingcap/tidb/config"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/pingcap/dm/pkg/conn"
@@ -39,7 +37,6 @@ var _ = Suite(&trackerSuite{})
 
 var (
 	defaultTestSessionCfg = map[string]string{"sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"}
-	defaultTestTrackerCfg = tidbConfig.NewConfig()
 )
 
 type trackerSuite struct {
@@ -74,47 +71,27 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	c.Assert(err, IsNil)
 	baseConn := conn.NewBaseConn(con, nil)
 
-	// user give correct session and tracker config
-	_, err = NewTracker(defaultTestSessionCfg, defaultTestTrackerCfg, baseConn)
+	// user give correct session config
+	_, err = NewTracker(defaultTestSessionCfg, baseConn)
 	c.Assert(err, IsNil)
 
-	// user give wrong session session and correct tracker config, will return error
+	// user give wrong session session, will return error
 	sessionCfg := map[string]string{"sql_mode": "HaHa"}
-	_, err = NewTracker(sessionCfg, defaultTestTrackerCfg, baseConn)
+	_, err = NewTracker(sessionCfg, baseConn)
 	c.Assert(err, NotNil)
-
-	// user give correct session session and wrong (empty) tracker config, will not return error since we only use `alter-primary-key`
-	wrongCfg := &tidbConfig.Config{}
-	tracker, err := NewTracker(defaultTestSessionCfg, wrongCfg, baseConn)
-	c.Assert(err, IsNil)
-	err = tracker.Exec(context.Background(), "", "create database testdb;")
-	c.Assert(err, IsNil)
-	err = tracker.Exec(context.Background(), "testdb", "create table foo (a varchar(255) primary key, b DATETIME)")
-	c.Assert(err, IsNil)
-
-	// discover tracker config failed, will not return error
-	mock.ExpectQuery("select json_extract\\(@@tidb_config, '\\$.\"alter-primary-key\"'\\)").WillReturnError(
-		&mysql.MySQLError{Number: 1064, Message: "You have an error in your SQL syntax blahblah"})
-	tracker, err = NewTracker(defaultTestSessionCfg, nil, baseConn)
-	c.Assert(err, IsNil)
-	c.Assert(tidbConfig.GetGlobalConfig().AlterPrimaryKey, IsFalse)
-	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
 	// discover session config failed, will return error
 	mock.ExpectQuery("show variables like 'sql_mode'").WillReturnRows(
 		sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "HaHa"))
-	tracker, err = NewTracker(nil, defaultTestTrackerCfg, baseConn)
+	_, err = NewTracker(nil, baseConn)
 	c.Assert(err, NotNil)
 
 	// empty or default config in downstream
-	mock.ExpectQuery("select json_extract\\(@@tidb_config, '\\$.\"alter-primary-key\"'\\)").WillReturnRows(
-		sqlmock.NewRows([]string{"json_extract(@@tidb_config, '$.\"alter-primary-key\"')"}).
-			AddRow("false"))
 	mock.ExpectQuery("show variables like 'sql_mode'").WillReturnRows(
 		sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", ""))
-	tracker, err = NewTracker(nil, nil, baseConn)
+	tracker, err := NewTracker(nil, baseConn)
 	c.Assert(err, IsNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 	err = tracker.Exec(context.Background(), "", "create database testdb;")
@@ -124,7 +101,7 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	mock.ExpectQuery("show variables like 'sql_mode'").WillReturnRows(
 		sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE"))
-	tracker, err = NewTracker(nil, defaultTestTrackerCfg, baseConn)
+	tracker, err = NewTracker(nil, baseConn)
 	c.Assert(err, IsNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 	c.Assert(tracker.se.GetSessionVars().SQLMode.HasOnlyFullGroupBy(), IsTrue)
@@ -141,10 +118,7 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	// user set session config, get tracker config from downstream
 	// no `STRICT_TRANS_TABLES`, no error now
 	sessionCfg = map[string]string{"sql_mode": "NO_ZERO_DATE,NO_ZERO_IN_DATE,ANSI_QUOTES"}
-	mock.ExpectQuery("select json_extract\\(@@tidb_config, '\\$.\"alter-primary-key\"'\\)").WillReturnRows(
-		sqlmock.NewRows([]string{"json_extract(@@tidb_config, '$.\"alter-primary-key\"')"}).
-			AddRow("true"))
-	tracker, err = NewTracker(sessionCfg, nil, baseConn)
+	tracker, err = NewTracker(sessionCfg, baseConn)
 	c.Assert(err, IsNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
@@ -175,7 +149,7 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 func (s *trackerSuite) TestDDL(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
 
-	tracker, err := NewTracker(defaultTestSessionCfg, defaultTestTrackerCfg, s.baseConn)
+	tracker, err := NewTracker(defaultTestSessionCfg, s.baseConn)
 	c.Assert(err, IsNil)
 
 	// Table shouldn't exist before initialization.
@@ -242,7 +216,7 @@ func (s *trackerSuite) TestDDL(c *C) {
 func (s *trackerSuite) TestGetSingleColumnIndices(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
 
-	tracker, err := NewTracker(defaultTestSessionCfg, defaultTestTrackerCfg, s.baseConn)
+	tracker, err := NewTracker(defaultTestSessionCfg, s.baseConn)
 	c.Assert(err, IsNil)
 
 	ctx := context.Background()
@@ -281,7 +255,7 @@ func (s *trackerSuite) TestGetSingleColumnIndices(c *C) {
 func (s *trackerSuite) TestCreateSchemaIfNotExists(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
 
-	tracker, err := NewTracker(defaultTestSessionCfg, defaultTestTrackerCfg, s.baseConn)
+	tracker, err := NewTracker(defaultTestSessionCfg, s.baseConn)
 	c.Assert(err, IsNil)
 
 	// We cannot create a table without a database.
@@ -309,7 +283,7 @@ func (s *trackerSuite) TestCreateSchemaIfNotExists(c *C) {
 func (s *trackerSuite) TestMultiDrop(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
 
-	tracker, err := NewTracker(defaultTestSessionCfg, defaultTestTrackerCfg, s.baseConn)
+	tracker, err := NewTracker(defaultTestSessionCfg, s.baseConn)
 	c.Assert(err, IsNil)
 
 	ctx := context.Background()
@@ -353,7 +327,7 @@ func (aj asJSON) String() string {
 func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
 
-	tracker, err := NewTracker(defaultTestSessionCfg, defaultTestTrackerCfg, s.baseConn)
+	tracker, err := NewTracker(defaultTestSessionCfg, s.baseConn)
 	c.Assert(err, IsNil)
 
 	// Create some sort of complicated table.
@@ -417,7 +391,7 @@ func (s *trackerSuite) TestAllSchemas(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
 	ctx := context.Background()
 
-	tracker, err := NewTracker(defaultTestSessionCfg, defaultTestTrackerCfg, s.baseConn)
+	tracker, err := NewTracker(defaultTestSessionCfg, s.baseConn)
 	c.Assert(err, IsNil)
 
 	// nothing should exist...

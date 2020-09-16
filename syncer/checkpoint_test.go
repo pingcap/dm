@@ -19,8 +19,6 @@ import (
 	"os"
 	"path/filepath"
 
-	tidbConfig "github.com/pingcap/tidb/config"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
@@ -67,10 +65,9 @@ func (s *testCheckpointSuite) SetUpSuite(c *C) {
 	var (
 		err                   error
 		defaultTestSessionCfg = map[string]string{"sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"}
-		defaultTestTrackerCfg = tidbConfig.NewConfig()
 	)
 
-	s.tracker, err = schema.NewTracker(defaultTestSessionCfg, defaultTestTrackerCfg, nil)
+	s.tracker, err = schema.NewTracker(defaultTestSessionCfg, nil)
 	c.Assert(err, IsNil)
 }
 

@@ -20,7 +20,6 @@ target-database:
     tidb_retry_limit: "10"
     tidb_skip_utf8_check: "1"
   security: null
-inner-tidb: null
 mysql-instances:
 - source-id: mysql-replica-01
   meta: null
