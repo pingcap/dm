@@ -891,15 +891,11 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 			continue
 		}
 
-		idx := strings.LastIndex(file, ".sql")
-		name := file[:idx]
-		fields := strings.Split(name, ".")
-		if len(fields) != 2 && len(fields) != 3 {
-			l.logCtx.L().Warn("invalid db table sql file", zap.String("file", file))
+		db, table, err := getDBAndTableFromFilename(file)
+		if err != nil {
+			l.logCtx.L().Warn("invalid db table sql file", zap.String("file", file), zap.Error(err))
 			continue
 		}
-
-		db, table := fields[0], fields[1]
 		if l.skipSchemaAndTable(&filter.Table{Schema: db, Name: table}) {
 			l.logCtx.L().Warn("ignore data file", zap.String("data file", file))
 			continue
@@ -1252,7 +1248,7 @@ func (l *Loader) cleanDumpFiles() {
 		var lastErr error
 		for f := range files {
 			if strings.HasSuffix(f, ".sql") {
-				lastErr = os.Remove(f)
+				lastErr = os.Remove(filepath.Join(l.cfg.Dir, f))
 			}
 		}
 		if lastErr != nil {
