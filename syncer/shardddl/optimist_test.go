@@ -144,7 +144,9 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(ifm[task], HasLen, 1)
 	c.Assert(ifm[task][source], HasLen, 1)
 	c.Assert(ifm[task][source][info1.UpSchema], HasLen, 1)
-	c.Assert(ifm[task][source][info1.UpSchema][info1.UpTable], DeepEquals, info1)
+	info1WithVer := info1
+	info1WithVer.Version = 1
+	c.Assert(ifm[task][source][info1.UpSchema][info1.UpTable], DeepEquals, info1WithVer)
 	opc := op1c
 	opc.Done = true
 	opm, _, err := optimism.GetAllOperations(etcdTestCli)
@@ -165,7 +167,9 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(rev3, Greater, rev2)
 	ifm, _, err = optimism.GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
-	c.Assert(ifm[task][source][infoCreate.UpSchema][infoCreate.UpTable], DeepEquals, infoCreate)
+	infoCreateWithVer := infoCreate
+	infoCreateWithVer.Version = 1
+	c.Assert(ifm[task][source][infoCreate.UpSchema][infoCreate.UpTable], DeepEquals, infoCreateWithVer)
 	c.Assert(o.tables.Tables[infoCreate.DownSchema][infoCreate.DownTable][infoCreate.UpSchema], HasKey, infoCreate.UpTable)
 
 	// handle `DROP TABLE`.

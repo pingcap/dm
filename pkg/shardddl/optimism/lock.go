@@ -51,6 +51,9 @@ type Lock struct {
 	// so we can set `done` to `false` when received a table info (and need the table to done some DDLs),
 	// and mark `done` to `true` after received the done status of the DDLs operation.
 	done map[string]map[string]map[string]bool
+
+	// upstream source ID -> upstream schema name -> upstream table name -> info version.
+	versions map[string]map[string]map[string]int64
 }
 
 // NewLock creates a new Lock instance.
@@ -65,6 +68,7 @@ func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []
 		tables:     make(map[string]map[string]map[string]schemacmp.Table),
 		done:       make(map[string]map[string]map[string]bool),
 		synced:     true,
+		versions:   make(map[string]map[string]map[string]int64),
 	}
 	l.addTables(tts)
 	metrics.ReportDDLPending(task, metrics.DDLPendingNone, metrics.DDLPendingSynced)
@@ -86,7 +90,7 @@ func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []
 // for non-intrusive, a broadcast mechanism needed to notify conflict tables after the conflict has resolved, or even a block mechanism needed.
 // for intrusive, a DML prune or transform mechanism needed for two different schemas (before and after the conflict resolved).
 func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
-	ddls []string, newTI *model.TableInfo, tts []TargetTable) (newDDLs []string, err error) {
+	ddls []string, newTI *model.TableInfo, tts []TargetTable, infoVersion int64) (newDDLs []string, err error) {
 	l.mu.Lock()
 	defer func() {
 		if len(newDDLs) > 0 {
@@ -104,6 +108,9 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		map[string]map[string]struct{}{callerSchema: {callerTable: struct{}{}}}))
 	// add any new source tables.
 	l.addTables(tts)
+	if val, ok := l.versions[callerSource][callerSchema][callerTable]; !ok || val < infoVersion {
+		l.versions[callerSource][callerSchema][callerTable] = infoVersion
+	}
 
 	var emptyDDLs = []string{}
 	oldTable := l.tables[callerSource][callerSchema][callerTable]
@@ -250,6 +257,7 @@ func (l *Lock) TryRemoveTable(source, schema, table string) bool {
 	_, remain := l.syncStatus()
 	l.synced = remain == 0
 	delete(l.done[source][schema], table)
+	delete(l.versions[source][schema], table)
 	log.L().Info("table removed from the lock", zap.String("lock", l.ID),
 		zap.String("source", source), zap.String("schema", schema), zap.String("table", table),
 		zap.Stringer("table info", ti))
@@ -397,17 +405,20 @@ func (l *Lock) addTables(tts []TargetTable) {
 		if _, ok := l.tables[tt.Source]; !ok {
 			l.tables[tt.Source] = make(map[string]map[string]schemacmp.Table)
 			l.done[tt.Source] = make(map[string]map[string]bool)
+			l.versions[tt.Source] = make(map[string]map[string]int64)
 		}
 		for schema, tables := range tt.UpTables {
 			if _, ok := l.tables[tt.Source][schema]; !ok {
 				l.tables[tt.Source][schema] = make(map[string]schemacmp.Table)
 				l.done[tt.Source][schema] = make(map[string]bool)
+				l.versions[tt.Source][schema] = make(map[string]int64)
 			}
 			for table := range tables {
 				if _, ok := l.tables[tt.Source][schema][table]; !ok {
 					// NOTE: the newly added table uses the current table info.
 					l.tables[tt.Source][schema][table] = l.joined
 					l.done[tt.Source][schema][table] = false
+					l.versions[tt.Source][schema][table] = 0
 					log.L().Info("table added to the lock", zap.String("lock", l.ID),
 						zap.String("source", tt.Source), zap.String("schema", schema), zap.String("table", table),
 						zap.Stringer("table info", l.joined))
@@ -415,4 +426,12 @@ func (l *Lock) addTables(tts []TargetTable) {
 			}
 		}
 	}
+}
+
+// GetVersion return version of info in lock.
+func (l *Lock) GetVersion(source string, schema string, table string) int64 {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	return l.versions[source][schema][table]
 }
