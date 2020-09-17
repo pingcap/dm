@@ -772,39 +772,42 @@ func (s *Syncer) addJob(job *job) error {
 		s.c.reset()
 	}
 
-	switch job.tp {
-	case ddl:
-		failpoint.Inject("ExitAfterDDLBeforeFlush", func() {
-			s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ExitAfterDDLBeforeFlush"))
-			utils.OsExit(1)
-		})
-		// interrupted after executed DDL and before save checkpoint.
-		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-			err := handleFlushCheckpointStage(3, val.(int), "before save checkpoint")
-			if err != nil {
-				failpoint.Return(err)
+	// don't save checkpoint when downstream has error
+	if s.execError.Get() == nil {
+		switch job.tp {
+		case ddl:
+			failpoint.Inject("ExitAfterDDLBeforeFlush", func() {
+				s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ExitAfterDDLBeforeFlush"))
+				utils.OsExit(1)
+			})
+			// interrupted after executed DDL and before save checkpoint.
+			failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+				err := handleFlushCheckpointStage(3, val.(int), "before save checkpoint")
+				if err != nil {
+					failpoint.Return(err)
+				}
+			})
+			// only save checkpoint for DDL and XID (see above)
+			s.saveGlobalPoint(job.location)
+			for sourceSchema, tbs := range job.sourceTbl {
+				if len(sourceSchema) == 0 {
+					continue
+				}
+				for _, sourceTable := range tbs {
+					s.saveTablePoint(sourceSchema, sourceTable, job.location)
+				}
 			}
-		})
-		// only save checkpoint for DDL and XID (see above)
-		s.saveGlobalPoint(job.location)
-		for sourceSchema, tbs := range job.sourceTbl {
-			if len(sourceSchema) == 0 {
-				continue
-			}
-			for _, sourceTable := range tbs {
-				s.saveTablePoint(sourceSchema, sourceTable, job.location)
-			}
-		}
-		// reset sharding group after checkpoint saved
-		s.resetShardingGroup(job.targetSchema, job.targetTable)
-	case insert, update, del:
-		// save job's current pos for DML events
-		for sourceSchema, tbs := range job.sourceTbl {
-			if len(sourceSchema) == 0 {
-				continue
-			}
-			for _, sourceTable := range tbs {
-				s.saveTablePoint(sourceSchema, sourceTable, job.currentLocation)
+			// reset sharding group after checkpoint saved
+			s.resetShardingGroup(job.targetSchema, job.targetTable)
+		case insert, update, del:
+			// save job's current pos for DML events
+			for sourceSchema, tbs := range job.sourceTbl {
+				if len(sourceSchema) == 0 {
+					continue
+				}
+				for _, sourceTable := range tbs {
+					s.saveTablePoint(sourceSchema, sourceTable, job.currentLocation)
+				}
 			}
 		}
 	}
@@ -928,12 +931,14 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = terror.WithScope(err, terror.ScopeDownstream)
 			}
 		}
+		// If downstream has error (which may cause by tracker is more compatible than downstream), we should stop handling
+		// this job, set `s.execError` to let caller of `addJob` discover error
 		if err != nil {
-			s.jobWg.Done()
 			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
 				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
 			}
+			s.jobWg.Done()
 			continue
 		}
 
@@ -963,15 +968,16 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = s.optimist.DoneOperation(*(s.optimist.PendingOperation()))
 			}
 		}
-		s.jobWg.Done()
 		if err != nil {
 			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
 				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
+			s.jobWg.Done()
 			continue
 		}
+		s.jobWg.Done()
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
 	}
 }
