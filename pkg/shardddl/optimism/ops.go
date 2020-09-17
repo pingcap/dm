@@ -49,17 +49,24 @@ func PutSourceTablesDeleteInfo(cli *clientv3.Client, st SourceTables, info Info)
 
 // DeleteInfosOperationsSchema deletes the shard DDL infos, operations and init schemas in etcd.
 // This function should often be called by DM-master when removing the lock.
-func DeleteInfosOperationsSchema(cli *clientv3.Client, infos []Info, ops []Operation, schema InitSchema) (int64, error) {
+// Only delete when all info's version are greater or equal to etcd's version, otherwise it means new info was putted into etcd before.
+func DeleteInfosOperationsSchema(cli *clientv3.Client, infos []Info, ops []Operation, schema InitSchema) (int64, bool, error) {
 	opsDel := make([]clientv3.Op, 0, len(infos)+len(ops))
+	cmps := make([]clientv3.Cmp, 0, len(infos))
 	for _, info := range infos {
+		key := common.ShardDDLOptimismInfoKeyAdapter.Encode(info.Task, info.Source, info.UpSchema, info.UpTable)
+		cmps = append(cmps, clientv3.Compare(clientv3.Version(key), "<", info.Version+1))
 		opsDel = append(opsDel, deleteInfoOp(info))
 	}
 	for _, op := range ops {
 		opsDel = append(opsDel, deleteOperationOp(op))
 	}
 	opsDel = append(opsDel, deleteInitSchemaOp(schema.Task, schema.DownSchema, schema.DownTable))
-	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, opsDel...)
-	return rev, err
+	resp, rev, err := etcdutil.DoOpsInOneCmpsTxnWithRetry(cli, cmps, opsDel, []clientv3.Op{})
+	if err != nil {
+		return 0, false, err
+	}
+	return rev, resp.Succeeded, nil
 }
 
 // DeleteInfosOperationsTablesSchemasByTask deletes the shard DDL infos and operations in etcd.
