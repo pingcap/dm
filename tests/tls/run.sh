@@ -81,6 +81,11 @@ function run() {
         "\"result\": true" 2 \
         "\"source\": \"$SOURCE_ID1\"" 1
 
+    echo "check master alive"
+    run_dm_ctl_with_tls $WORK_DIR "127.0.0.1:$MASTER_PORT" $cur/conf/ca.pem $cur/conf/dm.pem $cur/conf/dm.key \
+            "list-member" \
+            "\"alive\": true" 3
+
     echo "start task and check stage"
     run_dm_ctl_with_tls $WORK_DIR "127.0.0.1:$MASTER_PORT" $cur/conf/ca.pem $cur/conf/dm.pem $cur/conf/dm.key \
             "start-task $WORK_DIR/dm-task.yaml" \
