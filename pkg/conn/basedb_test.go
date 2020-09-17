@@ -72,6 +72,6 @@ func (t *testBaseDBSuite) TestFailDBPing(c *C) {
 	c.Assert(db, IsNil)
 	c.Assert(err, NotNil)
 
-	err = mock.ExpectationsWereMet()
+	err = mockDB.ExpectationsWereMet()
 	c.Assert(err, IsNil)
 }
