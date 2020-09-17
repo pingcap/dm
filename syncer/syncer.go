@@ -929,11 +929,12 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			}
 		}
 		if err != nil {
-			s.appendExecErrors(&ExecErrorContext{
-				err:      err,
-				location: sqlJob.currentLocation.Clone(),
-				jobs:     fmt.Sprintf("%v", sqlJob.ddls),
-			})
+			s.jobWg.Done()
+			s.execError.Set(err)
+			if !utils.IsContextCanceledError(err) {
+				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
+			}
+			continue
 		}
 
 		switch s.cfg.ShardMode {
@@ -1884,6 +1885,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		// if execute ddl failed, the execErrorDetected will be true.
 		err = s.execError.Get()
 		if err != nil {
+			if terr, ok := err.(*terror.Error); ok {
+				// don't mix scope since ErrSyncerUnitHandleDDLFailed is ScopeInternal
+				if terr.Scope() == terror.ScopeDownstream {
+					return terr
+				}
+			}
 			return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 		}
 
@@ -2067,6 +2074,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	err = s.execError.Get()
 	if err != nil {
+		if terr, ok := err.(*terror.Error); ok {
+			// don't mix scope since ErrSyncerUnitHandleDDLFailed is ScopeInternal
+			if terr.Scope() == terror.ScopeDownstream {
+				return terr
+			}
+		}
 		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 	}
 

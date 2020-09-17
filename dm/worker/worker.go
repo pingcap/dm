@@ -410,6 +410,7 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 		case stage, ok := <-stageCh:
 			if !ok {
 				closed = true
+				break
 			}
 			opType, err := w.operateSubTaskStageWithoutConfig(stage)
 			if err != nil {
@@ -422,6 +423,7 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 		case err, ok := <-errCh:
 			if !ok {
 				closed = true
+				break
 			}
 			// TODO: deal with err
 			log.L().Error("WatchSubTaskStage received an error", zap.Error(err))

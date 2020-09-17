@@ -204,6 +204,12 @@ func (s *Syncer) handleQueryEventOptimistic(
 
 	err = s.execError.Get()
 	if err != nil {
+		if terr, ok := err.(*terror.Error); ok {
+			// don't mix scope since ErrSyncerUnitHandleDDLFailed is ScopeInternal
+			if terr.Scope() == terror.ScopeDownstream {
+				return terr
+			}
+		}
 		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
 	}
 
