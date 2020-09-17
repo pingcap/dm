@@ -931,7 +931,6 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			}
 		}
 		if err != nil {
-			s.jobWg.Done()
 			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
 				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
@@ -942,6 +941,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				location: sqlJob.currentLocation.Clone(),
 				jobs:     fmt.Sprintf("%v", sqlJob.ddls),
 			})
+			s.jobWg.Done()
 			continue
 		}
 
@@ -971,15 +971,16 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = s.optimist.DoneOperation(*(s.optimist.PendingOperation()))
 			}
 		}
-		s.jobWg.Done()
 		if err != nil {
 			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
 				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
+			s.jobWg.Done()
 			continue
 		}
+		s.jobWg.Done()
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
 	}
 }
