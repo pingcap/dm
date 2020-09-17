@@ -396,8 +396,6 @@ function DM_EXEC_ERROR_SKIP_CASE() {
 function DM_EXEC_ERROR_SKIP() {
      run_case EXEC_ERROR_SKIP "double-source-pessimistic" \
      "run_sql_source1 \"create table ${db}.${tb1} (a int, b int);\"; \
-      run_sql_source2 \"create table ${db}.${ta} (a int, b int);\"; \
-      run_sql_source1 \"create table ${db}.${ta} (a int, b int);\"; \
       run_sql_source2 \"create table ${db}.${tb1} (a int, b int);\"" \
      "clean_table" "pessimistic"
      run_case EXEC_ERROR_SKIP "double-source-optimistic" \
