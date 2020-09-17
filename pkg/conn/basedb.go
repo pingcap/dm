@@ -52,8 +52,8 @@ func init() {
 	DefaultDBProvider = &DefaultDBProviderImpl{}
 }
 
-// mock is used in unit test
-var mock sqlmock.Sqlmock
+// mockDB is used in unit test
+var mockDB sqlmock.Sqlmock
 
 // Apply will build BaseDB with DBConfig
 func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
@@ -107,9 +107,9 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 	}
 	failpoint.Inject("failDBPing", func(_ failpoint.Value) {
 		db.Close()
-		db, mock, _ = sqlmock.New()
-		mock.ExpectPing()
-		mock.ExpectClose()
+		db, mockDB, _ = sqlmock.New()
+		mockDB.ExpectPing()
+		mockDB.ExpectClose()
 	})
 
 	err = db.Ping()
