@@ -41,7 +41,56 @@ func TruncateString(s string, n int) string {
 // If the converted string is truncated, a `...` tail will be appended.
 // It is not effective for large structure now.
 func TruncateInterface(v interface{}, n int) string {
-	return TruncateString(fmt.Sprintf("%+v", v), n)
+	// because []byte will print ascii using Printf("%+v"), we use "%s" for this type
+	prettyPrint0 := func(v interface{}) string {
+		if vv, ok := v.([]byte); ok {
+			return fmt.Sprintf("%s", vv)
+		}
+		return fmt.Sprintf("%+v", v)
+	}
+	prettyPrint1 := func(v interface{}) string {
+		if _, ok := v.([]byte); ok {
+			return prettyPrint0(v)
+		}
+
+		if vv, ok := v.([]interface{}); ok {
+			var buf strings.Builder
+			buf.WriteString("[")
+			for i, v2 := range vv {
+				if i != 0 {
+					buf.WriteString(" ")
+				}
+				buf.WriteString(prettyPrint0(v2))
+			}
+			buf.WriteString("]")
+			return buf.String()
+		}
+		return fmt.Sprintf("%+v", v)
+	}
+	prettyPrint2 := func(v interface{}) string {
+		if _, ok := v.([]byte); ok {
+			return prettyPrint0(v)
+		}
+		if _, ok := v.([]interface{}); ok {
+			return prettyPrint1(v)
+		}
+
+		if vv, ok := v.([][]interface{}); ok {
+			var buf strings.Builder
+			buf.WriteString("[")
+			for i, v2 := range vv {
+				if i != 0 {
+					buf.WriteString(" ")
+				}
+				buf.WriteString(prettyPrint1(v2))
+			}
+			buf.WriteString("]")
+			return buf.String()
+		}
+		return fmt.Sprintf("%+v", v)
+	}
+
+	return TruncateString(prettyPrint2(v), n)
 }
 
 // JoinProcessErrors return the string of pb.ProcessErrors joined by ", "

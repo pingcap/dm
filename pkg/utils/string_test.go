@@ -58,6 +58,9 @@ func (t *testStringSuite) TestTruncateInterface(c *C) {
 		iis [][]interface{}
 	)
 	iis = append(iis, []interface{}{i1, i2}, []interface{}{i3, i4})
+	bytes0 := []byte{97, 98, 99}
+	bytes1 := []interface{}{i1, bytes0}
+	bytes2 := [][]interface{}{bytes1}
 
 	cases := []struct {
 		v      interface{}
@@ -80,6 +83,9 @@ func (t *testStringSuite) TestTruncateInterface(c *C) {
 		{v: iis, n: 3, expect: "[[{..."},
 		{v: iis, n: 9, expect: "[[{b:true..."},
 		{v: iis, n: 99, expect: "[[{b:true i:123 s:abc} {b:true i:456 s:def}] [{b:false i:321 s:cba} {b:false i:654 s:fed}]]"},
+		{v: bytes0, n: -1, expect: "abc"},
+		{v: bytes1, n: -1, expect: "[{b:true i:123 s:abc} abc]"},
+		{v: bytes2, n: -1, expect: "[[{b:true i:123 s:abc} abc]]"},
 	}
 
 	for _, cs := range cases {
