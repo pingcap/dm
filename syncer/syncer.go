@@ -772,42 +772,43 @@ func (s *Syncer) addJob(job *job) error {
 		s.c.reset()
 	}
 
-	// don't save checkpoint when downstream has error
-	if s.execError.Get() == nil {
-		switch job.tp {
-		case ddl:
-			failpoint.Inject("ExitAfterDDLBeforeFlush", func() {
-				s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ExitAfterDDLBeforeFlush"))
-				utils.OsExit(1)
-			})
-			// interrupted after executed DDL and before save checkpoint.
-			failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-				err := handleFlushCheckpointStage(3, val.(int), "before save checkpoint")
-				if err != nil {
-					failpoint.Return(err)
-				}
-			})
-			// only save checkpoint for DDL and XID (see above)
-			s.saveGlobalPoint(job.location)
-			for sourceSchema, tbs := range job.sourceTbl {
-				if len(sourceSchema) == 0 {
-					continue
-				}
-				for _, sourceTable := range tbs {
-					s.saveTablePoint(sourceSchema, sourceTable, job.location)
-				}
+	if s.execError.Get() != nil {
+		return nil
+	}
+
+	switch job.tp {
+	case ddl:
+		failpoint.Inject("ExitAfterDDLBeforeFlush", func() {
+			s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ExitAfterDDLBeforeFlush"))
+			utils.OsExit(1)
+		})
+		// interrupted after executed DDL and before save checkpoint.
+		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+			err := handleFlushCheckpointStage(3, val.(int), "before save checkpoint")
+			if err != nil {
+				failpoint.Return(err)
 			}
-			// reset sharding group after checkpoint saved
-			s.resetShardingGroup(job.targetSchema, job.targetTable)
-		case insert, update, del:
-			// save job's current pos for DML events
-			for sourceSchema, tbs := range job.sourceTbl {
-				if len(sourceSchema) == 0 {
-					continue
-				}
-				for _, sourceTable := range tbs {
-					s.saveTablePoint(sourceSchema, sourceTable, job.currentLocation)
-				}
+		})
+		// only save checkpoint for DDL and XID (see above)
+		s.saveGlobalPoint(job.location)
+		for sourceSchema, tbs := range job.sourceTbl {
+			if len(sourceSchema) == 0 {
+				continue
+			}
+			for _, sourceTable := range tbs {
+				s.saveTablePoint(sourceSchema, sourceTable, job.location)
+			}
+		}
+		// reset sharding group after checkpoint saved
+		s.resetShardingGroup(job.targetSchema, job.targetTable)
+	case insert, update, del:
+		// save job's current pos for DML events
+		for sourceSchema, tbs := range job.sourceTbl {
+			if len(sourceSchema) == 0 {
+				continue
+			}
+			for _, sourceTable := range tbs {
+				s.saveTablePoint(sourceSchema, sourceTable, job.currentLocation)
 			}
 		}
 	}
