@@ -204,13 +204,8 @@ func (s *Syncer) handleQueryEventOptimistic(
 
 	err = s.execError.Get()
 	if err != nil {
-		if terr, ok := err.(*terror.Error); ok {
-			// don't mix scope since ErrSyncerUnitHandleDDLFailed is ScopeInternal
-			if terr.Scope() == terror.ScopeDownstream {
-				return terr
-			}
-		}
-		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
+		s.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+		return nil
 	}
 
 	for _, table := range onlineDDLTableNames {
