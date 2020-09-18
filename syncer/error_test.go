@@ -26,7 +26,6 @@ import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/conn"
-	context2 "github.com/pingcap/dm/pkg/context"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -97,7 +96,7 @@ func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 	var (
 		syncer = NewSyncer(s.cfg, nil)
 		tctx   = tcontext.Background()
-		conn2  = &DBConn{cfg: s.cfg, resetBaseConnFn: func(*context2.Context, *conn.BaseConn) (*conn.BaseConn, error) {
+		conn2  = &DBConn{cfg: s.cfg, resetBaseConnFn: func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error) {
 			return nil, nil
 		}}
 		customErr           = errors.New("custom error")
