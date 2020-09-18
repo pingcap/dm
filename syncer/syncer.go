@@ -931,11 +931,18 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			}
 		}
 		if err != nil {
+			s.execError.Set(err)
+			if !utils.IsContextCanceledError(err) {
+				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
+				s.runFatalChan <- unit.NewProcessError(err)
+			}
 			s.appendExecErrors(&ExecErrorContext{
 				err:      err,
 				location: sqlJob.currentLocation.Clone(),
 				jobs:     fmt.Sprintf("%v", sqlJob.ddls),
 			})
+			s.jobWg.Done()
+			continue
 		}
 
 		switch s.cfg.ShardMode {
@@ -964,15 +971,16 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = s.optimist.DoneOperation(*(s.optimist.PendingOperation()))
 			}
 		}
-		s.jobWg.Done()
 		if err != nil {
 			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
 				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
+			s.jobWg.Done()
 			continue
 		}
+		s.jobWg.Done()
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
 	}
 }
@@ -1884,9 +1892,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// when add ddl job, will execute ddl and then flush checkpoint.
 		// if execute ddl failed, the execErrorDetected will be true.
+		// return nil here to avoid duplicate error message
 		err = s.execError.Get()
 		if err != nil {
-			return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
+			s.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+			return nil
 		}
 
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
@@ -2069,7 +2079,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	err = s.execError.Get()
 	if err != nil {
-		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
+		s.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+		return nil
 	}
 
 	if len(onlineDDLTableNames) > 0 {
