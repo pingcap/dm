@@ -14,14 +14,21 @@
 package syncer
 
 import (
+	"context"
+
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/dm/pkg/conn"
-	"github.com/pingcap/dm/pkg/context"
-	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/errno"
+	"github.com/pingcap/tidb/infoschema"
+	gmysql "github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/pkg/conn"
+	context2 "github.com/pingcap/dm/pkg/context"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func newMysqlErr(number uint16, message string) *mysql.MySQLError {
@@ -37,6 +44,25 @@ func (s *testSyncerSuite) TestSpecificError(c *C) {
 
 	err = newMysqlErr(tmysql.ErrMasterFatalErrorReadingBinlog, "binlog purged error")
 	c.Assert(isBinlogPurgedError(err), Equals, true)
+
+	err2 := gmysql.ErrBadConn
+	c.Assert(needRetryReplicate(err2), IsTrue)
+}
+
+func (s *testSyncerSuite) TestIgnoreDDLError(c *C) {
+	cases := []struct {
+		err error
+		ret bool
+	}{
+		{errors.New("raw error"), false},
+		{newMysqlErr(tmysql.ErrDupKeyName, "Error: Duplicate key name 'some_key'"), true},
+		{newMysqlErr(uint16(infoschema.ErrDatabaseExists.Code()), "Can't create database"), true},
+		{newMysqlErr(uint16(infoschema.ErrAccessDenied.Code()), "Access denied for user"), false},
+	}
+
+	for _, t := range cases {
+		c.Assert(ignoreDDLError(t.err), Equals, t.ret)
+	}
 }
 
 func (s *testSyncerSuite) TestIsMysqlError(c *C) {
@@ -71,20 +97,21 @@ func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 	var (
 		syncer = NewSyncer(s.cfg, nil)
 		tctx   = tcontext.Background()
-		conn2  = &DBConn{cfg: s.cfg, resetBaseConnFn: func(*context.Context, *conn.BaseConn) (*conn.BaseConn, error) {
+		conn2  = &DBConn{cfg: s.cfg, resetBaseConnFn: func(*context2.Context, *conn.BaseConn) (*conn.BaseConn, error) {
 			return nil, nil
 		}}
-		customErr     = errors.New("custom error")
-		invalidDDL    = "SQL CAN NOT BE PARSED"
-		insertDML     = "INSERT INTO tbl VALUES (1)"
-		createTable   = "CREATE TABLE tbl (col INT)"
-		addUK         = "ALTER TABLE tbl ADD UNIQUE INDEX idx(col)"
-		addFK         = "ALTER TABLE tbl ADD CONSTRAINT fk FOREIGN KEY (col) REFERENCES tbl2 (col)"
-		addColumn     = "ALTER TABLE tbl ADD COLUMN col INT"
-		addIndexMulti = "ALTER TABLE tbl ADD INDEX idx1(col1), ADD INDEX idx2(col2)"
-		addIndex1     = "ALTER TABLE tbl ADD INDEX idx(col)"
-		addIndex2     = "CREATE INDEX idx ON tbl(col)"
-		cases         = []struct {
+		customErr           = errors.New("custom error")
+		invalidDDL          = "SQL CAN NOT BE PARSED"
+		insertDML           = "INSERT INTO tbl VALUES (1)"
+		createTable         = "CREATE TABLE tbl (col INT)"
+		addUK               = "ALTER TABLE tbl ADD UNIQUE INDEX idx(col)"
+		addFK               = "ALTER TABLE tbl ADD CONSTRAINT fk FOREIGN KEY (col) REFERENCES tbl2 (col)"
+		addColumn           = "ALTER TABLE tbl ADD COLUMN col INT"
+		addIndexMulti       = "ALTER TABLE tbl ADD INDEX idx1(col1), ADD INDEX idx2(col2)"
+		addIndex1           = "ALTER TABLE tbl ADD INDEX idx(col)"
+		addIndex2           = "CREATE INDEX idx ON tbl(col)"
+		dropColumnWithIndex = "ALTER TABLE tbl DROP c1"
+		cases               = []struct {
 			err     error
 			ddls    []string
 			index   int
@@ -165,12 +192,13 @@ func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 				index:   1,
 				handled: true,
 			},
+			{
+				err:   newMysqlErr(errno.ErrUnsupportedDDLOperation, "drop column xx with index"),
+				ddls:  []string{addIndex1, dropColumnWithIndex},
+				index: 0, // wrong index
+			},
 		}
 	)
-
-	var err error
-	syncer.fromDB, err = createUpStreamConn(s.cfg.From) // used to get parser
-	c.Assert(err, IsNil)
 
 	for _, cs := range cases {
 		err2 := syncer.handleSpecialDDLError(tctx, cs.err, cs.ddls, cs.index, conn2)
@@ -180,4 +208,42 @@ func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 			c.Assert(err2, Equals, cs.err)
 		}
 	}
+
+	var (
+		execErr = newMysqlErr(errno.ErrUnsupportedDDLOperation, "drop column xx with index")
+		ddls    = []string{dropColumnWithIndex}
+	)
+
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	conn1, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+	conn2.baseConn = conn.NewBaseConn(conn1, nil)
+
+	// dropColumnF test successful
+	mock.ExpectQuery("SELECT INDEX_NAME FROM information_schema.statistics WHERE.*").WillReturnRows(
+		sqlmock.NewRows([]string{"INDEX_NAME"}).AddRow("gen_idx"))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM information_schema.statistics WHERE.*").WillReturnRows(
+		sqlmock.NewRows([]string{"count(*)"}).AddRow(1))
+	mock.ExpectBegin()
+	mock.ExpectExec("ALTER TABLE ``.`tbl` DROP INDEX `gen_idx`").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	mock.ExpectBegin()
+	mock.ExpectExec(dropColumnWithIndex).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	handledErr := syncer.handleSpecialDDLError(tctx, execErr, ddls, 0, conn2)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+	c.Assert(handledErr, IsNil)
+
+	// dropColumnF test failed because multi-column index
+	mock.ExpectQuery("SELECT INDEX_NAME FROM information_schema.statistics WHERE.*").WillReturnRows(
+		sqlmock.NewRows([]string{"INDEX_NAME"}).AddRow("gen_idx"))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM information_schema.statistics WHERE.*").WillReturnRows(
+		sqlmock.NewRows([]string{"count(*)"}).AddRow(2))
+
+	handledErr = syncer.handleSpecialDDLError(tctx, execErr, ddls, 0, conn2)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+	c.Assert(handledErr, Equals, execErr)
+
 }
