@@ -214,6 +214,15 @@ jobs:
     - name: Wait for chaos test case complete
       run: |
         kubectl wait --for=condition=complete job/chaos-test-case --timeout=21m
+    
+    # send Slack notify if failed.
+    - name: Slack notification
+      if: ${{ failure() }}
+      env:
+        SLACK_WEBHOOK: https://hooks.slack.com/services/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
+      uses: Ilshidur/action-slack@2.1.0
+      with:
+        args: 'chaos job failed, https://github.com/pingcap/dm/runs/$GITHUB_RUN_ID'
 
     # Debug via SSH if previous steps failed
     - name: Set up tmate session
