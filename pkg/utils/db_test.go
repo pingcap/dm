@@ -19,9 +19,120 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
+	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
-func (t *testUtilsSuite) TestGetAllServerID(c *C) {
+var _ = Suite(&testDBSuite{})
+
+type testDBSuite struct {
+}
+
+func (t *testDBSuite) TestGetFlavor(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	// MySQL
+	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'version';`).WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("version", "5.7.31-log"))
+	flavor, err := GetFlavor(context.Background(), db)
+	c.Assert(err, IsNil)
+	c.Assert(flavor, Equals, "mysql")
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	// MariaDB
+	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'version';`).WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("version", "10.13.1-MariaDB-1~wheezy"))
+	flavor, err = GetFlavor(context.Background(), db)
+	c.Assert(err, IsNil)
+	c.Assert(flavor, Equals, "mariadb")
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	// others
+	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'version';`).WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("version", "unkown"))
+	flavor, err = GetFlavor(context.Background(), db)
+	c.Assert(err, IsNil)
+	c.Assert(flavor, Equals, "mysql") // as MySQL
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
+
+func (t *testDBSuite) TestGetRandomServerID(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	t.createMockResult(mock, 1, []uint32{100, 101}, "mysql")
+	serverID, err := GetRandomServerID(context.Background(), db)
+	c.Assert(err, IsNil)
+	c.Assert(serverID, Greater, uint32(0))
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+	c.Assert(serverID, Not(Equals), 1)
+	c.Assert(serverID, Not(Equals), 100)
+	c.Assert(serverID, Not(Equals), 101)
+}
+
+func (t *testDBSuite) TestGetMasterStatus(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	// 5 columns for MySQL
+	rows := mock.NewRows([]string{"File", "Position", "Binlog_Do_DB", "Binlog_Ignore_DB", "Executed_Gtid_Set"}).AddRow(
+		"mysql-bin.000009", 11232, nil, nil, "074be7f4-f0f1-11ea-95bd-0242ac120002:1-699",
+	)
+	mock.ExpectQuery(`SHOW MASTER STATUS`).WillReturnRows(rows)
+
+	pos, gs, err := GetMasterStatus(db, "mysql")
+	c.Assert(err, IsNil)
+	c.Assert(pos, Equals, gmysql.Position{
+		Name: "mysql-bin.000009",
+		Pos:  11232,
+	})
+	c.Assert(gs.String(), Equals, "074be7f4-f0f1-11ea-95bd-0242ac120002:1-699")
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	// 4 columns for MySQL
+	rows = mock.NewRows([]string{"File", "Position", "Binlog_Do_DB", "Binlog_Ignore_DB"}).AddRow(
+		"mysql-bin.000009", 11232, nil, nil,
+	)
+	mock.ExpectQuery(`SHOW MASTER STATUS`).WillReturnRows(rows)
+
+	pos, gs, err = GetMasterStatus(db, "mysql")
+	c.Assert(err, IsNil)
+	c.Assert(pos, Equals, gmysql.Position{
+		Name: "mysql-bin.000009",
+		Pos:  11232,
+	})
+	c.Assert(gs.String(), Equals, "")
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	// 4 columns for MariaDB
+	rows = mock.NewRows([]string{"File", "Position", "Binlog_Do_DB", "Binlog_Ignore_DB"}).AddRow(
+		"mysql-bin.000009", 11232, nil, nil,
+	)
+	mock.ExpectQuery(`SHOW MASTER STATUS`).WillReturnRows(rows)
+	rows = mock.NewRows([]string{"Variable_name", "Value"}).AddRow("gtid_binlog_pos", "1-2-100")
+	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'gtid_binlog_pos'`).WillReturnRows(rows)
+
+	pos, gs, err = GetMasterStatus(db, "mariadb")
+	c.Assert(err, IsNil)
+	c.Assert(pos, Equals, gmysql.Position{
+		Name: "mysql-bin.000009",
+		Pos:  11232,
+	})
+	c.Assert(gs.String(), Equals, "1-2-100")
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
+
+func (t *testDBSuite) TestGetMariaDBGtidDomainID(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	rows := mock.NewRows([]string{"Variable_name", "Value"}).AddRow("gtid_domain_id", 101)
+	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'gtid_domain_id'`).WillReturnRows(rows)
+
+	dID, err := GetMariaDBGtidDomainID(db)
+	c.Assert(err, IsNil)
+	c.Assert(dID, Equals, uint32(101))
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
+
+func (t *testDBSuite) TestGetAllServerID(c *C) {
 	testCases := []struct {
 		masterID  uint32
 		serverIDs []uint32
@@ -63,7 +174,7 @@ func (t *testUtilsSuite) TestGetAllServerID(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testUtilsSuite) createMockResult(mock sqlmock.Sqlmock, masterID uint32, serverIDs []uint32, flavor string) {
+func (t *testDBSuite) createMockResult(mock sqlmock.Sqlmock, masterID uint32, serverIDs []uint32, flavor string) {
 	expectQuery := mock.ExpectQuery("SHOW SLAVE HOSTS")
 
 	host := "test"
