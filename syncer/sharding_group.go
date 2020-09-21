@@ -14,7 +14,7 @@
 package syncer
 
 /*
- * sharding DDL sync for Syncer
+ * sharding DDL sync for Syncer (pessimism)
  *
  * assumption:
  *   all tables in a sharding group execute same DDLs in the same order
@@ -139,7 +139,7 @@ func NewShardingGroup(sourceID, shardMetaSchema, shardMetaTable string, sources 
 //   * add a new table to exists sharding group
 //   * add new table(s) to parent database's sharding group
 //  if group is in sequence sharding, return error directly
-//  othereise add it in source, set it false and increment remain
+//  otherwise add it in source, set it false and increment remain
 func (sg *ShardingGroup) Merge(sources []string) (bool, bool, int, error) {
 	sg.Lock()
 	defer sg.Unlock()
@@ -360,7 +360,7 @@ func (sg *ShardingGroup) ResolveShardingDDL() bool {
 	sg.Lock()
 	defer sg.Unlock()
 	reset := sg.meta.ResolveShardingDDL()
-	// reset sharding group after DDL is exexuted
+	// reset sharding group after DDL is executed
 	return reset
 }
 
