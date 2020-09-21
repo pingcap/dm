@@ -24,6 +24,6 @@ spec:
           command:
             - "/chaos-case"
             - "--config-dir=/" # we put config files into the root directory when building the docker image
-            - "--duration=120s" # TODO: 120s only for dev
+            - "--duration=20m"
       restartPolicy: Never
   backoffLimit: 0 # fail immediately
