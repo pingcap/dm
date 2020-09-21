@@ -25,18 +25,21 @@ import (
 var _ = Suite(&testShardingGroupSuite{})
 
 type testShardingGroupSuite struct {
+	cfg *config.SubTaskConfig
 }
 
-func (t *testShardingGroupSuite) TestLowestFirstPosInGroups(c *C) {
-	cfg := &config.SubTaskConfig{
+func (t *testShardingGroupSuite) SetUpSuite(c *C) {
+	t.cfg = &config.SubTaskConfig{
 		SourceID:   "mysql-replica-01",
 		MetaSchema: "test",
 		Name:       "checkpoint_ut",
 	}
+}
 
+func (t *testShardingGroupSuite) TestLowestFirstPosInGroups(c *C) {
 	ddls := []string{"DUMMY DDL"}
 
-	k := NewShardingGroupKeeper(tcontext.Background(), cfg)
+	k := NewShardingGroupKeeper(tcontext.Background(), t.cfg)
 
 	g1 := NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, []string{"db1.tbl1", "db1.tbl2"}, nil, false, "", false)
 	pos1 := mysql.Position{Name: "mysql-bin.000002", Pos: 123}
@@ -62,4 +65,25 @@ func (t *testShardingGroupSuite) TestLowestFirstPosInGroups(c *C) {
 	k.groups["db3.tbl"] = g3
 
 	c.Assert(k.lowestFirstLocationInGroups().Position, DeepEquals, pos2)
+}
+
+func (t *testShardingGroupSuite) TestMergeAndLeave(c *C) {
+	var (
+		source1 = "db1.tbl1"
+		source2 = "db1.tbl2"
+		source3 = "db1.tbl3"
+	)
+	k := NewShardingGroupKeeper(tcontext.Background(), t.cfg)
+	g1 := NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, []string{source1, source2}, nil, false, "", false)
+	c.Assert(g1.Sources(), DeepEquals, map[string]bool{source1: false, source2: false})
+	needShardingHandle, synced, remain, err := g1.Merge([]string{source3})
+	c.Assert(err, IsNil)
+	c.Assert(needShardingHandle, IsFalse)
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 3)
+
+	err = g1.Leave([]string{source1})
+	c.Assert(err, IsNil)
+	c.Assert(g1.Sources(), DeepEquals, map[string]bool{source3: false, source2: false})
+
 }
