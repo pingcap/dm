@@ -369,6 +369,41 @@ function DM_REPLACE_ERROR_MULTIPLE() {
     run_case REPLACE_ERROR_MULTIPLE "double-source-optimistic" "init_table 11 21" "clean_table" "optimistic"
 }
 
+function DM_EXEC_ERROR_SKIP_CASE() {
+    run_sql_source1 "insert into ${db}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${db}.${tb1} values(2,2);"
+    run_sql_tidb "insert into ${db}.${tb} values(1,1);"
+    run_sql_tidb "insert into ${db}.${tb} values(2,2);"
+    run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 4"
+
+    run_sql_source1 "alter table ${db}.${tb1} add unique index ua(a);"
+    run_sql_source2 "alter table ${db}.${tb1} add unique index ua(a);"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "Error 1062: Duplicate entry " 1
+
+    run_sql_tidb "insert into ${db}.${tb} values(3,3);"
+    run_sql_tidb "insert into ${db}.${tb} values(4,4);"
+    
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test skip" \
+            "\"result\": true" 2
+
+    run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 6"
+}
+
+function DM_EXEC_ERROR_SKIP() {
+     run_case EXEC_ERROR_SKIP "double-source-pessimistic" \
+     "run_sql_source1 \"create table ${db}.${tb1} (a int, b int);\"; \
+      run_sql_source2 \"create table ${db}.${tb1} (a int, b int);\"" \
+     "clean_table" "pessimistic"
+     run_case EXEC_ERROR_SKIP "double-source-optimistic" \
+     "run_sql_source1 \"create table ${db}.${tb1} (a int, b int);\"; \
+      run_sql_source2 \"create table ${db}.${tb1} (a int, b int);\"" \
+     "clean_table" "optimistic"
+}
+
 function run() {
     init_cluster
     init_database
@@ -377,6 +412,7 @@ function run() {
     DM_REPLACE_ERROR
     DM_REPLACE_ERROR_SHARDING
     DM_REPLACE_ERROR_MULTIPLE
+    DM_EXEC_ERROR_SKIP
 }
 
 cleanup_data $db

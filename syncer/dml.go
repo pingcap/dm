@@ -394,10 +394,15 @@ func genMultipleKeys(ti *model.TableInfo, value []interface{}, table string) []s
 	}
 
 	for _, indexCols := range ti.Indices {
+		// PK also has a true Unique
+		if !indexCols.Unique {
+			continue
+		}
 		cols, vals := getColumnData(ti.Columns, indexCols, value)
 		key := genKeyList(table, cols, vals)
 		if len(key) > 0 { // ignore `null` value.
 			multipleKeys = append(multipleKeys, key)
+			// TODO: break here? one unique index is enough?
 		} else {
 			log.L().Debug("ignore empty key", zap.String("table", table))
 		}
