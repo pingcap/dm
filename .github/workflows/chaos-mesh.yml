@@ -36,9 +36,10 @@ jobs:
     #     cluster_name: dm-chaos 
     # Set up Kubernetes with K3s
     - name: Set up K3s cluster
-      uses: debianmaster/actions-k3s@master
+      uses: manics/action-k3s-helm@master
       with:
-        version: 'v1.18.2-k3s1'
+        k3s-version: v1.18.9+k3s1
+        helm-version: v3.3.0
     - name: Print cluster information
       run: |
         kubectl config view
@@ -70,12 +71,6 @@ jobs:
     # - name: Load DM docker image into KIND
     #   run: |
     #     kind load docker-image dm:chaos --name dm-chaos
-    - name: Save docker image
-      run: |
-        docker image save dm:chaos -o dm:chaos
-    - name: Import docker image into K3s
-      run: |
-        k3s ctr images import dm:chaos
 
     # Set up upstream MySQL instances
     - name: Set up MySQL
