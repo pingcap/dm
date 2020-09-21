@@ -25,7 +25,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// Status implements SubTaskUnit.Status
+// Status implements Unit.Status
 // it returns status, but does not calc status
 func (s *Syncer) Status() interface{} {
 	var (
