@@ -223,3 +223,17 @@ func (s *testCommonSuite) TestCompareShardingDDLs(c *C) {
 	// same contents but different order
 	c.Assert(CompareShardingDDLs([]string{DDL1, DDL2}, []string{DDL2, DDL1}), IsTrue)
 }
+
+func (s *testCommonSuite) TestDDLLockID(c *C) {
+	task := "test"
+	ID := GenDDLLockID(task, "db", "tbl")
+	c.Assert(ID, Equals, "test-`db`.`tbl`")
+	c.Assert(ExtractTaskFromLockID(ID), Equals, task)
+
+	ID = GenDDLLockID(task, "d`b", "tb`l")
+	c.Assert(ID, Equals, "test-`d``b`.`tb``l`")
+	c.Assert(ExtractTaskFromLockID(ID), Equals, task)
+
+	// invalid ID
+	c.Assert(ExtractTaskFromLockID("invalid-lock-id"), Equals, "")
+}
