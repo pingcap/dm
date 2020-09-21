@@ -219,7 +219,7 @@ jobs:
     - name: Slack notification
       if: ${{ failure() }}
       env:
-        SLACK_WEBHOOK: https://hooks.slack.com/services/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
+        SLACK_WEBHOOK: ${{ secrets.SLACK_NOTIFY }}
       uses: Ilshidur/action-slack@2.1.0
       with:
         args: 'chaos job failed, https://github.com/pingcap/dm/runs/$GITHUB_RUN_ID'
