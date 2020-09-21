@@ -348,13 +348,6 @@ func (sg *ShardingGroup) String() string {
 	return fmt.Sprintf("IsSchemaOnly:%v remain:%d, sources:%+v", sg.IsSchemaOnly, sg.remain, sg.sources)
 }
 
-// InSequenceSharding returns whether this sharding group is in sequence sharding
-func (sg *ShardingGroup) InSequenceSharding() bool {
-	sg.RLock()
-	defer sg.RUnlock()
-	return sg.meta.InSequenceSharding()
-}
-
 // ResolveShardingDDL resolves sharding DDL in sharding group
 func (sg *ShardingGroup) ResolveShardingDDL() bool {
 	sg.Lock()
@@ -631,18 +624,6 @@ func (k *ShardingGroupKeeper) UnresolvedGroups() []*pb.ShardingGroup {
 		}
 	}
 	return groups
-}
-
-// InSequenceSharding returns whether exists sharding group in unfinished sequence sharding
-func (k *ShardingGroupKeeper) InSequenceSharding() bool {
-	k.RLock()
-	defer k.RUnlock()
-	for _, group := range k.groups {
-		if group.InSequenceSharding() {
-			return true
-		}
-	}
-	return false
 }
 
 // ResolveShardingDDL resolves one sharding DDL in specific group
