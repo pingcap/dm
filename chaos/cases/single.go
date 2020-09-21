@@ -285,6 +285,11 @@ func (st *singleTask) genIncrData(ctx context.Context) (err error) {
 				st.logger.Warn("ignore error when generating data for incremental stage", zap.Error(err))
 				err = nil // some other errors like `connection is already closed` may also be reported for context done.
 			default:
+				if forceIgnoreExecSQLError(err) {
+					st.logger.Warn("ignore error when generating data for incremental stage", zap.Error(err))
+					st.sourceConn.resetConn(ctx) // reset connection for the next round.
+					err = nil
+				}
 			}
 		}
 	}()
