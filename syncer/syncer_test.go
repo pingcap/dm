@@ -39,6 +39,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/retry"
+	"github.com/pingcap/dm/pkg/schema"
 	streamer2 "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 
@@ -56,6 +57,10 @@ import (
 )
 
 var _ = Suite(&testSyncerSuite{})
+
+var (
+	defaultTestSessionCfg = map[string]string{"sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"}
+)
 
 func TestSuite(t *testing.T) {
 	TestingT(t)
@@ -967,6 +972,8 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	syncer.ddlDB = syncer.fromDB.BaseDB
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
+	syncer.schemaTracker, err = schema.NewTracker(defaultTestSessionCfg, syncer.ddlDBConn.baseConn)
+	c.Assert(err, IsNil)
 	syncer.reset()
 
 	syncer.streamerController = NewStreamerController(tcontext.Background(), syncer.syncCfg, true, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone)
@@ -1145,6 +1152,8 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.schemaTracker, err = schema.NewTracker(defaultTestSessionCfg, syncer.ddlDBConn.baseConn)
+	c.Assert(err, IsNil)
 	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
 
 	syncer.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
@@ -1344,6 +1353,8 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.schemaTracker, err = schema.NewTracker(defaultTestSessionCfg, syncer.ddlDBConn.baseConn)
+	c.Assert(err, IsNil)
 	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
 
 	syncer.genRouter()

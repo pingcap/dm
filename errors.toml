@@ -2764,6 +2764,12 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+[error.DM-schema-tracker-44012]
+message = "failed to create schema tracker"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
 [error.DM-scheduler-46001]
 message = "the scheduler has not started"
 description = ""
