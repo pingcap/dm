@@ -57,4 +57,4 @@ spec:
         storageClassName: standard # standard, rancher.io/local-path
         resources:
           requests:
-            storage: 1Gi
+            storage: 5Gi
