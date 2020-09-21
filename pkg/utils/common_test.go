@@ -21,6 +21,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 )
 
 var _ = Suite(&testCommonSuite{})
@@ -69,7 +70,7 @@ func (s *testCommonSuite) TestFetchAllDoTables(c *C) {
 	got, err := FetchAllDoTables(db, ba)
 	c.Assert(err, IsNil)
 	c.Assert(got, HasLen, 0)
-	mock.ExpectationsWereMet()
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
 	// only system schemas exist, still no need to do.
 	schemas := []string{"information_schema", "mysql", "performance_schema", "sys", filter.DMHeartbeatSchema}
@@ -79,7 +80,7 @@ func (s *testCommonSuite) TestFetchAllDoTables(c *C) {
 	got, err = FetchAllDoTables(db, ba)
 	c.Assert(err, IsNil)
 	c.Assert(got, HasLen, 0)
-	mock.ExpectationsWereMet()
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
 	// schemas without tables in them.
 	doSchema := "test_db"
@@ -92,7 +93,7 @@ func (s *testCommonSuite) TestFetchAllDoTables(c *C) {
 	got, err = FetchAllDoTables(db, ba)
 	c.Assert(err, IsNil)
 	c.Assert(got, HasLen, 0)
-	mock.ExpectationsWereMet()
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
 	// do all tables under the schema.
 	rows = sqlmock.NewRows([]string{"Database"})
@@ -106,7 +107,7 @@ func (s *testCommonSuite) TestFetchAllDoTables(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(got, HasLen, 1)
 	c.Assert(got[doSchema], DeepEquals, tables)
-	mock.ExpectationsWereMet()
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
 	// use a block-allow-list to fiter some tables
 	ba, err = filter.New(false, &filter.Rules{
@@ -128,7 +129,67 @@ func (s *testCommonSuite) TestFetchAllDoTables(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(got, HasLen, 1)
 	c.Assert(got[doSchema], DeepEquals, []string{"tbl1", "tbl2"})
-	mock.ExpectationsWereMet()
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
+
+func (s *testCommonSuite) TestFetchTargetDoTables(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	// empty filter and router, just as upstream.
+	ba, err := filter.New(false, nil)
+	c.Assert(err, IsNil)
+	r, err := router.NewTableRouter(false, nil)
+	c.Assert(err, IsNil)
+
+	schemas := []string{"shard1"}
+	rows := sqlmock.NewRows([]string{"Database"})
+	s.addRowsForSchemas(rows, schemas)
+	mock.ExpectQuery(`SHOW DATABASES`).WillReturnRows(rows)
+
+	tablesM := map[string][]string{
+		"shard1": {"tbl1", "tbl2"},
+	}
+	for schema, tables := range tablesM {
+		rows = sqlmock.NewRows([]string{fmt.Sprintf("Tables_in_%s", schema), "Table_type"})
+		s.addRowsForTables(rows, tables)
+		mock.ExpectQuery(fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW'", schema)).WillReturnRows(rows)
+	}
+
+	got, err := FetchTargetDoTables(db, ba, r)
+	c.Assert(err, IsNil)
+	c.Assert(got, HasLen, 2)
+	c.Assert(got, DeepEquals, map[string][]*filter.Table{
+		"`shard1`.`tbl1`": {{Schema: "shard1", Name: "tbl1"}},
+		"`shard1`.`tbl2`": {{Schema: "shard1", Name: "tbl2"}},
+	})
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	// route to the same downstream.
+	r, err = router.NewTableRouter(false, []*router.TableRule{
+		{SchemaPattern: "shard*", TablePattern: "tbl*", TargetSchema: "shard", TargetTable: "tbl"},
+	})
+	c.Assert(err, IsNil)
+
+	rows = sqlmock.NewRows([]string{"Database"})
+	s.addRowsForSchemas(rows, schemas)
+	mock.ExpectQuery(`SHOW DATABASES`).WillReturnRows(rows)
+	for schema, tables := range tablesM {
+		rows = sqlmock.NewRows([]string{fmt.Sprintf("Tables_in_%s", schema), "Table_type"})
+		s.addRowsForTables(rows, tables)
+		mock.ExpectQuery(fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW'", schema)).WillReturnRows(rows)
+	}
+
+	got, err = FetchTargetDoTables(db, ba, r)
+	c.Assert(err, IsNil)
+	c.Assert(got, HasLen, 1)
+	c.Assert(got, DeepEquals, map[string][]*filter.Table{
+		"`shard`.`tbl`": {
+			{Schema: "shard1", Name: "tbl1"},
+			{Schema: "shard1", Name: "tbl2"},
+		},
+	})
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
 func (s *testCommonSuite) addRowsForSchemas(rows *sqlmock.Rows, schemas []string) {
@@ -141,4 +202,24 @@ func (s *testCommonSuite) addRowsForTables(rows *sqlmock.Rows, tables []string) 
 	for _, table := range tables {
 		rows.AddRow(table, "BASE TABLE")
 	}
+}
+
+func (s *testCommonSuite) TestCompareShardingDDLs(c *C) {
+	var (
+		DDL1 = "alter table add column c1 int"
+		DDL2 = "alter table add column c2 text"
+	)
+
+	// different DDLs
+	c.Assert(CompareShardingDDLs([]string{DDL1}, []string{DDL2}), IsFalse)
+
+	// different length
+	c.Assert(CompareShardingDDLs([]string{DDL1, DDL2}, []string{DDL2}), IsFalse)
+
+	// same DDLs
+	c.Assert(CompareShardingDDLs([]string{DDL1}, []string{DDL1}), IsTrue)
+	c.Assert(CompareShardingDDLs([]string{DDL1, DDL2}, []string{DDL1, DDL2}), IsTrue)
+
+	// same contents but different order
+	c.Assert(CompareShardingDDLs([]string{DDL1, DDL2}, []string{DDL2, DDL1}), IsTrue)
 }
