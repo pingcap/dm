@@ -286,14 +286,6 @@ func (sg *ShardingGroup) Tables() [][]string {
 	return tables
 }
 
-// IsUnresolved return whether it's unresolved
-func (sg *ShardingGroup) IsUnresolved() bool {
-	sg.RLock()
-	defer sg.RUnlock()
-
-	return sg.remain != len(sg.sources)
-}
-
 // UnresolvedTables returns all source tables' <schema, table> pair if is unresolved, else returns nil
 func (sg *ShardingGroup) UnresolvedTables() [][]string {
 	sg.RLock()
@@ -530,7 +522,7 @@ func (k *ShardingGroupKeeper) TrySync(
 	return true, group, synced, active, remain, err
 }
 
-// InSyncing checks whether the source is in sharding syncing
+// InSyncing checks whether the source is in sharding syncing, that is to say not before active DDL
 func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string, location binlog.Location) bool {
 	group := k.Group(targetSchema, targetTable)
 	if group == nil {
@@ -540,7 +532,7 @@ func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string
 }
 
 // UnresolvedTables returns
-//   all `target-schema.target-table` that has unresolved sharding DDL
+//   all `target-schema.target-table` that has unresolved sharding DDL,
 //   all source tables which with DDLs are un-resolved
 // NOTE: this func only ensure the returned tables are current un-resolved
 // if passing the returned tables to other func (like checkpoint),
@@ -550,9 +542,11 @@ func (k *ShardingGroupKeeper) UnresolvedTables() (map[string]bool, [][]string) {
 	tables := make([][]string, 0, 10)
 	k.RLock()
 	defer k.RUnlock()
+	// TODO: where does k.groups delete its key?
 	for id, group := range k.groups {
 		unresolved := group.UnresolvedTables()
 		if len(unresolved) > 0 {
+			// TODO: no need to return bool which indicates it has unresolved tables, because nowhere need it
 			ids[id] = true
 			tables = append(tables, unresolved...)
 		}
@@ -647,7 +641,7 @@ func (k *ShardingGroupKeeper) ActiveDDLFirstLocation(targetSchema, targetTable s
 	return binlog.Location{}, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetSchema, targetTable)
 }
 
-// PrepareFlushSQLs returns all sharding meta flushed SQLs execpt for given table IDs
+// PrepareFlushSQLs returns all sharding meta flushed SQLs except for given table IDs
 func (k *ShardingGroupKeeper) PrepareFlushSQLs(exceptTableIDs map[string]bool) ([]string, [][]interface{}) {
 	k.RLock()
 	defer k.RUnlock()
