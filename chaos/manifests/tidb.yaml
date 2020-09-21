@@ -47,7 +47,6 @@ spec:
       spec:
         accessModes:
           - ReadWriteOnce
-        storageClassName: standard # standard, rancher.io/local-path
         resources:
           requests:
             storage: 5Gi
