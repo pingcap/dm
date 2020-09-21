@@ -393,7 +393,6 @@ const (
 	codeSyncerReplaceEvent
 	codeSyncerOperatorNotExist
 	codeSyncerReplaceEventNotExist
-	codeSyncerUnitNewTracker
 )
 
 // DM-master error code
@@ -561,6 +560,7 @@ const (
 	codeSchemaTrackerInvalidCreateTableStmt
 	codeSchemaTrackerRestoreStmtFail
 	codeSchemaTrackerCannotDropTable
+	codeSchemaTrackerInit
 )
 
 // HA scheduler.
@@ -959,7 +959,6 @@ var (
 	ErrSyncerReplaceEvent                   = New(codeSyncerReplaceEvent, ClassSyncUnit, ScopeInternal, LevelHigh, "", "")
 	ErrSyncerOperatorNotExist               = New(codeSyncerOperatorNotExist, ClassSyncUnit, ScopeInternal, LevelLow, "error operator not exist, position: %s", "")
 	ErrSyncerReplaceEventNotExist           = New(codeSyncerReplaceEventNotExist, ClassSyncUnit, ScopeInternal, LevelHigh, "replace event not exist, location: %s", "")
-	ErrSyncerUnitNewTracker                 = New(codeSyncerUnitNewTracker, ClassSyncUnit, ScopeInternal, LevelHigh, "failed to create schema tracker", "")
 
 	// DM-master error
 	ErrMasterSQLOpNilRequest        = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid", "")
@@ -1132,6 +1131,7 @@ var (
 		"fail to restore the statement", "")
 	ErrSchemaTrackerCannotDropTable = New(codeSchemaTrackerCannotDropTable, ClassSchemaTracker, ScopeInternal, LevelHigh,
 		"failed to drop table for `%s`.`%s` in schema tracker", "")
+	ErrSchemaTrackerInit = New(codeSchemaTrackerInit, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create schema tracker", "")
 
 	// HA scheduler
 	ErrSchedulerNotStarted                = New(codeSchedulerNotStarted, ClassScheduler, ScopeInternal, LevelHigh, "the scheduler has not started", "")

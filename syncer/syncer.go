@@ -277,7 +277,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 
 	s.schemaTracker, err = schema.NewTracker(s.cfg.To.Session, s.ddlDBConn.baseConn)
 	if err != nil {
-		return terror.ErrSyncerUnitNewTracker.Delegate(err)
+		return terror.ErrSchemaTrackerInit.Delegate(err)
 	}
 
 	s.streamerController = NewStreamerController(tctx, s.syncCfg, s.cfg.EnableGTID, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
