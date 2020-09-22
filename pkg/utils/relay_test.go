@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+	"github.com/siddontang/go-mysql/replication"
 )
 
 var _ = Suite(&testUtilsSuite{})
@@ -107,4 +108,24 @@ func (t *testUtilsSuite) TestSuffixForUUID(c *C) {
 
 	_, _, err = ParseSuffixForUUID("uuid-invalid-fmt.abc.000001")
 	c.Assert(err, NotNil)
+}
+
+func (t *testUtilsSuite) TestGenFakeRotateEvent(c *C) {
+	var (
+		nextLogName = "mysql-bin.000123"
+		logPos      = uint64(456)
+		serverID    = uint32(101)
+	)
+
+	ev, err := GenFakeRotateEvent(nextLogName, logPos, serverID)
+	c.Assert(err, IsNil)
+	c.Assert(ev.Header.ServerID, Equals, serverID)
+	c.Assert(ev.Header.Timestamp, Equals, uint32(0))
+	c.Assert(ev.Header.LogPos, Equals, uint32(0))
+	c.Assert(ev.Header.EventType, Equals, replication.ROTATE_EVENT)
+
+	evR, ok := ev.Event.(*replication.RotateEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(string(evR.NextLogName), Equals, nextLogName)
+	c.Assert(evR.Position, Equals, logPos)
 }
