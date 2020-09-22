@@ -17,8 +17,9 @@ import (
 	"context"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go-mysql/mysql"
+	tmysql "github.com/pingcap/parser/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -199,6 +200,14 @@ func (t *testDBSuite) TestGetGTID(c *C) {
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
+func (t *testDBSuite) TestMySQLError(c *C) {
+	err := t.newMysqlErr(tmysql.ErrNoSuchThread, "Unknown thread id: 111")
+	c.Assert(IsNoSuchThreadError(err), Equals, true)
+
+	err = t.newMysqlErr(tmysql.ErrMasterFatalErrorReadingBinlog, "binlog purged error")
+	c.Assert(IsErrBinlogPurged(err), Equals, true)
+}
+
 func (t *testDBSuite) TestGetAllServerID(c *C) {
 	testCases := []struct {
 		masterID  uint32
@@ -219,7 +228,7 @@ func (t *testDBSuite) TestGetAllServerID(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	flavors := []string{mysql.MariaDBFlavor, mysql.MySQLFlavor}
+	flavors := []string{gmysql.MariaDBFlavor, gmysql.MySQLFlavor}
 
 	for _, testCase := range testCases {
 		for _, flavor := range flavors {
@@ -248,7 +257,7 @@ func (t *testDBSuite) createMockResult(mock sqlmock.Sqlmock, masterID uint32, se
 	port := 3306
 	slaveUUID := "test"
 
-	if flavor == mysql.MariaDBFlavor {
+	if flavor == gmysql.MariaDBFlavor {
 		rows := sqlmock.NewRows([]string{"Server_id", "Host", "Port", "Master_id"})
 		for _, serverID := range serverIDs {
 			rows.AddRow(serverID, host, port, masterID)
@@ -266,4 +275,11 @@ func (t *testDBSuite) createMockResult(mock sqlmock.Sqlmock, masterID uint32, se
 	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'server_id'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("server_id", masterID))
 
 	return
+}
+
+func (t *testDBSuite) newMysqlErr(number uint16, message string) *mysql.MySQLError {
+	return &mysql.MySQLError{
+		Number:  number,
+		Message: message,
+	}
 }
