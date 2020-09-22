@@ -234,12 +234,14 @@ jobs:
         kubectl wait --for=condition=complete job/chaos-test-case --timeout=21m
 
     - name: Copy logs to hack permission
+      if: ${{ always() }}
       run: |
         mkdir ./logs
         sudo cp -r -L /var/log/containers/. ./logs
         sudo chown -R runner ./logs
     - name: Upload logs
       uses: actions/upload-artifact@v2
+      if: ${{ always() }}
       with:
         name: chaos-base-logs
         path: |
