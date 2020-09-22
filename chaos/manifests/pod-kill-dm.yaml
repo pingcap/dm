@@ -8,7 +8,13 @@ spec:
   action: pod-kill
   mode: one
   selector:
-    annotationSelectors:
-      chaos-mesh: "pod-kill"
+    pods:
+      default: # default namespace
+        - dm-master-0
+        - dm-master-1
+        - dm-master-2
+        - dm-worker-0
+        - dm-worker-1
+        - dm-worker-2
   scheduler:
     cron: "@every 1m"

@@ -19,8 +19,6 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: dm-master
-  annotations:
-    chaos-mesh: "pod-failure"
   labels:
     app: dm-master
 spec:
