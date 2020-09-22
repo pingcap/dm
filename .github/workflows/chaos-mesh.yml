@@ -235,17 +235,17 @@ jobs:
 
     - name: Copy logs to hack permission
       run: |
-        mkdir $GITHUB_WORKSPACE/logs
-        sudo cp -r -L /var/log/containers/. $GITHUB_WORKSPACE/logs
-        sudo chown -R runner $GITHUB_WORKSPACE/logs
+        mkdir ./logs
+        sudo cp -r -L /var/log/containers/. ./logs
+        sudo chown -R runner ./logs
     - name: Upload logs
       uses: actions/upload-artifact@v2
       with:
         name: chaos-base-logs
         path: |
-          $GITHUB_WORKSPACE/logs
-          !$GITHUB_WORKSPACE/logs/coredns-*          
-          !$GITHUB_WORKSPACE/logs/local-path-provisioner-*
+          ./logs
+          !./logs/coredns-*          
+          !./logs/local-path-provisioner-*
 
     # send Slack notify if failed.
     - name: Slack notification
