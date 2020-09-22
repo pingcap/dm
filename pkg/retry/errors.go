@@ -17,7 +17,8 @@ import (
 	"database/sql/driver"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser/mysql"
+	tmysql "github.com/pingcap/parser/mysql"
+	gmysql "github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -63,7 +64,7 @@ var (
 func IsConnectionError(err error) bool {
 	err = errors.Cause(err)
 	switch err {
-	case driver.ErrBadConn, mysql.ErrBadConn:
+	case driver.ErrBadConn, tmysql.ErrBadConn, gmysql.ErrBadConn:
 		return true
 	}
 	return false
