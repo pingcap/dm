@@ -201,10 +201,10 @@ func (t *testDBSuite) TestGetGTID(c *C) {
 }
 
 func (t *testDBSuite) TestMySQLError(c *C) {
-	err := t.newMysqlErr(tmysql.ErrNoSuchThread, "Unknown thread id: 111")
+	err := newMysqlErr(tmysql.ErrNoSuchThread, "Unknown thread id: 111")
 	c.Assert(IsNoSuchThreadError(err), Equals, true)
 
-	err = t.newMysqlErr(tmysql.ErrMasterFatalErrorReadingBinlog, "binlog purged error")
+	err = newMysqlErr(tmysql.ErrMasterFatalErrorReadingBinlog, "binlog purged error")
 	c.Assert(IsErrBinlogPurged(err), Equals, true)
 }
 
@@ -277,7 +277,7 @@ func (t *testDBSuite) createMockResult(mock sqlmock.Sqlmock, masterID uint32, se
 	return
 }
 
-func (t *testDBSuite) newMysqlErr(number uint16, message string) *mysql.MySQLError {
+func newMysqlErr(number uint16, message string) *mysql.MySQLError {
 	return &mysql.MySQLError{
 		Number:  number,
 		Message: message,
