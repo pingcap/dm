@@ -1,8 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dm-worker
+  labels:
+    app: dm-worker
+spec:
+  ports:
+    - name: dm-worker
+      port: 8262
+      targetPort: 8262
+  selector:
+    app: dm-worker
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: dm-worker
+  annotations:
+    chaos-mesh: "pod-failure"
   labels:
     app: dm-worker
 spec:
