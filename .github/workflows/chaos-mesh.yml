@@ -233,17 +233,19 @@ jobs:
       run: |
         kubectl wait --for=condition=complete job/chaos-test-case --timeout=21m
 
-    - name: Chmod logs
+    - name: Copy logs to hack permission
       run: |
-        sudo chmod -R 0777 /var/log/containers
+        mkdir $GITHUB_WORKSPACE/logs
+        sudo cp -r -L /var/log/containers/. $GITHUB_WORKSPACE/logs
+        sudo chown -R runner $GITHUB_WORKSPACE/logs
     - name: Upload logs
       uses: actions/upload-artifact@v2
       with:
         name: chaos-base-logs
         path: |
-          /var/log/containers
-          !/var/log/containers/coredns*          
-          !/var/log/containers/local-path-provisioner*
+          $GITHUB_WORKSPACE/logs
+          !$GITHUB_WORKSPACE/logs/coredns-*          
+          !$GITHUB_WORKSPACE/logs/local-path-provisioner-*
 
     # send Slack notify if failed.
     - name: Slack notification
