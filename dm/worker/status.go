@@ -19,7 +19,7 @@ import (
 	"sort"
 
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/dm/unit"
 
 	"github.com/golang/protobuf/jsonpb"
 	"go.uber.org/zap"
@@ -181,7 +181,7 @@ func (w *Worker) Error(stName string) []*pb.SubTaskError {
 					stError.Error = &pb.SubTaskError_Sync{Sync: us.(*pb.SyncError)}
 				}
 			} else if result := st.Result(); result != nil {
-				processErrorMsg := utils.JoinProcessErrors(result.Errors)
+				processErrorMsg := unit.JoinProcessErrors(result.Errors)
 				if len(processErrorMsg) > 0 {
 					stError.Error = &pb.SubTaskError_Msg{Msg: processErrorMsg}
 				}
