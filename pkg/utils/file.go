@@ -52,13 +52,13 @@ func IsDirExists(name string) bool {
 }
 
 // GetFileSize return the size of the file.
+// NOTE: do not support to get the size of the directory now.
 func GetFileSize(file string) (int64, error) {
-	fd, err := os.Open(file)
-	if err != nil {
-		return 0, terror.ErrGetFileSize.Delegate(err, file)
+	if !IsFileExists(file) {
+		return 0, terror.ErrGetFileSize.Generate(file)
 	}
-	defer fd.Close()
-	stat, err := fd.Stat()
+
+	stat, err := os.Stat(file)
 	if err != nil {
 		return 0, terror.ErrGetFileSize.Delegate(err, file)
 	}
