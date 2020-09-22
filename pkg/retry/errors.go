@@ -16,8 +16,10 @@ package retry
 import (
 	"database/sql/driver"
 
-	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/mysql"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -61,7 +63,7 @@ var (
 func IsConnectionError(err error) bool {
 	err = errors.Cause(err)
 	switch err {
-	case driver.ErrBadConn:
+	case driver.ErrBadConn, mysql.ErrBadConn:
 		return true
 	}
 	return false
