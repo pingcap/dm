@@ -132,6 +132,73 @@ func (t *testDBSuite) TestGetMariaDBGtidDomainID(c *C) {
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
+func (t *testDBSuite) TestGetServerUUID(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	// MySQL
+	rows := mock.NewRows([]string{"Variable_name", "Value"}).AddRow("server_uuid", "074be7f4-f0f1-11ea-95bd-0242ac120002")
+	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'server_uuid'`).WillReturnRows(rows)
+	uuid, err := GetServerUUID(db, "mysql")
+	c.Assert(err, IsNil)
+	c.Assert(uuid, Equals, "074be7f4-f0f1-11ea-95bd-0242ac120002")
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	// MariaDB
+	rows = mock.NewRows([]string{"Variable_name", "Value"}).AddRow("gtid_domain_id", 123)
+	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'gtid_domain_id'`).WillReturnRows(rows)
+	rows = mock.NewRows([]string{"Variable_name", "Value"}).AddRow("server_id", 456)
+	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'server_id'`).WillReturnRows(rows)
+	uuid, err = GetServerUUID(db, "mariadb")
+	c.Assert(err, IsNil)
+	c.Assert(uuid, Equals, "123-456")
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
+
+func (t *testDBSuite) TestGetParser(c *C) {
+	var (
+		DDL1 = `ALTER TABLE tbl ADD COLUMN c1 INT`
+		DDL2 = `ALTER TABLE tbl ADD COLUMN 'c1' INT`
+	)
+
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	// no `ANSI_QUOTES`
+	rows := mock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", "")
+	mock.ExpectQuery(`SHOW VARIABLES LIKE 'sql_mode'`).WillReturnRows(rows)
+	p, err := GetParser(db)
+	c.Assert(err, IsNil)
+	_, err = p.ParseOneStmt(DDL1, "", "")
+	c.Assert(err, IsNil)
+	_, err = p.ParseOneStmt(DDL2, "", "")
+	c.Assert(err, NotNil)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	// `ANSI_QUOTES`
+	rows = mock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", "ANSI_QUOTES")
+	mock.ExpectQuery(`SHOW VARIABLES LIKE 'sql_mode'`).WillReturnRows(rows)
+	p, err = GetParser(db)
+	c.Assert(err, IsNil)
+	_, err = p.ParseOneStmt(DDL1, "", "")
+	c.Assert(err, IsNil)
+	_, err = p.ParseOneStmt(DDL2, "", "")
+	c.Assert(err, NotNil)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
+
+func (t *testDBSuite) TestGetGTID(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	rows := mock.NewRows([]string{"Variable_name", "Value"}).AddRow("GTID_MODE", "ON")
+	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'GTID_MODE'`).WillReturnRows(rows)
+	mode, err := GetGTID(db)
+	c.Assert(err, IsNil)
+	c.Assert(mode, Equals, "ON")
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
+
 func (t *testDBSuite) TestGetAllServerID(c *C) {
 	testCases := []struct {
 		masterID  uint32
