@@ -229,6 +229,7 @@ jobs:
       env:
         CFG_BASE64: ${{ env.CFG_BASE64 }}
 
+    # TODO: fail ASAP for test cases.
     - name: Wait for chaos test case complete
       run: |
         kubectl wait --for=condition=complete job/chaos-test-case --timeout=21m
