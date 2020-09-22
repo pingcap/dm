@@ -1,4 +1,5 @@
 FROM alpine:3.10
+RUN apk add --no-cache tzdata
 ADD dm-master /dm-master
 ADD dm-worker /dm-worker
 ADD dmctl /dmctl
