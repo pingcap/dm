@@ -20,6 +20,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
+// some error reference: https://docs.pingcap.com/tidb/stable/tidb-limitations#limitations-on-a-single-table
 var (
 	// UnsupportedDDLMsgs list the error messages of some unsupported DDL in TiDB
 	UnsupportedDDLMsgs = []string{
@@ -32,6 +33,9 @@ var (
 		"Unsupported collation",
 		"Invalid default value for",
 		"Unsupported drop primary key",
+		"Error 1059: Identifier name", // Limitations on identifier length
+		"Error 1117: Too many columns",
+		"Error 1069: Too many keys specified",
 	}
 
 	// UnsupportedDMLMsgs list the error messages of some un-recoverable DML, which is used in task auto recovery
@@ -39,6 +43,7 @@ var (
 		"Error 1062: Duplicate entry",
 		"Error 1406: Data too long for column",
 		"Error 1366",
+		"Error 8025: entry too large",
 	}
 
 	// ParseRelayLogErrMsgs list the error messages of some un-recoverable relay log parsing error, which is used in task auto recovery.
