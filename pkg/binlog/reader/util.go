@@ -62,9 +62,9 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 		// NOTE: only update endPos/GTIDs for DDL/XID to get an complete transaction.
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
-			parser2, err := event.GetParserForStatusVars(ev.StatusVars)
-			if err != nil {
-				log.L().Warn("can't determine sql_mode from binlog status_vars, use default parser instead", zap.Error(err))
+			parser2, err2 := event.GetParserForStatusVars(ev.StatusVars)
+			if err2 != nil {
+				log.L().Warn("can't determine sql_mode from binlog status_vars, use default parser instead", zap.Error(err2))
 				parser2 = parser.New()
 			}
 
@@ -74,9 +74,9 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 					// GTID not enabled, can't get GTIDs for the position.
 					return nil, errors.Errorf("should have a GTIDEvent before the DDL QueryEvent %+v", e.Header)
 				}
-				err = latestGSet.Update(nextGTIDStr)
-				if err != nil {
-					return nil, terror.Annotatef(err, "update GTID set %v with GTID %s", latestGSet, nextGTIDStr)
+				err2 = latestGSet.Update(nextGTIDStr)
+				if err2 != nil {
+					return nil, terror.Annotatef(err2, "update GTID set %v with GTID %s", latestGSet, nextGTIDStr)
 				}
 				latestPos = e.Header.LogPos
 			}
