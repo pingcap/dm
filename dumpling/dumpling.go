@@ -125,7 +125,7 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		m.logger.Info("dump data finished", zap.Duration("cost time", time.Since(begin)))
 	} else {
 		m.logger.Error("dump data exits with error", zap.Duration("cost time", time.Since(begin)),
-			zap.String("error", utils.JoinProcessErrors(errs)))
+			zap.String("error", unit.JoinProcessErrors(errs)))
 	}
 
 	pr <- pb.ProcessResult{

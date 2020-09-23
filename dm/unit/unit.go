@@ -91,3 +91,12 @@ func IsCtxCanceledProcessErr(err *pb.ProcessError) bool {
 	}
 	return false
 }
+
+// JoinProcessErrors return the string of pb.ProcessErrors joined by ", "
+func JoinProcessErrors(errors []*pb.ProcessError) string {
+	serrs := make([]string, 0, len(errors))
+	for _, serr := range errors {
+		serrs = append(serrs, serr.String())
+	}
+	return strings.Join(serrs, ", ")
+}

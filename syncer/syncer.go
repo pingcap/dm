@@ -1295,7 +1295,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			// try to re-sync in gtid mode
-			if tryReSync && s.cfg.EnableGTID && isBinlogPurgedError(err) && s.cfg.AutoFixGTID {
+			if tryReSync && s.cfg.EnableGTID && utils.IsErrBinlogPurged(err) && s.cfg.AutoFixGTID {
 				time.Sleep(retryTimeout)
 				err = s.reSyncBinlog(*tctx, lastLocation.Clone())
 				if err != nil {

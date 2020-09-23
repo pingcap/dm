@@ -14,8 +14,6 @@
 package syncer
 
 import (
-	"bytes"
-
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
@@ -27,38 +25,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 )
-
-func (s *testSyncerSuite) TestTrimCtrlChars(c *C) {
-	ddl := "create table if not exists foo.bar(id int)"
-	controlChars := make([]byte, 0, 33)
-	nul := byte(0x00)
-	for i := 0; i < 32; i++ {
-		controlChars = append(controlChars, nul)
-		nul++
-	}
-	controlChars = append(controlChars, 0x7f)
-
-	var buf bytes.Buffer
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
-
-	for _, char := range controlChars {
-		buf.WriteByte(char)
-		buf.WriteByte(char)
-		buf.WriteString(ddl)
-		buf.WriteByte(char)
-		buf.WriteByte(char)
-
-		newDDL := utils.TrimCtrlChars(buf.String())
-		c.Assert(len(newDDL), Equals, len(ddl))
-
-		_, err := p.ParseOneStmt(newDDL, "", "")
-		c.Assert(err, IsNil)
-		buf.Reset()
-	}
-}
 
 func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
 	ansiQuotesCases := []string{

@@ -44,6 +44,7 @@ import (
 	"github.com/pingcap/dm/dm/master/shardddl"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
@@ -1501,7 +1502,7 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 
 func extractWorkerError(result *pb.ProcessResult) error {
 	if result != nil && len(result.Errors) > 0 {
-		return terror.ErrMasterOperRespNotSuccess.Generate(utils.JoinProcessErrors(result.Errors))
+		return terror.ErrMasterOperRespNotSuccess.Generate(unit.JoinProcessErrors(result.Errors))
 	}
 	return nil
 }
