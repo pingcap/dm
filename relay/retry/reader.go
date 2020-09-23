@@ -17,10 +17,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/pingcap/errors"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-
 	"github.com/pingcap/dm/pkg/backoff"
+	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -58,7 +56,7 @@ func NewReaderRetry(cfg ReaderRetryConfig) (*ReaderRetry, error) {
 
 // Check checks whether should retry for the error.
 func (rr *ReaderRetry) Check(ctx context.Context, err error) bool {
-	if !isReaderRetryableError(err) {
+	if !retry.IsConnectionError(err) {
 		return false
 	}
 
@@ -76,14 +74,4 @@ func (rr *ReaderRetry) Check(ctx context.Context, err error) bool {
 	rr.lastRetryTime = time.Now()
 	rr.bf.BoundaryForward()
 	return true
-}
-
-// isReaderRetryableError tells whether this error should retry for the binlog reader.
-func isReaderRetryableError(err error) bool {
-	err = errors.Cause(err)
-	switch err {
-	case gmysql.ErrBadConn: // for underlying TCPReader
-		return true
-	}
-	return false
 }
