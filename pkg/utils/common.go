@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -30,13 +29,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
-)
-
-// move to tidb-tools later
-
-const (
-	maxRetryCount = 3
-	retryTimeout  = 3 * time.Second
 )
 
 // TrimCtrlChars returns a slice of the string s with all leading

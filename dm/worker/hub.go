@@ -13,13 +13,8 @@
 
 package worker
 
-import (
-	"sync"
-)
-
 var (
 	conditionHub *ConditionHub
-	once         sync.Once
 )
 
 // ConditionHub holds a DM-worker and it is used for wait condition detection
