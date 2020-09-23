@@ -14,9 +14,12 @@
 package utils
 
 import (
+	"context"
+	"errors"
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb/errno"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -258,4 +261,41 @@ func (t *testUtilsSuite) TestWrapSchemes(c *C) {
 		c.Assert(WrapSchemes(ca.old, false), Equals, ca.http)
 		c.Assert(WrapSchemes(ca.old, true), Equals, ca.https)
 	}
+}
+
+func (t *testUtilsSuite) TestWrapSchemesForInitialCluster(c *C) {
+	// no change
+	c.Assert(WrapSchemesForInitialCluster("master1=http://127.0.0.1:8291,master2=http://127.0.0.1:8292,master3=http://127.0.0.1:8293", false), Equals,
+		"master1=http://127.0.0.1:8291,master2=http://127.0.0.1:8292,master3=http://127.0.0.1:8293")
+	c.Assert(WrapSchemesForInitialCluster("master1=http://127.0.0.1:8291,master2=http://127.0.0.1:8292,master3=http://127.0.0.1:8293", true), Equals,
+		"master1=http://127.0.0.1:8291,master2=http://127.0.0.1:8292,master3=http://127.0.0.1:8293")
+
+	// add `http` or `https` for some URLs
+	c.Assert(WrapSchemesForInitialCluster("master1=http://127.0.0.1:8291,master2=127.0.0.1:8292,master3=http://127.0.0.1:8293", false), Equals,
+		"master1=http://127.0.0.1:8291,master2=http://127.0.0.1:8292,master3=http://127.0.0.1:8293")
+	c.Assert(WrapSchemesForInitialCluster("master1=http://127.0.0.1:8291,master2=127.0.0.1:8292,master3=http://127.0.0.1:8293", true), Equals,
+		"master1=http://127.0.0.1:8291,master2=https://127.0.0.1:8292,master3=http://127.0.0.1:8293")
+
+	// add `http` or `https` for all URLs
+	c.Assert(WrapSchemesForInitialCluster("master1=127.0.0.1:8291,master2=127.0.0.1:8292,master3=127.0.0.1:8293", false), Equals,
+		"master1=http://127.0.0.1:8291,master2=http://127.0.0.1:8292,master3=http://127.0.0.1:8293")
+	c.Assert(WrapSchemesForInitialCluster("master1=127.0.0.1:8291,master2=127.0.0.1:8292,master3=127.0.0.1:8293", true), Equals,
+		"master1=https://127.0.0.1:8291,master2=https://127.0.0.1:8292,master3=https://127.0.0.1:8293")
+}
+
+func (t *testUtilsSuite) TestIsContextCanceledError(c *C) {
+	c.Assert(IsContextCanceledError(context.Canceled), IsTrue)
+	c.Assert(IsContextCanceledError(context.DeadlineExceeded), IsFalse)
+	c.Assert(IsContextCanceledError(errors.New("another error")), IsFalse)
+}
+
+func (t *testUtilsSuite) TestIgnoreErrorCheckpoint(c *C) {
+	c.Assert(IgnoreErrorCheckpoint(newMysqlErr(errno.ErrDupFieldName, "Duplicate column name c1")), IsTrue)
+	c.Assert(IgnoreErrorCheckpoint(newMysqlErr(errno.ErrTableExists, "Table tbl already exists")), IsFalse)
+	c.Assert(IgnoreErrorCheckpoint(errors.New("another error")), IsFalse)
+}
+
+func (t *testUtilsSuite) TestIsBuildInSkipDDL(c *C) {
+	c.Assert(IsBuildInSkipDDL("alter table tbl add column c1 int"), IsFalse)
+	c.Assert(IsBuildInSkipDDL("DROP PROCEDURE"), IsTrue)
 }
