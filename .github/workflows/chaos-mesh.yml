@@ -29,6 +29,19 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
     
+    - name: Cache go modules
+      uses: actions/cache@v2
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
+    
+    - name: Cache retool
+      uses: actions/cache@v2
+      with:
+        path: |
+          **/_tools
+        key: ${{ runner.os }}-dm-retool-${{ hashFiles('**/_tools/manifest.json') }}
+    
     # Set up Kubernetes IN Docker
     # - name: Set up kind cluster 
     #   uses: helm/kind-action@v1.0.0
