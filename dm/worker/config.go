@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -34,10 +35,6 @@ import (
 // and assign it to SampleConfigFile while we build dm-worker
 var SampleConfigFile string
 var defaultKeepAliveTTL = int64(10)
-
-var (
-	getRandomServerIDFunc = utils.GetRandomServerID
-)
 
 // NewConfig creates a new base config for worker.
 func NewConfig() *Config {

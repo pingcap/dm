@@ -71,8 +71,7 @@ type testScheduler struct{}
 var _ = Suite(&testScheduler{})
 
 var (
-	sourceCfgEmpty config.SourceConfig
-	stageEmpty     ha.Stage
+	stageEmpty ha.Stage
 )
 
 func (t *testScheduler) TestScheduler(c *C) {
