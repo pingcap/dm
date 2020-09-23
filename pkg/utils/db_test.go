@@ -160,6 +160,7 @@ func (t *testDBSuite) TestGetParser(c *C) {
 	var (
 		DDL1 = `ALTER TABLE tbl ADD COLUMN c1 INT`
 		DDL2 = `ALTER TABLE tbl ADD COLUMN 'c1' INT`
+		DDL3 = `ALTER TABLE tbl ADD COLUMN "c1" INT`
 	)
 
 	db, mock, err := sqlmock.New()
@@ -174,6 +175,8 @@ func (t *testDBSuite) TestGetParser(c *C) {
 	c.Assert(err, IsNil)
 	_, err = p.ParseOneStmt(DDL2, "", "")
 	c.Assert(err, NotNil)
+	_, err = p.ParseOneStmt(DDL3, "", "")
+	c.Assert(err, NotNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
 	// `ANSI_QUOTES`
@@ -185,6 +188,8 @@ func (t *testDBSuite) TestGetParser(c *C) {
 	c.Assert(err, IsNil)
 	_, err = p.ParseOneStmt(DDL2, "", "")
 	c.Assert(err, NotNil)
+	_, err = p.ParseOneStmt(DDL3, "", "")
+	c.Assert(err, IsNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
