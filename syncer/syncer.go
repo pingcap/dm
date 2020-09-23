@@ -1895,7 +1895,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		// when add ddl job, will execute ddl and then flush checkpoint.
-		// if execute ddl failed, the execErrorDetected will be true.
+		// if execute ddl failed, the execError will be set to that error.
 		// return nil here to avoid duplicate error message
 		err = s.execError.Get()
 		if err != nil {
