@@ -658,7 +658,7 @@ func (t *testConfig) TestAdjustSessionCfg(c *C) {
 	c.Assert(dbCfg.Session, DeepEquals, sessionCfg)
 
 	sessionCfg["sql_mode"] = "ANSI_QUOTES"
-	dbCfg.Session["sql_mode"] = "ANSI_QUOTES"
+	dbCfg.Session["SQL_MODE"] = "ANSI_QUOTES"
 	adjustTargetDB(dbCfg)
 	c.Assert(dbCfg.Session, DeepEquals, sessionCfg)
 
