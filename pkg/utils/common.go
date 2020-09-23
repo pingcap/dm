@@ -54,7 +54,7 @@ func TrimCtrlChars(s string) string {
 
 // FetchAllDoTables returns all need to do tables after filtered (fetches from upstream MySQL)
 func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error) {
-	schemas, err := getSchemas(db, maxRetryCount)
+	schemas, err := dbutil.GetSchemas(context.Background(), db)
 
 	failpoint.Inject("FetchAllDoTablesFailed", func(val failpoint.Value) {
 		err = tmysql.NewErr(uint16(val.(int)))
@@ -142,66 +142,6 @@ func FetchTargetDoTables(db *sql.DB, bw *filter.Filter, router *router.Table) (m
 	}
 
 	return mapper, nil
-}
-
-func getSchemas(db *sql.DB, maxRetry int) ([]string, error) {
-	query := "SHOW DATABASES"
-	rows, err := querySQL(db, query, maxRetry)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	// show an example.
-	/*
-		mysql> SHOW DATABASES;
-		+--------------------+
-		| Database           |
-		+--------------------+
-		| information_schema |
-		| mysql              |
-		| performance_schema |
-		| sys                |
-		| test_db            |
-		+--------------------+
-	*/
-	schemas := make([]string, 0, 10)
-	for rows.Next() {
-		var schema string
-		err = rows.Scan(&schema)
-		if err != nil {
-			return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-		}
-		schemas = append(schemas, schema)
-	}
-	return schemas, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
-}
-
-func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
-	var (
-		err  error
-		rows *sql.Rows
-	)
-
-	for i := 0; i < maxRetry; i++ {
-		if i > 0 {
-			log.L().Warn("query retry", zap.Int("retry number", i), zap.String("query", TruncateString(query, -1)))
-			time.Sleep(retryTimeout)
-		} else {
-			log.L().Debug("query sql", zap.String("query", TruncateString(query, -1)))
-		}
-
-		rows, err = db.Query(query)
-		if err != nil {
-			log.L().Warn("query retry", zap.String("query", TruncateString(query, -1)), log.ShortError(err))
-			continue
-		}
-
-		return rows, nil
-	}
-
-	log.L().Error("query failed", zap.String("query", TruncateString(query, -1)), zap.Error(err))
-	return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 }
 
 // CompareShardingDDLs compares s and t ddls

@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -220,19 +219,13 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount 
 }
 
 func isErrDBExists(err error) bool {
-	return isMySQLError(err, tmysql.ErrDBCreateExists)
+	return utils.IsMySQLError(err, tmysql.ErrDBCreateExists)
 }
 
 func isErrTableExists(err error) bool {
-	return isMySQLError(err, tmysql.ErrTableExists)
+	return utils.IsMySQLError(err, tmysql.ErrTableExists)
 }
 
 func isErrDupEntry(err error) bool {
-	return isMySQLError(err, tmysql.ErrDupEntry)
-}
-
-func isMySQLError(err error, code uint16) bool {
-	err = errors.Cause(err)
-	e, ok := err.(*mysql.MySQLError)
-	return ok && e.Number == code
+	return utils.IsMySQLError(err, tmysql.ErrDupEntry)
 }
