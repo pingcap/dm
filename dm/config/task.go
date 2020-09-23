@@ -717,12 +717,16 @@ func checkDuplicateString(ruleNames []string) []string {
 }
 
 func adjustTargetDB(dbConfig *DBConfig) {
-	if dbConfig.Session == nil {
-		dbConfig.Session = make(map[string]string, len(defaultSessionCfg))
+	lowerMap := make(map[string]string, len(dbConfig.Session))
+	for k, v := range dbConfig.Session {
+		lowerMap[strings.ToLower(k)] = v
 	}
+
+	// all cfg in defaultSessionCfg should be lower case
 	for k, v := range defaultSessionCfg {
-		if _, ok := dbConfig.Session[k]; !ok {
-			dbConfig.Session[k] = v
+		if _, ok := lowerMap[k]; !ok {
+			lowerMap[k] = v
 		}
 	}
+	dbConfig.Session = lowerMap
 }

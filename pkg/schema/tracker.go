@@ -65,6 +65,7 @@ func NewTracker(sessionCfg map[string]string, tidbConn *conn.BaseConn) (*Tracker
 		sessionCfg = make(map[string]string)
 	}
 	// get variables if user doesn't specify
+	// all cfg in sessionVars should be lower case
 	for _, k := range sessionVars {
 		if _, ok := sessionCfg[k]; !ok {
 			var ignoredColumn interface{}
