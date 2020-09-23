@@ -49,7 +49,7 @@ else
 endif
 
 .PHONY: build retool_setup test unit_test dm_integration_test_build integration_test \
-	coverage check dm-worker dm-master dm-tracer dmctl debug-tools
+	coverage check dm-worker dm-master dm-tracer chaos-case dmctl debug-tools
 
 build: check dm-worker dm-master dm-tracer dmctl dm-portal dm-syncer
 
@@ -61,6 +61,9 @@ dm-master:
 
 dm-tracer:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-tracer ./cmd/dm-tracer
+
+chaos-case:
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/chaos-case ./chaos/cases
 
 dmctl:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dmctl ./cmd/dm-ctl
