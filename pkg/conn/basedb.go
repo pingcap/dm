@@ -52,13 +52,15 @@ func init() {
 	DefaultDBProvider = &DefaultDBProviderImpl{}
 }
 
-// mock is used in unit test
-var mock sqlmock.Sqlmock
+// mockDB is used in unit test
+var mockDB sqlmock.Sqlmock
 
 // Apply will build BaseDB with DBConfig
 func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&maxAllowedPacket=%d",
-		config.User, config.Password, config.Host, config.Port, *config.MaxAllowedPacket)
+	// maxAllowedPacket=0 can be used to automatically fetch the max_allowed_packet variable from server on every connection.
+	// https://github.com/go-sql-driver/mysql#maxallowedpacket
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&maxAllowedPacket=0",
+		config.User, config.Password, config.Host, config.Port)
 
 	doFuncInClose := func() {}
 	if config.Security != nil && len(config.Security.SSLCA) != 0 &&
@@ -105,9 +107,9 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 	}
 	failpoint.Inject("failDBPing", func(_ failpoint.Value) {
 		db.Close()
-		db, mock, _ = sqlmock.New()
-		mock.ExpectPing()
-		mock.ExpectClose()
+		db, mockDB, _ = sqlmock.New()
+		mockDB.ExpectPing()
+		mockDB.ExpectClose()
 	})
 
 	err = db.Ping()

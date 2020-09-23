@@ -35,13 +35,12 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
-
-	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -228,12 +227,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
 
-	var err error
-	syncer.schemaTracker, err = schema.NewTracker(cfg.To.Session)
-	if err != nil {
-		syncer.tctx.L().DPanic("cannot create schema tracker", zap.Error(err))
-	}
-
 	return syncer
 }
 
@@ -281,6 +274,11 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return err
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
+
+	s.schemaTracker, err = schema.NewTracker(s.cfg.To.Session, s.ddlDBConn.baseConn)
+	if err != nil {
+		return terror.ErrSchemaTrackerInit.Delegate(err)
+	}
 
 	s.streamerController = NewStreamerController(tctx, s.syncCfg, s.cfg.EnableGTID, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
 
@@ -774,6 +772,10 @@ func (s *Syncer) addJob(job *job) error {
 		s.c.reset()
 	}
 
+	if s.execError.Get() != nil {
+		return nil
+	}
+
 	switch job.tp {
 	case ddl:
 		failpoint.Inject("ExitAfterDDLBeforeFlush", func() {
@@ -930,12 +932,21 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = terror.WithScope(err, terror.ScopeDownstream)
 			}
 		}
+		// If downstream has error (which may cause by tracker is more compatible than downstream), we should stop handling
+		// this job, set `s.execError` to let caller of `addJob` discover error
 		if err != nil {
+			s.execError.Set(err)
+			if !utils.IsContextCanceledError(err) {
+				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
+				s.runFatalChan <- unit.NewProcessError(err)
+			}
 			s.appendExecErrors(&ExecErrorContext{
 				err:      err,
 				location: sqlJob.currentLocation.Clone(),
 				jobs:     fmt.Sprintf("%v", sqlJob.ddls),
 			})
+			s.jobWg.Done()
+			continue
 		}
 
 		switch s.cfg.ShardMode {
@@ -964,15 +975,16 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = s.optimist.DoneOperation(*(s.optimist.PendingOperation()))
 			}
 		}
-		s.jobWg.Done()
 		if err != nil {
 			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
 				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
+			s.jobWg.Done()
 			continue
 		}
+		s.jobWg.Done()
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
 	}
 }
@@ -1884,9 +1896,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// when add ddl job, will execute ddl and then flush checkpoint.
 		// if execute ddl failed, the execErrorDetected will be true.
+		// return nil here to avoid duplicate error message
 		err = s.execError.Get()
 		if err != nil {
-			return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
+			s.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+			return nil
 		}
 
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
@@ -2069,7 +2083,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	err = s.execError.Get()
 	if err != nil {
-		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
+		s.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+		return nil
 	}
 
 	if len(onlineDDLTableNames) > 0 {

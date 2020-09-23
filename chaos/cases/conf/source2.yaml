@@ -1,0 +1,7 @@
+source-id: "mysql-replica-02"
+
+from:
+  host: "mysql-1.mysql" # same namespace with MySQL
+  user: "root"
+  password: ""
+  port: 3306

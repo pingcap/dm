@@ -4,6 +4,7 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.4.1
 	github.com/Masterminds/semver v1.5.0 // indirect
+	github.com/chaos-mesh/go-sqlsmith v0.0.0-00010101000000-000000000000
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/docker/go-units v0.4.0
 	github.com/dustin/go-humanize v1.0.0
@@ -43,6 +44,7 @@ require (
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0
+	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	golang.org/x/sys v0.0.0-20200824131525-c12d262b63d8
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/genproto v0.0.0-20191230161307-f3c370f40bfb
@@ -52,3 +54,5 @@ require (
 )
 
 go 1.13
+
+replace github.com/chaos-mesh/go-sqlsmith => github.com/csuzhangxc/go-sqlsmith v0.0.0-20200904072619-4a3341a30495

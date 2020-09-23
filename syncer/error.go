@@ -147,6 +147,8 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 	}
 
 	// for DROP COLUMN with its single-column index, try drop index first then drop column
+	// TiDB will support DROP COLUMN with index soon. After its support, executing that SQL will not have an error,
+	// so this function will not trigger and cause some trouble
 	dropColumnF := func(tctx *tcontext.Context, originErr error, ddls []string, index int, conn *DBConn) error {
 		if !isDropColumnWithIndexError(originErr) {
 			return originErr
@@ -204,7 +206,9 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 			rows, err2 = conn.querySQL(tctx, sql2, schema, table, idx)
 			if err2 != nil || !rows.Next() || rows.Scan(&count) != nil || count != 1 {
 				tctx.L().Warn("can't auto drop index", zap.String("index", idx))
-				rows.Close()
+				if rows != nil {
+					rows.Close()
+				}
 				return originErr
 			}
 			idx2Drop = append(idx2Drop, idx)
@@ -228,6 +232,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		tctx.L().Info("execute drop column SQL success", zap.String("DDL", ddl2))
 		return nil
 	}
+	// TODO: add support for downstream alter pk without schema
 
 	retErr := err
 	toHandle := []func(*tcontext.Context, error, []string, int, *DBConn) error{
