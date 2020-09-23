@@ -18,8 +18,10 @@ import (
 	"testing"
 
 	"github.com/pingcap/check"
-	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/errors"
+
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 func TestSuite(t *testing.T) {
@@ -44,4 +46,14 @@ func (t *testUnitSuite) TestIsCtxCanceledProcessErr(c *check.C) {
 	c.Assert(err.GetErrLevel(), check.Equals, terr.Level().String())
 	c.Assert(err.GetMessage(), check.Equals, terr.Message())
 	c.Assert(err.GetRawCause(), check.Equals, "")
+}
+
+func (t *testUnitSuite) TestJoinProcessErrors(c *check.C) {
+	errs := []*pb.ProcessError{
+		NewProcessError(terror.ErrDBDriverError.Generate()),
+		NewProcessError(terror.ErrSyncUnitDMLStatementFound.Generate()),
+	}
+
+	c.Assert(JoinProcessErrors(errs), check.Equals,
+		`ErrCode:10001 ErrClass:"database" ErrScope:"not-set" ErrLevel:"high" Message:"database driver error" Workaround:"Please check the database connection and the database config in configuration file." , ErrCode:36014 ErrClass:"sync-unit" ErrScope:"internal" ErrLevel:"high" Message:"only support ROW format binlog, unexpected DML statement found in query event" `)
 }

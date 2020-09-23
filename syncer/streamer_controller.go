@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/common"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -284,7 +285,7 @@ func (c *StreamerController) ReopenWithRetry(tctx *tcontext.Context, location bi
 		if err == nil {
 			return nil
 		}
-		if needRetryReplicate(err) {
+		if retry.IsConnectionError(err) {
 			tctx.L().Info("fail to retry open binlog streamer", log.ShortError(err))
 			time.Sleep(retryTimeout)
 			continue

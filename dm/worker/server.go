@@ -548,7 +548,7 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb
 		Worker: s.cfg.Name,
 	}
 	if sourceStatus.Result != nil && len(sourceStatus.Result.Errors) > 0 {
-		sourceError.SourceError = utils.JoinProcessErrors(sourceStatus.Result.Errors)
+		sourceError.SourceError = unit.JoinProcessErrors(sourceStatus.Result.Errors)
 	}
 	resp := &pb.QueryErrorResponse{
 		Result:      true,

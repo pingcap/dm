@@ -23,20 +23,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/failpoint"
-	"go.uber.org/zap"
-
-	"github.com/pingcap/dm/pkg/gtid"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/terror"
-
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	gmysql "github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -412,9 +411,7 @@ func IsMySQLError(err error, code uint16) bool {
 
 // IsErrBinlogPurged checks whether err is BinlogPurged error
 func IsErrBinlogPurged(err error) bool {
-	err = errors.Cause(err)
-	e, ok := err.(*gmysql.MyError)
-	return ok && e.Code == tmysql.ErrMasterFatalErrorReadingBinlog
+	return IsMySQLError(err, tmysql.ErrMasterFatalErrorReadingBinlog)
 }
 
 // IsNoSuchThreadError checks whether err is NoSuchThreadError

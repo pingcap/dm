@@ -16,8 +16,11 @@ package retry
 import (
 	"database/sql/driver"
 
-	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/errors"
+	tmysql "github.com/pingcap/parser/mysql"
+	gmysql "github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // some error reference: https://docs.pingcap.com/tidb/stable/tidb-limitations#limitations-on-a-single-table
@@ -66,7 +69,7 @@ var (
 func IsConnectionError(err error) bool {
 	err = errors.Cause(err)
 	switch err {
-	case driver.ErrBadConn:
+	case driver.ErrBadConn, tmysql.ErrBadConn, gmysql.ErrBadConn:
 		return true
 	}
 	return false
