@@ -578,6 +578,7 @@ function test_multi_task_reduce_and_restart_worker() {
             running_count=$(echo $status_str | sed "s/$search_str/$search_str\n/g" | grep -c "$search_str")
             if [ $running_count != 4 ]; then
                 echo "error running worker"
+                echo $status_str
                 exit 1
             fi
         fi
