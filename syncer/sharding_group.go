@@ -485,10 +485,16 @@ func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sourc
 		if err := group.Leave(sources); err != nil {
 			return err
 		}
+		if len(group.sources) == 0 {
+			delete(k.groups, targetTableID)
+		}
 	}
 	if schemaGroup, ok := k.groups[schemaID]; ok {
 		if err := schemaGroup.Leave(sources); err != nil {
 			return err
+		}
+		if len(schemaGroup.sources) == 0 {
+			delete(k.groups, schemaID)
 		}
 	}
 	return nil
@@ -542,7 +548,6 @@ func (k *ShardingGroupKeeper) UnresolvedTables() (map[string]bool, [][]string) {
 	tables := make([][]string, 0, 10)
 	k.RLock()
 	defer k.RUnlock()
-	// TODO: where does k.groups delete its key?
 	for id, group := range k.groups {
 		unresolved := group.UnresolvedTables()
 		if len(unresolved) > 0 {
