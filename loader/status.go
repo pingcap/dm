@@ -41,11 +41,6 @@ func (l *Loader) Status() interface{} {
 	return s
 }
 
-// Error implements Unit.Error
-func (l *Loader) Error() interface{} {
-	return &pb.LoadError{}
-}
-
 // PrintStatus prints status like progress percentage.
 func (l *Loader) PrintStatus(ctx context.Context) {
 	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {

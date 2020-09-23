@@ -57,7 +57,6 @@ type Request struct {
 	UpdateSubTask  *pb.UpdateSubTaskRequest
 
 	QueryStatus       *pb.QueryStatusRequest
-	QueryError        *pb.QueryErrorRequest
 	QueryWorkerConfig *pb.QueryWorkerConfigRequest
 
 	SwitchRelayMaster *pb.SwitchRelayMasterRequest
@@ -81,7 +80,6 @@ type Response struct {
 	UpdateSubTask  *pb.CommonWorkerResponse
 
 	QueryStatus       *pb.QueryStatusResponse
-	QueryError        *pb.QueryErrorResponse
 	QueryWorkerConfig *pb.QueryWorkerConfigResponse
 
 	SwitchRelayMaster *pb.CommonWorkerResponse

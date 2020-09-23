@@ -74,10 +74,6 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 			QueryStatus: &pb.QueryStatusRequest{Name: "test"},
 		},
 		{
-			Type:       CmdQueryError,
-			QueryError: &pb.QueryErrorRequest{Name: "test-2"},
-		},
-		{
 			Type:              CmdQueryWorkerConfig,
 			QueryWorkerConfig: &pb.QueryWorkerConfigRequest{},
 		},
@@ -119,7 +115,6 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 	workerCli.EXPECT().OperateSubTask(gomock.Any(), reqs[1].OperateSubTask)
 	workerCli.EXPECT().UpdateSubTask(gomock.Any(), reqs[2].UpdateSubTask)
 	workerCli.EXPECT().QueryStatus(gomock.Any(), reqs[3].QueryStatus)
-	workerCli.EXPECT().QueryError(gomock.Any(), reqs[4].QueryError)
 	workerCli.EXPECT().QueryWorkerConfig(gomock.Any(), reqs[5].QueryWorkerConfig)
 	workerCli.EXPECT().SwitchRelayMaster(gomock.Any(), reqs[6].SwitchRelayMaster)
 	workerCli.EXPECT().OperateRelay(gomock.Any(), reqs[7].OperateRelay)

@@ -90,7 +90,7 @@ func NewMockUnit(typ pb.UnitType) *MockUnit {
 	}
 }
 
-func (m *MockUnit) Init(ctx context.Context) error {
+func (m *MockUnit) Init(_ context.Context) error {
 	return m.errInit
 }
 
@@ -118,7 +118,7 @@ func (m MockUnit) Pause() {}
 
 func (m *MockUnit) Resume(ctx context.Context, pr chan pb.ProcessResult) { m.Process(ctx, pr) }
 
-func (m *MockUnit) Update(cfg *config.SubTaskConfig) error {
+func (m *MockUnit) Update(_ *config.SubTaskConfig) error {
 	return m.errUpdate
 }
 
@@ -137,11 +137,9 @@ func (m *MockUnit) Status() interface{} {
 	}
 }
 
-func (m *MockUnit) Error() interface{} { return nil }
-
 func (m *MockUnit) Type() pb.UnitType { return m.typ }
 
-func (m *MockUnit) IsFreshTask(ctx context.Context) (bool, error) { return m.isFresh, m.errFresh }
+func (m *MockUnit) IsFreshTask(_ context.Context) (bool, error) { return m.isFresh, m.errFresh }
 
 func (m *MockUnit) InjectProcessError(ctx context.Context, err error) error {
 	newCtx, cancel := context.WithTimeout(ctx, time.Second)
@@ -191,7 +189,6 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 	st.Run()
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
-	c.Assert(st.Error(), IsNil)
 	c.Assert(st.Result(), IsNil)
 
 	// finish dump
@@ -303,7 +300,6 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 	st.Run()
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
-	c.Assert(st.Error(), IsNil)
 	c.Assert(st.Result(), IsNil)
 	c.Assert(st.CheckUnit(), IsFalse)
 
@@ -337,7 +333,6 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 	c.Assert(st.Resume(), IsNil)
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
-	c.Assert(st.Error(), IsNil)
 	c.Assert(st.Result(), IsNil)
 
 	c.Assert(st.Pause(), IsNil)
@@ -351,7 +346,6 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 	c.Assert(st.Resume(), IsNil)
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
-	c.Assert(st.Error(), IsNil)
 	c.Assert(st.Result(), IsNil)
 
 	// fail dumper
@@ -382,13 +376,11 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 	c.Assert(st.Resume(), IsNil)
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
-	c.Assert(st.Error(), IsNil)
 	c.Assert(st.Result(), IsNil)
 
 	c.Assert(st.Resume(), NotNil)
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
-	c.Assert(st.Error(), IsNil)
 	c.Assert(st.Result(), IsNil)
 	// finish dump
 	c.Assert(mockDumper.InjectProcessError(context.Background(), nil), IsNil)
@@ -452,7 +444,6 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 	c.Assert(st.Resume(), IsNil)
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
-	c.Assert(st.Error(), IsNil)
 	c.Assert(st.Result(), IsNil)
 
 	// pause again

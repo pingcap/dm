@@ -756,45 +756,6 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 	return resp, nil
 }
 
-// QueryError implements MasterServer.QueryError
-func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) (*pb.QueryErrorListResponse, error) {
-	var (
-		resp2 *pb.QueryErrorListResponse
-		err2  error
-	)
-	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
-	if shouldRet {
-		return resp2, err2
-	}
-
-	sources, err := extractSources(s, req)
-	if err != nil {
-		return &pb.QueryErrorListResponse{
-			Result: false,
-			Msg:    err.Error(),
-		}, nil
-	}
-
-	workerRespCh := s.getErrorFromWorkers(ctx, sources, req.Name)
-
-	workerRespMap := make(map[string]*pb.QueryErrorResponse, len(sources))
-	for len(workerRespCh) > 0 {
-		workerResp := <-workerRespCh
-		workerRespMap[workerResp.SourceError.Source] = workerResp
-	}
-
-	sort.Strings(sources)
-	workerResps := make([]*pb.QueryErrorResponse, 0, len(sources))
-	for _, worker := range sources {
-		workerResps = append(workerResps, workerRespMap[worker])
-	}
-	resp := &pb.QueryErrorListResponse{
-		Result:  true,
-		Sources: workerResps,
-	}
-	return resp, nil
-}
-
 // ShowDDLLocks implements MasterServer.ShowDDLLocks
 func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) (*pb.ShowDDLLocksResponse, error) {
 	var (
@@ -1094,63 +1055,6 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 			}
 			workerStatus.SourceStatus.Source = sourceID
 			workerRespCh <- workerStatus
-		}, func(args ...interface{}) {
-			defer wg.Done()
-			sourceID, _ := args[0].(string)
-			handleErr(terror.ErrMasterNoEmitToken.Generate(sourceID), sourceID)
-		}, source)
-	}
-	wg.Wait()
-	return workerRespCh
-}
-
-// getErrorFromWorkers does RPC request to get error information from dm-workers
-func (s *Server) getErrorFromWorkers(ctx context.Context, sources []string, taskName string) chan *pb.QueryErrorResponse {
-	workerReq := &workerrpc.Request{
-		Type:       workerrpc.CmdQueryError,
-		QueryError: &pb.QueryErrorRequest{Name: taskName},
-	}
-	workerRespCh := make(chan *pb.QueryErrorResponse, len(sources))
-
-	handleErr := func(err error, source string) bool {
-		log.L().Error("response error", zap.Error(err))
-		resp := &pb.QueryErrorResponse{
-			Result: false,
-			Msg:    err.Error(),
-			SourceError: &pb.SourceError{
-				Source: source,
-			},
-		}
-		workerRespCh <- resp
-		return false
-	}
-
-	var wg sync.WaitGroup
-	for _, source := range sources {
-		wg.Add(1)
-		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
-			defer wg.Done()
-			sourceID, _ := args[0].(string)
-			worker := s.scheduler.GetWorkerBySource(sourceID)
-			if worker == nil {
-				err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", sourceID)
-				handleErr(err, sourceID)
-				return
-			}
-
-			resp, err := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
-			workerError := &pb.QueryErrorResponse{}
-			if err != nil {
-				workerError = &pb.QueryErrorResponse{
-					Result:      false,
-					Msg:         err.Error(),
-					SourceError: &pb.SourceError{},
-				}
-			} else {
-				workerError = resp.QueryError
-			}
-			workerError.SourceError.Source = sourceID
-			workerRespCh <- workerError
 		}, func(args ...interface{}) {
 			defer wg.Done()
 			sourceID, _ := args[0].(string)
