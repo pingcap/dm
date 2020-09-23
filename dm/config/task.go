@@ -41,8 +41,10 @@ const (
 
 // shard DDL mode.
 const (
-	ShardPessimistic = "pessimistic"
-	ShardOptimistic  = "optimistic"
+	ShardPessimistic  = "pessimistic"
+	ShardOptimistic   = "optimistic"
+	tidbTxnMode       = "tidb_txn_mode"
+	tidbTxnOptimistic = "optimistic"
 )
 
 // default config item values
@@ -66,6 +68,11 @@ var (
 	defaultBatch                   = 100
 	defaultQueueSize               = 1024 // do not give too large default value to avoid OOM
 	defaultCheckpointFlushInterval = 30   // in seconds
+
+	// TargetDBConfig
+	defaultSessionCfg = map[string]string{
+		tidbTxnMode: tidbTxnOptimistic,
+	}
 )
 
 // Meta represents binlog's meta pos
@@ -411,6 +418,7 @@ func (c *TaskConfig) adjust() error {
 	if c.TargetDB == nil {
 		return terror.ErrConfigNeedTargetDB.Generate()
 	}
+	adjustTargetDB(c.TargetDB)
 
 	if len(c.MySQLInstances) == 0 {
 		return terror.ErrConfigMySQLInstsAtLeastOne.Generate()
@@ -706,4 +714,15 @@ func checkDuplicateString(ruleNames []string) []string {
 		}
 	}
 	return dupeArray
+}
+
+func adjustTargetDB(dbConfig *DBConfig) {
+	if dbConfig.Session == nil {
+		dbConfig.Session = make(map[string]string, len(defaultSessionCfg))
+	}
+	for k, v := range defaultSessionCfg {
+		if _, ok := dbConfig.Session[k]; !ok {
+			dbConfig.Session[k] = v
+		}
+	}
 }

@@ -324,7 +324,10 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		heartbeatRI         = 21
 		timezone            = "Asia/Shanghai"
 		maxAllowedPacket    = 10244201
-		session             = map[string]string{
+		fromSession         = map[string]string{
+			"sql_mode": " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
+		}
+		toSession = map[string]string{
 			"sql_mode": " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
 		}
 		security = Security{
@@ -380,7 +383,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 			User:             "user_from_1",
 			Password:         "123",
 			MaxAllowedPacket: &maxAllowedPacket,
-			Session:          session,
+			Session:          fromSession,
 			Security:         &security,
 			RawDBCfg:         &rawDBCfg,
 		}
@@ -390,7 +393,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 			User:             "user_from_2",
 			Password:         "abc",
 			MaxAllowedPacket: &maxAllowedPacket,
-			Session:          session,
+			Session:          fromSession,
 			Security:         &security,
 			RawDBCfg:         &rawDBCfg,
 		}
@@ -421,7 +424,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				User:             "user_to",
 				Password:         "abc",
 				MaxAllowedPacket: &maxAllowedPacket,
-				Session:          session,
+				Session:          toSession,
 				Security:         &security,
 				RawDBCfg:         &rawDBCfg,
 			},
@@ -576,6 +579,8 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	stCfgs[0].EnableANSIQuotes = stCfg1.EnableANSIQuotes
 	stCfgs[1].EnableANSIQuotes = stCfg2.EnableANSIQuotes
 	c.Assert(stCfgs[0].String(), Equals, stCfg1.String())
+	// subtask session cfg also changed because we ref DBConfig when merge from subtask config
+	stCfg2.To.Session[tidbTxnMode] = tidbTxnOptimistic
 	c.Assert(stCfgs[1].String(), Equals, stCfg2.String())
 }
 
@@ -644,4 +649,22 @@ func (t *testConfig) TestMySQLInstance(c *C) {
 
 	c.Assert(m.VerifyAndAdjust(), IsNil)
 
+}
+
+func (t *testConfig) TestAdjustSessionCfg(c *C) {
+	sessionCfg := map[string]string{tidbTxnMode: tidbTxnOptimistic}
+	dbCfg := &DBConfig{}
+	adjustTargetDB(dbCfg)
+	c.Assert(dbCfg.Session, DeepEquals, sessionCfg)
+
+	sessionCfg["sql_mode"] = "ANSI_QUOTES"
+	dbCfg.Session["sql_mode"] = "ANSI_QUOTES"
+	adjustTargetDB(dbCfg)
+	c.Assert(dbCfg.Session, DeepEquals, sessionCfg)
+
+	tidbTxnPessimistic := "pessimistic"
+	sessionCfg[tidbTxnMode] = tidbTxnPessimistic
+	dbCfg.Session[tidbTxnMode] = tidbTxnPessimistic
+	adjustTargetDB(dbCfg)
+	c.Assert(dbCfg.Session, DeepEquals, sessionCfg)
 }
