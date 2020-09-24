@@ -4,8 +4,6 @@ package pb;
 
 
 service Worker {
-    rpc UpdateSubTask (UpdateSubTaskRequest) returns (CommonWorkerResponse) {}
-
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
 
     // SwitchRelayMaster request a dm-worker's relay unit switching to another master server
@@ -51,10 +49,6 @@ message UpdateRelayRequest {
 message MigrateRelayRequest {
     string BinlogName = 1;
     uint32 BinlogPos = 2;
-}
-
-message UpdateSubTaskRequest {
-    string task = 1; // (sub) task's new configuration
 }
 
 message QueryStatusRequest {

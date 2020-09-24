@@ -52,8 +52,6 @@ const (
 type Request struct {
 	Type CmdType
 
-	UpdateSubTask *pb.UpdateSubTaskRequest
-
 	QueryStatus       *pb.QueryStatusRequest
 	QueryWorkerConfig *pb.QueryWorkerConfigRequest
 
@@ -72,8 +70,6 @@ type Request struct {
 // Response wraps all dm-worker rpc responses.
 type Response struct {
 	Type CmdType
-
-	UpdateSubTask *pb.CommonWorkerResponse
 
 	QueryStatus       *pb.QueryStatusResponse
 	QueryWorkerConfig *pb.QueryWorkerConfigResponse

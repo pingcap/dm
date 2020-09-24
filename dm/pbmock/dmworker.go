@@ -235,26 +235,6 @@ func (mr *MockWorkerClientMockRecorder) UpdateRelayConfig(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateRelayConfig", reflect.TypeOf((*MockWorkerClient)(nil).UpdateRelayConfig), varargs...)
 }
 
-// UpdateSubTask mocks base method
-func (m *MockWorkerClient) UpdateSubTask(arg0 context.Context, arg1 *pb.UpdateSubTaskRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "UpdateSubTask", varargs...)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateSubTask indicates an expected call of UpdateSubTask
-func (mr *MockWorkerClientMockRecorder) UpdateSubTask(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSubTask", reflect.TypeOf((*MockWorkerClient)(nil).UpdateSubTask), varargs...)
-}
-
 // MockWorkerServer is a mock of WorkerServer interface
 type MockWorkerServer struct {
 	ctrl     *gomock.Controller
@@ -426,19 +406,4 @@ func (m *MockWorkerServer) UpdateRelayConfig(arg0 context.Context, arg1 *pb.Upda
 func (mr *MockWorkerServerMockRecorder) UpdateRelayConfig(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateRelayConfig", reflect.TypeOf((*MockWorkerServer)(nil).UpdateRelayConfig), arg0, arg1)
-}
-
-// UpdateSubTask mocks base method
-func (m *MockWorkerServer) UpdateSubTask(arg0 context.Context, arg1 *pb.UpdateSubTaskRequest) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateSubTask", arg0, arg1)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateSubTask indicates an expected call of UpdateSubTask
-func (mr *MockWorkerServerMockRecorder) UpdateSubTask(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSubTask", reflect.TypeOf((*MockWorkerServer)(nil).UpdateSubTask), arg0, arg1)
 }
