@@ -1247,6 +1247,25 @@ func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, erro
 	return cfgs, nil
 }
 
+func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
+	toDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
+	if err != nil {
+		return err
+	}
+
+	value, err := dbutil.ShowVersion(ctx, toDB.DB)
+	if err != nil {
+		return err
+	}
+
+	version, err := utils.ToTiDBVersion(value)
+	// Do not adjust if not TiDB
+	if err == nil {
+		config.AdjustTargetDBSessionCfg(dbConfig, version)
+	}
+	return nil
+}
+
 // OperateSource will create or update an upstream source.
 func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest) (*pb.OperateSourceResponse, error) {
 	var (
@@ -1399,6 +1418,11 @@ func (s *Server) OperateLeader(ctx context.Context, req *pb.OperateLeaderRequest
 func (s *Server) generateSubTask(ctx context.Context, task string) (*config.TaskConfig, []*config.SubTaskConfig, error) {
 	cfg := config.NewTaskConfig()
 	err := cfg.Decode(task)
+	if err != nil {
+		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
+	}
+
+	err = adjustTargetDB(ctx, cfg.TargetDB)
 	if err != nil {
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}

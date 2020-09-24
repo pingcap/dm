@@ -38,6 +38,9 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
+// TiDBVersion represents TiDB version number.
+type TiDBVersion [3]uint
+
 var (
 	// for MariaDB, UUID set as `gtid_domain_id` + domainServerIDSeparator + `server_id`
 	domainServerIDSeparator = "-"
@@ -423,4 +426,45 @@ func IsNoSuchThreadError(err error) bool {
 func GetGTID(db *sql.DB) (string, error) {
 	val, err := GetGlobalVariable(db, "GTID_MODE")
 	return val, err
+}
+
+// ToTiDBVersion convert string to TiDBVersion
+// version format: 5.7.25-TiDB-v3.0.7
+func ToTiDBVersion(v string) (TiDBVersion, error) {
+	version := TiDBVersion{0, 0, 0}
+	tmp := strings.Split(v, "-")
+	if len(tmp) != 3 {
+		return version, errors.NotValidf("TiDB version %s", v)
+	}
+
+	tmp = strings.Split(tmp[2], ".")
+	if len(tmp) != 3 {
+		return version, errors.NotValidf("TiDB version %s", v)
+	}
+
+	if !strings.HasPrefix(tmp[0], "v") {
+		return version, errors.NotValidf("TiDB version %s", v)
+	}
+	tmp[0] = tmp[0][1:]
+
+	for i := range tmp {
+		val, err := strconv.ParseUint(tmp[i], 10, 64)
+		if err != nil {
+			return version, errors.NotValidf("TiDB version %s", v)
+		}
+		version[i] = uint(val)
+	}
+	return version, nil
+}
+
+// Ge means v >= min
+func (v TiDBVersion) Ge(min TiDBVersion) bool {
+	for i := range v {
+		if v[i] > min[i] {
+			return true
+		} else if v[i] < min[i] {
+			return false
+		}
+	}
+	return true
 }

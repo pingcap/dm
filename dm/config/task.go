@@ -23,6 +23,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/dustin/go-humanize"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
@@ -70,8 +71,12 @@ var (
 	defaultCheckpointFlushInterval = 30   // in seconds
 
 	// TargetDBConfig
-	defaultSessionCfg = map[string]string{
-		tidbTxnMode: tidbTxnOptimistic,
+	defaultSessionCfg = []struct {
+		key        string
+		val        string
+		minVersion utils.TiDBVersion
+	}{
+		{tidbTxnMode, tidbTxnOptimistic, utils.TiDBVersion{3, 0, 0}},
 	}
 )
 
@@ -418,7 +423,6 @@ func (c *TaskConfig) adjust() error {
 	if c.TargetDB == nil {
 		return terror.ErrConfigNeedTargetDB.Generate()
 	}
-	adjustTargetDB(c.TargetDB)
 
 	if len(c.MySQLInstances) == 0 {
 		return terror.ErrConfigMySQLInstsAtLeastOne.Generate()
@@ -716,16 +720,16 @@ func checkDuplicateString(ruleNames []string) []string {
 	return dupeArray
 }
 
-func adjustTargetDB(dbConfig *DBConfig) {
+// AdjustTargetDBSessionCfg adjust session cfg of TiDB
+func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version utils.TiDBVersion) {
 	lowerMap := make(map[string]string, len(dbConfig.Session))
 	for k, v := range dbConfig.Session {
 		lowerMap[strings.ToLower(k)] = v
 	}
-
 	// all cfg in defaultSessionCfg should be lower case
-	for k, v := range defaultSessionCfg {
-		if _, ok := lowerMap[k]; !ok {
-			lowerMap[k] = v
+	for _, cfg := range defaultSessionCfg {
+		if _, ok := lowerMap[cfg.key]; !ok && version.Ge(cfg.minVersion) {
+			lowerMap[cfg.key] = cfg.val
 		}
 	}
 	dbConfig.Session = lowerMap
