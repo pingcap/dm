@@ -2082,12 +2082,13 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	return nil
 }
 
+// input `sql` should be a single DDL, which came from parserpkg.SplitDDL
 func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.Table, stmt ast.StmtNode, ec *eventContext) error {
 	srcTable := tableNames[0][0]
 
 	// Make sure the tables are all loaded into the schema tracker.
 	var shouldExecDDLOnSchemaTracker, shouldSchemaExist, shouldTableExist bool
-	switch stmt.(type) {
+	switch node := stmt.(type) {
 	case *ast.CreateDatabaseStmt:
 		shouldExecDDLOnSchemaTracker = true
 	case *ast.AlterDatabaseStmt:
@@ -2108,9 +2109,20 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		if err := s.checkpoint.DeleteTablePoint(ec.tctx, srcTable.Schema, srcTable.Name); err != nil {
 			return err
 		}
-	case *ast.RenameTableStmt, *ast.CreateIndexStmt, *ast.DropIndexStmt, *ast.RepairTableStmt, *ast.AlterTableStmt:
-		// TODO: RENAME TABLE / ALTER TABLE RENAME should require special treatment.
+	case *ast.RenameTableStmt, *ast.CreateIndexStmt, *ast.DropIndexStmt, *ast.RepairTableStmt:
+		// TODO: RENAME TABLE should require special treatment.
 		shouldExecDDLOnSchemaTracker = true
+		shouldSchemaExist = true
+		shouldTableExist = true
+	case *ast.AlterTableStmt:
+		// TODO: ALTER TABLE RENAME should require special treatment.
+		// for DDL that adds FK, since TiDB doesn't fully support it yet, and the referenced table may not be stored in
+		// tracker, we simply ignore execution of this DDL.
+		if len(node.Specs) == 1 && node.Specs[0].Constraint != nil && node.Specs[0].Constraint.Tp == ast.ConstraintForeignKey {
+			shouldExecDDLOnSchemaTracker = false
+		} else {
+			shouldExecDDLOnSchemaTracker = true
+		}
 		shouldSchemaExist = true
 		shouldTableExist = true
 	case *ast.LockTablesStmt, *ast.UnlockTablesStmt, *ast.CleanupTableLockStmt, *ast.TruncateTableStmt:
