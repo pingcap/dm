@@ -579,8 +579,6 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	stCfgs[0].EnableANSIQuotes = stCfg1.EnableANSIQuotes
 	stCfgs[1].EnableANSIQuotes = stCfg2.EnableANSIQuotes
 	c.Assert(stCfgs[0].String(), Equals, stCfg1.String())
-	// subtask session cfg also changed because we ref DBConfig when merge from subtask config
-	stCfg2.To.Session[tidbTxnMode] = tidbTxnOptimistic
 	c.Assert(stCfgs[1].String(), Equals, stCfg2.String())
 }
 
@@ -649,22 +647,4 @@ func (t *testConfig) TestMySQLInstance(c *C) {
 
 	c.Assert(m.VerifyAndAdjust(), IsNil)
 
-}
-
-func (t *testConfig) TestAdjustSessionCfg(c *C) {
-	sessionCfg := map[string]string{tidbTxnMode: tidbTxnOptimistic}
-	dbCfg := &DBConfig{}
-	adjustTargetDB(dbCfg)
-	c.Assert(dbCfg.Session, DeepEquals, sessionCfg)
-
-	sessionCfg["sql_mode"] = "ANSI_QUOTES"
-	dbCfg.Session["SQL_MODE"] = "ANSI_QUOTES"
-	adjustTargetDB(dbCfg)
-	c.Assert(dbCfg.Session, DeepEquals, sessionCfg)
-
-	tidbTxnPessimistic := "pessimistic"
-	sessionCfg[tidbTxnMode] = tidbTxnPessimistic
-	dbCfg.Session[tidbTxnMode] = tidbTxnPessimistic
-	adjustTargetDB(dbCfg)
-	c.Assert(dbCfg.Session, DeepEquals, sessionCfg)
 }

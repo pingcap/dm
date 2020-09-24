@@ -356,6 +356,12 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
+	mock := t.initMockDB(c)
+	defer func() {
+		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+	}()
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	resp, err := server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -373,6 +379,8 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	// simulate invalid password returned from scheduler, but config was supported plaintext mysql password, so cfg.SubTaskConfigs will success
 	ctx, cancel = context.WithCancel(context.Background())
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "invalid-encrypt-password", t.workerClients)
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -406,6 +414,12 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	}
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
 		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, req))
+	mock := t.initMockDB(c)
+	defer func() {
+		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+	}()
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	resp, err = server.StartTask(context.Background(), req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -420,6 +434,8 @@ func (t *testMaster) TestStartTask(c *check.C) {
 
 	// check start-task with an invalid source
 	invalidSource := "invalid-source"
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
 		Sources: []string{invalidSource},
@@ -438,6 +454,8 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	defer func() {
 		checker.CheckSyncConfigFunc = bakCheckSyncConfigFunc
 	}()
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
 		Sources: sources,
@@ -455,6 +473,13 @@ type mockDBProvider struct {
 // Apply will build BaseDB with DBConfig
 func (d *mockDBProvider) Apply(config config.DBConfig) (*conn.BaseDB, error) {
 	return conn.NewBaseDB(d.db, func() {}), nil
+}
+
+func (t *testMaster) initMockDB(c *check.C) sqlmock.Sqlmock {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, check.IsNil)
+	conn.DefaultDBProvider = &mockDBProvider{db: db}
+	return mock
 }
 
 func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
@@ -509,6 +534,8 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	defer func() {
 		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
 	}()
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	mock.ExpectBegin()
 	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -523,6 +550,12 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		defer wg.Done()
 		time.Sleep(10 * time.Microsecond)
 		// start another same task at the same time, should get err
+		mock := t.initMockDB(c)
+		defer func() {
+			conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+		}()
+		mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+			AddRow("version", "5.7.25-TiDB-v4.0.2"))
 		resp1, err1 := server.StartTask(context.Background(), req)
 		c.Assert(err1, check.IsNil)
 		c.Assert(resp1.Result, check.IsFalse)
@@ -596,6 +629,8 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	db, mock, err = sqlmock.New()
 	c.Assert(err, check.IsNil)
 	conn.DefaultDBProvider = &mockDBProvider{db: db}
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "10.0.0-MariaDB"))
 	mock.ExpectBegin()
 	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -610,6 +645,12 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		defer wg.Done()
 		time.Sleep(10 * time.Microsecond)
 		// start another same task at the same time, should get err
+		mock := t.initMockDB(c)
+		defer func() {
+			conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+		}()
+		mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+			AddRow("version", "5.7.25-TiDB-v4.0.2"))
 		resp1, err1 := server.StartTask(context.Background(), req)
 		c.Assert(err1, check.IsNil)
 		c.Assert(resp1.Result, check.IsFalse)
@@ -692,6 +733,12 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	sourceResps := []*pb.CommonWorkerResponse{{Result: true, Source: sources[0]}, {Result: true, Source: sources[1]}}
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
 		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, startReq, pauseReq, resumeReq, stopReq1, stopReq2))
+	mock := t.initMockDB(c)
+	defer func() {
+		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+	}()
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	stResp, err := server.StartTask(context.Background(), startReq)
 	c.Assert(err, check.IsNil)
 	c.Assert(stResp.Result, check.IsTrue)
@@ -1328,6 +1375,12 @@ func (t *testMaster) TestGetTaskCfg(c *check.C) {
 		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, req))
 
 	// start task
+	mock := t.initMockDB(c)
+	defer func() {
+		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+	}()
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	resp, err := server.StartTask(context.Background(), req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
