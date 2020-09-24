@@ -29,7 +29,7 @@
   - What:
     - check data without stopping writing in upstream
     - no extra writes in upstream
-  - Why: found potential consistency earlier
+  - Why: found potential inconsistency earlier
 - [ ] support DM v2.0 in TiDB Operator [tidb-operator#2868](https://github.com/pingcap/tidb-operator/issues/2868)
   - What: use TiDB-Operator to manage DM 2.0
 
