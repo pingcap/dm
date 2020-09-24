@@ -28,7 +28,7 @@
 - [ ] provides a complete online replication checksum feature [#1097](https://github.com/pingcap/dm/issues/1097)
   - What:
     - check data without stopping writing in upstream
-    - no extra writes  in upstream
+    - no extra writes in upstream
   - Why: found potential consistency earlier
 - [ ] support DM v2.0 in TiDB Operator [tidb-operator#2868](https://github.com/pingcap/tidb-operator/issues/2868)
   - What: use TiDB-Operator to manage DM 2.0
