@@ -411,23 +411,6 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	return resp, nil
 }
 
-// SwitchRelayMaster implements WorkerServer.SwitchRelayMaster
-func (s *Server) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) (*pb.CommonWorkerResponse, error) {
-	log.L().Info("", zap.String("request", "SwitchRelayMaster"), zap.Stringer("payload", req))
-	w := s.getWorker(true)
-	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
-	}
-
-	err := w.SwitchRelayMaster(ctx, req)
-	if err != nil {
-		log.L().Error("fail to switch relay master", zap.String("request", "SwitchRelayMaster"), zap.Stringer("payload", req), zap.Error(err))
-	}
-	// TODO: check whether this interface need to store message in ETCD
-	return makeCommonWorkerResponse(err), nil
-}
-
 // OperateRelay implements WorkerServer.OperateRelay
 func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) (*pb.OperateRelayResponse, error) {
 	log.L().Info("", zap.String("request", "OperateRelay"), zap.Stringer("payload", req))

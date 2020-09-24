@@ -6,11 +6,7 @@ package pb;
 service Worker {
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
 
-    // SwitchRelayMaster request a dm-worker's relay unit switching to another master server
-    rpc SwitchRelayMaster (SwitchRelayMasterRequest) returns (CommonWorkerResponse) {}
-
     // OperateRelay operates relay unit
-    // differ from SwitchRelayMaster which may add more args in the future
     rpc OperateRelay (OperateRelayRequest) returns (OperateRelayResponse) {}
 
     // PurgeRelay purges relay log files for this dm-worker
@@ -306,10 +302,6 @@ message ProcessError {
     string Message = 5;
     string RawCause = 6;
     string Workaround = 7;
-}
-
-// SwitchRelayMasterRequest represents a request for switching a dm-worker's relay unit to another master server
-message SwitchRelayMasterRequest {
 }
 
 // RelayOp differs from TaskOp

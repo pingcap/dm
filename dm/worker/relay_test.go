@@ -70,11 +70,6 @@ func (d *DummyRelay) InjectProcessResult(result pb.ProcessResult) {
 	d.processResult = result
 }
 
-// SwitchMaster implements Process interface
-func (d *DummyRelay) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
-	return nil
-}
-
 // Migrate implements Process interface
 func (d *DummyRelay) Migrate(ctx context.Context, binlogName string, binlogPos uint32) error {
 	return nil
@@ -178,9 +173,6 @@ func (t *testRelay) testStart(c *C, holder *realRelayHolder) {
 	c.Assert(holder.Result(), IsNil)
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 
-	// test switch
-	c.Assert(holder.SwitchMaster(context.Background(), nil), ErrorMatches, ".*current stage is Running.*")
-
 	// test status
 	status := holder.Status()
 	c.Assert(status.Stage, Equals, pb.Stage_Running)
@@ -243,9 +235,6 @@ func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 	// test status
 	status := holder.Status()
 	c.Assert(status.Stage, Equals, pb.Stage_Paused)
-
-	// test switch
-	c.Assert(holder.SwitchMaster(context.Background(), nil), IsNil)
 
 	// test update
 	t.testUpdate(c, holder)

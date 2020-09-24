@@ -55,11 +55,10 @@ type Request struct {
 	QueryStatus       *pb.QueryStatusRequest
 	QueryWorkerConfig *pb.QueryWorkerConfigRequest
 
-	SwitchRelayMaster *pb.SwitchRelayMasterRequest
-	OperateRelay      *pb.OperateRelayRequest
-	PurgeRelay        *pb.PurgeRelayRequest
-	UpdateRelay       *pb.UpdateRelayRequest
-	MigrateRelay      *pb.MigrateRelayRequest
+	OperateRelay *pb.OperateRelayRequest
+	PurgeRelay   *pb.PurgeRelayRequest
+	UpdateRelay  *pb.UpdateRelayRequest
+	MigrateRelay *pb.MigrateRelayRequest
 
 	OperateSchema *pb.OperateWorkerSchemaRequest
 
@@ -74,11 +73,10 @@ type Response struct {
 	QueryStatus       *pb.QueryStatusResponse
 	QueryWorkerConfig *pb.QueryWorkerConfigResponse
 
-	SwitchRelayMaster *pb.CommonWorkerResponse
-	OperateRelay      *pb.OperateRelayResponse
-	PurgeRelay        *pb.CommonWorkerResponse
-	UpdateRelay       *pb.CommonWorkerResponse
-	MigrateRelay      *pb.CommonWorkerResponse
+	OperateRelay *pb.OperateRelayResponse
+	PurgeRelay   *pb.CommonWorkerResponse
+	UpdateRelay  *pb.CommonWorkerResponse
+	MigrateRelay *pb.CommonWorkerResponse
 
 	OperateSchema *pb.CommonWorkerResponse
 
