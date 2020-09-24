@@ -546,11 +546,11 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		defer wg.Done()
 		time.Sleep(10 * time.Microsecond)
 		// start another same task at the same time, should get err
-		mock := t.initMockDB(c)
+		mock2 := t.initMockDB(c)
 		defer func() {
 			conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
 		}()
-		mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		mock2.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("version", "5.7.25-TiDB-v4.0.2"))
 		resp1, err1 := server.StartTask(context.Background(), req)
 		c.Assert(err1, check.IsNil)
@@ -641,11 +641,11 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		defer wg.Done()
 		time.Sleep(10 * time.Microsecond)
 		// start another same task at the same time, should get err
-		mock := t.initMockDB(c)
+		mock2 := t.initMockDB(c)
 		defer func() {
 			conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
 		}()
-		mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		mock2.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("version", "5.7.25-TiDB-v4.0.2"))
 		resp1, err1 := server.StartTask(context.Background(), req)
 		c.Assert(err1, check.IsNil)
