@@ -12,7 +12,7 @@
   - Why: a lot of usability issues that have been not resolved yet, we need to stop user churn
 - [ ] better configuration file [#775](https://github.com/pingcap/dm/issues/775)
   - What: avoid misuse for configuration files
-  - Why: Many users meet problem when write configuration file but don’t know how to deal with it
+  - Why: many users meet problem when write configuration file but don’t know how to deal with it
 
 ## New features
 
@@ -36,8 +36,8 @@
 ## Out of Scope currently
 
 - Only supports synchronization of MySQL protocol Binlog to TiDB cluster and not all MySQL protocol databases
-  - Why: some MySQL protocol databases are not binlog protocol compatible, such as Alibaba’s DRDS
+  - Why: some MySQL protocol databases are not binlog protocol compatible
 - Provides a fully automated shard DDL merge and synchronization solution
   - Why: many scenes are difficult to automate
 - Replicate multiple upstream MySQL sources with one dm-worker
-  - Why: Large amount of development work and many uncertainties
+  - Why:lLarge amount of development work and many uncertainties
