@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -30,13 +29,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
-)
-
-// move to tidb-tools later
-
-const (
-	maxRetryCount = 3
-	retryTimeout  = 3 * time.Second
 )
 
 // TrimCtrlChars returns a slice of the string s with all leading
@@ -50,6 +42,15 @@ func TrimCtrlChars(s string) string {
 	}
 
 	return strings.TrimFunc(s, f)
+}
+
+// TrimQuoteMark tries to trim leading and tailing quote(") mark if exists
+// only trim if leading and tailing quote matched as a pair
+func TrimQuoteMark(s string) string {
+	if len(s) > 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		return s[1 : len(s)-1]
+	}
+	return s
 }
 
 // FetchAllDoTables returns all need to do tables after filtered (fetches from upstream MySQL)
