@@ -26,7 +26,6 @@ service Master {
             get: "/apis/v1alpha1/status/{name}"
         };
     }
-    rpc QueryError (QueryErrorListRequest) returns (QueryErrorListResponse) {}
 
     // show un-resolved DDL locks
     rpc ShowDDLLocks (ShowDDLLocksRequest) returns (ShowDDLLocksResponse) {}
@@ -188,17 +187,6 @@ message QueryStatusListResponse {
     bool result = 1;
     string msg = 2;
     repeated QueryStatusResponse sources = 3;
-}
-
-message QueryErrorListRequest {
-    string name = 1;             // task's name, empty for all tasks
-    repeated string sources = 2; // sources need to query, empty for all sources
-}
-
-message QueryErrorListResponse {
-    bool result = 1;
-    string msg = 2;
-    repeated QueryErrorResponse sources = 3;
 }
 
 // ShowDDLLocksRequest used to query DDL locks which are un-resolved
