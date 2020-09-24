@@ -35,7 +35,7 @@
 
 ## Out of Scope currently
 
-- Only supports synchronization of MySQL protocol Binlog to TiDB cluster and not all MySQL protocol databases
+- Only supports synchronization of MySQL protocol Binlog to TiDB cluster but not all MySQL protocol databases
   - Why: some MySQL protocol databases are not binlog protocol compatible
 - Provides a fully automated shard DDL merge and synchronization solution
   - Why: many scenes are difficult to automate
