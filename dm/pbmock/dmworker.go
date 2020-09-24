@@ -175,26 +175,6 @@ func (mr *MockWorkerClientMockRecorder) QueryWorkerConfig(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWorkerConfig", reflect.TypeOf((*MockWorkerClient)(nil).QueryWorkerConfig), varargs...)
 }
 
-// UpdateRelayConfig mocks base method
-func (m *MockWorkerClient) UpdateRelayConfig(arg0 context.Context, arg1 *pb.UpdateRelayRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "UpdateRelayConfig", varargs...)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateRelayConfig indicates an expected call of UpdateRelayConfig
-func (mr *MockWorkerClientMockRecorder) UpdateRelayConfig(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateRelayConfig", reflect.TypeOf((*MockWorkerClient)(nil).UpdateRelayConfig), varargs...)
-}
-
 // MockWorkerServer is a mock of WorkerServer interface
 type MockWorkerServer struct {
 	ctrl     *gomock.Controller
@@ -321,19 +301,4 @@ func (m *MockWorkerServer) QueryWorkerConfig(arg0 context.Context, arg1 *pb.Quer
 func (mr *MockWorkerServerMockRecorder) QueryWorkerConfig(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWorkerConfig", reflect.TypeOf((*MockWorkerServer)(nil).QueryWorkerConfig), arg0, arg1)
-}
-
-// UpdateRelayConfig mocks base method
-func (m *MockWorkerServer) UpdateRelayConfig(arg0 context.Context, arg1 *pb.UpdateRelayRequest) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateRelayConfig", arg0, arg1)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateRelayConfig indicates an expected call of UpdateRelayConfig
-func (mr *MockWorkerServerMockRecorder) UpdateRelayConfig(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateRelayConfig", reflect.TypeOf((*MockWorkerServer)(nil).UpdateRelayConfig), arg0, arg1)
 }

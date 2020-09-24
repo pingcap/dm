@@ -1016,36 +1016,6 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 	}, nil
 }
 
-// UpdateWorkerRelayConfig updates config for relay and (dm-worker)
-func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
-	var (
-		resp2 *pb.CommonWorkerResponse
-		err2  error
-	)
-	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
-	if shouldRet {
-		return resp2, err2
-	}
-
-	source := req.Source
-	content := req.Config
-	worker := s.scheduler.GetWorkerBySource(source)
-	if worker == nil {
-		return errorCommonWorkerResponse(fmt.Sprintf("source %s relevant source-client not found", source), source, ""), nil
-	}
-
-	log.L().Info("update relay config", zap.String("source", source), zap.String("request", "UpdateWorkerRelayConfig"))
-	request := &workerrpc.Request{
-		Type:        workerrpc.CmdUpdateRelay,
-		UpdateRelay: &pb.UpdateRelayRequest{Content: content},
-	}
-	resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
-	if err != nil {
-		return errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name), nil
-	}
-	return resp.UpdateRelay, nil
-}
-
 // TODO: refine the call stack of this API, query worker configs that we needed only
 func (s *Server) getSourceConfigs(sources []*config.MySQLInstance) (map[string]config.DBConfig, error) {
 	cfgs := make(map[string]config.DBConfig)
