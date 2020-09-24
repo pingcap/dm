@@ -185,7 +185,7 @@ func (t *testRelay) testStart(c *C, holder *realRelayHolder) {
 	c.Assert(holder.Stage(), Equals, pb.Stage_Paused)
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 
-	err := holder.Operate(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_ResumeRelay})
+	err := holder.Operate(context.Background(), pb.RelayOp_ResumeRelay)
 	c.Assert(err, IsNil)
 	c.Assert(waitRelayStage(holder, pb.Stage_Running, 10), IsTrue)
 	c.Assert(holder.Result(), IsNil)
@@ -224,12 +224,12 @@ func (t *testRelay) testClose(c *C, holder *realRelayHolder) {
 }
 
 func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
-	err := holder.Operate(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
+	err := holder.Operate(context.Background(), pb.RelayOp_PauseRelay)
 	c.Assert(err, IsNil)
 	c.Assert(holder.Stage(), Equals, pb.Stage_Paused)
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 
-	err = holder.pauseRelay(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
+	err = holder.pauseRelay(context.Background(), pb.RelayOp_PauseRelay)
 	c.Assert(err, ErrorMatches, ".*current stage is Paused.*")
 
 	// test status
@@ -239,13 +239,13 @@ func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 	// test update
 	t.testUpdate(c, holder)
 
-	err = holder.Operate(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_ResumeRelay})
+	err = holder.Operate(context.Background(), pb.RelayOp_ResumeRelay)
 	c.Assert(err, IsNil)
 	c.Assert(waitRelayStage(holder, pb.Stage_Running, 10), IsTrue)
 	c.Assert(holder.Result(), IsNil)
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 
-	err = holder.Operate(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_ResumeRelay})
+	err = holder.Operate(context.Background(), pb.RelayOp_ResumeRelay)
 	c.Assert(err, ErrorMatches, ".*current stage is Running.*")
 
 	// test status
@@ -254,7 +254,7 @@ func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 	c.Assert(status.Result, IsNil)
 
 	// invalid operation
-	err = holder.Operate(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_InvalidRelayOp})
+	err = holder.Operate(context.Background(), pb.RelayOp_InvalidRelayOp)
 	c.Assert(err, ErrorMatches, ".*not supported.*")
 }
 
@@ -283,12 +283,12 @@ func (t *testRelay) testUpdate(c *C, holder *realRelayHolder) {
 }
 
 func (t *testRelay) testStop(c *C, holder *realRelayHolder) {
-	err := holder.Operate(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_StopRelay})
+	err := holder.Operate(context.Background(), pb.RelayOp_StopRelay)
 	c.Assert(err, IsNil)
 	c.Assert(holder.Stage(), Equals, pb.Stage_Stopped)
 	c.Assert(holder.closed.Get(), Equals, closedTrue)
 
-	err = holder.Operate(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_StopRelay})
+	err = holder.Operate(context.Background(), pb.RelayOp_StopRelay)
 	c.Assert(err, ErrorMatches, ".*current stage is already stopped.*")
 }
 

@@ -6,9 +6,6 @@ package pb;
 service Worker {
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
 
-    // OperateRelay operates relay unit
-    rpc OperateRelay (OperateRelayRequest) returns (OperateRelayResponse) {}
-
     // PurgeRelay purges relay log files for this dm-worker
     rpc PurgeRelay (PurgeRelayRequest) returns (CommonWorkerResponse) {}
 
@@ -310,18 +307,6 @@ enum RelayOp {
     StopRelay = 1;
     PauseRelay = 2;
     ResumeRelay = 3;
-}
-
-// OperateRelayRequest represents a request for operate relay unit
-message OperateRelayRequest {
-    RelayOp op = 1;
-}
-
-message OperateRelayResponse {
-    RelayOp op = 1;
-    bool result = 2;
-    string source = 3; // source ID, set by dm-master
-    string msg = 4;
 }
 
 // PurgeRelayRequest represents a request to purge relay log files for this dm-worker

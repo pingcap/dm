@@ -566,17 +566,17 @@ func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) (string,
 	case stage.IsDeleted:
 		op = pb.RelayOp_StopRelay
 	}
-	return op.String(), w.OperateRelay(ctx, &pb.OperateRelayRequest{Op: op})
+	return op.String(), w.operateRelay(ctx, op)
 }
 
 // OperateRelay operates relay unit
-func (w *Worker) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) error {
+func (w *Worker) operateRelay(ctx context.Context, op pb.RelayOp) error {
 	if w.closed.Get() == closedTrue {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
 	if w.relayHolder != nil {
-		return w.relayHolder.Operate(ctx, req)
+		return w.relayHolder.Operate(ctx, op)
 	}
 
 	w.l.Warn("enable-relay is false, ignore operate relay")
@@ -740,7 +740,7 @@ func (w *Worker) MigrateRelay(ctx context.Context, binlogName string, binlogPos 
 
 	stage := w.relayHolder.Stage()
 	if stage == pb.Stage_Running {
-		err := w.relayHolder.Operate(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
+		err := w.relayHolder.Operate(ctx, pb.RelayOp_PauseRelay)
 		if err != nil {
 			return err
 		}

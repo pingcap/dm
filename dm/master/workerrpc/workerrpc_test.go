@@ -66,10 +66,6 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 			QueryWorkerConfig: &pb.QueryWorkerConfigRequest{},
 		},
 		{
-			Type:         CmdOperateRelay,
-			OperateRelay: &pb.OperateRelayRequest{Op: pb.RelayOp_ResumeRelay},
-		},
-		{
 			Type:       CmdPurgeRelay,
 			PurgeRelay: &pb.PurgeRelayRequest{Inactive: true},
 		},
@@ -97,13 +93,12 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 
 	workerCli.EXPECT().QueryStatus(gomock.Any(), reqs[0].QueryStatus)
 	workerCli.EXPECT().QueryWorkerConfig(gomock.Any(), reqs[1].QueryWorkerConfig)
-	workerCli.EXPECT().OperateRelay(gomock.Any(), reqs[2].OperateRelay)
-	workerCli.EXPECT().PurgeRelay(gomock.Any(), reqs[3].PurgeRelay)
-	workerCli.EXPECT().UpdateRelayConfig(gomock.Any(), reqs[4].UpdateRelay)
-	workerCli.EXPECT().MigrateRelay(gomock.Any(), reqs[5].MigrateRelay)
-	workerCli.EXPECT().OperateSchema(gomock.Any(), reqs[6].OperateSchema)
-	workerCli.EXPECT().OperateV1Meta(gomock.Any(), reqs[7].OperateV1Meta)
-	workerCli.EXPECT().HandleError(gomock.Any(), reqs[8].HandleError)
+	workerCli.EXPECT().PurgeRelay(gomock.Any(), reqs[2].PurgeRelay)
+	workerCli.EXPECT().UpdateRelayConfig(gomock.Any(), reqs[3].UpdateRelay)
+	workerCli.EXPECT().MigrateRelay(gomock.Any(), reqs[4].MigrateRelay)
+	workerCli.EXPECT().OperateSchema(gomock.Any(), reqs[5].OperateSchema)
+	workerCli.EXPECT().OperateV1Meta(gomock.Any(), reqs[6].OperateV1Meta)
+	workerCli.EXPECT().HandleError(gomock.Any(), reqs[7].HandleError)
 
 	// others cmds are not supported.
 	// NOTE: update the end cmd in the below `for` loop when adding new cmds.
