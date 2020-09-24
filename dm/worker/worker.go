@@ -569,20 +569,6 @@ func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) (string,
 	return op.String(), w.OperateRelay(ctx, &pb.OperateRelayRequest{Op: op})
 }
 
-// SwitchRelayMaster switches relay unit's master server
-func (w *Worker) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
-	if w.closed.Get() == closedTrue {
-		return terror.ErrWorkerAlreadyClosed.Generate()
-	}
-
-	if w.relayHolder != nil {
-		return w.relayHolder.SwitchMaster(ctx, req)
-	}
-
-	w.l.Warn("enable-relay is false, ignore switch relay master")
-	return nil
-}
-
 // OperateRelay operates relay unit
 func (w *Worker) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) error {
 	if w.closed.Get() == closedTrue {

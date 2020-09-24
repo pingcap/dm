@@ -64,7 +64,6 @@ func NewRootCmd() *cobra.Command {
 		master.NewQueryStatusCmd(),
 		master.NewShowDDLLocksCmd(),
 		master.NewUnlockDDLLockCmd(),
-		//	master.NewSwitchRelayMasterCmd(),
 		//	master.NewPauseRelayCmd(),
 		//	master.NewResumeRelayCmd(),
 		//	master.NewUpdateMasterConfigCmd(),

@@ -46,8 +46,6 @@ type RelayHolder interface {
 	Stage() pb.Stage
 	// Error returns relay unit's status
 	Error() *pb.RelayError
-	// SwitchMaster requests relay unit to switch master server
-	SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error
 	// Operate operates relay unit
 	Operate(ctx context.Context, req *pb.OperateRelayRequest) error
 	// Result returns the result of the relay
@@ -203,16 +201,6 @@ func (h *realRelayHolder) Error() *pb.RelayError {
 
 	s := h.relay.Error().(*pb.RelayError)
 	return s
-}
-
-// SwitchMaster requests relay unit to switch master server
-func (h *realRelayHolder) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
-	h.RLock()
-	defer h.RUnlock()
-	if h.stage != pb.Stage_Paused {
-		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Paused, "switch master")
-	}
-	return h.relay.SwitchMaster(ctx, req)
 }
 
 // Operate operates relay unit
@@ -450,11 +438,6 @@ func (d *dummyRelayHolder) Status() *pb.RelayStatus {
 
 // Error implements interface of RelayHolder
 func (d *dummyRelayHolder) Error() *pb.RelayError {
-	return nil
-}
-
-// SwitchMaster implements interface of RelayHolder
-func (d *dummyRelayHolder) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
 	return nil
 }
 

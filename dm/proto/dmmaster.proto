@@ -36,9 +36,6 @@ service Master {
 
     rpc UpdateWorkerRelayConfig(UpdateWorkerRelayConfigRequest) returns (CommonWorkerResponse) {}
 
-    // SwitchWorkerRelayMaster requests some dm-workers to switch relay unit's master server
-    rpc SwitchWorkerRelayMaster(SwitchWorkerRelayMasterRequest) returns (SwitchWorkerRelayMasterResponse) {}
-
     // OperateWorkerRelayTask requests some dm-workers to operate relay unit
     rpc OperateWorkerRelayTask (OperateWorkerRelayRequest) returns (OperateWorkerRelayResponse) {}
 
@@ -237,18 +234,6 @@ message UnlockDDLLockRequest {
 message UnlockDDLLockResponse {
     bool result = 1;
     string msg = 2;
-}
-
-// SwitchWorkerRelayMasterRequest represents a request for some dm-workers to switch relay unit's master server
-// workers: relay unit in these dm-workers need to switch master server
-message SwitchWorkerRelayMasterRequest {
-    repeated string sources = 1;
-}
-
-message SwitchWorkerRelayMasterResponse {
-    bool result = 1;
-    string msg = 2;
-    repeated CommonWorkerResponse sources = 3;
 }
 
 // OperateWorkerRelayRequest represents a request for some dm-workers to operate relay unit
