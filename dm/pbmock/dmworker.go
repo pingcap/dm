@@ -115,26 +115,6 @@ func (mr *MockWorkerClientMockRecorder) OperateSchema(arg0, arg1 interface{}, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateSchema", reflect.TypeOf((*MockWorkerClient)(nil).OperateSchema), varargs...)
 }
 
-// OperateSubTask mocks base method
-func (m *MockWorkerClient) OperateSubTask(arg0 context.Context, arg1 *pb.OperateSubTaskRequest, arg2 ...grpc.CallOption) (*pb.OperateSubTaskResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "OperateSubTask", varargs...)
-	ret0, _ := ret[0].(*pb.OperateSubTaskResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// OperateSubTask indicates an expected call of OperateSubTask
-func (mr *MockWorkerClientMockRecorder) OperateSubTask(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateSubTask", reflect.TypeOf((*MockWorkerClient)(nil).OperateSubTask), varargs...)
-}
-
 // OperateV1Meta mocks base method
 func (m *MockWorkerClient) OperateV1Meta(arg0 context.Context, arg1 *pb.OperateV1MetaRequest, arg2 ...grpc.CallOption) (*pb.OperateV1MetaResponse, error) {
 	m.ctrl.T.Helper()
@@ -356,21 +336,6 @@ func (m *MockWorkerServer) OperateSchema(arg0 context.Context, arg1 *pb.OperateW
 func (mr *MockWorkerServerMockRecorder) OperateSchema(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateSchema", reflect.TypeOf((*MockWorkerServer)(nil).OperateSchema), arg0, arg1)
-}
-
-// OperateSubTask mocks base method
-func (m *MockWorkerServer) OperateSubTask(arg0 context.Context, arg1 *pb.OperateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OperateSubTask", arg0, arg1)
-	ret0, _ := ret[0].(*pb.OperateSubTaskResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// OperateSubTask indicates an expected call of OperateSubTask
-func (mr *MockWorkerServerMockRecorder) OperateSubTask(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateSubTask", reflect.TypeOf((*MockWorkerServer)(nil).OperateSubTask), arg0, arg1)
 }
 
 // OperateV1Meta mocks base method

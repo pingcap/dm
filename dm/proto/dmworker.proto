@@ -4,7 +4,6 @@ package pb;
 
 
 service Worker {
-    rpc OperateSubTask (OperateSubTaskRequest) returns (OperateSubTaskResponse) {}
     rpc UpdateSubTask (UpdateSubTaskRequest) returns (CommonWorkerResponse) {}
 
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
@@ -52,18 +51,6 @@ message UpdateRelayRequest {
 message MigrateRelayRequest {
     string BinlogName = 1;
     uint32 BinlogPos = 2;
-}
-
-message OperateSubTaskRequest {
-    TaskOp op = 1;
-    string name = 2; // sub task's name
-}
-
-message OperateSubTaskResponse {
-    TaskOp op = 1;
-    bool result = 2;
-    string source = 3; // source ID, set by dm-master
-    string msg = 4;
 }
 
 message UpdateSubTaskRequest {

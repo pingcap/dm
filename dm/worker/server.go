@@ -399,40 +399,6 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 	return s.startWorker(&sourceCfg)
 }
 
-// OperateSubTask implements WorkerServer.OperateSubTask
-func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
-	resp := &pb.OperateSubTaskResponse{
-		Result: true,
-		Op:     req.Op,
-		Msg:    "",
-	}
-	w := s.getWorker(true)
-	if w == nil {
-		log.L().Error("fail to call OperateSubTask, because mysql worker has not been started")
-		resp.Result = false
-		resp.Msg = terror.ErrWorkerNoStart.Error()
-		return resp, nil
-	}
-
-	log.L().Info("", zap.String("request", "OperateSubTask"), zap.Stringer("payload", req))
-	err := w.OperateSubTask(req.Name, req.Op)
-	if err != nil {
-		err = terror.Annotatef(err, "operate(%s) sub task %s", req.Op.String(), req.Name)
-		log.L().Error("fail to operate task", zap.String("request", "OperateSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		resp.Result = false
-		resp.Msg = err.Error()
-	} else {
-		// TODO: change task state.
-		// clean subtask config when we stop the subtask
-		if req.Op == pb.TaskOp_Stop {
-			op1 := clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Encode(w.cfg.SourceID, req.Name))
-			resp.Msg = s.retryWriteEctd(op1)
-			resp.Result = len(resp.Msg) == 0
-		}
-	}
-	return resp, nil
-}
-
 // UpdateSubTask implements WorkerServer.UpdateSubTask
 func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req))
