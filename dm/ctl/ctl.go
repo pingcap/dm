@@ -67,7 +67,6 @@ func NewRootCmd() *cobra.Command {
 		//	master.NewPauseRelayCmd(),
 		//	master.NewResumeRelayCmd(),
 		//	master.NewUpdateMasterConfigCmd(),
-		//	master.NewUpdateRelayCmd(),
 		//	master.NewPurgeRelayCmd(),
 		//	master.NewMigrateRelayCmd(),
 		master.NewOperateSourceCmd(),

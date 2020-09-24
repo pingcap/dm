@@ -70,10 +70,6 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 			PurgeRelay: &pb.PurgeRelayRequest{Inactive: true},
 		},
 		{
-			Type:        CmdUpdateRelay,
-			UpdateRelay: &pb.UpdateRelayRequest{Content: "invalid relay content"},
-		},
-		{
 			Type:         CmdMigrateRelay,
 			MigrateRelay: &pb.MigrateRelayRequest{BinlogName: "mysql-bin.000123"},
 		},
@@ -94,11 +90,10 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 	workerCli.EXPECT().QueryStatus(gomock.Any(), reqs[0].QueryStatus)
 	workerCli.EXPECT().QueryWorkerConfig(gomock.Any(), reqs[1].QueryWorkerConfig)
 	workerCli.EXPECT().PurgeRelay(gomock.Any(), reqs[2].PurgeRelay)
-	workerCli.EXPECT().UpdateRelayConfig(gomock.Any(), reqs[3].UpdateRelay)
-	workerCli.EXPECT().MigrateRelay(gomock.Any(), reqs[4].MigrateRelay)
-	workerCli.EXPECT().OperateSchema(gomock.Any(), reqs[5].OperateSchema)
-	workerCli.EXPECT().OperateV1Meta(gomock.Any(), reqs[6].OperateV1Meta)
-	workerCli.EXPECT().HandleError(gomock.Any(), reqs[7].HandleError)
+	workerCli.EXPECT().MigrateRelay(gomock.Any(), reqs[3].MigrateRelay)
+	workerCli.EXPECT().OperateSchema(gomock.Any(), reqs[4].OperateSchema)
+	workerCli.EXPECT().OperateV1Meta(gomock.Any(), reqs[5].OperateV1Meta)
+	workerCli.EXPECT().HandleError(gomock.Any(), reqs[6].HandleError)
 
 	// others cmds are not supported.
 	// NOTE: update the end cmd in the below `for` loop when adding new cmds.

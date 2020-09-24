@@ -9,8 +9,6 @@ service Worker {
     // PurgeRelay purges relay log files for this dm-worker
     rpc PurgeRelay (PurgeRelayRequest) returns (CommonWorkerResponse) {}
 
-    rpc UpdateRelayConfig (UpdateRelayRequest) returns (CommonWorkerResponse) {}
-
     rpc QueryWorkerConfig (QueryWorkerConfigRequest) returns (QueryWorkerConfigResponse) {}
 
     rpc MigrateRelay(MigrateRelayRequest) returns (CommonWorkerResponse) {}
@@ -33,10 +31,6 @@ enum TaskOp {
     Start = 4;
     Update = 5;
     AutoResume = 6;
-}
-
-message UpdateRelayRequest {
-    string content = 1;
 }
 
 message MigrateRelayRequest {

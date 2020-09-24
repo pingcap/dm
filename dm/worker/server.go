@@ -428,23 +428,6 @@ func (s *Server) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) (*pb
 	return makeCommonWorkerResponse(err), nil
 }
 
-// UpdateRelayConfig updates config for relay and (dm-worker)
-func (s *Server) UpdateRelayConfig(ctx context.Context, req *pb.UpdateRelayRequest) (*pb.CommonWorkerResponse, error) {
-	log.L().Info("", zap.String("request", "UpdateRelayConfig"), zap.Stringer("payload", req))
-	w := s.getWorker(true)
-	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
-	}
-
-	err := w.UpdateRelayConfig(ctx, req.Content)
-	if err != nil {
-		log.L().Error("fail to update relay config", zap.String("request", "UpdateRelayConfig"), zap.Stringer("payload", req), zap.Error(err))
-	}
-	// TODO: check whether this interface need to store message in ETCD
-	return makeCommonWorkerResponse(err), nil
-}
-
 // QueryWorkerConfig return worker config
 // worker config is defined in worker directory now,
 // to avoid circular import, we only return db config

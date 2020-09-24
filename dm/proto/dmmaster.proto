@@ -34,8 +34,6 @@ service Master {
 
     rpc UpdateMasterConfig (UpdateMasterConfigRequest) returns (UpdateMasterConfigResponse) {}
 
-    rpc UpdateWorkerRelayConfig(UpdateWorkerRelayConfigRequest) returns (CommonWorkerResponse) {}
-
     // OperateWorkerRelayTask requests some dm-workers to operate relay unit
     rpc OperateWorkerRelayTask (OperateWorkerRelayRequest) returns (OperateWorkerRelayResponse) {}
 
@@ -115,11 +113,6 @@ message MigrateWorkerRelayRequest {
     string BinlogName = 1;
     uint32 BinlogPos = 2;
     string source = 3;
-}
-
-message UpdateWorkerRelayConfigRequest {
-    string config = 1;
-    string source = 2;
 }
 
 message StartTaskRequest {
