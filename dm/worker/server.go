@@ -539,37 +539,6 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	return resp, nil
 }
 
-// QueryError implements WorkerServer.QueryError
-func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb.QueryErrorResponse, error) {
-	log.L().Info("", zap.String("request", "QueryError"), zap.Stringer("payload", req))
-	sourceStatus := s.getSourceStatus(true)
-	sourceError := pb.SourceError{
-		Source: sourceStatus.Source,
-		Worker: s.cfg.Name,
-	}
-	if sourceStatus.Result != nil && len(sourceStatus.Result.Errors) > 0 {
-		sourceError.SourceError = unit.JoinProcessErrors(sourceStatus.Result.Errors)
-	}
-	resp := &pb.QueryErrorResponse{
-		Result:      true,
-		SourceError: &sourceError,
-	}
-
-	w := s.getWorker(true)
-	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		resp.Result = false
-		resp.Msg = terror.ErrWorkerNoStart.Error()
-		return resp, nil
-	}
-
-	resp.SubTaskError = w.QueryError(req.Name)
-	if w.relayHolder != nil {
-		resp.SourceError.RelayError = w.relayHolder.Error()
-	}
-	return resp, nil
-}
-
 // SwitchRelayMaster implements WorkerServer.SwitchRelayMaster
 func (s *Server) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "SwitchRelayMaster"), zap.Stringer("payload", req))
