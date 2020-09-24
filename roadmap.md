@@ -40,4 +40,4 @@
 - Provides a fully automated shard DDL merge and synchronization solution
   - Why: many scenes are difficult to automate
 - Replicate multiple upstream MySQL sources with one dm-worker
-  - Why:lLarge amount of development work and many uncertainties
+  - Why: Large amount of development work and many uncertainties
