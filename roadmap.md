@@ -21,7 +21,7 @@
   - Why: achieve transaction consistency as the upstream MySQL after stopped/paused the task
 - [ ] stop at the specified position/GTID [#348](https://github.com/pingcap/dm/issues/348)
   - What: stop to replicate when reached the specified binlog position or GTID, like `until_option` in MySQL
-  - Why: no more data replicated without needs to stop writing in the upstream
+  - Why: control over the data we want to replicate more precisely
 - [ ] update source config online [#1076](https://github.com/pingcap/dm/issues/1076)
   - What: update source configs (like upstream connection arguments) online
   - Why: switch from one MySQL instance to another in the replica group easier
