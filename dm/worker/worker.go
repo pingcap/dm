@@ -307,19 +307,6 @@ func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
 	return w.Status(name)
 }
 
-// QueryError query worker's sub tasks' error
-func (w *Worker) QueryError(name string) []*pb.SubTaskError {
-	w.RLock()
-	defer w.RUnlock()
-
-	if w.closed.Get() == closedTrue {
-		w.l.Warn("querying error from a closed worker")
-		return nil
-	}
-
-	return w.Error(name)
-}
-
 func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {
 	subTaskStages, subTaskCfgm, revSubTask, err := ha.GetSubTaskStageConfig(etcdCli, w.cfg.SourceID)
 	if err != nil {

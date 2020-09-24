@@ -1052,15 +1052,6 @@ func (s *testSyncerSuite) TestcheckpointID(c *C) {
 	c.Assert(checkpointID, Equals, "101")
 }
 
-func (s *testSyncerSuite) TestExecErrors(c *C) {
-	syncer := NewSyncer(s.cfg, nil)
-	syncer.appendExecErrors(new(ExecErrorContext))
-	c.Assert(syncer.execErrors.errors, HasLen, 1)
-
-	syncer.resetExecErrors()
-	c.Assert(syncer.execErrors.errors, HasLen, 0)
-}
-
 func (s *testSyncerSuite) TestCasuality(c *C) {
 	var wg sync.WaitGroup
 	s.cfg.WorkerCount = 1
