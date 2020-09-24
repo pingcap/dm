@@ -378,6 +378,22 @@ func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 	return clone, nil
 }
 
+// Clone returns a replica of DBConfig
+func (db *DBConfig) Clone() (*DBConfig, error) {
+	content, err := db.Toml()
+	if err != nil {
+		return nil, err
+	}
+
+	clone := &DBConfig{}
+	_, err = toml.Decode(content, clone)
+	if err != nil {
+		return nil, terror.ErrConfigTomlTransform.Delegate(err, "decode DB config from data")
+	}
+
+	return clone, nil
+}
+
 // Clone returns a replica of SubTaskConfig
 func (c *SubTaskConfig) Clone() (*SubTaskConfig, error) {
 	content, err := c.Toml()

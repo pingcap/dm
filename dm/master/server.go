@@ -1039,7 +1039,14 @@ func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, erro
 }
 
 func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
-	toDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
+	clone, err := dbConfig.Clone()
+	if err != nil {
+		return err
+	}
+	password := utils.DecryptOrPlaintext(clone.Password)
+	clone.Password = password
+
+	toDB, err := conn.DefaultDBProvider.Apply(*clone)
 	if err != nil {
 		return err
 	}
