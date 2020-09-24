@@ -4,7 +4,6 @@ package pb;
 
 
 service Worker {
-    rpc StartSubTask (StartSubTaskRequest) returns (CommonWorkerResponse) {}
     rpc OperateSubTask (OperateSubTaskRequest) returns (OperateSubTaskResponse) {}
     rpc UpdateSubTask (UpdateSubTaskRequest) returns (CommonWorkerResponse) {}
 
@@ -34,10 +33,6 @@ service Worker {
     rpc OperateV1Meta(OperateV1MetaRequest) returns(OperateV1MetaResponse) {}
 
     rpc HandleError(HandleWorkerErrorRequest) returns(CommonWorkerResponse) {}
-}
-
-message StartSubTaskRequest {
-    string task = 1; // (sub) task's configuration
 }
 
 enum TaskOp {

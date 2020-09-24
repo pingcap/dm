@@ -52,7 +52,6 @@ const (
 type Request struct {
 	Type CmdType
 
-	StartSubTask   *pb.StartSubTaskRequest
 	OperateSubTask *pb.OperateSubTaskRequest
 	UpdateSubTask  *pb.UpdateSubTaskRequest
 
@@ -75,7 +74,6 @@ type Request struct {
 type Response struct {
 	Type CmdType
 
-	StartSubTask   *pb.CommonWorkerResponse
 	OperateSubTask *pb.OperateSubTaskResponse
 	UpdateSubTask  *pb.CommonWorkerResponse
 
