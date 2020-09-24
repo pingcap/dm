@@ -295,26 +295,6 @@ func (mr *MockMasterClientMockRecorder) PurgeWorkerRelay(arg0, arg1 interface{},
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PurgeWorkerRelay", reflect.TypeOf((*MockMasterClient)(nil).PurgeWorkerRelay), varargs...)
 }
 
-// QueryError mocks base method
-func (m *MockMasterClient) QueryError(arg0 context.Context, arg1 *pb.QueryErrorListRequest, arg2 ...grpc.CallOption) (*pb.QueryErrorListResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "QueryError", varargs...)
-	ret0, _ := ret[0].(*pb.QueryErrorListResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// QueryError indicates an expected call of QueryError
-func (mr *MockMasterClientMockRecorder) QueryError(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryError", reflect.TypeOf((*MockMasterClient)(nil).QueryError), varargs...)
-}
-
 // QueryStatus mocks base method
 func (m *MockMasterClient) QueryStatus(arg0 context.Context, arg1 *pb.QueryStatusListRequest, arg2 ...grpc.CallOption) (*pb.QueryStatusListResponse, error) {
 	m.ctrl.T.Helper()
@@ -711,21 +691,6 @@ func (m *MockMasterServer) PurgeWorkerRelay(arg0 context.Context, arg1 *pb.Purge
 func (mr *MockMasterServerMockRecorder) PurgeWorkerRelay(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PurgeWorkerRelay", reflect.TypeOf((*MockMasterServer)(nil).PurgeWorkerRelay), arg0, arg1)
-}
-
-// QueryError mocks base method
-func (m *MockMasterServer) QueryError(arg0 context.Context, arg1 *pb.QueryErrorListRequest) (*pb.QueryErrorListResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryError", arg0, arg1)
-	ret0, _ := ret[0].(*pb.QueryErrorListResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// QueryError indicates an expected call of QueryError
-func (mr *MockMasterServerMockRecorder) QueryError(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryError", reflect.TypeOf((*MockMasterServer)(nil).QueryError), arg0, arg1)
 }
 
 // QueryStatus mocks base method
