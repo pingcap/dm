@@ -411,33 +411,6 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	return resp, nil
 }
 
-// OperateRelay implements WorkerServer.OperateRelay
-func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) (*pb.OperateRelayResponse, error) {
-	log.L().Info("", zap.String("request", "OperateRelay"), zap.Stringer("payload", req))
-	resp := &pb.OperateRelayResponse{
-		Op:     req.Op,
-		Result: false,
-	}
-
-	w := s.getWorker(true)
-	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		resp.Msg = terror.ErrWorkerNoStart.Error()
-		return resp, nil
-	}
-
-	err := w.OperateRelay(ctx, req)
-	if err != nil {
-		log.L().Error("fail to operate relay", zap.String("request", "OperateRelay"), zap.Stringer("payload", req), zap.Error(err))
-		resp.Msg = err.Error()
-		return resp, nil
-	}
-
-	// TODO: check whether this interface need to store message in ETCD
-	resp.Result = true
-	return resp, nil
-}
-
 // PurgeRelay implements WorkerServer.PurgeRelay
 func (s *Server) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "PurgeRelay"), zap.Stringer("payload", req))
