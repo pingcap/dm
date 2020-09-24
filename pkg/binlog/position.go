@@ -179,6 +179,16 @@ func AdjustPosition(pos gmysql.Position) gmysql.Position {
 	return realPos
 }
 
+// VerifyBinlogPos verify binlog pos string
+func VerifyBinlogPos(pos string) (*gmysql.Position, error) {
+	binlogPosStr := utils.TrimQuoteMark(pos)
+	pos2, err := PositionFromStr(binlogPosStr)
+	if err != nil {
+		return nil, terror.ErrVerifyHandleErrorArgs.Generatef("invalid --binlog-pos %s in handle-error operation: %s", binlogPosStr, terror.Message(err))
+	}
+	return &pos2, nil
+}
+
 // ComparePosition returns:
 //   1 if pos1 is bigger than pos2
 //   0 if pos1 is equal to pos2

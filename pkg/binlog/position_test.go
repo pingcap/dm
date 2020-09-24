@@ -684,5 +684,42 @@ func (t *testPositionSuite) TestCompareCompareLocation(c *C) {
 		cmpPos := CompareLocation(Location{cs.pos1, gset1, cs.suffix1}, Location{cs.pos2, gset2, cs.suffix2}, false)
 		c.Assert(cmpPos, Equals, cs.cmpPos)
 	}
+}
 
+func (t *testPositionSuite) TestVerifyBinlogPos(c *C) {
+	cases := []struct {
+		input  string
+		hasErr bool
+		pos    *gmysql.Position
+	}{
+		{
+			`"mysql-bin.000001:2345"`,
+			false,
+			&gmysql.Position{Name: "mysql-bin.000001", Pos: 2345},
+		},
+		{
+			`mysql-bin.000001:2345`,
+			false,
+			&gmysql.Position{Name: "mysql-bin.000001", Pos: 2345},
+		},
+		{
+			`"mysql-bin.000001"`,
+			true,
+			nil,
+		},
+		{
+			`mysql-bin.000001`,
+			true,
+			nil,
+		},
+	}
+
+	for _, ca := range cases {
+		ret, err := VerifyBinlogPos(ca.input)
+		if ca.hasErr {
+			c.Assert(err, NotNil)
+		} else {
+			c.Assert(ret, DeepEquals, ca.pos)
+		}
+	}
 }
