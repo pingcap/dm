@@ -11,7 +11,7 @@
   - What: solve usability issues recorded in [the project](https://github.com/pingcap/dm/projects/3)
   - Why: a lot of usability issues that have been not resolved yet, we need to stop user churn
 - [ ] better configuration file [#775](https://github.com/pingcap/dm/issues/775)
-  - What: avoid misuse for configuration files
+  - What: avoid misusing for configuration files
   - Why: many users meet problem when write configuration file but don’t know how to deal with it
 
 ## New features
