@@ -102,8 +102,6 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 	resp.Type = req.Type
 	var err error
 	switch req.Type {
-	case CmdUpdateSubTask:
-		resp.UpdateSubTask, err = client.UpdateSubTask(ctx, req.UpdateSubTask)
 	case CmdQueryStatus:
 		resp.QueryStatus, err = client.QueryStatus(ctx, req.QueryStatus)
 	case CmdQueryWorkerConfig:

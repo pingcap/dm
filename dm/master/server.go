@@ -624,43 +624,6 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		}
 	}
 
-	//var wg sync.WaitGroup
-	//for _, stCfg := range stCfgs {
-	//	wg.Add(1)
-	//	go s.ap.Emit(ctx, 0, func(args ...interface{}) {
-	//		defer wg.Done()
-	//		cfg, _ := args[0].(*config.SubTaskConfig)
-	//		worker, stCfgToml, _, err := s.taskConfigArgsExtractor(cfg)
-	//		if err != nil {
-	//			workerRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
-	//			return
-	//		}
-	//		request := &workerrpc.Request{
-	//			Type:          workerrpc.CmdUpdateSubTask,
-	//			UpdateSubTask: &pb.UpdateSubTaskRequest{Task: stCfgToml},
-	//		}
-	//		resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
-	//		if err != nil {
-	//			resp = &workerrpc.Response{
-	//				Type:          workerrpc.CmdUpdateSubTask,
-	//				UpdateSubTask: errorCommonWorkerResponse(err.Error(), cfg.SourceID),
-	//			}
-	//		}
-	//		resp.UpdateSubTask.Source = cfg.SourceID
-	//		workerRespCh <- resp.UpdateSubTask
-	//	}, func(args ...interface{}) {
-	//		defer wg.Done()
-	//		cfg, _ := args[0].(*config.SubTaskConfig)
-	//		worker, _, _, err := s.taskConfigArgsExtractor(cfg)
-	//		if err != nil {
-	//			workerRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
-	//			return
-	//		}
-	//		workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker.Address()).Error(), cfg.SourceID)
-	//	}, stCfg)
-	//}
-	//wg.Wait()
-
 	// TODO: update task config
 	// s.scheduler.UpdateTaskCfg(*cfg)
 

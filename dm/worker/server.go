@@ -327,26 +327,6 @@ func (s *Server) stopWorker(sourceID string) error {
 	return nil
 }
 
-func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
-	retryTimes := 3
-	cliCtx, canc := context.WithTimeout(s.etcdClient.Ctx(), time.Second)
-	defer canc()
-	for {
-		res, err := s.etcdClient.Txn(cliCtx).Then(ops...).Commit()
-		retryTimes--
-		if err == nil {
-			if res.Succeeded {
-				return ""
-			} else if retryTimes <= 0 {
-				return "failed to write data in etcd"
-			}
-		} else if retryTimes <= 0 {
-			return terror.Message(err)
-		}
-		time.Sleep(time.Millisecond * 50)
-	}
-}
-
 func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBound, errCh chan error) error {
 OUTER:
 	for {
@@ -397,43 +377,6 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 		return terror.ErrWorkerFailToGetSourceConfigFromEtcd.Generate(bound.Source)
 	}
 	return s.startWorker(&sourceCfg)
-}
-
-// UpdateSubTask implements WorkerServer.UpdateSubTask
-func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.CommonWorkerResponse, error) {
-	log.L().Info("", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req))
-	cfg := config.NewSubTaskConfig()
-	err := cfg.Decode(req.Task, true)
-	if err != nil {
-		err = terror.Annotatef(err, "decode config from request %+v", req.Task)
-		log.L().Error("fail to decode subtask", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    err.Error(),
-		}, nil
-	}
-	resp := &pb.CommonWorkerResponse{
-		Result: true,
-		Msg:    "",
-	}
-	w := s.getWorker(true)
-	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		resp.Result = false
-		resp.Msg = terror.ErrWorkerNoStart.Error()
-		return resp, nil
-	}
-	err = w.UpdateSubTask(cfg)
-	if err != nil {
-		err = terror.Annotatef(err, "update sub task %s", cfg.Name)
-		log.L().Error("fail to update task", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		resp.Result = false
-		resp.Msg = err.Error()
-	} else {
-		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
-		resp.Msg = s.retryWriteEctd(op1)
-	}
-	return resp, nil
 }
 
 // QueryStatus implements WorkerServer.QueryStatus
