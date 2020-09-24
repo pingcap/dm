@@ -39,5 +39,5 @@
   - Why: some MySQL protocol databases are not binlog protocol compatible
 - Provides a fully automated shard DDL merge and synchronization solution
   - Why: many scenes are difficult to automate
-- Replicate multiple upstream MySQL sources with one dm-worker
+- Replicates multiple upstream MySQL sources with one dm-worker
   - Why: Large amount of development work and many uncertainties
