@@ -52,8 +52,7 @@ const (
 type Request struct {
 	Type CmdType
 
-	OperateSubTask *pb.OperateSubTaskRequest
-	UpdateSubTask  *pb.UpdateSubTaskRequest
+	UpdateSubTask *pb.UpdateSubTaskRequest
 
 	QueryStatus       *pb.QueryStatusRequest
 	QueryWorkerConfig *pb.QueryWorkerConfigRequest
@@ -74,8 +73,7 @@ type Request struct {
 type Response struct {
 	Type CmdType
 
-	OperateSubTask *pb.OperateSubTaskResponse
-	UpdateSubTask  *pb.CommonWorkerResponse
+	UpdateSubTask *pb.CommonWorkerResponse
 
 	QueryStatus       *pb.QueryStatusResponse
 	QueryWorkerConfig *pb.QueryWorkerConfigResponse

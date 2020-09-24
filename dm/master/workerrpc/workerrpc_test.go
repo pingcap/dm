@@ -58,10 +58,6 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 
 	reqs := []*Request{
 		{
-			Type:           CmdOperateSubTask,
-			OperateSubTask: &pb.OperateSubTaskRequest{Op: pb.TaskOp_Pause},
-		},
-		{
 			Type:          CmdUpdateSubTask,
 			UpdateSubTask: &pb.UpdateSubTaskRequest{Task: "another invalid task content"},
 		},
@@ -107,18 +103,17 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 		},
 	}
 
-	workerCli.EXPECT().OperateSubTask(gomock.Any(), reqs[0].OperateSubTask)
-	workerCli.EXPECT().UpdateSubTask(gomock.Any(), reqs[1].UpdateSubTask)
-	workerCli.EXPECT().QueryStatus(gomock.Any(), reqs[2].QueryStatus)
-	workerCli.EXPECT().QueryWorkerConfig(gomock.Any(), reqs[3].QueryWorkerConfig)
-	workerCli.EXPECT().SwitchRelayMaster(gomock.Any(), reqs[4].SwitchRelayMaster)
-	workerCli.EXPECT().OperateRelay(gomock.Any(), reqs[5].OperateRelay)
-	workerCli.EXPECT().PurgeRelay(gomock.Any(), reqs[6].PurgeRelay)
-	workerCli.EXPECT().UpdateRelayConfig(gomock.Any(), reqs[7].UpdateRelay)
-	workerCli.EXPECT().MigrateRelay(gomock.Any(), reqs[8].MigrateRelay)
-	workerCli.EXPECT().OperateSchema(gomock.Any(), reqs[9].OperateSchema)
-	workerCli.EXPECT().OperateV1Meta(gomock.Any(), reqs[10].OperateV1Meta)
-	workerCli.EXPECT().HandleError(gomock.Any(), reqs[11].HandleError)
+	workerCli.EXPECT().UpdateSubTask(gomock.Any(), reqs[0].UpdateSubTask)
+	workerCli.EXPECT().QueryStatus(gomock.Any(), reqs[1].QueryStatus)
+	workerCli.EXPECT().QueryWorkerConfig(gomock.Any(), reqs[2].QueryWorkerConfig)
+	workerCli.EXPECT().SwitchRelayMaster(gomock.Any(), reqs[3].SwitchRelayMaster)
+	workerCli.EXPECT().OperateRelay(gomock.Any(), reqs[4].OperateRelay)
+	workerCli.EXPECT().PurgeRelay(gomock.Any(), reqs[5].PurgeRelay)
+	workerCli.EXPECT().UpdateRelayConfig(gomock.Any(), reqs[6].UpdateRelay)
+	workerCli.EXPECT().MigrateRelay(gomock.Any(), reqs[7].MigrateRelay)
+	workerCli.EXPECT().OperateSchema(gomock.Any(), reqs[8].OperateSchema)
+	workerCli.EXPECT().OperateV1Meta(gomock.Any(), reqs[9].OperateV1Meta)
+	workerCli.EXPECT().HandleError(gomock.Any(), reqs[10].HandleError)
 
 	// others cmds are not supported.
 	// NOTE: update the end cmd in the below `for` loop when adding new cmds.
@@ -138,8 +133,8 @@ OUTER:
 
 	// got an error from the underlying RPC.
 	err2 := errors.New("mock error")
-	workerCli.EXPECT().QueryStatus(gomock.Any(), reqs[2].QueryStatus).Return(nil, err2)
-	_, err = rpcCli.SendRequest(ctx, reqs[2], timeout)
+	workerCli.EXPECT().QueryStatus(gomock.Any(), reqs[1].QueryStatus).Return(nil, err2)
+	_, err = rpcCli.SendRequest(ctx, reqs[1], timeout)
 	c.Assert(terror.ErrMasterGRPCRequestError.Equal(err), IsTrue)
 	c.Assert(errors.Cause(err), Equals, err2)
 
@@ -147,6 +142,6 @@ OUTER:
 	c.Assert(rpcCli.Close(), IsNil)
 
 	// can't send request any more.
-	_, err = rpcCli.SendRequest(ctx, reqs[0], timeout)
+	_, err = rpcCli.SendRequest(ctx, reqs[1], timeout)
 	c.Assert(terror.ErrMasterGRPCSendOnCloseConn.Equal(err), IsTrue)
 }
