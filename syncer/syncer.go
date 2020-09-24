@@ -162,11 +162,6 @@ type Syncer struct {
 	// record whether error occurred when execute SQLs
 	execError atomic2.AtomicError
 
-	execErrors struct {
-		sync.Mutex
-		errors []*ExecErrorContext
-	}
-
 	heartbeat *Heartbeat
 
 	readerHub *streamer.ReaderHub
@@ -439,7 +434,6 @@ func (s *Syncer) reset() {
 	s.newJobChans(s.cfg.WorkerCount + 1)
 
 	s.execError.Set(nil)
-	s.resetExecErrors()
 	s.setErrLocation(nil, nil)
 	s.isReplacingErr = false
 
@@ -940,11 +934,6 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
-			s.appendExecErrors(&ExecErrorContext{
-				err:      err,
-				location: sqlJob.currentLocation.Clone(),
-				jobs:     fmt.Sprintf("%v", sqlJob.ddls),
-			})
 			s.jobWg.Done()
 			continue
 		}
@@ -1033,12 +1022,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			t := v.(int)
 			time.Sleep(time.Duration(t) * time.Second)
 		})
-		affected, err := db.executeSQL(tctx, queries, args...)
-		if err != nil {
-			errCtx := &ExecErrorContext{err, jobs[affected].currentLocation.Clone(), fmt.Sprintf("%v", jobs)}
-			s.appendExecErrors(errCtx)
-		}
-		return affected, err
+		return db.executeSQL(tctx, queries, args...)
 	}
 
 	var err error
@@ -2628,20 +2612,6 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 		s.streamerController.UpdateSyncCfg(s.syncCfg, s.fromDB)
 	}
 	return nil
-}
-
-// appendExecErrors appends syncer execErrors with new value
-func (s *Syncer) appendExecErrors(errCtx *ExecErrorContext) {
-	s.execErrors.Lock()
-	defer s.execErrors.Unlock()
-	s.execErrors.errors = append(s.execErrors.errors, errCtx)
-}
-
-// resetExecErrors resets syncer execErrors
-func (s *Syncer) resetExecErrors() {
-	s.execErrors.Lock()
-	defer s.execErrors.Unlock()
-	s.execErrors.errors = make([]*ExecErrorContext, 0)
 }
 
 func (s *Syncer) setTimezone() {

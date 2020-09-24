@@ -176,11 +176,6 @@ func (m *Dumpling) Status() interface{} {
 	return &pb.DumpStatus{}
 }
 
-// Error implements Unit.Error
-func (m *Dumpling) Error() interface{} {
-	return &pb.DumpError{}
-}
-
 // Type implements Unit.Type
 func (m *Dumpling) Type() pb.UnitType {
 	return pb.UnitType_Dump
