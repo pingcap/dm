@@ -16,8 +16,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"strings"
 	"sync"
 	"time"
 
@@ -156,11 +154,10 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 		return true
 	}), IsTrue)
 	// start task
-	cli := t.createClient(c, fmt.Sprintf("127.0.0.1:%d", port))
-	subtaskCfgBytes, err := ioutil.ReadFile("./subtask.toml")
-	// strings.Replace is used here to uncomment extra-args to avoid mydumper connecting to DB and generating arg --tables-list which will cause failure
-	_, err = cli.StartSubTask(context.Background(), &pb.StartSubTaskRequest{Task: strings.Replace(string(subtaskCfgBytes), "#extra-args", "extra-args", 1)})
+	var subtaskCfg config.SubTaskConfig
+	c.Assert(subtaskCfg.DecodeFile("./subtask.toml", true), IsNil)
 	c.Assert(err, IsNil)
+	s.getWorker(true).StartSubTask(&subtaskCfg)
 
 	// check task in paused state
 	c.Assert(utils.WaitSomething(100, 100*time.Millisecond, func() bool {

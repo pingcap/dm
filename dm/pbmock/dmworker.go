@@ -215,26 +215,6 @@ func (mr *MockWorkerClientMockRecorder) QueryWorkerConfig(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWorkerConfig", reflect.TypeOf((*MockWorkerClient)(nil).QueryWorkerConfig), varargs...)
 }
 
-// StartSubTask mocks base method
-func (m *MockWorkerClient) StartSubTask(arg0 context.Context, arg1 *pb.StartSubTaskRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "StartSubTask", varargs...)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// StartSubTask indicates an expected call of StartSubTask
-func (mr *MockWorkerClientMockRecorder) StartSubTask(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSubTask", reflect.TypeOf((*MockWorkerClient)(nil).StartSubTask), varargs...)
-}
-
 // SwitchRelayMaster mocks base method
 func (m *MockWorkerClient) SwitchRelayMaster(arg0 context.Context, arg1 *pb.SwitchRelayMasterRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
 	m.ctrl.T.Helper()
@@ -451,21 +431,6 @@ func (m *MockWorkerServer) QueryWorkerConfig(arg0 context.Context, arg1 *pb.Quer
 func (mr *MockWorkerServerMockRecorder) QueryWorkerConfig(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWorkerConfig", reflect.TypeOf((*MockWorkerServer)(nil).QueryWorkerConfig), arg0, arg1)
-}
-
-// StartSubTask mocks base method
-func (m *MockWorkerServer) StartSubTask(arg0 context.Context, arg1 *pb.StartSubTaskRequest) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSubTask", arg0, arg1)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// StartSubTask indicates an expected call of StartSubTask
-func (mr *MockWorkerServerMockRecorder) StartSubTask(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSubTask", reflect.TypeOf((*MockWorkerServer)(nil).StartSubTask), arg0, arg1)
 }
 
 // SwitchRelayMaster mocks base method

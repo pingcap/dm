@@ -399,43 +399,6 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 	return s.startWorker(&sourceCfg)
 }
 
-// StartSubTask implements WorkerServer.StartSubTask
-func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.CommonWorkerResponse, error) {
-	log.L().Info("", zap.String("request", "StartSubTask"), zap.Stringer("payload", req))
-	cfg := config.NewSubTaskConfig()
-	err := cfg.Decode(req.Task, true)
-	if err != nil {
-		err = terror.Annotatef(err, "decode subtask config from request %+v", req.Task)
-		log.L().Error("fail to decode task", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    err.Error(),
-		}, nil
-	}
-	resp := &pb.CommonWorkerResponse{
-		Result: true,
-		Msg:    "",
-	}
-	w := s.getWorker(true)
-	if w == nil || w.cfg.SourceID != cfg.SourceID {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		resp.Result = false
-		resp.Msg = terror.ErrWorkerNoStart.Error()
-		return resp, nil
-	}
-
-	cfg.LogLevel = s.cfg.LogLevel
-	cfg.LogFile = s.cfg.LogFile
-	cfg.LogFormat = s.cfg.LogFormat
-	w.StartSubTask(cfg)
-
-	if resp.Result {
-		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
-		resp.Msg = s.retryWriteEctd(op1)
-	}
-	return resp, nil
-}
-
 // OperateSubTask implements WorkerServer.OperateSubTask
 func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	resp := &pb.OperateSubTaskResponse{
