@@ -175,26 +175,6 @@ func (mr *MockWorkerClientMockRecorder) PurgeRelay(arg0, arg1 interface{}, arg2 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PurgeRelay", reflect.TypeOf((*MockWorkerClient)(nil).PurgeRelay), varargs...)
 }
 
-// QueryError mocks base method
-func (m *MockWorkerClient) QueryError(arg0 context.Context, arg1 *pb.QueryErrorRequest, arg2 ...grpc.CallOption) (*pb.QueryErrorResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "QueryError", varargs...)
-	ret0, _ := ret[0].(*pb.QueryErrorResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// QueryError indicates an expected call of QueryError
-func (mr *MockWorkerClientMockRecorder) QueryError(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryError", reflect.TypeOf((*MockWorkerClient)(nil).QueryError), varargs...)
-}
-
 // QueryStatus mocks base method
 func (m *MockWorkerClient) QueryStatus(arg0 context.Context, arg1 *pb.QueryStatusRequest, arg2 ...grpc.CallOption) (*pb.QueryStatusResponse, error) {
 	m.ctrl.T.Helper()
@@ -441,21 +421,6 @@ func (m *MockWorkerServer) PurgeRelay(arg0 context.Context, arg1 *pb.PurgeRelayR
 func (mr *MockWorkerServerMockRecorder) PurgeRelay(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PurgeRelay", reflect.TypeOf((*MockWorkerServer)(nil).PurgeRelay), arg0, arg1)
-}
-
-// QueryError mocks base method
-func (m *MockWorkerServer) QueryError(arg0 context.Context, arg1 *pb.QueryErrorRequest) (*pb.QueryErrorResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryError", arg0, arg1)
-	ret0, _ := ret[0].(*pb.QueryErrorResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// QueryError indicates an expected call of QueryError
-func (mr *MockWorkerServerMockRecorder) QueryError(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryError", reflect.TypeOf((*MockWorkerServer)(nil).QueryError), arg0, arg1)
 }
 
 // QueryStatus mocks base method
