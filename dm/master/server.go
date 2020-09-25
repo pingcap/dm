@@ -974,48 +974,6 @@ func (s *Server) checkTaskAndWorkerMatch(taskname string, targetWorker string) b
 	return false
 }
 
-// UpdateMasterConfig implements MasterServer.UpdateConfig
-func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
-	var (
-		resp2 *pb.UpdateMasterConfigResponse
-		err2  error
-	)
-	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
-	if shouldRet {
-		return resp2, err2
-	}
-
-	s.Lock()
-	err := s.cfg.UpdateConfigFile(req.Config)
-	if err != nil {
-		s.Unlock()
-		return &pb.UpdateMasterConfigResponse{
-			Result: false,
-			Msg:    "Failed to write config to local file. detail: " + err.Error(),
-		}, nil
-	}
-	log.L().Info("saved dm-master config file", zap.String("config file", s.cfg.ConfigFile), zap.String("request", "UpdateMasterConfig"))
-
-	cfg := NewConfig()
-	cfg.ConfigFile = s.cfg.ConfigFile
-	err = cfg.Reload()
-	if err != nil {
-		s.Unlock()
-		return &pb.UpdateMasterConfigResponse{
-			Result: false,
-			Msg:    fmt.Sprintf("Failed to parse configure from file %s, detail: ", cfg.ConfigFile) + err.Error(),
-		}, nil
-	}
-	log.L().Info("update dm-master config", zap.Stringer("config", cfg), zap.String("request", "UpdateMasterConfig"))
-	s.cfg = cfg
-	log.L().Info("update dm-master config file success", zap.String("request", "UpdateMasterConfig"))
-	s.Unlock()
-	return &pb.UpdateMasterConfigResponse{
-		Result: true,
-		Msg:    "",
-	}, nil
-}
-
 // TODO: refine the call stack of this API, query worker configs that we needed only
 func (s *Server) getSourceConfigs(sources []*config.MySQLInstance) (map[string]config.DBConfig, error) {
 	cfgs := make(map[string]config.DBConfig)

@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/url"
 	"os"
@@ -325,18 +324,6 @@ func (c *Config) adjust() error {
 	}
 
 	return err
-}
-
-// UpdateConfigFile write config to local file
-// if ConfigFile is nil, it will write to dm-master.toml
-func (c *Config) UpdateConfigFile(content string) error {
-	if c.ConfigFile != "" {
-		err := ioutil.WriteFile(c.ConfigFile, []byte(content), 0666)
-		return terror.ErrMasterConfigUpdateCfgFile.Delegate(err)
-	}
-	c.ConfigFile = "dm-master.toml"
-	err := ioutil.WriteFile(c.ConfigFile, []byte(content), 0666)
-	return terror.ErrMasterConfigUpdateCfgFile.Delegate(err)
 }
 
 // Reload load config from local file

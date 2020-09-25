@@ -375,26 +375,6 @@ func (mr *MockMasterClientMockRecorder) UnlockDDLLock(arg0, arg1 interface{}, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnlockDDLLock", reflect.TypeOf((*MockMasterClient)(nil).UnlockDDLLock), varargs...)
 }
 
-// UpdateMasterConfig mocks base method
-func (m *MockMasterClient) UpdateMasterConfig(arg0 context.Context, arg1 *pb.UpdateMasterConfigRequest, arg2 ...grpc.CallOption) (*pb.UpdateMasterConfigResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "UpdateMasterConfig", varargs...)
-	ret0, _ := ret[0].(*pb.UpdateMasterConfigResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateMasterConfig indicates an expected call of UpdateMasterConfig
-func (mr *MockMasterClientMockRecorder) UpdateMasterConfig(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMasterConfig", reflect.TypeOf((*MockMasterClient)(nil).UpdateMasterConfig), varargs...)
-}
-
 // UpdateTask mocks base method
 func (m *MockMasterClient) UpdateTask(arg0 context.Context, arg1 *pb.UpdateTaskRequest, arg2 ...grpc.CallOption) (*pb.UpdateTaskResponse, error) {
 	m.ctrl.T.Helper()
@@ -691,21 +671,6 @@ func (m *MockMasterServer) UnlockDDLLock(arg0 context.Context, arg1 *pb.UnlockDD
 func (mr *MockMasterServerMockRecorder) UnlockDDLLock(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnlockDDLLock", reflect.TypeOf((*MockMasterServer)(nil).UnlockDDLLock), arg0, arg1)
-}
-
-// UpdateMasterConfig mocks base method
-func (m *MockMasterServer) UpdateMasterConfig(arg0 context.Context, arg1 *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateMasterConfig", arg0, arg1)
-	ret0, _ := ret[0].(*pb.UpdateMasterConfigResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateMasterConfig indicates an expected call of UpdateMasterConfig
-func (mr *MockMasterServerMockRecorder) UpdateMasterConfig(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMasterConfig", reflect.TypeOf((*MockMasterServer)(nil).UpdateMasterConfig), arg0, arg1)
 }
 
 // UpdateTask mocks base method

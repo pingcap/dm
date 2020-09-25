@@ -150,38 +150,6 @@ func (t *testConfigSuite) TestConfig(c *check.C) {
 	}
 }
 
-func (t *testConfigSuite) TestUpdateConfigFile(c *check.C) {
-	var (
-		err        error
-		content    []byte
-		newContent []byte
-	)
-
-	cfg := &Config{}
-	err = cfg.configFromFile(defaultConfigFile)
-	c.Assert(err, check.IsNil)
-
-	content, err = ioutil.ReadFile(defaultConfigFile)
-	c.Assert(err, check.IsNil)
-
-	// update config to a new file
-	newCfgPath := path.Join(c.MkDir(), "test_config.toml")
-	cfg.ConfigFile = newCfgPath
-	err = cfg.UpdateConfigFile(string(content))
-	c.Assert(err, check.IsNil)
-	newContent, err = ioutil.ReadFile(newCfgPath)
-	c.Assert(err, check.IsNil)
-	c.Assert(newContent, check.DeepEquals, content)
-
-	// update config to the default config file
-	cfg.ConfigFile = ""
-	err = cfg.UpdateConfigFile(string(content))
-	c.Assert(err, check.IsNil)
-	newContent, err = ioutil.ReadFile(defaultConfigFile)
-	c.Assert(err, check.IsNil)
-	c.Assert(newContent, check.DeepEquals, content)
-}
-
 func (t *testConfigSuite) TestInvalidConfig(c *check.C) {
 	var (
 		err error
