@@ -79,6 +79,7 @@ func (o *Optimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error {
 	go func() {
 		defer o.wg.Done()
 		// TODO: handle fatal error from run
+		//nolint:errcheck
 		o.run(ctx, revSource, revInfo, revOperation)
 	}()
 

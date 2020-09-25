@@ -225,3 +225,11 @@ func GetTaskNameFromArgOrFile(arg string) string {
 	}
 	return cfg.Name
 }
+
+// PrintCmdUsage prints the usage of the command.
+func PrintCmdUsage(cmd *cobra.Command) {
+	err := cmd.Usage()
+	if err != nil {
+		fmt.Println("can't output command's usage:", err)
+	}
+}

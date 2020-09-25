@@ -37,7 +37,10 @@ type testPessimist struct{}
 var _ = Suite(&testPessimist{})
 
 func TestShardDDL(t *testing.T) {
-	log.InitLogger(&log.Config{})
+	err := log.InitLogger(&log.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer mockCluster.Terminate(t)

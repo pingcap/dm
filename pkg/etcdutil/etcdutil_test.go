@@ -42,7 +42,7 @@ type testEtcdUtilSuite struct {
 
 func (t *testEtcdUtilSuite) SetUpSuite(c *C) {
 	// initialized the logger to make genEmbedEtcdConfig working.
-	log.InitLogger(&log.Config{})
+	c.Assert(log.InitLogger(&log.Config{}), IsNil)
 }
 
 func TestSuite(t *testing.T) {
@@ -239,6 +239,7 @@ func (t *testEtcdUtilSuite) testDoOpsInOneTxnWithRetry(c *C) {
 
 	// enable failpoint
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/etcdutil/ErrNoSpace", `3*return()`), IsNil)
+	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/etcdutil/ErrNoSpace")
 
 	// put again

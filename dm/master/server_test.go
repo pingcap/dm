@@ -158,7 +158,11 @@ var (
 )
 
 func TestMaster(t *testing.T) {
-	log.InitLogger(&log.Config{})
+	err := log.InitLogger(&log.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	testEtcdCluster = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer testEtcdCluster.Terminate(t)
 
@@ -1060,7 +1064,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
 	mysqlCfg := config.NewSourceConfig()
-	mysqlCfg.LoadFromFile("./source.yaml")
+	c.Assert(mysqlCfg.LoadFromFile("./source.yaml"), check.IsNil)
 	mysqlCfg.From.Password = os.Getenv("MYSQL_PSWD")
 	task, err := mysqlCfg.Yaml()
 	c.Assert(err, check.IsNil)
@@ -1420,7 +1424,7 @@ func (t *testMaster) TestGetTaskCfg(c *check.C) {
 
 	// test recover from etcd
 	server.scheduler.Close()
-	server.scheduler.Start(ctx, etcdTestCli)
+	c.Assert(server.scheduler.Start(ctx, etcdTestCli), check.IsNil)
 
 	resp3, err := server.GetTaskCfg(context.Background(), req1)
 	c.Assert(err, check.IsNil)

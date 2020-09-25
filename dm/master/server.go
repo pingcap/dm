@@ -1308,7 +1308,12 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
-	defer baseDB.CloseBaseConn(dbConn)
+	defer func() {
+		err2 := baseDB.CloseBaseConn(dbConn)
+		if err2 != nil {
+			log.L().Warn("fail to close connection", zap.Error(err2))
+		}
+	}()
 	ctctx := tcontext.Background().WithContext(ctx).WithLogger(log.With(zap.String("job", "remove metadata")))
 
 	sqls := make([]string, 0, 4)

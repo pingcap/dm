@@ -41,7 +41,7 @@ type testConfigSuite struct {
 
 func (t *testConfigSuite) SetUpSuite(c *check.C) {
 	// initialized the logger to make genEmbedEtcdConfig working.
-	log.InitLogger(&log.Config{})
+	c.Assert(log.InitLogger(&log.Config{}), check.IsNil)
 }
 
 func (t *testConfigSuite) TestPrintSampleConfig(c *check.C) {

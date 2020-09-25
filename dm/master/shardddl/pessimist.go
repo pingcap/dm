@@ -81,6 +81,7 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	go func() {
 		defer p.wg.Done()
 		// TODO: handle fatal error from run
+		//nolint:errcheck
 		p.run(ctx, etcdCli, rev1, rev2)
 	}()
 

@@ -227,7 +227,10 @@ func loop() {
 		}
 
 		args := strings.Fields(line)
-		ctl.Start(args)
+		err = ctl.Start(args)
+		if err != nil {
+			fmt.Println("fail to run:", args)
+		}
 
 		syncErr := log.L().Sync()
 		if syncErr != nil {

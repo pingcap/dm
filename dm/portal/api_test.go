@@ -219,7 +219,8 @@ func (t *testPortalSuite) TestGenerateAndDownloadAndAnalyzeConfig(c *C) {
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("taskfile", "task.yaml")
 	c.Assert(err, IsNil)
-	io.Copy(part, resp.Body)
+	_, err = io.Copy(part, resp.Body)
+	c.Assert(err, IsNil)
 	writer.Close()
 	req = httptest.NewRequest("POST", "/analyze_config_file", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -292,7 +293,7 @@ func (t *testPortalSuite) getMockDB(req *http.Request, timeout int) (*sql.DB, st
 }
 
 func (t *testPortalSuite) TestAdjustConfig(c *C) {
-	adjustConfig(t.taskConfig)
+	c.Assert(adjustConfig(t.taskConfig), IsNil)
 
 	// test mysql instance's filter rules, route rules, block allow list and mydumper config name
 	c.Assert(t.taskConfig.IsSharding, IsTrue)

@@ -128,7 +128,8 @@ func (s *testDBSuite) TestBinaryLogs(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(remainingSize, Equals, files[fileNum-1].size)
 
-	s.db.Exec("FLUSH BINARY LOGS")
+	_, err = s.db.Exec("FLUSH BINARY LOGS")
+	c.Assert(err, IsNil)
 	files, err = getBinaryLogs(s.db)
 	c.Assert(err, IsNil)
 	c.Assert(files, HasLen, fileNum+1)
@@ -237,7 +238,7 @@ func (s *testDBSuite) TestTimezone(c *C) {
 	for _, testCase := range testCases {
 		s.cfg.Timezone = testCase.timezone
 		syncer := NewSyncer(s.cfg, nil)
-		syncer.genRouter()
+		c.Assert(syncer.genRouter(), IsNil)
 		s.resetBinlogSyncer(c)
 
 		// we should not use `sql.DB.Exec` to do query which depends on session variables
@@ -248,8 +249,10 @@ func (s *testDBSuite) TestTimezone(c *C) {
 		// if we must ensure multi queries use the same session, we should use a transaction
 		txn, err := s.db.Begin()
 		c.Assert(err, IsNil)
-		txn.Exec("set @@session.time_zone = ?", testCase.timezone)
-		txn.Exec("set @@session.sql_mode = ''")
+		_, err = txn.Exec("set @@session.time_zone = ?", testCase.timezone)
+		c.Assert(err, IsNil)
+		_, err = txn.Exec("set @@session.sql_mode = ''")
+		c.Assert(err, IsNil)
 		for _, sql := range testCase.sqls {
 			_, err = txn.Exec(sql)
 			c.Assert(err, IsNil)

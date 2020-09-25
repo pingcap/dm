@@ -211,8 +211,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 
 	syncer.checkpoint = NewRemoteCheckPoint(syncer.tctx, cfg, syncer.checkpointID())
 
-	syncer.setSyncCfg()
-
 	syncer.binlogType = toBinlogType(cfg.UseRelay)
 	syncer.errOperatorHolder = operator.NewHolder(&logger)
 	syncer.readerHub = streamer.GetReaderHub()
@@ -263,6 +261,11 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}()
 
 	tctx := s.tctx.WithContext(ctx)
+
+	err = s.setSyncCfg()
+	if err != nil {
+		return err
+	}
 
 	err = s.createDBs()
 	if err != nil {
@@ -1356,7 +1359,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				Suffix:  endSuffix,
 			}
 			if ev, ok := e.Event.(*replication.QueryEvent); ok {
-				currentLocation.GTIDSet.Set(ev.GSet)
+				err = currentLocation.GTIDSet.Set(ev.GSet)
+				if err != nil {
+					return terror.Annotatef(err, "fail to record GTID %v", ev.GSet)
+				}
 			}
 
 			if !s.isReplacingErr {
@@ -1389,7 +1395,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if safeModeExitLoc != nil && !s.isReplacingErr && shardingReSync == nil {
 			if binlog.CompareLocation(currentLocation, *safeModeExitLoc, s.cfg.EnableGTID) >= 0 {
 				s.checkpoint.SaveSafeModeExitPoint(nil)
-				safeMode.Add(tctx, -1)
+				err = safeMode.Add(tctx, -1)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -1430,7 +1439,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if shardingReSync != nil {
 				shardingReSync.currLocation.Position.Pos = e.Header.LogPos
 				shardingReSync.currLocation.Suffix = currentLocation.Suffix
-				shardingReSync.currLocation.GTIDSet.Set(ev.GSet)
+				err = shardingReSync.currLocation.GTIDSet.Set(ev.GSet)
+				if err != nil {
+					return terror.Annotatef(err, "fail to record GTID %v", ev.GSet)
+				}
 
 				// only need compare binlog position?
 				lastLocation = shardingReSync.currLocation.Clone()
@@ -1446,10 +1458,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			latestOp = xid
 			currentLocation.Position.Pos = e.Header.LogPos
-			currentLocation.GTIDSet.Set(ev.GSet)
+			err = currentLocation.GTIDSet.Set(ev.GSet)
+			if err != nil {
+				return terror.Annotatef(err, "fail to record GTID %v", ev.GSet)
+			}
+
 			s.tctx.L().Debug("", zap.String("event", "XID"), zap.Stringer("last location", lastLocation), log.WrapStringerField("location", currentLocation))
 			lastLocation.Position.Pos = e.Header.LogPos // update lastPos
-			lastLocation.GTIDSet.Set(ev.GSet)
+			err = lastLocation.GTIDSet.Set(ev.GSet)
+			if err != nil {
+				return terror.Annotatef(err, "fail to record GTID %v", ev.GSet)
+			}
 
 			job := newXIDJob(currentLocation, startLocation, currentLocation, traceID)
 			err = s.addJobFunc(job)
@@ -2028,6 +2047,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		if shardOp.Exec {
 			failpoint.Inject("ShardSyncedExecutionExit", func() {
 				s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ShardSyncedExecutionExit"))
+				//nolint:errcheck
 				s.flushCheckPoints()
 				utils.OsExit(1)
 			})
@@ -2037,6 +2057,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 					// exit in the first round sequence sharding DDL only
 					if group.meta.ActiveIdx() == 1 {
 						s.tctx.L().Warn("exit triggered", zap.String("failpoint", "SequenceShardSyncedExecutionExit"))
+						//nolint:errcheck
 						s.flushCheckPoints()
 						utils.OsExit(1)
 					}
@@ -2471,7 +2492,10 @@ func (s *Syncer) closeOnlineDDL() {
 
 func (s *Syncer) removeHeartbeat() {
 	if s.cfg.EnableHeartbeat {
-		s.heartbeat.RemoveTask(s.cfg.Name)
+		err := s.heartbeat.RemoveTask(s.cfg.Name)
+		if err != nil {
+			s.tctx.L().Error("fail to remove task for heartbeat", zap.Error(err))
+		}
 	}
 }
 

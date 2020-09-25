@@ -101,7 +101,12 @@ func (s *Server) KeepAlive() {
 
 		failpoint.Label("bypass")
 
-		s.stopWorker("")
+		// TODO: report the error.
+		err := s.stopWorker("")
+		if err != nil {
+			log.L().Error("fail to stop worker", zap.Error(err))
+			return // return if failed to stop the worker.
+		}
 		select {
 		case <-s.ctx.Done():
 			log.L().Info("keepalive with master goroutine exited!")
