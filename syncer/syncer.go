@@ -2127,7 +2127,6 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		shouldTableExistNum = 1
 	case *ast.AlterTableStmt:
 		shouldSchemaExist = true
-		// TODO: ALTER TABLE RENAME should require special treatment.
 		// for DDL that adds FK, since TiDB doesn't fully support it yet, we simply ignore execution of this DDL.
 		if len(node.Specs) == 1 && node.Specs[0].Constraint != nil && node.Specs[0].Constraint.Tp == ast.ConstraintForeignKey {
 			shouldTableExistNum = 1

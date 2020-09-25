@@ -64,39 +64,26 @@ func (tne *tableNameExtractor) Leave(in ast.Node) (ast.Node, bool) {
 	return in, true
 }
 
-// FetchDDLTableNames returns non-repeat tableNames in ddl, duplicate tableName is left at its first appearance
-// the result contains many tableName. Because we use visitor pattern, first tableName is always upper-most table in ast
+// FetchDDLTableNames returns tableNames in ddl the result contains many tableName.
+// Because we use visitor pattern, first tableName is always upper-most table in ast
 // specifically, for `create table like` DDL, result contains [sourceTableName, sourceRefTableName]
 // for rename table ddl, result contains [oldTableName, newTableName]
 // for other DDL, order of tableName is the node visit order
 func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, error) {
-	var res []*filter.Table
-
 	switch stmt.(type) {
 	case ast.DDLNode:
 	default:
-		return res, terror.ErrUnknownTypeDDL.Generate(stmt)
+		return nil, terror.ErrUnknownTypeDDL.Generate(stmt)
 	}
 
-	// special cases: schema related SQLs doesn't have tableName, and keep old behavior with drop multiple tables
-	shouldReturn := false
+	// special cases: schema related SQLs doesn't have tableName
 	switch v := stmt.(type) {
 	case *ast.AlterDatabaseStmt:
-		res = append(res, genTableName(v.Name, ""))
-		shouldReturn = true
+		return []*filter.Table{genTableName(v.Name, "")}, nil
 	case *ast.CreateDatabaseStmt:
-		res = append(res, genTableName(v.Name, ""))
-		shouldReturn = true
+		return []*filter.Table{genTableName(v.Name, "")}, nil
 	case *ast.DropDatabaseStmt:
-		res = append(res, genTableName(v.Name, ""))
-		shouldReturn = true
-	case *ast.DropTableStmt:
-		if len(v.Tables) != 1 {
-			return res, terror.ErrDropMultipleTables.Generate()
-		}
-	}
-	if shouldReturn {
-		return res, nil
+		return []*filter.Table{genTableName(v.Name, "")}, nil
 	}
 
 	e := &tableNameExtractor{
@@ -105,83 +92,64 @@ func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, erro
 	}
 	stmt.Accept(e)
 
-	seen := map[filter.Table]struct{}{}
-	for _, table := range e.names {
-		if _, ok := seen[*table]; !ok {
-			seen[*table] = struct{}{}
-			res = append(res, table)
-		}
-	}
+	return e.names, nil
+}
 
-	return res, nil
+type tableRenameVisitor struct {
+	targetNames []*filter.Table
+	i           int
+	hasErr      bool
+}
+
+func (v *tableRenameVisitor) Enter(in ast.Node) (ast.Node, bool) {
+	if v.hasErr {
+		return in, true
+	}
+	if t, ok := in.(*ast.TableName); ok {
+		if v.i >= len(v.targetNames) {
+			v.hasErr = true
+			return in, true
+		}
+		t.Schema = model.NewCIStr(v.targetNames[v.i].Schema)
+		t.Name = model.NewCIStr(v.targetNames[v.i].Name)
+		v.i++
+		return in, true
+	}
+	return in, false
+}
+
+func (v *tableRenameVisitor) Leave(in ast.Node) (ast.Node, bool) {
+	if v.hasErr {
+		return in, false
+	}
+	return in, true
 }
 
 // RenameDDLTable renames table names in ddl by given `targetTableNames`
 // argument `targetTableNames` is same with return value of FetchDDLTableNames
 // returned DDL is formatted like StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string, error) {
+	switch stmt.(type) {
+	case ast.DDLNode:
+	default:
+		return "", terror.ErrUnknownTypeDDL.Generate(stmt)
+	}
+
 	switch v := stmt.(type) {
 	case *ast.AlterDatabaseStmt:
 		v.Name = targetTableNames[0].Schema
-
 	case *ast.CreateDatabaseStmt:
 		v.Name = targetTableNames[0].Schema
-
 	case *ast.DropDatabaseStmt:
 		v.Name = targetTableNames[0].Schema
-
-	case *ast.CreateTableStmt:
-		v.Table.Schema = model.NewCIStr(targetTableNames[0].Schema)
-		v.Table.Name = model.NewCIStr(targetTableNames[0].Name)
-
-		if v.ReferTable != nil {
-			v.ReferTable.Schema = model.NewCIStr(targetTableNames[1].Schema)
-			v.ReferTable.Name = model.NewCIStr(targetTableNames[1].Name)
-		}
-
-	case *ast.DropTableStmt:
-		if len(v.Tables) > 1 {
-			return "", terror.ErrDropMultipleTables.Generate()
-		}
-
-		v.Tables[0].Schema = model.NewCIStr(targetTableNames[0].Schema)
-		v.Tables[0].Name = model.NewCIStr(targetTableNames[0].Name)
-
-	case *ast.TruncateTableStmt:
-		v.Table.Schema = model.NewCIStr(targetTableNames[0].Schema)
-		v.Table.Name = model.NewCIStr(targetTableNames[0].Name)
-
-	case *ast.DropIndexStmt:
-		v.Table.Schema = model.NewCIStr(targetTableNames[0].Schema)
-		v.Table.Name = model.NewCIStr(targetTableNames[0].Name)
-	case *ast.CreateIndexStmt:
-		v.Table.Schema = model.NewCIStr(targetTableNames[0].Schema)
-		v.Table.Name = model.NewCIStr(targetTableNames[0].Name)
-	case *ast.RenameTableStmt:
-		if len(v.TableToTables) > 1 {
-			return "", terror.ErrRenameMultipleTables.Generate()
-		}
-
-		v.TableToTables[0].OldTable.Schema = model.NewCIStr(targetTableNames[0].Schema)
-		v.TableToTables[0].OldTable.Name = model.NewCIStr(targetTableNames[0].Name)
-		v.TableToTables[0].NewTable.Schema = model.NewCIStr(targetTableNames[1].Schema)
-		v.TableToTables[0].NewTable.Name = model.NewCIStr(targetTableNames[1].Name)
-
-	case *ast.AlterTableStmt:
-		if len(v.Specs) > 1 {
-			return "", terror.ErrAlterMultipleTables.Generate()
-		}
-
-		v.Table.Schema = model.NewCIStr(targetTableNames[0].Schema)
-		v.Table.Name = model.NewCIStr(targetTableNames[0].Name)
-
-		if v.Specs[0].Tp == ast.AlterTableRenameTable {
-			v.Specs[0].NewTable.Schema = model.NewCIStr(targetTableNames[1].Schema)
-			v.Specs[0].NewTable.Name = model.NewCIStr(targetTableNames[1].Name)
-		}
-
 	default:
-		return "", terror.ErrUnknownTypeDDL.Generate(stmt)
+		visitor := &tableRenameVisitor{
+			targetNames: targetTableNames,
+		}
+		stmt.Accept(visitor)
+		if visitor.hasErr {
+			return "", terror.ErrRewriteSQL.Generate(stmt, targetTableNames)
+		}
 	}
 
 	var b []byte
