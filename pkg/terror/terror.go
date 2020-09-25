@@ -209,6 +209,7 @@ func (e *Error) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':
 		if s.Flag('+') {
+			//nolint:errcheck
 			io.WriteString(s, e.Error())
 			if e.stack != nil {
 				e.stack.StackTrace().Format(s, verb)
@@ -217,6 +218,7 @@ func (e *Error) Format(s fmt.State, verb rune) {
 		}
 		fallthrough
 	case 's':
+		//nolint:errcheck
 		io.WriteString(s, e.Error())
 	case 'q':
 		fmt.Fprintf(s, "%q", e.Error())
