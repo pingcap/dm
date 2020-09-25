@@ -465,19 +465,19 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	clearSchedulerEnv(c, cancel, &wg)
 }
 
+// db use for remove data
+// verDB user for show version
 type mockDBProvider struct {
 	verDB *sql.DB
 	db    *sql.DB
 }
 
-// Apply will build BaseDB with DBConfig
+// return db if verDB was closed
 func (d *mockDBProvider) Apply(config config.DBConfig) (*conn.BaseDB, error) {
-	if d.verDB != nil {
-		verDB := d.verDB
-		d.verDB = nil
-		return conn.NewBaseDB(verDB, func() {}), nil
+	if err := d.verDB.Ping(); err != nil {
+		return conn.NewBaseDB(d.db, func() {}), nil
 	}
-	return conn.NewBaseDB(d.db, func() {}), nil
+	return conn.NewBaseDB(d.verDB, func() {}), nil
 }
 
 func (t *testMaster) initVersionDB(c *check.C) sqlmock.Sqlmock {
@@ -549,6 +549,9 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	c.Assert(server.optimist.Start(ctx, etcdTestCli), check.IsNil)
 
 	verMock := t.initVersionDB(c)
+	defer func() {
+		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+	}()
 	verMock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	mock := t.initMockDB(c)
@@ -566,11 +569,8 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		defer wg.Done()
 		time.Sleep(10 * time.Microsecond)
 		// start another same task at the same time, should get err
-		mock2 := t.initVersionDB(c)
-		defer func() {
-			conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
-		}()
-		mock2.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		verMock2 := t.initVersionDB(c)
+		verMock2.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("version", "5.7.25-TiDB-v4.0.2"))
 		resp1, err1 := server.StartTask(context.Background(), req)
 		c.Assert(err1, check.IsNil)
@@ -642,9 +642,10 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	err = server.optimist.Start(ctx, etcdTestCli)
 	c.Assert(err, check.IsNil)
 
-	verMock = t.initMockDB(c)
+	verMock = t.initVersionDB(c)
 	verMock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-		AddRow("version", "10.0.0-MariaDB"))
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
+	mock = t.initMockDB(c)
 	mock.ExpectBegin()
 	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -659,11 +660,8 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		defer wg.Done()
 		time.Sleep(10 * time.Microsecond)
 		// start another same task at the same time, should get err
-		mock2 := t.initVersionDB(c)
-		defer func() {
-			conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
-		}()
-		mock2.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		vermock2 := t.initVersionDB(c)
+		vermock2.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("version", "5.7.25-TiDB-v4.0.2"))
 		resp1, err1 := server.StartTask(context.Background(), req)
 		c.Assert(err1, check.IsNil)
