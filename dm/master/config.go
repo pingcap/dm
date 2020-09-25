@@ -86,22 +86,6 @@ func NewConfig() *Config {
 	return cfg
 }
 
-// DeployMapper defines dm-worker's deploy mapper info: source id -> dm-worker ${host:ip}
-type DeployMapper struct {
-	MySQL  string `toml:"mysql-instance" json:"mysql-instance"` //  deprecated, use source-id instead
-	Source string `toml:"source-id" json:"source-id"`           // represents a MySQL/MariaDB instance or a replica group
-	Worker string `toml:"dm-worker" json:"dm-worker"`
-}
-
-// Verify verifies deploy configuration
-func (d *DeployMapper) Verify() error {
-	if d.MySQL == "" && d.Source == "" {
-		return terror.ErrMasterDeployMapperVerify.Generate(d)
-	}
-
-	return nil
-}
-
 // Config is the configuration for dm-master
 type Config struct {
 	*flag.FlagSet `json:"-"`
@@ -118,10 +102,6 @@ type Config struct {
 
 	MasterAddr    string `toml:"master-addr" json:"master-addr"`
 	AdvertiseAddr string `toml:"advertise-addr" json:"advertise-addr"`
-
-	Deploy []*DeployMapper `toml:"deploy" json:"-"`
-	// TODO: remove
-	DeployMap map[string]string `json:"deploy"`
 
 	ConfigFile string `json:"config-file"`
 
@@ -245,20 +225,6 @@ func (c *Config) adjust() error {
 		if len(host) == 0 || host == "0.0.0.0" || len(port) == 0 {
 			return terror.ErrMasterAdvertiseAddrNotValid.Generate(c.AdvertiseAddr)
 		}
-	}
-
-	c.DeployMap = make(map[string]string)
-	for _, item := range c.Deploy {
-		if err = item.Verify(); err != nil {
-			return err
-		}
-
-		// compatible with mysql instance which is deprecated
-		if item.Source == "" {
-			item.Source = item.MySQL
-		}
-
-		c.DeployMap[item.Source] = item.Worker
 	}
 
 	if c.RPCTimeoutStr == "" {

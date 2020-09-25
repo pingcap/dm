@@ -607,19 +607,19 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Sources))
 	if len(req.Sources) > 0 {
-		// specify only update task on partial dm-workers
-		// filter sub-task-configs through user specified workers
-		// if worker not exist, an error message will return
-		workerCfg := make(map[string]*config.SubTaskConfig)
+		// specify only update task on partial sources
+		// filter sub-task-configs through user specified sources
+		// if a source not exist, an error message will return
+		subtaskCfgs := make(map[string]*config.SubTaskConfig)
 		for _, stCfg := range stCfgs {
-			workerCfg[stCfg.SourceID] = stCfg
+			subtaskCfgs[stCfg.SourceID] = stCfg
 		}
 		stCfgs = make([]*config.SubTaskConfig, 0, len(req.Sources))
 		for _, source := range req.Sources {
-			if sourceCfg, ok := workerCfg[source]; ok {
+			if sourceCfg, ok := subtaskCfgs[source]; ok {
 				stCfgs = append(stCfgs, sourceCfg)
 			} else {
-				workerRespCh <- errorCommonWorkerResponse("source not found in task's config or deployment config", source, "")
+				workerRespCh <- errorCommonWorkerResponse("source not found in task's config", source, "")
 			}
 		}
 	}
