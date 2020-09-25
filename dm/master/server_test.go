@@ -187,19 +187,23 @@ func (t *testMaster) TearDownSuite(c *check.C) {
 	maxRetryNum = t.saveMaxRetryNum
 }
 
+func (t *testMaster) TearDownTest(c *check.C) {
+	clearEtcdEnv(c)
+}
+
 func newMockRPCClient(client pb.WorkerClient) workerrpc.Client {
 	c, _ := workerrpc.NewGRPCClientWrap(nil, client)
 	return c
 }
 
-func extractWorkerSource(deployMapper []*DeployMapper) ([]string, []string) {
-	sources := make([]string, 0, len(deployMapper))
-	workers := make([]string, 0, len(deployMapper))
-	for _, deploy := range deployMapper {
-		sources = append(sources, deploy.Source)
-		workers = append(workers, deploy.Worker)
-	}
-	return sources, workers
+func defaultWorkerSource() ([]string, []string) {
+	return []string{
+			"mysql-replica-01",
+			"mysql-replica-02",
+		}, []string{
+			"127.0.0.1:8262",
+			"127.0.0.1:8263",
+		}
 }
 
 func clearEtcdEnv(c *check.C) {
@@ -280,10 +284,10 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 
 	// test query all workers
-	for _, deploy := range server.cfg.Deploy {
+	for _, worker := range workers {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().QueryStatus(
 			gomock.Any(),
@@ -292,7 +296,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 			Result:       true,
 			SourceStatus: &pb.SourceStatus{},
 		}, nil)
-		t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+		t.workerClients[worker] = newMockRPCClient(mockWorkerClient)
 	}
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
@@ -303,7 +307,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	clearSchedulerEnv(c, cancel, &wg)
 
 	// query specified sources
-	for _, deploy := range server.cfg.Deploy {
+	for _, worker := range workers {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().QueryStatus(
 			gomock.Any(),
@@ -312,7 +316,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 			Result:       true,
 			SourceStatus: &pb.SourceStatus{},
 		}, nil)
-		t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+		t.workerClients[worker] = newMockRPCClient(mockWorkerClient)
 	}
 	ctx, cancel = context.WithCancel(context.Background())
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
@@ -346,7 +350,7 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 
 	t.workerClients = makeNilWorkerClients(workers)
 	var wg sync.WaitGroup
@@ -391,7 +395,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 
 	// s.generateSubTask with error
 	resp, err := server.StartTask(context.Background(), &pb.StartTaskRequest{
@@ -507,7 +511,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 	server.etcdClient = etcdTestCli
 
 	// test start task successfully
@@ -706,7 +710,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 
 	// test operate-task with invalid task name
 	resp, err := server.OperateTask(context.Background(), &pb.OperateTaskRequest{
@@ -794,7 +798,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 	var (
 		now      = time.Now().Unix()
 		filename = "mysql-bin.000005"
@@ -802,13 +806,13 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 
 	// mock PurgeRelay request
 	mockPurgeRelay := func(rpcSuccess bool) {
-		for _, deploy := range server.cfg.Deploy {
+		for i, worker := range workers {
 			rets := make([]interface{}, 0, 2)
 			if rpcSuccess {
 				rets = []interface{}{
 					&pb.CommonWorkerResponse{
 						Result: true,
-						Source: deploy.Source,
+						Source: sources[i],
 					},
 					nil,
 				}
@@ -826,7 +830,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 					Filename: filename,
 				},
 			).Return(rets...)
-			t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+			t.workerClients[worker] = newMockRPCClient(mockWorkerClient)
 		}
 	}
 
@@ -881,91 +885,12 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	clearSchedulerEnv(c, cancel, &wg)
 }
 
-func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
-	ctrl := gomock.NewController(c)
-	defer ctrl.Finish()
-
-	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
-
-	// mock SwitchRelayMaster request
-	mockSwitchRelayMaster := func(rpcSuccess bool) {
-		for _, deploy := range server.cfg.Deploy {
-			rets := make([]interface{}, 0, 2)
-			if rpcSuccess {
-				rets = []interface{}{
-					&pb.CommonWorkerResponse{
-						Result: true,
-						Source: deploy.Source,
-					},
-					nil,
-				}
-			} else {
-				rets = []interface{}{
-					nil,
-					errors.New(errGRPCFailed),
-				}
-			}
-			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-			mockWorkerClient.EXPECT().SwitchRelayMaster(
-				gomock.Any(),
-				&pb.SwitchRelayMasterRequest{},
-			).Return(rets...)
-			t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
-		}
-	}
-
-	// test SwitchWorkerRelayMaster with invalid dm-worker[s]
-	resp, err := server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
-		Sources: []string{"invalid-source1", "invalid-source2"},
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Sources, check.HasLen, 2)
-	for _, w := range resp.Sources {
-		c.Assert(w.Result, check.IsFalse)
-		c.Assert(w.Msg, check.Matches, "(?m).*relevant worker-client not found.*")
-	}
-
-	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
-	// test SwitchWorkerRelayMaster successfully
-	mockSwitchRelayMaster(true)
-	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
-	resp, err = server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
-		Sources: sources,
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Sources, check.HasLen, 2)
-	for _, w := range resp.Sources {
-		c.Assert(w.Result, check.IsTrue)
-	}
-	clearSchedulerEnv(c, cancel, &wg)
-
-	ctx, cancel = context.WithCancel(context.Background())
-	// test SwitchWorkerRelayMaster with error response
-	mockSwitchRelayMaster(false)
-	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
-	resp, err = server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
-		Sources: sources,
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Sources, check.HasLen, 2)
-	for _, w := range resp.Sources {
-		c.Assert(w.Result, check.IsFalse)
-		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
-	}
-	clearSchedulerEnv(c, cancel, &wg)
-}
-
 func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	pauseReq := &pb.OperateWorkerRelayRequest{
@@ -1110,6 +1035,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	c.Assert(leaderID, check.Equals, cfg1.Name)
 
 	cancel()
+	clearEtcdEnv(c)
 }
 
 func (t *testMaster) TestOperateSource(c *check.C) {
@@ -1270,7 +1196,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	scm, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
 	c.Assert(err, check.IsNil)
 	c.Assert(scm, check.HasLen, 0)
-	cancel()
+	clearSchedulerEnv(c, cancel, &wg)
 }
 
 func generateServerConfig(c *check.C, name string) *Config {
@@ -1444,6 +1370,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 		c.Assert(err, check.IsNil)
 		c.Assert(resp.Result, check.IsTrue)
 	}
+	clearSchedulerEnv(c, cancel, &wg)
 }
 
 func (t *testMaster) TestGetTaskCfg(c *check.C) {
@@ -1451,7 +1378,7 @@ func (t *testMaster) TestGetTaskCfg(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 
 	var wg sync.WaitGroup
 	taskName := "test"
