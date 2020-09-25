@@ -32,8 +32,6 @@ service Master {
     // used by dmctl to manually unlock DDL lock
     rpc UnlockDDLLock (UnlockDDLLockRequest) returns (UnlockDDLLockResponse) {}
 
-    rpc UpdateMasterConfig (UpdateMasterConfigRequest) returns (UpdateMasterConfigResponse) {}
-
     // OperateWorkerRelayTask requests some dm-workers to operate relay unit
     rpc OperateWorkerRelayTask (OperateWorkerRelayRequest) returns (OperateWorkerRelayResponse) {}
 
@@ -116,16 +114,6 @@ message StartTaskResponse {
     bool result = 1;
     string msg = 2;
     repeated CommonWorkerResponse sources = 3;
-}
-
-message UpdateMasterConfigRequest {
-    string config = 1;
-}
-
-message UpdateMasterConfigResponse {
-    bool result = 1;
-    string msg = 2;
-    repeated QueryStatusResponse sources = 3;
 }
 
 message OperateTaskRequest {
