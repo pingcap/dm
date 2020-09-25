@@ -41,12 +41,3 @@ rpc-timeout = "30s"
 # literal value happens to be an integer.
 rpc-rate-limit = 10.0
 rpc-rate-burst = 40
-
-# replication group <-> dm-Worker deployment, we'll refine it when new deployment function is available
-[[deploy]]
-source-id = "mysql-replica-01"
-dm-worker = "172.16.10.72:8262"
-
-[[deploy]]
-source-id = "mysql-replica-02"
-dm-worker = "172.16.10.73:8262"

@@ -84,9 +84,8 @@ func (t *testWorker) TestWorker(c *C) {
 
 	// SendRequest.
 	req := &workerrpc.Request{
-		Type: workerrpc.CmdOperateSubTask,
-		OperateSubTask: &pb.OperateSubTaskRequest{
-			Op:   pb.TaskOp_Pause,
+		Type: workerrpc.CmdQueryStatus,
+		QueryStatus: &pb.QueryStatusRequest{
 			Name: "task1",
 		},
 	}

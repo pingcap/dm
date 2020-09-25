@@ -58,44 +58,12 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 
 	reqs := []*Request{
 		{
-			Type:         CmdStartSubTask,
-			StartSubTask: &pb.StartSubTaskRequest{Task: "invalid task content"},
-		},
-		{
-			Type:           CmdOperateSubTask,
-			OperateSubTask: &pb.OperateSubTaskRequest{Op: pb.TaskOp_Pause},
-		},
-		{
-			Type:          CmdUpdateSubTask,
-			UpdateSubTask: &pb.UpdateSubTaskRequest{Task: "another invalid task content"},
-		},
-		{
 			Type:        CmdQueryStatus,
 			QueryStatus: &pb.QueryStatusRequest{Name: "test"},
 		},
 		{
-			Type:              CmdQueryWorkerConfig,
-			QueryWorkerConfig: &pb.QueryWorkerConfigRequest{},
-		},
-		{
-			Type:              CmdSwitchRelayMaster,
-			SwitchRelayMaster: &pb.SwitchRelayMasterRequest{},
-		},
-		{
-			Type:         CmdOperateRelay,
-			OperateRelay: &pb.OperateRelayRequest{Op: pb.RelayOp_ResumeRelay},
-		},
-		{
 			Type:       CmdPurgeRelay,
 			PurgeRelay: &pb.PurgeRelayRequest{Inactive: true},
-		},
-		{
-			Type:        CmdUpdateRelay,
-			UpdateRelay: &pb.UpdateRelayRequest{Content: "invalid relay content"},
-		},
-		{
-			Type:         CmdMigrateRelay,
-			MigrateRelay: &pb.MigrateRelayRequest{BinlogName: "mysql-bin.000123"},
 		},
 		{
 			Type:          CmdOperateSchema,
@@ -111,19 +79,11 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 		},
 	}
 
-	workerCli.EXPECT().StartSubTask(gomock.Any(), reqs[0].StartSubTask)
-	workerCli.EXPECT().OperateSubTask(gomock.Any(), reqs[1].OperateSubTask)
-	workerCli.EXPECT().UpdateSubTask(gomock.Any(), reqs[2].UpdateSubTask)
-	workerCli.EXPECT().QueryStatus(gomock.Any(), reqs[3].QueryStatus)
-	workerCli.EXPECT().QueryWorkerConfig(gomock.Any(), reqs[4].QueryWorkerConfig)
-	workerCli.EXPECT().SwitchRelayMaster(gomock.Any(), reqs[5].SwitchRelayMaster)
-	workerCli.EXPECT().OperateRelay(gomock.Any(), reqs[6].OperateRelay)
-	workerCli.EXPECT().PurgeRelay(gomock.Any(), reqs[7].PurgeRelay)
-	workerCli.EXPECT().UpdateRelayConfig(gomock.Any(), reqs[8].UpdateRelay)
-	workerCli.EXPECT().MigrateRelay(gomock.Any(), reqs[9].MigrateRelay)
-	workerCli.EXPECT().OperateSchema(gomock.Any(), reqs[10].OperateSchema)
-	workerCli.EXPECT().OperateV1Meta(gomock.Any(), reqs[11].OperateV1Meta)
-	workerCli.EXPECT().HandleError(gomock.Any(), reqs[12].HandleError)
+	workerCli.EXPECT().QueryStatus(gomock.Any(), reqs[0].QueryStatus)
+	workerCli.EXPECT().PurgeRelay(gomock.Any(), reqs[1].PurgeRelay)
+	workerCli.EXPECT().OperateSchema(gomock.Any(), reqs[2].OperateSchema)
+	workerCli.EXPECT().OperateV1Meta(gomock.Any(), reqs[3].OperateV1Meta)
+	workerCli.EXPECT().HandleError(gomock.Any(), reqs[4].HandleError)
 
 	// others cmds are not supported.
 	// NOTE: update the end cmd in the below `for` loop when adding new cmds.
@@ -143,7 +103,7 @@ OUTER:
 
 	// got an error from the underlying RPC.
 	err2 := errors.New("mock error")
-	workerCli.EXPECT().StartSubTask(gomock.Any(), reqs[0].StartSubTask).Return(nil, err2)
+	workerCli.EXPECT().QueryStatus(gomock.Any(), reqs[0].QueryStatus).Return(nil, err2)
 	_, err = rpcCli.SendRequest(ctx, reqs[0], timeout)
 	c.Assert(terror.ErrMasterGRPCRequestError.Equal(err), IsTrue)
 	c.Assert(errors.Cause(err), Equals, err2)

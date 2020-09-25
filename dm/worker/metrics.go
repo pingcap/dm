@@ -79,20 +79,20 @@ func (h *statusHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 // Note: handle error inside the function with returning it.
-func (w *Worker) collectMetrics() {
+func (s *Server) collectMetrics() {
 	// CPU usage metric
 	cpuUsage := cpu.GetCPUPercentage()
 	cpuUsageGauge.Set(cpuUsage)
 }
 
-func (w *Worker) runBackgroundJob(ctx context.Context) {
+func (s *Server) runBackgroundJob(ctx context.Context) {
 	ticker := time.NewTicker(time.Second * 10)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			w.collectMetrics()
+			s.collectMetrics()
 
 		case <-ctx.Done():
 			return
@@ -106,9 +106,10 @@ func RegistryMetrics() {
 	registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	registry.MustRegister(prometheus.NewGoCollector())
 
+	registry.MustRegister(cpuUsageGauge)
+
 	registry.MustRegister(taskState)
 	registry.MustRegister(opErrCounter)
-	registry.MustRegister(cpuUsageGauge)
 
 	relay.RegisterMetrics(registry)
 	dumpling.RegisterMetrics(registry)
