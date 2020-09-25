@@ -99,7 +99,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 		workerInfo2  = ha.NewWorkerInfo(workerName2, workerAddr2)
 		sourceCfg1   config.SourceConfig
 		subtaskCfg1  config.SubTaskConfig
-		keepAliveTTL = int64(2) // NOTE: this should be >= minLeaseTTL, in second.
+		keepAliveTTL = int64(5) // NOTE: this should be >= minLeaseTTL, in second.
 
 		rebuildScheduler = func(ctx context.Context) {
 			switch restart {
