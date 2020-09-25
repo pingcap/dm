@@ -1926,18 +1926,6 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest
 		}, nil
 	}
 
-	workerReq := workerrpc.Request{
-		Type: workerrpc.CmdOperateSchema,
-		OperateSchema: &pb.OperateWorkerSchemaRequest{
-			Op:       req.Op,
-			Task:     req.Task,
-			Source:   "", // set below.
-			Database: req.Database,
-			Table:    req.Table,
-			Schema:   req.Schema,
-		},
-	}
-
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
 	var wg sync.WaitGroup
 	for _, source := range req.Sources {
@@ -1949,9 +1937,19 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest
 				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("source %s relevant worker-client not found", source), source, "")
 				return
 			}
-			workerReq2 := workerReq
-			workerReq2.OperateSchema.Source = source
-			resp, err := worker.SendRequest(ctx, &workerReq2, s.cfg.RPCTimeout)
+			workerReq := workerrpc.Request{
+				Type: workerrpc.CmdOperateSchema,
+				OperateSchema: &pb.OperateWorkerSchemaRequest{
+					Op:       req.Op,
+					Task:     req.Task,
+					Source:   source,
+					Database: req.Database,
+					Table:    req.Table,
+					Schema:   req.Schema,
+				},
+			}
+
+			resp, err := worker.SendRequest(ctx, &workerReq, s.cfg.RPCTimeout)
 			workerResp := &pb.CommonWorkerResponse{}
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name)
