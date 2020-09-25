@@ -1599,7 +1599,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
 		}},
 
-		// test CREATE VIEW
+		// test VIEW
 		{"CREATE VIEW tmp AS SELECT * FROM " + testTbl, func() {
 			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
 				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
@@ -1607,6 +1607,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 				sqlmock.NewRows([]string{"Table", "Create Table"}).
 					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
 		}},
+		{"DROP VIEW IF EXISTS tmp", func() {}},
 	}
 
 	p := parser.New()
