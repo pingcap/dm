@@ -98,7 +98,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 		workerInfo2  = ha.NewWorkerInfo(workerName2, workerAddr2)
 		sourceCfg1   config.SourceConfig
 		subtaskCfg1  config.SubTaskConfig
-		keepAliveTTL = int64(2) // NOTE: this should be >= minLeaseTTL, in second.
+		keepAliveTTL = int64(5) // NOTE: this should be >= minLeaseTTL, in second.
 
 		rebuildScheduler = func(ctx context.Context) {
 			switch restart {
@@ -480,12 +480,24 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	rebuildScheduler(ctx)
 
 	// CASE 4.10: stop task1.
+	// wait for worker2 become bouned.
+	c.Assert(utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
+		w := s.GetWorkerByName(workerName2)
+		c.Assert(w, NotNil)
+		return w.Stage() == WorkerBound
+	}), IsTrue)
 	c.Assert(s.RemoveSubTasks(taskName1, sourceID1), IsNil)
 	t.subTaskCfgNotExist(c, s, taskName1, sourceID1)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_InvalidStage)
 	rebuildScheduler(ctx)
 
 	// CASE 4.11: remove worker not supported when the worker is online.
+	// wait for worker2 become bouned.
+	c.Assert(utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
+		w := s.GetWorkerByName(workerName2)
+		c.Assert(w, NotNil)
+		return w.Stage() == WorkerBound
+	}), IsTrue)
 	c.Assert(terror.ErrSchedulerWorkerOnline.Equal(s.RemoveWorker(workerName2)), IsTrue)
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
 	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName2))

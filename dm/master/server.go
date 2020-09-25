@@ -607,59 +607,22 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Sources))
 	if len(req.Sources) > 0 {
-		// specify only update task on partial dm-workers
-		// filter sub-task-configs through user specified workers
-		// if worker not exist, an error message will return
-		workerCfg := make(map[string]*config.SubTaskConfig)
+		// specify only update task on partial sources
+		// filter sub-task-configs through user specified sources
+		// if a source not exist, an error message will return
+		subtaskCfgs := make(map[string]*config.SubTaskConfig)
 		for _, stCfg := range stCfgs {
-			workerCfg[stCfg.SourceID] = stCfg
+			subtaskCfgs[stCfg.SourceID] = stCfg
 		}
 		stCfgs = make([]*config.SubTaskConfig, 0, len(req.Sources))
 		for _, source := range req.Sources {
-			if sourceCfg, ok := workerCfg[source]; ok {
+			if sourceCfg, ok := subtaskCfgs[source]; ok {
 				stCfgs = append(stCfgs, sourceCfg)
 			} else {
-				workerRespCh <- errorCommonWorkerResponse("source not found in task's config or deployment config", source, "")
+				workerRespCh <- errorCommonWorkerResponse("source not found in task's config", source, "")
 			}
 		}
 	}
-
-	//var wg sync.WaitGroup
-	//for _, stCfg := range stCfgs {
-	//	wg.Add(1)
-	//	go s.ap.Emit(ctx, 0, func(args ...interface{}) {
-	//		defer wg.Done()
-	//		cfg, _ := args[0].(*config.SubTaskConfig)
-	//		worker, stCfgToml, _, err := s.taskConfigArgsExtractor(cfg)
-	//		if err != nil {
-	//			workerRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
-	//			return
-	//		}
-	//		request := &workerrpc.Request{
-	//			Type:          workerrpc.CmdUpdateSubTask,
-	//			UpdateSubTask: &pb.UpdateSubTaskRequest{Task: stCfgToml},
-	//		}
-	//		resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
-	//		if err != nil {
-	//			resp = &workerrpc.Response{
-	//				Type:          workerrpc.CmdUpdateSubTask,
-	//				UpdateSubTask: errorCommonWorkerResponse(err.Error(), cfg.SourceID),
-	//			}
-	//		}
-	//		resp.UpdateSubTask.Source = cfg.SourceID
-	//		workerRespCh <- resp.UpdateSubTask
-	//	}, func(args ...interface{}) {
-	//		defer wg.Done()
-	//		cfg, _ := args[0].(*config.SubTaskConfig)
-	//		worker, _, _, err := s.taskConfigArgsExtractor(cfg)
-	//		if err != nil {
-	//			workerRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
-	//			return
-	//		}
-	//		workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker.Address()).Error(), cfg.SourceID)
-	//	}, stCfg)
-	//}
-	//wg.Wait()
 
 	// TODO: update task config
 	// s.scheduler.UpdateTaskCfg(*cfg)
@@ -892,76 +855,6 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 	}, nil
 }
 
-// SwitchWorkerRelayMaster implements MasterServer.SwitchWorkerRelayMaster
-func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWorkerRelayMasterRequest) (*pb.SwitchWorkerRelayMasterResponse, error) {
-	var (
-		resp2 *pb.SwitchWorkerRelayMasterResponse
-		err2  error
-	)
-	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
-	if shouldRet {
-		return resp2, err2
-	}
-
-	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
-
-	handleErr := func(err error, source string) {
-		log.L().Error("response error", zap.Error(err))
-		resp := errorCommonWorkerResponse(err.Error(), source, "")
-		workerRespCh <- resp
-	}
-
-	var wg sync.WaitGroup
-	for _, source := range req.Sources {
-		wg.Add(1)
-		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
-			defer wg.Done()
-			sourceID, _ := args[0].(string)
-			worker := s.scheduler.GetWorkerBySource(sourceID)
-			if worker == nil {
-				err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", sourceID)
-				handleErr(err, sourceID)
-				return
-			}
-			request := &workerrpc.Request{
-				Type:              workerrpc.CmdSwitchRelayMaster,
-				SwitchRelayMaster: &pb.SwitchRelayMasterRequest{},
-			}
-			resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
-			workerResp := &pb.CommonWorkerResponse{}
-			if err != nil {
-				workerResp = errorCommonWorkerResponse(err.Error(), sourceID, worker.BaseInfo().Name)
-			} else {
-				workerResp = resp.SwitchRelayMaster
-			}
-			workerResp.Source = sourceID
-			workerRespCh <- workerResp
-		}, func(args ...interface{}) {
-			defer wg.Done()
-			sourceID, _ := args[0].(string)
-			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(sourceID).Error(), sourceID, "")
-		}, source)
-	}
-	wg.Wait()
-
-	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Sources))
-	for len(workerRespCh) > 0 {
-		workerResp := <-workerRespCh
-		workerRespMap[workerResp.Source] = workerResp
-	}
-
-	sort.Strings(req.Sources)
-	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Sources))
-	for _, worker := range req.Sources {
-		workerResps = append(workerResps, workerRespMap[worker])
-	}
-
-	return &pb.SwitchWorkerRelayMasterResponse{
-		Result:  true,
-		Sources: workerResps,
-	}, nil
-}
-
 // OperateWorkerRelayTask implements MasterServer.OperateWorkerRelayTask
 func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWorkerRelayRequest) (*pb.OperateWorkerRelayResponse, error) {
 	var (
@@ -1081,78 +974,6 @@ func (s *Server) checkTaskAndWorkerMatch(taskname string, targetWorker string) b
 	return false
 }
 
-// UpdateMasterConfig implements MasterServer.UpdateConfig
-func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
-	var (
-		resp2 *pb.UpdateMasterConfigResponse
-		err2  error
-	)
-	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
-	if shouldRet {
-		return resp2, err2
-	}
-
-	s.Lock()
-	err := s.cfg.UpdateConfigFile(req.Config)
-	if err != nil {
-		s.Unlock()
-		return &pb.UpdateMasterConfigResponse{
-			Result: false,
-			Msg:    "Failed to write config to local file. detail: " + err.Error(),
-		}, nil
-	}
-	log.L().Info("saved dm-master config file", zap.String("config file", s.cfg.ConfigFile), zap.String("request", "UpdateMasterConfig"))
-
-	cfg := NewConfig()
-	cfg.ConfigFile = s.cfg.ConfigFile
-	err = cfg.Reload()
-	if err != nil {
-		s.Unlock()
-		return &pb.UpdateMasterConfigResponse{
-			Result: false,
-			Msg:    fmt.Sprintf("Failed to parse configure from file %s, detail: ", cfg.ConfigFile) + err.Error(),
-		}, nil
-	}
-	log.L().Info("update dm-master config", zap.Stringer("config", cfg), zap.String("request", "UpdateMasterConfig"))
-	s.cfg = cfg
-	log.L().Info("update dm-master config file success", zap.String("request", "UpdateMasterConfig"))
-	s.Unlock()
-	return &pb.UpdateMasterConfigResponse{
-		Result: true,
-		Msg:    "",
-	}, nil
-}
-
-// UpdateWorkerRelayConfig updates config for relay and (dm-worker)
-func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
-	var (
-		resp2 *pb.CommonWorkerResponse
-		err2  error
-	)
-	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
-	if shouldRet {
-		return resp2, err2
-	}
-
-	source := req.Source
-	content := req.Config
-	worker := s.scheduler.GetWorkerBySource(source)
-	if worker == nil {
-		return errorCommonWorkerResponse(fmt.Sprintf("source %s relevant source-client not found", source), source, ""), nil
-	}
-
-	log.L().Info("update relay config", zap.String("source", source), zap.String("request", "UpdateWorkerRelayConfig"))
-	request := &workerrpc.Request{
-		Type:        workerrpc.CmdUpdateRelay,
-		UpdateRelay: &pb.UpdateRelayRequest{Content: content},
-	}
-	resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
-	if err != nil {
-		return errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name), nil
-	}
-	return resp.UpdateRelay, nil
-}
-
 // TODO: refine the call stack of this API, query worker configs that we needed only
 func (s *Server) getSourceConfigs(sources []*config.MySQLInstance) (map[string]config.DBConfig, error) {
 	cfgs := make(map[string]config.DBConfig)
@@ -1164,36 +985,6 @@ func (s *Server) getSourceConfigs(sources []*config.MySQLInstance) (map[string]c
 		}
 	}
 	return cfgs, nil
-}
-
-// MigrateWorkerRelay migrates dm-woker relay unit
-func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
-	var (
-		resp2 *pb.CommonWorkerResponse
-		err2  error
-	)
-	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
-	if shouldRet {
-		return resp2, err2
-	}
-
-	source := req.Source
-	binlogPos := req.BinlogPos
-	binlogName := req.BinlogName
-	worker := s.scheduler.GetWorkerBySource(source)
-	if worker == nil {
-		return errorCommonWorkerResponse(fmt.Sprintf("source %s relevant source-client not found", source), source, ""), nil
-	}
-	log.L().Info("try to migrate relay", zap.String("source", source), zap.String("request", "MigrateWorkerRelay"))
-	request := &workerrpc.Request{
-		Type:         workerrpc.CmdMigrateRelay,
-		MigrateRelay: &pb.MigrateRelayRequest{BinlogName: binlogName, BinlogPos: binlogPos},
-	}
-	resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
-	if err != nil {
-		return errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name), nil
-	}
-	return resp.MigrateRelay, nil
 }
 
 // CheckTask checks legality of task configuration
