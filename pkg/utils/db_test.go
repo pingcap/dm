@@ -309,6 +309,10 @@ func (t *testDBSuite) TestTiDBVersion(c *C) {
 			"5.7.25-TiDB-v3.1.2",
 			TiDBVersion{3, 1, 2},
 			nil,
+		}, {
+			"5.7.25-TiDB-v4.0.0-beta.2-1293-g0843f32c0-dirty",
+			TiDBVersion{4, 0, 0},
+			nil,
 		},
 	}
 
