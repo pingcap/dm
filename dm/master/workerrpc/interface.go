@@ -52,18 +52,9 @@ const (
 type Request struct {
 	Type CmdType
 
-	StartSubTask   *pb.StartSubTaskRequest
-	OperateSubTask *pb.OperateSubTaskRequest
-	UpdateSubTask  *pb.UpdateSubTaskRequest
+	QueryStatus *pb.QueryStatusRequest
 
-	QueryStatus       *pb.QueryStatusRequest
-	QueryWorkerConfig *pb.QueryWorkerConfigRequest
-
-	SwitchRelayMaster *pb.SwitchRelayMasterRequest
-	OperateRelay      *pb.OperateRelayRequest
-	PurgeRelay        *pb.PurgeRelayRequest
-	UpdateRelay       *pb.UpdateRelayRequest
-	MigrateRelay      *pb.MigrateRelayRequest
+	PurgeRelay *pb.PurgeRelayRequest
 
 	OperateSchema *pb.OperateWorkerSchemaRequest
 
@@ -75,18 +66,9 @@ type Request struct {
 type Response struct {
 	Type CmdType
 
-	StartSubTask   *pb.CommonWorkerResponse
-	OperateSubTask *pb.OperateSubTaskResponse
-	UpdateSubTask  *pb.CommonWorkerResponse
+	QueryStatus *pb.QueryStatusResponse
 
-	QueryStatus       *pb.QueryStatusResponse
-	QueryWorkerConfig *pb.QueryWorkerConfigResponse
-
-	SwitchRelayMaster *pb.CommonWorkerResponse
-	OperateRelay      *pb.OperateRelayResponse
-	PurgeRelay        *pb.CommonWorkerResponse
-	UpdateRelay       *pb.CommonWorkerResponse
-	MigrateRelay      *pb.CommonWorkerResponse
+	PurgeRelay *pb.CommonWorkerResponse
 
 	OperateSchema *pb.CommonWorkerResponse
 

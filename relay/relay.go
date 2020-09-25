@@ -73,10 +73,6 @@ type Process interface {
 	Init(ctx context.Context) (err error)
 	// Process run background logic of relay log unit
 	Process(ctx context.Context, pr chan pb.ProcessResult)
-	// SwitchMaster switches relay's master server
-	SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error
-	// Migrate  resets  binlog position
-	Migrate(ctx context.Context, binlogName string, binlogPos uint32) error
 	// ActiveRelayLog returns the earliest active relay log info in this operator
 	ActiveRelayLog() *pkgstreamer.RelayLogInfo
 	// Reload reloads config
@@ -205,24 +201,6 @@ func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		IsCanceled: isCanceled,
 		Errors:     errs,
 	}
-}
-
-// SwitchMaster switches relay's master server
-// before call this from dmctl, you must ensure that relay catches up previous master
-// we can not check this automatically in this func because master already changed
-// switch master server steps:
-//   1. use dmctl to pause relay
-//   2. ensure relay catching up current master server (use `query-status`)
-//   3. switch master server for upstream
-//      * change relay's master config, TODO
-//      * change master behind VIP
-//   4. use dmctl to switch relay's master server (use `switch-relay-master`)
-//   5. use dmctl to resume relay
-func (r *Relay) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
-	if !r.cfg.EnableGTID {
-		return terror.ErrRelaySwitchMasterNeedGTID.Generate()
-	}
-	return r.reSetupMeta()
 }
 
 func (r *Relay) process(parentCtx context.Context) error {
@@ -860,19 +838,4 @@ func (r *Relay) ActiveRelayLog() *pkgstreamer.RelayLogInfo {
 	r.activeRelayLog.RLock()
 	defer r.activeRelayLog.RUnlock()
 	return r.activeRelayLog.info
-}
-
-// Migrate reset binlog pos and name, create sub dir
-func (r *Relay) Migrate(ctx context.Context, binlogName string, binlogPos uint32) error {
-	r.Lock()
-	defer r.Unlock()
-	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
-	if err != nil {
-		return err
-	}
-	err = r.meta.AddDir(uuid, &mysql.Position{Name: binlogName, Pos: binlogPos}, nil)
-	if err != nil {
-		return err
-	}
-	return nil
 }
