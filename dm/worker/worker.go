@@ -615,32 +615,6 @@ func (w *Worker) ForbidPurge() (bool, string) {
 	return false, ""
 }
 
-// MigrateRelay migrate relay unit
-func (w *Worker) MigrateRelay(ctx context.Context, binlogName string, binlogPos uint32) error {
-	w.Lock()
-	defer w.Unlock()
-
-	if w.relayHolder == nil {
-		w.l.Warn("relay holder is nil, ignore migrate relay")
-		return nil
-	}
-
-	stage := w.relayHolder.Stage()
-	if stage == pb.Stage_Running {
-		err := w.relayHolder.Operate(ctx, pb.RelayOp_PauseRelay)
-		if err != nil {
-			return err
-		}
-	} else if stage == pb.Stage_Stopped {
-		return terror.ErrWorkerMigrateStopRelay.Generate()
-	}
-	err := w.relayHolder.Migrate(ctx, binlogName, binlogPos)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // OperateSchema operates schema for an upstream table.
 func (w *Worker) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaRequest) (schema string, err error) {
 	w.Lock()

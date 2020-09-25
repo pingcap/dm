@@ -9,8 +9,6 @@ service Worker {
     // PurgeRelay purges relay log files for this dm-worker
     rpc PurgeRelay (PurgeRelayRequest) returns (CommonWorkerResponse) {}
 
-    rpc MigrateRelay(MigrateRelayRequest) returns (CommonWorkerResponse) {}
-
     // Operate (get/set/remove) schema for a specified upstream table.
     // a `set`/`remove` operation should be an one-time operation (only take effect once),
     // so we use a gRPC method rather than a etcd operation now (no persistent operation state).
@@ -29,11 +27,6 @@ enum TaskOp {
     Start = 4;
     Update = 5;
     AutoResume = 6;
-}
-
-message MigrateRelayRequest {
-    string BinlogName = 1;
-    uint32 BinlogPos = 2;
 }
 
 message QueryStatusRequest {

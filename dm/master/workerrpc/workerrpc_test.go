@@ -66,10 +66,6 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 			PurgeRelay: &pb.PurgeRelayRequest{Inactive: true},
 		},
 		{
-			Type:         CmdMigrateRelay,
-			MigrateRelay: &pb.MigrateRelayRequest{BinlogName: "mysql-bin.000123"},
-		},
-		{
 			Type:          CmdOperateSchema,
 			OperateSchema: &pb.OperateWorkerSchemaRequest{Op: pb.SchemaOp_SetSchema},
 		},
@@ -85,10 +81,9 @@ func (t *testWorkerRPCSuite) TestGRPCClient(c *C) {
 
 	workerCli.EXPECT().QueryStatus(gomock.Any(), reqs[0].QueryStatus)
 	workerCli.EXPECT().PurgeRelay(gomock.Any(), reqs[1].PurgeRelay)
-	workerCli.EXPECT().MigrateRelay(gomock.Any(), reqs[2].MigrateRelay)
-	workerCli.EXPECT().OperateSchema(gomock.Any(), reqs[3].OperateSchema)
-	workerCli.EXPECT().OperateV1Meta(gomock.Any(), reqs[4].OperateV1Meta)
-	workerCli.EXPECT().HandleError(gomock.Any(), reqs[5].HandleError)
+	workerCli.EXPECT().OperateSchema(gomock.Any(), reqs[2].OperateSchema)
+	workerCli.EXPECT().OperateV1Meta(gomock.Any(), reqs[3].OperateV1Meta)
+	workerCli.EXPECT().HandleError(gomock.Any(), reqs[4].HandleError)
 
 	// others cmds are not supported.
 	// NOTE: update the end cmd in the below `for` loop when adding new cmds.

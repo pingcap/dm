@@ -1029,36 +1029,6 @@ func (s *Server) getSourceConfigs(sources []*config.MySQLInstance) (map[string]c
 	return cfgs, nil
 }
 
-// MigrateWorkerRelay migrates dm-woker relay unit
-func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
-	var (
-		resp2 *pb.CommonWorkerResponse
-		err2  error
-	)
-	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
-	if shouldRet {
-		return resp2, err2
-	}
-
-	source := req.Source
-	binlogPos := req.BinlogPos
-	binlogName := req.BinlogName
-	worker := s.scheduler.GetWorkerBySource(source)
-	if worker == nil {
-		return errorCommonWorkerResponse(fmt.Sprintf("source %s relevant source-client not found", source), source, ""), nil
-	}
-	log.L().Info("try to migrate relay", zap.String("source", source), zap.String("request", "MigrateWorkerRelay"))
-	request := &workerrpc.Request{
-		Type:         workerrpc.CmdMigrateRelay,
-		MigrateRelay: &pb.MigrateRelayRequest{BinlogName: binlogName, BinlogPos: binlogPos},
-	}
-	resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
-	if err != nil {
-		return errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name), nil
-	}
-	return resp.MigrateRelay, nil
-}
-
 // CheckTask checks legality of task configuration
 func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.CheckTaskResponse, error) {
 	var (
