@@ -157,6 +157,7 @@ func (t *testMaster) TestWaitWorkersReadyV1Import(c *C) {
 
 	err = s.waitWorkersReadyV1Import(tctx, cfgs)
 	c.Assert(err, IsNil)
+	clearEtcdEnv(c)
 }
 
 func (t *testMaster) TestSubtaskCfgsStagesV1Import(c *C) {
@@ -342,4 +343,5 @@ func (t *testMaster) TestSubtaskCfgsStagesV1Import(c *C) {
 	c.Assert(err, ErrorMatches, ".*fail to get subtask config and stage.*")
 	c.Assert(cfgs, HasLen, 0)
 	c.Assert(stages, HasLen, 0)
+	clearEtcdEnv(c)
 }
