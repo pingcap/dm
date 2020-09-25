@@ -185,6 +185,9 @@ func (t *testMaster) SetUpSuite(c *check.C) {
 
 func (t *testMaster) TearDownSuite(c *check.C) {
 	maxRetryNum = t.saveMaxRetryNum
+}
+
+func (t *testMaster) TearDownTest(c *check.C) {
 	clearEtcdEnv(c)
 }
 
