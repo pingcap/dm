@@ -42,50 +42,74 @@ func Parse(p *parser.Parser, sql, charset, collation string) (stmt []ast.StmtNod
 	return stmts, terror.ErrParseSQL.Delegate(err)
 }
 
-// FetchDDLTableNames returns table names in ddl
-// the result contains [tableName] excepted create table like and rename table
-// for `create table like` DDL, result contains [sourceTableName, sourceRefTableName]
+// ref: https://github.com/pingcap/tidb/blob/09feccb529be2830944e11f5fed474020f50370f/server/sql_info_fetcher.go#L46
+type tableNameExtractor struct {
+	curDB string
+	names []*filter.Table
+}
+
+func (tne *tableNameExtractor) Enter(in ast.Node) (ast.Node, bool) {
+	if t, ok := in.(*ast.TableName); ok {
+		tb := &filter.Table{Schema: t.Schema.L, Name: t.Name.L}
+		if tb.Schema == "" {
+			tb.Schema = tne.curDB
+		}
+		tne.names = append(tne.names, tb)
+		return in, true
+	}
+	return in, false
+}
+
+func (tne *tableNameExtractor) Leave(in ast.Node) (ast.Node, bool) {
+	return in, true
+}
+
+// FetchDDLTableNames returns non-repeat tableNames in ddl, duplicate tableName is left at its first appearance
+// the result contains many tableName. Because we use visitor pattern, first tableName is always upper-most table in ast
+// specifically, for `create table like` DDL, result contains [sourceTableName, sourceRefTableName]
 // for rename table ddl, result contains [oldTableName, newTableName]
+// for other DDL, order of tableName is the node visit order
 func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, error) {
 	var res []*filter.Table
-	switch v := stmt.(type) {
-	case *ast.AlterDatabaseStmt:
-		res = append(res, genTableName(v.Name, ""))
-	case *ast.CreateDatabaseStmt:
-		res = append(res, genTableName(v.Name, ""))
-	case *ast.DropDatabaseStmt:
-		res = append(res, genTableName(v.Name, ""))
-	case *ast.CreateTableStmt:
-		res = append(res, genTableName(v.Table.Schema.O, v.Table.Name.O))
-		if v.ReferTable != nil {
-			res = append(res, genTableName(v.ReferTable.Schema.O, v.ReferTable.Name.O))
-		}
-	case *ast.DropTableStmt:
-		if len(v.Tables) != 1 {
-			return res, terror.ErrDropMultipleTables.Generate()
-		}
-		res = append(res, genTableName(v.Tables[0].Schema.O, v.Tables[0].Name.O))
-	case *ast.TruncateTableStmt:
-		res = append(res, genTableName(v.Table.Schema.O, v.Table.Name.O))
-	case *ast.AlterTableStmt:
-		res = append(res, genTableName(v.Table.Schema.O, v.Table.Name.O))
-		if v.Specs[0].NewTable != nil {
-			res = append(res, genTableName(v.Specs[0].NewTable.Schema.O, v.Specs[0].NewTable.Name.O))
-		}
-	case *ast.RenameTableStmt:
-		res = append(res, genTableName(v.OldTable.Schema.O, v.OldTable.Name.O))
-		res = append(res, genTableName(v.NewTable.Schema.O, v.NewTable.Name.O))
-	case *ast.CreateIndexStmt:
-		res = append(res, genTableName(v.Table.Schema.O, v.Table.Name.O))
-	case *ast.DropIndexStmt:
-		res = append(res, genTableName(v.Table.Schema.O, v.Table.Name.O))
+
+	switch stmt.(type) {
+	case ast.DDLNode:
 	default:
 		return res, terror.ErrUnknownTypeDDL.Generate(stmt)
 	}
 
-	for i := range res {
-		if res[i].Schema == "" {
-			res[i].Schema = schema
+	// special cases: schema related SQLs doesn't have tableName, and keep old behavior with drop multiple tables
+	shouldReturn := false
+	switch v := stmt.(type) {
+	case *ast.AlterDatabaseStmt:
+		res = append(res, genTableName(v.Name, ""))
+		shouldReturn = true
+	case *ast.CreateDatabaseStmt:
+		res = append(res, genTableName(v.Name, ""))
+		shouldReturn = true
+	case *ast.DropDatabaseStmt:
+		res = append(res, genTableName(v.Name, ""))
+		shouldReturn = true
+	case *ast.DropTableStmt:
+		if len(v.Tables) != 1 {
+			return res, terror.ErrDropMultipleTables.Generate()
+		}
+	}
+	if shouldReturn {
+		return res, nil
+	}
+
+	e := &tableNameExtractor{
+		curDB: schema,
+		names: make([]*filter.Table, 0),
+	}
+	stmt.Accept(e)
+
+	seen := map[filter.Table]struct{}{}
+	for _, table := range e.names {
+		if _, ok := seen[*table]; !ok {
+			seen[*table] = struct{}{}
+			res = append(res, table)
 		}
 	}
 

@@ -165,7 +165,7 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("s1", "t1")}, {genTableName("s1", "t1"), genTableName("xx", "t2")}, {genTableName("xx", "t2")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
-		{{genTableName("test", "t1")}},
+		{{genTableName("test", "t1"), genTableName("test", "t2")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
@@ -295,5 +295,4 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 			c.Assert(targetSQL, Equals, targetSQLs[i][j])
 		}
 	}
-
 }
