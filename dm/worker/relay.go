@@ -52,8 +52,6 @@ type RelayHolder interface {
 	Result() *pb.ProcessResult
 	// Update updates relay config online
 	Update(ctx context.Context, cfg *config.SourceConfig) error
-	// Migrate resets binlog name and binlog position for relay unit
-	Migrate(ctx context.Context, binlogName string, binlogPos uint32) error
 }
 
 // NewRelayHolder is relay holder initializer
@@ -360,13 +358,6 @@ func (h *realRelayHolder) EarliestActiveRelayLog() *streamer.RelayLogInfo {
 	return h.relay.ActiveRelayLog()
 }
 
-// Migrate reset binlog name and binlog pos for relay unit
-func (h *realRelayHolder) Migrate(ctx context.Context, binlogName string, binlogPos uint32) error {
-	h.Lock()
-	defer h.Unlock()
-	return h.relay.Migrate(ctx, binlogName, binlogPos)
-}
-
 /******************** dummy relay holder ********************/
 
 type dummyRelayHolder struct {
@@ -472,11 +463,6 @@ func (d *dummyRelayHolder) Result() *pb.ProcessResult {
 
 // Update implements interface of RelayHolder
 func (d *dummyRelayHolder) Update(ctx context.Context, cfg *config.SourceConfig) error {
-	return nil
-}
-
-// Migrate implements interface of RelayHolder
-func (d *dummyRelayHolder) Migrate(ctx context.Context, binlogName string, binlogPos uint32) error {
 	return nil
 }
 

@@ -428,23 +428,6 @@ func (s *Server) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) (*pb
 	return makeCommonWorkerResponse(err), nil
 }
 
-// MigrateRelay migrate relay to original binlog pos
-func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) (*pb.CommonWorkerResponse, error) {
-	log.L().Info("", zap.String("request", "MigrateRelay"), zap.Stringer("payload", req))
-	w := s.getWorker(true)
-	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
-	}
-
-	err := w.MigrateRelay(ctx, req.BinlogName, req.BinlogPos)
-	if err != nil {
-		log.L().Error("fail to migrate relay", zap.String("request", "MigrateRelay"), zap.Stringer("payload", req), zap.Error(err))
-	}
-	// TODO: check whether this interface need to store message in ETCD
-	return makeCommonWorkerResponse(err), nil
-}
-
 // OperateSchema operates schema for an upstream table.
 func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "OperateSchema"), zap.Stringer("payload", req))

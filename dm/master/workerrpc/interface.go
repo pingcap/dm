@@ -54,8 +54,7 @@ type Request struct {
 
 	QueryStatus *pb.QueryStatusRequest
 
-	PurgeRelay   *pb.PurgeRelayRequest
-	MigrateRelay *pb.MigrateRelayRequest
+	PurgeRelay *pb.PurgeRelayRequest
 
 	OperateSchema *pb.OperateWorkerSchemaRequest
 
@@ -69,8 +68,7 @@ type Response struct {
 
 	QueryStatus *pb.QueryStatusResponse
 
-	PurgeRelay   *pb.CommonWorkerResponse
-	MigrateRelay *pb.CommonWorkerResponse
+	PurgeRelay *pb.CommonWorkerResponse
 
 	OperateSchema *pb.CommonWorkerResponse
 

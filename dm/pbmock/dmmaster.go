@@ -135,26 +135,6 @@ func (mr *MockMasterClientMockRecorder) ListMember(arg0, arg1 interface{}, arg2 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMember", reflect.TypeOf((*MockMasterClient)(nil).ListMember), varargs...)
 }
 
-// MigrateWorkerRelay mocks base method
-func (m *MockMasterClient) MigrateWorkerRelay(arg0 context.Context, arg1 *pb.MigrateWorkerRelayRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "MigrateWorkerRelay", varargs...)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// MigrateWorkerRelay indicates an expected call of MigrateWorkerRelay
-func (mr *MockMasterClientMockRecorder) MigrateWorkerRelay(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateWorkerRelay", reflect.TypeOf((*MockMasterClient)(nil).MigrateWorkerRelay), varargs...)
-}
-
 // OfflineMember mocks base method
 func (m *MockMasterClient) OfflineMember(arg0 context.Context, arg1 *pb.OfflineMemberRequest, arg2 ...grpc.CallOption) (*pb.OfflineMemberResponse, error) {
 	m.ctrl.T.Helper()
@@ -531,21 +511,6 @@ func (m *MockMasterServer) ListMember(arg0 context.Context, arg1 *pb.ListMemberR
 func (mr *MockMasterServerMockRecorder) ListMember(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMember", reflect.TypeOf((*MockMasterServer)(nil).ListMember), arg0, arg1)
-}
-
-// MigrateWorkerRelay mocks base method
-func (m *MockMasterServer) MigrateWorkerRelay(arg0 context.Context, arg1 *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MigrateWorkerRelay", arg0, arg1)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// MigrateWorkerRelay indicates an expected call of MigrateWorkerRelay
-func (mr *MockMasterServerMockRecorder) MigrateWorkerRelay(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateWorkerRelay", reflect.TypeOf((*MockMasterServer)(nil).MigrateWorkerRelay), arg0, arg1)
 }
 
 // OfflineMember mocks base method

@@ -70,11 +70,6 @@ func (d *DummyRelay) InjectProcessResult(result pb.ProcessResult) {
 	d.processResult = result
 }
 
-// Migrate implements Process interface
-func (d *DummyRelay) Migrate(ctx context.Context, binlogName string, binlogPos uint32) error {
-	return nil
-}
-
 // ActiveRelayLog implements Process interface
 func (d *DummyRelay) ActiveRelayLog() *pkgstreamer.RelayLogInfo {
 	return nil

@@ -73,8 +73,6 @@ type Process interface {
 	Init(ctx context.Context) (err error)
 	// Process run background logic of relay log unit
 	Process(ctx context.Context, pr chan pb.ProcessResult)
-	// Migrate  resets  binlog position
-	Migrate(ctx context.Context, binlogName string, binlogPos uint32) error
 	// ActiveRelayLog returns the earliest active relay log info in this operator
 	ActiveRelayLog() *pkgstreamer.RelayLogInfo
 	// Reload reloads config
@@ -840,19 +838,4 @@ func (r *Relay) ActiveRelayLog() *pkgstreamer.RelayLogInfo {
 	r.activeRelayLog.RLock()
 	defer r.activeRelayLog.RUnlock()
 	return r.activeRelayLog.info
-}
-
-// Migrate reset binlog pos and name, create sub dir
-func (r *Relay) Migrate(ctx context.Context, binlogName string, binlogPos uint32) error {
-	r.Lock()
-	defer r.Unlock()
-	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
-	if err != nil {
-		return err
-	}
-	err = r.meta.AddDir(uuid, &mysql.Position{Name: binlogName, Pos: binlogPos}, nil)
-	if err != nil {
-		return err
-	}
-	return nil
 }

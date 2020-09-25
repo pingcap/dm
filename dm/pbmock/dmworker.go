@@ -55,26 +55,6 @@ func (mr *MockWorkerClientMockRecorder) HandleError(arg0, arg1 interface{}, arg2
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleError", reflect.TypeOf((*MockWorkerClient)(nil).HandleError), varargs...)
 }
 
-// MigrateRelay mocks base method
-func (m *MockWorkerClient) MigrateRelay(arg0 context.Context, arg1 *pb.MigrateRelayRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "MigrateRelay", varargs...)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// MigrateRelay indicates an expected call of MigrateRelay
-func (mr *MockWorkerClientMockRecorder) MigrateRelay(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateRelay", reflect.TypeOf((*MockWorkerClient)(nil).MigrateRelay), varargs...)
-}
-
 // OperateSchema mocks base method
 func (m *MockWorkerClient) OperateSchema(arg0 context.Context, arg1 *pb.OperateWorkerSchemaRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
 	m.ctrl.T.Helper()
@@ -191,21 +171,6 @@ func (m *MockWorkerServer) HandleError(arg0 context.Context, arg1 *pb.HandleWork
 func (mr *MockWorkerServerMockRecorder) HandleError(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleError", reflect.TypeOf((*MockWorkerServer)(nil).HandleError), arg0, arg1)
-}
-
-// MigrateRelay mocks base method
-func (m *MockWorkerServer) MigrateRelay(arg0 context.Context, arg1 *pb.MigrateRelayRequest) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MigrateRelay", arg0, arg1)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// MigrateRelay indicates an expected call of MigrateRelay
-func (mr *MockWorkerServerMockRecorder) MigrateRelay(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateRelay", reflect.TypeOf((*MockWorkerServer)(nil).MigrateRelay), arg0, arg1)
 }
 
 // OperateSchema mocks base method

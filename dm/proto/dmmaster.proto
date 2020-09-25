@@ -40,9 +40,6 @@ service Master {
     // PurgeWorkerRelay purges relay log files for some dm-workers
     rpc PurgeWorkerRelay(PurgeWorkerRelayRequest) returns (PurgeWorkerRelayResponse) {}
 
-    // MigrateRelay request migrate old dm-woker to a new one. 
-    rpc MigrateWorkerRelay(MigrateWorkerRelayRequest) returns (CommonWorkerResponse) {}
-
     // CheckTask checks legality of task configuration
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
 
@@ -107,12 +104,6 @@ service Master {
             body: "*"
         };
     }
-}
-
-message MigrateWorkerRelayRequest {
-    string BinlogName = 1;
-    uint32 BinlogPos = 2;
-    string source = 3;
 }
 
 message StartTaskRequest {
