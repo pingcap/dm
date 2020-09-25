@@ -1236,12 +1236,15 @@ func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, erro
 			return cfgs, err
 		}
 		if err = cfg.Adjust(fromDB.DB); err != nil {
+			fromDB.Close()
 			return cfgs, err
 		}
 		if _, err = cfg.Yaml(); err != nil {
+			fromDB.Close()
 			return cfgs, err
 		}
 
+		fromDB.Close()
 		cfgs[i] = cfg
 	}
 	return cfgs, nil
@@ -1262,6 +1265,7 @@ func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
 
 	value, err := dbutil.ShowVersion(ctx, toDB.DB)
 	if err != nil {
+		toDB.Close()
 		return err
 	}
 
@@ -1270,6 +1274,7 @@ func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
 	if err == nil {
 		config.AdjustTargetDBSessionCfg(dbConfig, version)
 	}
+	toDB.Close()
 	return nil
 }
 
