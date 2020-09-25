@@ -722,7 +722,6 @@ func checkDuplicateString(ruleNames []string) []string {
 
 // AdjustTargetDBSessionCfg adjust session cfg of TiDB
 func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version utils.TiDBVersion) {
-	log.L().Info("in adjust target db session cfg")
 	lowerMap := make(map[string]string, len(dbConfig.Session))
 	for k, v := range dbConfig.Session {
 		lowerMap[strings.ToLower(k)] = v
