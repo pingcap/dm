@@ -1256,6 +1256,7 @@ func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
 		cfg.Password = utils.DecryptOrPlaintext(cfg.Password)
 	}
 
+	log.L().Info("in adjust target db")
 	toDB, err := conn.DefaultDBProvider.Apply(cfg)
 	if err != nil {
 		return err
@@ -1266,6 +1267,7 @@ func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
 		toDB.Close()
 		return err
 	}
+	log.L().Info("get version: ", zap.String("tidb version", value))
 
 	version, err := utils.ToTiDBVersion(value)
 	// Do not adjust if not TiDB
