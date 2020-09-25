@@ -428,43 +428,6 @@ func (s *Server) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) (*pb
 	return makeCommonWorkerResponse(err), nil
 }
 
-// QueryWorkerConfig return worker config
-// worker config is defined in worker directory now,
-// to avoid circular import, we only return db config
-func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfigRequest) (*pb.QueryWorkerConfigResponse, error) {
-	log.L().Info("", zap.String("request", "QueryWorkerConfig"), zap.Stringer("payload", req))
-	resp := &pb.QueryWorkerConfigResponse{
-		Result: true,
-	}
-
-	w := s.getWorker(true)
-	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		resp.Result = false
-		resp.Msg = terror.ErrWorkerNoStart.Error()
-		return resp, nil
-	}
-
-	workerCfg, err := w.QueryConfig(ctx)
-	if err != nil {
-		resp.Result = false
-		resp.Msg = err.Error()
-		log.L().Error("fail to query worker config", zap.String("request", "QueryWorkerConfig"), zap.Stringer("payload", req), zap.Error(err))
-		return resp, nil
-	}
-
-	rawConfig, err := workerCfg.From.Toml()
-	if err != nil {
-		resp.Result = false
-		resp.Msg = err.Error()
-		log.L().Error("fail to marshal worker config", zap.String("request", "QueryWorkerConfig"), zap.Stringer("worker from config", &workerCfg.From), zap.Error(err))
-	}
-
-	resp.Content = rawConfig
-	resp.Source = workerCfg.SourceID
-	return resp, nil
-}
-
 // MigrateRelay migrate relay to original binlog pos
 func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "MigrateRelay"), zap.Stringer("payload", req))

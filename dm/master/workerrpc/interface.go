@@ -52,8 +52,7 @@ const (
 type Request struct {
 	Type CmdType
 
-	QueryStatus       *pb.QueryStatusRequest
-	QueryWorkerConfig *pb.QueryWorkerConfigRequest
+	QueryStatus *pb.QueryStatusRequest
 
 	PurgeRelay   *pb.PurgeRelayRequest
 	MigrateRelay *pb.MigrateRelayRequest
@@ -68,8 +67,7 @@ type Request struct {
 type Response struct {
 	Type CmdType
 
-	QueryStatus       *pb.QueryStatusResponse
-	QueryWorkerConfig *pb.QueryWorkerConfigResponse
+	QueryStatus *pb.QueryStatusResponse
 
 	PurgeRelay   *pb.CommonWorkerResponse
 	MigrateRelay *pb.CommonWorkerResponse
