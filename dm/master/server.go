@@ -1061,6 +1061,7 @@ func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
 	log.L().Info("get version: ", zap.String("tidb version", value))
 
 	version, err := utils.ToTiDBVersion(value)
+	log.L().Warn("get tidb version", log.ShortError(err))
 	// Do not adjust if not TiDB
 	if err == nil {
 		config.AdjustTargetDBSessionCfg(dbConfig, version)
