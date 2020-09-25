@@ -15,10 +15,12 @@ package utils
 
 import (
 	"context"
+	"sort"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
@@ -287,4 +289,57 @@ func newMysqlErr(number uint16, message string) *mysql.MySQLError {
 		Number:  number,
 		Message: message,
 	}
+}
+
+func (t *testDBSuite) TestTiDBVersion(c *C) {
+	testCases := []struct {
+		version string
+		result  TiDBVersion
+		err     error
+	}{
+		{
+			"wrong-version",
+			TiDBVersion{0, 0, 0},
+			errors.NotValidf("TiDB version %s", "wrong-version"),
+		}, {
+			"5.7.31-log",
+			TiDBVersion{0, 0, 0},
+			errors.NotValidf("TiDB version %s", "5.7.31-log"),
+		}, {
+			"5.7.25-TiDB-v3.1.2",
+			TiDBVersion{3, 1, 2},
+			nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		tidbVer, err := ToTiDBVersion(tc.version)
+		if tc.err != nil {
+			c.Assert(err, NotNil)
+			c.Assert(err.Error(), Equals, tc.err.Error())
+		} else {
+			c.Assert(tidbVer, DeepEquals, tc.result)
+		}
+	}
+
+	vers := []TiDBVersion{
+		{3, 0, 0},
+		{2, 1, 1},
+		{2, 0, 2},
+		{1, 2, 1},
+		{1, 1, 0},
+		{1, 1, 0},
+		{1, 0, 1},
+		{1, 0, 0},
+	}
+
+	clone := make([]TiDBVersion, 0, len(vers))
+	for _, v := range vers {
+		clone = append(clone, v)
+	}
+
+	sort.Slice(vers, func(i, j int) bool {
+		return vers[i].Ge(vers[j])
+	})
+	c.Assert(vers, DeepEquals, clone)
 }

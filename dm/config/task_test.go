@@ -19,6 +19,7 @@ import (
 	"sort"
 
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 
 	. "github.com/pingcap/check"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
@@ -647,4 +648,38 @@ func (t *testConfig) TestMySQLInstance(c *C) {
 
 	c.Assert(m.VerifyAndAdjust(), IsNil)
 
+}
+
+func (t *testConfig) TestAdjustTargetDBConfig(c *C) {
+	testCases := []struct {
+		dbConfig DBConfig
+		result   DBConfig
+		version  utils.TiDBVersion
+	}{
+		{
+			DBConfig{},
+			DBConfig{Session: map[string]string{}},
+			utils.TiDBVersion{0, 0, 0},
+		},
+		{
+			DBConfig{Session: map[string]string{"ANSI_QUOTES": ""}},
+			DBConfig{Session: map[string]string{"ansi_quotes": ""}},
+			utils.TiDBVersion{2, 0, 7},
+		},
+		{
+			DBConfig{},
+			DBConfig{Session: map[string]string{tidbTxnMode: tidbTxnOptimistic}},
+			utils.TiDBVersion{3, 0, 1},
+		},
+		{
+			DBConfig{Session: map[string]string{"ANSI_QUOTES": "", tidbTxnMode: "pessimistic"}},
+			DBConfig{Session: map[string]string{"ansi_quotes": "", tidbTxnMode: "pessimistic"}},
+			utils.TiDBVersion{4, 0, 2},
+		},
+	}
+
+	for _, tc := range testCases {
+		AdjustTargetDBSessionCfg(&tc.dbConfig, tc.version)
+		c.Assert(tc.dbConfig, DeepEquals, tc.result)
+	}
 }
