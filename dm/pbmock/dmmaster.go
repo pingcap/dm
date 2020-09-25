@@ -135,26 +135,6 @@ func (mr *MockMasterClientMockRecorder) ListMember(arg0, arg1 interface{}, arg2 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMember", reflect.TypeOf((*MockMasterClient)(nil).ListMember), varargs...)
 }
 
-// MigrateWorkerRelay mocks base method
-func (m *MockMasterClient) MigrateWorkerRelay(arg0 context.Context, arg1 *pb.MigrateWorkerRelayRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "MigrateWorkerRelay", varargs...)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// MigrateWorkerRelay indicates an expected call of MigrateWorkerRelay
-func (mr *MockMasterClientMockRecorder) MigrateWorkerRelay(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateWorkerRelay", reflect.TypeOf((*MockMasterClient)(nil).MigrateWorkerRelay), varargs...)
-}
-
 // OfflineMember mocks base method
 func (m *MockMasterClient) OfflineMember(arg0 context.Context, arg1 *pb.OfflineMemberRequest, arg2 ...grpc.CallOption) (*pb.OfflineMemberResponse, error) {
 	m.ctrl.T.Helper()
@@ -375,26 +355,6 @@ func (mr *MockMasterClientMockRecorder) StartTask(arg0, arg1 interface{}, arg2 .
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartTask", reflect.TypeOf((*MockMasterClient)(nil).StartTask), varargs...)
 }
 
-// SwitchWorkerRelayMaster mocks base method
-func (m *MockMasterClient) SwitchWorkerRelayMaster(arg0 context.Context, arg1 *pb.SwitchWorkerRelayMasterRequest, arg2 ...grpc.CallOption) (*pb.SwitchWorkerRelayMasterResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "SwitchWorkerRelayMaster", varargs...)
-	ret0, _ := ret[0].(*pb.SwitchWorkerRelayMasterResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// SwitchWorkerRelayMaster indicates an expected call of SwitchWorkerRelayMaster
-func (mr *MockMasterClientMockRecorder) SwitchWorkerRelayMaster(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SwitchWorkerRelayMaster", reflect.TypeOf((*MockMasterClient)(nil).SwitchWorkerRelayMaster), varargs...)
-}
-
 // UnlockDDLLock mocks base method
 func (m *MockMasterClient) UnlockDDLLock(arg0 context.Context, arg1 *pb.UnlockDDLLockRequest, arg2 ...grpc.CallOption) (*pb.UnlockDDLLockResponse, error) {
 	m.ctrl.T.Helper()
@@ -415,26 +375,6 @@ func (mr *MockMasterClientMockRecorder) UnlockDDLLock(arg0, arg1 interface{}, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnlockDDLLock", reflect.TypeOf((*MockMasterClient)(nil).UnlockDDLLock), varargs...)
 }
 
-// UpdateMasterConfig mocks base method
-func (m *MockMasterClient) UpdateMasterConfig(arg0 context.Context, arg1 *pb.UpdateMasterConfigRequest, arg2 ...grpc.CallOption) (*pb.UpdateMasterConfigResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "UpdateMasterConfig", varargs...)
-	ret0, _ := ret[0].(*pb.UpdateMasterConfigResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateMasterConfig indicates an expected call of UpdateMasterConfig
-func (mr *MockMasterClientMockRecorder) UpdateMasterConfig(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMasterConfig", reflect.TypeOf((*MockMasterClient)(nil).UpdateMasterConfig), varargs...)
-}
-
 // UpdateTask mocks base method
 func (m *MockMasterClient) UpdateTask(arg0 context.Context, arg1 *pb.UpdateTaskRequest, arg2 ...grpc.CallOption) (*pb.UpdateTaskResponse, error) {
 	m.ctrl.T.Helper()
@@ -453,26 +393,6 @@ func (mr *MockMasterClientMockRecorder) UpdateTask(arg0, arg1 interface{}, arg2 
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTask", reflect.TypeOf((*MockMasterClient)(nil).UpdateTask), varargs...)
-}
-
-// UpdateWorkerRelayConfig mocks base method
-func (m *MockMasterClient) UpdateWorkerRelayConfig(arg0 context.Context, arg1 *pb.UpdateWorkerRelayConfigRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "UpdateWorkerRelayConfig", varargs...)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateWorkerRelayConfig indicates an expected call of UpdateWorkerRelayConfig
-func (mr *MockMasterClientMockRecorder) UpdateWorkerRelayConfig(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateWorkerRelayConfig", reflect.TypeOf((*MockMasterClient)(nil).UpdateWorkerRelayConfig), varargs...)
 }
 
 // MockMasterServer is a mock of MasterServer interface
@@ -571,21 +491,6 @@ func (m *MockMasterServer) ListMember(arg0 context.Context, arg1 *pb.ListMemberR
 func (mr *MockMasterServerMockRecorder) ListMember(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMember", reflect.TypeOf((*MockMasterServer)(nil).ListMember), arg0, arg1)
-}
-
-// MigrateWorkerRelay mocks base method
-func (m *MockMasterServer) MigrateWorkerRelay(arg0 context.Context, arg1 *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MigrateWorkerRelay", arg0, arg1)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// MigrateWorkerRelay indicates an expected call of MigrateWorkerRelay
-func (mr *MockMasterServerMockRecorder) MigrateWorkerRelay(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateWorkerRelay", reflect.TypeOf((*MockMasterServer)(nil).MigrateWorkerRelay), arg0, arg1)
 }
 
 // OfflineMember mocks base method
@@ -753,21 +658,6 @@ func (mr *MockMasterServerMockRecorder) StartTask(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartTask", reflect.TypeOf((*MockMasterServer)(nil).StartTask), arg0, arg1)
 }
 
-// SwitchWorkerRelayMaster mocks base method
-func (m *MockMasterServer) SwitchWorkerRelayMaster(arg0 context.Context, arg1 *pb.SwitchWorkerRelayMasterRequest) (*pb.SwitchWorkerRelayMasterResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SwitchWorkerRelayMaster", arg0, arg1)
-	ret0, _ := ret[0].(*pb.SwitchWorkerRelayMasterResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// SwitchWorkerRelayMaster indicates an expected call of SwitchWorkerRelayMaster
-func (mr *MockMasterServerMockRecorder) SwitchWorkerRelayMaster(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SwitchWorkerRelayMaster", reflect.TypeOf((*MockMasterServer)(nil).SwitchWorkerRelayMaster), arg0, arg1)
-}
-
 // UnlockDDLLock mocks base method
 func (m *MockMasterServer) UnlockDDLLock(arg0 context.Context, arg1 *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
 	m.ctrl.T.Helper()
@@ -783,21 +673,6 @@ func (mr *MockMasterServerMockRecorder) UnlockDDLLock(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnlockDDLLock", reflect.TypeOf((*MockMasterServer)(nil).UnlockDDLLock), arg0, arg1)
 }
 
-// UpdateMasterConfig mocks base method
-func (m *MockMasterServer) UpdateMasterConfig(arg0 context.Context, arg1 *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateMasterConfig", arg0, arg1)
-	ret0, _ := ret[0].(*pb.UpdateMasterConfigResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateMasterConfig indicates an expected call of UpdateMasterConfig
-func (mr *MockMasterServerMockRecorder) UpdateMasterConfig(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMasterConfig", reflect.TypeOf((*MockMasterServer)(nil).UpdateMasterConfig), arg0, arg1)
-}
-
 // UpdateTask mocks base method
 func (m *MockMasterServer) UpdateTask(arg0 context.Context, arg1 *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
 	m.ctrl.T.Helper()
@@ -811,19 +686,4 @@ func (m *MockMasterServer) UpdateTask(arg0 context.Context, arg1 *pb.UpdateTaskR
 func (mr *MockMasterServerMockRecorder) UpdateTask(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTask", reflect.TypeOf((*MockMasterServer)(nil).UpdateTask), arg0, arg1)
-}
-
-// UpdateWorkerRelayConfig mocks base method
-func (m *MockMasterServer) UpdateWorkerRelayConfig(arg0 context.Context, arg1 *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateWorkerRelayConfig", arg0, arg1)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateWorkerRelayConfig indicates an expected call of UpdateWorkerRelayConfig
-func (mr *MockMasterServerMockRecorder) UpdateWorkerRelayConfig(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateWorkerRelayConfig", reflect.TypeOf((*MockMasterServer)(nil).UpdateWorkerRelayConfig), arg0, arg1)
 }
