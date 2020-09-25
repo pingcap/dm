@@ -155,26 +155,6 @@ func (mr *MockWorkerClientMockRecorder) QueryStatus(arg0, arg1 interface{}, arg2
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryStatus", reflect.TypeOf((*MockWorkerClient)(nil).QueryStatus), varargs...)
 }
 
-// QueryWorkerConfig mocks base method
-func (m *MockWorkerClient) QueryWorkerConfig(arg0 context.Context, arg1 *pb.QueryWorkerConfigRequest, arg2 ...grpc.CallOption) (*pb.QueryWorkerConfigResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "QueryWorkerConfig", varargs...)
-	ret0, _ := ret[0].(*pb.QueryWorkerConfigResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// QueryWorkerConfig indicates an expected call of QueryWorkerConfig
-func (mr *MockWorkerClientMockRecorder) QueryWorkerConfig(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWorkerConfig", reflect.TypeOf((*MockWorkerClient)(nil).QueryWorkerConfig), varargs...)
-}
-
 // MockWorkerServer is a mock of WorkerServer interface
 type MockWorkerServer struct {
 	ctrl     *gomock.Controller
@@ -286,19 +266,4 @@ func (m *MockWorkerServer) QueryStatus(arg0 context.Context, arg1 *pb.QueryStatu
 func (mr *MockWorkerServerMockRecorder) QueryStatus(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryStatus", reflect.TypeOf((*MockWorkerServer)(nil).QueryStatus), arg0, arg1)
-}
-
-// QueryWorkerConfig mocks base method
-func (m *MockWorkerServer) QueryWorkerConfig(arg0 context.Context, arg1 *pb.QueryWorkerConfigRequest) (*pb.QueryWorkerConfigResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryWorkerConfig", arg0, arg1)
-	ret0, _ := ret[0].(*pb.QueryWorkerConfigResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// QueryWorkerConfig indicates an expected call of QueryWorkerConfig
-func (mr *MockWorkerServerMockRecorder) QueryWorkerConfig(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWorkerConfig", reflect.TypeOf((*MockWorkerServer)(nil).QueryWorkerConfig), arg0, arg1)
 }

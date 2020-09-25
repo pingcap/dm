@@ -615,18 +615,6 @@ func (w *Worker) ForbidPurge() (bool, string) {
 	return false, ""
 }
 
-// QueryConfig returns worker's config
-func (w *Worker) QueryConfig(ctx context.Context) (*config.SourceConfig, error) {
-	w.RLock()
-	defer w.RUnlock()
-
-	if w.closed.Get() == closedTrue {
-		return nil, terror.ErrWorkerAlreadyClosed.Generate()
-	}
-
-	return w.cfg.Clone(), nil
-}
-
 // MigrateRelay migrate relay unit
 func (w *Worker) MigrateRelay(ctx context.Context, binlogName string, binlogPos uint32) error {
 	w.Lock()

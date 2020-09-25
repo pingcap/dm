@@ -9,8 +9,6 @@ service Worker {
     // PurgeRelay purges relay log files for this dm-worker
     rpc PurgeRelay (PurgeRelayRequest) returns (CommonWorkerResponse) {}
 
-    rpc QueryWorkerConfig (QueryWorkerConfigRequest) returns (QueryWorkerConfigResponse) {}
-
     rpc MigrateRelay(MigrateRelayRequest) returns (CommonWorkerResponse) {}
 
     // Operate (get/set/remove) schema for a specified upstream table.
@@ -313,16 +311,6 @@ message PurgeRelayRequest {
     int64 time = 2;
     string filename = 3;
     string subDir = 4;
-}
-
-message QueryWorkerConfigRequest {
-}
-
-message QueryWorkerConfigResponse {
-    bool result = 1;
-    string source = 2; // source ID, set by dm-master
-    string msg = 3; // when result is true, msg is empty
-    string content = 4; // marshaled config content
 }
 
 enum SchemaOp {
