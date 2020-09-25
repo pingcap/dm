@@ -19,13 +19,13 @@ import (
 
 	"github.com/pingcap/parser"
 
-	"github.com/pingcap/dm/dm/command"
-	"github.com/pingcap/dm/dm/pb"
-	parserpkg "github.com/pingcap/dm/pkg/parser"
-	"github.com/pingcap/dm/pkg/terror"
-
 	"github.com/pingcap/parser/ast"
 	"github.com/siddontang/go-mysql/replication"
+
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // HandleError handle error for syncer
@@ -39,7 +39,7 @@ func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 		}
 		pos = startLocation.Position.String()
 	} else {
-		startLocation, err := command.VerifyBinlogPos(pos)
+		startLocation, err := binlog.VerifyBinlogPos(pos)
 		if err != nil {
 			return err
 		}
