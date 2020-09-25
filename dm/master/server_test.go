@@ -185,6 +185,7 @@ func (t *testMaster) SetUpSuite(c *check.C) {
 
 func (t *testMaster) TearDownSuite(c *check.C) {
 	maxRetryNum = t.saveMaxRetryNum
+	clearEtcdEnv(c)
 }
 
 func newMockRPCClient(client pb.WorkerClient) workerrpc.Client {
@@ -968,6 +969,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	c.Assert(leaderID, check.Equals, cfg1.Name)
 
 	cancel()
+	clearEtcdEnv(c)
 }
 
 func (t *testMaster) TestOperateSource(c *check.C) {
@@ -1128,7 +1130,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	scm, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
 	c.Assert(err, check.IsNil)
 	c.Assert(scm, check.HasLen, 0)
-	cancel()
+	clearSchedulerEnv(c, cancel, &wg)
 }
 
 func generateServerConfig(c *check.C, name string) *Config {
@@ -1302,6 +1304,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 		c.Assert(err, check.IsNil)
 		c.Assert(resp.Result, check.IsTrue)
 	}
+	clearSchedulerEnv(c, cancel, &wg)
 }
 
 func (t *testMaster) TestGetTaskCfg(c *check.C) {
