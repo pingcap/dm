@@ -114,6 +114,7 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	)
 
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGTIDsForPos", `return("ccb992ad-a557-11ea-ba6a-0242ac140002:10-16")`), IsNil) // need `ResetStart`.
+	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGTIDsForPos")
 
 	dbConn, err := t.db.GetBaseConn(tctx.Ctx)

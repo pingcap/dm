@@ -287,7 +287,10 @@ func (st *singleTask) genIncrData(ctx context.Context) (err error) {
 			default:
 				if forceIgnoreExecSQLError(err) {
 					st.logger.Warn("ignore error when generating data for incremental stage", zap.Error(err))
-					st.sourceConn.resetConn(ctx) // reset connection for the next round.
+					err2 := st.sourceConn.resetConn(ctx) // reset connection for the next round.
+					if err2 != nil {
+						st.logger.Warn("fail to reset connection", zap.Error(err2))
+					}
 					err = nil
 				}
 			}

@@ -134,13 +134,13 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 
 	// test removeOutdated
 	flushLocation := startLocation
-	h.RemoveOutdated(flushLocation)
+	c.Assert(h.RemoveOutdated(flushLocation), IsNil)
 	apply, op = h.MatchAndApply(&startLocation, &endLocation)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Replace)
 
 	flushLocation = endLocation
-	h.RemoveOutdated(flushLocation)
+	c.Assert(h.RemoveOutdated(flushLocation), IsNil)
 	apply, op = h.MatchAndApply(&startLocation, &endLocation)
 	c.Assert(apply, IsFalse)
 	c.Assert(op, Equals, pb.ErrorOp_InvalidErrorOp)

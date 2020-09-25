@@ -46,7 +46,7 @@ type testElectionSuite struct {
 }
 
 func (t *testElectionSuite) SetUpTest(c *C) {
-	log.InitLogger(&log.Config{})
+	c.Assert(log.InitLogger(&log.Config{}), IsNil)
 
 	cfg := embed.NewConfig()
 	cfg.Name = "election-test"
@@ -109,6 +109,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 	defer cancel1()
 	if !normalExit {
 		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/election/mockCampaignLoopExitedAbnormally", `return()`), IsNil)
+		//nolint:errcheck
 		defer failpoint.Disable("github.com/pingcap/dm/pkg/election/mockCampaignLoopExitedAbnormally")
 	}
 	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1, t.notifyBlockTime)

@@ -149,7 +149,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 
 	s.resetEventsGenerator(c)
 
-	log.InitLogger(&log.Config{})
+	c.Assert(log.InitLogger(&log.Config{}), IsNil)
 }
 
 func (s *testSyncerSuite) generateEvents(binlogEvents mockBinlogEvents, c *C) []*replication.BinlogEvent {
@@ -400,7 +400,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
-	syncer.genRouter()
+	c.Assert(syncer.genRouter(), IsNil)
 	i := 0
 	for _, e := range allEvents {
 		switch ev := e.Event.(type) {
@@ -472,7 +472,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
-	syncer.genRouter()
+	c.Assert(syncer.genRouter(), IsNil)
 	i := 0
 	for _, e := range allEvents {
 		ev, ok := e.Event.(*replication.QueryEvent)
@@ -565,7 +565,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
-	syncer.genRouter()
+	c.Assert(syncer.genRouter(), IsNil)
 
 	i := 0
 	for _, e := range allEvents {
@@ -693,7 +693,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg, nil)
-	syncer.genRouter()
+	c.Assert(syncer.genRouter(), IsNil)
 
 	syncer.binlogFilter, err = bf.NewBinlogEvent(false, s.cfg.FilterRules)
 	c.Assert(err, IsNil)
@@ -829,6 +829,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	pos, gset, err := utils.GetMasterStatus(db, "mysql")
 	c.Assert(err, IsNil)
 
+	//nolint:errcheck
 	defer db.Exec("drop database if exists gctest_1")
 
 	s.cfg.BAList = &filter.Rules{
@@ -1039,7 +1040,8 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	}
 
 	for _, sql := range dropSQLs {
-		db.Exec(sql)
+		_, err = db.Exec(sql)
+		c.Assert(err, IsNil)
 	}
 }
 
@@ -1079,7 +1081,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
-	syncer.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background())
+	c.Assert(syncer.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background()), IsNil)
 
 	mock.ExpectBegin()
 	mock.ExpectExec(".*INSERT INTO .* VALUES.* ON DUPLICATE KEY UPDATE.*").WillReturnResult(sqlmock.NewResult(0, 1))
@@ -1149,9 +1151,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	syncer.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
 	c.Assert(err, IsNil)
-	syncer.genRouter()
+	c.Assert(syncer.genRouter(), IsNil)
 
-	syncer.setupMockCheckpoint(checkPointDBConn, checkPointMock)
+	syncer.setupMockCheckpoint(c, checkPointDBConn, checkPointMock)
 
 	syncer.reset()
 	events1 := mockBinlogEvents{
@@ -1266,7 +1268,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	cancel()
 	// when syncer exit Run(), will flush job
 	syncer.Pause()
-	syncer.Update(s.cfg)
+	c.Assert(syncer.Update(s.cfg), IsNil)
 
 	events2 := mockBinlogEvents{
 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), "c"}}}},
@@ -1348,9 +1350,9 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
 
-	syncer.genRouter()
+	c.Assert(syncer.genRouter(), IsNil)
 
-	syncer.setupMockCheckpoint(checkPointDBConn, checkPointMock)
+	syncer.setupMockCheckpoint(c, checkPointDBConn, checkPointMock)
 
 	syncer.reset()
 
@@ -1664,7 +1666,7 @@ func (s *Syncer) addJobToMemory(job *job) error {
 	return nil
 }
 
-func (s *Syncer) setupMockCheckpoint(checkPointDBConn *sql.Conn, checkPointMock sqlmock.Sqlmock) {
+func (s *Syncer) setupMockCheckpoint(c *C, checkPointDBConn *sql.Conn, checkPointMock sqlmock.Sqlmock) {
 	checkPointMock.ExpectBegin()
 	checkPointMock.ExpectExec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.cfg.MetaSchema)).WillReturnResult(sqlmock.NewResult(1, 1))
 	checkPointMock.ExpectCommit()
@@ -1674,5 +1676,5 @@ func (s *Syncer) setupMockCheckpoint(checkPointDBConn *sql.Conn, checkPointMock 
 
 	// mock syncer.checkpoint.Init() function
 	s.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
-	s.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background())
+	c.Assert(s.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background()), IsNil)
 }

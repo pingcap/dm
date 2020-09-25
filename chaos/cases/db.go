@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/errno"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -48,7 +49,10 @@ func createDBConn(ctx context.Context, db *conn.BaseDB, currDB string) (*dbConn,
 		baseConn: c,
 		currDB:   currDB,
 		resetFunc: func(ctx context.Context, baseConn *conn.BaseConn) (*conn.BaseConn, error) {
-			db.CloseBaseConn(baseConn)
+			err2 := db.CloseBaseConn(baseConn)
+			if err2 != nil {
+				log.L().Warn("fail to close connection", zap.Error(err2))
+			}
 			return db.GetBaseConn(ctx)
 		},
 	}, nil
