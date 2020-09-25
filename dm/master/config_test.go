@@ -91,11 +91,7 @@ func (t *testConfigSuite) TestConfig(c *check.C) {
 		peerURLs          = "http://127.0.0.1:8291"
 		advertisePeerURLs = "http://127.0.0.1:8291"
 		initialCluster    = "dm-master=http://127.0.0.1:8291"
-		deployMap         = map[string]string{
-			"mysql-replica-01": "172.16.10.72:8262",
-			"mysql-replica-02": "172.16.10.73:8262",
-		}
-		cases = []struct {
+		cases             = []struct {
 			args     []string
 			hasError bool
 			errorReg string
@@ -127,7 +123,6 @@ func (t *testConfigSuite) TestConfig(c *check.C) {
 	err = cfg.Reload()
 	c.Assert(err, check.IsNil)
 	c.Assert(cfg.MasterAddr, check.Equals, masterAddr)
-	c.Assert(cfg.DeployMap, check.DeepEquals, deployMap)
 
 	for _, tc := range cases {
 		cfg = NewConfig()
@@ -144,7 +139,6 @@ func (t *testConfigSuite) TestConfig(c *check.C) {
 			c.Assert(cfg.InitialCluster, check.Equals, initialCluster)
 			c.Assert(cfg.InitialClusterState, check.Equals, embed.ClusterStateFlagNew)
 			c.Assert(cfg.Join, check.Equals, "")
-			c.Assert(cfg.DeployMap, check.DeepEquals, deployMap)
 			c.Assert(cfg.String(), check.Matches, fmt.Sprintf("{.*master-addr\":\"%s\".*}", masterAddr))
 		}
 	}
@@ -156,49 +150,22 @@ func (t *testConfigSuite) TestInvalidConfig(c *check.C) {
 		cfg = NewConfig()
 	)
 
-	// test config Verify failed
+	filepath := path.Join(c.MkDir(), "test_invalid_config.toml")
+	// field still remain undecoded in config will cause verify failed
 	configContent := []byte(`
 master-addr = ":8261"
 advertise-addr = "127.0.0.1:8261"
-
-[[deploy]]
-dm-worker = "172.16.10.72:8262"`)
-	filepath := path.Join(c.MkDir(), "test_invalid_config.toml")
+aaa = "xxx"`)
 	err = ioutil.WriteFile(filepath, configContent, 0644)
-	c.Assert(err, check.IsNil)
 	err = cfg.configFromFile(filepath)
-	c.Assert(err, check.IsNil)
-	err = cfg.adjust()
-	c.Assert(err, check.ErrorMatches, ".*user should specify valid relation between source\\(mysql/mariadb\\) and dm-worker.*")
-
-	// test invalid config file content
-	err = ioutil.WriteFile(filepath, []byte("invalid toml file"), 0644)
-	c.Assert(err, check.IsNil)
-	err = cfg.Parse([]string{fmt.Sprintf("-config=%s", filepath)})
-	c.Assert(err, check.NotNil)
-	cfg.ConfigFile = filepath
-	err = cfg.Reload()
-	c.Assert(err, check.NotNil)
-
-	filepath2 := path.Join(c.MkDir(), "test_invalid_config.toml")
-	// field still remain undecoded in config will cause verify failed
-	configContent2 := []byte(`
-master-addr = ":8261"
-advertise-addr = "127.0.0.1:8261"
-aaa = "xxx"
-
-[[deploy]]
-dm-worker = "172.16.10.72:8262"`)
-	err = ioutil.WriteFile(filepath2, configContent2, 0644)
-	err = cfg.configFromFile(filepath2)
 	c.Assert(err, check.NotNil)
 	c.Assert(err, check.ErrorMatches, "*master config contained unknown configuration options: aaa.*")
 
 	// invalid `master-addr`
-	filepath3 := path.Join(c.MkDir(), "test_invalid_config.toml")
-	configContent3 := []byte(`master-addr = ""`)
-	err = ioutil.WriteFile(filepath3, configContent3, 0644)
-	err = cfg.configFromFile(filepath3)
+	filepath2 := path.Join(c.MkDir(), "test_invalid_config.toml")
+	configContent2 := []byte(`master-addr = ""`)
+	err = ioutil.WriteFile(filepath2, configContent2, 0644)
+	err = cfg.configFromFile(filepath2)
 	c.Assert(err, check.IsNil)
 	c.Assert(terror.ErrMasterHostPortNotValid.Equal(cfg.adjust()), check.IsTrue)
 }

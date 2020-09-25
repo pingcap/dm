@@ -20,7 +20,7 @@ function update_task_worker_not_found() {
         "\"result\": true" 1 \
         "\"result\": false" 1 \
         "\"source\": \"$not_found_source_id\"" 1 \
-        "\"msg\": \"source not found in task's config or deployment config\"" 1
+        "\"msg\": \"source not found in task's config\"" 1
 }
 
 function update_task_not_paused() {
