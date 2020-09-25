@@ -96,6 +96,7 @@ jobs:
 
   integration_test:
     needs: prepare
+    runs-on: ubuntu-18.04
     strategy:
       matrix:
         test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit, load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
