@@ -24,8 +24,6 @@ import (
 
 	gmysql "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/errno"
 	"github.com/siddontang/go-mysql/mysql"
 
@@ -241,43 +239,4 @@ func WrapSchemesForInitialCluster(s string, https bool) string {
 		output = append(output, kv[0]+"="+wrapScheme(kv[1], https))
 	}
 	return strings.Join(output, ",")
-}
-
-// ref: https://github.com/pingcap/tidb/blob/09feccb529be2830944e11f5fed474020f50370f/server/sql_info_fetcher.go#L46
-type tableNameExtractor struct {
-	curDB string
-	names map[*filter.Table]struct{}
-}
-
-func (tne *tableNameExtractor) Enter(in ast.Node) (ast.Node, bool) {
-	if _, ok := in.(*ast.TableName); ok {
-		return in, true
-	}
-	return in, false
-}
-
-func (tne *tableNameExtractor) Leave(in ast.Node) (ast.Node, bool) {
-	if t, ok := in.(*ast.TableName); ok {
-		tp := &filter.Table{Schema: t.Schema.L, Name: t.Name.L}
-		if tp.Schema == "" {
-			tp.Schema = tne.curDB
-		}
-		if _, ok := tne.names[tp]; !ok {
-			tne.names[tp] = struct{}{}
-		}
-	}
-	return in, true
-}
-
-func ExtractTableNames(stmt ast.StmtNode, defaultDB string) []*filter.Table {
-	e := &tableNameExtractor{
-		curDB: defaultDB,
-		names: map[*filter.Table]struct{}{},
-	}
-	stmt.Accept(e)
-	ret := make([]*filter.Table, 0, len(e.names))
-	for pair := range e.names {
-		ret = append(ret, pair)
-	}
-	return ret
 }

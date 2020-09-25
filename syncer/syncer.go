@@ -2083,11 +2083,18 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 }
 
 // input `sql` should be a single DDL, which came from parserpkg.SplitDDL
+// tableNames[0] is source (upstream) tableNames, tableNames[1] is target (downstream) tableNames
 func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.Table, stmt ast.StmtNode, ec *eventContext) error {
-	srcTable := tableNames[0][0]
+	srcTables, targetTables := tableNames[0], tableNames[1]
+	srcTable := srcTables[0]
 
 	// Make sure the tables are all loaded into the schema tracker.
-	var shouldExecDDLOnSchemaTracker, shouldSchemaExist, shouldTableExist bool
+	var (
+		shouldExecDDLOnSchemaTracker bool
+		shouldSchemaExist            bool
+		shouldTableExistNum          int // tableNames[:shouldTableExistNum] should exist
+		shouldRefTableExistNum       int // tableNames[1:shouldTableExistNum] should exist, since first one is "caller table"
+	)
 	switch node := stmt.(type) {
 	case *ast.CreateDatabaseStmt:
 		shouldExecDDLOnSchemaTracker = true
@@ -2101,30 +2108,37 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 				return err
 			}
 		}
-	case *ast.CreateTableStmt, *ast.CreateViewStmt, *ast.RecoverTableStmt:
+	case *ast.RecoverTableStmt:
 		shouldExecDDLOnSchemaTracker = true
 		shouldSchemaExist = true
+	case *ast.CreateTableStmt, *ast.CreateViewStmt:
+		shouldExecDDLOnSchemaTracker = true
+		shouldSchemaExist = true
+		// for CREATE TABLE LIKE/AS, there should be reference tables which should exist
+		shouldRefTableExistNum = len(srcTables)
 	case *ast.DropTableStmt:
 		shouldExecDDLOnSchemaTracker = true
 		if err := s.checkpoint.DeleteTablePoint(ec.tctx, srcTable.Schema, srcTable.Name); err != nil {
 			return err
 		}
 	case *ast.RenameTableStmt, *ast.CreateIndexStmt, *ast.DropIndexStmt, *ast.RepairTableStmt:
-		// TODO: RENAME TABLE should require special treatment.
 		shouldExecDDLOnSchemaTracker = true
 		shouldSchemaExist = true
-		shouldTableExist = true
+		shouldTableExistNum = 1
 	case *ast.AlterTableStmt:
+		shouldSchemaExist = true
 		// TODO: ALTER TABLE RENAME should require special treatment.
-		// for DDL that adds FK, since TiDB doesn't fully support it yet, and the referenced table may not be stored in
-		// tracker, we simply ignore execution of this DDL.
+		// for DDL that adds FK, since TiDB doesn't fully support it yet, we simply ignore execution of this DDL.
 		if len(node.Specs) == 1 && node.Specs[0].Constraint != nil && node.Specs[0].Constraint.Tp == ast.ConstraintForeignKey {
+			shouldTableExistNum = 1
 			shouldExecDDLOnSchemaTracker = false
+		} else if node.Specs[0].Tp == ast.AlterTableRenameTable {
+			shouldTableExistNum = 1
+			shouldExecDDLOnSchemaTracker = true
 		} else {
+			shouldTableExistNum = len(srcTables)
 			shouldExecDDLOnSchemaTracker = true
 		}
-		shouldSchemaExist = true
-		shouldTableExist = true
 	case *ast.LockTablesStmt, *ast.UnlockTablesStmt, *ast.CleanupTableLockStmt, *ast.TruncateTableStmt:
 		break
 	default:
@@ -2136,9 +2150,21 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 			return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, srcTable.Schema)
 		}
 	}
-	if shouldTableExist {
-		targetTable := tableNames[1][0]
-		if _, err := s.getTable(srcTable.Schema, srcTable.Name, targetTable.Schema, targetTable.Name); err != nil {
+	for i := 0; i < shouldTableExistNum; i++ {
+		if _, err := s.getTable(srcTables[i].Schema, srcTables[i].Name, targetTables[i].Schema, targetTables[i].Name); err != nil {
+			return err
+		}
+	}
+	// skip getTable before in above loop
+	start := 1
+	if shouldTableExistNum > start {
+		start = shouldTableExistNum
+	}
+	for i := start; i < shouldRefTableExistNum; i++ {
+		if err := s.schemaTracker.CreateSchemaIfNotExists(srcTables[i].Schema); err != nil {
+			return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, srcTables[i].Schema)
+		}
+		if _, err := s.getTable(srcTables[i].Schema, srcTables[i].Name, targetTables[i].Schema, targetTables[i].Name); err != nil {
 			return err
 		}
 	}
