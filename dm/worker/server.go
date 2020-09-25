@@ -125,6 +125,12 @@ func (s *Server) Start() error {
 
 	s.wg.Add(1)
 	go func() {
+		s.runBackgroundJob(s.ctx)
+		s.wg.Done()
+	}()
+
+	s.wg.Add(1)
+	go func() {
 		defer s.wg.Done()
 		// TODO: handle fatal error from observeSourceBound
 		s.observeSourceBound(s.ctx, s.etcdClient, revBound)
