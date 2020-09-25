@@ -433,7 +433,7 @@ func GetGTID(db *sql.DB) (string, error) {
 func ToTiDBVersion(v string) (TiDBVersion, error) {
 	version := TiDBVersion{0, 0, 0}
 	tmp := strings.Split(v, "-")
-	if len(tmp) != 3 {
+	if len(tmp) < 3 {
 		return version, errors.NotValidf("TiDB version %s", v)
 	}
 
