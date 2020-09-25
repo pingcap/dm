@@ -33,5 +33,4 @@ function check_task_error_database_config() {
         "check-task $task_conf" \
         "Access denied for user" 1 \
         "Please check the database connection and the database config in configuration file" 1
-
 }
