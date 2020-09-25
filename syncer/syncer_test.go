@@ -1612,7 +1612,6 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 
 	p := parser.New()
 	for _, ca := range cases {
-		c.Log(ca.sql)
 		ddlSQL, filter, stmt, err := syncer.handleDDL(p, testDB, ca.sql)
 		c.Assert(err, IsNil)
 
