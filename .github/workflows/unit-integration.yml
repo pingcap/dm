@@ -19,19 +19,15 @@ jobs:
           go-version: 1.13
       - name: Print Go version
         run: go version
-
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Check out code
         uses: actions/checkout@v2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-
       - name: Cache go modules
         uses: actions/cache@v2
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
-
       - name: Cache retool
         uses: actions/cache@v2
         with:
@@ -73,7 +69,9 @@ jobs:
           name: dm-${{ github.event.pull_request.head.sha }}
       - name: Unit Test ${{ matrix.test_name }}
         run: |
-          tar xz dm.tar.gz
+          ls -lh dm.tar.gz
+          tar xzvf dm.tar.gz
+          docker pull mysql:5.7
           docker run --name mysql-for-ut -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
           rm -rf /tmp/dm_test
           mkdir -p /tmp/dm_test
@@ -112,8 +110,10 @@ jobs:
           name: dm-${{ github.event.pull_request.head.sha }}
       - name: Integration Test ${{ matrix.test_name }}
         run: |
+          tar xzvf dm.tar.gz
+          docker pull mysql:5.7
           docker run --name mysql-for-ut -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
-          docker run --name mysql-for-ut -p 3306:3307 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
+          docker run --name mysql-for-ut2 -p 3306:3307 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
           rm -rf /tmp/dm_test
           mkdir -p /tmp/dm_test
           set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
@@ -144,8 +144,8 @@ jobs:
         with:
           name: dm-${{ github.event.pull_request.head.sha }}
       - name: Check
-        # unstash "dm"
         run: |
+          tar xzvf dm.tar.gz
           make check
 
   coverage:
