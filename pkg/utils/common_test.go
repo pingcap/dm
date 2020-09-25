@@ -57,6 +57,18 @@ func (s *testCommonSuite) TestTrimCtrlChars(c *C) {
 	}
 }
 
+func (s *testCommonSuite) TestTrimQuoteMark(c *C) {
+	cases := [][]string{
+		{`"123"`, `123`},
+		{`123`, `123`},
+		{`"123`, `"123`},
+		{`'123'`, `'123'`},
+	}
+	for _, ca := range cases {
+		c.Assert(TrimQuoteMark(ca[0]), Equals, ca[1])
+	}
+}
+
 func (s *testCommonSuite) TestFetchAllDoTables(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)

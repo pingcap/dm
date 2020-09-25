@@ -44,6 +44,15 @@ func TrimCtrlChars(s string) string {
 	return strings.TrimFunc(s, f)
 }
 
+// TrimQuoteMark tries to trim leading and tailing quote(") mark if exists
+// only trim if leading and tailing quote matched as a pair
+func TrimQuoteMark(s string) string {
+	if len(s) > 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		return s[1 : len(s)-1]
+	}
+	return s
+}
+
 // FetchAllDoTables returns all need to do tables after filtered (fetches from upstream MySQL)
 func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error) {
 	schemas, err := dbutil.GetSchemas(context.Background(), db)

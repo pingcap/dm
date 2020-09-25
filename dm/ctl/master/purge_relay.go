@@ -22,9 +22,9 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // NewPurgeRelayCmd creates a PurgeRelay command
@@ -91,7 +91,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 	if len(subDir) > 0 {
-		subDir = command.TrimQuoteMark(subDir)
+		subDir = utils.TrimQuoteMark(subDir)
 	}
 	if len(filename) > 0 && len(subDir) == 0 {
 		fmt.Println("[warn] no --sub-dir specify for --filename, the latest one will be used")

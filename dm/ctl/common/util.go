@@ -20,11 +20,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -189,7 +189,7 @@ func ExtractSQLsFromArgs(args []string) ([]string, error) {
 	}
 
 	concat := strings.TrimSpace(strings.Join(args, " "))
-	concat = command.TrimQuoteMark(concat)
+	concat = utils.TrimQuoteMark(concat)
 
 	parser := parser.New()
 	nodes, err := parserpkg.Parse(parser, concat, "", "")
