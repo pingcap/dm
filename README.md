@@ -71,6 +71,10 @@ make test
 * sample config file of dm-master: `bin/dm-master -print-sample-config`
 * sample config file of dm-worker: `bin/dm-worker -print-sample-config`
 
+## Roadmap
+
+Read the [Roadmap](roadmap.md).
+
 
 ## Contributing
 Contributions are welcomed and greatly appreciated. See [CONTRIBUTING.md](./CONTRIBUTING.md)
