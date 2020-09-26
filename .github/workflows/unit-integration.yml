@@ -38,7 +38,7 @@ jobs:
       - name: Cache prepare results
         uses: actions/cache@v2
         with:
-          path: dm.tar.gz
+          path: /tmp/dm.tar.gz
           key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
       - name: DM Integration Test Build
         run: |
@@ -49,7 +49,7 @@ jobs:
           rm -r tidb-enterprise-tools-latest-linux-amd64 || true
           id=$(docker create pingcap/tidb:nightly)
           docker cp $id:/tidb-server bin/
-          tar czvf dm.tar.gz ./*
+          tar czvf /tmp/dm.tar.gz .
 
 #      - name: Upload dm build results
 #        uses: actions/upload-artifact@v2
@@ -72,7 +72,7 @@ jobs:
       - name: Cache prepare results
         uses: actions/cache@v2
         with:
-          path: dm.tar.gz
+          path: /tmp/dm.tar.gz
           key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
 #      - name: Download dm build results
 #        uses: actions/download-artifact@v2
@@ -82,18 +82,16 @@ jobs:
         run: |
           docker pull mysql:5.7
           docker run --name mysql-for-ut -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
+          set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
           rm -rf /tmp/dm_test
           mkdir -p /tmp/dm_test
           export MYSQL_HOST=127.0.0.1
           export MYSQL_PORT=3306
           export MYSQL_PSWD=123456
           export PATH=~/go/bin:$PATH
-          ls -lh dm.tar.gz
-          tar xzvf dm.tar.gz
+          ls -lh /tmp/dm.tar.gz
+          tar xzvf /tmp/dm.tar.gz
           make unit_test_${{ matrix.test_name }}
-          ls ~/go/bin
-          echo $PATH
-          go env
           rm -rf cov_dir
           mkdir -p cov_dir
           ls /tmp/dm_test
@@ -126,13 +124,15 @@ jobs:
       - name: Cache prepare results
         uses: actions/cache@v2
         with:
-          path: dm.tar.gz
+          path: /tmp/dm.tar.gz
           key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
       - name: Integration Test ${{ matrix.test_name }}
         run: |
           docker pull mysql:5.7
           docker run --name mysql-for-ut -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
           docker run --name mysql-for-ut2 -p 3307:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
+          set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -p123456 -uroot --silent; if [ $? -eq 0 ]; then set -e; break; else if [ $i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
+          set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3307 -p123456 -uroot --silent; if [ $? -eq 0 ]; then set -e; break; else if [ $i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
           rm -rf /tmp/dm_test
           mkdir -p /tmp/dm_test
           export MYSQL_HOST1=127.0.0.1
@@ -140,12 +140,9 @@ jobs:
           export MYSQL_HOST2=127.0.0.1
           export MYSQL_PORT2=3307
           export PATH=~/go/bin:$PATH
-          ls -lh dm.tar.gz
-          tar xzvf dm.tar.gz
+          ls -lh /tmp/dm.tar.gz
+          tar xzvf /tmp/dm.tar.gz
           make integration_test CASE=${{ matrix.test_name }}
-          ls ~/go/bin
-          go env
-          echo $PATH
           rm -rf cov_dir
           mkdir -p cov_dir
           ls /tmp/dm_test
@@ -169,12 +166,12 @@ jobs:
       - name: Cache prepare results
         uses: actions/cache@v2
         with:
-          path: dm.tar.gz
+          path: /tmp/dm.tar.gz
           key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
       - name: Check
         run: |
           export PATH=~/go/bin:$PATH
-          tar xzvf dm.tar.gz
+          tar xzvf /tmp/dm.tar.gz
           make check
 
   coverage:
