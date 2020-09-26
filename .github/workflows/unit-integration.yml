@@ -60,6 +60,7 @@ jobs:
   unit_test:
     needs: prepare
     strategy:
+      fail-fast: false
       matrix:
         test_name: [relay, syncer, pkg_binlog, others]
     runs-on: ubuntu-18.04
@@ -80,6 +81,7 @@ jobs:
 #          name: dm-${{ github.event.pull_request.head.sha }}
       - name: Unit Test ${{ matrix.test_name }}
         run: |
+          set -x
           docker pull mysql:5.7
           docker run --name mysql-for-ut -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
           set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
@@ -108,6 +110,7 @@ jobs:
     needs: prepare
     runs-on: ubuntu-18.04
     strategy:
+      fail-fast: false
       matrix:
         test_name: [others, dmctl_basic]
 #        test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit, load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
@@ -128,6 +131,7 @@ jobs:
           key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
       - name: Integration Test ${{ matrix.test_name }}
         run: |
+          set -x
           docker pull mysql:5.7
           docker run --name mysql-for-ut -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
           docker run --name mysql-for-ut2 -p 3307:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
@@ -147,7 +151,6 @@ jobs:
           mkdir -p cov_dir
           ls /tmp/dm_test
           cp /tmp/dm_test/cov*out cov_dir
-          ls cov_idr
         # stash includes: "go/src/github.com/pingcap/dm/cov_dir/**", name: "integration-cov-${case_name}"
 
   check:
@@ -170,6 +173,7 @@ jobs:
           key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
       - name: Check
         run: |
+          set -x
           export PATH=~/go/bin:$PATH
           tar xzvf /tmp/dm.tar.gz
           make check
