@@ -89,14 +89,16 @@ jobs:
           export MYSQL_PORT=3306
           export MYSQL_PSWD=123456
           ls -lh dm.tar.gz
-          mkdir -p go/src/github.com/dm
-          cd go/src/github.com/dm
+#          mkdir -p go/src/github.com/dm
+#          cd go/src/github.com/dm
           tar xzvf dm.tar.gz
-          export PATH=${{ github.workspace }}/go/bin:$PATH
-          GOPATH=$GOPATH:${{ github.workspace }}/go make unit_test_${{ matrix.test_name }}
+#          export PATH=${{ github.workspace }}/go/bin:$PATH
+#          GOPATH=$GOPATH:${{ github.workspace }}/go make unit_test_${{ matrix.test_name }}
+          make unit_test_${{ matrix.test_name }}
           ls ~/go/bin
-          ls ./go/bin
+#          ls ./go/bin
           echo $PATH
+          go env
           rm -rf cov_dir
           mkdir -p cov_dir
           ls /tmp/dm_test
@@ -114,7 +116,8 @@ jobs:
     runs-on: ubuntu-18.04
     strategy:
       matrix:
-        test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit, load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
+        test_name: [others, dmctl_basic]
+#        test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit, load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
     steps:
       - name: Cache go modules
         uses: actions/cache@v2
@@ -144,13 +147,15 @@ jobs:
           export MYSQL_HOST2=127.0.0.1
           export MYSQL_PORT2=3307
           ls -lh dm.tar.gz
-          mkdir -p go/src/github.com/dm
-          cd go/src/github.com/dm
+#          mkdir -p go/src/github.com/dm
+#          cd go/src/github.com/dm
           tar xzvf dm.tar.gz
-          export PATH=${{ github.workspace }}/go/bin:$PATH
-          GOPATH=$GOPATH:${{ github.workspace }}/go make integration_test CASE=${{ matrix.test_name }}
+#          export PATH=${{ github.workspace }}/go/bin:$PATH
+#          GOPATH=$GOPATH:${{ github.workspace }}/go make integration_test CASE=${{ matrix.test_name }}
+          make integration_test CASE=${{ matrix.test_name }}
           ls ~/go/bin
-          ls ./go/bin
+          go env
+#          ls ./go/bin
           echo $PATH
           rm -rf cov_dir
           mkdir -p cov_dir
@@ -172,6 +177,11 @@ jobs:
 #        uses: actions/download-artifact@v2
 #        with:
 #          name: dm-${{ github.event.pull_request.head.sha }}
+      - name: Cache prepare results
+        uses: actions/cache@v2
+        with:
+          path: dm.tar.gz
+          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
       - name: Check
         run: |
           tar xzvf dm.tar.gz
