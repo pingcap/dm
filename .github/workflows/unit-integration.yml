@@ -89,14 +89,9 @@ jobs:
           export MYSQL_PORT=3306
           export MYSQL_PSWD=123456
           ls -lh dm.tar.gz
-#          mkdir -p go/src/github.com/dm
-#          cd go/src/github.com/dm
           tar xzvf dm.tar.gz
-#          export PATH=${{ github.workspace }}/go/bin:$PATH
-#          GOPATH=$GOPATH:${{ github.workspace }}/go make unit_test_${{ matrix.test_name }}
           make unit_test_${{ matrix.test_name }}
           ls ~/go/bin
-#          ls ./go/bin
           echo $PATH
           go env
           rm -rf cov_dir
@@ -147,15 +142,10 @@ jobs:
           export MYSQL_HOST2=127.0.0.1
           export MYSQL_PORT2=3307
           ls -lh dm.tar.gz
-#          mkdir -p go/src/github.com/dm
-#          cd go/src/github.com/dm
           tar xzvf dm.tar.gz
-#          export PATH=${{ github.workspace }}/go/bin:$PATH
-#          GOPATH=$GOPATH:${{ github.workspace }}/go make integration_test CASE=${{ matrix.test_name }}
           make integration_test CASE=${{ matrix.test_name }}
           ls ~/go/bin
           go env
-#          ls ./go/bin
           echo $PATH
           rm -rf cov_dir
           mkdir -p cov_dir
