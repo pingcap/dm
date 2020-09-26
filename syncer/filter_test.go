@@ -63,10 +63,10 @@ BEGIN
 END`, true},
 
 		// view
-		{"CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v` AS SELECT qty, price, qty*price AS value FROM t", true},
-		{"CREATE OR REPLACE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v` AS SELECT qty, price, qty*price AS value FROM t", true},
+		{"CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v` AS SELECT qty, price, qty*price AS value FROM t", false},
+		{"CREATE OR REPLACE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v` AS SELECT qty, price, qty*price AS value FROM t", false},
 		{"ALTER ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v` AS SELECT qty, price, qty*price AS value FROM t", true},
-		{"DROP VIEW v", true},
+		{"DROP VIEW v", false},
 		{"CREATE TABLE `VIEW`(id int)", false},
 		{"ALTER TABLE `VIEW`(id int)", false},
 
@@ -110,6 +110,7 @@ END`, true},
 	for _, t := range cases {
 		skipped, err := syncer.skipQuery(nil, nil, t.sql)
 		c.Assert(err, IsNil)
+		c.Log(t.sql)
 		c.Assert(skipped, Equals, t.expectSkipped)
 	}
 
