@@ -84,10 +84,10 @@ jobs:
           docker run --name mysql-for-ut -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
           rm -rf /tmp/dm_test
           mkdir -p /tmp/dm_test
-          set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
           export MYSQL_HOST=127.0.0.1
           export MYSQL_PORT=3306
           export MYSQL_PSWD=123456
+          export PATH=~/go/bin:$PATH
           ls -lh dm.tar.gz
           tar xzvf dm.tar.gz
           make unit_test_${{ matrix.test_name }}
@@ -135,12 +135,11 @@ jobs:
           docker run --name mysql-for-ut2 -p 3307:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
           rm -rf /tmp/dm_test
           mkdir -p /tmp/dm_test
-          set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
-          set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3307 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
           export MYSQL_HOST1=127.0.0.1
           export MYSQL_PORT1=3306
           export MYSQL_HOST2=127.0.0.1
           export MYSQL_PORT2=3307
+          export PATH=~/go/bin:$PATH
           ls -lh dm.tar.gz
           tar xzvf dm.tar.gz
           make integration_test CASE=${{ matrix.test_name }}
@@ -174,6 +173,7 @@ jobs:
           key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
       - name: Check
         run: |
+          export PATH=~/go/bin:$PATH
           tar xzvf dm.tar.gz
           make check
 
