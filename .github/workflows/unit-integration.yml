@@ -34,7 +34,12 @@ jobs:
           path: |
             **/_tools
           key: ${{ runner.os }}-dm-retool-${{ hashFiles('**/_tools/manifest.json') }}
-
+      # cache dm repo
+      - name: Cache prepare results
+        uses: actions/cache@v2
+        with:
+          path: dm.tar.gz
+          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
       - name: DM Integration Test Build
         run: |
           make dm_integration_test_build
@@ -45,11 +50,12 @@ jobs:
           id=$(docker create pingcap/tidb:nightly)
           docker cp $id:/tidb-server bin/
           tar czvf dm.tar.gz ./*
-      - name: Upload dm build results
-        uses: actions/upload-artifact@v2
-        with:
-          name: dm-${{ github.event.pull_request.head.sha }}
-          path: dm.tar.gz
+
+#      - name: Upload dm build results
+#        uses: actions/upload-artifact@v2
+#        with:
+#          name: dm-${{ github.event.pull_request.head.sha }}
+#          path: dm.tar.gz
 
   unit_test:
     needs: prepare
@@ -63,14 +69,17 @@ jobs:
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
-      - name: Download dm build results
-        uses: actions/download-artifact@v2
+      - name: Cache prepare results
+        uses: actions/cache@v2
         with:
-          name: dm-${{ github.event.pull_request.head.sha }}
+          path: dm.tar.gz
+          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
+#      - name: Download dm build results
+#        uses: actions/download-artifact@v2
+#        with:
+#          name: dm-${{ github.event.pull_request.head.sha }}
       - name: Unit Test ${{ matrix.test_name }}
         run: |
-          ls -lh dm.tar.gz
-          tar xzvf dm.tar.gz
           docker pull mysql:5.7
           docker run --name mysql-for-ut -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
           rm -rf /tmp/dm_test
@@ -79,7 +88,15 @@ jobs:
           export MYSQL_HOST=127.0.0.1
           export MYSQL_PORT=3306
           export MYSQL_PSWD=123456
-          make unit_test_${{ matrix.test_name }}
+          ls -lh dm.tar.gz
+          mkdir -p go/src/github.com/dm
+          cd go/src/github.com/dm
+          tar xzvf dm.tar.gz
+          export PATH=${{ github.workspace }}/go/bin:$PATH
+          GOPATH=$GOPATH:${{ github.workspace }}/go make unit_test_${{ matrix.test_name }}
+          ls ~/go/bin
+          ls ./go/bin
+          echo $PATH
           rm -rf cov_dir
           mkdir -p cov_dir
           ls /tmp/dm_test
@@ -104,16 +121,20 @@ jobs:
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
-      - name: Download dm build results
-        uses: actions/download-artifact@v2
+#      - name: Download dm build results
+#        uses: actions/download-artifact@v2
+#        with:
+#          name: dm-${{ github.event.pull_request.head.sha }}
+      - name: Cache prepare results
+        uses: actions/cache@v2
         with:
-          name: dm-${{ github.event.pull_request.head.sha }}
+          path: dm.tar.gz
+          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
       - name: Integration Test ${{ matrix.test_name }}
         run: |
-          tar xzvf dm.tar.gz
           docker pull mysql:5.7
           docker run --name mysql-for-ut -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
-          docker run --name mysql-for-ut2 -p 3306:3307 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
+          docker run --name mysql-for-ut2 -p 3307:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
           rm -rf /tmp/dm_test
           mkdir -p /tmp/dm_test
           set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
@@ -122,7 +143,15 @@ jobs:
           export MYSQL_PORT1=3306
           export MYSQL_HOST2=127.0.0.1
           export MYSQL_PORT2=3307
-          make integration_test CASE=${{ matrix.test_name }}
+          ls -lh dm.tar.gz
+          mkdir -p go/src/github.com/dm
+          cd go/src/github.com/dm
+          tar xzvf dm.tar.gz
+          export PATH=${{ github.workspace }}/go/bin:$PATH
+          GOPATH=$GOPATH:${{ github.workspace }}/go make integration_test CASE=${{ matrix.test_name }}
+          ls ~/go/bin
+          ls ./go/bin
+          echo $PATH
           rm -rf cov_dir
           mkdir -p cov_dir
           ls /tmp/dm_test
@@ -139,10 +168,10 @@ jobs:
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
-      - name: Download dm build results
-        uses: actions/download-artifact@v2
-        with:
-          name: dm-${{ github.event.pull_request.head.sha }}
+#      - name: Download dm build results
+#        uses: actions/download-artifact@v2
+#        with:
+#          name: dm-${{ github.event.pull_request.head.sha }}
       - name: Check
         run: |
           tar xzvf dm.tar.gz
