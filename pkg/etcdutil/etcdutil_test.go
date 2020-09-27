@@ -146,7 +146,7 @@ func (t *testEtcdUtilSuite) testMemberUtilInternal(c *C, portCount int) {
 	t.checkMember(c, uint64(etcd1.Server.ID()), listResp1.Members[0], cfg1)
 
 	// add member
-	cfg2, basePort := t.newConfig(c, "etcd2", basePort, portCount)
+	cfg2, _ := t.newConfig(c, "etcd2", basePort, portCount)
 	cfg2.InitialCluster = cfg1.InitialCluster + "," + cfg2.InitialCluster
 	cfg2.ClusterState = embed.ClusterStateFlagExisting
 	addResp, err := AddMember(cli, t.urlsToStrings(cfg2.APUrls))
