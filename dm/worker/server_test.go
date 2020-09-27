@@ -323,6 +323,7 @@ func (t *testServer) testHTTPInterface(c *C, uri string) {
 }
 
 func (t *testServer) createClient(c *C, addr string) pb.WorkerClient {
+	//nolint:staticcheck
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	c.Assert(err, IsNil)
 	return pb.NewWorkerClient(conn)

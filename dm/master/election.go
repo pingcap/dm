@@ -18,13 +18,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/dm/dm/master/metrics"
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/failpoint"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+
+	"github.com/pingcap/dm/dm/master/metrics"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 const (
@@ -107,6 +108,7 @@ func (s *Server) createLeaderClient(leaderAddr string) {
 		return
 	}
 
+	//nolint:staticcheck
 	conn, err := grpc.Dial(leaderAddr, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		log.L().Error("can't create grpc connection with leader, can't forward request to leader", zap.String("leader", leaderAddr), zap.Error(err))

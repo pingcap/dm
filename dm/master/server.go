@@ -816,7 +816,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 				return
 			}
 			resp, err := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
-			workerResp := &pb.CommonWorkerResponse{}
+			var workerResp *pb.CommonWorkerResponse
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name)
 			} else {
@@ -928,7 +928,7 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 				return
 			}
 			resp, err := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
-			workerStatus := &pb.QueryStatusResponse{}
+			var workerStatus *pb.QueryStatusResponse
 			if err != nil {
 				workerStatus = &pb.QueryStatusResponse{
 					Result:       false,
@@ -1752,7 +1752,7 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest
 			}
 
 			resp, err := worker.SendRequest(ctx, &workerReq, s.cfg.RPCTimeout)
-			workerResp := &pb.CommonWorkerResponse{}
+			var workerResp *pb.CommonWorkerResponse
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name)
 			} else {
@@ -1853,7 +1853,7 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleErrorRequest) (*
 				return
 			}
 			resp, err := worker.SendRequest(ctx, &workerReq, s.cfg.RPCTimeout)
-			workerResp := &pb.CommonWorkerResponse{}
+			var workerResp *pb.CommonWorkerResponse
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name)
 			} else {

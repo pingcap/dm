@@ -46,7 +46,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -679,13 +678,8 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 		for _, e := range events {
 			switch ev := e.Event.(type) {
 			case *replication.QueryEvent:
-				stmt, err := p.ParseOneStmt(string(ev.Query), "", "")
+				_, err = p.ParseOneStmt(string(ev.Query), "", "")
 				c.Assert(err, IsNil)
-				_, isDDL := stmt.(ast.DDLNode)
-				if !isDDL {
-					continue
-				}
-
 			case *replication.RowsEvent:
 				r, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
 				c.Assert(err, IsNil)
@@ -774,12 +768,8 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 	for _, e := range allEvents {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
-			stmt, err := p.ParseOneStmt(string(ev.Query), "", "")
+			_, err = p.ParseOneStmt(string(ev.Query), "", "")
 			c.Assert(err, IsNil)
-			_, isDDL := stmt.(ast.DDLNode)
-			if !isDDL {
-				continue
-			}
 		case *replication.RowsEvent:
 			r, _, err := mapping.HandleRowValue(string(ev.Table.Schema), string(ev.Table.Table), dmls[dmlIndex].column, ev.Rows[0])
 			c.Assert(err, IsNil)
