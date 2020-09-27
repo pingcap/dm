@@ -87,7 +87,7 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	c.Assert(sqls[0], Equals, expectedSQL)
 }
 
-func (s *testSyncerSuite) TestresolveDDLSQL(c *C) {
+func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 	// duplicate with pkg/parser
 	sqls := []string{
 		"create schema `s1`",
@@ -296,6 +296,13 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 			isDDL:    false,
 			hasError: false,
 		},
+		{
+			sql:      "NOT A SQL",
+			schema:   "",
+			ignore:   false,
+			isDDL:    false,
+			hasError: true,
+		},
 	}
 
 	cfg := &config.SubTaskConfig{
@@ -357,4 +364,33 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 		getSQL := sqls[0]
 		c.Assert(getSQL, Equals, tc.expected)
 	}
+}
+
+func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
+
+	// go-ost
+	fn := OnlineDDLSchemes[config.GHOST]
+	plugin, err := fn(tcontext.Background(), s.cfg)
+	syncer := NewSyncer(s.cfg, nil)
+	syncer.onlineDDL = plugin
+	p := parser.New()
+	// real table
+	sql := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
+	stmt, err := p.ParseOneStmt(sql, "", "")
+	c.Assert(err, IsNil)
+	sqls, tables, err := syncer.resolveDDLSQL(tcontext.Background(), p, stmt, "test")
+	c.Assert(err, IsNil)
+	c.Assert(sqls, HasLen, 1)
+	c.Assert(sqls[0], Equals, sql)
+	c.Assert(tables, HasLen, 0)
+	// trash table
+	sql = "CREATE TABLE IF NOT EXISTS `test`.`_t1_del` (`n` INT)"
+	stmt, err = p.ParseOneStmt(sql, "", "")
+	c.Assert(err, IsNil)
+	sqls, tables, err = syncer.resolveDDLSQL(tcontext.Background(), p, stmt, "test")
+	c.Assert(err, IsNil)
+	c.Assert(sqls, HasLen, 0)
+	c.Assert(tables, HasLen, 0)
+
+	c.Fail()
 }

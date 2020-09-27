@@ -128,7 +128,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 /// resolveDDLSQL do two things
 // * it splits multiple operations in one DDL statement into multiple DDL statements
 // * try to apply online ddl by given online
-// return @spilted sqls, @online ddl table names, @error
+// return @spilt sqls, @online ddl table names, @error
 func (s *Syncer) resolveDDLSQL(tctx *tcontext.Context, p *parser.Parser, stmt ast.StmtNode, schema string) (sqls []string, tables map[string]*filter.Table, err error) {
 	sqls, err = parserpkg.SplitDDL(stmt, schema)
 	if err != nil {
