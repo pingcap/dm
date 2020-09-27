@@ -18,12 +18,13 @@ import (
 	"path"
 	"sort"
 
-	"github.com/pingcap/dm/pkg/terror"
-
 	. "github.com/pingcap/check"
+	"github.com/pingcap/dm/pkg/terror"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+
+	"github.com/coreos/go-semver/semver"
 )
 
 func (t *testConfig) TestInvalidTaskConfig(c *C) {
@@ -324,7 +325,10 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		heartbeatRI         = 21
 		timezone            = "Asia/Shanghai"
 		maxAllowedPacket    = 10244201
-		session             = map[string]string{
+		fromSession         = map[string]string{
+			"sql_mode": " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
+		}
+		toSession = map[string]string{
 			"sql_mode": " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
 		}
 		security = Security{
@@ -380,7 +384,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 			User:             "user_from_1",
 			Password:         "123",
 			MaxAllowedPacket: &maxAllowedPacket,
-			Session:          session,
+			Session:          fromSession,
 			Security:         &security,
 			RawDBCfg:         &rawDBCfg,
 		}
@@ -390,7 +394,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 			User:             "user_from_2",
 			Password:         "abc",
 			MaxAllowedPacket: &maxAllowedPacket,
-			Session:          session,
+			Session:          fromSession,
 			Security:         &security,
 			RawDBCfg:         &rawDBCfg,
 		}
@@ -421,7 +425,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				User:             "user_to",
 				Password:         "abc",
 				MaxAllowedPacket: &maxAllowedPacket,
-				Session:          session,
+				Session:          toSession,
 				Security:         &security,
 				RawDBCfg:         &rawDBCfg,
 			},
@@ -644,4 +648,38 @@ func (t *testConfig) TestMySQLInstance(c *C) {
 
 	c.Assert(m.VerifyAndAdjust(), IsNil)
 
+}
+
+func (t *testConfig) TestAdjustTargetDBConfig(c *C) {
+	testCases := []struct {
+		dbConfig DBConfig
+		result   DBConfig
+		version  *semver.Version
+	}{
+		{
+			DBConfig{},
+			DBConfig{Session: map[string]string{}},
+			semver.New("0.0.0"),
+		},
+		{
+			DBConfig{Session: map[string]string{"SQL_MODE": "ANSI_QUOTES"}},
+			DBConfig{Session: map[string]string{"sql_mode": "ANSI_QUOTES"}},
+			semver.New("2.0.7"),
+		},
+		{
+			DBConfig{},
+			DBConfig{Session: map[string]string{tidbTxnMode: tidbTxnOptimistic}},
+			semver.New("3.0.1"),
+		},
+		{
+			DBConfig{Session: map[string]string{"SQL_MODE": "", tidbTxnMode: "pessimistic"}},
+			DBConfig{Session: map[string]string{"sql_mode": "", tidbTxnMode: "pessimistic"}},
+			semver.New("4.0.0-beta.2"),
+		},
+	}
+
+	for _, tc := range testCases {
+		AdjustTargetDBSessionCfg(&tc.dbConfig, tc.version)
+		c.Assert(tc.dbConfig, DeepEquals, tc.result)
+	}
 }
