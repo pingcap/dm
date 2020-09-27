@@ -109,6 +109,7 @@ func (t *testParserSuite) TestError(c *C) {
 	_, err = RenameDDLTable(stmts[0], nil)
 	c.Assert(terror.ErrUnknownTypeDDL.Equal(err), IsTrue)
 
+	// tableRenameVisitor with less `targetNames` won't panic
 	ddl := "create table `s1`.`t1` (id int)"
 	stmts, err = Parse(p, ddl, "", "")
 	c.Assert(err, IsNil)
