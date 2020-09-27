@@ -16,10 +16,13 @@ package utils
 import (
 	"context"
 
-	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/coreos/go-semver/semver"
+	"github.com/go-sql-driver/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -286,5 +289,41 @@ func newMysqlErr(number uint16, message string) *mysql.MySQLError {
 	return &mysql.MySQLError{
 		Number:  number,
 		Message: message,
+	}
+}
+
+func (t *testDBSuite) TestTiDBVersion(c *C) {
+	testCases := []struct {
+		version string
+		result  *semver.Version
+		err     error
+	}{
+		{
+			"wrong-version",
+			semver.New("0.0.0"),
+			errors.Errorf("not a valid TiDB version: %s", "wrong-version"),
+		}, {
+			"5.7.31-log",
+			semver.New("0.0.0"),
+			errors.Errorf("not a valid TiDB version: %s", "5.7.31-log"),
+		}, {
+			"5.7.25-TiDB-v3.1.2",
+			semver.New("3.1.2"),
+			nil,
+		}, {
+			"5.7.25-TiDB-v4.0.0-beta.2-1293-g0843f32c0-dirty",
+			semver.New("4.0.00-beta.2"),
+			nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		tidbVer, err := ExtractTiDBVersion(tc.version)
+		if tc.err != nil {
+			c.Assert(err, NotNil)
+			c.Assert(err.Error(), Equals, tc.err.Error())
+		} else {
+			c.Assert(tidbVer, DeepEquals, tc.result)
+		}
 	}
 }
