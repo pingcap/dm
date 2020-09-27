@@ -23,13 +23,13 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
-
-	"github.com/dustin/go-humanize"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+
+	"github.com/coreos/go-semver/semver"
+	"github.com/dustin/go-humanize"
 	"go.uber.org/zap"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -74,9 +74,9 @@ var (
 	defaultSessionCfg = []struct {
 		key        string
 		val        string
-		minVersion utils.TiDBVersion
+		minVersion *semver.Version
 	}{
-		{tidbTxnMode, tidbTxnOptimistic, utils.TiDBVersion{3, 0, 0}},
+		{tidbTxnMode, tidbTxnOptimistic, semver.New("3.0.0")},
 	}
 )
 
@@ -721,14 +721,14 @@ func checkDuplicateString(ruleNames []string) []string {
 }
 
 // AdjustTargetDBSessionCfg adjust session cfg of TiDB
-func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version utils.TiDBVersion) {
+func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version *semver.Version) {
 	lowerMap := make(map[string]string, len(dbConfig.Session))
 	for k, v := range dbConfig.Session {
 		lowerMap[strings.ToLower(k)] = v
 	}
 	// all cfg in defaultSessionCfg should be lower case
 	for _, cfg := range defaultSessionCfg {
-		if _, ok := lowerMap[cfg.key]; !ok && version.Ge(cfg.minVersion) {
+		if _, ok := lowerMap[cfg.key]; !ok && !version.LessThan(*cfg.minVersion) {
 			lowerMap[cfg.key] = cfg.val
 		}
 	}

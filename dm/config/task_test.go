@@ -18,13 +18,13 @@ import (
 	"path"
 	"sort"
 
-	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
-
 	. "github.com/pingcap/check"
+	"github.com/pingcap/dm/pkg/terror"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+
+	"github.com/coreos/go-semver/semver"
 )
 
 func (t *testConfig) TestInvalidTaskConfig(c *C) {
@@ -654,27 +654,27 @@ func (t *testConfig) TestAdjustTargetDBConfig(c *C) {
 	testCases := []struct {
 		dbConfig DBConfig
 		result   DBConfig
-		version  utils.TiDBVersion
+		version  *semver.Version
 	}{
 		{
 			DBConfig{},
 			DBConfig{Session: map[string]string{}},
-			utils.TiDBVersion{0, 0, 0},
+			semver.New("0.0.0"),
 		},
 		{
-			DBConfig{Session: map[string]string{"ANSI_QUOTES": ""}},
-			DBConfig{Session: map[string]string{"ansi_quotes": ""}},
-			utils.TiDBVersion{2, 0, 7},
+			DBConfig{Session: map[string]string{"SQL_MODE": "ANSI_QUOTES"}},
+			DBConfig{Session: map[string]string{"sql_mode": "ANSI_QUOTES"}},
+			semver.New("2.0.7"),
 		},
 		{
 			DBConfig{},
 			DBConfig{Session: map[string]string{tidbTxnMode: tidbTxnOptimistic}},
-			utils.TiDBVersion{3, 0, 1},
+			semver.New("3.0.1"),
 		},
 		{
-			DBConfig{Session: map[string]string{"ANSI_QUOTES": "", tidbTxnMode: "pessimistic"}},
-			DBConfig{Session: map[string]string{"ansi_quotes": "", tidbTxnMode: "pessimistic"}},
-			utils.TiDBVersion{4, 0, 2},
+			DBConfig{Session: map[string]string{"SQL_MODE": "", tidbTxnMode: "pessimistic"}},
+			DBConfig{Session: map[string]string{"sql_mode": "", tidbTxnMode: "pessimistic"}},
+			semver.New("4.0.0-beta.2"),
 		},
 	}
 

@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coreos/go-semver/semver"
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -37,9 +38,6 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
-
-// TiDBVersion represents TiDB version number.
-type TiDBVersion [3]uint
 
 var (
 	// for MariaDB, UUID set as `gtid_domain_id` + domainServerIDSeparator + `server_id`
@@ -428,43 +426,20 @@ func GetGTID(db *sql.DB) (string, error) {
 	return val, err
 }
 
-// ToTiDBVersion convert string to TiDBVersion
-// version format: 5.7.25-TiDB-v3.0.7
-func ToTiDBVersion(v string) (TiDBVersion, error) {
-	version := TiDBVersion{0, 0, 0}
-	tmp := strings.Split(v, "-")
-	if len(tmp) < 3 {
-		return version, errors.NotValidf("TiDB version %s", v)
+// ExtractTiDBVersion extract tidb's version
+// version format: "5.7.25-TiDB-v3.0.0-beta-211-g09beefbe0-dirty"
+//                               ^~~~~~~~~^
+func ExtractTiDBVersion(version string) (*semver.Version, error) {
+	versions := strings.Split(strings.TrimSuffix(version, "-dirty"), "-")
+	end := len(versions)
+	switch end {
+	case 3, 4:
+	case 5, 6:
+		end -= 2
+	default:
+		return nil, errors.Errorf("not a valid TiDB version: %s", version)
 	}
-
-	tmp = strings.Split(tmp[2], ".")
-	if len(tmp) != 3 {
-		return version, errors.NotValidf("TiDB version %s", v)
-	}
-
-	if !strings.HasPrefix(tmp[0], "v") {
-		return version, errors.NotValidf("TiDB version %s", v)
-	}
-	tmp[0] = tmp[0][1:]
-
-	for i := range tmp {
-		val, err := strconv.ParseUint(tmp[i], 10, 64)
-		if err != nil {
-			return version, errors.NotValidf("TiDB version %s", v)
-		}
-		version[i] = uint(val)
-	}
-	return version, nil
-}
-
-// Ge means v >= min
-func (v TiDBVersion) Ge(min TiDBVersion) bool {
-	for i := range v {
-		if v[i] > min[i] {
-			return true
-		} else if v[i] < min[i] {
-			return false
-		}
-	}
-	return true
+	rawVersion := strings.Join(versions[2:end], "-")
+	rawVersion = strings.TrimPrefix(rawVersion, "v")
+	return semver.NewVersion(rawVersion)
 }
