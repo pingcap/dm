@@ -300,10 +300,9 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 				if oldLeaderID == leaderInfo.ID {
 					continue
-				} else {
-					oldLeaderID = leaderInfo.ID
-					break observeElection
 				}
+				oldLeaderID = leaderInfo.ID
+				break observeElection
 			}
 		}
 

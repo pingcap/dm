@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 )
 
+// ExitWithError forces to exist the process, it's often used in integration tests.
 func ExitWithError(err error) {
 	log.L().Error("", zap.Error(err))
 	os.Exit(1)
