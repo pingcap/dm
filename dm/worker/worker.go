@@ -63,7 +63,6 @@ type Worker struct {
 	tracer *tracing.Tracer
 
 	taskStatusChecker TaskStatusChecker
-	configFile        string
 
 	etcdClient *clientv3.Client
 

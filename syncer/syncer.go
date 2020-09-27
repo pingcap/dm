@@ -1505,7 +1505,6 @@ type eventContext struct {
 	tryReSync           bool
 	startTime           time.Time
 	traceID             *string
-	parser2             *parser.Parser
 	shardingReSyncCh    *chan *ShardingReSync
 }
 

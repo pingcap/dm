@@ -950,21 +950,6 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 	return workerRespCh
 }
 
-// return true means match, false means mismatch.
-func (s *Server) checkTaskAndWorkerMatch(taskname string, targetWorker string) bool {
-	// find worker
-	workers := s.getTaskResources(taskname)
-	if len(workers) == 0 {
-		return false
-	}
-	for _, worker := range workers {
-		if worker == targetWorker {
-			return true
-		}
-	}
-	return false
-}
-
 // TODO: refine the call stack of this API, query worker configs that we needed only
 func (s *Server) getSourceConfigs(sources []*config.MySQLInstance) (map[string]config.DBConfig, error) {
 	cfgs := make(map[string]config.DBConfig)
