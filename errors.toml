@@ -742,6 +742,12 @@ description = ""
 workaround = "Please make sure the args are correct."
 tags = ["internal", "low"]
 
+[error.DM-functional-11119]
+message = "failed to rewrite SQL for target DB, stmt: %+v, targetTableNames: %+v"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""
