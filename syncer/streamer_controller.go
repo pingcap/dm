@@ -167,8 +167,8 @@ func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, loca
 	if c.streamerProducer != nil {
 		switch t := c.streamerProducer.(type) {
 		case *remoteBinlogReader:
-			err := c.closeBinlogSyncer(tctx, t.reader)
-			if err != nil {
+			err2 := c.closeBinlogSyncer(tctx, t.reader)
+			if err2 != nil {
 				tctx.L().Warn("fail to close remote binlog reader", zap.Error(err))
 			}
 		case *localBinlogReader:

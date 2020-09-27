@@ -154,7 +154,7 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 				}
 
 				if len(queries) == 1 && strings.Contains(queries[0], "CREATE TABLE") {
-					err = &mysql.MySQLError{uint16(errCode), ""}
+					err = &mysql.MySQLError{Number: uint16(errCode), Message: ""}
 					ctx.L().Warn("executeSQL failed", zap.String("failpoint", "LoadExecCreateTableFailed"), zap.Error(err))
 				}
 			})
