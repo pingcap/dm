@@ -125,7 +125,8 @@ function test_join_masters_and_worker {
     check_port_offline $MASTER_PORT1 20
     rm -rf $WORK_DIR/master1/default.master1
 
-    run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT2 "list-member --worker --name=worker2" '"stage": "free",' 1
+    # uncomment after we support https://github.com/pingcap/dm/issues/1110
+    # run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT2 "list-member --worker --name=worker2" '"stage": "free",' 1
 
     sleep 5
 
