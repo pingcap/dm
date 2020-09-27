@@ -557,6 +557,8 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 
 		cfg.CleanDumpFile = c.CleanDumpFile
 
+		cfg.EnableANSIQuotes = c.EnableANSIQuotes
+
 		err := cfg.Adjust(true)
 		if err != nil {
 			return nil, terror.Annotatef(err, "source %s", inst.SourceID)
