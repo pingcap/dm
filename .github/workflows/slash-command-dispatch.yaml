@@ -1,0 +1,18 @@
+name: Slash Command Dispatch
+# def77e11863ae381d3c10652efdc6650724c15a8
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  slashCommandDispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Slash Command Dispatch
+        uses: peter-evans/slash-command-dispatch@v2
+        with:
+          token: ${{ secrets.PAT }}
+          issue-type: pull-request
+          reactions: false
+          commands: |
+            run-all-tests
+            run-unit-tests

@@ -7,6 +7,8 @@ on:
     branches:
       - master
       - release-*
+  repository_dispatch:
+    types: [run-all-tests-command, run-unit-test-command]
 
 jobs:
   prepare:
@@ -38,7 +40,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/dm.tar.gz
-          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - name: DM Integration Test Build
         run: |
           make dm_integration_test_build
@@ -46,7 +48,11 @@ jobs:
           mv tidb-enterprise-tools-latest-linux-amd64/bin/sync_diff_inspector bin/
           mv tidb-enterprise-tools-latest-linux-amd64/bin/mydumper bin/
           rm -r tidb-enterprise-tools-latest-linux-amd64 || true
-          id=$(docker create pingcap/tidb:nightly)
+          tidb_version=${{ github.event.client_payload.slash_command.args.named.tidb }}
+          if [[ -z "${{ github.event.client_payload.slash_command.args.named.tidb }}" ]];then tidb_version=nightly;fi
+          if [[ "${{ github.event.client_payload.slash_command.args.named.tidb }}" =~ "master" ]]; then tidb_version=nightly;fi
+          if [[ "${{ github.event.client_payload.slash_command.args.named.tidb }}" =~ "release" ]]; then tidb_version=${{ github.event.client_payload.slash_command.args.named.tidb }}-nightly;fi
+          id=$(docker create pingcap/tidb:$tidb_version)
           docker cp $id:/tidb-server bin/
           tar czvf /tmp/dm.tar.gz .
 
@@ -73,7 +79,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/dm.tar.gz
-          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - name: Download dm build results
 #        uses: actions/download-artifact@v2
 #        with:
@@ -127,7 +133,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/dm.tar.gz
-          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - name: Integration Test ${{ matrix.test_name }}
         run: |
           set -x
@@ -154,7 +160,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-${{ matrix.test_name }}-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-it-${{ matrix.test_name }}-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 
   check:
     needs: prepare
@@ -169,7 +175,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/dm.tar.gz
-          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - name: Check
         run: |
           set -x
@@ -190,112 +196,114 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/dm.tar.gz
-          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-ut-relay-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-ut-relay-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-ut-syncer-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-ut-syncer-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-ut-pkg_binlog-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-ut-pkg_binlog-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-ut-others-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-ut-others-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 
       # test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit,
       # load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-others-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-others-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-all_mode-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-all_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-dmctl_advance-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-dmctl_advance-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-dmctl_basic-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-it-dmctl_basic-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-dmctl_command-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-it-dmctl_command-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-ha_cases-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-ha_cases-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-http_apis-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-http_apis-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-import_goroutine_leak-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-import_goroutine_leak-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-incremental_mode-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-incremental_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-initial_unit-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-initial_unit-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-load_interrupt-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-load_interrupt-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-online_ddl-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-online_ddl-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-print_status-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-print_status-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-relay_interrupt-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-relay_interrupt-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-safe_mode-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-safe_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-sequence_safe_mode-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-sequence_safe_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-sequence_sharding-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-sequence_sharding-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-shardddl1-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-shardddl1-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-shardddl2-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-shardddl2-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-shardddl3-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-shardddl3-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - uses: actions/cache@v2
 #        with:
 #          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-sharding-${{ github.event.pull_request.head.sha }}-master
+#          key: ${{ runner.os }}-dm-it-sharding-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - name: Upload Coverage
         run: |
+          ls -lh /tmp/dm.tar.gz
+          tar xzvf /tmp/dm.tar.gz
           ls cov_dir
           rm -rf /tmp/dm_test
           mkdir -p /tmp/dm_test
