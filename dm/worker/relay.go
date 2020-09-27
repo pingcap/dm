@@ -46,16 +46,12 @@ type RelayHolder interface {
 	Stage() pb.Stage
 	// Error returns relay unit's status
 	Error() *pb.RelayError
-	// SwitchMaster requests relay unit to switch master server
-	SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error
 	// Operate operates relay unit
-	Operate(ctx context.Context, req *pb.OperateRelayRequest) error
+	Operate(ctx context.Context, op pb.RelayOp) error
 	// Result returns the result of the relay
 	Result() *pb.ProcessResult
 	// Update updates relay config online
 	Update(ctx context.Context, cfg *config.SourceConfig) error
-	// Migrate resets binlog name and binlog position for relay unit
-	Migrate(ctx context.Context, binlogName string, binlogPos uint32) error
 }
 
 // NewRelayHolder is relay holder initializer
@@ -205,34 +201,24 @@ func (h *realRelayHolder) Error() *pb.RelayError {
 	return s
 }
 
-// SwitchMaster requests relay unit to switch master server
-func (h *realRelayHolder) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
-	h.RLock()
-	defer h.RUnlock()
-	if h.stage != pb.Stage_Paused {
-		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Paused, "switch master")
-	}
-	return h.relay.SwitchMaster(ctx, req)
-}
-
 // Operate operates relay unit
-func (h *realRelayHolder) Operate(ctx context.Context, req *pb.OperateRelayRequest) error {
-	switch req.Op {
+func (h *realRelayHolder) Operate(ctx context.Context, op pb.RelayOp) error {
+	switch op {
 	case pb.RelayOp_PauseRelay:
-		return h.pauseRelay(ctx, req)
+		return h.pauseRelay(ctx, op)
 	case pb.RelayOp_ResumeRelay:
-		return h.resumeRelay(ctx, req)
+		return h.resumeRelay(ctx, op)
 	case pb.RelayOp_StopRelay:
-		return h.stopRelay(ctx, req)
+		return h.stopRelay(ctx, op)
 	}
-	return terror.ErrWorkerRelayOperNotSupport.Generate(req.Op.String())
+	return terror.ErrWorkerRelayOperNotSupport.Generate(op.String())
 }
 
-func (h *realRelayHolder) pauseRelay(ctx context.Context, req *pb.OperateRelayRequest) error {
+func (h *realRelayHolder) pauseRelay(ctx context.Context, op pb.RelayOp) error {
 	h.Lock()
 	if h.stage != pb.Stage_Running {
 		h.Unlock()
-		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Running, req.Op)
+		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Running, op)
 	}
 	h.stage = pb.Stage_Paused
 
@@ -247,11 +233,11 @@ func (h *realRelayHolder) pauseRelay(ctx context.Context, req *pb.OperateRelayRe
 	return nil
 }
 
-func (h *realRelayHolder) resumeRelay(ctx context.Context, req *pb.OperateRelayRequest) error {
+func (h *realRelayHolder) resumeRelay(ctx context.Context, op pb.RelayOp) error {
 	h.Lock()
 	defer h.Unlock()
 	if h.stage != pb.Stage_Paused {
-		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Paused, req.Op)
+		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Paused, op)
 	}
 
 	h.wg.Add(1)
@@ -262,11 +248,11 @@ func (h *realRelayHolder) resumeRelay(ctx context.Context, req *pb.OperateRelayR
 	return nil
 }
 
-func (h *realRelayHolder) stopRelay(ctx context.Context, req *pb.OperateRelayRequest) error {
+func (h *realRelayHolder) stopRelay(ctx context.Context, op pb.RelayOp) error {
 	h.Lock()
 	defer h.Unlock()
 	if h.stage == pb.Stage_Stopped {
-		return terror.ErrWorkerRelayStageNotValid.Generatef("current stage is already stopped not valid, relayop %s", req.Op)
+		return terror.ErrWorkerRelayStageNotValid.Generatef("current stage is already stopped not valid, relayop %s", op)
 	}
 	h.stage = pb.Stage_Stopped
 
@@ -348,7 +334,7 @@ func (h *realRelayHolder) Update(ctx context.Context, cfg *config.SourceConfig) 
 			return err
 		}
 	} else if stage == pb.Stage_Running {
-		err := h.Operate(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
+		err := h.Operate(ctx, pb.RelayOp_PauseRelay)
 		if err != nil {
 			return err
 		}
@@ -358,7 +344,7 @@ func (h *realRelayHolder) Update(ctx context.Context, cfg *config.SourceConfig) 
 			return err
 		}
 
-		err = h.Operate(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_ResumeRelay})
+		err = h.Operate(ctx, pb.RelayOp_ResumeRelay)
 		if err != nil {
 			return err
 		}
@@ -370,13 +356,6 @@ func (h *realRelayHolder) Update(ctx context.Context, cfg *config.SourceConfig) 
 // EarliestActiveRelayLog implements RelayOperator.EarliestActiveRelayLog
 func (h *realRelayHolder) EarliestActiveRelayLog() *streamer.RelayLogInfo {
 	return h.relay.ActiveRelayLog()
-}
-
-// Migrate reset binlog name and binlog pos for relay unit
-func (h *realRelayHolder) Migrate(ctx context.Context, binlogName string, binlogPos uint32) error {
-	h.Lock()
-	defer h.Unlock()
-	return h.relay.Migrate(ctx, binlogName, binlogPos)
 }
 
 /******************** dummy relay holder ********************/
@@ -453,29 +432,24 @@ func (d *dummyRelayHolder) Error() *pb.RelayError {
 	return nil
 }
 
-// SwitchMaster implements interface of RelayHolder
-func (d *dummyRelayHolder) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
-	return nil
-}
-
 // Operate implements interface of RelayHolder
-func (d *dummyRelayHolder) Operate(ctx context.Context, req *pb.OperateRelayRequest) error {
+func (d *dummyRelayHolder) Operate(ctx context.Context, op pb.RelayOp) error {
 	d.Lock()
 	defer d.Unlock()
-	switch req.Op {
+	switch op {
 	case pb.RelayOp_PauseRelay:
 		if d.stage != pb.Stage_Running {
-			return terror.ErrWorkerRelayStageNotValid.Generate(d.stage, pb.Stage_Running, req.Op)
+			return terror.ErrWorkerRelayStageNotValid.Generate(d.stage, pb.Stage_Running, op)
 		}
 		d.stage = pb.Stage_Paused
 	case pb.RelayOp_ResumeRelay:
 		if d.stage != pb.Stage_Paused {
-			return terror.ErrWorkerRelayStageNotValid.Generate(d.stage, pb.Stage_Paused, req.Op)
+			return terror.ErrWorkerRelayStageNotValid.Generate(d.stage, pb.Stage_Paused, op)
 		}
 		d.stage = pb.Stage_Running
 	case pb.RelayOp_StopRelay:
 		if d.stage == pb.Stage_Stopped {
-			return terror.ErrWorkerRelayStageNotValid.Generatef("current stage is already stopped not valid, relayop %s", req.Op)
+			return terror.ErrWorkerRelayStageNotValid.Generatef("current stage is already stopped not valid, relayop %s", op)
 		}
 		d.stage = pb.Stage_Stopped
 	}
@@ -489,11 +463,6 @@ func (d *dummyRelayHolder) Result() *pb.ProcessResult {
 
 // Update implements interface of RelayHolder
 func (d *dummyRelayHolder) Update(ctx context.Context, cfg *config.SourceConfig) error {
-	return nil
-}
-
-// Migrate implements interface of RelayHolder
-func (d *dummyRelayHolder) Migrate(ctx context.Context, binlogName string, binlogPos uint32) error {
 	return nil
 }
 
