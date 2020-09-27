@@ -84,10 +84,7 @@ func (c *dbConn) execSQLs(ctx context.Context, queries ...string) error {
 			if retry.IsConnectionError(err) || forceIgnoreExecSQLError(err) {
 				// HACK: for some errors like `invalid connection`, `sql: connection is already closed`, we can ignore them just for testing.
 				err = c.resetConn(ctx)
-				if err != nil {
-					return false
-				}
-				return true
+				return err == nil
 			}
 			return false
 		},

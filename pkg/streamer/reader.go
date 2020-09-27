@@ -416,8 +416,6 @@ func (r *BinlogReader) Close() {
 // GetUUIDs returns binlog reader's uuids
 func (r *BinlogReader) GetUUIDs() []string {
 	uuids := make([]string, 0, len(r.uuids))
-	for _, uuid := range r.uuids {
-		uuids = append(uuids, uuid)
-	}
+	uuids = append(uuids, r.uuids...)
 	return uuids
 }

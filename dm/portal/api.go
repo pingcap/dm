@@ -398,7 +398,6 @@ func (p *Handler) Download(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Control", "private, no-transform, no-store, must-revalidate")
 
 	http.ServeContent(w, req, path.Base(filepath), time.Now(), bytes.NewReader(cfgData))
-	return
 }
 
 // fileValid judge the download file path is valid or not.

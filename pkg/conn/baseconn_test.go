@@ -114,10 +114,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	mock.ExpectExec("create database test").WillReturnError(errors.New("don't ignore me"))
 	mock.ExpectRollback()
 	ignoreF := func(err error) bool {
-		if err.Error() == "ignore me" {
-			return true
-		}
-		return false
+		return err.Error() == "ignore me"
 	}
 	affected, err = baseConn.ExecuteSQLWithIgnoreError(tctx, testStmtHistogram, "test", ignoreF, []string{"create database test", "create database test"})
 	c.Assert(strings.Contains(err.Error(), "don't ignore me"), IsTrue)

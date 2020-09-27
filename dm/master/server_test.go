@@ -1466,9 +1466,8 @@ func (t *testMaster) subTaskStageMatch(c *check.C, s *scheduler.Scheduler, task,
 
 func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskName, sourceID string, masterReq interface{}) {
 	var expect pb.Stage
-	switch masterReq.(type) {
+	switch req := masterReq.(type) {
 	case *pb.OperateSourceRequest:
-		req := masterReq.(*pb.OperateSourceRequest)
 		switch req.Op {
 		case pb.SourceOp_StartSource, pb.SourceOp_UpdateSource:
 			expect = pb.Stage_Running
@@ -1478,7 +1477,6 @@ func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskNam
 	case *pb.StartTaskRequest, *pb.UpdateTaskRequest:
 		expect = pb.Stage_Running
 	case *pb.OperateTaskRequest:
-		req := masterReq.(*pb.OperateTaskRequest)
 		switch req.Op {
 		case pb.TaskOp_Resume:
 			expect = pb.Stage_Running
@@ -1488,7 +1486,6 @@ func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskNam
 			expect = pb.Stage_Stopped
 		}
 	case *pb.OperateWorkerRelayRequest:
-		req := masterReq.(*pb.OperateWorkerRelayRequest)
 		switch req.Op {
 		case pb.RelayOp_ResumeRelay:
 			expect = pb.Stage_Running
