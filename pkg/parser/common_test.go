@@ -19,6 +19,8 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = Suite(&testParserSuite{})
@@ -91,6 +93,27 @@ func (t *testParserSuite) TestParser(c *C) {
 		_, err := Parse(p, sql, "", "")
 		c.Assert(err, NotNil)
 	}
+}
+
+func (t *testParserSuite) TestError(c *C) {
+	p := parser.New()
+
+	// DML will report ErrUnknownTypeDDL
+	dml := "INSERT INTO `t1` VALUES (1)"
+
+	stmts, err := Parse(p, dml, "", "")
+	c.Assert(err, IsNil)
+	_, err = FetchDDLTableNames("test", stmts[0])
+	c.Assert(terror.ErrUnknownTypeDDL.Equal(err), IsTrue)
+
+	_, err = RenameDDLTable(stmts[0], nil)
+	c.Assert(terror.ErrUnknownTypeDDL.Equal(err), IsTrue)
+
+	ddl := "create table `s1`.`t1` (id int)"
+	stmts, err = Parse(p, ddl, "", "")
+	c.Assert(err, IsNil)
+	_, err = RenameDDLTable(stmts[0], nil)
+	c.Assert(terror.ErrRewriteSQL.Equal(err), IsTrue)
 }
 
 func (t *testParserSuite) TestResolveDDL(c *C) {
@@ -288,7 +311,6 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 
 			tableNames, err := FetchDDLTableNames("test", s[0])
 			c.Assert(err, IsNil)
-			c.Log(sql, tableNames)
 			c.Assert(tableNames, DeepEquals, tbs[j])
 
 			targetSQL, err := RenameDDLTable(s[0], targetTableNames[i][j])

@@ -110,7 +110,6 @@ END`, true},
 	for _, t := range cases {
 		skipped, err := syncer.skipQuery(nil, nil, t.sql)
 		c.Assert(err, IsNil)
-		c.Log(t.sql)
 		c.Assert(skipped, Equals, t.expectSkipped)
 	}
 
