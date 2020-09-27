@@ -781,6 +781,7 @@ func (t *testOptimist) TestOptimistLockMultipleTarget(c *C) {
 	_, err = optimism.PutInfo(etcdTestCli, i11)
 	c.Assert(err, IsNil)
 	_, err = optimism.PutInfo(etcdTestCli, i21)
+	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
 		return len(o.Locks()) == 2
 	}), IsTrue)

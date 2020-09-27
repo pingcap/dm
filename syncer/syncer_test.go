@@ -224,6 +224,7 @@ func (s *testSyncerSuite) resetEventsGenerator(c *C) {
 	}
 	latestGTIDStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
 	latestGTID, err := gtid.ParserGTID(s.cfg.Flavor, latestGTIDStr)
+	c.Assert(err, IsNil)
 	s.eventsGenerator, err = event.NewGenerator(s.cfg.Flavor, uint32(s.cfg.ServerID), 0, latestGTID, previousGTIDSet, 0)
 	if err != nil {
 		c.Fatal(err)
@@ -1114,6 +1115,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
 	checkPointDB, checkPointMock, err := sqlmock.New()
+	c.Assert(err, IsNil)
 	checkPointDBConn, err := checkPointDB.Conn(context.Background())
 	c.Assert(err, IsNil)
 
@@ -1332,6 +1334,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
 	checkPointDB, checkPointMock, err := sqlmock.New()
+	c.Assert(err, IsNil)
 	checkPointDBConn, err := checkPointDB.Conn(context.Background())
 	c.Assert(err, IsNil)
 
@@ -1516,6 +1519,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	c.Assert(err, IsNil)
 
 	checkPointDB, checkPointMock, err := sqlmock.New()
+	c.Assert(err, IsNil)
 	checkPointDBConn, err := checkPointDB.Conn(context.Background())
 	c.Assert(err, IsNil)
 

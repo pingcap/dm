@@ -811,7 +811,10 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	// mock PurgeRelay request
 	mockPurgeRelay := func(rpcSuccess bool) {
 		for i, worker := range workers {
-			rets := make([]interface{}, 0, 2)
+			rets := []interface{}{
+				nil,
+				errors.New(errGRPCFailed),
+			}
 			if rpcSuccess {
 				rets = []interface{}{
 					&pb.CommonWorkerResponse{
@@ -819,11 +822,6 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 						Source: sources[i],
 					},
 					nil,
-				}
-			} else {
-				rets = []interface{}{
-					nil,
-					errors.New(errGRPCFailed),
 				}
 			}
 			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)

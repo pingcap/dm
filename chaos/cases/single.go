@@ -204,6 +204,9 @@ func (st *singleTask) genFullData() error {
 			return err
 		}
 		err = st.sourceConn.execSQLs(st.ctx, query)
+		if err != nil {
+			return err
+		}
 		st.tables = append(st.tables, name)
 
 		col2, idx2, err := createTableToSmithSchema(singleDB, query)
