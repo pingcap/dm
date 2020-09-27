@@ -57,7 +57,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 	case realTable:
 		switch stmt.(type) {
 		case *ast.RenameTableStmt:
-			if len(tables) != 2 {
+			if len(tables) != 4 {
 				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
 
@@ -73,7 +73,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 		// ignore trashTable
 		switch stmt.(type) {
 		case *ast.RenameTableStmt:
-			if len(tables) != 2 {
+			if len(tables) != 4 {
 				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
 
@@ -96,7 +96,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 				return nil, "", "", err
 			}
 		case *ast.RenameTableStmt:
-			if len(tables) != 2 {
+			if len(tables) != 4 {
 				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
 
