@@ -330,7 +330,8 @@ func (s *Server) stopWorker(sourceID string) error {
 	w := s.getWorker(false)
 	if w == nil {
 		s.Unlock()
-		return terror.ErrWorkerNoStart
+		log.L().Warn("worker has not been started, no need to stop", zap.String("source", sourceID))
+		return nil // no need to stop because not started yet
 	}
 	if sourceID != "" && w.cfg.SourceID != sourceID {
 		s.Unlock()
