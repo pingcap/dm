@@ -22,6 +22,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -57,7 +58,7 @@ func (g *Ghost) Apply(tctx *tcontext.Context, tables []*filter.Table, statement 
 	case realTable:
 		switch stmt.(type) {
 		case *ast.RenameTableStmt:
-			if len(tables) != 2 {
+			if len(tables) != parserpkg.SingleRenameTableNameNum {
 				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
 			}
 
@@ -73,7 +74,7 @@ func (g *Ghost) Apply(tctx *tcontext.Context, tables []*filter.Table, statement 
 		// ignore trashTable
 		switch stmt.(type) {
 		case *ast.RenameTableStmt:
-			if len(tables) != 2 {
+			if len(tables) != parserpkg.SingleRenameTableNameNum {
 				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
 			}
 
@@ -96,7 +97,7 @@ func (g *Ghost) Apply(tctx *tcontext.Context, tables []*filter.Table, statement 
 				return nil, "", "", err
 			}
 		case *ast.RenameTableStmt:
-			if len(tables) != 2 {
+			if len(tables) != parserpkg.SingleRenameTableNameNum {
 				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
 			}
 
