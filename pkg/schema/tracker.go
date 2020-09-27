@@ -63,9 +63,13 @@ func NewTracker(sessionCfg map[string]string, tidbConn *conn.BaseConn) (*Tracker
 
 	if len(sessionCfg) == 0 {
 		sessionCfg = make(map[string]string)
-		var ignoredColumn interface{}
-		for _, k := range sessionVars {
-			rows, err2 := tidbConn.QuerySQL(tcontext.Background(), fmt.Sprintf("show variables like '%s'", k))
+	}
+	// get variables if user doesn't specify
+	// all cfg in sessionVars should be lower case
+	for _, k := range sessionVars {
+		if _, ok := sessionCfg[k]; !ok {
+			var ignoredColumn interface{}
+			rows, err2 := tidbConn.QuerySQL(tcontext.Background(), fmt.Sprintf("SHOW VARIABLES LIKE '%s'", k))
 			if err2 != nil {
 				return nil, err2
 			}
