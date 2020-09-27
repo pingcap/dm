@@ -43,6 +43,7 @@ jobs:
           key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - name: DM Integration Test Build
         run: |
+          set -x
           make dm_integration_test_build
           curl http://download.pingcap.org/tidb-enterprise-tools-latest-linux-amd64.tar.gz | tar xz
           mv tidb-enterprise-tools-latest-linux-amd64/bin/sync_diff_inspector bin/

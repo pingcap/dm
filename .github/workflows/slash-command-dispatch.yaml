@@ -10,9 +10,9 @@ jobs:
       - name: Slash Command Dispatch
         uses: peter-evans/slash-command-dispatch@v2
         with:
-          token: ${{ secrets.PAT }}
+          token: ${{ secrets.PAT2 }}
           issue-type: pull-request
-          reactions: false
+#          reactions: false
           commands: |
             run-all-tests
             run-unit-tests
