@@ -146,11 +146,7 @@ func (st *singleTask) run() error {
 		return err
 	}
 
-	if err := st.incrLoop(); err != nil {
-		return err
-	}
-
-	return nil
+	return st.incrLoop()
 }
 
 // stopPreviousTask stops the previous task with the same name if exists.
@@ -174,10 +170,7 @@ func (st *singleTask) clearPreviousData() error {
 	if err := dropDatabase(st.ctx, st.sourceConn, singleDB); err != nil {
 		return err
 	}
-	if err := dropDatabase(st.ctx, st.targetConn, singleDB); err != nil {
-		return err
-	}
-	return nil
+	return dropDatabase(st.ctx, st.targetConn, singleDB)
 }
 
 // genFullData generates data for the full stage.
