@@ -34,7 +34,6 @@ jobs:
           path: |
             **/_tools
           key: ${{ runner.os }}-dm-retool-${{ hashFiles('**/_tools/manifest.json') }}
-      # cache dm repo
       - name: Cache prepare results
         uses: actions/cache@v2
         with:
@@ -84,7 +83,7 @@ jobs:
           set -x
           docker pull mysql:5.7
           docker run --name mysql-for-ut -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 -d mysql:5.7 --log-bin --binlog-format=ROW --enforce-gtid-consistency=ON --gtid-mode=ON --server-id=1
-          set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
+          set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -uroot --silent; if [ $? -eq 0 ]; then set -e; break; else if [ $i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
           rm -rf /tmp/dm_test
           mkdir -p /tmp/dm_test
           export MYSQL_HOST=127.0.0.1
@@ -99,12 +98,16 @@ jobs:
           ls /tmp/dm_test
           cp /tmp/dm_test/cov*out cov_dir
           ls cov_dir
+      - name: Cache coverage results
+        uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-ut-${{ matrix.test_name }}-${{ github.event.pull_request.head.sha }}-master
 #      - name: Upload dm unit coverage
 #        uses: actions/upload-artifact@v2
 #        with:
 #          name: dm-${{ github.event.pull_request.head.sha }}
 #          path: dm.tar.gz
-        # stash includes: "go/src/github.com/pingcap/dm/cov_dir/**", name: "unit-cov-${case_name}"
 
   integration_test:
     needs: prepare
@@ -112,7 +115,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_name: [others, dmctl_basic]
+        test_name: [dmctl_basic, dmctl_command]
 #        test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit, load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
     steps:
       - name: Cache go modules
@@ -120,10 +123,6 @@ jobs:
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
-#      - name: Download dm build results
-#        uses: actions/download-artifact@v2
-#        with:
-#          name: dm-${{ github.event.pull_request.head.sha }}
       - name: Cache prepare results
         uses: actions/cache@v2
         with:
@@ -151,7 +150,11 @@ jobs:
           mkdir -p cov_dir
           ls /tmp/dm_test
           cp /tmp/dm_test/cov*out cov_dir
-        # stash includes: "go/src/github.com/pingcap/dm/cov_dir/**", name: "integration-cov-${case_name}"
+      - name: Cache coverage results
+        uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-${{ matrix.test_name }}-${{ github.event.pull_request.head.sha }}-master
 
   check:
     needs: prepare
@@ -162,10 +165,6 @@ jobs:
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
-#      - name: Download dm build results
-#        uses: actions/download-artifact@v2
-#        with:
-#          name: dm-${{ github.event.pull_request.head.sha }}
       - name: Cache prepare results
         uses: actions/cache@v2
         with:
@@ -182,65 +181,141 @@ jobs:
     needs: [unit_test, integration_test, check]
     runs-on: ubuntu-18.04
     steps:
-#      - name: Coverage
-        # unstash 'dm'
-          #            unstash 'unit-cov-relay'
-          #            unstash 'unit-cov-syncer'
-          #            unstash 'unit-cov-pkg_binlog'
-          #            unstash 'unit-cov-others'
-          #            unstash 'integration-cov-others'
-          #            unstash 'integration-cov-all_mode'
-          #            unstash 'integration-cov-dmctl_advance'
-          #            unstash 'integration-cov-dmctl_basic'
-          #            unstash 'integration-cov-dmctl_command'
-          #            try {
-          #                unstash 'integration-cov-ha_cases'
-          #            } catch (Exception e) {
-          #            }
-          #            unstash 'integration-cov-http_apis'
-          #            unstash 'integration-cov-import_goroutine_leak'
-          #            unstash 'integration-cov-incremental_mode'
-          #            unstash 'integration-cov-initial_unit'
-          #            unstash 'integration-cov-load_interrupt'
-          #            unstash 'integration-cov-online_ddl'
-          #            unstash 'integration-cov-print_status'
-          #            unstash 'integration-cov-relay_interrupt'
-          #            unstash 'integration-cov-safe_mode'
-          #            unstash 'integration-cov-sequence_safe_mode'
-          #            unstash 'integration-cov-sequence_sharding'
-          #            try {
-          #                unstash 'integration-cov-shardddl1'
-          #            } catch (Exception e) {
-          #            }
-          #            try {
-          #                unstash 'integration-cov-shardddl2'
-          #            } catch (Exception e) {
-          #            }
-          #            try {
-          #                unstash 'integration-cov-shardddl3'
-          #            } catch (Exception e) {
-        #            }
-        #            unstash 'integration-cov-sharding'
-#        run: |
-#          make check
-#          rm -rf /tmp/dm_test
-#          mkdir -p /tmp/dm_test
-#          cp cov_dir/* /tmp/dm_test
-#          set +x
-#          BUILD_NUMBER=${BUILD_NUMBER} COVERALLS_TOKEN="${COVERALLS_TOKEN}" CODECOV_TOKEN="${CODECOV_TOKEN}" GOPATH=${ws}/go:\$GOPATH PATH=${ws}/go/bin:/go/bin:\$PATH JenkinsCI=1 make coverage || true
-#          set -x
+      - name: Cache go modules
+        uses: actions/cache@v2
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
+      - name: Cache prepare results
+        uses: actions/cache@v2
+        with:
+          path: /tmp/dm.tar.gz
+          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-master
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-ut-relay-${{ github.event.pull_request.head.sha }}-master
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-ut-syncer-${{ github.event.pull_request.head.sha }}-master
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-ut-pkg_binlog-${{ github.event.pull_request.head.sha }}-master
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-ut-others-${{ github.event.pull_request.head.sha }}-master
 
-      # send Slack notify if failed.
-#      - name: Slack notification
-#        if: ${{ failure() }}
-#        uses: Ilshidur/action-slack@2.1.0
-#        env:
-#          SLACK_WEBHOOK: ${{ secrets.SLACK_NOTIFY }}
+      # test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit,
+      # load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
+#      - uses: actions/cache@v2
 #        with:
-#          args: "chaos job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
-
-      # Debug via SSH if previous steps failed
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-others-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-all_mode-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-dmctl_advance-${{ github.event.pull_request.head.sha }}-master
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-dmctl_basic-${{ github.event.pull_request.head.sha }}-master
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-dmctl_command-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-ha_cases-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-http_apis-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-import_goroutine_leak-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-incremental_mode-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-initial_unit-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-load_interrupt-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-online_ddl-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-print_status-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-relay_interrupt-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-safe_mode-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-sequence_safe_mode-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-sequence_sharding-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-shardddl1-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-shardddl2-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-shardddl3-${{ github.event.pull_request.head.sha }}-master
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-sharding-${{ github.event.pull_request.head.sha }}-master
+      - name: Upload Coverage
+        run: |
+          ls cov_dir
+          rm -rf /tmp/dm_test
+          mkdir -p /tmp/dm_test
+          cp cov_dir/* /tmp/dm_test
+          set +x
+          CODECOV_TOKEN=866b8fb2-e586-464e-9360-8699cf99e353
+          COVERALLS_TOKEN=XEr5hsGAb7FSu9JOfmfHbXiMHZ1cKu86y
+          COVERALLS_TOKEN="${COVERALLS_TOKEN}" CODECOV_TOKEN="${CODECOV_TOKEN}" JenkinsCI=1 make coverage || true
       - name: Set up tmate session
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v2
 
+  Notify:
+    needs: [coverage]
+    runs-on: ubuntu-18.04
+    if: ${{ always() }}
+    steps:
+      - name: Slack notification
+        uses: Ilshidur/action-slack@2.1.0
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_NOTIFY }}
+        with:
+          args: "dm unit_integration test job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
