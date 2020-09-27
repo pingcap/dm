@@ -89,8 +89,6 @@ const (
 )
 
 type testSyncerSuite struct {
-	streamer        *replication.BinlogStreamer
-	mockStreamer    streamer2.Streamer
 	cfg             *config.SubTaskConfig
 	eventsGenerator *event.Generator
 }
@@ -211,11 +209,6 @@ func (s *testSyncerSuite) generateEvents(binlogEvents mockBinlogEvents, c *C) []
 	return events
 }
 
-func (s *testSyncerSuite) resetMockStreamer(events []*replication.BinlogEvent) {
-	streamer := &MockStreamer{events: events, idx: 0}
-	s.mockStreamer = streamer
-}
-
 func (s *testSyncerSuite) resetEventsGenerator(c *C) {
 	previousGTIDSetStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:1-94321383"
 	previousGTIDSet, err := gtid.ParserGTID(s.cfg.Flavor, previousGTIDSetStr)
@@ -240,27 +233,6 @@ func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
 	return utils.GetParser(db)
-}
-
-func (s *testSyncerSuite) mockCheckPointCreate(checkPointMock sqlmock.Sqlmock, tag string) {
-	checkPointMock.ExpectBegin()
-	// we encode the line number to make it easier to figure out which expectation has failed.
-	checkPointMock.ExpectExec(fmt.Sprintf("(223:"+tag+")?INSERT INTO `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectExec(fmt.Sprintf("(224:"+tag+")?INSERT INTO `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
-	// TODO because shardGroup DB is same as checkpoint DB, next time split them is better
-	checkPointMock.ExpectExec(fmt.Sprintf("(226:"+tag+")?DELETE FROM `%s`.`%s_syncer_sharding_meta(228)?", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectCommit()
-}
-
-func (s *testSyncerSuite) mockCheckPointFlush(checkPointMock sqlmock.Sqlmock, tagInt int) {
-	tag := fmt.Sprintf("%d", tagInt)
-	checkPointMock.ExpectBegin()
-	checkPointMock.ExpectExec(fmt.Sprintf("(242:"+tag+")?INSERT INTO `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectExec(fmt.Sprintf("(243:"+tag+")?INSERT INTO `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectExec(fmt.Sprintf("(244:"+tag+")?INSERT INTO `%s`.`%s`", s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
-	// TODO because shardGroup DB is same as checkpoint DB, next time split them is better
-	checkPointMock.ExpectExec(fmt.Sprintf("(246:"+tag+")?DELETE FROM `%s`.`%s_syncer_sharding_meta(239)?", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectCommit()
 }
 
 func (s *testSyncerSuite) TestSelectDB(c *C) {

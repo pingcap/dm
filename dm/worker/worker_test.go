@@ -23,7 +23,6 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/tikv/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
-	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -194,12 +193,6 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 		c.Log(sts)
 		return false
 	}), IsTrue)
-}
-
-func (t *testServer2) createClient(c *C, addr string) pb.WorkerClient {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
-	c.Assert(err, IsNil)
-	return pb.NewWorkerClient(conn)
 }
 
 type testWorkerEtcdCompact struct{}
