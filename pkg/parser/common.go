@@ -28,6 +28,12 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	// for RenameTableStmt, it contains 4 not 2 TableName, first two are repeated at start
+	// ref https://github.com/pingcap/tidb/pull/3892
+	SingleRenameTableNameNum = 4
+)
+
 // Parse wraps parser.Parse(), makes `parser` suitable for dm
 func Parse(p *parser.Parser, sql, charset, collation string) (stmt []ast.StmtNode, err error) {
 	stmts, warnings, err := p.Parse(sql, charset, collation)
@@ -67,7 +73,7 @@ func (tne *tableNameExtractor) Leave(in ast.Node) (ast.Node, bool) {
 // FetchDDLTableNames returns tableNames in ddl the result contains many tableName.
 // Because we use visitor pattern, first tableName is always upper-most table in ast
 // specifically, for `create table like` DDL, result contains [sourceTableName, sourceRefTableName]
-// for rename table ddl, result contains [oldTableName, newTableName]
+// for rename table ddl, result contains [old1, new1, old1, new1, old2, new2, old3, new3, ...] because of TiDB parser
 // for other DDL, order of tableName is the node visit order
 func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, error) {
 	switch stmt.(type) {
