@@ -118,6 +118,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	startLocation.Suffix++
 	e, err = h.GetEvent(&startLocation)
 	c.Assert(terror.ErrSyncerReplaceEvent.Equal(err), IsTrue)
+	c.Assert(e, IsNil)
 
 	// revert exist operator
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Revert, nil)

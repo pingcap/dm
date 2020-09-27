@@ -50,6 +50,7 @@ func NewGRPCClient(addr string, securityCfg config.Security) (*GRPCClient, error
 		return nil, terror.ErrMasterGRPCCreateConn.Delegate(err)
 	}
 
+	//nolint:staticcheck
 	conn, err := grpc.Dial(addr, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second),
 		grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff: backoff.Config{

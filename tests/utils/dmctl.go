@@ -27,6 +27,7 @@ import (
 
 func CreateDmCtl(addr string) (pb.MasterClient, error) {
 	// TODO: use tls, this function is not used
+	//nolint:staticcheck
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		return nil, errors.Trace(err)

@@ -364,6 +364,7 @@ func (c *TaskConfig) String() string {
 
 // JSON returns the config's json string
 func (c *TaskConfig) JSON() string {
+	//nolint:staticcheck
 	cfg, err := json.Marshal(c)
 	if err != nil {
 		log.L().Error("marshal task config to json", zap.String("task", c.Name), log.ShortError(err))
