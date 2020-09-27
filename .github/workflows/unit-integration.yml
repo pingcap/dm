@@ -108,7 +108,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-ut-${{ matrix.test_name }}-${{ github.event.pull_request.head.sha }}-master
+          key: ${{ runner.os }}-dm-ut-${{ matrix.test_name }}-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
 #      - name: Upload dm unit coverage
 #        uses: actions/upload-artifact@v2
 #        with:
