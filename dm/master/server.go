@@ -1027,15 +1027,45 @@ func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, erro
 			return cfgs, err
 		}
 		if err = cfg.Adjust(fromDB.DB); err != nil {
+			fromDB.Close()
 			return cfgs, err
 		}
 		if _, err = cfg.Yaml(); err != nil {
+			fromDB.Close()
 			return cfgs, err
 		}
 
+		fromDB.Close()
 		cfgs[i] = cfg
 	}
 	return cfgs, nil
+}
+
+func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
+	cfg := *dbConfig
+	if len(cfg.Password) > 0 {
+		cfg.Password = utils.DecryptOrPlaintext(cfg.Password)
+	}
+
+	toDB, err := conn.DefaultDBProvider.Apply(cfg)
+	if err != nil {
+		return err
+	}
+	defer toDB.Close()
+
+	value, err := dbutil.ShowVersion(ctx, toDB.DB)
+	if err != nil {
+		return err
+	}
+
+	version, err := utils.ExtractTiDBVersion(value)
+	// Do not adjust if not TiDB
+	if err == nil {
+		config.AdjustTargetDBSessionCfg(dbConfig, version)
+	} else {
+		log.L().Warn("get tidb version", log.ShortError(err))
+	}
+	return nil
 }
 
 // OperateSource will create or update an upstream source.
@@ -1190,6 +1220,11 @@ func (s *Server) OperateLeader(ctx context.Context, req *pb.OperateLeaderRequest
 func (s *Server) generateSubTask(ctx context.Context, task string) (*config.TaskConfig, []*config.SubTaskConfig, error) {
 	cfg := config.NewTaskConfig()
 	err := cfg.Decode(task)
+	if err != nil {
+		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
+	}
+
+	err = adjustTargetDB(ctx, cfg.TargetDB)
 	if err != nil {
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
