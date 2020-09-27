@@ -98,7 +98,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(sqls, check.HasLen, 4)
 	c.Assert(args, check.HasLen, 4)
 	for _, stmt := range sqls {
-		c.Assert(stmt, check.Matches, fmt.Sprintf("INSERT INTO .*"))
+		c.Assert(stmt, check.Matches, "INSERT INTO .*")
 	}
 	for _, arg := range args {
 		c.Assert(arg, check.HasLen, 8)
@@ -144,7 +144,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(sqls, check.HasLen, 4)
 	c.Assert(args, check.HasLen, 4)
 	for _, stmt := range sqls {
-		c.Assert(stmt, check.Matches, fmt.Sprintf("INSERT INTO .*"))
+		c.Assert(stmt, check.Matches, "INSERT INTO .*")
 	}
 	for _, arg := range args {
 		c.Assert(arg, check.HasLen, 8)
@@ -187,7 +187,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	sqls, args = meta.FlushData(sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 1)
 	c.Assert(args, check.HasLen, 1)
-	c.Assert(sqls[0], check.Matches, fmt.Sprintf("DELETE FROM .*"))
+	c.Assert(sqls[0], check.Matches, "DELETE FROM .*")
 	c.Assert(args[0], check.DeepEquals, []interface{}{sourceID, tableID})
 }
 

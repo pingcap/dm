@@ -2764,7 +2764,7 @@ func (s *Syncer) handleEventError(err error, startLocation, endLocation *binlog.
 func (s *Syncer) getEvent(tctx *tcontext.Context, startLocation *binlog.Location) (*replication.BinlogEvent, error) {
 	// next event is a replace event
 	if s.isReplacingErr {
-		s.tctx.L().Info(fmt.Sprintf("try to get replace event"), zap.Stringer("location", startLocation))
+		s.tctx.L().Info("try to get replace event", zap.Stringer("location", startLocation))
 		return s.errOperatorHolder.GetEvent(startLocation)
 	}
 

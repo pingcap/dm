@@ -37,7 +37,7 @@ type SummaryVecProxy struct {
 func NewSummaryVec(opts prometheus.SummaryOpts, labelNames []string) *SummaryVecProxy {
 	return &SummaryVecProxy{
 		LabelNames: labelNames,
-		Labels:     make(map[string]map[string]string, 0),
+		Labels:     make(map[string]map[string]string),
 		SummaryVec: prometheus.NewSummaryVec(opts, labelNames),
 	}
 }
