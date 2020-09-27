@@ -976,6 +976,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	syncer.ddlDB = syncer.fromDB.BaseDB
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
+	c.Assert(syncer.setSyncCfg(), IsNil)
 	syncer.schemaTracker, err = schema.NewTracker(defaultTestSessionCfg, syncer.ddlDBConn.baseConn)
 	c.Assert(err, IsNil)
 	syncer.reset()
@@ -1083,8 +1084,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
 
-	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
-	c.Assert(syncer.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background()), IsNil)
+	syncer.setupMockCheckpoint(c, dbConn, mock)
 
 	mock.ExpectBegin()
 	mock.ExpectExec(".*INSERT INTO .* VALUES.* ON DUPLICATE KEY UPDATE.*").WillReturnResult(sqlmock.NewResult(0, 1))
