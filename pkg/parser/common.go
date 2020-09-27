@@ -29,7 +29,8 @@ import (
 )
 
 const (
-	// for RenameTableStmt, it contains 4 not 2 TableName, first two are repeated at start
+	// SingleRenameTableNameNum stands for number of TableNames in a single table renaming. it's 4 not 2 because TiDB
+	// parser repeats first two TableNames at start
 	// ref https://github.com/pingcap/tidb/pull/3892
 	SingleRenameTableNameNum = 4
 )
