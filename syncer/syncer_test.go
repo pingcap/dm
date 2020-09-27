@@ -27,6 +27,7 @@ import (
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/parser/model"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -950,7 +951,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 
 	for _, testCase := range testCases {
 		for _, sql := range testCase.sqls {
-			_, err := db.Exec(sql)
+			_, err = db.Exec(sql)
 			c.Assert(err, IsNil, Commentf("sql: %s", sql))
 		}
 		idx := 0
@@ -958,21 +959,23 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 			if idx >= len(testCase.sqls) {
 				break
 			}
-			e, err := syncer.streamerController.GetEvent(tcontext.Background())
+			var e *replication.BinlogEvent
+			e, err = syncer.streamerController.GetEvent(tcontext.Background())
 			c.Assert(err, IsNil)
 			switch ev := e.Event.(type) {
 			case *replication.RowsEvent:
 				schemaName := string(ev.Table.Schema)
 				tableName := string(ev.Table.Table)
-				ti, err := syncer.getTable(schemaName, tableName, schemaName, tableName)
+				var ti *model.TableInfo
+				ti, err = syncer.getTable(schemaName, tableName, schemaName, tableName)
 				c.Assert(err, IsNil)
 				var (
 					sqls []string
 					args [][]interface{}
 				)
 
-				prunedColumns, prunedRows, err := pruneGeneratedColumnDML(ti, ev.Rows)
-				c.Assert(err, IsNil)
+				prunedColumns, prunedRows, err2 := pruneGeneratedColumnDML(ti, ev.Rows)
+				c.Assert(err2, IsNil)
 				param := &genDMLParam{
 					schema:            schemaName,
 					table:             tableName,
