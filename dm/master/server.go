@@ -1051,20 +1051,20 @@ func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
 	if err != nil {
 		return err
 	}
+	defer toDB.Close()
 
 	value, err := dbutil.ShowVersion(ctx, toDB.DB)
 	if err != nil {
-		toDB.Close()
 		return err
 	}
 
 	version, err := utils.ToTiDBVersion(value)
-	log.L().Warn("get tidb version", log.ShortError(err))
 	// Do not adjust if not TiDB
 	if err == nil {
 		config.AdjustTargetDBSessionCfg(dbConfig, version)
+	} else {
+		log.L().Warn("get tidb version", log.ShortError(err))
 	}
-	toDB.Close()
 	return nil
 }
 
