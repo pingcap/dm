@@ -173,6 +173,10 @@ run() {
     curl -X PUT ${API_URL} -d '{"op":1, "task":"sequence_sharding_optimistic", "sources": ["mysql-replica-01"], "database":"sharding_seq_opt", "table":"t1"}' > ${WORK_DIR}/get_schema.log
     check_log_contains ${WORK_DIR}/get_schema.log "Table 'sharding_seq_opt.t1' doesn't exist" 1
 
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-schema get -s mysql-replica-01,mysql-replica-02 sequence_sharding_optimistic -d sharding_seq_opt -t t2" \
+        "\"result\": true" 3
+
     # try to set another schema, `c3` `int` -> `bigint`.
     echo 'CREATE TABLE `t1` ( `id` bigint(20) NOT NULL, `c2` varchar(20) DEFAULT NULL, `c3` bigint(11) DEFAULT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' > ${WORK_DIR}/schema.sql
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \

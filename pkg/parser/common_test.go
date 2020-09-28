@@ -19,6 +19,8 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = Suite(&testParserSuite{})
@@ -103,6 +105,28 @@ func (t *testParserSuite) TestParser(c *C) {
 	}
 }
 
+func (t *testParserSuite) TestError(c *C) {
+	p := parser.New()
+
+	// DML will report ErrUnknownTypeDDL
+	dml := "INSERT INTO `t1` VALUES (1)"
+
+	stmts, err := Parse(p, dml, "", "")
+	c.Assert(err, IsNil)
+	_, err = FetchDDLTableNames("test", stmts[0])
+	c.Assert(terror.ErrUnknownTypeDDL.Equal(err), IsTrue)
+
+	_, err = RenameDDLTable(stmts[0], nil)
+	c.Assert(terror.ErrUnknownTypeDDL.Equal(err), IsTrue)
+
+	// tableRenameVisitor with less `targetNames` won't panic
+	ddl := "create table `s1`.`t1` (id int)"
+	stmts, err = Parse(p, ddl, "", "")
+	c.Assert(err, IsNil)
+	_, err = RenameDDLTable(stmts[0], nil)
+	c.Assert(terror.ErrRewriteSQL.Equal(err), IsTrue)
+}
+
 func (t *testParserSuite) TestResolveDDL(c *C) {
 	p := parser.New()
 	expectedSQLs := [][]string{
@@ -164,8 +188,8 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("test", "t1"), genTableName("xx", "t2")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("s1", "t1")}},
-		{{genTableName("s1", "t1"), genTableName("s2", "t2")}},
-		{{genTableName("test", "t1"), genTableName("test", "t2")}, {genTableName("s1", "t1"), genTableName("test", "t2")}},
+		{{genTableName("s1", "t1"), genTableName("s2", "t2"), genTableName("s1", "t1"), genTableName("s2", "t2")}},
+		{{genTableName("test", "t1"), genTableName("test", "t2"), genTableName("test", "t1"), genTableName("test", "t2")}, {genTableName("s1", "t1"), genTableName("test", "t2"), genTableName("s1", "t1"), genTableName("test", "t2")}},
 		{{genTableName("s1", "t1")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
@@ -175,7 +199,7 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("s1", "t1")}, {genTableName("s1", "t1"), genTableName("xx", "t2")}, {genTableName("xx", "t2")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
-		{{genTableName("test", "t1")}},
+		{{genTableName("test", "t1"), genTableName("test", "t2")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
@@ -208,8 +232,8 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("xtest", "xt1"), genTableName("xxx", "xt2")}},
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xs1", "xt1")}},
-		{{genTableName("xs1", "xt1"), genTableName("xs2", "xt2")}},
-		{{genTableName("xtest", "xt1"), genTableName("xtest", "xt2")}, {genTableName("xs1", "xt1"), genTableName("xtest", "xt2")}},
+		{{genTableName("xs1", "xt1"), genTableName("xs2", "xt2"), genTableName("xs1", "xt1"), genTableName("xs2", "xt2")}},
+		{{genTableName("xtest", "xt1"), genTableName("xtest", "xt2"), genTableName("xtest", "xt1"), genTableName("xtest", "xt2")}, {genTableName("xs1", "xt1"), genTableName("xtest", "xt2"), genTableName("xs1", "xt1"), genTableName("xtest", "xt2")}},
 		{{genTableName("xs1", "xt1")}},
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xtest", "xt1")}},
@@ -219,7 +243,7 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("xs1", "xt1")}, {genTableName("xs1", "xt1"), genTableName("xxx", "xt2")}, {genTableName("xxx", "xt2")}},
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xtest", "xt1")}},
-		{{genTableName("xtest", "xt1")}},
+		{{genTableName("xtest", "xt1"), genTableName("xtest", "xt2")}},
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xtest", "xt1")}},
@@ -263,7 +287,7 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{"ALTER TABLE `xs1`.`xt1` ADD COLUMN `c1` INT", "ALTER TABLE `xs1`.`xt1` RENAME AS `xxx`.`xt2`", "ALTER TABLE `xxx`.`xt2` DROP COLUMN `c2`"},
 		{"ALTER TABLE `xtest`.`xt1` ADD COLUMN IF NOT EXISTS `c1` INT"},
 		{"ALTER TABLE `xtest`.`xt1` ADD INDEX IF NOT EXISTS(`a`) USING BTREE COMMENT 'a'"},
-		{"ALTER TABLE `xtest`.`xt1` ADD CONSTRAINT `fk_t2_id` FOREIGN KEY IF NOT EXISTS (`t2_id`) REFERENCES `t2`(`id`)"},
+		{"ALTER TABLE `xtest`.`xt1` ADD CONSTRAINT `fk_t2_id` FOREIGN KEY IF NOT EXISTS (`t2_id`) REFERENCES `xtest`.`xt2`(`id`)"},
 		{"CREATE INDEX IF NOT EXISTS `i1` ON `xtest`.`xt1` (`c1`)"},
 		{"ALTER TABLE `xtest`.`xt1` ADD PARTITION IF NOT EXISTS (PARTITION `p2` VALUES LESS THAN (MAXVALUE))"},
 		{"ALTER TABLE `xtest`.`xt1` DROP COLUMN IF EXISTS `c2`"},
@@ -305,5 +329,4 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 			c.Assert(targetSQL, Equals, targetSQLs[i][j])
 		}
 	}
-
 }

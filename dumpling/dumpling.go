@@ -125,7 +125,7 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		m.logger.Info("dump data finished", zap.Duration("cost time", time.Since(begin)))
 	} else {
 		m.logger.Error("dump data exits with error", zap.Duration("cost time", time.Since(begin)),
-			zap.String("error", utils.JoinProcessErrors(errs)))
+			zap.String("error", unit.JoinProcessErrors(errs)))
 	}
 
 	pr <- pb.ProcessResult{
@@ -176,11 +176,6 @@ func (m *Dumpling) Status() interface{} {
 	return &pb.DumpStatus{}
 }
 
-// Error implements Unit.Error
-func (m *Dumpling) Error() interface{} {
-	return &pb.DumpError{}
-}
-
 // Type implements Unit.Type
 func (m *Dumpling) Type() pb.UnitType {
 	return pb.UnitType_Dump
@@ -197,8 +192,6 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	db := cfg.From
 
 	dumpConfig := export.DefaultConfig()
-	// ret is used to record the unsupported arguments for dumpling
-	var ret []string
 
 	// block status addr because we already have it in DM, and if we enable it, may we need more ports for the process.
 	dumpConfig.StatusAddr = ""
@@ -237,11 +230,6 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		dumpConfig.Where = cfg.Where
 	}
 
-	if cfg.SkipTzUTC {
-		// TODO: support skip-tz-utc
-		ret = append(ret, "--skip-tz-utc")
-	}
-
 	if db.Security != nil {
 		dumpConfig.Security.CAPath = db.Security.SSLCA
 		dumpConfig.Security.CertPath = db.Security.SSLCert
@@ -253,7 +241,6 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		err := parseExtraArgs(&m.logger, dumpConfig, ParseArgLikeBash(extraArgs))
 		if err != nil {
 			m.logger.Warn("parsed some unsupported arguments", zap.Error(err))
-			ret = append(ret, extraArgs...)
 		}
 	}
 
@@ -263,9 +250,6 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	}
 
 	m.logger.Info("create dumpling", zap.Stringer("config", dumpConfig))
-	if len(ret) > 0 {
-		m.logger.Warn("meeting some unsupported arguments", zap.Strings("argument", ret))
-	}
 
 	if !cfg.CaseSensitive {
 		dumpConfig.TableFilter = filter.CaseInsensitive(dumpConfig.TableFilter)

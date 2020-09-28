@@ -27,7 +27,6 @@ import (
 	tddl "github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/errno"
 	"github.com/pingcap/tidb/infoschema"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -35,7 +34,7 @@ import (
 )
 
 func ignoreDDLError(err error) bool {
-	err = originError(err)
+	err = errors.Cause(err)
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if !ok {
 		return false
@@ -55,23 +54,8 @@ func ignoreDDLError(err error) bool {
 	}
 }
 
-func needRetryReplicate(err error) bool {
-	err = originError(err)
-	return err == gmysql.ErrBadConn
-}
-
-func isBinlogPurgedError(err error) bool {
-	return isMysqlError(err, tmysql.ErrMasterFatalErrorReadingBinlog)
-}
-
-func isMysqlError(err error, code uint16) bool {
-	err = originError(err)
-	mysqlErr, ok := err.(*mysql.MySQLError)
-	return ok && mysqlErr.Number == code
-}
-
 func isDropColumnWithIndexError(err error) bool {
-	mysqlErr, ok := originError(err).(*mysql.MySQLError)
+	mysqlErr, ok := errors.Cause(err).(*mysql.MySQLError)
 	if !ok {
 		return false
 	}
@@ -79,18 +63,6 @@ func isDropColumnWithIndexError(err error) bool {
 	return mysqlErr.Number == errno.ErrUnsupportedDDLOperation &&
 		strings.Contains(mysqlErr.Message, "drop column") &&
 		strings.Contains(mysqlErr.Message, "with index")
-}
-
-// originError return original error
-func originError(err error) error {
-	for {
-		e := errors.Cause(err)
-		if e == err {
-			break
-		}
-		err = e
-	}
-	return err
 }
 
 // handleSpecialDDLError handles special errors for DDL execution.

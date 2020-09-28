@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -30,13 +29,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
-)
-
-// move to tidb-tools later
-
-const (
-	maxRetryCount = 3
-	retryTimeout  = 3 * time.Second
 )
 
 // TrimCtrlChars returns a slice of the string s with all leading
@@ -52,9 +44,18 @@ func TrimCtrlChars(s string) string {
 	return strings.TrimFunc(s, f)
 }
 
+// TrimQuoteMark tries to trim leading and tailing quote(") mark if exists
+// only trim if leading and tailing quote matched as a pair
+func TrimQuoteMark(s string) string {
+	if len(s) > 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		return s[1 : len(s)-1]
+	}
+	return s
+}
+
 // FetchAllDoTables returns all need to do tables after filtered (fetches from upstream MySQL)
 func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error) {
-	schemas, err := getSchemas(db, maxRetryCount)
+	schemas, err := dbutil.GetSchemas(context.Background(), db)
 
 	failpoint.Inject("FetchAllDoTablesFailed", func(val failpoint.Value) {
 		err = tmysql.NewErr(uint16(val.(int)))
@@ -142,66 +143,6 @@ func FetchTargetDoTables(db *sql.DB, bw *filter.Filter, router *router.Table) (m
 	}
 
 	return mapper, nil
-}
-
-func getSchemas(db *sql.DB, maxRetry int) ([]string, error) {
-	query := "SHOW DATABASES"
-	rows, err := querySQL(db, query, maxRetry)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	// show an example.
-	/*
-		mysql> SHOW DATABASES;
-		+--------------------+
-		| Database           |
-		+--------------------+
-		| information_schema |
-		| mysql              |
-		| performance_schema |
-		| sys                |
-		| test_db            |
-		+--------------------+
-	*/
-	schemas := make([]string, 0, 10)
-	for rows.Next() {
-		var schema string
-		err = rows.Scan(&schema)
-		if err != nil {
-			return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-		}
-		schemas = append(schemas, schema)
-	}
-	return schemas, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
-}
-
-func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
-	var (
-		err  error
-		rows *sql.Rows
-	)
-
-	for i := 0; i < maxRetry; i++ {
-		if i > 0 {
-			log.L().Warn("query retry", zap.Int("retry number", i), zap.String("query", TruncateString(query, -1)))
-			time.Sleep(retryTimeout)
-		} else {
-			log.L().Debug("query sql", zap.String("query", TruncateString(query, -1)))
-		}
-
-		rows, err = db.Query(query)
-		if err != nil {
-			log.L().Warn("query retry", zap.String("query", TruncateString(query, -1)), log.ShortError(err))
-			continue
-		}
-
-		return rows, nil
-	}
-
-	log.L().Error("query failed", zap.String("query", TruncateString(query, -1)), zap.Error(err))
-	return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 }
 
 // CompareShardingDDLs compares s and t ddls

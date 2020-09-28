@@ -6,6 +6,7 @@ require (
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/chaos-mesh/go-sqlsmith v0.0.0-00010101000000-000000000000
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
+	github.com/coreos/go-semver v0.3.0
 	github.com/docker/go-units v0.4.0
 	github.com/dustin/go-humanize v1.0.0
 	github.com/go-sql-driver/mysql v1.5.0
