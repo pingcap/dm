@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"path/filepath"
 	"strings"
 	"time"
@@ -62,6 +63,7 @@ type singleResult struct {
 	Insert int `json:"insert"`
 	Update int `json:"update"`
 	Delete int `json:"delete"`
+	DDL    int `json:"ddl"`
 }
 
 func (sr *singleResult) String() string {
@@ -316,6 +318,18 @@ func (st *singleTask) genIncrData(ctx context.Context) (err error) {
 		case deleteDML:
 			st.result.Delete++
 		default:
+		}
+
+		if rand.Intn(1000) < 10 {
+			query, err = randDDL(st.ss)
+			if err != nil {
+				return err
+			}
+			err = st.sourceConn.execSQLs(ctx, query)
+			if err != nil {
+				return err
+			}
+			st.result.DDL++
 		}
 	}
 }
