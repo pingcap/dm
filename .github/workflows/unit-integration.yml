@@ -64,7 +64,7 @@ jobs:
           if [ "true" != "${{ steps.cache-other-tools.outputs.cache-hit }}" ]
           then
               mkdir -p _other_tools
-              wget wget https://github.com/github/gh-ost/releases/download/v1.1.0/gh-ost-binary-linux-20200828140552.tar.gz
+              wget https://github.com/github/gh-ost/releases/download/v1.1.0/gh-ost-binary-linux-20200828140552.tar.gz
               tar xzvf gh-ost-binary-linux-20200828140552.tar.gz
               mv gh-ost _other_tools
               wget https://www.percona.com/downloads/percona-toolkit/3.2.1/binary/tarball/percona-toolkit-3.2.1_x86_64.tar.gz
