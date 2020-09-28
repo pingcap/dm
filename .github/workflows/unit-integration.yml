@@ -24,8 +24,8 @@ jobs:
           if [[ -z "${{ github.event.client_payload.slash_command.args.named.tidb }}" ]];then tidb_version=nightly;fi
           if [[ "${{ github.event.client_payload.slash_command.args.named.tidb }}" =~ "master" ]]; then tidb_version=nightly;fi
           if [[ "${{ github.event.client_payload.slash_command.args.named.tidb }}" =~ "release" ]]; then tidb_version=${{ github.event.client_payload.slash_command.args.named.tidb }}-nightly;fi
-          echo "::set-env name=dm_sha::${dm_version}"
-          echo "::set-env name=tidb_sha::${tidb_version}"
+          echo "::set-output name=dm_sha::${dm_version}"
+          echo "::set-output name=tidb_sha::${tidb_version}"
           echo dm_sha ${dm_version}
           echo tidb_sha ${tidb_version}
       # set up golang env, GOPATH="/home/runner/go"，GOMODCACHE="/home/runner/go/pkg/mod"
