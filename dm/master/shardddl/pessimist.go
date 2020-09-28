@@ -81,6 +81,7 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	go func() {
 		defer p.wg.Done()
 		// TODO: handle fatal error from run
+		//nolint:errcheck
 		p.run(ctx, etcdCli, rev1, rev2)
 	}()
 
@@ -695,10 +696,10 @@ func (p *Pessimist) waitOwnerToBeDone(ctx context.Context, lock *pessimism.Lock,
 		}
 		if lock.IsDone(owner) {
 			break
-		} else {
-			p.logger.Info("retry to wait for the owner done the operation",
-				zap.String("owner", owner), zap.String("lock", lock.ID), zap.Int("retry", retryNum))
 		}
+		p.logger.Info("retry to wait for the owner done the operation",
+			zap.String("owner", owner), zap.String("lock", lock.ID), zap.Int("retry", retryNum))
+
 	}
 
 	return lock.IsDone(owner), nil
@@ -761,10 +762,10 @@ func (p *Pessimist) waitNonOwnerToBeDone(ctx context.Context, lock *pessimism.Lo
 		}
 		if ctxDone || allDone() {
 			break
-		} else {
-			p.logger.Info("retry to wait for non-owner sources done the operation",
-				zap.String("lock", lock.ID), zap.Strings("sources", waitSources), zap.Int("retry", retryNum))
 		}
+		p.logger.Info("retry to wait for non-owner sources done the operation",
+			zap.String("lock", lock.ID), zap.Strings("sources", waitSources), zap.Int("retry", retryNum))
+
 	}
 
 	return allDone(), nil

@@ -50,7 +50,10 @@ type testPessimist struct{}
 var _ = Suite(&testPessimist{})
 
 func TestShardDDL(t *testing.T) {
-	log.InitLogger(&log.Config{})
+	err := log.InitLogger(&log.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer mockCluster.Terminate(t)
@@ -914,8 +917,7 @@ func (t *testPessimist) TestMeetEtcdCompactError(c *C) {
 			if i == 1 {
 				rev1, rev2 = rev2, rev1
 			}
-			// TODO: handle fatal error from run
-			p.run(ctx2, etcdTestCli, rev1, rev2)
+			c.Assert(p.run(ctx2, etcdTestCli, rev1, rev2), IsNil)
 		}()
 		// PUT i11, will create a lock but not synced.
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {

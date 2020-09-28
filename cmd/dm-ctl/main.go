@@ -54,16 +54,16 @@ func helpUsage(cfg *common.Config) {
 	fmt.Println()
 	fmt.Println("Special Commands:")
 	f := cfg.FlagSet.Lookup(common.EncryptCmdName)
-	fmt.Println(fmt.Sprintf("  --%s %s", f.Name, f.Usage))
+	fmt.Printf("  --%s %s\n", f.Name, f.Usage)
 	f = cfg.FlagSet.Lookup(common.DecryptCmdName)
-	fmt.Println(fmt.Sprintf("  --%s %s", f.Name, f.Usage))
+	fmt.Printf("  --%s %s\n", f.Name, f.Usage)
 	fmt.Println()
 	fmt.Println("Global Options:")
 	cfg.FlagSet.VisitAll(func(flag2 *flag.Flag) {
 		if flag2.Name == common.EncryptCmdName || flag2.Name == common.DecryptCmdName {
 			return
 		}
-		fmt.Println(fmt.Sprintf("  --%s %s", flag2.Name, flag2.Usage))
+		fmt.Printf("  --%s %s\n", flag2.Name, flag2.Usage)
 	})
 }
 
@@ -227,7 +227,10 @@ func loop() {
 		}
 
 		args := strings.Fields(line)
-		ctl.Start(args)
+		err = ctl.Start(args)
+		if err != nil {
+			fmt.Println("fail to run:", args)
+		}
 
 		syncErr := log.L().Sync()
 		if syncErr != nil {

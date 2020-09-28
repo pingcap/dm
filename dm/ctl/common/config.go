@@ -82,6 +82,7 @@ type Config struct {
 }
 
 func (c *Config) String() string {
+	//nolint:staticcheck
 	cfg, err := json.Marshal(c)
 	if err != nil {
 		fmt.Printf("marshal config to json error %v", err)

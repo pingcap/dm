@@ -71,7 +71,7 @@ func parseInsertStmt(sql []byte, table *tableInfo, columnMapping *cm.Mapping) ([
 			if sql[e] == '\n' && (sql[e-1] == ',' || sql[e-1] == ';') && sql[e-2] == ')' {
 				break
 			}
-			if sql[e] == '\n' && e-6 > s && bytes.Compare(sql[e-6:e], VALUES) == 0 {
+			if sql[e] == '\n' && e-6 > s && bytes.Equal(sql[e-6:e], VALUES) {
 				s = e + 1
 				continue
 			}

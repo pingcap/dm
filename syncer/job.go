@@ -73,7 +73,6 @@ type job struct {
 	currentLocation binlog.Location // end location of the sql in binlog, for user to skip sql manually by changing checkpoint
 	ddls            []string
 	traceID         string
-	traceGID        string
 }
 
 func (j *job) String() string {

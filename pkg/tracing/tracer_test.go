@@ -238,7 +238,9 @@ func (ts *TracerTestSuite) waitUntilServerOnline() error {
 func (ts *TracerTestSuite) startServer(c *tc.C) {
 	ts.prepare(c)
 	ts.server = NewMockServer(ts.bind, ts.checkCh)
-	go ts.server.Start()
+	go func() {
+		c.Assert(ts.server.Start(), tc.IsNil)
+	}()
 	err := ts.waitUntilServerOnline()
 	c.Assert(err, tc.IsNil)
 }

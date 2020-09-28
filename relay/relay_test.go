@@ -55,7 +55,7 @@ type testRelaySuite struct {
 }
 
 func (t *testRelaySuite) SetUpSuite(c *C) {
-	log.InitLogger(&log.Config{})
+	c.Assert(log.InitLogger(&log.Config{}), IsNil)
 }
 
 func getDBConfigForTest() config.DBConfig {
@@ -372,7 +372,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 			Timestamp: uint32(time.Now().Unix()),
 			ServerID:  11,
 		}
-		binlogPos   = gmysql.Position{"mysql-bin.666888", 4}
+		binlogPos   = gmysql.Position{Name: "mysql-bin.666888", Pos: 4}
 		rotateEv, _ = event.GenRotateEvent(eventHeader, 123, []byte(binlogPos.Name), uint64(binlogPos.Pos))
 		queryEv, _  = event.GenQueryEvent(eventHeader, 123, 0, 0, 0, nil, nil, []byte("CREATE DATABASE db_relay_test"))
 	)

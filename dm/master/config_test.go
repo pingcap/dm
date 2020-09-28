@@ -41,7 +41,7 @@ type testConfigSuite struct {
 
 func (t *testConfigSuite) SetUpSuite(c *check.C) {
 	// initialized the logger to make genEmbedEtcdConfig working.
-	log.InitLogger(&log.Config{})
+	c.Assert(log.InitLogger(&log.Config{}), check.IsNil)
 }
 
 func (t *testConfigSuite) TestPrintSampleConfig(c *check.C) {
@@ -157,6 +157,7 @@ master-addr = ":8261"
 advertise-addr = "127.0.0.1:8261"
 aaa = "xxx"`)
 	err = ioutil.WriteFile(filepath, configContent, 0644)
+	c.Assert(err, check.IsNil)
 	err = cfg.configFromFile(filepath)
 	c.Assert(err, check.NotNil)
 	c.Assert(err, check.ErrorMatches, "*master config contained unknown configuration options: aaa.*")
@@ -165,6 +166,7 @@ aaa = "xxx"`)
 	filepath2 := path.Join(c.MkDir(), "test_invalid_config.toml")
 	configContent2 := []byte(`master-addr = ""`)
 	err = ioutil.WriteFile(filepath2, configContent2, 0644)
+	c.Assert(err, check.IsNil)
 	err = cfg.configFromFile(filepath2)
 	c.Assert(err, check.IsNil)
 	c.Assert(terror.ErrMasterHostPortNotValid.Equal(cfg.adjust()), check.IsTrue)

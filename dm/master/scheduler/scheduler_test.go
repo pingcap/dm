@@ -51,7 +51,10 @@ var (
 )
 
 func TestScheduler(t *testing.T) {
-	log.InitLogger(&log.Config{})
+	err := log.InitLogger(&log.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer mockCluster.Terminate(t)
@@ -71,8 +74,7 @@ type testScheduler struct{}
 var _ = Suite(&testScheduler{})
 
 var (
-	sourceCfgEmpty config.SourceConfig
-	stageEmpty     ha.Stage
+	stageEmpty ha.Stage
 )
 
 func (t *testScheduler) TestScheduler(c *C) {

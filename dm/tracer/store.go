@@ -97,7 +97,7 @@ func (store *EventStore) scan(offset, limit int64) [][]*TraceEvent {
 		traceID := store.ids[idx]
 		if event, ok := store.events[traceID]; ok {
 			result = append(result, event)
-		} else {
+		} else { //nolint:staticcheck
 			// TODO: add lazy clean up mechanism
 		}
 	}

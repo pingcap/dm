@@ -92,7 +92,13 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 		return err
 	}
 	// once we put the key successfully, we should revoke lease before we quit keepalive normally
-	defer revokeLease(cli, lease.ID)
+	defer func() {
+		_, err2 := revokeLease(cli, lease.ID)
+		if err2 != nil {
+			log.L().Warn("fail to revoke lease", zap.Error(err))
+		}
+	}()
+
 	ch, err := cli.KeepAlive(ctx, lease.ID)
 	if err != nil {
 		return err

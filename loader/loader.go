@@ -982,7 +982,10 @@ func (l *Loader) prepare() error {
 	}
 
 	// collect dir files.
-	files := CollectDirFiles(l.cfg.Dir)
+	files, err := CollectDirFiles(l.cfg.Dir)
+	if err != nil {
+		return err
+	}
 
 	l.logCtx.L().Debug("collected files", zap.Reflect("files", files))
 
@@ -1133,7 +1136,13 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer l.toDB.CloseBaseConn(baseConn)
+	defer func() {
+		err2 := l.toDB.CloseBaseConn(baseConn)
+		if err2 != nil {
+			l.logCtx.L().Warn("fail to close connection", zap.Error(err2))
+		}
+	}()
+
 	dbConn := &DBConn{
 		cfg:      l.cfg,
 		baseConn: baseConn,
@@ -1278,7 +1287,10 @@ func (l *Loader) cleanDumpFiles() {
 		}
 	} else {
 		// leave metadata file, only delete sql files
-		files := CollectDirFiles(l.cfg.Dir)
+		files, err := CollectDirFiles(l.cfg.Dir)
+		if err != nil {
+			l.logCtx.L().Warn("fail to collect files", zap.String("data folder", l.cfg.Dir), zap.Error(err))
+		}
 		var lastErr error
 		for f := range files {
 			if strings.HasSuffix(f, ".sql") {
