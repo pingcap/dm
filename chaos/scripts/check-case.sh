@@ -15,7 +15,7 @@ for i in {1..20}; do
             break
         fi
         failed=$(kubectl get job chaos-test-case -o jsonpath={.status.failed})
-        if [ $failed -gt 0 ]; then
+        if [[ $failed -gt 0 ]]; then
             echo "chaos-test-case job has failed"
             break
         fi
