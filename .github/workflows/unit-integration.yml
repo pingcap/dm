@@ -14,6 +14,20 @@ jobs:
   prepare:
     runs-on: ubuntu-18.04
     steps:
+      - name: Parse sha
+        id: parse_sha
+        run: |
+          set -x
+          dm_version=${{ github.event.pull_request.head.sha }}
+          if [[ -z "${{ github.event.pull_request.head.sha }}" ]];then dm_version=${{ github.event.client_payload.pull_request.head.sha }};fi
+          tidb_version=${{ github.event.client_payload.slash_command.args.named.tidb }}
+          if [[ -z "${{ github.event.client_payload.slash_command.args.named.tidb }}" ]];then tidb_version=nightly;fi
+          if [[ "${{ github.event.client_payload.slash_command.args.named.tidb }}" =~ "master" ]]; then tidb_version=nightly;fi
+          if [[ "${{ github.event.client_payload.slash_command.args.named.tidb }}" =~ "release" ]]; then tidb_version=${{ github.event.client_payload.slash_command.args.named.tidb }}-nightly;fi
+          echo "::set-env name=dm_sha::${dm_version}"
+          echo "::set-env name=tidb_sha::${tidb_version}"
+          echo dm_sha ${dm_version}
+          echo tidb_sha ${tidb_version}
       # set up golang env, GOPATH="/home/runner/go"，GOMODCACHE="/home/runner/go/pkg/mod"
       - name: Set up Go 1.13
         uses: actions/setup-go@v2
@@ -24,7 +38,7 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ steps.parse_sha.outputs.dm_sha }}
       - name: Cache go modules
         uses: actions/cache@v2
         with:
@@ -46,7 +60,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/dm.tar.gz
-          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-${{ steps.parse_sha.outputs.dm_sha }}-${{ steps.parse_sha.outputs.tidb_sha }}
       - name: DM Integration Test Build
         run: |
           set -x
@@ -55,10 +69,7 @@ jobs:
           mv tidb-enterprise-tools-latest-linux-amd64/bin/sync_diff_inspector bin/
           mv tidb-enterprise-tools-latest-linux-amd64/bin/mydumper bin/
           rm -r tidb-enterprise-tools-latest-linux-amd64 || true
-          tidb_version=${{ github.event.client_payload.slash_command.args.named.tidb }}
-          if [[ -z "${{ github.event.client_payload.slash_command.args.named.tidb }}" ]];then tidb_version=nightly;fi
-          if [[ "${{ github.event.client_payload.slash_command.args.named.tidb }}" =~ "master" ]]; then tidb_version=nightly;fi
-          if [[ "${{ github.event.client_payload.slash_command.args.named.tidb }}" =~ "release" ]]; then tidb_version=${{ github.event.client_payload.slash_command.args.named.tidb }}-nightly;fi
+          tidb_version=${{ steps.parse_sha.outputs.tidb_sha }}
           id=$(docker create pingcap/tidb:$tidb_version)
           docker cp $id:/tidb-server bin/
           if [ "true" != "${{ steps.cache-other-tools.outputs.cache-hit }}" ]
@@ -78,6 +89,9 @@ jobs:
 #        with:
 #          name: dm-${{ github.event.pull_request.head.sha }}
 #          path: dm.tar.gz
+    outputs:
+      dm_sha: ${{ steps.parse_sha.outputs.dm_sha }}
+      tidb_sha: ${{ steps.parse_sha.outputs.tidb_sha }}
 
   unit_test:
     needs: prepare
@@ -96,7 +110,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/dm.tar.gz
-          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
 #      - name: Download dm build results
 #        uses: actions/download-artifact@v2
 #        with:
@@ -127,7 +141,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-ut-${{ matrix.test_name }}-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-ut-${{ matrix.test_name }}-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
 #      - name: Upload dm unit coverage
 #        uses: actions/upload-artifact@v2
 #        with:
@@ -152,7 +166,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/dm.tar.gz
-          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - name: Integration Test ${{ matrix.test_name }}
         run: |
           set -x
@@ -181,7 +195,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-${{ matrix.test_name }}-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-${{ matrix.test_name }}-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
 
   check:
     needs: prepare
@@ -196,7 +210,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/dm.tar.gz
-          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - name: Check
         run: |
           set -x
@@ -217,110 +231,110 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/dm.tar.gz
-          key: ${{ runner.os }}-dm-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-ut-relay-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-ut-relay-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-ut-syncer-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-ut-syncer-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-ut-pkg_binlog-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-ut-pkg_binlog-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-ut-others-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-ut-others-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
 
       # test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit,
       # load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-others-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-others-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-all_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-all_mode-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-dmctl_advance-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-dmctl_advance-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-dmctl_basic-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-dmctl_basic-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-dmctl_command-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-dmctl_command-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-ha_cases-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-ha_cases-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-http_apis-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-http_apis-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-import_goroutine_leak-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-import_goroutine_leak-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-incremental_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-incremental_mode-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-initial_unit-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-initial_unit-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-load_interrupt-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-load_interrupt-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-online_ddl-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-online_ddl-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-print_status-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-print_status-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-relay_interrupt-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-relay_interrupt-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-safe_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-safe_mode-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-sequence_safe_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-sequence_safe_mode-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-sequence_sharding-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-sequence_sharding-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-shardddl1-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-shardddl1-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-shardddl2-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-shardddl2-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-shardddl3-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-shardddl3-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
-          key: ${{ runner.os }}-dm-it-sharding-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+          key: ${{ runner.os }}-dm-it-sharding-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - name: Upload Coverage
         run: |
           ls -lh /tmp/dm.tar.gz
