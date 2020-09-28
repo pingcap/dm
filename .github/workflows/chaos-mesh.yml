@@ -14,6 +14,10 @@ jobs:
   base:
     # The type of runner that the job will run on
     runs-on: ubuntu-18.04
+    strategy:
+        fail-fast: false
+        matrix:
+          chaos-obj: ["pod-failure-dm", "pod-kill-dm"]
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -235,7 +239,7 @@ jobs:
 
     - name: Encode chaos-mesh action
       run: |
-        echo "::set-env name=CFG_BASE64::$(base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/pod-failure-dm.yaml)"
+        echo "::set-env name=CFG_BASE64::$(base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/${{ matrix.chaos-obj }}.yaml)"
 
     - name: Run chaos mesh action
       uses: chaos-mesh/chaos-mesh-action@master
