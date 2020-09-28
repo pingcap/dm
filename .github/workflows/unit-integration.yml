@@ -36,6 +36,12 @@ jobs:
           path: |
             **/_tools
           key: ${{ runner.os }}-dm-retool-${{ hashFiles('**/_tools/manifest.json') }}
+      - name: Cache other tools such as pt-online-schema-change and gh-ost
+        id: cache-other-tools
+        uses: actions/cache@v2
+        with:
+          path: _other_tools
+          key: ${{ runner.os }}-dm-other-tools
       - name: Cache prepare results
         uses: actions/cache@v2
         with:
@@ -55,8 +61,18 @@ jobs:
           if [[ "${{ github.event.client_payload.slash_command.args.named.tidb }}" =~ "release" ]]; then tidb_version=${{ github.event.client_payload.slash_command.args.named.tidb }}-nightly;fi
           id=$(docker create pingcap/tidb:$tidb_version)
           docker cp $id:/tidb-server bin/
+          if [ "true" != "${{ steps.cache-other-tools.outputs.cache-hit }}" ]
+          then
+              mkdir -p _other_tools
+              wget wget https://github.com/github/gh-ost/releases/download/v1.1.0/gh-ost-binary-linux-20200828140552.tar.gz
+              tar xzvf gh-ost-binary-linux-20200828140552.tar.gz
+              mv gh-ost _other_tools
+              wget https://www.percona.com/downloads/percona-toolkit/3.2.1/binary/tarball/percona-toolkit-3.2.1_x86_64.tar.gz
+              tar xzvf percona-toolkit-3.2.1_x86_64.tar.gz
+              cp percona-toolkit-3.2.1/bin/pt-online-schema-change _other_tools
+              rm -r gh-ost-binary-linux-20200828140552.tar.gz percona-toolkit-3.2.1_x86_64.tar.gz percona-toolkit-3.2.1
+          fi
           tar czvf /tmp/dm.tar.gz .
-
 #      - name: Upload dm build results
 #        uses: actions/upload-artifact@v2
 #        with:
@@ -97,6 +113,8 @@ jobs:
           export MYSQL_PORT=3306
           export MYSQL_PSWD=123456
           export PATH=~/go/bin:$PATH
+          export GHOST_BINARY=${{ github.workspace }}/_other_tools/gh-ost
+          export PTOSC_BINARY=${{ github.workspace }}/_other_tools/pt-online-schema-change
           ls -lh /tmp/dm.tar.gz
           tar xzvf /tmp/dm.tar.gz
           make unit_test_${{ matrix.test_name }}
@@ -150,6 +168,8 @@ jobs:
           export MYSQL_HOST2=127.0.0.1
           export MYSQL_PORT2=3307
           export PATH=~/go/bin:$PATH
+          export GHOST_BINARY=${{ github.workspace }}/_other_tools/gh-ost
+          export PTOSC_BINARY=${{ github.workspace }}/_other_tools/pt-online-schema-change
           ls -lh /tmp/dm.tar.gz
           tar xzvf /tmp/dm.tar.gz
           make integration_test CASE=${{ matrix.test_name }}
