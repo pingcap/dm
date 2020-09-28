@@ -21,12 +21,12 @@ require (
 	github.com/lance6716/retool v1.3.8-0.20200806070832-3469f70b2afe
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
 	github.com/pingcap/dumpling v0.0.0-20200909092728-a45daad655d1
-	github.com/pingcap/errors v0.11.5-0.20200902104258-eba4f1d8f6de
+	github.com/pingcap/errors v0.11.5-0.20200917111840-a15ef68f753d
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
 	github.com/pingcap/log v0.0.0-20200828042413-fce0951f1463
-	github.com/pingcap/parser v0.0.0-20200916082702-907ee5aa5a1c
-	github.com/pingcap/tidb v1.1.0-beta.0.20200916071239-1bfeff96c743
-	github.com/pingcap/tidb-tools v4.0.7-0.20200911093302-34396298f626+incompatible
+	github.com/pingcap/parser v0.0.0-20200924053142-5d7e8ebf605e
+	github.com/pingcap/tidb v1.1.0-beta.0.20200927065602-486e473a86e9
+	github.com/pingcap/tidb-tools v4.0.7-0.20200927084250-e47e0e12c7f3+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
 	github.com/satori/go.uuid v1.2.0
@@ -43,7 +43,6 @@ require (
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/unrolled/render v1.0.1
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738
-	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	golang.org/x/sys v0.0.0-20200824131525-c12d262b63d8
@@ -56,4 +55,4 @@ require (
 
 go 1.13
 
-replace github.com/chaos-mesh/go-sqlsmith => github.com/csuzhangxc/go-sqlsmith v0.0.0-20200904072619-4a3341a30495
+replace github.com/chaos-mesh/go-sqlsmith => github.com/csuzhangxc/go-sqlsmith v0.0.0-20200928023709-4ad8903babdd
