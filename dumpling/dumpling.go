@@ -85,7 +85,6 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	failpoint.Inject("dumpUnitProcessForever", func() {
 		m.logger.Info("dump unit runs forever", zap.String("failpoint", "dumpUnitProcessForever"))
 		<-ctx.Done()
-		failpoint.Return()
 	})
 
 	// NOTE: remove output dir before start dumping
