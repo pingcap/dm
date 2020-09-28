@@ -272,9 +272,9 @@ jobs:
     # send Slack notify if failed.
     - name: Slack notification
       if: ${{ failure() }}
-      uses: Ilshidur/action-slack@2.1.0
       env:
         SLACK_WEBHOOK: ${{ secrets.SLACK_NOTIFY }}
+      uses: Ilshidur/action-slack@2.1.0
       with:
         args: "chaos job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
 
