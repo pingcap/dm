@@ -37,7 +37,7 @@ func NewPauseTaskCmd() *cobra.Command {
 func pauseTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
-		cmd.Usage()
+		common.PrintCmdUsage(cmd)
 		err = errors.New("please check output to see error")
 		return
 	}

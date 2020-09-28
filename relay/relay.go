@@ -171,11 +171,7 @@ func (r *Relay) Init(ctx context.Context) (err error) {
 		return err
 	}
 
-	if err := reportRelayLogSpaceInBackground(r.cfg.RelayDir); err != nil {
-		return err
-	}
-
-	return nil
+	return reportRelayLogSpaceInBackground(r.cfg.RelayDir)
 }
 
 // Process implements the dm.Unit interface.

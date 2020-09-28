@@ -21,12 +21,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/terror"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/dustin/go-humanize"
@@ -363,6 +364,7 @@ func (c *TaskConfig) String() string {
 
 // JSON returns the config's json string
 func (c *TaskConfig) JSON() string {
+	//nolint:staticcheck
 	cfg, err := json.Marshal(c)
 	if err != nil {
 		log.L().Error("marshal task config to json", zap.String("task", c.Name), log.ShortError(err))
@@ -532,7 +534,7 @@ func (c *TaskConfig) adjust() error {
 		}
 
 		// for backward compatible, set global config `ansi-quotes: true` if any syncer is true
-		if inst.Syncer.EnableANSIQuotes == true {
+		if inst.Syncer.EnableANSIQuotes {
 			log.L().Warn("DM could discover proper ANSI_QUOTES, `enable-ansi-quotes` is no longer take effect")
 		}
 

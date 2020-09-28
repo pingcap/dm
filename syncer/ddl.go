@@ -85,7 +85,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 	}
 
 	stmt := stmts[0]
-	switch stmt.(type) {
+	switch node := stmt.(type) {
 	case ast.DDLNode:
 		return parseDDLResult{
 			stmt:   stmt,
@@ -94,8 +94,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 		}, nil
 	case ast.DMLNode:
 		// if DML can be ignored, we do not report an error
-		dml := stmt.(ast.DMLNode)
-		schema2, table, err2 := tableNameForDML(dml)
+		schema2, table, err2 := tableNameForDML(node)
 		if err2 == nil {
 			if len(schema2) > 0 {
 				schema = schema2

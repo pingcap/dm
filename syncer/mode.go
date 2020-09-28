@@ -25,14 +25,17 @@ import (
 )
 
 func (s *Syncer) enableSafeModeInitializationPhase(tctx *tcontext.Context, safeMode *sm.SafeMode) {
-	safeMode.Reset(tctx)  // in initialization phase, reset first
+	safeMode.Reset(tctx) // in initialization phase, reset first
+	//nolint:errcheck
 	safeMode.Add(tctx, 1) // enable and will revert 5 minutes later
 
 	if s.cfg.SafeMode {
+		//nolint:errcheck
 		safeMode.Add(tctx, 1) // add 1 but should no corresponding -1, so keeps enabled
 		s.tctx.L().Info("enable safe-mode by config")
 	}
 	if s.checkpoint.SafeModeExitPoint() != nil {
+		//nolint:errcheck
 		safeMode.Add(tctx, 1) // enable and will revert after pass SafeModeExitLoc
 		s.tctx.L().Info("enable safe-mode because of inconsistent dump, will exit at", zap.Stringer("location", *s.checkpoint.SafeModeExitPoint()))
 	}

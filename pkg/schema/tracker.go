@@ -238,10 +238,7 @@ func (tr *Tracker) Reset() error {
 func (tr *Tracker) Close() error {
 	tr.se.Close()
 	tr.dom.Close()
-	if err := tr.store.Close(); err != nil {
-		return err
-	}
-	return nil
+	return tr.store.Close()
 }
 
 // DropTable drops a table from this tracker.

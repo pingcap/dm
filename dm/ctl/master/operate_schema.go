@@ -53,7 +53,7 @@ func convertSchemaOpType(t string) pb.SchemaOp {
 func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) < 2 || len(cmd.Flags().Args()) > 3 {
 		cmd.SetOut(os.Stdout)
-		cmd.Usage()
+		common.PrintCmdUsage(cmd)
 		err = errors.New("please check output to see error")
 		return
 	}

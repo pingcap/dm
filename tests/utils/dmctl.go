@@ -25,8 +25,10 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
+// CreateDmCtl creates a gRPC client to DM-master.
 func CreateDmCtl(addr string) (pb.MasterClient, error) {
 	// TODO: use tls, this function is not used
+	//nolint:staticcheck
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -34,6 +36,7 @@ func CreateDmCtl(addr string) (pb.MasterClient, error) {
 	return pb.NewMasterClient(conn), nil
 }
 
+// StartTask starts a task with the specified config.
 func StartTask(ctx context.Context, cli pb.MasterClient, configFile string, workers []string) error {
 	content, err := ioutil.ReadFile(configFile)
 	if err != nil {
@@ -61,6 +64,7 @@ func StartTask(ctx context.Context, cli pb.MasterClient, configFile string, work
 	return nil
 }
 
+// OperateTask does operations on the task.
 func OperateTask(ctx context.Context, cli pb.MasterClient, op pb.TaskOp, name string, workers []string) error {
 	resp, err := cli.OperateTask(ctx, &pb.OperateTaskRequest{
 		Op:      op,
