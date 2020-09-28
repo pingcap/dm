@@ -1503,10 +1503,10 @@ func (s *testSyncerSuite) TestRemoveMetadataIsFine(c *C) {
 
 func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	var (
-		testDB  = "test_db"
-		testTbl = "test_tbl"
-		filter  = [][]*filter.Table{{{testDB, testTbl}}, {{testDB, testTbl}}}
-		ec      = &eventContext{tctx: tcontext.Background()}
+		testDB   = "test_db"
+		testTbl  = "test_tbl"
+		testTbl2 = "test_tbl2"
+		ec       = &eventContext{tctx: tcontext.Background()}
 	)
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
@@ -1523,6 +1523,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
 	syncer.schemaTracker, err = schema.NewTracker(defaultTestSessionCfg, syncer.ddlDBConn.baseConn)
+	c.Assert(syncer.genRouter(), IsNil)
 	c.Assert(err, IsNil)
 
 	cases := []struct {
@@ -1548,6 +1549,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 				sqlmock.NewRows([]string{"Table", "Create Table"}).
 					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
 		}},
+
 		// alter add FK will not executed on tracker (otherwise will report error tb2 not exist)
 		{fmt.Sprintf("ALTER TABLE %s.%s add constraint foreign key (c) references tb2(c)", testDB, testTbl), func() {
 			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
@@ -1557,18 +1559,65 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
 		}},
 		{"TRUNCATE TABLE " + testTbl, func() {}},
+
+		// test CREATE TABLE that reference another table
+		{fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s LIKE %s", testDB, testTbl, testTbl2), func() {
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+				sqlmock.NewRows([]string{"Table", "Create Table"}).
+					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		}},
+
+		// 'CREATE TABLE ... SELECT' is not implemented yet
+		//{fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s AS SELECT * FROM %s, %s.%s WHERE %s.n=%s.%s.n", testDB, testTbl, testTbl2, testDB2, testTbl3, testTbl2, testDB2, testTbl3), func() {
+		//	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+		//		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+		//	mock.ExpectQuery(fmt.Sprintf("SHOW CREATE TABLE \\`%s\\`.\\`%s\\`.*", testDB, testTbl2)).WillReturnRows(
+		//		sqlmock.NewRows([]string{"Table", "Create Table"}).
+		//			AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		//	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+		//		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+		//	mock.ExpectQuery(fmt.Sprintf("SHOW CREATE TABLE \\`%s\\`.\\`%s\\`.*", testDB2, testTbl3)).WillReturnRows(
+		//		sqlmock.NewRows([]string{"Table", "Create Table"}).
+		//			AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		//}},
+
+		// test RENAME TABLE
+		{fmt.Sprintf("RENAME TABLE %s.%s TO %s.%s", testDB, testTbl, testDB, testTbl2), func() {
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+				sqlmock.NewRows([]string{"Table", "Create Table"}).
+					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		}},
+		{fmt.Sprintf("ALTER TABLE %s.%s RENAME %s.%s", testDB, testTbl, testDB, testTbl2), func() {
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+				sqlmock.NewRows([]string{"Table", "Create Table"}).
+					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		}},
+
+		// test VIEW
+		{"CREATE VIEW tmp AS SELECT * FROM " + testTbl, func() {
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+				sqlmock.NewRows([]string{"Table", "Create Table"}).
+					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		}},
+		{"DROP VIEW IF EXISTS tmp", func() {}},
 	}
 
 	p := parser.New()
 	for _, ca := range cases {
-		stmts, warns, err := p.Parse(ca.sql, "", "")
+		ddlSQL, filter, stmt, err := syncer.handleDDL(p, testDB, ca.sql)
 		c.Assert(err, IsNil)
-		c.Assert(warns, HasLen, 0)
-		c.Assert(stmts, HasLen, 1)
 
 		ca.callback()
 
-		c.Assert(syncer.trackDDL(testDB, ca.sql, filter, stmts[0], ec), IsNil)
+		c.Assert(syncer.trackDDL(testDB, ddlSQL, filter, stmt, ec), IsNil)
 		c.Assert(syncer.schemaTracker.Reset(), IsNil)
 		c.Assert(mock.ExpectationsWereMet(), IsNil)
 		c.Assert(checkPointMock.ExpectationsWereMet(), IsNil)
