@@ -122,8 +122,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_name: [dmctl_basic, dmctl_command]
-#        test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit, load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
+#        test_name: [dmctl_basic, dmctl_command]
+        test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit, load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
     steps:
       - name: Cache go modules
         uses: actions/cache@v2
@@ -217,18 +217,18 @@ jobs:
 
       # test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit,
       # load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-others-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-all_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-dmctl_advance-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-others-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-all_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-dmctl_advance-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
@@ -237,70 +237,70 @@ jobs:
         with:
           path: cov_dir
           key: ${{ runner.os }}-dm-it-dmctl_command-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-ha_cases-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-http_apis-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-import_goroutine_leak-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-incremental_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-initial_unit-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-load_interrupt-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-online_ddl-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-print_status-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-relay_interrupt-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-safe_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-sequence_safe_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-sequence_sharding-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-shardddl1-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-shardddl2-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-shardddl3-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
-#      - uses: actions/cache@v2
-#        with:
-#          path: cov_dir
-#          key: ${{ runner.os }}-dm-it-sharding-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-ha_cases-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-http_apis-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-import_goroutine_leak-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-incremental_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-initial_unit-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-load_interrupt-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-online_ddl-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-print_status-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-relay_interrupt-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-safe_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-sequence_safe_mode-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-sequence_sharding-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-shardddl1-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-shardddl2-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-shardddl3-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
+      - uses: actions/cache@v2
+        with:
+          path: cov_dir
+          key: ${{ runner.os }}-dm-it-sharding-${{ github.event.pull_request.head.sha }}-${{ github.event.client_payload.slash_command.args.named.tidb }}
       - name: Upload Coverage
         run: |
           ls -lh /tmp/dm.tar.gz

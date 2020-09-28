@@ -15,4 +15,4 @@ jobs:
 #          reactions: false
           commands: |
             run-all-tests
-            run-unit-tests
+            run-unit-test
