@@ -25,9 +25,9 @@ import (
 
 // rate limit related constant value
 const (
-	DefaultRate      float64 = 10
-	DefaultBurst             = 40
-	ErrorNoEmitToken         = "fail to get emit opportunity for %s"
+	DefaultRate      = float64(10)
+	DefaultBurst     = 40
+	ErrorNoEmitToken = "fail to get emit opportunity for %s"
 )
 
 type emitFunc func(args ...interface{})

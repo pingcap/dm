@@ -146,11 +146,7 @@ func (st *singleTask) run() error {
 		return err
 	}
 
-	if err := st.incrLoop(); err != nil {
-		return err
-	}
-
-	return nil
+	return st.incrLoop()
 }
 
 // stopPreviousTask stops the previous task with the same name if exists.
@@ -174,10 +170,7 @@ func (st *singleTask) clearPreviousData() error {
 	if err := dropDatabase(st.ctx, st.sourceConn, singleDB); err != nil {
 		return err
 	}
-	if err := dropDatabase(st.ctx, st.targetConn, singleDB); err != nil {
-		return err
-	}
-	return nil
+	return dropDatabase(st.ctx, st.targetConn, singleDB)
 }
 
 // genFullData generates data for the full stage.
@@ -204,6 +197,9 @@ func (st *singleTask) genFullData() error {
 			return err
 		}
 		err = st.sourceConn.execSQLs(st.ctx, query)
+		if err != nil {
+			return err
+		}
 		st.tables = append(st.tables, name)
 
 		col2, idx2, err := createTableToSmithSchema(singleDB, query)
@@ -287,7 +283,10 @@ func (st *singleTask) genIncrData(ctx context.Context) (err error) {
 			default:
 				if forceIgnoreExecSQLError(err) {
 					st.logger.Warn("ignore error when generating data for incremental stage", zap.Error(err))
-					st.sourceConn.resetConn(ctx) // reset connection for the next round.
+					err2 := st.sourceConn.resetConn(ctx) // reset connection for the next round.
+					if err2 != nil {
+						st.logger.Warn("fail to reset connection", zap.Error(err2))
+					}
 					err = nil
 				}
 			}

@@ -33,7 +33,7 @@ type HistogramVecProxy struct {
 func NewHistogramVec(opts prometheus.HistogramOpts, labelNames []string) *HistogramVecProxy {
 	return &HistogramVecProxy{
 		LabelNames:   labelNames,
-		Labels:       make(map[string]map[string]string, 0),
+		Labels:       make(map[string]map[string]string),
 		HistogramVec: prometheus.NewHistogramVec(opts, labelNames),
 	}
 }

@@ -26,9 +26,9 @@ import (
 )
 
 // CollectDirFiles gets files in path
-func CollectDirFiles(path string) map[string]struct{} {
+func CollectDirFiles(path string) (map[string]struct{}, error) {
 	files := make(map[string]struct{})
-	filepath.Walk(path, func(path string, f os.FileInfo, err error) error {
+	err := filepath.Walk(path, func(_ string, f os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -46,7 +46,7 @@ func CollectDirFiles(path string) map[string]struct{} {
 		return nil
 	})
 
-	return files
+	return files, err
 }
 
 // SQLReplace works like strings.Replace but only supports one replacement.
@@ -68,6 +68,7 @@ func backquote(s string) string {
 // shortSha1 returns the first 6 characters of sha1 value
 func shortSha1(s string) string {
 	h := sha1.New()
+	//nolint:errcheck
 	h.Write([]byte(s))
 	return fmt.Sprintf("%x", h.Sum(nil))[:6]
 }

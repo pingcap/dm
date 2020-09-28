@@ -675,11 +675,7 @@ func (k *ShardingGroupKeeper) prepare() error {
 		return err
 	}
 
-	if err := k.createTable(); err != nil {
-		return err
-	}
-
-	return nil
+	return k.createTable()
 }
 
 // Close closes sharding group keeper

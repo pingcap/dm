@@ -167,7 +167,10 @@ func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, loca
 	if c.streamerProducer != nil {
 		switch t := c.streamerProducer.(type) {
 		case *remoteBinlogReader:
-			c.closeBinlogSyncer(tctx, t.reader)
+			err2 := c.closeBinlogSyncer(tctx, t.reader)
+			if err2 != nil {
+				tctx.L().Warn("fail to close remote binlog reader", zap.Error(err))
+			}
 		case *localBinlogReader:
 			// check the uuid before close
 			uuidSameWithUpstream, err = c.checkUUIDSameWithUpstream(location.Position, t.reader.GetUUIDs())
@@ -330,7 +333,10 @@ func (c *StreamerController) close(tctx *tcontext.Context) {
 		switch r := c.streamerProducer.(type) {
 		case *remoteBinlogReader:
 			// process remote binlog reader
-			c.closeBinlogSyncer(tctx, r.reader)
+			err := c.closeBinlogSyncer(tctx, r.reader)
+			if err != nil {
+				tctx.L().Warn("fail to close remote binlog reader", zap.Error(err))
+			}
 		case *localBinlogReader:
 			// process local binlog reader
 			r.reader.Close()

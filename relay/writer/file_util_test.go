@@ -556,7 +556,6 @@ func (t *testFileUtilSuite) testGetTxnPosGTIDsIllegalGTID(c *check.C, gtidEv *re
 	// FormatDescriptionEvent
 	formatDescEv, err := event.GenFormatDescriptionEvent(header, latestPos)
 	c.Assert(err, check.IsNil)
-	latestPos = formatDescEv.Header.LogPos
 
 	// write events to the file
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0644)

@@ -116,7 +116,6 @@ func (t *testDMLSuite) TestGenDMLEvent(c *C) {
 	c.Assert(result.LatestGTID.String(), Equals, "03fc0263-28c7-11e7-a653-6c0b84d59f30:126")
 
 	latestPos = result.LatestPos // update latest pos
-	latestGTID = result.LatestGTID
 	xid++
 
 	// test DELETE for MariaDB
@@ -145,7 +144,4 @@ func (t *testDMLSuite) TestGenDMLEvent(c *C) {
 	c.Assert(result.Events[3].Header.EventType, Equals, eventType)
 	c.Assert(result.LatestPos, Equals, latestPos+uint32(len(result.Data)))
 	c.Assert(result.LatestGTID.String(), Equals, fmt.Sprintf("1-%d-4", serverID))
-
-	latestPos = result.LatestPos // update latest pos
-	latestGTID = result.LatestGTID
 }

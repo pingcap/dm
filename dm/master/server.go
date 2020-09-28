@@ -240,15 +240,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		}()
 	})
 
-	s.bgFunWg.Add(1)
-	go func() {
-		defer s.bgFunWg.Done()
-		select {
-		case <-ctx.Done():
-			return
-		}
-	}()
-
 	failpoint.Inject("FailToElect", func(val failpoint.Value) {
 		masterStrings := val.(string)
 		if strings.Contains(masterStrings, s.cfg.Name) {
@@ -825,7 +816,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 				return
 			}
 			resp, err := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
-			workerResp := &pb.CommonWorkerResponse{}
+			var workerResp *pb.CommonWorkerResponse
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name)
 			} else {
@@ -937,7 +928,7 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 				return
 			}
 			resp, err := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
-			workerStatus := &pb.QueryStatusResponse{}
+			var workerStatus *pb.QueryStatusResponse
 			if err != nil {
 				workerStatus = &pb.QueryStatusResponse{
 					Result:       false,
@@ -957,21 +948,6 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 	}
 	wg.Wait()
 	return workerRespCh
-}
-
-// return true means match, false means mismatch.
-func (s *Server) checkTaskAndWorkerMatch(taskname string, targetWorker string) bool {
-	// find worker
-	workers := s.getTaskResources(taskname)
-	if len(workers) == 0 {
-		return false
-	}
-	for _, worker := range workers {
-		if worker == targetWorker {
-			return true
-		}
-	}
-	return false
 }
 
 // TODO: refine the call stack of this API, query worker configs that we needed only
@@ -1131,9 +1107,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		return resp, nil
 	case pb.SourceOp_StopSource:
 		toRemove := make([]string, 0, len(cfgs)+len(req.SourceID))
-		for _, sid := range req.SourceID {
-			toRemove = append(toRemove, sid)
-		}
+		toRemove = append(toRemove, req.SourceID...)
 		for _, cfg := range cfgs {
 			toRemove = append(toRemove, cfg.SourceID)
 		}
@@ -1308,7 +1282,12 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
-	defer baseDB.CloseBaseConn(dbConn)
+	defer func() {
+		err2 := baseDB.CloseBaseConn(dbConn)
+		if err2 != nil {
+			log.L().Warn("fail to close connection", zap.Error(err2))
+		}
+	}()
 	ctctx := tcontext.Background().WithContext(ctx).WithLogger(log.With(zap.String("job", "remove metadata")))
 
 	sqls := make([]string, 0, 4)
@@ -1355,9 +1334,8 @@ In the above situations, once we find an error in response we should return the 
 */
 func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, taskName, sourceID string, masterReq interface{}) (*pb.QueryStatusResponse, error) {
 	var expect pb.Stage
-	switch masterReq.(type) {
+	switch req := masterReq.(type) {
 	case *pb.OperateSourceRequest:
-		req := masterReq.(*pb.OperateSourceRequest)
 		switch req.Op {
 		case pb.SourceOp_StartSource, pb.SourceOp_UpdateSource, pb.SourceOp_ShowSource:
 			expect = pb.Stage_Running
@@ -1367,7 +1345,6 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 	case *pb.StartTaskRequest, *pb.UpdateTaskRequest:
 		expect = pb.Stage_Running
 	case *pb.OperateTaskRequest:
-		req := masterReq.(*pb.OperateTaskRequest)
 		switch req.Op {
 		case pb.TaskOp_Resume:
 			expect = pb.Stage_Running
@@ -1377,7 +1354,6 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 			expect = pb.Stage_Stopped
 		}
 	case *pb.OperateWorkerRelayRequest:
-		req := masterReq.(*pb.OperateWorkerRelayRequest)
 		switch req.Op {
 		case pb.RelayOp_ResumeRelay:
 			expect = pb.Stage_Running
@@ -1776,7 +1752,7 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest
 			}
 
 			resp, err := worker.SendRequest(ctx, &workerReq, s.cfg.RPCTimeout)
-			workerResp := &pb.CommonWorkerResponse{}
+			var workerResp *pb.CommonWorkerResponse
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name)
 			} else {
@@ -1877,7 +1853,7 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleErrorRequest) (*
 				return
 			}
 			resp, err := worker.SendRequest(ctx, &workerReq, s.cfg.RPCTimeout)
-			workerResp := &pb.CommonWorkerResponse{}
+			var workerResp *pb.CommonWorkerResponse
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name)
 			} else {

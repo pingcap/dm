@@ -178,6 +178,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	deleteOp := deleteInfoOp(i21)
 	resp, err := etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
 	c.Assert(err, IsNil)
+	c.Assert(resp.Succeeded, IsTrue)
 	<-wch
 
 	// put again
