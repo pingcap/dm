@@ -251,7 +251,7 @@ jobs:
     # check whether complete with 1m * 20 times.
     - name: Wait for chaos test case complete
       run: |
-        completed=false && for i in {1..20}; do kubectl wait --for=condition=complete job/chaos-test-case --timeout=1m; if [ $? -eq 0 ]; then complete=true; break; else echo "chaos-test-case has not completed" ${i}; fi; done && if ! $completed; then exit 1; fi
+        $GITHUB_WORKSPACE/chaos/scripts/check-case.sh
 
     - name: Copy logs to hack permission
       if: ${{ always() }}
