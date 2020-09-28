@@ -33,7 +33,7 @@ type GaugeVecProxy struct {
 func NewGaugeVec(opts prometheus.GaugeOpts, labelNames []string) *GaugeVecProxy {
 	return &GaugeVecProxy{
 		LabelNames: labelNames,
-		Labels:     make(map[string]map[string]string, 0),
+		Labels:     make(map[string]map[string]string),
 		GaugeVec:   prometheus.NewGaugeVec(opts, labelNames),
 	}
 }

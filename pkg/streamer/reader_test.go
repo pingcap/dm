@@ -62,7 +62,6 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	// no valid currentUUID provide, failed
 	currentUUID := "invalid-current-uuid"
 	relayDir := filepath.Join(baseDir, currentUUID)
-	fullPath := filepath.Join(relayDir, filename)
 	cfg := &BinlogReaderConfig{RelayDir: baseDir}
 	r := NewBinlogReader(tctx, cfg)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
@@ -77,7 +76,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	// change to valid currentUUID
 	currentUUID = "b60868af-5a6f-11e9-9ea3-0242ac160006.000001"
 	relayDir = filepath.Join(baseDir, currentUUID)
-	fullPath = filepath.Join(relayDir, filename)
+	fullPath := filepath.Join(relayDir, filename)
 	cfg = &BinlogReaderConfig{RelayDir: baseDir}
 	r = NewBinlogReader(tctx, cfg)
 
@@ -85,6 +84,11 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
 		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
 	c.Assert(err, ErrorMatches, ".*(no such file or directory|The system cannot find the path specified).*")
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(latestPos, Equals, int64(0))
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
 
 	// empty relay log file, failed, got EOF
 	err = os.MkdirAll(relayDir, 0700)
@@ -95,6 +99,11 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
 		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
 	c.Assert(errors.Cause(err), Equals, io.EOF)
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(latestPos, Equals, int64(0))
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
 
 	// write some events to binlog file
 	_, err = f.Write(replication.BinLogFileHeader)

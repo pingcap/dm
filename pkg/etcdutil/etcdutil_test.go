@@ -42,7 +42,7 @@ type testEtcdUtilSuite struct {
 
 func (t *testEtcdUtilSuite) SetUpSuite(c *C) {
 	// initialized the logger to make genEmbedEtcdConfig working.
-	log.InitLogger(&log.Config{})
+	c.Assert(log.InitLogger(&log.Config{}), IsNil)
 }
 
 func TestSuite(t *testing.T) {
@@ -146,7 +146,7 @@ func (t *testEtcdUtilSuite) testMemberUtilInternal(c *C, portCount int) {
 	t.checkMember(c, uint64(etcd1.Server.ID()), listResp1.Members[0], cfg1)
 
 	// add member
-	cfg2, basePort := t.newConfig(c, "etcd2", basePort, portCount)
+	cfg2, _ := t.newConfig(c, "etcd2", basePort, portCount)
 	cfg2.InitialCluster = cfg1.InitialCluster + "," + cfg2.InitialCluster
 	cfg2.ClusterState = embed.ClusterStateFlagExisting
 	addResp, err := AddMember(cli, t.urlsToStrings(cfg2.APUrls))
@@ -239,6 +239,7 @@ func (t *testEtcdUtilSuite) testDoOpsInOneTxnWithRetry(c *C) {
 
 	// enable failpoint
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/etcdutil/ErrNoSpace", `3*return()`), IsNil)
+	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/etcdutil/ErrNoSpace")
 
 	// put again

@@ -33,7 +33,7 @@ type CounterVecProxy struct {
 func NewCounterVec(opts prometheus.CounterOpts, labelNames []string) *CounterVecProxy {
 	return &CounterVecProxy{
 		LabelNames: labelNames,
-		Labels:     make(map[string]map[string]string, 0),
+		Labels:     make(map[string]map[string]string),
 		CounterVec: prometheus.NewCounterVec(opts, labelNames),
 	}
 }

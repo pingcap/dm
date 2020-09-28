@@ -300,10 +300,9 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 				if oldLeaderID == leaderInfo.ID {
 					continue
-				} else {
-					oldLeaderID = leaderInfo.ID
-					break observeElection
 				}
+				oldLeaderID = leaderInfo.ID
+				break observeElection
 			}
 		}
 
@@ -503,18 +502,4 @@ func (e *Election) ClearSessionIfNeeded(ctx context.Context, id string) (bool, e
 		return false, err
 	}
 	return delResp.Deleted > 0, err
-}
-
-// getLeaderInfo get the current leader's information (if exists).
-func getLeaderInfo(ctx context.Context, elec *concurrency.Election) (key, ID, addr string, err error) {
-	resp, err := elec.Leader(ctx)
-	if err != nil {
-		return "", "", "", err
-	}
-	leaderInfo, err := getCampaignerInfo(resp.Kvs[0].Value)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	return string(resp.Kvs[0].Key), leaderInfo.ID, leaderInfo.Addr, nil
 }

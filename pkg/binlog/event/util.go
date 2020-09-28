@@ -33,10 +33,6 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-var (
-	columnTypeMismatchErrFmt = "value %+v (type %v) with column type %v"
-)
-
 // encodeTableMapColumnMeta generates the column_meta_def according to the column_type_def.
 // NOTE: we should pass more arguments for some type def later, now simply hard-code them.
 // ref: https://dev.mysql.com/doc/internals/en/table-map-event.html

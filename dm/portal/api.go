@@ -283,6 +283,7 @@ func (p *Handler) AnalyzeConfig(w http.ResponseWriter, req *http.Request) {
 
 	// Parse our multipart form, 10 << 20 specifies a maximum
 	// upload of 10 MB files.
+	//nolint:errcheck
 	req.ParseMultipartForm(10 << 20)
 	// FormFile returns the first file for the given key `taskfile`
 	// it also returns the FileHeader so we can get the Filename,
@@ -397,7 +398,6 @@ func (p *Handler) Download(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Control", "private, no-transform, no-store, must-revalidate")
 
 	http.ServeContent(w, req, path.Base(filepath), time.Now(), bytes.NewReader(cfgData))
-	return
 }
 
 // fileValid judge the download file path is valid or not.
@@ -419,6 +419,7 @@ func (p *Handler) genJSONResp(w io.Writer, status int, v interface{}) {
 	if err := p.r.JSON(w, status, v); err != nil {
 		errStr := fmt.Sprintf("generate json response for %v failed %v", v, err)
 		log.L().Error("", zap.String("error", errStr))
+		//nolint:errcheck
 		io.WriteString(w, errStr)
 	}
 }

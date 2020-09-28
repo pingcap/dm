@@ -53,7 +53,7 @@ func convertOp(t string) pb.ErrorOp {
 func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) < 2 {
 		cmd.SetOut(os.Stdout)
-		cmd.Usage()
+		common.PrintCmdUsage(cmd)
 		err = errors.New("please check output to see error")
 		return
 	}

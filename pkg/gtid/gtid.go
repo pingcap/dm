@@ -309,14 +309,20 @@ func (m *MariadbGTIDSet) Replace(other Set, masters []interface{}) error {
 
 		otherGS.delete(domainID)
 		if uuidSet, ok := m.get(domainID); ok {
-			otherGS.set.AddSet(uuidSet)
+			err := otherGS.set.AddSet(uuidSet)
+			if err != nil {
+				return terror.ErrMariaDBDomainID.AnnotateDelegate(err, "fail to add UUID set for domain %d", domainID)
+			}
 		}
 	}
 
 	for id, set := range m.set.Sets {
 		if _, ok := otherGS.get(id); ok {
 			otherGS.delete(id)
-			otherGS.set.AddSet(set)
+			err := otherGS.set.AddSet(set)
+			if err != nil {
+				return terror.ErrMariaDBDomainID.AnnotateDelegate(err, "fail to add UUID set for domain %d", id)
+			}
 		}
 	}
 

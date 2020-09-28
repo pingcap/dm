@@ -15,7 +15,6 @@ package worker
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -90,32 +89,6 @@ func (bs ResumeStrategy) String() string {
 		return s
 	}
 	return fmt.Sprintf("unsupported resume strategy: %d", bs)
-}
-
-// duration is used to hold a time.Duration field
-type duration struct {
-	time.Duration
-}
-
-// MarshalText hacks to satisfy the encoding.TextMarshaler interface
-func (d duration) MarshalText() ([]byte, error) {
-	return []byte(d.Duration.String()), nil
-}
-
-// UnmarshalText hacks to satisfy the encoding.TextUnmarshaler interface
-func (d duration) UnmarshalText(text []byte) error {
-	var err error
-	d.Duration, err = time.ParseDuration(string(text))
-	return err
-}
-
-// MarshalJSON hacks to satisfy the json.Marshaler interface
-func (d *duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&struct {
-		Duration string `json:"duration"`
-	}{
-		d.Duration.String(),
-	})
 }
 
 // TaskStatusChecker is an interface that defines how we manage task status

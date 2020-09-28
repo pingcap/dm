@@ -77,6 +77,7 @@ func (m *SafeMode) Reset(tctx *tcontext.Context) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	//nolint:errcheck
 	m.setCount(tctx, 0)
 	m.tables = make(map[string]struct{})
 }

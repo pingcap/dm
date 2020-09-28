@@ -26,7 +26,7 @@ type testPrinterSuite struct {
 }
 
 func (t *testPrinterSuite) SetUpTest(c *C) {
-	log.InitLogger(&log.Config{})
+	c.Assert(log.InitLogger(&log.Config{}), IsNil)
 }
 
 func (t *testPrinterSuite) TestPrinter(c *C) {

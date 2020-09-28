@@ -88,6 +88,7 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 
 	// get all two config.
 	cfgM, rev3, err = GetSourceCfg(etcdTestCli, "", 0)
+	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
 	c.Assert(cfgM, HasLen, 2)
 	c.Assert(cfgM[source], DeepEquals, cfg)
