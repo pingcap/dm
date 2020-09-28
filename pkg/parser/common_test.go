@@ -67,6 +67,10 @@ var sqls = []string{
 	"alter database `test` charset utf8mb4",
 }
 
+var nonDDLs = []string{
+	"GRANT CREATE TABLESPACE ON *.* TO `root`@`%` WITH GRANT OPTION",
+}
+
 func TestSuite(t *testing.T) {
 	TestingT(t)
 }
@@ -78,6 +82,12 @@ func (t *testParserSuite) TestParser(c *C) {
 	p := parser.New()
 
 	for _, sql := range sqls {
+		stmts, err := Parse(p, sql, "", "")
+		c.Assert(err, IsNil)
+		c.Assert(stmts, HasLen, 1)
+	}
+
+	for _, sql := range nonDDLs {
 		stmts, err := Parse(p, sql, "", "")
 		c.Assert(err, IsNil)
 		c.Assert(stmts, HasLen, 1)

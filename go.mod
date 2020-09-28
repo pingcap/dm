@@ -24,6 +24,7 @@ require (
 	github.com/onsi/ginkgo v1.9.0 // indirect
 	github.com/onsi/gomega v1.6.0 // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
+<<<<<<< HEAD
 	github.com/pingcap/errcode v0.3.0 // indirect
 	github.com/pingcap/errors v0.11.5-0.20190809092503-95897b64e011
 	github.com/pingcap/failpoint v0.0.0-20200210140405-f8f9fb234798
@@ -33,6 +34,16 @@ require (
 	github.com/pingcap/tidb-tools v4.0.5-0.20200805025317-02a16e0521cb+incompatible
 	github.com/prometheus/client_golang v1.2.1
 	github.com/prometheus/procfs v0.0.7 // indirect
+=======
+	github.com/pingcap/dumpling v0.0.0-20200909092728-a45daad655d1
+	github.com/pingcap/errors v0.11.5-0.20200917111840-a15ef68f753d
+	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
+	github.com/pingcap/log v0.0.0-20200828042413-fce0951f1463
+	github.com/pingcap/parser v0.0.0-20200924053142-5d7e8ebf605e
+	github.com/pingcap/tidb v1.1.0-beta.0.20200927065602-486e473a86e9
+	github.com/pingcap/tidb-tools v4.0.7-0.20200927084250-e47e0e12c7f3+incompatible
+	github.com/prometheus/client_golang v1.5.1
+>>>>>>> 84b12c5f... *: update parser to support `GRANT CREATE TABLESPACE` syntax (#1048)
 	github.com/rakyll/statik v0.1.6
 	github.com/satori/go.uuid v1.2.0
 	github.com/shopspring/decimal v0.0.0-20191125035519-b054a8dfd10d // indirect
@@ -41,10 +52,17 @@ require (
 	github.com/siddontang/go-mysql v0.0.0-20200222075837-12e89848f047
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
+<<<<<<< HEAD
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20190318030020-c3a204f8e965
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
+=======
+	github.com/spf13/cobra v1.0.0
+	github.com/spf13/pflag v1.0.5
+	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285
+	github.com/tikv/pd v1.1.0-beta.0.20200907085700-5b04bec39b99
+>>>>>>> 84b12c5f... *: update parser to support `GRANT CREATE TABLESPACE` syntax (#1048)
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v2.16.0+incompatible // indirect
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
@@ -61,3 +79,8 @@ require (
 )
 
 go 1.13
+<<<<<<< HEAD
+=======
+
+replace github.com/chaos-mesh/go-sqlsmith => github.com/csuzhangxc/go-sqlsmith v0.0.0-20200928023709-4ad8903babdd
+>>>>>>> 84b12c5f... *: update parser to support `GRANT CREATE TABLESPACE` syntax (#1048)

@@ -18,7 +18,11 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	tmysql "github.com/pingcap/parser/mysql"
+<<<<<<< HEAD
 	"github.com/pingcap/parser/terror"
+=======
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
+>>>>>>> 84b12c5f... *: update parser to support `GRANT CREATE TABLESPACE` syntax (#1048)
 	tddl "github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/infoschema"
 	gmysql "github.com/siddontang/go-mysql/mysql"
@@ -35,7 +39,7 @@ func ignoreDDLError(err error) bool {
 		return false
 	}
 
-	errCode := terror.ErrCode(mysqlErr.Number)
+	errCode := errors.ErrCode(mysqlErr.Number)
 	switch errCode {
 	case infoschema.ErrDatabaseExists.Code(), infoschema.ErrDatabaseNotExists.Code(), infoschema.ErrDatabaseDropExists.Code(),
 		infoschema.ErrTableExists.Code(), infoschema.ErrTableNotExists.Code(), infoschema.ErrTableDropExists.Code(),
