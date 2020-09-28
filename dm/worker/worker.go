@@ -147,12 +147,6 @@ func (w *Worker) Start(startRelay bool) {
 
 	w.l.Info("start running")
 
-	w.wg.Add(1)
-	go func() {
-		w.runBackgroundJob(w.ctx)
-		w.wg.Done()
-	}()
-
 	ticker := time.NewTicker(5 * time.Second)
 	w.closed.Set(closedFalse)
 	defer ticker.Stop()
@@ -305,19 +299,6 @@ func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
 	}
 
 	return w.Status(name)
-}
-
-// QueryError query worker's sub tasks' error
-func (w *Worker) QueryError(name string) []*pb.SubTaskError {
-	w.RLock()
-	defer w.RUnlock()
-
-	if w.closed.Get() == closedTrue {
-		w.l.Warn("querying error from a closed worker")
-		return nil
-	}
-
-	return w.Error(name)
 }
 
 func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {
@@ -579,31 +560,17 @@ func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) (string,
 	case stage.IsDeleted:
 		op = pb.RelayOp_StopRelay
 	}
-	return op.String(), w.OperateRelay(ctx, &pb.OperateRelayRequest{Op: op})
-}
-
-// SwitchRelayMaster switches relay unit's master server
-func (w *Worker) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
-	if w.closed.Get() == closedTrue {
-		return terror.ErrWorkerAlreadyClosed.Generate()
-	}
-
-	if w.relayHolder != nil {
-		return w.relayHolder.SwitchMaster(ctx, req)
-	}
-
-	w.l.Warn("enable-relay is false, ignore switch relay master")
-	return nil
+	return op.String(), w.operateRelay(ctx, op)
 }
 
 // OperateRelay operates relay unit
-func (w *Worker) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) error {
+func (w *Worker) operateRelay(ctx context.Context, op pb.RelayOp) error {
 	if w.closed.Get() == closedTrue {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
 	if w.relayHolder != nil {
-		return w.relayHolder.Operate(ctx, req)
+		return w.relayHolder.Operate(ctx, op)
 	}
 
 	w.l.Warn("enable-relay is false, ignore operate relay")
@@ -640,145 +607,6 @@ func (w *Worker) ForbidPurge() (bool, string) {
 		}
 	}
 	return false, ""
-}
-
-// QueryConfig returns worker's config
-func (w *Worker) QueryConfig(ctx context.Context) (*config.SourceConfig, error) {
-	w.RLock()
-	defer w.RUnlock()
-
-	if w.closed.Get() == closedTrue {
-		return nil, terror.ErrWorkerAlreadyClosed.Generate()
-	}
-
-	return w.cfg.Clone(), nil
-}
-
-// UpdateRelayConfig update subTask ans relay unit configure online
-// TODO: update the function name like `UpdateConfig`, and update the cmd in dmctl from `update-relay` to `update-worker-config`
-func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
-	w.Lock()
-	defer w.Unlock()
-
-	if w.closed.Get() == closedTrue {
-		return terror.ErrWorkerAlreadyClosed.Generate()
-	}
-
-	if w.relayHolder != nil {
-		stage := w.relayHolder.Stage()
-		if stage == pb.Stage_Finished || stage == pb.Stage_Stopped {
-			return terror.ErrWorkerRelayUnitStage.Generate(stage.String())
-		}
-	}
-
-	sts := w.subTaskHolder.getAllSubTasks()
-
-	// Check whether subtask is running syncer unit
-	for _, st := range sts {
-		isRunning := st.CheckUnit()
-		if !isRunning {
-			return terror.ErrWorkerNoSyncerRunning.Generate()
-		}
-	}
-
-	// No need to store config in local
-	newCfg := config.NewSourceConfig()
-
-	err := newCfg.ParseYaml(content)
-	if err != nil {
-		return err
-	}
-
-	if newCfg.SourceID != w.cfg.SourceID {
-		return terror.ErrWorkerCannotUpdateSourceID.Generate()
-	}
-
-	w.l.Info("update config", zap.Stringer("new config", newCfg))
-	cloneCfg := newCfg.DecryptPassword()
-
-	// Update SubTask configure
-	// NOTE: we only update `DB.Config` in SubTaskConfig now
-	for _, st := range sts {
-		cfg := config.NewSubTaskConfig()
-
-		cfg.From = cloneCfg.From
-		cfg.From.Adjust()
-
-		stage := st.Stage()
-		if stage == pb.Stage_Paused {
-			err = st.UpdateFromConfig(cfg)
-			if err != nil {
-				return err
-			}
-		} else if stage == pb.Stage_Running {
-			err = st.Pause()
-			if err != nil {
-				return err
-			}
-
-			err = st.UpdateFromConfig(cfg)
-			if err != nil {
-				return err
-			}
-
-			err = st.Resume()
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	w.l.Info("update config of subtasks successfully.")
-
-	// Update relay unit configure
-	if w.relayHolder != nil {
-		err = w.relayHolder.Update(ctx, cloneCfg)
-		if err != nil {
-			return err
-		}
-	}
-
-	w.cfg.From = newCfg.From
-	w.cfg.AutoFixGTID = newCfg.AutoFixGTID
-	w.cfg.Charset = newCfg.Charset
-
-	if w.configFile == "" {
-		w.configFile = "dm-worker.toml"
-	}
-	content, err = w.cfg.Toml()
-	if err != nil {
-		return err
-	}
-
-	w.l.Info("update config successfully, save config to local file", zap.String("local file", w.configFile))
-
-	return nil
-}
-
-// MigrateRelay migrate relay unit
-func (w *Worker) MigrateRelay(ctx context.Context, binlogName string, binlogPos uint32) error {
-	w.Lock()
-	defer w.Unlock()
-
-	if w.relayHolder == nil {
-		w.l.Warn("relay holder is nil, ignore migrate relay")
-		return nil
-	}
-
-	stage := w.relayHolder.Stage()
-	if stage == pb.Stage_Running {
-		err := w.relayHolder.Operate(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
-		if err != nil {
-			return err
-		}
-	} else if stage == pb.Stage_Stopped {
-		return terror.ErrWorkerMigrateStopRelay.Generate()
-	}
-	err := w.relayHolder.Migrate(ctx, binlogName, binlogPos)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // OperateSchema operates schema for an upstream table.

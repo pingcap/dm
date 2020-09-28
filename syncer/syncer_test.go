@@ -59,7 +59,10 @@ import (
 var _ = Suite(&testSyncerSuite{})
 
 var (
-	defaultTestSessionCfg = map[string]string{"sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"}
+	defaultTestSessionCfg = map[string]string{
+		"sql_mode":             "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION",
+		"tidb_skip_utf8_check": "0",
+	}
 )
 
 func TestSuite(t *testing.T) {
@@ -1049,15 +1052,6 @@ func (s *testSyncerSuite) TestcheckpointID(c *C) {
 	c.Assert(checkpointID, Equals, "101")
 }
 
-func (s *testSyncerSuite) TestExecErrors(c *C) {
-	syncer := NewSyncer(s.cfg, nil)
-	syncer.appendExecErrors(new(ExecErrorContext))
-	c.Assert(syncer.execErrors.errors, HasLen, 1)
-
-	syncer.resetExecErrors()
-	c.Assert(syncer.execErrors.errors, HasLen, 0)
-}
-
 func (s *testSyncerSuite) TestCasuality(c *C) {
 	var wg sync.WaitGroup
 	s.cfg.WorkerCount = 1
@@ -1505,6 +1499,129 @@ func (s *testSyncerSuite) TestRemoveMetadataIsFine(c *C) {
 	fresh, err = syncer.IsFreshTask(context.Background())
 	c.Assert(err, IsNil)
 	c.Assert(fresh, IsFalse)
+}
+
+func (s *testSyncerSuite) TestTrackDDL(c *C) {
+	var (
+		testDB   = "test_db"
+		testTbl  = "test_tbl"
+		testTbl2 = "test_tbl2"
+		ec       = &eventContext{tctx: tcontext.Background()}
+	)
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+
+	checkPointDB, checkPointMock, err := sqlmock.New()
+	checkPointDBConn, err := checkPointDB.Conn(context.Background())
+	c.Assert(err, IsNil)
+
+	syncer := NewSyncer(s.cfg, nil)
+	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
+	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
+	syncer.schemaTracker, err = schema.NewTracker(defaultTestSessionCfg, syncer.ddlDBConn.baseConn)
+	c.Assert(syncer.genRouter(), IsNil)
+	c.Assert(err, IsNil)
+
+	cases := []struct {
+		sql      string
+		callback func()
+	}{
+		{"CREATE DATABASE IF NOT EXISTS " + testDB, func() {}},
+		{"ALTER DATABASE " + testDB + " DEFAULT COLLATE utf8_bin", func() {}},
+		{"DROP DATABASE IF EXISTS " + testDB, func() {}},
+		{fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s (c int)", testDB, testTbl), func() {}},
+		{fmt.Sprintf("DROP TABLE IF EXISTS %s.%s", testDB, testTbl), func() {}},
+		{"CREATE INDEX idx1 ON " + testTbl + " (c)", func() {
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+				sqlmock.NewRows([]string{"Table", "Create Table"}).
+					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		}},
+		{fmt.Sprintf("ALTER TABLE %s.%s add c2 int", testDB, testTbl), func() {
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+				sqlmock.NewRows([]string{"Table", "Create Table"}).
+					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		}},
+
+		// alter add FK will not executed on tracker (otherwise will report error tb2 not exist)
+		{fmt.Sprintf("ALTER TABLE %s.%s add constraint foreign key (c) references tb2(c)", testDB, testTbl), func() {
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+				sqlmock.NewRows([]string{"Table", "Create Table"}).
+					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		}},
+		{"TRUNCATE TABLE " + testTbl, func() {}},
+
+		// test CREATE TABLE that reference another table
+		{fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s LIKE %s", testDB, testTbl, testTbl2), func() {
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+				sqlmock.NewRows([]string{"Table", "Create Table"}).
+					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		}},
+
+		// 'CREATE TABLE ... SELECT' is not implemented yet
+		//{fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s AS SELECT * FROM %s, %s.%s WHERE %s.n=%s.%s.n", testDB, testTbl, testTbl2, testDB2, testTbl3, testTbl2, testDB2, testTbl3), func() {
+		//	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+		//		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+		//	mock.ExpectQuery(fmt.Sprintf("SHOW CREATE TABLE \\`%s\\`.\\`%s\\`.*", testDB, testTbl2)).WillReturnRows(
+		//		sqlmock.NewRows([]string{"Table", "Create Table"}).
+		//			AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		//	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+		//		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+		//	mock.ExpectQuery(fmt.Sprintf("SHOW CREATE TABLE \\`%s\\`.\\`%s\\`.*", testDB2, testTbl3)).WillReturnRows(
+		//		sqlmock.NewRows([]string{"Table", "Create Table"}).
+		//			AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		//}},
+
+		// test RENAME TABLE
+		{fmt.Sprintf("RENAME TABLE %s.%s TO %s.%s", testDB, testTbl, testDB, testTbl2), func() {
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+				sqlmock.NewRows([]string{"Table", "Create Table"}).
+					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		}},
+		{fmt.Sprintf("ALTER TABLE %s.%s RENAME %s.%s", testDB, testTbl, testDB, testTbl2), func() {
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+				sqlmock.NewRows([]string{"Table", "Create Table"}).
+					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		}},
+
+		// test VIEW
+		{"CREATE VIEW tmp AS SELECT * FROM " + testTbl, func() {
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+				sqlmock.NewRows([]string{"Table", "Create Table"}).
+					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+		}},
+		{"DROP VIEW IF EXISTS tmp", func() {}},
+	}
+
+	p := parser.New()
+	for _, ca := range cases {
+		ddlSQL, filter, stmt, err := syncer.handleDDL(p, testDB, ca.sql)
+		c.Assert(err, IsNil)
+
+		ca.callback()
+
+		c.Assert(syncer.trackDDL(testDB, ddlSQL, filter, stmt, ec), IsNil)
+		c.Assert(syncer.schemaTracker.Reset(), IsNil)
+		c.Assert(mock.ExpectationsWereMet(), IsNil)
+		c.Assert(checkPointMock.ExpectationsWereMet(), IsNil)
+	}
 }
 
 func executeSQLAndWait(expectJobNum int) {

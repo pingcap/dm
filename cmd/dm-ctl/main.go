@@ -36,38 +36,17 @@ import (
 // Usage: dmctl [global options] command [command options] [arguments...]
 //
 //Available Commands:
-//  break-ddl-lock        break-ddl-lock <-w worker ...> <task-name> [--remove-id] [--exec] [--skip]
-//  check-task            check-task <config-file>
-//  migrate-relay         migrate-relay <worker> <binlogName> <binlogPos>
-//  pause-relay           pause-relay <-w worker ...>
-//  pause-task            pause-task [-w worker ...] <task-name>
-//  purge-relay           purge-relay <-w worker> [--filename] [--sub-dir]
-//  query-error           query-error [-w worker ...] [task-name]
-//  query-status          query-status [-w worker ...] [task-name]
-//  refresh-worker-tasks  refresh-worker-tasks
-//  resume-relay          resume-relay <-w worker ...>
-//  resume-task           resume-task [-w worker ...] <task-name>
-//  show-ddl-locks        show-ddl-locks [-w worker ...] [task-name]
-//  sql-inject            sql-inject <-w worker> <task-name> <sql1;sql2;>
-//  sql-replace           sql-replace <-w worker> [-b binlog-pos] [-s sql-pattern] [--sharding] <task-name> <sql1;sql2;>
-//  sql-skip              sql-skip <-w worker> [-b binlog-pos] [-s sql-pattern] [--sharding] <task-name>
-//  start-task            start-task [-w worker ...] <config-file>
-//  stop-task             stop-task [-w worker ...] <task-name>
-//  switch-relay-master   switch-relay-master <-w worker ...>
-//  unlock-ddl-lock       unlock-ddl-lock [-w worker ...] <lock-ID>
-//  update-master-config  update-master-config <config-file>
-//  update-relay          update-relay [-w worker ...] <config-file>
-//  update-task           update-task [-w worker ...] <config-file>
+//  ...
+//  query-status          query-status [-s source ...] [task-name]
+//  ...
 //
 //Special Commands:
 //  --encrypt encrypt plaintext to ciphertext
-//  --decrypt decrypt ciphertext to plaintext
+//  ...
 //
 //Global Options:
 //  --V prints version and exit
-//  --config path to config file
-//  --master-addr master API server addr
-//  --rpc-timeout rpc timeout, default is 10m
+//  ...
 func helpUsage(cfg *common.Config) {
 	fmt.Println("Usage: dmctl [global options] command [command options] [arguments...]")
 	fmt.Println()

@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coreos/go-semver/semver"
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -423,4 +424,22 @@ func IsNoSuchThreadError(err error) bool {
 func GetGTID(db *sql.DB) (string, error) {
 	val, err := GetGlobalVariable(db, "GTID_MODE")
 	return val, err
+}
+
+// ExtractTiDBVersion extract tidb's version
+// version format: "5.7.25-TiDB-v3.0.0-beta-211-g09beefbe0-dirty"
+//                               ^~~~~~~~~^
+func ExtractTiDBVersion(version string) (*semver.Version, error) {
+	versions := strings.Split(strings.TrimSuffix(version, "-dirty"), "-")
+	end := len(versions)
+	switch end {
+	case 3, 4:
+	case 5, 6:
+		end -= 2
+	default:
+		return nil, errors.Errorf("not a valid TiDB version: %s", version)
+	}
+	rawVersion := strings.Join(versions[2:end], "-")
+	rawVersion = strings.TrimPrefix(rawVersion, "v")
+	return semver.NewVersion(rawVersion)
 }

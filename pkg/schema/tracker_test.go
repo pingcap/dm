@@ -81,14 +81,14 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	c.Assert(err, NotNil)
 
 	// discover session config failed, will return error
-	mock.ExpectQuery("show variables like 'sql_mode'").WillReturnRows(
+	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
 		sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "HaHa"))
 	_, err = NewTracker(nil, baseConn)
 	c.Assert(err, NotNil)
 
 	// empty or default config in downstream
-	mock.ExpectQuery("show variables like 'sql_mode'").WillReturnRows(
+	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
 		sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", ""))
 	tracker, err := NewTracker(nil, baseConn)
@@ -98,7 +98,7 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	c.Assert(err, IsNil)
 
 	// found session config in downstream
-	mock.ExpectQuery("show variables like 'sql_mode'").WillReturnRows(
+	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
 		sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE"))
 	tracker, err = NewTracker(nil, baseConn)

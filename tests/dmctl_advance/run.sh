@@ -21,8 +21,6 @@ function usage_and_arg_test() {
     unlock_ddl_lock_wrong_arg
     unlock_ddl_lock_invalid_force_remove
 
-#    query_error_wrong_arg
-
     handle_error_wrong_arg
     handle_error_invalid_binlogpos
     handle_error_invalid_sqls
