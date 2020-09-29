@@ -17,22 +17,37 @@ import (
 	"context"
 	"path/filepath"
 
+	"golang.org/x/sync/errgroup"
+
 	config2 "github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
-const (
-	singleTaskFile = "task-single.yaml"
-	singleDB       = "db_single" // specified in `task-single.yaml`.
+var (
+	// NOTE: items in `doSchemas` should be specified in the corresponding task files (`filenames`).
+	filenames = []string{"task-single.yaml", "task-pessimistic.yaml", "task-optimistic.yaml"}
+	doSchemas = []string{"db_single", "db_pessimistic", "db_optimistic"}
 )
 
-// runSingleCase runs a test case with single source task.
-func runSingleCase(ctx context.Context, cli pb.MasterClient, confDir string,
+// runCases runs test cases.
+func runCases(ctx context.Context, cli pb.MasterClient, confDir string,
 	targetCfg config2.DBConfig, sourcesCfg ...config2.DBConfig) error {
-	taskFile := filepath.Join(confDir, singleTaskFile)
-	t, err := newTask(ctx, cli, taskFile, singleDB, targetCfg, sourcesCfg...)
-	if err != nil {
-		return err
+	var eg errgroup.Group
+	for i := range filenames {
+		taskFile := filepath.Join(confDir, filenames[i])
+		schema := doSchemas[i]
+		eg.Go(func() error {
+			t, err := newTask(ctx, cli, taskFile, schema, targetCfg, sourcesCfg...)
+			if err != nil {
+				return err
+			}
+			err = t.run()
+			if utils.IsContextCanceledError(err) {
+				err = nil // clear err
+			}
+			return err
+		})
 	}
-	return t.run()
+	return eg.Wait()
 }

@@ -224,8 +224,8 @@ func (t *task) genFullData() error {
 
 	var eg errgroup.Group
 	for _, conn := range t.sourceConns {
+		conn2 := conn
 		eg.Go(func() error {
-			conn2 := conn
 			for i := 0; i < fullInsertCount; i++ {
 				query, _, err2 := t.ss.InsertStmt(false)
 				if err2 != nil {
@@ -347,8 +347,8 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 
 			var eg errgroup.Group
 			for i, conn := range t.sourceConns {
+				conn2 := conn
 				eg.Go(func() error {
-					conn2 := conn
 					if err2 := conn2.execSQLs(ctx, query); err2 != nil {
 						return err2
 					}
