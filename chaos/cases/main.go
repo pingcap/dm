@@ -106,11 +106,7 @@ func main() {
 	// run tests cases
 	var eg errgroup.Group
 	eg.Go(func() error {
-		st, err2 := newSingleTask(ctx3, masterCli, cfg.ConfigDir, cfg.Target, cfg.Source1)
-		if err2 != nil {
-			return err2
-		}
-		err2 = st.run()
+		err2 := runSingleCase(ctx3, masterCli, cfg.ConfigDir, cfg.Target, cfg.Source1)
 		if utils.IsContextCanceledError(err2) {
 			err2 = nil // clear err
 		}
