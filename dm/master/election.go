@@ -52,6 +52,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 			}
 
 			if leaderInfo.ID == s.cfg.Name {
+				s.Lock()
 				// this member become leader
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
 
@@ -60,10 +61,10 @@ func (s *Server) electionNotify(ctx context.Context) {
 				if !ok {
 					s.retireLeader()
 					s.election.Resign()
+					s.Unlock()
 					continue
 				}
 
-				s.Lock()
 				s.leader = oneselfLeader
 				s.closeLeaderClient()
 				s.Unlock()
