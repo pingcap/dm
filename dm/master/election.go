@@ -59,9 +59,9 @@ func (s *Server) electionNotify(ctx context.Context) {
 				ok := s.startLeaderComponent(ctx)
 
 				if !ok {
+					s.Unlock()
 					s.retireLeader()
 					s.election.Resign()
-					s.Unlock()
 					continue
 				}
 
