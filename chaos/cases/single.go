@@ -198,6 +198,7 @@ func (st *singleTask) genFullData() error {
 		if err != nil {
 			return err
 		}
+		st.logger.Info("creating table", zap.String("query", query))
 		err = st.sourceConn.execSQLs(st.ctx, query)
 		if err != nil {
 			return err
@@ -325,6 +326,7 @@ func (st *singleTask) genIncrData(ctx context.Context) (err error) {
 			if err != nil {
 				return err
 			}
+			st.logger.Info("executing DDL", zap.String("query", query))
 			err = st.sourceConn.execSQLs(ctx, query)
 			if err != nil {
 				return err
