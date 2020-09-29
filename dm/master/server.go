@@ -52,7 +52,6 @@ import (
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -114,9 +113,6 @@ type Server struct {
 	// shard DDL optimist
 	optimist *shardddl.Optimist
 
-	// trace group id generator
-	idGen *tracing.IDGenerator
-
 	// agent pool
 	ap *AgentPool
 
@@ -129,7 +125,6 @@ func NewServer(cfg *Config) *Server {
 	server := Server{
 		cfg:       cfg,
 		scheduler: scheduler.NewScheduler(&logger, cfg.Security),
-		idGen:     tracing.NewIDGen(),
 		ap:        NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
 	}
 	server.pessimist = shardddl.NewPessimist(&logger, server.getTaskResources)
