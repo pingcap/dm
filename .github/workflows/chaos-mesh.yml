@@ -97,6 +97,8 @@ jobs:
         cp $GITHUB_WORKSPACE/chaos/cases/conf/source1.yaml $GITHUB_WORKSPACE/bin/source1.yaml
         cp $GITHUB_WORKSPACE/chaos/cases/conf/source2.yaml $GITHUB_WORKSPACE/bin/source2.yaml
         cp $GITHUB_WORKSPACE/chaos/cases/conf/task-single.yaml $GITHUB_WORKSPACE/bin/task-single.yaml
+        cp $GITHUB_WORKSPACE/chaos/cases/conf/task-pessimistic.yaml $GITHUB_WORKSPACE/bin/task-pessimistic.yaml
+        cp $GITHUB_WORKSPACE/chaos/cases/conf/task-optimistic.yaml $GITHUB_WORKSPACE/bin/task-optimistic.yaml
         docker build -f $GITHUB_WORKSPACE/chaos/manifests/Dockerfile -t dm:chaos $GITHUB_WORKSPACE/bin
         docker image list
     # Load DM docker image into KIND, see https://kind.sigs.k8s.io/docs/user/quick-start/#loading-an-image-into-your-cluster

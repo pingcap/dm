@@ -348,11 +348,12 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 			var eg errgroup.Group
 			for i, conn := range t.sourceConns {
 				conn2 := conn
+				i2 := i
 				eg.Go(func() error {
 					if err2 := conn2.execSQLs(ctx, query); err2 != nil {
 						return err2
 					}
-					t.results[i].DDL++
+					t.results[i2].DDL++
 					return nil
 				})
 			}
