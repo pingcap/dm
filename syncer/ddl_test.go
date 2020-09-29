@@ -17,16 +17,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/pingcap/parser/ast"
-
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 )
@@ -494,7 +493,6 @@ func (m mockOnlinePlugin) Clear(tctx *tcontext.Context) error {
 }
 
 func (m mockOnlinePlugin) Close() {
-	return
 }
 
 func (s *testSyncerSuite) TestClearOnlineDDL(c *C) {
