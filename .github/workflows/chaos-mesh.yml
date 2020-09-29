@@ -19,7 +19,7 @@ jobs:
     strategy:
         fail-fast: false
         matrix:
-          chaos-obj: ["pod-failure-dm", "pod-kill-dm", "network-partition-dm"]
+          chaos-obj: ["pod-failure-dm", "pod-kill-dm", "network-partition-dm", "network-emulation-dm"]
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
