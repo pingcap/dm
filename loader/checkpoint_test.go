@@ -84,7 +84,7 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	c.Assert(err, IsNil)
 	defer cp.Close()
 
-	cp.Clear(tctx)
+	c.Assert(cp.Clear(tctx), IsNil)
 
 	// no checkpoint exist
 	err = cp.Load(tctx)
@@ -175,7 +175,7 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	c.Assert(count, Equals, len(cases))
 
 	// clear all
-	cp.Clear(tctx)
+	c.Assert(cp.Clear(tctx), IsNil)
 
 	// no checkpoint exist
 	err = cp.Load(tctx)

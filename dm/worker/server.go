@@ -133,6 +133,7 @@ func (s *Server) Start() error {
 	go func() {
 		defer s.wg.Done()
 		// TODO: handle fatal error from observeSourceBound
+		//nolint:errcheck
 		s.observeSourceBound(s.ctx, s.etcdClient, revBound)
 	}()
 
@@ -211,12 +212,20 @@ func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Clien
 					}
 					rev = rev1
 					if bound.IsEmpty() {
-						s.stopWorker("")
+						err = s.stopWorker("")
+						if err != nil {
+							log.L().Error("fail to stop worker", zap.Error(err))
+							return err // return if failed to stop the worker.
+						}
 					} else {
 						if w := s.getWorker(true); w != nil && w.cfg.SourceID == bound.Source {
 							continue
 						}
-						s.stopWorker("")
+						err = s.stopWorker("")
+						if err != nil {
+							log.L().Error("fail to stop worker", zap.Error(err))
+							return err // return if failed to stop the worker.
+						}
 						err1 = s.startWorker(&cfg)
 						s.setSourceStatus(bound.Source, err1, true)
 						if err1 != nil {
@@ -321,7 +330,8 @@ func (s *Server) stopWorker(sourceID string) error {
 	w := s.getWorker(false)
 	if w == nil {
 		s.Unlock()
-		return terror.ErrWorkerNoStart
+		log.L().Warn("worker has not been started, no need to stop", zap.String("source", sourceID))
+		return nil // no need to stop because not started yet
 	}
 	if sourceID != "" && w.cfg.SourceID != sourceID {
 		s.Unlock()
@@ -551,6 +561,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	go func() {
 		defer w.wg.Done()
 		// TODO: handle fatal error from observeSubtaskStage
+		//nolint:errcheck
 		w.observeSubtaskStage(w.ctx, s.etcdClient, revSubTask)
 	}()
 
@@ -559,6 +570,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		go func() {
 			defer w.wg.Done()
 			// TODO: handle fatal error from observeRelayStage
+			//nolint:errcheck
 			w.observeRelayStage(w.ctx, s.etcdClient, revRelay)
 		}()
 	}

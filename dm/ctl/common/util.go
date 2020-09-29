@@ -53,6 +53,7 @@ func InitClient(addr string, securityCfg config.Security) error {
 		return terror.ErrCtlInvalidTLSCfg.Delegate(err)
 	}
 
+	//nolint:staticcheck
 	conn, err := grpc.Dial(addr, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
 	if err != nil {
 		return terror.ErrCtlGRPCCreateConn.AnnotateDelegate(err, "can't connect to %s", addr)
@@ -224,4 +225,12 @@ func GetTaskNameFromArgOrFile(arg string) string {
 		return arg
 	}
 	return cfg.Name
+}
+
+// PrintCmdUsage prints the usage of the command.
+func PrintCmdUsage(cmd *cobra.Command) {
+	err := cmd.Usage()
+	if err != nil {
+		fmt.Println("can't output command's usage:", err)
+	}
 }

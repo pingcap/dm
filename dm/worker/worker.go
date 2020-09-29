@@ -60,7 +60,6 @@ type Worker struct {
 	relayPurger purger.Purger
 
 	taskStatusChecker TaskStatusChecker
-	configFile        string
 
 	etcdClient *clientv3.Client
 

@@ -123,7 +123,7 @@ func PutInfoIfOpNotDone(cli *clientv3.Client, info Info) (rev int64, putted bool
 	} else if opBefore.Done {
 		// the operation with `done` exist before, abort the PUT.
 		return rev, false, nil
-	} else if utils.CompareShardingDDLs(opBefore.DDLs, info.DDLs) {
+	} else if utils.CompareShardingDDLs(opBefore.DDLs, info.DDLs) { //nolint:staticcheck
 		// TODO: try to handle put the same `done` DDL later.
 	}
 
