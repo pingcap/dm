@@ -1,0 +1,23 @@
+---
+# network partition between DM-worker and DM-master
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-partition-dm
+  labels:
+    app: network-partition-dm
+spec:
+  action: partition
+  mode: one
+  selector:
+    labelSelectors:
+      "app": "dm-worker"
+  direction: both
+  target:
+    selector:
+      labelSelectors:
+        "app": "dm-master"
+    mode: one
+  duration: "10s"
+  scheduler:
+    cron: "@every 2m"
