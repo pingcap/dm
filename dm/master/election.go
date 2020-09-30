@@ -29,7 +29,8 @@ import (
 )
 
 const (
-	oneselfLeader = "oneself"
+	oneselfLeader         = "oneself"
+	oneselfStartingLeader = "starting"
 )
 
 func (s *Server) electionNotify(ctx context.Context) {
@@ -40,7 +41,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 		case leaderInfo := <-s.election.LeaderNotify():
 			// retire from leader
 			if leaderInfo == nil {
-				if s.leader == oneselfLeader {
+				if s.leader.Get() == oneselfLeader {
 					s.retireLeader()
 					log.L().Info("current member retire from the leader", zap.String("current member", s.cfg.Name))
 				} else {
@@ -52,20 +53,20 @@ func (s *Server) electionNotify(ctx context.Context) {
 			}
 
 			if leaderInfo.ID == s.cfg.Name {
-				s.Lock()
 				// this member become leader
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
+				s.leader.Set(oneselfStartingLeader)
 
 				ok := s.startLeaderComponent(ctx)
 
 				if !ok {
-					s.Unlock()
 					s.retireLeader()
 					s.election.Resign()
 					continue
 				}
 
-				s.leader = oneselfLeader
+				s.Lock()
+				s.leader.Set(oneselfLeader)
 				s.closeLeaderClient()
 				s.Unlock()
 
@@ -85,7 +86,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 				log.L().Info("get new leader", zap.String("leader", leaderInfo.ID), zap.String("current member", s.cfg.Name))
 
 				s.Lock()
-				s.leader = leaderInfo.ID
+				s.leader.Set(leaderInfo.ID)
 				s.createLeaderClient(leaderInfo.Addr)
 				s.Unlock()
 			}
@@ -127,11 +128,24 @@ func (s *Server) closeLeaderClient() {
 }
 
 func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
+	retry := 10
+	wait := 100 * time.Millisecond
+	for ; retry > 0; retry-- {
+		if s.leader.Get() == oneselfStartingLeader {
+			time.Sleep(wait)
+		} else {
+			break
+		}
+	}
+	if retry == 0 {
+		// not leader and can't forward
+		return false, false
+	}
 	s.RLock()
 	defer s.RUnlock()
 
-	isLeader = (s.leader == oneselfLeader)
-	needForward = (s.leaderGrpcConn != nil)
+	isLeader = s.leader.Get() == oneselfLeader
+	needForward = s.leaderGrpcConn != nil
 	return
 }
 
@@ -173,7 +187,7 @@ func (s *Server) retireLeader() {
 	s.scheduler.Close()
 
 	s.Lock()
-	s.leader = ""
+	s.leader.Set("")
 	s.closeLeaderClient()
 	s.Unlock()
 
