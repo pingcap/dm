@@ -208,6 +208,10 @@ func (t *task) genFullData() error {
 			if err = conn.execSQLs(t.ctx, query); err != nil {
 				return err
 			}
+			// set different `AUTO_INCREMENT` to avoid encplicate entry for `INSERT`.
+			if err = conn.execSQLs(t.ctx, fmt.Sprintf("ALTER TABLE %s AUTO_INCREMENT = %d", name, 1+i*100000000)); err != nil {
+				return err
+			}
 		}
 		t.tables = append(t.tables, name)
 
@@ -222,19 +226,23 @@ func (t *task) genFullData() error {
 	// go-sqlsmith needs to load schema before generating DML and `ALTER TABLE` statements.
 	t.ss.LoadSchema(columns, indexes)
 
-	// no concurrency to avoid duplicate entry in multiple MySQL instances.
+	var eg errgroup.Group
 	for _, conn := range t.sourceConns {
-		for i := 0; i < fullInsertCount; i++ {
-			query, _, err2 := t.ss.InsertStmt(false)
-			if err2 != nil {
-				return err2
+		conn2 := conn
+		eg.Go(func() error {
+			for i := 0; i < fullInsertCount; i++ {
+				query, _, err2 := t.ss.InsertStmt(false)
+				if err2 != nil {
+					return err2
+				}
+				if err2 = conn2.execSQLs(t.ctx, query); err2 != nil {
+					return err2
+				}
 			}
-			if err2 = conn.execSQLs(t.ctx, query); err2 != nil {
-				return err2
-			}
-		}
+			return nil
+		})
 	}
-	return nil
+	return eg.Wait()
 }
 
 // createTask does `start-task` operation.
