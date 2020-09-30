@@ -31,7 +31,6 @@ import (
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/relay/purger"
 )
 
@@ -60,8 +59,6 @@ type Worker struct {
 	relayHolder RelayHolder
 	relayPurger purger.Purger
 
-	tracer *tracing.Tracer
-
 	taskStatusChecker TaskStatusChecker
 
 	etcdClient *clientv3.Client
@@ -73,7 +70,6 @@ type Worker struct {
 func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name string) (w *Worker, err error) {
 	w = &Worker{
 		cfg:           cfg,
-		tracer:        tracing.InitTracerHub(cfg.Tracer),
 		subTaskHolder: newSubTaskHolder(),
 		l:             log.With(zap.String("component", "worker controller")),
 		etcdClient:    etcdClient,
@@ -136,11 +132,6 @@ func (w *Worker) Start(startRelay bool) {
 		w.taskStatusChecker.Start()
 	}
 
-	// start tracer
-	if w.tracer.Enable() {
-		w.tracer.Start()
-	}
-
 	w.wg.Add(1)
 	defer w.wg.Done()
 
@@ -190,11 +181,6 @@ func (w *Worker) Close() {
 	// close task status checker
 	if w.cfg.Checker.CheckEnable {
 		w.taskStatusChecker.Close()
-	}
-
-	// close tracer
-	if w.tracer.Enable() {
-		w.tracer.Stop()
 	}
 
 	w.closed.Set(closedTrue)
