@@ -70,11 +70,12 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 	taskCfg.TargetDB = &targetCfg // replace DB config
 
 	var (
-		sourceDBs   = make([]*conn.BaseDB, 0, len(sourcesCfg))
-		sourceConns = make([]*dbConn, 0, len(sourcesCfg))
-		results     = make(results, 0, len(sourcesCfg))
+		sourceDBs   = make([]*conn.BaseDB, 0, len(taskCfg.MySQLInstances))
+		sourceConns = make([]*dbConn, 0, len(taskCfg.MySQLInstances))
+		results     = make(results, 0, len(taskCfg.MySQLInstances))
 	)
-	for _, cfg := range sourcesCfg {
+	for i := range taskCfg.MySQLInstances { // only use necessary part of sources.
+		cfg := sourcesCfg[i]
 		db, err := conn.DefaultDBProvider.Apply(cfg)
 		if err != nil {
 			return nil, err
