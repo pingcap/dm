@@ -204,12 +204,12 @@ func (t *task) genFullData() error {
 			return err
 		}
 		t.logger.Info("creating table", zap.String("query", query))
-		for _, conn := range t.sourceConns {
+		for j, conn := range t.sourceConns {
 			if err = conn.execSQLs(t.ctx, query); err != nil {
 				return err
 			}
 			// set different `AUTO_INCREMENT` to avoid encplicate entry for `INSERT`.
-			if err = conn.execSQLs(t.ctx, fmt.Sprintf("ALTER TABLE %s AUTO_INCREMENT = %d", name, 1+i*100000000)); err != nil {
+			if err = conn.execSQLs(t.ctx, fmt.Sprintf("ALTER TABLE %s AUTO_INCREMENT = %d", name, 1+j*100000000)); err != nil {
 				return err
 			}
 		}
