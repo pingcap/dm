@@ -17,8 +17,8 @@ import (
 	"context"
 	"os"
 	"strconv"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -63,7 +63,7 @@ func getDBConfigFromEnv() config.DBConfig {
 func (d *testDumplingSuite) SetUpSuite(c *C) {
 	dir := c.MkDir()
 	d.cfg = &config.SubTaskConfig{
-		Name: "dumplint_ut",
+		Name: "dumpling_ut",
 		From: getDBConfigFromEnv(),
 		LoaderConfig: config.LoaderConfig{
 			Dir: dir,
@@ -74,7 +74,7 @@ func (d *testDumplingSuite) SetUpSuite(c *C) {
 
 func (d *testDumplingSuite) TestDumpling(c *C) {
 	dumpling := NewDumpling(d.cfg)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	err := dumpling.Init(ctx)
@@ -85,7 +85,7 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	c.Assert(len(resultCh), Equals, 1)
 	result := <-resultCh
 	c.Assert(result.IsCanceled, IsFalse)
-	c.Assert(len(result.Errors), Equals, 0, Commentf("errrors: %v", result.Errors))
+	c.Assert(len(result.Errors), Equals, 0, Commentf("errors: %v", result.Errors))
 
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError", `return("unknown error")`), IsNil)
 	// nolint:errcheck
@@ -107,16 +107,10 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessCancel")
 
 	// cancel
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		dumpling.Process(ctx, resultCh)
-	}()
-	cancel()
-	wg.Wait()
+	dumpling.Process(ctx, resultCh)
 	c.Assert(len(resultCh), Equals, 1)
 	result = <-resultCh
 	c.Assert(result.IsCanceled, IsTrue)
-	c.Assert(len(result.Errors), Equals, 0)
+	c.Assert(len(result.Errors), Equals, 1)
+	c.Assert(result.Errors[0].String(), Matches, ".*context deadline exceeded.*")
 }
