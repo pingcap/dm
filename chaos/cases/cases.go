@@ -26,8 +26,10 @@ import (
 
 var (
 	// NOTE: items in `doSchemas` should be specified in the corresponding task files (`filenames`).
-	filenames = []string{"task-single.yaml", "task-pessimistic.yaml", "task-optimistic.yaml"}
-	doSchemas = []string{"db_single", "db_pessimistic", "db_optimistic"}
+	// NOTE: can not support optimistic shard DDL now because go-sqlsmith will generated some statements like
+	//   `ALTER TABLE `db_optimistic`.`dxeyydwb` ADD COLUMN (`zuhxfgsce` INT(18) NOT NULL)` which has NOT NULL column without DEFAULT value.
+	filenames = []string{"task-single.yaml", "task-pessimistic.yaml"}
+	doSchemas = []string{"db_single", "db_pessimistic"}
 )
 
 // runCases runs test cases.
