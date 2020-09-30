@@ -102,9 +102,9 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	// nolint:errcheck
 	failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever", `return("unknown error")`), IsNil)
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessCancel", `return("unknown error")`), IsNil)
 	// nolint:errcheck
-	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever")
+	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessCancel")
 
 	// cancel
 	var wg sync.WaitGroup

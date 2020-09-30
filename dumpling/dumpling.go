@@ -85,6 +85,7 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	failpoint.Inject("dumpUnitProcessForever", func() {
 		m.logger.Info("dump unit runs forever", zap.String("failpoint", "dumpUnitProcessForever"))
 		<-ctx.Done()
+		failpoint.Return()
 	})
 
 	// NOTE: remove output dir before start dumping
@@ -99,6 +100,11 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 		return
 	}
+
+	failpoint.Inject("dumpUnitProcessCancel", func() {
+		m.logger.Info("mock dump unit cancel", zap.String("failpoint", "dumpUnitProcessCancel"))
+		<-ctx.Done()
+	})
 
 	newCtx, cancel := context.WithCancel(ctx)
 	err = export.Dump(newCtx, m.dumpConfig)
