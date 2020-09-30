@@ -33,12 +33,12 @@ var (
 // runCases runs test cases.
 func runCases(ctx context.Context, cli pb.MasterClient, confDir string,
 	targetCfg config2.DBConfig, sourcesCfg ...config2.DBConfig) error {
-	var eg errgroup.Group
+	eg, ctx2 := errgroup.WithContext(ctx)
 	for i := range filenames {
 		taskFile := filepath.Join(confDir, filenames[i])
 		schema := doSchemas[i]
 		eg.Go(func() error {
-			t, err := newTask(ctx, cli, taskFile, schema, targetCfg, sourcesCfg...)
+			t, err := newTask(ctx2, cli, taskFile, schema, targetCfg, sourcesCfg...)
 			if err != nil {
 				return err
 			}
