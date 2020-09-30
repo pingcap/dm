@@ -19,13 +19,12 @@ RUN GO111MODULE=on go mod download
 
 COPY . .
 
-RUN make dm-worker dm-master dm-tracer dmctl
+RUN make dm-worker dm-master dmctl
 
 FROM alpine:3.10
 
 COPY --from=builder /go/src/github.com/pingcap/dm/bin/dm-worker /dm-worker
 COPY --from=builder /go/src/github.com/pingcap/dm/bin/dm-master /dm-master
-COPY --from=builder /go/src/github.com/pingcap/dm/bin/dm-tracer /dm-tracer
 COPY --from=builder /go/src/github.com/pingcap/dm/bin/dmctl /dmctl
 COPY --from=builder /opt/tools/bin/mydumper /mydumper
 
