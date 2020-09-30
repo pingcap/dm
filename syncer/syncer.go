@@ -58,7 +58,6 @@ import (
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	operator "github.com/pingcap/dm/syncer/err-operator"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
@@ -170,9 +169,6 @@ type Syncer struct {
 
 	isReplacingErr bool // true if we are in replace events by handle-error
 
-	// TODO: re-implement tracer flow for binlog event later.
-	tracer *tracing.Tracer
-
 	currentLocationMu struct {
 		sync.RWMutex
 		currentLocation binlog.Location // use to calc remain binlog size
@@ -204,7 +200,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.count.Set(0)
 	syncer.c = newCausality()
 	syncer.done = nil
-	syncer.tracer = tracing.GetTracer()
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
 	syncer.enableRelay = cfg.UseRelay
@@ -1195,9 +1190,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		shardingReSyncCh        = make(chan *ShardingReSync, 10)
 		shardingReSync          *ShardingReSync
 		savedGlobalLastLocation binlog.Location
-		latestOp                opType // latest job operation tp
 		traceSource             = fmt.Sprintf("%s.syncer.%s", s.cfg.SourceID, s.cfg.Name)
-		traceID                 string
 	)
 
 	closeShardingResync := func() error {
@@ -1245,7 +1238,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			currentLocation = shardingReSync.currLocation.Clone()
 			// if suffix>0, we are replacing error
-			s.isReplacingErr = (currentLocation.Suffix != 0)
+			s.isReplacingErr = currentLocation.Suffix != 0
 			err = s.streamerController.RedirectStreamer(s.tctx, shardingReSync.currLocation.Clone())
 			if err != nil {
 				return err
@@ -1258,10 +1251,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		var e *replication.BinlogEvent
-
-		if shardingReSync == nil {
-			latestOp = null
-		}
 
 		startTime := time.Now()
 		e, err = s.getEvent(tctx, &currentLocation)
@@ -1409,13 +1398,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			currentLocation:     &currentLocation,
 			lastLocation:        &lastLocation,
 			shardingReSync:      shardingReSync,
-			latestOp:            &latestOp,
 			closeShardingResync: closeShardingResync,
 			traceSource:         traceSource,
 			safeMode:            safeMode,
 			tryReSync:           tryReSync,
 			startTime:           startTime,
-			traceID:             &traceID,
 			shardingReSyncCh:    &shardingReSyncCh,
 		}
 
@@ -1456,7 +1443,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			}
 
-			latestOp = xid
 			currentLocation.Position.Pos = e.Header.LogPos
 			err = currentLocation.GTIDSet.Set(ev.GSet)
 			if err != nil {
@@ -1470,7 +1456,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return terror.Annotatef(err, "fail to record GTID %v", ev.GSet)
 			}
 
-			job := newXIDJob(currentLocation, startLocation, currentLocation, traceID)
+			job := newXIDJob(currentLocation, startLocation, currentLocation)
 			err = s.addJobFunc(job)
 			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
 				return err
@@ -1498,18 +1484,15 @@ type eventContext struct {
 	currentLocation     *binlog.Location
 	lastLocation        *binlog.Location
 	shardingReSync      *ShardingReSync
-	latestOp            *opType
 	closeShardingResync func() error
 	traceSource         string
 	safeMode            *sm.SafeMode
 	tryReSync           bool
 	startTime           time.Time
-	traceID             *string
 	shardingReSyncCh    *chan *ShardingReSync
 }
 
-// TODO: Further split into smaller functions and group common arguments into
-// a context struct.
+// TODO: Further split into smaller functions and group common arguments into a context struct.
 func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext) error {
 	if ec.header.Timestamp == 0 || ec.header.LogPos == 0 { // fake rotate event
 		if string(ev.NextLogName) <= ec.lastLocation.Position.Name {
@@ -1545,7 +1528,6 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 		}
 		return nil
 	}
-	*ec.latestOp = rotate
 
 	s.tctx.L().Info("", zap.String("event", "rotate"), log.WrapStringerField("location", ec.currentLocation))
 	return nil
@@ -1619,6 +1601,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		sqls    []string
 		keys    [][]string
 		args    [][]interface{}
+		jobType opType
 	)
 
 	param := &genDMLParam{
@@ -1640,7 +1623,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			}
 		}
 		binlogEvent.WithLabelValues("write_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
-		*ec.latestOp = insert
+		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 		if !applied {
@@ -1651,7 +1634,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			}
 		}
 		binlogEvent.WithLabelValues("update_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
-		*ec.latestOp = update
+		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 		if !applied {
@@ -1661,7 +1644,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			}
 		}
 		binlogEvent.WithLabelValues("delete_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
-		*ec.latestOp = del
+		jobType = del
 
 	default:
 		s.tctx.L().Debug("ignoring unrecognized event", zap.String("event", "row"), zap.Stringer("type", ec.header.EventType))
@@ -1678,12 +1661,12 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if keys != nil {
 			key = keys[i]
 		}
-		err = s.commitJob(*ec.latestOp, originSchema, originTable, schemaName, tableName, sqls[i], arg, key, true, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, *ec.traceID)
+		err = s.commitJob(jobType, originSchema, originTable, schemaName, tableName, sqls[i], arg, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation)
 		if err != nil {
 			return err
 		}
 	}
-	dispatchBinlogDurationHistogram.WithLabelValues(ec.latestOp.String(), s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
+	dispatchBinlogDurationHistogram.WithLabelValues(jobType.String(), s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	return nil
 }
 
@@ -1733,7 +1716,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	s.tctx.L().Info("", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation))
 	*ec.lastLocation = ec.currentLocation.Clone() // update lastLocation, because we have checked `isDDL`
-	*ec.latestOp = ddl
 
 	var (
 		sqls                []string
@@ -1890,7 +1872,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			}
 		})
 
-		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, *ec.traceID, sourceTbls)
+		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, sourceTbls)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err
@@ -2079,7 +2061,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 	})
 
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, *ec.traceID, nil)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
@@ -2198,7 +2180,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	return nil
 }
 
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, location, startLocation, cmdLocation binlog.Location, traceID string) error {
+func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, location, startLocation, cmdLocation binlog.Location) error {
 	startTime := time.Now()
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
@@ -2207,7 +2189,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 	conflictDetectDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 
-	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, location, startLocation, cmdLocation, traceID)
+	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, location, startLocation, cmdLocation)
 	return s.addJobFunc(job)
 }
 
