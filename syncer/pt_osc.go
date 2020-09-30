@@ -28,7 +28,7 @@ import (
 
 // PT handles pt online schema changes
 // (_*).*_new ghost table
-// (_*).*_old ghost transh table
+// (_*).*_old ghost trash table
 // we don't support `--new-table-name` flag
 type PT struct {
 	storge *OnlineDDLStorage
@@ -140,7 +140,7 @@ func (p *PT) Finish(tcxt *tcontext.Context, schema, table string) error {
 
 // TableType implements interface
 func (p *PT) TableType(table string) TableType {
-	// 5 is _ _gho/ghc/del
+	// 5 is _ _old/new
 	if len(table) > 5 {
 		if strings.HasPrefix(table, "_") && strings.HasSuffix(table, "_new") {
 			return ghostTable
