@@ -222,23 +222,19 @@ func (t *task) genFullData() error {
 	// go-sqlsmith needs to load schema before generating DML and `ALTER TABLE` statements.
 	t.ss.LoadSchema(columns, indexes)
 
-	var eg errgroup.Group
+	// no concurrency to avoid duplicate entry in multiple MySQL instances.
 	for _, conn := range t.sourceConns {
-		conn2 := conn
-		eg.Go(func() error {
-			for i := 0; i < fullInsertCount; i++ {
-				query, _, err2 := t.ss.InsertStmt(false)
-				if err2 != nil {
-					return err2
-				}
-				if err2 = conn2.execSQLs(t.ctx, query); err2 != nil {
-					return err2
-				}
+		for i := 0; i < fullInsertCount; i++ {
+			query, _, err2 := t.ss.InsertStmt(false)
+			if err2 != nil {
+				return err2
 			}
-			return nil
-		})
+			if err2 = conn.execSQLs(t.ctx, query); err2 != nil {
+				return err2
+			}
+		}
 	}
-	return eg.Wait()
+	return nil
 }
 
 // createTask does `start-task` operation.
