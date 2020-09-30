@@ -158,7 +158,11 @@ var (
 )
 
 func TestMaster(t *testing.T) {
-	log.InitLogger(&log.Config{})
+	err := log.InitLogger(&log.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	testEtcdCluster = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer testEtcdCluster.Terminate(t)
 
@@ -807,7 +811,10 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	// mock PurgeRelay request
 	mockPurgeRelay := func(rpcSuccess bool) {
 		for i, worker := range workers {
-			rets := make([]interface{}, 0, 2)
+			rets := []interface{}{
+				nil,
+				errors.New(errGRPCFailed),
+			}
 			if rpcSuccess {
 				rets = []interface{}{
 					&pb.CommonWorkerResponse{
@@ -815,11 +822,6 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 						Source: sources[i],
 					},
 					nil,
-				}
-			} else {
-				rets = []interface{}{
-					nil,
-					errors.New(errGRPCFailed),
 				}
 			}
 			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
@@ -1060,7 +1062,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
 	mysqlCfg := config.NewSourceConfig()
-	mysqlCfg.LoadFromFile("./source.yaml")
+	c.Assert(mysqlCfg.LoadFromFile("./source.yaml"), check.IsNil)
 	mysqlCfg.From.Password = os.Getenv("MYSQL_PSWD")
 	task, err := mysqlCfg.Yaml()
 	c.Assert(err, check.IsNil)
@@ -1420,7 +1422,7 @@ func (t *testMaster) TestGetTaskCfg(c *check.C) {
 
 	// test recover from etcd
 	server.scheduler.Close()
-	server.scheduler.Start(ctx, etcdTestCli)
+	c.Assert(server.scheduler.Start(ctx, etcdTestCli), check.IsNil)
 
 	resp3, err := server.GetTaskCfg(context.Background(), req1)
 	c.Assert(err, check.IsNil)
@@ -1464,9 +1466,8 @@ func (t *testMaster) subTaskStageMatch(c *check.C, s *scheduler.Scheduler, task,
 
 func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskName, sourceID string, masterReq interface{}) {
 	var expect pb.Stage
-	switch masterReq.(type) {
+	switch req := masterReq.(type) {
 	case *pb.OperateSourceRequest:
-		req := masterReq.(*pb.OperateSourceRequest)
 		switch req.Op {
 		case pb.SourceOp_StartSource, pb.SourceOp_UpdateSource:
 			expect = pb.Stage_Running
@@ -1476,7 +1477,6 @@ func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskNam
 	case *pb.StartTaskRequest, *pb.UpdateTaskRequest:
 		expect = pb.Stage_Running
 	case *pb.OperateTaskRequest:
-		req := masterReq.(*pb.OperateTaskRequest)
 		switch req.Op {
 		case pb.TaskOp_Resume:
 			expect = pb.Stage_Running
@@ -1486,7 +1486,6 @@ func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskNam
 			expect = pb.Stage_Stopped
 		}
 	case *pb.OperateWorkerRelayRequest:
-		req := masterReq.(*pb.OperateWorkerRelayRequest)
 		switch req.Op {
 		case pb.RelayOp_ResumeRelay:
 			expect = pb.Stage_Running

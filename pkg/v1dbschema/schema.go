@@ -47,7 +47,12 @@ func UpdateSchema(tctx *tcontext.Context, db *conn.BaseDB, cfg *config.SubTaskCo
 	if err != nil {
 		return terror.ErrFailUpdateV1DBSchema.Delegate(err)
 	}
-	defer db.CloseBaseConn(dbConn)
+	defer func() {
+		err2 := db.CloseBaseConn(dbConn)
+		if err2 != nil {
+			tctx.L().Warn("fail to close connection", zap.Error(err2))
+		}
+	}()
 
 	// setup a TCP binlog reader (because no relay can be used when upgrading).
 	syncCfg := replication.BinlogSyncerConfig{

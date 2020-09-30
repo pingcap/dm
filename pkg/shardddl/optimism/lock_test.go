@@ -28,7 +28,7 @@ type testLock struct{}
 var _ = Suite(&testLock{})
 
 func (t *testLock) SetUpSuite(c *C) {
-	log.InitLogger(&log.Config{})
+	c.Assert(log.InitLogger(&log.Config{}), IsNil)
 }
 
 func (t *testLock) TestLockTrySyncNormal(c *C) {

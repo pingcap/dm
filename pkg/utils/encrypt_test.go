@@ -45,5 +45,6 @@ func (t *testEncryptSuite) TestEncrypt(c *C) {
 	// invalid ciphertext
 	plaintext2, err = Decrypt(base64.StdEncoding.EncodeToString([]byte("invalid-plaintext")))
 	c.Assert(err, ErrorMatches, ".*can not decrypt password.*")
+	c.Assert(plaintext2, Equals, "")
 	c.Assert(DecryptOrPlaintext("invalid-plaintext"), Equals, "invalid-plaintext")
 }

@@ -54,7 +54,9 @@ func (ts *HTTPHandlerTestSuite) startServer(c *C, offset int) {
 	ts.cfg.TracerAddr = fmt.Sprintf(":%d", 8263+offset)
 
 	ts.server = NewServer(ts.cfg)
-	go ts.server.Start()
+	go func() {
+		c.Assert(ts.server.Start(), IsNil)
+	}()
 
 	err := ts.waitUntilServerOnline()
 	c.Assert(err, IsNil)
@@ -73,6 +75,7 @@ func (ts *HTTPHandlerTestSuite) waitUntilServerOnline() error {
 	for i := 0; i < retryTime; i++ {
 		resp, err := http.Get(statusURL)
 		if err == nil {
+			//nolint:errcheck
 			ioutil.ReadAll(resp.Body)
 			resp.Body.Close()
 			return nil

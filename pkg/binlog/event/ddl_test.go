@@ -67,7 +67,6 @@ func (t *testDDLSuite) TestGenDDLEvent(c *C) {
 	c.Assert(result.LatestGTID.String(), Equals, "03fc0263-28c7-11e7-a653-6c0b84d59f30:125")
 
 	latestPos = result.LatestPos // update latest pos
-	latestGTID = result.LatestGTID
 
 	// test CREATE/DROP table for MariaDB
 	flavor = gmysql.MariaDBFlavor
@@ -109,7 +108,4 @@ func (t *testDDLSuite) TestGenDDLEvent(c *C) {
 	c.Assert(bytes.Contains(result.Data, []byte(table)), IsTrue)
 	c.Assert(result.LatestPos, Equals, latestPos+uint32(len(result.Data)))
 	c.Assert(result.LatestGTID.String(), Equals, fmt.Sprintf("1-%d-6", serverID))
-
-	latestPos = result.LatestPos // update latest pos
-	latestGTID = result.LatestGTID
 }

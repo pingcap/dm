@@ -21,13 +21,12 @@ require (
 	github.com/lance6716/retool v1.3.8-0.20200806070832-3469f70b2afe
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
 	github.com/pingcap/dumpling v0.0.0-20200909092728-a45daad655d1
-	github.com/pingcap/errcode v0.3.0 // indirect
-	github.com/pingcap/errors v0.11.5-0.20200820035142-66eb5bf1d1cd
+	github.com/pingcap/errors v0.11.5-0.20200917111840-a15ef68f753d
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
 	github.com/pingcap/log v0.0.0-20200828042413-fce0951f1463
-	github.com/pingcap/parser v0.0.0-20200905070518-a6534dd22500
-	github.com/pingcap/tidb v1.1.0-beta.0.20200904065405-82a37247485a
-	github.com/pingcap/tidb-tools v4.0.5-0.20200828085514-03575b185007+incompatible
+	github.com/pingcap/parser v0.0.0-20200924053142-5d7e8ebf605e
+	github.com/pingcap/tidb v1.1.0-beta.0.20200927065602-486e473a86e9
+	github.com/pingcap/tidb-tools v4.0.7-0.20200927084250-e47e0e12c7f3+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
 	github.com/satori/go.uuid v1.2.0
@@ -40,7 +39,7 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285
-	github.com/tikv/pd v1.1.0-beta.0.20200825090122-aeda6d60f107
+	github.com/tikv/pd v1.1.0-beta.0.20200907085700-5b04bec39b99
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/unrolled/render v1.0.1
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738
@@ -56,4 +55,4 @@ require (
 
 go 1.13
 
-replace github.com/chaos-mesh/go-sqlsmith => github.com/csuzhangxc/go-sqlsmith v0.0.0-20200904072619-4a3341a30495
+replace github.com/chaos-mesh/go-sqlsmith => github.com/csuzhangxc/go-sqlsmith v0.0.0-20200928023709-4ad8903babdd

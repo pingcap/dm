@@ -240,30 +240,30 @@ func (t *testPositionSuite) TestAdjustPosition(c *C) {
 	}{
 		{
 			gmysql.Position{
-				"mysql-bin.00001",
-				123,
+				Name: "mysql-bin.00001",
+				Pos:  123,
 			},
 			gmysql.Position{
-				"mysql-bin.00001",
-				123,
-			},
-		}, {
-			gmysql.Position{
-				"mysql-bin|00001.00002",
-				123,
-			},
-			gmysql.Position{
-				"mysql-bin.00002",
-				123,
+				Name: "mysql-bin.00001",
+				Pos:  123,
 			},
 		}, {
 			gmysql.Position{
-				"mysql-bin|00001.00002.00003",
-				123,
+				Name: "mysql-bin|00001.00002",
+				Pos:  123,
 			},
 			gmysql.Position{
-				"mysql-bin|00001.00002.00003",
-				123,
+				Name: "mysql-bin.00002",
+				Pos:  123,
+			},
+		}, {
+			gmysql.Position{
+				Name: "mysql-bin|00001.00002.00003",
+				Pos:  123,
+			},
+			gmysql.Position{
+				Name: "mysql-bin|00001.00002.00003",
+				Pos:  123,
 			},
 		},
 	}

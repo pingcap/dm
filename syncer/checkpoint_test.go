@@ -469,6 +469,7 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 		sqlmock.NewRows(columns).AddRow("", "", pos2.Name, pos2.Pos, gs.String(), pos2.Name, pos2.Pos, gs.String(), "null", true).
 			AddRow(schema, table, pos2.Name, pos2.Pos, gs.String(), "", 0, "", tiBytes, false))
 	err = cp.Load(tctx, s.tracker)
+	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), DeepEquals, binlog.Location{Position: pos2, GTIDSet: gs})
 	rcp = cp.(*RemoteCheckPoint)
 	c.Assert(rcp.points[schema][table].TableInfo(), NotNil)
