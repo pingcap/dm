@@ -81,13 +81,7 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	c.Assert(err, IsNil)
 	resultCh := make(chan pb.ProcessResult, 1)
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		dumpling.Process(ctx, resultCh)
-	}()
-	wg.Wait()
+	dumpling.Process(ctx, resultCh)
 	c.Assert(len(resultCh), Equals, 1)
 	result := <-resultCh
 	c.Assert(result.IsCanceled, IsFalse)
@@ -98,12 +92,7 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 
 	// return error
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		dumpling.Process(ctx, resultCh)
-	}()
-	wg.Wait()
+	dumpling.Process(ctx, resultCh)
 	c.Assert(len(resultCh), Equals, 1)
 	result = <-resultCh
 	c.Assert(result.IsCanceled, IsFalse)
@@ -118,6 +107,7 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever")
 
 	// cancel
+	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
