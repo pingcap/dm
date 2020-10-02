@@ -73,7 +73,7 @@ type SourceConfig struct {
 	ServerID uint32 `yaml:"server-id" toml:"server-id" json:"server-id"`
 
 	// deprecated tracer, to keep compatibility with older version
-	_ map[string]string `yaml:"tracer" toml:"tracer" json:"tracer"`
+	Tracer map[string]interface{} `yaml:"tracer" toml:"tracer" json:"tracer"`
 }
 
 // NewSourceConfig creates a new base config for upstream MySQL/MariaDB source.
