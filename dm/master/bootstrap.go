@@ -51,6 +51,7 @@ var (
 // - upgrade the cluster from v1.0.x if needed.
 // - upgrade the cluster from a previous v2.0.x version to the current version.
 func (s *Server) bootstrap(ctx context.Context) error {
+	log.L().Info("start bootstrapping")
 	if s.cfg.V1SourcesPath != "" {
 		err := s.importFromV10x(ctx)
 		if err != nil {
