@@ -74,6 +74,7 @@ func (t *testConfig) TestConfig(c *C) {
 	clone1.ServerID = 101
 	// fix empty map after marshal/unmarshal becomes nil
 	clone1.From.Session = map[string]string{}
+	clone1.Tracer = map[string]interface{}{}
 	clone2 := cfg.DecryptPassword()
 	c.Assert(clone2, DeepEquals, clone1)
 
