@@ -127,20 +127,26 @@ func (s *Server) closeLeaderClient() {
 	}
 }
 
-func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
-	retry := 10
-	wait := 100 * time.Millisecond
-	for ; retry > 0; retry-- {
-		if s.leader.Get() == oneselfStartingLeader {
-			time.Sleep(wait)
-		} else {
-			break
+func (s *Server) isLeaderAndNeedForward(ctx context.Context) (isLeader bool, needForward bool) {
+	// maybe in `startLeaderComponent`, will wait for a short time
+	if s.leader.Get() == oneselfStartingLeader {
+		retry := 10
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+
+		for s.leader.Get() == oneselfStartingLeader {
+			if retry == 0 {
+				return false, false
+			}
+			select {
+			case <-ctx.Done():
+				return false, false
+			case <-ticker.C:
+				retry--
+			}
 		}
 	}
-	if retry == 0 {
-		// not leader and can't forward
-		return false, false
-	}
+
 	s.RLock()
 	defer s.RUnlock()
 

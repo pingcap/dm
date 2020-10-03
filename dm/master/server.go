@@ -1902,7 +1902,7 @@ func (s *Server) sharedLogic(ctx context.Context, req interface{}, respPointer i
 	//		}
 	//		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	//	}
-	isLeader, needForward := s.isLeaderAndNeedForward()
+	isLeader, needForward := s.isLeaderAndNeedForward(ctx)
 	if isLeader {
 		return false
 	}

@@ -42,7 +42,7 @@ type AtomicString struct {
 	p unsafe.Pointer
 }
 
-// Get returns error
+// Get returns string
 func (s *AtomicString) Get() string {
 	p := atomic.LoadPointer(&s.p)
 	if p == nil {
@@ -51,7 +51,7 @@ func (s *AtomicString) Get() string {
 	return *(*string)(p)
 }
 
-// Set sets error to AtomicError
+// Set sets string to AtomicString
 func (s *AtomicString) Set(str string) {
 	atomic.StorePointer(&s.p, unsafe.Pointer(&str))
 }
