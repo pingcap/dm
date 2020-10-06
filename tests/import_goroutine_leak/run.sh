@@ -88,7 +88,8 @@ function run() {
 
     # dm-worker1 panics
     err_cnt=`grep "panic" $WORK_DIR/worker1/log/stdout.log | wc -l`
-    if [ $err_cnt -ne 2 ]; then
+    # there may be more panic
+    if [ $err_cnt -lt 2 ]; then
         echo "dm-worker1 doesn't panic again, panic count ${err_cnt}"
         exit 2
     fi

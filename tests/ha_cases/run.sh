@@ -125,7 +125,8 @@ function test_join_masters_and_worker {
     check_port_offline $MASTER_PORT1 20
     rm -rf $WORK_DIR/master1/default.master1
 
-    run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT2 "list-member --worker --name=worker2" '"stage": "free",' 1
+    # uncomment after we support https://github.com/pingcap/dm/issues/1110
+    # run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT2 "list-member --worker --name=worker2" '"stage": "free",' 1
 
     sleep 5
 
@@ -417,8 +418,6 @@ function test_pause_task() {
     load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
     load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
 
-    # TODO: After change execErrorDetected to execError, remove this line
-    sleep 1
     task_name=(test test2)
     for name in ${task_name[@]}; do
         echo "pause tasks $name"
@@ -580,6 +579,7 @@ function test_multi_task_reduce_and_restart_worker() {
             running_count=$(echo $status_str | sed "s/$search_str/$search_str\n/g" | grep -c "$search_str")
             if [ $running_count != 4 ]; then
                 echo "error running worker"
+                echo $status_str
                 exit 1
             fi
         fi

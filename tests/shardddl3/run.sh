@@ -487,10 +487,9 @@ function DM_RemoveLock_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column c double;"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column c double;"
     run_sql_source2 "alter table ${shardddl1}.${tb2} add column c double;"
-    sleep 1
+    check_log_contain_with_retry "wait new ddl info putted into etcd" $WORK_DIR/master/log/dm-master.log
     run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
 
-    check_log_contain_with_retry "wait new ddl info putted into etcd" $WORK_DIR/master/log/dm-master.log
     check_log_contain_with_retry "fail to delete shard DDL infos and lock operations" $WORK_DIR/master/log/dm-master.log
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} change a a bigint default 10;"
