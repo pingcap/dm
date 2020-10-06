@@ -69,7 +69,9 @@ func (t *testMaster) TestCollectSourceConfigFilesV1Import(c *C) {
 
 	// load a valid source file.
 	cfg1 := config.NewSourceConfig()
-	cfg1.From.Session = map[string]string{} // fix empty map after marshal/unmarshal becomes nil
+	// fix empty map after marshal/unmarshal becomes nil
+	cfg1.From.Session = map[string]string{}
+	cfg1.Tracer = map[string]interface{}{}
 	c.Assert(cfg1.LoadFromFile("./source.yaml"), IsNil)
 	cfg1.From.Host = host
 	cfg1.From.Port = port
