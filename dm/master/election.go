@@ -136,6 +136,7 @@ func (s *Server) isLeaderAndNeedForward(ctx context.Context) (isLeader bool, nee
 
 		for s.leader.Get() == oneselfStartingLeader {
 			if retry == 0 {
+				log.L().Error("leader didn't finish starting after retry, please manually retry later")
 				return false, false
 			}
 			select {
