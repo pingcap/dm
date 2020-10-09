@@ -15,21 +15,12 @@ package dumpling
 
 import (
 	"strings"
-	"testing"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
 
 	. "github.com/pingcap/check"
 )
-
-var _ = Suite(&testDumplingSuite{})
-
-func TestSuite(t *testing.T) {
-	TestingT(t)
-}
-
-type testDumplingSuite struct{}
 
 func (m *testDumplingSuite) TestParseArgs(c *C) {
 	logger := log.L()

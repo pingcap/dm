@@ -41,3 +41,11 @@ func randDML(ss *sqlsmith.SQLSmith) (dml string, t dmlType, err error) {
 	}
 	return
 }
+
+// randDDL generates `ALTER TABLE` DDL.
+func randDDL(ss *sqlsmith.SQLSmith) (string, error) {
+	return ss.AlterTableStmt(&sqlsmith.DDLOptions{
+		OnlineDDL: false,
+		Tables:    make([]string, 0),
+	})
+}
