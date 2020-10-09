@@ -99,7 +99,7 @@ jobs:
       fail-fast: false
       matrix:
 #        test_name: [relay, syncer, pkg_binlog, others]
-        test_name: [syncer, pkg_binlog]
+        test_name: [pkg_binlog]
     runs-on: ubuntu-18.04
     steps:
       - name: Cache go modules
@@ -233,22 +233,22 @@ jobs:
         with:
           path: /tmp/dm.tar.gz
           key: ${{ runner.os }}-dm-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-ut-relay-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-ut-syncer-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-ut-relay-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-ut-syncer-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
           key: ${{ runner.os }}-dm-ut-pkg_binlog-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-ut-others-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-ut-others-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
 
       # test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit,
       # load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
