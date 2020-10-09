@@ -57,6 +57,10 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 			if err2 != nil {
 				return err2
 			}
+			line = strings.TrimSpace(line)
+			if len(line) == 0 {
+				return nil
+			}
 			parts := strings.SplitN(line, ":", 2)
 			if len(parts) != 2 {
 				continue
