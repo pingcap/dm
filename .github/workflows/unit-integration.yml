@@ -338,12 +338,14 @@ jobs:
 #          key: ${{ runner.os }}-dm-it-sharding-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - name: Upload Coverage
         run: |
+          set -x
           ls -lh /tmp/dm.tar.gz
           tar xzvf /tmp/dm.tar.gz
           ls cov_dir
           rm -rf /tmp/dm_test
           mkdir -p /tmp/dm_test
           cp cov_dir/* /tmp/dm_test
+          export PATH=~/go/bin:$PAT
           set +x
           COVERALLS_TOKEN="${{ secrets.COVERALLS_TOKEN }}" CODECOV_TOKEN="${{ secrets.CODECOV_TOKEN }}" JenkinsCI=1 make coverage || true
       - name: Set up tmate session
