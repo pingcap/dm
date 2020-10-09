@@ -122,7 +122,7 @@ func ignoreExecSQLError(err error) bool {
 		return true
 	case errno.ErrDupEntry: // HACK: we tolerate `invalid connection`, then `Duplicate entry` may be reported.
 		return true
-	case errno.ErrTooBigRowsize: // HACK:we tolerate `Error 1118: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535`
+	case errno.ErrTooBigRowsize: // HACK: we tolerate `Error 1118: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535`
 		return true
 	default:
 		return false
