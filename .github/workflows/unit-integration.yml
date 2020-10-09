@@ -345,7 +345,7 @@ jobs:
           rm -rf /tmp/dm_test
           mkdir -p /tmp/dm_test
           cp cov_dir/* /tmp/dm_test
-          export PATH=~/go/bin:$PAT
+          export PATH=~/go/bin:$PATH
           set +x
           COVERALLS_TOKEN="${{ secrets.COVERALLS_TOKEN }}" CODECOV_TOKEN="${{ secrets.CODECOV_TOKEN }}" JenkinsCI=1 make coverage || true
       - name: Set up tmate session
