@@ -51,10 +51,10 @@ function run() {
     sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
     dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 
+    # don't check result, because worker may meet failpoint `LoadExceedOffsetExit` before correct response.
+    # let following check (port offline, dump data) ensure task has been started
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "start-task $cur/conf/dm-task.yaml" \
-        "\"result\": true" 2 \
-        "\"source\": \"mysql-replica-01\"" 1
+        "start-task $cur/conf/dm-task.yaml"
 
     check_port_offline $WORKER1_PORT 20
 
