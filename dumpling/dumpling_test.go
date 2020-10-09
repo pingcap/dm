@@ -74,7 +74,7 @@ func (d *testDumplingSuite) SetUpSuite(c *C) {
 
 func (d *testDumplingSuite) TestDumpling(c *C) {
 	dumpling := NewDumpling(d.cfg)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	err := dumpling.Init(ctx)
@@ -107,7 +107,9 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessCancel")
 
 	// cancel
-	dumpling.Process(ctx, resultCh)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+	dumpling.Process(ctx2, resultCh)
 	c.Assert(len(resultCh), Equals, 1)
 	result = <-resultCh
 	c.Assert(result.IsCanceled, IsTrue)
