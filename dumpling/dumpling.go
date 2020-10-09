@@ -101,6 +101,11 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		return
 	}
 
+	failpoint.Inject("dumpUnitProcessCancel", func() {
+		m.logger.Info("mock dump unit cancel", zap.String("failpoint", "dumpUnitProcessCancel"))
+		<-ctx.Done()
+	})
+
 	newCtx, cancel := context.WithCancel(ctx)
 	err = export.Dump(newCtx, m.dumpConfig)
 	cancel()
