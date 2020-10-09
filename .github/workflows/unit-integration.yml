@@ -220,7 +220,7 @@ jobs:
           make check
 
   coverage:
-    needs: [unit_test, integration_test, check]
+    needs: [prepare, unit_test, integration_test, check]
     runs-on: ubuntu-18.04
     steps:
       - name: Cache go modules
