@@ -85,7 +85,7 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	c.Assert(len(resultCh), Equals, 1)
 	result := <-resultCh
 	c.Assert(result.IsCanceled, IsFalse)
-	c.Assert(len(result.Errors), Equals, 0, Commentf("errors: %v", result.Errors))
+	c.Assert(len(result.Errors), Equals, 0)
 
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError", `return("unknown error")`), IsNil)
 	// nolint:errcheck
