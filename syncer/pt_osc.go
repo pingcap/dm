@@ -22,12 +22,13 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
 // PT handles pt online schema changes
 // (_*).*_new ghost table
-// (_*).*_old ghost transh table
+// (_*).*_old ghost trash table
 // we don't support `--new-table-name` flag
 type PT struct {
 	storge *OnlineDDLStorage
@@ -57,7 +58,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 	case realTable:
 		switch stmt.(type) {
 		case *ast.RenameTableStmt:
-			if len(tables) != 2 {
+			if len(tables) != parserpkg.SingleRenameTableNameNum {
 				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
 
@@ -73,7 +74,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 		// ignore trashTable
 		switch stmt.(type) {
 		case *ast.RenameTableStmt:
-			if len(tables) != 2 {
+			if len(tables) != parserpkg.SingleRenameTableNameNum {
 				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
 
@@ -96,7 +97,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 				return nil, "", "", err
 			}
 		case *ast.RenameTableStmt:
-			if len(tables) != 2 {
+			if len(tables) != parserpkg.SingleRenameTableNameNum {
 				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
 
@@ -139,7 +140,7 @@ func (p *PT) Finish(tcxt *tcontext.Context, schema, table string) error {
 
 // TableType implements interface
 func (p *PT) TableType(table string) TableType {
-	// 5 is _ _gho/ghc/del
+	// 5 is _ _old/new
 	if len(table) > 5 {
 		if strings.HasPrefix(table, "_") && strings.HasSuffix(table, "_new") {
 			return ghostTable

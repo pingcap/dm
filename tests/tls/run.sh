@@ -81,6 +81,11 @@ function run() {
         "\"result\": true" 2 \
         "\"source\": \"$SOURCE_ID1\"" 1
 
+    echo "check master alive"
+    run_dm_ctl_with_tls $WORK_DIR "127.0.0.1:$MASTER_PORT" $cur/conf/ca.pem $cur/conf/dm.pem $cur/conf/dm.key \
+            "list-member" \
+            "\"alive\": true" 3
+
     echo "start task and check stage"
     run_dm_ctl_with_tls $WORK_DIR "127.0.0.1:$MASTER_PORT" $cur/conf/ca.pem $cur/conf/dm.pem $cur/conf/dm.key \
             "start-task $WORK_DIR/dm-task.yaml" \
@@ -90,8 +95,9 @@ function run() {
             "query-status test" \
             "\"result\": true" 2
 
-    echo "test http interface"
+    echo "test http and api interface"
     check_rpc_alive $cur/../bin/check_master_online_http 127.0.0.1:$MASTER_PORT1 "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
+    check_rpc_alive $cur/../bin/check_master_http_apis 127.0.0.1:$MASTER_PORT1 "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
 
     echo "use common name not in 'cert-allowed-cn' should not request success"
     check_rpc_alive $cur/../bin/check_master_online_http 127.0.0.1:$MASTER_PORT1 "$cur/conf/ca.pem" "$cur/conf/other.pem" "$cur/conf/other.key" && exit 1 || true

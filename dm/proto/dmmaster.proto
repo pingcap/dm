@@ -26,28 +26,17 @@ service Master {
             get: "/apis/v1alpha1/status/{name}"
         };
     }
-    rpc QueryError (QueryErrorListRequest) returns (QueryErrorListResponse) {}
 
     // show un-resolved DDL locks
     rpc ShowDDLLocks (ShowDDLLocksRequest) returns (ShowDDLLocksResponse) {}
     // used by dmctl to manually unlock DDL lock
     rpc UnlockDDLLock (UnlockDDLLockRequest) returns (UnlockDDLLockResponse) {}
 
-    rpc UpdateMasterConfig (UpdateMasterConfigRequest) returns (UpdateMasterConfigResponse) {}
-
-    rpc UpdateWorkerRelayConfig(UpdateWorkerRelayConfigRequest) returns (CommonWorkerResponse) {}
-
-    // SwitchWorkerRelayMaster requests some dm-workers to switch relay unit's master server
-    rpc SwitchWorkerRelayMaster(SwitchWorkerRelayMasterRequest) returns (SwitchWorkerRelayMasterResponse) {}
-
     // OperateWorkerRelayTask requests some dm-workers to operate relay unit
     rpc OperateWorkerRelayTask (OperateWorkerRelayRequest) returns (OperateWorkerRelayResponse) {}
 
     // PurgeWorkerRelay purges relay log files for some dm-workers
     rpc PurgeWorkerRelay(PurgeWorkerRelayRequest) returns (PurgeWorkerRelayResponse) {}
-
-    // MigrateRelay request migrate old dm-woker to a new one. 
-    rpc MigrateWorkerRelay(MigrateWorkerRelayRequest) returns (CommonWorkerResponse) {}
 
     // CheckTask checks legality of task configuration
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
@@ -115,20 +104,9 @@ service Master {
     }
 }
 
-message MigrateWorkerRelayRequest {
-    string BinlogName = 1;
-    uint32 BinlogPos = 2;
-    string source = 3;
-}
-
-message UpdateWorkerRelayConfigRequest {
-    string config = 1;
-    string source = 2;
-}
-
 message StartTaskRequest {
     string task = 1; // task's configuration, yaml format
-    repeated string sources = 2; // mysql source need to do start task, empty for all matched workers in deployment
+    repeated string sources = 2; // mysql source need to do start task, empty for all sources defiend in the task config
     bool removeMeta = 3; // whether to remove meta data for this task or not
 }
 
@@ -136,16 +114,6 @@ message StartTaskResponse {
     bool result = 1;
     string msg = 2;
     repeated CommonWorkerResponse sources = 3;
-}
-
-message UpdateMasterConfigRequest {
-    string config = 1;
-}
-
-message UpdateMasterConfigResponse {
-    bool result = 1;
-    string msg = 2;
-    repeated QueryStatusResponse sources = 3;
 }
 
 message OperateTaskRequest {
@@ -188,17 +156,6 @@ message QueryStatusListResponse {
     bool result = 1;
     string msg = 2;
     repeated QueryStatusResponse sources = 3;
-}
-
-message QueryErrorListRequest {
-    string name = 1;             // task's name, empty for all tasks
-    repeated string sources = 2; // sources need to query, empty for all sources
-}
-
-message QueryErrorListResponse {
-    bool result = 1;
-    string msg = 2;
-    repeated QueryErrorResponse sources = 3;
 }
 
 // ShowDDLLocksRequest used to query DDL locks which are un-resolved
@@ -249,18 +206,6 @@ message UnlockDDLLockRequest {
 message UnlockDDLLockResponse {
     bool result = 1;
     string msg = 2;
-}
-
-// SwitchWorkerRelayMasterRequest represents a request for some dm-workers to switch relay unit's master server
-// workers: relay unit in these dm-workers need to switch master server
-message SwitchWorkerRelayMasterRequest {
-    repeated string sources = 1;
-}
-
-message SwitchWorkerRelayMasterResponse {
-    bool result = 1;
-    string msg = 2;
-    repeated CommonWorkerResponse sources = 3;
 }
 
 // OperateWorkerRelayRequest represents a request for some dm-workers to operate relay unit

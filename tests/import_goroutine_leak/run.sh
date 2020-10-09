@@ -26,7 +26,6 @@ function run() {
     run_sql_file $WORK_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $WORK_DIR/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
-
     echo "dm-worker panic, doJob of import unit workers don't exit"
     # check doJobs of import unit worker exit
     inject_points=("github.com/pingcap/dm/loader/dispatchError=return(1)"
@@ -70,6 +69,7 @@ function run() {
     inject_points=("github.com/pingcap/dm/loader/dontWaitWorkerExit=return(1)"
                    "github.com/pingcap/dm/loader/LoadDataSlowDown=sleep(1000)"
                    "github.com/pingcap/dm/loader/executeSQLError=return(1)"
+                   "github.com/pingcap/dm/loader/dispatchError=return(1)"
                    )
     export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
@@ -88,7 +88,8 @@ function run() {
 
     # dm-worker1 panics
     err_cnt=`grep "panic" $WORK_DIR/worker1/log/stdout.log | wc -l`
-    if [ $err_cnt -ne 2 ]; then
+    # there may be more panic
+    if [ $err_cnt -lt 2 ]; then
         echo "dm-worker1 doesn't panic again, panic count ${err_cnt}"
         exit 2
     fi

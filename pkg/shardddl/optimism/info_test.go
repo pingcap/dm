@@ -126,7 +126,9 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1], HasLen, 1)
 	c.Assert(ifm[task1][source1], HasLen, 1)
 	c.Assert(ifm[task1][source1][upSchema], HasLen, 1)
-	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11)
+	i11WithVer := i11
+	i11WithVer.Version = 2
+	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 
 	// put another key and get again with 2 info.
 	rev4, err := PutInfo(etcdTestCli, i12)
@@ -136,8 +138,10 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm, HasLen, 1)
 	c.Assert(ifm, HasKey, task1)
 	c.Assert(ifm[task1], HasLen, 2)
-	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11)
-	c.Assert(ifm[task1][source2][upSchema][upTable], DeepEquals, i12)
+	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
+	i12WithVer := i12
+	i12WithVer.Version = 1
+	c.Assert(ifm[task1][source2][upSchema][upTable], DeepEquals, i12WithVer)
 
 	// start the watcher.
 	wch := make(chan Info, 10)
@@ -149,23 +153,50 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 		ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
 		defer cancel()
 		WatchInfo(ctx, etcdTestCli, rev4+1, wch, ech) // revision+1
-		close(wch)                                    // close the chan
-		close(ech)
 	}()
 
 	// put another key for a different task.
+	// version start from 1
 	_, err = PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
-	wg.Wait()
-
-	// watch should only get i21.
-	c.Assert(len(wch), Equals, 1)
-	c.Assert(<-wch, DeepEquals, i21)
+	infoWithVer := <-wch
+	i21WithVer := i21
+	i21WithVer.Version = 1
+	c.Assert(infoWithVer, DeepEquals, i21WithVer)
 	c.Assert(len(ech), Equals, 0)
 
-	// delete i12.
-	deleteOp := deleteInfoOp(i12)
+	// put again
+	// version increase
+	_, err = PutInfo(etcdTestCli, i21)
+	c.Assert(err, IsNil)
+	infoWithVer = <-wch
+	i21WithVer.Version++
+	c.Assert(infoWithVer, DeepEquals, i21WithVer)
+	c.Assert(len(ech), Equals, 0)
+
+	// delete i21.
+	deleteOp := deleteInfoOp(i21)
 	resp, err := etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
+	c.Assert(err, IsNil)
+	c.Assert(resp.Succeeded, IsTrue)
+	<-wch
+
+	// put again
+	// version reset to 1
+	_, err = PutInfo(etcdTestCli, i21)
+	c.Assert(err, IsNil)
+	infoWithVer = <-wch
+	i21WithVer.Version = 1
+	c.Assert(infoWithVer, DeepEquals, i21WithVer)
+	c.Assert(len(ech), Equals, 0)
+
+	close(wch) // close the chan
+	close(ech)
+	wg.Wait()
+
+	// delete i12.
+	deleteOp = deleteInfoOp(i12)
+	resp, err = etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
 	c.Assert(err, IsNil)
 
 	// get again.
@@ -175,9 +206,9 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm, HasKey, task1)
 	c.Assert(ifm, HasKey, task2)
 	c.Assert(ifm[task1], HasLen, 1)
-	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11)
+	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 	c.Assert(ifm[task2], HasLen, 1)
-	c.Assert(ifm[task2][source1][upSchema][upTable], DeepEquals, i21)
+	c.Assert(ifm[task2][source1][upSchema][upTable], DeepEquals, i21WithVer)
 
 	// watch the deletion for i12.
 	wch = make(chan Info, 10)

@@ -196,7 +196,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 		tableNames: needTrackDDLs[0].tableNames,
 		stmt:       needTrackDDLs[0].stmt,
 	}
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, *ec.traceID, nil)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
@@ -204,7 +204,8 @@ func (s *Syncer) handleQueryEventOptimistic(
 
 	err = s.execError.Get()
 	if err != nil {
-		return terror.ErrSyncerUnitHandleDDLFailed.Delegate(err, ev.Query)
+		s.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+		return nil
 	}
 
 	for _, table := range onlineDDLTableNames {

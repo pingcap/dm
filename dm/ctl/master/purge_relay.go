@@ -22,14 +22,9 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-)
-
-var (
-	timeFormat = "2006-01-02_15:04:05" // _ join date and time, no space
-	timeLayout = "2006-01-02 15:04:05"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // NewPurgeRelayCmd creates a PurgeRelay command
@@ -57,7 +52,7 @@ func NewPurgeRelayCmd() *cobra.Command {
 func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
-		cmd.Usage()
+		common.PrintCmdUsage(cmd)
 		err = errors.New("please check output to see error")
 		return
 	}
@@ -73,18 +68,6 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 
-	//inactive, err := cmd.Flags().GetBool("inactive")
-	//if err != nil {
-	//	fmt.Println(errors.Trace(err))
-	//	return
-	//}
-	//
-	//timeStr, err := cmd.Flags().GetString("time")
-	//if err != nil {
-	//	fmt.Println(errors.Trace(err))
-	//	return
-	//}
-
 	filename, err := cmd.Flags().GetString("filename")
 	if err != nil {
 		common.PrintLines("error in parse `--filename`")
@@ -97,32 +80,10 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 
-	//var count = 0
-	//if inactive {
-	//	count++
-	//}
-	//if len(timeStr) > 0 {
-	//	count++
-	//	timeStr = strings.Trim(timeStr, "\"")
-	//}
 	if len(filename) > 0 {
 		//count++
 		filename = strings.Trim(filename, "\"")
 	}
-	//if count != 1 {
-	//	fmt.Println("must specify one (and only one) of --inactive, --time, --filename")
-	//	return
-	//}
-
-	//var time2 = time.Unix(0, 0) // zero time
-	//if len(timeStr) > 0 {
-	//	timeStr2 := strings.Replace(timeStr, "_", " ", 1)
-	//	time2, err = time.ParseInLocation(timeLayout, timeStr2, time.Local)
-	//	if err != nil {
-	//		fmt.Printf("invalid time format %s for --time, it should be %s\n", timeStr, timeFormat)
-	//		return
-	//	}
-	//}
 
 	if len(filename) > 0 && len(sources) > 1 {
 		fmt.Println("for --filename, can only specify one source per time")
@@ -130,7 +91,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 	if len(subDir) > 0 {
-		subDir = command.TrimQuoteMark(subDir)
+		subDir = utils.TrimQuoteMark(subDir)
 	}
 	if len(filename) > 0 && len(subDir) == 0 {
 		fmt.Println("[warn] no --sub-dir specify for --filename, the latest one will be used")

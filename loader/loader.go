@@ -49,7 +49,8 @@ import (
 )
 
 const (
-	jobCount = 1000
+	jobCount            = 1000
+	uninitializedOffset = -1
 )
 
 // FilePosSet represents a set in mathematics.
@@ -185,21 +186,8 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 					}
 					return
 				}
+				w.loader.checkPoint.UpdateOffset(job.file, job.offset)
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
-
-				if w.cfg.CleanDumpFile {
-					fileInfos := w.checkPoint.GetRestoringFileInfo(job.schema, job.table)
-					if pos, ok := fileInfos[job.file]; ok {
-						if job.offset == pos[1] {
-							w.tctx.L().Info("try to remove loaded dump file", zap.String("data file", job.file))
-							if err := os.Remove(job.absPath); err != nil {
-								w.tctx.L().Warn("error when remove loaded dump file", zap.String("data file", job.file), zap.Error(err))
-							}
-						}
-					} else {
-						w.tctx.L().Warn("file not recorded in checkpoint", zap.String("data file", job.file))
-					}
-				}
 			}
 		}
 	}
@@ -262,22 +250,28 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 		cur int64
 	)
 
+	baseFile := filepath.Base(file)
+
 	f, err = os.Open(file)
 	if err != nil {
 		return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err)
 	}
 	defer f.Close()
 
-	finfo, err := f.Stat()
-	if err != nil {
-		return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err)
-	}
+	// file was not found in checkpoint
+	if offset == uninitializedOffset {
+		offset = 0
 
-	baseFile := filepath.Base(file)
-	err = w.checkPoint.Init(w.tctx.WithContext(ctx), baseFile, finfo.Size())
-	if err != nil {
-		w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), zap.Int64("offset", offset), log.ShortError(err))
-		return err
+		finfo, err2 := f.Stat()
+		if err2 != nil {
+			return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err2)
+		}
+
+		err2 = w.checkPoint.Init(w.tctx.WithContext(ctx), baseFile, finfo.Size())
+		if err2 != nil {
+			w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), zap.Int64("offset", offset), log.ShortError(err2))
+			return err2
+		}
 	}
 
 	cur, err = f.Seek(offset, io.SeekStart)
@@ -647,25 +641,6 @@ func (l *Loader) Restore(ctx context.Context) error {
 
 	if err == nil {
 		l.logCtx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
-		if l.cfg.CleanDumpFile {
-			files := CollectDirFiles(l.cfg.Dir)
-			hasDatafile := false
-			for file := range files {
-				if strings.HasSuffix(file, ".sql") &&
-					!strings.HasSuffix(file, "-schema.sql") &&
-					!strings.HasSuffix(file, "-schema-create.sql") &&
-					!strings.Contains(file, "-schema-view.sql") &&
-					!strings.Contains(file, "-schema-triggers.sql") &&
-					!strings.Contains(file, "-schema-post.sql") {
-					hasDatafile = true
-				}
-			}
-
-			if !hasDatafile {
-				l.logCtx.L().Info("clean dump files after importing all files")
-				l.cleanDumpFiles()
-			}
-		}
 	} else if errors.Cause(err) != context.Canceled {
 		return err
 	}
@@ -693,6 +668,9 @@ func (l *Loader) Close() {
 	err := l.toDB.Close()
 	if err != nil {
 		l.logCtx.L().Error("close downstream DB error", log.ShortError(err))
+	}
+	if l.cfg.CleanDumpFile && l.checkPoint.AllFinished() {
+		l.cleanDumpFiles()
 	}
 	l.checkPoint.Close()
 	l.removeLabelValuesWithTaskInMetrics(l.cfg.Name)
@@ -943,15 +921,11 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 			continue
 		}
 
-		idx := strings.Index(file, ".sql")
-		name := file[:idx]
-		fields := strings.Split(name, ".")
-		if len(fields) != 2 && len(fields) != 3 {
-			l.logCtx.L().Warn("invalid db table sql file", zap.String("file", file))
+		db, table, err := getDBAndTableFromFilename(file)
+		if err != nil {
+			l.logCtx.L().Warn("invalid db table sql file", zap.String("file", file), zap.Error(err))
 			continue
 		}
-
-		db, table := fields[0], fields[1]
 		if l.skipSchemaAndTable(&filter.Table{Schema: db, Name: table}) {
 			l.logCtx.L().Warn("ignore data file", zap.String("data file", file))
 			continue
@@ -1008,7 +982,10 @@ func (l *Loader) prepare() error {
 	}
 
 	// collect dir files.
-	files := CollectDirFiles(l.cfg.Dir)
+	files, err := CollectDirFiles(l.cfg.Dir)
+	if err != nil {
+		return err
+	}
 
 	l.logCtx.L().Debug("collected files", zap.Reflect("files", files))
 
@@ -1034,6 +1011,10 @@ func (l *Loader) prepare() error {
 
 // restoreSchema creates schema
 func (l *Loader) restoreSchema(ctx context.Context, conn *DBConn, sqlFile, schema string) error {
+	if l.checkPoint.IsTableCreated(schema, "") {
+		l.logCtx.L().Info("database already exists in checkpoint, skip creating it", zap.String("schema", schema), zap.String("db schema file", sqlFile))
+		return nil
+	}
 	err := l.restoreStructure(ctx, conn, sqlFile, schema, "")
 	if err != nil {
 		if isErrDBExists(err) {
@@ -1047,6 +1028,10 @@ func (l *Loader) restoreSchema(ctx context.Context, conn *DBConn, sqlFile, schem
 
 // restoreTable creates table
 func (l *Loader) restoreTable(ctx context.Context, conn *DBConn, sqlFile, schema, table string) error {
+	if l.checkPoint.IsTableCreated(schema, table) {
+		l.logCtx.L().Info("table already exists in checkpoint, skip creating it", zap.String("schema", schema), zap.String("table", table), zap.String("db schema file", sqlFile))
+		return nil
+	}
 	err := l.restoreStructure(ctx, conn, sqlFile, schema, table)
 	if err != nil {
 		if isErrTableExists(err) {
@@ -1107,7 +1092,6 @@ func (l *Loader) restoreStructure(ctx context.Context, conn *DBConn, sqlFile str
 				return terror.WithScope(err, terror.ScopeDownstream)
 			}
 		}
-
 	}
 
 	return nil
@@ -1152,7 +1136,13 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer l.toDB.CloseBaseConn(baseConn)
+	defer func() {
+		err2 := l.toDB.CloseBaseConn(baseConn)
+		if err2 != nil {
+			l.logCtx.L().Warn("fail to close connection", zap.Error(err2))
+		}
+	}()
+
 	dbConn := &DBConn{
 		cfg:      l.cfg,
 		baseConn: baseConn,
@@ -1225,7 +1215,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 
 				l.logCtx.L().Debug("dispatch data file", zap.String("schema", db), zap.String("table", table), zap.String("data file", file))
 
-				var offset int64
+				offset := int64(uninitializedOffset)
 				posSet, ok := restoringFiles[file]
 				if ok {
 					offset = posSet[0]
@@ -1289,24 +1279,26 @@ func (l *Loader) getMydumpMetadata() error {
 
 // cleanDumpFiles is called when finish restoring data, to clean useless files
 func (l *Loader) cleanDumpFiles() {
+	l.logCtx.L().Info("clean dump files")
 	if l.cfg.Mode == config.ModeFull {
 		// in full-mode all files won't be need in the future
 		if err := os.RemoveAll(l.cfg.Dir); err != nil {
 			l.logCtx.L().Warn("error when remove loaded dump folder", zap.String("data folder", l.cfg.Dir), zap.Error(err))
 		}
 	} else {
-		// leave metadata file, only delete structure files
-		for db, tables := range l.db2Tables {
-			dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
-			if err := os.Remove(dbFile); err != nil {
-				l.logCtx.L().Warn("error when remove loaded dump file", zap.String("data file", dbFile), zap.Error(err))
+		// leave metadata file, only delete sql files
+		files, err := CollectDirFiles(l.cfg.Dir)
+		if err != nil {
+			l.logCtx.L().Warn("fail to collect files", zap.String("data folder", l.cfg.Dir), zap.Error(err))
+		}
+		var lastErr error
+		for f := range files {
+			if strings.HasSuffix(f, ".sql") {
+				lastErr = os.Remove(filepath.Join(l.cfg.Dir, f))
 			}
-			for table := range tables {
-				tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
-				if err := os.Remove(tableFile); err != nil {
-					l.logCtx.L().Warn("error when remove loaded dump file", zap.String("data file", tableFile), zap.Error(err))
-				}
-			}
+		}
+		if lastErr != nil {
+			l.logCtx.L().Warn("show last error when remove loaded dump sql files", zap.String("data folder", l.cfg.Dir), zap.Error(lastErr))
 		}
 	}
 }

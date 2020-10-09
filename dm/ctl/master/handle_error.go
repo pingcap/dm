@@ -20,9 +20,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 )
 
 // NewHandleErrorCmd creates a HandleError command
@@ -53,7 +53,7 @@ func convertOp(t string) pb.ErrorOp {
 func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) < 2 {
 		cmd.SetOut(os.Stdout)
-		cmd.Usage()
+		common.PrintCmdUsage(cmd)
 		err = errors.New("please check output to see error")
 		return
 	}
@@ -92,7 +92,7 @@ func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 	if len(binlogPos) != 0 {
-		_, err = command.VerifyBinlogPos(binlogPos)
+		_, err = binlog.VerifyBinlogPos(binlogPos)
 		if err != nil {
 			return
 		}

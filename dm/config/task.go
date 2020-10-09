@@ -21,14 +21,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/terror"
-
-	"github.com/dustin/go-humanize"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
+
+	"github.com/coreos/go-semver/semver"
+	"github.com/dustin/go-humanize"
 	"go.uber.org/zap"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -41,8 +43,10 @@ const (
 
 // shard DDL mode.
 const (
-	ShardPessimistic = "pessimistic"
-	ShardOptimistic  = "optimistic"
+	ShardPessimistic  = "pessimistic"
+	ShardOptimistic   = "optimistic"
+	tidbTxnMode       = "tidb_txn_mode"
+	tidbTxnOptimistic = "optimistic"
 )
 
 // default config item values
@@ -66,6 +70,15 @@ var (
 	defaultBatch                   = 100
 	defaultQueueSize               = 1024 // do not give too large default value to avoid OOM
 	defaultCheckpointFlushInterval = 30   // in seconds
+
+	// TargetDBConfig
+	defaultSessionCfg = []struct {
+		key        string
+		val        string
+		minVersion *semver.Version
+	}{
+		{tidbTxnMode, tidbTxnOptimistic, semver.New("3.0.0")},
+	}
 )
 
 // Meta represents binlog's meta pos
@@ -351,6 +364,7 @@ func (c *TaskConfig) String() string {
 
 // JSON returns the config's json string
 func (c *TaskConfig) JSON() string {
+	//nolint:staticcheck
 	cfg, err := json.Marshal(c)
 	if err != nil {
 		log.L().Error("marshal task config to json", zap.String("task", c.Name), log.ShortError(err))
@@ -520,7 +534,7 @@ func (c *TaskConfig) adjust() error {
 		}
 
 		// for backward compatible, set global config `ansi-quotes: true` if any syncer is true
-		if inst.Syncer.EnableANSIQuotes == true {
+		if inst.Syncer.EnableANSIQuotes {
 			log.L().Warn("DM could discover proper ANSI_QUOTES, `enable-ansi-quotes` is no longer take effect")
 		}
 
@@ -706,4 +720,19 @@ func checkDuplicateString(ruleNames []string) []string {
 		}
 	}
 	return dupeArray
+}
+
+// AdjustTargetDBSessionCfg adjust session cfg of TiDB
+func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version *semver.Version) {
+	lowerMap := make(map[string]string, len(dbConfig.Session))
+	for k, v := range dbConfig.Session {
+		lowerMap[strings.ToLower(k)] = v
+	}
+	// all cfg in defaultSessionCfg should be lower case
+	for _, cfg := range defaultSessionCfg {
+		if _, ok := lowerMap[cfg.key]; !ok && !version.LessThan(*cfg.minVersion) {
+			lowerMap[cfg.key] = cfg.val
+		}
+	}
+	dbConfig.Session = lowerMap
 }

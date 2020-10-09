@@ -62,16 +62,11 @@ func NewRootCmd() *cobra.Command {
 		master.NewCheckTaskCmd(),
 		//	master.NewUpdateTaskCmd(),
 		master.NewQueryStatusCmd(),
-		//	master.NewQueryErrorCmd(),
 		master.NewShowDDLLocksCmd(),
 		master.NewUnlockDDLLockCmd(),
-		//	master.NewSwitchRelayMasterCmd(),
 		//	master.NewPauseRelayCmd(),
 		//	master.NewResumeRelayCmd(),
-		//	master.NewUpdateMasterConfigCmd(),
-		//	master.NewUpdateRelayCmd(),
 		//	master.NewPurgeRelayCmd(),
-		//	master.NewMigrateRelayCmd(),
 		master.NewOperateSourceCmd(),
 		master.NewOfflineMemberCmd(),
 		master.NewOperateLeaderCmd(),
@@ -122,11 +117,11 @@ func PrintHelp(args []string) {
 	if err != nil {
 		fmt.Println(err)
 		rootCmd.SetOut(os.Stdout)
-		rootCmd.Usage()
+		common.PrintCmdUsage(rootCmd)
 		return
 	}
 	cmd.SetOut(os.Stdout)
-	cmd.Usage()
+	common.PrintCmdUsage(cmd)
 }
 
 // Start starts running a command

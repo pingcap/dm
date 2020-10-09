@@ -51,8 +51,6 @@ type Unit interface {
 
 	// Status returns the unit's current status
 	Status() interface{}
-	// Error returns the unit's error information
-	Error() interface{}
 	// Type returns the unit's type
 	Type() pb.UnitType
 	// IsFreshTask return whether is a fresh task (not processed before)
@@ -88,8 +86,14 @@ func NewProcessError(err error) *pb.ProcessError {
 
 // IsCtxCanceledProcessErr returns true if the err's context canceled
 func IsCtxCanceledProcessErr(err *pb.ProcessError) bool {
-	if strings.Contains(err.Message, "context canceled") {
-		return true
+	return strings.Contains(err.Message, "context canceled")
+}
+
+// JoinProcessErrors return the string of pb.ProcessErrors joined by ", "
+func JoinProcessErrors(errors []*pb.ProcessError) string {
+	serrs := make([]string, 0, len(errors))
+	for _, serr := range errors {
+		serrs = append(serrs, serr.String())
 	}
-	return false
+	return strings.Join(serrs, ", ")
 }

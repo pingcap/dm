@@ -27,7 +27,7 @@ var (
 	printStatusInterval = time.Second * 5
 )
 
-// Status implements SubTaskUnit.Status
+// Status implements Unit.Status
 func (l *Loader) Status() interface{} {
 	finishedSize := l.finishedDataSize.Get()
 	totalSize := l.totalDataSize.Get()
@@ -39,11 +39,6 @@ func (l *Loader) Status() interface{} {
 		MetaBinlog:    l.metaBinlog.Get(),
 	}
 	return s
-}
-
-// Error implements SubTaskUnit.Error
-func (l *Loader) Error() interface{} {
-	return &pb.LoadError{}
 }
 
 // PrintStatus prints status like progress percentage.

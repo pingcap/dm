@@ -25,7 +25,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// Status implements SubTaskUnit.Status
+// Status implements Unit.Status
 // it returns status, but does not calc status
 func (s *Syncer) Status() interface{} {
 	var (
@@ -41,9 +41,6 @@ func (s *Syncer) Status() interface{} {
 	}
 
 	syncerLocation := s.checkpoint.FlushedGlobalPoint()
-	if err != nil {
-		s.tctx.L().Warn("fail to get flushed global point", zap.Error(err))
-	}
 	st := &pb.SyncStatus{
 		TotalEvents:  total,
 		TotalTps:     totalTps,

@@ -205,6 +205,30 @@ Finished dump at: 2020-05-21 18:14:49`,
 			},
 			"5b5a8e4e-9b43-11ea-900d-0242ac170002:1-10,5b642cb6-9b43-11ea-8914-0242ac170003:1-9,97b5142f-e19c-11e8-808c-0242ac110005:1-13",
 		},
+		{ // no GTID sets
+			`Started dump at: 2020-09-30 12:16:49
+SHOW MASTER STATUS:
+	Log: mysql-bin-changelog.000003
+	Pos: 12470000
+
+SHOW MASTER STATUS: /* AFTER CONNECTION POOL ESTABLISHED */
+	Log: mysql-bin-changelog.000003
+	Pos: 12470000
+
+Finished dump at: 2020-09-30 12:16:49
+`,
+			mysql.Position{
+				Name: "mysql-bin-changelog.000003",
+				Pos:  12470000,
+			},
+			"",
+			true,
+			mysql.Position{
+				Name: "mysql-bin-changelog.000003",
+				Pos:  12470000,
+			},
+			"",
+		},
 	}
 
 	for _, tc := range testCases {

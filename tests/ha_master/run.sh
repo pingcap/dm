@@ -292,6 +292,10 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member --master" \
+        "\"alive\": true" 5
+
     test_evict_leader
     test_list_member # TICASE-942, 944, 945, 946, 947
 

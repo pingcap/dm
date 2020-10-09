@@ -24,17 +24,25 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	tidbConfig "github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/meta"
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/store/mockstore"
+
+	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 const (
 	waitDDLRetryCount = 10
 	schemaLeaseTime   = 10 * time.Millisecond
+)
+
+var (
+	sessionVars = []string{"sql_mode", "tidb_skip_utf8_check"}
 )
 
 // Tracker is used to track schema locally.
@@ -44,8 +52,43 @@ type Tracker struct {
 	se    session.Session
 }
 
-// NewTracker creates a new tracker.
-func NewTracker(sessionCfg map[string]string) (*Tracker, error) {
+// NewTracker creates a new tracker. `sessionCfg` will be set as tracker's session variables if specified, or retrieve
+// some variable from downstream TiDB using `tidbConn`.
+func NewTracker(sessionCfg map[string]string, tidbConn *conn.BaseConn) (*Tracker, error) {
+	// NOTE: tidb uses a **global** config so can't isolate tracker's config from each other. If that isolation is needed,
+	// we might SetGlobalConfig before every call to tracker, or use some patch like https://github.com/bouk/monkey
+	toSet := tidbConfig.NewConfig()
+	toSet.AlterPrimaryKey = true
+	tidbConfig.StoreGlobalConfig(toSet)
+
+	if len(sessionCfg) == 0 {
+		sessionCfg = make(map[string]string)
+	}
+	// get variables if user doesn't specify
+	// all cfg in sessionVars should be lower case
+	for _, k := range sessionVars {
+		if _, ok := sessionCfg[k]; !ok {
+			var ignoredColumn interface{}
+			rows, err2 := tidbConn.QuerySQL(tcontext.Background(), fmt.Sprintf("SHOW VARIABLES LIKE '%s'", k))
+			if err2 != nil {
+				return nil, err2
+			}
+			if rows.Next() {
+				var value string
+				if err3 := rows.Scan(&ignoredColumn, &value); err3 != nil {
+					return nil, err3
+				}
+				sessionCfg[k] = value
+			}
+			if err2 = rows.Close(); err2 != nil {
+				return nil, err2
+			}
+			if err2 = rows.Err(); err2 != nil {
+				return nil, err2
+			}
+		}
+	}
+
 	store, err := mockstore.NewMockStore(mockstore.WithStoreType(mockstore.MockTiKV))
 	if err != nil {
 		return nil, err
@@ -195,10 +238,7 @@ func (tr *Tracker) Reset() error {
 func (tr *Tracker) Close() error {
 	tr.se.Close()
 	tr.dom.Close()
-	if err := tr.store.Close(); err != nil {
-		return err
-	}
-	return nil
+	return tr.store.Close()
 }
 
 // DropTable drops a table from this tracker.

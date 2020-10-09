@@ -23,20 +23,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/failpoint"
-	"go.uber.org/zap"
-
-	"github.com/pingcap/dm/pkg/gtid"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/terror"
-
+	"github.com/coreos/go-semver/semver"
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	gmysql "github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -412,9 +412,7 @@ func IsMySQLError(err error, code uint16) bool {
 
 // IsErrBinlogPurged checks whether err is BinlogPurged error
 func IsErrBinlogPurged(err error) bool {
-	err = errors.Cause(err)
-	e, ok := err.(*gmysql.MyError)
-	return ok && e.Code == tmysql.ErrMasterFatalErrorReadingBinlog
+	return IsMySQLError(err, tmysql.ErrMasterFatalErrorReadingBinlog)
 }
 
 // IsNoSuchThreadError checks whether err is NoSuchThreadError
@@ -426,4 +424,22 @@ func IsNoSuchThreadError(err error) bool {
 func GetGTID(db *sql.DB) (string, error) {
 	val, err := GetGlobalVariable(db, "GTID_MODE")
 	return val, err
+}
+
+// ExtractTiDBVersion extract tidb's version
+// version format: "5.7.25-TiDB-v3.0.0-beta-211-g09beefbe0-dirty"
+//                               ^~~~~~~~~^
+func ExtractTiDBVersion(version string) (*semver.Version, error) {
+	versions := strings.Split(strings.TrimSuffix(version, "-dirty"), "-")
+	end := len(versions)
+	switch end {
+	case 3, 4:
+	case 5, 6:
+		end -= 2
+	default:
+		return nil, errors.Errorf("not a valid TiDB version: %s", version)
+	}
+	rawVersion := strings.Join(versions[2:end], "-")
+	rawVersion = strings.TrimPrefix(rawVersion, "v")
+	return semver.NewVersion(rawVersion)
 }

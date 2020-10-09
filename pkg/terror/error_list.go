@@ -171,6 +171,9 @@ const (
 
 	// dm/command
 	codeVerifyHandleErrorArgs
+
+	// pkg/parser
+	codeRewriteSQL
 )
 
 // Config related error code list
@@ -392,7 +395,7 @@ const (
 	codeSyncerFailpoint
 	codeSyncerReplaceEvent
 	codeSyncerOperatorNotExist
-	codeSyncerReplcaeEventNotExist
+	codeSyncerReplaceEventNotExist
 )
 
 // DM-master error code
@@ -560,6 +563,7 @@ const (
 	codeSchemaTrackerInvalidCreateTableStmt
 	codeSchemaTrackerRestoreStmtFail
 	codeSchemaTrackerCannotDropTable
+	codeSchemaTrackerInit
 )
 
 // HA scheduler.
@@ -753,6 +757,9 @@ var (
 
 	// Functional error
 	ErrVerifyHandleErrorArgs = New(codeVerifyHandleErrorArgs, ClassFunctional, ScopeInternal, LevelLow, "", "Please make sure the args are correct.")
+
+	// pkg/parser
+	ErrRewriteSQL = New(codeRewriteSQL, ClassFunctional, ScopeInternal, LevelHigh, "failed to rewrite SQL for target DB, stmt: %+v, targetTableNames: %+v", "")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s", "Please check `ignore-checking-items` config in task configuration file, which can be set including `all`/`dump_privilege`/`replication_privilege`/`version`/`binlog_enable`/`binlog_format`/`binlog_row_image`/`table_schema`/`schema_of_shard_tables`/`auto_increment_ID`.")
@@ -957,7 +964,7 @@ var (
 	ErrSyncerFailpoint                      = New(codeSyncerFailpoint, ClassSyncUnit, ScopeInternal, LevelLow, "failpoint specified error", "")
 	ErrSyncerReplaceEvent                   = New(codeSyncerReplaceEvent, ClassSyncUnit, ScopeInternal, LevelHigh, "", "")
 	ErrSyncerOperatorNotExist               = New(codeSyncerOperatorNotExist, ClassSyncUnit, ScopeInternal, LevelLow, "error operator not exist, position: %s", "")
-	ErrSyncerReplaceEventNotExist           = New(codeSyncerReplcaeEventNotExist, ClassSyncUnit, ScopeInternal, LevelHigh, "replace event not exist, location: %s", "")
+	ErrSyncerReplaceEventNotExist           = New(codeSyncerReplaceEventNotExist, ClassSyncUnit, ScopeInternal, LevelHigh, "replace event not exist, location: %s", "")
 
 	// DM-master error
 	ErrMasterSQLOpNilRequest        = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid", "")
@@ -1130,6 +1137,7 @@ var (
 		"fail to restore the statement", "")
 	ErrSchemaTrackerCannotDropTable = New(codeSchemaTrackerCannotDropTable, ClassSchemaTracker, ScopeInternal, LevelHigh,
 		"failed to drop table for `%s`.`%s` in schema tracker", "")
+	ErrSchemaTrackerInit = New(codeSchemaTrackerInit, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create schema tracker", "")
 
 	// HA scheduler
 	ErrSchedulerNotStarted                = New(codeSchedulerNotStarted, ClassScheduler, ScopeInternal, LevelHigh, "the scheduler has not started", "")

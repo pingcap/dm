@@ -18,25 +18,16 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/utils"
-
 	"github.com/golang/protobuf/jsonpb"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/dm/pb"
 )
 
 // Status returns the status of the current sub task
 func (st *SubTask) Status() interface{} {
 	if cu := st.CurrUnit(); cu != nil {
 		return cu.Status()
-	}
-	return nil
-}
-
-// Error returns the error of the current sub task
-func (st *SubTask) Error() interface{} {
-	if cu := st.CurrUnit(); cu != nil {
-		return cu.Error()
 	}
 	return nil
 }
@@ -129,66 +120,4 @@ func (w *Worker) StatusJSON(stName string) string {
 		return ""
 	}
 	return s
-}
-
-// Error returns the error information of the worker (and sub tasks)
-// if stName is empty, all sub task's error information will be returned
-func (w *Worker) Error(stName string) []*pb.SubTaskError {
-	sts := w.subTaskHolder.getAllSubTasks()
-	if len(sts) == 0 {
-		return nil // no sub task started
-	}
-
-	errs := make([]*pb.SubTaskError, 0, len(sts))
-
-	// return error order by name
-	names := make([]string, 0, len(sts))
-	if len(stName) > 0 {
-		names = append(names, stName)
-	} else {
-		for name := range sts {
-			names = append(names, name)
-		}
-	}
-	sort.Strings(names)
-
-	for _, name := range names {
-		st, ok := sts[name]
-		var stError pb.SubTaskError
-		if !ok {
-			stError = pb.SubTaskError{
-				Error: &pb.SubTaskError_Msg{Msg: fmt.Sprintf("no sub task with name %s has started", name)},
-			}
-		} else {
-			cu := st.CurrUnit()
-			stError = pb.SubTaskError{
-				Name:  name,
-				Stage: st.Stage(),
-			}
-
-			if cu != nil {
-				// oneof error
-				stError.Unit = cu.Type()
-				us := cu.Error()
-				switch cu.Type() {
-				case pb.UnitType_Check:
-					stError.Error = &pb.SubTaskError_Check{Check: us.(*pb.CheckError)}
-				case pb.UnitType_Dump:
-					stError.Error = &pb.SubTaskError_Dump{Dump: us.(*pb.DumpError)}
-				case pb.UnitType_Load:
-					stError.Error = &pb.SubTaskError_Load{Load: us.(*pb.LoadError)}
-				case pb.UnitType_Sync:
-					stError.Error = &pb.SubTaskError_Sync{Sync: us.(*pb.SyncError)}
-				}
-			} else if result := st.Result(); result != nil {
-				processErrorMsg := utils.JoinProcessErrors(result.Errors)
-				if len(processErrorMsg) > 0 {
-					stError.Error = &pb.SubTaskError_Msg{Msg: processErrorMsg}
-				}
-			}
-		}
-		errs = append(errs, &stError)
-	}
-
-	return errs
 }

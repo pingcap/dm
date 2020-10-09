@@ -41,8 +41,7 @@ const (
 )
 
 var (
-	defaultMaxAllowedPacket = 64 * 1024 * 1024 // 64MiB, equal to TiDB's default
-	defaultMaxIdleConns     = 2
+	defaultMaxIdleConns = 2
 )
 
 // RawDBConfig contains some low level database config
@@ -81,10 +80,11 @@ func (c *RawDBConfig) SetMaxIdleConns(value int) *RawDBConfig {
 
 // DBConfig is the DB configuration.
 type DBConfig struct {
-	Host             string            `toml:"host" json:"host" yaml:"host"`
-	Port             int               `toml:"port" json:"port" yaml:"port"`
-	User             string            `toml:"user" json:"user" yaml:"user"`
-	Password         string            `toml:"password" json:"-" yaml:"password"` // omit it for privacy
+	Host     string `toml:"host" json:"host" yaml:"host"`
+	Port     int    `toml:"port" json:"port" yaml:"port"`
+	User     string `toml:"user" json:"user" yaml:"user"`
+	Password string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
+	// deprecated, mysql driver could automatically fetch this value
 	MaxAllowedPacket *int              `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
 	Session          map[string]string `toml:"session" json:"session" yaml:"session"`
 
@@ -121,10 +121,6 @@ func (db *DBConfig) Decode(data string) error {
 
 // Adjust adjusts the config.
 func (db *DBConfig) Adjust() {
-	if db.MaxAllowedPacket == nil {
-		cloneV := defaultMaxAllowedPacket
-		db.MaxAllowedPacket = &cloneV
-	}
 }
 
 // SubTaskConfig is the configuration for SubTask

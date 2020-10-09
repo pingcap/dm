@@ -14,7 +14,7 @@
 package syncer
 
 /*
- * sharding DDL sync for Syncer
+ * sharding DDL sync for Syncer (pessimism)
  *
  * assumption:
  *   all tables in a sharding group execute same DDLs in the same order
@@ -139,7 +139,7 @@ func NewShardingGroup(sourceID, shardMetaSchema, shardMetaTable string, sources 
 //   * add a new table to exists sharding group
 //   * add new table(s) to parent database's sharding group
 //  if group is in sequence sharding, return error directly
-//  othereise add it in source, set it false and increment remain
+//  otherwise add it in source, set it false and increment remain
 func (sg *ShardingGroup) Merge(sources []string) (bool, bool, int, error) {
 	sg.Lock()
 	defer sg.Unlock()
@@ -286,14 +286,6 @@ func (sg *ShardingGroup) Tables() [][]string {
 	return tables
 }
 
-// IsUnresolved return whether it's unresolved
-func (sg *ShardingGroup) IsUnresolved() bool {
-	sg.RLock()
-	defer sg.RUnlock()
-
-	return sg.remain != len(sg.sources)
-}
-
 // UnresolvedTables returns all source tables' <schema, table> pair if is unresolved, else returns nil
 func (sg *ShardingGroup) UnresolvedTables() [][]string {
 	sg.RLock()
@@ -348,19 +340,12 @@ func (sg *ShardingGroup) String() string {
 	return fmt.Sprintf("IsSchemaOnly:%v remain:%d, sources:%+v", sg.IsSchemaOnly, sg.remain, sg.sources)
 }
 
-// InSequenceSharding returns whether this sharding group is in sequence sharding
-func (sg *ShardingGroup) InSequenceSharding() bool {
-	sg.RLock()
-	defer sg.RUnlock()
-	return sg.meta.InSequenceSharding()
-}
-
 // ResolveShardingDDL resolves sharding DDL in sharding group
 func (sg *ShardingGroup) ResolveShardingDDL() bool {
 	sg.Lock()
 	defer sg.Unlock()
 	reset := sg.meta.ResolveShardingDDL()
-	// reset sharding group after DDL is exexuted
+	// reset sharding group after DDL is executed
 	return reset
 }
 
@@ -500,10 +485,16 @@ func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sourc
 		if err := group.Leave(sources); err != nil {
 			return err
 		}
+		if len(group.sources) == 0 {
+			delete(k.groups, targetTableID)
+		}
 	}
 	if schemaGroup, ok := k.groups[schemaID]; ok {
 		if err := schemaGroup.Leave(sources); err != nil {
 			return err
+		}
+		if len(schemaGroup.sources) == 0 {
+			delete(k.groups, schemaID)
 		}
 	}
 	return nil
@@ -537,7 +528,7 @@ func (k *ShardingGroupKeeper) TrySync(
 	return true, group, synced, active, remain, err
 }
 
-// InSyncing checks whether the source is in sharding syncing
+// InSyncing checks whether the source is in sharding syncing, that is to say not before active DDL
 func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string, location binlog.Location) bool {
 	group := k.Group(targetSchema, targetTable)
 	if group == nil {
@@ -547,7 +538,7 @@ func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string
 }
 
 // UnresolvedTables returns
-//   all `target-schema.target-table` that has unresolved sharding DDL
+//   all `target-schema.target-table` that has unresolved sharding DDL,
 //   all source tables which with DDLs are un-resolved
 // NOTE: this func only ensure the returned tables are current un-resolved
 // if passing the returned tables to other func (like checkpoint),
@@ -560,6 +551,7 @@ func (k *ShardingGroupKeeper) UnresolvedTables() (map[string]bool, [][]string) {
 	for id, group := range k.groups {
 		unresolved := group.UnresolvedTables()
 		if len(unresolved) > 0 {
+			// TODO: no need to return bool which indicates it has unresolved tables, because nowhere need it
 			ids[id] = true
 			tables = append(tables, unresolved...)
 		}
@@ -633,18 +625,6 @@ func (k *ShardingGroupKeeper) UnresolvedGroups() []*pb.ShardingGroup {
 	return groups
 }
 
-// InSequenceSharding returns whether exists sharding group in unfinished sequence sharding
-func (k *ShardingGroupKeeper) InSequenceSharding() bool {
-	k.RLock()
-	defer k.RUnlock()
-	for _, group := range k.groups {
-		if group.InSequenceSharding() {
-			return true
-		}
-	}
-	return false
-}
-
 // ResolveShardingDDL resolves one sharding DDL in specific group
 func (k *ShardingGroupKeeper) ResolveShardingDDL(targetSchema, targetTable string) (bool, error) {
 	group := k.Group(targetSchema, targetTable)
@@ -666,7 +646,7 @@ func (k *ShardingGroupKeeper) ActiveDDLFirstLocation(targetSchema, targetTable s
 	return binlog.Location{}, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetSchema, targetTable)
 }
 
-// PrepareFlushSQLs returns all sharding meta flushed SQLs execpt for given table IDs
+// PrepareFlushSQLs returns all sharding meta flushed SQLs except for given table IDs
 func (k *ShardingGroupKeeper) PrepareFlushSQLs(exceptTableIDs map[string]bool) ([]string, [][]interface{}) {
 	k.RLock()
 	defer k.RUnlock()
@@ -695,11 +675,7 @@ func (k *ShardingGroupKeeper) prepare() error {
 		return err
 	}
 
-	if err := k.createTable(); err != nil {
-		return err
-	}
-
-	return nil
+	return k.createTable()
 }
 
 // Close closes sharding group keeper

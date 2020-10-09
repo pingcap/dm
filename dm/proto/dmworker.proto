@@ -4,28 +4,10 @@ package pb;
 
 
 service Worker {
-    rpc StartSubTask (StartSubTaskRequest) returns (CommonWorkerResponse) {}
-    rpc OperateSubTask (OperateSubTaskRequest) returns (OperateSubTaskResponse) {}
-    rpc UpdateSubTask (UpdateSubTaskRequest) returns (CommonWorkerResponse) {}
-
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
-    rpc QueryError (QueryErrorRequest) returns (QueryErrorResponse) {}
-
-    // SwitchRelayMaster request a dm-worker's relay unit switching to another master server
-    rpc SwitchRelayMaster (SwitchRelayMasterRequest) returns (CommonWorkerResponse) {}
-
-    // OperateRelay operates relay unit
-    // differ from SwitchRelayMaster which may add more args in the future
-    rpc OperateRelay (OperateRelayRequest) returns (OperateRelayResponse) {}
 
     // PurgeRelay purges relay log files for this dm-worker
     rpc PurgeRelay (PurgeRelayRequest) returns (CommonWorkerResponse) {}
-
-    rpc UpdateRelayConfig (UpdateRelayRequest) returns (CommonWorkerResponse) {}
-
-    rpc QueryWorkerConfig (QueryWorkerConfigRequest) returns (QueryWorkerConfigResponse) {}
-
-    rpc MigrateRelay(MigrateRelayRequest) returns (CommonWorkerResponse) {}
 
     // Operate (get/set/remove) schema for a specified upstream table.
     // a `set`/`remove` operation should be an one-time operation (only take effect once),
@@ -35,10 +17,6 @@ service Worker {
     rpc OperateV1Meta(OperateV1MetaRequest) returns(OperateV1MetaResponse) {}
 
     rpc HandleError(HandleWorkerErrorRequest) returns(CommonWorkerResponse) {}
-}
-
-message StartSubTaskRequest {
-    string task = 1; // (sub) task's configuration
 }
 
 enum TaskOp {
@@ -51,36 +29,7 @@ enum TaskOp {
     AutoResume = 6;
 }
 
-message UpdateRelayRequest {
-    string content = 1;
-}
-
-message MigrateRelayRequest {
-    string BinlogName = 1;
-    uint32 BinlogPos = 2;
-}
-
-message OperateSubTaskRequest {
-    TaskOp op = 1;
-    string name = 2; // sub task's name
-}
-
-message OperateSubTaskResponse {
-    TaskOp op = 1;
-    bool result = 2;
-    string source = 3; // source ID, set by dm-master
-    string msg = 4;
-}
-
-message UpdateSubTaskRequest {
-    string task = 1; // (sub) task's new configuration
-}
-
 message QueryStatusRequest {
-    string name = 1; // sub task's name, empty for all sub tasks
-}
-
-message QueryErrorRequest {
     string name = 1; // sub task's name, empty for all sub tasks
 }
 
@@ -98,14 +47,6 @@ message QueryStatusResponse {
     string msg = 2;
     SourceStatus sourceStatus = 3;
     repeated SubTaskStatus subTaskStatus = 4;
-}
-
-// QueryErrorResponse represents response for query on a dm-worker
-message QueryErrorResponse {
-    bool result = 1;
-    string msg = 2;
-    SourceError SourceError = 3;
-    repeated SubTaskError subTaskError = 4;
 }
 
 // Stage represents current stage for a (sub) task
@@ -345,28 +286,12 @@ message ProcessError {
     string Workaround = 7;
 }
 
-// SwitchRelayMasterRequest represents a request for switching a dm-worker's relay unit to another master server
-message SwitchRelayMasterRequest {
-}
-
 // RelayOp differs from TaskOp
 enum RelayOp {
     InvalidRelayOp = 0;  // placeholder
     StopRelay = 1;
     PauseRelay = 2;
     ResumeRelay = 3;
-}
-
-// OperateRelayRequest represents a request for operate relay unit
-message OperateRelayRequest {
-    RelayOp op = 1;
-}
-
-message OperateRelayResponse {
-    RelayOp op = 1;
-    bool result = 2;
-    string source = 3; // source ID, set by dm-master
-    string msg = 4;
 }
 
 // PurgeRelayRequest represents a request to purge relay log files for this dm-worker
@@ -379,16 +304,6 @@ message PurgeRelayRequest {
     int64 time = 2;
     string filename = 3;
     string subDir = 4;
-}
-
-message QueryWorkerConfigRequest {
-}
-
-message QueryWorkerConfigResponse {
-    bool result = 1;
-    string source = 2; // source ID, set by dm-master
-    string msg = 3; // when result is true, msg is empty
-    string content = 4; // marshaled config content
 }
 
 enum SchemaOp {

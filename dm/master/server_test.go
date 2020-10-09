@@ -158,7 +158,11 @@ var (
 )
 
 func TestMaster(t *testing.T) {
-	log.InitLogger(&log.Config{})
+	err := log.InitLogger(&log.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	testEtcdCluster = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer testEtcdCluster.Terminate(t)
 
@@ -187,19 +191,23 @@ func (t *testMaster) TearDownSuite(c *check.C) {
 	maxRetryNum = t.saveMaxRetryNum
 }
 
+func (t *testMaster) TearDownTest(c *check.C) {
+	clearEtcdEnv(c)
+}
+
 func newMockRPCClient(client pb.WorkerClient) workerrpc.Client {
 	c, _ := workerrpc.NewGRPCClientWrap(nil, client)
 	return c
 }
 
-func extractWorkerSource(deployMapper []*DeployMapper) ([]string, []string) {
-	sources := make([]string, 0, len(deployMapper))
-	workers := make([]string, 0, len(deployMapper))
-	for _, deploy := range deployMapper {
-		sources = append(sources, deploy.Source)
-		workers = append(workers, deploy.Worker)
-	}
-	return sources, workers
+func defaultWorkerSource() ([]string, []string) {
+	return []string{
+			"mysql-replica-01",
+			"mysql-replica-02",
+		}, []string{
+			"127.0.0.1:8262",
+			"127.0.0.1:8263",
+		}
 }
 
 func clearEtcdEnv(c *check.C) {
@@ -280,10 +288,10 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 
 	// test query all workers
-	for _, deploy := range server.cfg.Deploy {
+	for _, worker := range workers {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().QueryStatus(
 			gomock.Any(),
@@ -292,7 +300,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 			Result:       true,
 			SourceStatus: &pb.SourceStatus{},
 		}, nil)
-		t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+		t.workerClients[worker] = newMockRPCClient(mockWorkerClient)
 	}
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
@@ -303,7 +311,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	clearSchedulerEnv(c, cancel, &wg)
 
 	// query specified sources
-	for _, deploy := range server.cfg.Deploy {
+	for _, worker := range workers {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().QueryStatus(
 			gomock.Any(),
@@ -312,7 +320,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 			Result:       true,
 			SourceStatus: &pb.SourceStatus{},
 		}, nil)
-		t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+		t.workerClients[worker] = newMockRPCClient(mockWorkerClient)
 	}
 	ctx, cancel = context.WithCancel(context.Background())
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
@@ -346,12 +354,18 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 
 	t.workerClients = makeNilWorkerClients(workers)
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
+	mock := t.initVersionDB(c)
+	defer func() {
+		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+	}()
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	resp, err := server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -369,6 +383,9 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	// simulate invalid password returned from scheduler, but config was supported plaintext mysql password, so cfg.SubTaskConfigs will success
 	ctx, cancel = context.WithCancel(context.Background())
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "invalid-encrypt-password", t.workerClients)
+	mock = t.initVersionDB(c)
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -382,7 +399,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 
 	// s.generateSubTask with error
 	resp, err := server.StartTask(context.Background(), &pb.StartTaskRequest{
@@ -402,6 +419,12 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	}
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
 		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, req))
+	mock := t.initVersionDB(c)
+	defer func() {
+		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+	}()
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	resp, err = server.StartTask(context.Background(), req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -416,6 +439,9 @@ func (t *testMaster) TestStartTask(c *check.C) {
 
 	// check start-task with an invalid source
 	invalidSource := "invalid-source"
+	mock = t.initVersionDB(c)
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
 		Sources: []string{invalidSource},
@@ -434,6 +460,9 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	defer func() {
 		checker.CheckSyncConfigFunc = bakCheckSyncConfigFunc
 	}()
+	mock = t.initVersionDB(c)
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
 		Sources: sources,
@@ -444,13 +473,41 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	clearSchedulerEnv(c, cancel, &wg)
 }
 
+// db use for remove data
+// verDB user for show version
 type mockDBProvider struct {
-	db *sql.DB
+	verDB *sql.DB
+	db    *sql.DB
 }
 
-// Apply will build BaseDB with DBConfig
+// return db if verDB was closed
 func (d *mockDBProvider) Apply(config config.DBConfig) (*conn.BaseDB, error) {
-	return conn.NewBaseDB(d.db, func() {}), nil
+	if err := d.verDB.Ping(); err != nil {
+		return conn.NewBaseDB(d.db, func() {}), nil
+	}
+	return conn.NewBaseDB(d.verDB, func() {}), nil
+}
+
+func (t *testMaster) initVersionDB(c *check.C) sqlmock.Sqlmock {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, check.IsNil)
+	if mdbp, ok := conn.DefaultDBProvider.(*mockDBProvider); ok {
+		mdbp.verDB = db
+	} else {
+		conn.DefaultDBProvider = &mockDBProvider{verDB: db}
+	}
+	return mock
+}
+
+func (t *testMaster) initMockDB(c *check.C) sqlmock.Sqlmock {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, check.IsNil)
+	if mdbp, ok := conn.DefaultDBProvider.(*mockDBProvider); ok {
+		mdbp.db = db
+	} else {
+		conn.DefaultDBProvider = &mockDBProvider{db: db}
+	}
+	return mock
 }
 
 func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
@@ -458,7 +515,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 	server.etcdClient = etcdTestCli
 
 	// test start task successfully
@@ -499,12 +556,13 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	c.Assert(server.pessimist.Start(ctx, etcdTestCli), check.IsNil)
 	c.Assert(server.optimist.Start(ctx, etcdTestCli), check.IsNil)
 
-	db, mock, err := sqlmock.New()
-	c.Assert(err, check.IsNil)
-	conn.DefaultDBProvider = &mockDBProvider{db: db}
+	verMock := t.initVersionDB(c)
 	defer func() {
 		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
 	}()
+	verMock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
+	mock := t.initMockDB(c)
 	mock.ExpectBegin()
 	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -519,6 +577,9 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		defer wg.Done()
 		time.Sleep(10 * time.Microsecond)
 		// start another same task at the same time, should get err
+		verMock2 := t.initVersionDB(c)
+		verMock2.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+			AddRow("version", "5.7.25-TiDB-v4.0.2"))
 		resp1, err1 := server.StartTask(context.Background(), req)
 		c.Assert(err1, check.IsNil)
 		c.Assert(resp1.Result, check.IsFalse)
@@ -589,9 +650,10 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	err = server.optimist.Start(ctx, etcdTestCli)
 	c.Assert(err, check.IsNil)
 
-	db, mock, err = sqlmock.New()
-	c.Assert(err, check.IsNil)
-	conn.DefaultDBProvider = &mockDBProvider{db: db}
+	verMock = t.initVersionDB(c)
+	verMock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
+	mock = t.initMockDB(c)
 	mock.ExpectBegin()
 	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -606,6 +668,9 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		defer wg.Done()
 		time.Sleep(10 * time.Microsecond)
 		// start another same task at the same time, should get err
+		vermock2 := t.initVersionDB(c)
+		vermock2.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+			AddRow("version", "5.7.25-TiDB-v4.0.2"))
 		resp1, err1 := server.StartTask(context.Background(), req)
 		c.Assert(err1, check.IsNil)
 		c.Assert(resp1.Result, check.IsFalse)
@@ -640,72 +705,6 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	clearSchedulerEnv(c, cancel, &wg)
 }
 
-func (t *testMaster) TestQueryError(c *check.C) {
-	ctrl := gomock.NewController(c)
-	defer ctrl.Finish()
-	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
-
-	// test query all workers
-	for _, deploy := range server.cfg.Deploy {
-		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-		mockWorkerClient.EXPECT().QueryError(
-			gomock.Any(),
-			&pb.QueryErrorRequest{},
-		).Return(&pb.QueryErrorResponse{
-			Result:      true,
-			SourceError: &pb.SourceError{},
-		}, nil)
-		t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
-	}
-	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
-	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
-	resp, err := server.QueryError(context.Background(), &pb.QueryErrorListRequest{})
-	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
-	clearSchedulerEnv(c, cancel, &wg)
-
-	// query specified dm-worker[s]
-	for _, deploy := range server.cfg.Deploy {
-		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-		mockWorkerClient.EXPECT().QueryError(
-			gomock.Any(),
-			&pb.QueryErrorRequest{},
-		).Return(&pb.QueryErrorResponse{
-			Result:      true,
-			SourceError: &pb.SourceError{},
-		}, nil)
-		t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
-	}
-
-	ctx, cancel = context.WithCancel(context.Background())
-	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
-	resp, err = server.QueryError(context.Background(), &pb.QueryErrorListRequest{
-		Sources: sources,
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
-
-	// query with invalid dm-worker[s]
-	resp, err = server.QueryError(context.Background(), &pb.QueryErrorListRequest{
-		Sources: []string{"invalid-source1", "invalid-source2"},
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsFalse)
-	c.Assert(resp.Msg, check.Matches, ".*relevant worker-client not found")
-
-	// query with invalid task name
-	resp, err = server.QueryError(context.Background(), &pb.QueryErrorListRequest{
-		Name: "invalid-task-name",
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsFalse)
-	c.Assert(resp.Msg, check.Matches, "task .* has no source or not exist, can try `refresh-worker-tasks` cmd first")
-	clearSchedulerEnv(c, cancel, &wg)
-	// TODO: test query with correct task name, this needs to add task first
-}
-
 func (t *testMaster) TestOperateTask(c *check.C) {
 	var (
 		taskName = "unit-test-task"
@@ -715,7 +714,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 
 	// test operate-task with invalid task name
 	resp, err := server.OperateTask(context.Background(), &pb.OperateTaskRequest{
@@ -754,6 +753,12 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	sourceResps := []*pb.CommonWorkerResponse{{Result: true, Source: sources[0]}, {Result: true, Source: sources[1]}}
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
 		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, startReq, pauseReq, resumeReq, stopReq1, stopReq2))
+	mock := t.initVersionDB(c)
+	defer func() {
+		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+	}()
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	stResp, err := server.StartTask(context.Background(), startReq)
 	c.Assert(err, check.IsNil)
 	c.Assert(stResp.Result, check.IsTrue)
@@ -797,7 +802,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 	var (
 		now      = time.Now().Unix()
 		filename = "mysql-bin.000005"
@@ -805,20 +810,18 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 
 	// mock PurgeRelay request
 	mockPurgeRelay := func(rpcSuccess bool) {
-		for _, deploy := range server.cfg.Deploy {
-			rets := make([]interface{}, 0, 2)
+		for i, worker := range workers {
+			rets := []interface{}{
+				nil,
+				errors.New(errGRPCFailed),
+			}
 			if rpcSuccess {
 				rets = []interface{}{
 					&pb.CommonWorkerResponse{
 						Result: true,
-						Source: deploy.Source,
+						Source: sources[i],
 					},
 					nil,
-				}
-			} else {
-				rets = []interface{}{
-					nil,
-					errors.New(errGRPCFailed),
 				}
 			}
 			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
@@ -829,7 +832,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 					Filename: filename,
 				},
 			).Return(rets...)
-			t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+			t.workerClients[worker] = newMockRPCClient(mockWorkerClient)
 		}
 	}
 
@@ -884,91 +887,12 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	clearSchedulerEnv(c, cancel, &wg)
 }
 
-func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
-	ctrl := gomock.NewController(c)
-	defer ctrl.Finish()
-
-	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
-
-	// mock SwitchRelayMaster request
-	mockSwitchRelayMaster := func(rpcSuccess bool) {
-		for _, deploy := range server.cfg.Deploy {
-			rets := make([]interface{}, 0, 2)
-			if rpcSuccess {
-				rets = []interface{}{
-					&pb.CommonWorkerResponse{
-						Result: true,
-						Source: deploy.Source,
-					},
-					nil,
-				}
-			} else {
-				rets = []interface{}{
-					nil,
-					errors.New(errGRPCFailed),
-				}
-			}
-			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-			mockWorkerClient.EXPECT().SwitchRelayMaster(
-				gomock.Any(),
-				&pb.SwitchRelayMasterRequest{},
-			).Return(rets...)
-			t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
-		}
-	}
-
-	// test SwitchWorkerRelayMaster with invalid dm-worker[s]
-	resp, err := server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
-		Sources: []string{"invalid-source1", "invalid-source2"},
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Sources, check.HasLen, 2)
-	for _, w := range resp.Sources {
-		c.Assert(w.Result, check.IsFalse)
-		c.Assert(w.Msg, check.Matches, "(?m).*relevant worker-client not found.*")
-	}
-
-	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
-	// test SwitchWorkerRelayMaster successfully
-	mockSwitchRelayMaster(true)
-	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
-	resp, err = server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
-		Sources: sources,
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Sources, check.HasLen, 2)
-	for _, w := range resp.Sources {
-		c.Assert(w.Result, check.IsTrue)
-	}
-	clearSchedulerEnv(c, cancel, &wg)
-
-	ctx, cancel = context.WithCancel(context.Background())
-	// test SwitchWorkerRelayMaster with error response
-	mockSwitchRelayMaster(false)
-	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
-	resp, err = server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
-		Sources: sources,
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Sources, check.HasLen, 2)
-	for _, w := range resp.Sources {
-		c.Assert(w.Result, check.IsFalse)
-		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
-	}
-	clearSchedulerEnv(c, cancel, &wg)
-}
-
 func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	pauseReq := &pb.OperateWorkerRelayRequest{
@@ -1113,6 +1037,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	c.Assert(leaderID, check.Equals, cfg1.Name)
 
 	cancel()
+	clearEtcdEnv(c)
 }
 
 func (t *testMaster) TestOperateSource(c *check.C) {
@@ -1137,7 +1062,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
 	mysqlCfg := config.NewSourceConfig()
-	mysqlCfg.LoadFromFile("./source.yaml")
+	c.Assert(mysqlCfg.LoadFromFile("./source.yaml"), check.IsNil)
 	mysqlCfg.From.Password = os.Getenv("MYSQL_PSWD")
 	task, err := mysqlCfg.Yaml()
 	c.Assert(err, check.IsNil)
@@ -1273,7 +1198,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	scm, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
 	c.Assert(err, check.IsNil)
 	c.Assert(scm, check.HasLen, 0)
-	cancel()
+	clearSchedulerEnv(c, cancel, &wg)
 }
 
 func generateServerConfig(c *check.C, name string) *Config {
@@ -1447,6 +1372,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 		c.Assert(err, check.IsNil)
 		c.Assert(resp.Result, check.IsTrue)
 	}
+	clearSchedulerEnv(c, cancel, &wg)
 }
 
 func (t *testMaster) TestGetTaskCfg(c *check.C) {
@@ -1454,7 +1380,7 @@ func (t *testMaster) TestGetTaskCfg(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, workers := defaultWorkerSource()
 
 	var wg sync.WaitGroup
 	taskName := "test"
@@ -1467,6 +1393,12 @@ func (t *testMaster) TestGetTaskCfg(c *check.C) {
 		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, req))
 
 	// start task
+	mock := t.initVersionDB(c)
+	defer func() {
+		conn.DefaultDBProvider = &conn.DefaultDBProviderImpl{}
+	}()
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("version", "5.7.25-TiDB-v4.0.2"))
 	resp, err := server.StartTask(context.Background(), req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -1490,7 +1422,7 @@ func (t *testMaster) TestGetTaskCfg(c *check.C) {
 
 	// test recover from etcd
 	server.scheduler.Close()
-	server.scheduler.Start(ctx, etcdTestCli)
+	c.Assert(server.scheduler.Start(ctx, etcdTestCli), check.IsNil)
 
 	resp3, err := server.GetTaskCfg(context.Background(), req1)
 	c.Assert(err, check.IsNil)
@@ -1534,9 +1466,8 @@ func (t *testMaster) subTaskStageMatch(c *check.C, s *scheduler.Scheduler, task,
 
 func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskName, sourceID string, masterReq interface{}) {
 	var expect pb.Stage
-	switch masterReq.(type) {
+	switch req := masterReq.(type) {
 	case *pb.OperateSourceRequest:
-		req := masterReq.(*pb.OperateSourceRequest)
 		switch req.Op {
 		case pb.SourceOp_StartSource, pb.SourceOp_UpdateSource:
 			expect = pb.Stage_Running
@@ -1546,7 +1477,6 @@ func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskNam
 	case *pb.StartTaskRequest, *pb.UpdateTaskRequest:
 		expect = pb.Stage_Running
 	case *pb.OperateTaskRequest:
-		req := masterReq.(*pb.OperateTaskRequest)
 		switch req.Op {
 		case pb.TaskOp_Resume:
 			expect = pb.Stage_Running
@@ -1556,7 +1486,6 @@ func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskNam
 			expect = pb.Stage_Stopped
 		}
 	case *pb.OperateWorkerRelayRequest:
-		req := masterReq.(*pb.OperateWorkerRelayRequest)
 		switch req.Op {
 		case pb.RelayOp_ResumeRelay:
 			expect = pb.Stage_Running

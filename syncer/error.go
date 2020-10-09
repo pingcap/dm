@@ -23,12 +23,10 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	tmysql "github.com/pingcap/parser/mysql"
-	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	tddl "github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/errno"
 	"github.com/pingcap/tidb/infoschema"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -36,13 +34,13 @@ import (
 )
 
 func ignoreDDLError(err error) bool {
-	err = originError(err)
+	err = errors.Cause(err)
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if !ok {
 		return false
 	}
 
-	errCode := terror.ErrCode(mysqlErr.Number)
+	errCode := errors.ErrCode(mysqlErr.Number)
 	switch errCode {
 	case infoschema.ErrDatabaseExists.Code(), infoschema.ErrDatabaseNotExists.Code(), infoschema.ErrDatabaseDropExists.Code(),
 		infoschema.ErrTableExists.Code(), infoschema.ErrTableNotExists.Code(), infoschema.ErrTableDropExists.Code(),
@@ -56,23 +54,8 @@ func ignoreDDLError(err error) bool {
 	}
 }
 
-func needRetryReplicate(err error) bool {
-	err = originError(err)
-	return err == gmysql.ErrBadConn
-}
-
-func isBinlogPurgedError(err error) bool {
-	return isMysqlError(err, tmysql.ErrMasterFatalErrorReadingBinlog)
-}
-
-func isMysqlError(err error, code uint16) bool {
-	err = originError(err)
-	mysqlErr, ok := err.(*mysql.MySQLError)
-	return ok && mysqlErr.Number == code
-}
-
 func isDropColumnWithIndexError(err error) bool {
-	mysqlErr, ok := originError(err).(*mysql.MySQLError)
+	mysqlErr, ok := errors.Cause(err).(*mysql.MySQLError)
 	if !ok {
 		return false
 	}
@@ -80,18 +63,6 @@ func isDropColumnWithIndexError(err error) bool {
 	return mysqlErr.Number == errno.ErrUnsupportedDDLOperation &&
 		strings.Contains(mysqlErr.Message, "drop column") &&
 		strings.Contains(mysqlErr.Message, "with index")
-}
-
-// originError return original error
-func originError(err error) error {
-	for {
-		e := errors.Cause(err)
-		if e == err {
-			break
-		}
-		err = e
-	}
-	return err
 }
 
 // handleSpecialDDLError handles special errors for DDL execution.
@@ -148,6 +119,8 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 	}
 
 	// for DROP COLUMN with its single-column index, try drop index first then drop column
+	// TiDB will support DROP COLUMN with index soon. After its support, executing that SQL will not have an error,
+	// so this function will not trigger and cause some trouble
 	dropColumnF := func(tctx *tcontext.Context, originErr error, ddls []string, index int, conn *DBConn) error {
 		if !isDropColumnWithIndexError(originErr) {
 			return originErr
@@ -205,7 +178,9 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 			rows, err2 = conn.querySQL(tctx, sql2, schema, table, idx)
 			if err2 != nil || !rows.Next() || rows.Scan(&count) != nil || count != 1 {
 				tctx.L().Warn("can't auto drop index", zap.String("index", idx))
-				rows.Close()
+				if rows != nil {
+					rows.Close()
+				}
 				return originErr
 			}
 			idx2Drop = append(idx2Drop, idx)
@@ -229,6 +204,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		tctx.L().Info("execute drop column SQL success", zap.String("DDL", ddl2))
 		return nil
 	}
+	// TODO: add support for downstream alter pk without schema
 
 	retErr := err
 	toHandle := []func(*tcontext.Context, error, []string, int, *DBConn) error{

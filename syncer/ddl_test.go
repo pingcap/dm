@@ -14,51 +14,21 @@
 package syncer
 
 import (
-	"bytes"
+	"errors"
+	"fmt"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 )
-
-func (s *testSyncerSuite) TestTrimCtrlChars(c *C) {
-	ddl := "create table if not exists foo.bar(id int)"
-	controlChars := make([]byte, 0, 33)
-	nul := byte(0x00)
-	for i := 0; i < 32; i++ {
-		controlChars = append(controlChars, nul)
-		nul++
-	}
-	controlChars = append(controlChars, 0x7f)
-
-	var buf bytes.Buffer
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
-
-	for _, char := range controlChars {
-		buf.WriteByte(char)
-		buf.WriteByte(char)
-		buf.WriteString(ddl)
-		buf.WriteByte(char)
-		buf.WriteByte(char)
-
-		newDDL := utils.TrimCtrlChars(buf.String())
-		c.Assert(len(newDDL), Equals, len(ddl))
-
-		_, err := p.ParseOneStmt(newDDL, "", "")
-		c.Assert(err, IsNil)
-		buf.Reset()
-	}
-}
 
 func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
 	ansiQuotesCases := []string{
@@ -121,7 +91,7 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	c.Assert(sqls[0], Equals, expectedSQL)
 }
 
-func (s *testSyncerSuite) TestresolveDDLSQL(c *C) {
+func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 	// duplicate with pkg/parser
 	sqls := []string{
 		"create schema `s1`",
@@ -330,6 +300,13 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 			isDDL:    false,
 			hasError: false,
 		},
+		{
+			sql:      "NOT A SQL",
+			schema:   "",
+			ignore:   false,
+			isDDL:    false,
+			hasError: true,
+		},
 	}
 
 	cfg := &config.SubTaskConfig{
@@ -391,4 +368,156 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 		getSQL := sqls[0]
 		c.Assert(getSQL, Equals, tc.expected)
 	}
+}
+
+func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
+	cases := []struct {
+		onlineType string
+		trashName  string
+		ghostname  string
+	}{
+		{
+			config.GHOST,
+			"_t1_del",
+			"_t1_gho",
+		},
+		{
+			config.PT,
+			"_t1_old",
+			"_t1_new",
+		},
+	}
+	tctx := tcontext.Background()
+	p := parser.New()
+
+	for _, ca := range cases {
+		fn := OnlineDDLSchemes[ca.onlineType]
+		plugin, err := fn(tctx, s.cfg)
+		c.Assert(err, IsNil)
+		syncer := NewSyncer(s.cfg, nil)
+		syncer.onlineDDL = plugin
+		c.Assert(plugin.Clear(tctx), IsNil)
+
+		// real table
+		sql := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
+		stmt, err := p.ParseOneStmt(sql, "", "")
+		c.Assert(err, IsNil)
+		sqls, tables, err := syncer.resolveDDLSQL(tctx, p, stmt, "test")
+		c.Assert(err, IsNil)
+		c.Assert(sqls, HasLen, 1)
+		c.Assert(sqls[0], Equals, sql)
+		c.Assert(tables, HasLen, 0)
+
+		// trash table
+		sql = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `test`.`%s` (`n` INT)", ca.trashName)
+		stmt, err = p.ParseOneStmt(sql, "", "")
+		c.Assert(err, IsNil)
+		sqls, tables, err = syncer.resolveDDLSQL(tctx, p, stmt, "test")
+		c.Assert(err, IsNil)
+		c.Assert(sqls, HasLen, 0)
+		c.Assert(tables, HasLen, 0)
+
+		// ghost table
+		sql = fmt.Sprintf("ALTER TABLE `test`.`%s` ADD COLUMN `n` INT", ca.ghostname)
+		newSQL := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
+		stmt, err = p.ParseOneStmt(sql, "", "")
+		c.Assert(err, IsNil)
+		sqls, tables, err = syncer.resolveDDLSQL(tctx, p, stmt, "test")
+		c.Assert(err, IsNil)
+		c.Assert(sqls, HasLen, 0)
+		c.Assert(tables, HasLen, 0)
+		sql = fmt.Sprintf("RENAME TABLE `test`.`%s` TO `test`.`t1`", ca.ghostname)
+		stmt, err = p.ParseOneStmt(sql, "", "")
+		c.Assert(err, IsNil)
+		sqls, tables, err = syncer.resolveDDLSQL(tctx, p, stmt, "test")
+		c.Assert(err, IsNil)
+		c.Assert(sqls, HasLen, 1)
+		c.Assert(sqls[0], Equals, newSQL)
+		tableName := &filter.Table{Schema: "test", Name: ca.ghostname}
+		c.Assert(tables, DeepEquals, map[string]*filter.Table{tableName.String(): tableName})
+	}
+}
+
+func (s *testSyncerSuite) TestDropSchemaInSharding(c *C) {
+	var (
+		targetDB  = "target_db"
+		targetTbl = "tbl"
+		sourceDB  = "db1"
+		source1   = "`db1`.`tbl1`"
+		source2   = "`db1`.`tbl2`"
+		tctx      = tcontext.Background()
+	)
+	clone, _ := s.cfg.Clone()
+	clone.ShardMode = config.ShardPessimistic
+	syncer := NewSyncer(clone, nil)
+	_, _, _, _, err := syncer.sgk.AddGroup(targetDB, targetTbl, []string{source1}, nil, true)
+	c.Assert(err, IsNil)
+	_, _, _, _, err = syncer.sgk.AddGroup(targetDB, targetTbl, []string{source2}, nil, true)
+	c.Assert(err, IsNil)
+	c.Assert(syncer.sgk.Groups(), HasLen, 2)
+	c.Assert(syncer.dropSchemaInSharding(tctx, sourceDB), IsNil)
+	c.Assert(syncer.sgk.Groups(), HasLen, 0)
+}
+
+type mockOnlinePlugin struct {
+	toFinish map[string]struct{}
+}
+
+func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
+	return nil, "", "", nil
+}
+
+func (m mockOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) error {
+	k := schema + table
+	if _, ok := m.toFinish[k]; !ok {
+		return errors.New("finish table not found")
+	}
+	delete(m.toFinish, schema+table)
+	return nil
+}
+
+func (m mockOnlinePlugin) TableType(table string) TableType {
+	return ""
+}
+
+func (m mockOnlinePlugin) RealName(schema, table string) (string, string) {
+	return "", ""
+}
+
+func (m mockOnlinePlugin) ResetConn(tctx *tcontext.Context) error {
+	return nil
+}
+
+func (m mockOnlinePlugin) Clear(tctx *tcontext.Context) error {
+	return nil
+}
+
+func (m mockOnlinePlugin) Close() {
+}
+
+func (s *testSyncerSuite) TestClearOnlineDDL(c *C) {
+	var (
+		targetDB  = "target_db"
+		targetTbl = "tbl"
+		source1   = "`db1`.`tbl1`"
+		key1      = "db1tbl1"
+		source2   = "`db1`.`tbl2`"
+		key2      = "db1tbl2"
+		tctx      = tcontext.Background()
+	)
+	clone, _ := s.cfg.Clone()
+	clone.ShardMode = config.ShardPessimistic
+	syncer := NewSyncer(clone, nil)
+	mock := mockOnlinePlugin{
+		map[string]struct{}{key1: {}, key2: {}},
+	}
+	syncer.onlineDDL = mock
+
+	_, _, _, _, err := syncer.sgk.AddGroup(targetDB, targetTbl, []string{source1}, nil, true)
+	c.Assert(err, IsNil)
+	_, _, _, _, err = syncer.sgk.AddGroup(targetDB, targetTbl, []string{source2}, nil, true)
+	c.Assert(err, IsNil)
+
+	c.Assert(syncer.clearOnlineDDL(tctx, targetDB, targetTbl), IsNil)
+	c.Assert(mock.toFinish, HasLen, 0)
 }

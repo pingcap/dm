@@ -20,11 +20,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -53,6 +53,7 @@ func InitClient(addr string, securityCfg config.Security) error {
 		return terror.ErrCtlInvalidTLSCfg.Delegate(err)
 	}
 
+	//nolint:staticcheck
 	conn, err := grpc.Dial(addr, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
 	if err != nil {
 		return terror.ErrCtlGRPCCreateConn.AnnotateDelegate(err, "can't connect to %s", addr)
@@ -189,7 +190,7 @@ func ExtractSQLsFromArgs(args []string) ([]string, error) {
 	}
 
 	concat := strings.TrimSpace(strings.Join(args, " "))
-	concat = command.TrimQuoteMark(concat)
+	concat = utils.TrimQuoteMark(concat)
 
 	parser := parser.New()
 	nodes, err := parserpkg.Parse(parser, concat, "", "")
@@ -224,4 +225,12 @@ func GetTaskNameFromArgOrFile(arg string) string {
 		return arg
 	}
 	return cfg.Name
+}
+
+// PrintCmdUsage prints the usage of the command.
+func PrintCmdUsage(cmd *cobra.Command) {
+	err := cmd.Usage()
+	if err != nil {
+		fmt.Println("can't output command's usage:", err)
+	}
 }

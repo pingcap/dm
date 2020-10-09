@@ -50,6 +50,7 @@ func NewGRPCClient(addr string, securityCfg config.Security) (*GRPCClient, error
 		return nil, terror.ErrMasterGRPCCreateConn.Delegate(err)
 	}
 
+	//nolint:staticcheck
 	conn, err := grpc.Dial(addr, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second),
 		grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff: backoff.Config{
@@ -102,28 +103,10 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 	resp.Type = req.Type
 	var err error
 	switch req.Type {
-	case CmdStartSubTask:
-		resp.StartSubTask, err = client.StartSubTask(ctx, req.StartSubTask)
-	case CmdOperateSubTask:
-		resp.OperateSubTask, err = client.OperateSubTask(ctx, req.OperateSubTask)
-	case CmdUpdateSubTask:
-		resp.UpdateSubTask, err = client.UpdateSubTask(ctx, req.UpdateSubTask)
 	case CmdQueryStatus:
 		resp.QueryStatus, err = client.QueryStatus(ctx, req.QueryStatus)
-	case CmdQueryError:
-		resp.QueryError, err = client.QueryError(ctx, req.QueryError)
-	case CmdQueryWorkerConfig:
-		resp.QueryWorkerConfig, err = client.QueryWorkerConfig(ctx, req.QueryWorkerConfig)
-	case CmdSwitchRelayMaster:
-		resp.SwitchRelayMaster, err = client.SwitchRelayMaster(ctx, req.SwitchRelayMaster)
-	case CmdOperateRelay:
-		resp.OperateRelay, err = client.OperateRelay(ctx, req.OperateRelay)
 	case CmdPurgeRelay:
 		resp.PurgeRelay, err = client.PurgeRelay(ctx, req.PurgeRelay)
-	case CmdUpdateRelay:
-		resp.UpdateRelay, err = client.UpdateRelayConfig(ctx, req.UpdateRelay)
-	case CmdMigrateRelay:
-		resp.MigrateRelay, err = client.MigrateRelay(ctx, req.MigrateRelay)
 	case CmdOperateSchema:
 		resp.OperateSchema, err = client.OperateSchema(ctx, req.OperateSchema)
 	case CmdOperateV1Meta:

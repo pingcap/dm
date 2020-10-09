@@ -57,6 +57,7 @@ func NewUpgradeContext() Context {
 func TryUpgrade(cli *clientv3.Client, uctx Context) error {
 	// 1. get previous version from etcd.
 	preVer, _, err := GetVersion(cli)
+	log.L().Info("fetch previous version", zap.Any("preVer", preVer))
 	if err != nil {
 		return err
 	}

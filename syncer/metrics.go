@@ -251,6 +251,7 @@ func InitStatusAndMetrics(addr string) {
 		http.HandleFunc("/status", func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Content-Type", "text/plain")
 			text := utils.GetRawInfo()
+			//nolint:errcheck
 			w.Write([]byte(text))
 		})
 
