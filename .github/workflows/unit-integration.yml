@@ -98,7 +98,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_name: [relay, syncer, pkg_binlog, others]
+#        test_name: [relay, syncer, pkg_binlog, others]
+        test_name: [syncer, pkg_binlog]
     runs-on: ubuntu-18.04
     steps:
       - name: Cache go modules
@@ -154,8 +155,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-#        test_name: [dmctl_basic, dmctl_command]
-        test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit, load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
+        test_name: [dmctl_basic, dmctl_command]
+#        test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit, load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
     steps:
       - name: Cache go modules
         uses: actions/cache@v2
@@ -251,18 +252,18 @@ jobs:
 
       # test_name: [others, all_mode, dmctl_advance, dmctl_basic, dmctl_command, ha_cases, http_apis, import_goroutine_leak, incremental_mode, initial_unit,
       # load_interrupt, online_ddl, print_status, relay_interrupt, safe_mode, sequence_safe_mode, sequence_sharding, shardddl1, shardddl2, shardddl3, sharding]
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-others-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-all_mode-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-dmctl_advance-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-others-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-all_mode-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-dmctl_advance-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - uses: actions/cache@v2
         with:
           path: cov_dir
@@ -271,70 +272,70 @@ jobs:
         with:
           path: cov_dir
           key: ${{ runner.os }}-dm-it-dmctl_command-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-ha_cases-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-http_apis-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-import_goroutine_leak-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-incremental_mode-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-initial_unit-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-load_interrupt-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-online_ddl-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-print_status-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-relay_interrupt-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-safe_mode-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-sequence_safe_mode-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-sequence_sharding-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-shardddl1-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-shardddl2-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-shardddl3-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
-      - uses: actions/cache@v2
-        with:
-          path: cov_dir
-          key: ${{ runner.os }}-dm-it-sharding-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-ha_cases-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-http_apis-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-import_goroutine_leak-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-incremental_mode-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-initial_unit-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-load_interrupt-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-online_ddl-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-print_status-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-relay_interrupt-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-safe_mode-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-sequence_safe_mode-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-sequence_sharding-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-shardddl1-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-shardddl2-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-shardddl3-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
+#      - uses: actions/cache@v2
+#        with:
+#          path: cov_dir
+#          key: ${{ runner.os }}-dm-it-sharding-${{ needs.prepare.outputs.dm_sha }}-${{ needs.prepare.outputs.tidb_sha }}
       - name: Upload Coverage
         run: |
           ls -lh /tmp/dm.tar.gz
@@ -344,9 +345,7 @@ jobs:
           mkdir -p /tmp/dm_test
           cp cov_dir/* /tmp/dm_test
           set +x
-          CODECOV_TOKEN=866b8fb2-e586-464e-9360-8699cf99e353
-          COVERALLS_TOKEN=XEr5hsGAb7FSu9JOfmfHbXiMHZ1cKu86y
-          COVERALLS_TOKEN="${COVERALLS_TOKEN}" CODECOV_TOKEN="${CODECOV_TOKEN}" JenkinsCI=1 make coverage || true
+          COVERALLS_TOKEN="${{ secrets.COVERALLS_TOKEN }}" CODECOV_TOKEN="${{ secrets.CODECOV_TOKEN }}" JenkinsCI=1 make coverage || true
       - name: Set up tmate session
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v2
