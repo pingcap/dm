@@ -73,7 +73,7 @@ func (s *testLogSuite) TestLogLevel(c *C) {
 	}
 	cfg.Adjust()
 
-	InitLogger(cfg)
+	c.Assert(InitLogger(cfg), IsNil)
 	c.Assert(Props().Level.String(), Equals, zap.WarnLevel.String())
 	c.Assert(L().Check(zap.InfoLevel, "This is an info log"), IsNil)
 	c.Assert(L().Check(zap.ErrorLevel, "This is an error log"), NotNil)

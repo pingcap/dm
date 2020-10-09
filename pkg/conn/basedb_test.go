@@ -64,6 +64,7 @@ func (t *testBaseDBSuite) TestGetBaseConn(c *C) {
 
 func (t *testBaseDBSuite) TestFailDBPing(c *C) {
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/conn/failDBPing", "return"), IsNil)
+	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/conn/failDBPing")
 
 	cfg := config.DBConfig{User: "root", Host: "127.0.0.1", Port: 3306}

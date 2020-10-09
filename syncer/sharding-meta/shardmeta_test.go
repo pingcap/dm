@@ -49,15 +49,15 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 		tableID    = "`target_db`.`target_table`"
 		meta       = NewShardingMeta(metaSchema, metaTable, false)
 		items      = []*DDLItem{
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1000}}, []string{"ddl1"}, table1),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1200}}, []string{"ddl2-1,ddl2-2"}, table1),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1400}}, []string{"ddl3"}, table1),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1600}}, []string{"ddl1"}, table2),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1800}}, []string{"ddl2-1,ddl2-2"}, table2),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 2000}}, []string{"ddl3"}, table2),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 2200}}, []string{"ddl1"}, table3),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 2400}}, []string{"ddl2-1,ddl2-2"}, table3),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 2600}}, []string{"ddl3"}, table3),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 1000}}, []string{"ddl1"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 1200}}, []string{"ddl2-1,ddl2-2"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 1400}}, []string{"ddl3"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 1600}}, []string{"ddl1"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 1800}}, []string{"ddl2-1,ddl2-2"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 2000}}, []string{"ddl3"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 2200}}, []string{"ddl1"}, table3),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 2400}}, []string{"ddl2-1,ddl2-2"}, table3),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 2600}}, []string{"ddl3"}, table3),
 		}
 	)
 
@@ -98,7 +98,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(sqls, check.HasLen, 4)
 	c.Assert(args, check.HasLen, 4)
 	for _, stmt := range sqls {
-		c.Assert(stmt, check.Matches, fmt.Sprintf("INSERT INTO .*"))
+		c.Assert(stmt, check.Matches, "INSERT INTO .*")
 	}
 	for _, arg := range args {
 		c.Assert(arg, check.HasLen, 8)
@@ -144,7 +144,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(sqls, check.HasLen, 4)
 	c.Assert(args, check.HasLen, 4)
 	for _, stmt := range sqls {
-		c.Assert(stmt, check.Matches, fmt.Sprintf("INSERT INTO .*"))
+		c.Assert(stmt, check.Matches, "INSERT INTO .*")
 	}
 	for _, arg := range args {
 		c.Assert(arg, check.HasLen, 8)
@@ -187,7 +187,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	sqls, args = meta.FlushData(sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 1)
 	c.Assert(args, check.HasLen, 1)
-	c.Assert(sqls[0], check.Matches, fmt.Sprintf("DELETE FROM .*"))
+	c.Assert(sqls[0], check.Matches, "DELETE FROM .*")
 	c.Assert(args[0], check.DeepEquals, []interface{}{sourceID, tableID})
 }
 
@@ -200,12 +200,12 @@ func (t *testShardMetaSuite) TestShardingMetaWrongSequence(c *check.C) {
 		table2   = "table2"
 		meta     = NewShardingMeta("", "", false)
 		items    = []*DDLItem{
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1000}}, []string{"ddl1"}, table1),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1200}}, []string{"ddl2"}, table1),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1400}}, []string{"ddl3"}, table1),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1600}}, []string{"ddl1"}, table2),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1800}}, []string{"ddl3"}, table2),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 2000}}, []string{"ddl2"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 1000}}, []string{"ddl1"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 1200}}, []string{"ddl2"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 1400}}, []string{"ddl3"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 1600}}, []string{"ddl1"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 1800}}, []string{"ddl3"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 2000}}, []string{"ddl2"}, table2),
 		}
 	)
 
@@ -254,8 +254,8 @@ func (t *testShardMetaSuite) TestFlushLoadMeta(c *check.C) {
 		meta       = NewShardingMeta(metaSchema, metaTable, false)
 		loadedMeta = NewShardingMeta(metaSchema, metaTable, false)
 		items      = []*DDLItem{
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1000}}, []string{"ddl1"}, table1),
-			NewDDLItem(binlog.Location{Position: mysql.Position{filename, 1200}}, []string{"ddl1"}, table2),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 1000}}, []string{"ddl1"}, table1),
+			NewDDLItem(binlog.Location{Position: mysql.Position{Name: filename, Pos: 1200}}, []string{"ddl1"}, table2),
 		}
 	)
 	for _, item := range items {
@@ -268,7 +268,7 @@ func (t *testShardMetaSuite) TestFlushLoadMeta(c *check.C) {
 	c.Assert(args, check.HasLen, 3)
 	for _, arg := range args {
 		c.Assert(arg, check.HasLen, 8)
-		loadedMeta.RestoreFromData(arg[2].(string), arg[3].(int), arg[4].(bool), []byte(arg[5].(string)), mysql.MySQLFlavor)
+		c.Assert(loadedMeta.RestoreFromData(arg[2].(string), arg[3].(int), arg[4].(bool), []byte(arg[5].(string)), mysql.MySQLFlavor), check.IsNil)
 	}
 	c.Assert(loadedMeta.activeIdx, check.Equals, meta.activeIdx)
 	c.Assert(loadedMeta.global.String(), check.Equals, meta.global.String())

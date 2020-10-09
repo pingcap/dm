@@ -23,7 +23,6 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/tikv/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
-	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -132,12 +131,16 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 	}()
 
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever", `return(true)`), IsNil)
+	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly", `return(true)`), IsNil)
+	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/loader/ignoreLoadCheckpointErr", `return()`), IsNil)
+	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/loader/ignoreLoadCheckpointErr")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError", `return("test auto resume inject error")`), IsNil)
+	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 
 	s := NewServer(cfg)
@@ -168,6 +171,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 		}
 		return false
 	}), IsTrue)
+	//nolint:errcheck
 	failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 
 	rtsc, ok := s.getWorker(true).taskStatusChecker.(*realTaskStatusChecker)
@@ -189,12 +193,6 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 		c.Log(sts)
 		return false
 	}), IsTrue)
-}
-
-func (t *testServer2) createClient(c *C, addr string) pb.WorkerClient {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
-	c.Assert(err, IsNil)
-	return pb.NewWorkerClient(conn)
 }
 
 type testWorkerEtcdCompact struct{}

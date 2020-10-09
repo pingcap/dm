@@ -36,7 +36,7 @@ func (t *testMetricsProxySuite) TestHistogramVecProxy(c *C) {
 			if rand.Intn(199)%2 == 0 {
 				histogram.WithLabelValues(aArgs...).Observe(float64(rand.Intn(199)))
 			} else {
-				labels := make(prometheus.Labels, 0)
+				labels := make(prometheus.Labels)
 				for k, labelName := range oneCase.LabelsNames {
 					labels[labelName] = aArgs[k]
 				}

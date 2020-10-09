@@ -72,8 +72,6 @@ type job struct {
 	startLocation   binlog.Location // start location of the sql in binlog, for handle_error
 	currentLocation binlog.Location // end location of the sql in binlog, for user to skip sql manually by changing checkpoint
 	ddls            []string
-	traceID         string
-	traceGID        string
 }
 
 func (j *job) String() string {
@@ -81,7 +79,7 @@ func (j *job) String() string {
 	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.sql, j.args, j.key, j.ddls, j.location, j.startLocation, j.currentLocation)
 }
 
-func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, location, startLocation, cmdLocation binlog.Location, traceID string) *job {
+func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, location, startLocation, cmdLocation binlog.Location) *job {
 	location1 := location.Clone()
 	cmdLocation1 := cmdLocation.Clone()
 
@@ -97,7 +95,6 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 		location:        location1,
 		currentLocation: cmdLocation1,
 		retry:           true,
-		traceID:         traceID,
 	}
 }
 
@@ -105,7 +102,7 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 // when cfg.ShardMode == "", ddlInfo == nil，sourceTbls != nil, we use sourceTbls to record ddl affected tables.
 // when cfg.ShardMode == ShardOptimistic || ShardPessimistic, ddlInfo != nil, sourceTbls == nil.
 func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation, cmdLocation binlog.Location,
-	traceID string, sourceTbls map[string]map[string]struct{}) *job {
+	sourceTbls map[string]map[string]struct{}) *job {
 	location1 := location.Clone()
 	cmdLocation1 := cmdLocation.Clone()
 
@@ -115,7 +112,6 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation,
 		location:        location1,
 		startLocation:   startLocation,
 		currentLocation: cmdLocation1,
-		traceID:         traceID,
 	}
 
 	if ddlInfo != nil {
@@ -138,7 +134,7 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation,
 	return j
 }
 
-func newXIDJob(location, startLocation, cmdLocation binlog.Location, traceID string) *job {
+func newXIDJob(location, startLocation, cmdLocation binlog.Location) *job {
 	location1 := location.Clone()
 	cmdLocation1 := cmdLocation.Clone()
 
@@ -147,7 +143,6 @@ func newXIDJob(location, startLocation, cmdLocation binlog.Location, traceID str
 		location:        location1,
 		startLocation:   startLocation,
 		currentLocation: cmdLocation1,
-		traceID:         traceID,
 	}
 }
 

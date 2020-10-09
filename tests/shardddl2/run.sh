@@ -524,6 +524,13 @@ function DM_063_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+
+    if [[ "$1" = "optimistic" ]]; then
+        # make sure alter column mediumint exec before bigint
+        # otherwise will report "Unsupported modify column length is less than origin"
+        run_sql_tidb_with_retry "select count(1) from ${shardddl}.${tb};" "count(1): 3"
+    fi
+
     run_sql_source2 "alter table ${shardddl1}.${tb1} modify id bigint;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(5);"

@@ -127,10 +127,7 @@ func (cp *RemoteCheckPoint) prepare(tctx *tcontext.Context) error {
 		return err
 	}
 	// create table
-	if err := cp.createTable(tctx); err != nil {
-		return err
-	}
-	return nil
+	return cp.createTable(tctx)
 }
 
 func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {

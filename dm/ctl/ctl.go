@@ -117,11 +117,11 @@ func PrintHelp(args []string) {
 	if err != nil {
 		fmt.Println(err)
 		rootCmd.SetOut(os.Stdout)
-		rootCmd.Usage()
+		common.PrintCmdUsage(rootCmd)
 		return
 	}
 	cmd.SetOut(os.Stdout)
-	cmd.Usage()
+	common.PrintCmdUsage(cmd)
 }
 
 // Start starts running a command

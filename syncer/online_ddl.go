@@ -280,10 +280,7 @@ func (s *OnlineDDLStorage) prepare(tctx *tcontext.Context) error {
 		return err
 	}
 
-	if err := s.createTable(tctx); err != nil {
-		return err
-	}
-	return nil
+	return s.createTable(tctx)
 }
 
 func (s *OnlineDDLStorage) createSchema(tctx *tcontext.Context) error {

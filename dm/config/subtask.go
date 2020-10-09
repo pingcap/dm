@@ -41,8 +41,7 @@ const (
 )
 
 var (
-	defaultMaxAllowedPacket = 64 * 1024 * 1024 // 64MiB, equal to TiDB's default
-	defaultMaxIdleConns     = 2
+	defaultMaxIdleConns = 2
 )
 
 // RawDBConfig contains some low level database config

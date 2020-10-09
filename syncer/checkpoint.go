@@ -632,10 +632,7 @@ func (cp *RemoteCheckPoint) prepare(tctx *tcontext.Context) error {
 		return err
 	}
 
-	if err := cp.createTable(tctx); err != nil {
-		return err
-	}
-	return nil
+	return cp.createTable(tctx)
 }
 
 func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
@@ -882,8 +879,9 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location binl
 		exitSafeGTIDStr = safeModeExitLoc.GTIDSetStr()
 	}
 
+	// convert tiBytes to string to get a readable log
 	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSetStr(),
-		exitSafeName, exitSafePos, exitSafeGTIDStr, tiBytes, isGlobal}
+		exitSafeName, exitSafePos, exitSafeGTIDStr, string(tiBytes), isGlobal}
 	return sql2, args
 }
 
