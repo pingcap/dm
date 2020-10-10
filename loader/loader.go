@@ -460,7 +460,20 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().
 		SetMaxIdleConns(l.cfg.PoolSize)
 
-	l.toDB, l.toDBConns, err = createConns(tctx, l.cfg, l.cfg.PoolSize)
+	// used to change loader's specified DB settings, currently SQL Mode
+	lcfg, err := l.cfg.Clone()
+	if err != nil {
+		return err
+	}
+	lowerM := map[string]struct{}{}
+	for k := range l.cfg.To.Session {
+		lowerM[strings.ToLower(k)] = struct{}{}
+	}
+	if _, ok := lowerM["sql_mode"]; !ok {
+		lcfg.To.Session["sql_mode"] = l.cfg.LoaderConfig.SQLMode
+	}
+
+	l.toDB, l.toDBConns, err = createConns(tctx, lcfg, l.cfg.PoolSize)
 	if err != nil {
 		return err
 	}
