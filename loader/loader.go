@@ -465,11 +465,14 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	lowerM := map[string]struct{}{}
+	hasSQLMode := false
 	for k := range l.cfg.To.Session {
-		lowerM[strings.ToLower(k)] = struct{}{}
+		if strings.ToLower(k) == "sql_mode" {
+			hasSQLMode = true
+			break
+		}
 	}
-	if _, ok := lowerM["sql_mode"]; !ok {
+	if !hasSQLMode {
 		lcfg.To.Session["sql_mode"] = l.cfg.LoaderConfig.SQLMode
 	}
 
