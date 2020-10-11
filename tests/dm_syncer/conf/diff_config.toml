@@ -16,17 +16,57 @@ fix-sql-file = "fix.sql"
 
 # tables need to check.
 [[check-tables]]
-schema = "dm_syncer"
-tables = ["~t.*"]
+schema = "forum"
+tables = ["message"]
 
 [[table-config]]
-schema = "dm_syncer"
-table = "t1"
+schema = "forum"
+table = "message"
 
 [[table-config.source-tables]]
 instance-id = "source-1"
 schema = "dm_syncer"
-table  = "t1"
+tables = ["~t.*"]
+
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "logs"
+table  = "messages_2016"
+
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "logs"
+table  = "messages_2017"
+
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "logs"
+table  = "messages_2018"
+
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "forum"
+table  = "users"
+
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "forum"
+table  = "message"
+
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "forum_backup_2016"
+table  = "message"
+
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "forum_backup_2017"
+table  = "message"
+
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "forum_backup_2018"
+table  = "message"
 
 [[table-config]]
 schema = "dm_syncer"
