@@ -238,12 +238,14 @@ jobs:
         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/cases.yaml
         sleep 60
 
+    - name: Encode chaos-mesh action
+      run: |
+        echo CFG_BASE64=$(base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/${{ matrix.chaos-obj }}.yaml) >> $GITHUB_ENV
+
     - name: Run chaos mesh action
       uses: chaos-mesh/chaos-mesh-action@master
-      # we should in GITHUB_WORKSPACE
       env:
-        CFG_FILE: ./chaos/manifests/${{ matrix.chaos-obj }}.yaml
-        CHAOS_MESH_VERSION: v1.0.0
+        CFG_BASE64: ${{ env.CFG_BASE64 }}
 
     # check whether complete with 1m * 20 times.
     - name: Wait for chaos test case complete
