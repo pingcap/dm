@@ -48,7 +48,7 @@ var (
 	keepaliveTimeout        = 3 * time.Second
 	keepaliveTime           = 3 * time.Second
 	retryConnectSleepTime   = time.Second
-	syncMasterEndpointsTime = 3 * time.Second // enough?
+	syncMasterEndpointsTime = 3 * time.Second
 	getMinPosForSubTaskFunc = getMinPosForSubTask
 )
 
@@ -185,19 +185,32 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) syncMasterEndpoints(ctx context.Context) {
+	lastClientUrls := []string{}
 	clientURLs := []string{}
-	for {
+
+	updateF := func() {
 		clientURLs = clientURLs[:0]
 		resp, err := s.etcdClient.MemberList(ctx)
 		if err != nil {
 			log.L().Error("can't get etcd member list", zap.Error(err))
-		} else {
-			for _, m := range resp.Members {
-				clientURLs = append(clientURLs, m.GetClientURLs()...)
-			}
-			log.L().Debug("will sync endpoints to", zap.Strings("client URLs", clientURLs))
-			s.etcdClient.SetEndpoints(clientURLs...)
+			return
 		}
+
+		for _, m := range resp.Members {
+			clientURLs = append(clientURLs, m.GetClientURLs()...)
+		}
+		if utils.NonRepeatStringsEqual(clientURLs, lastClientUrls) {
+			log.L().Debug("etcd member list doesn't change", zap.Strings("client URLs", clientURLs))
+			return
+		}
+		log.L().Debug("will sync endpoints to", zap.Strings("client URLs", clientURLs))
+		s.etcdClient.SetEndpoints(clientURLs...)
+		lastClientUrls = clientURLs
+	}
+
+	for {
+		updateF()
+
 		select {
 		case <-ctx.Done():
 			return

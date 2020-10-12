@@ -181,3 +181,19 @@ func ExtractTaskFromLockID(lockID string) string {
 	}
 	return strs[1]
 }
+
+func NonRepeatStringsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	m := make(map[string]struct{}, len(a))
+	for _, s := range a {
+		m[s] = struct{}{}
+	}
+	for _, s := range b {
+		if _, ok := m[s]; !ok {
+			return false
+		}
+	}
+	return true
+}
