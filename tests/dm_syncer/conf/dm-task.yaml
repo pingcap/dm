@@ -36,16 +36,16 @@ mysql-instances:
 
 block-allow-list:
   instance:
-    do-dbs: ["forum_backup_2020", "forum"]
-    ignore-dbs: ["~^forum_backup_"]
+    do-dbs: ["dm_syncer", "dm_syncer_do_db"]
+    ignore-dbs: ["~^dm_syncer_ignore_"]
     do-tables:
-      - db-name: "logs"
-        tbl-name: "~_2018$"
-      - db-name: "~^forum.*"
-​      tbl-name: "messages"
+      - db-name: "dm_syncer"
+        tbl-name: "~t.*"
+      - db-name: "dm_syncer_do_db"
+        tbl-name: "~^dm_syncer_do_db_."
     ignore-tables:
-      - db-name: "~.*"
-  ​      tbl-name: "^messages.*"
+      - db-name: "~^dm_syncer_ignore_"
+        tbl-name: "~^dm_syncer_ignore_db_."
 
 mydumpers:
   global:

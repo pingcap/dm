@@ -32,6 +32,7 @@ function run() {
     dmctl_start_task $WORK_DIR/dm-task.yaml
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_blalist.toml
 
     dmctl_stop_task $TASK_NAME
 
