@@ -54,9 +54,7 @@ Please reference to "Deploy" section in [our doc](https://docs.pingcap.com/tidb-
 
 ## Config File
 
-* all sample config files can be found in directory `conf` of dm tarball
-* sample config file of dm-master: `bin/dm-master -print-sample-config`
-* sample config file of dm-worker: `bin/dm-worker -print-sample-config`
+Please reference to "Configuration" section in [our doc](https://docs.pingcap.com/tidb-data-migration/dev/config-overview)
 
 ## Roadmap
 
