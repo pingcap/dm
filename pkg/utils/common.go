@@ -182,6 +182,7 @@ func ExtractTaskFromLockID(lockID string) string {
 	return strs[1]
 }
 
+// NonRepeatStringsEqual is used to compare two un-ordered, non-repeat-element string slice is equal
 func NonRepeatStringsEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
