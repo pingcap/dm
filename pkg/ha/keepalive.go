@@ -71,7 +71,6 @@ func workerEventFromKey(key string) (WorkerEvent, error) {
 // KeepAlive puts the join time of the workerName into etcd.
 // this key will be kept in etcd until the worker is blocked or failed
 // k/v: workerName -> join time.
-// TODO: fetch the actual master endpoints, the master member maybe changed.
 func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, keepAliveTTL int64) error {
 	cliCtx, cancel := context.WithTimeout(ctx, etcdutil.DefaultRequestTimeout)
 	defer cancel()
