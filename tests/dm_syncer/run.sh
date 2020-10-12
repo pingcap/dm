@@ -74,6 +74,7 @@ function run() {
     # wait for dm_syncer to init and start
     sleep 5
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_filter_rule.toml
 }
 
 cleanup_data $TEST_NAME
