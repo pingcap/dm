@@ -54,3 +54,11 @@ syncers:
   global:
     worker-count: 16
     batch: 100
+
+filters:
+  rule-1:
+    schema-pattern: "dm_syncer"
+    table-pattern: "dm_syncer_filter_rule"
+    events: ["truncate table", "drop table"]
+    sql-pattern: ["^DROP\\s+PROCEDURE", "^DELETE\\s+PROCEDURE"]
+    action: Ignore
