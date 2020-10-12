@@ -35,3 +35,4 @@ cp $PWD/bin/dm-master.test.previous $PWD/bin/dm-master.test
 cp $PWD/bin/dm-worker.test.current $PWD/bin/dm-worker.test
 
 run "$test_case"
+

@@ -151,19 +151,19 @@ tidy_mod:
 
 dm_integration_test_build: retool_setup
 	$(FAILPOINT_ENABLE)
-	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-worker.test github.com/pingcap/dm/cmd/dm-worker \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c -cover -covermode=count \
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c -cover -covermode=count \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dmctl.test github.com/pingcap/dm/cmd/dm-ctl \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-syncer.test github.com/pingcap/dm/cmd/dm-syncer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
@@ -181,12 +181,10 @@ integration_test: check_third_party_binary
 	tests/run.sh $(CASE)
 
 compatibility_test: check_third_party_binary
-	@which bin/dm-master.test
-	@which bin/dm-worker.test
-	cp bin/dm-master.test bin/dm-master.test.current
-	cp bin/dm-worker.test bin/dm-worker.test.current
-	cp bin/dm-master.test bin/dm-master.test.previous
-	cp bin/dm-worker.test bin/dm-worker.test.previous
+	@which bin/dm-master.test.current
+	@which bin/dm-worker.test.current
+	@which bin/dm-master.test.previous
+	@which bin/dm-worker.test.previous
 	tests/compatibility_run.sh ${CASE}
 
 # unify cover mode in coverage files, more details refer to tests/_utils/run_dm_ctl
