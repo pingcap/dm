@@ -32,21 +32,16 @@ function test_session_config(){
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
     sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
 
-    # enable ansi-quotes
-    sed -i 's/ansi-quotes: false/ansi-quotes: true/g'  $WORK_DIR/dm-task.yaml
     # error config
     sed -i 's/tidb_retry_limit: "10"/tidb_retry_limit: "fjs"/g'  $WORK_DIR/dm-task.yaml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $WORK_DIR/dm-task.yaml --remove-meta" \
-        "'tidb_retry_limit' can't be set to the value" 1
+        "Incorrect argument type to variable 'tidb_retry_limit'" 1
 
-    # sql_mode="ANSI_QUOTES"
     sed -i 's/tidb_retry_limit: "fjs"/tidb_retry_limit: "10"/g'  $WORK_DIR/dm-task.yaml
-    sed -i 's/sql_mode: ".*"/sql_mode: "ANSI_QUOTES"/g'  $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
 
-    # fail because insert 0 will auto generates the next serial number
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10 'fail'
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "stop-task $ILLEGAL_CHAR_NAME"\
             "\"result\": true" 3
@@ -85,8 +80,6 @@ function run() {
     # start DM task only
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
     sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
-    # test deprecated config
-    sed -i 's/enable-ansi-quotes: false/enable-ansi-quotes: true/g'  $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
 
     # use sync_diff_inspector to check full dump loader
