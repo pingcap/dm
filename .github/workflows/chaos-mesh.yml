@@ -241,7 +241,7 @@ jobs:
     - name: Run chaos mesh action
       uses: chaos-mesh/chaos-mesh-action@master
       env:
-        CFG_FILE: $GITHUB_WORKSPACE/chaos/manifests/${{ matrix.chaos-obj }}.yaml
+        CFG_FILE: ${{ GITHUB_WORKSPACE }}/chaos/manifests/${{ matrix.chaos-obj }}.yaml
         CHAOS_MESH_VERSION: v1.0.0
 
     # check whether complete with 1m * 20 times.
