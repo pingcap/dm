@@ -151,19 +151,19 @@ tidy_mod:
 
 dm_integration_test_build: retool_setup
 	$(FAILPOINT_ENABLE)
-	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-worker.test github.com/pingcap/dm/cmd/dm-worker \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c -cover -covermode=count \
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c -cover -covermode=count \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dmctl.test github.com/pingcap/dm/cmd/dm-ctl \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-syncer.test github.com/pingcap/dm/cmd/dm-syncer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
