@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	. "github.com/pingcap/check"
 )
@@ -67,6 +68,9 @@ func (d *testDumplingSuite) SetUpSuite(c *C) {
 		From: getDBConfigFromEnv(),
 		LoaderConfig: config.LoaderConfig{
 			Dir: dir,
+		},
+		BAList: &filter.Rules{
+			DoDBs: []string{"information_schema"},
 		},
 	}
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)
