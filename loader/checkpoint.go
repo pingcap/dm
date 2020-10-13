@@ -212,12 +212,20 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 func (cp *RemoteCheckPoint) GetRestoringFileInfo(db, table string) map[string][]int64 {
 	cp.restoringFiles.RLock()
 	defer cp.restoringFiles.RUnlock()
+	results := make(map[string][]int64)
 	if tables, ok := cp.restoringFiles.pos[db]; ok {
 		if restoringFiles, ok := tables[table]; ok {
-			return restoringFiles
+			// make a copy of restoringFiles, and its slice value
+			for k, v := range restoringFiles {
+				results[k] = make([]int64, len(v))
+				for i := range v {
+					results[k][i] = v[i]
+				}
+			}
+			return results
 		}
 	}
-	return make(map[string][]int64)
+	return results
 }
 
 // GetAllRestoringFileInfo implements CheckPoint.GetAllRestoringFileInfo
@@ -228,7 +236,11 @@ func (cp *RemoteCheckPoint) GetAllRestoringFileInfo() map[string][]int64 {
 	for _, tables := range cp.restoringFiles.pos {
 		for _, files := range tables {
 			for file, pos := range files {
-				results[file] = pos
+				// make a copy of slice
+				results[file] = make([]int64, len(pos))
+				for i := range pos {
+					results[file][i] = pos[i]
+				}
 			}
 		}
 	}
