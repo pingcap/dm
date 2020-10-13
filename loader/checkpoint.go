@@ -218,9 +218,7 @@ func (cp *RemoteCheckPoint) GetRestoringFileInfo(db, table string) map[string][]
 			// make a copy of restoringFiles, and its slice value
 			for k, v := range restoringFiles {
 				results[k] = make([]int64, len(v))
-				for i := range v {
-					results[k][i] = v[i]
-				}
+				copy(results[k], v)
 			}
 			return results
 		}
@@ -236,11 +234,8 @@ func (cp *RemoteCheckPoint) GetAllRestoringFileInfo() map[string][]int64 {
 	for _, tables := range cp.restoringFiles.pos {
 		for _, files := range tables {
 			for file, pos := range files {
-				// make a copy of slice
 				results[file] = make([]int64, len(pos))
-				for i := range pos {
-					results[file][i] = pos[i]
-				}
+				copy(results[file], pos)
 			}
 		}
 	}
