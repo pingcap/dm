@@ -200,12 +200,15 @@ func (s *Server) syncMasterEndpoints(ctx context.Context) {
 			clientURLs = append(clientURLs, m.GetClientURLs()...)
 		}
 		if utils.NonRepeatStringsEqual(clientURLs, lastClientUrls) {
-			log.L().Debug("etcd member list doesn't change", zap.Strings("client URLs", clientURLs))
+			log.L().Info("etcd member list doesn't change", zap.Strings("client URLs", clientURLs))
 			return
 		}
-		log.L().Debug("will sync endpoints to", zap.Strings("client URLs", clientURLs))
+		log.L().Info("will sync endpoints to", zap.Strings("client URLs", clientURLs))
 		s.etcdClient.SetEndpoints(clientURLs...)
-		lastClientUrls = clientURLs
+		lastClientUrls = make([]string, len(clientURLs))
+		for i := range clientURLs {
+			lastClientUrls[i] = clientURLs[i]
+		}
 	}
 
 	for {
