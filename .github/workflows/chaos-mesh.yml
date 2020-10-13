@@ -70,7 +70,8 @@ jobs:
       env:
         KUBECONFIG: /etc/rancher/k3s/k3s.yaml
     - name: Export KUBECONFIG environment variable
-      run: echo "::set-env name=KUBECONFIG::/etc/rancher/k3s/k3s.yaml"
+      run: |
+        echo 'KUBECONFIG=/etc/rancher/k3s/k3s.yaml' >> $GITHUB_ENV
       shell: bash
     - name: Print cluster information
       run: |
@@ -239,7 +240,7 @@ jobs:
 
     - name: Encode chaos-mesh action
       run: |
-        echo "::set-env name=CFG_BASE64::$(base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/${{ matrix.chaos-obj }}.yaml)"
+        echo CFG_BASE64=$(base64 -w 0 $GITHUB_WORKSPACE/chaos/manifests/${{ matrix.chaos-obj }}.yaml) >> $GITHUB_ENV
 
     - name: Run chaos mesh action
       uses: chaos-mesh/chaos-mesh-action@master
