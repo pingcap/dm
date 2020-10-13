@@ -88,6 +88,7 @@ func (t *testElectionSuite) TearDownTest(c *C) {
 
 func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 	var (
+		timeout    = 3 * time.Second
 		sessionTTL = 60
 		key        = "unit-test/election-2-after-1"
 		ID1        = "member1"
@@ -120,7 +121,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 	select {
 	case leader := <-e1.LeaderNotify():
 		c.Assert(leader.ID, Equals, ID1)
-	case <-time.After(3 * time.Second):
+	case <-time.After(timeout):
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e1.IsLeader(), IsTrue)
@@ -141,7 +142,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 	select {
 	case leader := <-e2.leaderCh:
 		c.Assert(leader.ID, Equals, ID1)
-	case <-time.After(time.Second):
+	case <-time.After(timeout):
 		c.Fatal("leader campaign timeout")
 	}
 	// but the leader should still be e1
@@ -171,7 +172,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 	select {
 	case leader := <-e2.LeaderNotify():
 		c.Assert(leader.ID, Equals, ID2)
-	case <-time.After(3 * time.Second):
+	case <-time.After(timeout):
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e2.IsLeader(), IsTrue)
@@ -196,7 +197,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 			c.Assert(terror.ErrElectionCampaignFail.Equal(err2), IsTrue)
 			// the old session is done, but we can't create a new one.
 			c.Assert(err2, ErrorMatches, ".*fail to campaign leader: create a new session.*")
-		case <-time.After(time.Second):
+		case <-time.After(timeout):
 			c.Fatal("do not receive error for e2")
 		}
 	}()
@@ -218,6 +219,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 
 func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	var (
+		timeout    = 3 * time.Second
 		sessionTTL = 60
 		key        = "unit-test/election-always-1"
 		ID1        = "member1"
@@ -239,7 +241,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	select {
 	case leader := <-e1.LeaderNotify():
 		c.Assert(leader.ID, Equals, ID1)
-	case <-time.After(3 * time.Second):
+	case <-time.After(timeout):
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e1.IsLeader(), IsTrue)
@@ -270,7 +272,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 		select {
 		case err2 := <-e2.ErrorNotify():
 			c.Fatalf("cancel the campaign should not get an error, %v", err2)
-		case <-time.After(time.Second): // wait 1s
+		case <-time.After(timeout): // wait 3s
 		}
 	}()
 	cancel2()
@@ -288,6 +290,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 
 func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 	var (
+		timeout    = 3 * time.Second
 		sessionTTL = 60
 		key        = "unit-test/election-evict-leader"
 		ID1        = "member1"
@@ -309,7 +312,7 @@ func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 	select {
 	case leader := <-e1.LeaderNotify():
 		c.Assert(leader.ID, Equals, ID1)
-	case <-time.After(3 * time.Second):
+	case <-time.After(timeout):
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e1.IsLeader(), IsTrue)
@@ -354,6 +357,7 @@ func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 
 func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 	var (
+		timeout    = 3 * time.Second
 		sessionTTL = 60
 		key        = "unit-test/election-delete-key"
 		ID         = "member"
@@ -373,7 +377,7 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 	select {
 	case leader := <-e.LeaderNotify():
 		c.Assert(leader.ID, Equals, ID)
-	case <-time.After(3 * time.Second):
+	case <-time.After(timeout):
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e.IsLeader(), IsTrue)
