@@ -206,9 +206,7 @@ func (s *Server) syncMasterEndpoints(ctx context.Context) {
 		log.L().Info("will sync endpoints to", zap.Strings("client URLs", clientURLs))
 		s.etcdClient.SetEndpoints(clientURLs...)
 		lastClientUrls = make([]string, len(clientURLs))
-		for i := range clientURLs {
-			lastClientUrls[i] = clientURLs[i]
-		}
+		copy(lastClientUrls, clientURLs)
 	}
 
 	for {
