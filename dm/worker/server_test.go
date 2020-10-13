@@ -281,7 +281,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		c.Assert(s.observeSourceBound(ctx1, etcdCli, startRev), IsNil)
+		c.Assert(s.observeSourceBound(ctx1, startRev), IsNil)
 	}()
 	// step 4.1: should stop the running worker, source bound has been deleted, should stop this worker
 	time.Sleep(time.Second)
@@ -302,7 +302,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		c.Assert(s.observeSourceBound(ctx2, etcdCli, startRev), IsNil)
+		c.Assert(s.observeSourceBound(ctx2, startRev), IsNil)
 	}()
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return s.getWorker(true) != nil

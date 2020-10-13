@@ -83,6 +83,8 @@ func NewServer(cfg *Config) *Server {
 
 // Start starts to serving
 func (s *Server) Start() error {
+	log.L().Info("starting dm-worker server")
+	s.ctx, s.cancel = context.WithCancel(context.Background())
 	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
 	if err != nil {
 		return terror.ErrWorkerTLSConfigNotValid.Delegate(err)
@@ -94,9 +96,6 @@ func (s *Server) Start() error {
 	}
 	s.rootLis = tls.WrapListener(rootLis)
 
-	log.L().Info("Start Server")
-	s.setWorker(nil, true)
-	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.etcdClient, err = clientv3.New(clientv3.Config{
 		Endpoints:            GetJoinURLs(s.cfg.Join),
 		DialTimeout:          dialTimeout,
@@ -108,18 +107,19 @@ func (s *Server) Start() error {
 		return err
 	}
 
+	s.setWorker(nil, true)
 	bound, sourceCfg, revBound, err := ha.GetSourceBoundConfig(s.etcdClient, s.cfg.Name)
 	if err != nil {
-		// TODO: need retry
 		return err
 	}
 	if !bound.IsEmpty() {
-		log.L().Warn("worker has been assigned source before keepalive")
+		log.L().Warn("worker has been assigned source before keepalive", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted))
 		err = s.startWorker(&sourceCfg)
 		s.setSourceStatus(bound.Source, err, true)
 		if err != nil {
-			log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
-				zap.Stringer("bound", bound), zap.Error(err))
+			// if DM-worker can't handle pre-assigned source before keepalive, it simply exits with the error,
+			// because no re-assigned mechanism exists for keepalived DM-worker yet.
+			return err
 		}
 	}
 
@@ -134,7 +134,7 @@ func (s *Server) Start() error {
 		defer s.wg.Done()
 		// TODO: handle fatal error from observeSourceBound
 		//nolint:errcheck
-		s.observeSourceBound(s.ctx, s.etcdClient, revBound)
+		s.observeSourceBound(s.ctx, revBound)
 	}()
 
 	s.wg.Add(1)
@@ -158,18 +158,25 @@ func (s *Server) Start() error {
 	// NOTE: don't need to set tls config, because rootLis already use tls
 	s.svr = grpc.NewServer()
 	pb.RegisterWorkerServer(s.svr, s)
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
-			log.L().Error("fail to start gRPC server", log.ShortError(err2))
+			log.L().Error("gRPC server returned", log.ShortError(err2))
 		}
 	}()
 
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		InitStatus(httpL) // serve status
+	}()
+
 	RegistryMetrics()
-	go InitStatus(httpL) // serve status
 
 	s.closed.Set(false)
-	log.L().Info("start gRPC API", zap.String("listened address", s.cfg.WorkerAddr))
+	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.WorkerAddr))
 	err = m.Serve()
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
@@ -177,7 +184,7 @@ func (s *Server) Start() error {
 	return terror.ErrWorkerStartService.Delegate(err)
 }
 
-func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Client, rev int64) error {
+func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 	var wg sync.WaitGroup
 	for {
 		sourceBoundCh := make(chan ha.SourceBound, 10)
@@ -191,7 +198,7 @@ func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Clien
 				close(sourceBoundErrCh)
 				wg.Done()
 			}()
-			ha.WatchSourceBound(ctx1, etcdCli, s.cfg.Name, rev+1, sourceBoundCh, sourceBoundErrCh)
+			ha.WatchSourceBound(ctx1, s.etcdClient, s.cfg.Name, rev+1, sourceBoundCh, sourceBoundErrCh)
 		}()
 		err := s.handleSourceBound(ctx1, sourceBoundCh, sourceBoundErrCh)
 		cancel1()
@@ -229,8 +236,7 @@ func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Clien
 						err1 = s.startWorker(&cfg)
 						s.setSourceStatus(bound.Source, err1, true)
 						if err1 != nil {
-							log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
-								zap.Stringer("bound", bound), zap.Error(err1))
+							log.L().Error("fail to operate sourceBound on worker", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted), zap.Error(err1))
 						}
 					}
 				}
@@ -353,13 +359,12 @@ OUTER:
 			if !ok {
 				break OUTER
 			}
+			log.L().Info("receive source bound", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted))
 			err := s.operateSourceBound(bound)
 			s.setSourceStatus(bound.Source, err, true)
 			if err != nil {
-				// record the reason for operating source bound
 				opErrCounter.WithLabelValues(s.cfg.Name, opErrTypeSourceBound).Inc()
-				log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
-					zap.Stringer("bound", bound), zap.Error(err))
+				log.L().Error("fail to operate sourceBound on worker", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted), zap.Error(err))
 				if etcdutil.IsRetryableError(err) {
 					return err
 				}
@@ -408,7 +413,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 
 	w := s.getWorker(true)
 	if w == nil {
-		log.L().Error("fail to call QueryStatus, because mysql worker has not been started")
+		log.L().Warn("fail to call QueryStatus, because no mysql source is being handled in the worker")
 		resp.Result = false
 		resp.Msg = terror.ErrWorkerNoStart.Error()
 		return resp, nil
@@ -432,7 +437,7 @@ func (s *Server) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) (*pb
 	log.L().Info("", zap.String("request", "PurgeRelay"), zap.Stringer("payload", req))
 	w := s.getWorker(true)
 	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		log.L().Warn("fail to call StartSubTask, because no mysql source is being handled in the worker")
 		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
 	}
 
@@ -440,7 +445,6 @@ func (s *Server) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) (*pb
 	if err != nil {
 		log.L().Error("fail to purge relay", zap.String("request", "PurgeRelay"), zap.Stringer("payload", req), zap.Error(err))
 	}
-	// TODO: check whether this interface need to store message in ETCD
 	return makeCommonWorkerResponse(err), nil
 }
 
@@ -450,10 +454,10 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 
 	w := s.getWorker(true)
 	if w == nil {
-		log.L().Error("fail to call OperateSchema, because mysql worker has not been started")
+		log.L().Warn("fail to call OperateSchema, because no mysql source is being handled in the worker")
 		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
 	} else if req.Source != w.cfg.SourceID {
-		log.L().Error("fail to call OperateSchema, because source mismatch")
+		log.L().Error("fail to call OperateSchema, because source mismatch", zap.String("request", req.Source), zap.String("current", w.cfg.SourceID))
 		return makeCommonWorkerResponse(terror.ErrWorkerSourceNotMatch.Generate()), nil
 	}
 
@@ -474,8 +478,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	defer s.Unlock()
 	if w := s.getWorker(false); w != nil {
 		if w.cfg.SourceID == cfg.SourceID {
-			// This mysql task has started. It may be a repeated request. Just return true
-			log.L().Info("This mysql task has started. It may be a repeated request. Just return true", zap.String("sourceID", s.worker.cfg.SourceID))
+			log.L().Info("mysql source is being handled", zap.String("sourceID", s.worker.cfg.SourceID))
 			return nil
 		}
 		return terror.ErrWorkerAlreadyStart.Generate()
@@ -485,7 +488,6 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	// because triggering these events is useless now
 	subTaskStages, subTaskCfgm, revSubTask, err := ha.GetSubTaskStageConfig(s.etcdClient, cfg.SourceID)
 	if err != nil {
-		// TODO: need retry
 		return err
 	}
 
@@ -515,8 +517,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		}
 	}
 
-	log.L().Info("start worker", zap.String("sourceCfg", cfg.String()), zap.Reflect("subTasks", subTaskCfgs))
-
+	log.L().Info("starting to handle mysql source", zap.String("sourceCfg", cfg.String()), zap.Reflect("subTasks", subTaskCfgs))
 	w, err := NewWorker(cfg, s.etcdClient, s.cfg.Name)
 	if err != nil {
 		return err
@@ -544,7 +545,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		return w.closed.Get() == closedFalse
 	})
 	if !isStarted {
-		// TODO: add more mechanism to wait
+		// TODO: add more mechanism to wait or un-bound the source
 		return terror.ErrWorkerNoStart
 	}
 
@@ -553,8 +554,8 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		if expectStage.IsDeleted || expectStage.Expect != pb.Stage_Running {
 			continue
 		}
+		log.L().Info("start to run subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
 		w.StartSubTask(subTaskCfg)
-		log.L().Info("load subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
 	}
 
 	w.wg.Add(1)
@@ -575,6 +576,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		}()
 	}
 
+	log.L().Info("started to handle mysql source", zap.String("sourceCfg", cfg.String()))
 	return nil
 }
 
@@ -719,7 +721,7 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 
 	w := s.getWorker(true)
 	if w == nil {
-		log.L().Error("fail to call HandleError, because mysql worker has not been started")
+		log.L().Warn("fail to call HandleError, because no mysql source is being handled in the worker")
 		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
 	}
 
