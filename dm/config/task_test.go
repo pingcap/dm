@@ -683,3 +683,17 @@ func (t *testConfig) TestAdjustTargetDBConfig(c *C) {
 		c.Assert(tc.dbConfig, DeepEquals, tc.result)
 	}
 }
+
+func (t *testConfig) TestDefaultConfig(c *C) {
+	cfg := NewTaskConfig()
+	cfg.Name = "test"
+	cfg.TaskMode = "all"
+	cfg.TargetDB = &DBConfig{}
+	cfg.MySQLInstances = append(cfg.MySQLInstances, &MySQLInstance{SourceID: "source1"})
+	c.Assert(cfg.adjust(), IsNil)
+	c.Assert(*cfg.MySQLInstances[0].Mydumper, DeepEquals, defaultMydumperConfig())
+
+	cfg.MySQLInstances[0].Mydumper = &MydumperConfig{MydumperPath: "test"}
+	c.Assert(cfg.adjust(), IsNil)
+	c.Assert(cfg.MySQLInstances[0].Mydumper.ChunkFilesize, Equals, defaultChunkFilesize)
+}
