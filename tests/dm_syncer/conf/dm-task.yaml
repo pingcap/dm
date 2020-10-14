@@ -37,7 +37,18 @@ mysql-instances:
 
 block-allow-list:
   instance:
-    do-dbs: ["dm_syncer"]
+    do-dbs: ["dm_syncer", "dm_syncer_do_db"]
+    ignore-dbs: ["~^dm_syncer_ignore_"]
+    do-tables:
+      - db-name: "dm_syncer"
+        tbl-name: "~t.*"
+      - db-name: "dm_syncer_do_db"
+        tbl-name: "~^dm_syncer_do_db_."
+      - db-name: "dm_syncer"
+        tbl-name: "~^dm_syncer_route_rules_."
+    ignore-tables:
+      - db-name: "~^dm_syncer_ignore_"
+        tbl-name: "~^dm_syncer_ignore_db_."
 
 mydumpers:
   global:

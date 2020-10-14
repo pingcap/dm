@@ -74,7 +74,11 @@ function run() {
     # wait for dm_syncer to init and start
     sleep 5
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_blalist.toml
     check_sync_diff $WORK_DIR $cur/conf/diff_config_route_rules.toml
+    # test block-allow-list by the way
+    run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
+    check_not_contains "dm_syncer_ignore_db"
 }
 
 cleanup_data $TEST_NAME
