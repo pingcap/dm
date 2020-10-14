@@ -314,7 +314,7 @@ function DM_027_CASE() {
     # we now haven't checked table struct when create sharding table
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unknown column 'val' in 'field list'" 1
+            "unknown column val" 1
 }
 
 function DM_027() {
