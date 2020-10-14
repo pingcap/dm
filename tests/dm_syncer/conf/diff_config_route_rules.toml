@@ -20,31 +20,26 @@ schema = "dm_syncer"
 tables = ["dm_syncer_route_rule"]
 
 [[table-config]]
-schema = "dm_syncer"
-table = "dm_syncer_route_rule_1"
+    schema = "dm_syncer"
 
-[[table-config.source-tables]]
-instance-id = "source-2"
-schema = "dm_syncer"
-table  = "dm_syncer_route_rule_1"
+    table = "dm_syncer_route_rule"
 
-[[table-config]]
-schema = "dm_syncer"
-table = "dm_syncer_route_rule_2"
+    is-sharding = true
 
-[[table-config.source-tables]]
-instance-id = "source-2"
-schema = "dm_syncer"
-table  = "dm_syncer_route_rule_2"
+    [[table-config.source-tables]]
+    instance-id = "source-2"
+    schema = "dm_syncer"
+    table  = "dm_syncer_route_rule_1"
 
-[[table-config]]
-schema = "dm_syncer"
-table = "dm_syncer_route_rule_3"
+    [[table-config.source-tables]]
+    instance-id = "source-2"
+    schema = "dm_syncer"
+    table  = "dm_syncer_route_rule_2"
 
-[[table-config.source-tables]]
-instance-id = "source-2"
-schema = "dm_syncer"
-table  = "dm_syncer_route_rule_3"
+    [[table-config.source-tables]]
+    instance-id = "source-2"
+    schema = "dm_syncer"
+    table  = "dm_syncer_route_rule_3"
 
 [[source-db]]
 host = "127.0.0.1"
