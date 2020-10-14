@@ -50,26 +50,11 @@ make test
 
 ## Installing
 
-* The best way to install DM is via [DM-Ansible](https://pingcap.com/docs/tools/dm/deployment/)
-* deploy DM manually
-  ```
-  # Download the DM package.
-  wget http://download.pingcap.org/dm-latest-linux-amd64.tar.gz
-  wget http://download.pingcap.org/dm-latest-linux-amd64.sha256
-
-  # Check the file integrity. If the result is OK, the file is correct.
-  sha256sum -c dm-latest-linux-amd64.sha256
-
-  # Extract the package.
-  tar -xzf dm-latest-linux-amd64.tar.gz
-  cd dm-latest-linux-amd64
-  ```
+Please reference to "Deploy" section in [our doc](https://docs.pingcap.com/tidb-data-migration/)
 
 ## Config File
 
-* all sample config files can be found in directory `conf` of dm tarball
-* sample config file of dm-master: `bin/dm-master -print-sample-config`
-* sample config file of dm-worker: `bin/dm-worker -print-sample-config`
+Please reference to "Configuration" section in [our doc](https://docs.pingcap.com/tidb-data-migration/dev/config-overview)
 
 ## Roadmap
 

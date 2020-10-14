@@ -59,6 +59,7 @@ func (m *Dumpling) Init(ctx context.Context) error {
 	var err error
 	m.dumpConfig, err = m.constructArgs()
 	m.detectSQLMode()
+	m.logger.Info("create dumpling", zap.Stringer("config", m.dumpConfig))
 	return err
 }
 
@@ -100,6 +101,11 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 		return
 	}
+
+	failpoint.Inject("dumpUnitProcessCancel", func() {
+		m.logger.Info("mock dump unit cancel", zap.String("failpoint", "dumpUnitProcessCancel"))
+		<-ctx.Done()
+	})
 
 	newCtx, cancel := context.WithCancel(ctx)
 	err = export.Dump(newCtx, m.dumpConfig)
@@ -206,7 +212,6 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		return nil, err
 	}
 	dumpConfig.TableFilter = tableFilter
-	dumpConfig.EscapeBackslash = true
 	dumpConfig.CompleteInsert = true // always keep column name in `INSERT INTO` statements.
 	dumpConfig.Logger = m.logger.Logger
 
@@ -249,8 +254,6 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		dumpConfig.PosAfterConnect = true
 	}
 
-	m.logger.Info("create dumpling", zap.Stringer("config", dumpConfig))
-
 	if !cfg.CaseSensitive {
 		dumpConfig.TableFilter = filter.CaseInsensitive(dumpConfig.TableFilter)
 	}
@@ -258,7 +261,8 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	return dumpConfig, nil
 }
 
-// detectSQLMode tries to detect SQL mode from upstream. If success, write it to LoaderConfig
+// detectSQLMode tries to detect SQL mode from upstream. If success, write it to LoaderConfig.
+// Because loader will use this SQL mode, we need to treat disable `EscapeBackslash` when NO_BACKSLASH_ESCAPES
 func (m *Dumpling) detectSQLMode() {
 	db, err := sql.Open("mysql", m.dumpConfig.GetDSN(""))
 	if err != nil {
@@ -272,4 +276,9 @@ func (m *Dumpling) detectSQLMode() {
 	}
 	m.logger.Info("found upstream SQL mode", zap.String("SQL mode", sqlMode))
 	m.cfg.LoaderConfig.SQLMode = sqlMode
+	if strings.Contains(sqlMode, "NO_BACKSLASH_ESCAPES") {
+		m.dumpConfig.EscapeBackslash = false
+	} else {
+		m.dumpConfig.EscapeBackslash = true
+	}
 }

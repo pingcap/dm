@@ -151,19 +151,19 @@ tidy_mod:
 
 dm_integration_test_build: retool_setup
 	$(FAILPOINT_ENABLE)
-	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-worker.test github.com/pingcap/dm/cmd/dm-worker \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c -cover -covermode=count \
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c -cover -covermode=count \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dmctl.test github.com/pingcap/dm/cmd/dm-ctl \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-syncer.test github.com/pingcap/dm/cmd/dm-syncer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
@@ -181,12 +181,10 @@ integration_test: check_third_party_binary
 	tests/run.sh $(CASE)
 
 compatibility_test: check_third_party_binary
-	@which bin/dm-master.test
-	@which bin/dm-worker.test
-	cp bin/dm-master.test bin/dm-master.test.current
-	cp bin/dm-worker.test bin/dm-worker.test.current
-	cp bin/dm-master.test bin/dm-master.test.previous
-	cp bin/dm-worker.test bin/dm-worker.test.previous
+	@which bin/dm-master.test.current
+	@which bin/dm-worker.test.current
+	@which bin/dm-master.test.previous
+	@which bin/dm-worker.test.previous
 	tests/compatibility_run.sh ${CASE}
 
 # unify cover mode in coverage files, more details refer to tests/_utils/run_dm_ctl
@@ -194,8 +192,8 @@ coverage_fix_cover_mode:
 	sed -i "s/mode: count/mode: atomic/g" $(TEST_DIR)/cov.*.dmctl.*.out
 
 coverage: coverage_fix_cover_mode retool_setup
-	retool do gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go|.*debug-tools.*|.*portal.*" > "$(TEST_DIR)/all_cov.out"
-	retool do gocovmerge "$(TEST_DIR)"/cov.unit_test*.out | grep -vE ".*.pb.go|.*.__failpoint_binding__.go|.*debug-tools.*|.*portal.*" > $(TEST_DIR)/unit_test.out
+	retool do gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go|.*debug-tools.*|.*portal.*|.*chaos.*" > "$(TEST_DIR)/all_cov.out"
+	retool do gocovmerge "$(TEST_DIR)"/cov.unit_test*.out | grep -vE ".*.pb.go|.*.__failpoint_binding__.go|.*debug-tools.*|.*portal.*|.*chaos.*" > $(TEST_DIR)/unit_test.out
 ifeq ("$(JenkinsCI)", "1")
 	@bash <(curl -s https://codecov.io/bash) -f $(TEST_DIR)/unit_test.out -t $(CODECOV_TOKEN)
 	@retool do goveralls -coverprofile=$(TEST_DIR)/all_cov.out -service=jenkins-ci -repotoken $(COVERALLS_TOKEN)
