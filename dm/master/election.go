@@ -29,7 +29,8 @@ import (
 )
 
 const (
-	oneselfLeader = "oneself"
+	oneselfLeader         = "oneself"
+	oneselfStartingLeader = "starting"
 )
 
 func (s *Server) electionNotify(ctx context.Context) {
@@ -40,7 +41,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 		case leaderInfo := <-s.election.LeaderNotify():
 			// retire from leader
 			if leaderInfo == nil {
-				if s.leader == oneselfLeader {
+				if s.leader.Get() == oneselfLeader {
 					s.retireLeader()
 					log.L().Info("current member retire from the leader", zap.String("current member", s.cfg.Name))
 				} else {
@@ -54,6 +55,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 			if leaderInfo.ID == s.cfg.Name {
 				// this member become leader
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
+				s.leader.Set(oneselfStartingLeader)
 
 				ok := s.startLeaderComponent(ctx)
 
@@ -64,7 +66,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 				}
 
 				s.Lock()
-				s.leader = oneselfLeader
+				s.leader.Set(oneselfLeader)
 				s.closeLeaderClient()
 				s.Unlock()
 
@@ -84,7 +86,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 				log.L().Info("get new leader", zap.String("leader", leaderInfo.ID), zap.String("current member", s.cfg.Name))
 
 				s.Lock()
-				s.leader = leaderInfo.ID
+				s.leader.Set(leaderInfo.ID)
 				s.createLeaderClient(leaderInfo.Addr)
 				s.Unlock()
 			}
@@ -125,12 +127,32 @@ func (s *Server) closeLeaderClient() {
 	}
 }
 
-func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
+func (s *Server) isLeaderAndNeedForward(ctx context.Context) (isLeader bool, needForward bool) {
+	// maybe in `startLeaderComponent`, will wait for a short time
+	if s.leader.Get() == oneselfStartingLeader {
+		retry := 10
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+
+		for s.leader.Get() == oneselfStartingLeader {
+			if retry == 0 {
+				log.L().Error("leader didn't finish starting after retry, please manually retry later")
+				return false, false
+			}
+			select {
+			case <-ctx.Done():
+				return false, false
+			case <-ticker.C:
+				retry--
+			}
+		}
+	}
+
 	s.RLock()
 	defer s.RUnlock()
 
-	isLeader = (s.leader == oneselfLeader)
-	needForward = (s.leaderGrpcConn != nil)
+	isLeader = s.leader.Get() == oneselfLeader
+	needForward = s.leaderGrpcConn != nil
 	return
 }
 
@@ -172,7 +194,7 @@ func (s *Server) retireLeader() {
 	s.scheduler.Close()
 
 	s.Lock()
-	s.leader = ""
+	s.leader.Set("")
 	s.closeLeaderClient()
 	s.Unlock()
 
