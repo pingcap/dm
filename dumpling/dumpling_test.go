@@ -23,7 +23,9 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dumpling/v4/export"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	. "github.com/pingcap/check"
 )
@@ -67,6 +69,9 @@ func (d *testDumplingSuite) SetUpSuite(c *C) {
 		From: getDBConfigFromEnv(),
 		LoaderConfig: config.LoaderConfig{
 			Dir: dir,
+		},
+		BAList: &filter.Rules{
+			DoDBs: []string{"information_schema"},
 		},
 	}
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)
@@ -115,4 +120,11 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	c.Assert(result.IsCanceled, IsTrue)
 	c.Assert(len(result.Errors), Equals, 1)
 	c.Assert(result.Errors[0].String(), Matches, ".*context deadline exceeded.*")
+}
+
+func (d *testDumplingSuite) TestDefaultConfig(c *C) {
+	dumpling := NewDumpling(d.cfg)
+	ctx := context.Background()
+	c.Assert(dumpling.Init(ctx), IsNil)
+	c.Assert(dumpling.dumpConfig.StatementSize, Not(Equals), export.UnspecifiedSize)
 }

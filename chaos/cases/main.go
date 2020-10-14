@@ -97,6 +97,13 @@ func main() {
 		os.Exit(2)
 	}
 
+	// set upstream and downstream instances state.
+	err = setInstancesState(ctx, cfg.Target, cfg.Source1, cfg.Source2)
+	if err != nil {
+		log.L().Error("fail to set instances state", zap.Error(err))
+		os.Exit(2)
+	}
+
 	// context for the duration of running.
 	ctx3, cancel3 := context.WithTimeout(ctx, cfg.Duration)
 	defer cancel3()
