@@ -84,6 +84,7 @@ func NewServer(cfg *Config) *Server {
 // Start starts to serving
 func (s *Server) Start() error {
 	log.L().Info("starting dm-worker server")
+	RegistryMetrics()
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
 	if err != nil {
@@ -172,8 +173,6 @@ func (s *Server) Start() error {
 		defer s.wg.Done()
 		InitStatus(httpL) // serve status
 	}()
-
-	RegistryMetrics()
 
 	s.closed.Set(false)
 	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.WorkerAddr))
