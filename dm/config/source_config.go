@@ -129,7 +129,11 @@ func (c *SourceConfig) Yaml() (string, error) {
 func (c *SourceConfig) Parse(content string) error {
 	// Parse first to get config file.
 	metaData, err := toml.Decode(content, c)
-	return c.check(&metaData, err)
+	err2 := c.check(&metaData, err)
+	if err2 != nil {
+		return err2
+	}
+	return c.Verify()
 }
 
 // ParseYaml parses flag definitions from the argument list, content should be yaml format
@@ -138,7 +142,7 @@ func (c *SourceConfig) ParseYaml(content string) error {
 		return terror.ErrConfigYamlTransform.Delegate(err, "decode source config")
 	}
 	c.adjust()
-	return nil
+	return c.Verify()
 }
 
 // EncodeToml encodes config.
@@ -303,7 +307,7 @@ func (c *SourceConfig) LoadFromFile(path string) error {
 		return terror.ErrConfigYamlTransform.Delegate(err, "decode source config")
 	}
 	c.adjust()
-	return nil
+	return c.Verify()
 }
 
 func (c *SourceConfig) check(metaData *toml.MetaData, err error) error {
