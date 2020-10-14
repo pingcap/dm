@@ -246,7 +246,7 @@ func testDefaultMasterServer(c *check.C) *Server {
 	c.Assert(err, check.IsNil)
 	cfg.DataDir = c.MkDir()
 	server := NewServer(cfg)
-	server.leader = oneselfLeader
+	server.leader.Set(oneselfLeader)
 	go server.ap.Start(context.Background())
 
 	return server
@@ -1058,7 +1058,7 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
 
 	s1 := NewServer(cfg1)
-	s1.leader = oneselfLeader
+	s1.leader.Set(oneselfLeader)
 	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
 	mysqlCfg := config.NewSourceConfig()
@@ -1259,7 +1259,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	// ensure s2 has got the right leader info, because it will be used to `OfflineMember`.
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		s2.RLock()
-		leader := s2.leader
+		leader := s2.leader.Get()
 		s2.RUnlock()
 		if leader == "" {
 			return false
@@ -1267,7 +1267,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 		if leader == oneselfLeader {
 			leaderID = s2.cfg.Name
 		} else {
-			leaderID = s2.leader
+			leaderID = s2.leader.Get()
 		}
 		return true
 	}), check.IsTrue)
