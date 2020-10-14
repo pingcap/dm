@@ -11,4 +11,4 @@ create table dm_syncer_route_rules_2 (id int auto_increment, name varchar(20), p
 insert into dm_syncer_route_rules_2 (name) values ('howie'), ('Bran'), ('Sansa');
 
 create table dm_syncer_route_rules_3 (id int auto_increment, name varchar(20), primary key (`id`));
-insert into dm_syncer_route_rules_4 (name) values ('Arya'), ('Howie'), ('Sansa');
+insert into dm_syncer_route_rules_3 (name) values ('Arya'), ('Howie'), ('Sansa');
