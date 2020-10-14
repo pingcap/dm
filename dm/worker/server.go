@@ -551,11 +551,11 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 
 	for _, subTaskCfg := range subTaskCfgs {
 		expectStage := subTaskStages[subTaskCfg.Name]
-		if expectStage.IsDeleted || expectStage.Expect != pb.Stage_Running {
+		if expectStage.IsDeleted {
 			continue
 		}
-		log.L().Info("start to run subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
-		w.StartSubTask(subTaskCfg)
+		log.L().Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
+		w.StartSubTask(subTaskCfg, expectStage.Expect)
 	}
 
 	w.wg.Add(1)

@@ -188,7 +188,7 @@ func (w *Worker) Close() {
 }
 
 // StartSubTask creates a sub task an run it
-func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
+func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage) {
 	w.Lock()
 	defer w.Unlock()
 
@@ -216,8 +216,8 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
 		return
 	}
 
-	w.l.Info("started sub task", zap.Stringer("config", cfg2))
-	st.Run()
+	w.l.Info("subtask created", zap.Stringer("config", cfg2))
+	st.Run(expectStage)
 }
 
 // UpdateSubTask update config for a sub task
@@ -410,16 +410,19 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 func (w *Worker) operateSubTaskStage(stage ha.Stage, subTaskCfg config.SubTaskConfig) (string, error) {
 	var op pb.TaskOp
 	switch {
-	case stage.Expect == pb.Stage_Running:
+	case stage.Expect == pb.Stage_Running, stage.Expect == pb.Stage_Paused:
 		if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
-			w.StartSubTask(&subTaskCfg)
-			log.L().Info("load subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
+			// create the subtask for expected running and paused stage.
+			log.L().Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
+			w.StartSubTask(&subTaskCfg, stage.Expect)
 			// error is nil, opErrTypeBeforeOp will be ignored
 			return opErrTypeBeforeOp, nil
 		}
-		op = pb.TaskOp_Resume
-	case stage.Expect == pb.Stage_Paused:
-		op = pb.TaskOp_Pause
+		if stage.Expect == pb.Stage_Running {
+			op = pb.TaskOp_Resume
+		} else if stage.Expect == pb.Stage_Paused {
+			op = pb.TaskOp_Pause
+		}
 	case stage.IsDeleted:
 		op = pb.TaskOp_Stop
 	}
