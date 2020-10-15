@@ -192,8 +192,8 @@ coverage_fix_cover_mode:
 	sed -i "s/mode: count/mode: atomic/g" $(TEST_DIR)/cov.*.dmctl.*.out
 
 coverage: coverage_fix_cover_mode retool_setup
-	retool do gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go|.*debug-tools.*|.*portal.*|.*chaos.*" > "$(TEST_DIR)/all_cov.out"
-	retool do gocovmerge "$(TEST_DIR)"/cov.unit_test*.out | grep -vE ".*.pb.go|.*.__failpoint_binding__.go|.*debug-tools.*|.*portal.*|.*chaos.*" > $(TEST_DIR)/unit_test.out
+	retool do gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go|.*debug-tools.*|.*portal.*|.*chaos.*|.*ctl.*|.*loader.*|.*relay.*" > "$(TEST_DIR)/all_cov.out"
+	retool do gocovmerge "$(TEST_DIR)"/cov.unit_test*.out | grep -vE ".*.pb.go|.*.__failpoint_binding__.go|.*debug-tools.*|.*portal.*|.*chaos.*|.*ctl.*|.*loader.*|.*relay.*" > $(TEST_DIR)/unit_test.out
 ifeq ("$(JenkinsCI)", "1")
 	@bash <(curl -s https://codecov.io/bash) -f $(TEST_DIR)/unit_test.out -t $(CODECOV_TOKEN)
 	@retool do goveralls -coverprofile=$(TEST_DIR)/all_cov.out -service=jenkins-ci -repotoken $(COVERALLS_TOKEN)
