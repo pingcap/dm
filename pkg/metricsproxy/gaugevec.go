@@ -49,7 +49,7 @@ func (c *GaugeVecProxy) WithLabelValues(lvs ...string) prometheus.Gauge {
 			labels[c.LabelNames[index]] = label
 		}
 		c.mu.Lock()
-		noteLabelsInMetricsProxy(c, labels)
+		noteLabelsInMetricsProxy(c, labels, lvs)
 		c.mu.Unlock()
 	}
 	return c.GaugeVec.WithLabelValues(lvs...)
@@ -60,8 +60,12 @@ func (c *GaugeVecProxy) WithLabelValues(lvs ...string) prometheus.Gauge {
 //     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Add(42)
 func (c *GaugeVecProxy) With(labels prometheus.Labels) prometheus.Gauge {
 	if len(labels) > 0 {
+		values := make([]string, 0, len(labels))
+		for _, v := range labels {
+			values = append(values, v)
+		}
 		c.mu.Lock()
-		noteLabelsInMetricsProxy(c, labels)
+		noteLabelsInMetricsProxy(c, labels, values)
 		c.mu.Unlock()
 	}
 

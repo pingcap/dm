@@ -53,7 +53,7 @@ func (c *SummaryVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 			labels[c.LabelNames[index]] = label
 		}
 		c.mu.Lock()
-		noteLabelsInMetricsProxy(c, labels)
+		noteLabelsInMetricsProxy(c, labels, lvs)
 		c.mu.Unlock()
 	}
 	return c.SummaryVec.WithLabelValues(lvs...)
@@ -64,8 +64,12 @@ func (c *SummaryVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 //     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Observe(42.21)
 func (c *SummaryVecProxy) With(labels prometheus.Labels) prometheus.Observer {
 	if len(labels) > 0 {
+		values := make([]string, 0, len(labels))
+		for _, v := range labels {
+			values = append(values, v)
+		}
 		c.mu.Lock()
-		noteLabelsInMetricsProxy(c, labels)
+		noteLabelsInMetricsProxy(c, labels, values)
 		c.mu.Unlock()
 	}
 

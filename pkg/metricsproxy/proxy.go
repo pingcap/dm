@@ -14,8 +14,7 @@
 package metricsproxy
 
 import (
-	"crypto/md5"
-	"fmt"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -27,21 +26,12 @@ type Proxy interface {
 }
 
 // noteLabelsInMetricsProxy common function in Proxy
-func noteLabelsInMetricsProxy(proxy Proxy, labels map[string]string) {
-	labelsMd5Sum := labelsMd5Sum(labels)
+func noteLabelsInMetricsProxy(proxy Proxy, labels map[string]string, values []string) {
+	key := strings.Join(values, ",")
 
-	if _, ok := proxy.GetLabels()[labelsMd5Sum]; !ok {
-		proxy.GetLabels()[labelsMd5Sum] = labels
+	if _, ok := proxy.GetLabels()[key]; !ok {
+		proxy.GetLabels()[key] = labels
 	}
-}
-
-// labelsMd5Sum common function in Proxy
-func labelsMd5Sum(labels map[string]string) string {
-	var str string
-	for _, label := range labels {
-		str += label
-	}
-	return fmt.Sprintf("%x", md5.Sum([]byte(str)))
 }
 
 // findAndDeleteLabelsInMetricsProxy common function in Proxy
