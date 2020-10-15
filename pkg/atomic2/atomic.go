@@ -36,3 +36,22 @@ func (e *AtomicError) Get() error {
 func (e *AtomicError) Set(err error) {
 	atomic.StorePointer(&e.p, unsafe.Pointer(&err))
 }
+
+// AtomicString implements atomic string method
+type AtomicString struct {
+	p unsafe.Pointer
+}
+
+// Get returns string
+func (s *AtomicString) Get() string {
+	p := atomic.LoadPointer(&s.p)
+	if p == nil {
+		return ""
+	}
+	return *(*string)(p)
+}
+
+// Set sets string to AtomicString
+func (s *AtomicString) Set(str string) {
+	atomic.StorePointer(&s.p, unsafe.Pointer(&str))
+}
