@@ -4,7 +4,7 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.4.1
 	github.com/Masterminds/semver v1.5.0 // indirect
-	github.com/chaos-mesh/go-sqlsmith v0.0.0-00010101000000-000000000000
+	github.com/chaos-mesh/go-sqlsmith v0.0.0-20201014055312-2d45413c66bc
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/coreos/go-semver v0.3.0
 	github.com/docker/go-units v0.4.0
@@ -54,5 +54,3 @@ require (
 )
 
 go 1.13
-
-replace github.com/chaos-mesh/go-sqlsmith => github.com/csuzhangxc/go-sqlsmith v0.0.0-20200928023709-4ad8903babdd
