@@ -45,6 +45,7 @@ import (
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/atomic2"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
@@ -95,7 +96,9 @@ type Server struct {
 	etcdClient *clientv3.Client
 	election   *election.Election
 
-	leader         string
+	// below three leader related variables should be protected by a lock (currently Server's lock) to provide integrity
+	// except for leader == oneselfStartingLeader which is a intermedia state, which means caller may retry sometime later
+	leader         atomic2.AtomicString
 	leaderClient   pb.MasterClient
 	leaderGrpcConn *grpc.ClientConn
 
@@ -1894,12 +1897,12 @@ func (s *Server) sharedLogic(ctx context.Context, req interface{}, respPointer i
 	//		}
 	//		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	//	}
-	isLeader, needForward := s.isLeaderAndNeedForward()
+	isLeader, needForward := s.isLeaderAndNeedForward(ctx)
 	if isLeader {
 		return false
 	}
 	if needForward {
-		log.L().Info("will forward after a short interval", zap.String("from", s.cfg.Name), zap.String("to", s.leader), zap.String("request", methodName))
+		log.L().Info("will forward after a short interval", zap.String("from", s.cfg.Name), zap.String("to", s.leader.Get()), zap.String("request", methodName))
 		time.Sleep(100 * time.Millisecond)
 		params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(req)}
 		results := reflect.ValueOf(s.leaderClient).MethodByName(methodName).Call(params)
