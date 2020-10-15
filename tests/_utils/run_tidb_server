@@ -1,11 +1,16 @@
 #!/bin/sh
 # parameter 1: tidb port
 # parameter 2: tidb password
+# parameter 3: optional, tidb config file
 
 set -eu
 
 PORT=$1
 PASSWORD=$2
+CONFIG=""
+if [ "$#" -ge 3 ]; then
+    CONFIG=$3
+fi
 
 TEST_DIR=/tmp/dm_test
 
@@ -13,6 +18,7 @@ echo "Starting TiDB on port ${PORT}"
 bin/tidb-server \
     -P ${PORT} \
     --store mocktikv \
+    --config "$CONFIG" \
     --log-file "$TEST_DIR/tidb.log" &
 
 echo "Verifying TiDB is started..."
