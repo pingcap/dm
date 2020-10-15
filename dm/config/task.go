@@ -491,6 +491,9 @@ func (c *TaskConfig) adjust() error {
 		if inst.Mydumper == nil {
 			defaultCfg := defaultMydumperConfig()
 			inst.Mydumper = &defaultCfg
+		} else if inst.Mydumper.ChunkFilesize == "" {
+			// avoid too big dump file that can't sent concurrently
+			inst.Mydumper.ChunkFilesize = defaultChunkFilesize
 		}
 		if inst.MydumperThread != 0 {
 			inst.Mydumper.Threads = inst.MydumperThread
