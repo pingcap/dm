@@ -1671,7 +1671,11 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 }
 
 func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) error {
-	sql := strings.TrimSpace(string(ev.Query))
+	query := string(ev.Query)
+	if query == "BEGIN" {
+		return nil
+	}
+	sql := strings.TrimSpace(query)
 	usedSchema := string(ev.Schema)
 	parser2, err := event.GetParserForStatusVars(ev.StatusVars)
 	if err != nil {
@@ -1692,7 +1696,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
 	}
 	if !parseResult.isDDL {
-		// skipped sql maybe not a DDL (like `BEGIN`)
+		// skipped sql maybe not a DDL
 		return nil
 	}
 
