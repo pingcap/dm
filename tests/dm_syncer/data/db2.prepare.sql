@@ -5,10 +5,10 @@ create table t2 (id int auto_increment, name varchar(20), primary key (`id`));
 insert into t2 (name) values ('Arya'), ('Bran'), ('Sansa');
 
 create table dm_syncer_route_rules_1 (id int, name varchar(20), primary key (`id`));
-insert into dm_syncer_route_rules_1 (name) values ('Howie'), ('howie');
+insert into dm_syncer_route_rules_1 (id, name) values (1, 'Howie'), (2, 'howie');
 
 create table dm_syncer_route_rules_2 (id int, name varchar(20), primary key (`id`));
-insert into dm_syncer_route_rules_2 (name) values ('howie'), ('Bran'), ('Sansa');
+insert into dm_syncer_route_rules_2 (id, name) values (2, 'howie'), (3, 'Bran'), (4, 'Sansa');
 
 create table dm_syncer_route_rules_3 (id int, name varchar(20), primary key (`id`));
-insert into dm_syncer_route_rules_3 (name) values ('Arya'), ('Howie'), ('Sansa');
+insert into dm_syncer_route_rules_3 (id, name) values (3, 'Arya'), (4, 'Howie'), (5, 'Sansa');
