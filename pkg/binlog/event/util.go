@@ -271,6 +271,8 @@ func writeStringColumnValue(buf *bytes.Buffer, value interface{}) error {
 }
 
 // https://dev.mysql.com/doc/internals/en/query-event.html
+// and after Q_COMMIT_TS could be find in
+// https://github.com/mysql/mysql-server/blob/124c7ab1d6f914637521fd4463a993aa73403513/libbinlogevents/include/statement_events.h#L500
 const (
 	QFlags2Code = iota
 	QSqlModeCode
@@ -286,6 +288,13 @@ const (
 	QInvokers
 	QUpdatedDbNames
 	QMicroseconds
+	QCommitTs
+	QCommitTs2
+	QExplicitDefaultsForTimestamp
+	QDdlLoggedWithXid
+	QDefaultCollationForUtf8mb4
+	QSqlRequirePrimaryKey
+	QDefaultTableEncryption
 )
 
 var (
@@ -300,6 +309,15 @@ var (
 		QTableMapForUpdateCode: 8,
 		QMasterDataWrittenCode: 4,
 		QMicroseconds:          3,
+		QCommitTs:              0, // unused now
+		QCommitTs2:             0, // unused now
+		// below variables could be find in
+		// https://github.com/mysql/mysql-server/blob/7d10c82196c8e45554f27c00681474a9fb86d137/libbinlogevents/src/statement_events.cpp#L312
+		QExplicitDefaultsForTimestamp: 1,
+		QDdlLoggedWithXid:             8,
+		QDefaultCollationForUtf8mb4:   2,
+		QSqlRequirePrimaryKey:         1,
+		QDefaultTableEncryption:       1,
 	}
 )
 
