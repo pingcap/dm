@@ -38,7 +38,7 @@ import (
 
 const (
 	waitDDLRetryCount = 10
-	schemaLeaseTime   = 10 * time.Millisecond
+	schemaLeaseTime   = 300 * time.Second
 )
 
 var (
