@@ -21,16 +21,17 @@ import (
 
 // Proxy Interface
 type Proxy interface {
-	GetLabels() map[string]map[string]string
+	GetLabelNamesIndex() map[string]int
+	GetLabels() map[string][]string
 	vecDelete(prometheus.Labels) bool
 }
 
 // noteLabelsInMetricsProxy common function in Proxy
-func noteLabelsInMetricsProxy(proxy Proxy, labels map[string]string, values []string) {
+func noteLabelsInMetricsProxy(proxy Proxy, values []string) {
 	key := strings.Join(values, ",")
 
 	if _, ok := proxy.GetLabels()[key]; !ok {
-		proxy.GetLabels()[key] = labels
+		proxy.GetLabels()[key] = values
 	}
 }
 
@@ -40,16 +41,22 @@ func findAndDeleteLabelsInMetricsProxy(proxy Proxy, labels prometheus.Labels) bo
 		deleteLabelsList = make([]map[string]string, 0)
 		res              = true
 	)
+
+	labelNamesIndex := proxy.GetLabelNamesIndex()
 	inputLabelsLen := len(labels)
 	for _, ls := range proxy.GetLabels() {
 		t := 0
 		for k := range labels {
-			if ls[k] == labels[k] {
+			if ls[labelNamesIndex[k]] == labels[k] {
 				t++
 			}
 		}
 		if t == inputLabelsLen {
-			deleteLabelsList = append(deleteLabelsList, ls)
+			deleteLabel := make(map[string]string, len(labelNamesIndex))
+			for labelKey, idx := range labelNamesIndex {
+				deleteLabel[labelKey] = ls[idx]
+			}
+			deleteLabelsList = append(deleteLabelsList, deleteLabel)
 		}
 	}
 

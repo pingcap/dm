@@ -23,19 +23,23 @@ import (
 type CounterVecProxy struct {
 	mu sync.Mutex
 
-	LabelNames []string
-	Labels     map[string]map[string]string
+	LabelNamesIndex map[string]int
+	Labels          map[string][]string
 	*prometheus.CounterVec
 }
 
 // NewCounterVec creates a new CounterVec based on the provided CounterOpts and
 // partitioned by the given label names.
 func NewCounterVec(opts prometheus.CounterOpts, labelNames []string) *CounterVecProxy {
-	return &CounterVecProxy{
-		LabelNames: labelNames,
-		Labels:     make(map[string]map[string]string),
-		CounterVec: prometheus.NewCounterVec(opts, labelNames),
+	counterVecProxy := &CounterVecProxy{
+		LabelNamesIndex: make(map[string]int, len(labelNames)),
+		Labels:          make(map[string][]string),
+		CounterVec:      prometheus.NewCounterVec(opts, labelNames),
 	}
+	for idx, v := range labelNames {
+		counterVecProxy.LabelNamesIndex[v] = idx
+	}
+	return counterVecProxy
 }
 
 // WithLabelValues works as GetMetricWithLabelValues, but panics where
@@ -44,12 +48,8 @@ func NewCounterVec(opts prometheus.CounterOpts, labelNames []string) *CounterVec
 //     myVec.WithLabelValues("404", "GET").Add(42)
 func (c *CounterVecProxy) WithLabelValues(lvs ...string) prometheus.Counter {
 	if len(lvs) > 0 {
-		labels := make(map[string]string, len(lvs))
-		for index, label := range lvs {
-			labels[c.LabelNames[index]] = label
-		}
 		c.mu.Lock()
-		noteLabelsInMetricsProxy(c, labels, lvs)
+		noteLabelsInMetricsProxy(c, lvs)
 		c.mu.Unlock()
 	}
 	return c.CounterVec.WithLabelValues(lvs...)
@@ -60,12 +60,13 @@ func (c *CounterVecProxy) WithLabelValues(lvs ...string) prometheus.Counter {
 //     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Add(42)
 func (c *CounterVecProxy) With(labels prometheus.Labels) prometheus.Counter {
 	if len(labels) > 0 {
-		values := make([]string, 0, len(labels))
-		for _, v := range labels {
-			values = append(values, v)
+		values := make([]string, len(labels))
+		labelNameIndex := c.GetLabelNamesIndex()
+		for k, v := range labels {
+			values[labelNameIndex[k]] = v
 		}
 		c.mu.Lock()
-		noteLabelsInMetricsProxy(c, labels, values)
+		noteLabelsInMetricsProxy(c, values)
 		c.mu.Unlock()
 	}
 
@@ -82,8 +83,13 @@ func (c *CounterVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	return findAndDeleteLabelsInMetricsProxy(c, labels)
 }
 
+// GetLabelNamesIndex to support get CounterVecProxy's LabelNames when you use Proxy object
+func (c *CounterVecProxy) GetLabelNamesIndex() map[string]int {
+	return c.LabelNamesIndex
+}
+
 // GetLabels to support get CounterVecProxy's Labels when you use Proxy object
-func (c *CounterVecProxy) GetLabels() map[string]map[string]string {
+func (c *CounterVecProxy) GetLabels() map[string][]string {
 	return c.Labels
 }
 

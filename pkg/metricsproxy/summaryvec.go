@@ -23,8 +23,8 @@ import (
 type SummaryVecProxy struct {
 	mu sync.Mutex
 
-	LabelNames []string
-	Labels     map[string]map[string]string
+	LabelNamesIndex map[string]int
+	Labels          map[string][]string
 	*prometheus.SummaryVec
 }
 
@@ -35,11 +35,15 @@ type SummaryVecProxy struct {
 // it is handled by the Prometheus server internally, “quantile” is an illegal
 // label name. NewSummaryVec will panic if this label name is used.
 func NewSummaryVec(opts prometheus.SummaryOpts, labelNames []string) *SummaryVecProxy {
-	return &SummaryVecProxy{
-		LabelNames: labelNames,
-		Labels:     make(map[string]map[string]string),
-		SummaryVec: prometheus.NewSummaryVec(opts, labelNames),
+	summaryVecProxy := &SummaryVecProxy{
+		LabelNamesIndex: make(map[string]int),
+		Labels:          make(map[string][]string),
+		SummaryVec:      prometheus.NewSummaryVec(opts, labelNames),
 	}
+	for idx, v := range labelNames {
+		summaryVecProxy.LabelNamesIndex[v] = idx
+	}
+	return summaryVecProxy
 }
 
 // WithLabelValues works as GetMetricWithLabelValues, but panics where
@@ -48,12 +52,8 @@ func NewSummaryVec(opts prometheus.SummaryOpts, labelNames []string) *SummaryVec
 //     myVec.WithLabelValues("404", "GET").Observe(42.21)
 func (c *SummaryVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 	if len(lvs) > 0 {
-		labels := make(map[string]string, len(lvs))
-		for index, label := range lvs {
-			labels[c.LabelNames[index]] = label
-		}
 		c.mu.Lock()
-		noteLabelsInMetricsProxy(c, labels, lvs)
+		noteLabelsInMetricsProxy(c, lvs)
 		c.mu.Unlock()
 	}
 	return c.SummaryVec.WithLabelValues(lvs...)
@@ -64,12 +64,13 @@ func (c *SummaryVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 //     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Observe(42.21)
 func (c *SummaryVecProxy) With(labels prometheus.Labels) prometheus.Observer {
 	if len(labels) > 0 {
-		values := make([]string, 0, len(labels))
-		for _, v := range labels {
-			values = append(values, v)
+		values := make([]string, len(labels))
+		labelNameIndex := c.GetLabelNamesIndex()
+		for k, v := range labels {
+			values[labelNameIndex[k]] = v
 		}
 		c.mu.Lock()
-		noteLabelsInMetricsProxy(c, labels, values)
+		noteLabelsInMetricsProxy(c, values)
 		c.mu.Unlock()
 	}
 
@@ -86,8 +87,13 @@ func (c *SummaryVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	return findAndDeleteLabelsInMetricsProxy(c, labels)
 }
 
+// GetLabelNamesIndex to support get SummaryVecProxy's LabelNames when you use Proxy object
+func (c *SummaryVecProxy) GetLabelNamesIndex() map[string]int {
+	return c.LabelNamesIndex
+}
+
 // GetLabels to support get SummaryVecProxy's Labels when you use Proxy object
-func (c *SummaryVecProxy) GetLabels() map[string]map[string]string {
+func (c *SummaryVecProxy) GetLabels() map[string][]string {
 	return c.Labels
 }
 
