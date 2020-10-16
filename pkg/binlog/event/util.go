@@ -321,37 +321,36 @@ var (
 	}
 )
 
-// getSQLMode gets SQL mode from binlog statusVars
+// getSQLMode gets SQL mode from binlog statusVars, still could return a reasonable value if found error
 func getSQLMode(statusVars []byte) (mysql.SQLMode, error) {
 	vars, err := statusVarsToKV(statusVars)
-	if err != nil {
-		return mysql.ModeNone, err
-	}
 	b, ok := vars[QSqlModeCode]
+
 	if !ok {
-		// should not happen
-		return mysql.ModeNone, errors.New("Q_SQL_MODE_CODE not found in status_vars")
+		if err == nil {
+			// should not happen
+			err = errors.New("Q_SQL_MODE_CODE not found in status_vars")
+		}
+		return mysql.ModeNone, err
 	}
 
 	r := bytes.NewReader(b)
 	var v int64
 	_ = binary.Read(r, binary.LittleEndian, &v)
 
-	return mysql.SQLMode(v), nil
+	return mysql.SQLMode(v), err
 }
 
 // GetParserForStatusVars gets a parser for binlog which is suitable for its sql_mode in statusVars
 func GetParserForStatusVars(statusVars []byte) (*parser.Parser, error) {
 	parser2 := parser.New()
 	mode, err := getSQLMode(statusVars)
-	if err != nil {
-		return nil, err
-	}
 	parser2.SetSQLMode(mode)
-	return parser2, nil
+	return parser2, err
 }
 
 // if returned error is `io.EOF`, it means UnexpectedEOF because we handled expected `io.EOF` as success
+// returned map should not be nil for other usage
 func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 	r := bytes.NewReader(statusVars)
 	vars := make(map[byte][]byte)
@@ -381,7 +380,7 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 
 	generateError := func(err error) (map[byte][]byte, error) {
 		offset, _ := r.Seek(0, io.SeekCurrent)
-		return nil, terror.ErrBinlogStatusVarsParse.Delegate(err, statusVars, offset)
+		return vars, terror.ErrBinlogStatusVarsParse.Delegate(err, statusVars, offset)
 	}
 
 	for {
