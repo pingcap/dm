@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -1671,11 +1672,10 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 }
 
 func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) error {
-	query := string(ev.Query)
-	if query == "BEGIN" {
+	if bytes.Equal(ev.Query, []byte("BEGIN")) {
 		return nil
 	}
-	sql := strings.TrimSpace(query)
+	sql := strings.TrimSpace(string(ev.Query))
 	usedSchema := string(ev.Schema)
 	parser2, err := event.GetParserForStatusVars(ev.StatusVars)
 	if err != nil {
