@@ -1675,8 +1675,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	usedSchema := string(ev.Schema)
 	parser2, err := event.GetParserForStatusVars(ev.StatusVars)
 	if err != nil {
-		log.L().Warn("can't determine sql_mode from binlog status_vars, use default parser instead", zap.Error(err))
-		parser2 = parser.New()
+		log.L().Warn("found error when get sql_mode from binlog status_vars", zap.Error(err))
 	}
 
 	parseResult, err := s.parseDDLSQL(sql, parser2, usedSchema)
