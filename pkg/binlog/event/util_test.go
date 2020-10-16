@@ -60,8 +60,23 @@ func (t *testUtilSuite) TestStatusVarsToKV(c *C) {
 		// wrong input
 		{
 			[]byte{0, 0, 0, 0, 0, 1},
-			nil,
+			map[byte][]byte{
+				0: {0, 0, 0, 0},
+			},
 			terror.ErrBinlogStatusVarsParse.Delegate(io.EOF, []byte{0, 0, 0, 0, 0, 1}, 6),
+		},
+		// undocumented status_vars
+		{
+			[]byte{0, 0, 0, 0, 0, 1, 32, 0, 160, 85, 0, 0, 0, 0, 6, 3, 115, 116, 100, 4, 45, 0, 45, 0, 8, 0, 12, 1, 111, 110, 108, 105, 110, 101, 95, 100, 100, 108, 0, 16, 0},
+			map[byte][]byte{
+				0:  {0, 0, 0, 0},
+				1:  {32, 0, 160, 85, 0, 0, 0, 0},
+				6:  {3, 115, 116, 100},
+				4:  {45, 0, 45, 0, 8, 0},
+				12: {1, 111, 110, 108, 105, 110, 101, 95, 100, 100, 108, 0},
+				16: {0},
+			},
+			nil,
 		},
 	}
 
@@ -71,7 +86,7 @@ func (t *testUtilSuite) TestStatusVarsToKV(c *C) {
 			c.Assert(err.Error(), Equals, t.err.Error())
 		} else {
 			c.Assert(err, IsNil)
-			c.Assert(vars, DeepEquals, t.output)
 		}
+		c.Assert(vars, DeepEquals, t.output)
 	}
 }

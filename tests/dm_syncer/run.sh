@@ -13,6 +13,9 @@ function run() {
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_contains 'Query OK, 3 rows affected'
 
+    run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
+    check_not_contains "dm_syncer_filter_rule"
+
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
@@ -74,7 +77,12 @@ function run() {
     # wait for dm_syncer to init and start
     sleep 5
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_blalist.toml
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_route_rules.toml
     check_sync_diff $WORK_DIR $cur/conf/diff_config_filter_rule.toml
+    # test block-allow-list by the way
+    run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
+    check_not_contains "dm_syncer_ignore_db"
 }
 
 cleanup_data $TEST_NAME
