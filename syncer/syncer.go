@@ -873,9 +873,7 @@ func (s *Syncer) flushCheckPoints() error {
 		s.tctx.L().Info("prepare flush sqls", zap.Strings("shard meta sqls", shardMetaSQLs), zap.Reflect("shard meta arguments", shardMetaArgs))
 	}
 
-	tctx, cancel := s.tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
-	defer cancel()
-	err := s.checkpoint.FlushPointsExcept(tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
+	err := s.checkpoint.FlushPointsExcept(s.tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
 	if err != nil {
 		return terror.Annotatef(err, "flush checkpoint %s", s.checkpoint)
 	}
