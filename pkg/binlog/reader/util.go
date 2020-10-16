@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser"
 	uuid "github.com/satori/go.uuid"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
@@ -64,8 +63,7 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 		case *replication.QueryEvent:
 			parser2, err2 := event.GetParserForStatusVars(ev.StatusVars)
 			if err2 != nil {
-				log.L().Warn("can't determine sql_mode from binlog status_vars, use default parser instead", zap.Error(err2))
-				parser2 = parser.New()
+				log.L().Warn("found error when get sql_mode from binlog status_vars", zap.Error(err2))
 			}
 
 			isDDL := common.CheckIsDDL(string(ev.Query), parser2)

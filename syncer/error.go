@@ -60,7 +60,7 @@ func isDropColumnWithIndexError(err error) bool {
 		return false
 	}
 	// different version of TiDB has different error message, try to cover most versions
-	return mysqlErr.Number == errno.ErrUnsupportedDDLOperation &&
+	return (mysqlErr.Number == errno.ErrUnsupportedDDLOperation || mysqlErr.Number == tmysql.ErrUnknown) &&
 		strings.Contains(mysqlErr.Message, "drop column") &&
 		strings.Contains(mysqlErr.Message, "with index")
 }
