@@ -61,7 +61,7 @@ filters:
     action: Do
   filter-schema-rule:
     schema-pattern: "dm_syncer"
-    events: ["drop database"]
+    events: ["drop table"]
     action: Ignore
 
 routes:
