@@ -249,3 +249,10 @@ func (s *testCommonSuite) TestDDLLockID(c *C) {
 	// invalid ID
 	c.Assert(ExtractTaskFromLockID("invalid-lock-id"), Equals, "")
 }
+
+func (s *testCommonSuite) TestNonRepeatStringsEqual(c *C) {
+	c.Assert(NonRepeatStringsEqual([]string{}, []string{}), IsTrue)
+	c.Assert(NonRepeatStringsEqual([]string{"1", "2"}, []string{"2", "1"}), IsTrue)
+	c.Assert(NonRepeatStringsEqual([]string{}, []string{"1"}), IsFalse)
+	c.Assert(NonRepeatStringsEqual([]string{"1", "2"}, []string{"2", "3"}), IsFalse)
+}
