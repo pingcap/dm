@@ -17,7 +17,7 @@ fix-sql-file = "fix.sql"
 # tables need to check.
 [[check-tables]]
 schema = "dm_syncer"
-tables = ["~t.*"]
+tables = ["~^t.*"]
 
 [[table-config]]
 schema = "dm_syncer"
