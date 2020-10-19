@@ -248,7 +248,7 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schem
 			newSQLs = append(newSQLs, sql)
 		}
 	}
-	return sqls, tableNames[0], nil
+	return newSQLs, tableNames[0], nil
 }
 
 func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema string) error {
