@@ -6,6 +6,15 @@ insert into t1 (id, name) values (1, 'arya'), (2, 'catelyn');
 create table dm_syncer_1(id int, name varchar(20), primary key(`id`));
 insert into dm_syncer_1 values (1, 'arya'), (2, 'catelyn');
 
+create table dm_syncer_route_rules_1 (id int, name varchar(20), primary key (`id`));
+insert into dm_syncer_route_rules_1 (id, name) values (1, 'Howie'), (2, 'howie');
+
+create table dm_syncer_route_rules_2 (id int, name varchar(20), primary key (`id`));
+insert into dm_syncer_route_rules_2 (id, name) values (3, 'howie'), (4, 'Bran'), (5, 'Sansa');
+
+create table dm_syncer_route_rules_3 (id int, name varchar(20), primary key (`id`));
+insert into dm_syncer_route_rules_3 (id, name) values (6, 'Arya'), (7, 'Howie'), (8, 'Sansa');
+
 drop database if exists `dm_syncer_do_db`;
 create database `dm_syncer_do_db`;
 use `dm_syncer_do_db`;

@@ -21,6 +21,7 @@ mysql-instances:
       binlog-name: binlog-name-placeholder-1
       binlog-pos: 4
     block-allow-list:  "instance"
+    route-rules: ["route-rule"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -30,14 +31,14 @@ mysql-instances:
       binlog-name: binlog-name-placeholder-2
       binlog-pos: 4
     block-allow-list:  "instance"
-    route-rules: ["route-rule"]
+    filter-rules: ["filter-schema-rule","do-table-rule"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
 block-allow-list:
   instance:
-    do-dbs: ["dm_syncer", "dm_syncer_do_db"]
+    do-dbs: ["dm_syncer", "dm_syncer_do_db","dm_syncer_plus"]
     ignore-dbs: ["~^dm_syncer_ignore_"]
     do-tables:
       - db-name: "dm_syncer"
@@ -46,9 +47,29 @@ block-allow-list:
         tbl-name: "~^dm_syncer_do_db_."
       - db-name: "dm_syncer"
         tbl-name: "~^dm_syncer_route_rules_."
+      - db-name: "dm_syncer_plus"
+        tbl-name: "dm_syncer_filter_rule"
     ignore-tables:
       - db-name: "~^dm_syncer_ignore_"
         tbl-name: "~^dm_syncer_ignore_db_."
+
+filters:
+  do-table-rule:
+    schema-pattern: "dm_syncer_plus"
+    table-pattern: "dm_syncer_filter_rule"
+    events: ["create table", "all dml"]
+    action: Do
+  filter-schema-rule:
+    schema-pattern: "dm_syncer_plus"
+    events: ["drop table"]
+    action: Ignore
+
+routes:
+  route-rule:
+    schema-pattern: "dm_syncer"
+    table-pattern: "dm_syncer_route_rules_*"
+    target-schema: "dm_syncer"
+    target-table: "dm_syncer_route_rule"
 
 mydumpers:
   global:
@@ -66,10 +87,3 @@ syncers:
   global:
     worker-count: 16
     batch: 100
-
-routes:
-  route-rule:
-    schema-pattern: "dm_syncer"
-    table-pattern: "dm_syncer_route_rules_*"
-    target-schema: "dm_syncer"
-    target-table: "dm_syncer_route_rule"
