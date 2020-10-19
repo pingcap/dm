@@ -54,6 +54,11 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     sleep 2
 
+    echo "pause task before kill and restart dm-worker"
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "pause-task test" \
+        "\"result\": true" 3
+
     echo "start dm-worker3 and kill dm-worker2"
     ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
     check_port_offline $WORKER2_PORT 20
@@ -61,6 +66,23 @@ function run() {
 
     run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
+
+    sleep 8
+    echo "wait for the task to be scheduled and keep paused"
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Paused"' 10
+
+    echo "resume task before kill and restart dm-worker"
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task test" \
+        "\"result\": true" 3
+
+    echo "start dm-worker2 and kill dm-worker3"
+    ps aux | grep dm-worker3 |awk '{print $2}'|xargs kill || true
+    check_port_offline $WORKER3_PORT 20
+    rm -rf $WORK_DIR/worker3/relay_log
+
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
     sleep 8
     echo "wait and check task running"
