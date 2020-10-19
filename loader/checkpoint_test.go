@@ -158,3 +158,21 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(count, Equals, 0)
 }
+
+func (t *testCheckPointSuite) TestDeepCopy(c *C) {
+	cp := RemoteCheckPoint{}
+	cp.restoringFiles.pos = make(map[string]map[string]FilePosSet)
+	cp.restoringFiles.pos["db"] = make(map[string]FilePosSet)
+	cp.restoringFiles.pos["db"]["table"] = make(map[string][]int64)
+	cp.restoringFiles.pos["db"]["table"]["file"] = []int64{0, 100}
+
+	ret := cp.GetRestoringFileInfo("db", "table")
+	cp.restoringFiles.pos["db"]["table"]["file"][0] = 10
+	cp.restoringFiles.pos["db"]["table"]["file2"] = []int64{0, 100}
+	c.Assert(ret, DeepEquals, map[string][]int64{"file": {0, 100}})
+
+	ret = cp.GetAllRestoringFileInfo()
+	cp.restoringFiles.pos["db"]["table"]["file"][0] = 20
+	cp.restoringFiles.pos["db"]["table"]["file3"] = []int64{0, 100}
+	c.Assert(ret, DeepEquals, map[string][]int64{"file": {10, 100}, "file2": {0, 100}})
+}
