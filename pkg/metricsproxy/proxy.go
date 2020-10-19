@@ -23,16 +23,14 @@ import (
 type Proxy interface {
 	GetLabelNamesIndex() map[string]int
 	GetLabels() map[string][]string
+	SetLabel(string, []string)
 	vecDelete(prometheus.Labels) bool
 }
 
 // noteLabelsInMetricsProxy common function in Proxy
 func noteLabelsInMetricsProxy(proxy Proxy, values []string) {
 	key := strings.Join(values, ",")
-
-	if _, ok := proxy.GetLabels()[key]; !ok {
-		proxy.GetLabels()[key] = values
-	}
+	proxy.SetLabel(key, values)
 }
 
 // findAndDeleteLabelsInMetricsProxy common function in Proxy

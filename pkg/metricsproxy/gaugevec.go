@@ -48,9 +48,7 @@ func NewGaugeVec(opts prometheus.GaugeOpts, labelNames []string) *GaugeVecProxy 
 //     myVec.WithLabelValues("404", "GET").Add(42)
 func (c *GaugeVecProxy) WithLabelValues(lvs ...string) prometheus.Gauge {
 	if len(lvs) > 0 {
-		c.mu.Lock()
 		noteLabelsInMetricsProxy(c, lvs)
-		c.mu.Unlock()
 	}
 	return c.GaugeVec.WithLabelValues(lvs...)
 }
@@ -65,9 +63,7 @@ func (c *GaugeVecProxy) With(labels prometheus.Labels) prometheus.Gauge {
 		for k, v := range labels {
 			values[labelNameIndex[k]] = v
 		}
-		c.mu.Lock()
 		noteLabelsInMetricsProxy(c, values)
-		c.mu.Unlock()
 	}
 
 	return c.GaugeVec.With(labels)
@@ -91,6 +87,13 @@ func (c *GaugeVecProxy) GetLabelNamesIndex() map[string]int {
 // GetLabels to support get GaugeVecProxy's Labels when you use Proxy object
 func (c *GaugeVecProxy) GetLabels() map[string][]string {
 	return c.Labels
+}
+
+// SetLabel to support set GaugeVecProxy's Label when you use Proxy object
+func (c *GaugeVecProxy) SetLabel(key string, vals []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Labels[key] = vals
 }
 
 // vecDelete to support delete GaugeVecProxy's Labels when you use Proxy object

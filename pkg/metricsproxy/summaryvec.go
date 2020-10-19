@@ -52,9 +52,7 @@ func NewSummaryVec(opts prometheus.SummaryOpts, labelNames []string) *SummaryVec
 //     myVec.WithLabelValues("404", "GET").Observe(42.21)
 func (c *SummaryVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 	if len(lvs) > 0 {
-		c.mu.Lock()
 		noteLabelsInMetricsProxy(c, lvs)
-		c.mu.Unlock()
 	}
 	return c.SummaryVec.WithLabelValues(lvs...)
 }
@@ -69,9 +67,7 @@ func (c *SummaryVecProxy) With(labels prometheus.Labels) prometheus.Observer {
 		for k, v := range labels {
 			values[labelNameIndex[k]] = v
 		}
-		c.mu.Lock()
 		noteLabelsInMetricsProxy(c, values)
-		c.mu.Unlock()
 	}
 
 	return c.SummaryVec.With(labels)
@@ -95,6 +91,13 @@ func (c *SummaryVecProxy) GetLabelNamesIndex() map[string]int {
 // GetLabels to support get SummaryVecProxy's Labels when you use Proxy object
 func (c *SummaryVecProxy) GetLabels() map[string][]string {
 	return c.Labels
+}
+
+// SetLabel to support set SummaryVecProxy's Label when you use Proxy object
+func (c *SummaryVecProxy) SetLabel(key string, vals []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Labels[key] = vals
 }
 
 // vecDelete to support delete SummaryVecProxy's Labels when you use Proxy object

@@ -48,9 +48,7 @@ func NewCounterVec(opts prometheus.CounterOpts, labelNames []string) *CounterVec
 //     myVec.WithLabelValues("404", "GET").Add(42)
 func (c *CounterVecProxy) WithLabelValues(lvs ...string) prometheus.Counter {
 	if len(lvs) > 0 {
-		c.mu.Lock()
 		noteLabelsInMetricsProxy(c, lvs)
-		c.mu.Unlock()
 	}
 	return c.CounterVec.WithLabelValues(lvs...)
 }
@@ -65,9 +63,7 @@ func (c *CounterVecProxy) With(labels prometheus.Labels) prometheus.Counter {
 		for k, v := range labels {
 			values[labelNameIndex[k]] = v
 		}
-		c.mu.Lock()
 		noteLabelsInMetricsProxy(c, values)
-		c.mu.Unlock()
 	}
 
 	return c.CounterVec.With(labels)
@@ -91,6 +87,13 @@ func (c *CounterVecProxy) GetLabelNamesIndex() map[string]int {
 // GetLabels to support get CounterVecProxy's Labels when you use Proxy object
 func (c *CounterVecProxy) GetLabels() map[string][]string {
 	return c.Labels
+}
+
+// SetLabel to support set CounterVecProxy's Label when you use Proxy object
+func (c *CounterVecProxy) SetLabel(key string, vals []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Labels[key] = vals
 }
 
 // vecDelete to support delete CounterVecProxy's Labels when you use Proxy object
