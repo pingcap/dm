@@ -2471,7 +2471,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40049]
-message = "worker already closed"
+message = "mysql source handler worker already closed"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -2597,13 +2597,13 @@ workaround = "Please check configs in worker configuration file."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40070]
-message = "worker has not started"
+message = "no mysql source is being handled in the worker"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40071]
-message = "worker already started"
+message = "mysql source handler worker already started"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
