@@ -89,8 +89,11 @@ type RemoteCheckPoint struct {
 	conn           *DBConn
 	id             string
 	schema         string
-	tableName      string                           // tableName contains schema name
-	restoringFiles map[string]map[string]FilePosSet // schema -> table -> FilePosSet(filename -> [cur, end])
+	tableName      string // tableName contains schema name
+	restoringFiles struct {
+		sync.RWMutex
+		pos map[string]map[string]FilePosSet // schema -> table -> FilePosSet(filename -> [cur, end])
+	}
 	finishedTables map[string]struct{}
 	logCtx         *tcontext.Context
 }
@@ -105,12 +108,12 @@ func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 		db:             db,
 		conn:           dbConns[0],
 		id:             id,
-		restoringFiles: make(map[string]map[string]FilePosSet),
 		finishedTables: make(map[string]struct{}),
 		schema:         dbutil.ColumnName(cfg.MetaSchema),
 		tableName:      dbutil.TableName(cfg.MetaSchema, fmt.Sprintf("%s_loader_checkpoint", cfg.Name)),
 		logCtx:         tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
 	}
+	cp.restoringFiles.pos = make(map[string]map[string]FilePosSet)
 
 	err = cp.prepare(tctx)
 	if err != nil {
@@ -184,17 +187,19 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 		endPos   int64
 	)
 
-	cp.restoringFiles = make(map[string]map[string]FilePosSet) // reset to empty
+	cp.restoringFiles.Lock()
+	defer cp.restoringFiles.Unlock()
+	cp.restoringFiles.pos = make(map[string]map[string]FilePosSet) // reset to empty
 	for rows.Next() {
 		err := rows.Scan(&filename, &schema, &table, &offset, &endPos)
 		if err != nil {
 			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
 
-		if _, ok := cp.restoringFiles[schema]; !ok {
-			cp.restoringFiles[schema] = make(map[string]FilePosSet)
+		if _, ok := cp.restoringFiles.pos[schema]; !ok {
+			cp.restoringFiles.pos[schema] = make(map[string]FilePosSet)
 		}
-		tables := cp.restoringFiles[schema]
+		tables := cp.restoringFiles.pos[schema]
 		if _, ok := tables[table]; !ok {
 			tables[table] = make(map[string][]int64)
 		}
@@ -207,21 +212,32 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 
 // GetRestoringFileInfo implements CheckPoint.GetRestoringFileInfo
 func (cp *RemoteCheckPoint) GetRestoringFileInfo(db, table string) map[string][]int64 {
-	if tables, ok := cp.restoringFiles[db]; ok {
+	cp.restoringFiles.RLock()
+	defer cp.restoringFiles.RUnlock()
+	results := make(map[string][]int64)
+	if tables, ok := cp.restoringFiles.pos[db]; ok {
 		if restoringFiles, ok := tables[table]; ok {
-			return restoringFiles
+			// make a copy of restoringFiles, and its slice value
+			for k, v := range restoringFiles {
+				results[k] = make([]int64, len(v))
+				copy(results[k], v)
+			}
+			return results
 		}
 	}
-	return make(map[string][]int64)
+	return results
 }
 
 // GetAllRestoringFileInfo implements CheckPoint.GetAllRestoringFileInfo
 func (cp *RemoteCheckPoint) GetAllRestoringFileInfo() map[string][]int64 {
+	cp.restoringFiles.RLock()
+	defer cp.restoringFiles.RUnlock()
 	results := make(map[string][]int64)
-	for _, tables := range cp.restoringFiles {
+	for _, tables := range cp.restoringFiles.pos {
 		for _, files := range tables {
 			for file, pos := range files {
-				results[file] = pos
+				results[file] = make([]int64, len(pos))
+				copy(results[file], pos)
 			}
 		}
 	}
@@ -230,7 +246,9 @@ func (cp *RemoteCheckPoint) GetAllRestoringFileInfo() map[string][]int64 {
 
 // IsTableCreated implements CheckPoint.IsTableCreated
 func (cp *RemoteCheckPoint) IsTableCreated(db, table string) bool {
-	tables, ok := cp.restoringFiles[db]
+	cp.restoringFiles.RLock()
+	defer cp.restoringFiles.RUnlock()
+	tables, ok := cp.restoringFiles.pos[db]
 	if !ok {
 		return false
 	}
@@ -252,8 +270,10 @@ func (cp *RemoteCheckPoint) IsTableFinished(db, table string) bool {
 
 // CalcProgress implements CheckPoint.CalcProgress
 func (cp *RemoteCheckPoint) CalcProgress(allFiles map[string]Tables2DataFiles) error {
+	cp.restoringFiles.RLock()
+	defer cp.restoringFiles.RUnlock()
 	cp.finishedTables = make(map[string]struct{}) // reset to empty
-	for db, tables := range cp.restoringFiles {
+	for db, tables := range cp.restoringFiles.pos {
 		dbTables, ok := allFiles[db]
 		if !ok {
 			return terror.ErrCheckpointDBNotExistInFile.Generate(db)
@@ -299,7 +319,9 @@ func (cp *RemoteCheckPoint) allFilesFinished(files map[string][]int64) bool {
 
 // AllFinished implements CheckPoint.AllFinished
 func (cp *RemoteCheckPoint) AllFinished() bool {
-	for _, tables := range cp.restoringFiles {
+	cp.restoringFiles.RLock()
+	defer cp.restoringFiles.RUnlock()
+	for _, tables := range cp.restoringFiles.pos {
 		for _, restoringFiles := range tables {
 			if !cp.allFilesFinished(restoringFiles) {
 				return false
@@ -337,10 +359,12 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 		return terror.WithScope(terror.Annotate(err, "initialize checkpoint"), terror.ScopeDownstream)
 	}
 	// checkpoint not exists and no error, cache endPos in memory
-	if _, ok := cp.restoringFiles[schema]; !ok {
-		cp.restoringFiles[schema] = make(map[string]FilePosSet)
+	cp.restoringFiles.Lock()
+	defer cp.restoringFiles.Unlock()
+	if _, ok := cp.restoringFiles.pos[schema]; !ok {
+		cp.restoringFiles.pos[schema] = make(map[string]FilePosSet)
 	}
-	tables := cp.restoringFiles[schema]
+	tables := cp.restoringFiles.pos[schema]
 	if _, ok := tables[table]; !ok {
 		tables[table] = make(map[string][]int64)
 	}
@@ -375,12 +399,14 @@ func (cp *RemoteCheckPoint) GenSQL(filename string, offset int64) string {
 
 // UpdateOffset implements CheckPoint.UpdateOffset
 func (cp *RemoteCheckPoint) UpdateOffset(filename string, offset int64) {
+	cp.restoringFiles.Lock()
+	defer cp.restoringFiles.Unlock()
 	db, table, err := getDBAndTableFromFilename(filename)
 	if err != nil {
 		cp.logCtx.L().Error("error in checkpoint UpdateOffset", zap.Error(err))
 		return
 	}
-	cp.restoringFiles[db][table][filename][0] = offset
+	cp.restoringFiles.pos[db][table][filename][0] = offset
 }
 
 // Clear implements CheckPoint.Clear
@@ -417,17 +443,10 @@ func (cp *RemoteCheckPoint) Count(tctx *tcontext.Context) (int, error) {
 }
 
 func (cp *RemoteCheckPoint) String() string {
-	// `String` is often used to log something, it's not a big problem even fail,
-	// so 1min should be enough.
-	tctx2, cancel := cp.logCtx.WithTimeout(time.Minute)
-	defer cancel()
-
-	if err := cp.Load(tctx2); err != nil {
-		return err.Error()
-	}
-
+	cp.restoringFiles.RLock()
+	defer cp.restoringFiles.RUnlock()
 	result := make(map[string][]int64)
-	for _, tables := range cp.restoringFiles {
+	for _, tables := range cp.restoringFiles.pos {
 		for _, files := range tables {
 			for file, set := range files {
 				result[file] = set
