@@ -188,7 +188,7 @@ func (w *Worker) Close() {
 }
 
 // StartSubTask creates a sub task an run it
-func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
+func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage) {
 	w.Lock()
 	defer w.Unlock()
 
@@ -211,12 +211,13 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
 	st.cfg = cfg2
 
 	if w.relayPurger != nil && w.relayPurger.Purging() {
+		// TODO: retry until purged finished
 		st.fail(terror.ErrWorkerRelayIsPurging.Generate(cfg.Name))
 		return
 	}
 
-	w.l.Info("started sub task", zap.Stringer("config", cfg2))
-	st.Run()
+	w.l.Info("subtask created", zap.Stringer("config", cfg2))
+	st.Run(expectStage)
 }
 
 // UpdateSubTask update config for a sub task
@@ -378,10 +379,11 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 				closed = true
 				break
 			}
+			log.L().Info("receive subtask stage change", zap.Stringer("stage", stage), zap.Bool("is deleted", stage.IsDeleted))
 			opType, err := w.operateSubTaskStageWithoutConfig(stage)
 			if err != nil {
 				opErrCounter.WithLabelValues(w.name, opType).Inc()
-				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage), zap.Error(err))
+				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage), zap.Bool("is deleted", stage.IsDeleted), zap.Error(err))
 				if etcdutil.IsRetryableError(err) {
 					return err
 				}
@@ -408,16 +410,19 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 func (w *Worker) operateSubTaskStage(stage ha.Stage, subTaskCfg config.SubTaskConfig) (string, error) {
 	var op pb.TaskOp
 	switch {
-	case stage.Expect == pb.Stage_Running:
+	case stage.Expect == pb.Stage_Running, stage.Expect == pb.Stage_Paused:
 		if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
-			w.StartSubTask(&subTaskCfg)
-			log.L().Info("load subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
+			// create the subtask for expected running and paused stage.
+			log.L().Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
+			w.StartSubTask(&subTaskCfg, stage.Expect)
 			// error is nil, opErrTypeBeforeOp will be ignored
 			return opErrTypeBeforeOp, nil
 		}
-		op = pb.TaskOp_Resume
-	case stage.Expect == pb.Stage_Paused:
-		op = pb.TaskOp_Pause
+		if stage.Expect == pb.Stage_Running {
+			op = pb.TaskOp_Resume
+		} else if stage.Expect == pb.Stage_Paused {
+			op = pb.TaskOp_Pause
+		}
 	case stage.IsDeleted:
 		op = pb.TaskOp_Stop
 	}
@@ -483,7 +488,7 @@ func (w *Worker) observeRelayStage(ctx context.Context, etcdCli *clientv3.Client
 					opType, err1 := w.operateRelayStage(ctx, stage)
 					if err1 != nil {
 						opErrCounter.WithLabelValues(w.name, opType).Inc()
-						log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Error(err1))
+						log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Bool("is deleted", stage.IsDeleted), zap.Error(err1))
 					}
 				}
 				retryNum++
@@ -509,10 +514,11 @@ OUTER:
 			if !ok {
 				break OUTER
 			}
+			log.L().Info("receive relay stage change", zap.Stringer("stage", stage), zap.Bool("is deleted", stage.IsDeleted))
 			opType, err := w.operateRelayStage(ctx, stage)
 			if err != nil {
 				opErrCounter.WithLabelValues(w.name, opType).Inc()
-				log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Error(err))
+				log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Bool("is deleted", stage.IsDeleted), zap.Error(err))
 			}
 		case err, ok := <-errCh:
 			if !ok {
