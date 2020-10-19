@@ -84,6 +84,8 @@ function run() {
     # test block-allow-list by the way
     run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
     check_not_contains "dm_syncer_ignore_db"
+    run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
+    check_contains "dm_syncer"
 }
 
 cleanup_data $TEST_NAME

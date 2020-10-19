@@ -27,17 +27,17 @@ tables = ["dm_syncer_route_rule"]
     is-sharding = true
 
     [[table-config.source-tables]]
-    instance-id = "source-2"
+    instance-id = "source-1"
     schema = "dm_syncer"
     table  = "dm_syncer_route_rules_1"
 
     [[table-config.source-tables]]
-    instance-id = "source-2"
+    instance-id = "source-1"
     schema = "dm_syncer"
     table  = "dm_syncer_route_rules_2"
 
     [[table-config.source-tables]]
-    instance-id = "source-2"
+    instance-id = "source-1"
     schema = "dm_syncer"
     table  = "dm_syncer_route_rules_3"
 
@@ -46,7 +46,7 @@ host = "127.0.0.1"
 port = 3307
 user = "root"
 password = "123456"
-instance-id = "source-2"
+instance-id = "source-1"
 
 [target-db]
 host = "127.0.0.1"

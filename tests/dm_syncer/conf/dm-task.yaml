@@ -21,6 +21,7 @@ mysql-instances:
       binlog-name: binlog-name-placeholder-1
       binlog-pos: 4
     block-allow-list:  "instance"
+    route-rules: ["route-rule"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -30,7 +31,6 @@ mysql-instances:
       binlog-name: binlog-name-placeholder-2
       binlog-pos: 4
     block-allow-list:  "instance"
-    route-rules: ["route-rule"]
     filter-rules: ["filter-schema-rule","do-table-rule"]
     mydumper-config-name: "global"
     loader-config-name: "global"
