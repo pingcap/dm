@@ -101,7 +101,7 @@ func (t *testServer) TestServer(c *C) {
 		keepAliveTTL = int64(1)
 	)
 	etcdDir := c.MkDir()
-	ETCD, err := createMockETCD(etcdDir, "host://"+masterAddr)
+	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
 	c.Assert(err, IsNil)
 	defer ETCD.Close()
 	cfg := NewConfig()
@@ -230,7 +230,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 		startRev     = int64(1)
 	)
 	etcdDir := c.MkDir()
-	ETCD, err := createMockETCD(etcdDir, "host://"+masterAddr)
+	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
 	c.Assert(err, IsNil)
 	defer ETCD.Close()
 	cfg := NewConfig()
@@ -376,7 +376,7 @@ func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, d
 	// When worker server fail to keepalive with etcd, sever should close its worker
 	c.Assert(s.getWorker(true), IsNil)
 	c.Assert(s.getSourceStatus(true).Result, IsNil)
-	ETCD, err := createMockETCD(dir, "host://"+hostName)
+	ETCD, err := createMockETCD(dir, "http://"+hostName)
 	c.Assert(err, IsNil)
 	time.Sleep(3 * time.Second)
 	return ETCD

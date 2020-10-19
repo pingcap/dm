@@ -872,9 +872,7 @@ func (s *Syncer) flushCheckPoints() error {
 		s.tctx.L().Info("prepare flush sqls", zap.Strings("shard meta sqls", shardMetaSQLs), zap.Reflect("shard meta arguments", shardMetaArgs))
 	}
 
-	tctx, cancel := s.tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
-	defer cancel()
-	err := s.checkpoint.FlushPointsExcept(tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
+	err := s.checkpoint.FlushPointsExcept(s.tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
 	if err != nil {
 		return terror.Annotatef(err, "flush checkpoint %s", s.checkpoint)
 	}
@@ -1675,8 +1673,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	usedSchema := string(ev.Schema)
 	parser2, err := event.GetParserForStatusVars(ev.StatusVars)
 	if err != nil {
-		log.L().Warn("can't determine sql_mode from binlog status_vars, use default parser instead", zap.Error(err))
-		parser2 = parser.New()
+		log.L().Warn("found error when get sql_mode from binlog status_vars", zap.Error(err))
 	}
 
 	parseResult, err := s.parseDDLSQL(sql, parser2, usedSchema)
