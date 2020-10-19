@@ -24,6 +24,7 @@ insert into dm_syncer_ignore_db_1(id, name) values (1, 'Howie'), (2, 'howie');
 create table dm_syncer_ignore_db_2(id int, name varchar(20), primary key(`id`));
 insert into dm_syncer_ignore_db_2(id, name) values (1, 'Howie'), (2, 'howie');
 
+use `dm_syncer`;
 create table dm_syncer_route_rules_1 (id int, name varchar(20), primary key (`id`));
 insert into dm_syncer_route_rules_1 (id, name) values (1, 'Howie'), (2, 'howie');
 
