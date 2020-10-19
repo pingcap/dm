@@ -30,6 +30,7 @@ mysql-instances:
       binlog-name: binlog-name-placeholder-2
       binlog-pos: 4
     block-allow-list:  "instance"
+    route-rules: ["route-rule"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -43,6 +44,8 @@ block-allow-list:
         tbl-name: "~t.*"
       - db-name: "dm_syncer_do_db"
         tbl-name: "~^dm_syncer_do_db_."
+      - db-name: "dm_syncer"
+        tbl-name: "~^dm_syncer_route_rules_."
     ignore-tables:
       - db-name: "~^dm_syncer_ignore_"
         tbl-name: "~^dm_syncer_ignore_db_."
@@ -63,3 +66,10 @@ syncers:
   global:
     worker-count: 16
     batch: 100
+
+routes:
+  route-rule:
+    schema-pattern: "dm_syncer"
+    table-pattern: "dm_syncer_route_rules_*"
+    target-schema: "dm_syncer"
+    target-table: "dm_syncer_route_rule"

@@ -271,6 +271,8 @@ func writeStringColumnValue(buf *bytes.Buffer, value interface{}) error {
 }
 
 // https://dev.mysql.com/doc/internals/en/query-event.html
+// and after Q_COMMIT_TS could be find in
+// https://github.com/mysql/mysql-server/blob/124c7ab1d6f914637521fd4463a993aa73403513/libbinlogevents/include/statement_events.h#L500
 const (
 	QFlags2Code = iota
 	QSqlModeCode
@@ -286,6 +288,13 @@ const (
 	QInvokers
 	QUpdatedDbNames
 	QMicroseconds
+	QCommitTs
+	QCommitTs2
+	QExplicitDefaultsForTimestamp
+	QDdlLoggedWithXid
+	QDefaultCollationForUtf8mb4
+	QSqlRequirePrimaryKey
+	QDefaultTableEncryption
 )
 
 var (
@@ -300,40 +309,48 @@ var (
 		QTableMapForUpdateCode: 8,
 		QMasterDataWrittenCode: 4,
 		QMicroseconds:          3,
+		QCommitTs:              0, // unused now
+		QCommitTs2:             0, // unused now
+		// below variables could be find in
+		// https://github.com/mysql/mysql-server/blob/7d10c82196c8e45554f27c00681474a9fb86d137/libbinlogevents/src/statement_events.cpp#L312
+		QExplicitDefaultsForTimestamp: 1,
+		QDdlLoggedWithXid:             8,
+		QDefaultCollationForUtf8mb4:   2,
+		QSqlRequirePrimaryKey:         1,
+		QDefaultTableEncryption:       1,
 	}
 )
 
-// getSQLMode gets SQL mode from binlog statusVars
+// getSQLMode gets SQL mode from binlog statusVars, still could return a reasonable value if found error
 func getSQLMode(statusVars []byte) (mysql.SQLMode, error) {
 	vars, err := statusVarsToKV(statusVars)
-	if err != nil {
-		return mysql.ModeNone, err
-	}
 	b, ok := vars[QSqlModeCode]
+
 	if !ok {
-		// should not happen
-		return mysql.ModeNone, errors.New("Q_SQL_MODE_CODE not found in status_vars")
+		if err == nil {
+			// should not happen
+			err = errors.New("Q_SQL_MODE_CODE not found in status_vars")
+		}
+		return mysql.ModeNone, err
 	}
 
 	r := bytes.NewReader(b)
 	var v int64
 	_ = binary.Read(r, binary.LittleEndian, &v)
 
-	return mysql.SQLMode(v), nil
+	return mysql.SQLMode(v), err
 }
 
 // GetParserForStatusVars gets a parser for binlog which is suitable for its sql_mode in statusVars
 func GetParserForStatusVars(statusVars []byte) (*parser.Parser, error) {
 	parser2 := parser.New()
 	mode, err := getSQLMode(statusVars)
-	if err != nil {
-		return nil, err
-	}
 	parser2.SetSQLMode(mode)
-	return parser2, nil
+	return parser2, err
 }
 
 // if returned error is `io.EOF`, it means UnexpectedEOF because we handled expected `io.EOF` as success
+// returned map should not be nil for other usage
 func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 	r := bytes.NewReader(statusVars)
 	vars := make(map[byte][]byte)
@@ -363,7 +380,7 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 
 	generateError := func(err error) (map[byte][]byte, error) {
 		offset, _ := r.Seek(0, io.SeekCurrent)
-		return nil, terror.ErrBinlogStatusVarsParse.Delegate(err, statusVars, offset)
+		return vars, terror.ErrBinlogStatusVarsParse.Delegate(err, statusVars, offset)
 	}
 
 	for {
