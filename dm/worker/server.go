@@ -48,6 +48,7 @@ var (
 	keepaliveTimeout        = 3 * time.Second
 	keepaliveTime           = 3 * time.Second
 	retryConnectSleepTime   = time.Second
+	syncMasterEndpointsTime = 3 * time.Second
 	getMinPosForSubTaskFunc = getMinPosForSubTask
 )
 
@@ -107,6 +108,12 @@ func (s *Server) Start() error {
 	if err != nil {
 		return err
 	}
+
+	s.wg.Add(1)
+	go func() {
+		s.syncMasterEndpoints(s.ctx)
+		s.wg.Done()
+	}()
 
 	bound, sourceCfg, revBound, err := ha.GetSourceBoundConfig(s.etcdClient, s.cfg.Name)
 	if err != nil {
@@ -175,6 +182,42 @@ func (s *Server) Start() error {
 		err = nil
 	}
 	return terror.ErrWorkerStartService.Delegate(err)
+}
+
+func (s *Server) syncMasterEndpoints(ctx context.Context) {
+	lastClientUrls := []string{}
+	clientURLs := []string{}
+
+	updateF := func() {
+		clientURLs = clientURLs[:0]
+		resp, err := s.etcdClient.MemberList(ctx)
+		if err != nil {
+			log.L().Error("can't get etcd member list", zap.Error(err))
+			return
+		}
+
+		for _, m := range resp.Members {
+			clientURLs = append(clientURLs, m.GetClientURLs()...)
+		}
+		if utils.NonRepeatStringsEqual(clientURLs, lastClientUrls) {
+			log.L().Debug("etcd member list doesn't change", zap.Strings("client URLs", clientURLs))
+			return
+		}
+		log.L().Info("will sync endpoints to", zap.Strings("client URLs", clientURLs))
+		s.etcdClient.SetEndpoints(clientURLs...)
+		lastClientUrls = make([]string, len(clientURLs))
+		copy(lastClientUrls, clientURLs)
+	}
+
+	for {
+		updateF()
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(syncMasterEndpointsTime):
+		}
+	}
 }
 
 func (s *Server) observeSourceBound(ctx context.Context, etcdCli *clientv3.Client, rev int64) error {
