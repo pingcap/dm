@@ -48,7 +48,7 @@ func NewDDLItem(location binlog.Location, ddls []string, source string) *DDLItem
 	}
 
 	return &DDLItem{
-		FirstLocation: location.Clone(),
+		FirstLocation: location,
 		DDLs:          ddls,
 		Source:        source,
 
@@ -259,7 +259,7 @@ func (meta *ShardingMeta) ActiveDDLFirstLocation() (binlog.Location, error) {
 		return binlog.Location{}, terror.ErrSyncUnitDDLActiveIndexLarger.Generate(meta.activeIdx, meta.global.Items)
 	}
 
-	return meta.global.Items[meta.activeIdx].FirstLocation.Clone(), nil
+	return meta.global.Items[meta.activeIdx].FirstLocation, nil
 }
 
 // FlushData returns sharding meta flush SQL and args

@@ -590,9 +590,9 @@ func (k *ShardingGroupKeeper) lowestFirstLocationInGroups() *binlog.Location {
 func (k *ShardingGroupKeeper) AdjustGlobalLocation(globalLocation binlog.Location) binlog.Location {
 	lowestFirstLocation := k.lowestFirstLocationInGroups()
 	if lowestFirstLocation != nil && binlog.CompareLocation(*lowestFirstLocation, globalLocation, k.cfg.EnableGTID) < 0 {
-		return lowestFirstLocation.Clone()
+		return *lowestFirstLocation
 	}
-	return globalLocation.Clone()
+	return globalLocation
 }
 
 // Groups returns all sharding groups, often used for debug

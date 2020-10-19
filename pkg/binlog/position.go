@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/siddontang/go-mysql/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
@@ -244,15 +245,6 @@ func (l Location) Clone() Location {
 	return l.CloneWithFlavor("")
 }
 
-// ClonePtr clones a same Location pointer
-func (l *Location) ClonePtr() *Location {
-	if l == nil {
-		return nil
-	}
-	newLocation := l.Clone()
-	return &newLocation
-}
-
 // CloneWithFlavor clones the location, and if the GTIDSet is nil, will create a GTIDSet with specified flavor.
 func (l Location) CloneWithFlavor(flavor string) Location {
 	var newGTIDSet gtid.Set
@@ -345,4 +337,20 @@ func compareIndex(lhs, rhs int) int {
 // ResetSuffix set suffix to 0
 func (l *Location) ResetSuffix() {
 	l.Suffix = 0
+}
+
+// SetGTID set new gtid for location
+func (l *Location) SetGTID(gset mysql.GTIDSet) error {
+	flavor := mysql.MySQLFlavor
+	if _, ok := l.GTIDSet.(*gtid.MariadbGTIDSet); ok {
+		flavor = mysql.MariaDBFlavor
+	}
+
+	newGTID := gtid.MinGTIDSet(flavor)
+	if err := newGTID.Set(gset); err != nil {
+		return err
+	}
+
+	l.GTIDSet = newGTID
+	return nil
 }
