@@ -80,6 +80,7 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config_blalist.toml
     check_sync_diff $WORK_DIR $cur/conf/diff_config_route_rules.toml
     check_sync_diff $WORK_DIR $cur/conf/diff_config_filter_rule.toml
+    
     # test block-allow-list by the way
     run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
     check_not_contains "dm_syncer_ignore_db"

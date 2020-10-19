@@ -4,8 +4,6 @@ use `dm_syncer`;
 create table t2 (id int auto_increment, name varchar(20), primary key (`id`));
 insert into t2 (name) values ('Arya'), ('Bran'), ('Sansa');
 
-create database `dm_syncer`;
-
 create table dm_syncer_route_rules_1 (id int, name varchar(20), primary key (`id`));
 insert into dm_syncer_route_rules_1 (id, name) values (1, 'Howie'), (2, 'howie');
 
