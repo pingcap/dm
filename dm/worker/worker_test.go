@@ -106,7 +106,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 	)
 	hostName := "127.0.0.1:8261"
 	etcdDir := c.MkDir()
-	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
+	ETCD, err := createMockETCD(etcdDir, "http://"+hostName)
 	c.Assert(err, IsNil)
 	defer ETCD.Close()
 
@@ -226,7 +226,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 		startRev     = int64(1)
 	)
 	etcdDir := c.MkDir()
-	ETCD, err := createMockETCD(etcdDir, "host://"+masterAddr)
+	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
 	c.Assert(err, IsNil)
 	defer ETCD.Close()
 	cfg := NewConfig()
@@ -337,7 +337,7 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 		startRev     = int64(1)
 	)
 	etcdDir := c.MkDir()
-	ETCD, err := createMockETCD(etcdDir, "host://"+masterAddr)
+	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
 	c.Assert(err, IsNil)
 	defer ETCD.Close()
 	cfg := NewConfig()
