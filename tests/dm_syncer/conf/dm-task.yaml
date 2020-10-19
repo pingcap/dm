@@ -38,7 +38,7 @@ mysql-instances:
 
 block-allow-list:
   instance:
-    do-dbs: ["dm_syncer", "dm_syncer_do_db"]
+    do-dbs: ["dm_syncer", "dm_syncer_do_db","dm_syncer_plus"]
     ignore-dbs: ["~^dm_syncer_ignore_"]
     do-tables:
       - db-name: "dm_syncer"
@@ -47,7 +47,7 @@ block-allow-list:
         tbl-name: "~^dm_syncer_do_db_."
       - db-name: "dm_syncer"
         tbl-name: "~^dm_syncer_route_rules_."
-      - db-name: "dm_syncer"
+      - db-name: "dm_syncer_plus"
         tbl-name: "dm_syncer_filter_rule"
     ignore-tables:
       - db-name: "~^dm_syncer_ignore_"
@@ -55,12 +55,12 @@ block-allow-list:
 
 filters:
   do-table-rule:
-    schema-pattern: "dm_syncer"
+    schema-pattern: "dm_syncer_plus"
     table-pattern: "dm_syncer_filter_rule"
     events: ["create table", "all dml"]
     action: Do
   filter-schema-rule:
-    schema-pattern: "dm_syncer"
+    schema-pattern: "dm_syncer_plus"
     events: ["drop table"]
     action: Ignore
 

@@ -14,7 +14,7 @@ function run() {
     check_contains 'Query OK, 3 rows affected'
 
     run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
-    check_not_contains "dm_syncer"
+    check_not_contains "dm_syncer_plus"
 
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
@@ -79,13 +79,12 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     check_sync_diff $WORK_DIR $cur/conf/diff_config_blalist.toml
     check_sync_diff $WORK_DIR $cur/conf/diff_config_route_rules.toml
-    check_sync_diff $WORK_DIR $cur/conf/diff_config_filter_rule.toml
-    
+
     # test block-allow-list by the way
     run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
     check_not_contains "dm_syncer_ignore_db"
     run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
-    check_contains "dm_syncer"
+    check_contains "dm_syncer_plus"
 }
 
 cleanup_data $TEST_NAME
