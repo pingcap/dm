@@ -160,9 +160,11 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *me
 			arg = args[i]
 		}
 
-		tctx.L().Debug("execute statement",
-			zap.String("query", utils.TruncateString(query, -1)),
-			zap.String("argument", utils.TruncateInterface(arg, -1)))
+		if tctx.L().Check(zap.DebugLevel, "test") != nil {
+			tctx.L().Debug("execute statement",
+				zap.String("query", utils.TruncateString(query, -1)),
+				zap.String("argument", utils.TruncateInterface(arg, -1)))
+		}
 
 		startTime = time.Now()
 		_, err = txn.ExecContext(tctx.Context(), query, arg...)
