@@ -67,7 +67,7 @@ filters:
 routes:
   route-rule:
     schema-pattern: "dm_syncer"
-    table-pattern: "dm_syncer_route_rules_*"
+    table-pattern: "dm_syncer_route_rules_."
     target-schema: "dm_syncer"
     target-table: "dm_syncer_route_rule"
 
