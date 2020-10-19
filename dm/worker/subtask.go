@@ -176,9 +176,9 @@ func (st *SubTask) Init() error {
 }
 
 // Run runs the sub task
-func (st *SubTask) Run() {
+func (st *SubTask) Run(expectStage pb.Stage) {
 	if st.Stage() == pb.Stage_Finished || st.Stage() == pb.Stage_Running {
-		st.l.Warn("prepare to run", zap.Stringer("stage", st.Stage()))
+		st.l.Warn("prepare to run a subtask with invalid stage", zap.Stringer("current stage", st.Stage()))
 		return
 	}
 
@@ -189,7 +189,12 @@ func (st *SubTask) Run() {
 		return
 	}
 
-	st.run()
+	if expectStage == pb.Stage_Running {
+		st.run()
+	} else {
+		// if not want to run, still need to set the stage.
+		st.setStage(expectStage)
+	}
 }
 
 func (st *SubTask) run() {
@@ -455,7 +460,7 @@ func (st *SubTask) Pause() error {
 // similar to Run
 func (st *SubTask) Resume() error {
 	if !st.initialized.Get() {
-		st.Run()
+		st.Run(pb.Stage_Running)
 		return nil
 	}
 
