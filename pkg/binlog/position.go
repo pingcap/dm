@@ -207,6 +207,7 @@ func ComparePosition(pos1, pos2 gmysql.Position) int {
 }
 
 // Location is used for save binlog's position and gtid
+// TODO: encapsulate attributes in Location
 type Location struct {
 	Position gmysql.Position
 
@@ -340,6 +341,7 @@ func (l *Location) ResetSuffix() {
 }
 
 // SetGTID set new gtid for location
+// Use this func instead of GITSet.Set to avoid change other location
 func (l *Location) SetGTID(gset mysql.GTIDSet) error {
 	flavor := mysql.MySQLFlavor
 	if _, ok := l.GTIDSet.(*gtid.MariadbGTIDSet); ok {
