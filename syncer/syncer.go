@@ -928,7 +928,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if err != nil {
 			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
-				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
+				err = s.handleEventError(err, sqlJob.startLocation, sqlJob.currentLocation)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
 			s.jobWg.Done()
@@ -964,7 +964,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if err != nil {
 			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
-				err = s.handleEventError(err, &sqlJob.startLocation, &sqlJob.currentLocation)
+				err = s.handleEventError(err, sqlJob.startLocation, sqlJob.currentLocation)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
 			s.jobWg.Done()
@@ -999,7 +999,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	fatalF := func(affected int, err error) {
 		s.execError.Set(err)
 		if !utils.IsContextCanceledError(err) {
-			err = s.handleEventError(err, &jobs[affected].startLocation, &jobs[affected].currentLocation)
+			err = s.handleEventError(err, jobs[affected].startLocation, jobs[affected].currentLocation)
 			s.runFatalChan <- unit.NewProcessError(err)
 		}
 		clearF()
@@ -1252,7 +1252,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		var e *replication.BinlogEvent
 
 		startTime := time.Now()
-		e, err = s.getEvent(tctx, &currentLocation)
+		e, err = s.getEvent(tctx, currentLocation)
 
 		if err == context.Canceled {
 			s.tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last location", lastLocation))
@@ -1354,7 +1354,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			if !s.isReplacingErr {
-				apply, op := s.errOperatorHolder.MatchAndApply(&startLocation, &currentLocation)
+				apply, op := s.errOperatorHolder.MatchAndApply(startLocation, currentLocation)
 				if apply {
 					if op == pb.ErrorOp_Replace {
 						s.isReplacingErr = true
@@ -1408,17 +1408,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
 			err = s.handleRotateEvent(ev, ec)
-			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
+			if err = s.handleEventError(err, startLocation, currentLocation); err != nil {
 				return err
 			}
 		case *replication.RowsEvent:
 			err = s.handleRowsEvent(ev, ec)
-			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
+			if err = s.handleEventError(err, startLocation, currentLocation); err != nil {
 				return err
 			}
 		case *replication.QueryEvent:
 			err = s.handleQueryEvent(ev, ec)
-			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
+			if err = s.handleEventError(err, startLocation, currentLocation); err != nil {
 				return err
 			}
 		case *replication.XIDEvent:
@@ -1457,7 +1457,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			job := newXIDJob(currentLocation, startLocation, currentLocation)
 			err = s.addJobFunc(job)
-			if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
+			if err = s.handleEventError(err, startLocation, currentLocation); err != nil {
 				return err
 			}
 		case *replication.GenericEvent:
@@ -1467,7 +1467,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if s.checkpoint.CheckGlobalPoint() {
 					s.tctx.L().Info("meet heartbeat event and then flush jobs")
 					err = s.flushJobs()
-					if err = s.handleEventError(err, &startLocation, &currentLocation); err != nil {
+					if err = s.handleEventError(err, startLocation, currentLocation); err != nil {
 						return err
 					}
 				}
@@ -2730,17 +2730,17 @@ func (s *Syncer) getErrLocation() *binlog.Location {
 	return s.errLocation.startLocation
 }
 
-func (s *Syncer) handleEventError(err error, startLocation, endLocation *binlog.Location) error {
+func (s *Syncer) handleEventError(err error, startLocation, endLocation binlog.Location) error {
 	if err == nil {
 		return nil
 	}
 
-	s.setErrLocation(startLocation, endLocation)
+	s.setErrLocation(&startLocation, &endLocation)
 	return terror.Annotatef(err, "startLocation: [%s], endLocation: [%s]", startLocation, endLocation)
 }
 
 // getEvent gets an event from streamerController or errOperatorHolder
-func (s *Syncer) getEvent(tctx *tcontext.Context, startLocation *binlog.Location) (*replication.BinlogEvent, error) {
+func (s *Syncer) getEvent(tctx *tcontext.Context, startLocation binlog.Location) (*replication.BinlogEvent, error) {
 	// next event is a replace event
 	if s.isReplacingErr {
 		s.tctx.L().Info("try to get replace event", zap.Stringer("location", startLocation))

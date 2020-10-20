@@ -103,7 +103,7 @@ func (h *Holder) Set(pos string, op pb.ErrorOp, events []*replication.BinlogEven
 // replace event b	1010, 1			1010, 2
 // replace event c	1010, 2			1020, 0
 // event 3		1020, 0			1030, 0
-func (h *Holder) GetEvent(startLocation *binlog.Location) (*replication.BinlogEvent, error) {
+func (h *Holder) GetEvent(startLocation binlog.Location) (*replication.BinlogEvent, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -126,7 +126,7 @@ func (h *Holder) GetEvent(startLocation *binlog.Location) (*replication.BinlogEv
 }
 
 // MatchAndApply tries to match operation for event by location and apply it on replace events
-func (h *Holder) MatchAndApply(startLocation, endLocation *binlog.Location) (bool, pb.ErrorOp) {
+func (h *Holder) MatchAndApply(startLocation, endLocation binlog.Location) (bool, pb.ErrorOp) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 

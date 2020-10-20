@@ -85,45 +85,45 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	// skip event
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Skip, nil)
 	c.Assert(err, IsNil)
-	apply, op := h.MatchAndApply(&startLocation, &endLocation)
+	apply, op := h.MatchAndApply(startLocation, endLocation)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Skip)
 
 	// overwrite operator
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Replace, []*replication.BinlogEvent{event1, event2})
 	c.Assert(err, IsNil)
-	apply, op = h.MatchAndApply(&startLocation, &endLocation)
+	apply, op = h.MatchAndApply(startLocation, endLocation)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Replace)
 
 	// test GetEvent
 	// get by endLocation
-	e, err := h.GetEvent(&endLocation)
+	e, err := h.GetEvent(endLocation)
 	c.Assert(e, IsNil)
 	c.Assert(terror.ErrSyncerReplaceEventNotExist.Equal(err), IsTrue)
 	// get first event
-	e, err = h.GetEvent(&startLocation)
+	e, err = h.GetEvent(startLocation)
 	c.Assert(err, IsNil)
 	c.Assert(e.Header.LogPos, Equals, startLocation.Position.Pos)
 	c.Assert(e.Header.EventSize, Equals, uint32(0))
 	c.Assert(e.Event, Equals, event1.Event)
 	// get second event
 	startLocation.Suffix++
-	e, err = h.GetEvent(&startLocation)
+	e, err = h.GetEvent(startLocation)
 	c.Assert(err, IsNil)
 	c.Assert(e.Header.LogPos, Equals, endLocation.Position.Pos)
 	c.Assert(e.Header.EventSize, Equals, endLocation.Position.Pos-startLocation.Position.Pos)
 	c.Assert(e.Event, Equals, event2.Event)
 	// get third event, out of index
 	startLocation.Suffix++
-	e, err = h.GetEvent(&startLocation)
+	e, err = h.GetEvent(startLocation)
 	c.Assert(terror.ErrSyncerReplaceEvent.Equal(err), IsTrue)
 	c.Assert(e, IsNil)
 
 	// revert exist operator
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Revert, nil)
 	c.Assert(err, IsNil)
-	apply, op = h.MatchAndApply(&startLocation, &endLocation)
+	apply, op = h.MatchAndApply(startLocation, endLocation)
 	c.Assert(apply, IsFalse)
 	c.Assert(op, Equals, pb.ErrorOp_InvalidErrorOp)
 
@@ -136,17 +136,17 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	// test removeOutdated
 	flushLocation := startLocation
 	c.Assert(h.RemoveOutdated(flushLocation), IsNil)
-	apply, op = h.MatchAndApply(&startLocation, &endLocation)
+	apply, op = h.MatchAndApply(startLocation, endLocation)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Replace)
 
 	flushLocation = endLocation
 	c.Assert(h.RemoveOutdated(flushLocation), IsNil)
-	apply, op = h.MatchAndApply(&startLocation, &endLocation)
+	apply, op = h.MatchAndApply(startLocation, endLocation)
 	c.Assert(apply, IsFalse)
 	c.Assert(op, Equals, pb.ErrorOp_InvalidErrorOp)
 
-	apply, op = h.MatchAndApply(&endLocation, &nextLocation)
+	apply, op = h.MatchAndApply(endLocation, nextLocation)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Replace)
 }
