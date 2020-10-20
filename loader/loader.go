@@ -465,9 +465,12 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	// fix nil map after clone
-	// TODO: we may develop `TrueClone` in future
-	lcfg.To.Session = make(map[string]string)
+	// fix nil map after clone, which we will use below
+	// TODO: we may develop `SafeClone` in future
+	if lcfg.To.Session == nil {
+		lcfg.To.Session = make(map[string]string)
+	}
+
 	hasSQLMode := false
 	for k := range l.cfg.To.Session {
 		if strings.ToLower(k) == "sql_mode" {
