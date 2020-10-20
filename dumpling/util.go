@@ -94,7 +94,12 @@ func parseExtraArgs(logger *log.Logger, dumpCfg *export.Config, args []string) e
 		}
 	}
 
-	dumpCfg.FileSize, err = parseFileSize(fileSizeStr)
+	if fileSizeStr != "" {
+		dumpCfg.FileSize, err = parseFileSize(fileSizeStr)
+		if err != nil {
+			return err
+		}
+	}
 
 	if len(tablesList) > 0 || (len(filters) != 1 || filters[0] != "*.*") {
 		ff, err2 := parseTableFilter(tablesList, filters)
@@ -105,7 +110,7 @@ func parseExtraArgs(logger *log.Logger, dumpCfg *export.Config, args []string) e
 		logger.Warn("overwrite `block-allow-list` by `tables-list` or `filter`")
 	}
 
-	return err
+	return nil
 }
 
 func parseFileSize(fileSizeStr string) (uint64, error) {
