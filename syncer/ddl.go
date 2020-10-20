@@ -219,36 +219,18 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schem
 	targetTables := []*filter.Table{
 		{Schema: realSchema, Name: realTable},
 	}
-
-	newSQLs := make([]string, 0, len(sqls))
 	for i := range sqls {
 		stmt, err := p.ParseOneStmt(sqls[i], "", "")
 		if err != nil {
 			return nil, nil, terror.ErrSyncerUnitParseStmt.New(err.Error())
 		}
 
-		sqls2, err := parserpkg.SplitDDL(stmt, schema)
+		sqls[i], err = parserpkg.RenameDDLTable(stmt, targetTables)
 		if err != nil {
 			return nil, nil, err
 		}
-		if len(sqls2) > 1 {
-			for _, sql := range sqls2 {
-				stmt, _ := p.ParseOneStmt(sql, "", "")
-				sql, err = parserpkg.RenameDDLTable(stmt, targetTables)
-				if err != nil {
-					return nil, nil, err
-				}
-				newSQLs = append(newSQLs, sql)
-			}
-		} else {
-			sql, err = parserpkg.RenameDDLTable(stmt, targetTables)
-			if err != nil {
-				return nil, nil, err
-			}
-			newSQLs = append(newSQLs, sql)
-		}
 	}
-	return newSQLs, tableNames[0], nil
+	return sqls, tableNames[0], nil
 }
 
 func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema string) error {
