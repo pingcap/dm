@@ -65,7 +65,7 @@ func NewPessimist(pLogger *log.Logger, taskSources func(task string) []string) *
 }
 
 // Start starts the shard DDL coordination in pessimism mode.
-// NTOE: for logic errors, it should start without returning errors (but report via metrics or log) so that the user can fix them.
+// NOTE: for logic errors, it should start without returning errors (but report via metrics or log) so that the user can fix them.
 func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error {
 	p.logger.Info("the shard DDL pessimist is starting")
 

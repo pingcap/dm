@@ -60,7 +60,7 @@ func NewOptimist(pLogger *log.Logger) *Optimist {
 }
 
 // Start starts the shard DDL coordination in optimism mode.
-// NTOE: for logic errors, it should start without returning errors (but report via metrics or log) so that the user can fix them.
+// NOTE: for logic errors, it should start without returning errors (but report via metrics or log) so that the user can fix them.
 func (o *Optimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error {
 	o.logger.Info("the shard DDL optimist is starting")
 
