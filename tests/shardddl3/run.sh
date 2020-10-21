@@ -567,6 +567,71 @@ function DM_RemoveLock() {
             "bound" 2
 }
 
+function DM_RestartMaster_CASE() {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
+    
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column c double;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column c text;"
+
+    if [[ "$1" = "pessimistic" ]]; then
+        # count of 2: `blockingDDLs` and `unresolvedGroups`
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "query-status test" \
+                'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` DOUBLE' 2 \
+                'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` TEXT' 2
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "show-ddl-locks" \
+                'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c`' 1
+    else
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "query-status test" \
+                'because schema conflict detected' 1
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "show-ddl-locks" \
+                'mysql-replica-01-`shardddl1`.`tb1`' 1 \
+                'mysql-replica-02-`shardddl1`.`tb1`' 1
+    fi
+
+    echo "restart dm-master"
+    ps aux | grep dm-master |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT 20
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+
+    if [[ "$1" = "pessimistic" ]]; then
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "query-status test" \
+                'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` DOUBLE' 2 \
+                'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` TEXT' 2
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "show-ddl-locks" \
+                'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c`' 1
+    else
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "query-status test" \
+                'because schema conflict detected' 1
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "show-ddl-locks" \
+                'mysql-replica-01-`shardddl1`.`tb1`' 1 \
+                'mysql-replica-02-`shardddl1`.`tb1`' 1
+    fi
+}
+
+function DM_RestartMaster() {
+    run_case RestartMaster "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"" \
+    "clean_table" "pessimistic"
+
+    run_case RestartMaster "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"" \
+    "clean_table" "optimistic"
+}
+
 function run() {
     init_cluster
     init_database
@@ -582,6 +647,8 @@ function run() {
     done
 
     DM_RemoveLock
+
+    DM_RestartMaster
 }
 
 cleanup_data $shardddl

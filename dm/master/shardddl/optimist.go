@@ -60,6 +60,7 @@ func NewOptimist(pLogger *log.Logger) *Optimist {
 }
 
 // Start starts the shard DDL coordination in optimism mode.
+// NTOE: for logic errors, it should start without returning errors (but report via metrics or log) so that the user can fix them.
 func (o *Optimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error {
 	o.logger.Info("the shard DDL optimist is starting")
 
@@ -246,7 +247,9 @@ func (o *Optimist) rebuildLocks() (revSource, revInfo, revOperation int64, err e
 	// recover the shard DDL lock based on history shard DDL info & lock operation.
 	err = o.recoverLocks(ifm, opm)
 	if err != nil {
-		return 0, 0, 0, err
+		// only log the error, and don't return it to forbid the startup of the DM-master leader.
+		// then these unexpected locks can be handled by the user.
+		o.logger.Error("fail to recover locks", log.ShortError(err))
 	}
 	return revSource, revInfo, revOperation, nil
 }

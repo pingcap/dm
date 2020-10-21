@@ -159,6 +159,7 @@ func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 }
 
 // Start starts the scheduler for work.
+// NTOE: for logic errors, it should start without returning errors (but report via metrics or log) so that the user can fix them.
 func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error {
 	s.logger.Info("the scheduler is starting")
 
