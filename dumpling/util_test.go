@@ -98,12 +98,13 @@ func (m *testDumplingSuite) TestParseArgsWontOverwrite(c *C) {
 	}
 	cfg.BAList = rules
 	// make sure we enter `parseExtraArgs`
-	cfg.ExtraArgs = "--statement-size=4000 --consistency lock"
+	cfg.ExtraArgs = "-s=4000 --consistency lock"
 
 	d := NewDumpling(cfg)
 	exportCfg, err := d.constructArgs()
 	c.Assert(err, IsNil)
 
+	c.Assert(exportCfg.StatementSize, Equals, uint64(4000))
 	c.Assert(exportCfg.FileSize, Equals, uint64(1*units.MiB))
 
 	f, err2 := tfilter.ParseMySQLReplicationRules(rules)
