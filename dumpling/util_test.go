@@ -16,10 +16,13 @@ package dumpling
 import (
 	"strings"
 
+	"github.com/docker/go-units"
+	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+	tfilter "github.com/pingcap/tidb-tools/pkg/table-filter"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
-
-	. "github.com/pingcap/check"
 )
 
 func (m *testDumplingSuite) TestParseArgs(c *C) {
@@ -85,4 +88,28 @@ func (m *testDumplingSuite) TestParseArgs(c *C) {
 	extraArgs = `--no-locks --consistency lock`
 	err = parseExtraArgs(&logger, exportCfg, strings.Fields(extraArgs))
 	c.Assert(err.Error(), Equals, "cannot both specify `--no-locks` and `--consistency` other than `none`")
+}
+
+func (m *testDumplingSuite) TestParseArgsWontOverwrite(c *C) {
+	cfg := &config.SubTaskConfig{}
+	cfg.ChunkFilesize = "1"
+	rules := &filter.Rules{
+		DoDBs: []string{"unit_test"},
+	}
+	cfg.BAList = rules
+	// make sure we enter `parseExtraArgs`
+	cfg.ExtraArgs = "-s=4000 --consistency lock"
+
+	d := NewDumpling(cfg)
+	exportCfg, err := d.constructArgs()
+	c.Assert(err, IsNil)
+
+	c.Assert(exportCfg.StatementSize, Equals, uint64(4000))
+	c.Assert(exportCfg.FileSize, Equals, uint64(1*units.MiB))
+
+	f, err2 := tfilter.ParseMySQLReplicationRules(rules)
+	c.Assert(err2, IsNil)
+	c.Assert(exportCfg.TableFilter, DeepEquals, tfilter.CaseInsensitive(f))
+
+	c.Assert(exportCfg.Consistency, Equals, "lock")
 }
