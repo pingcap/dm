@@ -38,7 +38,7 @@ function run() {
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
-    run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
+    run_sql "show databases;" $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_not_contains "dm_syncer_plus"
     # start a task in `incremental` mode
     # using account with limited privileges
