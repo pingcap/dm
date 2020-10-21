@@ -161,7 +161,7 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *me
 		}
 
 		// avoid use TruncateInterface for all log level which will slow the speed of DML
-		if tctx.L().Check(zap.DebugLevel, "check") != nil {
+		if tctx.L().Core().Enabled(zap.DebugLevel) {
 			tctx.L().Debug("execute statement",
 				zap.String("query", utils.TruncateString(query, -1)),
 				zap.String("argument", utils.TruncateInterface(arg, -1)))
