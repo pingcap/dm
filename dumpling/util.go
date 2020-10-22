@@ -65,7 +65,7 @@ func parseExtraArgs(logger *log.Logger, dumpCfg *export.Config, args []string) e
 	dumplingFlagSet.StringSliceVarP(&tablesList, "tables-list", "T", nil, "Comma delimited table list to dump; must be qualified table names")
 	dumplingFlagSet.IntVarP(&dumpCfg.Threads, "threads", "t", dumpCfg.Threads, "Number of goroutines to use, default 4")
 	dumplingFlagSet.StringVarP(&fileSizeStr, "filesize", "F", "", "The approximate size of output file")
-	dumplingFlagSet.Uint64VarP(&dumpCfg.StatementSize, "statement-size", "S", dumpCfg.StatementSize, "Attempted size of INSERT statement in bytes")
+	dumplingFlagSet.Uint64VarP(&dumpCfg.StatementSize, "statement-size", "s", dumpCfg.StatementSize, "Attempted size of INSERT statement in bytes")
 	dumplingFlagSet.StringVar(&dumpCfg.Consistency, "consistency", dumpCfg.Consistency, "Consistency level during dumping: {auto|none|flush|lock|snapshot}")
 	dumplingFlagSet.StringVar(&dumpCfg.Snapshot, "snapshot", dumpCfg.Snapshot, "Snapshot position. Valid only when consistency=snapshot")
 	dumplingFlagSet.BoolVarP(&dumpCfg.NoViews, "no-views", "W", dumpCfg.NoViews, "Do not dump views")
