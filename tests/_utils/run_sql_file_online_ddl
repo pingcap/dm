@@ -42,6 +42,10 @@ do
                 --alter="$alter" D=$schema,t=$table \
                  --recursion-method=none --print --execute \
                  >> $TEST_DIR/pt-osc.log
+            $ptosc_bin --user=root --host=$host --port=$port --password=$password \
+                --alter "row_format=compressed key_block_size=8" D=$schema,t=$table \
+                --recursion-method=none --print --execute \
+                >> $TEST_DIR/pt-osc.log
         else
             mysql -uroot -h$host -P$port -p$password --default-character-set utf8 -E -e "use $schema; $line" >> "$TEST_DIR/sql_res.$TEST_NAME.txt"
         fi

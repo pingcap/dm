@@ -42,7 +42,7 @@ block-allow-list:
     ignore-dbs: ["~^dm_syncer_ignore_"]
     do-tables:
       - db-name: "dm_syncer"
-        tbl-name: "~t.*"
+        tbl-name: "~^t.*"
       - db-name: "dm_syncer_do_db"
         tbl-name: "~^dm_syncer_do_db_."
       - db-name: "dm_syncer"
