@@ -57,6 +57,8 @@ func (s *Server) electionNotify(ctx context.Context) {
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
 				s.leader.Set(oneselfStartingLeader)
 
+				// NOTE: for logic errors, we should return with `true`, so that the cluster can serve requests and the user can fix these errors.
+				// otherwise no member of DM-master can become the leader and the user can't fix them (the cluster may need to be fixed offline with some other tools like etcdctl).
 				ok := s.startLeaderComponent(ctx)
 
 				if !ok {

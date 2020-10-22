@@ -70,7 +70,7 @@ func (t *testServer) testWorker(c *C) {
 
 	w.StartSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",
-	})
+	}, pb.Stage_Running)
 	task := w.subTaskHolder.findSubTask("testStartTask")
 	c.Assert(task, NotNil)
 	c.Assert(task.Result().String(), Matches, ".*worker already closed.*")
@@ -106,7 +106,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 	)
 	hostName := "127.0.0.1:8261"
 	etcdDir := c.MkDir()
-	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
+	ETCD, err := createMockETCD(etcdDir, "http://"+hostName)
 	c.Assert(err, IsNil)
 	defer ETCD.Close()
 
@@ -160,7 +160,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 	var subtaskCfg config.SubTaskConfig
 	c.Assert(subtaskCfg.DecodeFile("./subtask.toml", true), IsNil)
 	c.Assert(err, IsNil)
-	s.getWorker(true).StartSubTask(&subtaskCfg)
+	s.getWorker(true).StartSubTask(&subtaskCfg, pb.Stage_Running)
 
 	// check task in paused state
 	c.Assert(utils.WaitSomething(100, 100*time.Millisecond, func() bool {
@@ -226,7 +226,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 		startRev     = int64(1)
 	)
 	etcdDir := c.MkDir()
-	ETCD, err := createMockETCD(etcdDir, "host://"+masterAddr)
+	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
 	c.Assert(err, IsNil)
 	defer ETCD.Close()
 	cfg := NewConfig()
@@ -269,7 +269,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 		[]ha.Stage{ha.NewSubTaskStage(pb.Stage_Stopped, sourceCfg.SourceID, subtaskCfg.Name)})
 	c.Assert(err, IsNil)
 	// step 2.1: start a subtask manually
-	w.StartSubTask(&subtaskCfg)
+	w.StartSubTask(&subtaskCfg, pb.Stage_Running)
 	// step 3: trigger etcd compaction and check whether we can receive it through watcher
 	_, err = etcdCli.Compact(ctx, rev)
 	c.Assert(err, IsNil)
@@ -337,7 +337,7 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 		startRev     = int64(1)
 	)
 	etcdDir := c.MkDir()
-	ETCD, err := createMockETCD(etcdDir, "host://"+masterAddr)
+	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
 	c.Assert(err, IsNil)
 	defer ETCD.Close()
 	cfg := NewConfig()

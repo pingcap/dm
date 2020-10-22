@@ -217,17 +217,3 @@ func (c *Config) configFromFile(path string) error {
 	}
 	return nil
 }
-
-// Reload reload configure from ConfigFile
-func (c *Config) Reload() error {
-	if c.ConfigFile == "" {
-		c.ConfigFile = "dm-worker-config.bak"
-	}
-
-	err := c.configFromFile(c.ConfigFile)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}

@@ -111,9 +111,9 @@ jobs:
          kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
     - name: Wait for MySQL ready # kubectl wait --all not working
       run: |
-         kubectl wait --for=condition=Ready pod/mysql-0 --timeout=120s || true
+         kubectl wait --for=condition=Ready pod/mysql-0 --timeout=300s || true
          sleep 10
-         kubectl wait --for=condition=Ready pod/mysql-1 --timeout=120s || true
+         kubectl wait --for=condition=Ready pod/mysql-1 --timeout=300s || true
          echo show pvc
          kubectl get pvc -l app=mysql -o wide
          echo show pv
@@ -139,7 +139,7 @@ jobs:
         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/tidb.yaml
     - name: Wait for TiDB ready
       run: |
-        kubectl wait --for=condition=Ready pod/tidb-0 --timeout=120s || true
+        kubectl wait --for=condition=Ready pod/tidb-0 --timeout=300s || true
         echo show pvc
         kubectl get pvc -l app=tidb -o wide
         echo show pv
@@ -165,7 +165,7 @@ jobs:
     - name: Wait for DM-master ready
       run: |
         sleep 10
-        kubectl wait --for=condition=Ready pod -l app=dm-master --all --timeout=120s || true
+        kubectl wait --for=condition=Ready pod -l app=dm-master --all --timeout=300s || true
         echo "<<<<< show pvc >>>>>"
         kubectl get pvc -l app=dm-master -o wide
         echo "<<<<< show pv >>>>>"
@@ -202,7 +202,7 @@ jobs:
     - name: Wait for DM-worker ready
       run: |
         sleep 10
-        kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=120s || true
+        kubectl wait --for=condition=Ready pod -l app=dm-worker --all --timeout=300s || true
         echo "<<<<< show pvc >>>>>"
         kubectl get pvc -l app=dm-worker -o wide
         echo "<<<<< show pv >>>>>"
@@ -258,7 +258,9 @@ jobs:
         mkdir ./logs
         sudo cp -r -L /var/log/containers/. ./logs
         sudo chown -R runner ./logs
+    # Update logs as artifact seems not stable, so we set `continue-on-error: true` here.
     - name: Upload logs
+      continue-on-error: true
       uses: actions/upload-artifact@v2
       if: ${{ always() }}
       with:

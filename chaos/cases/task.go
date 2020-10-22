@@ -76,13 +76,13 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 	)
 	for i := range taskCfg.MySQLInstances { // only use necessary part of sources.
 		cfg := sourcesCfg[i]
-		db, err := conn.DefaultDBProvider.Apply(cfg)
-		if err != nil {
-			return nil, err
+		db, err2 := conn.DefaultDBProvider.Apply(cfg)
+		if err2 != nil {
+			return nil, err2
 		}
-		conn, err := createDBConn(ctx, db, schema)
-		if err != nil {
-			return nil, err
+		conn, err2 := createDBConn(ctx, db, schema)
+		if err2 != nil {
+			return nil, err2
 		}
 		sourceDBs = append(sourceDBs, db)
 		sourceConns = append(sourceConns, conn)
