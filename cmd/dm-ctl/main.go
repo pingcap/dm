@@ -220,6 +220,8 @@ func loop() {
 			}
 			continue
 		}
+
+		line = strings.TrimSpace(line)
 		if line == "exit" {
 			os.Exit(0)
 		} else if line == "" {
