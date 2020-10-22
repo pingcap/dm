@@ -709,7 +709,7 @@ func (s *Syncer) checkWait(job *job) bool {
 
 func (s *Syncer) saveTablePoint(db, table string, location binlog.Location) {
 	ti, err := s.schemaTracker.GetTable(db, table)
-	if err != nil {
+	if err != nil && table != "" {
 		s.tctx.L().DPanic("table info missing from schema tracker",
 			zap.String("schema", db),
 			zap.String("table", table),
