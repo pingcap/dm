@@ -52,8 +52,8 @@ func (s *Syncer) Status() interface{} {
 		st.MasterBinlogGtid = masterGTIDSet.String()
 	}
 
-	if syncerLocation.GTIDSet != nil {
-		st.SyncerBinlogGtid = syncerLocation.GTIDSet.String()
+	if syncerLocation.GetGTID() != nil {
+		st.SyncerBinlogGtid = syncerLocation.GetGTID().String()
 	}
 
 	st.BinlogType = "unknown"
@@ -69,7 +69,7 @@ func (s *Syncer) Status() interface{} {
 		s.tctx.L().Debug("fail to parse real mysql position", zap.Stringer("position", syncerLocation.Position), log.ShortError(err))
 	}
 	if s.cfg.EnableGTID {
-		if masterGTIDSet != nil && syncerLocation.GTIDSet != nil && masterGTIDSet.Equal(syncerLocation.GTIDSet) {
+		if masterGTIDSet != nil && syncerLocation.GetGTID() != nil && masterGTIDSet.Equal(syncerLocation.GetGTID()) {
 			st.Synced = true
 		}
 	} else {

@@ -23,19 +23,23 @@ import (
 type HistogramVecProxy struct {
 	mu sync.Mutex
 
-	LabelNames []string
-	Labels     map[string]map[string]string
+	LabelNamesIndex map[string]int
+	Labels          map[string][]string
 	*prometheus.HistogramVec
 }
 
 // NewHistogramVec creates a new HistogramVec based on the provided HistogramOpts and
 // partitioned by the given label names.
 func NewHistogramVec(opts prometheus.HistogramOpts, labelNames []string) *HistogramVecProxy {
-	return &HistogramVecProxy{
-		LabelNames:   labelNames,
-		Labels:       make(map[string]map[string]string),
-		HistogramVec: prometheus.NewHistogramVec(opts, labelNames),
+	histogramVecProxy := &HistogramVecProxy{
+		LabelNamesIndex: make(map[string]int),
+		Labels:          make(map[string][]string),
+		HistogramVec:    prometheus.NewHistogramVec(opts, labelNames),
 	}
+	for idx, v := range labelNames {
+		histogramVecProxy.LabelNamesIndex[v] = idx
+	}
+	return histogramVecProxy
 }
 
 // WithLabelValues works as GetMetricWithLabelValues, but panics where
@@ -44,13 +48,7 @@ func NewHistogramVec(opts prometheus.HistogramOpts, labelNames []string) *Histog
 //     myVec.WithLabelValues("404", "GET").Observe(42.21)
 func (c *HistogramVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 	if len(lvs) > 0 {
-		labels := make(map[string]string, len(lvs))
-		for index, label := range lvs {
-			labels[c.LabelNames[index]] = label
-		}
-		c.mu.Lock()
-		noteLabelsInMetricsProxy(c, labels)
-		c.mu.Unlock()
+		noteLabelsInMetricsProxy(c, lvs)
 	}
 	return c.HistogramVec.WithLabelValues(lvs...)
 }
@@ -60,9 +58,12 @@ func (c *HistogramVecProxy) WithLabelValues(lvs ...string) prometheus.Observer {
 //     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Observe(42.21)
 func (c *HistogramVecProxy) With(labels prometheus.Labels) prometheus.Observer {
 	if len(labels) > 0 {
-		c.mu.Lock()
-		noteLabelsInMetricsProxy(c, labels)
-		c.mu.Unlock()
+		values := make([]string, len(labels))
+		labelNameIndex := c.GetLabelNamesIndex()
+		for k, v := range labels {
+			values[labelNameIndex[k]] = v
+		}
+		noteLabelsInMetricsProxy(c, values)
 	}
 
 	return c.HistogramVec.With(labels)
@@ -78,9 +79,21 @@ func (c *HistogramVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool 
 	return findAndDeleteLabelsInMetricsProxy(c, labels)
 }
 
+// GetLabelNamesIndex to support get HistogramVecProxy's LabelNames when you use Proxy object
+func (c *HistogramVecProxy) GetLabelNamesIndex() map[string]int {
+	return c.LabelNamesIndex
+}
+
 // GetLabels to support get HistogramVecProxy's Labels when you use Proxy object
-func (c *HistogramVecProxy) GetLabels() map[string]map[string]string {
+func (c *HistogramVecProxy) GetLabels() map[string][]string {
 	return c.Labels
+}
+
+// SetLabel to support set HistogramVecProxy's Label when you use Proxy object
+func (c *HistogramVecProxy) SetLabel(key string, vals []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Labels[key] = vals
 }
 
 // vecDelete to support delete HistogramVecProxy's Labels when you use Proxy object

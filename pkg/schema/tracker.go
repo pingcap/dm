@@ -38,7 +38,6 @@ import (
 
 const (
 	waitDDLRetryCount = 10
-	schemaLeaseTime   = 10 * time.Millisecond
 )
 
 var (
@@ -94,9 +93,6 @@ func NewTracker(sessionCfg map[string]string, tidbConn *conn.BaseConn) (*Tracker
 		return nil, err
 	}
 
-	// shorten the schema lease, since the time needed to confirm DDL sync is
-	// proportional to this duration (default = 1 second)
-	session.SetSchemaLease(schemaLeaseTime)
 	dom, err := session.BootstrapSession(store)
 	if err != nil {
 		return nil, err
