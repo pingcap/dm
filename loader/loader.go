@@ -396,6 +396,8 @@ type Loader struct {
 
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
+
+	finish sync2.AtomicBool
 }
 
 // NewLoader creates a new Loader.
@@ -662,6 +664,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 	l.workerWg.Wait()
 
 	if err == nil {
+		l.finish.Set(true)
 		l.logCtx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
 	} else if errors.Cause(err) != context.Canceled {
 		return err
