@@ -68,7 +68,7 @@ func (r *remoteBinlogReader) generateStreamer(location binlog.Location) (streame
 	}()
 
 	if r.EnableGTID {
-		streamer, err := r.reader.StartSyncGTID(location.GTIDSet.Origin())
+		streamer, err := r.reader.StartSyncGTID(location.GetGTID().Origin().Clone())
 		return streamer, terror.ErrSyncerUnitRemoteSteamerStartSync.Delegate(err)
 	}
 

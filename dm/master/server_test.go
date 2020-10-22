@@ -344,7 +344,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	c.Assert(resp.Msg, check.Matches, "task .* has no source or not exist, can try `refresh-worker-tasks` cmd first")
+	c.Assert(resp.Msg, check.Matches, "task .* has no source or not exist")
 	clearSchedulerEnv(c, cancel, &wg)
 	// TODO: test query with correct task name, this needs to add task first
 }
