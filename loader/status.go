@@ -31,7 +31,7 @@ var (
 func (l *Loader) Status() interface{} {
 	finishedSize := l.finishedDataSize.Get()
 	totalSize := l.totalDataSize.Get()
-	progress := percent(finishedSize, totalSize)
+	progress := percent(finishedSize, totalSize, l.finish.Get())
 	s := &pb.LoadStatus{
 		FinishedBytes: finishedSize,
 		TotalBytes:    totalSize,
@@ -71,8 +71,8 @@ func (l *Loader) PrintStatus(ctx context.Context) {
 			zap.Int64("finished_bytes", finishedSize),
 			zap.Int64("total_bytes", totalSize),
 			zap.Int64("total_file_count", totalFileCount),
-			zap.String("progress", percent(finishedSize, totalSize)))
-		progressGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(float64(finishedSize) / float64(totalSize))
+			zap.String("progress", percent(finishedSize, totalSize, l.finish.Get())))
+		progressGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(progress(finishedSize, totalSize, l.finish.Get()))
 		if done {
 			return
 		}
