@@ -43,8 +43,8 @@ type DDLItem struct {
 // NewDDLItem creates a new DDLItem
 func NewDDLItem(location binlog.Location, ddls []string, source string) *DDLItem {
 	gsetStr := ""
-	if location.GTIDSet != nil {
-		gsetStr = location.GTIDSet.String()
+	if location.GetGTID() != nil {
+		gsetStr = location.GetGTID().String()
 	}
 
 	return &DDLItem{
@@ -126,10 +126,10 @@ func (meta *ShardingMeta) RestoreFromData(sourceTableID string, activeIdx int, i
 		if err1 != nil {
 			return err1
 		}
-		item.FirstLocation = binlog.Location{
-			Position: item.FirstPosition,
-			GTIDSet:  gset,
-		}
+		item.FirstLocation = binlog.InitLocation(
+			item.FirstPosition,
+			gset,
+		)
 	}
 
 	if isGlobal {

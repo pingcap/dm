@@ -146,8 +146,8 @@ func (h *Holder) MatchAndApply(startLocation, endLocation binlog.Location) (bool
 		for _, ev := range operator.events {
 			ev.Header.LogPos = startLocation.Position.Pos
 			if e, ok := ev.Event.(*replication.QueryEvent); ok {
-				if startLocation.GTIDSet != nil {
-					e.GSet = startLocation.GTIDSet.Origin()
+				if startLocation.GetGTID() != nil {
+					e.GSet = startLocation.GetGTID().Origin()
 				}
 			}
 		}
@@ -157,8 +157,8 @@ func (h *Holder) MatchAndApply(startLocation, endLocation binlog.Location) (bool
 		e.Header.EventSize = endLocation.Position.Pos - startLocation.Position.Pos
 		e.Header.LogPos = endLocation.Position.Pos
 		if e, ok := e.Event.(*replication.QueryEvent); ok {
-			if endLocation.GTIDSet != nil {
-				e.GSet = endLocation.GTIDSet.Origin()
+			if endLocation.GetGTID() != nil {
+				e.GSet = endLocation.GetGTID().Origin()
 			}
 		}
 	}

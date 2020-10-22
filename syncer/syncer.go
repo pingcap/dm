@@ -1325,27 +1325,28 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		startLocation = binlog.Location{}
 		switch e.Event.(type) {
 		case *replication.RowsEvent, *replication.QueryEvent:
-			startLocation = binlog.Location{
-				Position: mysql.Position{
+			startLocation = binlog.InitLocation(
+				mysql.Position{
 					Name: lastLocation.Position.Name,
 					Pos:  e.Header.LogPos - e.Header.EventSize,
 				},
-				GTIDSet: lastLocation.GTIDSet.Clone(),
-				Suffix:  currentLocation.Suffix,
-			}
+				lastLocation.GetGTID(),
+			)
+			startLocation.Suffix = currentLocation.Suffix
 
 			endSuffix := startLocation.Suffix
 			if s.isReplacingErr {
 				endSuffix++
 			}
-			currentLocation = binlog.Location{
-				Position: mysql.Position{
+			currentLocation = binlog.InitLocation(
+				mysql.Position{
 					Name: lastLocation.Position.Name,
 					Pos:  e.Header.LogPos,
 				},
-				GTIDSet: lastLocation.GTIDSet.Clone(),
-				Suffix:  endSuffix,
-			}
+				lastLocation.GetGTID(),
+			)
+			currentLocation.Suffix = endSuffix
+
 			if ev, ok := e.Event.(*replication.QueryEvent); ok {
 				err = currentLocation.SetGTID(ev.GSet)
 				if err != nil {
@@ -1490,13 +1491,13 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 		}
 	}
 
-	*ec.currentLocation = binlog.Location{
-		Position: mysql.Position{
+	*ec.currentLocation = binlog.InitLocation(
+		mysql.Position{
 			Name: string(ev.NextLogName),
 			Pos:  uint32(ev.Position),
 		},
-		GTIDSet: ec.currentLocation.GTIDSet,
-	}
+		ec.currentLocation.GetGTID(),
+	)
 
 	if binlog.CompareLocation(*ec.currentLocation, *ec.lastLocation, s.cfg.EnableGTID) >= 0 {
 		*ec.lastLocation = *ec.currentLocation

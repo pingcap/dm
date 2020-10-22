@@ -737,7 +737,7 @@ func (t *testPositionSuite) TestSetGTID(c *C) {
 			Name: "mysql-bin.00002",
 			Pos:  2333,
 		},
-		GTIDSet: gset,
+		gtidSet: gset,
 		Suffix:  0,
 	}
 	loc2 := loc
@@ -753,15 +753,15 @@ func (t *testPositionSuite) TestSetGTID(c *C) {
 	c.Assert(CompareLocation(loc, loc2, false), Equals, 1)
 
 	// WARN: will change other location's gtid
-	err := loc2.GTIDSet.Set(mysqlSet2)
+	err := loc2.gtidSet.Set(mysqlSet2)
 	c.Assert(err, IsNil)
-	c.Assert(loc.GTIDSet.String(), Equals, GTIDSetStr2)
-	c.Assert(loc2.GTIDSet.String(), Equals, GTIDSetStr2)
+	c.Assert(loc.gtidSet.String(), Equals, GTIDSetStr2)
+	c.Assert(loc2.gtidSet.String(), Equals, GTIDSetStr2)
 	c.Assert(CompareLocation(loc, loc2, true), Equals, 0)
 
 	err = loc2.SetGTID(mysqlSet)
 	c.Assert(err, IsNil)
-	c.Assert(loc.GTIDSet.String(), Equals, GTIDSetStr2)
-	c.Assert(loc2.GTIDSet.String(), Equals, GTIDSetStr)
+	c.Assert(loc.gtidSet.String(), Equals, GTIDSetStr2)
+	c.Assert(loc2.gtidSet.String(), Equals, GTIDSetStr)
 	c.Assert(CompareLocation(loc, loc2, true), Equals, 1)
 }

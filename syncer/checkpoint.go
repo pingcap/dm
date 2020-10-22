@@ -728,13 +728,13 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			return err
 		}
 
-		location := binlog.Location{
-			Position: mysql.Position{
+		location := binlog.InitLocation(
+			mysql.Position{
 				Name: binlogName,
 				Pos:  binlogPos,
 			},
-			GTIDSet: gset,
-		}
+			gset,
+		)
 		if isGlobal {
 			if binlog.CompareLocation(location, binlog.NewLocation(cp.cfg.Flavor), cp.cfg.EnableGTID) > 0 {
 				cp.globalPoint = newBinlogPoint(location, location, nil, nil, cp.cfg.EnableGTID)
@@ -748,13 +748,13 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 					if err2 != nil {
 						return err2
 					}
-					exitSafeModeLoc := binlog.Location{
-						Position: mysql.Position{
+					exitSafeModeLoc := binlog.InitLocation(
+						mysql.Position{
 							Name: exitSafeBinlogName,
 							Pos:  exitSafeBinlogPos,
 						},
-						GTIDSet: gset2,
-					}
+						gset2,
+					)
 					cp.SaveSafeModeExitPoint(&exitSafeModeLoc)
 				}
 			} else {
@@ -829,13 +829,14 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 			return err
 		}
 
-		location = &binlog.Location{
-			Position: mysql.Position{
+		loc := binlog.InitLocation(
+			mysql.Position{
 				Name: cp.cfg.Meta.BinLogName,
 				Pos:  cp.cfg.Meta.BinLogPos,
 			},
-			GTIDSet: gset,
-		}
+			gset,
+		)
+		location = &loc
 	default:
 		// should not go here (syncer is only used in `all` or `incremental` mode)
 		return terror.ErrCheckpointInvalidTaskMode.Generate(cp.cfg.Mode)
