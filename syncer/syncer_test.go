@@ -946,7 +946,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	syncer.reset()
 
 	syncer.streamerController = NewStreamerController(tcontext.Background(), syncer.syncCfg, true, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone)
-	err = syncer.streamerController.Start(tcontext.Background(), binlog.Location{Position: pos, GTIDSet: gset})
+	err = syncer.streamerController.Start(tcontext.Background(), binlog.InitLocation(pos, gset))
 	c.Assert(err, IsNil)
 
 	for _, testCase := range testCases {
