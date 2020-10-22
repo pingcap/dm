@@ -23,19 +23,23 @@ import (
 type GaugeVecProxy struct {
 	mu sync.Mutex
 
-	LabelNames []string
-	Labels     map[string]map[string]string
+	LabelNamesIndex map[string]int
+	Labels          map[string][]string
 	*prometheus.GaugeVec
 }
 
 // NewGaugeVec creates a new GaugeVec based on the provided GaugeOpts and
 // partitioned by the given label names.
 func NewGaugeVec(opts prometheus.GaugeOpts, labelNames []string) *GaugeVecProxy {
-	return &GaugeVecProxy{
-		LabelNames: labelNames,
-		Labels:     make(map[string]map[string]string),
-		GaugeVec:   prometheus.NewGaugeVec(opts, labelNames),
+	gaugeVecProxy := &GaugeVecProxy{
+		LabelNamesIndex: make(map[string]int, len(labelNames)),
+		Labels:          make(map[string][]string),
+		GaugeVec:        prometheus.NewGaugeVec(opts, labelNames),
 	}
+	for idx, v := range labelNames {
+		gaugeVecProxy.LabelNamesIndex[v] = idx
+	}
+	return gaugeVecProxy
 }
 
 // WithLabelValues works as GetMetricWithLabelValues, but panics where
@@ -44,13 +48,7 @@ func NewGaugeVec(opts prometheus.GaugeOpts, labelNames []string) *GaugeVecProxy 
 //     myVec.WithLabelValues("404", "GET").Add(42)
 func (c *GaugeVecProxy) WithLabelValues(lvs ...string) prometheus.Gauge {
 	if len(lvs) > 0 {
-		labels := make(map[string]string, len(lvs))
-		for index, label := range lvs {
-			labels[c.LabelNames[index]] = label
-		}
-		c.mu.Lock()
-		noteLabelsInMetricsProxy(c, labels)
-		c.mu.Unlock()
+		noteLabelsInMetricsProxy(c, lvs)
 	}
 	return c.GaugeVec.WithLabelValues(lvs...)
 }
@@ -60,9 +58,12 @@ func (c *GaugeVecProxy) WithLabelValues(lvs ...string) prometheus.Gauge {
 //     myVec.With(prometheus.Labels{"code": "404", "method": "GET"}).Add(42)
 func (c *GaugeVecProxy) With(labels prometheus.Labels) prometheus.Gauge {
 	if len(labels) > 0 {
-		c.mu.Lock()
-		noteLabelsInMetricsProxy(c, labels)
-		c.mu.Unlock()
+		values := make([]string, len(labels))
+		labelNameIndex := c.GetLabelNamesIndex()
+		for k, v := range labels {
+			values[labelNameIndex[k]] = v
+		}
+		noteLabelsInMetricsProxy(c, values)
 	}
 
 	return c.GaugeVec.With(labels)
@@ -78,9 +79,21 @@ func (c *GaugeVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	return findAndDeleteLabelsInMetricsProxy(c, labels)
 }
 
+// GetLabelNamesIndex to support get GaugeVecProxy's LabelNames when you use Proxy object
+func (c *GaugeVecProxy) GetLabelNamesIndex() map[string]int {
+	return c.LabelNamesIndex
+}
+
 // GetLabels to support get GaugeVecProxy's Labels when you use Proxy object
-func (c *GaugeVecProxy) GetLabels() map[string]map[string]string {
+func (c *GaugeVecProxy) GetLabels() map[string][]string {
 	return c.Labels
+}
+
+// SetLabel to support set GaugeVecProxy's Label when you use Proxy object
+func (c *GaugeVecProxy) SetLabel(key string, vals []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Labels[key] = vals
 }
 
 // vecDelete to support delete GaugeVecProxy's Labels when you use Proxy object

@@ -45,8 +45,8 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 		pos2         mysql.Position
 		gtidStr2     string
 
-		loc  *binlog.Location
-		loc2 *binlog.Location
+		locPtr  *binlog.Location
+		locPtr2 *binlog.Location
 	)
 
 	br := bufio.NewReader(fd)
@@ -135,10 +135,8 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 	if err != nil {
 		return nil, nil, invalidErr
 	}
-	loc = &binlog.Location{
-		Position: pos,
-		GTIDSet:  gset,
-	}
+	loc := binlog.InitLocation(pos, gset)
+	locPtr = &loc
 
 	if useLocation2 {
 		if len(pos2.Name) == 0 || pos2.Pos == uint32(0) {
@@ -148,13 +146,11 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 		if err != nil {
 			return nil, nil, invalidErr
 		}
-		loc2 = &binlog.Location{
-			Position: pos2,
-			GTIDSet:  gset2,
-		}
+		loc2 := binlog.InitLocation(pos2, gset2)
+		locPtr2 = &loc2
 	}
 
-	return loc, loc2, nil
+	return locPtr, locPtr2, nil
 }
 
 func readFollowingGTIDs(br *bufio.Reader, flavor string) (string, error) {
