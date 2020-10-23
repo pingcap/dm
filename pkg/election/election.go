@@ -359,6 +359,9 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 	e.campaignMu.Unlock()
 
 	defer func() {
+		if err := elec.Resign(ctx); err != nil {
+			e.l.Warn("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
+		}
 		e.campaignMu.Lock()
 		e.resignCh = nil
 		e.campaignMu.Unlock()
@@ -368,9 +371,6 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 
 	for {
 		if e.evictLeader.Get() == 1 {
-			if err := elec.Resign(ctx); err != nil {
-				e.l.Info("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
-			}
 			return
 		}
 
@@ -397,9 +397,6 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 		case <-ctx.Done():
 			return
 		case <-e.resignCh:
-			if err := elec.Resign(ctx); err != nil {
-				e.l.Info("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
-			}
 			return
 		}
 	}
