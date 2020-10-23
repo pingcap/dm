@@ -57,7 +57,7 @@ filters:
   do-table-rule:
     schema-pattern: "dm_syncer_filter_rules"
     table-pattern: "dm_syncer_filter_rule"
-    events: ["create table", "insert"]
+    events: ["create table", "insert", "create database"]
     action: Do
   filter-schema-rule:
     schema-pattern: "dm_syncer_filter_rules"
