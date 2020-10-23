@@ -251,6 +251,77 @@ function DM_082() {
     #"clean_table" "optimistic"
 }
 
+function DM_085_CASE() {
+    run_sql_source2 "alter table ${shardddl1}.${tb1} alter index a visible;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(3,'ccc');"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} alter index a visible;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(6,'fff');"
+    run_sql_source2 "alter table ${shardddl1}.${tb3} alter index a visible;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(9,'iii');"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_085() {
+    # `ALTER INDEX` not supported in MySQL 5.7, but we setup the second MySQL 8.0 in CI now.
+    run_case 085 "single-source-pessimistic-2" \
+    "run_sql_source2 \"create table ${shardddl1}.${tb1} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb3} (a int unique key, b varchar(10));\"" \
+    "clean_table" "pessimistic"
+    
+    run_case 085 "single-source-optimistic-2" \
+    "run_sql_source2 \"create table ${shardddl1}.${tb1} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb3} (a int unique key, b varchar(10));\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_086_CASE() {
+    run_sql_source2 "alter table ${shardddl1}.${tb1} alter index a visible;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(3,'ccc');"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} alter index a invisible;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(6,'fff');"
+    run_sql_source2 "alter table ${shardddl1}.${tb3} alter index a visible;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(9,'iii');"
+    
+    if [[ "$1" = "pessimistic" ]]; then
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "detect inconsistent DDL sequence from source" 1
+    else
+        # schema comparer for optimistic shard DDL can't diff visible/invisible now.
+        # may this needs to be failed?
+        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    fi
+}
+
+function DM_086() {
+    # `ALTER INDEX` not supported in MySQL 5.7, but we setup the second MySQL 8.0 in CI now.
+    run_case 086 "single-source-pessimistic-2" \
+    "run_sql_source2 \"create table ${shardddl1}.${tb1} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb3} (a int unique key, b varchar(10));\"" \
+    "clean_table" "pessimistic"
+    
+    run_case 086 "single-source-optimistic-2" \
+    "run_sql_source2 \"create table ${shardddl1}.${tb1} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb3} (a int unique key, b varchar(10));\"" \
+    "clean_table" "optimistic"
+}
+
 function DM_094_CASE() {
     # here we run ddl to make sure we flush first check point in syncer
     # otherwise the worker may dump again when restart
@@ -705,7 +776,7 @@ function run() {
     init_database
     start=71
     end=103
-    except=(072 074 075 083 084 085 086 087 088 089 090 091 092 093)
+    except=(072 074 075 083 084 087 088 089 090 091 092 093)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
             continue

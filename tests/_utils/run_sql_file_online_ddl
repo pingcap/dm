@@ -31,6 +31,7 @@ do
         # may different. So we cheat gh-ost that we are running on aliyun rds,
         # on which will disable the port check.
         if [ "$6" == "gh-ost" ]; then
+            $ghost_bin -version
             $ghost_bin --user=root --host=$host --port=$port --password=$password \
                 --database=$schema --table=$table --alter="$alter" \
                 --serve-socket-file="$TEST_DIR/gh-ost.$schema.$table.$port.sock" \
@@ -38,6 +39,7 @@ do
                 --initially-drop-old-table -ok-to-drop-table -aliyun-rds -execute \
                 >> $TEST_DIR/gh-ost.log
         elif [ "$6" == "pt" ]; then
+            $ptosc_bin --version
             $ptosc_bin --user=root --host=$host --port=$port --password=$password \
                 --alter="$alter" D=$schema,t=$table \
                  --recursion-method=none --print --execute \

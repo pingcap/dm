@@ -531,8 +531,8 @@ github.com/pingcap/check v0.0.0-20191216031241-8a5a85928f12 h1:rfD9v3+ppLPzoQBgZ
 github.com/pingcap/check v0.0.0-20191216031241-8a5a85928f12/go.mod h1:PYMCGwN0JHjoqGr3HrZoD+b8Tgx8bKnArhSq8YVzUMc=
 github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712 h1:R8gStypOBmpnHEx1qi//SaqxJVI4inOqljg/Aj5/390=
 github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712/go.mod h1:PYMCGwN0JHjoqGr3HrZoD+b8Tgx8bKnArhSq8YVzUMc=
-github.com/pingcap/dumpling v0.0.0-20201002062622-d00c8ed4877b h1:IvubrTU7rj8sJ1u071v8gYa80Y9XGi009Nzq0KJoFXI=
-github.com/pingcap/dumpling v0.0.0-20201002062622-d00c8ed4877b/go.mod h1:c/2BIQEiqlpPQISY5HljfR+eM/KukJdNTn2Fs2KI/6o=
+github.com/pingcap/dumpling v0.0.0-20201016024720-1004016d3d49 h1:1Y+4WAJo09ShBoXG5zapR+zwAA9YiDRVsgSjuXlYn0E=
+github.com/pingcap/dumpling v0.0.0-20201016024720-1004016d3d49/go.mod h1:c/2BIQEiqlpPQISY5HljfR+eM/KukJdNTn2Fs2KI/6o=
 github.com/pingcap/errcode v0.0.0-20180921232412-a1a7271709d9/go.mod h1:4b2X8xSqxIroj/IZ9MX/VGZhAwc11wB9wRIzHvz6SeM=
 github.com/pingcap/errors v0.11.0 h1:DCJQB8jrHbQ1VVlMFIrbj2ApScNNotVmkSNplu2yUt4=
 github.com/pingcap/errors v0.11.0/go.mod h1:Oi8TUi2kEtXXLMJk9l1cGmz20kV3TaQ0usTwv5KuLY8=
