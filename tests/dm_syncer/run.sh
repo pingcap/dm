@@ -39,7 +39,7 @@ function run() {
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     run_sql "show databases;" $MYSQL_PORT2 $MYSQL_PASSWORD2
-    check_not_contains "dm_syncer_plus"
+    check_not_contains "dm_syncer_filter_rules"
     # start a task in `incremental` mode
     # using account with limited privileges
     kill_dm_worker
@@ -82,7 +82,7 @@ function run() {
     run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
     check_not_contains "dm_syncer_ignore_db"
     run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
-    check_contains "dm_syncer_plus"
+    check_contains "dm_syncer_filter_rules"
 }
 
 cleanup_data $TEST_NAME
