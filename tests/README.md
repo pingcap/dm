@@ -33,12 +33,14 @@
 
 1. Run `make dm_integration_test_build` to generate DM related binary for integration test
 
-2. Setup two MySQL servers (5.6 ~ 5.7) with [binlog enabled first](https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html) and [set `GTID_MODE=ON`](https://dev.mysql.com/doc/refman/5.7/en/replication-mode-change-online-enable-gtids.html), export proper environment variables. Variables and their default values are showed in following table.
+2. Setup two MySQL servers (the first one: 5.6 ~ 5.7; the second one: 8.0) with [binlog enabled first](https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html) and [set `GTID_MODE=ON`](https://dev.mysql.com/doc/refman/5.7/en/replication-mode-change-online-enable-gtids.html), export proper environment variables. Variables and their default values are showed in following table.
 
     | MySQL | Host | Port| PASSWORD |
     | :------------ | :---------- | :------ | :---- |
     | MySQL1 | `MYSQL_HOST1` / `127.0.0.1` | `MYSQL_PORT1` / `3306` | `MYSQL_PASSWORD1` / `123456` |
     | MySQL2 | `MYSQL_HOST2` / `127.0.0.1` | `MYSQL_PORT2` / `3307` | `MYSQL_PASSWORD2` / `123456` |
+
+    > For the second MySQL server (with 8.0 version), you should setup it with `--default-authentication-plugin=mysql_native_password`.
 
 3. Run `make integration_test` to execute the integration tests. This command will
 

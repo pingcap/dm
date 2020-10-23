@@ -21,10 +21,11 @@ function extract() {
     table=${str:1:1}
 }
 
+# set charset explicitly because MySQL 8.0 has different default charsets.
 function init_table() {
     for i in $@; do
         extract $i
-        run_sql_source${source} "create table ${db}.tb${table} (id int);"
+        run_sql_source${source} "create table ${db}.tb${table} (id int) CHARSET=latin1 COLLATE=latin1_bin;"
     done
 }
 
