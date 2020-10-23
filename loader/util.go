@@ -74,8 +74,25 @@ func shortSha1(s string) string {
 }
 
 // percent calculates percentage of a/b.
-func percent(a int64, b int64) string {
+func percent(a int64, b int64, finish bool) string {
+	if b == 0 {
+		if finish {
+			return "100.00 %"
+		}
+		return "0.00 %"
+	}
 	return fmt.Sprintf("%.2f %%", float64(a)/float64(b)*100)
+}
+
+// progress calculates progress of a/b.
+func progress(a int64, b int64, finish bool) float64 {
+	if b == 0 {
+		if finish {
+			return 1
+		}
+		return 0
+	}
+	return float64(a) / float64(b)
 }
 
 func generateSchemaCreateFile(dir string, schema string) error {
