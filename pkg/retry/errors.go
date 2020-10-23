@@ -49,6 +49,11 @@ var (
 		"Error 8025: entry too large",
 	}
 
+	// ReplicationErrMsgs list the error message of un-recoverable replication error
+	ReplicationErrMsgs = []string{
+		"Could not find first log file name in binary log index file",
+	}
+
 	// ParseRelayLogErrMsgs list the error messages of some un-recoverable relay log parsing error, which is used in task auto recovery.
 	ParseRelayLogErrMsgs = []string{
 		"binlog checksum mismatch, data may be corrupted",
