@@ -7,6 +7,74 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 source $cur/../_utils/shardddl_lib.sh
 
+function DM_071_CASE() {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} default character set utf8mb4 collate utf8mb4_bin;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,'ccc');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} default character set utf8mb4 collate utf8mb4_bin;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,'fff');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} default character set utf8mb4 collate utf8mb4_bin;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,'iii');"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_071() {
+    run_case 071 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
+    "clean_table" "pessimistic"
+
+    # schema comparer doesn't support to compare/diff charset now
+    # run_case 071 "double-source-optimistic" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
+    # "clean_table" "optimistic"
+}
+
+function DM_073_CASE() {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} convert to character set utf8mb4 collate utf8mb4_bin;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,'ccc');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} convert to character set utf8mb4 collate utf8mb4_bin;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,'fff');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} convert to character set utf8mb4 collate utf8mb4_bin;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,'iii');"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_073() {
+    run_case 073 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
+    "clean_table" "pessimistic"
+
+    # schema comparer doesn't support to compare/diff charset now
+    # run_case 073 "double-source-optimistic" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
+    # "clean_table" "optimistic"
+}
+
 function DM_076_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} add primary key(id);"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -708,7 +776,7 @@ function run() {
     init_database
     start=71
     end=103
-    except=(071 072 073 074 075 083 084 087 088 089 090 091 092 093)
+    except=(072 074 075 083 084 087 088 089 090 091 092 093)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
             continue
