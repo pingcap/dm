@@ -14,7 +14,6 @@
 package worker
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/pingcap/check"
@@ -309,11 +308,11 @@ func (s *testTaskCheckerSuite) TestIsResumableError(c *check.C) {
 		// others
 		{nil, true},
 		{errors.New("unknown error"), true},
+		{terror.ErrNotSet.Delegate(&tmysql.SQLError{Code: 1236, Message: "Could not find first log file name in binary log index file", State: tmysql.DefaultMySQLState}), false},
 	}
 
 	for _, tc := range testCases {
 		err := unit.NewProcessError(tc.err)
-		fmt.Printf("error: %v\n", err)
 		c.Assert(isResumableError(err), check.Equals, tc.resumable)
 	}
 }
