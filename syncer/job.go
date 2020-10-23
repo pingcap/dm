@@ -80,9 +80,6 @@ func (j *job) String() string {
 }
 
 func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, location, startLocation, cmdLocation binlog.Location) *job {
-	location1 := location.Clone()
-	cmdLocation1 := cmdLocation.Clone()
-
 	return &job{
 		tp:              tp,
 		sourceTbl:       map[string][]string{sourceSchema: {sourceTable}},
@@ -92,8 +89,8 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 		args:            args,
 		key:             key,
 		startLocation:   startLocation,
-		location:        location1,
-		currentLocation: cmdLocation1,
+		location:        location,
+		currentLocation: cmdLocation,
 		retry:           true,
 	}
 }
@@ -103,15 +100,13 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 // when cfg.ShardMode == ShardOptimistic || ShardPessimistic, ddlInfo != nil, sourceTbls == nil.
 func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation, cmdLocation binlog.Location,
 	sourceTbls map[string]map[string]struct{}) *job {
-	location1 := location.Clone()
-	cmdLocation1 := cmdLocation.Clone()
 
 	j := &job{
 		tp:              ddl,
 		ddls:            ddls,
-		location:        location1,
+		location:        location,
 		startLocation:   startLocation,
-		currentLocation: cmdLocation1,
+		currentLocation: cmdLocation,
 	}
 
 	if ddlInfo != nil {
@@ -135,14 +130,11 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation,
 }
 
 func newXIDJob(location, startLocation, cmdLocation binlog.Location) *job {
-	location1 := location.Clone()
-	cmdLocation1 := cmdLocation.Clone()
-
 	return &job{
 		tp:              xid,
-		location:        location1,
+		location:        location,
 		startLocation:   startLocation,
-		currentLocation: cmdLocation1,
+		currentLocation: cmdLocation,
 	}
 }
 
@@ -153,11 +145,9 @@ func newFlushJob() *job {
 }
 
 func newSkipJob(location binlog.Location) *job {
-	location1 := location.Clone()
-
 	return &job{
 		tp:       skip,
-		location: location1,
+		location: location,
 	}
 }
 

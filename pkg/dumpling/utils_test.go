@@ -238,11 +238,11 @@ Finished dump at: 2020-09-30 12:16:49
 		c.Assert(err, IsNil)
 		c.Assert(loc.Position, DeepEquals, tc.pos)
 		gs, _ := gtid.ParserGTID("mysql", tc.gsetStr)
-		c.Assert(loc.GTIDSet, DeepEquals, gs)
+		c.Assert(loc.GetGTID(), DeepEquals, gs)
 		if tc.loc2 {
 			c.Assert(loc2.Position, DeepEquals, tc.pos2)
 			gs2, _ := gtid.ParserGTID("mysql", tc.gsetStr2)
-			c.Assert(loc2.GTIDSet, DeepEquals, gs2)
+			c.Assert(loc2.GetGTID(), DeepEquals, gs2)
 		} else {
 			c.Assert(loc2, IsNil)
 		}

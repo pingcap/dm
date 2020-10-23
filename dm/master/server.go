@@ -661,7 +661,7 @@ func extractSources(s *Server, req hasWokers) ([]string, error) {
 		// query specified task's sources
 		sources = s.getTaskResources(req.GetName())
 		if len(sources) == 0 {
-			return nil, errors.Errorf("task %s has no source or not exist, can try `refresh-worker-tasks` cmd first", req.GetName())
+			return nil, errors.Errorf("task %s has no source or not exist", req.GetName())
 		}
 	} else {
 		// query all sources

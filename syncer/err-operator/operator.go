@@ -103,7 +103,7 @@ func (h *Holder) Set(pos string, op pb.ErrorOp, events []*replication.BinlogEven
 // replace event b	1010, 1			1010, 2
 // replace event c	1010, 2			1020, 0
 // event 3		1020, 0			1030, 0
-func (h *Holder) GetEvent(startLocation *binlog.Location) (*replication.BinlogEvent, error) {
+func (h *Holder) GetEvent(startLocation binlog.Location) (*replication.BinlogEvent, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -126,7 +126,7 @@ func (h *Holder) GetEvent(startLocation *binlog.Location) (*replication.BinlogEv
 }
 
 // MatchAndApply tries to match operation for event by location and apply it on replace events
-func (h *Holder) MatchAndApply(startLocation, endLocation *binlog.Location) (bool, pb.ErrorOp) {
+func (h *Holder) MatchAndApply(startLocation, endLocation binlog.Location) (bool, pb.ErrorOp) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -146,8 +146,8 @@ func (h *Holder) MatchAndApply(startLocation, endLocation *binlog.Location) (boo
 		for _, ev := range operator.events {
 			ev.Header.LogPos = startLocation.Position.Pos
 			if e, ok := ev.Event.(*replication.QueryEvent); ok {
-				if startLocation.GTIDSet != nil {
-					e.GSet = startLocation.GTIDSet.Origin()
+				if startLocation.GetGTID() != nil {
+					e.GSet = startLocation.GetGTID().Origin()
 				}
 			}
 		}
@@ -157,8 +157,8 @@ func (h *Holder) MatchAndApply(startLocation, endLocation *binlog.Location) (boo
 		e.Header.EventSize = endLocation.Position.Pos - startLocation.Position.Pos
 		e.Header.LogPos = endLocation.Position.Pos
 		if e, ok := e.Event.(*replication.QueryEvent); ok {
-			if endLocation.GTIDSet != nil {
-				e.GSet = endLocation.GTIDSet.Origin()
+			if endLocation.GetGTID() != nil {
+				e.GSet = endLocation.GetGTID().Origin()
 			}
 		}
 	}
