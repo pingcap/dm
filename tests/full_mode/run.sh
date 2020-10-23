@@ -107,8 +107,34 @@ function escape_schema() {
     cleanup_process $*
 }
 
+function empty_data() {
+    run_sql_both_source "drop database if exists full_mode;"
+    run_sql_both_source "create database full_mode;"
+    run_sql_source1 "create table full_mode.t1 (id int, name varchar(20), primary key(id));"
+    run_sql_source2 "create table full_mode.t2 (id int, name varchar(20), primary key(id));"
+
+    init_cluster
+
+    dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml    
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"stage\": \"Finished\"" 2 \
+        "\"totalBytes\": \"0\"" 2 \
+        "\"progress\": \"100.00 %\"" 2
+    
+    check_log_contains $WORK_DIR/worker1/log/dm-worker.log "progress=\"100.00 %\""
+    check_log_contains $WORK_DIR/worker2/log/dm-worker.log "progress=\"100.00 %\""
+
+    cleanup_data full_mode
+    cleanup_process $*
+}
+
 function run() {
     fail_acquire_global_lock
+    escape_schema
+    empty_data
 
     run_sql_both_source "SET @@GLOBAL.SQL_MODE='NO_BACKSLASH_ESCAPES'"
 
