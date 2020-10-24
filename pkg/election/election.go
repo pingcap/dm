@@ -361,12 +361,13 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 
 	defer func() {
 		e.l.Info("will try resign leader")
-		timeoutCtx, _ := context.WithTimeout(context.Background(), time.Duration(e.sessionTTL)*time.Second)
+		timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Duration(e.sessionTTL)*time.Second)
 		if err := elec.Resign(timeoutCtx); err != nil {
 			e.l.Warn("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
 		} else {
 			e.l.Info("finish resign leader")
 		}
+		cancel()
 		e.campaignMu.Lock()
 		e.resignCh = nil
 		e.campaignMu.Unlock()
