@@ -25,7 +25,9 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/tikv/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/clientv3/concurrency"
 	"go.etcd.io/etcd/embed"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
@@ -401,4 +403,79 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 	_, err = cli.Delete(ctx, leaderKey)
 	c.Assert(err, IsNil)
 	wg.Wait()
+}
+
+func (t *testElectionSuite) TestCancelCtxWontBlock(c *C) {
+	var (
+		wg         sync.WaitGroup
+		timeout    = 3 * time.Second
+		sessionTTL = 60
+		key        = "unit-test/election-key"
+		ID         = "member"
+		addr       = "127.0.0.1:1234"
+	)
+	cli, err := etcdutil.CreateClient([]string{t.endPoint}, nil)
+	c.Assert(err, IsNil)
+	defer cli.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// manually create Election, don't use `NewElection` to avoid `campaignLoop`
+	e := &Election{
+		cli:        cli,
+		sessionTTL: sessionTTL,
+		key:        key,
+		info: &CampaignerInfo{
+			ID:   ID,
+			Addr: addr,
+		},
+		notifyBlockTime: t.notifyBlockTime,
+		leaderCh:        make(chan *CampaignerInfo, 1),
+		ech:             make(chan error, 1), // size 1 is enough
+		cancel:          func() {},           // no use, but avoid panic
+		l:               log.With(zap.String("component", "election")),
+	}
+	e.infoStr = e.info.String()
+	defer e.Close()
+
+	session, err := e.newSession(ctx, newSessionDefaultRetryCnt)
+	c.Assert(err, IsNil)
+	elec := concurrency.NewElection(session, e.key)
+	ctx2, cancel2 := context.WithCancel(ctx)
+
+	resp, err := cli.Get(ctx, key, clientv3.WithPrefix())
+	c.Assert(err, IsNil)
+	c.Assert(resp.Kvs, HasLen, 0)
+
+	go func() {
+		c.Assert(elec.Campaign(ctx2, e.key), IsNil)
+	}()
+	ch := elec.Observe(ctx2)
+	info := <-ch
+	leaderKey := string(info.Kvs[0].Key)
+
+	wg.Add(1)
+	go func() {
+		e.watchLeader(ctx2, session, leaderKey, elec)
+		wg.Done()
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	cancel2()
+
+	// watchLeader will clean election-key
+	wg.Wait()
+	resp, err = cli.Get(ctx, key, clientv3.WithPrefix())
+	c.Assert(err, IsNil)
+	c.Assert(resp.Kvs, HasLen, 0)
+
+	elec2 := concurrency.NewElection(session, e.key)
+	ch2 := elec2.Observe(ctx)
+	select {
+	case info = <-ch2:
+		// should not observe old election-key
+		c.Log(info)
+		c.Fail()
+	case <-time.After(timeout):
+	}
 }

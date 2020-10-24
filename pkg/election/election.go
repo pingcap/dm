@@ -351,6 +351,7 @@ func (e *Election) notifyLeader(ctx context.Context, leaderInfo *CampaignerInfo)
 	}
 }
 
+// watchLeader should call `elec.Resign` when exit, to remove election-key
 func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session, key string, elec *concurrency.Election) {
 	e.l.Debug("watch leader key", zap.String("key", key))
 
@@ -359,8 +360,12 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 	e.campaignMu.Unlock()
 
 	defer func() {
-		if err := elec.Resign(ctx); err != nil {
+		e.l.Info("will try resign leader")
+		timeoutCtx, _ := context.WithTimeout(context.Background(), time.Duration(e.sessionTTL)*time.Second)
+		if err := elec.Resign(timeoutCtx); err != nil {
 			e.l.Warn("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
+		} else {
+			e.l.Info("finish resign leader")
 		}
 		e.campaignMu.Lock()
 		e.resignCh = nil
