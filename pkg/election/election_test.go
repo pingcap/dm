@@ -167,7 +167,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 		c.Assert(deleted, IsFalse)
 	} else {
 		// for abnormally exited election, session will be cleared here
-		c.Assert(deleted, IsTrue)
+		// or cleared by `watchLeader` triggered by context cancel in `e1.Close()` after #1214. so we remove test here
 	}
 
 	// e2 should become the leader
@@ -473,9 +473,8 @@ func (t *testElectionSuite) TestCancelCtxWontBlock(c *C) {
 	ch2 := elec2.Observe(ctx)
 	select {
 	case info = <-ch2:
-		// should not observe old election-key
 		c.Log(info)
-		c.Fail()
+		c.Fatal("should not observe old election-key")
 	case <-time.After(timeout):
 	}
 }
