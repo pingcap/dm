@@ -446,9 +446,7 @@ func (t *testElectionSuite) TestCancelCtxWontBlock(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(resp.Kvs, HasLen, 0)
 
-	go func() {
-		c.Assert(elec.Campaign(ctx2, e.key), IsNil)
-	}()
+	c.Assert(elec.Campaign(ctx2, e.key), IsNil)
 	ch := elec.Observe(ctx2)
 	info := <-ch
 	leaderKey := string(info.Kvs[0].Key)
