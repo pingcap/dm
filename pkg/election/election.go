@@ -321,8 +321,8 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 
 		// make sure `elec.Campaign` was exited (instead of rely on `<-eleObserveCh`), to avoid data race writing `elec`'s member
-		cancel2()
 		campaignWg.Wait()
+		cancel2()
 
 		e.l.Info("become leader", zap.Stringer("current member", e.info))
 		e.notifyLeader(ctx, leaderInfo) // become the leader now
