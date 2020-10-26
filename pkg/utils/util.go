@@ -203,17 +203,14 @@ func wrapScheme(s string, https bool) string {
 	if s == "" {
 		return s
 	}
-	if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
-		return s
-	}
+	s = UnwrapScheme(s)
 	if https {
 		return "https://" + s
 	}
 	return "http://" + s
 }
 
-// WrapSchemes adds http or https scheme to input if missing. input could be a comma-separated list
-// if input has wrong scheme, don't correct it (maybe user deliberately?)
+// WrapSchemes adds http or https scheme to input if missing. input could be a comma-separated list.
 func WrapSchemes(s string, https bool) string {
 	items := strings.Split(s, ",")
 	output := make([]string, 0, len(items))
