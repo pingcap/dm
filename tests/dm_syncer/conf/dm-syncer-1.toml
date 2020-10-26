@@ -76,24 +76,16 @@ batch = 1000
 #db-name = "~^b.*"
 #tbl-name = "~^a.*"
 
+[[filter-rules]]
+  schema-pattern: "dm_syncer_filter_rules"
+  events: ["drop database"]
+  action: "Ignore"
 
-# filter-rules filter binlog events
-#[[filter-rules]]
-#schema-pattern = "shard_db_*"
-#table-pattern  = "shard_table_*"
-# do all dml, ignore all ddl
-#events = ["all dml"]
-#action = "Do"
-
-#[[filter-rules]]
-#schema-pattern = "shard_db_*"
-#table-pattern  = "shard_table_*"
-# ignore delete sqls and drop table ddls
-#events = ["delete", "drop table"]
-# regular expression, ignore drop procedure queries
-# sql-pattern = ["^DROP\\s+PROCEDURE"]
-#action = "Ignore"
-
+[[filter-rules]]
+  schema-pattern = "dm_syncer_filter_rules"
+  table-pattern  = "dm_syncer_filter_rule"
+  events = ["create table", "insert", "update", "create database"]
+  action = "Do"
 
 # route table
 
