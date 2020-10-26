@@ -492,8 +492,6 @@ function DM_102_CASE() {
         "show-ddl-locks" \
         "\"ID\": \"test-\`shardddl\`.\`tb\`\"" 1
 
-    read -p 123
-
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "unlock-ddl-lock test-\`shardddl\`.\`tb\`" \
         "\"result\": true" 1
