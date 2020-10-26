@@ -77,6 +77,6 @@ function get_start_name() {
 }
 
 function get_next_query_pos() {
-    pos=$(mysql -uroot -P$1 -h127.0.0.1 -p$2 -e 'show binlog events'|grep Query | awk '{ if ($2>'"$3"') {print $2; exit} }')
+    pos=$(mysql -uroot -P$1 -h127.0.0.1 -p$2 -e 'show binlog events'|grep Query | awk '{ if ($2>'"$3"' && $6!="BEGIN") {print $2; exit} }')
     echo ${pos}
 }
