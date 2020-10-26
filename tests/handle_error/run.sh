@@ -778,41 +778,41 @@ function DM_4220_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column" 2
+            "Unsupported modify column.*varchar(10)" 2
 
     first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
     first_pos2=$(get_start_pos 127.0.0.1:$MASTER_PORT $source2)
     first_name1=$(get_start_name 127.0.0.1:$MASTER_PORT $source1)
     first_name2=$(get_start_name 127.0.0.1:$MASTER_PORT $source2)
 
-    second_query_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
-    second_query_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $first_pos2)
-    third_query_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $second_query_pos1)
-    third_query_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $second_query_pos2)
+    second_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
+    second_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $first_pos2)
+    third_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $second_pos1)
+    third_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $second_pos2)
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test skip -s $source1 -b $first_name1:$second_query_pos1" \
+            "handle-error test skip -s $source1 -b $first_name1:$second_pos1" \
             "\"result\": true" 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test skip -s $source2 -b $first_name2:$second_query_pos2" \
+            "handle-error test skip -s $source2 -b $first_name2:$second_pos2" \
             "\"result\": true" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test skip -s $source1 -b $first_name1:$third_query_pos1" \
+            "handle-error test skip -s $source1 -b $first_name1:$third_pos1" \
             "\"result\": true" 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test skip -s $source2 -b $first_name2:$third_query_pos2" \
+            "handle-error test skip -s $source2 -b $first_name2:$third_pos2" \
             "\"result\": true" 2
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column.*varchar(10).*" 2
+            "Unsupported modify column.*varchar(10)" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test revert -s $source1 -b $first_name1:$third_query_pos1" \
+            "handle-error test revert -s $source1 -b $first_name1:$third_pos1" \
             "\"result\": true" 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test revert -s $source2 -b $first_name2:$third_query_pos2" \
+            "handle-error test revert -s $source2 -b $first_name2:$third_pos2" \
             "\"result\": true" 2
     
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -821,7 +821,7 @@ function DM_4220_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column.*varchar(30).*" 2
+            "Unsupported modify column.*varchar(30)" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test skip" \
@@ -833,13 +833,13 @@ function DM_4220_CASE() {
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 4"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test revert -s $source1 -b $first_name1:$third_query_pos1" \
+            "handle-error test revert -s $source1 -b $first_name1:$third_pos1" \
             "\"result\": true" 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test revert -s $source2 -b $first_name2:$third_query_pos2" \
+            "handle-error test revert -s $source2 -b $first_name2:$third_pos2" \
             "\"result\": true" 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test revert -b $first_name2:$third_query_pos2" \
+            "handle-error test revert -b $first_name2:$third_pos2" \
             "operator not exist" 2
 
     run_sql_source1 "insert into ${db}.${tb1} values(5);"
@@ -864,38 +864,38 @@ function DM_4185_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column" 2
+            "Unsupported modify column.*varchar(10)" 2
 
     first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
     first_pos2=$(get_start_pos 127.0.0.1:$MASTER_PORT $source2)
     first_name1=$(get_start_name 127.0.0.1:$MASTER_PORT $source1)
     first_name2=$(get_start_name 127.0.0.1:$MASTER_PORT $source2)
-    second_query_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
-    second_query_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $first_pos2)
+    second_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
+    second_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $first_pos2)
 
-    if [ "$second_query_pos1" = "$second_query_pos2" ]; then
+    if [ "$second_pos1" = "$second_pos2" ]; then
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test skip -b $first_name1:$second_query_pos1" \
+            "handle-error test skip -b $first_name1:$second_pos1" \
             "\"result\": true" 3
     else
         # WARN: may skip unknown event like later insert, test will fail
         # It hasn't happened yet.
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test skip -b $first_name1:$second_query_pos1" \
+            "handle-error test skip -b $first_name1:$second_pos1" \
             "\"result\": true" 3
 
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column" 2
+            "Unsupported modify column.*varchar(10)" 2
 
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test skip -b $first_name1:$second_query_pos2" \
+            "handle-error test skip -b $first_name1:$second_pos2" \
             "\"result\": true" 3
     fi
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column.*varchar(10).*" 2
+            "Unsupported modify column.*varchar(10)" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test skip" \
@@ -928,19 +928,19 @@ function DM_4201_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column" 1
+            "Unsupported modify column.*varchar(10)" 1
 
     first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
     first_name1=$(get_start_name 127.0.0.1:$MASTER_PORT $source1)
-    second_query_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
+    second_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test skip -b $first_name1:$second_query_pos1" \
+            "handle-error test skip -b $first_name1:$second_pos1" \
             "\"result\": true" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column.*varchar(10).*" 1
+            "Unsupported modify column.*varchar(10)" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test skip" \
@@ -959,6 +959,7 @@ function DM_4201() {
      run_case 4201 "single-source-no-sharding" "init_table 11" "clean_table" ""
 }
 
+# 4189, 4190, 4191, 4192, 4214
 function DM_4189_CASE() {
     run_sql_source1 "insert into ${db}.${tb1} values(1);"
     run_sql_source2 "insert into ${db}.${tb1} values(2);"
@@ -973,38 +974,38 @@ function DM_4189_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "unsupported add column .* constraint UNIQUE KEY" 2
+            "unsupported add column 'c' constraint UNIQUE KEY" 2
 
     first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
     first_pos2=$(get_start_pos 127.0.0.1:$MASTER_PORT $source2)
     first_name1=$(get_start_name 127.0.0.1:$MASTER_PORT $source1)
     first_name2=$(get_start_name 127.0.0.1:$MASTER_PORT $source2)
-    second_query_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
-    second_query_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $first_pos2)
+    second_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
+    second_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $first_pos2)
 
-    if [ "$second_query_pos1" = "$second_query_pos2" ]; then
+    if [ "$second_pos1" = "$second_pos2" ]; then
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test -b $first_name1:$second_query_pos1 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
+            "handle-error test -b $first_name1:$second_pos1 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
             "\"result\": true" 3
     else
         # WARN: may replace unknown event like later insert, test will fail
         # It hasn't happened yet.
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test -s $source1 -b $first_name1:$second_query_pos1 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
+            "handle-error test -s $source1 -b $first_name1:$second_pos1 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
             "\"result\": true" 2
 
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "unsupported add column .* constraint UNIQUE KEY" 2
+            "unsupported add column 'c' constraint UNIQUE KEY" 2
 
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test -s $source2 -b $first_name2:$second_query_pos2 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
+            "handle-error test -s $source2 -b $first_name2:$second_pos2 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
             "\"result\": true" 2
     fi
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "unsupported add column .* constraint UNIQUE KEY" 2
+            "unsupported add column 'c' constraint UNIQUE KEY" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
@@ -1029,6 +1030,7 @@ function DM_4189() {
      run_case 4189 "double-source-optimistic" "init_table 11 21;run_sql_source1 \"insert into ${db}.${tb1} values(100);\"" "clean_table" "optimistic"
 }
 
+# 4210, 4212
 function DM_4210_CASE() {
     run_sql_source1 "insert into ${db}.${tb1} values(1);"
     run_sql_source1 "alter table ${db}.${tb1} add column c int unique;"
@@ -1037,19 +1039,19 @@ function DM_4210_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "unsupported add column .* constraint UNIQUE KEY" 1
+            "unsupported add column 'c' constraint UNIQUE KEY" 1
 
     first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
     first_name1=$(get_start_name 127.0.0.1:$MASTER_PORT $source1)
-    second_query_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
+    second_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test -b $first_name1:$second_query_pos1 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
+            "handle-error test -b $first_name1:$second_pos1 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
             "\"result\": true" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "unsupported add column .* constraint UNIQUE KEY" 1
+            "unsupported add column 'c' constraint UNIQUE KEY" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test replace alter table ${db}.${tb1} add column e int unique;" \
@@ -1057,7 +1059,7 @@ function DM_4210_CASE() {
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "unsupported add column .* constraint UNIQUE KEY" 1
+            "unsupported add column 'e' constraint UNIQUE KEY" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
@@ -1076,7 +1078,7 @@ function DM_4210() {
      run_case 4210 "single-source-no-sharding" "init_table 11" "clean_table" ""
 }
 
-# 4193, 4221, 4227, 4228
+# 4193, 4221, 4225, 4227, 4228
 function DM_4193_CASE() {
     run_sql_source1 "insert into ${db}.${tb1} values(1);"
     run_sql_source2 "insert into ${db}.${tb1} values(2);"
@@ -1095,7 +1097,7 @@ function DM_4193_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column" 2
+            "Unsupported modify column.*varchar(10)" 2
 
     first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
     first_pos2=$(get_start_pos 127.0.0.1:$MASTER_PORT $source2)
@@ -1104,12 +1106,12 @@ function DM_4193_CASE() {
 
     temp_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
     temp_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $first_pos2)
-    second_query_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $temp_pos1)
-    second_query_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $temp_pos2)
-    temp_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $second_query_pos1)
-    temp_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $second_query_pos2)
-    third_query_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $temp_pos1)
-    third_query_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $temp_pos2)
+    second_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $temp_pos1)
+    second_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $temp_pos2)
+    temp_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $second_pos1)
+    temp_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $second_pos2)
+    third_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $temp_pos1)
+    third_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $temp_pos2)
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test skip -s $source1 -b $first_name1:$first_pos1" \
@@ -1120,7 +1122,7 @@ function DM_4193_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column.*varchar(20).*" 2
+            "Unsupported modify column.*varchar(20)" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test revert -s $source1 -b $first_name1:$first_pos1" \
@@ -1130,19 +1132,19 @@ function DM_4193_CASE() {
             "operator not exist" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test skip -s $source1 -b $first_name1:$third_query_pos1" \
+            "handle-error test skip -s $source1 -b $first_name1:$third_pos1" \
             "\"result\": true" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test revert -b $first_name1:$third_query_pos1" \
+            "handle-error test revert -b $first_name1:$third_pos1" \
             "operator not exist" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test skip -s $source1 -b $first_name1:$third_query_pos1" \
+            "handle-error test skip -s $source1 -b $first_name1:$third_pos1" \
             "\"result\": true" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test revert -s $source2 -b $first_name2:$third_query_pos2" \
+            "handle-error test revert -s $source2 -b $first_name2:$third_pos2" \
             "operator not exist" 1
         
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -1151,7 +1153,7 @@ function DM_4193_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column.*varchar(30).*" 1
+            "Unsupported modify column.*varchar(30)" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test skip" \
@@ -1178,7 +1180,7 @@ function DM_4230_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "unsupported add column .* constraint UNIQUE KEY" 1
+            "unsupported add column 'c' constraint UNIQUE KEY" 1
 
     run_sql_source1 "insert into ${db}.${tb1} values(2,2);"
         
@@ -1188,7 +1190,7 @@ function DM_4230_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "unsupported add column .* constraint UNIQUE KEY" 1
+            "unsupported add column 'd' constraint UNIQUE KEY" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test revert" \
