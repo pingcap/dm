@@ -20,11 +20,11 @@ require (
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/lance6716/retool v1.3.8-0.20200806070832-3469f70b2afe
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
-	github.com/pingcap/dumpling v0.0.0-20201002062622-d00c8ed4877b
+	github.com/pingcap/dumpling v0.0.0-20201016024720-1004016d3d49
 	github.com/pingcap/errors v0.11.5-0.20200917111840-a15ef68f753d
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
 	github.com/pingcap/log v0.0.0-20200828042413-fce0951f1463
-	github.com/pingcap/parser v0.0.0-20200924053142-5d7e8ebf605e
+	github.com/pingcap/parser v0.0.0-20201020021731-5af7d42c2022
 	github.com/pingcap/tidb v1.1.0-beta.0.20200927065602-486e473a86e9
 	github.com/pingcap/tidb-tools v4.0.7-0.20200927084250-e47e0e12c7f3+incompatible
 	github.com/prometheus/client_golang v1.5.1

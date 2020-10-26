@@ -723,3 +723,45 @@ func (t *testPositionSuite) TestVerifyBinlogPos(c *C) {
 		}
 	}
 }
+
+func (t *testPositionSuite) TestSetGTID(c *C) {
+	GTIDSetStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14"
+	GTIDSetStr2 := "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-15"
+	gset, _ := gtid.ParserGTID("mysql", GTIDSetStr)
+	gset2, _ := gtid.ParserGTID("mysql", GTIDSetStr2)
+	mysqlSet := gset.Origin()
+	mysqlSet2 := gset2.Origin()
+
+	loc := Location{
+		Position: gmysql.Position{
+			Name: "mysql-bin.00002",
+			Pos:  2333,
+		},
+		gtidSet: gset,
+		Suffix:  0,
+	}
+	loc2 := loc
+
+	c.Assert(CompareLocation(loc, loc2, false), Equals, 0)
+
+	loc2.Position.Pos++
+	c.Assert(loc.Position.Pos, Equals, uint32(2333))
+	c.Assert(CompareLocation(loc, loc2, false), Equals, -1)
+
+	loc2.Position.Name = "mysql-bin.00001"
+	c.Assert(loc.Position.Name, Equals, "mysql-bin.00002")
+	c.Assert(CompareLocation(loc, loc2, false), Equals, 1)
+
+	// WARN: will change other location's gtid
+	err := loc2.gtidSet.Set(mysqlSet2)
+	c.Assert(err, IsNil)
+	c.Assert(loc.gtidSet.String(), Equals, GTIDSetStr2)
+	c.Assert(loc2.gtidSet.String(), Equals, GTIDSetStr2)
+	c.Assert(CompareLocation(loc, loc2, true), Equals, 0)
+
+	err = loc2.SetGTID(mysqlSet)
+	c.Assert(err, IsNil)
+	c.Assert(loc.gtidSet.String(), Equals, GTIDSetStr2)
+	c.Assert(loc2.gtidSet.String(), Equals, GTIDSetStr)
+	c.Assert(CompareLocation(loc, loc2, true), Equals, 1)
+}

@@ -43,12 +43,12 @@ type DDLItem struct {
 // NewDDLItem creates a new DDLItem
 func NewDDLItem(location binlog.Location, ddls []string, source string) *DDLItem {
 	gsetStr := ""
-	if location.GTIDSet != nil {
-		gsetStr = location.GTIDSet.String()
+	if location.GetGTID() != nil {
+		gsetStr = location.GetGTID().String()
 	}
 
 	return &DDLItem{
-		FirstLocation: location.Clone(),
+		FirstLocation: location,
 		DDLs:          ddls,
 		Source:        source,
 
@@ -126,10 +126,10 @@ func (meta *ShardingMeta) RestoreFromData(sourceTableID string, activeIdx int, i
 		if err1 != nil {
 			return err1
 		}
-		item.FirstLocation = binlog.Location{
-			Position: item.FirstPosition,
-			GTIDSet:  gset,
-		}
+		item.FirstLocation = binlog.InitLocation(
+			item.FirstPosition,
+			gset,
+		)
 	}
 
 	if isGlobal {
@@ -259,7 +259,7 @@ func (meta *ShardingMeta) ActiveDDLFirstLocation() (binlog.Location, error) {
 		return binlog.Location{}, terror.ErrSyncUnitDDLActiveIndexLarger.Generate(meta.activeIdx, meta.global.Items)
 	}
 
-	return meta.global.Items[meta.activeIdx].FirstLocation.Clone(), nil
+	return meta.global.Items[meta.activeIdx].FirstLocation, nil
 }
 
 // FlushData returns sharding meta flush SQL and args

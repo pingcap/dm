@@ -7,6 +7,74 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 source $cur/../_utils/shardddl_lib.sh
 
+function DM_071_CASE() {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} default character set utf8mb4 collate utf8mb4_bin;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,'ccc');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} default character set utf8mb4 collate utf8mb4_bin;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,'fff');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} default character set utf8mb4 collate utf8mb4_bin;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,'iii');"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_071() {
+    run_case 071 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
+    "clean_table" "pessimistic"
+
+    # schema comparer doesn't support to compare/diff charset now
+    # run_case 071 "double-source-optimistic" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
+    # "clean_table" "optimistic"
+}
+
+function DM_073_CASE() {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} convert to character set utf8mb4 collate utf8mb4_bin;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,'ccc');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} convert to character set utf8mb4 collate utf8mb4_bin;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,'fff');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} convert to character set utf8mb4 collate utf8mb4_bin;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,'iii');"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_073() {
+    run_case 073 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
+    "clean_table" "pessimistic"
+
+    # schema comparer doesn't support to compare/diff charset now
+    # run_case 073 "double-source-optimistic" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
+    # "clean_table" "optimistic"
+}
+
 function DM_076_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} add primary key(id);"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -181,6 +249,77 @@ function DM_082() {
     # run_sql_source2 \"create table ${shardddl1}.${tb1} (a int unique key, b varchar(10));\"; \
     # run_sql_source2 \"create table ${shardddl1}.${tb2} (a int unique key, b varchar(10));\"" \
     #"clean_table" "optimistic"
+}
+
+function DM_085_CASE() {
+    run_sql_source2 "alter table ${shardddl1}.${tb1} alter index a visible;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(3,'ccc');"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} alter index a visible;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(6,'fff');"
+    run_sql_source2 "alter table ${shardddl1}.${tb3} alter index a visible;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(9,'iii');"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_085() {
+    # `ALTER INDEX` not supported in MySQL 5.7, but we setup the second MySQL 8.0 in CI now.
+    run_case 085 "single-source-pessimistic-2" \
+    "run_sql_source2 \"create table ${shardddl1}.${tb1} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb3} (a int unique key, b varchar(10));\"" \
+    "clean_table" "pessimistic"
+    
+    run_case 085 "single-source-optimistic-2" \
+    "run_sql_source2 \"create table ${shardddl1}.${tb1} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb3} (a int unique key, b varchar(10));\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_086_CASE() {
+    run_sql_source2 "alter table ${shardddl1}.${tb1} alter index a visible;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(3,'ccc');"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} alter index a invisible;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(6,'fff');"
+    run_sql_source2 "alter table ${shardddl1}.${tb3} alter index a visible;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(9,'iii');"
+    
+    if [[ "$1" = "pessimistic" ]]; then
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "detect inconsistent DDL sequence from source" 1
+    else
+        # schema comparer for optimistic shard DDL can't diff visible/invisible now.
+        # may this needs to be failed?
+        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    fi
+}
+
+function DM_086() {
+    # `ALTER INDEX` not supported in MySQL 5.7, but we setup the second MySQL 8.0 in CI now.
+    run_case 086 "single-source-pessimistic-2" \
+    "run_sql_source2 \"create table ${shardddl1}.${tb1} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb3} (a int unique key, b varchar(10));\"" \
+    "clean_table" "pessimistic"
+    
+    run_case 086 "single-source-optimistic-2" \
+    "run_sql_source2 \"create table ${shardddl1}.${tb1} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int unique key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb3} (a int unique key, b varchar(10));\"" \
+    "clean_table" "optimistic"
 }
 
 function DM_094_CASE() {
@@ -584,12 +723,77 @@ function DM_RemoveLock() {
             "bound" 2
 }
 
+function DM_RestartMaster_CASE() {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
+    
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column c double;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column c text;"
+
+    if [[ "$1" = "pessimistic" ]]; then
+        # count of 2: `blockingDDLs` and `unresolvedGroups`
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "query-status test" \
+                'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` DOUBLE' 2 \
+                'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` TEXT' 2
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "show-ddl-locks" \
+                'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c`' 1
+    else
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "query-status test" \
+                'because schema conflict detected' 1
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "show-ddl-locks" \
+                'mysql-replica-01-`shardddl1`.`tb1`' 1 \
+                'mysql-replica-02-`shardddl1`.`tb1`' 1
+    fi
+
+    echo "restart dm-master"
+    ps aux | grep dm-master |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT 20
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+
+    if [[ "$1" = "pessimistic" ]]; then
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "query-status test" \
+                'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` DOUBLE' 2 \
+                'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` TEXT' 2
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "show-ddl-locks" \
+                'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c`' 1
+    else
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "query-status test" \
+                'because schema conflict detected' 1
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "show-ddl-locks" \
+                'mysql-replica-01-`shardddl1`.`tb1`' 1 \
+                'mysql-replica-02-`shardddl1`.`tb1`' 1
+    fi
+}
+
+function DM_RestartMaster() {
+    run_case RestartMaster "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"" \
+    "clean_table" "pessimistic"
+
+    run_case RestartMaster "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"" \
+    "clean_table" "optimistic"
+}
+
 function run() {
     init_cluster
     init_database
     start=71
     end=103
-    except=(071 072 073 074 075 083 084 085 086 087 088 089 090 091 092 093)
+    except=(072 074 075 083 084 087 088 089 090 091 092 093)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
             continue
@@ -599,6 +803,8 @@ function run() {
     done
 
     DM_RemoveLock
+
+    DM_RestartMaster
 }
 
 cleanup_data $shardddl

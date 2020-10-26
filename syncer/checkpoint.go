@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -96,7 +97,7 @@ func (b *binlogPoint) save(location binlog.Location, ti *model.TableInfo) error 
 func (b *binlogPoint) flush() {
 	b.Lock()
 	defer b.Unlock()
-	b.flushedLocation = b.location.Clone()
+	b.flushedLocation = b.location
 	b.flushedTI = b.ti
 }
 
@@ -106,7 +107,7 @@ func (b *binlogPoint) rollback(schemaTracker *schema.Tracker, schema string) (is
 
 	// set suffix to 0 when we meet error
 	b.flushedLocation.ResetSuffix()
-	b.location = b.flushedLocation.Clone()
+	b.location = b.flushedLocation
 	if b.ti == nil {
 		return // for global checkpoint, no need to rollback the schema.
 	}
@@ -138,14 +139,14 @@ func (b *binlogPoint) outOfDate() bool {
 func (b *binlogPoint) MySQLLocation() binlog.Location {
 	b.RLock()
 	defer b.RUnlock()
-	return b.location.Clone()
+	return b.location
 }
 
 // FlushedMySQLLocation returns flushed point as binlog.Location
 func (b *binlogPoint) FlushedMySQLLocation() binlog.Location {
 	b.RLock()
 	defer b.RUnlock()
-	return b.flushedLocation.Clone()
+	return b.flushedLocation
 }
 
 // TableInfo returns the table schema associated at the current binlog position.
@@ -321,8 +322,11 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 	defer cp.Unlock()
 
 	// delete all checkpoints
+	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
+	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
+	defer cancel()
 	_, err := cp.dbConn.executeSQL(
-		tctx,
+		tctx2,
 		[]string{`DELETE FROM ` + cp.tableName + ` WHERE id = ?`},
 		[]interface{}{cp.id},
 	)
@@ -342,7 +346,7 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, point binlog.Location, ti *model.TableInfo) {
 	cp.Lock()
 	defer cp.Unlock()
-	cp.saveTablePoint(sourceSchema, sourceTable, point.Clone(), ti)
+	cp.saveTablePoint(sourceSchema, sourceTable, point, ti)
 }
 
 // saveTablePoint saves single table's checkpoint without mutex.Lock
@@ -390,9 +394,12 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(tctx *tcontext.Context, sourceSchem
 		return nil
 	}
 
+	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
+	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
+	defer cancel()
 	cp.logCtx.L().Info("delete table checkpoint", zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	_, err := cp.dbConn.executeSQL(
-		tctx,
+		tctx2,
 		[]string{`DELETE FROM ` + cp.tableName + ` WHERE id = ? AND cp_schema = ? AND cp_table = ?`},
 		[]interface{}{cp.id, sourceSchema, sourceTable},
 	)
@@ -412,9 +419,12 @@ func (cp *RemoteCheckPoint) DeleteSchemaPoint(tctx *tcontext.Context, sourceSche
 		return nil
 	}
 
+	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
+	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
+	defer cancel()
 	cp.logCtx.L().Info("delete schema checkpoint", zap.String("schema", sourceSchema))
 	_, err := cp.dbConn.executeSQL(
-		tctx,
+		tctx2,
 		[]string{`DELETE FROM ` + cp.tableName + ` WHERE id = ? AND cp_schema = ?`},
 		[]interface{}{cp.id, sourceSchema},
 	)
@@ -461,7 +471,7 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(location binlog.Location) {
 	defer cp.Unlock()
 
 	cp.logCtx.L().Debug("save global checkpoint", zap.Stringer("location", location))
-	if err := cp.globalPoint.save(location.Clone(), nil); err != nil {
+	if err := cp.globalPoint.save(location, nil); err != nil {
 		cp.logCtx.L().Error("fail to save global checkpoint", log.ShortError(err))
 	}
 }
@@ -522,7 +532,10 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 		args = append(args, extraArgs[i])
 	}
 
-	_, err := cp.dbConn.executeSQL(tctx, sqls, args...)
+	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
+	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
+	defer cancel()
+	_, err := cp.dbConn.executeSQL(tctx2, sqls, args...)
 	if err != nil {
 		return err
 	}
@@ -715,16 +728,16 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			return err
 		}
 
-		location := binlog.Location{
-			Position: mysql.Position{
+		location := binlog.InitLocation(
+			mysql.Position{
 				Name: binlogName,
 				Pos:  binlogPos,
 			},
-			GTIDSet: gset,
-		}
+			gset,
+		)
 		if isGlobal {
 			if binlog.CompareLocation(location, binlog.NewLocation(cp.cfg.Flavor), cp.cfg.EnableGTID) > 0 {
-				cp.globalPoint = newBinlogPoint(location.Clone(), location.Clone(), nil, nil, cp.cfg.EnableGTID)
+				cp.globalPoint = newBinlogPoint(location, location, nil, nil, cp.cfg.EnableGTID)
 				cp.logCtx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
 			}
 
@@ -735,13 +748,13 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 					if err2 != nil {
 						return err2
 					}
-					exitSafeModeLoc := binlog.Location{
-						Position: mysql.Position{
+					exitSafeModeLoc := binlog.InitLocation(
+						mysql.Position{
 							Name: exitSafeBinlogName,
 							Pos:  exitSafeBinlogPos,
 						},
-						GTIDSet: gset2,
-					}
+						gset2,
+					)
 					cp.SaveSafeModeExitPoint(&exitSafeModeLoc)
 				}
 			} else {
@@ -780,7 +793,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			mSchema = make(map[string]*binlogPoint)
 			cp.points[cpSchema] = mSchema
 		}
-		mSchema[cpTable] = newBinlogPoint(location.Clone(), location.Clone(), &ti, &ti, cp.cfg.EnableGTID)
+		mSchema[cpTable] = newBinlogPoint(location, location, &ti, &ti, cp.cfg.EnableGTID)
 	}
 
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
@@ -816,13 +829,14 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 			return err
 		}
 
-		location = &binlog.Location{
-			Position: mysql.Position{
+		loc := binlog.InitLocation(
+			mysql.Position{
 				Name: cp.cfg.Meta.BinLogName,
 				Pos:  cp.cfg.Meta.BinLogPos,
 			},
-			GTIDSet: gset,
-		}
+			gset,
+		)
+		location = &loc
 	default:
 		// should not go here (syncer is only used in `all` or `incremental` mode)
 		return terror.ErrCheckpointInvalidTaskMode.Generate(cp.cfg.Mode)
@@ -830,7 +844,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 
 	// if meta loaded, we will start syncing from meta's pos
 	if location != nil {
-		cp.globalPoint = newBinlogPoint(location.Clone(), location.Clone(), nil, nil, cp.cfg.EnableGTID)
+		cp.globalPoint = newBinlogPoint(*location, *location, nil, nil, cp.cfg.EnableGTID)
 		cp.logCtx.L().Info("loaded checkpoints from meta", log.WrapStringerField("global checkpoint", cp.globalPoint))
 	}
 	if safeModeExitLoc != nil {

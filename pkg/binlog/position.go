@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/siddontang/go-mysql/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
@@ -206,10 +207,11 @@ func ComparePosition(pos1, pos2 gmysql.Position) int {
 }
 
 // Location is used for save binlog's position and gtid
+// TODO: encapsulate all attributes in Location
 type Location struct {
 	Position gmysql.Position
 
-	GTIDSet gtid.Set
+	gtidSet gtid.Set
 
 	Suffix int // use for replace event
 }
@@ -218,7 +220,15 @@ type Location struct {
 func NewLocation(flavor string) Location {
 	return Location{
 		Position: MinPosition,
-		GTIDSet:  gtid.MinGTIDSet(flavor),
+		gtidSet:  gtid.MinGTIDSet(flavor),
+	}
+}
+
+// InitLocation init a new Location
+func InitLocation(pos gmysql.Position, gset gtid.Set) Location {
+	return Location{
+		Position: pos,
+		gtidSet:  gset,
 	}
 }
 
@@ -232,8 +242,8 @@ func (l Location) String() string {
 // GTIDSetStr returns gtid set's string
 func (l Location) GTIDSetStr() string {
 	gsetStr := ""
-	if l.GTIDSet != nil {
-		gsetStr = l.GTIDSet.String()
+	if l.gtidSet != nil {
+		gsetStr = l.gtidSet.String()
 	}
 
 	return gsetStr
@@ -244,20 +254,11 @@ func (l Location) Clone() Location {
 	return l.CloneWithFlavor("")
 }
 
-// ClonePtr clones a same Location pointer
-func (l *Location) ClonePtr() *Location {
-	if l == nil {
-		return nil
-	}
-	newLocation := l.Clone()
-	return &newLocation
-}
-
 // CloneWithFlavor clones the location, and if the GTIDSet is nil, will create a GTIDSet with specified flavor.
 func (l Location) CloneWithFlavor(flavor string) Location {
 	var newGTIDSet gtid.Set
-	if l.GTIDSet != nil {
-		newGTIDSet = l.GTIDSet.Clone()
+	if l.gtidSet != nil {
+		newGTIDSet = l.gtidSet.Clone()
 	} else if len(flavor) != 0 {
 		newGTIDSet = gtid.MinGTIDSet(flavor)
 	}
@@ -267,7 +268,7 @@ func (l Location) CloneWithFlavor(flavor string) Location {
 			Name: l.Position.Name,
 			Pos:  l.Position.Pos,
 		},
-		GTIDSet: newGTIDSet,
+		gtidSet: newGTIDSet,
 		Suffix:  l.Suffix,
 	}
 }
@@ -278,7 +279,7 @@ func (l Location) CloneWithFlavor(flavor string) Location {
 //   -1 if point1 is less than point2
 func CompareLocation(location1, location2 Location, cmpGTID bool) int {
 	if cmpGTID {
-		cmp, canCmp := CompareGTID(location1.GTIDSet, location2.GTIDSet)
+		cmp, canCmp := CompareGTID(location1.gtidSet, location2.gtidSet)
 		if canCmp {
 			if cmp != 0 {
 				return cmp
@@ -345,4 +346,26 @@ func compareIndex(lhs, rhs int) int {
 // ResetSuffix set suffix to 0
 func (l *Location) ResetSuffix() {
 	l.Suffix = 0
+}
+
+// SetGTID set new gtid for location
+// Use this func instead of GITSet.Set to avoid change other location
+func (l *Location) SetGTID(gset mysql.GTIDSet) error {
+	flavor := mysql.MySQLFlavor
+	if _, ok := l.gtidSet.(*gtid.MariadbGTIDSet); ok {
+		flavor = mysql.MariaDBFlavor
+	}
+
+	newGTID := gtid.MinGTIDSet(flavor)
+	if err := newGTID.Set(gset); err != nil {
+		return err
+	}
+
+	l.gtidSet = newGTID
+	return nil
+}
+
+// GetGTID return gtidSet of Location
+func (l *Location) GetGTID() gtid.Set {
+	return l.gtidSet
 }

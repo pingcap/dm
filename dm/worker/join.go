@@ -61,7 +61,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 			if conn != nil {
 				conn.Close()
 			}
-			log.L().Error("fail to dial dm-master", zap.Error(err))
+			log.L().Error("fail to dial dm-master", zap.String("endpoint", endpoint), zap.Error(err))
 			continue
 		}
 		client := pb.NewMasterClient(conn)
@@ -70,11 +70,11 @@ func (s *Server) JoinMaster(endpoints []string) error {
 		cancel1()
 		conn.Close()
 		if err != nil {
-			log.L().Error("fail to register worker", zap.Error(err))
+			log.L().Error("fail to register worker", zap.String("endpoint", endpoint), zap.Error(err))
 			continue
 		}
 		if !resp.GetResult() {
-			log.L().Error("fail to register worker", zap.String("error", resp.Msg))
+			log.L().Error("fail to register worker", zap.String("endpoint", endpoint), zap.String("error", resp.Msg))
 			continue
 		}
 		return nil

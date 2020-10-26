@@ -531,8 +531,8 @@ github.com/pingcap/check v0.0.0-20191216031241-8a5a85928f12 h1:rfD9v3+ppLPzoQBgZ
 github.com/pingcap/check v0.0.0-20191216031241-8a5a85928f12/go.mod h1:PYMCGwN0JHjoqGr3HrZoD+b8Tgx8bKnArhSq8YVzUMc=
 github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712 h1:R8gStypOBmpnHEx1qi//SaqxJVI4inOqljg/Aj5/390=
 github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712/go.mod h1:PYMCGwN0JHjoqGr3HrZoD+b8Tgx8bKnArhSq8YVzUMc=
-github.com/pingcap/dumpling v0.0.0-20201002062622-d00c8ed4877b h1:IvubrTU7rj8sJ1u071v8gYa80Y9XGi009Nzq0KJoFXI=
-github.com/pingcap/dumpling v0.0.0-20201002062622-d00c8ed4877b/go.mod h1:c/2BIQEiqlpPQISY5HljfR+eM/KukJdNTn2Fs2KI/6o=
+github.com/pingcap/dumpling v0.0.0-20201016024720-1004016d3d49 h1:1Y+4WAJo09ShBoXG5zapR+zwAA9YiDRVsgSjuXlYn0E=
+github.com/pingcap/dumpling v0.0.0-20201016024720-1004016d3d49/go.mod h1:c/2BIQEiqlpPQISY5HljfR+eM/KukJdNTn2Fs2KI/6o=
 github.com/pingcap/errcode v0.0.0-20180921232412-a1a7271709d9/go.mod h1:4b2X8xSqxIroj/IZ9MX/VGZhAwc11wB9wRIzHvz6SeM=
 github.com/pingcap/errors v0.11.0 h1:DCJQB8jrHbQ1VVlMFIrbj2ApScNNotVmkSNplu2yUt4=
 github.com/pingcap/errors v0.11.0/go.mod h1:Oi8TUi2kEtXXLMJk9l1cGmz20kV3TaQ0usTwv5KuLY8=
@@ -608,6 +608,8 @@ github.com/pingcap/parser v0.0.0-20200821073936-cf85e80665c4/go.mod h1:vQdbJqobJ
 github.com/pingcap/parser v0.0.0-20200909072241-6dac7bb703e2/go.mod h1:RlLfMRJwFBSiXd2lUaWdV5pSXtrpyvZM8k5bbZWsheU=
 github.com/pingcap/parser v0.0.0-20200924053142-5d7e8ebf605e h1:IFD2pEbIcN+EzG/RGMLrv/Tt6U9KzJGT6hSbGkQ1v7c=
 github.com/pingcap/parser v0.0.0-20200924053142-5d7e8ebf605e/go.mod h1:RlLfMRJwFBSiXd2lUaWdV5pSXtrpyvZM8k5bbZWsheU=
+github.com/pingcap/parser v0.0.0-20201020021731-5af7d42c2022 h1:OQb5ZNXI0mkc04nGob7czVaowOWnyLT2QOhYBlIDLMc=
+github.com/pingcap/parser v0.0.0-20201020021731-5af7d42c2022/go.mod h1:RlLfMRJwFBSiXd2lUaWdV5pSXtrpyvZM8k5bbZWsheU=
 github.com/pingcap/pd/v4 v4.0.0-rc.1.0.20200422143320-428acd53eba2 h1:JTzYYukREvxVSKW/ncrzNjFitd8snoQ/Xz32pw8i+s8=
 github.com/pingcap/pd/v4 v4.0.0-rc.1.0.20200422143320-428acd53eba2/go.mod h1:s+utZtXDznOiL24VK0qGmtoHjjXNsscJx3m1n8cC56s=
 github.com/pingcap/pd/v4 v4.0.0-rc.2.0.20200520083007-2c251bd8f181/go.mod h1:q4HTx/bA8aKBa4S7L+SQKHvjRPXCRV0tA0yRw0qkZSA=

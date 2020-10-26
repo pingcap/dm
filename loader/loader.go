@@ -396,6 +396,8 @@ type Loader struct {
 
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
+
+	finish sync2.AtomicBool
 }
 
 // NewLoader creates a new Loader.
@@ -465,6 +467,12 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
+	// fix nil map after clone, which we will use below
+	// TODO: we may develop `SafeClone` in future
+	if lcfg.To.Session == nil {
+		lcfg.To.Session = make(map[string]string)
+	}
+
 	hasSQLMode := false
 	for k := range l.cfg.To.Session {
 		if strings.ToLower(k) == "sql_mode" {
@@ -656,6 +664,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 	l.workerWg.Wait()
 
 	if err == nil {
+		l.finish.Set(true)
 		l.logCtx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
 	} else if errors.Cause(err) != context.Canceled {
 		return err
