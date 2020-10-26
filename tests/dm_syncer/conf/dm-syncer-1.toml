@@ -77,15 +77,15 @@ batch = 1000
 #tbl-name = "~^a.*"
 
 [[filter-rules]]
-  schema-pattern: "dm_syncer_filter_rules"
-  events: ["drop database"]
-  action: "Ignore"
+schema-pattern: "dm_syncer_filter_rules"
+events: ["drop database"]
+action: "Ignore"
 
 [[filter-rules]]
-  schema-pattern = "dm_syncer_filter_rules"
-  table-pattern  = "dm_syncer_filter_rule"
-  events = ["create table", "insert", "update", "create database"]
-  action = "Do"
+schema-pattern = "dm_syncer_filter_rules"
+table-pattern  = "dm_syncer_filter_rule"
+events = ["create table", "insert", "update", "create database"]
+action = "Do"
 
 # route table
 
