@@ -469,11 +469,13 @@ function DM_101() {
 function DM_102_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int default 0;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values (1,1);"
-    run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int default -1;"
+#    run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int default -1;"
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "show-ddl-locks" \
         "\"ID\": \"test-\`shardddl\`.\`tb\`\"" 1
+
+    read -p 123
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "unlock-ddl-lock test-\`shardddl\`.\`tb\`" \
@@ -570,7 +572,7 @@ function DM_RemoveLock() {
 function run() {
     init_cluster
     init_database
-    start=71
+    start=102
     end=103
     except=(071 072 073 074 075 083 084 085 086 087 088 089 090 091 092 093)
     for i in $(seq -f "%03g" ${start} ${end}); do
