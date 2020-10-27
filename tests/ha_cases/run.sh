@@ -693,6 +693,7 @@ function test_config_name() {
     cp $cur/conf/dm-worker2.toml $WORK_DIR/dm-worker2.toml
     sed -i "s/name = \"worker2\"/name = \"worker1\"/g" $WORK_DIR/dm-worker2.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $WORK_DIR/dm-worker2.toml
+    sleep 2
     check_log_contain_with_retry "dm-worker with name {\\\"name\\\":\\\"worker1\\\",\\\"addr\\\":\\\"127.0.0.1:8262\\\"} already exists" $WORK_DIR/worker2/log/dm-worker.log
 
     cp $cur/conf/dm-worker2.toml $WORK_DIR/dm-worker2.toml
