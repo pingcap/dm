@@ -671,8 +671,40 @@ function test_isolate_master_and_worker() {
     echo "[$(date)] <<<<<< finish test_isolate_master_and_worker >>>>>>"
 }
 
+function test_config_name() {
+    echo "[$(date)] <<<<<< start test_name_conflict >>>>>>"
+
+    cp $cur/conf/dm-master-join2.toml $WORK_DIR/dm-master-join2.toml
+    sed -i "s/name = \"master2\"/name = \"master1\"/g" $WORK_DIR/dm-master-join2.toml
+    run_dm_master $WORK_DIR/master-join1 $MASTER_PORT1 $cur/conf/dm-master-join1.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
+    run_dm_master $WORK_DIR/master-join2 $MASTER_PORT2 $WORK_DIR/dm-master-join2.toml
+    check_log_contain_with_retry "missing data or joining a duplicate member master1" $WORK_DIR/master-join2/log/dm-master.log
+
+    TEST_CHAR="!@#$%^\&*()_+¥"
+    cp $cur/conf/dm-master-join2.toml $WORK_DIR/dm-master-join2.toml
+    sed -i "s/name = \"master2\"/name = \"test$TEST_CHAR\"/g" $WORK_DIR/dm-master-join2.toml
+    run_dm_master $WORK_DIR/master-join2 $MASTER_PORT2 $WORK_DIR/dm-master-join2.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
+
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+
+    cp $cur/conf/dm-worker2.toml $WORK_DIR/dm-worker2.toml
+    sed -i "s/name = \"worker2\"/name = \"worker1\"/g" $WORK_DIR/dm-worker2.toml
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $WORK_DIR/dm-worker2.toml
+    check_log_contain_with_retry "dm-worker with name {\\\"name\\\":\\\"worker1\\\",\\\"addr\\\":\\\"127.0.0.1:8262\\\"} already exists" $WORK_DIR/worker2/log/dm-worker.log
+
+    cp $cur/conf/dm-worker2.toml $WORK_DIR/dm-worker2.toml
+    sed -i "s/name = \"worker2\"/name = \"master1\"/g" $WORK_DIR/dm-worker2.toml
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $WORK_DIR/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    echo "[$(date)] <<<<<< finish test_name_conflict >>>>>>"
+}
 
 function run() {
+    test_config_name
     test_join_masters_and_worker               # TICASE-928, 930, 931, 961, 932, 957
     test_kill_master                           # TICASE-996, 958
     test_kill_and_isolate_worker               # TICASE-968, 973, 1002, 975, 969, 972, 974, 970, 971, 976, 978, 988
