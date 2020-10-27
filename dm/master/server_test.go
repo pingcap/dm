@@ -19,7 +19,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -34,6 +33,7 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	tiddl "github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/sessionctx"
 	tidbmock "github.com/pingcap/tidb/util/mock"
@@ -967,8 +967,184 @@ func (t *testMaster) TestServer(c *check.C) {
 	}), check.IsTrue)
 }
 
+func (t *testMaster) TestMasterTLS(c *check.C) {
+	masterAddr := tempurl.Alloc()[len("http://"):]
+	peerAddr := tempurl.Alloc()[len("http://"):]
+
+	// all with `https://` prefix
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{
+		"--name=master-tls",
+		fmt.Sprintf("--data-dir=%s", c.MkDir()),
+		fmt.Sprintf("--master-addr=https://%s", masterAddr),
+		fmt.Sprintf("--advertise-addr=https://%s", masterAddr),
+		fmt.Sprintf("--peer-urls=https://%s", peerAddr),
+		fmt.Sprintf("--advertise-peer-urls=https://%s", peerAddr),
+		fmt.Sprintf("--initial-cluster=master-tls=https://%s", peerAddr),
+		"--ssl-ca=./tls_for_test/ca.pem",
+		"--ssl-cert=./tls_for_test/dm.pem",
+		"--ssl-key=./tls_for_test/dm.key",
+	}), check.IsNil)
+	t.testTLSPrefix(c, cfg)
+	c.Assert(cfg.MasterAddr, check.Equals, masterAddr)
+	c.Assert(cfg.AdvertiseAddr, check.Equals, masterAddr)
+	c.Assert(cfg.PeerUrls, check.Equals, "https://"+peerAddr)
+	c.Assert(cfg.AdvertisePeerUrls, check.Equals, "https://"+peerAddr)
+	c.Assert(cfg.InitialCluster, check.Equals, "master-tls=https://"+peerAddr)
+
+	// no `https://` prefix for `--master-addr`
+	cfg = NewConfig()
+	c.Assert(cfg.Parse([]string{
+		"--name=master-tls",
+		fmt.Sprintf("--data-dir=%s", c.MkDir()),
+		fmt.Sprintf("--master-addr=%s", masterAddr),
+		fmt.Sprintf("--advertise-addr=https://%s", masterAddr),
+		fmt.Sprintf("--peer-urls=https://%s", peerAddr),
+		fmt.Sprintf("--advertise-peer-urls=https://%s", peerAddr),
+		fmt.Sprintf("--initial-cluster=master-tls=https://%s", peerAddr),
+		"--ssl-ca=./tls_for_test/ca.pem",
+		"--ssl-cert=./tls_for_test/dm.pem",
+		"--ssl-key=./tls_for_test/dm.key",
+	}), check.IsNil)
+	t.testTLSPrefix(c, cfg)
+
+	// no `https://` prefix for `--master-addr` and `--advertise-addr`
+	cfg = NewConfig()
+	c.Assert(cfg.Parse([]string{
+		"--name=master-tls",
+		fmt.Sprintf("--data-dir=%s", c.MkDir()),
+		fmt.Sprintf("--master-addr=%s", masterAddr),
+		fmt.Sprintf("--advertise-addr=%s", masterAddr),
+		fmt.Sprintf("--peer-urls=https://%s", peerAddr),
+		fmt.Sprintf("--advertise-peer-urls=https://%s", peerAddr),
+		fmt.Sprintf("--initial-cluster=master-tls=https://%s", peerAddr),
+		"--ssl-ca=./tls_for_test/ca.pem",
+		"--ssl-cert=./tls_for_test/dm.pem",
+		"--ssl-key=./tls_for_test/dm.key",
+	}), check.IsNil)
+	t.testTLSPrefix(c, cfg)
+
+	// no `https://` prefix for `--master-addr`, `--advertise-addr` and `--peer-urls`
+	cfg = NewConfig()
+	c.Assert(cfg.Parse([]string{
+		"--name=master-tls",
+		fmt.Sprintf("--data-dir=%s", c.MkDir()),
+		fmt.Sprintf("--master-addr=%s", masterAddr),
+		fmt.Sprintf("--advertise-addr=%s", masterAddr),
+		fmt.Sprintf("--peer-urls=%s", peerAddr),
+		fmt.Sprintf("--advertise-peer-urls=https://%s", peerAddr),
+		fmt.Sprintf("--initial-cluster=master-tls=https://%s", peerAddr),
+		"--ssl-ca=./tls_for_test/ca.pem",
+		"--ssl-cert=./tls_for_test/dm.pem",
+		"--ssl-key=./tls_for_test/dm.key",
+	}), check.IsNil)
+	t.testTLSPrefix(c, cfg)
+
+	// no `https://` prefix for `--master-addr`, `--advertise-addr`, `--peer-urls` and `--advertise-peer-urls`
+	cfg = NewConfig()
+	c.Assert(cfg.Parse([]string{
+		"--name=master-tls",
+		fmt.Sprintf("--data-dir=%s", c.MkDir()),
+		fmt.Sprintf("--master-addr=%s", masterAddr),
+		fmt.Sprintf("--advertise-addr=%s", masterAddr),
+		fmt.Sprintf("--peer-urls=%s", peerAddr),
+		fmt.Sprintf("--advertise-peer-urls=%s", peerAddr),
+		fmt.Sprintf("--initial-cluster=master-tls=https://%s", peerAddr),
+		"--ssl-ca=./tls_for_test/ca.pem",
+		"--ssl-cert=./tls_for_test/dm.pem",
+		"--ssl-key=./tls_for_test/dm.key",
+	}), check.IsNil)
+	t.testTLSPrefix(c, cfg)
+
+	// all without `https://`/`http://` prefix
+	cfg = NewConfig()
+	c.Assert(cfg.Parse([]string{
+		"--name=master-tls",
+		fmt.Sprintf("--data-dir=%s", c.MkDir()),
+		fmt.Sprintf("--master-addr=%s", masterAddr),
+		fmt.Sprintf("--advertise-addr=%s", masterAddr),
+		fmt.Sprintf("--peer-urls=%s", peerAddr),
+		fmt.Sprintf("--advertise-peer-urls=%s", peerAddr),
+		fmt.Sprintf("--initial-cluster=master-tls=%s", peerAddr),
+		"--ssl-ca=./tls_for_test/ca.pem",
+		"--ssl-cert=./tls_for_test/dm.pem",
+		"--ssl-key=./tls_for_test/dm.key",
+	}), check.IsNil)
+	t.testTLSPrefix(c, cfg)
+	c.Assert(cfg.MasterAddr, check.Equals, masterAddr)
+	c.Assert(cfg.AdvertiseAddr, check.Equals, masterAddr)
+	c.Assert(cfg.PeerUrls, check.Equals, "https://"+peerAddr)
+	c.Assert(cfg.AdvertisePeerUrls, check.Equals, "https://"+peerAddr)
+	c.Assert(cfg.InitialCluster, check.Equals, "master-tls=https://"+peerAddr)
+
+	// all with `http://` prefix, but with TLS enabled.
+	cfg = NewConfig()
+	c.Assert(cfg.Parse([]string{
+		"--name=master-tls",
+		fmt.Sprintf("--data-dir=%s", c.MkDir()),
+		fmt.Sprintf("--master-addr=http://%s", masterAddr),
+		fmt.Sprintf("--advertise-addr=http://%s", masterAddr),
+		fmt.Sprintf("--peer-urls=http://%s", peerAddr),
+		fmt.Sprintf("--advertise-peer-urls=http://%s", peerAddr),
+		fmt.Sprintf("--initial-cluster=master-tls=http://%s", peerAddr),
+		"--ssl-ca=./tls_for_test/ca.pem",
+		"--ssl-cert=./tls_for_test/dm.pem",
+		"--ssl-key=./tls_for_test/dm.key",
+	}), check.IsNil)
+	c.Assert(cfg.MasterAddr, check.Equals, masterAddr)
+	c.Assert(cfg.AdvertiseAddr, check.Equals, masterAddr)
+	c.Assert(cfg.PeerUrls, check.Equals, "https://"+peerAddr)
+	c.Assert(cfg.AdvertisePeerUrls, check.Equals, "https://"+peerAddr)
+	c.Assert(cfg.InitialCluster, check.Equals, "master-tls=https://"+peerAddr)
+
+	// different prefix for `--peer-urls` and `--initial-cluster`
+	cfg = NewConfig()
+	c.Assert(cfg.Parse([]string{
+		"--name=master-tls",
+		fmt.Sprintf("--data-dir=%s", c.MkDir()),
+		fmt.Sprintf("--master-addr=https://%s", masterAddr),
+		fmt.Sprintf("--advertise-addr=https://%s", masterAddr),
+		fmt.Sprintf("--peer-urls=https://%s", peerAddr),
+		fmt.Sprintf("--advertise-peer-urls=https://%s", peerAddr),
+		fmt.Sprintf("--initial-cluster=master-tls=http://%s", peerAddr),
+		"--ssl-ca=./tls_for_test/ca.pem",
+		"--ssl-cert=./tls_for_test/dm.pem",
+		"--ssl-key=./tls_for_test/dm.key",
+	}), check.IsNil)
+	c.Assert(cfg.MasterAddr, check.Equals, masterAddr)
+	c.Assert(cfg.AdvertiseAddr, check.Equals, masterAddr)
+	c.Assert(cfg.PeerUrls, check.Equals, "https://"+peerAddr)
+	c.Assert(cfg.AdvertisePeerUrls, check.Equals, "https://"+peerAddr)
+	c.Assert(cfg.InitialCluster, check.Equals, "master-tls=https://"+peerAddr)
+	t.testTLSPrefix(c, cfg)
+}
+
+func (t *testMaster) testTLSPrefix(c *check.C, cfg *Config) {
+	s := NewServer(cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	err1 := s.Start(ctx)
+	c.Assert(err1, check.IsNil)
+
+	t.testHTTPInterface(c, fmt.Sprintf("https://%s/status", cfg.AdvertiseAddr), []byte(utils.GetRawInfo()))
+	t.testHTTPInterface(c, fmt.Sprintf("https://%s/debug/pprof/", cfg.AdvertiseAddr), []byte("Types of profiles available"))
+
+	// close
+	cancel()
+	s.Close()
+
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return s.closed.Get()
+	}), check.IsTrue)
+}
+
 func (t *testMaster) testHTTPInterface(c *check.C, url string, contain []byte) {
-	resp, err := http.Get(url)
+	// we use HTTPS in some test cases.
+	tls, err := toolutils.NewTLS("./tls_for_test/ca.pem", "./tls_for_test/dm.pem", "./tls_for_test/dm.key", url, []string{})
+	c.Assert(err, check.IsNil)
+	cli := toolutils.ClientWithTLS(tls.TLSConfig())
+
+	resp, err := cli.Get(url)
 	c.Assert(err, check.IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, check.Equals, 200)

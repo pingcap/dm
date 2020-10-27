@@ -246,10 +246,9 @@ func (t *testUtilsSuite) TestWrapSchemes(c *C) {
 			"https://abc.com:123",
 		},
 		{
-			// if input has wrong scheme, don't correct it (maybe user deliberately?)
 			"abc.com:123,http://abc.com:123,0.0.0.0:123,https://0.0.0.0:123",
-			"http://abc.com:123,http://abc.com:123,http://0.0.0.0:123,https://0.0.0.0:123",
-			"https://abc.com:123,http://abc.com:123,https://0.0.0.0:123,https://0.0.0.0:123",
+			"http://abc.com:123,http://abc.com:123,http://0.0.0.0:123,http://0.0.0.0:123",
+			"https://abc.com:123,https://abc.com:123,https://0.0.0.0:123,https://0.0.0.0:123",
 		},
 		{
 			"",
@@ -264,17 +263,16 @@ func (t *testUtilsSuite) TestWrapSchemes(c *C) {
 }
 
 func (t *testUtilsSuite) TestWrapSchemesForInitialCluster(c *C) {
-	// no change
 	c.Assert(WrapSchemesForInitialCluster("master1=http://127.0.0.1:8291,master2=http://127.0.0.1:8292,master3=http://127.0.0.1:8293", false), Equals,
 		"master1=http://127.0.0.1:8291,master2=http://127.0.0.1:8292,master3=http://127.0.0.1:8293")
 	c.Assert(WrapSchemesForInitialCluster("master1=http://127.0.0.1:8291,master2=http://127.0.0.1:8292,master3=http://127.0.0.1:8293", true), Equals,
-		"master1=http://127.0.0.1:8291,master2=http://127.0.0.1:8292,master3=http://127.0.0.1:8293")
+		"master1=https://127.0.0.1:8291,master2=https://127.0.0.1:8292,master3=https://127.0.0.1:8293")
 
-	// add `http` or `https` for some URLs
-	c.Assert(WrapSchemesForInitialCluster("master1=http://127.0.0.1:8291,master2=127.0.0.1:8292,master3=http://127.0.0.1:8293", false), Equals,
+	// correct `http` or `https` for some URLs
+	c.Assert(WrapSchemesForInitialCluster("master1=http://127.0.0.1:8291,master2=127.0.0.1:8292,master3=https://127.0.0.1:8293", false), Equals,
 		"master1=http://127.0.0.1:8291,master2=http://127.0.0.1:8292,master3=http://127.0.0.1:8293")
-	c.Assert(WrapSchemesForInitialCluster("master1=http://127.0.0.1:8291,master2=127.0.0.1:8292,master3=http://127.0.0.1:8293", true), Equals,
-		"master1=http://127.0.0.1:8291,master2=https://127.0.0.1:8292,master3=http://127.0.0.1:8293")
+	c.Assert(WrapSchemesForInitialCluster("master1=http://127.0.0.1:8291,master2=127.0.0.1:8292,master3=https://127.0.0.1:8293", true), Equals,
+		"master1=https://127.0.0.1:8291,master2=https://127.0.0.1:8292,master3=https://127.0.0.1:8293")
 
 	// add `http` or `https` for all URLs
 	c.Assert(WrapSchemesForInitialCluster("master1=127.0.0.1:8291,master2=127.0.0.1:8292,master3=127.0.0.1:8293", false), Equals,
