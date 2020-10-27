@@ -166,8 +166,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 		// for normally exited election, session has already been closed before
 		c.Assert(deleted, IsFalse)
 	}
-	// for abnormally exited election, session will be cleared here
-	// or cleared by `watchLeader` triggered by context cancel in `e1.Close()` after #1214. so we remove test here
+	// for abnormally exited election, session will be cleared by `watchLeader` in `e1.Close()` after #1214.
 
 	// e2 should become the leader
 	select {
