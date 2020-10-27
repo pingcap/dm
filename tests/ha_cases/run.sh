@@ -706,7 +706,7 @@ function test_config_name() {
 }
 
 function run() {
-    test_config_name
+    test_config_name                           # TICASE-915, 916, 954, 955
     test_join_masters_and_worker               # TICASE-928, 930, 931, 961, 932, 957
     test_kill_master                           # TICASE-996, 958
     test_kill_and_isolate_worker               # TICASE-968, 973, 1002, 975, 969, 972, 974, 970, 971, 976, 978, 988
