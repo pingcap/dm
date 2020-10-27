@@ -417,7 +417,7 @@ function DM_4202_CASE() {
             "handle-error test skip -b $start_location" \
             "\"result\": true" 2
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"result\": true" 2
 
@@ -441,7 +441,7 @@ function DM_4204_CASE() {
             "handle-error test skip" \
             "\"result\": true" 2
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"result\": true" 2
 
@@ -480,7 +480,7 @@ function DM_4206_CASE() {
             "handle-error test skip -b $start_location2 -s $source2" \
             "\"result\": true" 2
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"result\": true" 3
 
@@ -527,7 +527,7 @@ function DM_4207_CASE() {
             "\"result\": true" 3
     fi
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"result\": true" 3
 
@@ -665,7 +665,7 @@ function DM_4215_CASE() {
             "handle-error test -s $source2 -b $start_location2 replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
             "\"result\": true" 2
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"result\": true" 3
 
@@ -712,7 +712,7 @@ function DM_4216_CASE() {
             "\"result\": true" 3
     fi
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"result\": true" 3
 
@@ -893,7 +893,7 @@ function DM_4185_CASE() {
             "\"result\": true" 3
     fi
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "Unsupported modify column.*varchar(10)" 2
 
@@ -901,7 +901,7 @@ function DM_4185_CASE() {
             "handle-error test skip" \
             "\"result\": true" 3
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"result\": true" 3
 
@@ -938,7 +938,7 @@ function DM_4201_CASE() {
             "handle-error test skip -b $first_name1:$second_pos1" \
             "\"result\": true" 2
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "Unsupported modify column.*varchar(10)" 1
 
@@ -946,7 +946,7 @@ function DM_4201_CASE() {
             "handle-error test skip" \
             "\"result\": true" 2
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"result\": true" 2
 
@@ -1003,7 +1003,7 @@ function DM_4189_CASE() {
             "\"result\": true" 2
     fi
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "unsupported add column 'c' constraint UNIQUE KEY" 2
 
@@ -1011,7 +1011,7 @@ function DM_4189_CASE() {
             "handle-error test replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
             "\"result\": true" 3
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"result\": true" 3
 
@@ -1049,7 +1049,7 @@ function DM_4210_CASE() {
             "handle-error test -b $first_name1:$second_pos1 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
             "\"result\": true" 2
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "unsupported add column 'c' constraint UNIQUE KEY" 1
 
@@ -1057,7 +1057,7 @@ function DM_4210_CASE() {
             "handle-error test replace alter table ${db}.${tb1} add column e int unique;" \
             "\"result\": true" 2
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "unsupported add column 'e' constraint UNIQUE KEY" 1
 
@@ -1065,7 +1065,7 @@ function DM_4210_CASE() {
             "handle-error test replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
             "\"result\": true" 2
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"result\": true" 2
 
