@@ -32,7 +32,7 @@ function test_session_config(){
     sed -i 's/tidb_retry_limit: "10"/tidb_retry_limit: "fjs"/g'  $WORK_DIR/dm-task.yaml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $WORK_DIR/dm-task.yaml" \
-        "'tidb_retry_limit' can't be set to the value" 1
+        "Incorrect argument type to variable 'tidb_retry_limit'" 1
 
     # sql_mode="ANSI_QUOTES"
     sed -i 's/tidb_retry_limit: "fjs"/tidb_retry_limit: "10"/g'  $WORK_DIR/dm-task.yaml
