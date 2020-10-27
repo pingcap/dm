@@ -672,7 +672,7 @@ function test_isolate_master_and_worker() {
 }
 
 function test_config_name() {
-    echo "[$(date)] <<<<<< start test_name_conflict >>>>>>"
+    echo "[$(date)] <<<<<< start test_config_name >>>>>>"
 
     cp $cur/conf/dm-master-join2.toml $WORK_DIR/dm-master-join2.toml
     sed -i "s/name = \"master2\"/name = \"master1\"/g" $WORK_DIR/dm-master-join2.toml
@@ -702,7 +702,7 @@ function test_config_name() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $WORK_DIR/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-    echo "[$(date)] <<<<<< finish test_name_conflict >>>>>>"
+    echo "[$(date)] <<<<<< finish test_config_name >>>>>>"
 }
 
 function run() {
