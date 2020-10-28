@@ -8,7 +8,8 @@ networks:
 
 # re-usable extension fields, https://docs.docker.com/compose/compose-file/#extension-fields.
 x-node: &default-node
-  build: ./node
+  # build: ./node
+  image: csuzhangxc/dm-tiup-work:latest
   env_file: ./secret/node.env
   working_dir: /root
   privileged: true
@@ -62,7 +63,8 @@ services:
     <<: *default-node
     container_name: control
     hostname: control
-    build: ./control
+    # build: ./control
+    image: csuzhangxc/dm-tiup-control:latest
     env_file: ./secret/control.env
     networks:
       dm-tiup:
