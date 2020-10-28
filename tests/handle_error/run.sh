@@ -453,31 +453,55 @@ function DM_4204() {
      run_case 4204 "single-source-no-sharding" "init_table 11" "clean_table" ""
 }
 
+# 4206, 4208
 function DM_4206_CASE() {
     run_sql_source1 "insert into ${db}.${tb1} values(1);"
     run_sql_source2 "insert into ${db}.${tb1} values(2);"
     run_sql_source1 "alter table ${db}.${tb1} modify id varchar(10);"
     run_sql_source2 "alter table ${db}.${tb1} modify id varchar(10);"
+    run_sql_source1 "alter table ${db}.${tb1} modify id varchar(20);"
+    run_sql_source2 "alter table ${db}.${tb1} modify id varchar(20);"
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column" 2
+            "Unsupported modify column.*varchar(10)" 2
 
-    start_location1=$(get_start_location 127.0.0.1:$MASTER_PORT $source1)
-    start_location2=$(get_start_location 127.0.0.1:$MASTER_PORT $source2)
+    first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
+    first_pos2=$(get_start_pos 127.0.0.1:$MASTER_PORT $source2)
+    first_name1=$(get_start_name 127.0.0.1:$MASTER_PORT $source1)
+    first_name2=$(get_start_name 127.0.0.1:$MASTER_PORT $source2)
+
+    second_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
+    second_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $first_pos2)
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test skip -b $start_location1 -s $source1" \
+            "handle-error test skip -b $first_name1:$second_pos1 -s $source1" \
+            "\"result\": true" 2
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "Unsupported modify column.*varchar(10)" 2
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test skip -b $first_name1:$first_pos1 -s $source1" \
             "\"result\": true" 2
 
     run_sql_source1 "insert into ${db}.${tb1} values(3);"
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "Unsupported modify column" 1
+            "Unsupported modify column.*varchar(10)" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test skip -b $start_location2 -s $source2" \
+            "handle-error test skip -b $first_name2:$first_pos2 -s $source2" \
+            "\"result\": true" 2
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "Unsupported modify column.*varchar(20)" 1
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test skip -b $first_name2:$second_pos2 -s $source2" \
             "\"result\": true" 2
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -637,39 +661,62 @@ function DM_4213() {
      run_case 4213 "single-source-no-sharding" "init_table 11" "clean_table" ""
 }
 
-
+# 4215, 4217
 function DM_4215_CASE() {
     run_sql_source1 "insert into ${db}.${tb1} values(1);"
     run_sql_source2 "insert into ${db}.${tb1} values(2);"
     run_sql_source1 "alter table ${db}.${tb1} add column c int unique;"
     run_sql_source2 "alter table ${db}.${tb1} add column c int unique;"
+    run_sql_source1 "alter table ${db}.${tb1} add column d int unique;"
+    run_sql_source2 "alter table ${db}.${tb1} add column d int unique;"
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "unsupported add column .* constraint UNIQUE KEY" 2
+            "unsupported add column 'c' constraint UNIQUE KEY" 2
 
-    start_location1=$(get_start_location 127.0.0.1:$MASTER_PORT $source1)
-    start_location2=$(get_start_location 127.0.0.1:$MASTER_PORT $source2)
+    first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
+    first_pos2=$(get_start_pos 127.0.0.1:$MASTER_PORT $source2)
+    first_name1=$(get_start_name 127.0.0.1:$MASTER_PORT $source1)
+    first_name2=$(get_start_name 127.0.0.1:$MASTER_PORT $source2)
+
+    second_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $first_pos1)
+    second_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $first_pos2)
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test -s $source1 -b $start_location1 replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
+            "handle-error test -s $source1 -b $first_name1:$second_pos1 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
             "\"result\": true" 2
 
-    run_sql_source1 "insert into ${db}.${tb1} values(3,3);"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "unsupported add column 'c' constraint UNIQUE KEY" 2
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test -s $source1 -b $first_name1:$first_pos1 replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
+            "\"result\": true" 2
+
+    run_sql_source1 "insert into ${db}.${tb1} values(3,3,3);"
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "unsupported add column .* constraint UNIQUE KEY" 1
+            "unsupported add column 'c' constraint UNIQUE KEY" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test -s $source2 -b $start_location2 replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
+            "handle-error test -s $source2 -b $first_name2:$first_pos2 replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
+            "\"result\": true" 2
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "unsupported add column 'd' constraint UNIQUE KEY" 1
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test -s $source2 -b $first_name2:$second_pos2 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
             "\"result\": true" 2
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"result\": true" 3
 
-    run_sql_source2 "insert into ${db}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${db}.${tb1} values(4,4,4);"
 
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 4"
 }
@@ -765,7 +812,7 @@ function DM_4219() {
      run_case 4219 "double-source-optimistic" "init_table 11 21" "clean_table" "optimistic"
 }
 
-# 4220, 4224, 4226
+# 4220, 4224, 4226, 4229, 4194, 4195, 4196
 function DM_4220_CASE() {
     run_sql_source1 "insert into ${db}.${tb1} values(1);"
     run_sql_source2 "insert into ${db}.${tb1} values(2);"
@@ -779,6 +826,10 @@ function DM_4220_CASE() {
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "Unsupported modify column.*varchar(10)" 2
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test revert" \
+            "operator not exist" 2
 
     first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
     first_pos2=$(get_start_pos 127.0.0.1:$MASTER_PORT $source2)
@@ -796,6 +847,10 @@ function DM_4220_CASE() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test skip -s $source2 -b $first_name2:$second_pos2" \
             "\"result\": true" 2
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test revert" \
+            "operator not exist" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test skip -s $source1 -b $first_name1:$third_pos1" \
@@ -842,6 +897,10 @@ function DM_4220_CASE() {
             "handle-error test revert -b $first_name2:$third_pos2" \
             "operator not exist" 2
 
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test revert" \
+            "source.*has no error" 2
+
     run_sql_source1 "insert into ${db}.${tb1} values(5);"
     run_sql_source2 "insert into ${db}.${tb1} values(6);"
 
@@ -853,7 +912,7 @@ function DM_4220() {
      run_case 4220 "double-source-optimistic" "init_table 11 21" "clean_table" "optimistic"
 }
 
-# 4185, 4187
+# 4185, 4187, 4186
 function DM_4185_CASE() {
     run_sql_source1 "insert into ${db}.${tb1} values(1);"
     run_sql_source2 "insert into ${db}.${tb1} values(2);"
@@ -959,7 +1018,7 @@ function DM_4201() {
      run_case 4201 "single-source-no-sharding" "init_table 11" "clean_table" ""
 }
 
-# 4189, 4190, 4191, 4192, 4214
+# 4189, 4190, 4191, 4192, 4214, 4218
 function DM_4189_CASE() {
     run_sql_source1 "insert into ${db}.${tb1} values(1);"
     run_sql_source2 "insert into ${db}.${tb1} values(2);"
@@ -991,16 +1050,16 @@ function DM_4189_CASE() {
         # WARN: may replace unknown event like later insert, test will fail
         # It hasn't happened yet.
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test -s $source1 -b $first_name1:$second_pos1 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
-            "\"result\": true" 2
+            "handle-error test -b $first_name1:$second_pos1 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
+            "\"result\": true" 3
 
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "unsupported add column 'c' constraint UNIQUE KEY" 2
 
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test -s $source2 -b $first_name2:$second_pos2 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
-            "\"result\": true" 2
+            "handle-error test -b $first_name2:$second_pos2 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
+            "\"result\": true" 3
     fi
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -1213,6 +1272,115 @@ function DM_4230() {
      run_case 4230 "single-source-no-sharding" "init_table 11" "clean_table" ""
 }
 
+# 4177, 4178, 4179, 4181, 4183, 4188, 4180, 4182
+function DM_4177_CASE() {
+    run_sql_source1 "insert into ${db}.${tb1} values(1);"
+    run_sql_source1 "alter table ${db}.${tb1} modify id varchar(10);"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "Unsupported modify column" 1
+
+    start_location=$(get_start_location 127.0.0.1:$MASTER_PORT $source1)
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error wrong-task skip" \
+            "\"result\": false" 1 \
+            "task wrong-task.*not exist" 1
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error skip" \
+            "Usage" 1
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test skip -b $start_location -s wrong-source" \
+            "source wrong-source.*not found" 1
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test skip -b mysql-bin|1111 -s wrong-source" \
+            "invalid --binlog-pos" 1
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "Unsupported modify column" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test skip" \
+            "\"result\": true" 2
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test skip" \
+            "\"result\": false" 1 \
+            "source.*has no error" 1
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test replace \"alter table ${db}.${tb1} add column c int;\"" \
+            "\"result\": false" 1 \
+            "source.*has no error" 1
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test skip -b mysql-bin.000000:00000" \
+            "\"result\": true" 2
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test aaa" \
+            "invalid operation 'aaa'" 1
+
+    run_sql_source1 "insert into ${db}.${tb1} values(2);"
+    run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 2"
+}
+
+function DM_4177() {
+     run_case 4177 "single-source-no-sharding" "init_table 11" "clean_table" ""
+     # 4184
+     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test skip" \
+            "task.*not exist" 1
+     # 4223
+     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test replace alter table ${db}.${tb1} add column c int" \
+            "task.*not exist" 1
+     # 4197
+     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test revert" \
+            "task.*not exist" 1
+}
+
+function DM_4231_CASE() {
+    run_sql_source1 "insert into ${db}.${tb1} values(1);"
+    run_sql_source1 "alter table ${db}.${tb1} add column c int unique;"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "unsupported add column 'c' constraint UNIQUE KEY" 1
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test replace \"alter table ${db}.${tb1} add column c int; alter table ${db}.${tb1} add column d int unique;\"" \
+            "\"result\": true" 2
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "unsupported add column 'd' constraint UNIQUE KEY" 1
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test revert" \
+            "\"result\": true" 2
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "unsupported add column 'c' constraint UNIQUE KEY" 1
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test replace alter table ${db}.${tb1} add unique(c);" \
+            "\"result\": true" 2
+
+    run_sql_source1 "insert into ${db}.${tb1} values(2,2);"
+    run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 2"
+}
+
+function DM_4231() {
+     run_case 4231 "single-source-no-sharding" "init_table 11" "clean_table" ""
+}
+
 function run() {
     init_cluster
     init_database
@@ -1223,7 +1391,7 @@ function run() {
     DM_REPLACE_ERROR_MULTIPLE
     DM_EXEC_ERROR_SKIP
 
-    implement=(4202 4204 4206 4207 4209 4211 4213 4215 4216 4219 4220 4185 4201 4189 4210 4193 4230)
+    implement=(4202 4204 4206 4207 4209 4211 4213 4215 4216 4219 4220 4185 4201 4189 4210 4193 4230 4177 4231)
     for i in ${implement[@]}; do
         DM_${i}
         sleep 1
