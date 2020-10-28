@@ -139,8 +139,8 @@ function import_to_v2_by_tiup() {
 
     # import from v1
     # TODO: update `--cluster-version` to the target version later.
-    tiup install dmctl:DM_V2_VER
-    tiup dm import --yes --dir=/home/tidb/dm-ansible --cluster-version DM_V2_VER
+    tiup install dmctl:$DM_V2_VER
+    tiup dm import --yes --dir=/home/tidb/dm-ansible --cluster-version $DM_V2_VER
     tiup dm start --yes $CLUSTER_NAME
 }
 
@@ -155,7 +155,7 @@ function migrate_in_v2 {
     check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
 
     # stop v2 task
-    tiup dmctl:DM_V2_VER --master-addr=master1:8261 stop-task $TASK_NAME
+    tiup dmctl:$DM_V2_VER --master-addr=master1:8261 stop-task $TASK_NAME
 }
 
 function destroy_v2_by_tiup() {
