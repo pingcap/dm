@@ -13,6 +13,7 @@ PATH=$CUR/../_utils:$PATH # for sync_diff_inspector
 
 TASK_NAME="upgrade_via_tiup"
 CLUSTER_NAME="dm-v1"
+DM_V2_VER="nightly"
 
 DB1=sharding1
 DB2=sharding2
@@ -138,7 +139,8 @@ function import_to_v2_by_tiup() {
 
     # import from v1
     # TODO: update `--cluster-version` to the target version later.
-    tiup dm import --yes --dir=/home/tidb/dm-ansible --cluster-version nightly
+    tiup install dmctl:DM_V2_VER
+    tiup dm import --yes --dir=/home/tidb/dm-ansible --cluster-version DM_V2_VER
     tiup dm start --yes $CLUSTER_NAME
 }
 
@@ -152,8 +154,8 @@ function migrate_in_v2 {
     # check data
     check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
 
-    # stop v1 task
-    /home/tidb/dm-ansible/dmctl/dmctl --master-addr=master1:8261 stop-task $TASK_NAME
+    # stop v2 task
+    tiup dmctl:DM_V2_VER --master-addr=master1:8261 stop-task $TASK_NAME
 }
 
 function destroy_v2_by_tiup() {
