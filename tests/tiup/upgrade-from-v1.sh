@@ -66,7 +66,9 @@ EOF
     cp $CUR/ansible_data/inventory.ini /home/tidb/dm-ansible/
 
     # not following the docs, use root and without password to run it
-    sudo ansible-playbook -i /home/tidb/dm-ansible/hosts.ini /home/tidb/dm-ansible/create_users.yml -u root
+    cd /home/tidb/dm-ansible
+    sudo ansible-playbook -i hosts.ini create_users.yml -u root
+    cd $CUR/../..
 
     #step 6
 su tidb <<EOF
