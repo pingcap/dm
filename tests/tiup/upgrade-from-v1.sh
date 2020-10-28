@@ -127,9 +127,6 @@ function migrate_in_v1 {
 
     # check data
     check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
-
-    # stop v1 task
-    /home/tidb/dm-ansible/dmctl/dmctl --master-addr=master1:8261 stop-task $TASK_NAME
 }
 
 # ref https://docs.pingcap.com/zh/tidb-data-migration/v2.0/deploy-a-dm-cluster-using-tiup
@@ -146,9 +143,6 @@ function import_to_v2_by_tiup() {
 }
 
 function migrate_in_v2 {
-    # start v2 task
-    /home/tidb/dm-ansible/dmctl/dmctl --master-addr=master1:8261 start-task $CUR/conf/task.yaml
-
     # prepare incremental data
     exec_sql mysql1 3306 "INSERT INTO $DB1.$TBL1 (c1, c2) VALUES (201, '201');"
     exec_sql mysql1 3306 "INSERT INTO $DB1.$TBL2 (c1, c2) VALUES (202, '202');"
