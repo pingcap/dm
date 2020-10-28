@@ -25,8 +25,8 @@ x-node: &default-node
 
 services:
   mysql1: # upstream MySQL-1
-    container_name: mysql57
-    hostname: mysql57
+    container_name: mysql1
+    hostname: mysql1
     networks:
       dm-tiup:
         ipv4_address: 172.28.0.201
@@ -38,12 +38,12 @@ services:
       MYSQL_ALLOW_EMPTY_PASSWORD: 1
 
   mysql2: # upstream MySQL-2
-    container_name: mysql80
-    hostname: mysql80
+    container_name: mysql2
+    hostname: mysql2
     networks:
       dm-tiup:
         ipv4_address: 172.28.0.202
-    image: mysql:8.0.22
+    image: mysql:5.7.32
     command: --default-authentication-plugin=mysql_native_password --log-bin=/var/lib/mysql/mysql-bin --server-id=1 --binlog-format=ROW --gtid_mode=ON --enforce-gtid-consistency=true
     restart: always
     environment:
@@ -69,6 +69,8 @@ services:
     networks:
       dm-tiup:
         ipv4_address: 172.28.0.100
+    volumes: # mount the whole GOPATH because we put the repo under it.
+      - ${GOPATH}:/go
 
   master1: # node for deploy DM-master-1 (add more nodes if needed)
     <<: *default-node
