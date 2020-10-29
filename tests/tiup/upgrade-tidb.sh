@@ -39,6 +39,8 @@ function migrate_before_upgrade() {
 function migrate_after_upgrade() {
     exec_incremental_stage2
 
+    sleep 10
+
     check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
 
     tiup dmctl:$DM_VER --master-addr=master1:8261 stop-task $TASK_NAME
