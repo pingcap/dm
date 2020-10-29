@@ -887,12 +887,16 @@ function DM_4220_CASE() {
 
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 4"
 
+    # flush checkpoint, otherwise revert may "succeed"
+    run_sql_source1 "alter table ${db}.${tb1} add column c int;"
+    run_sql_source2 "alter table ${db}.${tb1} add column c int;"
+
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test revert -s $source1 -b $first_name1:$third_pos1" \
-            "\"result\": true" 2
+            "operator not exist" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test revert -s $source2 -b $first_name2:$third_pos2" \
-            "\"result\": true" 2
+            "operator not exist" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test revert -b $first_name2:$third_pos2" \
             "operator not exist" 2
@@ -901,8 +905,8 @@ function DM_4220_CASE() {
             "handle-error test revert" \
             "source.*has no error" 2
 
-    run_sql_source1 "insert into ${db}.${tb1} values(5);"
-    run_sql_source2 "insert into ${db}.${tb1} values(6);"
+    run_sql_source1 "insert into ${db}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${db}.${tb1} values(6,6);"
 
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 6"
 }
