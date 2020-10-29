@@ -199,13 +199,13 @@ function check_log_contain_with_retry() {
     rc=0
     for ((k=1;k<11;k++)); do
         got=`grep "$text" $log1 | wc -l`
-        if [[ ! $got = 0 ]]; then
+        if [[ $got -ne 0 ]]; then
             rc=1
             break
         fi
         if [[ ! "$log2" = "" ]]; then
             got=`grep "$text" $log2 | wc -l`
-            if [[ ! $got = 0 ]]; then
+            if [[ $got -ne 0 ]]; then
                 rc=1
                 break
             fi
@@ -213,7 +213,7 @@ function check_log_contain_with_retry() {
         echo "check log contain failed $k-th time, retry later"
         sleep 2
     done
-    if [[ $rc = 0 ]]; then
+    if [[ $rc -eq 0 ]]; then
         echo "log dosen't contain $text"
         exit 1
     fi
