@@ -25,6 +25,7 @@ import (
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/pb"
@@ -549,8 +550,40 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 func (o *Optimist) removeLock(lock *optimism.Lock) (bool, error) {
 	failpoint.Inject("SleepWhenRemoveLock", func(val failpoint.Value) {
 		t := val.(int)
-		log.L().Info("wait new ddl info putted into etcd", zap.String("failpoint", "SleepWhenRemoveLock"))
-		time.Sleep(time.Duration(t) * time.Second)
+		log.L().Info("wait new ddl info putted into etcd",
+			zap.String("failpoint", "SleepWhenRemoveLock"),
+			zap.Int("max wait second", t))
+
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		timer := time.NewTimer(time.Duration(t) * time.Second)
+		defer timer.Stop()
+	OUTER:
+		for {
+			select {
+			case <-timer.C:
+				log.L().Info("failed to wait new DDL info", zap.Int("wait second", t))
+				break OUTER
+			case <-ticker.C:
+				// manually check etcd
+				cmps := make([]clientv3.Cmp, 0)
+				for source, schemaTables := range lock.Ready() {
+					for schema, tables := range schemaTables {
+						for table := range tables {
+							info := optimism.NewInfo(lock.Task, source, schema, table, lock.DownSchema, lock.DownTable, nil, nil, nil)
+							info.Version = lock.GetVersion(source, schema, table)
+							key := common.ShardDDLOptimismInfoKeyAdapter.Encode(info.Task, info.Source, info.UpSchema, info.UpTable)
+							cmps = append(cmps, clientv3.Compare(clientv3.Version(key), "<", info.Version+1))
+						}
+					}
+				}
+				resp, _, err := etcdutil.DoOpsInOneCmpsTxnWithRetry(o.cli, cmps, nil, nil)
+				if err == nil && !resp.Succeeded {
+					log.L().Info("found new DDL info")
+					break OUTER
+				}
+			}
+		}
 	})
 	deleted, err := o.deleteInfosOps(lock)
 	if err != nil {

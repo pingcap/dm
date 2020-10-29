@@ -72,8 +72,8 @@ function test_multi_task_running() {
 
     sleep 5 # wait for flush checkpoint
     echo "use sync_diff_inspector to check increment data"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10 || print_debug_status
-    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 10 || print_debug_status
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 50 || print_debug_status
+    check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 50 || print_debug_status
     echo "[$(date)] <<<<<< finish test_multi_task_running >>>>>>"
 }
 
@@ -421,14 +421,15 @@ function test_pause_task() {
     task_name=(test test2)
     for name in ${task_name[@]}; do
         echo "pause tasks $name"
+
+        # because some SQL may running (often remove checkpoint record), pause will cause that SQL failed
+        # thus `result` is not true
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "pause-task $name"\
-            "\"result\": true" 3
+            "pause-task $name"
 
         # pause twice, just used to test pause by the way
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "pause-task $name"\
-            "\"result\": true" 3
+            "pause-task $name"
         
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status $name"\

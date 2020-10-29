@@ -566,8 +566,11 @@ func (t *testRelaySuite) TestProcess(c *C) {
 	// kill the binlog dump connection
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel2()
-	connID, err := getBinlogDumpConnID(ctx2, r.db)
-	c.Assert(err, IsNil)
+	var connID uint32
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		connID, err = getBinlogDumpConnID(ctx2, r.db)
+		return err == nil
+	}), IsTrue)
 	_, err = r.db.ExecContext(ctx2, fmt.Sprintf(`KILL %d`, connID))
 	c.Assert(err, IsNil)
 
