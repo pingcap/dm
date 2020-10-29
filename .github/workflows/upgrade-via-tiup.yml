@@ -34,7 +34,7 @@ jobs:
       working-directory: ${{ env.working-directory }}
       run: |
           cd ${{ env.working-directory }}/tests/tiup/docker
-          docker-compose up -d
+          GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
     
     - name: Run test cases
       working-directory: ${{ env.working-directoryr }}
