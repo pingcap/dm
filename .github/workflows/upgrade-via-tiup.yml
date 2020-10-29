@@ -1,14 +1,14 @@
 name: Upgrade via TiUP
 
 on:
-  push:
-    branches:
-    - master
-    - release-2.0
-  pull_request:
-    branches:
-    - master
-    - release-2.0
+  schedule:
+    - cron: '3 22 * * *' # run at minute 06:03 UTC+8
+  workflow_dispatch:
+    inputs:  # TODO: use these inputs
+      fromVer:
+        dmVer: 'v1.0.6'
+      toVer:
+        dmVer: 'nightly'  
 
 jobs:
 
