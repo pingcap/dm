@@ -71,7 +71,7 @@ EOF
 }
 
 function stop_v1_by_ansible() {
-    su tidb <<EOF
+su tidb <<EOF
     cd /home/tidb/dm-ansible
     ansible-playbook stop.yml
 EOF
