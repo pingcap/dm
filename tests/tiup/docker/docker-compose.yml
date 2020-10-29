@@ -57,6 +57,10 @@ services:
       dm-tiup:
         ipv4_address: 172.28.0.203
     image: pingcap/tidb:v4.0.7
+    command:
+      - --path=/data
+    volumes: # persist data for upgrade
+      - ./data:/data
     restart: always
 
   control:
