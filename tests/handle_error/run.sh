@@ -848,6 +848,10 @@ function DM_4220_CASE() {
             "handle-error test skip -s $source2 -b $first_name2:$second_pos2" \
             "\"result\": true" 2
 
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "Unsupported modify column.*varchar(10)" 2
+
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test revert" \
             "operator not exist" 2
