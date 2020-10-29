@@ -37,8 +37,9 @@ jobs:
           docker-compose up -d
     
     - name: Run test cases
-      working-directory: ${{ env.working-directory/tests/tiup/docker }}
+      working-directory: ${{ env.working-directoryr }}
       run: |
+        cd ${{ env.working-directory }}/tests/tiup/docker
         GOPATH=${GITHUB_WORKSPACE}/go docker-compose exec control bash -c "cd /go/src/github.com/pingcap/dm && ./tests/tiup/upgrade-from-v1.sh"
 
     # send Slack notify if failed.
