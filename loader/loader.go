@@ -214,7 +214,9 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 			if err := w.restoreDataFile(ctx, filepath.Join(w.cfg.Dir, job.dataFile), job.offset, job.info); err != nil {
 				// expect pause rather than exit
 				err = terror.Annotatef(err, "restore data file (%v) failed", job.dataFile)
-				runFatalChan <- unit.NewProcessError(err)
+				if !utils.IsContextCanceledError(err) {
+					runFatalChan <- unit.NewProcessError(err)
+				}
 				return
 			}
 		}
@@ -533,8 +535,12 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	wg.Wait() // wait for receive all fatal from l.runFatalChan
 
 	if err != nil {
-		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Inc()
-		errs = append(errs, unit.NewProcessError(err))
+		if utils.IsContextCanceledError(err) {
+			l.logCtx.L().Info("filter out error caused by user cancel")
+		} else {
+			loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Inc()
+			errs = append(errs, unit.NewProcessError(err))
+		}
 	}
 
 	isCanceled := false
