@@ -1,0 +1,8 @@
+source-id: mysql-replica-02
+enable-gtid: true
+from:
+  host: mysql2
+  user: root
+  port: 3306
+checker:
+  check-enable: false
