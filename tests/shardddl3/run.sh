@@ -610,6 +610,23 @@ function DM_102_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values (1,1);"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int default -1;"
 
+    sleep 1
+    # wait DM receive source2's DDL
+    found=false
+    for ((k=0; k<10; k++)); do
+        content=$($PWD/bin/dmctl.test DEVEL --master-addr=127.0.0.1:$MASTER_PORT query-status test)
+        master2=$(echo $content | sed 's/"masterBinlog":/"masterBinlog":\n/g' | awk -F')' 'FNR==3{print $1}')
+        syncer2=$(echo $content | sed 's/"syncerBinlog":/"syncerBinlog":\n/g' | awk -F')' 'FNR==3{print $1}')
+        if [ "$master2" != "$syncer2" ]; then
+            found=true
+            break
+        fi
+    done
+    if [[ $found == false ]]; then
+        echo "didn't receive mismatched DDL"
+        exit 2
+    fi
+
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "show-ddl-locks" \
         "\"ID\": \"test-\`shardddl\`.\`tb\`\"" 1
@@ -683,7 +700,7 @@ function DM_RemoveLock_CASE() {
 function DM_RemoveLock() {
     ps aux | grep dm-master |awk '{print $2}'|xargs kill || true
     check_port_offline $MASTER_PORT1 20
-    export GO_FAILPOINTS="github.com/pingcap/dm/dm/master/shardddl/SleepWhenRemoveLock=return(5)"
+    export GO_FAILPOINTS="github.com/pingcap/dm/dm/master/shardddl/SleepWhenRemoveLock=return(10)"
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
