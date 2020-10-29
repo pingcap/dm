@@ -179,7 +179,11 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	resp, err := etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
 	c.Assert(err, IsNil)
 	c.Assert(resp.Succeeded, IsTrue)
-	<-wch
+	select {
+	case err2 := <-ech:
+		c.Fatal(err2)
+	case <-wch:
+	}
 
 	// put again
 	// version reset to 1
