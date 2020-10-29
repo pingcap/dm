@@ -201,7 +201,7 @@ func (t *testPessimist) testPessimistProgress(c *C, restart int) {
 	done, _, err = pessimism.PutOperationDeleteExistInfo(etcdTestCli, op12c, i12)
 	c.Assert(err, IsNil)
 	c.Assert(done, IsTrue)
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
 		_, ok := p.Locks()[ID1]
 		return !ok
 	}), IsTrue)
