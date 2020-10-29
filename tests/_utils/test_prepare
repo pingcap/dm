@@ -198,12 +198,22 @@ function check_log_contain_with_retry() {
     fi
     rc=0
     for ((k=1;k<11;k++)); do
+        if [[ ! -f $log1 ]]; then
+            sleep 2
+            echo "check log contain failed $k-th time (file not exist), retry later"
+            continue
+        fi
         got=`grep "$text" $log1 | wc -l`
         if [[ $got -ne 0 ]]; then
             rc=1
             break
         fi
         if [[ ! "$log2" = "" ]]; then
+            if [[ ! -f $log2 ]]; then
+                sleep 2
+                echo "check log contain failed $k-th time (file not exist), retry later"
+                continue
+            fi
             got=`grep "$text" $log2 | wc -l`
             if [[ $got -ne 0 ]]; then
                 rc=1
