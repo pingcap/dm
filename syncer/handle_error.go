@@ -55,13 +55,13 @@ func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 		}
 	}
 
-	err = s.errOperatorHolder.Set(pos, req.Op, events)
+	// remove outdated operators when add operator
+	err = s.errOperatorHolder.RemoveOutdated(s.checkpoint.FlushedGlobalPoint())
 	if err != nil {
 		return err
 	}
 
-	// remove outdated operators when add operator
-	err = s.errOperatorHolder.RemoveOutdated(s.checkpoint.FlushedGlobalPoint())
+	err = s.errOperatorHolder.Set(pos, req.Op, events)
 	if err != nil {
 		return err
 	}
