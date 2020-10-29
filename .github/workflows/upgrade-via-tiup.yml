@@ -15,7 +15,8 @@ on:
         dmVer: 'nightly'  
 
 jobs:
-  prepare:
+  from_v1:
+    name: From V1
     runs-on: ubuntu-18.04
     env:
       working-directory: ${{ github.workspace }}/go/src/github.com/pingcap/dm
@@ -37,14 +38,6 @@ jobs:
           cd ${{ env.working-directory }}/tests/tiup/docker
           GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
 
-  from_v1:
-    name: From V1
-    runs-on: ubuntu-18.04
-    env:
-      working-directory: ${{ github.workspace }}/go/src/github.com/pingcap/dm
-    needs: prepare
-
-    steps:
     - name: Run test cases
       working-directory: ${{ env.working-directoryr }}
       run: |
@@ -71,13 +64,30 @@ jobs:
     runs-on: ubuntu-18.04
     env:
       working-directory: ${{ github.workspace }}/go/src/github.com/pingcap/dm
-    needs: prepare
     strategy:
         fail-fast: false
         matrix:
           previous_v2: ["v2.0.0-rc", "v2.0.0-rc.2"]
 
     steps:    
+
+    - name: Set up Go 1.13
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.13
+    
+    - name: Check out code
+      uses: actions/checkout@v2
+      with:
+        path: go/src/github.com/pingcap/dm
+    
+    - name: Setup containers
+      working-directory: ${{ env.working-directory }}
+      run: |
+          cd ${{ env.working-directory }}/tests/tiup/docker
+          GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
+
+    # TODO: support more CUR_VER
     - name: Run test cases
       working-directory: ${{ env.working-directoryr }}
       run: |
