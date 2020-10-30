@@ -2,6 +2,51 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] 2020-10-30
+
+### Improvements
+
+- Optimize the setting of `safe-mode` to ensure the eventual consistency of data when the upstream database, such as Amazon Aurora and Aliyun RDS, does not support FTWRL in the full export [#981](https://github.com/pingcap/dm/pull/981) [#1017](https://github.com/pingcap/dm/pull/1017)
+- Support automatic configuration of `sql_mode` for data migration based on the global `sql_mode` of upstream and downstream databases and `sql_mode` of binlog events [#1005](https://github.com/pingcap/dm/pull/1005) [#1071](https://github.com/pingcap/dm/pull/1071) [#1137](https://github.com/pingcap/dm/pull/1137)
+- Support automatic configuration of the `max_allowed_packet` from DM to the downstream TiDB, based on the global `max_allowed_packet` value of the downstream TiDB [#1071](https://github.com/pingcap/dm/pull/1071)
+- Optimize the incremental replication speed compared with DM 2.0 RC version [#1203](https://github.com/pingcap/dm/pull/1203)
+- Improve performance by using optimistic transaction to migrate data to TiDB by default [#1107](https://github.com/pingcap/dm/pull/1107)
+- Support DM-worker automatically fetching and using the list of DM-master nodes in the cluster [#1180](https://github.com/pingcap/dm/pull/1180)
+- Disable auto-resume behavior for more errors that cannot be automatically recovered [#979](https://github.com/pingcap/dm/pull/979) [#1085](https://github.com/pingcap/dm/pull/1085) [#1216](https://github.com/pingcap/dm/pull/1216)
+
+### Bug fixes
+
+- Fix the issue that failure to automatically set the default value of `statement-size` for full export might cause the `packet for query is too large` error or the OOM issue in TiDB [#1133](https://github.com/pingcap/dm/pull/1133)
+- Fix DM-worker panic when there are concurrent checkpoint operations during the full import [#1182](https://github.com/pingcap/dm/pull/1182)
+- Fix the issue that the migration task might have `table checkpoint position * less than global checkpoint position` error and be interrupted after the upstream MySQL/MariaDB instance is restarted [#1041](https://github.com/pingcap/dm/pull/1041)
+- Fix the issue that migration tasks might be interrupted when the upstream database does not enable GTID [#1123](https://github.com/pingcap/dm/pull/1123)
+- Fix the issue that the DM-master node does not start properly after conflicts occur during the shard DDL coordination [#1199](https://github.com/pingcap/dm/pull/1199)
+- Fix the issue that the incremental replication might be too slow when there are multiple common indexes in the table to be migrated [#1063](https://github.com/pingcap/dm/pull/1063)
+- Fix the issue that the progress display is abnormal after restarting the migration task during the full import [#1043](https://github.com/pingcap/dm/pull/1043)
+- Fix the issue that paused migration subtasks cannot be obtained by `query-status` after being scheduled to another DM-worker [#1183](https://github.com/pingcap/dm/pull/1183)
+- Fix the issue that `FileSize` might not take effect during the full export [#1191](https://github.com/pingcap/dm/pull/1191)
+- Fix the issue that the `-s` parameter in `extra-args` does not take effect during the full export [#1196](https://github.com/pingcap/dm/pull/1196)
+- Fix the issue that enabling the online DDL feature might cause `not allowed operation: alter multiple tables in one statement` error [#1192](https://github.com/pingcap/dm/pull/1192)
+- Fix the issue that during the incremental replication, the migration task might be interrupted when the DDL statements to be migrated are associated with other tables, such as DDL statements related to foreign keys [#1101](https://github.com/pingcap/dm/pull/1101) [#1108](https://github.com/pingcap/dm/pull/1108)
+- Fix the issue that database names and table names with character `/` are not correctly parsed during the full migration [#991](https://github.com/pingcap/dm/pull/991)
+- Fix the issue that after failing to migrate DDL statements to the downstream TiDB database during the incremental replication, migration tasks might not be paused and the corresponding error cannot be obtained from `query-status` [#1059](https://github.com/pingcap/dm/pull/1059)
+- Fix the issue that concurrently coordinating multiple DDL statements in the optimistic shard DDL mode might block the task [#1051](https://github.com/pingcap/dm/pull/1051)
+- Fix the issue that a DM-master might try to forward requests to other DM-master nodes after it becomes the leader [#1157](https://github.com/pingcap/dm/pull/1157)
+- Fix the issue that DM cannot parse `GRANT CREATE TABLESPACE` during the precheck [#1113](https://github.com/pingcap/dm/pull/1113)
+- Fix the issue that migration tasks are interrupted when migrating `DROP TABLE` statements but corresponding tables don’t exist [#990](https://github.com/pingcap/dm/pull/990)
+- Fix the issue that `operate-schema` might not work properly when the `--source` parameter is specified [#1106](https://github.com/pingcap/dm/pull/1106)
+- Fix the issue that `list-member` cannot be executed correctly after enabling TLS [#1050](https://github.com/pingcap/dm/pull/1050)
+- Fix the issue that mixing `https` and `http` in the config items might cause the cluster to not work properly after enabling TLS [#1220](https://github.com/pingcap/dm/pull/1220)
+- Fix the issue that the HTTP API cannot work properly after configuring the `cert-allowed-cn` parameter for DM-masters [#1036](https://github.com/pingcap/dm/pull/1036)
+- Fix the issue that for incremental replication tasks, the configuration check fails when `binlog-gtid` is only specified in the `meta` of the task configuration [#987](https://github.com/pingcap/dm/pull/987)
+- Fix the issue that in the interactive mode, dmctl cannot correctly execute some commands starting or ending with blank characters [#1202](https://github.com/pingcap/dm/pull/1202)
+- Fix the issue that the `converting NULL to string is unsupported` error is output to the log file during the full export [#1014](https://github.com/pingcap/dm/pull/1014)
+- Fix the issue that the progress might be displayed as `NaN` during the full import [#1209](https://github.com/pingcap/dm/pull/1209)
+
+### Action required
+
+- When upgrading from a previous version, note that you must upgrade all DM components (dmctl/DM-master/DM-worker) together
+
 ## [2.0.0-rc.2] 2020-09-01
 
 ### Improvements
