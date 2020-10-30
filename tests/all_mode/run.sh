@@ -33,10 +33,12 @@ function test_session_config(){
     sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
 
     # error config
+    # there should be a error message like "Incorrect argument type to variable 'tidb_retry_limit'"
+    # but different TiDB version output different message. so we only roughly match here
     sed -i 's/tidb_retry_limit: "10"/tidb_retry_limit: "fjs"/g'  $WORK_DIR/dm-task.yaml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $WORK_DIR/dm-task.yaml --remove-meta" \
-        "Incorrect argument type to variable 'tidb_retry_limit'" 1
+        "tidb_retry_limit" 1
 
     sed -i 's/tidb_retry_limit: "fjs"/tidb_retry_limit: "10"/g'  $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
