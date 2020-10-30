@@ -459,8 +459,8 @@ function DM_035() {
 function run() {
     init_cluster
     init_database
-    start=27
-    end=27
+    start=1
+    end=35
     except=(024 025 029)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
