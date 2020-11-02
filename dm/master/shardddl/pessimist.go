@@ -471,9 +471,6 @@ func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.I
 			p.infoOpMu.Lock()
 			lockID, synced, remain, err := p.lk.TrySync(info, p.taskSources(info.Task))
 			if err != nil {
-				// if the lock become synced, and `done` for `exec`/`skip` operation received,
-				// but the `done` operations have not been deleted,
-				// then the DM-worker should not put any new DDL info until the old operation has been deleted.
 				p.logger.Error("fail to try sync shard DDL lock", zap.Stringer("info", info), log.ShortError(err))
 				// currently, only DDL mismatch will cause error
 				metrics.ReportDDLError(info.Task, metrics.InfoErrSyncLock)
