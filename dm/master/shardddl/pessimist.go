@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/failpoint"
 )
 
 var (
@@ -52,6 +53,8 @@ type Pessimist struct {
 
 	// taskSources used to get all sources relative to the given task.
 	taskSources func(task string) []string
+
+	infoOpMu sync.Mutex
 }
 
 // NewPessimist creates a new Pessimist instance.
@@ -464,6 +467,8 @@ func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.I
 				return
 			}
 			p.logger.Info("receive a shard DDL info", zap.Stringer("info", info))
+
+			p.infoOpMu.Lock()
 			lockID, synced, remain, err := p.lk.TrySync(info, p.taskSources(info.Task))
 			if err != nil {
 				// if the lock become synced, and `done` for `exec`/`skip` operation received,
@@ -472,9 +477,11 @@ func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.I
 				p.logger.Error("fail to try sync shard DDL lock", zap.Stringer("info", info), log.ShortError(err))
 				// currently, only DDL mismatch will cause error
 				metrics.ReportDDLError(info.Task, metrics.InfoErrSyncLock)
+				p.infoOpMu.Unlock()
 				continue
 			} else if !synced {
 				p.logger.Info("the shard DDL lock has not synced", zap.String("lock", lockID), zap.Int("remain", remain))
+				p.infoOpMu.Unlock()
 				continue
 			}
 			p.logger.Info("the shard DDL lock has synced", zap.String("lock", lockID))
@@ -483,8 +490,8 @@ func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.I
 			if err != nil {
 				p.logger.Error("fail to handle the shard DDL lock", zap.String("lock", lockID), log.ShortError(err))
 				metrics.ReportDDLError(info.Task, metrics.InfoErrHandleLock)
-				continue
 			}
+			p.infoOpMu.Unlock()
 		}
 	}
 }
@@ -505,14 +512,17 @@ func (p *Pessimist) handleOperationPut(ctx context.Context, opCh <-chan pessimis
 				continue
 			}
 
+			p.infoOpMu.Lock()
 			lock := p.lk.FindLock(op.ID)
 			if lock == nil {
 				p.logger.Warn("no lock for the shard DDL lock operation exist", zap.Stringer("operation", op))
+				p.infoOpMu.Unlock()
 				continue
 			} else if synced, _ := lock.IsSynced(); !synced {
 				// this should not happen in normal case.
 				p.logger.Warn("the lock for the shard DDL lock operation has not synced", zap.Stringer("operation", op))
 				metrics.ReportDDLError(op.Task, metrics.OpErrLockUnSynced)
+				p.infoOpMu.Unlock()
 				continue
 			}
 
@@ -527,6 +537,7 @@ func (p *Pessimist) handleOperationPut(ctx context.Context, opCh <-chan pessimis
 					metrics.ReportDDLError(op.Task, metrics.OpErrRemoveLock)
 				}
 				p.logger.Info("the lock info for the shard DDL lock operation has been cleared", zap.Stringer("operation", op))
+				p.infoOpMu.Unlock()
 				continue
 			}
 
@@ -534,6 +545,7 @@ func (p *Pessimist) handleOperationPut(ctx context.Context, opCh <-chan pessimis
 			// still need to wait for more `done` from other non-owner dm-worker instances.
 			if op.Source != lock.Owner {
 				p.logger.Info("the shard DDL lock operation of a non-owner has done", zap.Stringer("operation", op), zap.String("owner", lock.Owner))
+				p.infoOpMu.Unlock()
 				continue
 			}
 
@@ -544,6 +556,7 @@ func (p *Pessimist) handleOperationPut(ctx context.Context, opCh <-chan pessimis
 				p.logger.Error("fail to put skip shard DDL lock operations for non-owner", zap.String("lock", lock.ID), log.ShortError(err))
 				metrics.ReportDDLError(op.Task, metrics.OpErrPutNonOwnerOp)
 			}
+			p.infoOpMu.Unlock()
 		}
 	}
 }
@@ -631,6 +644,35 @@ func (p *Pessimist) removeLock(lock *pessimism.Lock) error {
 	if err != nil {
 		return err
 	}
+
+	failpoint.Inject("SleepWhenRemoveLock", func(val failpoint.Value) {
+		t := val.(int)
+		log.L().Info("wait new ddl info putted into etcd",
+			zap.String("failpoint", "SleepWhenRemoveLock"),
+			zap.Int("max wait second", t))
+
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		timer := time.NewTimer(time.Duration(t) * time.Second)
+		defer timer.Stop()
+	OUTER:
+		for {
+			select {
+			case <-timer.C:
+				log.L().Info("failed to wait new DDL info", zap.Int("wait second", t))
+				break OUTER
+			case <-ticker.C:
+				// manually check etcd
+				infos, _, err := pessimism.GetAllInfo(p.cli)
+				if err == nil {
+					if _, ok := infos[lock.Task]; ok {
+						log.L().Info("found new DDL info")
+						break OUTER
+					}
+				}
+			}
+		}
+	})
 	p.lk.RemoveLock(lock.ID)
 	metrics.ReportDDLPending(lock.Task, metrics.DDLPendingSynced, metrics.DDLPendingNone)
 	return nil
