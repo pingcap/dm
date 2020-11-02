@@ -92,3 +92,34 @@ func (t *testUtilSuite) TestGenerateSchemaCreateFile(c *C) {
 		c.Assert(string(data), Equals, testCase.createSQL)
 	}
 }
+
+func (t *testUtilSuite) TestGetDBAndTableFromFilename(c *C) {
+	cases := []struct {
+		filename string
+		schema   string
+		table    string
+		errMsg   string
+	}{
+		{"db.tbl.sql", "db", "tbl", ""},
+		{"db.tbl.0.sql", "db", "tbl", ""},
+		{"db.sqltbl.sql", "db", "sqltbl", ""},
+		{"db.sqltbl.0.sql", "db", "sqltbl", ""},
+		{"sqldb.tbl.sql", "sqldb", "tbl", ""},
+		{"sqldb.tbl.0.sql", "sqldb", "tbl", ""},
+		{"db.tbl.sql0.sql", "db", "tbl", ""},
+		{"db.tbl.0", "", "", ".*doesn't have a `.sql` suffix.*"},
+		{"db.sql", "", "", ".*doesn't have correct `.` seperator.*"},
+		{"db.0.sql", "db", "0", ""}, // treat `0` as the table name.
+	}
+
+	for _, cs := range cases {
+		schema, table, err := getDBAndTableFromFilename(cs.filename)
+		if cs.errMsg != "" {
+			c.Assert(err, ErrorMatches, cs.errMsg)
+		} else {
+			c.Assert(err, IsNil)
+			c.Assert(schema, Equals, cs.schema)
+			c.Assert(table, Equals, cs.table)
+		}
+	}
+}
