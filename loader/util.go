@@ -91,3 +91,19 @@ func generateSchemaCreateFile(dir string, schema string) error {
 func escapeName(name string) string {
 	return strings.Replace(name, "`", "``", -1)
 }
+<<<<<<< HEAD
+=======
+
+// input filename is like `all_mode.t1.0.sql` or `all_mode.t1.sql`
+func getDBAndTableFromFilename(filename string) (string, string, error) {
+	idx := strings.LastIndex(filename, ".sql")
+	if idx < 0 {
+		return "", "", fmt.Errorf("%s doesn't have a `.sql` suffix", filename)
+	}
+	fields := strings.Split(filename[:idx], ".")
+	if len(fields) != 2 && len(fields) != 3 {
+		return "", "", fmt.Errorf("%s doesn't have correct `.` seperator", filename)
+	}
+	return fields[0], fields[1], nil
+}
+>>>>>>> 6dd3d65e... fix: support "sql" prefix exists in table name (#1256)
