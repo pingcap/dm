@@ -98,6 +98,7 @@ function run() {
     ps aux | grep dm-worker |awk '{print $2}'|xargs kill || true
     check_port_offline $WORKER1_PORT 20
     
+    # use a small job chan size to block the sender
     inject_points=("github.com/pingcap/dm/loader/LoadDataSlowDown=sleep(1000)"
                    "github.com/pingcap/dm/loader/executeSQLError=return(1)"
                    "github.com/pingcap/dm/loader/returnDoJobError=return(1)"
