@@ -2,17 +2,25 @@
 
 ## Primary Focus
 
-- Make DM easy to use: there are a lot of usability issues that have been spat out for up to a year! We need to address at least known usability issues.
-- DM 2.0 GA: DM 2.0 (supports High Availability and better shard DDL replication) has taken so long and no GA, it’s time to GA delivery.
+- Make DM stable to use: all bugs with [`severity/major`](https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aseverity%2Fmajor) or [`severity/moderate`](https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aseverity%2Fmoderate) label must be fixed, and it's better to fix bugs with [`severity/minor`](https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aseverity%2Fminor) label too.
+- Make DM easy to use: continue to improve usability and optimize user experience.
 
 ## Usability Improvement
 
-- [ ] solve known usability issue (continuous work)
-  - What: solve usability issues recorded in [the project](https://github.com/pingcap/dm/projects/3)
-  - Why: a lot of usability issues that have been not resolved yet, we need to stop user churn
+- [ ] bring relay log support back in v2.0 [#1234](https://github.com/pingcap/dm/issues/1234)
+  - What: binlog replication unit can read binlog events from relay log, as it did in v1.0
+  - Why:
+    - AWS Aurora and some other RDS may purge binlog ASAP, but full dump & import may take a long time
+    - some users will create many data migration tasks for a single upstream instance, but it's better to avoid pull binlog events many times
+- [ ] support to migration exceeded 4GB binlog file automatically [#989](https://github.com/pingcap/dm/issues/989)
+  - What: exceeded 4GB binlog file doesn't interrupt the migration task
+  - Why: some operations (like `DELETE FROM` for many rows, `CREATE TABLE new_tbl AS SELECT * FROM orig_tbl`) in upstream may generated large binlog files
 - [ ] better configuration file [#775](https://github.com/pingcap/dm/issues/775)
   - What: avoid misusing for configuration files
   - Why: many users meet problem when write configuration file but don’t know how to deal with it
+- [ ] solve other known usability issues (continuous work)
+  - What: solve usability issues recorded in [the project](https://github.com/pingcap/dm/projects/3)
+  - Why: a lot of usability issues that have been not resolved yet, we need to stop user churn
 
 ## New features
 
@@ -32,6 +40,18 @@
   - Why: found potential inconsistency earlier
 - [ ] support DM v2.0 in TiDB Operator [tidb-operator#2868](https://github.com/pingcap/tidb-operator/issues/2868)
   - What: use TiDB-Operator to manage DM 2.0
+- [ ] use Lightning to import full dumped data [#405](https://github.com/pingcap/dm/issues/405)
+  - What: use Lighting as the full data load unit
+  - Why:
+    - Lightning is stabler than current Loader in DM
+    - Lightning support more source data formats, like CSV
+    - Lightning support more storage drivers, like AWS S3
+
+## Performance Improvement
+
+- [ ] flush incremental checkpoint asynchronously [#605](https://github.com/pingcap/dm/pull/605)
+  - What: flush checkpoint doesn't block replicate DML statements
+  - Why: no block or serialization for DML replications should get better performance
 
 ## Out of Scope currently
 
