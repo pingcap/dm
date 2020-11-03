@@ -276,7 +276,7 @@ func (cp *RemoteCheckPoint) allFilesFinished(files map[string][]int64) bool {
 
 // Init implements CheckPoint.Init
 func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos int64) error {
-	idx := strings.Index(filename, ".sql")
+	idx := strings.LastIndex(filename, ".sql")
 	if idx < 0 {
 		return terror.ErrCheckpointInvalidTableFile.Generate(filename)
 	}
