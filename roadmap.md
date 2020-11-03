@@ -12,9 +12,9 @@
   - Why:
     - AWS Aurora and some other RDS may purge binlog ASAP, but full dump & import may take a long time
     - some users will create many data migration tasks for a single upstream instance, but it's better to avoid pull binlog events many times
-- [ ] support to migration exceeded 4GB binlog file automatically [#989](https://github.com/pingcap/dm/issues/989)
+- [ ] support to migrate exceeded 4GB binlog file automatically [#989](https://github.com/pingcap/dm/issues/989)
   - What: exceeded 4GB binlog file doesn't interrupt the migration task
-  - Why: some operations (like `DELETE FROM` for many rows, `CREATE TABLE new_tbl AS SELECT * FROM orig_tbl`) in upstream may generated large binlog files
+  - Why: some operations (like `DELETE FROM` with large numbers of rows, `CREATE TABLE new_tbl AS SELECT * FROM orig_tbl`) in upstream may generate large binlog files
 - [ ] better configuration file [#775](https://github.com/pingcap/dm/issues/775)
   - What: avoid misusing for configuration files
   - Why: many users meet problem when write configuration file but don’t know how to deal with it
@@ -40,7 +40,7 @@
   - Why: found potential inconsistency earlier
 - [ ] support DM v2.0 in TiDB Operator [tidb-operator#2868](https://github.com/pingcap/tidb-operator/issues/2868)
   - What: use TiDB-Operator to manage DM 2.0
-- [ ] use Lightning to import full dumped data [#405](https://github.com/pingcap/dm/issues/405)
+- [ ] use [Lightning](https://github.com/pingcap/tidb-lightning/) to import full dumped data [#405](https://github.com/pingcap/dm/issues/405)
   - What: use Lighting as the full data load unit
   - Why:
     - Lightning is stabler than current Loader in DM
@@ -50,8 +50,8 @@
 ## Performance Improvement
 
 - [ ] flush incremental checkpoint asynchronously [#605](https://github.com/pingcap/dm/pull/605)
-  - What: flush checkpoint doesn't block replicate DML statements
-  - Why: no block or serialization for DML replications should get better performance
+  - What: flush checkpoint doesn't block replication for DML statements
+  - Why: no block or serialization for DML replication should get better performance
 
 ## Out of Scope currently
 
