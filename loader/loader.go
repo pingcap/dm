@@ -95,10 +95,9 @@ type Worker struct {
 }
 
 // NewWorker returns a Worker.
-func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
+func NewWorker(loader *Loader, id int) *Worker {
 	ctctx := loader.logCtx.WithLogger(loader.logCtx.L().WithFields(zap.Int("worker ID", id)))
-
-	return &Worker{
+	w := &Worker{
 		id:         id,
 		cfg:        loader.cfg,
 		checkPoint: loader.checkPoint,
@@ -106,7 +105,15 @@ func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
 		jobQueue:   make(chan *dataJob, jobCount),
 		loader:     loader,
 		tctx:       ctctx,
-	}, nil
+	}
+
+	failpoint.Inject("workerChanSize", func(val failpoint.Value) {
+		size := val.(int)
+		w.tctx.L().Info("", zap.String("failpoint", "workerChanSize"), zap.Int("size", size))
+		w.jobQueue = make(chan *dataJob, size)
+	})
+
+	return w
 }
 
 // Close closes worker
@@ -142,6 +149,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 	ctctx := w.tctx.WithContext(newCtx)
 
 	doJob := func() {
+		hasError := false
 		for {
 			select {
 			case <-newCtx.Done():
@@ -156,6 +164,10 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 					w.tctx.L().Info("jobs are finished, execution goroutine exits")
 					return
 				}
+				if hasError {
+					continue // continue to read so than the sender will not be blocked
+				}
+
 				sqls := make([]string, 0, 3)
 				sqls = append(sqls, fmt.Sprintf("USE `%s`;", unescapePercent(job.schema, w.tctx.L())))
 				sqls = append(sqls, job.sql)
@@ -184,7 +196,12 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 					if !utils.IsContextCanceledError(err) {
 						runFatalChan <- unit.NewProcessError(err)
 					}
-					return
+					hasError = true
+					failpoint.Inject("returnDoJobError", func(_ failpoint.Value) {
+						w.tctx.L().Info("", zap.String("failpoint", "returnDoJobError"))
+						failpoint.Return()
+					})
+					continue
 				}
 				w.loader.checkPoint.UpdateOffset(job.file, job.offset)
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
@@ -844,11 +861,7 @@ func (l *Loader) genRouter(rules []*router.TableRule) error {
 
 func (l *Loader) initAndStartWorkerPool(ctx context.Context) error {
 	for i := 0; i < l.cfg.PoolSize; i++ {
-		worker, err := NewWorker(l, i)
-		if err != nil {
-			return err
-		}
-
+		worker := NewWorker(l, i)
 		l.workerWg.Add(1) // for every worker goroutine, Add(1)
 		go func() {
 			defer l.workerWg.Done()
