@@ -2,7 +2,7 @@
 
 ## Primary Focus
 
-- Make DM stable to use: all bugs with [`severity/major`](https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aseverity%2Fmajor) or [`severity/moderate`](https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aseverity%2Fmoderate) label must be fixed, and it's better to fix bugs with [`severity/minor`](https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aseverity%2Fminor) label too.
+- Make DM stable to use: all bugs with [`severity/critical`](https://github.com/pingcap/dm/labels/severity%2Fcritical), [`severity/major`](https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aseverity%2Fmajor) or [`severity/moderate`](https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aseverity%2Fmoderate) label must be fixed, and it's better to fix bugs with [`severity/minor`](https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aseverity%2Fminor) label too.
 - Make DM easy to use: continue to improve usability and optimize user experience.
 
 ## Usability Improvement
