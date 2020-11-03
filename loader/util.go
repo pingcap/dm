@@ -112,7 +112,7 @@ func escapeName(name string) string {
 
 // input filename is like `all_mode.t1.0.sql` or `all_mode.t1.sql`
 func getDBAndTableFromFilename(filename string) (string, string, error) {
-	idx := strings.Index(filename, ".sql")
+	idx := strings.LastIndex(filename, ".sql")
 	if idx < 0 {
 		return "", "", fmt.Errorf("%s doesn't have a `.sql` suffix", filename)
 	}

@@ -881,7 +881,7 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 			continue
 		}
 
-		idx := strings.Index(file, "-schema-create.sql")
+		idx := strings.LastIndex(file, "-schema-create.sql")
 		if idx > 0 {
 			schemaFileCount++
 			db := file[:idx]
@@ -913,7 +913,7 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 			continue
 		}
 
-		idx := strings.Index(file, "-schema.sql")
+		idx := strings.LastIndex(file, "-schema.sql")
 		name := file[:idx]
 		fields := strings.Split(name, ".")
 		if len(fields) != 2 {

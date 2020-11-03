@@ -686,7 +686,11 @@ function DM_RemoveLock_CASE() {
     check_log_contain_with_retry "wait new ddl info putted into etcd" $WORK_DIR/master/log/dm-master.log
     run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
 
-    check_log_contain_with_retry "fail to delete shard DDL infos and lock operations" $WORK_DIR/master/log/dm-master.log
+    if [[ "$1" = "pessimistic" ]]; then
+        check_log_contain_with_retry "found new DDL info" $WORK_DIR/master/log/dm-master.log
+    else
+        check_log_contain_with_retry "fail to delete shard DDL infos and lock operations" $WORK_DIR/master/log/dm-master.log
+    fi
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} change a a bigint default 10;"
     run_sql_source2 "alter table ${shardddl1}.${tb1} drop column b;"
@@ -700,13 +704,18 @@ function DM_RemoveLock_CASE() {
 function DM_RemoveLock() {
     ps aux | grep dm-master |awk '{print $2}'|xargs kill || true
     check_port_offline $MASTER_PORT1 20
-    export GO_FAILPOINTS="github.com/pingcap/dm/dm/master/shardddl/SleepWhenRemoveLock=return(10)"
+    export GO_FAILPOINTS="github.com/pingcap/dm/dm/master/shardddl/SleepWhenRemoveLock=return(30)"
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "list-member -w" \
             "bound" 2
 
+    run_case RemoveLock "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "clean_table" "pessimistic"
     run_case RemoveLock "double-source-optimistic" \
     "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
      run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
