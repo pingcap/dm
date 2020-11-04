@@ -775,7 +775,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			continue // skip global checkpoint
 		}
 
-		var ti model.TableInfo
+		var ti *model.TableInfo
 		if !bytes.Equal(tiBytes, []byte("null")) {
 			// only create table if `table_info` is not `null`.
 			if err = json.Unmarshal(tiBytes, &ti); err != nil {
@@ -788,7 +788,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			mSchema = make(map[string]*binlogPoint)
 			cp.points[cpSchema] = mSchema
 		}
-		mSchema[cpTable] = newBinlogPoint(location, location, &ti, &ti, cp.cfg.EnableGTID)
+		mSchema[cpTable] = newBinlogPoint(location, location, ti, ti, cp.cfg.EnableGTID)
 	}
 
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)

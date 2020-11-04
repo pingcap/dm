@@ -589,8 +589,8 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 	}
 
 	// if table already exists in checkpoint, create it in schema tracker
-	if ti := s.checkpoint.GetFlushedTableInfo(origSchema, origTable); ti != nil {
-		if err := s.schemaTracker.CreateTableIfNotExists(origSchema, origTable, ti); err != nil {
+	if ti = s.checkpoint.GetFlushedTableInfo(origSchema, origTable); ti != nil {
+		if err = s.schemaTracker.CreateTableIfNotExists(origSchema, origTable, ti); err != nil {
 			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origSchema, origTable)
 		}
 		s.tctx.L().Debug("lazy init table info in schema tracker", zap.String("schema", origSchema), zap.String("table", origTable))
