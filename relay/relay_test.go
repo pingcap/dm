@@ -525,7 +525,7 @@ func (t *testRelaySuite) TestProcess(c *C) {
 			Flavor:     gmysql.MySQLFlavor,
 			RelayDir:   c.MkDir(),
 			ServerID:   12321,
-			From: DBConfig{
+			From: config.DBConfig{
 				Host:     dbCfg.Host,
 				Port:     dbCfg.Port,
 				User:     dbCfg.User,
@@ -541,16 +541,10 @@ func (t *testRelaySuite) TestProcess(c *C) {
 		}
 		r = NewRelay(relayCfg).(*Relay)
 	)
-	db, err := openDBForTest()
-	c.Assert(err, IsNil)
-	r.db = db
-	defer func() {
-		r.db.Close()
-		r.db = nil
-	}()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
+	err := r.Init(ctx)
+	c.Assert(err, IsNil)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

@@ -15,6 +15,7 @@ package relay
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"os"
@@ -36,6 +37,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/common"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -47,6 +49,7 @@ import (
 	"github.com/pingcap/dm/relay/retry"
 	"github.com/pingcap/dm/relay/transformer"
 	"github.com/pingcap/dm/relay/writer"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 var (
@@ -113,34 +116,10 @@ type Relay struct {
 
 // NewRealRelay creates an instance of Relay.
 func NewRealRelay(cfg *Config) Process {
-	syncerCfg := replication.BinlogSyncerConfig{
-		ServerID: uint32(cfg.ServerID),
-		Flavor:   cfg.Flavor,
-		Host:     cfg.From.Host,
-		Port:     uint16(cfg.From.Port),
-		User:     cfg.From.User,
-		Password: cfg.From.Password,
-		Charset:  cfg.Charset,
-	}
-	common.SetDefaultReplicationCfg(&syncerCfg, common.MaxBinlogSyncerReconnect)
-
-	if !cfg.EnableGTID {
-		// for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent
-		// if not need to support GTID mode, we can enable rawMode
-		syncerCfg.RawModeEnabled = true
-	}
-
-	if cfg.Flavor == mysql.MariaDBFlavor {
-		// ref: https://mariadb.com/kb/en/library/annotate_rows_log_event/#slave-option-replicate-annotate-row-events
-		// ref: https://github.com/MariaDB/server/blob/bf71d263621c90cbddc7bde9bf071dae503f333f/sql/sql_repl.cc#L1809
-		syncerCfg.DumpCommandFlag |= dumpFlagSendAnnotateRowsEvent
-	}
-
 	return &Relay{
-		cfg:       cfg,
-		syncerCfg: syncerCfg,
-		meta:      NewLocalMeta(cfg.Flavor, cfg.RelayDir),
-		tctx:      tcontext.Background().WithLogger(log.With(zap.String("component", "relay log"))),
+		cfg:  cfg,
+		meta: NewLocalMeta(cfg.Flavor, cfg.RelayDir),
+		tctx: tcontext.Background().WithLogger(log.With(zap.String("component", "relay log"))),
 	}
 }
 
@@ -153,13 +132,17 @@ func (r *Relay) Init(ctx context.Context) (err error) {
 		}
 	}()
 
-	cfg := r.cfg.From
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, showStatusConnectionTimeout)
-	db, err := sql.Open("mysql", dbDSN)
+	err = r.setSyncConfig()
 	if err != nil {
-		return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
+		return err
 	}
-	r.db = db
+
+	db, err := conn.DefaultDBProvider.Apply(r.cfg.From)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeUpstream)
+	}
+
+	r.db = db.DB
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DB", Fn: r.closeDB})
 
 	if err2 := os.MkdirAll(r.cfg.RelayDir, 0755); err2 != nil {
@@ -790,24 +773,9 @@ func (r *Relay) Reload(newCfg *Config) error {
 	}
 	r.db = db
 
-	syncerCfg := replication.BinlogSyncerConfig{
-		ServerID: uint32(r.cfg.ServerID),
-		Flavor:   r.cfg.Flavor,
-		Host:     newCfg.From.Host,
-		Port:     uint16(newCfg.From.Port),
-		User:     newCfg.From.User,
-		Password: newCfg.From.Password,
-		Charset:  newCfg.Charset,
+	if err := r.setSyncConfig(); err != nil {
+		return err
 	}
-	common.SetDefaultReplicationCfg(&syncerCfg, common.MaxBinlogSyncerReconnect)
-
-	if !newCfg.EnableGTID {
-		// for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent
-		// if not need to support GTID mode, we can enable rawMode
-		syncerCfg.RawModeEnabled = true
-	}
-
-	r.syncerCfg = syncerCfg
 
 	r.tctx.L().Info("relay unit is updated")
 
@@ -834,4 +802,41 @@ func (r *Relay) ActiveRelayLog() *pkgstreamer.RelayLogInfo {
 	r.activeRelayLog.RLock()
 	defer r.activeRelayLog.RUnlock()
 	return r.activeRelayLog.info
+}
+
+func (r *Relay) setSyncConfig() error {
+	var tlsConfig *tls.Config
+	var err error
+	if r.cfg.From.Security != nil {
+		tlsConfig, err = toolutils.ToTLSConfig(r.cfg.From.Security.SSLCA, r.cfg.From.Security.SSLCert, r.cfg.From.Security.SSLKey)
+		if err != nil {
+			return terror.ErrConnInvalidTLSConfig.Delegate(err)
+		}
+		if tlsConfig != nil {
+			tlsConfig.InsecureSkipVerify = true
+		}
+	}
+
+	syncerCfg := replication.BinlogSyncerConfig{
+		ServerID:  uint32(r.cfg.ServerID),
+		Flavor:    r.cfg.Flavor,
+		Host:      r.cfg.From.Host,
+		Port:      uint16(r.cfg.From.Port),
+		User:      r.cfg.From.User,
+		Password:  r.cfg.From.Password,
+		Charset:   r.cfg.Charset,
+		TLSConfig: tlsConfig,
+	}
+	common.SetDefaultReplicationCfg(&syncerCfg, common.MaxBinlogSyncerReconnect)
+
+	if !r.cfg.EnableGTID {
+		syncerCfg.RawModeEnabled = true
+	}
+
+	if r.cfg.Flavor == mysql.MariaDBFlavor {
+		syncerCfg.DumpCommandFlag |= dumpFlagSendAnnotateRowsEvent
+	}
+
+	r.syncerCfg = syncerCfg
+	return nil
 }
