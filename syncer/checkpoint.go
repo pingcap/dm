@@ -183,7 +183,7 @@ type CheckPoint interface {
 	Clear(tctx *tcontext.Context) error
 
 	// Load loads all checkpoints saved by CheckPoint
-	Load(tctx *tcontext.Context, schemaTracker *schema.Tracker) error
+	Load(tctx *tcontext.Context) error
 
 	// LoadMeta loads checkpoints from meta config item or file
 	LoadMeta() error
@@ -232,6 +232,10 @@ type CheckPoint interface {
 	// CheckGlobalPoint checks whether we should save global checkpoint
 	// corresponding to Meta.Check
 	CheckGlobalPoint() bool
+
+	// GetFlushedTableInfo gets flushed table info
+	// use for lazy create table in schemaTracker
+	GetFlushedTableInfo(schema string, table string) *model.TableInfo
 
 	// Rollback rolls global checkpoint and all table checkpoints back to flushed checkpoints
 	Rollback(schemaTracker *schema.Tracker)
@@ -682,7 +686,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 }
 
 // Load implements CheckPoint.Load
-func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.Tracker) error {
+func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 	cp.Lock()
 	defer cp.Unlock()
 
@@ -771,20 +775,11 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			continue // skip global checkpoint
 		}
 
-		var ti model.TableInfo
+		var ti *model.TableInfo
 		if !bytes.Equal(tiBytes, []byte("null")) {
 			// only create table if `table_info` is not `null`.
 			if err = json.Unmarshal(tiBytes, &ti); err != nil {
 				return terror.ErrSchemaTrackerInvalidJSON.Delegate(err, cpSchema, cpTable)
-			}
-
-			if schemaTracker != nil {
-				if err = schemaTracker.CreateSchemaIfNotExists(cpSchema); err != nil {
-					return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, cpSchema)
-				}
-				if err = schemaTracker.CreateTableIfNotExists(cpSchema, cpTable, &ti); err != nil {
-					return terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, cpSchema, cpTable)
-				}
 			}
 		}
 
@@ -793,7 +788,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			mSchema = make(map[string]*binlogPoint)
 			cp.points[cpSchema] = mSchema
 		}
-		mSchema[cpTable] = newBinlogPoint(location, location, &ti, &ti, cp.cfg.EnableGTID)
+		mSchema[cpTable] = newBinlogPoint(location, location, ti, ti, cp.cfg.EnableGTID)
 	}
 
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
@@ -913,4 +908,16 @@ func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, *binlog.Location,
 	}
 
 	return loc, loc2, err
+}
+
+// GetFlushedTableInfo implements CheckPoint.GetFlushedTableInfo
+func (cp *RemoteCheckPoint) GetFlushedTableInfo(schema string, table string) *model.TableInfo {
+	cp.Lock()
+	defer cp.Unlock()
+	if tables, ok := cp.points[schema]; ok {
+		if point, ok2 := tables[table]; ok2 {
+			return point.flushedTI
+		}
+	}
+	return nil
 }
