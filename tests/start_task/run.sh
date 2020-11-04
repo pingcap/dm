@@ -37,6 +37,7 @@ function lazy_init_tracker() {
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    # only table 1-50 flush checkpoint
     for j in $(seq 50); do
         run_sql "INSERT INTO start_task.t$j VALUES (2,20002),(2,20022);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     done

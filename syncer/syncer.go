@@ -335,7 +335,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-checkpoint", Fn: s.checkpoint.Close})
 
-	err = s.checkpoint.Load(tctx, s.schemaTracker)
+	err = s.checkpoint.Load(tctx)
 	if err != nil {
 		return err
 	}

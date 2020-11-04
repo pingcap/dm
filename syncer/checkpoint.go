@@ -183,7 +183,7 @@ type CheckPoint interface {
 	Clear(tctx *tcontext.Context) error
 
 	// Load loads all checkpoints saved by CheckPoint
-	Load(tctx *tcontext.Context, schemaTracker *schema.Tracker) error
+	Load(tctx *tcontext.Context) error
 
 	// LoadMeta loads checkpoints from meta config item or file
 	LoadMeta() error
@@ -686,7 +686,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 }
 
 // Load implements CheckPoint.Load
-func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.Tracker) error {
+func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 	cp.Lock()
 	defer cp.Unlock()
 
@@ -912,6 +912,8 @@ func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, *binlog.Location,
 
 // GetFlushedTableInfo implements CheckPoint.GetFlushedTableInfo
 func (cp *RemoteCheckPoint) GetFlushedTableInfo(schema string, table string) *model.TableInfo {
+	cp.Lock()
+	defer cp.Unlock()
 	if tables, ok := cp.points[schema]; ok {
 		if point, ok2 := tables[table]; ok2 {
 			return point.flushedTI
