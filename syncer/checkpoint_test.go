@@ -147,7 +147,7 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 
 	// try load, but should load nothing
 	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
-	err := cp.Load(tctx, s.tracker)
+	err := cp.Load(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint().Position, Equals, binlog.MinPosition)
 	c.Assert(cp.FlushedGlobalPoint().Position, Equals, binlog.MinPosition)
@@ -165,7 +165,7 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	}
 
 	s.mock.ExpectQuery(loadCheckPointSQL).WithArgs(cpid).WillReturnRows(sqlmock.NewRows(nil))
-	err = cp.Load(tctx, s.tracker)
+	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
 	cp.SaveGlobalPoint(binlog.Location{Position: pos1})
 
@@ -225,7 +225,7 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	cp.SaveGlobalPoint(binlog.Location{Position: pos3})
 	columns := []string{"cp_schema", "cp_table", "binlog_name", "binlog_pos", "binlog_gtid", "exit_safe_binlog_name", "exit_safe_binlog_pos", "exit_safe_binlog_gtid", "table_info", "is_global"}
 	s.mock.ExpectQuery(loadCheckPointSQL).WithArgs(cpid).WillReturnRows(sqlmock.NewRows(columns).AddRow("", "", pos2.Name, pos2.Pos, "", "", 0, "", "null", true))
-	err = cp.Load(tctx, s.tracker)
+	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint().Position, Equals, pos2)
 	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos2)
@@ -251,7 +251,7 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(cp.FlushedGlobalPoint().Position, Equals, binlog.MinPosition)
 
 	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
-	err = cp.Load(tctx, s.tracker)
+	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint().Position, Equals, binlog.MinPosition)
 	c.Assert(cp.FlushedGlobalPoint().Position, Equals, binlog.MinPosition)
@@ -277,7 +277,7 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	err = cp.FlushPointsExcept(tctx, nil, nil, nil)
 	c.Assert(err, IsNil)
 	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
-	err = cp.Load(tctx, s.tracker)
+	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint().Position, Equals, pos1)
 	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos1)
@@ -316,7 +316,7 @@ SHOW MASTER STATUS: /* AFTER CONNECTION POOL ESTABLISHED */
 	err = cp.FlushPointsExcept(tctx, nil, nil, nil)
 	c.Assert(err, IsNil)
 	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
-	err = cp.Load(tctx, s.tracker)
+	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint().Position, Equals, pos1)
 	c.Assert(cp.FlushedGlobalPoint().Position, Equals, pos1)
@@ -468,7 +468,7 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	s.mock.ExpectQuery(loadCheckPointSQL).WithArgs(cpid).WillReturnRows(
 		sqlmock.NewRows(columns).AddRow("", "", pos2.Name, pos2.Pos, gs.String(), pos2.Name, pos2.Pos, gs.String(), "null", true).
 			AddRow(schema, table, pos2.Name, pos2.Pos, gs.String(), "", 0, "", tiBytes, false))
-	err = cp.Load(tctx, s.tracker)
+	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), DeepEquals, binlog.InitLocation(pos2, gs))
 	rcp = cp.(*RemoteCheckPoint)
