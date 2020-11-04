@@ -588,6 +588,15 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 		return nil, terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, origSchema)
 	}
 
+	// if table already exists in checkpoint, create it in schema tracker
+	if ti := s.checkpoint.GetFlushedTableInfo(origSchema, origTable); ti != nil {
+		if err := s.schemaTracker.CreateTableIfNotExists(origSchema, origTable, ti); err != nil {
+			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origSchema, origTable)
+		}
+		s.tctx.L().Debug("lazy init table info in schema tracker", zap.String("schema", origSchema), zap.String("table", origTable))
+		return ti, nil
+	}
+
 	// in optimistic shard mode, we should try to get the init schema (the one before modified by other tables) first.
 	if s.cfg.ShardMode == config.ShardOptimistic {
 		ti, err = s.trackInitTableInfoOptimistic(origSchema, origTable, renamedSchema, renamedTable)

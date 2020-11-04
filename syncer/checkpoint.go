@@ -233,6 +233,10 @@ type CheckPoint interface {
 	// corresponding to Meta.Check
 	CheckGlobalPoint() bool
 
+	// GetFlushedTableInfo gets flushed table info
+	// use for lazy create table in schemaTracker
+	GetFlushedTableInfo(schema string, table string) *model.TableInfo
+
 	// Rollback rolls global checkpoint and all table checkpoints back to flushed checkpoints
 	Rollback(schemaTracker *schema.Tracker)
 
@@ -777,15 +781,6 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 			if err = json.Unmarshal(tiBytes, &ti); err != nil {
 				return terror.ErrSchemaTrackerInvalidJSON.Delegate(err, cpSchema, cpTable)
 			}
-
-			if schemaTracker != nil {
-				if err = schemaTracker.CreateSchemaIfNotExists(cpSchema); err != nil {
-					return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, cpSchema)
-				}
-				if err = schemaTracker.CreateTableIfNotExists(cpSchema, cpTable, &ti); err != nil {
-					return terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, cpSchema, cpTable)
-				}
-			}
 		}
 
 		mSchema, ok := cp.points[cpSchema]
@@ -913,4 +908,14 @@ func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, *binlog.Location,
 	}
 
 	return loc, loc2, err
+}
+
+// GetFlushedTableInfo implements CheckPoint.GetFlushedTableInfo
+func (cp *RemoteCheckPoint) GetFlushedTableInfo(schema string, table string) *model.TableInfo {
+	if tables, ok := cp.points[schema]; ok {
+		if point, ok2 := tables[table]; ok2 {
+			return point.flushedTI
+		}
+	}
+	return nil
 }
