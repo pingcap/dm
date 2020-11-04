@@ -676,7 +676,7 @@ func getMinPosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) 
 	}
 	defer checkpoint.Close()
 
-	err = checkpoint.Load(tctx, nil)
+	err = checkpoint.Load(tctx)
 	if err != nil {
 		return nil, errors.Annotate(err, "get min position from checkpoint")
 	}
