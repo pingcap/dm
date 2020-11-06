@@ -151,61 +151,56 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 	doJob := func() {
 		hasError := false
 		for {
-			select {
-			case <-newCtx.Done():
-				w.tctx.L().Info("context canceled, execution goroutine exits")
+			job, ok := <-w.jobQueue
+			if !ok {
+				w.tctx.L().Info("job queue was closed, execution goroutine exits")
 				return
-			case job, ok := <-w.jobQueue:
-				if !ok {
-					w.tctx.L().Info("job queue was closed, execution goroutine exits")
-					return
-				}
-				if job == nil {
-					w.tctx.L().Info("jobs are finished, execution goroutine exits")
-					return
-				}
-				if hasError {
-					continue // continue to read so than the sender will not be blocked
-				}
-
-				sqls := make([]string, 0, 3)
-				sqls = append(sqls, fmt.Sprintf("USE `%s`;", unescapePercent(job.schema, w.tctx.L())))
-				sqls = append(sqls, job.sql)
-
-				offsetSQL := w.checkPoint.GenSQL(job.file, job.offset)
-				sqls = append(sqls, offsetSQL)
-
-				failpoint.Inject("LoadExceedOffsetExit", func(val failpoint.Value) {
-					threshold, _ := val.(int)
-					if job.offset >= int64(threshold) {
-						w.tctx.L().Warn("load offset execeeds threshold, it will exit", zap.Int64("load offset", job.offset), zap.Int("value", threshold), zap.String("failpoint", "LoadExceedOffsetExit"))
-						utils.OsExit(1)
-					}
-				})
-
-				failpoint.Inject("LoadDataSlowDown", nil)
-
-				err := w.conn.executeSQL(ctctx, sqls)
-				failpoint.Inject("executeSQLError", func(_ failpoint.Value) {
-					w.tctx.L().Info("", zap.String("failpoint", "executeSQLError"))
-					err = errors.New("inject failpoint executeSQLError")
-				})
-				if err != nil {
-					// expect pause rather than exit
-					err = terror.WithScope(terror.Annotatef(err, "file %s", job.file), terror.ScopeDownstream)
-					if !utils.IsContextCanceledError(err) {
-						runFatalChan <- unit.NewProcessError(err)
-					}
-					hasError = true
-					failpoint.Inject("returnDoJobError", func(_ failpoint.Value) {
-						w.tctx.L().Info("", zap.String("failpoint", "returnDoJobError"))
-						failpoint.Return()
-					})
-					continue
-				}
-				w.loader.checkPoint.UpdateOffset(job.file, job.offset)
-				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
 			}
+			if job == nil {
+				w.tctx.L().Info("jobs are finished, execution goroutine exits")
+				return
+			}
+			if hasError {
+				continue // continue to read so than the sender will not be blocked
+			}
+
+			sqls := make([]string, 0, 3)
+			sqls = append(sqls, fmt.Sprintf("USE `%s`;", unescapePercent(job.schema, w.tctx.L())))
+			sqls = append(sqls, job.sql)
+
+			offsetSQL := w.checkPoint.GenSQL(job.file, job.offset)
+			sqls = append(sqls, offsetSQL)
+
+			failpoint.Inject("LoadExceedOffsetExit", func(val failpoint.Value) {
+				threshold, _ := val.(int)
+				if job.offset >= int64(threshold) {
+					w.tctx.L().Warn("load offset execeeds threshold, it will exit", zap.Int64("load offset", job.offset), zap.Int("value", threshold), zap.String("failpoint", "LoadExceedOffsetExit"))
+					utils.OsExit(1)
+				}
+			})
+
+			failpoint.Inject("LoadDataSlowDown", nil)
+
+			err := w.conn.executeSQL(ctctx, sqls)
+			failpoint.Inject("executeSQLError", func(_ failpoint.Value) {
+				w.tctx.L().Info("", zap.String("failpoint", "executeSQLError"))
+				err = errors.New("inject failpoint executeSQLError")
+			})
+			if err != nil {
+				// expect pause rather than exit
+				err = terror.WithScope(terror.Annotatef(err, "file %s", job.file), terror.ScopeDownstream)
+				if !utils.IsContextCanceledError(err) {
+					runFatalChan <- unit.NewProcessError(err)
+				}
+				hasError = true
+				failpoint.Inject("returnDoJobError", func(_ failpoint.Value) {
+					w.tctx.L().Info("", zap.String("failpoint", "returnDoJobError"))
+					failpoint.Return()
+				})
+				continue
+			}
+			w.loader.checkPoint.UpdateOffset(job.file, job.offset)
+			w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
 		}
 	}
 
