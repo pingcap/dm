@@ -748,6 +748,18 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+[error.DM-functional-11120]
+message = "no relay subdir match gtid %s"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-functional-11121]
+message = "no relay pos match gtid %s"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""

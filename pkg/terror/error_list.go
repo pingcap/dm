@@ -174,6 +174,10 @@ const (
 
 	// pkg/parser
 	codeRewriteSQL
+
+	// pkg/streamer
+	codeNoUUIDDirMatchGTID
+	codeNoRelayPosMatchGTID
 )
 
 // Config related error code list
@@ -653,6 +657,8 @@ var (
 	ErrNoSubdirToSwitch         = New(codeNoSubdirToSwitch, ClassFunctional, ScopeInternal, LevelHigh, "parse for previous sub relay directory finished, but no next sub directory need to switch", "")
 	ErrNeedSyncAgain            = New(codeNeedSyncAgain, ClassFunctional, ScopeInternal, LevelHigh, "Last sync error or closed, try sync and get event again", "")
 	ErrSyncClosed               = New(codeSyncClosed, ClassFunctional, ScopeInternal, LevelHigh, "Sync was closed", "")
+	ErrNoUUIDDirMatchGTID       = New(codeNoUUIDDirMatchGTID, ClassFunctional, ScopeInternal, LevelHigh, "no relay subdir match gtid %s", "")
+	ErrNoRelayPosMatchGTID      = New(codeNoRelayPosMatchGTID, ClassFunctional, ScopeInternal, LevelHigh, "no relay pos match gtid %s", "")
 	// pkg/utils
 	ErrSchemaTableNameNotValid   = New(codeSchemaTableNameNotValid, ClassFunctional, ScopeInternal, LevelHigh, "table name %s not valid", "")
 	ErrGenTableRouter            = New(codeGenTableRouter, ClassFunctional, ScopeInternal, LevelHigh, "generate table router", "Please check `routes` config in task configuration file.")

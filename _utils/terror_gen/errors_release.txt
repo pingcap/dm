@@ -45,6 +45,8 @@ ErrParserParseRelayLog,[code=11038:class=functional:scope=internal:level=high], 
 ErrNoSubdirToSwitch,[code=11039:class=functional:scope=internal:level=high], "Message: parse for previous sub relay directory finished, but no next sub directory need to switch"
 ErrNeedSyncAgain,[code=11040:class=functional:scope=internal:level=high], "Message: Last sync error or closed, try sync and get event again"
 ErrSyncClosed,[code=11041:class=functional:scope=internal:level=high], "Message: Sync was closed"
+ErrNoUUIDDirMatchGTID,[code=11120:class=functional:scope=internal:level=high], "Message: no relay subdir match gtid %s"
+ErrNoRelayPosMatchGTID,[code=11121:class=functional:scope=internal:level=high], "Message: no relay pos match gtid %s"
 ErrSchemaTableNameNotValid,[code=11042:class=functional:scope=internal:level=high], "Message: table name %s not valid"
 ErrGenTableRouter,[code=11043:class=functional:scope=internal:level=high], "Message: generate table router, Workaround: Please check `routes` config in task configuration file."
 ErrEncryptSecretKeyNotValid,[code=11044:class=functional:scope=internal:level=high], "Message: key size should be 16, 24 or 32, but input key's size is %d"

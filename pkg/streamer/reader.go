@@ -15,6 +15,7 @@ package streamer
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -22,7 +23,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
+	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
@@ -34,6 +37,13 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
+// Meta represents binlog meta information in relay.meta
+type Meta struct {
+	BinLogName string `toml:"binlog-name" json:"binlog-name"`
+	BinLogPos  uint32 `toml:"binlog-pos" json:"binlog-pos"`
+	BinlogGTID string `toml:"binlog-gtid" json:"binlog-gtid"`
+}
+
 var (
 	// polling interval for watcher
 	watcherInterval = 100 * time.Millisecond
@@ -43,6 +53,7 @@ var (
 type BinlogReaderConfig struct {
 	RelayDir string
 	Timezone *time.Location
+	Flavor   string
 }
 
 // BinlogReader is a binlog reader.
@@ -60,6 +71,8 @@ type BinlogReader struct {
 	cancel  context.CancelFunc
 
 	tctx *tcontext.Context
+
+	prevGset, currGset mysql.GTIDSet
 }
 
 // NewBinlogReader creates a new BinlogReader
@@ -103,9 +116,172 @@ func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
 	return nil
 }
 
-// StartSync start syncon
+// getUUIDByGTID gets uuid subdir which contain the gtid set
+func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
+	for _, uuid := range r.uuids {
+		filename := path.Join(r.cfg.RelayDir, uuid, utils.MetaFilename)
+		fd, err := os.Open(filename)
+		if err != nil {
+			return "", terror.ErrRelayLoadMetaData.Delegate(err)
+		}
+		defer fd.Close()
+
+		var meta Meta
+		_, err = toml.DecodeReader(fd, &meta)
+		if err != nil {
+			return "", terror.ErrRelayLoadMetaData.Delegate(err)
+		}
+
+		gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, meta.BinlogGTID)
+		if err != nil {
+			return "", terror.ErrRelayLoadMetaData.Delegate(err)
+		}
+		if gs.Contain(gset) {
+			r.tctx.L().Info("get uuid subdir by gtid", zap.Stringer("GTID Set", gset), zap.String("uuid", uuid))
+			return uuid, nil
+		}
+	}
+
+	// TODO: use a better mechanism to call relay.meta.Flush
+	// use the newest uuid subdir
+	if len(r.uuids) > 0 {
+		return r.uuids[len(r.uuids)-1], nil
+	}
+	return "", terror.ErrNoUUIDDirMatchGTID.Generate(gset.String())
+}
+
+// GetFilePosByGTID tries to get Pos by GTID for file
+func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gset mysql.GTIDSet) (uint32, error) {
+	s := newLocalStreamer()
+
+	ctx2, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	r.wg.Add(1)
+	go func() {
+		defer r.wg.Done()
+
+		offset := int64(4)
+		onEventFunc := func(e *replication.BinlogEvent) error {
+			offset = int64(e.Header.LogPos)
+
+			select {
+			case s.ch <- e:
+			case <-ctx2.Done():
+			}
+			return nil
+		}
+
+		err := r.parser.ParseFile(filePath, offset, onEventFunc)
+		if err != nil {
+			r.tctx.L().Error("parse file stopped", zap.Error(err))
+		}
+		// reach end of file
+		s.ch <- nil
+	}()
+
+	lastPos := uint32(0)
+	for {
+		select {
+		case <-ctx.Done():
+			return 0, nil
+		default:
+		}
+
+		e, err := s.GetEvent(ctx)
+		if err != nil {
+			return 0, err
+		}
+		// gset is the last txn in file
+		if e == nil {
+			return lastPos, nil
+		}
+		switch ev := e.Event.(type) {
+		case *replication.PreviousGTIDsEvent:
+			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, ev.GTIDSets)
+			if err != nil {
+				return 0, err
+			}
+			// if PreviousGITDsEvent contain the gset, go to previous file
+			if gs.Contain(gset) {
+				return 0, nil
+			}
+		case *replication.RotateEvent:
+			if e.Header.Timestamp != 0 && e.Header.LogPos != 0 {
+				// gset is the last txn in file
+				return lastPos, nil
+			}
+		case *replication.XIDEvent:
+			lastPos = e.Header.LogPos
+		case *replication.QueryEvent:
+			lastPos = e.Header.LogPos
+		case *replication.GTIDEvent:
+			u, _ := uuid.FromBytes(ev.SID)
+			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, fmt.Sprintf("%s:%d", u.String(), ev.GNO))
+			if err != nil {
+				return 0, err
+			}
+			// meet first gtid event greater than gset
+			if !gset.Contain(gs) {
+				return lastPos, nil
+			}
+		case *replication.MariadbGTIDEvent:
+			GTID := ev.GTID
+			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
+			if err != nil {
+				return 0, err
+			}
+			// meet first gtid event greater than gset
+			if !gset.Contain(gs) {
+				return lastPos, nil
+			}
+		default:
+		}
+	}
+}
+
+// getPosByGTID gets position by gtid
+func (r *BinlogReader) getPosByGTID(gset mysql.GTIDSet) (*mysql.Position, error) {
+	uuid, err := r.getUUIDByGTID(gset)
+	if err != nil {
+		return nil, err
+	}
+	_, suffix, err := utils.ParseSuffixForUUID(uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	uuidDir := path.Join(r.cfg.RelayDir, uuid)
+	allFiles, err := CollectAllBinlogFiles(uuidDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// iterate files from the newest one
+	for i := len(allFiles) - 1; i >= 0; i-- {
+		file := allFiles[i]
+		filePath := path.Join(uuidDir, file)
+		pos, err := r.GetFilePosByGTID(r.tctx.Ctx, filePath, gset)
+		if err != nil {
+			return nil, err
+		}
+		if pos != 0 {
+			fileName, err := binlog.ParseFilename(file)
+			if err != nil {
+				return nil, err
+			}
+			return &mysql.Position{
+				Name: binlog.ConstructFilenameWithUUIDSuffix(fileName, utils.SuffixIntToStr(suffix)),
+				Pos:  uint32(pos),
+			}, nil
+		}
+	}
+	return nil, terror.ErrNoRelayPosMatchGTID.Generate(gset.String())
+}
+
+// StartSyncByPos start sync by pos
 // TODO:  thread-safe?
-func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
+func (r *BinlogReader) StartSyncByPos(pos mysql.Position) (Streamer, error) {
 	if pos.Name == "" {
 		return nil, terror.ErrBinlogFileNotSpecified.Generate()
 	}
@@ -133,6 +309,48 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 		defer r.wg.Done()
 		r.tctx.L().Info("start reading", zap.Stringer("position", pos))
 		err = r.parseRelay(r.tctx.Context(), s, pos)
+		if errors.Cause(err) == r.tctx.Context().Err() {
+			r.tctx.L().Warn("parse relay finished", log.ShortError(err))
+		} else if err != nil {
+			s.closeWithError(err)
+			r.tctx.L().Error("parse relay stopped", zap.Error(err))
+		}
+	}()
+
+	return s, nil
+}
+
+// StartSyncByGTID start sync by gtid
+func (r *BinlogReader) StartSyncByGTID(gset mysql.GTIDSet) (Streamer, error) {
+	r.tctx.L().Info("begin to sync binlog", zap.Stringer("GTID Set", gset))
+
+	if r.running {
+		return nil, terror.ErrReaderAlreadyRunning.Generate()
+	}
+
+	err := r.updateUUIDs()
+	if err != nil {
+		return nil, err
+	}
+
+	pos, err := r.getPosByGTID(gset)
+	if err != nil {
+		return nil, err
+	}
+	r.tctx.L().Info("get pos by gtid", zap.Stringer("GTID Set", gset), zap.Stringer("Position", pos))
+
+	r.prevGset = gset
+	r.currGset = nil
+
+	r.latestServerID = 0
+	r.running = true
+	s := newLocalStreamer()
+
+	r.wg.Add(1)
+	go func() {
+		defer r.wg.Done()
+		r.tctx.L().Info("start reading", zap.Stringer("position", pos))
+		err = r.parseRelay(r.tctx.Context(), s, *pos)
 		if errors.Cause(err) == r.tctx.Context().Err() {
 			r.tctx.L().Warn("parse relay finished", log.ShortError(err))
 		} else if err != nil {
@@ -292,15 +510,14 @@ func (r *BinlogReader) parseFile(
 		r.tctx.L().Debug("read event", zap.Reflect("header", e.Header))
 		r.latestServerID = e.Header.ServerID // record server_id
 
-		switch e.Header.EventType {
-		case replication.FORMAT_DESCRIPTION_EVENT:
+		switch ev := e.Event.(type) {
+		case *replication.FormatDescriptionEvent:
 			// ignore FORMAT_DESCRIPTION event, because go-mysql will send this fake event
-		case replication.ROTATE_EVENT:
+		case *replication.RotateEvent:
 			// add master UUID suffix to pos.Name
-			env := e.Event.(*replication.RotateEvent)
-			parsed, _ := binlog.ParseFilename(string(env.NextLogName))
+			parsed, _ := binlog.ParseFilename(string(ev.NextLogName))
 			nameWithSuffix := binlog.ConstructFilenameWithUUIDSuffix(parsed, uuidSuffix)
-			env.NextLogName = []byte(nameWithSuffix)
+			ev.NextLogName = []byte(nameWithSuffix)
 
 			if e.Header.Timestamp != 0 && e.Header.LogPos != 0 {
 				// not fake rotate event, update file pos
@@ -314,10 +531,36 @@ func (r *BinlogReader) parseFile(
 			// and we *try* to switch to the next when `needReParse` is false.
 			// so this `currentPos` only used for log now.
 			currentPos := mysql.Position{
-				Name: string(env.NextLogName),
-				Pos:  uint32(env.Position),
+				Name: string(ev.NextLogName),
+				Pos:  uint32(ev.Position),
 			}
 			r.tctx.L().Info("rotate binlog", zap.Stringer("position", currentPos))
+		case *replication.GTIDEvent:
+			if r.prevGset == nil {
+				break
+			}
+			u, _ := uuid.FromBytes(ev.SID)
+			err2 := r.advanceCurrentGtidSet(fmt.Sprintf("%s:%d", u.String(), ev.GNO))
+			if err2 != nil {
+				return errors.Trace(err2)
+			}
+			latestPos = int64(e.Header.LogPos)
+		case *replication.MariadbGTIDEvent:
+			if r.prevGset == nil {
+				break
+			}
+			GTID := ev.GTID
+			err2 := r.advanceCurrentGtidSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
+			if err2 != nil {
+				return errors.Trace(err2)
+			}
+			latestPos = int64(e.Header.LogPos)
+		case *replication.XIDEvent:
+			ev.GSet = r.getCurrentGtidSet()
+			latestPos = int64(e.Header.LogPos)
+		case *replication.QueryEvent:
+			ev.GSet = r.getCurrentGtidSet()
+			latestPos = int64(e.Header.LogPos)
 		default:
 			// update file pos
 			latestPos = int64(e.Header.LogPos)
@@ -418,4 +661,25 @@ func (r *BinlogReader) GetUUIDs() []string {
 	uuids := make([]string, 0, len(r.uuids))
 	uuids = append(uuids, r.uuids...)
 	return uuids
+}
+
+func (r *BinlogReader) getCurrentGtidSet() mysql.GTIDSet {
+	if r.currGset == nil {
+		return nil
+	}
+	return r.currGset.Clone()
+}
+
+func (r *BinlogReader) advanceCurrentGtidSet(gtid string) error {
+	if r.currGset == nil {
+		r.currGset = r.prevGset.Clone()
+	}
+	prev := r.currGset.Clone()
+	err := r.currGset.Update(gtid)
+	if err == nil {
+		if !r.currGset.Equal(prev) {
+			r.prevGset = prev
+		}
+	}
+	return err
 }

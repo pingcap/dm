@@ -522,7 +522,7 @@ func (t *testReaderSuite) TestStartSync(c *C) {
 	}
 
 	// start the reader
-	s, err := r.StartSync(startPos)
+	s, err := r.StartSyncByPos(startPos)
 	c.Assert(err, IsNil)
 
 	// get events from the streamer
@@ -620,12 +620,12 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	c.Assert(err, ErrorMatches, ".*empty UUIDs not valid.*")
 
 	// no startup pos specified
-	s, err := r.StartSync(gmysql.Position{})
+	s, err := r.StartSyncByPos(gmysql.Position{})
 	c.Assert(terror.ErrBinlogFileNotSpecified.Equal(err), IsTrue)
 	c.Assert(s, IsNil)
 
 	// empty UUIDs
-	s, err = r.StartSync(startPos)
+	s, err = r.StartSyncByPos(startPos)
 	c.Assert(err, ErrorMatches, ".*empty UUIDs not valid.*")
 	c.Assert(s, IsNil)
 
@@ -636,13 +636,13 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	c.Assert(err, IsNil)
 
 	// the startup relay log file not found
-	s, err = r.StartSync(startPos)
+	s, err = r.StartSyncByPos(startPos)
 	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*not found.*", startPos.Name))
 	c.Assert(s, IsNil)
 
 	// can not re-start the reader
 	r.running = true
-	s, err = r.StartSync(startPos)
+	s, err = r.StartSyncByPos(startPos)
 	c.Assert(terror.ErrReaderAlreadyRunning.Equal(err), IsTrue)
 	c.Assert(s, IsNil)
 	r.Close()
@@ -656,7 +656,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	err = ioutil.WriteFile(relayLogFilePath, make([]byte, 100), 0600)
 	c.Assert(err, IsNil)
 	startPos.Pos = 10000
-	s, err = r.StartSync(startPos)
+	s, err = r.StartSyncByPos(startPos)
 	c.Assert(terror.ErrRelayLogGivenPosTooBig.Equal(err), IsTrue)
 	c.Assert(s, IsNil)
 }

@@ -194,12 +194,6 @@ func (r *Relay) process(parentCtx context.Context) error {
 	}
 
 	if isNew {
-		// purge old relay log
-		err = r.purgeRelayDir()
-		if err != nil {
-			return err
-		}
-
 		// re-setup meta for new server
 		err = r.reSetupMeta()
 		if err != nil {
