@@ -42,6 +42,7 @@ type Meta struct {
 	BinLogName string `toml:"binlog-name" json:"binlog-name"`
 	BinLogPos  uint32 `toml:"binlog-pos" json:"binlog-pos"`
 	BinlogGTID string `toml:"binlog-gtid" json:"binlog-gtid"`
+	UUID       string `toml:"-" json:"-"`
 }
 
 var (
@@ -118,6 +119,12 @@ func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
 
 // getUUIDByGTID gets uuid subdir which contain the gtid set
 func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
+	// TODO: use a better mechanism to call relay.meta.Flush
+	// get the meta save in memory
+	relayMetaHub := GetRelayMetaHub()
+	meta := relayMetaHub.GetMeta()
+
+	// get flush logs from oldest to newest
 	for _, uuid := range r.uuids {
 		filename := path.Join(r.cfg.RelayDir, uuid, utils.MetaFilename)
 		fd, err := os.Open(filename)
@@ -142,10 +149,16 @@ func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
 		}
 	}
 
-	// TODO: use a better mechanism to call relay.meta.Flush
-	// use the newest uuid subdir
-	if len(r.uuids) > 0 {
-		return r.uuids[len(r.uuids)-1], nil
+	// use memory meta
+	if len(meta.UUID) > 0 {
+		gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, meta.BinlogGTID)
+		if err != nil {
+			return "", terror.ErrRelayLoadMetaData.Delegate(err)
+		}
+		if gs.Contain(gset) {
+			r.tctx.L().Info("get uuid subdir by gtid", zap.Stringer("GTID Set", gset), zap.String("uuid", meta.UUID))
+			return meta.UUID, nil
+		}
 	}
 	return "", terror.ErrNoUUIDDirMatchGTID.Generate(gset.String())
 }
@@ -175,9 +188,17 @@ func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gs
 		err := r.parser.ParseFile(filePath, offset, onEventFunc)
 		if err != nil {
 			r.tctx.L().Error("parse file stopped", zap.Error(err))
+			select {
+			case s.ech <- err:
+			case <-ctx2.Done():
+			}
+		} else {
+			// reach end of file
+			select {
+			case s.ch <- nil:
+			case <-ctx2.Done():
+			}
 		}
-		// reach end of file
-		s.ch <- nil
 	}()
 
 	lastPos := uint32(0)

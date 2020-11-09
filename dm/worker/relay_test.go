@@ -19,10 +19,12 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/gtid"
 	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay"
@@ -113,6 +115,11 @@ func (d *DummyRelay) Close() {}
 
 // IsClosed implements Process interface
 func (d *DummyRelay) IsClosed() bool { return false }
+
+// SaveMeta implements Process interface
+func (d *DummyRelay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
+	return nil
+}
 
 func (t *testRelay) TestRelay(c *C) {
 	originNewRelay := relay.NewRelay

@@ -205,7 +205,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	// write a greater GTID sets in meta
 	greaterGITDSet, err := gtid.ParserGTID(relayCfg.Flavor, greaterGITDSetStr)
 	c.Assert(err, IsNil)
-	c.Assert(r.meta.Save(startPos, greaterGITDSet), IsNil)
+	c.Assert(r.SaveMeta(startPos, greaterGITDSet), IsNil)
 
 	// invalid data truncated, meta updated
 	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
@@ -217,7 +217,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	c.Assert(latestGTIDs.Equal(recoverGTIDSet), IsTrue) // verifyMetadata is not enough
 
 	// no relay log file need to recover
-	c.Assert(r.meta.Save(minCheckpoint, latestGTIDs), IsNil)
+	c.Assert(r.SaveMeta(minCheckpoint, latestGTIDs), IsNil)
 	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
 	_, latestPos = r.meta.Pos()
 	c.Assert(latestPos, DeepEquals, minCheckpoint)
@@ -283,7 +283,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	f.Close()
 
 	// recover with the subset of GTIDs (previous GTID set).
-	c.Assert(r.meta.Save(startPos, previousGTIDSet), IsNil)
+	c.Assert(r.SaveMeta(startPos, previousGTIDSet), IsNil)
 	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
 	_, latestPos = r.meta.Pos()
 	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})

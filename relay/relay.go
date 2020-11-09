@@ -94,6 +94,8 @@ type Process interface {
 	Close()
 	// IsClosed returns whether relay log process unit was closed
 	IsClosed() bool
+	// SaveMeta save relay meta
+	SaveMeta(pos mysql.Position, gset gtid.Set) error
 }
 
 // Relay relays mysql binlog to local file.
@@ -112,6 +114,8 @@ type Relay struct {
 		sync.RWMutex
 		info *pkgstreamer.RelayLogInfo
 	}
+
+	relayMetaHub *pkgstreamer.RelayMetaHub
 }
 
 // NewRealRelay creates an instance of Relay.
@@ -153,6 +157,8 @@ func (r *Relay) Init(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
+
+	r.relayMetaHub = pkgstreamer.GetRelayMetaHub()
 
 	return reportRelayLogSpaceInBackground(r.cfg.RelayDir)
 }
@@ -353,7 +359,7 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 			} else if err = latestGTID.Truncate(result.LatestGTIDs); err != nil {
 				return err
 			}
-			err = r.meta.Save(result.LatestPos, latestGTID)
+			err = r.SaveMeta(result.LatestPos, latestGTID)
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v after recovered", result.LatestPos, result.LatestGTIDs)
 			}
@@ -479,7 +485,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		}
 
 		if needSavePos {
-			err = r.meta.Save(lastPos, lastGTID)
+			err = r.SaveMeta(lastPos, lastGTID)
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v into meta", lastPos, lastGTID)
 			}
@@ -563,7 +569,7 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 		select {
 		case <-flushTicker.C:
 			if r.meta.Dirty() {
-				err := r.meta.Flush()
+				err := r.FlushMeta()
 				if err != nil {
 					r.tctx.L().Error("flush meta", zap.Error(err))
 				} else {
@@ -646,10 +652,28 @@ func (r *Relay) IsClosed() bool {
 	return r.closed.Get()
 }
 
+// SaveMeta save relay meta and update meta in RelayLogInfo
+func (r *Relay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
+	if err := r.meta.Save(pos, gset); err != nil {
+		return err
+	}
+	r.relayMetaHub.SetMeta(r.meta.UUID(), pos, gset)
+	return nil
+}
+
+// FlushMeta flush relay meta and clear all metas in RelayLogInfo
+func (r *Relay) FlushMeta() error {
+	if err := r.meta.Flush(); err != nil {
+		return err
+	}
+	r.relayMetaHub.ClearMeta()
+	return nil
+}
+
 // stopSync stops syncing, now it used by Close and Pause
 func (r *Relay) stopSync() {
-	if err := r.meta.Flush(); err != nil {
-		r.tctx.L().Error("flush checkpoint", zap.Error(err))
+	if err := r.FlushMeta(); err != nil {
+		r.tctx.L().Error("flush meta", zap.Error(err))
 	}
 }
 
