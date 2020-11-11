@@ -558,6 +558,7 @@ func (r *BinlogReader) parseFile(
 			r.tctx.L().Info("rotate binlog", zap.Stringer("position", currentPos))
 		case *replication.GTIDEvent:
 			if r.prevGset == nil {
+				latestPos = int64(e.Header.LogPos)
 				break
 			}
 			u, _ := uuid.FromBytes(ev.SID)
@@ -568,6 +569,7 @@ func (r *BinlogReader) parseFile(
 			latestPos = int64(e.Header.LogPos)
 		case *replication.MariadbGTIDEvent:
 			if r.prevGset == nil {
+				latestPos = int64(e.Header.LogPos)
 				break
 			}
 			GTID := ev.GTID
