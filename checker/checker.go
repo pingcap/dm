@@ -38,7 +38,7 @@ import (
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb-tools/pkg/table-router"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 )
@@ -69,8 +69,6 @@ type Checker struct {
 
 	instances []*mysqlInstance
 
-	enableANSIQuotes bool
-
 	checkList     []check.Checker
 	checkingItems map[string]string
 	result        struct {
@@ -80,12 +78,11 @@ type Checker struct {
 }
 
 // NewChecker returns a checker
-func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string, enableANSIQuotes bool) *Checker {
+func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *Checker {
 	c := &Checker{
-		instances:        make([]*mysqlInstance, 0, len(cfgs)),
-		checkingItems:    checkingItems,
-		logger:           log.With(zap.String("unit", "task check")),
-		enableANSIQuotes: enableANSIQuotes,
+		instances:     make([]*mysqlInstance, 0, len(cfgs)),
+		checkingItems: checkingItems,
+		logger:        log.With(zap.String("unit", "task check")),
 	}
 
 	for _, cfg := range cfgs {
@@ -214,7 +211,7 @@ func (c *Checker) Init(ctx context.Context) (err error) {
 		dbs[instance.cfg.SourceID] = instance.sourceDB.DB
 
 		if checkSchema {
-			c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB.DB, instance.sourceDBinfo, checkTables, c.enableANSIQuotes))
+			c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB.DB, instance.sourceDBinfo, checkTables))
 		}
 	}
 
@@ -224,7 +221,7 @@ func (c *Checker) Init(ctx context.Context) (err error) {
 				continue
 			}
 
-			c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID, c.enableANSIQuotes))
+			c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID))
 		}
 	}
 
