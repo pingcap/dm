@@ -122,7 +122,7 @@ func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
 	// TODO: use a better mechanism to call relay.meta.Flush
 	// get the meta save in memory
 	relayMetaHub := GetRelayMetaHub()
-	meta := relayMetaHub.GetMeta()
+	relayMeta := relayMetaHub.GetMeta()
 
 	// get flush logs from oldest to newest
 	for _, uuid := range r.uuids {
@@ -150,14 +150,14 @@ func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
 	}
 
 	// use memory meta
-	if len(meta.UUID) > 0 {
-		gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, meta.BinlogGTID)
+	if len(relayMeta.UUID) > 0 {
+		gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, relayMeta.BinlogGTID)
 		if err != nil {
 			return "", terror.ErrRelayLoadMetaData.Delegate(err)
 		}
 		if gs.Contain(gset) {
-			r.tctx.L().Info("get uuid subdir by gtid", zap.Stringer("GTID Set", gset), zap.String("uuid", meta.UUID))
-			return meta.UUID, nil
+			r.tctx.L().Info("get uuid subdir by gtid", zap.Stringer("GTID Set", gset), zap.String("uuid", relayMeta.UUID))
+			return relayMeta.UUID, nil
 		}
 	}
 	return "", terror.ErrNoUUIDDirMatchGTID.Generate(gset.String())
@@ -219,6 +219,11 @@ func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gs
 		}
 		switch ev := e.Event.(type) {
 		case *replication.PreviousGTIDsEvent:
+			// nil previous gtid event
+			if len(ev.GTIDSets) == 0 {
+				lastPos = e.Header.LogPos
+				continue
+			}
 			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, ev.GTIDSets)
 			if err != nil {
 				return 0, err

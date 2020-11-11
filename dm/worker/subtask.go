@@ -28,6 +28,8 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
+	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/terror"
@@ -600,10 +602,24 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 			if err != nil {
 				return terror.WithClass(err, terror.ClassDMWorker)
 			}
+			if st.cfg.EnableGTID {
+				gset1, err := gtid.ParserGTID(st.cfg.Flavor, loadStatus.MetaBinlogGTID)
+				if err != nil {
+					st.l.Error("fail to parse gtid", log.ShortError(err))
+				}
+				gset2, err := gtid.ParserGTID(st.cfg.Flavor, relayStatus.RelayBinlogGtid)
+				if err != nil {
+					st.l.Error("fail to parse gtid", log.ShortError(err))
+				}
+				rc, ok := binlog.CompareGTID(gset1, gset2)
+				if ok && rc <= 0 {
+					break
+				}
+			}
 			if pos1.Compare(*pos2) <= 0 {
 				break
 			}
-			st.l.Debug("wait relay to catchup", zap.Stringer("load end position", pos1), zap.Stringer("relay position", pos2))
+			st.l.Debug("wait relay to catchup", zap.Stringer("load end position", pos1), zap.String("load end gtid", loadStatus.MetaBinlogGTID), zap.Stringer("relay position", pos2), zap.String("relay gtid", relayStatus.RelayBinlogGtid))
 
 			select {
 			case <-ctx.Done():
