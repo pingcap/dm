@@ -41,12 +41,12 @@ jobs:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
     
-    - name: Cache retool
+    - name: Cache tools
       uses: actions/cache@v2
       with:
         path: |
-          **/_tools
-        key: ${{ runner.os }}-dm-retool-${{ hashFiles('**/_tools/manifest.json') }}
+          **/tools
+        key: ${{ runner.os }}-dm-tools-${{ hashFiles('**/tools/go.sum') }}
     
     # Set up Kubernetes IN Docker
     # - name: Set up kind cluster 
