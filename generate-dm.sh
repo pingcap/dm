@@ -8,9 +8,7 @@
 GOPATH=$(go env GOPATH)
 echo "using GOPATH=$GOPATH"
 
-# we use `retool` to manage the tools written in Go.
-# ensure it matches `-tool-dir` of `retool`.
-TOOLS_BIN_DIR=$(pwd)/_tools/bin
+TOOLS_BIN_DIR=$(pwd)/tools/bin
 
 case "$(uname)" in
     MINGW*)
@@ -24,7 +22,7 @@ esac
 # use `protoc-gen-gogofaster` rather than `protoc-gen-go`.
 GOGO_FASTER=$TOOLS_BIN_DIR/protoc-gen-gogofaster$EXE
 if [ ! -f ${GOGO_FASTER} ]; then
-    echo "${GOGO_FASTER} does not exist, please run 'make retool_setup' first"
+    echo "${GOGO_FASTER} does not exist, please run 'make tools_setup' first"
     exit 1
 fi
 
@@ -40,7 +38,7 @@ fi
 # we need `grpc-gateway` to generate HTTP API from gRPC API.
 GRPC_GATEWAY=$TOOLS_BIN_DIR/protoc-gen-grpc-gateway$EXE
 if [ ! -f ${GRPC_GATEWAY} ]; then
-    echo "${GRPC_GATEWAY} does not exist, please run 'make retool_setup' first"
+    echo "${GRPC_GATEWAY} does not exist, please run 'make tools_setup' first"
     exit 1
 fi
 
