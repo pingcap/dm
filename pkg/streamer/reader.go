@@ -165,10 +165,16 @@ func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
 
 // GetFilePosByGTID tries to get Pos by GTID for file
 func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gset mysql.GTIDSet) (uint32, error) {
-	s := newLocalStreamer()
-
 	ctx2, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	s := newLocalStreamer()
+	parser := replication.NewBinlogParser()
+	parser.SetVerifyChecksum(true)
+	parser.SetUseDecimal(true)
+	if r.cfg.Timezone != nil {
+		parser.SetTimestampStringLocation(r.cfg.Timezone)
+	}
 
 	r.wg.Add(1)
 	go func() {
@@ -185,7 +191,7 @@ func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gs
 			return nil
 		}
 
-		err := r.parser.ParseFile(filePath, offset, onEventFunc)
+		err := parser.ParseFile(filePath, offset, onEventFunc)
 		if err != nil {
 			r.tctx.L().Error("parse file stopped", zap.Error(err))
 			select {
