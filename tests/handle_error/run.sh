@@ -44,7 +44,7 @@ function DM_SKIP_ERROR_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "\"stage\": \"Running\"" 1 \
+            "\"stage\": \"Running\"" 3 \
             "\"stage\": \"Paused\"" 1
 
     # skip all sources
@@ -55,14 +55,14 @@ function DM_SKIP_ERROR_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "\"stage\": \"Running\"" 2
+            "\"stage\": \"Running\"" 4
 
     # '11' -> 11, '22' -> 22, no error
     run_sql_source1 "insert into ${db}.${tb1} values('111',7)"
     run_sql_source2 "insert into ${db}.${tb2} values('222',8)"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "\"stage\": \"Running\"" 2
+            "\"stage\": \"Running\"" 4
 
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb1} where id=111;" "count(1): 1"
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb2} where id=222;" "count(1): 1"
@@ -130,7 +130,7 @@ function DM_SKIP_ERROR_SHARDING_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "\"stage\": \"Running\"" 2
+            "\"stage\": \"Running\"" 4
 
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb}" "count(1): 8"
 }
@@ -290,7 +290,7 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "\"stage\": \"Running\"" 2 \
+            "\"stage\": \"Running\"" 4 \
 
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb}" "count(1): 8"
 }
@@ -359,7 +359,7 @@ function DM_REPLACE_ERROR_MULTIPLE_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "\"stage\": \"Running\"" 2 \
+            "\"stage\": \"Running\"" 4 \
 
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 2"
 }

@@ -33,10 +33,11 @@ func (l *Loader) Status() interface{} {
 	totalSize := l.totalDataSize.Get()
 	progress := percent(finishedSize, totalSize, l.finish.Get())
 	s := &pb.LoadStatus{
-		FinishedBytes: finishedSize,
-		TotalBytes:    totalSize,
-		Progress:      progress,
-		MetaBinlog:    l.metaBinlog.Get(),
+		FinishedBytes:  finishedSize,
+		TotalBytes:     totalSize,
+		Progress:       progress,
+		MetaBinlog:     l.metaBinlog.Get(),
+		MetaBinlogGTID: l.metaBinlogGTID.Get(),
 	}
 	return s
 }

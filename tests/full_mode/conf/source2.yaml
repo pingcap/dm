@@ -2,6 +2,7 @@ server-id: 102
 source-id: mysql-replica-02
 flavor: ''
 enable-gtid: false
+enable-relay: true
 relay-binlog-name: ''
 relay-binlog-gtid: ''
 from:
