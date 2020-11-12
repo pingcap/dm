@@ -3,7 +3,6 @@ module github.com/pingcap/dm
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.4.1
-	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/chaos-mesh/go-sqlsmith v0.0.0-20201014055312-2d45413c66bc
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/coreos/go-semver v0.3.0
@@ -18,8 +17,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.14.3
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
-	github.com/lance6716/retool v1.3.8-0.20200806070832-3469f70b2afe
-	github.com/mattn/goveralls v0.0.7 // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
 	github.com/pingcap/dumpling v0.0.0-20201028073240-ac8d8f304ab3
 	github.com/pingcap/errors v0.11.5-0.20200917111840-a15ef68f753d
@@ -43,7 +40,6 @@ require (
 	github.com/tikv/pd v1.1.0-beta.0.20200907085700-5b04bec39b99
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/unrolled/render v1.0.1
-	github.com/zhouqiang-cl/gocovmerge v0.0.0-20190125174600-5256314471af // indirect
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738
 	go.uber.org/zap v1.16.0
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
