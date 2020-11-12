@@ -29,6 +29,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
+	"github.com/siddontang/go-mysql/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
@@ -56,6 +57,29 @@ type testRelaySuite struct {
 
 func (t *testRelaySuite) SetUpSuite(c *C) {
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)
+}
+
+func newRelayCfg(c *C, flavor string) *Config {
+	dbCfg := getDBConfigForTest()
+	return &Config{
+		EnableGTID: false, // position mode, so auto-positioning can work
+		Flavor:     flavor,
+		RelayDir:   c.MkDir(),
+		ServerID:   12321,
+		From: config.DBConfig{
+			Host:     dbCfg.Host,
+			Port:     dbCfg.Port,
+			User:     dbCfg.User,
+			Password: dbCfg.Password,
+		},
+		ReaderRetry: retry.ReaderRetryConfig{
+			BackoffRollback: 200 * time.Millisecond,
+			BackoffMax:      1 * time.Second,
+			BackoffMin:      1 * time.Millisecond,
+			BackoffJitter:   true,
+			BackoffFactor:   2,
+		},
+	}
 }
 
 func getDBConfigForTest() config.DBConfig {
@@ -151,12 +175,10 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 		startPos           = gmysql.Position{Name: filename, Pos: 123}
 
 		parser2  = parser.New()
-		relayCfg = &Config{
-			RelayDir: c.MkDir(),
-			Flavor:   gmysql.MySQLFlavor,
-		}
-		r = NewRelay(relayCfg).(*Relay)
+		relayCfg = newRelayCfg(c, mysql.MySQLFlavor)
+		r        = NewRelay(relayCfg).(*Relay)
 	)
+	c.Assert(r.Init(context.Background()), IsNil)
 	// purge old relay dir
 	f, err := os.Create(filepath.Join(r.cfg.RelayDir, "old_relay_log"))
 	c.Assert(err, IsNil)
@@ -236,13 +258,10 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 		startPos           = gmysql.Position{Name: filename, Pos: 123}
 
 		parser2  = parser.New()
-		relayCfg = &Config{
-			RelayDir: c.MkDir(),
-			Flavor:   gmysql.MySQLFlavor,
-		}
-		r = NewRelay(relayCfg).(*Relay)
+		relayCfg = newRelayCfg(c, mysql.MySQLFlavor)
+		r        = NewRelay(relayCfg).(*Relay)
 	)
-
+	c.Assert(r.Init(context.Background()), IsNil)
 	recoverGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, recoverGTIDSetStr)
 	c.Assert(err, IsNil)
 
@@ -362,11 +381,8 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 		reader2      = &mockReader{}
 		transformer2 = transformer.NewTransformer(parser.New())
 		writer2      = &mockWriter{}
-		relayCfg     = &Config{
-			RelayDir: c.MkDir(),
-			Flavor:   gmysql.MariaDBFlavor,
-		}
-		r = NewRelay(relayCfg).(*Relay)
+		relayCfg     = newRelayCfg(c, mysql.MariaDBFlavor)
+		r            = NewRelay(relayCfg).(*Relay)
 
 		eventHeader = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),
@@ -376,6 +392,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 		rotateEv, _ = event.GenRotateEvent(eventHeader, 123, []byte(binlogPos.Name), uint64(binlogPos.Pos))
 		queryEv, _  = event.GenQueryEvent(eventHeader, 123, 0, 0, 0, nil, nil, []byte("CREATE DATABASE db_relay_test"))
 	)
+	c.Assert(r.Init(context.Background()), IsNil)
 	// NOTE: we can mock meta later.
 	c.Assert(r.meta.Load(), IsNil)
 	c.Assert(r.meta.AddDir("24ecd093-8cec-11e9-aa0d-0242ac170002", nil, nil), IsNil)
