@@ -18,7 +18,7 @@ TOPDIRS  := $$(ls -d */ | grep -vE "vendor|_tools")
 SHELL    := /usr/bin/env bash
 TEST_DIR := /tmp/dm_test
 FAILPOINT_DIR := $$(for p in $(PACKAGES); do echo $${p\#"github.com/pingcap/dm/"}; done)
-FAILPOINT := retool do failpoint-ctl
+FAILPOINT := tools/bin/failpoint-ctl
 
 RACE_FLAG =
 TEST_RACE_FLAG = -race
@@ -48,7 +48,7 @@ else
 	LDFLAGS += -X "github.com/pingcap/dm/dm/config.SampleConfigFile=$(shell cat dm/master/source.yaml | base64)"
 endif
 
-.PHONY: build retool_setup test unit_test dm_integration_test_build integration_test \
+.PHONY: build tools_setup test unit_test dm_integration_test_build integration_test \
 	coverage check dm-worker dm-master chaos-case dmctl debug-tools
 
 build: check dm-worker dm-master dmctl dm-portal dm-syncer
@@ -76,17 +76,24 @@ debug-tools:
 
 dm-portal-frontend:
 	# TODO: build frontend
-	statik -src=./dm/portal/frontend/build -dest=./dm/portal/
+	tools/bin/statik -src=./dm/portal/frontend/build -dest=./dm/portal/
 
-retool_setup:
-	@echo "setup retool"
-	go get github.com/lance6716/retool@dev
-	GO111MODULE=off retool sync
+tools_setup:
+	@echo "setup tools"
+	cd tools && $(GOBUILD) -o bin/errcheck github.com/kisielk/errcheck
+	cd tools && $(GOBUILD) -o bin/failpoint-ctl github.com/pingcap/failpoint/failpoint-ctl
+	cd tools && $(GOBUILD) -o bin/gocovmerge github.com/zhouqiang-cl/gocovmerge
+	cd tools && $(GOBUILD) -o bin/golint golang.org/x/lint/golint
+	cd tools && $(GOBUILD) -o bin/goveralls github.com/mattn/goveralls
+	cd tools && $(GOBUILD) -o bin/mockgen github.com/golang/mock/mockgen
+	cd tools && $(GOBUILD) -o bin/protoc-gen-gogofaster github.com/gogo/protobuf/protoc-gen-gogofaster
+	cd tools && $(GOBUILD) -o bin/protoc-gen-grpc-gateway github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+	cd tools && $(GOBUILD) -o bin/statik github.com/rakyll/statik
 
-generate_proto: retool_setup
+generate_proto: tools_setup
 	./generate-dm.sh
 
-generate_mock: retool_setup
+generate_mock: tools_setup
 	./tests/generate-mock.sh
 
 test: unit_test integration_test
@@ -102,38 +109,38 @@ define run_unit_test
 	$(FAILPOINT_DISABLE)
 endef
 
-unit_test: retool_setup
+unit_test: tools_setup
 	$(call run_unit_test,$(PACKAGES),unit_test)
 
 # run unit test for the specified pkg only, like `make unit_test_pkg PKG=github.com/pingcap/dm/dm/master`
-unit_test_pkg: retool_setup
+unit_test_pkg: tools_setup
 	$(call run_unit_test,$(PKG),unit_test_syncer)
 
-unit_test_relay: retool_setup
+unit_test_relay: tools_setup
 	$(call run_unit_test,$(PACKAGES_RELAY),unit_test_relay)
 
-unit_test_syncer: retool_setup
+unit_test_syncer: tools_setup
 	$(call run_unit_test,$(PACKAGES_SYNCER),unit_test_syncer)
 
-unit_test_pkg_binlog: retool_setup
+unit_test_pkg_binlog: tools_setup
 	$(call run_unit_test,$(PACKAGES_PKG_BINLOG),unit_test_pkg_binlog)
 
-unit_test_others: retool_setup
+unit_test_others: tools_setup
 	$(call run_unit_test,$(PACKAGES_OTHERS),unit_test_others)
 
-check: retool_setup fmt lint vet terror_check tidy_mod
+check: tools_setup fmt lint vet terror_check tidy_mod
 
 fmt:
 	@echo "gofmt (simplify)"
 	@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 
-errcheck: retool_setup
+errcheck: tools_setup
 	@echo "errcheck"
-	@retool do errcheck -blank $(PACKAGES) | grep -v "_test\.go" | awk '{print} END{if(NR>0) {exit 1}}'
+	tools/bin/errcheck -blank $(PACKAGES) | grep -v "_test\.go" | awk '{print} END{if(NR>0) {exit 1}}'
 
-lint: retool_setup
+lint: tools_setup
 	@echo "golint"
-	@retool do golint -set_exit_status $(PACKAGES)
+	tools/bin/golint -set_exit_status $(PACKAGES)
 
 vet:
 	$(GO) build -o bin/shadow golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow
@@ -149,7 +156,7 @@ tidy_mod:
 	@echo "tidy go.mod"
 	_utils/mod_check/check.sh
 
-dm_integration_test_build: retool_setup
+dm_integration_test_build: tools_setup
 	$(FAILPOINT_ENABLE)
 	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
@@ -191,12 +198,12 @@ compatibility_test: check_third_party_binary
 coverage_fix_cover_mode:
 	sed -i "s/mode: count/mode: atomic/g" $(TEST_DIR)/cov.*.dmctl.*.out
 
-coverage: coverage_fix_cover_mode retool_setup
-	retool do gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.pb.gw.go|.*.__failpoint_binding__.go|.*debug-tools.*|.*portal.*|.*chaos.*" > "$(TEST_DIR)/all_cov.out"
-	retool do gocovmerge "$(TEST_DIR)"/cov.unit_test*.out | grep -vE ".*.pb.go|.*.pb.gw.go|.*.__failpoint_binding__.go|.*debug-tools.*|.*portal.*|.*chaos.*" > $(TEST_DIR)/unit_test.out
+coverage: coverage_fix_cover_mode tools_setup
+	tools/bin/gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.pb.gw.go|.*.__failpoint_binding__.go|.*debug-tools.*|.*portal.*|.*chaos.*" > "$(TEST_DIR)/all_cov.out"
+	tools/bin/gocovmerge "$(TEST_DIR)"/cov.unit_test*.out | grep -vE ".*.pb.go|.*.pb.gw.go|.*.__failpoint_binding__.go|.*debug-tools.*|.*portal.*|.*chaos.*" > $(TEST_DIR)/unit_test.out
 ifeq ("$(JenkinsCI)", "1")
 	@bash <(curl -s https://codecov.io/bash) -f $(TEST_DIR)/unit_test.out -t $(CODECOV_TOKEN)
-	@retool do goveralls -coverprofile=$(TEST_DIR)/all_cov.out -service=jenkins-ci -repotoken $(COVERALLS_TOKEN)
+	tools/bin/goveralls -coverprofile=$(TEST_DIR)/all_cov.out -service=jenkins-ci -repotoken $(COVERALLS_TOKEN)
 else
 	go tool cover -html "$(TEST_DIR)/all_cov.out" -o "$(TEST_DIR)/all_cov.html"
 	go tool cover -html "$(TEST_DIR)/unit_test.out" -o "$(TEST_DIR)/unit_test_cov.html"
@@ -210,8 +217,8 @@ check-static:
 	  --enable ineffassign \
 	  ./...
 
-failpoint-enable: retool_setup
+failpoint-enable: tools_setup
 	$(FAILPOINT_ENABLE)
 
-failpoint-disable: retool_setup
+failpoint-disable: tools_setup
 	$(FAILPOINT_DISABLE)
