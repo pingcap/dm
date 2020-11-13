@@ -317,13 +317,13 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 			return err
 		}
 
-		err = s.initShardingGroups()
+		err = s.initShardingGroups(ctx)
 		if err != nil {
 			return err
 		}
 		rollbackHolder.Add(fr.FuncRollback{Name: "close-sharding-group-keeper", Fn: s.sgk.Close})
 	case config.ShardOptimistic:
-		err = s.initOptimisticShardDDL()
+		err = s.initOptimisticShardDDL(ctx)
 		if err != nil {
 			return err
 		}
@@ -369,9 +369,9 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 
 // initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
 // NOTE: now we don't support modify router rules after task has started
-func (s *Syncer) initShardingGroups() error {
+func (s *Syncer) initShardingGroups(ctx context.Context) error {
 	// fetch tables from source and filter them
-	sourceTables, err := s.fromDB.fetchAllDoTables(s.baList)
+	sourceTables, err := s.fromDB.fetchAllDoTables(ctx, s.baList)
 	if err != nil {
 		return err
 	}
@@ -2591,12 +2591,12 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 			return err
 		}
 
-		err = s.initShardingGroups()
+		err = s.initShardingGroups(context.Background()) // FIXME: fix context when re-implementing `Update`
 		if err != nil {
 			return err
 		}
 	case config.ShardOptimistic:
-		err = s.initOptimisticShardDDL()
+		err = s.initOptimisticShardDDL(context.Background()) // FIXME: fix context when re-implementing `Update`
 		if err != nil {
 			return err
 		}

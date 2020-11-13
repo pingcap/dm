@@ -14,6 +14,8 @@
 package syncer
 
 import (
+	"context"
+
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
@@ -34,9 +36,9 @@ type trackedDDL struct {
 }
 
 // initOptimisticShardDDL initializes the shard DDL support in the optimistic mode.
-func (s *Syncer) initOptimisticShardDDL() error {
+func (s *Syncer) initOptimisticShardDDL(ctx context.Context) error {
 	// fetch tables from source and filter them
-	sourceTables, err := s.fromDB.fetchAllDoTables(s.baList)
+	sourceTables, err := s.fromDB.fetchAllDoTables(ctx, s.baList)
 	if err != nil {
 		return err
 	}

@@ -100,8 +100,8 @@ func (conn *UpStreamConn) killConn(ctx context.Context, connID uint32) error {
 	return utils.KillConn(ctx, conn.BaseDB.DB, connID)
 }
 
-func (conn *UpStreamConn) fetchAllDoTables(bw *filter.Filter) (map[string][]string, error) {
-	return utils.FetchAllDoTables(conn.BaseDB.DB, bw)
+func (conn *UpStreamConn) fetchAllDoTables(ctx context.Context, bw *filter.Filter) (map[string][]string, error) {
+	return utils.FetchAllDoTables(ctx, conn.BaseDB.DB, bw)
 }
 
 func (conn *UpStreamConn) countBinaryLogsSize(pos mysql.Position) (int64, error) {
