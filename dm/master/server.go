@@ -986,7 +986,7 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
-func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, error) {
+func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*config.SourceConfig, error) {
 	cfgs := make([]*config.SourceConfig, len(contents))
 	for i, content := range contents {
 		cfg := config.NewSourceConfig()
@@ -1000,7 +1000,7 @@ func parseAndAdjustSourceConfig(contents []string) ([]*config.SourceConfig, erro
 		if err != nil {
 			return cfgs, err
 		}
-		if err = cfg.Adjust(fromDB.DB); err != nil {
+		if err = cfg.Adjust(ctx, fromDB.DB); err != nil {
 			fromDB.Close()
 			return cfgs, err
 		}
@@ -1053,7 +1053,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		return resp2, err2
 	}
 
-	cfgs, err := parseAndAdjustSourceConfig(req.Config)
+	cfgs, err := parseAndAdjustSourceConfig(ctx, req.Config)
 	resp := &pb.OperateSourceResponse{
 		Result: false,
 	}

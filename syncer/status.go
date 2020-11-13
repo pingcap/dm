@@ -14,6 +14,8 @@
 package syncer
 
 import (
+	"context"
+
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
@@ -27,7 +29,7 @@ import (
 
 // Status implements Unit.Status
 // it returns status, but does not calc status
-func (s *Syncer) Status() interface{} {
+func (s *Syncer) Status(ctx context.Context) interface{} {
 	var (
 		masterPos     mysql.Position
 		masterGTIDSet gtid.Set
@@ -35,7 +37,7 @@ func (s *Syncer) Status() interface{} {
 	total := s.count.Get()
 	totalTps := s.totalTps.Get()
 	tps := s.tps.Get()
-	masterPos, masterGTIDSet, err := s.getMasterStatus()
+	masterPos, masterGTIDSet, err := s.getMasterStatus(ctx)
 	if err != nil {
 		s.tctx.L().Warn("fail to get master status", zap.Error(err))
 	}

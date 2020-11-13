@@ -232,7 +232,7 @@ func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.
 	mock.ExpectQuery("SHOW VARIABLES LIKE").
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-	return utils.GetParser(db)
+	return utils.GetParser(context.Background(), db)
 }
 
 func (s *testSyncerSuite) TestSelectDB(c *C) {
@@ -793,7 +793,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	_, err = db.Exec("SET GLOBAL binlog_format = 'ROW';")
 	c.Assert(err, IsNil)
 
-	pos, gset, err := utils.GetMasterStatus(db, "mysql")
+	pos, gset, err := utils.GetMasterStatus(context.Background(), db, "mysql")
 	c.Assert(err, IsNil)
 
 	//nolint:errcheck
@@ -945,7 +945,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	c.Assert(err, IsNil)
 	syncer.reset()
 
-	syncer.streamerController = NewStreamerController(tcontext.Background(), syncer.syncCfg, true, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone)
+	syncer.streamerController = NewStreamerController(syncer.syncCfg, true, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone)
 	err = syncer.streamerController.Start(tcontext.Background(), binlog.InitLocation(pos, gset))
 	c.Assert(err, IsNil)
 
@@ -967,7 +967,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				schemaName := string(ev.Table.Schema)
 				tableName := string(ev.Table.Table)
 				var ti *model.TableInfo
-				ti, err = syncer.getTable(schemaName, tableName, schemaName, tableName)
+				ti, err = syncer.getTable(tcontext.Background(), schemaName, tableName, schemaName, tableName)
 				c.Assert(err, IsNil)
 				var (
 					sqls []string
@@ -1217,7 +1217,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	executeSQLAndWait(len(expectJobs1))
-	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(0))
+	c.Assert(syncer.Status(ctx).(*pb.SyncStatus).TotalEvents, Equals, int64(0))
 	syncer.mockFinishJob(expectJobs1)
 
 	testJobs.Lock()
@@ -1272,9 +1272,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	executeSQLAndWait(len(expectJobs2))
-	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(len(expectJobs1)))
+	c.Assert(syncer.Status(ctx).(*pb.SyncStatus).TotalEvents, Equals, int64(len(expectJobs1)))
 	syncer.mockFinishJob(expectJobs2)
-	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(len(expectJobs1)+len(expectJobs2)))
+	c.Assert(syncer.Status(ctx).(*pb.SyncStatus).TotalEvents, Equals, int64(len(expectJobs1)+len(expectJobs2)))
 
 	testJobs.RLock()
 	checkJobs(c, testJobs.jobs, expectJobs2)
@@ -1421,7 +1421,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	}
 
 	executeSQLAndWait(len(expectJobs))
-	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(0))
+	c.Assert(syncer.Status(ctx).(*pb.SyncStatus).TotalEvents, Equals, int64(0))
 	syncer.mockFinishJob(expectJobs)
 
 	testJobs.Lock()

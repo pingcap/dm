@@ -41,7 +41,7 @@ type RelayHolder interface {
 	// Close closes the holder
 	Close()
 	// Status returns relay unit's status
-	Status() *pb.RelayStatus
+	Status(ctx context.Context) *pb.RelayStatus
 	// Stage returns the stage of the relay
 	Stage() pb.Stage
 	// Error returns relay unit's status
@@ -175,14 +175,14 @@ func (h *realRelayHolder) run() {
 }
 
 // Status returns relay unit's status
-func (h *realRelayHolder) Status() *pb.RelayStatus {
+func (h *realRelayHolder) Status(ctx context.Context) *pb.RelayStatus {
 	if h.closed.Get() == closedTrue || h.relay.IsClosed() {
 		return &pb.RelayStatus{
 			Stage: pb.Stage_Stopped,
 		}
 	}
 
-	s := h.relay.Status().(*pb.RelayStatus)
+	s := h.relay.Status(ctx).(*pb.RelayStatus)
 	s.Stage = h.Stage()
 	s.Result = h.Result()
 
@@ -418,7 +418,7 @@ func (d *dummyRelayHolder) Close() {
 }
 
 // Status implements interface of RelayHolder
-func (d *dummyRelayHolder) Status() *pb.RelayStatus {
+func (d *dummyRelayHolder) Status(ctx context.Context) *pb.RelayStatus {
 	d.Lock()
 	defer d.Unlock()
 	return &pb.RelayStatus{

@@ -466,6 +466,9 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 }
 
 func (t *testRelaySuite) TestReSetupMeta(c *C) {
+	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
+	defer cancel()
+
 	var (
 		relayCfg = &Config{
 			RelayDir: c.MkDir(),
@@ -485,19 +488,19 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 		r.db.Close()
 		r.db = nil
 	}()
-	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
+	uuid, err := utils.GetServerUUID(ctx, r.db, r.cfg.Flavor)
 	c.Assert(err, IsNil)
 
 	// re-setup meta with start pos adjusted
 	r.cfg.EnableGTID = true
 	r.cfg.BinlogGTID = "24ecd093-8cec-11e9-aa0d-0242ac170002:1-23"
 	r.cfg.BinLogName = "mysql-bin.000005"
-	c.Assert(r.reSetupMeta(), IsNil)
+	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid001 := fmt.Sprintf("%s.000001", uuid)
 	t.verifyMetadata(c, r, uuid001, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, r.cfg.BinlogGTID, []string{uuid001})
 
 	// re-setup meta again, often happen when connecting a server behind a VIP.
-	c.Assert(r.reSetupMeta(), IsNil)
+	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid002 := fmt.Sprintf("%s.000002", uuid)
 	t.verifyMetadata(c, r, uuid002, minCheckpoint, r.cfg.BinlogGTID, []string{uuid001, uuid002})
 
@@ -605,7 +608,7 @@ func (t *testRelaySuite) TestProcess(c *C) {
 
 	// check whether have binlog file in relay directory
 	// and check for events already done in `TestHandleEvent`
-	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
+	uuid, err := utils.GetServerUUID(ctx2, r.db, r.cfg.Flavor)
 	c.Assert(err, IsNil)
 	files, err := streamer.CollectAllBinlogFiles(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
 	c.Assert(err, IsNil)

@@ -37,7 +37,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 		// for set schema, we must ensure it's a valid `CREATE TABLE` statement.
 		// now, we only set schema for schema-tracker,
 		// if want to update the one in checkpoint, it should wait for the flush of checkpoint.
-		parser2, err := s.fromDB.getParser()
+		parser2, err := s.fromDB.getParser(ctx)
 		if err != nil {
 			return "", err
 		}

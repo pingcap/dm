@@ -28,7 +28,7 @@ var (
 )
 
 // Status implements Unit.Status
-func (l *Loader) Status() interface{} {
+func (l *Loader) Status(ctx context.Context) interface{} {
 	finishedSize := l.finishedDataSize.Get()
 	totalSize := l.totalDataSize.Get()
 	progress := percent(finishedSize, totalSize, l.finish.Get())

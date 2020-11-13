@@ -86,7 +86,7 @@ type Process interface {
 	// Error returns error message if having one
 	Error() interface{}
 	// Status returns status of relay log process unit
-	Status() interface{}
+	Status(ctx context.Context) interface{}
 	// Close does some clean works
 	Close()
 	// IsClosed returns whether relay log process unit was closed
@@ -199,13 +199,13 @@ func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 }
 
-func (r *Relay) process(parentCtx context.Context) error {
-	parser2, err := utils.GetParser(r.db) // refine to use user config later
+func (r *Relay) process(ctx context.Context) error {
+	parser2, err := utils.GetParser(ctx, r.db) // refine to use user config later
 	if err != nil {
 		return err
 	}
 
-	isNew, err := isNewServer(r.meta.UUID(), r.db, r.cfg.Flavor)
+	isNew, err := isNewServer(ctx, r.meta.UUID(), r.db, r.cfg.Flavor)
 	if err != nil {
 		return err
 	}
@@ -218,7 +218,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		}
 
 		// re-setup meta for new server
-		err = r.reSetupMeta()
+		err = r.reSetupMeta(ctx)
 		if err != nil {
 			return err
 		}
@@ -262,15 +262,15 @@ func (r *Relay) process(parentCtx context.Context) error {
 
 	transformer2 := transformer.NewTransformer(parser2)
 
-	go r.doIntervalOps(parentCtx)
+	go r.doIntervalOps(ctx)
 
 	// handles binlog events with retry mechanism.
 	// it only do the retry for some binlog reader error now.
 	for {
-		err := r.handleEvents(parentCtx, reader2, transformer2, writer2)
+		err := r.handleEvents(ctx, reader2, transformer2, writer2)
 		if err == nil {
 			return nil
-		} else if !readerRetry.Check(parentCtx, err) {
+		} else if !readerRetry.Check(ctx, err) {
 			return err
 		}
 
@@ -420,7 +420,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 					r.tctx.L().Error("the requested binlog files have purged in the master server or the master server have switched, currently DM do no support to handle this error",
 						zap.String("db host", cfg.Host), zap.Int("db port", cfg.Port), zap.Stringer("last pos", lastPos), log.ShortError(err))
 					// log the status for debug
-					pos, gs, err2 := utils.GetMasterStatus(r.db, r.cfg.Flavor)
+					pos, gs, err2 := utils.GetMasterStatus(ctx, r.db, r.cfg.Flavor)
 					if err2 == nil {
 						r.tctx.L().Info("current master status", zap.Stringer("position", pos), log.WrapStringerField("GTID sets", gs))
 					}
@@ -521,8 +521,8 @@ func (r *Relay) tryUpdateActiveRelayLog(e *replication.BinlogEvent, filename str
 }
 
 // reSetupMeta re-setup the metadata when switching to a new upstream master server.
-func (r *Relay) reSetupMeta() error {
-	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
+func (r *Relay) reSetupMeta(ctx context.Context) error {
+	uuid, err := utils.GetServerUUID(ctx, r.db, r.cfg.Flavor)
 	if err != nil {
 		return err
 	}
@@ -537,7 +537,7 @@ func (r *Relay) reSetupMeta() error {
 
 	var latestPosName, latestGTIDStr string
 	if (r.cfg.EnableGTID && len(r.cfg.BinlogGTID) == 0) || (!r.cfg.EnableGTID && len(r.cfg.BinLogName) == 0) {
-		latestPos, latestGTID, err2 := utils.GetMasterStatus(r.db, r.cfg.Flavor)
+		latestPos, latestGTID, err2 := utils.GetMasterStatus(ctx, r.db, r.cfg.Flavor)
 		if err2 != nil {
 			return err2
 		}
@@ -594,7 +594,9 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 				}
 			}
 		case <-masterStatusTicker.C:
-			pos, _, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
+			ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
+			pos, _, err := utils.GetMasterStatus(ctx2, r.db, r.cfg.Flavor)
+			cancel2()
 			if err != nil {
 				r.tctx.L().Warn("get master status", zap.Error(err))
 				continue
@@ -701,8 +703,8 @@ func (r *Relay) Close() {
 }
 
 // Status implements the dm.Unit interface.
-func (r *Relay) Status() interface{} {
-	masterPos, masterGTID, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
+func (r *Relay) Status(ctx context.Context) interface{} {
+	masterPos, masterGTID, err := utils.GetMasterStatus(ctx, r.db, r.cfg.Flavor)
 	if err != nil {
 		r.tctx.L().Warn("get master status", zap.Error(err))
 	}
