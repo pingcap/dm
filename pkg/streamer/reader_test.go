@@ -748,7 +748,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 		lastGTID, err = gtid.ParserGTID(mysql.MySQLFlavor, subDir.gtidStr)
 		c.Assert(err, IsNil)
 		uuidDir := path.Join(baseDir, subDir.uuid)
-		err := os.MkdirAll(uuidDir, 0700)
+		err = os.MkdirAll(uuidDir, 0700)
 		c.Assert(err, IsNil)
 
 		for _, fileEventType := range subDir.fileEventTypes {
@@ -787,15 +787,21 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 	for {
 		ev, err2 := s.GetEvent(ctx)
 		c.Assert(err2, IsNil)
+		if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 {
+			continue // ignore fake event
+		}
 		obtainBaseEvents = append(obtainBaseEvents, ev)
-		// get event from second event(skip the nil previous event)
+		// start after the first nil previous event
 		if len(obtainBaseEvents) == len(allEvents)-1 {
 			break
 		}
 	}
 
+	// allEvents: [FORMAT_DESCRIPTION_EVENT, PREVIOUS_GTIDS_EVENT, GTID_EVENT, QUERY_EVENT...]
+	// obtainBaseEvents: [FORMAT_DESCRIPTION_EVENT(generated), GTID_EVENT, QUERY_EVENT...]
 	for i, event := range obtainBaseEvents {
 		if i == 0 {
+			c.Assert(event.Header.EventType, Equals, replication.FORMAT_DESCRIPTION_EVENT)
 			continue
 		}
 		c.Assert(event.Header, DeepEquals, allEvents[i+1].Header)
