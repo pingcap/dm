@@ -26,15 +26,15 @@ function DM_036_CASE() {
 function DM_036() {
     # currently not support pessimistic
     # run_case 036 "double-source-pessimistic" \
-    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\";" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\";" \
     # "clean_table" "pessimistic"
 
     run_case 036 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\";" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\";" \
     "clean_table" "optimistic"
 }
 
@@ -71,13 +71,13 @@ function DM_038_CASE() {
     # TODO: remove sleep after we support detect ASAP in optimistic mode
     sleep 1
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column col1 datetime default now();"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values (1);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values (4);"
     sleep 1
     run_sql_source2 "alter table ${shardddl1}.${tb1} add column col1 datetime default now();"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} (id) values (2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (id) values (5);"
     sleep 1
     run_sql_source2 "alter table ${shardddl1}.${tb2} add column col1 datetime default now();"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} (id) values (3);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (id) values (6);"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3 'fail'
 }
 
@@ -200,14 +200,14 @@ function DM_046_CASE() {
 
 function DM_046() {
     run_case 046 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\"" \
     "clean_table" "pessimistic"
     run_case 046 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\"" \
     "clean_table" "optimistic"
 }
 
@@ -229,14 +229,14 @@ function DM_047_CASE() {
 
 function DM_047() {
     run_case 047 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) stored);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) stored);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10), c int as (a+1) stored);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10), c int as (a+1) stored);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10), c int as (a+1) stored);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10), c int as (a+1) stored);\"" \
     "clean_table" "pessimistic"
     run_case 047 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) stored);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) stored);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10), c int as (a+1) stored);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10), c int as (a+1) stored);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10), c int as (a+1) stored);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10), c int as (a+1) stored);\"" \
     "clean_table" "optimistic"
 }
 
@@ -258,14 +258,14 @@ function DM_048_CASE() {
 
 function DM_048() {
     run_case 048 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) virtual);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) virtual);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10), c int as (a+1) virtual);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10), c int as (a+1) virtual);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10), c int as (a+1) virtual);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10), c int as (a+1) virtual);\"" \
     "clean_table" "pessimistic"
     run_case 048 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) virtual);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10), c int as (a+1) virtual);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10), c int as (a+1) virtual);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10), c int as (a+1) virtual);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10), c int as (a+1) virtual);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10), c int as (a+1) virtual);\"" \
     "clean_table" "optimistic"
 }
 
@@ -294,14 +294,14 @@ function DM_049_CASE() {
 
 function DM_049() {
     run_case 049 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\"" \
     "clean_table" "pessimistic"
     run_case 049 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\"" \
     "clean_table" "optimistic"
 }
 
@@ -330,14 +330,14 @@ function DM_050_CASE() {
 
 function DM_050() {
     run_case 050 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\"" \
     "clean_table" "pessimistic"
     run_case 050 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\"" \
     "clean_table" "optimistic"
 }
 
@@ -366,14 +366,14 @@ function DM_051_CASE() {
 
 function DM_051() {
     run_case 051 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
     "clean_table" "pessimistic"
     run_case 051 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
     "clean_table" "optimistic"
 }
 
@@ -402,14 +402,14 @@ function DM_056_CASE() {
 
 function DM_056() {
     run_case 056 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
     "clean_table" "pessimistic"
     run_case 056 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
     "clean_table" "optimistic"
 }
 
@@ -487,14 +487,14 @@ function DM_059_CASE {
 
 function DM_059() {
     run_case 059 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int, a datetime);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (id int, a datetime);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (id int, a datetime);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a datetime);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a datetime);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a datetime);\"" \
     "clean_table" "pessimistic"
     run_case 059 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int, a datetime);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (id int, a datetime);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (id int, a datetime);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a datetime);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a datetime);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a datetime);\"" \
     "clean_table" "optimistic"
 }
 
@@ -550,14 +550,14 @@ function DM_063_CASE() {
 
 function DM_063() {
     run_case 063 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id smallint);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (id smallint);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (id smallint);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id smallint primary key);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (id smallint primary key);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (id smallint primary key);\"" \
     "clean_table" "pessimistic"
     run_case 063 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id smallint);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (id smallint);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (id smallint);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id smallint primary key);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (id smallint primary key);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (id smallint primary key);\"" \
      "clean_table" "optimistic"
 }
 
@@ -605,14 +605,14 @@ function DM_065_CASE() {
 
 function DM_065() {
     run_case 065 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
     "clean_table" "pessimistic"
     run_case 065 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
     "clean_table" "optimistic"
 }
 
@@ -668,30 +668,30 @@ function DM_067() {
 
 function DM_068_CASE {
     run_sql_source1 "alter table ${shardddl1}.${tb1} modify id datetime default now();"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(now());"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(now());"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(now());"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,now());"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,now());"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,now());"
     run_sql_source2 "alter table ${shardddl1}.${tb1} modify id datetime default now();"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(now());"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(now());"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(now());"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,now());"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,now());"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,now());"
     run_sql_source2 "alter table ${shardddl1}.${tb2} modify id datetime default now();"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(now());"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(now());"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(now());"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,now());"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,now());"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,now());"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 function DM_068() {
     run_case 068 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id datetime);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (id datetime);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (id datetime);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, id datetime);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, id datetime);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, id datetime);\"" \
     "clean_table" "pessimistic"
     run_case 068 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id datetime);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (id datetime);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (id datetime);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, id datetime);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, id datetime);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, id datetime);\"" \
     "clean_table" "optimistic"
 }
 
