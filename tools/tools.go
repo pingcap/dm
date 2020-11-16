@@ -20,5 +20,12 @@ package tools
 
 import (
 	// make go module happy
-	_ "github.com/lance6716/retool"
+	_ "github.com/gogo/protobuf/protoc-gen-gogofaster"
+	_ "github.com/golang/mock/mockgen"
+	_ "github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway"
+	_ "github.com/kisielk/errcheck"
+	_ "github.com/mattn/goveralls"
+	_ "github.com/pingcap/failpoint/failpoint-ctl"
+	_ "github.com/zhouqiang-cl/gocovmerge"
+	_ "golang.org/x/lint/golint"
 )
