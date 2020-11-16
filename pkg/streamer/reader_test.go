@@ -737,7 +737,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 		r.uuids = append(r.uuids, subDir.uuid)
 	}
 
-	// wirte index file
+	// write index file
 	uuidBytes := t.uuidListToBytes(c, r.uuids)
 	err := ioutil.WriteFile(r.indexPath, uuidBytes, 0600)
 	c.Assert(err, IsNil)
