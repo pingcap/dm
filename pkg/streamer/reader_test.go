@@ -756,8 +756,8 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 			allEvents = append(allEvents, events...)
 
 			// write binlog file
-			f, err := os.OpenFile(path.Join(uuidDir, fileEventType.filename), os.O_CREATE|os.O_WRONLY, 0600)
-			c.Assert(err, IsNil)
+			f, err2 := os.OpenFile(path.Join(uuidDir, fileEventType.filename), os.O_CREATE|os.O_WRONLY, 0600)
+			c.Assert(err2, IsNil)
 			_, err = f.Write(replication.BinLogFileHeader)
 			c.Assert(err, IsNil)
 			for _, ev := range events {
@@ -768,8 +768,8 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 
 			// write meta file
 			meta := Meta{BinLogName: fileEventType.filename, BinLogPos: lastPos, BinlogGTID: previousGset.String()}
-			metaFile, err := os.Create(path.Join(uuidDir, utils.MetaFilename))
-			c.Assert(err, IsNil)
+			metaFile, err2 := os.Create(path.Join(uuidDir, utils.MetaFilename))
+			c.Assert(err2, IsNil)
 			err = toml.NewEncoder(metaFile).Encode(meta)
 			c.Assert(err, IsNil)
 			metaFile.Close()

@@ -164,7 +164,7 @@ func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
 }
 
 // GetFilePosByGTID tries to get Pos by GTID for file
-func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gset mysql.GTIDSet) (uint32, error) {
+func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gset mysql.GTIDSet, oldest bool) (uint32, error) {
 	ctx2, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -236,6 +236,11 @@ func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gs
 			}
 			// if PreviousGITDsEvent contain the gset, go to previous file
 			if gs.Contain(gset) {
+				// if it's the oldest file and gs equals gset, continue
+				if oldest && gset.Contain(gs) {
+					lastPos = e.Header.LogPos
+					continue
+				}
 				return 0, nil
 			}
 		case *replication.RotateEvent:
@@ -291,7 +296,7 @@ func (r *BinlogReader) getPosByGTID(gset mysql.GTIDSet) (*mysql.Position, error)
 	for i := len(allFiles) - 1; i >= 0; i-- {
 		file := allFiles[i]
 		filePath := path.Join(uuidDir, file)
-		pos, err := r.GetFilePosByGTID(r.tctx.Ctx, filePath, gset)
+		pos, err := r.GetFilePosByGTID(r.tctx.Ctx, filePath, gset, i == 0)
 		if err != nil {
 			return nil, err
 		}
