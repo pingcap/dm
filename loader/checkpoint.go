@@ -43,6 +43,9 @@ type CheckPoint interface {
 	// GetAllRestoringFileInfo return all restoring files position
 	GetAllRestoringFileInfo() map[string][]int64
 
+	// IsTableCreated checks if db / table was created. set `table` to "" when check db
+	IsTableCreated(db, table string) bool
+
 	// IsTableFinished query if table has finished
 	IsTableFinished(db, table string) bool
 
@@ -66,6 +69,13 @@ type CheckPoint interface {
 
 	// GenSQL generates sql to update checkpoint to DB
 	GenSQL(filename string, offset int64) string
+
+	// UpdateOffset keeps `cp.restoringFiles` in memory same with checkpoint in DB,
+	// should be called after update checkpoint in DB
+	UpdateOffset(filename string, offset int64)
+
+	// AllFinished returns `true` when all restoring job are finished
+	AllFinished() bool
 }
 
 // RemoteCheckPoint implements CheckPoint by saving status in remote database system, mostly in TiDB.
@@ -79,8 +89,8 @@ type RemoteCheckPoint struct {
 	conn           *DBConn
 	id             string
 	schema         string
-	tableName      string // tableName contains schema name
-	restoringFiles map[string]map[string]FilePosSet
+	tableName      string                           // tableName contains schema name
+	restoringFiles map[string]map[string]FilePosSet // schema -> table -> FilePosSet(filename -> [cur, end])
 	finishedTables map[string]struct{}
 	logCtx         *tcontext.Context
 }
@@ -218,6 +228,19 @@ func (cp *RemoteCheckPoint) GetAllRestoringFileInfo() map[string][]int64 {
 	return results
 }
 
+// IsTableCreated implements CheckPoint.IsTableCreated
+func (cp *RemoteCheckPoint) IsTableCreated(db, table string) bool {
+	tables, ok := cp.restoringFiles[db]
+	if !ok {
+		return false
+	}
+	if table == "" {
+		return true
+	}
+	_, ok = tables[table]
+	return ok
+}
+
 // IsTableFinished implements CheckPoint.IsTableFinished
 func (cp *RemoteCheckPoint) IsTableFinished(db, table string) bool {
 	key := strings.Join([]string{db, table}, ".")
@@ -257,7 +280,7 @@ func (cp *RemoteCheckPoint) CalcProgress(allFiles map[string]Tables2DataFiles) e
 		}
 	}
 
-	cp.logCtx.L().Info("calculate checkpoint finished.", zap.Reflect("finished tables", cp.finishedTables))
+	cp.logCtx.L().Info("calculate checkpoint finished.", zap.Any("finished tables", cp.finishedTables))
 	return nil
 }
 
@@ -269,6 +292,18 @@ func (cp *RemoteCheckPoint) allFilesFinished(files map[string][]int64) bool {
 		}
 		if pos[0] != pos[1] {
 			return false
+		}
+	}
+	return true
+}
+
+// AllFinished implements CheckPoint.AllFinished
+func (cp *RemoteCheckPoint) AllFinished() bool {
+	for _, tables := range cp.restoringFiles {
+		for _, restoringFiles := range tables {
+			if !cp.allFilesFinished(restoringFiles) {
+				return false
+			}
 		}
 	}
 	return true
@@ -303,7 +338,7 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 	cp.connMutex.Unlock()
 	if err != nil {
 		if isErrDupEntry(err) {
-			cp.logCtx.L().Info("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
+			cp.logCtx.L().Error("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
 			return nil
 		}
 		return terror.WithScope(terror.Annotate(err, "initialize checkpoint"), terror.ScopeDownstream)
@@ -343,6 +378,16 @@ func (cp *RemoteCheckPoint) GenSQL(filename string, offset int64) string {
 	sql := fmt.Sprintf("UPDATE %s SET `offset`=%d WHERE `id` ='%s' AND `filename`='%s';",
 		cp.tableName, offset, cp.id, filename)
 	return sql
+}
+
+// UpdateOffset implements CheckPoint.UpdateOffset
+func (cp *RemoteCheckPoint) UpdateOffset(filename string, offset int64) {
+	fields := strings.Split(filename, ".")
+	if len(fields) != 2 && len(fields) != 3 {
+		cp.logCtx.L().Error("can't get db and table from filename in checkpoint UpdateOffset", zap.String("filename", filename))
+	}
+	db, table := fields[0], fields[1]
+	cp.restoringFiles[db][table][filename][0] = offset
 }
 
 // Clear implements CheckPoint.Clear
