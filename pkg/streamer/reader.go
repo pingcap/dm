@@ -243,9 +243,7 @@ func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gs
 				// gset is the last txn in file
 				return lastPos, nil
 			}
-		case *replication.XIDEvent:
-			lastPos = e.Header.LogPos
-		case *replication.QueryEvent:
+		case *replication.XIDEvent, *replication.QueryEvent:
 			lastPos = e.Header.LogPos
 		case *replication.GTIDEvent:
 			u, _ := uuid.FromBytes(ev.SID)
