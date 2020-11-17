@@ -24,6 +24,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -641,11 +642,13 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 	}
 
 	testCase := []struct {
+		serverUUID     string
 		uuid           string
 		gtidStr        string
 		fileEventTypes []FileEventType
 	}{
 		{
+			"ba8f633f-1f15-11eb-b1c7-0242ac110002",
 			"ba8f633f-1f15-11eb-b1c7-0242ac110002.000001",
 			"ba8f633f-1f15-11eb-b1c7-0242ac110002:0",
 			[]FileEventType{
@@ -684,6 +687,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 			},
 		},
 		{
+			"bf6227a7-1f15-11eb-9afb-0242ac110004",
 			"bf6227a7-1f15-11eb-9afb-0242ac110004.000002",
 			"bf6227a7-1f15-11eb-9afb-0242ac110004:20",
 			[]FileEventType{
@@ -715,6 +719,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 				},
 			},
 		}, {
+			"bcbf9d42-1f15-11eb-a41c-0242ac110003",
 			"bcbf9d42-1f15-11eb-a41c-0242ac110003.000003",
 			"bcbf9d42-1f15-11eb-a41c-0242ac110003:30",
 			[]FileEventType{
@@ -726,7 +731,6 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 						replication.XID_EVENT,
 						replication.QUERY_EVENT,
 						replication.XID_EVENT,
-						replication.ROTATE_EVENT,
 					},
 				},
 			},
@@ -743,7 +747,12 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 	c.Assert(err, IsNil)
 
 	var allEvents []*replication.BinlogEvent
+
+	// prePosMap record previous uuid's last file's size
+	// when master switch, we get the previous uuid's last pos now
+	prePosMap := make(map[string]uint32)
 	for _, subDir := range testCase {
+		prePosMap[subDir.serverUUID] = lastPos
 		lastPos = 4
 		lastGTID, err = gtid.ParserGTID(mysql.MySQLFlavor, subDir.gtidStr)
 		c.Assert(err, IsNil)
@@ -797,6 +806,8 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 		}
 	}
 
+	preGset, err := gtid.ParserGTID(mysql.MySQLFlavor, "")
+	c.Assert(err, IsNil)
 	// allEvents: [FORMAT_DESCRIPTION_EVENT, PREVIOUS_GTIDS_EVENT, GTID_EVENT, QUERY_EVENT...]
 	// obtainBaseEvents: [FORMAT_DESCRIPTION_EVENT(generated), GTID_EVENT, QUERY_EVENT...]
 	for i, event := range obtainBaseEvents {
@@ -806,17 +817,22 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 		}
 		c.Assert(event.Header, DeepEquals, allEvents[i+1].Header)
 		switch ev := event.Event.(type) {
-		case *replication.QueryEvent:
-			if bytes.Equal(ev.Query, []byte("BEGIN")) {
-				continue
+		case *replication.GTIDEvent:
+			pos, err2 := r.getPosByGTID(preGset.Origin().Clone())
+			u, _ := uuid.FromBytes(ev.SID)
+			c.Assert(err2, IsNil)
+			// new uuid dir
+			if len(preGset.String()) != 0 && !strings.Contains(preGset.String(), u.String()) {
+				c.Assert(pos.Pos, Equals, prePosMap[u.String()], Commentf("a %d", i))
+			} else {
+				c.Assert(pos.Pos, Equals, event.Header.LogPos-event.Header.EventSize, Commentf("b %d", i))
 			}
-			pos, err := r.getPosByGTID(ev.GSet)
-			c.Assert(err, IsNil)
-			c.Assert(pos.Pos, Equals, event.Header.LogPos)
+		case *replication.QueryEvent:
+			err2 := preGset.Set(ev.GSet)
+			c.Assert(err2, IsNil)
 		case *replication.XIDEvent:
-			pos, err := r.getPosByGTID(ev.GSet)
-			c.Assert(err, IsNil)
-			c.Assert(pos.Pos, Equals, event.Header.LogPos)
+			err2 := preGset.Set(ev.GSet)
+			c.Assert(err2, IsNil)
 		}
 	}
 }

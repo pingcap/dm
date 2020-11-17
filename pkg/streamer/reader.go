@@ -225,31 +225,28 @@ func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gs
 		}
 		switch ev := e.Event.(type) {
 		case *replication.PreviousGTIDsEvent:
-			// nil previous gtid event
+			// nil previous gtid event, continue to parse file
 			if len(ev.GTIDSets) == 0 {
-				lastPos = e.Header.LogPos
-				continue
+				break
 			}
 			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, ev.GTIDSets)
 			if err != nil {
 				return 0, err
 			}
-			// if PreviousGITDsEvent contain the gset, go to previous file
+			// if PreviousGITDsEvent contain but not equal the gset, go to previous file
 			if gs.Contain(gset) {
-				// if it's the oldest file and gs equals gset, continue
+				// continue to parse file if gset equals gs
 				if gset.Contain(gs) {
-					lastPos = e.Header.LogPos
-					continue
+					break
 				}
 				return 0, nil
 			}
 		case *replication.RotateEvent:
+			// should not happen
 			if e.Header.Timestamp != 0 && e.Header.LogPos != 0 {
-				// gset is the last txn in file
 				return lastPos, nil
 			}
-		case *replication.XIDEvent, *replication.QueryEvent:
-			lastPos = e.Header.LogPos
+			continue
 		case *replication.GTIDEvent:
 			u, _ := uuid.FromBytes(ev.SID)
 			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, fmt.Sprintf("%s:%d", u.String(), ev.GNO))
@@ -270,8 +267,8 @@ func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gs
 			if !gset.Contain(gs) {
 				return lastPos, nil
 			}
-		default:
 		}
+		lastPos = e.Header.LogPos
 	}
 }
 
