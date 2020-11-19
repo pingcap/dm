@@ -76,6 +76,7 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name strin
 		etcdClient:    etcdClient,
 		name:          name,
 	}
+	// keep running until canceled in `Close`.
 	w.ctx, w.cancel = context.WithCancel(context.Background())
 	w.closed.Set(closedTrue)
 

@@ -129,6 +129,7 @@ func (r *TCPReader) Close() error {
 		}
 		defer db.Close()
 
+		// try to KILL the conn in default timeout.
 		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
 		defer cancel()
 		err = utils.KillConn(ctx, db, connID)
