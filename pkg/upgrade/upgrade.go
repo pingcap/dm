@@ -44,8 +44,9 @@ type Context struct {
 	SubTaskConfigs map[string]map[string]config.SubTaskConfig
 }
 
-// NewUpgradeContext creates a Context, avoid nil Context member
-func NewUpgradeContext() Context {
+// newUpgradeContext creates a Context, avoid nil Context member.
+// only used for testing now.
+func newUpgradeContext() Context {
 	return Context{
 		Context:        context.Background(),
 		SubTaskConfigs: make(map[string]map[string]config.SubTaskConfig),

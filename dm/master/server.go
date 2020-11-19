@@ -1286,7 +1286,8 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 			log.L().Warn("fail to close connection", zap.Error(err2))
 		}
 	}()
-	ctctx := tcontext.Background().WithContext(ctx).WithLogger(log.With(zap.String("job", "remove metadata")))
+
+	ctctx := tcontext.NewContext(ctx, log.With(zap.String("job", "remove metadata")))
 
 	sqls := make([]string, 0, 4)
 	// clear loader and syncer checkpoints

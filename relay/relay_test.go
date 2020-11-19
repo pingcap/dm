@@ -125,7 +125,7 @@ func (w *mockWriter) Close() error {
 	return nil
 }
 
-func (w *mockWriter) Recover() (writer.RecoverResult, error) {
+func (w *mockWriter) Recover(ctx context.Context) (writer.RecoverResult, error) {
 	return writer.RecoverResult{}, nil
 }
 
@@ -169,13 +169,13 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	c.Assert(r.meta.Load(), IsNil)
 
 	// no file specified, no need to recover
-	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+	c.Assert(r.tryRecoverLatestFile(context.Background(), parser2), IsNil)
 
 	// save position into meta
 	c.Assert(r.meta.AddDir(uuid, &startPos, nil), IsNil)
 
 	// relay log file does not exists, no need to recover
-	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+	c.Assert(r.tryRecoverLatestFile(context.Background(), parser2), IsNil)
 
 	// use a generator to generate some binlog events
 	previousGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, previousGTIDSetStr)
@@ -191,7 +191,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	c.Assert(err, IsNil)
 
 	// all events/transactions are complete, no need to recover
-	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+	c.Assert(r.tryRecoverLatestFile(context.Background(), parser2), IsNil)
 	// now, we do not update position/GTID set in meta if not recovered
 	t.verifyMetadata(c, r, uuidWithSuffix, startPos, "", []string{uuidWithSuffix})
 
@@ -208,7 +208,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	c.Assert(r.meta.Save(startPos, greaterGITDSet), IsNil)
 
 	// invalid data truncated, meta updated
-	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+	c.Assert(r.tryRecoverLatestFile(context.Background(), parser2), IsNil)
 	_, latestPos := r.meta.Pos()
 	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})
 	_, latestGTIDs := r.meta.GTID()
@@ -218,7 +218,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 
 	// no relay log file need to recover
 	c.Assert(r.meta.Save(minCheckpoint, latestGTIDs), IsNil)
-	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+	c.Assert(r.tryRecoverLatestFile(context.Background(), parser2), IsNil)
 	_, latestPos = r.meta.Pos()
 	c.Assert(latestPos, DeepEquals, minCheckpoint)
 	_, latestGTIDs = r.meta.GTID()
@@ -269,7 +269,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	f.Close()
 
 	// recover with empty GTIDs.
-	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+	c.Assert(r.tryRecoverLatestFile(context.Background(), parser2), IsNil)
 	_, latestPos := r.meta.Pos()
 	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})
 	_, latestGTIDs := r.meta.GTID()
@@ -284,7 +284,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 
 	// recover with the subset of GTIDs (previous GTID set).
 	c.Assert(r.meta.Save(startPos, previousGTIDSet), IsNil)
-	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+	c.Assert(r.tryRecoverLatestFile(context.Background(), parser2), IsNil)
 	_, latestPos = r.meta.Pos()
 	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})
 	_, latestGTIDs = r.meta.GTID()

@@ -15,6 +15,7 @@ package writer
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
 	"os"
@@ -325,7 +326,7 @@ func (t *testFileUtilSuite) testGetTxnPosGTIDs(c *check.C, filename, flavor, pre
 	c.Assert(err, check.IsNil)
 
 	// not extra data exists
-	pos, gSet, err := getTxnPosGTIDs(filename, parser2)
+	pos, gSet, err := getTxnPosGTIDs(context.Background(), filename, parser2)
 	c.Assert(err, check.IsNil)
 	c.Assert(pos, check.DeepEquals, expectedPos)
 	c.Assert(gSet, check.DeepEquals, expectedGTIDs)
@@ -362,7 +363,7 @@ func (t *testFileUtilSuite) testGetTxnPosGTIDs(c *check.C, filename, flavor, pre
 	c.Assert(f.Close(), check.IsNil)
 
 	// check again
-	pos, gSet, err = getTxnPosGTIDs(filename, parser2)
+	pos, gSet, err = getTxnPosGTIDs(context.Background(), filename, parser2)
 	c.Assert(err, check.IsNil)
 	c.Assert(pos, check.DeepEquals, expectedPos)
 	c.Assert(gSet, check.DeepEquals, expectedGTIDs)
@@ -382,7 +383,7 @@ func (t *testFileUtilSuite) testGetTxnPosGTIDs(c *check.C, filename, flavor, pre
 		c.Assert(err, check.IsNil)
 		c.Assert(f.Close(), check.IsNil)
 		// check again
-		pos, gSet, err = getTxnPosGTIDs(filename, parser2)
+		pos, gSet, err = getTxnPosGTIDs(context.Background(), filename, parser2)
 		c.Assert(err, check.IsNil)
 		c.Assert(pos, check.DeepEquals, expectedPos)
 		c.Assert(gSet, check.DeepEquals, expectedGTIDs)
@@ -399,7 +400,7 @@ func (t *testFileUtilSuite) testGetTxnPosGTIDs(c *check.C, filename, flavor, pre
 	expectedPos += int64(len(extraData))
 	expectedGTIDs, err = gtid.ParserGTID(flavor, expectedGTIDsStr2) // 3 DDL + 11 DML
 	c.Assert(err, check.IsNil)
-	pos, gSet, err = getTxnPosGTIDs(filename, parser2)
+	pos, gSet, err = getTxnPosGTIDs(context.Background(), filename, parser2)
 	c.Assert(err, check.IsNil)
 	c.Assert(pos, check.DeepEquals, expectedPos)
 	c.Assert(gSet, check.DeepEquals, expectedGTIDs)
@@ -503,7 +504,7 @@ func (t *testFileUtilSuite) TestGetTxnPosGTIDsNoGTID(c *check.C) {
 	c.Assert(f.Close(), check.IsNil)
 
 	// check latest pos/GTID set
-	pos, gSet, err := getTxnPosGTIDs(filename, parser.New())
+	pos, gSet, err := getTxnPosGTIDs(context.Background(), filename, parser.New())
 	c.Assert(err, check.IsNil)
 	c.Assert(pos, check.Equals, int64(latestPos))
 	c.Assert(gSet, check.IsNil) // GTID not enabled
@@ -569,7 +570,7 @@ func (t *testFileUtilSuite) testGetTxnPosGTIDsIllegalGTID(c *check.C, gtidEv *re
 	c.Assert(f.Close(), check.IsNil)
 
 	// check latest pos/GTID set
-	pos, gSet, err := getTxnPosGTIDs(filename, parser.New())
+	pos, gSet, err := getTxnPosGTIDs(context.Background(), filename, parser.New())
 	c.Assert(err, check.ErrorMatches, errRegStr)
 	c.Assert(pos, check.Equals, int64(0))
 	c.Assert(gSet, check.IsNil)

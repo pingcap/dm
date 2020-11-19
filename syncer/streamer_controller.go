@@ -201,7 +201,7 @@ func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, loca
 	if c.currentBinlogType == RemoteBinlog {
 		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), tctx, c.syncCfg.Flavor, c.enableGTID}
 	} else {
-		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(tctx, &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
+		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(tctx.L(), &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
 	}
 
 	c.streamer, err = c.streamerProducer.generateStreamer(location)
@@ -308,6 +308,7 @@ func (c *StreamerController) closeBinlogSyncer(logtctx *tcontext.Context, binlog
 	lastSlaveConnectionID := binlogSyncer.LastConnectionID()
 	defer binlogSyncer.Close()
 	if lastSlaveConnectionID > 0 {
+		// try to KILL the conn in default timeout, but it's not a big problem even failed.
 		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
 		defer cancel()
 		err := c.fromDB.killConn(ctx, lastSlaveConnectionID)
