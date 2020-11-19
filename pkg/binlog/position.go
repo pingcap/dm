@@ -36,6 +36,7 @@ const (
 	// eg. mysql-bin.000003 in c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002 => mysql-bin|000002.000003
 	// where `000002` in `c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002` is the UUIDSuffix
 	posUUIDSuffixSeparator = "|"
+	minUUIDSuffix          = 1
 )
 
 var (
@@ -108,6 +109,19 @@ func RealMySQLPos(pos gmysql.Position) (gmysql.Position, error) {
 	}
 
 	return pos, nil
+}
+
+// ExtractSuffix extracts uuidSuffix from input name
+func ExtractSuffix(name string) (string, error) {
+	filename, err := ParseFilename(name)
+	if err != nil {
+		return "", err
+	}
+	sepIdx := strings.LastIndex(filename.BaseName, posUUIDSuffixSeparator)
+	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(filename.BaseName) {
+		return filename.BaseName[sepIdx+len(posUUIDSuffixSeparator):], nil
+	}
+	return fmt.Sprintf("%06d", minUUIDSuffix), nil
 }
 
 // ExtractPos extracts (uuidWithSuffix, uuidSuffix, originalPos) from input pos (originalPos or convertedPos)

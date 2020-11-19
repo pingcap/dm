@@ -183,7 +183,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	f, err := os.Create(filepath.Join(r.cfg.RelayDir, "old_relay_log"))
 	c.Assert(err, IsNil)
 	f.Close()
-	c.Assert(r.purgeRelayDir(), IsNil)
+	c.Assert(r.PurgeRelayDir(), IsNil)
 	files, err := ioutil.ReadDir(r.cfg.RelayDir)
 	c.Assert(err, IsNil)
 	c.Assert(files, HasLen, 0)
@@ -194,7 +194,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
 
 	// save position into meta
-	c.Assert(r.meta.AddDir(uuid, &startPos, nil), IsNil)
+	c.Assert(r.meta.AddDir(uuid, &startPos, nil, ""), IsNil)
 
 	// relay log file does not exists, no need to recover
 	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
@@ -265,7 +265,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	recoverGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, recoverGTIDSetStr)
 	c.Assert(err, IsNil)
 
-	c.Assert(r.meta.AddDir(uuid, &startPos, nil), IsNil)
+	c.Assert(r.meta.AddDir(uuid, &startPos, nil, ""), IsNil)
 	c.Assert(r.meta.Load(), IsNil)
 
 	// use a generator to generate some binlog events
@@ -395,7 +395,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	c.Assert(r.Init(context.Background()), IsNil)
 	// NOTE: we can mock meta later.
 	c.Assert(r.meta.Load(), IsNil)
-	c.Assert(r.meta.AddDir("24ecd093-8cec-11e9-aa0d-0242ac170002", nil, nil), IsNil)
+	c.Assert(r.meta.AddDir("24ecd093-8cec-11e9-aa0d-0242ac170002", nil, nil, ""), IsNil)
 
 	// attach GTID sets to QueryEv
 	queryEv2 := queryEv.Event.(*replication.QueryEvent)

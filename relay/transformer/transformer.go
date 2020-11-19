@@ -67,6 +67,8 @@ func (t *transformer) Transform(e *replication.BinlogEvent) Result {
 	}
 
 	switch ev := e.Event.(type) {
+	case *replication.PreviousGTIDsEvent:
+		result.CanSaveGTID = true
 	case *replication.RotateEvent:
 		result.LogPos = uint32(ev.Position)         // next event's position
 		result.NextLogName = string(ev.NextLogName) // for RotateEvent, update binlog name

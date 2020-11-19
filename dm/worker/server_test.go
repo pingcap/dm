@@ -33,6 +33,8 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -60,11 +62,11 @@ func (t *testServer) SetUpSuite(c *C) {
 	err := log.InitLogger(&log.Config{})
 	c.Assert(err, IsNil)
 
-	getMinPosForSubTaskFunc = getFakePosForSubTask
+	getMinLocForSubTaskFunc = getFakeLocForSubTask
 }
 
 func (t *testServer) TearDownSuite(c *C) {
-	getMinPosForSubTaskFunc = getMinPosForSubTask
+	getMinLocForSubTaskFunc = getMinLocForSubTask
 }
 
 func createMockETCD(dir string, host string) (*embed.Etcd, error) {
@@ -414,10 +416,19 @@ func (t *testServer) TestGetMinPosInAllSubTasks(c *C) {
 			Name: "test1",
 		},
 	}
-	minPos, err := getMinPosInAllSubTasks(context.Background(), subTaskCfg)
+	minLoc, err := getMinLocInAllSubTasks(context.Background(), subTaskCfg)
 	c.Assert(err, IsNil)
-	c.Assert(minPos.Name, Equals, "mysql-binlog.00001")
-	c.Assert(minPos.Pos, Equals, uint32(12))
+	c.Assert(minLoc.Position.Name, Equals, "mysql-binlog.00001")
+	c.Assert(minLoc.Position.Pos, Equals, uint32(12))
+
+	for _, subtask := range subTaskCfg {
+		subtask.EnableGTID = true
+	}
+
+	minLoc, err = getMinLocInAllSubTasks(context.Background(), subTaskCfg)
+	c.Assert(err, IsNil)
+	c.Assert(minLoc.Position.Name, Equals, "mysql-binlog.00001")
+	c.Assert(minLoc.Position.Pos, Equals, uint32(123))
 }
 
 func (t *testServer) TestUnifyMasterBinlogPos(c *C) {
@@ -530,22 +541,38 @@ func (t *testServer) TestUnifyMasterBinlogPos(c *C) {
 	c.Assert(relay.RelayCatchUpMaster, IsTrue)
 }
 
-func getFakePosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minPos *mysql.Position, err error) {
-	switch subTaskCfg.Name {
-	case "test1":
-		return &mysql.Position{
+func getFakeLocForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minLoc *binlog.Location, err error) {
+	gset1, _ := gtid.ParserGTID(mysql.MySQLFlavor, "ba8f633f-1f15-11eb-b1c7-0242ac110001:1-30")
+	gset2, _ := gtid.ParserGTID(mysql.MySQLFlavor, "ba8f633f-1f15-11eb-b1c7-0242ac110001:1-50")
+	gset3, _ := gtid.ParserGTID(mysql.MySQLFlavor, "ba8f633f-1f15-11eb-b1c7-0242ac110001:1-50,ba8f633f-1f15-11eb-b1c7-0242ac110002:1")
+	loc1 := binlog.InitLocation(
+		mysql.Position{
 			Name: "mysql-binlog.00001",
 			Pos:  123,
-		}, nil
-	case "test2":
-		return &mysql.Position{
+		},
+		gset1,
+	)
+	loc2 := binlog.InitLocation(
+		mysql.Position{
 			Name: "mysql-binlog.00001",
 			Pos:  12,
-		}, nil
-	case "test3":
-		return &mysql.Position{
+		},
+		gset2,
+	)
+	loc3 := binlog.InitLocation(
+		mysql.Position{
 			Name: "mysql-binlog.00003",
-		}, nil
+		},
+		gset3,
+	)
+
+	switch subTaskCfg.Name {
+	case "test1":
+		return &loc1, nil
+	case "test2":
+		return &loc2, nil
+	case "test3":
+		return &loc3, nil
 	default:
 		return nil, nil
 	}

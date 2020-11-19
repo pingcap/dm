@@ -96,6 +96,10 @@ type Process interface {
 	IsClosed() bool
 	// SaveMeta save relay meta
 	SaveMeta(pos mysql.Position, gset gtid.Set) error
+	// ResetMeta reset relay meta
+	ResetMeta()
+	// PurgeRelayDir will clear all contents under w.cfg.RelayDir
+	PurgeRelayDir() error
 }
 
 // Relay relays mysql binlog to local file.
@@ -200,7 +204,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 	}
 
 	if isNew {
-		// re-setup meta for new server
+		// re-setup meta for new server or new source
 		err = r.reSetupMeta()
 		if err != nil {
 			return err
@@ -270,8 +274,8 @@ func (r *Relay) process(parentCtx context.Context) error {
 	}
 }
 
-// purgeRelayDir will clear all contents under w.cfg.RelayDir
-func (r *Relay) purgeRelayDir() error {
+// PurgeRelayDir implements the dm.Unit interface
+func (r *Relay) PurgeRelayDir() error {
 	dir := r.cfg.RelayDir
 	d, err := os.Open(dir)
 	// fail to open dir, return directly
@@ -509,7 +513,29 @@ func (r *Relay) reSetupMeta() error {
 	if err != nil {
 		return err
 	}
-	err = r.meta.AddDir(uuid, nil, nil)
+
+	var newPos *mysql.Position
+	var newGset gtid.Set
+	var newUUIDSufiix string
+	if len(r.cfg.UUIDSuffix) != 0 {
+		if err = r.PurgeRelayDir(); err != nil {
+			return err
+		}
+		r.ResetMeta()
+
+		newUUIDSufiix = r.cfg.UUIDSuffix
+		r.cfg.UUIDSuffix = ""
+		if len(r.cfg.BinLogName) != 0 {
+			newPos = &mysql.Position{Name: r.cfg.BinLogName, Pos: binlog.MinPosition.Pos}
+		}
+		if len(r.cfg.BinlogGTID) != 0 {
+			newGset, err = gtid.ParserGTID(r.cfg.Flavor, r.cfg.BinlogGTID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	err = r.meta.AddDir(uuid, newPos, newGset, newUUIDSufiix)
 	if err != nil {
 		return err
 	}
@@ -659,6 +685,11 @@ func (r *Relay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
 	}
 	r.relayMetaHub.SetMeta(r.meta.UUID(), pos, gset)
 	return nil
+}
+
+// ResetMeta reset relay meta
+func (r *Relay) ResetMeta() {
+	r.meta = NewLocalMeta(r.cfg.Flavor, r.cfg.RelayDir)
 }
 
 // FlushMeta flush relay meta and clear all metas in RelayLogInfo

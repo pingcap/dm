@@ -121,6 +121,14 @@ func (d *DummyRelay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
 	return nil
 }
 
+// ResetMeta implements Process interface
+func (d *DummyRelay) ResetMeta() {}
+
+// PurgeRelayDir implements Process interface
+func (d *DummyRelay) PurgeRelayDir() error {
+	return nil
+}
+
 func (t *testRelay) TestRelay(c *C) {
 	originNewRelay := relay.NewRelay
 	relay.NewRelay = NewDummyRelay

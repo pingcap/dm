@@ -35,6 +35,7 @@ type Config struct {
 	// do not need to specify binlog-pos, because relay will fetch the whole file
 	BinLogName string `toml:"binlog-name" json:"binlog-name"`
 	BinlogGTID string `toml:"binlog-gtid" json:"binlog-gtid"`
+	UUIDSuffix string `toml:"-" json:"-"`
 
 	// for binlog reader retry
 	ReaderRetry retry.ReaderRetryConfig `toml:"reader-retry" json:"reader-retry"`
@@ -61,6 +62,7 @@ func FromSourceCfg(sourceCfg *config.SourceConfig) *Config {
 		From:        clone.From,
 		BinLogName:  clone.RelayBinLogName,
 		BinlogGTID:  clone.RelayBinlogGTID,
+		UUIDSuffix:  clone.UUIDSuffix,
 		ReaderRetry: retry.ReaderRetryConfig{ // we use config from TaskChecker now
 			BackoffRollback: clone.Checker.BackoffRollback.Duration,
 			BackoffMax:      clone.Checker.BackoffMax.Duration,

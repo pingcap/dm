@@ -63,7 +63,7 @@ type Meta interface {
 	// and binlog pos will be set again when new binlog events received
 	// @serverUUID should be a server_uuid for MySQL or MariaDB
 	// if set @newPos / @newGTID, old value will be replaced
-	AddDir(serverUUID string, newPos *mysql.Position, newGTID gtid.Set) error
+	AddDir(serverUUID string, newPos *mysql.Position, newGTID gtid.Set, uuidSuffix string) error
 
 	// Pos returns current (UUID with suffix, Position) pair
 	Pos() (string, mysql.Position)
@@ -268,7 +268,7 @@ func (lm *LocalMeta) Dir() string {
 }
 
 // AddDir implements Meta.AddDir
-func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID gtid.Set) error {
+func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID gtid.Set, uuidSuffix string) error {
 	lm.Lock()
 	defer lm.Unlock()
 
@@ -276,7 +276,11 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 
 	if len(lm.currentUUID) == 0 {
 		// no UUID exists yet, simply add it
-		newUUID = utils.AddSuffixForUUID(serverUUID, minUUIDSufix)
+		if len(uuidSuffix) == 0 {
+			newUUID = utils.AddSuffixForUUID(serverUUID, minUUIDSufix)
+		} else {
+			newUUID = utils.AddSuffixStrForUUID(serverUUID, uuidSuffix)
+		}
 	} else {
 		_, suffix, err := utils.ParseSuffixForUUID(lm.currentUUID)
 		if err != nil {
@@ -343,7 +347,7 @@ func (lm *LocalMeta) GTID() (string, gtid.Set) {
 	lm.RLock()
 	defer lm.RUnlock()
 
-	return lm.currentUUID, lm.gset.Clone()
+	return lm.currentUUID, lm.gset
 }
 
 // UUID implements Meta.UUID

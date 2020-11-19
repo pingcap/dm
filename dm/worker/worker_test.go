@@ -92,11 +92,11 @@ func (t *testServer2) SetUpSuite(c *C) {
 	err := log.InitLogger(&log.Config{})
 	c.Assert(err, IsNil)
 
-	getMinPosForSubTaskFunc = getFakePosForSubTask
+	getMinLocForSubTaskFunc = getFakeLocForSubTask
 }
 
 func (t *testServer2) TearDownSuite(c *C) {
-	getMinPosForSubTaskFunc = getMinPosForSubTask
+	getMinLocForSubTaskFunc = getMinLocForSubTask
 }
 
 func (t *testServer2) TestTaskAutoResume(c *C) {
