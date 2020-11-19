@@ -630,6 +630,13 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 
 // setUpReader setups the underlying reader used to read binlog events from the upstream master server.
 func (r *Relay) setUpReader() (reader.Reader, error) {
+	randomServerID, err := utils.GetRandomServerID(r.tctx.Context(), r.db)
+	if err != nil {
+		// should never happened unless the master has too many slave
+		return nil, terror.Annotate(err, "fail to get random server id for relay reader")
+	}
+	r.syncerCfg.ServerID = randomServerID
+
 	uuid, pos := r.meta.Pos()
 	_, gs := r.meta.GTID()
 	cfg := &reader.Config{
@@ -641,7 +648,7 @@ func (r *Relay) setUpReader() (reader.Reader, error) {
 	}
 
 	reader2 := reader.NewReader(cfg)
-	err := reader2.Start()
+	err = reader2.Start()
 	if err != nil {
 		// do not log the whole config to protect the password in `SyncConfig`.
 		// and other config items should already logged before or included in `err`.
