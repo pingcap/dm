@@ -160,8 +160,8 @@ github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghf
 github.com/cespare/xxhash/v2 v2.1.0/go.mod h1:dgIUBU3pDso/gPgZ1osOZ0iQf77oPR28Tjxl5dIMyVM=
 github.com/cespare/xxhash/v2 v2.1.1 h1:6MnRN8NT7+YBpUIWxHtefFZOKTAPgGjpQSxqLNn0+qY=
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
-github.com/chaos-mesh/go-sqlsmith v0.0.0-20201014055312-2d45413c66bc h1:xWRymIiLYe06evkBoialnTa6yCFH4BK0/1A3Vutq1MI=
-github.com/chaos-mesh/go-sqlsmith v0.0.0-20201014055312-2d45413c66bc/go.mod h1:o8sr9C3GqCAtDNJnLF/RwBd98KPU2QUCMUY1lhCeg/Y=
+github.com/chaos-mesh/go-sqlsmith v0.0.0-20201120053641-47c50b530c01 h1:UmnTbNFdwBNRKk5g1dePu8uwC0RJNgwj2noWXh7sooQ=
+github.com/chaos-mesh/go-sqlsmith v0.0.0-20201120053641-47c50b530c01/go.mod h1:InMdCr1VbT2jZTbOyq1B4Rt+z+mk2+qalNI5aefDOQI=
 github.com/cheggaaa/pb v2.0.7+incompatible h1:gLKifR1UkZ/kLkda5gC0K6c8g+jU2sINPtBeOiNlMhU=
 github.com/cheggaaa/pb v2.0.7+incompatible/go.mod h1:pQciLPpbU0oxA0h+VJYYLxO+XeDQb5pZijXscXHm81s=
 github.com/cheggaaa/pb/v3 v3.0.1/go.mod h1:SqqeMF/pMOIu3xgGoxtPYhMNQP258xE4x/XRTYua+KU=
