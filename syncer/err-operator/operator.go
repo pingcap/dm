@@ -19,7 +19,7 @@ import (
 	"strings"
 	"sync"
 
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
@@ -40,7 +40,7 @@ type Operator struct {
 // newOperator creates a new operator with a random UUID
 func newOperator(op pb.ErrorOp, events []*replication.BinlogEvent) *Operator {
 	return &Operator{
-		uuid:   uuid.Must(uuid.NewV4()).String(),
+		uuid:   uuid.New().String(),
 		op:     op,
 		events: events,
 	}

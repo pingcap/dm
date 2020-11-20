@@ -21,8 +21,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pingcap/parser"
-	uuid "github.com/satori/go.uuid"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 

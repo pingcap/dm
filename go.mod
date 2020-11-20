@@ -13,6 +13,7 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/mock v1.4.3
 	github.com/golang/protobuf v1.3.4
+	github.com/google/uuid v1.1.1
 	github.com/grpc-ecosystem/grpc-gateway v1.14.3
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
@@ -25,7 +26,6 @@ require (
 	github.com/pingcap/tidb-tools v4.0.7-0.20200927084250-e47e0e12c7f3+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
-	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/siddontang/go-mysql v0.0.0-20200222075837-12e89848f047
 	github.com/soheilhy/cmux v0.1.4
