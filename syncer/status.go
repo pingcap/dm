@@ -15,9 +15,12 @@ package syncer
 
 import (
 	"context"
+	"time"
 
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/failpoint"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -88,5 +91,14 @@ func (s *Syncer) Status(ctx context.Context) interface{} {
 		st.BlockingDDLs = pendingShardInfo.DDLs
 	}
 
+	failpoint.Inject("BlockSyncStatus", func(val failpoint.Value) {
+		interval, err := time.ParseDuration(val.(string))
+		if err != nil {
+			s.tctx.L().Warn("inject failpoint BlockSyncStatus failed", zap.Reflect("value", val), zap.Error(err))
+		} else {
+			s.tctx.L().Info("set BlockSyncStatus", zap.String("failpoint", "BlockSyncStatus"), zap.Duration("value", interval))
+			time.Sleep(interval)
+		}
+	})
 	return st
 }
