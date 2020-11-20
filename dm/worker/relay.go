@@ -123,6 +123,7 @@ func (h *realRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.P
 		streamer.GetReaderHub(),
 	}
 
+	// TODO: refine the context usage of relay, and it may need to be initialized before handle any subtasks.
 	ctx, cancel := context.WithTimeout(context.Background(), unit.DefaultInitTimeout)
 	defer cancel()
 	if err := h.relay.Init(ctx); err != nil {
