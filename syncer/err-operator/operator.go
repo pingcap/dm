@@ -40,7 +40,7 @@ type Operator struct {
 // newOperator creates a new operator with a random UUID
 func newOperator(op pb.ErrorOp, events []*replication.BinlogEvent) *Operator {
 	return &Operator{
-		uuid:   uuid.NewV4().String(),
+		uuid:   uuid.Must(uuid.NewV4()).String(),
 		op:     op,
 		events: events,
 	}
