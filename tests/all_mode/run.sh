@@ -84,9 +84,15 @@ function test_query_timeout(){
     dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
     
     # `query-status` timeout
+    start_time=$(date +%s)
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status $ILLEGAL_CHAR_NAME" \
         "context deadline exceeded" 2
+    duration=$(( $(date +%s)-$start_time ))
+    if [[ $duration -gt 10 ]]; then
+        echo "query-stauts takes too much time $duration"
+        exit 1
+    fi
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
