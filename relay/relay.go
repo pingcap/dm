@@ -203,7 +203,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		return err
 	}
 
-	if isNew {
+	if isNew || len(r.cfg.UUIDSuffix) > 0 {
 		// re-setup meta for new server or new source
 		err = r.reSetupMeta()
 		if err != nil {
@@ -524,7 +524,9 @@ func (r *Relay) reSetupMeta() error {
 		r.ResetMeta()
 
 		newUUIDSufiix = r.cfg.UUIDSuffix
+		// reset the UUIDSuffix
 		r.cfg.UUIDSuffix = ""
+
 		if len(r.cfg.BinLogName) != 0 {
 			newPos = &mysql.Position{Name: r.cfg.BinLogName, Pos: binlog.MinPosition.Pos}
 		}

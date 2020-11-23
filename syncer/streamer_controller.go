@@ -235,6 +235,7 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 	failpoint.Inject("SyncerGetEventError", func(_ failpoint.Value) {
 		if !mockRestarted {
 			mockRestarted = true
+			c.meetError = true
 			tctx.L().Info("mock upstream instance restart", zap.String("failpoint", "SyncerGetEventError"))
 			failpoint.Return(nil, terror.ErrDBBadConn.Generate())
 		}

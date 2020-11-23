@@ -552,8 +552,10 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		}
 
 		if minLoc != nil {
+			log.L().Info("get min location in all subtasks", zap.Stringer("location", *minLoc))
 			cfg.RelayBinLogName = binlog.AdjustPosition(minLoc.Position).Name
 			cfg.RelayBinlogGTID = minLoc.GTIDSetStr()
+			// set UUIDSuffix when bound to a source
 			cfg.UUIDSuffix, err = binlog.ExtractSuffix(minLoc.Position.Name)
 			if err != nil {
 				return err

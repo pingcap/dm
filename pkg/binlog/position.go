@@ -113,6 +113,9 @@ func RealMySQLPos(pos gmysql.Position) (gmysql.Position, error) {
 
 // ExtractSuffix extracts uuidSuffix from input name
 func ExtractSuffix(name string) (string, error) {
+	if len(name) == 0 {
+		return fmt.Sprintf("%06d", minUUIDSuffix), nil
+	}
 	filename, err := ParseFilename(name)
 	if err != nil {
 		return "", err
