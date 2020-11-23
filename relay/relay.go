@@ -664,7 +664,7 @@ func (r *Relay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
 	return nil
 }
 
-// FlushMeta flush relay meta.
+// FlushMeta flush relay meta
 func (r *Relay) FlushMeta() error {
 	return r.meta.Flush()
 }
