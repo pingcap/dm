@@ -24,7 +24,7 @@ import (
 	. "github.com/pingcap/check"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
-	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 func TestSuite(t *testing.T) {
@@ -48,7 +48,7 @@ func (t *testFileWriterSuite) TestWrite(c *C) {
 		allData bytes.Buffer
 	)
 
-	w := NewFileWriter(tcontext.Background(), cfg)
+	w := NewFileWriter(log.L(), cfg)
 	c.Assert(w, NotNil)
 
 	// check status, stageNew

@@ -49,7 +49,7 @@ func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 	events := make([]*replication.BinlogEvent, 0)
 	var err error
 	if req.Op == pb.ErrorOp_Replace {
-		events, err = s.genEvents(req.Sqls)
+		events, err = s.genEvents(ctx, req.Sqls)
 		if err != nil {
 			return err
 		}
@@ -69,10 +69,10 @@ func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 	return nil
 }
 
-func (s *Syncer) genEvents(sqls []string) ([]*replication.BinlogEvent, error) {
+func (s *Syncer) genEvents(ctx context.Context, sqls []string) ([]*replication.BinlogEvent, error) {
 	events := make([]*replication.BinlogEvent, 0)
 
-	parser2, err := s.fromDB.getParser()
+	parser2, err := s.fromDB.getParser(ctx)
 	if err != nil {
 		s.tctx.L().Error("failed to get SQL mode specified parser from upstream, using default SQL mode instead")
 		parser2 = parser.New()

@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 //// Backoff related constants
@@ -190,6 +191,7 @@ func (tsc *realTaskStatusChecker) Close() {
 }
 
 func (tsc *realTaskStatusChecker) run() {
+	// keep running until canceled in `Close`.
 	tsc.ctx, tsc.cancel = context.WithCancel(context.Background())
 	tsc.closed.Set(closedFalse)
 
@@ -293,7 +295,10 @@ func (tsc *realTaskStatusChecker) getRelayResumeStrategy(relayStatus *pb.RelaySt
 }
 
 func (tsc *realTaskStatusChecker) checkRelayStatus() {
-	relayStatus := tsc.w.relayHolder.Status()
+	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
+	defer cancel()
+
+	relayStatus := tsc.w.relayHolder.Status(ctx)
 	if tsc.bc.relayBackoff == nil {
 		tsc.bc.relayBackoff, _ = backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin.Duration, tsc.cfg.BackoffMax.Duration)
 		tsc.bc.latestRelayPausedTime = time.Now()

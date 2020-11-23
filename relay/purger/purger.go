@@ -24,7 +24,6 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
-	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
@@ -79,7 +78,7 @@ type RelayPurger struct {
 	interceptors []PurgeInterceptor
 	strategies   map[strategyType]PurgeStrategy
 
-	tctx *tcontext.Context
+	logger log.Logger
 }
 
 // NewRelayPurger creates a new purger
@@ -91,7 +90,7 @@ func NewRelayPurger(cfg config.PurgeConfig, baseRelayDir string, operators []Rel
 		operators:    operators,
 		interceptors: interceptors,
 		strategies:   make(map[strategyType]PurgeStrategy),
-		tctx:         tcontext.Background().WithLogger(log.With(zap.String("component", "relay purger"))),
+		logger:       log.With(zap.String("component", "relay purger")),
 	}
 
 	// add strategies
@@ -113,7 +112,7 @@ func (p *RelayPurger) Start() {
 		return // no need do purge in the background
 	}
 
-	p.tctx.L().Info("starting relay log purger", zap.Reflect("config", p.cfg))
+	p.logger.Info("starting relay log purger", zap.Reflect("config", p.cfg))
 
 	// Close will wait process to return
 	p.wg.Add(1)
@@ -131,7 +130,7 @@ func (p *RelayPurger) run() {
 
 	var ctx context.Context
 	p.lock.Lock()
-	ctx, p.cancel = context.WithCancel(context.Background())
+	ctx, p.cancel = context.WithCancel(context.Background()) // run until cancel in `Close`.
 	p.lock.Unlock()
 	for {
 		select {
@@ -149,7 +148,7 @@ func (p *RelayPurger) Close() {
 		return
 	}
 
-	p.tctx.L().Info("closing relay log purger")
+	p.logger.Info("closing relay log purger")
 
 	p.lock.RLock()
 	if p.cancel != nil {
@@ -203,7 +202,7 @@ func (p *RelayPurger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 func (p *RelayPurger) tryPurge() {
 	strategy, args, err := p.check()
 	if err != nil {
-		p.tctx.L().Error("check whether need to purge relay log files in background", zap.Error(err))
+		p.logger.Error("check whether need to purge relay log files in background", zap.Error(err))
 		return
 	}
 	if strategy == nil {
@@ -211,7 +210,7 @@ func (p *RelayPurger) tryPurge() {
 	}
 	err = p.doPurge(strategy, args)
 	if err != nil {
-		p.tctx.L().Error("do purge", zap.Stringer("strategy", strategy.Type()), zap.Error(err))
+		p.logger.Error("do purge", zap.Stringer("strategy", strategy.Type()), zap.Error(err))
 	}
 }
 
@@ -236,12 +235,12 @@ func (p *RelayPurger) doPurge(ps PurgeStrategy, args StrategyArgs) error {
 	}
 	args.SetActiveRelayLog(earliest)
 
-	p.tctx.L().Info("start purging relay log files", zap.Stringer("type", ps.Type()), zap.Reflect("args", args))
+	p.logger.Info("start purging relay log files", zap.Stringer("type", ps.Type()), zap.Reflect("args", args))
 	return ps.Do(args)
 }
 
 func (p *RelayPurger) check() (PurgeStrategy, StrategyArgs, error) {
-	p.tctx.L().Info("checking whether needing to purge relay log files")
+	p.logger.Info("checking whether needing to purge relay log files")
 
 	uuids, err := utils.ParseUUIDIndex(p.indexPath)
 	if err != nil {

@@ -103,6 +103,7 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 		return terror.ErrReaderAlreadyStarted.Generate(r.stage, common.StageNew)
 	}
 
+	// keep running until canceled in `Close`.
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	r.wg.Add(1)
 	go func() {

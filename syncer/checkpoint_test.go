@@ -76,7 +76,7 @@ func (s *testCheckpointSuite) SetUpSuite(c *C) {
 		}
 	)
 
-	s.tracker, err = schema.NewTracker(defaultTestSessionCfg, nil)
+	s.tracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, nil)
 	c.Assert(err, IsNil)
 }
 
