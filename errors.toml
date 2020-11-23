@@ -2656,6 +2656,12 @@ description = ""
 workaround = "Please check network connection of worker"
 tags = ["internal", "high"]
 
+[error.DM-dm-worker-40078]
+message = "cannot compare gtid between loader and relay, loader gtid: %s, relay gtid: %s"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
 [error.DM-dm-tracer-42001]
 message = "parse dm-tracer config flag set"
 description = ""

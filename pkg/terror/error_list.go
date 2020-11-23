@@ -538,6 +538,7 @@ const (
 	codeWorkerDDLLockOpNotFound
 	codeWorkerTLSConfigNotValid
 	codeWorkerFailConnectMaster
+	codeWorkerWaitRelayCatchupGTID
 )
 
 // DM-tracer error code
@@ -1106,6 +1107,7 @@ var (
 	ErrWorkerNoStart                 = New(codeWorkerNoStart, ClassDMWorker, ScopeInternal, LevelHigh, "no mysql source is being handled in the worker", "")
 	ErrWorkerAlreadyStart            = New(codeWorkerAlreadyStarted, ClassDMWorker, ScopeInternal, LevelHigh, "mysql source handler worker already started", "")
 	ErrWorkerSourceNotMatch          = New(codeWorkerSourceNotMatch, ClassDMWorker, ScopeInternal, LevelHigh, "source of request does not match with source in worker", "")
+	ErrWorkerWaitRelayCatchupGTID    = New(codeWorkerWaitRelayCatchupGTID, ClassDMWorker, ScopeInternal, LevelHigh, "cannot compare gtid between loader and relay, loader gtid: %s, relay gtid: %s", "")
 
 	ErrWorkerFailToGetSubtaskConfigFromEtcd = New(codeWorkerFailToGetSubtaskConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative subtask config for task %s in etcd", "")
 	ErrWorkerFailToGetSourceConfigFromEtcd  = New(codeWorkerFailToGetSourceConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative source config for source %s in etcd", "")
