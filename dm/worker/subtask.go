@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/pingcap/failpoint"
+	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
@@ -584,6 +585,13 @@ func (st *SubTask) ShardDDLOperation() *pessimism.Operation {
 // Currently there is only one wait condition
 // from Load unit to Sync unit, wait for relay-log catched up with mydumper binlog position.
 func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
+	var (
+		gset1 gtid.Set
+		gset2 gtid.Set
+		pos1  *mysql.Position
+		pos2  *mysql.Position
+		err   error
+	)
 	pu := st.PrevUnit()
 	cu := st.CurrUnit()
 	if pu != nil && pu.Type() == pb.UnitType_Load && cu.Type() == pb.UnitType_Sync {
@@ -601,40 +609,49 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 		loadStatus := pu.Status(ctxStatus).(*pb.LoadStatus)
 		cancelStatus()
 
-		pos1, err := utils.DecodeBinlogPosition(loadStatus.MetaBinlog)
-		if err != nil {
-			return terror.WithClass(err, terror.ClassDMWorker)
+		if st.cfg.EnableGTID {
+			gset1, err = gtid.ParserGTID(st.cfg.Flavor, loadStatus.MetaBinlogGTID)
+			if err != nil {
+				return terror.WithClass(err, terror.ClassDMWorker)
+			}
+		} else {
+			pos1, err = utils.DecodeBinlogPosition(loadStatus.MetaBinlog)
+			if err != nil {
+				return terror.WithClass(err, terror.ClassDMWorker)
+			}
 		}
+
 		for {
 			ctxStatus, cancelStatus = context.WithTimeout(ctxWait, utils.DefaultDBTimeout)
 			relayStatus := hub.w.relayHolder.Status(ctxStatus)
 			cancelStatus()
 
-			pos2, err := utils.DecodeBinlogPosition(relayStatus.RelayBinlog)
-			if err != nil {
-				return terror.WithClass(err, terror.ClassDMWorker)
-			}
 			if st.cfg.EnableGTID {
-				gset1, err := gtid.ParserGTID(st.cfg.Flavor, loadStatus.MetaBinlogGTID)
+				gset2, err = gtid.ParserGTID(st.cfg.Flavor, relayStatus.RelayBinlogGtid)
 				if err != nil {
-					st.l.Error("fail to parse gtid", log.ShortError(err))
-				}
-				gset2, err := gtid.ParserGTID(st.cfg.Flavor, relayStatus.RelayBinlogGtid)
-				if err != nil {
-					st.l.Error("fail to parse gtid", log.ShortError(err))
+					return terror.WithClass(err, terror.ClassDMWorker)
 				}
 				rc, ok := binlog.CompareGTID(gset1, gset2)
 				if ok && rc <= 0 {
 					break
 				}
+			} else {
+				pos2, err = utils.DecodeBinlogPosition(relayStatus.RelayBinlog)
+				if err != nil {
+					return terror.WithClass(err, terror.ClassDMWorker)
+				}
+				if pos1.Compare(*pos2) <= 0 {
+					break
+				}
 			}
-			if pos1.Compare(*pos2) <= 0 {
-				break
-			}
-			st.l.Debug("wait relay to catchup", zap.Stringer("load end position", pos1), zap.String("load end gtid", loadStatus.MetaBinlogGTID), zap.Stringer("relay position", pos2), zap.String("relay gtid", relayStatus.RelayBinlogGtid))
+
+			st.l.Debug("wait relay to catchup", zap.Bool("enableGTID", st.cfg.EnableGTID), zap.Stringer("load end position", pos1), zap.String("load end gtid", loadStatus.MetaBinlogGTID), zap.Stringer("relay position", pos2), zap.String("relay gtid", relayStatus.RelayBinlogGtid))
 
 			select {
 			case <-ctxWait.Done():
+				if st.cfg.EnableGTID {
+					return terror.ErrWorkerWaitRelayCatchupTimeout.Generate(waitRelayCatchupTimeout, loadStatus.MetaBinlogGTID, relayStatus.RelayBinlogGtid)
+				}
 				return terror.ErrWorkerWaitRelayCatchupTimeout.Generate(waitRelayCatchupTimeout, pos1, pos2)
 			case <-subTaskCtx.Done():
 				return nil

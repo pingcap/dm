@@ -430,7 +430,7 @@ ErrWorkerCacheDDLInfoExists,[code=40063:class=dm-worker:scope=internal:level=hig
 ErrWorkerExecSkipDDLConflict,[code=40064:class=dm-worker:scope=internal:level=high], "Message: execDDL and skipDDL can not specify both at the same time"
 ErrWorkerExecDDLSyncerOnly,[code=40065:class=dm-worker:scope=internal:level=high], "Message: only syncer support ExecuteDDL, but current unit is %s"
 ErrWorkerExecDDLTimeout,[code=40066:class=dm-worker:scope=internal:level=high], "Message: ExecuteDDL timeout (exceeding %s), Workaround: Please try use `query-status` to query whether the DDL is still blocking."
-ErrWorkerWaitRelayCatchupTimeout,[code=40067:class=dm-worker:scope=internal:level=high], "Message: waiting for relay binlog pos to catch up with loader end binlog pos is timeout (exceeding %s), loader end binlog pos: %s, relay binlog pos: %s"
+ErrWorkerWaitRelayCatchupTimeout,[code=40067:class=dm-worker:scope=internal:level=high], "Message: waiting for relay to catch up with loader is timeout (exceeding %s), loader: %s, relay: %s"
 ErrWorkerRelayIsPurging,[code=40068:class=dm-worker:scope=internal:level=high], "Message: relay log purger is purging, cannot start sub task %s, Workaround: Please try again later."
 ErrWorkerHostPortNotValid,[code=40069:class=dm-worker:scope=internal:level=high], "Message: host:port '%s' not valid, Workaround: Please check configs in worker configuration file."
 ErrWorkerNoStart,[code=40070:class=dm-worker:scope=internal:level=high], "Message: no mysql source is being handled in the worker"
