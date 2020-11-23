@@ -31,6 +31,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/binlog/reader"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -127,14 +128,8 @@ func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
 	// get flush logs from oldest to newest
 	for _, uuid := range r.uuids {
 		filename := path.Join(r.cfg.RelayDir, uuid, utils.MetaFilename)
-		fd, err := os.Open(filename)
-		if err != nil {
-			return "", terror.ErrRelayLoadMetaData.Delegate(err)
-		}
-		defer fd.Close()
-
 		var meta Meta
-		_, err = toml.DecodeReader(fd, &meta)
+		_, err := toml.DecodeFile(filename, &meta)
 		if err != nil {
 			return "", terror.ErrRelayLoadMetaData.Delegate(err)
 		}
@@ -144,7 +139,7 @@ func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
 			return "", terror.ErrRelayLoadMetaData.Delegate(err)
 		}
 		if gs.Contain(gset) {
-			r.tctx.L().Info("get uuid subdir by gtid", zap.Stringer("GTID Set", gset), zap.String("uuid", uuid))
+			r.tctx.L().Info("get uuid subdir by gtid", zap.Stringer("GTID Set", gset), zap.String("uuid", uuid), zap.Stringer("latest GTID Set in subdir", gs))
 			return uuid, nil
 		}
 	}
@@ -165,47 +160,12 @@ func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
 
 // GetFilePosByGTID tries to get Pos by GTID for file
 func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gset mysql.GTIDSet) (uint32, error) {
-	ctx2, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	s := newLocalStreamer()
-	parser := replication.NewBinlogParser()
-	parser.SetVerifyChecksum(true)
-	parser.SetUseDecimal(true)
-	if r.cfg.Timezone != nil {
-		parser.SetTimestampStringLocation(r.cfg.Timezone)
+	fileReader := reader.NewFileReader(&reader.FileReaderConfig{Timezone: r.cfg.Timezone})
+	defer fileReader.Close()
+	err := fileReader.StartSyncByPos(mysql.Position{Name: filePath, Pos: 4})
+	if err != nil {
+		return 0, err
 	}
-
-	r.wg.Add(1)
-	go func() {
-		defer r.wg.Done()
-
-		offset := int64(4)
-		onEventFunc := func(e *replication.BinlogEvent) error {
-			offset = int64(e.Header.LogPos)
-
-			select {
-			case s.ch <- e:
-			case <-ctx2.Done():
-			}
-			return nil
-		}
-
-		err := parser.ParseFile(filePath, offset, onEventFunc)
-		if err != nil {
-			r.tctx.L().Error("parse file stopped", zap.Error(err))
-			select {
-			case s.ech <- err:
-			case <-ctx2.Done():
-			}
-		} else {
-			// reach end of file
-			select {
-			case s.ch <- nil:
-			case <-ctx2.Done():
-			}
-		}
-	}()
 
 	lastPos := uint32(0)
 	for {
@@ -215,14 +175,17 @@ func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gs
 		default:
 		}
 
-		e, err := s.GetEvent(ctx)
+		ctx2, cancel := context.WithTimeout(ctx, time.Second)
+		e, err := fileReader.GetEvent(ctx2)
+		cancel()
 		if err != nil {
+			// reach end of file
+			if errors.Cause(err) == context.DeadlineExceeded {
+				return lastPos, nil
+			}
 			return 0, err
 		}
-		// gset is the last txn in file
-		if e == nil {
-			return lastPos, nil
-		}
+
 		switch ev := e.Event.(type) {
 		case *replication.PreviousGTIDsEvent:
 			// nil previous gtid event, continue to parse file
