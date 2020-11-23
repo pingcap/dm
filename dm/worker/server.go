@@ -461,9 +461,9 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		return resp, nil
 	}
 
-	resp.SubTaskStatus = w.QueryStatus(req.Name)
+	resp.SubTaskStatus = w.QueryStatus(ctx, req.Name)
 	if w.relayHolder != nil {
-		sourceStatus.RelayStatus = w.relayHolder.Status()
+		sourceStatus.RelayStatus = w.relayHolder.Status(ctx)
 	}
 
 	unifyMasterBinlogPos(resp, w.cfg.EnableGTID)

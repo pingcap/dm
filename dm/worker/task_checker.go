@@ -185,6 +185,7 @@ func (tsc *realTaskStatusChecker) Close() {
 }
 
 func (tsc *realTaskStatusChecker) run() {
+	// keep running until canceled in `Close`.
 	tsc.ctx, tsc.cancel = context.WithCancel(context.Background())
 	tsc.closed.Set(closedFalse)
 
