@@ -632,7 +632,10 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 					return terror.WithClass(err, terror.ClassDMWorker)
 				}
 				rc, ok := binlog.CompareGTID(gset1, gset2)
-				if ok && rc <= 0 {
+				if !ok {
+					return terror.ErrWorkerWaitRelayCatchupGTID.Generate(loadStatus.MetaBinlogGTID, relayStatus.RelayBinlogGtid)
+				}
+				if rc <= 0 {
 					break
 				}
 			} else {
