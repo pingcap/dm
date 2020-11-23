@@ -1039,6 +1039,18 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			if !ok {
 				return
 			}
+
+			select {
+			case <-tctx.Ctx.Done():
+				// do not handle jobs anymore, because it should be failed with a done context.
+				// and avoid some errors like:
+				//  - `driver: bad connection` for `BEGIN`
+				//  - `sql: connection is already closed` for `BEGIN`
+				tctx.L().Debug("skip a remaining job in the job chan", zap.Stringer("job", sqlJob))
+				continue
+			default:
+			}
+
 			idx++
 
 			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
