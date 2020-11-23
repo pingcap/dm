@@ -2591,7 +2591,7 @@ workaround = "Please try use `query-status` to query whether the DDL is still bl
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40067]
-message = "waiting for relay binlog pos to catch up with loader end binlog pos is timeout (exceeding %s), loader end binlog pos: %s, relay binlog pos: %s"
+message = "waiting for relay to catch up with loader is timeout (exceeding %s), loader: %s, relay: %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
