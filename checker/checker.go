@@ -180,7 +180,7 @@ func (c *Checker) Init(ctx context.Context) (err error) {
 			continue
 		}
 
-		mapping, err := utils.FetchTargetDoTables(instance.sourceDB.DB, bw, r)
+		mapping, err := utils.FetchTargetDoTables(ctx, instance.sourceDB.DB, bw, r)
 		if err != nil {
 			return err
 		}

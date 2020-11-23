@@ -102,7 +102,7 @@ func (d *DummyRelay) Error() interface{} {
 }
 
 // Status implements Process interface
-func (d *DummyRelay) Status() interface{} {
+func (d *DummyRelay) Status(ctx context.Context) interface{} {
 	return &pb.RelayStatus{
 		Stage: pb.Stage_New,
 	}
@@ -169,7 +169,7 @@ func (t *testRelay) testStart(c *C, holder *realRelayHolder) {
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 
 	// test status
-	status := holder.Status()
+	status := holder.Status(context.Background())
 	c.Assert(status.Stage, Equals, pb.Stage_Running)
 	c.Assert(status.Result, IsNil)
 
@@ -210,7 +210,7 @@ func (t *testRelay) testClose(c *C, holder *realRelayHolder) {
 	c.Assert(holder.closed.Get(), Equals, closedTrue)
 
 	// todo: very strange, and can't resume
-	status := holder.Status()
+	status := holder.Status(context.Background())
 	c.Assert(status.Stage, Equals, pb.Stage_Stopped)
 	c.Assert(status.Result, IsNil)
 
@@ -228,7 +228,7 @@ func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 	c.Assert(err, ErrorMatches, ".*current stage is Paused.*")
 
 	// test status
-	status := holder.Status()
+	status := holder.Status(context.Background())
 	c.Assert(status.Stage, Equals, pb.Stage_Paused)
 
 	// test update
@@ -244,7 +244,7 @@ func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 	c.Assert(err, ErrorMatches, ".*current stage is Running.*")
 
 	// test status
-	status = holder.Status()
+	status = holder.Status(context.Background())
 	c.Assert(status.Stage, Equals, pb.Stage_Running)
 	c.Assert(status.Result, IsNil)
 

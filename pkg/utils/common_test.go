@@ -15,6 +15,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -79,7 +80,7 @@ func (s *testCommonSuite) TestFetchAllDoTables(c *C) {
 
 	// no schemas need to do.
 	mock.ExpectQuery(`SHOW DATABASES`).WillReturnRows(sqlmock.NewRows([]string{"Database"}))
-	got, err := FetchAllDoTables(db, ba)
+	got, err := FetchAllDoTables(context.Background(), db, ba)
 	c.Assert(err, IsNil)
 	c.Assert(got, HasLen, 0)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
@@ -89,7 +90,7 @@ func (s *testCommonSuite) TestFetchAllDoTables(c *C) {
 	rows := sqlmock.NewRows([]string{"Database"})
 	s.addRowsForSchemas(rows, schemas)
 	mock.ExpectQuery(`SHOW DATABASES`).WillReturnRows(rows)
-	got, err = FetchAllDoTables(db, ba)
+	got, err = FetchAllDoTables(context.Background(), db, ba)
 	c.Assert(err, IsNil)
 	c.Assert(got, HasLen, 0)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
@@ -102,7 +103,7 @@ func (s *testCommonSuite) TestFetchAllDoTables(c *C) {
 	mock.ExpectQuery(`SHOW DATABASES`).WillReturnRows(rows)
 	mock.ExpectQuery(fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW'", doSchema)).WillReturnRows(
 		sqlmock.NewRows([]string{fmt.Sprintf("Tables_in_%s", doSchema), "Table_type"}))
-	got, err = FetchAllDoTables(db, ba)
+	got, err = FetchAllDoTables(context.Background(), db, ba)
 	c.Assert(err, IsNil)
 	c.Assert(got, HasLen, 0)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
@@ -115,7 +116,7 @@ func (s *testCommonSuite) TestFetchAllDoTables(c *C) {
 	rows = sqlmock.NewRows([]string{fmt.Sprintf("Tables_in_%s", doSchema), "Table_type"})
 	s.addRowsForTables(rows, tables)
 	mock.ExpectQuery(fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW'", doSchema)).WillReturnRows(rows)
-	got, err = FetchAllDoTables(db, ba)
+	got, err = FetchAllDoTables(context.Background(), db, ba)
 	c.Assert(err, IsNil)
 	c.Assert(got, HasLen, 1)
 	c.Assert(got[doSchema], DeepEquals, tables)
@@ -137,7 +138,7 @@ func (s *testCommonSuite) TestFetchAllDoTables(c *C) {
 	rows = sqlmock.NewRows([]string{fmt.Sprintf("Tables_in_%s", doSchema), "Table_type"})
 	s.addRowsForTables(rows, tables)
 	mock.ExpectQuery(fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW'", doSchema)).WillReturnRows(rows)
-	got, err = FetchAllDoTables(db, ba)
+	got, err = FetchAllDoTables(context.Background(), db, ba)
 	c.Assert(err, IsNil)
 	c.Assert(got, HasLen, 1)
 	c.Assert(got[doSchema], DeepEquals, []string{"tbl1", "tbl2"})
@@ -168,7 +169,7 @@ func (s *testCommonSuite) TestFetchTargetDoTables(c *C) {
 		mock.ExpectQuery(fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW'", schema)).WillReturnRows(rows)
 	}
 
-	got, err := FetchTargetDoTables(db, ba, r)
+	got, err := FetchTargetDoTables(context.Background(), db, ba, r)
 	c.Assert(err, IsNil)
 	c.Assert(got, HasLen, 2)
 	c.Assert(got, DeepEquals, map[string][]*filter.Table{
@@ -192,7 +193,7 @@ func (s *testCommonSuite) TestFetchTargetDoTables(c *C) {
 		mock.ExpectQuery(fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW'", schema)).WillReturnRows(rows)
 	}
 
-	got, err = FetchTargetDoTables(db, ba, r)
+	got, err = FetchTargetDoTables(context.Background(), db, ba, r)
 	c.Assert(err, IsNil)
 	c.Assert(got, HasLen, 1)
 	c.Assert(got, DeepEquals, map[string][]*filter.Table{

@@ -14,6 +14,7 @@
 package worker
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -25,18 +26,19 @@ import (
 )
 
 // Status returns the status of the current sub task
-func (st *SubTask) Status() interface{} {
+func (st *SubTask) Status(ctx context.Context) interface{} {
 	if cu := st.CurrUnit(); cu != nil {
-		return cu.Status()
+		return cu.Status(ctx)
 	}
 	return nil
 }
 
 // StatusJSON returns the status of the current sub task as json string
-func (st *SubTask) StatusJSON() string {
-	sj, err := json.Marshal(st.Status())
+func (st *SubTask) StatusJSON(ctx context.Context) string {
+	status := st.Status(ctx)
+	sj, err := json.Marshal(status)
 	if err != nil {
-		st.l.Error("fail to marshal status", zap.Reflect("status", st.Status()), zap.Error(err))
+		st.l.Error("fail to marshal status", zap.Reflect("status", status), zap.Error(err))
 		return ""
 	}
 	return string(sj)
@@ -44,7 +46,7 @@ func (st *SubTask) StatusJSON() string {
 
 // Status returns the status of the worker (and sub tasks)
 // if stName is empty, all sub task's status will be returned
-func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
+func (w *Worker) Status(ctx context.Context, stName string) []*pb.SubTaskStatus {
 
 	sts := w.subTaskHolder.getAllSubTasks()
 
@@ -91,7 +93,7 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 			if cu != nil {
 				stStatus.Unit = cu.Type()
 				// oneof status
-				us := cu.Status()
+				us := cu.Status(ctx)
 				switch stStatus.Unit {
 				case pb.UnitType_Check:
 					stStatus.Status = &pb.SubTaskStatus_Check{Check: us.(*pb.CheckStatus)}
@@ -111,8 +113,8 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 }
 
 // StatusJSON returns the status of the worker as json string
-func (w *Worker) StatusJSON(stName string) string {
-	sl := &pb.SubTaskStatusList{Status: w.Status(stName)}
+func (w *Worker) StatusJSON(ctx context.Context, stName string) string {
+	sl := &pb.SubTaskStatusList{Status: w.Status(ctx, stName)}
 	mar := jsonpb.Marshaler{EmitDefaults: true, Indent: "    "}
 	s, err := mar.MarshalToString(sl)
 	if err != nil {

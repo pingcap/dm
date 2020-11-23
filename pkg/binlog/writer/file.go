@@ -23,7 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
-	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -37,7 +37,7 @@ type FileWriter struct {
 
 	file *os.File
 
-	tctx *tcontext.Context
+	logger log.Logger
 }
 
 // FileWriterStatus represents the status of a FileWriter.
@@ -63,10 +63,10 @@ type FileWriterConfig struct {
 }
 
 // NewFileWriter creates a FileWriter instance.
-func NewFileWriter(tctx *tcontext.Context, cfg *FileWriterConfig) Writer {
+func NewFileWriter(logger log.Logger, cfg *FileWriterConfig) Writer {
 	return &FileWriter{
-		cfg:  cfg,
-		tctx: tctx,
+		cfg:    cfg,
+		logger: logger,
 	}
 }
 
@@ -87,7 +87,7 @@ func (w *FileWriter) Start() error {
 	if err != nil {
 		err2 := f.Close() // close the file opened before
 		if err2 != nil {
-			w.tctx.L().Error("fail to close file", zap.String("component", "file writer"), zap.Error(err2))
+			w.logger.Error("fail to close file", zap.String("component", "file writer"), zap.Error(err2))
 		}
 		return terror.ErrBinlogWriterGetFileStat.Delegate(err, f.Name())
 	}
@@ -111,7 +111,7 @@ func (w *FileWriter) Close() error {
 	if w.file != nil {
 		err2 := w.flush() // try flush manually before close.
 		if err2 != nil {
-			w.tctx.L().Error("fail to flush buffered data", zap.String("component", "file writer"), zap.Error(err2))
+			w.logger.Error("fail to flush buffered data", zap.String("component", "file writer"), zap.Error(err2))
 		}
 		err = w.file.Close()
 		w.file = nil

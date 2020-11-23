@@ -72,6 +72,9 @@ func (t *testDBSuite) TestGetRandomServerID(c *C) {
 }
 
 func (t *testDBSuite) TestGetMasterStatus(c *C) {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultDBTimeout)
+	defer cancel()
+
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
@@ -81,7 +84,7 @@ func (t *testDBSuite) TestGetMasterStatus(c *C) {
 	)
 	mock.ExpectQuery(`SHOW MASTER STATUS`).WillReturnRows(rows)
 
-	pos, gs, err := GetMasterStatus(db, "mysql")
+	pos, gs, err := GetMasterStatus(ctx, db, "mysql")
 	c.Assert(err, IsNil)
 	c.Assert(pos, Equals, gmysql.Position{
 		Name: "mysql-bin.000009",
@@ -96,7 +99,7 @@ func (t *testDBSuite) TestGetMasterStatus(c *C) {
 	)
 	mock.ExpectQuery(`SHOW MASTER STATUS`).WillReturnRows(rows)
 
-	pos, gs, err = GetMasterStatus(db, "mysql")
+	pos, gs, err = GetMasterStatus(ctx, db, "mysql")
 	c.Assert(err, IsNil)
 	c.Assert(pos, Equals, gmysql.Position{
 		Name: "mysql-bin.000009",
@@ -113,7 +116,7 @@ func (t *testDBSuite) TestGetMasterStatus(c *C) {
 	rows = mock.NewRows([]string{"Variable_name", "Value"}).AddRow("gtid_binlog_pos", "1-2-100")
 	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'gtid_binlog_pos'`).WillReturnRows(rows)
 
-	pos, gs, err = GetMasterStatus(db, "mariadb")
+	pos, gs, err = GetMasterStatus(ctx, db, "mariadb")
 	c.Assert(err, IsNil)
 	c.Assert(pos, Equals, gmysql.Position{
 		Name: "mysql-bin.000009",
@@ -124,26 +127,32 @@ func (t *testDBSuite) TestGetMasterStatus(c *C) {
 }
 
 func (t *testDBSuite) TestGetMariaDBGtidDomainID(c *C) {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultDBTimeout)
+	defer cancel()
+
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
 	rows := mock.NewRows([]string{"Variable_name", "Value"}).AddRow("gtid_domain_id", 101)
 	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'gtid_domain_id'`).WillReturnRows(rows)
 
-	dID, err := GetMariaDBGtidDomainID(db)
+	dID, err := GetMariaDBGtidDomainID(ctx, db)
 	c.Assert(err, IsNil)
 	c.Assert(dID, Equals, uint32(101))
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
 func (t *testDBSuite) TestGetServerUUID(c *C) {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultDBTimeout)
+	defer cancel()
+
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
 	// MySQL
 	rows := mock.NewRows([]string{"Variable_name", "Value"}).AddRow("server_uuid", "074be7f4-f0f1-11ea-95bd-0242ac120002")
 	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'server_uuid'`).WillReturnRows(rows)
-	uuid, err := GetServerUUID(db, "mysql")
+	uuid, err := GetServerUUID(ctx, db, "mysql")
 	c.Assert(err, IsNil)
 	c.Assert(uuid, Equals, "074be7f4-f0f1-11ea-95bd-0242ac120002")
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
@@ -153,13 +162,16 @@ func (t *testDBSuite) TestGetServerUUID(c *C) {
 	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'gtid_domain_id'`).WillReturnRows(rows)
 	rows = mock.NewRows([]string{"Variable_name", "Value"}).AddRow("server_id", 456)
 	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'server_id'`).WillReturnRows(rows)
-	uuid, err = GetServerUUID(db, "mariadb")
+	uuid, err = GetServerUUID(ctx, db, "mariadb")
 	c.Assert(err, IsNil)
 	c.Assert(uuid, Equals, "123-456")
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
 func (t *testDBSuite) TestGetParser(c *C) {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultDBTimeout)
+	defer cancel()
+
 	var (
 		DDL1 = `ALTER TABLE tbl ADD COLUMN c1 INT`
 		DDL2 = `ALTER TABLE tbl ADD COLUMN 'c1' INT`
@@ -172,7 +184,7 @@ func (t *testDBSuite) TestGetParser(c *C) {
 	// no `ANSI_QUOTES`
 	rows := mock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", "")
 	mock.ExpectQuery(`SHOW VARIABLES LIKE 'sql_mode'`).WillReturnRows(rows)
-	p, err := GetParser(db)
+	p, err := GetParser(ctx, db)
 	c.Assert(err, IsNil)
 	_, err = p.ParseOneStmt(DDL1, "", "")
 	c.Assert(err, IsNil)
@@ -185,7 +197,7 @@ func (t *testDBSuite) TestGetParser(c *C) {
 	// `ANSI_QUOTES`
 	rows = mock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", "ANSI_QUOTES")
 	mock.ExpectQuery(`SHOW VARIABLES LIKE 'sql_mode'`).WillReturnRows(rows)
-	p, err = GetParser(db)
+	p, err = GetParser(ctx, db)
 	c.Assert(err, IsNil)
 	_, err = p.ParseOneStmt(DDL1, "", "")
 	c.Assert(err, IsNil)
@@ -197,12 +209,15 @@ func (t *testDBSuite) TestGetParser(c *C) {
 }
 
 func (t *testDBSuite) TestGetGTID(c *C) {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultDBTimeout)
+	defer cancel()
+
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
 	rows := mock.NewRows([]string{"Variable_name", "Value"}).AddRow("GTID_MODE", "ON")
 	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'GTID_MODE'`).WillReturnRows(rows)
-	mode, err := GetGTID(db)
+	mode, err := GetGTIDMode(ctx, db)
 	c.Assert(err, IsNil)
 	c.Assert(mode, Equals, "ON")
 	c.Assert(mock.ExpectationsWereMet(), IsNil)

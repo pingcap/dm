@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -47,7 +48,7 @@ func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
 			AddRow("sql_mode", "ANSI_QUOTES"))
 	c.Assert(err, IsNil)
 
-	parser, err := utils.GetParser(db)
+	parser, err := utils.GetParser(context.Background(), db)
 	c.Assert(err, IsNil)
 
 	for _, sql := range ansiQuotesCases {

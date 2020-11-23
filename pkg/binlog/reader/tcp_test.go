@@ -99,7 +99,7 @@ func (t *testTCPReaderSuite) setUpData(c *C) {
 		c.Assert(err, IsNil)
 		// check whether other test cases have wrote any events.
 		time.Sleep(time.Second)
-		_, gs, err2 := utils.GetMasterStatus(t.db, flavor)
+		_, gs, err2 := utils.GetMasterStatus(context.Background(), t.db, flavor)
 		c.Assert(err2, IsNil)
 		return gs.String() == "" // break waiting if no other case wrote any events
 	}
@@ -189,7 +189,7 @@ func (t *testTCPReaderSuite) TestSyncPos(c *C) {
 	c.Assert(err, NotNil)
 
 	// get current position for master
-	pos, _, err = utils.GetMasterStatus(t.db, flavor)
+	pos, _, err = utils.GetMasterStatus(context.Background(), t.db, flavor)
 	c.Assert(err, IsNil)
 
 	// execute another DML again
@@ -274,7 +274,7 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 	c.Assert(err, NotNil)
 
 	// get current GTID set for master
-	_, gSet, err = utils.GetMasterStatus(t.db, flavor)
+	_, gSet, err = utils.GetMasterStatus(context.Background(), t.db, flavor)
 	c.Assert(err, IsNil)
 
 	// execute another DML again
@@ -295,15 +295,15 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 
 func (t *testTCPReaderSuite) verifyInitialEvents(c *C, reader Reader) {
 	// if timeout, we think the test case failed.
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	parser2, err := utils.GetParser(t.db)
+	parser2, err := utils.GetParser(ctx, t.db)
 	c.Assert(err, IsNil)
 
 forLoop:
 	for {
-		e, err := reader.GetEvent(timeoutCtx)
+		e, err := reader.GetEvent(ctx)
 		c.Assert(err, IsNil)
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:

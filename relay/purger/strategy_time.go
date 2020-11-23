@@ -21,7 +21,6 @@ import (
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
-	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
@@ -49,12 +48,12 @@ func (ta *timeArgs) String() string {
 type timeStrategy struct {
 	purging sync2.AtomicInt32
 
-	tctx *tcontext.Context
+	logger log.Logger
 }
 
 func newTimeStrategy() PurgeStrategy {
 	return &timeStrategy{
-		tctx: tcontext.Background().WithLogger(log.With(zap.String("component", "relay purger"), zap.String("strategy", "time"))),
+		logger: log.With(zap.String("component", "relay purger"), zap.String("strategy", "time")),
 	}
 }
 
@@ -77,7 +76,7 @@ func (s *timeStrategy) Do(args interface{}) error {
 		return terror.ErrRelayPurgeArgsNotValid.Generate(args, args)
 	}
 
-	return purgeRelayFilesBeforeFileAndTime(s.tctx, ta.relayBaseDir, ta.uuids, ta.activeRelayLog, ta.safeTime)
+	return purgeRelayFilesBeforeFileAndTime(s.logger, ta.relayBaseDir, ta.uuids, ta.activeRelayLog, ta.safeTime)
 }
 
 func (s *timeStrategy) Purging() bool {
