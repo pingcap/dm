@@ -319,7 +319,7 @@ function run() {
     check_http_alive 127.0.0.1:$MASTER_PORT3/apis/${API_VERSION}/status/test '"stage": "Running"' 10
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -343,7 +343,7 @@ function run() {
     # the last two masters should elect a new leader and serve service
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT4" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     # run master3 again
     run_dm_master $WORK_DIR/master3 $MASTER_PORT3 $cur/conf/dm-master3.toml

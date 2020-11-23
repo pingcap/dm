@@ -91,22 +91,22 @@ function run() {
     echo "query-status from all dm-master"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     echo "join new dm-master and query-status"
     run_dm_master $WORK_DIR/master4 $MASTER_PORT4 $cur/conf/dm-master4.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT4
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT4" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     # may join failed with error `fail to join embed etcd: add member http://127.0.0.1:8295: etcdserver: unhealthy cluster`, and dm-master will exit. so just sleep some seconds.
     sleep 5
@@ -115,14 +115,14 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
     sleep 5
 
     run_dm_master $WORK_DIR/master6 $MASTER_PORT6 $cur/conf/dm-master6.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT6
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT6" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
     sleep 5
 
     echo "kill dm-master1"
