@@ -20,7 +20,6 @@ import (
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
-	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
@@ -48,12 +47,12 @@ func (sa *spaceArgs) String() string {
 type spaceStrategy struct {
 	purging sync2.AtomicInt32
 
-	tctx *tcontext.Context
+	logger log.Logger
 }
 
 func newSpaceStrategy() PurgeStrategy {
 	return &spaceStrategy{
-		tctx: tcontext.Background().WithLogger(log.With(zap.String("component", "relay purger"), zap.String("strategy", "space"))),
+		logger: log.With(zap.String("component", "relay purger"), zap.String("strategy", "space")),
 	}
 }
 
@@ -85,7 +84,7 @@ func (s *spaceStrategy) Do(args interface{}) error {
 
 	// NOTE: we purge all inactive relay log files when available space less than @remainSpace
 	// maybe we can refine this to purge only part of this files every time
-	return purgeRelayFilesBeforeFile(s.tctx, sa.relayBaseDir, sa.uuids, sa.activeRelayLog)
+	return purgeRelayFilesBeforeFile(s.logger, sa.relayBaseDir, sa.uuids, sa.activeRelayLog)
 }
 
 func (s *spaceStrategy) Purging() bool {

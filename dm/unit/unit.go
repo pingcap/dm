@@ -50,7 +50,7 @@ type Unit interface {
 	Update(cfg *config.SubTaskConfig) error
 
 	// Status returns the unit's current status
-	Status() interface{}
+	Status(ctx context.Context) interface{}
 	// Type returns the unit's type
 	Type() pb.UnitType
 	// IsFreshTask return whether is a fresh task (not processed before)

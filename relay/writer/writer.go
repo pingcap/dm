@@ -14,6 +14,8 @@
 package writer
 
 import (
+	"context"
+
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
@@ -60,7 +62,7 @@ type Writer interface {
 	// It is often used to recover a binlog file with some corrupt/incomplete binlog events/transactions at the end of the file.
 	// It is not safe for concurrent use by multiple goroutines.
 	// It should be called before writing to the file.
-	Recover() (RecoverResult, error)
+	Recover(ctx context.Context) (RecoverResult, error)
 
 	// WriteEvent writes an binlog event's data into disk or any other places.
 	// It is not safe for concurrent use by multiple goroutines.

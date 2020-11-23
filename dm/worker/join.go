@@ -44,6 +44,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 		return terror.ErrWorkerTLSConfigNotValid.Delegate(err)
 	}
 
+	// join doesn't support to be canceled now, because it can return at most in (3s+3s) * len(endpoints).
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

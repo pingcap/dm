@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 	"time"
@@ -76,8 +77,8 @@ type UpStreamConn struct {
 	BaseDB *conn.BaseDB
 }
 
-func (conn *UpStreamConn) getMasterStatus(flavor string) (mysql.Position, gtid.Set, error) {
-	pos, gtidSet, err := utils.GetMasterStatus(conn.BaseDB.DB, flavor)
+func (conn *UpStreamConn) getMasterStatus(ctx context.Context, flavor string) (mysql.Position, gtid.Set, error) {
+	pos, gtidSet, err := utils.GetMasterStatus(ctx, conn.BaseDB.DB, flavor)
 
 	failpoint.Inject("GetMasterStatusFailed", func(val failpoint.Value) {
 		err = tmysql.NewErr(uint16(val.(int)))
@@ -87,20 +88,20 @@ func (conn *UpStreamConn) getMasterStatus(flavor string) (mysql.Position, gtid.S
 	return pos, gtidSet, err
 }
 
-func (conn *UpStreamConn) getServerUUID(flavor string) (string, error) {
-	return utils.GetServerUUID(conn.BaseDB.DB, flavor)
+func (conn *UpStreamConn) getServerUUID(ctx context.Context, flavor string) (string, error) {
+	return utils.GetServerUUID(ctx, conn.BaseDB.DB, flavor)
 }
 
-func (conn *UpStreamConn) getParser() (*parser.Parser, error) {
-	return utils.GetParser(conn.BaseDB.DB)
+func (conn *UpStreamConn) getParser(ctx context.Context) (*parser.Parser, error) {
+	return utils.GetParser(ctx, conn.BaseDB.DB)
 }
 
-func (conn *UpStreamConn) killConn(connID uint32) error {
-	return utils.KillConn(conn.BaseDB.DB, connID)
+func (conn *UpStreamConn) killConn(ctx context.Context, connID uint32) error {
+	return utils.KillConn(ctx, conn.BaseDB.DB, connID)
 }
 
-func (conn *UpStreamConn) fetchAllDoTables(bw *filter.Filter) (map[string][]string, error) {
-	return utils.FetchAllDoTables(conn.BaseDB.DB, bw)
+func (conn *UpStreamConn) fetchAllDoTables(ctx context.Context, bw *filter.Filter) (map[string][]string, error) {
+	return utils.FetchAllDoTables(ctx, conn.BaseDB.DB, bw)
 }
 
 func (conn *UpStreamConn) countBinaryLogsSize(pos mysql.Position) (int64, error) {

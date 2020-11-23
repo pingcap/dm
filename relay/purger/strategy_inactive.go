@@ -20,7 +20,6 @@ import (
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
-	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
@@ -50,12 +49,12 @@ func (ia *inactiveArgs) String() string {
 type inactiveStrategy struct {
 	purging sync2.AtomicInt32
 
-	tctx *tcontext.Context
+	logger log.Logger
 }
 
 func newInactiveStrategy() PurgeStrategy {
 	return &inactiveStrategy{
-		tctx: tcontext.Background().WithLogger(log.With(zap.String("component", "relay purger"), zap.String("strategy", "inactive binlog file"))),
+		logger: log.With(zap.String("component", "relay purger"), zap.String("strategy", "inactive binlog file")),
 	}
 }
 
@@ -75,7 +74,7 @@ func (s *inactiveStrategy) Do(args interface{}) error {
 		return terror.ErrRelayPurgeArgsNotValid.Generate(args, args)
 	}
 
-	return purgeRelayFilesBeforeFile(s.tctx, ia.relayBaseDir, ia.uuids, ia.activeRelayLog)
+	return purgeRelayFilesBeforeFile(s.logger, ia.relayBaseDir, ia.uuids, ia.activeRelayLog)
 }
 
 func (s *inactiveStrategy) Purging() bool {
