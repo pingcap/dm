@@ -162,6 +162,7 @@ func (r *Relay) Init(ctx context.Context) (err error) {
 	}
 
 	r.relayMetaHub = pkgstreamer.GetRelayMetaHub()
+	r.relayMetaHub.ClearMeta()
 
 	return reportRelayLogSpaceInBackground(r.cfg.RelayDir)
 }
@@ -705,13 +706,9 @@ func (r *Relay) ResetMeta() {
 	r.meta = NewLocalMeta(r.cfg.Flavor, r.cfg.RelayDir)
 }
 
-// FlushMeta flush relay meta and clear all metas in RelayLogInfo
+// FlushMeta flush relay meta.
 func (r *Relay) FlushMeta() error {
-	if err := r.meta.Flush(); err != nil {
-		return err
-	}
-	r.relayMetaHub.ClearMeta()
-	return nil
+	return r.meta.Flush()
 }
 
 // stopSync stops syncing, now it used by Close and Pause
