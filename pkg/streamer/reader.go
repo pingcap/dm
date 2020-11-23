@@ -120,11 +120,6 @@ func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
 
 // getUUIDByGTID gets uuid subdir which contain the gtid set
 func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
-	// TODO: use a better mechanism to call relay.meta.Flush
-	// get the meta save in memory
-	relayMetaHub := GetRelayMetaHub()
-	relayMeta := relayMetaHub.GetMeta()
-
 	// get flush logs from oldest to newest
 	for _, uuid := range r.uuids {
 		filename := path.Join(r.cfg.RelayDir, uuid, utils.MetaFilename)
@@ -144,7 +139,11 @@ func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
 		}
 	}
 
-	// use memory meta
+	// TODO: use a better mechanism to call relay.meta.Flush
+	// get the meta save in memory
+	relayMetaHub := GetRelayMetaHub()
+	relayMeta := relayMetaHub.GetMeta()
+
 	if len(relayMeta.UUID) > 0 {
 		gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, relayMeta.BinlogGTID)
 		if err != nil {
