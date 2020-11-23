@@ -54,8 +54,8 @@ func TrimQuoteMark(s string) string {
 }
 
 // FetchAllDoTables returns all need to do tables after filtered (fetches from upstream MySQL)
-func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error) {
-	schemas, err := dbutil.GetSchemas(context.Background(), db)
+func FetchAllDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter) (map[string][]string, error) {
+	schemas, err := dbutil.GetSchemas(ctx, db)
 
 	failpoint.Inject("FetchAllDoTablesFailed", func(val failpoint.Value) {
 		err = tmysql.NewErr(uint16(val.(int)))
@@ -86,7 +86,7 @@ func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error
 	for _, ftSchema := range ftSchemas {
 		schema := ftSchema.Schema
 		// use `GetTables` from tidb-tools, no view included
-		tables, err := dbutil.GetTables(context.Background(), db, schema)
+		tables, err := dbutil.GetTables(ctx, db, schema)
 		if err != nil {
 			return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 		}
@@ -113,9 +113,9 @@ func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error
 }
 
 // FetchTargetDoTables returns all need to do tables after filtered and routed (fetches from upstream MySQL)
-func FetchTargetDoTables(db *sql.DB, bw *filter.Filter, router *router.Table) (map[string][]*filter.Table, error) {
+func FetchTargetDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter, router *router.Table) (map[string][]*filter.Table, error) {
 	// fetch tables from source and filter them
-	sourceTables, err := FetchAllDoTables(db, bw)
+	sourceTables, err := FetchAllDoTables(ctx, db, bw)
 
 	failpoint.Inject("FetchTargetDoTablesFailed", func(val failpoint.Value) {
 		err = tmysql.NewErr(uint16(val.(int)))

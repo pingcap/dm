@@ -15,7 +15,6 @@ package reader
 
 import (
 	"context"
-	"time"
 
 	. "github.com/pingcap/check"
 	gmysql "github.com/siddontang/go-mysql/mysql"
@@ -37,11 +36,11 @@ func (t *testTCPReaderSuite) TestGetGTIDsForPos(c *C) {
 			UseDecimal:     true,
 			VerifyChecksum: true,
 		}
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
 	)
 	defer cancel()
 
-	endPos, endGS, err := utils.GetMasterStatus(t.db, flavor)
+	endPos, endGS, err := utils.GetMasterStatus(ctx, t.db, flavor)
 	c.Assert(err, IsNil)
 
 	r1 := NewTCPReader(cfg)

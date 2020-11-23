@@ -161,7 +161,7 @@ func (s *Server) collectSourceConfigFilesV1Import(tctx *tcontext.Context) (map[s
 			return nil, err
 		}
 
-		cfgs2, err := parseAndAdjustSourceConfig([]string{string(content)})
+		cfgs2, err := parseAndAdjustSourceConfig(tctx.Ctx, []string{string(content)})
 		if err != nil {
 			// abort importing if any invalid source config files exist.
 			return nil, err

@@ -39,7 +39,10 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-var (
+const (
+	// DefaultDBTimeout represents a DB operation timeout for common usages.
+	DefaultDBTimeout = 30 * time.Second
+
 	// for MariaDB, UUID set as `gtid_domain_id` + domainServerIDSeparator + `server_id`
 	domainServerIDSeparator = "-"
 
@@ -66,7 +69,7 @@ func GetAllServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, error
 		return nil, err
 	}
 
-	masterServerID, err := GetServerID(db)
+	masterServerID, err := GetServerID(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -166,13 +169,13 @@ func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, err
 }
 
 // GetMasterStatus gets status from master
-func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
+func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
 	var (
 		binlogPos gmysql.Position
 		gs        gtid.Set
 	)
 
-	rows, err := db.Query(`SHOW MASTER STATUS`)
+	rows, err := db.QueryContext(ctx, `SHOW MASTER STATUS`)
 	if err != nil {
 		return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
@@ -223,7 +226,7 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 	}
 
 	if flavor == gmysql.MariaDBFlavor && (gs == nil || gs.String() == "") {
-		gs, err = GetMariaDBGTID(db)
+		gs, err = GetMariaDBGTID(ctx, db)
 		if err != nil {
 			return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 		}
@@ -234,8 +237,8 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 
 // GetMariaDBGTID gets MariaDB's `gtid_binlog_pos`
 // it can not get by `SHOW MASTER STATUS`
-func GetMariaDBGTID(db *sql.DB) (gtid.Set, error) {
-	gtidStr, err := GetGlobalVariable(db, "gtid_binlog_pos")
+func GetMariaDBGTID(ctx context.Context, db *sql.DB) (gtid.Set, error) {
+	gtidStr, err := GetGlobalVariable(ctx, db, "gtid_binlog_pos")
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +250,7 @@ func GetMariaDBGTID(db *sql.DB) (gtid.Set, error) {
 }
 
 // GetGlobalVariable gets server's global variable
-func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
+func GetGlobalVariable(ctx context.Context, db *sql.DB, variable string) (value string, err error) {
 	failpoint.Inject("GetGlobalVariableFailed", func(val failpoint.Value) {
 		items := strings.Split(val.(string), ",")
 		if len(items) != 2 {
@@ -265,16 +268,16 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 		}
 	})
 
-	conn, err := db.Conn(context.Background())
+	conn, err := db.Conn(ctx)
 	if err != nil {
 		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 	defer conn.Close()
-	return getVariable(conn, variable, true)
+	return getVariable(ctx, conn, variable, true)
 }
 
 // GetSessionVariable gets connection's session variable
-func GetSessionVariable(conn *sql.Conn, variable string) (value string, err error) {
+func GetSessionVariable(ctx context.Context, conn *sql.Conn, variable string) (value string, err error) {
 	failpoint.Inject("GetSessionVariableFailed", func(val failpoint.Value) {
 		items := strings.Split(val.(string), ",")
 		if len(items) != 2 {
@@ -291,10 +294,10 @@ func GetSessionVariable(conn *sql.Conn, variable string) (value string, err erro
 			failpoint.Return("", terror.DBErrorAdapt(err, terror.ErrDBDriverError))
 		}
 	})
-	return getVariable(conn, variable, false)
+	return getVariable(ctx, conn, variable, false)
 }
 
-func getVariable(conn *sql.Conn, variable string, isGlobal bool) (value string, err error) {
+func getVariable(ctx context.Context, conn *sql.Conn, variable string, isGlobal bool) (value string, err error) {
 	var template string
 	if isGlobal {
 		template = "SHOW GLOBAL VARIABLES LIKE '%s'"
@@ -302,7 +305,7 @@ func getVariable(conn *sql.Conn, variable string, isGlobal bool) (value string, 
 		template = "SHOW VARIABLES LIKE '%s'"
 	}
 	query := fmt.Sprintf(template, variable)
-	row := conn.QueryRowContext(context.Background(), query)
+	row := conn.QueryRowContext(ctx, query)
 
 	// Show an example.
 	/*
@@ -322,8 +325,8 @@ func getVariable(conn *sql.Conn, variable string, isGlobal bool) (value string, 
 }
 
 // GetServerID gets server's `server_id`
-func GetServerID(db *sql.DB) (uint32, error) {
-	serverIDStr, err := GetGlobalVariable(db, "server_id")
+func GetServerID(ctx context.Context, db *sql.DB) (uint32, error) {
+	serverIDStr, err := GetGlobalVariable(ctx, db, "server_id")
 	if err != nil {
 		return 0, err
 	}
@@ -333,8 +336,8 @@ func GetServerID(db *sql.DB) (uint32, error) {
 }
 
 // GetMariaDBGtidDomainID gets MariaDB server's `gtid_domain_id`
-func GetMariaDBGtidDomainID(db *sql.DB) (uint32, error) {
-	domainIDStr, err := GetGlobalVariable(db, "gtid_domain_id")
+func GetMariaDBGtidDomainID(ctx context.Context, db *sql.DB) (uint32, error) {
+	domainIDStr, err := GetGlobalVariable(ctx, db, "gtid_domain_id")
 	if err != nil {
 		return 0, err
 	}
@@ -344,22 +347,22 @@ func GetMariaDBGtidDomainID(db *sql.DB) (uint32, error) {
 }
 
 // GetServerUUID gets server's `server_uuid`
-func GetServerUUID(db *sql.DB, flavor string) (string, error) {
+func GetServerUUID(ctx context.Context, db *sql.DB, flavor string) (string, error) {
 	if flavor == gmysql.MariaDBFlavor {
-		return GetMariaDBUUID(db)
+		return GetMariaDBUUID(ctx, db)
 	}
-	serverUUID, err := GetGlobalVariable(db, "server_uuid")
+	serverUUID, err := GetGlobalVariable(ctx, db, "server_uuid")
 	return serverUUID, err
 }
 
 // GetMariaDBUUID gets equivalent `server_uuid` for MariaDB
 // `gtid_domain_id` joined `server_id` with domainServerIDSeparator
-func GetMariaDBUUID(db *sql.DB) (string, error) {
-	domainID, err := GetMariaDBGtidDomainID(db)
+func GetMariaDBUUID(ctx context.Context, db *sql.DB) (string, error) {
+	domainID, err := GetMariaDBGtidDomainID(ctx, db)
 	if err != nil {
 		return "", err
 	}
-	serverID, err := GetServerID(db)
+	serverID, err := GetServerID(ctx, db)
 	if err != nil {
 		return "", err
 	}
@@ -367,18 +370,18 @@ func GetMariaDBUUID(db *sql.DB) (string, error) {
 }
 
 // GetParser gets a parser for sql.DB which is suitable for session variable sql_mode
-func GetParser(db *sql.DB) (*parser.Parser, error) {
-	c, err := db.Conn(context.Background())
+func GetParser(ctx context.Context, db *sql.DB) (*parser.Parser, error) {
+	c, err := db.Conn(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer c.Close()
-	return GetParserForConn(c)
+	return GetParserForConn(ctx, c)
 }
 
 // GetParserForConn gets a parser for sql.Conn which is suitable for session variable sql_mode
-func GetParserForConn(conn *sql.Conn) (*parser.Parser, error) {
-	sqlMode, err := GetSessionVariable(conn, "sql_mode")
+func GetParserForConn(ctx context.Context, conn *sql.Conn) (*parser.Parser, error) {
+	sqlMode, err := GetSessionVariable(ctx, conn, "sql_mode")
 	if err != nil {
 		return nil, err
 	}
@@ -398,8 +401,8 @@ func GetParserFromSQLModeStr(sqlMode string) (*parser.Parser, error) {
 }
 
 // KillConn kills the DB connection (thread in mysqld)
-func KillConn(db *sql.DB, connID uint32) error {
-	_, err := db.Exec(fmt.Sprintf("KILL %d", connID))
+func KillConn(ctx context.Context, db *sql.DB, connID uint32) error {
+	_, err := db.ExecContext(ctx, fmt.Sprintf("KILL %d", connID))
 	return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 }
 
@@ -420,9 +423,9 @@ func IsNoSuchThreadError(err error) bool {
 	return IsMySQLError(err, tmysql.ErrNoSuchThread)
 }
 
-// GetGTID return GTID_MODE
-func GetGTID(db *sql.DB) (string, error) {
-	val, err := GetGlobalVariable(db, "GTID_MODE")
+// GetGTIDMode return GTID_MODE
+func GetGTIDMode(ctx context.Context, db *sql.DB) (string, error) {
+	val, err := GetGlobalVariable(ctx, db, "GTID_MODE")
 	return val, err
 }
 

@@ -143,6 +143,7 @@ func (h *Heartbeat) AddTask(name string) error {
 			h.cancel = nil
 			h.wg.Wait()
 		}
+		// only cancel the context when `RemoveTask`.
 		ctx, cancel := context.WithCancel(context.Background())
 		h.cancel = cancel
 

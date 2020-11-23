@@ -118,7 +118,7 @@ type StreamerController struct {
 }
 
 // NewStreamerController creates a new streamer controller
-func NewStreamerController(tctx *tcontext.Context, syncCfg replication.BinlogSyncerConfig, enableGTID bool, fromDB *UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location) *StreamerController {
+func NewStreamerController(syncCfg replication.BinlogSyncerConfig, enableGTID bool, fromDB *UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location) *StreamerController {
 	streamerController := &StreamerController{
 		initBinlogType:    binlogType,
 		currentBinlogType: binlogType,
@@ -177,7 +177,9 @@ func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, loca
 			}
 		case *localBinlogReader:
 			// check the uuid before close
-			uuidSameWithUpstream, err = c.checkUUIDSameWithUpstream(location.Position, t.reader.GetUUIDs())
+			ctx, cancel := context.WithTimeout(tctx.Ctx, utils.DefaultDBTimeout)
+			defer cancel()
+			uuidSameWithUpstream, err = c.checkUUIDSameWithUpstream(ctx, location.Position, t.reader.GetUUIDs())
 			if err != nil {
 				return err
 			}
@@ -203,7 +205,7 @@ func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, loca
 	if c.currentBinlogType == RemoteBinlog {
 		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), tctx, c.syncCfg.Flavor, c.enableGTID}
 	} else {
-		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(tctx, &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone, Flavor: c.syncCfg.Flavor}), c.enableGTID}
+		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(tctx.L(), &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone, Flavor: c.syncCfg.Flavor}), c.enableGTID}
 	}
 
 	c.streamer, err = c.streamerProducer.generateStreamer(location)
@@ -310,7 +312,10 @@ func (c *StreamerController) closeBinlogSyncer(logtctx *tcontext.Context, binlog
 	lastSlaveConnectionID := binlogSyncer.LastConnectionID()
 	defer binlogSyncer.Close()
 	if lastSlaveConnectionID > 0 {
-		err := c.fromDB.killConn(lastSlaveConnectionID)
+		// try to KILL the conn in default timeout, but it's not a big problem even failed.
+		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
+		defer cancel()
+		err := c.fromDB.killConn(ctx, lastSlaveConnectionID)
 		if err != nil {
 			logtctx.L().Error("fail to kill last connection", zap.Uint32("connection ID", lastSlaveConnectionID), log.ShortError(err))
 			if !utils.IsNoSuchThreadError(err) {
@@ -379,7 +384,7 @@ func (c *StreamerController) UpdateSyncCfg(syncCfg replication.BinlogSyncerConfi
 }
 
 // check whether the uuid in binlog position's name is same with upstream
-func (c *StreamerController) checkUUIDSameWithUpstream(pos mysql.Position, uuids []string) (bool, error) {
+func (c *StreamerController) checkUUIDSameWithUpstream(ctx context.Context, pos mysql.Position, uuids []string) (bool, error) {
 	_, uuidSuffix, _, err := binlog.SplitFilenameWithUUIDSuffix(pos.Name)
 	if err != nil {
 		// don't contain uuid in position's name
@@ -387,7 +392,7 @@ func (c *StreamerController) checkUUIDSameWithUpstream(pos mysql.Position, uuids
 	}
 	uuid := utils.GetUUIDBySuffix(uuids, uuidSuffix)
 
-	upstreamUUID, err := utils.GetServerUUID(c.fromDB.BaseDB.DB, c.syncCfg.Flavor)
+	upstreamUUID, err := utils.GetServerUUID(ctx, c.fromDB.BaseDB.DB, c.syncCfg.Flavor)
 	if err != nil {
 		return false, terror.Annotate(err, "streamer controller check upstream uuid failed")
 	}
