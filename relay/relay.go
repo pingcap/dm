@@ -706,7 +706,7 @@ func (r *Relay) ResetMeta() {
 	r.meta = NewLocalMeta(r.cfg.Flavor, r.cfg.RelayDir)
 }
 
-// FlushMeta flush relay meta.
+// FlushMeta flush relay meta
 func (r *Relay) FlushMeta() error {
 	return r.meta.Flush()
 }
