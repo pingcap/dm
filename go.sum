@@ -898,8 +898,8 @@ github.com/pingcap/parser v0.0.0-20200909072241-6dac7bb703e2/go.mod h1:RlLfMRJwF
 github.com/pingcap/parser v0.0.0-20200924053142-5d7e8ebf605e h1:IFD2pEbIcN+EzG/RGMLrv/Tt6U9KzJGT6hSbGkQ1v7c=
 github.com/pingcap/parser v0.0.0-20200924053142-5d7e8ebf605e/go.mod h1:RlLfMRJwFBSiXd2lUaWdV5pSXtrpyvZM8k5bbZWsheU=
 github.com/pingcap/parser v0.0.0-20201112105242-773b8b74f44e/go.mod h1:GbEr2PgY72/4XqPZzmzstlOU/+il/wrjeTNFs6ihsSE=
-github.com/pingcap/parser v0.0.0-20201117030726-9d7d64259a5c h1:vXTEZHqrFPF4jF5Y3/A1iR1AaCiahWLBpc+QevUi0HE=
-github.com/pingcap/parser v0.0.0-20201117030726-9d7d64259a5c/go.mod h1:GbEr2PgY72/4XqPZzmzstlOU/+il/wrjeTNFs6ihsSE=
+github.com/pingcap/parser v0.0.0-20201123080035-8f4c6ab94e11 h1:CpYV3/Mp42Szvt8ne6g2ojLtBmsUq6o86JazeAj4pIo=
+github.com/pingcap/parser v0.0.0-20201123080035-8f4c6ab94e11/go.mod h1:GbEr2PgY72/4XqPZzmzstlOU/+il/wrjeTNFs6ihsSE=
 github.com/pingcap/pd v2.1.5+incompatible/go.mod h1:nD3+EoYes4+aNNODO99ES59V83MZSI+dFbhyr667a0E=
 github.com/pingcap/pd/v4 v4.0.0-rc.1.0.20200422143320-428acd53eba2 h1:JTzYYukREvxVSKW/ncrzNjFitd8snoQ/Xz32pw8i+s8=
 github.com/pingcap/pd/v4 v4.0.0-rc.1.0.20200422143320-428acd53eba2/go.mod h1:s+utZtXDznOiL24VK0qGmtoHjjXNsscJx3m1n8cC56s=
