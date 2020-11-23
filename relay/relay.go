@@ -704,6 +704,7 @@ func (r *Relay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
 // ResetMeta reset relay meta
 func (r *Relay) ResetMeta() {
 	r.meta = NewLocalMeta(r.cfg.Flavor, r.cfg.RelayDir)
+	r.relayMetaHub.ClearMeta()
 }
 
 // FlushMeta flush relay meta
