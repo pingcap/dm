@@ -155,6 +155,7 @@ function DM_080_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(3,'ccc');"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(3,'ccc');"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,'ccc');"
+    sleep 5
     run_sql_tidb_with_retry "select count(1) from ${shardddl}.${tb};" "count(1): 3"
 }
 
