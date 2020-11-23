@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/purger"
 )
 
@@ -75,6 +76,7 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name strin
 		etcdClient:    etcdClient,
 		name:          name,
 	}
+	// keep running until canceled in `Close`.
 	w.ctx, w.cancel = context.WithCancel(context.Background())
 	w.closed.Set(closedTrue)
 
@@ -146,7 +148,7 @@ func (w *Worker) Start(startRelay bool) {
 			w.l.Info("status print process exits!")
 			return
 		case <-ticker.C:
-			w.l.Debug("runtime status", zap.String("status", w.StatusJSON("")))
+			w.l.Debug("runtime status", zap.String("status", w.StatusJSON(w.ctx, "")))
 		}
 	}
 }
@@ -275,7 +277,7 @@ func (w *Worker) OperateSubTask(name string, op pb.TaskOp) error {
 }
 
 // QueryStatus query worker's sub tasks' status
-func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
+func (w *Worker) QueryStatus(ctx context.Context, name string) []*pb.SubTaskStatus {
 	w.RLock()
 	defer w.RUnlock()
 
@@ -284,7 +286,10 @@ func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
 		return nil
 	}
 
-	return w.Status(name)
+	// use one timeout for all tasks. increase this value if it's too short.
+	ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
+	defer cancel2()
+	return w.Status(ctx2, name)
 }
 
 func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {

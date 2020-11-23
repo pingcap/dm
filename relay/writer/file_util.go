@@ -164,7 +164,7 @@ func checkIsDuplicateEvent(filename string, ev *replication.BinlogEvent) (bool, 
 // getTxnPosGTIDs gets position/GTID set for all completed transactions from a binlog file.
 // It is not safe if there other routine is writing the file.
 // NOTE: we use a int64 rather than a uint32 to represent the latest transaction's end log pos.
-func getTxnPosGTIDs(filename string, p *parser.Parser) (int64, gtid.Set, error) {
+func getTxnPosGTIDs(ctx context.Context, filename string, p *parser.Parser) (int64, gtid.Set, error) {
 	// use a FileReader to parse the binlog file.
 	rCfg := &reader.FileReaderConfig{
 		EnableRawMode: false, // in order to get GTID set, we always disable RawMode.
@@ -185,11 +185,11 @@ func getTxnPosGTIDs(filename string, p *parser.Parser) (int64, gtid.Set, error) 
 	)
 	for {
 		var e *replication.BinlogEvent
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		e, err = r.GetEvent(ctx)
-		cancel()
+		ctx2, cancel2 := context.WithTimeout(ctx, time.Second)
+		e, err = r.GetEvent(ctx2)
+		cancel2()
 		if err != nil {
-			break // now, we stop to parse for any errors
+			break // now, we stop to parse for any errors even is context done
 		}
 
 		// NOTE: only update pos/GTID set for DDL/XID to get an complete transaction.
@@ -258,5 +258,5 @@ func getTxnPosGTIDs(filename string, p *parser.Parser) (int64, gtid.Set, error) 
 		}
 	}
 
-	return latestPos, latestGTIDs, nil
+	return latestPos, latestGTIDs, ctx.Err() // return the error if the context is done.
 }

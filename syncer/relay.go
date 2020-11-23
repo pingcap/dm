@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 
@@ -26,7 +27,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-func (s *Syncer) setInitActiveRelayLog() error {
+func (s *Syncer) setInitActiveRelayLog(ctx context.Context) error {
 	if s.binlogType != LocalBinlog {
 		return nil
 	}
@@ -60,7 +61,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 		}
 	} else {
 		// start from dumper or loader, get current pos from master
-		pos, _, err = s.fromDB.getMasterStatus(s.cfg.Flavor)
+		pos, _, err = s.fromDB.getMasterStatus(ctx, s.cfg.Flavor)
 		if err != nil {
 			return terror.Annotatef(err, "get master status")
 		}
@@ -74,7 +75,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 	} else {
 		var uuid string
 		latestUUID := uuids[len(uuids)-1]
-		uuid, err = s.fromDB.getServerUUID(s.cfg.Flavor)
+		uuid, err = s.fromDB.getServerUUID(ctx, s.cfg.Flavor)
 		if err != nil {
 			return terror.WithScope(terror.Annotatef(err, "get server UUID"), terror.ScopeUpstream)
 		}

@@ -96,7 +96,7 @@ type RemoteCheckPoint struct {
 		pos map[string]map[string]FilePosSet // schema -> table -> FilePosSet(filename -> [cur, end])
 	}
 	finishedTables map[string]struct{}
-	logCtx         *tcontext.Context
+	logger         log.Logger
 }
 
 func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
@@ -112,7 +112,7 @@ func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 		finishedTables: make(map[string]struct{}),
 		schema:         dbutil.ColumnName(cfg.MetaSchema),
 		tableName:      dbutil.TableName(cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name)),
-		logCtx:         tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
+		logger:         tctx.L().WithFields(zap.String("component", "remote checkpoint")),
 	}
 	cp.restoringFiles.pos = make(map[string]map[string]FilePosSet)
 
@@ -165,7 +165,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 	begin := time.Now()
 	defer func() {
-		cp.logCtx.L().Info("load checkpoint", zap.Duration("cost time", time.Since(begin)))
+		cp.logger.Info("load checkpoint", zap.Duration("cost time", time.Since(begin)))
 	}()
 
 	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from %s where `id`=?", cp.tableName)
@@ -298,14 +298,14 @@ func (cp *RemoteCheckPoint) CalcProgress(allFiles map[string]Tables2DataFiles) e
 		}
 	}
 
-	cp.logCtx.L().Info("calculate checkpoint finished.", zap.Any("finished tables", cp.finishedTables))
+	cp.logger.Info("calculate checkpoint finished.", zap.Any("finished tables", cp.finishedTables))
 	return nil
 }
 
 func (cp *RemoteCheckPoint) allFilesFinished(files map[string][]int64) bool {
 	for file, pos := range files {
 		if len(pos) != 2 {
-			cp.logCtx.L().Error("unexpected checkpoint record", zap.String("data file", file), zap.Int64s("position", pos))
+			cp.logger.Error("unexpected checkpoint record", zap.String("data file", file), zap.Int64s("position", pos))
 			return false
 		}
 		if pos[0] != pos[1] {
@@ -338,7 +338,7 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 
 	}
 	sql2 := fmt.Sprintf("INSERT INTO %s (`id`, `filename`, `cp_schema`, `cp_table`, `offset`, `end_pos`) VALUES(?,?,?,?,?,?)", cp.tableName)
-	cp.logCtx.L().Info("initial checkpoint record",
+	cp.logger.Info("initial checkpoint record",
 		zap.String("sql", sql2),
 		zap.String("id", cp.id),
 		zap.String("filename", filename),
@@ -352,7 +352,7 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 	cp.connMutex.Unlock()
 	if err != nil {
 		if isErrDupEntry(err) {
-			cp.logCtx.L().Error("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
+			cp.logger.Error("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
 			return nil
 		}
 		return terror.WithScope(terror.Annotate(err, "initialize checkpoint"), terror.ScopeDownstream)
@@ -385,7 +385,7 @@ func (cp *RemoteCheckPoint) ResetConn(tctx *tcontext.Context) error {
 func (cp *RemoteCheckPoint) Close() {
 	err := cp.db.Close()
 	if err != nil {
-		cp.logCtx.L().Error("close checkpoint db", log.ShortError(err))
+		cp.logger.Error("close checkpoint db", log.ShortError(err))
 	}
 }
 
@@ -402,7 +402,7 @@ func (cp *RemoteCheckPoint) UpdateOffset(filename string, offset int64) {
 	defer cp.restoringFiles.Unlock()
 	db, table, err := getDBAndTableFromFilename(filename)
 	if err != nil {
-		cp.logCtx.L().Error("error in checkpoint UpdateOffset", zap.Error(err))
+		cp.logger.Error("error in checkpoint UpdateOffset", zap.Error(err))
 		return
 	}
 	cp.restoringFiles.pos[db][table][filename][0] = offset
@@ -437,7 +437,7 @@ func (cp *RemoteCheckPoint) Count(tctx *tcontext.Context) (int, error) {
 	if rows.Err() != nil {
 		return 0, terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
-	cp.logCtx.L().Debug("checkpoint record", zap.Int("count", count))
+	cp.logger.Debug("checkpoint record", zap.Int("count", count))
 	return count, nil
 }
 

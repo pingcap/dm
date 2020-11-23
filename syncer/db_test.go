@@ -92,7 +92,7 @@ func (s *testDBSuite) resetBinlogSyncer(c *C) {
 		s.syncer.Close()
 	}
 
-	pos, _, err := utils.GetMasterStatus(s.db, "mysql")
+	pos, _, err := utils.GetMasterStatus(context.Background(), s.db, "mysql")
 	c.Assert(err, IsNil)
 
 	s.syncer = replication.NewBinlogSyncer(cfg)
@@ -101,14 +101,14 @@ func (s *testDBSuite) resetBinlogSyncer(c *C) {
 }
 
 func (s *testDBSuite) TestGetServerUUID(c *C) {
-	uuid, err := utils.GetServerUUID(s.db, "mysql")
+	uuid, err := utils.GetServerUUID(context.Background(), s.db, "mysql")
 	c.Assert(err, IsNil)
 	_, err = gouuid.Parse(uuid)
 	c.Assert(err, IsNil)
 }
 
 func (s *testDBSuite) TestGetServerID(c *C) {
-	id, err := utils.GetServerID(s.db)
+	id, err := utils.GetServerID(context.Background(), s.db)
 	c.Assert(err, IsNil)
 	c.Assert(id, Greater, uint32(0))
 }

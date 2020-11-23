@@ -84,11 +84,13 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) (err error) {
 	}
 
 	if resp.Result && taskName == "" && len(sources) == 0 && !more {
-		result := wrapTaskResult(resp)
-		common.PrettyPrintInterface(result)
-	} else {
-		common.PrettyPrintResponse(resp)
+		result, hasFalseResult := wrapTaskResult(resp)
+		if !hasFalseResult { // if any result is false, we still print the full status.
+			common.PrettyPrintInterface(result)
+			return
+		}
 	}
+	common.PrettyPrintResponse(resp)
 	return
 }
 
@@ -106,10 +108,12 @@ func getRelayStage(relayStatus *pb.RelayStatus) string {
 }
 
 // wrapTaskResult picks task info and generate tasks' status and relative workers
-func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
+func wrapTaskResult(resp *pb.QueryStatusListResponse) (result *taskResult, hasFalseResult bool) {
 	taskStatusMap := make(map[string]string)
 	taskCorrespondingSources := make(map[string][]string)
+	hasFalseResult = !resp.Result
 	for _, source := range resp.Sources {
+		hasFalseResult = hasFalseResult || !source.Result
 		relayStatus := source.SourceStatus.RelayStatus
 		for _, subTask := range source.SubTaskStatus {
 			subTaskName := subTask.Name
@@ -157,5 +161,5 @@ func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 		Result: resp.Result,
 		Msg:    resp.Msg,
 		Tasks:  taskList,
-	}
+	}, hasFalseResult
 }

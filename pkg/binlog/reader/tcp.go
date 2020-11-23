@@ -128,7 +128,11 @@ func (r *TCPReader) Close() error {
 					"open connection to the master %s:%d", r.syncerCfg.Host, r.syncerCfg.Port), terror.ScopeUpstream)
 		}
 		defer db.Close()
-		err = utils.KillConn(db, connID)
+
+		// try to KILL the conn in default timeout.
+		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
+		defer cancel()
+		err = utils.KillConn(ctx, db, connID)
 		if err != nil {
 			return terror.WithScope(terror.Annotatef(err, "kill connection %d for master %s:%d", connID, r.syncerCfg.Host, r.syncerCfg.Port), terror.ScopeUpstream)
 		}

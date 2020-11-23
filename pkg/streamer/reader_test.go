@@ -32,7 +32,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
-	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -57,13 +57,11 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	tctx := tcontext.Background()
-
 	// no valid currentUUID provide, failed
 	currentUUID := "invalid-current-uuid"
 	relayDir := filepath.Join(baseDir, currentUUID)
 	cfg := &BinlogReaderConfig{RelayDir: baseDir}
-	r := NewBinlogReader(tctx, cfg)
+	r := NewBinlogReader(log.L(), cfg)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
 		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
 	c.Assert(err, ErrorMatches, ".*invalid-current-uuid.*")
@@ -78,7 +76,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	relayDir = filepath.Join(baseDir, currentUUID)
 	fullPath := filepath.Join(relayDir, filename)
 	cfg = &BinlogReaderConfig{RelayDir: baseDir}
-	r = NewBinlogReader(tctx, cfg)
+	r = NewBinlogReader(log.L(), cfg)
 
 	// relay log file not exists, failed
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
@@ -240,8 +238,7 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 		nextPath     = filepath.Join(relayDir, nextFilename)
 		s            = newLocalStreamer()
 		cfg          = &BinlogReaderConfig{RelayDir: baseDir}
-		tctx         = tcontext.Background()
-		r            = NewBinlogReader(tctx, cfg)
+		r            = NewBinlogReader(log.L(), cfg)
 	)
 
 	// create the current relay log file and write some events
@@ -332,8 +329,7 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 		nextFullPath = filepath.Join(nextRelayDir, nextFilename)
 		s            = newLocalStreamer()
 		cfg          = &BinlogReaderConfig{RelayDir: baseDir}
-		tctx         = tcontext.Background()
-		r            = NewBinlogReader(tctx, cfg)
+		r            = NewBinlogReader(log.L(), cfg)
 	)
 
 	// create the current relay log file and write some events
@@ -400,8 +396,7 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 		fullPath     = filepath.Join(relayDir, filename)
 		s            = newLocalStreamer()
 		cfg          = &BinlogReaderConfig{RelayDir: baseDir}
-		tctx         = tcontext.Background()
-		r            = NewBinlogReader(tctx, cfg)
+		r            = NewBinlogReader(log.L(), cfg)
 	)
 
 	// create the current relay log file and write some events
@@ -449,8 +444,7 @@ func (t *testReaderSuite) TestUpdateUUIDs(c *C) {
 	var (
 		baseDir = c.MkDir()
 		cfg     = &BinlogReaderConfig{RelayDir: baseDir}
-		tctx    = tcontext.Background()
-		r       = NewBinlogReader(tctx, cfg)
+		r       = NewBinlogReader(log.L(), cfg)
 	)
 	c.Assert(r.uuids, HasLen, 0)
 
@@ -485,8 +479,7 @@ func (t *testReaderSuite) TestStartSync(c *C) {
 			"b60868af-5a6f-11e9-9ea3-0242ac160008.000003",
 		}
 		cfg      = &BinlogReaderConfig{RelayDir: baseDir}
-		tctx     = tcontext.Background()
-		r        = NewBinlogReader(tctx, cfg)
+		r        = NewBinlogReader(log.L(), cfg)
 		startPos = gmysql.Position{Name: "test-mysql-bin|000001.000001"} // from the first relay log file in the first sub directory
 	)
 
@@ -614,8 +607,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 		startPos = gmysql.Position{Name: "test-mysql-bin|000001.000001"} // from the first relay log file in the first sub directory
 	)
 
-	tctx := tcontext.Background()
-	r := NewBinlogReader(tctx, cfg)
+	r := NewBinlogReader(log.L(), cfg)
 	err := r.checkRelayPos(startPos)
 	c.Assert(err, ErrorMatches, ".*empty UUIDs not valid.*")
 
@@ -630,7 +622,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	c.Assert(s, IsNil)
 
 	// write UUIDs into index file
-	r = NewBinlogReader(tctx, cfg) // create a new reader
+	r = NewBinlogReader(log.L(), cfg) // create a new reader
 	uuidBytes := t.uuidListToBytes(c, UUIDs)
 	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0600)
 	c.Assert(err, IsNil)
