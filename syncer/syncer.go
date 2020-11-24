@@ -1047,7 +1047,8 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 				//  - `driver: bad connection` for `BEGIN`
 				//  - `sql: connection is already closed` for `BEGIN`
 				tctx.L().Debug("skip a remaining DML job in the job chan", zap.Stringer("job", sqlJob), zap.Int("remain", len(jobChan)))
-				s.jobWg.Done()
+				s.execError.Set(tctx.Ctx.Err()) // set exexError to avoid flushing checkpoint because some jobs are skipped.
+				s.jobWg.Done()                  // done WaitGroup to avoid blocking
 				continue
 			default:
 			}
