@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -138,7 +139,7 @@ func (t *testFileReaderSuite) TestGetEvent(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	e, err = r.GetEvent(ctx)
-	c.Assert(errors.Cause(err), Equals, context.DeadlineExceeded)
+	c.Assert(terror.ErrReaderReachEndOfFile.Equal(err), IsTrue)
 	c.Assert(e, IsNil)
 	c.Assert(r.Close(), IsNil) // close the reader
 
