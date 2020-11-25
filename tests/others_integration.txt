@@ -10,3 +10,4 @@ sequence_sharding_optimistic
 sequence_sharding_removemeta
 drop_column_with_index
 handle_error
+many_tables
