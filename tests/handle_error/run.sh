@@ -40,7 +40,7 @@ function DM_SKIP_ERROR_CASE() {
     # skip one source
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test skip -s mysql-replica-01" \
-            "only support to handle query error currently" 1
+            "only support to handle ddl error currently" 1
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
@@ -49,7 +49,7 @@ function DM_SKIP_ERROR_CASE() {
     # skip all sources
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test skip" \
-            "only support to handle query error currently" 2
+            "only support to handle ddl error currently" 2
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
