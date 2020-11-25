@@ -760,6 +760,12 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+[error.DM-functional-11122]
+message = ""
+description = ""
+workaround = ""
+tags = ["internal", "low"]
+
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""

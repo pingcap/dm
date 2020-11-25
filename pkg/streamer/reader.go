@@ -179,7 +179,7 @@ func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gs
 		cancel()
 		if err != nil {
 			// reach end of file
-			if errors.Cause(err) == context.DeadlineExceeded {
+			if terror.ErrReaderReachEndOfFile.Equal(err) {
 				return lastPos, nil
 			}
 			return 0, err
