@@ -78,6 +78,18 @@ func (t *testUtilSuite) TestStatusVarsToKV(c *C) {
 			},
 			nil,
 		},
+		// OVER_MAX_DBS_IN_EVENT_MTS in Q_UPDATED_DB_NAMES
+		{
+			[]byte{0, 0, 0, 0, 0, 1, 0, 0, 160, 85, 0, 0, 0, 0, 6, 3, 115, 116, 100, 4, 45, 0, 45, 0, 33, 0, 12, 254},
+			map[byte][]byte{
+				0:  {0, 0, 0, 0},
+				1:  {0, 0, 160, 85, 0, 0, 0, 0},
+				6:  {3, 115, 116, 100},
+				4:  {45, 0, 45, 0, 33, 0},
+				12: {254},
+			},
+			nil,
+		},
 	}
 
 	for _, t := range testCases {
