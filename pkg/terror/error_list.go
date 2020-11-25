@@ -178,8 +178,6 @@ const (
 	// pkg/streamer
 	codeNoUUIDDirMatchGTID
 	codeNoRelayPosMatchGTID
-
-	// pkg/reader
 	codeReaderReachEndOfFile
 )
 
@@ -770,9 +768,8 @@ var (
 	ErrRewriteSQL = New(codeRewriteSQL, ClassFunctional, ScopeInternal, LevelHigh, "failed to rewrite SQL for target DB, stmt: %+v, targetTableNames: %+v", "")
 
 	// pkg/streamer
-	ErrNoUUIDDirMatchGTID  = New(codeNoUUIDDirMatchGTID, ClassFunctional, ScopeInternal, LevelHigh, "no relay subdir match gtid %s", "")
-	ErrNoRelayPosMatchGTID = New(codeNoRelayPosMatchGTID, ClassFunctional, ScopeInternal, LevelHigh, "no relay pos match gtid %s", "")
-
+	ErrNoUUIDDirMatchGTID   = New(codeNoUUIDDirMatchGTID, ClassFunctional, ScopeInternal, LevelHigh, "no relay subdir match gtid %s", "")
+	ErrNoRelayPosMatchGTID  = New(codeNoRelayPosMatchGTID, ClassFunctional, ScopeInternal, LevelHigh, "no relay pos match gtid %s", "")
 	ErrReaderReachEndOfFile = New(codeReaderReachEndOfFile, ClassFunctional, ScopeInternal, LevelLow, "", "")
 
 	// Config related error
