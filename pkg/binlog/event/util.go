@@ -442,6 +442,11 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 				return generateError(err)
 			}
 			value = append(value, count)
+			// if count is 254 (OVER_MAX_DBS_IN_EVENT_MTS), there's no following DB names
+			// https://github.com/mysql/mysql-server/blob/ee4455a33b10f1b1886044322e4893f587b319ed/libbinlogevents/include/binlog_event.h#L107
+			if count == 254 {
+				break
+			}
 
 			buf := make([]byte, 0, 128)
 			b := byte(1) // initialize to any non-zero value
