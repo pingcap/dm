@@ -33,9 +33,12 @@ func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 	pos := req.BinlogPos
 
 	if len(pos) == 0 {
-		startLocation := s.getErrLocation()
+		startLocation, isQueryEvent := s.getErrLocation()
 		if startLocation == nil {
 			return fmt.Errorf("source '%s' has no error", s.cfg.SourceID)
+		}
+		if !isQueryEvent {
+			return fmt.Errorf("only support to handle query error currently")
 		}
 		pos = startLocation.Position.String()
 	} else {
