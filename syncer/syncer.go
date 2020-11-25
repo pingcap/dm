@@ -2088,7 +2088,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 // input `sql` should be a single DDL, which came from parserpkg.SplitDDL
 // tableNames[0] is source (upstream) tableNames, tableNames[1] is target (downstream) tableNames
 func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.Table, stmt ast.StmtNode, ec *eventContext) error {
-	begin := time.Now()
 	srcTables, targetTables := tableNames[0], tableNames[1]
 	srcTable := srcTables[0]
 
@@ -2153,13 +2152,11 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 			return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, srcTable.Schema)
 		}
 	}
-	s.tctx.L().Warn("lance test", zap.Any("after CreateSchemaIfNotExists", time.Since(begin)))
 	for i := 0; i < shouldTableExistNum; i++ {
 		if _, err := s.getTable(ec.tctx, srcTables[i].Schema, srcTables[i].Name, targetTables[i].Schema, targetTables[i].Name); err != nil {
 			return err
 		}
 	}
-	s.tctx.L().Warn("lance test", zap.Any("after getTable", time.Since(begin)))
 	// skip getTable before in above loop
 	start := 1
 	if shouldTableExistNum > start {
@@ -2173,7 +2170,6 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 			return err
 		}
 	}
-	s.tctx.L().Warn("lance test", zap.Any("after CreateSchemaIfNotExists and getTable", time.Since(begin)))
 
 	if shouldExecDDLOnSchemaTracker {
 		if err := s.schemaTracker.Exec(ec.tctx.Ctx, usedSchema, sql); err != nil {
@@ -2181,7 +2177,6 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 			return terror.ErrSchemaTrackerCannotExecDDL.Delegate(err, sql)
 		}
 	}
-	s.tctx.L().Warn("lance test", zap.Any("after Exec", time.Since(begin)))
 
 	return nil
 }
