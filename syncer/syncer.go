@@ -1017,6 +1017,18 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		if len(jobs) == 0 {
 			return 0, nil
 		}
+
+		select {
+		case <-tctx.Ctx.Done():
+			// do not execute queries anymore, because they should be failed with a done context.
+			// and avoid some errors like:
+			//  - `driver: bad connection` for `BEGIN`
+			//  - `sql: connection is already closed` for `BEGIN`
+			tctx.L().Info("skip some remaining DML jobs in the job chan because the context is done", zap.Int("count", len(jobs)))
+			return 0, tctx.Ctx.Err() // return the error to trigger `fatalF`.
+		default:
+		}
+
 		queries := make([]string, 0, len(jobs))
 		args := make([][]interface{}, 0, len(jobs))
 		for _, j := range jobs {
@@ -1039,20 +1051,6 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			if !ok {
 				return
 			}
-
-			select {
-			case <-tctx.Ctx.Done():
-				// do not handle jobs anymore, because it should be failed with a done context.
-				// and avoid some errors like:
-				//  - `driver: bad connection` for `BEGIN`
-				//  - `sql: connection is already closed` for `BEGIN`
-				tctx.L().Debug("skip a remaining DML job in the job chan", zap.Stringer("job", sqlJob), zap.Int("remain", len(jobChan)))
-				s.execError.Set(tctx.Ctx.Err()) // set exexError to avoid flushing checkpoint because some jobs are skipped.
-				s.jobWg.Done()                  // done WaitGroup to avoid blocking
-				continue
-			default:
-			}
-
 			idx++
 
 			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
