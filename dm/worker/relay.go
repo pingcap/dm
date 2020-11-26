@@ -232,7 +232,7 @@ func (h *realRelayHolder) stopRelay(ctx context.Context, op pb.RelayOp) error {
 		return terror.ErrWorkerRelayStageNotValid.Generatef("current stage is already stopped not valid, relayop %s", op)
 	}
 	h.stage = pb.Stage_Stopped
-	h.Unlock()  // unlock to make `run` can return
+	h.Unlock() // unlock to make `run` can return
 
 	// now, when try to stop relay unit, we close relay holder
 	h.Close()
