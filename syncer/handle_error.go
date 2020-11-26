@@ -33,9 +33,12 @@ func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 	pos := req.BinlogPos
 
 	if len(pos) == 0 {
-		startLocation := s.getErrLocation()
+		startLocation, isQueryEvent := s.getErrLocation()
 		if startLocation == nil {
 			return fmt.Errorf("source '%s' has no error", s.cfg.SourceID)
+		}
+		if !isQueryEvent {
+			return fmt.Errorf("only support to handle ddl error currently, see https://docs.pingcap.com/tidb-data-migration/stable/error-handling for other errors")
 		}
 		pos = startLocation.Position.String()
 	} else {
