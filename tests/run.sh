@@ -48,6 +48,8 @@ fi
 should_run=0
 if [ "$test_case" == "*" ]; then
     should_run=1
+elif [ "$test_case" == "compatibility" ]; then
+    should_run=1
 elif [ "$test_case" == "others" ]; then
     test_case=$(cat $CUR/others_integration.txt)
     should_run=1
