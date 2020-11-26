@@ -519,6 +519,7 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 	var newGset gtid.Set
 	var newUUIDSufiix string
 	if len(r.cfg.UUIDSuffix) != 0 {
+		// if bound or rebound to a source, clear all relay log and meta
 		if err = r.PurgeRelayDir(); err != nil {
 			return err
 		}

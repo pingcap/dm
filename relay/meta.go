@@ -58,7 +58,8 @@ type Meta interface {
 	Dirty() bool
 
 	// AddDir adds sub relay directory for server UUID (without suffix)
-	// the added sub relay directory's suffix is incremented
+	// if uuidSuffix not nil, add sub relay directory with uuidSuffix (bount to a new source)
+	// otherwise the added sub relay directory's suffix is incremented (master/slave switch)
 	// after sub relay directory added, the internal binlog pos should be reset
 	// and binlog pos will be set again when new binlog events received
 	// @serverUUID should be a server_uuid for MySQL or MariaDB
