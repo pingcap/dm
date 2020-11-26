@@ -40,17 +40,32 @@ start_services() {
 }
 
 if [ "$#" -ge 1 ]; then
-    test_case=$1
-    if [ "$test_case" != "*" ]; then
-        if [ "$test_case" == "others" ]; then
-            test_case=$(cat $CUR/others_integration.txt)
-        elif [ ! -d "tests/$test_case" ]; then
-            echo $test_case "not exist"
-            exit 0
-        fi
-    fi
+    test_case="$@"
 else
     test_case="*"
+fi
+
+should_run=0
+if [ "$test_case" == "*" ]; then
+    should_run=1
+elif [ "$test_case" == "others" ]; then
+    test_case=$(cat $CUR/others_integration.txt)
+    should_run=1
+else
+    exist_case=""
+    for one_case in $test_case; do
+        if [ ! -d "tests/$one_case" ]; then
+            echo $one_case "not exist"
+        else
+            exist_case="$exist_case $one_case"
+            should_run=1
+        fi
+    done
+    test_case=$exist_case
+fi
+
+if [ $should_run -eq 0 ]; then
+    exit 0
 fi
 
 trap stop_services EXIT
