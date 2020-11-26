@@ -40,32 +40,20 @@ function DM_SKIP_ERROR_CASE() {
     # skip one source
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test skip -s mysql-replica-01" \
-            "\"result\": true" 2
+            "only support to handle ddl error currently" 1
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "\"stage\": \"Running\"" 3 \
-            "\"stage\": \"Paused\"" 1
+            "\"stage\": \"Paused\"" 2
 
     # skip all sources
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test skip" \
-            "\"result\": true" 2 \
-            "\"source 'mysql-replica-01' has no error\"" 1
+            "only support to handle ddl error currently" 2
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "\"stage\": \"Running\"" 4
-
-    # '11' -> 11, '22' -> 22, no error
-    run_sql_source1 "insert into ${db}.${tb1} values('111',7)"
-    run_sql_source2 "insert into ${db}.${tb2} values('222',8)"
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "query-status test" \
-            "\"stage\": \"Running\"" 4
-
-    run_sql_tidb_with_retry "select count(1) from ${db}.${tb1} where id=111;" "count(1): 1"
-    run_sql_tidb_with_retry "select count(1) from ${db}.${tb2} where id=222;" "count(1): 1"
+            "\"stage\": \"Paused\"" 2
 }
 
 function DM_SKIP_ERROR() {
