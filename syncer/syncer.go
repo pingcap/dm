@@ -264,7 +264,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return err
 	}
 
-	err = s.createDBs()
+	err = s.createDBs(ctx)
 	if err != nil {
 		return err
 	}
@@ -2330,13 +2330,32 @@ func (s *Syncer) printStatus(ctx context.Context) {
 	}
 }
 
-func (s *Syncer) createDBs() error {
+func (s *Syncer) createDBs(ctx context.Context) error {
 	var err error
 	dbCfg := s.cfg.From
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDMLConnectionTimeout)
 	s.fromDB, err = createUpStreamConn(dbCfg)
 	if err != nil {
 		return err
+	}
+
+	// get sql_mode from upstream db
+	if s.cfg.To.Session == nil {
+		s.cfg.To.Session = make(map[string]string)
+	}
+	hasSQLMode := false
+	for k := range s.cfg.To.Session {
+		if strings.ToLower(k) == "sql_mode" {
+			hasSQLMode = true
+			break
+		}
+	}
+	if !hasSQLMode {
+		sqlMode, err2 := utils.GetGlobalVariable(ctx, s.fromDB.BaseDB.DB, "sql_mode")
+		if err2 != nil {
+			s.tctx.L().Warn("cannot get sql_mode from upstream database", log.ShortError(err2))
+		}
+		s.cfg.To.Session["sql_mode"] = sqlMode
 	}
 
 	dbCfg = s.cfg.To
