@@ -179,6 +179,7 @@ type Syncer struct {
 		sync.RWMutex
 		startLocation *binlog.Location
 		endLocation   *binlog.Location
+		isQueryEvent  bool
 	}
 
 	addJobFunc func(*job) error
@@ -433,7 +434,7 @@ func (s *Syncer) reset() {
 	s.newJobChans(s.cfg.WorkerCount + 1)
 
 	s.execError.Set(nil)
-	s.setErrLocation(nil, nil)
+	s.setErrLocation(nil, nil, false)
 	s.isReplacingErr = false
 
 	switch s.cfg.ShardMode {
@@ -936,7 +937,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if err != nil {
 			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
-				err = s.handleEventError(err, sqlJob.startLocation, sqlJob.currentLocation)
+				err = s.handleEventError(err, sqlJob.startLocation, sqlJob.currentLocation, true)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
 			s.jobWg.Done()
@@ -972,7 +973,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if err != nil {
 			s.execError.Set(err)
 			if !utils.IsContextCanceledError(err) {
-				err = s.handleEventError(err, sqlJob.startLocation, sqlJob.currentLocation)
+				err = s.handleEventError(err, sqlJob.startLocation, sqlJob.currentLocation, true)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
 			s.jobWg.Done()
@@ -1007,7 +1008,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	fatalF := func(affected int, err error) {
 		s.execError.Set(err)
 		if !utils.IsContextCanceledError(err) {
-			err = s.handleEventError(err, jobs[affected].startLocation, jobs[affected].currentLocation)
+			err = s.handleEventError(err, jobs[affected].startLocation, jobs[affected].currentLocation, false)
 			s.runFatalChan <- unit.NewProcessError(err)
 		}
 		clearF()
@@ -1017,6 +1018,18 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		if len(jobs) == 0 {
 			return 0, nil
 		}
+
+		select {
+		case <-tctx.Ctx.Done():
+			// do not execute queries anymore, because they should be failed with a done context.
+			// and avoid some errors like:
+			//  - `driver: bad connection` for `BEGIN`
+			//  - `sql: connection is already closed` for `BEGIN`
+			tctx.L().Info("skip some remaining DML jobs in the job chan because the context is done", zap.Int("count", len(jobs)))
+			return 0, tctx.Ctx.Err() // return the error to trigger `fatalF`.
+		default:
+		}
+
 		queries := make([]string, 0, len(jobs))
 		args := make([][]interface{}, 0, len(jobs))
 		for _, j := range jobs {
@@ -1328,11 +1341,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		tctx.L().Debug("receive binlog event", zap.Reflect("header", e.Header))
 
 		// TODO: support all event
-		// we calculate startLocation and endLocation(currentLocation) for Rows/Query event here
+		// we calculate startLocation and endLocation(currentLocation) for Query event here
 		// set startLocation empty for other events to avoid misuse
 		startLocation = binlog.Location{}
 		switch e.Event.(type) {
-		case *replication.RowsEvent, *replication.QueryEvent:
+		case *replication.QueryEvent:
 			startLocation = binlog.InitLocation(
 				mysql.Position{
 					Name: lastLocation.Position.Name,
@@ -1469,7 +1482,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 		}
 		if err2 != nil {
-			if err := s.handleEventError(err2, startLocation, currentLocation); err != nil {
+			if err := s.handleEventError(err2, startLocation, currentLocation, e.Header.EventType == replication.QUERY_EVENT); err != nil {
 				return err
 			}
 		}
@@ -2709,10 +2722,11 @@ func (s *Syncer) ShardDDLOperation() *pessimism.Operation {
 	return s.pessimist.PendingOperation()
 }
 
-func (s *Syncer) setErrLocation(startLocation, endLocation *binlog.Location) {
+func (s *Syncer) setErrLocation(startLocation, endLocation *binlog.Location, isQueryEventEvent bool) {
 	s.errLocation.Lock()
 	defer s.errLocation.Unlock()
 
+	s.errLocation.isQueryEvent = isQueryEventEvent
 	if s.errLocation.startLocation == nil || startLocation == nil {
 		s.errLocation.startLocation = startLocation
 	} else if binlog.CompareLocation(*startLocation, *s.errLocation.startLocation, s.cfg.EnableGTID) < 0 {
@@ -2726,18 +2740,18 @@ func (s *Syncer) setErrLocation(startLocation, endLocation *binlog.Location) {
 	}
 }
 
-func (s *Syncer) getErrLocation() *binlog.Location {
+func (s *Syncer) getErrLocation() (*binlog.Location, bool) {
 	s.errLocation.Lock()
 	defer s.errLocation.Unlock()
-	return s.errLocation.startLocation
+	return s.errLocation.startLocation, s.errLocation.isQueryEvent
 }
 
-func (s *Syncer) handleEventError(err error, startLocation, endLocation binlog.Location) error {
+func (s *Syncer) handleEventError(err error, startLocation, endLocation binlog.Location, isQueryEvent bool) error {
 	if err == nil {
 		return nil
 	}
 
-	s.setErrLocation(&startLocation, &endLocation)
+	s.setErrLocation(&startLocation, &endLocation, isQueryEvent)
 	return terror.Annotatef(err, "startLocation: [%s], endLocation: [%s]", startLocation, endLocation)
 }
 

@@ -115,6 +115,9 @@ function run() {
     # meeting an error of context cancel.
     # when below check pass, it means we filter out that error, or that error doesn't happen.
     # we only focus on fails, to find any unfiltered context cancel error.
+    # and should not contain errors like:
+    #   - `driver: bad connection`
+    #   - `sql: connection is already closed`
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "pause-task test" \
         "\"result\": true" 3
