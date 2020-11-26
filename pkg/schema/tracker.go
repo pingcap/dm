@@ -93,6 +93,9 @@ func NewTracker(sessionCfg map[string]string, tidbConn *conn.BaseConn) (*Tracker
 		return nil, err
 	}
 
+	// avoid data race and of course no use in DM
+	domain.RunAutoAnalyze = false
+
 	dom, err := session.BootstrapSession(store)
 	if err != nil {
 		return nil, err
