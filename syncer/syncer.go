@@ -2351,23 +2351,25 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 		return err
 	}
 
+	hasSQLMode := false
 	// get sql_mode from upstream db
 	if s.cfg.To.Session == nil {
 		s.cfg.To.Session = make(map[string]string)
-	}
-	hasSQLMode := false
-	for k := range s.cfg.To.Session {
-		if strings.ToLower(k) == "sql_mode" {
-			hasSQLMode = true
-			break
+	} else {
+		for k := range s.cfg.To.Session {
+			if strings.ToLower(k) == "sql_mode" {
+				hasSQLMode = true
+				break
+			}
 		}
 	}
 	if !hasSQLMode {
 		sqlMode, err2 := utils.GetGlobalVariable(ctx, s.fromDB.BaseDB.DB, "sql_mode")
 		if err2 != nil {
 			s.tctx.L().Warn("cannot get sql_mode from upstream database", log.ShortError(err2))
+		} else {
+			s.cfg.To.Session["sql_mode"] = sqlMode
 		}
-		s.cfg.To.Session["sql_mode"] = sqlMode
 	}
 
 	dbCfg = s.cfg.To
