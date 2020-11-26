@@ -14,6 +14,7 @@
 package relay
 
 import (
+	"context"
 	"fmt"
 
 	. "github.com/pingcap/check"
@@ -28,6 +29,9 @@ type testUtilSuite struct {
 }
 
 func (t *testUtilSuite) TestIsNewServer(c *C) {
+	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
+	defer cancel()
+
 	db, err := openDBForTest()
 	c.Assert(err, IsNil)
 	defer db.Close()
@@ -35,19 +39,19 @@ func (t *testUtilSuite) TestIsNewServer(c *C) {
 	flavor := gmysql.MySQLFlavor
 
 	// no prevUUID, is new server.
-	isNew, err := isNewServer("", db, flavor)
+	isNew, err := isNewServer(ctx, "", db, flavor)
 	c.Assert(err, IsNil)
 	c.Assert(isNew, IsTrue)
 
 	// different server
-	isNew, err = isNewServer("not-exists-uuid.000001", db, flavor)
+	isNew, err = isNewServer(ctx, "not-exists-uuid.000001", db, flavor)
 	c.Assert(err, IsNil)
 	c.Assert(isNew, IsTrue)
 
 	// the same server
-	currUUID, err := utils.GetServerUUID(db, flavor)
+	currUUID, err := utils.GetServerUUID(ctx, db, flavor)
 	c.Assert(err, IsNil)
-	isNew, err = isNewServer(fmt.Sprintf("%s.000001", currUUID), db, flavor)
+	isNew, err = isNewServer(ctx, fmt.Sprintf("%s.000001", currUUID), db, flavor)
 	c.Assert(err, IsNil)
 	c.Assert(isNew, IsFalse)
 }

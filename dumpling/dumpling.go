@@ -58,7 +58,7 @@ func NewDumpling(cfg *config.SubTaskConfig) *Dumpling {
 func (m *Dumpling) Init(ctx context.Context) error {
 	var err error
 	m.dumpConfig, err = m.constructArgs()
-	m.detectSQLMode()
+	m.detectSQLMode(ctx)
 	m.logger.Info("create dumpling", zap.Stringer("config", m.dumpConfig))
 	return err
 }
@@ -177,7 +177,7 @@ func (m *Dumpling) Update(cfg *config.SubTaskConfig) error {
 }
 
 // Status implements Unit.Status
-func (m *Dumpling) Status() interface{} {
+func (m *Dumpling) Status(ctx context.Context) interface{} {
 	// NOTE: try to add some status, like dumped file count
 	return &pb.DumpStatus{}
 }
@@ -263,14 +263,14 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 
 // detectSQLMode tries to detect SQL mode from upstream. If success, write it to LoaderConfig.
 // Because loader will use this SQL mode, we need to treat disable `EscapeBackslash` when NO_BACKSLASH_ESCAPES
-func (m *Dumpling) detectSQLMode() {
+func (m *Dumpling) detectSQLMode(ctx context.Context) {
 	db, err := sql.Open("mysql", m.dumpConfig.GetDSN(""))
 	if err != nil {
 		return
 	}
 	defer db.Close()
 
-	sqlMode, err := utils.GetGlobalVariable(db, "sql_mode")
+	sqlMode, err := utils.GetGlobalVariable(ctx, db, "sql_mode")
 	if err != nil {
 		return
 	}

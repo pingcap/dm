@@ -63,8 +63,8 @@ type BinlogReader struct {
 }
 
 // NewBinlogReader creates a new BinlogReader
-func NewBinlogReader(tctx *tcontext.Context, cfg *BinlogReaderConfig) *BinlogReader {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewBinlogReader(logger log.Logger, cfg *BinlogReaderConfig) *BinlogReader {
+	ctx, cancel := context.WithCancel(context.Background()) // only can be canceled in `Close`
 	parser := replication.NewBinlogParser()
 	parser.SetVerifyChecksum(true)
 	// useDecimal must set true.  ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
@@ -73,7 +73,7 @@ func NewBinlogReader(tctx *tcontext.Context, cfg *BinlogReaderConfig) *BinlogRea
 		parser.SetTimestampStringLocation(cfg.Timezone)
 	}
 
-	newtctx := tcontext.NewContext(ctx, tctx.L().WithFields(zap.String("component", "binlog reader")))
+	newtctx := tcontext.NewContext(ctx, logger.WithFields(zap.String("component", "binlog reader")))
 
 	return &BinlogReader{
 		cfg:       cfg,
