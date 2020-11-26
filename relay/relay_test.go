@@ -487,12 +487,11 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	defer cancel()
 
 	var (
-		relayCfg = &Config{
-			RelayDir: c.MkDir(),
-			Flavor:   gmysql.MySQLFlavor,
-		}
-		r = NewRelay(relayCfg).(*Relay)
+		relayCfg = newRelayCfg(c, mysql.MySQLFlavor)
+		r        = NewRelay(relayCfg).(*Relay)
 	)
+	c.Assert(r.Init(context.Background()), IsNil)
+
 	// empty metadata
 	c.Assert(r.meta.Load(), IsNil)
 	t.verifyMetadata(c, r, "", minCheckpoint, "", nil)
@@ -521,6 +520,16 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	uuid002 := fmt.Sprintf("%s.000002", uuid)
 	t.verifyMetadata(c, r, uuid002, minCheckpoint, r.cfg.BinlogGTID, []string{uuid001, uuid002})
 
+	r.cfg.BinLogName = "mysql-bin.000002"
+	r.cfg.BinlogGTID = "24ecd093-8cec-11e9-aa0d-0242ac170002:1-50,24ecd093-8cec-11e9-aa0d-0242ac170003:1-50"
+	r.cfg.UUIDSuffix = "000002"
+	c.Assert(r.reSetupMeta(ctx), IsNil)
+	t.verifyMetadata(c, r, uuid002, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, r.cfg.BinlogGTID, []string{uuid002})
+
+	// re-setup meta again, often happen when connecting a server behind a VIP.
+	c.Assert(r.reSetupMeta(ctx), IsNil)
+	uuid003 := fmt.Sprintf("%s.000003", uuid)
+	t.verifyMetadata(c, r, uuid003, minCheckpoint, r.cfg.BinlogGTID, []string{uuid002, uuid003})
 }
 
 func (t *testRelaySuite) verifyMetadata(c *C, r *Relay, uuidExpected string,

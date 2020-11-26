@@ -406,7 +406,7 @@ func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.
 	c.Assert(s.getWorker(true), IsNil)
 }
 
-func (t *testServer) TestGetMinPosInAllSubTasks(c *C) {
+func (t *testServer) TestGetMinLocInAllSubTasks(c *C) {
 	subTaskCfg := []*config.SubTaskConfig{
 		{
 			Name: "test2",

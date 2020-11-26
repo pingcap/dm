@@ -639,7 +639,6 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 
 // all subTask in subTaskCfgs should have same source
 // this function return the min location in all subtasks, used for relay's location
-// TODO: get min gtidSet
 func getMinLocInAllSubTasks(ctx context.Context, subTaskCfgs []*config.SubTaskConfig) (minLoc *binlog.Location, err error) {
 	for _, subTaskCfg := range subTaskCfgs {
 		loc, err := getMinLocForSubTaskFunc(ctx, subTaskCfg)
