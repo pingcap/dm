@@ -35,6 +35,11 @@ import (
 	"github.com/pingcap/dm/syncer"
 )
 
+const (
+	// the timout to wait for relay catchup when switching from load unit to sync unit.
+	waitRelayCatchupTimeout = 5 * time.Minute
+)
+
 // createRealUnits is subtask units initializer
 // it can be used for testing
 var createUnits = createRealUnits
@@ -278,7 +283,9 @@ func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 		}
 		st.setStage(stage)
 
-		st.l.Info("unit process returned", zap.Stringer("unit", cu.Type()), zap.Stringer("stage", stage), zap.String("status", st.StatusJSON()))
+		ctx, cancel := context.WithTimeout(st.ctx, utils.DefaultDBTimeout)
+		defer cancel()
+		st.l.Info("unit process returned", zap.Stringer("unit", cu.Type()), zap.Stringer("stage", stage), zap.String("status", st.StatusJSON(ctx)))
 
 		switch stage {
 		case pb.Stage_Finished:
@@ -585,17 +592,22 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 			return nil
 		}
 
-		waitRelayCatchupTimeout := 5 * time.Minute
-		ctx, cancel := context.WithTimeout(hub.w.ctx, waitRelayCatchupTimeout)
-		defer cancel()
+		ctxWait, cancelWait := context.WithTimeout(hub.w.ctx, waitRelayCatchupTimeout)
+		defer cancelWait()
 
-		loadStatus := pu.Status().(*pb.LoadStatus)
+		ctxStatus, cancelStatus := context.WithTimeout(ctxWait, utils.DefaultDBTimeout)
+		loadStatus := pu.Status(ctxStatus).(*pb.LoadStatus)
+		cancelStatus()
+
 		pos1, err := utils.DecodeBinlogPosition(loadStatus.MetaBinlog)
 		if err != nil {
 			return terror.WithClass(err, terror.ClassDMWorker)
 		}
 		for {
-			relayStatus := hub.w.relayHolder.Status()
+			ctxStatus, cancelStatus = context.WithTimeout(ctxWait, utils.DefaultDBTimeout)
+			relayStatus := hub.w.relayHolder.Status(ctxStatus)
+			cancelStatus()
+
 			pos2, err := utils.DecodeBinlogPosition(relayStatus.RelayBinlog)
 			if err != nil {
 				return terror.WithClass(err, terror.ClassDMWorker)
@@ -606,7 +618,7 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 			st.l.Debug("wait relay to catchup", zap.Stringer("load end position", pos1), zap.Stringer("relay position", pos2))
 
 			select {
-			case <-ctx.Done():
+			case <-ctxWait.Done():
 				return terror.ErrWorkerWaitRelayCatchupTimeout.Generate(waitRelayCatchupTimeout, pos1, pos2)
 			case <-subTaskCtx.Done():
 				return nil

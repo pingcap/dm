@@ -14,6 +14,7 @@
 package writer
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"sync"
@@ -29,7 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	bw "github.com/pingcap/dm/pkg/binlog/writer"
-	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -55,15 +56,15 @@ type FileWriter struct {
 
 	filename sync2.AtomicString // current binlog filename
 
-	tctx *tcontext.Context
+	logger log.Logger
 }
 
 // NewFileWriter creates a FileWriter instances.
-func NewFileWriter(tctx *tcontext.Context, cfg *FileConfig, parser2 *parser.Parser) Writer {
+func NewFileWriter(logger log.Logger, cfg *FileConfig, parser2 *parser.Parser) Writer {
 	w := &FileWriter{
 		cfg:    cfg,
 		parser: parser2,
-		tctx:   tctx.WithLogger(tctx.L().WithFields(zap.String("sub component", "relay writer"))),
+		logger: logger.WithFields(zap.String("sub component", "relay writer")),
 	}
 	w.filename.Set(cfg.Filename) // set the startup filename
 	return w
@@ -101,7 +102,7 @@ func (w *FileWriter) Close() error {
 }
 
 // Recover implements Writer.Recover.
-func (w *FileWriter) Recover() (RecoverResult, error) {
+func (w *FileWriter) Recover(ctx context.Context) (RecoverResult, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -109,7 +110,7 @@ func (w *FileWriter) Recover() (RecoverResult, error) {
 		return RecoverResult{}, terror.ErrRelayWriterNeedStart.Generate(w.stage, common.StagePrepared)
 	}
 
-	return w.doRecovering()
+	return w.doRecovering(ctx)
 }
 
 // WriteEvent implements Writer.WriteEvent.
@@ -164,7 +165,7 @@ func (w *FileWriter) offset() int64 {
 func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (Result, error) {
 	// close the previous binlog file
 	if w.out != nil {
-		w.tctx.L().Info("closing previous underlying binlog writer", zap.Reflect("status", w.out.Status()))
+		w.logger.Info("closing previous underlying binlog writer", zap.Reflect("status", w.out.Status()))
 		err := w.out.Close()
 		if err != nil {
 			return Result{}, terror.Annotate(err, "close previous underlying binlog writer")
@@ -181,13 +182,13 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 	outCfg := &bw.FileWriterConfig{
 		Filename: filename,
 	}
-	out := bw.NewFileWriter(w.tctx, outCfg)
+	out := bw.NewFileWriter(w.logger, outCfg)
 	err := out.Start()
 	if err != nil {
 		return Result{}, terror.Annotatef(err, "start underlying binlog writer for %s", filename)
 	}
 	w.out = out.(*bw.FileWriter)
-	w.tctx.L().Info("open underlying binlog writer", zap.Reflect("status", w.out.Status()))
+	w.logger.Info("open underlying binlog writer", zap.Reflect("status", w.out.Status()))
 
 	// write the binlog file header if not exists
 	exist, err := checkBinlogHeaderExist(filename)
@@ -342,7 +343,7 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) (bool, err
 		// no hole exists, but duplicate events may exists, this should be handled in another place.
 		return holeSize < 0, nil
 	}
-	w.tctx.L().Info("hole exist from pos1 to pos2", zap.Int64("pos1", fileOffset), zap.Int64("pos2", evStartPos), zap.String("file", w.filename.Get()))
+	w.logger.Info("hole exist from pos1 to pos2", zap.Int64("pos1", fileOffset), zap.Int64("pos2", evStartPos), zap.String("file", w.filename.Get()))
 
 	// 2. generate dummy event
 	var (
@@ -370,7 +371,7 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (Re
 	if err != nil {
 		return Result{}, terror.Annotatef(err, "check event %+v whether duplicate in %s", ev.Header, filename)
 	} else if duplicate {
-		w.tctx.L().Info("event is duplicate", zap.Reflect("header", ev.Header), zap.String("file", w.filename.Get()))
+		w.logger.Info("event is duplicate", zap.Reflect("header", ev.Header), zap.String("file", w.filename.Get()))
 	}
 
 	var reason string
@@ -392,7 +393,7 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (Re
 // 3. truncate any incomplete events/transactions
 // now, we think a transaction finished if we received a XIDEvent or DDL in QueryEvent
 // NOTE: handle cases when file size > 4GB
-func (w *FileWriter) doRecovering() (RecoverResult, error) {
+func (w *FileWriter) doRecovering(ctx context.Context) (RecoverResult, error) {
 	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
 	fs, err := os.Stat(filename)
 	if (err != nil && os.IsNotExist(err)) || (err == nil && len(w.filename.Get()) == 0) {
@@ -402,7 +403,7 @@ func (w *FileWriter) doRecovering() (RecoverResult, error) {
 	}
 
 	// get latest pos/GTID set for all completed transactions from the file
-	latestPos, latestGTIDs, err := getTxnPosGTIDs(filename, w.parser)
+	latestPos, latestGTIDs, err := getTxnPosGTIDs(ctx, filename, w.parser)
 	if err != nil {
 		return RecoverResult{}, terror.Annotatef(err, "get latest pos/GTID set from %s", filename)
 	}

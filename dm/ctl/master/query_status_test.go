@@ -32,7 +32,8 @@ type testCtlMaster struct {
 var _ = check.Suite(&testCtlMaster{})
 
 func generateAndCheckTaskResult(c *check.C, resp *pb.QueryStatusListResponse, expectedResult []*taskInfo) {
-	result := wrapTaskResult(resp)
+	result, hasFalseResult := wrapTaskResult(resp)
+	c.Assert(hasFalseResult, check.IsFalse)
 	c.Assert(result.Result, check.IsTrue)
 	c.Assert(result.Tasks, check.HasLen, 1)
 	sort.Strings(result.Tasks[0].Sources)
@@ -136,7 +137,8 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 			},
 		}},
 	})
-	result := wrapTaskResult(resp)
+	result, hasFalseResult := wrapTaskResult(resp)
+	c.Assert(hasFalseResult, check.IsFalse)
 	c.Assert(result.Tasks, check.HasLen, 2)
 	if result.Tasks[0].TaskName == "test2" {
 		result.Tasks[0], result.Tasks[1] = result.Tasks[1], result.Tasks[0]
@@ -153,4 +155,17 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	},
 	}
 	c.Assert(result.Tasks, check.DeepEquals, expectedResult)
+
+	resp.Result = false
+	_, hasFalseResult = wrapTaskResult(resp)
+	c.Assert(hasFalseResult, check.IsTrue)
+
+	resp.Result = true
+	resp.Sources[0].Result = false
+	_, hasFalseResult = wrapTaskResult(resp)
+	c.Assert(hasFalseResult, check.IsTrue)
+
+	resp.Sources[0].Result = true
+	_, hasFalseResult = wrapTaskResult(resp)
+	c.Assert(hasFalseResult, check.IsFalse)
 }
