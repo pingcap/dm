@@ -17,7 +17,8 @@ EOF
 }
 
 function run() {
-    run_sql_both_source "SET @@GLOBAL.SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE'"
+    run_sql "SET @@GLOBAL.SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE'" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "SET @@GLOBAL.SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE,ANSI_QUOTES'" $MYSQL_PORT2 $MYSQL_PASSWORD2
     run_sql_tidb "SET @@GLOBAL.SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE'"
 
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -52,10 +53,14 @@ function run() {
 
     # start DM task only
     dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "Sync" 2
 
     # TODO: check sharding partition id
     # use sync_diff_inspector to check full dump loader
     echo "check sync diff for full dump and load"
+    run_sql "SET @@GLOBAL.SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE'" $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
