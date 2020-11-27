@@ -47,7 +47,7 @@ func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig) error {
 	switch cfgs[0].Mode {
 	case config.ModeFull:
 		ignoreCheckingItems = append(ignoreCheckingItems, config.ReplicationPrivilegeChecking,
-			config.BinlogEnableChecking, config.BinlogFormatChecking, config.BinlogRowImageChecking)
+			config.BinlogEnableChecking, config.BinlogFormatChecking, config.BinlogRowImageChecking, config.ServerIDChecking)
 	case config.ModeIncrement:
 		ignoreCheckingItems = append(ignoreCheckingItems, config.DumpPrivilegeChecking)
 	}
