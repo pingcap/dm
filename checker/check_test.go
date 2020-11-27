@@ -56,6 +56,7 @@ func ignoreExcept(itemMap map[string]struct{}) []string {
 		config.DumpPrivilegeChecking,
 		config.ReplicationPrivilegeChecking,
 		config.VersionChecking,
+		config.ServerIDChecking,
 		config.BinlogEnableChecking,
 		config.BinlogFormatChecking,
 		config.BinlogRowImageChecking,
@@ -143,6 +144,24 @@ func (s *testCheckerSuite) TestVersionChecking(c *tc.C) {
 	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 		AddRow("version", "10.0.0-MariaDB"))
 	c.Assert(CheckSyncConfig(context.Background(), cfgs), tc.ErrorMatches, "(.|\n)*version required at least .* but got 10.0.0(.|\n)*")
+}
+
+func (s *testCheckerSuite) TestServerIDChecking(c *tc.C) {
+	cfgs := []*config.SubTaskConfig{
+		{
+			IgnoreCheckingItems: ignoreExcept(map[string]struct{}{config.ServerIDChecking: {}}),
+		},
+	}
+
+	mock := s.initMockDB(c)
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'server_id'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("server_id", "0"))
+	c.Assert(CheckSyncConfig(context.Background(), cfgs), tc.ErrorMatches, "(.|\n)*please set server_id greater than 0(.|\n)*")
+
+	mock = s.initMockDB(c)
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'server_id'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+		AddRow("server_id", "1"))
+	c.Assert(CheckSyncConfig(context.Background(), cfgs), tc.IsNil)
 }
 
 func (s *testCheckerSuite) TestBinlogEnableChecking(c *tc.C) {
