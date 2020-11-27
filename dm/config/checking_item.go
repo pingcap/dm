@@ -27,6 +27,7 @@ const (
 	DumpPrivilegeChecking        = "dump_privilege"
 	ReplicationPrivilegeChecking = "replication_privilege"
 	VersionChecking              = "version"
+	ServerIDChecking             = "server_id"
 	BinlogEnableChecking         = "binlog_enable"
 	BinlogFormatChecking         = "binlog_format"
 	BinlogRowImageChecking       = "binlog_row_image"
@@ -41,6 +42,7 @@ var AllCheckingItems = map[string]string{
 	DumpPrivilegeChecking:        "dump privileges of source DB checking item",
 	ReplicationPrivilegeChecking: "replication privileges of source DB checking item",
 	VersionChecking:              "MySQL/MariaDB version checking item",
+	ServerIDChecking:             "server_id checking item",
 	BinlogEnableChecking:         "binlog enable checking item",
 	BinlogFormatChecking:         "binlog format checking item",
 	BinlogRowImageChecking:       "binlog row image checking item",
