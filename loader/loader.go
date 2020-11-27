@@ -967,7 +967,7 @@ func (l *Loader) prepareViewFiles(files map[string]struct{}) error {
 			continue
 		}
 		// because there's a table file for view file, we skip this check
-		tables, _ := l.db2Tables[db]
+		tables := l.db2Tables[db]
 		if _, ok := tables[table]; !ok {
 			return terror.ErrLoadUnitNoTableFileForView.Generate(file)
 		}
