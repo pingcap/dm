@@ -67,6 +67,8 @@ var sqls = []string{
 	"alter table `t1` partition by list (a) (partition x default)",
 	"alter table `t1` partition by system_time (partition x history, partition y current)",
 	"alter database `test` charset utf8mb4",
+	"create view `v1` as select * from `t1`",
+	"drop view `v1`",
 }
 
 var nonDDLs = []string{
@@ -171,6 +173,8 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{"ALTER TABLE `test`.`t1` PARTITION BY LIST (`a`) (PARTITION `x` DEFAULT)"},
 		{"ALTER TABLE `test`.`t1` PARTITION BY SYSTEM_TIME (PARTITION `x` HISTORY,PARTITION `y` CURRENT)"},
 		{"ALTER DATABASE `test` CHARACTER SET = utf8mb4"},
+		{"CREATE ALGORITHM = UNDEFINED DEFINER = CURRENT_USER SQL SECURITY DEFINER VIEW `test`.`v1` AS SELECT * FROM `test`.`t1`"},
+		{"DROP VIEW IF EXISTS `test`.`v1`"},
 	}
 
 	expectedTableName := [][][]*filter.Table{
@@ -215,6 +219,8 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "")}},
+		{{genTableName("test", "v1"), genTableName("test", "t1")}},
+		{{genTableName("test", "v1")}},
 	}
 
 	targetTableNames := [][][]*filter.Table{
@@ -259,6 +265,8 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xtest", "")}},
+		{{genTableName("xtest", "v1"), genTableName("xtest", "t1")}},
+		{{genTableName("xtest", "v1")}},
 	}
 
 	targetSQLs := [][]string{
@@ -303,6 +311,8 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{"ALTER TABLE `xtest`.`xt1` PARTITION BY LIST (`a`) (PARTITION `x` DEFAULT)"},
 		{"ALTER TABLE `xtest`.`xt1` PARTITION BY SYSTEM_TIME (PARTITION `x` HISTORY,PARTITION `y` CURRENT)"},
 		{"ALTER DATABASE `xtest` CHARACTER SET = utf8mb4"},
+		{"CREATE ALGORITHM = UNDEFINED DEFINER = CURRENT_USER SQL SECURITY DEFINER VIEW `xtest`.`v1` AS SELECT * FROM `xtest`.`t1`"},
+		{"DROP VIEW IF EXISTS `xtest`.`v1`"},
 	}
 
 	for i, sql := range sqls {
