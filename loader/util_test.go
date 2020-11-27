@@ -57,9 +57,11 @@ func (t *testUtilSuite) TestSQLReplace(c *C) {
 	}
 
 	for _, tt := range replaceTests {
-		c.Assert(SQLReplace(tt.in, tt.old, tt.new), Equals, tt.out)
+		c.Assert(SQLReplace(tt.in, tt.old, tt.new, false), Equals, tt.out)
 	}
 
+	c.Assert(SQLReplace("create table \"xyz\"", "xyz", "abc", true),
+		Equals, "create table \"abc\"")
 }
 
 func (t *testUtilSuite) TestShortSha1(c *C) {
