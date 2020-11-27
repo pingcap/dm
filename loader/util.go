@@ -14,7 +14,6 @@
 package loader
 
 import (
-	"bytes"
 	"crypto/sha1"
 	"fmt"
 	"os"
@@ -51,18 +50,24 @@ func CollectDirFiles(path string) (map[string]struct{}, error) {
 
 // SQLReplace works like strings.Replace but only supports one replacement.
 // It uses backquote pairs to quote the old and new word.
-func SQLReplace(s, old, new string) string {
-	old = backquote(old)
-	new = backquote(new)
-	return strings.Replace(s, old, new, 1)
-}
+func SQLReplace(s, old, new string, ansiquote bool) string {
+	var quote string
+	if ansiquote {
+		quote = "\""
+	} else {
+		quote = "`"
+	}
+	quoteF := func(s string) string {
+		var b strings.Builder
+		b.WriteString(quote)
+		b.WriteString(s)
+		b.WriteString(quote)
+		return b.String()
+	}
 
-func backquote(s string) string {
-	buf := bytes.Buffer{}
-	buf.WriteByte('`')
-	buf.WriteString(s)
-	buf.WriteByte('`')
-	return buf.String()
+	old = quoteF(old)
+	new = quoteF(new)
+	return strings.Replace(s, old, new, 1)
 }
 
 // shortSha1 returns the first 6 characters of sha1 value
