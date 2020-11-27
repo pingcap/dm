@@ -1254,6 +1254,10 @@ function DM_4230_CASE() {
             "handle-error test revert" \
             "\"result\": true" 2
 
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "unsupported add column 'c' constraint UNIQUE KEY" 1
+
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test replace alter table ${db}.${tb1} add column c int;" \
             "\"result\": true" 2
