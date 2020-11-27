@@ -32,6 +32,8 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285
+	github.com/tidwall/gjson v1.6.1
+	github.com/tidwall/sjson v1.1.2
 	github.com/tikv/pd v1.1.0-beta.0.20201119053953-51eff4c1fa05
 	github.com/unrolled/render v1.0.1
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200824191128-ae9734ed278b
