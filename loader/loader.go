@@ -968,7 +968,7 @@ func (l *Loader) prepareViewFiles(files map[string]struct{}) error {
 		}
 		// because there's a table file for view file, we skip this check
 		tables, _ := l.db2Tables[db]
-		if _, ok := tables[table]; ok {
+		if _, ok := tables[table]; !ok {
 			return terror.ErrLoadUnitNoTableFileForView.Generate(file)
 		}
 
@@ -1128,6 +1128,70 @@ func (l *Loader) restoreTable(ctx context.Context, conn *DBConn, sqlFile, schema
 	return nil
 }
 
+// restoreView drops dummy table and create view
+func (l *Loader) restoreView(ctx context.Context, conn *DBConn, sqlFile, schema, view string) error {
+	// dumpling will generate such a viewFile
+	// /*!40101 SET NAMES binary*/;
+	// DROP TABLE IF EXISTS `v2`;
+	// DROP VIEW IF EXISTS `v2`;
+	// SET @PREV_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT;
+	// SET @PREV_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS;
+	// SET @PREV_COLLATION_CONNECTION=@@COLLATION_CONNECTION;
+	// SET character_set_client = utf8;
+	// SET character_set_results = utf8;
+	// SET collation_connection = utf8_general_ci;
+	// CREATE ALGORITHM=UNDEFINED DEFINER="root"@"localhost" SQL SECURITY DEFINER VIEW "all_mode"."v2" AS select "all_mode"."t2"."id" AS "id" from "all_mode"."t2";
+	// SET character_set_client = @PREV_CHARACTER_SET_CLIENT;
+	// SET character_set_results = @PREV_CHARACTER_SET_RESULTS;
+	// SET collation_connection = @PREV_COLLATION_CONNECTION;
+	f, err := os.Open(sqlFile)
+	if err != nil {
+		return terror.ErrLoadUnitReadSchemaFile.Delegate(err)
+	}
+	defer f.Close()
+
+	tctx := tcontext.NewContext(ctx, l.logger)
+
+	data := make([]byte, 0, 1024*1024)
+	br := bufio.NewReader(f)
+	for {
+		line, err := br.ReadString('\n')
+		if err == io.EOF {
+			break
+		}
+
+		realLine := strings.TrimSpace(line[:len(line)-1])
+		if len(realLine) == 0 {
+			continue
+		}
+
+		data = append(data, []byte(realLine)...)
+		if data[len(data)-1] == ';' {
+			query := string(data)
+			data = data[0:0]
+			if strings.HasPrefix(query, "/*") && strings.HasSuffix(query, "*/;") {
+				continue
+			}
+
+			var sqls []string
+			dstSchema, dstTable := fetchMatchedLiteral(tctx, l.tableRouter, schema, view)
+			// TODO: wait DM#1309
+			sqls = append(sqls, fmt.Sprintf("USE `%s`;", unescapePercent(dstSchema, l.logger)))
+			query = renameShardingTable(query, view, dstTable)
+
+			l.logger.Debug("view create statement", zap.String("sql", query))
+
+			sqls = append(sqls, query)
+			err = conn.executeSQL(tctx, sqls)
+			if err != nil {
+				return terror.WithScope(err, terror.ScopeDownstream)
+			}
+		}
+	}
+
+	return nil
+}
+
 // restoreStruture creates schema or table
 func (l *Loader) restoreStructure(ctx context.Context, conn *DBConn, sqlFile string, schema string, table string) error {
 	f, err := os.Open(sqlFile)
@@ -1248,6 +1312,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 
 	for _, db := range dbs {
 		tables := l.db2Tables[db]
+		views := l.db2Views[db]
 
 		// create db
 		dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
@@ -1316,8 +1381,18 @@ func (l *Loader) restoreData(ctx context.Context) error {
 				dispatchMap[fmt.Sprintf("%s_%s_%s", db, table, file)] = j
 			}
 		}
+
+		for view := range views {
+			viewFile := fmt.Sprintf("%s/%s.%s-schema-view.sql", l.cfg.Dir, db, view)
+			l.logger.Info("start to create view", zap.String("view file", viewFile))
+			err := l.restoreView(ctx, dbConn, viewFile, db, view)
+			if err != nil {
+				return err
+			}
+			l.logger.Info("finish to create view", zap.String("view file", viewFile))
+		}
 	}
-	l.logger.Info("finish to create tables", zap.Duration("cost time", time.Since(begin)))
+	l.logger.Info("finish to create tables and views", zap.Duration("cost time", time.Since(begin)))
 
 	// a simple and naive approach to dispatch files randomly based on the feature of golang map(range by random)
 	for _, j := range dispatchMap {

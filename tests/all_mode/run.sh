@@ -108,9 +108,9 @@ function test_query_timeout(){
 function run() {
     run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
 
-#    test_session_config
-#
-#    test_query_timeout
+    test_session_config
+
+    test_query_timeout
 
     export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
 
@@ -142,7 +142,7 @@ function run() {
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     run_sql "show create view all_mode.v2" $TIDB_PORT $TIDB_PASSWORD
-    check_contains "blahblah"
+    check_contains "View: v2"
 
     # check default session config
     check_log_contain_with_retry '\\"tidb_txn_mode\\":\\"optimistic\\"' $WORK_DIR/worker1/log/dm-worker.log
@@ -199,9 +199,17 @@ function run() {
     # check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
 
     # test block-allow-list by the way
-    run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
+    run_sql_tidb "show databases;"
     check_not_contains "ignore_db"
     check_contains "all_mode"
+
+    run_sql "select count(*) from all_mode.v1;" $TIDB_PORT $TIDB_PASSWORD
+    check_contains "count(*): 11"
+
+    run_sql_source1 "drop view all_mode.v1;"
+    sleep 1
+    # doesn't exist
+    run_sql_tidb "select count(*) from all_mode.v1;" $TIDB_PORT $TIDB_PASSWORD && exit 1 || echo "view dropped"
 
     echo "check dump files have been cleaned"
     ls $WORK_DIR/worker1/dumped_data.$ILLEGAL_CHAR_NAME && exit 1 || echo "worker1 auto removed dump files"

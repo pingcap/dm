@@ -168,6 +168,24 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 	return bf.String(), nil
 }
 
+type dbNameAppender struct {
+	curDB model.CIStr
+}
+
+func (v *dbNameAppender) Enter(in ast.Node) (ast.Node, bool) {
+	if t, ok := in.(*ast.TableName); ok {
+		if t.Schema.O == "" {
+			t.Schema = v.curDB
+		}
+		return in, true
+	}
+	return in, false
+}
+
+func (v *dbNameAppender) Leave(in ast.Node) (ast.Node, bool) {
+	return in, true
+}
+
 // SplitDDL splits multiple operations in one DDL statement into multiple DDL statements
 // returned DDL is formatted like StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 // if fail to restore, it would not restore the value of `stmt` (it changes it's values if `stmt` is one of  DropTableStmt, RenameTableStmt, AlterTableStmt)
@@ -289,7 +307,9 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 		v.Table = table
 
 		return sqls, nil
-		// TODO: view!
+	case *ast.CreateViewStmt:
+		visitor := &dbNameAppender{curDB: schemaName}
+		v.Accept(visitor)
 	default:
 		return nil, terror.ErrUnknownTypeDDL.Generate(stmt)
 	}
