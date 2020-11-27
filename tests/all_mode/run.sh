@@ -141,7 +141,7 @@ function run() {
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-    run_sql "show create view all_mode.v2" $TIDB_PORT $TIDB_PASSWORD
+    run_sql_tidb "show create view all_mode.v2"
     check_contains "View: v2"
 
     # check default session config
