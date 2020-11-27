@@ -60,6 +60,9 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 	// we might SetGlobalConfig before every call to tracker, or use some patch like https://github.com/bouk/monkey
 	toSet := tidbConfig.NewConfig()
 	toSet.AlterPrimaryKey = true
+	// bypass wait time of https://github.com/pingcap/tidb/pull/20550
+	toSet.TiKVClient.AsyncCommit.SafeWindow = 0
+	toSet.TiKVClient.AsyncCommit.AllowedClockDrift = 0
 	tidbConfig.StoreGlobalConfig(toSet)
 
 	if len(sessionCfg) == 0 {
