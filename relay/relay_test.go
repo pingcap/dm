@@ -536,9 +536,11 @@ func (t *testRelaySuite) verifyMetadata(c *C, r *Relay, uuidExpected string,
 	posExpected gmysql.Position, gsStrExpected string, UUIDsExpected []string) {
 	uuid, pos := r.meta.Pos()
 	_, gs := r.meta.GTID()
+	gsExpected, err := gtid.ParserGTID(mysql.MySQLFlavor, gsStrExpected)
+	c.Assert(err, IsNil)
 	c.Assert(uuid, Equals, uuidExpected)
 	c.Assert(pos, DeepEquals, posExpected)
-	c.Assert(gs.String(), Equals, gsStrExpected)
+	c.Assert(gs.Equal(gsExpected), IsTrue)
 
 	indexFile := filepath.Join(r.cfg.RelayDir, utils.UUIDIndexFilename)
 	UUIDs, err := utils.ParseUUIDIndex(indexFile)
