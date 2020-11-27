@@ -19,11 +19,11 @@ import (
 	"fmt"
 	"time"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/DATA-DOG/go-sqlmock"
+	gouuid "github.com/google/uuid"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/infoschema"
-	gouuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
@@ -103,7 +103,7 @@ func (s *testDBSuite) resetBinlogSyncer(c *C) {
 func (s *testDBSuite) TestGetServerUUID(c *C) {
 	uuid, err := utils.GetServerUUID(context.Background(), s.db, "mysql")
 	c.Assert(err, IsNil)
-	_, err = gouuid.FromString(uuid)
+	_, err = gouuid.Parse(uuid)
 	c.Assert(err, IsNil)
 }
 

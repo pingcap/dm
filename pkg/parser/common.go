@@ -29,10 +29,9 @@ import (
 )
 
 const (
-	// SingleRenameTableNameNum stands for number of TableNames in a single table renaming. it's 4 not 2 because TiDB
-	// parser repeats first two TableNames at start
-	// ref https://github.com/pingcap/tidb/pull/3892
-	SingleRenameTableNameNum = 4
+	// SingleRenameTableNameNum stands for number of TableNames in a single table renaming. it's 2 after
+	// https://github.com/pingcap/parser/pull/1021
+	SingleRenameTableNameNum = 2
 )
 
 // Parse wraps parser.Parse(), makes `parser` suitable for dm
