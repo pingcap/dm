@@ -16,7 +16,7 @@ fix-sql-file = "fix.sql"
 
 # tables need to check.
 [[check-tables]]
-schema = "initial_unit"
+schema = "many_tables_db"
 tables = ["~.*"]
 
 [[source-db]]
