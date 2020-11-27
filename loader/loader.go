@@ -383,7 +383,9 @@ type Loader struct {
 
 	// db -> tables
 	// table -> data files
-	db2Tables  map[string]Tables2DataFiles
+	db2Tables map[string]Tables2DataFiles
+	// db -> views
+	db2Views   map[string]map[string]struct{}
 	tableInfos map[string]*tableInfo
 
 	// for every worker goroutine, not for every data file
@@ -419,6 +421,7 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 	loader := &Loader{
 		cfg:        cfg,
 		db2Tables:  make(map[string]Tables2DataFiles),
+		db2Views:   make(map[string]map[string]struct{}),
 		tableInfos: make(map[string]*tableInfo),
 		workerWg:   new(sync.WaitGroup),
 		logger:     log.With(zap.String("task", cfg.Name), zap.String("unit", "load")),
@@ -944,6 +947,44 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 	return nil
 }
 
+func (l *Loader) prepareViewFiles(files map[string]struct{}) error {
+	for file := range files {
+		if !strings.HasSuffix(file, "-schema-view.sql") {
+			continue
+		}
+
+		idx := strings.LastIndex(file, "-schema-view.sql")
+		name := file[:idx]
+		fields := strings.Split(name, ".")
+		if len(fields) != 2 {
+			l.logger.Warn("invalid view file", zap.String("file", file))
+			continue
+		}
+
+		db, table := fields[0], fields[1]
+		if l.skipSchemaAndTable(&filter.Table{Schema: db, Name: table}) {
+			l.logger.Warn("ignore view file", zap.String("view file", file))
+			continue
+		}
+		// because there's a table file for view file, we skip this check
+		tables, _ := l.db2Tables[db]
+		if _, ok := tables[table]; ok {
+			return terror.ErrLoadUnitNoTableFileForView.Generate(file)
+		}
+
+		views, ok := l.db2Views[db]
+		if !ok {
+			l.db2Views[db] = map[string]struct{}{}
+			views = l.db2Views[db]
+		}
+		views[table] = struct{}{}
+
+		l.totalFileCount.Add(1) // for view
+	}
+
+	return nil
+}
+
 func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 	var dataFilesNumber float64
 
@@ -1041,6 +1082,11 @@ func (l *Loader) prepare() error {
 
 	// Sql file for create table
 	if err := l.prepareTableFiles(files); err != nil {
+		return err
+	}
+
+	// Sql file for create view
+	if err := l.prepareViewFiles(files); err != nil {
 		return err
 	}
 

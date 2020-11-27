@@ -1,4 +1,5 @@
 use all_mode;
+create view v1 as select id from t1;
 insert into t1 (id, name) values (3, 'Eddard Stark');
 update t1 set name = 'Arya Stark' where id = 1;
 update t1 set name = 'Catelyn Stark' where name = 'catelyn';

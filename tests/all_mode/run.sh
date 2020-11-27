@@ -108,9 +108,9 @@ function test_query_timeout(){
 function run() {
     run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
 
-    test_session_config
-
-    test_query_timeout
+#    test_session_config
+#
+#    test_query_timeout
 
     export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
 
@@ -141,6 +141,8 @@ function run() {
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_sql "show create view all_mode.v2" $TIDB_PORT $TIDB_PASSWORD
+    check_contains "blahblah"
 
     # check default session config
     check_log_contain_with_retry '\\"tidb_txn_mode\\":\\"optimistic\\"' $WORK_DIR/worker1/log/dm-worker.log

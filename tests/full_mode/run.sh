@@ -64,7 +64,7 @@ function escape_schema() {
     cp $cur/data/db2.prepare.sql $WORK_DIR/db2.prepare.sql
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
     cp $cur/conf/diff_config.toml $WORK_DIR/diff_config.toml
-    sed -i "s/full_mode/full\/mode/g" $WORK_DIR/db1.prepare.sql $WORK_DIR/db2.prepare.sql $WORK_DIR/dm-task.yaml $WORK_DIR/diff_config.toml
+    sed -i "s/full_mode/full\/mo-de/g" $WORK_DIR/db1.prepare.sql $WORK_DIR/db2.prepare.sql $WORK_DIR/dm-task.yaml $WORK_DIR/diff_config.toml
 
     run_sql_file $WORK_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
@@ -72,9 +72,9 @@ function escape_schema() {
     check_contains 'Query OK, 3 rows affected'
 
     # test load data with `/` in the table name
-    run_sql_source1 "create table \`full/mode\`.\`tb\/1\` (id int, name varchar(10), primary key(\`id\`));"
-    run_sql_source1 "insert into \`full/mode\`.\`tb\/1\` values(1,'haha');"
-    run_sql_source1 "insert into \`full/mode\`.\`tb\/1\` values(2,'hihi');"
+    run_sql_source1 "create table \`full/mo-de\`.\`tb\/1\` (id int, name varchar(10), primary key(\`id\`));"
+    run_sql_source1 "insert into \`full/mo-de\`.\`tb\/1\` values(1,'haha');"
+    run_sql_source1 "insert into \`full/mo-de\`.\`tb\/1\` values(2,'hihi');"
 
     run_sql_file $cur/data/db1.prepare.user.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_count 'Query OK, 0 rows affected' 7
@@ -103,7 +103,7 @@ function escape_schema() {
     ls $WORK_DIR/worker1/dumped_data.test && exit 1 || echo "worker1 auto removed dump files"
     ls $WORK_DIR/worker2/dumped_data.test && exit 1 || echo "worker2 auto removed dump files"
 
-    cleanup_data full/mode
+    cleanup_data full/mo-de
     cleanup_process $*
 }
 
