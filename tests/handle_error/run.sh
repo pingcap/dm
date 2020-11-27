@@ -878,14 +878,13 @@ function DM_4220_CASE() {
             "handle-error test skip" \
             "\"result\": true" 3
 
-    run_sql_source1 "insert into ${db}.${tb1} values(3);"
-    run_sql_source2 "insert into ${db}.${tb1} values(4);"
-
-    run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 4"
-
     # flush checkpoint, otherwise revert may "succeed"
-    run_sql_source1 "alter table ${db}.${tb1} add column c int;"
-    run_sql_source2 "alter table ${db}.${tb1} add column c int;"
+    run_sql_source1 "alter table ${db}.${tb1} add column new_col int;"
+    run_sql_source2 "alter table ${db}.${tb1} add column new_col int;"
+
+    run_sql_source1 "insert into ${db}.${tb1} values(3,3);"
+    run_sql_source2 "insert into ${db}.${tb1} values(4,4);"
+    run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 4"
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "handle-error test revert -s $source1 -b $first_name1:$third_pos1" \
