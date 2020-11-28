@@ -28,6 +28,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pingcap/parser"
+	tmysql "github.com/pingcap/parser/mysql"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
@@ -36,6 +39,7 @@ import (
 	"github.com/pingcap/dm/pkg/dumpling"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
@@ -1153,6 +1157,15 @@ func (l *Loader) restoreView(ctx context.Context, conn *DBConn, sqlFile, schema,
 
 	tctx := tcontext.NewContext(ctx, l.logger)
 
+	var sqls []string
+	dstSchema, dstView := fetchMatchedLiteral(tctx, l.tableRouter, schema, view)
+	sqls = append(sqls, fmt.Sprintf("USE `%s`;", unescapePercent(dstSchema, l.logger)))
+	sqlMode, err := tmysql.GetSQLMode(l.cfg.SQLMode)
+	if err != nil {
+		// should not happened
+		return terror.ErrGetSQLModeFromStr.Generate(l.cfg.SQLMode)
+	}
+
 	data := make([]byte, 0, 1024*1024)
 	br := bufio.NewReader(f)
 	for {
@@ -1174,20 +1187,44 @@ func (l *Loader) restoreView(ctx context.Context, conn *DBConn, sqlFile, schema,
 				continue
 			}
 
-			var sqls []string
-			dstSchema, dstTable := fetchMatchedLiteral(tctx, l.tableRouter, schema, view)
-			// TODO: wait DM#1309
-			sqls = append(sqls, fmt.Sprintf("USE `%s`;", unescapePercent(dstSchema, l.logger)))
-			query = renameShardingTable(query, view, dstTable)
+			if strings.HasPrefix(query, "DROP") {
+				query = renameShardingTable(query, view, dstView, false)
+			} else if strings.HasPrefix(query, "CREATE") {
+				// create view statement could be complicated because it has a select
+				p := parser.New()
+				p.SetSQLMode(sqlMode)
+				stmt, err := p.ParseOneStmt(query, "", "")
+				if err != nil {
+					return terror.ErrLoadUnitParseStatement.Generate(query)
+				}
+
+				tableNames, err := parserpkg.FetchDDLTableNames(schema, stmt)
+				if err != nil {
+					return terror.WithScope(err, terror.ScopeInternal)
+				}
+				targetTableNames := make([]*filter.Table, 0, len(tableNames))
+				for i := range tableNames {
+					dstSchema, dstTable := fetchMatchedLiteral(tctx, l.tableRouter, tableNames[i].Schema, tableNames[i].Name)
+					tableName := &filter.Table{
+						Schema: dstSchema,
+						Name:   dstTable,
+					}
+					targetTableNames = append(targetTableNames, tableName)
+				}
+				query, err = parserpkg.RenameDDLTable(stmt, targetTableNames)
+				if err != nil {
+					return terror.WithScope(err, terror.ScopeInternal)
+				}
+			}
 
 			l.logger.Debug("view create statement", zap.String("sql", query))
 
 			sqls = append(sqls, query)
-			err = conn.executeSQL(tctx, sqls)
-			if err != nil {
-				return terror.WithScope(err, terror.ScopeDownstream)
-			}
 		}
+	}
+	err = conn.executeSQL(tctx, sqls)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 
 	return nil

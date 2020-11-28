@@ -2166,6 +2166,9 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		}
 	}
 	for i := 0; i < shouldTableExistNum; i++ {
+		if srcTables[i].Schema == "" && srcTables[i].Name == "" {
+			continue
+		}
 		if _, err := s.getTable(ec.tctx, srcTables[i].Schema, srcTables[i].Name, targetTables[i].Schema, targetTables[i].Name); err != nil {
 			return err
 		}
@@ -2176,6 +2179,9 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		start = shouldTableExistNum
 	}
 	for i := start; i < shouldRefTableExistNum; i++ {
+		if srcTables[i].Schema == "" && srcTables[i].Name == "" {
+			continue
+		}
 		if err := s.schemaTracker.CreateSchemaIfNotExists(srcTables[i].Schema); err != nil {
 			return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, srcTables[i].Schema)
 		}

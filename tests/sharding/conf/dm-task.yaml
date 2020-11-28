@@ -35,6 +35,8 @@ block-allow-list:
     do-tables:
     -  db-name: "~^sharding[\\d]+"
        tbl-name: "~^t[\\d]+"
+    -  db-name: "~^sharding[\\d]+"
+       tbl-name: "~^v[\\d]+"
 
 routes:
   sharding-route-rules-table:

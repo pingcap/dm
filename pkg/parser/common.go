@@ -51,14 +51,27 @@ type tableNameExtractor struct {
 }
 
 func (tne *tableNameExtractor) Enter(in ast.Node) (ast.Node, bool) {
-	if t, ok := in.(*ast.TableName); ok {
-		tb := &filter.Table{Schema: t.Schema.L, Name: t.Name.L}
+	switch n := in.(type) {
+	case *ast.TableName:
+		tb := &filter.Table{Schema: n.Schema.L, Name: n.Name.L}
 		if tb.Schema == "" {
 			tb.Schema = tne.curDB
 		}
 		tne.names = append(tne.names, tb)
 		return in, true
+	case *ast.ColumnName:
+		tb := &filter.Table{Schema: n.Schema.L, Name: n.Table.L}
+		// this column has specified a table, such as
+		// CREATE VIEW `v1` AS SELECT `t1`.`c1` AS `c1` FROM `t1`
+		if tb.Name != "" {
+			if tb.Schema == "" {
+				tb.Schema = tne.curDB
+			}
+			tne.names = append(tne.names, tb)
+		}
+		return in, true
 	}
+
 	return in, false
 }
 
@@ -107,16 +120,29 @@ func (v *tableRenameVisitor) Enter(in ast.Node) (ast.Node, bool) {
 	if v.hasErr {
 		return in, true
 	}
-	if t, ok := in.(*ast.TableName); ok {
+	switch n := in.(type) {
+	case *ast.TableName:
 		if v.i >= len(v.targetNames) {
 			v.hasErr = true
 			return in, true
 		}
-		t.Schema = model.NewCIStr(v.targetNames[v.i].Schema)
-		t.Name = model.NewCIStr(v.targetNames[v.i].Name)
+		n.Schema = model.NewCIStr(v.targetNames[v.i].Schema)
+		n.Name = model.NewCIStr(v.targetNames[v.i].Name)
 		v.i++
 		return in, true
+	case *ast.ColumnName:
+		if n.Table.L != "" {
+			if v.i >= len(v.targetNames) {
+				v.hasErr = true
+				return in, true
+			}
+			n.Schema = model.NewCIStr(v.targetNames[v.i].Schema)
+			n.Table = model.NewCIStr(v.targetNames[v.i].Name)
+			v.i++
+		}
+		return in, true
 	}
+
 	return in, false
 }
 
@@ -172,6 +198,7 @@ type dbNameAppender struct {
 }
 
 func (v *dbNameAppender) Enter(in ast.Node) (ast.Node, bool) {
+	// TODO: for columnName
 	if t, ok := in.(*ast.TableName); ok {
 		if t.Schema.O == "" {
 			t.Schema = v.curDB
