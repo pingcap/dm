@@ -337,8 +337,6 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 
 			tableNames, err := FetchDDLTableNames("test", s[0])
 			c.Assert(err, IsNil)
-			c.Log(statement)
-			c.Log(tableNames, tbs[j])
 			c.Assert(tableNames, DeepEquals, tbs[j])
 
 			targetSQL, err := RenameDDLTable(s[0], targetTableNames[i][j])
