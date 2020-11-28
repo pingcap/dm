@@ -63,6 +63,9 @@ function run() {
     run_sql_source1 "SET @@GLOBAL.SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE'"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    run_sql_tidb "show create view db_target.v1"
+    check_contains "View: v1"
+
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
