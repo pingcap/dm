@@ -38,13 +38,6 @@ func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string
 	}
 
 	if len(tables) > 0 {
-		nonEmptyTables := make([]*filter.Table, 0, len(tables))
-		for _, t := range tables {
-			if t.Schema != "" && t.Name != "" {
-				nonEmptyTables = append(nonEmptyTables, t)
-			}
-		}
-		tables = nonEmptyTables
 		tbs := s.baList.ApplyOn(tables)
 		if len(tbs) != len(tables) {
 			s.tctx.L().Info("not all tables passed block-allow list",
