@@ -198,13 +198,19 @@ type dbNameAppender struct {
 }
 
 func (v *dbNameAppender) Enter(in ast.Node) (ast.Node, bool) {
-	// TODO: for columnName
-	if t, ok := in.(*ast.TableName); ok {
-		if t.Schema.O == "" {
-			t.Schema = v.curDB
+	switch n := in.(type) {
+	case *ast.TableName:
+		if n.Schema.O == "" {
+			n.Schema = v.curDB
+		}
+		return in, true
+	case *ast.ColumnName:
+		if n.Table.O != "" && n.Schema.O == "" {
+			n.Schema = v.curDB
 		}
 		return in, true
 	}
+
 	return in, false
 }
 
