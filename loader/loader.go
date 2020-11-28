@@ -296,6 +296,7 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 
 	lastOffset := cur
 
+	ansiquote := strings.Contains(w.cfg.SQLMode, "ANSI_QUOTES")
 	data := make([]byte, 0, 1024*1024)
 	br := bufio.NewReader(f)
 	for {
@@ -334,7 +335,7 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 					return terror.Annotatef(err, "file %s", file)
 				}
 			} else if table.sourceTable != table.targetTable {
-				query = renameShardingTable(query, table.sourceTable, table.targetTable)
+				query = renameShardingTable(query, table.sourceTable, table.targetTable, ansiquote)
 			}
 
 			idx := strings.Index(query, "INSERT INTO")
@@ -1201,6 +1202,7 @@ func (l *Loader) restoreStructure(ctx context.Context, conn *DBConn, sqlFile str
 	defer f.Close()
 
 	tctx := tcontext.NewContext(ctx, l.logger)
+	ansiquote := strings.Contains(l.cfg.SQLMode, "ANSI_QUOTES")
 
 	data := make([]byte, 0, 1024*1024)
 	br := bufio.NewReader(f)
@@ -1228,9 +1230,9 @@ func (l *Loader) restoreStructure(ctx context.Context, conn *DBConn, sqlFile str
 			// for table
 			if table != "" {
 				sqls = append(sqls, fmt.Sprintf("USE `%s`;", unescapePercent(dstSchema, l.logger)))
-				query = renameShardingTable(query, table, dstTable)
+				query = renameShardingTable(query, table, dstTable, ansiquote)
 			} else {
-				query = renameShardingSchema(query, schema, dstSchema)
+				query = renameShardingSchema(query, schema, dstSchema, ansiquote)
 			}
 
 			l.logger.Debug("schema create statement", zap.String("sql", query))
@@ -1247,13 +1249,13 @@ func (l *Loader) restoreStructure(ctx context.Context, conn *DBConn, sqlFile str
 }
 
 // renameShardingTable replaces srcTable with dstTable in query
-func renameShardingTable(query, srcTable, dstTable string) string {
-	return SQLReplace(query, srcTable, dstTable)
+func renameShardingTable(query, srcTable, dstTable string, ansiquote bool) string {
+	return SQLReplace(query, srcTable, dstTable, ansiquote)
 }
 
 // renameShardingSchema replaces srcSchema with dstSchema in query
-func renameShardingSchema(query, srcSchema, dstSchema string) string {
-	return SQLReplace(query, srcSchema, dstSchema)
+func renameShardingSchema(query, srcSchema, dstSchema string, ansiquote bool) string {
+	return SQLReplace(query, srcSchema, dstSchema, ansiquote)
 }
 
 func fetchMatchedLiteral(ctx *tcontext.Context, router *router.Table, schema, table string) (targetSchema string, targetTable string) {
