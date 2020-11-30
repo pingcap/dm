@@ -748,6 +748,24 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+[error.DM-functional-11120]
+message = "no relay subdir match gtid %s"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-functional-11121]
+message = "no relay pos match gtid %s"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-functional-11122]
+message = ""
+description = ""
+workaround = ""
+tags = ["internal", "low"]
+
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""
@@ -2579,7 +2597,7 @@ workaround = "Please try use `query-status` to query whether the DDL is still bl
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40067]
-message = "waiting for relay binlog pos to catch up with loader end binlog pos is timeout (exceeding %s), loader end binlog pos: %s, relay binlog pos: %s"
+message = "waiting for relay to catch up with loader is timeout (exceeding %s), loader: %s, relay: %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -2642,6 +2660,12 @@ tags = ["internal", "high"]
 message = "cannot connect with master endpoints: %v"
 description = ""
 workaround = "Please check network connection of worker"
+tags = ["internal", "high"]
+
+[error.DM-dm-worker-40078]
+message = "cannot compare gtid between loader and relay, loader gtid: %s, relay gtid: %s"
+description = ""
+workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-tracer-42001]
