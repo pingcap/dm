@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/google/uuid"
 	"github.com/pingcap/errors"
-	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
