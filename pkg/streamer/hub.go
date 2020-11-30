@@ -19,13 +19,17 @@ import (
 	"sync"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/siddontang/go-mysql/mysql"
 )
 
 var (
-	readerHub *ReaderHub // singleton instance
-	once      sync.Once
+	readerHub     *ReaderHub // singleton instance
+	relayMetaHub  *RelayMetaHub
+	relayMetaOnce sync.Once
+	once          sync.Once
 )
 
 // RelayLogInfo represents information for relay log
@@ -136,4 +140,49 @@ func (h *ReaderHub) RemoveActiveRelayLog(taskName string) {
 func (h *ReaderHub) EarliestActiveRelayLog() *RelayLogInfo {
 	_, rli := h.rlih.earliest()
 	return rli
+}
+
+// RelayMetaHub holds information for relay metas
+type RelayMetaHub struct {
+	mu   sync.RWMutex
+	meta Meta
+}
+
+// GetRelayMetaHub gets singleton instance of RelayMetaHub
+func GetRelayMetaHub() *RelayMetaHub {
+	relayMetaOnce.Do(func() {
+		relayMetaHub = &RelayMetaHub{}
+	})
+	return relayMetaHub
+}
+
+// GetMeta gets all metas
+func (r *RelayMetaHub) GetMeta() Meta {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.meta
+}
+
+// SetMeta sets meta
+func (r *RelayMetaHub) SetMeta(uuid string, pos mysql.Position, gset gtid.Set) {
+	gs := ""
+	if gset != nil {
+		gs = gset.String()
+	}
+	meta := Meta{
+		BinLogPos:  pos.Pos,
+		BinLogName: pos.Name,
+		BinlogGTID: gs,
+		UUID:       uuid,
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.meta = meta
+}
+
+// ClearMeta clears meta
+func (r *RelayMetaHub) ClearMeta() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.meta = Meta{}
 }
