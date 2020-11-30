@@ -1,4 +1,6 @@
 source-id: "mysql-replica-01"
+enable-gtid: false
+enable-relay: true
 
 from:
   host: "mysql-0.mysql" # same namespace with MySQL
