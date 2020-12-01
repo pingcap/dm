@@ -15,7 +15,7 @@ target-database:
 mysql-instances:
   - source-id: "mysql-replica-01"
     block-allow-list:  "instance"
-    route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
+    route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema", "shardview-route-table", "shardview-route-view", "shardview-route-schema"]
     column-mapping-rules: ["instance-1"]
     mydumper-config-name: "global"
     loader-config-name: "global"
@@ -31,11 +31,15 @@ mysql-instances:
 
 block-allow-list:
   instance:
-    do-dbs: ["~^sharding[\\d]+"]
+    do-dbs: ["~^sharding[\\d]+", "~^shardview[\\d]+"]
     do-tables:
     -  db-name: "~^sharding[\\d]+"
        tbl-name: "~^t[\\d]+"
     -  db-name: "~^sharding[\\d]+"
+       tbl-name: "~^v[\\d]+"
+    -  db-name: "~^shardview[\\d]+"
+       tbl-name: "~^t[\\d]+"
+    -  db-name: "~^shardview[\\d]+"
        tbl-name: "~^v[\\d]+"
 
 routes:
@@ -48,6 +52,22 @@ routes:
   sharding-route-rules-schema:
     schema-pattern: sharding*
     target-schema: db_target
+
+  shardview-route-table:
+    schema-pattern: shardview*
+    table-pattern: t*
+    target-schema: dbview_target
+    target-table: t_target
+
+  shardview-route-view:
+    schema-pattern: shardview*
+    table-pattern: v*
+    target-schema: dbview_target
+    target-table: v_target
+
+  shardview-route-schema:
+    schema-pattern: shardview*
+    target-schema: dbview_target
 
 column-mappings:
   instance-1:

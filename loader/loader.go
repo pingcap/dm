@@ -1340,19 +1340,9 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	}
 
 	dispatchMap := make(map[string]*fileJob)
-
-	// restore db in sort
-	dbs := make([]string, 0, len(l.db2Tables))
-	for db := range l.db2Tables {
-		dbs = append(dbs, db)
-	}
-
 	tctx := tcontext.NewContext(ctx, l.logger)
 
-	for _, db := range dbs {
-		tables := l.db2Tables[db]
-		views := l.db2Views[db]
-
+	for db, tables := range l.db2Tables {
 		// create db
 		dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
 		l.logger.Info("start to create schema", zap.String("schema file", dbFile))
@@ -1420,7 +1410,9 @@ func (l *Loader) restoreData(ctx context.Context) error {
 				dispatchMap[fmt.Sprintf("%s_%s_%s", db, table, file)] = j
 			}
 		}
+	}
 
+	for db, views := range l.db2Views {
 		for view := range views {
 			viewFile := fmt.Sprintf("%s/%s.%s-schema-view.sql", l.cfg.Dir, db, view)
 			l.logger.Info("start to create view", zap.String("view file", viewFile))

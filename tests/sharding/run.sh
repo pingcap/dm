@@ -65,6 +65,8 @@ function run() {
 
     run_sql_tidb "show create view db_target.v1"
     check_contains "View: v1"
+    run_sql_tidb "show create view dbview_target.v_target"
+    check_contains "View: v_target"
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
