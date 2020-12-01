@@ -118,7 +118,7 @@ function DM_SKIP_ERROR_SHARDING_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "\"stage\": \"Running\"" 2
+            "\"stage\": \"Running\"" 4
 
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb}" "count(1): 8"
 }
@@ -278,7 +278,7 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "\"stage\": \"Running\"" 2 \
+            "\"stage\": \"Running\"" 4 \
 
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb}" "count(1): 8"
 }
@@ -347,7 +347,7 @@ function DM_REPLACE_ERROR_MULTIPLE_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "\"stage\": \"Running\"" 2 \
+            "\"stage\": \"Running\"" 4 \
 
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 2"
 }

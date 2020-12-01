@@ -46,11 +46,15 @@ type StreamerProducer interface {
 
 // Read local relay log
 type localBinlogReader struct {
-	reader *streamer.BinlogReader
+	reader     *streamer.BinlogReader
+	EnableGTID bool
 }
 
 func (l *localBinlogReader) generateStreamer(location binlog.Location) (streamer.Streamer, error) {
-	return l.reader.StartSync(location.Position)
+	if l.EnableGTID {
+		return l.reader.StartSyncByGTID(location.GetGTID().Origin().Clone())
+	}
+	return l.reader.StartSyncByPos(location.Position)
 }
 
 // Read remote binlog
@@ -201,7 +205,7 @@ func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, loca
 	if c.currentBinlogType == RemoteBinlog {
 		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), tctx, c.syncCfg.Flavor, c.enableGTID}
 	} else {
-		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(tctx.L(), &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
+		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(tctx.L(), &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone, Flavor: c.syncCfg.Flavor}), c.enableGTID}
 	}
 
 	c.streamer, err = c.streamerProducer.generateStreamer(location)

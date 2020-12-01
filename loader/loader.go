@@ -414,6 +414,7 @@ type Loader struct {
 	totalFileCount   sync2.AtomicInt64 // schema + table + data
 	finishedDataSize sync2.AtomicInt64
 	metaBinlog       sync2.AtomicString
+	metaBinlogGTID   sync2.AtomicString
 
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
@@ -1465,6 +1466,7 @@ func (l *Loader) getMydumpMetadata() error {
 	}
 
 	l.metaBinlog.Set(loc.Position.String())
+	l.metaBinlogGTID.Set(loc.GTIDSetStr())
 	return nil
 }
 
