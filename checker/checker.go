@@ -160,6 +160,9 @@ func (c *Checker) Init(ctx context.Context) (err error) {
 		if _, ok := c.checkingItems[config.VersionChecking]; ok {
 			c.checkList = append(c.checkList, check.NewMySQLVersionChecker(instance.sourceDB.DB, instance.sourceDBinfo))
 		}
+		if _, ok := c.checkingItems[config.ServerIDChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLServerIDChecker(instance.sourceDB.DB, instance.sourceDBinfo))
+		}
 		if _, ok := c.checkingItems[config.BinlogEnableChecking]; ok {
 			c.checkList = append(c.checkList, check.NewMySQLBinlogEnableChecker(instance.sourceDB.DB, instance.sourceDBinfo))
 		}

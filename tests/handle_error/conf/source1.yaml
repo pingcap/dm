@@ -1,7 +1,7 @@
 source-id: mysql-replica-01
 flavor: ''
 enable-gtid: false
-enable-relay: false
+enable-relay: true
 from:
   host: 127.0.0.1
   user: root

@@ -201,7 +201,7 @@ func GenRotateEvent(header *replication.EventHeader, latestPos uint32, nextLogNa
 //   a. https://github.com/vitessio/vitess/blob/28e7e5503a6c3d3b18d4925d95f23ebcb6f25c8e/go/mysql/binlog_event_mysql56.go#L56
 //   b. https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
 func GenPreviousGTIDsEvent(header *replication.EventHeader, latestPos uint32, gSet gtid.Set) (*replication.BinlogEvent, error) {
-	if gSet == nil || len(gSet.String()) == 0 {
+	if gSet == nil {
 		return nil, terror.ErrBinlogEmptyGTID.Generate()
 	}
 
