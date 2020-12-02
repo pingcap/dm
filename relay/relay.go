@@ -386,8 +386,15 @@ func (r *Relay) tryRecoverLatestFile(ctx context.Context, parser2 *parser.Parser
 func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transformer2 transformer.Transformer, writer2 writer.Writer) error {
 	var (
 		_, lastPos  = r.meta.Pos()
-		_, lastGTID = r.meta.GTID()
+		_, metaGTID = r.meta.GTID()
+		lastGTID    gtid.Set
+		err         error
 	)
+	if metaGTID != nil {
+		lastGTID = metaGTID.Clone()
+	} else if lastGTID, err = gtid.ParserGTID(r.cfg.Flavor, ""); err != nil {
+		return err
+	}
 
 	for {
 		// 1. read events from upstream server
