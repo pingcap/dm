@@ -333,7 +333,7 @@ func (tsc *realTaskStatusChecker) checkRelayStatus() {
 		if err != nil {
 			tsc.l.Error("dispatch auto resume relay failed", zap.Error(err))
 		} else {
-			tsc.l.Info("dispatch auto resume task")
+			tsc.l.Info("dispatch auto resume relay")
 			tsc.bc.latestRelayResumeTime = time.Now()
 			rbf.BoundaryForward()
 		}
