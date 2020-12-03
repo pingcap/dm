@@ -59,7 +59,7 @@ function run() {
         "query-status sequence_sharding" \
         "detect inconsistent DDL sequence" 2
 
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "stop-task sequence_sharding" \
         "\"result\": true" 3
     
