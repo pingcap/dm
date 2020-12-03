@@ -43,11 +43,11 @@ mysql-instances:
   column-mapping-rules: []
   route-rules: []
   black-white-list: ""
-  block-allow-list: balist-02
-  mydumper-config-name: dump-02
+  block-allow-list: balist-01
+  mydumper-config-name: dump-01
   mydumper: null
   mydumper-thread: 0
-  loader-config-name: load-02
+  loader-config-name: load-01
   loader: null
   loader-thread: 0
   syncer-config-name: sync-02
@@ -65,12 +65,6 @@ block-allow-list:
     - import_v10x
     ignore-tables: []
     ignore-dbs: []
-  balist-02:
-    do-tables: []
-    do-dbs:
-    - import_v10x
-    ignore-tables: []
-    ignore-dbs: []
 mydumpers:
   dump-01:
     mydumper-path: ./bin/mydumper
@@ -81,20 +75,8 @@ mydumpers:
     where: ""
     skip-tz-utc: true
     extra-args: ""
-  dump-02:
-    mydumper-path: ./bin/mydumper
-    threads: 4
-    chunk-filesize: "64"
-    statement-size: 0
-    rows: 0
-    where: ""
-    skip-tz-utc: true
-    extra-args: ""
 loaders:
   load-01:
-    pool-size: 16
-    dir: ./dumped_data.test
-  load-02:
     pool-size: 16
     dir: ./dumped_data.test
 syncers:

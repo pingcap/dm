@@ -461,12 +461,6 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			return resp, nil
 		}
 
-		err = s.scheduler.AddTaskCfg(*cfg)
-		if err != nil {
-			resp.Msg = err.Error()
-			return resp, nil
-		}
-
 		resp.Result = true
 		if cfg.RemoveMeta {
 			resp.Msg = "`remove-meta` in task config is deprecated, please use `start-task ... --remove-meta` instead"
@@ -517,11 +511,6 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	var err error
 	if expect == pb.Stage_Stopped {
 		err = s.scheduler.RemoveSubTasks(req.Name, sources...)
-		if err != nil {
-			resp.Msg = err.Error()
-			return resp, nil
-		}
-		err = s.scheduler.RemoveTaskCfg(req.Name)
 	} else {
 		err = s.scheduler.UpdateExpectSubTaskStage(expect, req.Name, sources...)
 	}
@@ -754,20 +743,18 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 		resp.Msg = "can't find task name from lock-ID"
 		return resp, nil
 	}
-	cfgStr := s.scheduler.GetTaskCfg(task)
-	if cfgStr == "" {
+	subtasks := s.scheduler.GetSubTaskCfgsByTask(task)
+	if len(subtasks) == 0 {
 		resp.Msg = "task (" + task + ") which extracted from lock-ID is not found in DM"
 		return resp, nil
 	}
-	cfg := config.NewTaskConfig()
-	if err := cfg.Decode(cfgStr); err != nil {
-		resp.Msg = err.Error()
-		return resp, nil
-	}
 
-	if cfg.ShardMode != config.ShardPessimistic {
-		resp.Msg = "`unlock-ddl-lock` is only supported in pessimistic shard mode currently"
-		return resp, nil
+	for _, subtask := range subtasks {
+		if subtask.ShardMode != config.ShardPessimistic {
+			resp.Msg = "`unlock-ddl-lock` is only supported in pessimistic shard mode currently"
+			return resp, nil
+		}
+		break
 	}
 
 	// TODO: add `unlock-ddl-lock` support for Optimist later.
@@ -1792,18 +1779,29 @@ func (s *Server) GetTaskCfg(ctx context.Context, req *pb.GetTaskCfgRequest) (*pb
 		return resp2, err2
 	}
 
-	cfg := s.scheduler.GetTaskCfg(req.Name)
-
-	if len(cfg) == 0 {
+	subCfgMap := s.scheduler.GetSubTaskCfgsByTask(req.Name)
+	if len(subCfgMap) == 0 {
 		return &pb.GetTaskCfgResponse{
 			Result: false,
 			Msg:    "task not found",
 		}, nil
 	}
+	subCfgList := make([]*config.SubTaskConfig, 0, len(subCfgMap))
+	for _, subCfg := range subCfgMap {
+		subCfgList = append(subCfgList, subCfg)
+	}
+
+	sort.Slice(subCfgList, func(i, j int) bool {
+		return subCfgList[i].SourceID < subCfgList[j].SourceID
+	})
+
+	var cfg config.TaskConfig
+	cfg.FromSubTaskConfigs(subCfgList...)
+	cfg.TargetDB.Password = "******"
 
 	return &pb.GetTaskCfgResponse{
 		Result: true,
-		Cfg:    cfg,
+		Cfg:    cfg.String(),
 	}, nil
 }
 
