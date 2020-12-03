@@ -27,7 +27,7 @@ function extract() {
 function init_table() {
     for i in $@; do
         extract $i
-        run_sql_source${source} "create table ${db}.tb${table} (id int) CHARSET=latin1 COLLATE=latin1_bin;"
+        run_sql_source${source} "create table ${db}.tb${table} (id int primary key) CHARSET=latin1 COLLATE=latin1_bin;"
     done
 }
 

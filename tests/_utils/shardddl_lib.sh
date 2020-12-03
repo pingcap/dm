@@ -28,7 +28,7 @@ function extract() {
 function init_table() {
     for i in $@; do
         extract $i
-        run_sql_source${source} "create table shardddl${database}.tb${table} (id int);"
+        run_sql_source${source} "create table shardddl${database}.tb${table} (id int primary key);"
     done
 }
 

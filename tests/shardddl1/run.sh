@@ -293,7 +293,7 @@ function DM_023() {
 function DM_026_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values (1)"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values (2)"
-    run_sql_source1 "create table ${shardddl1}.${tb3}(id int);"
+    run_sql_source1 "create table ${shardddl1}.${tb3}(id int primary key);"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values (3)"
     run_sql_source1 "insert into ${shardddl1}.${tb2} values (4)"
     run_sql_source1 "insert into ${shardddl1}.${tb3} values (5)"
@@ -396,20 +396,28 @@ function DM_032() {
 
 function DM_033_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} add new_col1 int not null;"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(null);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,null);"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add new_col1 int not null;"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(2,2);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(3,3);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(null);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(3,3,3);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(5,null);"
     run_sql_source2 "alter table ${shardddl1}.${tb2} add new_col1 int not null;"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 function DM_033() {
-    run_case 033 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 033 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\";" \
+    "clean_table" "pessimistic"
     # currently not support optimistic
-    # run_case 033 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+    # run_case 033 "double-source-optimistic" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\";" \
+    # "clean_table" "optimistic"
 }
 
 function DM_034_CASE() {
