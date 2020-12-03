@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,6 +33,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/dumpling"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -405,6 +407,8 @@ type Loader struct {
 	totalDataSize    sync2.AtomicInt64
 	totalFileCount   sync2.AtomicInt64 // schema + table + data
 	finishedDataSize sync2.AtomicInt64
+	metaBinlog       sync2.AtomicString
+	metaBinlogGTID   sync2.AtomicString
 
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
@@ -512,6 +516,14 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	defer cancel()
 
 	l.newFileJobQueue()
+	if err := l.getMydumpMetadata(); err != nil {
+		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Inc()
+		pr <- pb.ProcessResult{
+			Errors: []*pb.ProcessError{unit.NewProcessError(err)},
+		}
+		return
+	}
+
 	l.runFatalChan = make(chan *pb.ProcessError, 2*l.cfg.PoolSize)
 	errs := make([]*pb.ProcessError, 0, 2)
 
@@ -1289,6 +1301,23 @@ func (l *Loader) checkpointID() string {
 		return l.cfg.Dir
 	}
 	return shortSha1(dir)
+}
+
+func (l *Loader) getMydumpMetadata() error {
+	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
+	loc, _, err := dumpling.ParseMetaData(metafile, l.cfg.Flavor)
+	if err != nil {
+		toPrint, err2 := ioutil.ReadFile(metafile)
+		if err2 != nil {
+			toPrint = []byte(err2.Error())
+		}
+		l.logger.Error("fail to parse dump metadata", log.ShortError(err))
+		return terror.ErrParseMydumperMeta.Generate(err, toPrint)
+	}
+
+	l.metaBinlog.Set(loc.Position.String())
+	l.metaBinlogGTID.Set(loc.GTIDSetStr())
+	return nil
 }
 
 // cleanDumpFiles is called when finish restoring data, to clean useless files
