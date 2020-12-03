@@ -11,6 +11,8 @@ function get_task_config_to_file() {
         "get-task-config test --file $WORK_DIR/test.yaml" \
         "\"result\": true" 1
 
+    sed -i "s/password: '\*\*\*\*\*\*'/password: ''/g" $WORK_DIR/test.yaml
+
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "stop-task test" \
         "\"result\": true" 3
@@ -25,7 +27,7 @@ function get_task_config_to_file() {
         "\"result\": true" 3
 }
 
-function get_task_config_recover_etcd() {
+function get_task_config_restart_master() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "get-task-config test --file $WORK_DIR/test1.yaml" \
         "\"result\": true" 1

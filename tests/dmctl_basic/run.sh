@@ -177,7 +177,7 @@ function run() {
     echo "get_task_config"
     get_task_config_wrong_name
     get_task_config_to_file
-    get_task_config_recover_etcd
+    get_task_config_restart_master
 
     # retry to wait for recovered from etcd ready
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \

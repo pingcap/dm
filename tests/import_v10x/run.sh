@@ -78,6 +78,7 @@ function run() {
         "get-task-config test --file $WORK_DIR/task.yaml" \
         "\"result\": true" 1
 
+    sed -i "s/password: '\*\*\*\*\*\*'/password: \"\"/g" $WORK_DIR/task.yaml
     diff $cur/conf/task.yaml $WORK_DIR/task.yaml || exit 1
     
     run_sql "show create table \`dm_meta\`.\`test_syncer_checkpoint\`" $TIDB_PORT $TIDB_PASSWORD
