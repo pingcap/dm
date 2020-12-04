@@ -1551,7 +1551,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	clearSchedulerEnv(c, cancel, &wg)
 }
 
-func (t *testMaster) TestGetTaskCfg(c *check.C) {
+func (t *testMaster) TestGetCfg(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
@@ -1580,19 +1580,19 @@ func (t *testMaster) TestGetTaskCfg(c *check.C) {
 	c.Assert(resp.Result, check.IsTrue)
 
 	// get task config
-	req1 := &pb.GetTaskCfgRequest{
+	req1 := &pb.GetCfgRequest{
 		Name: taskName,
 	}
-	resp1, err := server.GetTaskCfg(context.Background(), req1)
+	resp1, err := server.GetCfg(context.Background(), req1)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp1.Result, check.IsTrue)
 	c.Assert(strings.Contains(resp1.Cfg, "name: test"), check.IsTrue)
 
 	// wrong task name
-	req2 := &pb.GetTaskCfgRequest{
+	req2 := &pb.GetCfgRequest{
 		Name: "haha",
 	}
-	resp2, err := server.GetTaskCfg(context.Background(), req2)
+	resp2, err := server.GetCfg(context.Background(), req2)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp2.Result, check.IsFalse)
 
@@ -1600,7 +1600,7 @@ func (t *testMaster) TestGetTaskCfg(c *check.C) {
 	server.scheduler.Close()
 	c.Assert(server.scheduler.Start(ctx, etcdTestCli), check.IsNil)
 
-	resp3, err := server.GetTaskCfg(context.Background(), req1)
+	resp3, err := server.GetCfg(context.Background(), req1)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp3.Result, check.IsTrue)
 	c.Assert(resp3.Cfg, check.Equals, resp1.Cfg)

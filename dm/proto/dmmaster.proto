@@ -89,8 +89,8 @@ service Master {
         };
     }
 
-    // GetTaskCfg get task config
-    rpc GetTaskCfg(GetTaskCfgRequest) returns(GetTaskCfgResponse) {
+    // GetCfg get config
+    rpc GetCfg(GetCfgRequest) returns(GetCfgResponse) {
         option (google.api.http) = {
             get: "/apis/v1alpha1/tasks/{name}"
         };
@@ -102,6 +102,8 @@ service Master {
             body: "*"
         };
     }
+
+    rpc GetMasterCfg(GetMasterCfgRequest) returns(GetMasterCfgResponse) {}
 }
 
 message StartTaskRequest {
@@ -383,15 +385,30 @@ message GetSubTaskCfgResponse {
     repeated string cfgs = 3;
 }
 
-message GetTaskCfgRequest {
-    // the task name
-    string name = 1;
+enum CfgType {
+    InvalidType = 0;
+    TaskType = 1;
+    MasterType = 2;
+    WorkerType = 3;
+    SourceType = 4;
 }
 
-message GetTaskCfgResponse {
+message GetCfgRequest {
+    CfgType type = 1; // the config type
+    string name = 2; // the config name
+}
+
+message GetCfgResponse {
     bool result = 1;
     string msg = 2;
     string cfg = 3;
+}
+
+message GetMasterCfgRequest {
+}
+
+message GetMasterCfgResponse {
+    string cfg = 1;
 }
 
 message HandleErrorRequest {

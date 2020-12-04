@@ -1768,40 +1768,142 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest
 	}, nil
 }
 
-// GetTaskCfg implements MasterServer.GetSubTaskCfg
-func (s *Server) GetTaskCfg(ctx context.Context, req *pb.GetTaskCfgRequest) (*pb.GetTaskCfgResponse, error) {
+func (s *Server) createMasterClientByName(ctx context.Context, name string) (pb.MasterClient, error) {
+	listResp, err := s.etcdClient.MemberList(ctx)
+	if err != nil {
+		return nil, err
+	}
+	clientURLs := []string{}
+	for _, m := range listResp.Members {
+		if name == m.Name {
+			for _, url := range m.GetClientURLs() {
+				clientURLs = append(clientURLs, utils.UnwrapScheme(url))
+			}
+			break
+		}
+	}
+	if len(clientURLs) == 0 {
+		return nil, errors.New("master not found")
+	}
+	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
+	if err != nil {
+		return nil, err
+	}
+
+	var conn *grpc.ClientConn
+	for _, clientURL := range clientURLs {
+		//nolint:staticcheck
+		conn, err = grpc.Dial(clientURL, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second))
+		if err == nil {
+			masterClient := pb.NewMasterClient(conn)
+			return masterClient, nil
+		}
+		log.L().Error("can not dial to master", zap.String("name", name), zap.String("client url", clientURL), log.ShortError(err))
+	}
+	// return last err
+	return nil, err
+}
+
+// GetMasterCfg implements MasterServer.GetMasterCfg
+func (s *Server) GetMasterCfg(ctx context.Context, req *pb.GetMasterCfgRequest) (*pb.GetMasterCfgResponse, error) {
+	log.L().Info("", zap.Any("payload", req), zap.String("request", "GetMasterCfg"))
+
+	var err error
+	resp := &pb.GetMasterCfgResponse{}
+	resp.Cfg, err = s.cfg.Toml()
+	return resp, err
+}
+
+// GetCfg implements MasterServer.GetCfg
+func (s *Server) GetCfg(ctx context.Context, req *pb.GetCfgRequest) (*pb.GetCfgResponse, error) {
 	var (
-		resp2 *pb.GetTaskCfgResponse
+		resp2 = &pb.GetCfgResponse{}
 		err2  error
+		cfg   string
 	)
 	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
 	}
 
-	subCfgMap := s.scheduler.GetSubTaskCfgsByTask(req.Name)
-	if len(subCfgMap) == 0 {
-		return &pb.GetTaskCfgResponse{
-			Result: false,
-			Msg:    "task not found",
-		}, nil
+	switch req.Type {
+	case pb.CfgType_TaskType:
+		subCfgMap := s.scheduler.GetSubTaskCfgsByTask(req.Name)
+		if len(subCfgMap) == 0 {
+			resp2.Msg = "task not found"
+			return resp2, nil
+		}
+		subCfgList := make([]*config.SubTaskConfig, 0, len(subCfgMap))
+		for _, subCfg := range subCfgMap {
+			subCfgList = append(subCfgList, subCfg)
+		}
+		sort.Slice(subCfgList, func(i, j int) bool {
+			return subCfgList[i].SourceID < subCfgList[j].SourceID
+		})
+
+		var taskCfg config.TaskConfig
+		taskCfg.FromSubTaskConfigs(subCfgList...)
+		taskCfg.TargetDB.Password = "******"
+		cfg = taskCfg.String()
+	case pb.CfgType_MasterType:
+		if req.Name == s.cfg.Name {
+			cfg, err2 = s.cfg.Toml()
+			if err2 != nil {
+				resp2.Msg = err2.Error()
+			} else {
+				resp2.Result = true
+				resp2.Cfg = cfg
+			}
+			return resp2, nil
+		}
+
+		masterClient, err := s.createMasterClientByName(ctx, req.Name)
+		if err != nil {
+			resp2.Msg = err.Error()
+			return resp2, nil
+		}
+		masterResp, err := masterClient.GetMasterCfg(ctx, &pb.GetMasterCfgRequest{})
+		if err != nil {
+			resp2.Msg = err.Error()
+			return resp2, nil
+		}
+		cfg = masterResp.Cfg
+	case pb.CfgType_WorkerType:
+		worker := s.scheduler.GetWorkerByName(req.Name)
+		if worker == nil {
+			resp2.Msg = "worker not found"
+			return resp2, nil
+		}
+		workerReq := workerrpc.Request{
+			Type:         workerrpc.CmdGetWorkerCfg,
+			GetWorkerCfg: &pb.GetWorkerCfgRequest{},
+		}
+		workerResp, err := worker.SendRequest(ctx, &workerReq, s.cfg.RPCTimeout)
+		if err != nil {
+			resp2.Msg = err.Error()
+			return resp2, nil
+		}
+		cfg = workerResp.GetWorkerCfg.Cfg
+	case pb.CfgType_SourceType:
+		sourceCfg := s.scheduler.GetSourceCfgByID(req.Name)
+		if sourceCfg == nil {
+			resp2.Msg = "source not found"
+			return resp2, nil
+		}
+		sourceCfg.From.Password = "*******"
+		cfg, err2 = sourceCfg.Yaml()
+		if err2 != nil {
+			resp2.Msg = err2.Error()
+			return resp2, nil
+		}
+	default:
+		resp2.Msg = fmt.Sprintf("invalid config op '%s'", req.Type)
+		return resp2, nil
 	}
-	subCfgList := make([]*config.SubTaskConfig, 0, len(subCfgMap))
-	for _, subCfg := range subCfgMap {
-		subCfgList = append(subCfgList, subCfg)
-	}
 
-	sort.Slice(subCfgList, func(i, j int) bool {
-		return subCfgList[i].SourceID < subCfgList[j].SourceID
-	})
-
-	var cfg config.TaskConfig
-	cfg.FromSubTaskConfigs(subCfgList...)
-	cfg.TargetDB.Password = "******"
-
-	return &pb.GetTaskCfgResponse{
+	return &pb.GetCfgResponse{
 		Result: true,
-		Cfg:    cfg.String(),
+		Cfg:    cfg,
 	}, nil
 }
 
