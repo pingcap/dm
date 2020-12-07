@@ -533,7 +533,7 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 }
 
 func (t *testRelaySuite) verifyMetadata(c *C, r *Relay, uuidExpected string,
-	posExpected gmysql.Position, gsStrExpected string, UUIDsExpected []string) {
+	posExpected gmysql.Position, gsStrExpected string, uuidsExpected []string) {
 	uuid, pos := r.meta.Pos()
 	_, gs := r.meta.GTID()
 	gsExpected, err := gtid.ParserGTID(mysql.MySQLFlavor, gsStrExpected)
@@ -545,7 +545,7 @@ func (t *testRelaySuite) verifyMetadata(c *C, r *Relay, uuidExpected string,
 	indexFile := filepath.Join(r.cfg.RelayDir, utils.UUIDIndexFilename)
 	UUIDs, err := utils.ParseUUIDIndex(indexFile)
 	c.Assert(err, IsNil)
-	c.Assert(UUIDs, DeepEquals, UUIDsExpected)
+	c.Assert(UUIDs, DeepEquals, uuidsExpected)
 }
 
 func (t *testRelaySuite) TestProcess(c *C) {
