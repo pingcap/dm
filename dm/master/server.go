@@ -1890,7 +1890,7 @@ func (s *Server) GetCfg(ctx context.Context, req *pb.GetCfgRequest) (*pb.GetCfgR
 			resp2.Msg = "source not found"
 			return resp2, nil
 		}
-		sourceCfg.From.Password = "*******"
+		sourceCfg.From.Password = "******"
 		cfg, err2 = sourceCfg.Yaml()
 		if err2 != nil {
 			resp2.Msg = err2.Error()

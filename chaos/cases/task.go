@@ -23,6 +23,7 @@ import (
 
 	"github.com/chaos-mesh/go-sqlsmith"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/mysql"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 const (
@@ -363,6 +365,10 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 				})
 			}
 			if err = eg.Wait(); err != nil {
+				if utils.IsMySQLError(err, mysql.ErrDupFieldName) {
+					t.logger.Warn("ignore duplicate field name for ddl", log.ShortError(err))
+					continue
+				}
 				return err
 			}
 		}

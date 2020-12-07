@@ -616,6 +616,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 }
 
 func getGenerateName(rule interface{}, nameIdx int, namePrefix string, nameMap map[string]string) (string, int) {
+	// use json as key since no DeepEqual for rules now.
 	ruleByte, err := json.Marshal(rule)
 	if err != nil {
 		log.L().Error(fmt.Sprintf("marshal %s rule to json", namePrefix), log.ShortError(err))

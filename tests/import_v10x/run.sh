@@ -75,7 +75,7 @@ function run() {
 
     # check task config, just a simple match
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "get-task-config test --file $WORK_DIR/task.yaml" \
+        "get-config task test --file $WORK_DIR/task.yaml" \
         "\"result\": true" 1
 
     sed -i "s/password: '\*\*\*\*\*\*'/password: \"\"/g" $WORK_DIR/task.yaml

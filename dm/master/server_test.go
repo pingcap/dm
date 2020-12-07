@@ -1567,6 +1567,7 @@ func (t *testMaster) TestGetCfg(c *check.C) {
 	}
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
 		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, req))
+	server.etcdClient = etcdTestCli
 
 	// start task
 	mock := t.initVersionDB(c)
@@ -1582,6 +1583,7 @@ func (t *testMaster) TestGetCfg(c *check.C) {
 	// get task config
 	req1 := &pb.GetCfgRequest{
 		Name: taskName,
+		Type: pb.CfgType_TaskType,
 	}
 	resp1, err := server.GetCfg(context.Background(), req1)
 	c.Assert(err, check.IsNil)
@@ -1591,12 +1593,14 @@ func (t *testMaster) TestGetCfg(c *check.C) {
 	// wrong task name
 	req2 := &pb.GetCfgRequest{
 		Name: "haha",
+		Type: pb.CfgType_TaskType,
 	}
 	resp2, err := server.GetCfg(context.Background(), req2)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp2.Result, check.IsFalse)
+	c.Assert(resp2.Msg, check.Equals, "task not found")
 
-	// test recover from etcd
+	// test restart master
 	server.scheduler.Close()
 	c.Assert(server.scheduler.Start(ctx, etcdTestCli), check.IsNil)
 
@@ -1604,6 +1608,51 @@ func (t *testMaster) TestGetCfg(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp3.Result, check.IsTrue)
 	c.Assert(resp3.Cfg, check.Equals, resp1.Cfg)
+
+	req3 := &pb.GetCfgRequest{
+		Name: "dm-master",
+		Type: pb.CfgType_MasterType,
+	}
+	resp4, err := server.GetCfg(context.Background(), req3)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp4.Result, check.IsTrue)
+	c.Assert(strings.Contains(resp4.Cfg, "name = \"dm-master\""), check.IsTrue)
+
+	req4 := &pb.GetCfgRequest{
+		Name: "haha",
+		Type: pb.CfgType_MasterType,
+	}
+	resp5, err := server.GetCfg(context.Background(), req4)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp5.Result, check.IsFalse)
+	c.Assert(resp5.Msg, check.Equals, "master not found")
+
+	req5 := &pb.GetCfgRequest{
+		Name: "haha",
+		Type: pb.CfgType_WorkerType,
+	}
+	resp6, err := server.GetCfg(context.Background(), req5)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp6.Result, check.IsFalse)
+	c.Assert(resp6.Msg, check.Equals, "worker not found")
+
+	req6 := &pb.GetCfgRequest{
+		Name: "mysql-replica-01",
+		Type: pb.CfgType_SourceType,
+	}
+	resp7, err := server.GetCfg(context.Background(), req6)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp7.Result, check.IsTrue)
+	c.Assert(strings.Contains(resp7.Cfg, "source-id: mysql-replica-01"), check.IsTrue, check.Commentf(resp7.Cfg))
+
+	req7 := &pb.GetCfgRequest{
+		Name: "haha",
+		Type: pb.CfgType_SourceType,
+	}
+	resp8, err := server.GetCfg(context.Background(), req7)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp8.Result, check.IsFalse)
+	c.Assert(resp8.Msg, check.Equals, "source not found")
 
 	clearSchedulerEnv(c, cancel, &wg)
 }
