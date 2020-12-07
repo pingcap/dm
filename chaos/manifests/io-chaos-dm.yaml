@@ -2,6 +2,8 @@ apiVersion: chaos-mesh.org/v1alpha1
 kind: IoChaos
 metadata:
   name: io-delay-dm
+  labels:
+    app: io-delay-dm
 spec:
   action: latency
   mode: one
