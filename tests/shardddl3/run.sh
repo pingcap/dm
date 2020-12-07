@@ -28,16 +28,16 @@ function DM_071_CASE() {
 
 function DM_071() {
     run_case 071 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
     "clean_table" "pessimistic"
 
     # schema comparer doesn't support to compare/diff charset now
     # run_case 071 "double-source-optimistic" \
-    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
     # "clean_table" "optimistic"
 }
 
@@ -62,16 +62,16 @@ function DM_073_CASE() {
 
 function DM_073() {
     run_case 073 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
     "clean_table" "pessimistic"
 
     # schema comparer doesn't support to compare/diff charset now
     # run_case 073 "double-source-optimistic" \
-    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10)) default character set utf8 collate utf8_bin;\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10)) default character set utf8 collate utf8_bin;\"" \
     # "clean_table" "optimistic"
 }
 
@@ -83,8 +83,12 @@ function DM_076_CASE() {
 }
 
 function DM_076() {
-    run_case 076 "single-source-pessimistic" "init_table 111" "clean_table" ""
-    run_case 076 "single-source-optimistic" "init_table 111" "clean_table" ""
+    run_case 076 "single-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int unique, id int);\"" \
+    "clean_table" "pessimistic"
+    run_case 076 "single-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int unique, id int);\"" \
+    "clean_table" "optimistic"
 }
 
 function DM_077_CASE() {
@@ -100,9 +104,9 @@ function DM_077() {
 }
 
 function DM_078_CASE() {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values (1, 'wer'), (2, NULL);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values (1, 1, 'wer'), (2, 2, NULL);"
     run_sql_source1 "alter table ${shardddl1}.${tb1} add primary key(a);"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values (3, 'wer'), (4, NULL);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values (3, 3, 'wer'), (4, 4, NULL);"
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
@@ -113,8 +117,8 @@ function DM_078() {
     wait_process_exit tidb-server
     run_tidb_server 4000 $TIDB_PASSWORD $cur/conf/tidb-alter-pk-config.toml
 
-    run_case 078 "single-source-pessimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"" "clean_table" ""
-    run_case 078 "single-source-optimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"" "clean_table" ""
+    run_case 078 "single-source-pessimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int unique, a int, b varchar(10));\"" "clean_table" ""
+    run_case 078 "single-source-optimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int unique, a int, b varchar(10));\"" "clean_table" ""
 
     # don't revert tidb until DM_079
 }
@@ -141,35 +145,35 @@ function DM_080_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} add unique key idx_a(a);"
     run_sql_source1 "alter table ${shardddl1}.${tb1} add unique key idx_b(b);"
     run_sql_source1 "alter table ${shardddl1}.${tb1} add unique key idx_ab(a,b);"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,1,'aaa');"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add unique key idx_a(a);"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add unique key idx_b(b);"
     run_sql_source2 "alter table ${shardddl1}.${tb1} add unique key idx_ab(a,b);"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(2,'bbb');"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(3,2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(4,2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(5,2,'bbb');"
     run_sql_source2 "alter table ${shardddl1}.${tb2} add unique key idx_a(a);"
     run_sql_source2 "alter table ${shardddl1}.${tb2} add unique key idx_b(b);"
     run_sql_source2 "alter table ${shardddl1}.${tb2} add unique key idx_ab(a,b);"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(3,'ccc');"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(3,'ccc');"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,'ccc');"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(6,3,'ccc');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(7,3,'ccc');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(8,3,'ccc');"
     run_sql_tidb_with_retry "select count(1) from ${shardddl}.${tb};" "count(1): 3"
 }
 
 function DM_080() {
     run_case 080 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int, b varchar(10));\"" \
     "clean_table" "pessimistic"
 
     # currently not support optimistic
     #run_case 080 "double-source-optimistic" \
-    #"run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-    # run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-    # run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    #"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b varchar(10));\"; \
+    # run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b varchar(10));\"; \
+    # run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int, b varchar(10));\"" \
     #"clean_table" "optimistic"
 }
 
@@ -187,35 +191,35 @@ function DM_081_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} drop index idx_a;"
     run_sql_source1 "alter table ${shardddl1}.${tb1} drop index idx_b;"
     run_sql_source1 "alter table ${shardddl1}.${tb1} drop index idx_ab;"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,1,'aaa');"
     run_sql_source2 "alter table ${shardddl1}.${tb1} drop index idx_a;"
     run_sql_source2 "alter table ${shardddl1}.${tb1} drop index idx_b;"
     run_sql_source2 "alter table ${shardddl1}.${tb1} drop index idx_ab;"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(2,'bbb');"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(3,2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(4,2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(5,2,'bbb');"
     run_sql_source2 "alter table ${shardddl1}.${tb2} drop index idx_a;"
     run_sql_source2 "alter table ${shardddl1}.${tb2} drop index idx_b;"
     run_sql_source2 "alter table ${shardddl1}.${tb2} drop index idx_ab;"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(3,'ccc');"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(3,'ccc');"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,'ccc');"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(6,3,'ccc');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(7,3,'ccc');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(8,3,'ccc');"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 function DM_081() {
     run_case 081 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int, b varchar(10));\"" \
     "clean_table" "pessimistic"
 
     # currently not support optimistic
     # run_case 081 "double-source-optimistic" \
-    #"run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-    # run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-    # run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    #"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b varchar(10));\"; \
+    # run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b varchar(10));\"; \
+    # run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int, b varchar(10));\"" \
     #"clean_table" "optimistic"
 }
 
@@ -664,14 +668,14 @@ function DM_103_CASE() {
 
 function DM_103() {
     run_case 103 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\"" \
     "clean_table" "pessimistic"
     run_case 103 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\"" \
     "clean_table" "optimistic"
 }
 
@@ -712,14 +716,14 @@ function DM_RemoveLock() {
             "bound" 2
 
     run_case RemoveLock "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\"" \
     "clean_table" "pessimistic"
     run_case RemoveLock "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\"" \
     "clean_table" "optimistic"
 
     export GO_FAILPOINTS=""
@@ -787,13 +791,13 @@ function DM_RestartMaster_CASE() {
 
 function DM_RestartMaster() {
     run_case RestartMaster "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"" \
     "clean_table" "pessimistic"
 
     run_case RestartMaster "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b varchar(10));\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"" \
     "clean_table" "optimistic"
 }
 
