@@ -542,7 +542,7 @@ function test_multi_task_reduce_and_restart_worker() {
 
             echo "try to kill worker port ${worker_ports[$[ $idx - 1 ] ]}"
             ps aux | grep dm-worker${idx} |awk '{print $2}'|xargs kill || true
-            check_port_offline ${worker_ports[$[ $idx - 1] ]} 20
+            run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT2 "list-member --worker --name=worker$idx" '"stage": "offline"' 1
 
             echo "start dm-worker${idx}"
             run_dm_worker $WORK_DIR/worker${idx} ${worker_ports[$[ $idx - 1] ]} $cur/conf/dm-worker${idx}.toml
