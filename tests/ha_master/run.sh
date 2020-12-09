@@ -234,11 +234,11 @@ function test_list_member() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "get-config master master1" \
-        "master1" 1
+        'name = \\"master1\\"' 1
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "get-config master master2" \
-        "master2" 1
+        'name = \\"master2\\"' 1
 
     echo "[$(date)] <<<<<< finish test_list_member_command >>>>>>"
 }
