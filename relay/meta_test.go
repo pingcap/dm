@@ -143,7 +143,7 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 	c.Assert(gset.String(), Equals, latestGTIDStr)
 
 	for _, cs := range cases {
-		err = lm.AddDir(cs.uuid, nil, nil, "")
+		err = lm.AddDir(cs.uuid, nil, nil, 0)
 		c.Assert(err, IsNil)
 
 		err = lm.Save(cs.pos, cs.gset)
@@ -203,7 +203,7 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 		pos:            mysql.Position{Name: "mysql-bin.000005", Pos: 789},
 		gset:           gset5,
 	}
-	err = lm.AddDir(cs.uuid, &cs.pos, cs.gset, "")
+	err = lm.AddDir(cs.uuid, &cs.pos, cs.gset, 0)
 	c.Assert(err, IsNil)
 
 	dirty = lm.Dirty()

@@ -112,19 +112,21 @@ func RealMySQLPos(pos gmysql.Position) (gmysql.Position, error) {
 }
 
 // ExtractSuffix extracts uuidSuffix from input name
-func ExtractSuffix(name string) (string, error) {
+func ExtractSuffix(name string) (int, error) {
 	if len(name) == 0 {
-		return fmt.Sprintf("%06d", minUUIDSuffix), nil
+		return minUUIDSuffix, nil
 	}
 	filename, err := ParseFilename(name)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 	sepIdx := strings.LastIndex(filename.BaseName, posUUIDSuffixSeparator)
 	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(filename.BaseName) {
-		return filename.BaseName[sepIdx+len(posUUIDSuffixSeparator):], nil
+		suffix := filename.BaseName[sepIdx+len(posUUIDSuffixSeparator):]
+		v, err := strconv.ParseInt(suffix, 10, 64)
+		return int(v), err
 	}
-	return fmt.Sprintf("%06d", minUUIDSuffix), nil
+	return minUUIDSuffix, nil
 }
 
 // ExtractPos extracts (uuidWithSuffix, uuidSuffix, originalPos) from input pos (originalPos or convertedPos)

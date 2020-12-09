@@ -72,11 +72,6 @@ func AddSuffixForUUID(uuid string, ID int) string {
 	return fmt.Sprintf("%s%s%06d", uuid, uuidIndexSeparator, ID) // eg. 53ea0ed1-9bf8-11e6-8bea-64006a897c73.000001
 }
 
-// AddSuffixStrForUUID adds a suffix string for UUID
-func AddSuffixStrForUUID(uuid string, suffix string) string {
-	return fmt.Sprintf("%s%s%s", uuid, uuidIndexSeparator, suffix) // eg. 53ea0ed1-9bf8-11e6-8bea-64006a897c73.000001
-}
-
 // SuffixIntToStr convert int-represented suffix to string-represented
 func SuffixIntToStr(ID int) string {
 	return fmt.Sprintf("%06d", ID)

@@ -35,7 +35,7 @@ type Config struct {
 	// do not need to specify binlog-pos, because relay will fetch the whole file
 	BinLogName string `toml:"binlog-name" json:"binlog-name"`
 	BinlogGTID string `toml:"binlog-gtid" json:"binlog-gtid"`
-	UUIDSuffix string `toml:"-" json:"-"`
+	UUIDSuffix int    `toml:"-" json:"-"`
 
 	// for binlog reader retry
 	ReaderRetry retry.ReaderRetryConfig `toml:"reader-retry" json:"reader-retry"`

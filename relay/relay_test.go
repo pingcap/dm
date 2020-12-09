@@ -194,7 +194,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	c.Assert(r.tryRecoverLatestFile(context.Background(), parser2), IsNil)
 
 	// save position into meta
-	c.Assert(r.meta.AddDir(uuid, &startPos, nil, ""), IsNil)
+	c.Assert(r.meta.AddDir(uuid, &startPos, nil, 0), IsNil)
 
 	// relay log file does not exists, no need to recover
 	c.Assert(r.tryRecoverLatestFile(context.Background(), parser2), IsNil)
@@ -265,7 +265,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	recoverGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, recoverGTIDSetStr)
 	c.Assert(err, IsNil)
 
-	c.Assert(r.meta.AddDir(uuid, &startPos, nil, ""), IsNil)
+	c.Assert(r.meta.AddDir(uuid, &startPos, nil, 0), IsNil)
 	c.Assert(r.meta.Load(), IsNil)
 
 	// use a generator to generate some binlog events
@@ -395,7 +395,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	c.Assert(r.Init(context.Background()), IsNil)
 	// NOTE: we can mock meta later.
 	c.Assert(r.meta.Load(), IsNil)
-	c.Assert(r.meta.AddDir("24ecd093-8cec-11e9-aa0d-0242ac170002", nil, nil, ""), IsNil)
+	c.Assert(r.meta.AddDir("24ecd093-8cec-11e9-aa0d-0242ac170002", nil, nil, 0), IsNil)
 
 	// attach GTID sets to QueryEv
 	queryEv2 := queryEv.Event.(*replication.QueryEvent)
@@ -522,7 +522,7 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 
 	r.cfg.BinLogName = "mysql-bin.000002"
 	r.cfg.BinlogGTID = "24ecd093-8cec-11e9-aa0d-0242ac170002:1-50,24ecd093-8cec-11e9-aa0d-0242ac170003:1-50"
-	r.cfg.UUIDSuffix = "000002"
+	r.cfg.UUIDSuffix = 2
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	t.verifyMetadata(c, r, uuid002, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, r.cfg.BinlogGTID, []string{uuid002})
 

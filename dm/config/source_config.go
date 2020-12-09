@@ -55,7 +55,7 @@ type SourceConfig struct {
 	RelayBinLogName string `yaml:"relay-binlog-name" toml:"relay-binlog-name" json:"relay-binlog-name"`
 	RelayBinlogGTID string `yaml:"relay-binlog-gtid" toml:"relay-binlog-gtid" json:"relay-binlog-gtid"`
 	// only use when worker bound source, do not marsh it
-	UUIDSuffix string `yaml:"-" toml:"-" json:"-"`
+	UUIDSuffix int `yaml:"-" toml:"-" json:"-"`
 
 	SourceID string   `yaml:"source-id" toml:"source-id" json:"source-id"`
 	From     DBConfig `yaml:"from" toml:"from" json:"from"`

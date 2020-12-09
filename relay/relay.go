@@ -203,7 +203,7 @@ func (r *Relay) process(ctx context.Context) error {
 		return err
 	}
 
-	if isNew || len(r.cfg.UUIDSuffix) > 0 {
+	if isNew || r.cfg.UUIDSuffix > 0 {
 		// re-setup meta for new server or new source
 		err = r.reSetupMeta(ctx)
 		if err != nil {
@@ -524,8 +524,8 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 
 	var newPos *mysql.Position
 	var newGset gtid.Set
-	var newUUIDSufiix string
-	if len(r.cfg.UUIDSuffix) != 0 {
+	var newUUIDSufiix int
+	if r.cfg.UUIDSuffix > 0 {
 		// if bound or rebound to a source, clear all relay log and meta
 		if err = r.PurgeRelayDir(); err != nil {
 			return err
@@ -534,7 +534,7 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 
 		newUUIDSufiix = r.cfg.UUIDSuffix
 		// reset the UUIDSuffix
-		r.cfg.UUIDSuffix = ""
+		r.cfg.UUIDSuffix = 0
 
 		if len(r.cfg.BinLogName) != 0 {
 			newPos = &mysql.Position{Name: r.cfg.BinLogName, Pos: binlog.MinPosition.Pos}
