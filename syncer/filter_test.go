@@ -63,10 +63,10 @@ BEGIN
 END`, true},
 
 		// view
-		{"CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v` AS SELECT qty, price, qty*price AS value FROM t", false},
-		{"CREATE OR REPLACE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v` AS SELECT qty, price, qty*price AS value FROM t", false},
+		{"CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v` AS SELECT qty, price, qty*price AS value FROM t", true},
+		{"CREATE OR REPLACE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v` AS SELECT qty, price, qty*price AS value FROM t", true},
 		{"ALTER ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v` AS SELECT qty, price, qty*price AS value FROM t", true},
-		{"DROP VIEW v", false},
+		{"DROP VIEW v", true},
 		{"CREATE TABLE `VIEW`(id int)", false},
 		{"ALTER TABLE `VIEW`(id int)", false},
 

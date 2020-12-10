@@ -63,6 +63,8 @@ var (
 		"^ALTER\\s+PROCEDURE",
 
 		// view
+		"^CREATE\\s*(OR REPLACE)?\\s+(ALGORITHM\\s?=.+?)?(DEFINER\\s?=.+?)?\\s+(SQL SECURITY DEFINER)?VIEW",
+		"^DROP\\s+VIEW",
 		"^ALTER\\s+(ALGORITHM\\s?=.+?)?(DEFINER\\s?=.+?)?(SQL SECURITY DEFINER)?VIEW",
 
 		// function
