@@ -25,6 +25,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // ParseMetaData parses mydumper's output meta file and returns binlog location.
@@ -128,7 +129,7 @@ func ParseMetaData(filename, flavor string) (*binlog.Location, *binlog.Location,
 	}
 
 	if len(pos.Name) == 0 || pos.Pos == uint32(0) {
-		return nil, nil, invalidErr
+		return nil, nil, terror.ErrMetadataNoBinlogLoc.Generate(filename)
 	}
 
 	gset, err := gtid.ParserGTID(flavor, gtidStr)

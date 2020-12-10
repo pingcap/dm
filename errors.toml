@@ -766,6 +766,12 @@ description = ""
 workaround = ""
 tags = ["internal", "low"]
 
+[error.DM-functional-11123]
+message = "didn't found binlog location in dumped metadata file %s"
+description = ""
+workaround = "Please check log of dump unit, there maybe errors when read upstream binlog status"
+tags = ["upstream", "low"]
+
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""
