@@ -123,6 +123,13 @@ ErrFailUpdateV1DBSchema,[code=11116:class=functional:scope=internal:level=medium
 ErrBinlogStatusVarsParse,[code=11117:class=functional:scope=internal:level=medium], "Message: fail to parse binglog status_vars: %v, offset: %d"
 ErrVerifyHandleErrorArgs,[code=11118:class=functional:scope=internal:level=low], "Workaround: Please make sure the args are correct."
 ErrRewriteSQL,[code=11119:class=functional:scope=internal:level=high], "Message: failed to rewrite SQL for target DB, stmt: %+v, targetTableNames: %+v"
+<<<<<<< HEAD
+=======
+ErrNoUUIDDirMatchGTID,[code=11120:class=functional:scope=internal:level=high], "Message: no relay subdir match gtid %s"
+ErrNoRelayPosMatchGTID,[code=11121:class=functional:scope=internal:level=high], "Message: no relay pos match gtid %s"
+ErrReaderReachEndOfFile,[code=11122:class=functional:scope=internal:level=low]
+ErrMetadataNoBinlogLoc,[code=11123:class=functional:scope=upstream:level=low], "Message: didn't found binlog location in dumped metadata file %s, Workaround: Please check log of dump unit, there maybe errors when read upstream binlog status"
+>>>>>>> 7e79861c... load: load should not need metadata (#1321)
 ErrConfigCheckItemNotSupport,[code=20001:class=config:scope=internal:level=medium], "Message: checking item %s is not supported\n%s, Workaround: Please check `ignore-checking-items` config in task configuration file, which can be set including `all`/`dump_privilege`/`replication_privilege`/`version`/`binlog_enable`/`binlog_format`/`binlog_row_image`/`table_schema`/`schema_of_shard_tables`/`auto_increment_ID`."
 ErrConfigTomlTransform,[code=20002:class=config:scope=internal:level=medium], "Message: %s, Workaround: Please check the configuration file has correct TOML format."
 ErrConfigYamlTransform,[code=20003:class=config:scope=internal:level=medium], "Message: %s, Workaround: Please check the configuration file has correct YAML format."

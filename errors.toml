@@ -748,6 +748,33 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+<<<<<<< HEAD
+=======
+[error.DM-functional-11120]
+message = "no relay subdir match gtid %s"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-functional-11121]
+message = "no relay pos match gtid %s"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-functional-11122]
+message = ""
+description = ""
+workaround = ""
+tags = ["internal", "low"]
+
+[error.DM-functional-11123]
+message = "didn't found binlog location in dumped metadata file %s"
+description = ""
+workaround = "Please check log of dump unit, there maybe errors when read upstream binlog status"
+tags = ["upstream", "low"]
+
+>>>>>>> 7e79861c... load: load should not need metadata (#1321)
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""
