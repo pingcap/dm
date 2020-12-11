@@ -64,7 +64,10 @@ func startTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	defer cancel()
 
 	// start task
-	cli := common.MasterClient()
+	cli, err := common.MasterClient()
+	if err != nil {
+		return
+	}
 	resp, err := cli.StartTask(ctx, &pb.StartTaskRequest{
 		Task:       string(content),
 		Sources:    sources,

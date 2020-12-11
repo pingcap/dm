@@ -57,7 +57,10 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	defer cancel()
 
 	// update task
-	cli := common.MasterClient()
+	cli, err := common.MasterClient()
+	if err != nil {
+		return
+	}
 	resp, err := cli.UpdateTask(ctx, &pb.UpdateTaskRequest{
 		Task:    string(content),
 		Sources: sources,

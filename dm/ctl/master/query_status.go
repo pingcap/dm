@@ -65,7 +65,10 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 
-	cli := common.MasterClient()
+	cli, err := common.MasterClient()
+	if err != nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
 	resp, err := cli.QueryStatus(ctx, &pb.QueryStatusListRequest{

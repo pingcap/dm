@@ -190,6 +190,12 @@ function run() {
     pause_task_success $TASK_NAME
     query_status_paused_tasks
 
+    echo "dmctl master_addr"
+    dmctl_multiple_addrs
+    dmctl_unwrap_schema
+    dmctl_wrong_addrs
+    dmctl_no_addr
+
     # echo "update_task_worker_not_found"
     # update_task_worker_not_found $TASK_CONF 127.0.0.1:9999
     # update_task_success_single_worker $TASK_CONF $SOURCE_ID1

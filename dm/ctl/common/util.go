@@ -14,6 +14,7 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -25,6 +26,7 @@ import (
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"go.etcd.io/etcd/clientv3"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -36,9 +38,31 @@ import (
 )
 
 var (
-	masterClient pb.MasterClient
 	globalConfig = &Config{}
+	ctlClient    = &CtlClient{}
 )
+
+// CtlClient used to get master client for dmctl
+type CtlClient struct {
+	tls        *toolutils.TLS
+	etcdClient *clientv3.Client
+}
+
+func (c *CtlClient) getMasterClient() (pb.MasterClient, error) {
+	var (
+		err  error
+		conn *grpc.ClientConn
+	)
+	endpoints := c.etcdClient.Endpoints()
+	for _, endpoint := range endpoints {
+		//nolint:staticcheck
+		conn, err = grpc.Dial(utils.UnwrapScheme(endpoint), c.tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
+		if err == nil {
+			return pb.NewMasterClient(conn), nil
+		}
+	}
+	return nil, terror.ErrCtlGRPCCreateConn.AnnotateDelegate(err, "can't connect to %s", strings.Join(endpoints, ","))
+}
 
 // InitUtils inits necessary dmctl utils
 func InitUtils(cfg *Config) error {
@@ -53,12 +77,35 @@ func InitClient(addr string, securityCfg config.Security) error {
 		return terror.ErrCtlInvalidTLSCfg.Delegate(err)
 	}
 
-	//nolint:staticcheck
-	conn, err := grpc.Dial(addr, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
+	endpoints := strings.Split(addr, ",")
+	for _, endpoint := range endpoints {
+		//nolint:staticcheck
+		_, err = grpc.Dial(utils.UnwrapScheme(endpoint), tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
+		if err != nil {
+			continue
+		}
+		break
+	}
 	if err != nil {
 		return terror.ErrCtlGRPCCreateConn.AnnotateDelegate(err, "can't connect to %s", addr)
 	}
-	masterClient = pb.NewMasterClient(conn)
+
+	etcdClient, err := clientv3.New(clientv3.Config{
+		Endpoints:            endpoints,
+		DialTimeout:          dialTimeout,
+		DialKeepAliveTime:    keepaliveTime,
+		DialKeepAliveTimeout: keepaliveTimeout,
+		TLS:                  tls.TLSConfig(),
+	})
+	if err != nil {
+		return err
+	}
+
+	ctlClient = &CtlClient{
+		tls:        tls,
+		etcdClient: etcdClient,
+	}
+
 	return nil
 }
 
@@ -68,8 +115,8 @@ func GlobalConfig() *Config {
 }
 
 // MasterClient returns dm-master client
-func MasterClient() pb.MasterClient {
-	return masterClient
+func MasterClient() (pb.MasterClient, error) {
+	return ctlClient.getMasterClient()
 }
 
 // PrintLines adds a wrap to support `\n` within `chzyer/readline`
@@ -232,5 +279,38 @@ func PrintCmdUsage(cmd *cobra.Command) {
 	err := cmd.Usage()
 	if err != nil {
 		fmt.Println("can't output command's usage:", err)
+	}
+}
+
+// SyncMasterEndpoints sync masters' endpoints
+func SyncMasterEndpoints(ctx context.Context) {
+	lastClientUrls := []string{}
+	clientURLs := []string{}
+	updateF := func() {
+		clientURLs = clientURLs[:0]
+		resp, err := ctlClient.etcdClient.MemberList(ctx)
+		if err != nil {
+			return
+		}
+
+		for _, m := range resp.Members {
+			clientURLs = append(clientURLs, m.GetClientURLs()...)
+		}
+		if utils.NonRepeatStringsEqual(clientURLs, lastClientUrls) {
+			return
+		}
+		ctlClient.etcdClient.SetEndpoints(clientURLs...)
+		lastClientUrls = make([]string, len(clientURLs))
+		copy(lastClientUrls, clientURLs)
+	}
+
+	for {
+		updateF()
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(syncMasterEndpointsTime):
+		}
 	}
 }

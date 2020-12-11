@@ -52,7 +52,10 @@ func getTaskCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 
-	cli := common.MasterClient()
+	cli, err := common.MasterClient()
+	if err != nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
 

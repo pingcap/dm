@@ -23,7 +23,10 @@ import (
 func OperateRelay(op pb.RelayOp, workers []string) (*pb.OperateWorkerRelayResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli := MasterClient()
+	cli, err := MasterClient()
+	if err != nil {
+		return nil, err
+	}
 	return cli.OperateWorkerRelayTask(ctx, &pb.OperateWorkerRelayRequest{
 		Op:      op,
 		Sources: workers,

@@ -105,7 +105,10 @@ func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli := common.MasterClient()
+	cli, err := common.MasterClient()
+	if err != nil {
+		return
+	}
 
 	resp, err := cli.HandleError(ctx, &pb.HandleErrorRequest{
 		Op:        op,

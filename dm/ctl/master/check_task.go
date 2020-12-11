@@ -52,7 +52,10 @@ func checkTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	defer cancel()
 
 	// start task
-	cli := common.MasterClient()
+	cli, err := common.MasterClient()
+	if err != nil {
+		return
+	}
 	resp, err := cli.CheckTask(ctx, &pb.CheckTaskRequest{
 		Task: string(content),
 	})
