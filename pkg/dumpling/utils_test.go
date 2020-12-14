@@ -22,6 +22,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = Suite(&testSuite{})
@@ -247,4 +248,12 @@ Finished dump at: 2020-09-30 12:16:49
 			c.Assert(loc2, IsNil)
 		}
 	}
+
+	noBinlogLoc := `Started dump at: 2020-12-02 17:13:56
+Finished dump at: 2020-12-02 17:13:56
+`
+	err = ioutil.WriteFile(f.Name(), []byte(noBinlogLoc), 0644)
+	c.Assert(err, IsNil)
+	_, _, err = ParseMetaData(f.Name(), "mysql")
+	c.Assert(terror.ErrMetadataNoBinlogLoc.Equal(err), IsTrue)
 }

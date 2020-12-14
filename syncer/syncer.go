@@ -1549,6 +1549,14 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	originSchema, originTable := string(ev.Table.Schema), string(ev.Table.Table)
 	schemaName, tableName := s.renameShardingSchema(originSchema, originTable)
 
+	*ec.currentLocation = binlog.InitLocation(
+		mysql.Position{
+			Name: ec.lastLocation.Position.Name,
+			Pos:  ec.header.LogPos,
+		},
+		ec.lastLocation.GetGTID(),
+	)
+
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currLocation = *ec.currentLocation
 		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation, s.cfg.EnableGTID) >= 0 {
