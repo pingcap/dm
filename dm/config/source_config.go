@@ -233,7 +233,7 @@ func (c *SourceConfig) Adjust(ctx context.Context, db *sql.DB) (err error) {
 	}
 
 	// MariaDB automatically enabled gtid after 10.0.2, refer to https://mariadb.com/kb/en/gtid/#using-global-transaction-ids
-	if c.EnableGTID && c.Flavor == mysql.MySQLFlavor {
+	if c.EnableGTID && c.Flavor != mysql.MariaDBFlavor {
 		val, err := utils.GetGTIDMode(ctx2, db)
 		if err != nil {
 			return err
