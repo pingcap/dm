@@ -233,7 +233,7 @@ Finished dump at: 2020-09-30 12:16:49
 	}
 
 	for _, tc := range testCases {
-		err := ioutil.WriteFile(f.Name(), []byte(tc.source), 0644)
+		err = ioutil.WriteFile(f.Name(), []byte(tc.source), 0644)
 		c.Assert(err, IsNil)
 		loc, loc2, err := ParseMetaData(f.Name(), "mysql")
 		c.Assert(err, IsNil)
