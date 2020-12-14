@@ -17,9 +17,8 @@ EOF
 }
 
 function run() {
-    run_sql "SET @@GLOBAL.SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE'" $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql "SET @@GLOBAL.SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE,ANSI_QUOTES'" $MYSQL_PORT2 $MYSQL_PASSWORD2
-    run_sql_tidb "SET @@GLOBAL.SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE'"
+    run_sql "SET @@GLOBAL.SQL_MODE=''" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES'" $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
@@ -60,7 +59,7 @@ function run() {
     # TODO: check sharding partition id
     # use sync_diff_inspector to check full dump loader
     echo "check sync diff for full dump and load"
-    run_sql "SET @@GLOBAL.SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE'" $MYSQL_PORT2 $MYSQL_PASSWORD2
+    run_sql "SET @@GLOBAL.SQL_MODE=''" $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -149,7 +148,6 @@ function run() {
         "task test has no source or not exist" 1
 
     run_sql_both_source "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
-    run_sql_tidb "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
 }
 
 cleanup_data db_target
