@@ -272,7 +272,7 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 			v.Specs = []*ast.AlterTableSpec{spec}
 
 			// handle `alter table t1 add column (c1 int, c2 int)`
-			if spec.Tp == ast.AlterTableAddColumns {
+			if spec.Tp == ast.AlterTableAddColumns && len(spec.NewColumns) > 1 {
 				columns := spec.NewColumns
 				spec.Position = &ast.ColumnPosition{
 					Tp: ast.ColumnPositionNone, // otherwise restore will become "alter table t1 add column (c1 int)"
