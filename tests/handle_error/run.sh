@@ -1384,6 +1384,32 @@ function DM_4231() {
      run_case 4231 "single-source-no-sharding" "init_table 11" "clean_table" ""
 }
 
+function DM_SKIP_INCOMPATIBLE_DDL_CASE() {
+    run_sql_source1 "insert into ${db}.${tb1} values(1);"
+
+    run_sql_source1 "CREATE FUNCTION ${db}.hello (s CHAR(20)) RETURNS CHAR(50) DETERMINISTIC RETURN CONCAT('Hello, ',s,'!');"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "\"stage\": \"Running\"" 2
+
+    run_sql_source1 "/*!50003 drop function ${db}.hello*/;"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "drop function `hello`" 1 \
+            "Please confirm your DDL statement is correct and needed." 1
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "handle-error test skip" \
+            "\"result\": true" 2
+
+    run_sql_source1 "insert into ${db}.${tb1} values(2);"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_SKIP_INCOMPATIBLE_DDL() {
+    run_case SKIP_INCOMPATIBLE_DDL "single-source-no-sharding" "init_table 11" "clean_table" ""
+}
+
 function run() {
     init_cluster
     init_database
@@ -1393,6 +1419,7 @@ function run() {
     DM_REPLACE_ERROR_SHARDING
     DM_REPLACE_ERROR_MULTIPLE
     DM_EXEC_ERROR_SKIP
+    DM_SKIP_INCOMPATIBLE_DDL
 
     implement=(4202 4204 4206 4207 4209 4211 4213 4215 4216 4219 4220 4185 4201 4189 4210 4193 4230 4177 4231)
     for i in ${implement[@]}; do
