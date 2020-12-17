@@ -26,17 +26,6 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var (
-	// IncompatibleDDLFormat is for incompatible ddl
-	IncompatibleDDLFormat = `encountered incompatible DDL in TiDB:
-	please confirm your DDL statement is correct and needed.
-	for TiDB compatible DDL, please see the docs:
-	  English version: https://pingcap.com/docs/dev/reference/mysql-compatibility/#ddl
-	  Chinese version: https://pingcap.com/docs-cn/dev/reference/mysql-compatibility/#ddl
-	if the DDL is not needed, you can use a filter rule with "*" schema-pattern to ignore it.
-	 `
-)
-
 // parseDDLResult represents the result of parseDDLSQL
 type parseDDLResult struct {
 	stmt   ast.StmtNode
@@ -68,12 +57,12 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 	stmts, err := parserpkg.Parse(p, sql, "", "")
 	if err != nil {
 		// log error rather than fatal, so other defer can be executed
-		s.tctx.L().Error(IncompatibleDDLFormat, zap.String("sql", sql))
+		s.tctx.L().Error("parse ddl", zap.String("sql", sql))
 		return parseDDLResult{
 			stmt:   nil,
 			ignore: false,
 			isDDL:  false,
-		}, terror.Annotatef(err, IncompatibleDDLFormat, sql)
+		}, terror.ErrSyncerParseDDL.Delegate(err, sql)
 	}
 
 	if len(stmts) == 0 {
