@@ -285,7 +285,11 @@ func (tsc *realTaskStatusChecker) getRelayResumeStrategy(relayStatus *pb.RelaySt
 		return ResumeIgnore
 	}
 
-	// TODO: use different strategies based on the error detail
+	for _, err := range relayStatus.Result.Errors {
+		if _, ok := retry.UnresumableRelayErrCodes[err.ErrCode]; ok {
+			return ResumeNoSense
+		}
+	}
 
 	if time.Since(tsc.bc.latestRelayResumeTime) < duration {
 		return ResumeSkip

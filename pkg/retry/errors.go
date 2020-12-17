@@ -68,6 +68,15 @@ var (
 		int32(terror.ErrDumpUnitRuntime.Code()):             {},
 		int32(terror.ErrSyncerUnitDMLColumnNotMatch.Code()): {},
 	}
+
+	// UnresumableRelayErrCodes is a set of unresumeable relay unit err codes.
+	UnresumableRelayErrCodes = map[int32]struct{}{
+		int32(terror.ErrRelayUUIDSuffixNotValid.Code()): {},
+		int32(terror.ErrRelayUUIDSuffixLessThanPrev.Code()): {},
+		int32(terror.ErrRelayBinlogNameNotValid.Code()): {},
+		int32(terror.ErrRelayNoCurrentUUID.Code()): {},
+		int32(terror.ErrRelayLogDirpathEmpty.Code()): {},
+	}
 )
 
 // IsConnectionError tells whether this error should reconnect to Database
