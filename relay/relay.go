@@ -386,14 +386,13 @@ func (r *Relay) tryRecoverLatestFile(ctx context.Context, parser2 *parser.Parser
 func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transformer2 transformer.Transformer, writer2 writer.Writer) error {
 	var (
 		_, lastPos  = r.meta.Pos()
-		_, metaGTID = r.meta.GTID()
-		lastGTID    gtid.Set
+		_, lastGTID = r.meta.GTID()
 		err         error
 	)
-	if metaGTID != nil {
-		lastGTID = metaGTID.Clone()
-	} else if lastGTID, err = gtid.ParserGTID(r.cfg.Flavor, ""); err != nil {
-		return err
+	if lastGTID == nil {
+		if lastGTID, err = gtid.ParserGTID(r.cfg.Flavor, ""); err != nil {
+			return err
+		}
 	}
 
 	for {
@@ -645,12 +644,14 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 func (r *Relay) setUpReader(ctx context.Context) (reader.Reader, error) {
 	ctx2, cancel := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 	defer cancel()
-	randomServerID, err := utils.GetRandomServerID(ctx2, r.db)
+
+	randomServerID, err := utils.ReuseServerID(ctx2, r.cfg.ServerID, r.db)
 	if err != nil {
 		// should never happened unless the master has too many slave
 		return nil, terror.Annotate(err, "fail to get random server id for relay reader")
 	}
 	r.syncerCfg.ServerID = randomServerID
+	r.cfg.ServerID = randomServerID
 
 	uuid, pos := r.meta.Pos()
 	_, gs := r.meta.GTID()
@@ -773,9 +774,7 @@ func (r *Relay) Status(ctx context.Context) interface{} {
 	}
 	if r.cfg.EnableGTID {
 		if masterGTID != nil && relayGTIDSet != nil {
-			// avoid data race
-			clone := relayGTIDSet.Clone()
-			if clone.Equal(masterGTID) {
+			if relayGTIDSet.Equal(masterGTID) {
 				rs.RelayCatchUpMaster = true
 			}
 		}

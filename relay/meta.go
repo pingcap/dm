@@ -58,7 +58,7 @@ type Meta interface {
 	Dirty() bool
 
 	// AddDir adds sub relay directory for server UUID (without suffix)
-	// if uuidSuffix is not zero value, add sub relay directory with uuidSuffix (bount to a new source)
+	// if uuidSuffix is not zero value, add sub relay directory with uuidSuffix (bound to a new source)
 	// otherwise the added sub relay directory's suffix is incremented (master/slave switch)
 	// after sub relay directory added, the internal binlog pos should be reset
 	// and binlog pos will be set again when new binlog events received
@@ -348,7 +348,10 @@ func (lm *LocalMeta) GTID() (string, gtid.Set) {
 	lm.RLock()
 	defer lm.RUnlock()
 
-	return lm.currentUUID, lm.gset
+	if lm.gset != nil {
+		return lm.currentUUID, lm.gset.Clone()
+	}
+	return lm.currentUUID, nil
 }
 
 // UUID implements Meta.UUID
