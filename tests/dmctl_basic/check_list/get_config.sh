@@ -3,7 +3,7 @@
 function get_config_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "get-config" \
-        "get-config <task\/master\/worker\/source> <name> \[--file filename\] \[flags\]" 1
+        "get-config <task | master | worker | source> <name> \[--file filename\] \[flags\]" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "get-config hihi haha" \
@@ -19,7 +19,7 @@ function get_config_wrong_arg() {
         "task not found" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "get-task-config haha hihi" \
-        "get-config <task\/master\/worker\/source> <name> \[--file filename\] \[flags\]" 1
+        "get-config <task | master | worker | source> <name> \[--file filename\] \[flags\]" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "get-config master haha" \
