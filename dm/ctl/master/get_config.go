@@ -29,7 +29,7 @@ import (
 // NewGetCfgCmd creates a getCfg command
 func NewGetCfgCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get-config <task/master/worker/source> <name> [--file filename]",
+		Use:   "get-config <task | master | worker | source> <name> [--file filename]",
 		Short: "Gets the configuration.",
 		RunE:  getCfgFunc,
 	}
