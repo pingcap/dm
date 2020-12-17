@@ -358,6 +358,10 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 				i2 := i
 				eg.Go(func() error {
 					if err2 := conn2.execSQLs(ctx, query); err2 != nil {
+						if utils.IsMySQLError(err2, mysql.ErrDupFieldName) {
+							t.logger.Warn("ignore duplicate field name for ddl", log.ShortError(err))
+							return nil
+						}
 						return err2
 					}
 					t.results[i2].DDL++
@@ -365,10 +369,6 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 				})
 			}
 			if err = eg.Wait(); err != nil {
-				if utils.IsMySQLError(err, mysql.ErrDupFieldName) {
-					t.logger.Warn("ignore duplicate field name for ddl", log.ShortError(err))
-					continue
-				}
 				return err
 			}
 		}
