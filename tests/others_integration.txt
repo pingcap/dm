@@ -2,11 +2,8 @@ import_v10x
 tls
 sharding2
 ha
-ha_master
 full_mode
-start_task
 dm_syncer
 sequence_sharding_optimistic
 sequence_sharding_removemeta
 drop_column_with_index
-handle_error
