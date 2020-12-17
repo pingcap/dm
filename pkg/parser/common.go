@@ -288,6 +288,7 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 					}
 					sqls = append(sqls, bf.String())
 				}
+				// we have restore SQL for every columns, skip below general restoring and continue on next spec
 				continue
 			}
 
