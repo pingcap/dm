@@ -13,6 +13,14 @@ function get_config_wrong_arg() {
         "get-config task haha" \
         "task not found" 1
 
+    # test alias
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "get-task-config haha" \
+        "task not found" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "get-task-config haha hihi" \
+        "get-config <task\/master\/worker\/source> <name> \[--file filename\] \[flags\]" 1
+
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "get-config master haha" \
         "master not found" 1
