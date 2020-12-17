@@ -145,7 +145,7 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 	}
 
 	if c.MasterAddr == "" {
-		return false, errors.Errorf("--master-addr not provided")
+		return false, errors.Errorf("--master-addr not provided, use --help to see help messages")
 	}
 
 	return false, errors.Trace(c.adjust())
