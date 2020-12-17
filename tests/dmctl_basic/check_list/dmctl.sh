@@ -7,7 +7,7 @@ function dmctl_multiple_addrs() {
 }
 
 function dmctl_unwrap_schema() {
-    run_dm_ctl $WORK_DIR "https://127.0.0.1:$MASTER_PORT,http://127.0.0.1:1234,127.0.0.1:4322" \
+    run_dm_ctl $WORK_DIR "http://127.0.0.1:1234,127.0.0.1:4322,https://127.0.0.1:$MASTER_PORT" \
         "list-member" \
         "\"result\": true" 1
 }
