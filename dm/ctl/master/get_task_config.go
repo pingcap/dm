@@ -52,16 +52,19 @@ func getTaskCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 
-	cli, err := common.MasterClient()
-	if err != nil {
-		return
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
 
-	resp, err := cli.GetTaskCfg(ctx, &pb.GetTaskCfgRequest{
-		Name: taskName,
-	})
+	resp := &pb.GetTaskCfgResponse{}
+	err = common.SendRequest(
+		ctx,
+		"GetTaskCfg",
+		&pb.GetTaskCfgRequest{
+			Name: taskName,
+		},
+		&resp,
+	)
+
 	if err != nil {
 		common.PrintLines("can not get config of task %s", taskName)
 		return

@@ -51,14 +51,18 @@ func showDDLLocksFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli, err := common.MasterClient()
-	if err != nil {
-		return
-	}
-	resp, err := cli.ShowDDLLocks(ctx, &pb.ShowDDLLocksRequest{
-		Task:    taskName,
-		Sources: sources,
-	})
+
+	resp := &pb.ShowDDLLocksResponse{}
+	err = common.SendRequest(
+		ctx,
+		"ShowDDLLocks",
+		&pb.ShowDDLLocksRequest{
+			Task:    taskName,
+			Sources: sources,
+		},
+		&resp,
+	)
+
 	if err != nil {
 		common.PrintLines("can not show DDL locks for task %s and sources %v", taskName, sources)
 		return

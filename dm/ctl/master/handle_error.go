@@ -105,18 +105,21 @@ func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli, err := common.MasterClient()
-	if err != nil {
-		return
-	}
 
-	resp, err := cli.HandleError(ctx, &pb.HandleErrorRequest{
-		Op:        op,
-		Task:      taskName,
-		BinlogPos: binlogPos,
-		Sqls:      sqls,
-		Sources:   sources,
-	})
+	resp := &pb.HandleErrorResponse{}
+	err = common.SendRequest(
+		ctx,
+		"HandleError",
+		&pb.HandleErrorRequest{
+			Op:        op,
+			Task:      taskName,
+			BinlogPos: binlogPos,
+			Sqls:      sqls,
+			Sources:   sources,
+		},
+		&resp,
+	)
+
 	if err != nil {
 		return
 	}

@@ -99,18 +99,21 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli, err := common.MasterClient()
-	if err != nil {
-		return
-	}
 
-	resp, err := cli.PurgeWorkerRelay(ctx, &pb.PurgeWorkerRelayRequest{
-		Sources: sources,
-		//Inactive: inactive,
-		//Time:     time2.Unix(),
-		Filename: filename,
-		SubDir:   subDir,
-	})
+	resp := &pb.PurgeWorkerRelayResponse{}
+	err = common.SendRequest(
+		ctx,
+		"PurgeWorkerRelay",
+		&pb.PurgeWorkerRelayRequest{
+			Sources: sources,
+			//Inactive: inactive,
+			//Time:     time2.Unix(),
+			Filename: filename,
+			SubDir:   subDir,
+		},
+		&resp,
+	)
+
 	if err != nil {
 		return
 	}

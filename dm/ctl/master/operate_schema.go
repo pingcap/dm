@@ -112,18 +112,21 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cli, err := common.MasterClient()
-	if err != nil {
-		return
-	}
-	resp, err := cli.OperateSchema(ctx, &pb.OperateSchemaRequest{
-		Op:       op,
-		Task:     taskName,
-		Sources:  sources,
-		Database: database,
-		Table:    table,
-		Schema:   string(schemaContent),
-	})
+	resp := &pb.OperateSchemaResponse{}
+	err = common.SendRequest(
+		ctx,
+		"OperateSchema",
+		&pb.OperateSchemaRequest{
+			Op:       op,
+			Task:     taskName,
+			Sources:  sources,
+			Database: database,
+			Table:    table,
+			Schema:   string(schemaContent),
+		},
+		&resp,
+	)
+
 	if err != nil {
 		return
 	}

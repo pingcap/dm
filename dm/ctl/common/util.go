@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"reflect"
 	"strings"
 	"time"
 
@@ -35,6 +36,8 @@ import (
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -44,24 +47,62 @@ var (
 
 // CtlClient used to get master client for dmctl
 type CtlClient struct {
-	tls        *toolutils.TLS
-	etcdClient *clientv3.Client
+	tls          *toolutils.TLS
+	etcdClient   *clientv3.Client
+	conn         *grpc.ClientConn
+	masterClient pb.MasterClient
 }
 
-func (c *CtlClient) getMasterClient() (pb.MasterClient, error) {
+func (c *CtlClient) updateMasterClient() error {
 	var (
 		err  error
 		conn *grpc.ClientConn
 	)
+	if c.conn != nil {
+		c.conn.Close()
+	}
+
 	endpoints := c.etcdClient.Endpoints()
 	for _, endpoint := range endpoints {
 		//nolint:staticcheck
 		conn, err = grpc.Dial(utils.UnwrapScheme(endpoint), c.tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
 		if err == nil {
-			return pb.NewMasterClient(conn), nil
+			c.conn = conn
+			c.masterClient = pb.NewMasterClient(conn)
+			return nil
 		}
 	}
-	return nil, terror.ErrCtlGRPCCreateConn.AnnotateDelegate(err, "can't connect to %s", strings.Join(endpoints, ","))
+	return terror.ErrCtlGRPCCreateConn.AnnotateDelegate(err, "can't connect to %s", strings.Join(endpoints, ","))
+}
+
+func (c *CtlClient) sendRequest(ctx context.Context, reqName string, req interface{}, respPointer interface{}) error {
+	params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(req)}
+	results := reflect.ValueOf(ctlClient.masterClient).MethodByName(reqName).Call(params)
+
+	reflect.ValueOf(respPointer).Elem().Set(results[0])
+	errInterface := results[1].Interface()
+	// nil can't pass type conversion, so we handle it separately
+	if errInterface == nil {
+		return nil
+	}
+	return errInterface.(error)
+}
+
+// SendRequest send request to master
+func SendRequest(ctx context.Context, reqName string, req interface{}, respPointer interface{}) error {
+	err := ctlClient.sendRequest(ctx, reqName, req, respPointer)
+	if err == nil || status.Code(err) != codes.Unavailable {
+		return err
+	}
+
+	// update master client
+	err = ctlClient.updateMasterClient()
+	if err != nil {
+		return err
+	}
+
+	// sendRequest again
+	return ctlClient.sendRequest(ctx, reqName, req, respPointer)
 }
 
 // InitUtils inits necessary dmctl utils
@@ -78,18 +119,6 @@ func InitClient(addr string, securityCfg config.Security) error {
 	}
 
 	endpoints := strings.Split(addr, ",")
-	for _, endpoint := range endpoints {
-		//nolint:staticcheck
-		_, err = grpc.Dial(utils.UnwrapScheme(endpoint), tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
-		if err != nil {
-			continue
-		}
-		break
-	}
-	if err != nil {
-		return terror.ErrCtlGRPCCreateConn.AnnotateDelegate(err, "can't connect to %s", addr)
-	}
-
 	etcdClient, err := clientv3.New(clientv3.Config{
 		Endpoints:            endpoints,
 		DialTimeout:          dialTimeout,
@@ -106,17 +135,12 @@ func InitClient(addr string, securityCfg config.Security) error {
 		etcdClient: etcdClient,
 	}
 
-	return nil
+	return ctlClient.updateMasterClient()
 }
 
 // GlobalConfig returns global dmctl config
 func GlobalConfig() *Config {
 	return globalConfig
-}
-
-// MasterClient returns dm-master client
-func MasterClient() (pb.MasterClient, error) {
-	return ctlClient.getMasterClient()
 }
 
 // PrintLines adds a wrap to support `\n` within `chzyer/readline`

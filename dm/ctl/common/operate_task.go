@@ -23,13 +23,17 @@ import (
 func OperateTask(op pb.TaskOp, name string, sources []string) (*pb.OperateTaskResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli, err := MasterClient()
-	if err != nil {
-		return nil, err
-	}
-	return cli.OperateTask(ctx, &pb.OperateTaskRequest{
-		Op:      op,
-		Name:    name,
-		Sources: sources,
-	})
+
+	resp := &pb.OperateTaskResponse{}
+	err := SendRequest(
+		ctx,
+		"OperateTask",
+		&pb.OperateTaskRequest{
+			Op:      op,
+			Name:    name,
+			Sources: sources,
+		},
+		&resp,
+	)
+	return resp, err
 }

@@ -67,15 +67,19 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli, err := common.MasterClient()
-	if err != nil {
-		return
-	}
-	resp, err := cli.UnlockDDLLock(ctx, &pb.UnlockDDLLockRequest{
-		ID:           lockID,
-		ReplaceOwner: owner,
-		ForceRemove:  forceRemove,
-	})
+
+	resp := &pb.UnlockDDLLockResponse{}
+	err = common.SendRequest(
+		ctx,
+		"UnlockDDLLock",
+		&pb.UnlockDDLLockRequest{
+			ID:           lockID,
+			ReplaceOwner: owner,
+			ForceRemove:  forceRemove,
+		},
+		&resp,
+	)
+
 	if err != nil {
 		common.PrintLines("can not unlock DDL lock %s", lockID)
 		return
