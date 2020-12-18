@@ -52,13 +52,25 @@ func getTaskCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 
-	cli := common.MasterClient()
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
 
+<<<<<<< HEAD:dm/ctl/master/get_task_config.go
 	resp, err := cli.GetTaskCfg(ctx, &pb.GetTaskCfgRequest{
 		Name: taskName,
 	})
+=======
+	resp := &pb.GetCfgResponse{}
+	err = common.SendRequest(
+		ctx,
+		"GetCfg",
+		&pb.GetCfgRequest{
+			Type: tp,
+			Name: cfgName,
+		},
+		&resp,
+	)
+>>>>>>> e5c5de85... dmctl: support and sync mutiple endpoints (#1333):dm/ctl/master/get_config.go
 	if err != nil {
 		common.PrintLines("can not get config of task %s", taskName)
 		return
