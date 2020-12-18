@@ -82,8 +82,8 @@ func (c *CtlClient) updateMasterClient() error {
 }
 
 func (c *CtlClient) sendRequest(ctx context.Context, reqName string, req interface{}, respPointer interface{}) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(req)}
 	results := reflect.ValueOf(ctlClient.masterClient).MethodByName(reqName).Call(params)
