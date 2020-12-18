@@ -779,3 +779,13 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 		Worker: s.cfg.Name,
 	}, nil
 }
+
+// GetWorkerCfg get worker config
+func (s *Server) GetWorkerCfg(ctx context.Context, req *pb.GetWorkerCfgRequest) (*pb.GetWorkerCfgResponse, error) {
+	log.L().Info("", zap.String("request", "GetWorkerCfg"), zap.Stringer("payload", req))
+	var err error
+	resp := &pb.GetWorkerCfgResponse{}
+
+	resp.Cfg, err = s.cfg.Toml()
+	return resp, err
+}

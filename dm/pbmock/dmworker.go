@@ -35,6 +35,26 @@ func (m *MockWorkerClient) EXPECT() *MockWorkerClientMockRecorder {
 	return m.recorder
 }
 
+// GetWorkerCfg mocks base method
+func (m *MockWorkerClient) GetWorkerCfg(arg0 context.Context, arg1 *pb.GetWorkerCfgRequest, arg2 ...grpc.CallOption) (*pb.GetWorkerCfgResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetWorkerCfg", varargs...)
+	ret0, _ := ret[0].(*pb.GetWorkerCfgResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWorkerCfg indicates an expected call of GetWorkerCfg
+func (mr *MockWorkerClientMockRecorder) GetWorkerCfg(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkerCfg", reflect.TypeOf((*MockWorkerClient)(nil).GetWorkerCfg), varargs...)
+}
+
 // HandleError mocks base method
 func (m *MockWorkerClient) HandleError(arg0 context.Context, arg1 *pb.HandleWorkerErrorRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
 	m.ctrl.T.Helper()
@@ -156,6 +176,21 @@ func NewMockWorkerServer(ctrl *gomock.Controller) *MockWorkerServer {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockWorkerServer) EXPECT() *MockWorkerServerMockRecorder {
 	return m.recorder
+}
+
+// GetWorkerCfg mocks base method
+func (m *MockWorkerServer) GetWorkerCfg(arg0 context.Context, arg1 *pb.GetWorkerCfgRequest) (*pb.GetWorkerCfgResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWorkerCfg", arg0, arg1)
+	ret0, _ := ret[0].(*pb.GetWorkerCfgResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWorkerCfg indicates an expected call of GetWorkerCfg
+func (mr *MockWorkerServerMockRecorder) GetWorkerCfg(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkerCfg", reflect.TypeOf((*MockWorkerServer)(nil).GetWorkerCfg), arg0, arg1)
 }
 
 // HandleError mocks base method

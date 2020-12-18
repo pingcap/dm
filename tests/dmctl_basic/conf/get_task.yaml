@@ -1,31 +1,32 @@
 name: test
 task-mode: all
-is-sharding: false
-shard-mode: ""
+is-sharding: true
+shard-mode: pessimistic
 ignore-checking-items: []
 meta-schema: dm_meta
-enable-heartbeat: true
+enable-heartbeat: false
 heartbeat-update-interval: 1
-heartbeat-report-interval: 1
+heartbeat-report-interval: 10
 timezone: Asia/Shanghai
 case-sensitive: false
 target-database:
   host: 127.0.0.1
   port: 4000
   user: root
-  password: ""
-  max-allowed-packet: 67108864
+  password: '******'
+  max-allowed-packet: null
   session:
-    tidb_disable_txn_auto_retry: "off"
-    tidb_retry_limit: "10"
-    tidb_skip_utf8_check: "1"
+    tidb_txn_mode: optimistic
   security: null
 mysql-instances:
 - source-id: mysql-replica-01
   meta: null
   filter-rules: []
-  column-mapping-rules: []
-  route-rules: []
+  column-mapping-rules:
+  - cm-01
+  route-rules:
+  - route-01
+  - route-02
   black-white-list: ""
   block-allow-list: balist-01
   mydumper-config-name: dump-01
@@ -40,8 +41,11 @@ mysql-instances:
 - source-id: mysql-replica-02
   meta: null
   filter-rules: []
-  column-mapping-rules: []
-  route-rules: []
+  column-mapping-rules:
+  - cm-02
+  route-rules:
+  - route-01
+  - route-02
   black-white-list: ""
   block-allow-list: balist-01
   mydumper-config-name: dump-01
@@ -50,19 +54,53 @@ mysql-instances:
   loader-config-name: load-01
   loader: null
   loader-thread: 0
-  syncer-config-name: sync-02
+  syncer-config-name: sync-01
   syncer: null
   syncer-thread: 0
 online-ddl-scheme: ""
-routes: {}
+routes:
+  route-01:
+    schema-pattern: dmctl
+    table-pattern: t_*
+    target-schema: dmctl
+    target-table: t_target
+  route-02:
+    schema-pattern: dmctl
+    table-pattern: ""
+    target-schema: dmctl
+    target-table: ""
 filters: {}
-column-mappings: {}
+column-mappings:
+  cm-01:
+    schema-pattern: dmctl
+    table-pattern: t_*
+    source-column: id
+    target-column: id
+    expression: partition id
+    arguments:
+    - "1"
+    - ""
+    - t_
+    create-table-query: ""
+  cm-02:
+    schema-pattern: dmctl
+    table-pattern: t_*
+    source-column: id
+    target-column: id
+    expression: partition id
+    arguments:
+    - "2"
+    - ""
+    - t_
+    create-table-query: ""
 black-white-list: {}
 block-allow-list:
   balist-01:
-    do-tables: []
+    do-tables:
+    - db-name: dmctl
+      tbl-name: ~^t_[\d]+
     do-dbs:
-    - import_v10x
+    - dmctl
     ignore-tables: []
     ignore-dbs: []
 mydumpers:
@@ -92,18 +130,6 @@ syncers:
     disable-detect: false
     safe-mode: false
     enable-ansi-quotes: false
-  sync-02:
-    meta-file: ""
-    worker-count: 16
-    batch: 100
-    queue-size: 1024
-    checkpoint-flush-interval: 30
-    max-retry: 0
-    auto-fix-gtid: false
-    enable-gtid: true
-    disable-detect: false
-    safe-mode: false
-    enable-ansi-quotes: false
-clean-dump-file: false
+clean-dump-file: true
 ansi-quotes: false
 remove-meta: false
