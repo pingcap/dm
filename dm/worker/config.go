@@ -78,7 +78,7 @@ type Config struct {
 	WorkerAddr    string `toml:"worker-addr" json:"worker-addr"`
 	AdvertiseAddr string `toml:"advertise-addr" json:"advertise-addr"`
 
-	ConfigFile string `json:"config-file"`
+	ConfigFile string `toml:"config-file" json:"config-file"`
 	// TODO: in the future dm-workers should share a same ttl from dm-master
 	KeepAliveTTL int64 `toml:"keepalive-ttl" json:"keepalive-ttl"`
 

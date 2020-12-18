@@ -19,7 +19,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -346,14 +345,12 @@ func (s *Server) createSubtaskV1Import(tctx *tcontext.Context,
 	var err error
 outerLoop:
 	for taskName, taskCfgs := range cfgs {
-		cfgLists := make([]*config.SubTaskConfig, 0, len(taskCfgs))
 		for sourceID, cfg := range taskCfgs {
 			var cfg2 *config.SubTaskConfig
 			cfg2, err = cfg.DecryptPassword()
 			if err != nil {
 				break outerLoop
 			}
-			cfgLists = append(cfgLists, cfg2)
 			stage := stages[taskName][sourceID]
 			switch stage {
 			case pb.Stage_Running, pb.Stage_Paused:
@@ -377,15 +374,6 @@ outerLoop:
 					break outerLoop
 				}
 			}
-		}
-		sort.Slice(cfgLists, func(i, j int) bool {
-			return cfgLists[i].SourceID < cfgLists[j].SourceID
-		})
-		var mergedCfg config.TaskConfig
-		mergedCfg.FromSubTaskConfigs(cfgLists...)
-		err2 := s.scheduler.AddTaskCfg(mergedCfg)
-		if err2 != nil {
-			tctx.Logger.Error("fail to add task config into the cluster") // only log it
 		}
 	}
 	return err
