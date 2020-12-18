@@ -77,6 +77,11 @@ var (
 		"^ALTER\\s+TABLESPACE",
 		"^DROP\\s+TABLESPACE",
 
+		// event
+		"^CREATE\\s+(DEFINER\\s?=.+?)?EVENT",
+		"^ALTER\\s+(DEFINER\\s?=.+?)?EVENT",
+		"^DROP\\s+EVENT",
+
 		// account management
 		"^GRANT",
 		"^REVOKE",
