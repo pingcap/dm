@@ -67,10 +67,16 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) (err error) {
 	defer cancel()
 
 	// operate leader
-	cli := common.MasterClient()
-	resp, err := cli.OperateLeader(ctx, &pb.OperateLeaderRequest{
-		Op: op,
-	})
+	resp := &pb.OperateLeaderResponse{}
+	err = common.SendRequest(
+		ctx,
+		"OperateLeader",
+		&pb.OperateLeaderRequest{
+			Op: op,
+		},
+		&resp,
+	)
+
 	if err != nil {
 		return
 	}

@@ -81,11 +81,17 @@ func offlineMemberFunc(cmd *cobra.Command, _ []string) (err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cli := common.MasterClient()
-	resp, err := cli.OfflineMember(ctx, &pb.OfflineMemberRequest{
-		Type: offlineType,
-		Name: name,
-	})
+	resp := &pb.OfflineMemberResponse{}
+	err = common.SendRequest(
+		ctx,
+		"OfflineMember",
+		&pb.OfflineMemberRequest{
+			Type: offlineType,
+			Name: name,
+		},
+		&resp,
+	)
+
 	if err != nil {
 		return
 	}

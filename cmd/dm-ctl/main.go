@@ -14,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -194,6 +195,10 @@ func interactionMode() {
 			os.Exit(1)
 		}
 	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go common.SyncMasterEndpoints(ctx)
 
 	loop()
 

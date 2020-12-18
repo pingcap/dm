@@ -115,12 +115,18 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cli := common.MasterClient()
-	resp, err := cli.OperateSource(ctx, &pb.OperateSourceRequest{
-		Config:   contents,
-		Op:       op,
-		SourceID: sourceID,
-	})
+	resp := &pb.OperateSourceResponse{}
+	err = common.SendRequest(
+		ctx,
+		"OperateSource",
+		&pb.OperateSourceRequest{
+			Config:   contents,
+			Op:       op,
+			SourceID: sourceID,
+		},
+		&resp,
+	)
+
 	if err != nil {
 		return
 	}
