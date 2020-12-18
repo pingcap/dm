@@ -668,14 +668,14 @@ func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
 	loadMap := make(map[string]string, len(stCfgs))
 	syncMap := make(map[string]string, len(stCfgs))
 	cmMap := make(map[string]string, len(stCfgs))
-	var BAListIdx, routeIdx, filterIdx, dumpIdx, loadIdx, syncIdx, cmIdx int
-	var BAListName, routeName, filterName, dumpName, loadName, syncName, cmName string
+	var baListIdx, routeIdx, filterIdx, dumpIdx, loadIdx, syncIdx, cmIdx int
+	var baListName, routeName, filterName, dumpName, loadName, syncName, cmName string
 
 	// NOTE:
 	// - we choose to ref global configs for instances now.
 	for _, stCfg := range stCfgs {
-		BAListName, BAListIdx = getGenerateName(stCfg.BAList, BAListIdx, "balist", BAListMap)
-		c.BAList[BAListName] = stCfg.BAList
+		baListName, baListIdx = getGenerateName(stCfg.BAList, baListIdx, "balist", BAListMap)
+		c.BAList[baListName] = stCfg.BAList
 
 		routeNames := make([]string, 0, len(stCfg.RouteRules))
 		for _, rule := range stCfg.RouteRules {
@@ -713,7 +713,7 @@ func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
 			FilterRules:        filterNames,
 			ColumnMappingRules: cmNames,
 			RouteRules:         routeNames,
-			BAListName:         BAListName,
+			BAListName:         baListName,
 			MydumperConfigName: dumpName,
 			LoaderConfigName:   loadName,
 			SyncerConfigName:   syncName,
