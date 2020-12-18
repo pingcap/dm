@@ -86,7 +86,7 @@ func (c *CtlClient) sendRequest(ctx context.Context, reqName string, req interfa
 	defer c.mu.RUnlock()
 
 	params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(req)}
-	results := reflect.ValueOf(ctlClient.masterClient).MethodByName(reqName).Call(params)
+	results := reflect.ValueOf(c.masterClient).MethodByName(reqName).Call(params)
 
 	reflect.ValueOf(respPointer).Elem().Set(results[0])
 	errInterface := results[1].Interface()
