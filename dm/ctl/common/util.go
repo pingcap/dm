@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
@@ -47,6 +48,7 @@ var (
 
 // CtlClient used to get master client for dmctl
 type CtlClient struct {
+	mu           sync.RWMutex
 	tls          *toolutils.TLS
 	etcdClient   *clientv3.Client
 	conn         *grpc.ClientConn
@@ -58,6 +60,10 @@ func (c *CtlClient) updateMasterClient() error {
 		err  error
 		conn *grpc.ClientConn
 	)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if c.conn != nil {
 		c.conn.Close()
 	}
@@ -76,6 +82,9 @@ func (c *CtlClient) updateMasterClient() error {
 }
 
 func (c *CtlClient) sendRequest(ctx context.Context, reqName string, req interface{}, respPointer interface{}) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(req)}
 	results := reflect.ValueOf(ctlClient.masterClient).MethodByName(reqName).Call(params)
 
