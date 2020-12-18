@@ -1841,8 +1841,7 @@ func (s *Server) GetCfg(ctx context.Context, req *pb.GetCfgRequest) (*pb.GetCfgR
 			return subCfgList[i].SourceID < subCfgList[j].SourceID
 		})
 
-		var taskCfg config.TaskConfig
-		taskCfg.FromSubTaskConfigs(subCfgList...)
+		taskCfg := config.FromSubTaskConfigs(subCfgList...)
 		taskCfg.TargetDB.Password = "******"
 		cfg = taskCfg.String()
 	case pb.CfgType_MasterType:

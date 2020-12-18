@@ -363,6 +363,17 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 			TargetSchema:  "db",
 			TargetTable:   "tbl",
 		}
+		routeRule3 = router.TableRule{
+			SchemaPattern: "database*",
+			TablePattern:  "table*",
+		}
+		routeRule4 = router.TableRule{
+			SchemaPattern: "schema*",
+			TablePattern:  "tbs*",
+			TargetSchema:  "schema",
+			TargetTable:   "tbs",
+		}
+
 		filterRule1 = bf.BinlogEventRule{
 			SchemaPattern: "db*",
 			TablePattern:  "tbl1*",
@@ -440,7 +451,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				Security:         &security,
 				RawDBCfg:         &rawDBCfg,
 			},
-			RouteRules:  []*router.TableRule{&routeRule2, &routeRule1},
+			RouteRules:  []*router.TableRule{&routeRule2, &routeRule1, &routeRule3},
 			FilterRules: []*bf.BinlogEventRule{&filterRule1, &filterRule2},
 			BAList:      &baList1,
 			MydumperConfig: MydumperConfig{
@@ -483,9 +494,9 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	}
 	stCfg2.From = source2DBCfg
 	stCfg2.BAList = &baList2
+	stCfg2.RouteRules = []*router.TableRule{&routeRule4, &routeRule1, &routeRule2}
 
-	var cfg TaskConfig
-	cfg.FromSubTaskConfigs(stCfg1, stCfg2)
+	cfg := FromSubTaskConfigs(stCfg1, stCfg2)
 
 	cfg2 := TaskConfig{
 		Name:                    name,
@@ -506,7 +517,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				Meta:               stCfg1.Meta,
 				FilterRules:        []string{"filter-01", "filter-02"},
 				ColumnMappingRules: []string{},
-				RouteRules:         []string{"route-01", "route-02"},
+				RouteRules:         []string{"route-01", "route-02", "route-03"},
 				BWListName:         "",
 				BAListName:         "balist-01",
 				MydumperConfigName: "dump-01",
@@ -524,7 +535,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				Meta:               stCfg2.Meta,
 				FilterRules:        []string{"filter-01", "filter-02"},
 				ColumnMappingRules: []string{},
-				RouteRules:         []string{"route-01", "route-02"},
+				RouteRules:         []string{"route-01", "route-02", "route-04"},
 				BWListName:         "",
 				BAListName:         "balist-02",
 				MydumperConfigName: "dump-01",
@@ -542,6 +553,8 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		Routes: map[string]*router.TableRule{
 			"route-01": &routeRule1,
 			"route-02": &routeRule2,
+			"route-03": &routeRule3,
+			"route-04": &routeRule4,
 		},
 		Filters: map[string]*bf.BinlogEventRule{
 			"filter-01": &filterRule1,

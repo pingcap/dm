@@ -615,6 +615,9 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 	return cfgs, nil
 }
 
+// getGenerateName generates name by rule or gets name from nameMap
+// if it's a new name, increase nameIdx
+// otherwise return current nameIdx
 func getGenerateName(rule interface{}, nameIdx int, namePrefix string, nameMap map[string]string) (string, int) {
 	// use json as key since no DeepEqual for rules now.
 	ruleByte, err := json.Marshal(rule)
@@ -631,8 +634,8 @@ func getGenerateName(rule interface{}, nameIdx int, namePrefix string, nameMap m
 }
 
 // FromSubTaskConfigs constructs task configs from a list of valid subtask configs.
-// this method is only used to construct config when importing from v1.0.x now.
-func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) {
+func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
+	c := &TaskConfig{}
 	// global configs.
 	stCfg0 := stCfgs[0]
 	c.Name = stCfg0.Name
@@ -716,6 +719,7 @@ func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) {
 			SyncerConfigName:   syncName,
 		})
 	}
+	return c
 }
 
 // checkDuplicateString checks whether the given string array has duplicate string item
