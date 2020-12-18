@@ -46,6 +46,7 @@ const (
 
 	CmdOperateV1Meta
 	CmdHandleError
+	CmdGetWorkerCfg
 )
 
 // Request wraps all dm-worker rpc requests.
@@ -60,6 +61,7 @@ type Request struct {
 
 	OperateV1Meta *pb.OperateV1MetaRequest
 	HandleError   *pb.HandleWorkerErrorRequest
+	GetWorkerCfg  *pb.GetWorkerCfgRequest
 }
 
 // Response wraps all dm-worker rpc responses.
@@ -74,6 +76,7 @@ type Response struct {
 
 	OperateV1Meta *pb.OperateV1MetaResponse
 	HandleError   *pb.CommonWorkerResponse
+	GetWorkerCfg  *pb.GetWorkerCfgResponse
 }
 
 // Client is a client that sends RPC.

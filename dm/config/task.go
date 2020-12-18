@@ -160,19 +160,6 @@ func (m *MySQLInstance) VerifyAndAdjust() error {
 	return nil
 }
 
-// RemoveDuplicateCfg remove duplicate mydumper, loader, and syncer config
-func (m *MySQLInstance) RemoveDuplicateCfg() {
-	if len(m.MydumperConfigName) > 0 && m.Mydumper != nil {
-		m.Mydumper = nil
-	}
-	if len(m.LoaderConfigName) > 0 && m.Loader != nil {
-		m.Loader = nil
-	}
-	if len(m.SyncerConfigName) > 0 && m.Syncer != nil {
-		m.Syncer = nil
-	}
-}
-
 // MydumperConfig represents mydumper process unit's specific config
 type MydumperConfig struct {
 	MydumperPath  string `yaml:"mydumper-path" toml:"mydumper-path" json:"mydumper-path"`    // mydumper binary path
@@ -628,9 +615,27 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 	return cfgs, nil
 }
 
+// getGenerateName generates name by rule or gets name from nameMap
+// if it's a new name, increase nameIdx
+// otherwise return current nameIdx
+func getGenerateName(rule interface{}, nameIdx int, namePrefix string, nameMap map[string]string) (string, int) {
+	// use json as key since no DeepEqual for rules now.
+	ruleByte, err := json.Marshal(rule)
+	if err != nil {
+		log.L().Error(fmt.Sprintf("marshal %s rule to json", namePrefix), log.ShortError(err))
+		return fmt.Sprintf("%s-%02d", namePrefix, nameIdx), nameIdx + 1
+	} else if val, ok := nameMap[string(ruleByte)]; ok {
+		return val, nameIdx
+	} else {
+		ruleName := fmt.Sprintf("%s-%02d", namePrefix, nameIdx+1)
+		nameMap[string(ruleByte)] = ruleName
+		return ruleName, nameIdx + 1
+	}
+}
+
 // FromSubTaskConfigs constructs task configs from a list of valid subtask configs.
-// this method is only used to construct config when importing from v1.0.x now.
-func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) {
+func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
+	c := &TaskConfig{}
 	// global configs.
 	stCfg0 := stCfgs[0]
 	c.Name = stCfg0.Name
@@ -656,39 +661,48 @@ func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) {
 	c.Loaders = make(map[string]*LoaderConfig)
 	c.Syncers = make(map[string]*SyncerConfig)
 
+	BAListMap := make(map[string]string, len(stCfgs))
+	routeMap := make(map[string]string, len(stCfgs))
+	filterMap := make(map[string]string, len(stCfgs))
+	dumpMap := make(map[string]string, len(stCfgs))
+	loadMap := make(map[string]string, len(stCfgs))
+	syncMap := make(map[string]string, len(stCfgs))
+	cmMap := make(map[string]string, len(stCfgs))
+	var baListIdx, routeIdx, filterIdx, dumpIdx, loadIdx, syncIdx, cmIdx int
+	var baListName, routeName, filterName, dumpName, loadName, syncName, cmName string
+
 	// NOTE:
 	// - we choose to ref global configs for instances now.
-	// - no DeepEqual for rules now, so not combine REAL same rule into only one.
-	for i, stCfg := range stCfgs {
-		BAListName := fmt.Sprintf("balist-%02d", i+1)
-		c.BAList[BAListName] = stCfg.BAList
+	for _, stCfg := range stCfgs {
+		baListName, baListIdx = getGenerateName(stCfg.BAList, baListIdx, "balist", BAListMap)
+		c.BAList[baListName] = stCfg.BAList
 
 		routeNames := make([]string, 0, len(stCfg.RouteRules))
-		for j, rule := range stCfg.RouteRules {
-			routeName := fmt.Sprintf("route-%02d-%02d", i+1, j+1)
+		for _, rule := range stCfg.RouteRules {
+			routeName, routeIdx = getGenerateName(rule, routeIdx, "route", routeMap)
 			routeNames = append(routeNames, routeName)
 			c.Routes[routeName] = rule
 		}
 
 		filterNames := make([]string, 0, len(stCfg.FilterRules))
-		for j, rule := range stCfg.FilterRules {
-			filterName := fmt.Sprintf("filter-%02d-%02d", i+1, j+1)
+		for _, rule := range stCfg.FilterRules {
+			filterName, filterIdx = getGenerateName(rule, filterIdx, "filter", filterMap)
 			filterNames = append(filterNames, filterName)
 			c.Filters[filterName] = rule
 		}
 
-		dumpName := fmt.Sprintf("dump-%02d", i+1)
+		dumpName, dumpIdx = getGenerateName(stCfg.MydumperConfig, dumpIdx, "dump", dumpMap)
 		c.Mydumpers[dumpName] = &stCfg.MydumperConfig
 
-		loadName := fmt.Sprintf("load-%02d", i+1)
+		loadName, loadIdx = getGenerateName(stCfg.LoaderConfig, loadIdx, "load", loadMap)
 		c.Loaders[loadName] = &stCfg.LoaderConfig
 
-		syncName := fmt.Sprintf("sync-%02d", i+1)
+		syncName, syncIdx = getGenerateName(stCfg.SyncerConfig, syncIdx, "sync", syncMap)
 		c.Syncers[syncName] = &stCfg.SyncerConfig
 
 		cmNames := make([]string, 0, len(stCfg.ColumnMappingRules))
-		for j, rule := range stCfg.ColumnMappingRules {
-			cmName := fmt.Sprintf("cm-%02d-%02d", i+1, j+1)
+		for _, rule := range stCfg.ColumnMappingRules {
+			cmName, cmIdx = getGenerateName(rule, cmIdx, "cm", cmMap)
 			cmNames = append(cmNames, cmName)
 			c.ColumnMappings[cmName] = rule
 		}
@@ -699,12 +713,13 @@ func (c *TaskConfig) FromSubTaskConfigs(stCfgs ...*SubTaskConfig) {
 			FilterRules:        filterNames,
 			ColumnMappingRules: cmNames,
 			RouteRules:         routeNames,
-			BAListName:         BAListName,
+			BAListName:         baListName,
 			MydumperConfigName: dumpName,
 			LoaderConfigName:   loadName,
 			SyncerConfigName:   syncName,
 		})
 	}
+	return c
 }
 
 // checkDuplicateString checks whether the given string array has duplicate string item
