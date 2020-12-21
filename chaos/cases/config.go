@@ -80,9 +80,11 @@ func (c *config) parse(args []string) error {
 
 func (c *config) adjust() {
 	// `go-sqlsmith` may generate ZERO time data, so we simply clear `sql_mode` now.
-	c.Source1.Session = map[string]string{"sql_mode": ""}
-	c.Source2.Session = map[string]string{"sql_mode": ""}
-	c.Target.Session = map[string]string{"sql_mode": ""}
+	// mysql:5.7 `explicit_defaults_for_timestamp`: OFF
+	// tidb `explicit_defaults_for_timestamp`: ON
+	// `ALTER TABLE .* ADD COLUMN (.* TIMESTAMP)` will have different default value
+	c.Source1.Session = map[string]string{"sql_mode": "", "explicit_defaults_for_timestamp": "on"}
+	c.Source2.Session = map[string]string{"sql_mode": "", "explicit_defaults_for_timestamp": "on"}
 
 	c.Source1.Adjust()
 	c.Source2.Adjust()
