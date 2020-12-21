@@ -68,7 +68,7 @@ function run() {
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 3
 
     echo "use sync_diff_inspector to check data second time"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

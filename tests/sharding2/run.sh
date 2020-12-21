@@ -81,7 +81,7 @@ function run() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4 \
+        "\"stage\": \"Running\"" 3 \
         "\"unit\": \"Sync\"" 2
 }
 

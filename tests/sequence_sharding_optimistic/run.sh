@@ -74,7 +74,7 @@ run() {
         "\"result\": true" 3
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status $task_name" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 3
 
     # now, for optimistic shard DDL, different sources will reach a stage often not at the same time,
     # in order to simply the check and resume flow, only enable the failpoint for one DM-worker.
@@ -198,7 +198,7 @@ run() {
         "\"result\": true" 3
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status $task_name" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 3
 
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

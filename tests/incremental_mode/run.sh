@@ -110,7 +110,7 @@ function run() {
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
-        "Running" 4
+        "Running" 3
     # we use failpoint to let worker sleep 8 second when executeSQLs, to increase possibility of
     # meeting an error of context cancel.
     # when below check pass, it means we filter out that error, or that error doesn't happen.
