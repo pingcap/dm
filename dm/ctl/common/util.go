@@ -14,10 +14,13 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
@@ -25,6 +28,7 @@ import (
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"go.etcd.io/etcd/clientv3"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -33,12 +37,82 @@ import (
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
-	masterClient pb.MasterClient
 	globalConfig = &Config{}
+	ctlClient    = &CtlClient{}
 )
+
+// CtlClient used to get master client for dmctl
+type CtlClient struct {
+	mu           sync.RWMutex
+	tls          *toolutils.TLS
+	etcdClient   *clientv3.Client
+	conn         *grpc.ClientConn
+	masterClient pb.MasterClient
+}
+
+func (c *CtlClient) updateMasterClient() error {
+	var (
+		err  error
+		conn *grpc.ClientConn
+	)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn != nil {
+		c.conn.Close()
+	}
+
+	endpoints := c.etcdClient.Endpoints()
+	for _, endpoint := range endpoints {
+		//nolint:staticcheck
+		conn, err = grpc.Dial(utils.UnwrapScheme(endpoint), c.tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
+		if err == nil {
+			c.conn = conn
+			c.masterClient = pb.NewMasterClient(conn)
+			return nil
+		}
+	}
+	return terror.ErrCtlGRPCCreateConn.AnnotateDelegate(err, "can't connect to %s", strings.Join(endpoints, ","))
+}
+
+func (c *CtlClient) sendRequest(ctx context.Context, reqName string, req interface{}, respPointer interface{}) error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(req)}
+	results := reflect.ValueOf(c.masterClient).MethodByName(reqName).Call(params)
+
+	reflect.ValueOf(respPointer).Elem().Set(results[0])
+	errInterface := results[1].Interface()
+	// nil can't pass type conversion, so we handle it separately
+	if errInterface == nil {
+		return nil
+	}
+	return errInterface.(error)
+}
+
+// SendRequest send request to master
+func SendRequest(ctx context.Context, reqName string, req interface{}, respPointer interface{}) error {
+	err := ctlClient.sendRequest(ctx, reqName, req, respPointer)
+	if err == nil || status.Code(err) != codes.Unavailable {
+		return err
+	}
+
+	// update master client
+	err = ctlClient.updateMasterClient()
+	if err != nil {
+		return err
+	}
+
+	// sendRequest again
+	return ctlClient.sendRequest(ctx, reqName, req, respPointer)
+}
 
 // InitUtils inits necessary dmctl utils
 func InitUtils(cfg *Config) error {
@@ -53,23 +127,29 @@ func InitClient(addr string, securityCfg config.Security) error {
 		return terror.ErrCtlInvalidTLSCfg.Delegate(err)
 	}
 
-	//nolint:staticcheck
-	conn, err := grpc.Dial(addr, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
+	endpoints := strings.Split(addr, ",")
+	etcdClient, err := clientv3.New(clientv3.Config{
+		Endpoints:            endpoints,
+		DialTimeout:          dialTimeout,
+		DialKeepAliveTime:    keepaliveTime,
+		DialKeepAliveTimeout: keepaliveTimeout,
+		TLS:                  tls.TLSConfig(),
+	})
 	if err != nil {
-		return terror.ErrCtlGRPCCreateConn.AnnotateDelegate(err, "can't connect to %s", addr)
+		return err
 	}
-	masterClient = pb.NewMasterClient(conn)
-	return nil
+
+	ctlClient = &CtlClient{
+		tls:        tls,
+		etcdClient: etcdClient,
+	}
+
+	return ctlClient.updateMasterClient()
 }
 
 // GlobalConfig returns global dmctl config
 func GlobalConfig() *Config {
 	return globalConfig
-}
-
-// MasterClient returns dm-master client
-func MasterClient() pb.MasterClient {
-	return masterClient
 }
 
 // PrintLines adds a wrap to support `\n` within `chzyer/readline`
@@ -232,5 +312,38 @@ func PrintCmdUsage(cmd *cobra.Command) {
 	err := cmd.Usage()
 	if err != nil {
 		fmt.Println("can't output command's usage:", err)
+	}
+}
+
+// SyncMasterEndpoints sync masters' endpoints
+func SyncMasterEndpoints(ctx context.Context) {
+	lastClientUrls := []string{}
+	clientURLs := []string{}
+	updateF := func() {
+		clientURLs = clientURLs[:0]
+		resp, err := ctlClient.etcdClient.MemberList(ctx)
+		if err != nil {
+			return
+		}
+
+		for _, m := range resp.Members {
+			clientURLs = append(clientURLs, m.GetClientURLs()...)
+		}
+		if utils.NonRepeatStringsEqual(clientURLs, lastClientUrls) {
+			return
+		}
+		ctlClient.etcdClient.SetEndpoints(clientURLs...)
+		lastClientUrls = make([]string, len(clientURLs))
+		copy(lastClientUrls, clientURLs)
+	}
+
+	for {
+		updateF()
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(syncMasterEndpointsTime):
+		}
 	}
 }
