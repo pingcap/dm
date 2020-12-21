@@ -26,26 +26,50 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewGetTaskCfgCmd creates a getTaskCfg command
-func NewGetTaskCfgCmd() *cobra.Command {
+// NewGetCfgCmd creates a getCfg command
+func NewGetCfgCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get-task-config <task-name | task-file> [--file filename]",
-		Short: "Gets the task configuration.",
-		RunE:  getTaskCfgFunc,
+		Use:   "get-config <task | master | worker | source> <name> [--file filename]",
+		Short: "Gets the configuration.",
+		RunE:  getCfgFunc,
 	}
 	cmd.Flags().StringP("file", "f", "", "write config to file")
 	return cmd
 }
 
-// getTaskCfgFunc does get task's config
-func getTaskCfgFunc(cmd *cobra.Command, _ []string) (err error) {
-	if len(cmd.Flags().Args()) != 1 {
+func convertCfgType(t string) pb.CfgType {
+	switch t {
+	case "task":
+		return pb.CfgType_TaskType
+	case "master":
+		return pb.CfgType_MasterType
+	case "worker":
+		return pb.CfgType_WorkerType
+	case "source":
+		return pb.CfgType_SourceType
+	default:
+		return pb.CfgType_InvalidType
+	}
+}
+
+// getCfgFunc gets config
+func getCfgFunc(cmd *cobra.Command, _ []string) (err error) {
+	if len(cmd.Flags().Args()) != 2 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
 		err = errors.New("please check output to see error")
 		return
 	}
-	taskName := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0))
+
+	cfgType := cmd.Flags().Arg(0)
+	tp := convertCfgType(cfgType)
+	if tp == pb.CfgType_InvalidType {
+		common.PrintLines("invalid config type '%s'", cfgType)
+		err = errors.New("please check output to see error")
+		return
+	}
+
+	cfgName := cmd.Flags().Arg(1)
 	filename, err := cmd.Flags().GetString("file")
 	if err != nil {
 		common.PrintLines("can not get filename")
@@ -56,11 +80,12 @@ func getTaskCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
 
-	resp, err := cli.GetTaskCfg(ctx, &pb.GetTaskCfgRequest{
-		Name: taskName,
+	resp, err := cli.GetCfg(ctx, &pb.GetCfgRequest{
+		Type: tp,
+		Name: cfgName,
 	})
 	if err != nil {
-		common.PrintLines("can not get config of task %s", taskName)
+		common.PrintLines("can not get %s config of %s", cfgType, cfgName)
 		return
 	}
 
