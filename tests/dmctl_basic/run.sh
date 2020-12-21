@@ -174,10 +174,9 @@ function run() {
         "\"stage\": \"Running\"" 4
     # update_task_not_paused $TASK_CONF
 
-    echo "get_task_config"
-    get_task_config_wrong_name
-    get_task_config_to_file
-    get_task_config_recover_etcd
+    echo "get_config"
+    get_config_wrong_arg
+    get_config_to_file
 
     # retry to wait for recovered from etcd ready
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -189,6 +188,12 @@ function run() {
     query_status_with_tasks
     pause_task_success $TASK_NAME
     query_status_paused_tasks
+
+    echo "dmctl master_addr"
+    dmctl_multiple_addrs
+    dmctl_unwrap_schema
+    dmctl_wrong_addrs
+    dmctl_no_addr
 
     # echo "update_task_worker_not_found"
     # update_task_worker_not_found $TASK_CONF 127.0.0.1:9999

@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
@@ -39,6 +40,11 @@ const (
 	Master = "master"
 	// Worker specifies member worker type
 	Worker = "worker"
+
+	dialTimeout             = 3 * time.Second
+	keepaliveTimeout        = 3 * time.Second
+	keepaliveTime           = 3 * time.Second
+	syncMasterEndpointsTime = 3 * time.Second
 )
 
 // NewConfig creates a new base config for dmctl.
@@ -139,7 +145,7 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 	}
 
 	if c.MasterAddr == "" {
-		return false, flag.ErrHelp
+		return false, errors.Errorf("--master-addr not provided, use --help to see help messages")
 	}
 
 	return false, errors.Trace(c.adjust())
@@ -180,6 +186,11 @@ func (c *Config) adjust() error {
 
 // validate host:port format address
 func validateAddr(addr string) error {
-	_, _, err := net.SplitHostPort(addr)
-	return errors.Trace(err)
+	endpoints := strings.Split(addr, ",")
+	for _, endpoint := range endpoints {
+		if _, _, err := net.SplitHostPort(utils.UnwrapScheme(endpoint)); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
 }

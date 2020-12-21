@@ -55,6 +55,46 @@ func (mr *MockMasterClientMockRecorder) CheckTask(arg0, arg1 interface{}, arg2 .
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckTask", reflect.TypeOf((*MockMasterClient)(nil).CheckTask), varargs...)
 }
 
+// GetCfg mocks base method
+func (m *MockMasterClient) GetCfg(arg0 context.Context, arg1 *pb.GetCfgRequest, arg2 ...grpc.CallOption) (*pb.GetCfgResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetCfg", varargs...)
+	ret0, _ := ret[0].(*pb.GetCfgResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCfg indicates an expected call of GetCfg
+func (mr *MockMasterClientMockRecorder) GetCfg(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCfg", reflect.TypeOf((*MockMasterClient)(nil).GetCfg), varargs...)
+}
+
+// GetMasterCfg mocks base method
+func (m *MockMasterClient) GetMasterCfg(arg0 context.Context, arg1 *pb.GetMasterCfgRequest, arg2 ...grpc.CallOption) (*pb.GetMasterCfgResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetMasterCfg", varargs...)
+	ret0, _ := ret[0].(*pb.GetMasterCfgResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMasterCfg indicates an expected call of GetMasterCfg
+func (mr *MockMasterClientMockRecorder) GetMasterCfg(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMasterCfg", reflect.TypeOf((*MockMasterClient)(nil).GetMasterCfg), varargs...)
+}
+
 // GetSubTaskCfg mocks base method
 func (m *MockMasterClient) GetSubTaskCfg(arg0 context.Context, arg1 *pb.GetSubTaskCfgRequest, arg2 ...grpc.CallOption) (*pb.GetSubTaskCfgResponse, error) {
 	m.ctrl.T.Helper()
@@ -73,26 +113,6 @@ func (mr *MockMasterClientMockRecorder) GetSubTaskCfg(arg0, arg1 interface{}, ar
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubTaskCfg", reflect.TypeOf((*MockMasterClient)(nil).GetSubTaskCfg), varargs...)
-}
-
-// GetTaskCfg mocks base method
-func (m *MockMasterClient) GetTaskCfg(arg0 context.Context, arg1 *pb.GetTaskCfgRequest, arg2 ...grpc.CallOption) (*pb.GetTaskCfgResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "GetTaskCfg", varargs...)
-	ret0, _ := ret[0].(*pb.GetTaskCfgResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetTaskCfg indicates an expected call of GetTaskCfg
-func (mr *MockMasterClientMockRecorder) GetTaskCfg(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaskCfg", reflect.TypeOf((*MockMasterClient)(nil).GetTaskCfg), varargs...)
 }
 
 // HandleError mocks base method
@@ -433,6 +453,36 @@ func (mr *MockMasterServerMockRecorder) CheckTask(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckTask", reflect.TypeOf((*MockMasterServer)(nil).CheckTask), arg0, arg1)
 }
 
+// GetCfg mocks base method
+func (m *MockMasterServer) GetCfg(arg0 context.Context, arg1 *pb.GetCfgRequest) (*pb.GetCfgResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCfg", arg0, arg1)
+	ret0, _ := ret[0].(*pb.GetCfgResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCfg indicates an expected call of GetCfg
+func (mr *MockMasterServerMockRecorder) GetCfg(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCfg", reflect.TypeOf((*MockMasterServer)(nil).GetCfg), arg0, arg1)
+}
+
+// GetMasterCfg mocks base method
+func (m *MockMasterServer) GetMasterCfg(arg0 context.Context, arg1 *pb.GetMasterCfgRequest) (*pb.GetMasterCfgResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMasterCfg", arg0, arg1)
+	ret0, _ := ret[0].(*pb.GetMasterCfgResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMasterCfg indicates an expected call of GetMasterCfg
+func (mr *MockMasterServerMockRecorder) GetMasterCfg(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMasterCfg", reflect.TypeOf((*MockMasterServer)(nil).GetMasterCfg), arg0, arg1)
+}
+
 // GetSubTaskCfg mocks base method
 func (m *MockMasterServer) GetSubTaskCfg(arg0 context.Context, arg1 *pb.GetSubTaskCfgRequest) (*pb.GetSubTaskCfgResponse, error) {
 	m.ctrl.T.Helper()
@@ -446,21 +496,6 @@ func (m *MockMasterServer) GetSubTaskCfg(arg0 context.Context, arg1 *pb.GetSubTa
 func (mr *MockMasterServerMockRecorder) GetSubTaskCfg(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubTaskCfg", reflect.TypeOf((*MockMasterServer)(nil).GetSubTaskCfg), arg0, arg1)
-}
-
-// GetTaskCfg mocks base method
-func (m *MockMasterServer) GetTaskCfg(arg0 context.Context, arg1 *pb.GetTaskCfgRequest) (*pb.GetTaskCfgResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTaskCfg", arg0, arg1)
-	ret0, _ := ret[0].(*pb.GetTaskCfgResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetTaskCfg indicates an expected call of GetTaskCfg
-func (mr *MockMasterServerMockRecorder) GetTaskCfg(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaskCfg", reflect.TypeOf((*MockMasterServer)(nil).GetTaskCfg), arg0, arg1)
 }
 
 // HandleError mocks base method

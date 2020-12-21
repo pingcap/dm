@@ -65,13 +65,20 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 
-	cli := common.MasterClient()
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
-	resp, err := cli.QueryStatus(ctx, &pb.QueryStatusListRequest{
-		Name:    taskName,
-		Sources: sources,
-	})
+
+	resp := &pb.QueryStatusListResponse{}
+	err = common.SendRequest(
+		ctx,
+		"QueryStatus",
+		&pb.QueryStatusListRequest{
+			Name:    taskName,
+			Sources: sources,
+		},
+		&resp,
+	)
+
 	if err != nil {
 		common.PrintLines("can not query %s task's status(in sources %v)", taskName, sources)
 		return

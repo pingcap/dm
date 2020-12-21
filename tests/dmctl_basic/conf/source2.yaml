@@ -1,5 +1,5 @@
 source-id: mysql-replica-02
-flavor: ''
+server-id: 654321
 enable-gtid: false
 relay-binlog-name: ''
 relay-binlog-gtid: ''

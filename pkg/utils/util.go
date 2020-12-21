@@ -63,6 +63,8 @@ var (
 		"^ALTER\\s+PROCEDURE",
 
 		// view
+		"^CREATE\\s*(OR REPLACE)?\\s+(ALGORITHM\\s?=.+?)?(DEFINER\\s?=.+?)?\\s+(SQL SECURITY DEFINER)?VIEW",
+		"^DROP\\s+VIEW",
 		"^ALTER\\s+(ALGORITHM\\s?=.+?)?(DEFINER\\s?=.+?)?(SQL SECURITY DEFINER)?VIEW",
 
 		// function
@@ -77,6 +79,11 @@ var (
 		"^CREATE\\s+TABLESPACE",
 		"^ALTER\\s+TABLESPACE",
 		"^DROP\\s+TABLESPACE",
+
+		// event
+		"^CREATE\\s+(DEFINER\\s?=.+?)?EVENT",
+		"^ALTER\\s+(DEFINER\\s?=.+?)?EVENT",
+		"^DROP\\s+EVENT",
 
 		// account management
 		"^GRANT",
