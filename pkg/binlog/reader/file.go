@@ -45,6 +45,7 @@ type FileReader struct {
 	parser *replication.BinlogParser
 	ch     chan *replication.BinlogEvent
 	ech    chan error
+	endCh  chan struct{}
 
 	logger log.Logger
 
@@ -89,6 +90,7 @@ func NewFileReader(cfg *FileReaderConfig) Reader {
 		parser: parser,
 		ch:     make(chan *replication.BinlogEvent, cfg.ChBufferSize),
 		ech:    make(chan error, cfg.EchBufferSize),
+		endCh:  make(chan struct{}),
 		logger: log.With(zap.String("component", "binlog file reader")),
 	}
 }
@@ -115,6 +117,9 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 			case r.ech <- err:
 			case <-r.ctx.Done():
 			}
+		} else {
+			r.logger.Info("parse end of binlog file", zap.Stringer("pos", pos))
+			close(r.endCh)
 		}
 	}()
 
@@ -159,6 +164,8 @@ func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, er
 		return ev, nil
 	case err := <-r.ech:
 		return nil, err
+	case <-r.endCh:
+		return nil, terror.ErrReaderReachEndOfFile.Generate()
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
