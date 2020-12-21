@@ -560,6 +560,8 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 			if err != nil {
 				return err
 			}
+		} else {
+			cfg.UUIDSuffix = binlog.MinUUIDSuffix
 		}
 	}
 

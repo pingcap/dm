@@ -773,10 +773,10 @@ func (t *testPositionSuite) TestExtractSuffix(c *C) {
 	}{
 		{
 			"",
-			minUUIDSuffix,
+			MinUUIDSuffix,
 		}, {
 			"mysql-bin.00005",
-			minUUIDSuffix,
+			MinUUIDSuffix,
 		},
 		{
 			"mysql-bin|000001.000001",
