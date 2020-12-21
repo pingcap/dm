@@ -45,12 +45,12 @@ function diff_get_config() {
         "\"result\": true" 1
     diff $dm_master_conf $cur/conf/get_master1.toml || exit 1
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "get-config worker worker1 --file $dm_worker1_conf" \
         "\"result\": true" 1
     diff $dm_worker1_conf $cur/conf/get_worker1.toml || exit 1
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "get-config worker worker2 --file $dm_worker2_conf" \
         "\"result\": true" 1
     diff $dm_worker2_conf $cur/conf/get_worker2.toml || exit 1
