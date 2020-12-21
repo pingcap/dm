@@ -773,10 +773,8 @@ func (r *Relay) Status(ctx context.Context) interface{} {
 		rs.RelayBinlogGtid = relayGTIDSet.String()
 	}
 	if r.cfg.EnableGTID {
-		if masterGTID != nil && relayGTIDSet != nil {
-			if relayGTIDSet.Equal(masterGTID) {
-				rs.RelayCatchUpMaster = true
-			}
+		if masterGTID != nil && relayGTIDSet != nil && relayGTIDSet.Equal(masterGTID) {
+			rs.RelayCatchUpMaster = true
 		}
 	} else {
 		rs.RelayCatchUpMaster = masterPos.Compare(relayPos) == 0
