@@ -74,7 +74,7 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 	var (
 		sourceDBs   = make([]*conn.BaseDB, 0, len(taskCfg.MySQLInstances))
 		sourceConns = make([]*dbConn, 0, len(taskCfg.MySQLInstances))
-		results     = make(results, 0, len(taskCfg.MySQLInstances))
+		res         = make(results, 0, len(taskCfg.MySQLInstances))
 	)
 	for i := range taskCfg.MySQLInstances { // only use necessary part of sources.
 		cfg := sourcesCfg[i]
@@ -88,7 +88,7 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 		}
 		sourceDBs = append(sourceDBs, db)
 		sourceConns = append(sourceConns, conn)
-		results = append(results, singleResult{})
+		res = append(res, singleResult{})
 	}
 
 	targetDB, err := conn.DefaultDBProvider.Apply(targetCfg)
@@ -112,7 +112,7 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 		schema:      schema,
 		tables:      make([]string, 0),
 		taskCfg:     taskCfg,
-		results:     results,
+		results:     res,
 	}
 	t.ss.SetDB(schema)
 	return t, nil
@@ -278,7 +278,7 @@ func (t *task) incrLoop() error {
 			}
 
 			// diff data
-			err = t.diffIncrData(ctx2)
+			err = t.diffIncrData(t.ctx)
 			if err != nil {
 				cancel2()
 				return err
