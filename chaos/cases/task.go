@@ -37,7 +37,7 @@ import (
 const (
 	tableCount      = 10               // tables count in schema.
 	fullInsertCount = 100              // `INSERT INTO` count (not rows count) for each table in full stage.
-	diffCount       = 10               // diff data check count
+	diffCount       = 20               // diff data check count
 	diffInterval    = 10 * time.Second // diff data check interval
 	incrRoundTime   = 20 * time.Second // time to generate incremental data in one round
 )
