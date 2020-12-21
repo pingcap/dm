@@ -123,13 +123,13 @@ ErrFailUpdateV1DBSchema,[code=11116:class=functional:scope=internal:level=medium
 ErrBinlogStatusVarsParse,[code=11117:class=functional:scope=internal:level=medium], "Message: fail to parse binglog status_vars: %v, offset: %d"
 ErrVerifyHandleErrorArgs,[code=11118:class=functional:scope=internal:level=low], "Workaround: Please make sure the args are correct."
 ErrRewriteSQL,[code=11119:class=functional:scope=internal:level=high], "Message: failed to rewrite SQL for target DB, stmt: %+v, targetTableNames: %+v"
-<<<<<<< HEAD
-=======
 ErrNoUUIDDirMatchGTID,[code=11120:class=functional:scope=internal:level=high], "Message: no relay subdir match gtid %s"
 ErrNoRelayPosMatchGTID,[code=11121:class=functional:scope=internal:level=high], "Message: no relay pos match gtid %s"
 ErrReaderReachEndOfFile,[code=11122:class=functional:scope=internal:level=low]
 ErrMetadataNoBinlogLoc,[code=11123:class=functional:scope=upstream:level=low], "Message: didn't found binlog location in dumped metadata file %s, Workaround: Please check log of dump unit, there maybe errors when read upstream binlog status"
->>>>>>> 7e79861c... load: load should not need metadata (#1321)
+ErrNoUUIDDirMatchGTID,[code=11120:class=functional:scope=internal:level=high], "Message: no relay subdir match gtid %s"
+ErrNoRelayPosMatchGTID,[code=11121:class=functional:scope=internal:level=high], "Message: no relay pos match gtid %s"
+ErrReaderReachEndOfFile,[code=11122:class=functional:scope=internal:level=low]
 ErrConfigCheckItemNotSupport,[code=20001:class=config:scope=internal:level=medium], "Message: checking item %s is not supported\n%s, Workaround: Please check `ignore-checking-items` config in task configuration file, which can be set including `all`/`dump_privilege`/`replication_privilege`/`version`/`binlog_enable`/`binlog_format`/`binlog_row_image`/`table_schema`/`schema_of_shard_tables`/`auto_increment_ID`."
 ErrConfigTomlTransform,[code=20002:class=config:scope=internal:level=medium], "Message: %s, Workaround: Please check the configuration file has correct TOML format."
 ErrConfigYamlTransform,[code=20003:class=config:scope=internal:level=medium], "Message: %s, Workaround: Please check the configuration file has correct YAML format."
@@ -435,12 +435,13 @@ ErrWorkerCacheDDLInfoExists,[code=40063:class=dm-worker:scope=internal:level=hig
 ErrWorkerExecSkipDDLConflict,[code=40064:class=dm-worker:scope=internal:level=high], "Message: execDDL and skipDDL can not specify both at the same time"
 ErrWorkerExecDDLSyncerOnly,[code=40065:class=dm-worker:scope=internal:level=high], "Message: only syncer support ExecuteDDL, but current unit is %s"
 ErrWorkerExecDDLTimeout,[code=40066:class=dm-worker:scope=internal:level=high], "Message: ExecuteDDL timeout (exceeding %s), Workaround: Please try use `query-status` to query whether the DDL is still blocking."
-ErrWorkerWaitRelayCatchupTimeout,[code=40067:class=dm-worker:scope=internal:level=high], "Message: waiting for relay binlog pos to catch up with loader end binlog pos is timeout (exceeding %s), loader end binlog pos: %s, relay binlog pos: %s"
+ErrWorkerWaitRelayCatchupTimeout,[code=40067:class=dm-worker:scope=internal:level=high], "Message: waiting for relay to catch up with loader is timeout (exceeding %s), loader: %s, relay: %s"
 ErrWorkerRelayIsPurging,[code=40068:class=dm-worker:scope=internal:level=high], "Message: relay log purger is purging, cannot start sub task %s, Workaround: Please try again later."
 ErrWorkerHostPortNotValid,[code=40069:class=dm-worker:scope=internal:level=high], "Message: host:port '%s' not valid, Workaround: Please check configs in worker configuration file."
 ErrWorkerNoStart,[code=40070:class=dm-worker:scope=internal:level=high], "Message: no mysql source is being handled in the worker"
 ErrWorkerAlreadyStart,[code=40071:class=dm-worker:scope=internal:level=high], "Message: mysql source handler worker already started"
 ErrWorkerSourceNotMatch,[code=40072:class=dm-worker:scope=internal:level=high], "Message: source of request does not match with source in worker"
+ErrWorkerWaitRelayCatchupGTID,[code=40078:class=dm-worker:scope=internal:level=high], "Message: cannot compare gtid between loader and relay, loader gtid: %s, relay gtid: %s"
 ErrWorkerFailToGetSubtaskConfigFromEtcd,[code=40073:class=dm-worker:scope=internal:level=medium], "Message: there is no relative subtask config for task %s in etcd"
 ErrWorkerFailToGetSourceConfigFromEtcd,[code=40074:class=dm-worker:scope=internal:level=medium], "Message: there is no relative source config for source %s in etcd"
 ErrWorkerDDLLockOpNotFound,[code=40075:class=dm-worker:scope=internal:level=high], "Message: missing shard DDL lock operation for shard DDL info (%s)"

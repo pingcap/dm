@@ -174,8 +174,6 @@ const (
 
 	// pkg/parser
 	codeRewriteSQL
-<<<<<<< HEAD
-=======
 
 	// pkg/streamer
 	codeNoUUIDDirMatchGTID
@@ -184,7 +182,6 @@ const (
 
 	// pkg/dumpling
 	codeMetadataNoBinlogLoc
->>>>>>> 7e79861c... load: load should not need metadata (#1321)
 )
 
 // Config related error code list
@@ -545,6 +542,7 @@ const (
 	codeWorkerDDLLockOpNotFound
 	codeWorkerTLSConfigNotValid
 	codeWorkerFailConnectMaster
+	codeWorkerWaitRelayCatchupGTID
 )
 
 // DM-tracer error code
@@ -772,8 +770,6 @@ var (
 	// pkg/parser
 	ErrRewriteSQL = New(codeRewriteSQL, ClassFunctional, ScopeInternal, LevelHigh, "failed to rewrite SQL for target DB, stmt: %+v, targetTableNames: %+v", "")
 
-<<<<<<< HEAD
-=======
 	// pkg/streamer
 	ErrNoUUIDDirMatchGTID   = New(codeNoUUIDDirMatchGTID, ClassFunctional, ScopeInternal, LevelHigh, "no relay subdir match gtid %s", "")
 	ErrNoRelayPosMatchGTID  = New(codeNoRelayPosMatchGTID, ClassFunctional, ScopeInternal, LevelHigh, "no relay pos match gtid %s", "")
@@ -782,7 +778,6 @@ var (
 	// pkg/dumplling
 	ErrMetadataNoBinlogLoc = New(codeMetadataNoBinlogLoc, ClassFunctional, ScopeUpstream, LevelLow, "didn't found binlog location in dumped metadata file %s", "Please check log of dump unit, there maybe errors when read upstream binlog status")
 
->>>>>>> 7e79861c... load: load should not need metadata (#1321)
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s", "Please check `ignore-checking-items` config in task configuration file, which can be set including `all`/`dump_privilege`/`replication_privilege`/`version`/`binlog_enable`/`binlog_format`/`binlog_row_image`/`table_schema`/`schema_of_shard_tables`/`auto_increment_ID`.")
 	ErrConfigTomlTransform          = New(codeConfigTomlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s", "Please check the configuration file has correct TOML format.")
@@ -1114,12 +1109,13 @@ var (
 	ErrWorkerExecSkipDDLConflict     = New(codeWorkerExecSkipDDLConflict, ClassDMWorker, ScopeInternal, LevelHigh, "execDDL and skipDDL can not specify both at the same time", "")
 	ErrWorkerExecDDLSyncerOnly       = New(codeWorkerExecDDLSyncerOnly, ClassDMWorker, ScopeInternal, LevelHigh, "only syncer support ExecuteDDL, but current unit is %s", "")
 	ErrWorkerExecDDLTimeout          = New(codeWorkerExecDDLTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "ExecuteDDL timeout (exceeding %s)", "Please try use `query-status` to query whether the DDL is still blocking.")
-	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "waiting for relay binlog pos to catch up with loader end binlog pos is timeout (exceeding %s), loader end binlog pos: %s, relay binlog pos: %s", "")
+	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "waiting for relay to catch up with loader is timeout (exceeding %s), loader: %s, relay: %s", "")
 	ErrWorkerRelayIsPurging          = New(codeWorkerRelayIsPurging, ClassDMWorker, ScopeInternal, LevelHigh, "relay log purger is purging, cannot start sub task %s", "Please try again later.")
 	ErrWorkerHostPortNotValid        = New(codeWorkerHostPortNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "host:port '%s' not valid", "Please check configs in worker configuration file.")
 	ErrWorkerNoStart                 = New(codeWorkerNoStart, ClassDMWorker, ScopeInternal, LevelHigh, "no mysql source is being handled in the worker", "")
 	ErrWorkerAlreadyStart            = New(codeWorkerAlreadyStarted, ClassDMWorker, ScopeInternal, LevelHigh, "mysql source handler worker already started", "")
 	ErrWorkerSourceNotMatch          = New(codeWorkerSourceNotMatch, ClassDMWorker, ScopeInternal, LevelHigh, "source of request does not match with source in worker", "")
+	ErrWorkerWaitRelayCatchupGTID    = New(codeWorkerWaitRelayCatchupGTID, ClassDMWorker, ScopeInternal, LevelHigh, "cannot compare gtid between loader and relay, loader gtid: %s, relay gtid: %s", "")
 
 	ErrWorkerFailToGetSubtaskConfigFromEtcd = New(codeWorkerFailToGetSubtaskConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative subtask config for task %s in etcd", "")
 	ErrWorkerFailToGetSourceConfigFromEtcd  = New(codeWorkerFailToGetSourceConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative source config for source %s in etcd", "")

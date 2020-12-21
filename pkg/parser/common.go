@@ -271,6 +271,27 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 
 			v.Specs = []*ast.AlterTableSpec{spec}
 
+			// handle `alter table t1 add column (c1 int, c2 int)`
+			if spec.Tp == ast.AlterTableAddColumns && len(spec.NewColumns) > 1 {
+				columns := spec.NewColumns
+				spec.Position = &ast.ColumnPosition{
+					Tp: ast.ColumnPositionNone, // otherwise restore will become "alter table t1 add column (c1 int)"
+				}
+				for _, c := range columns {
+					spec.NewColumns = []*ast.ColumnDef{c}
+					bf.Reset()
+					err = stmt.Restore(ctx)
+					if err != nil {
+						v.Specs = specs
+						v.Table = table
+						return nil, terror.ErrRestoreASTNode.Delegate(err)
+					}
+					sqls = append(sqls, bf.String())
+				}
+				// we have restore SQL for every columns, skip below general restoring and continue on next spec
+				continue
+			}
+
 			bf.Reset()
 			err = stmt.Restore(ctx)
 			if err != nil {
