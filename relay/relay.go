@@ -15,6 +15,7 @@ package relay
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"os"
@@ -36,6 +37,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/common"
+	"github.com/pingcap/dm/pkg/conn"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
@@ -46,6 +48,7 @@ import (
 	"github.com/pingcap/dm/relay/retry"
 	"github.com/pingcap/dm/relay/transformer"
 	"github.com/pingcap/dm/relay/writer"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 var (
@@ -90,6 +93,8 @@ type Process interface {
 	Close()
 	// IsClosed returns whether relay log process unit was closed
 	IsClosed() bool
+	// SaveMeta save relay meta
+	SaveMeta(pos mysql.Position, gset gtid.Set) error
 }
 
 // Relay relays mysql binlog to local file.
@@ -108,38 +113,16 @@ type Relay struct {
 		sync.RWMutex
 		info *pkgstreamer.RelayLogInfo
 	}
+
+	relayMetaHub *pkgstreamer.RelayMetaHub
 }
 
 // NewRealRelay creates an instance of Relay.
 func NewRealRelay(cfg *Config) Process {
-	syncerCfg := replication.BinlogSyncerConfig{
-		ServerID: uint32(cfg.ServerID),
-		Flavor:   cfg.Flavor,
-		Host:     cfg.From.Host,
-		Port:     uint16(cfg.From.Port),
-		User:     cfg.From.User,
-		Password: cfg.From.Password,
-		Charset:  cfg.Charset,
-	}
-	common.SetDefaultReplicationCfg(&syncerCfg, common.MaxBinlogSyncerReconnect)
-
-	if !cfg.EnableGTID {
-		// for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent
-		// if not need to support GTID mode, we can enable rawMode
-		syncerCfg.RawModeEnabled = true
-	}
-
-	if cfg.Flavor == mysql.MariaDBFlavor {
-		// ref: https://mariadb.com/kb/en/library/annotate_rows_log_event/#slave-option-replicate-annotate-row-events
-		// ref: https://github.com/MariaDB/server/blob/bf71d263621c90cbddc7bde9bf071dae503f333f/sql/sql_repl.cc#L1809
-		syncerCfg.DumpCommandFlag |= dumpFlagSendAnnotateRowsEvent
-	}
-
 	return &Relay{
-		cfg:       cfg,
-		syncerCfg: syncerCfg,
-		meta:      NewLocalMeta(cfg.Flavor, cfg.RelayDir),
-		logger:    log.With(zap.String("component", "relay log")),
+		cfg:    cfg,
+		meta:   NewLocalMeta(cfg.Flavor, cfg.RelayDir),
+		logger: log.With(zap.String("component", "relay log")),
 	}
 }
 
@@ -152,13 +135,17 @@ func (r *Relay) Init(ctx context.Context) (err error) {
 		}
 	}()
 
-	cfg := r.cfg.From
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, showStatusConnectionTimeout)
-	db, err := sql.Open("mysql", dbDSN)
+	err = r.setSyncConfig()
 	if err != nil {
-		return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
+		return err
 	}
-	r.db = db
+
+	db, err := conn.DefaultDBProvider.Apply(r.cfg.From)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeUpstream)
+	}
+
+	r.db = db.DB
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DB", Fn: r.closeDB})
 
 	if err2 := os.MkdirAll(r.cfg.RelayDir, 0755); err2 != nil {
@@ -169,6 +156,9 @@ func (r *Relay) Init(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
+
+	r.relayMetaHub = pkgstreamer.GetRelayMetaHub()
+	r.relayMetaHub.ClearMeta()
 
 	return reportRelayLogSpaceInBackground(r.cfg.RelayDir)
 }
@@ -210,12 +200,6 @@ func (r *Relay) process(ctx context.Context) error {
 	}
 
 	if isNew {
-		// purge old relay log
-		err = r.purgeRelayDir()
-		if err != nil {
-			return err
-		}
-
 		// re-setup meta for new server
 		err = r.reSetupMeta(ctx)
 		if err != nil {
@@ -376,7 +360,7 @@ func (r *Relay) tryRecoverLatestFile(ctx context.Context, parser2 *parser.Parser
 			} else if err = latestGTID.Truncate(result.LatestGTIDs); err != nil {
 				return err
 			}
-			err = r.meta.Save(result.LatestPos, latestGTID)
+			err = r.SaveMeta(result.LatestPos, latestGTID)
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v after recovered", result.LatestPos, result.LatestGTIDs)
 			}
@@ -502,7 +486,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		}
 
 		if needSavePos {
-			err = r.meta.Save(lastPos, lastGTID)
+			err = r.SaveMeta(lastPos, lastGTID)
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v into meta", lastPos, lastGTID)
 			}
@@ -586,7 +570,7 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 		select {
 		case <-flushTicker.C:
 			if r.meta.Dirty() {
-				err := r.meta.Flush()
+				err := r.FlushMeta()
 				if err != nil {
 					r.logger.Error("flush meta", zap.Error(err))
 				} else {
@@ -671,9 +655,23 @@ func (r *Relay) IsClosed() bool {
 	return r.closed.Get()
 }
 
+// SaveMeta save relay meta and update meta in RelayLogInfo
+func (r *Relay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
+	if err := r.meta.Save(pos, gset); err != nil {
+		return err
+	}
+	r.relayMetaHub.SetMeta(r.meta.UUID(), pos, gset)
+	return nil
+}
+
+// FlushMeta flush relay meta
+func (r *Relay) FlushMeta() error {
+	return r.meta.Flush()
+}
+
 // stopSync stops syncing, now it used by Close and Pause
 func (r *Relay) stopSync() {
-	if err := r.meta.Flush(); err != nil {
+	if err := r.FlushMeta(); err != nil {
 		r.logger.Error("flush checkpoint", zap.Error(err))
 	}
 }
@@ -792,24 +790,9 @@ func (r *Relay) Reload(newCfg *Config) error {
 	}
 	r.db = db
 
-	syncerCfg := replication.BinlogSyncerConfig{
-		ServerID: uint32(r.cfg.ServerID),
-		Flavor:   r.cfg.Flavor,
-		Host:     newCfg.From.Host,
-		Port:     uint16(newCfg.From.Port),
-		User:     newCfg.From.User,
-		Password: newCfg.From.Password,
-		Charset:  newCfg.Charset,
+	if err := r.setSyncConfig(); err != nil {
+		return err
 	}
-	common.SetDefaultReplicationCfg(&syncerCfg, common.MaxBinlogSyncerReconnect)
-
-	if !newCfg.EnableGTID {
-		// for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent
-		// if not need to support GTID mode, we can enable rawMode
-		syncerCfg.RawModeEnabled = true
-	}
-
-	r.syncerCfg = syncerCfg
 
 	r.logger.Info("relay unit is updated")
 
@@ -836,4 +819,41 @@ func (r *Relay) ActiveRelayLog() *pkgstreamer.RelayLogInfo {
 	r.activeRelayLog.RLock()
 	defer r.activeRelayLog.RUnlock()
 	return r.activeRelayLog.info
+}
+
+func (r *Relay) setSyncConfig() error {
+	var tlsConfig *tls.Config
+	var err error
+	if r.cfg.From.Security != nil {
+		tlsConfig, err = toolutils.ToTLSConfig(r.cfg.From.Security.SSLCA, r.cfg.From.Security.SSLCert, r.cfg.From.Security.SSLKey)
+		if err != nil {
+			return terror.ErrConnInvalidTLSConfig.Delegate(err)
+		}
+		if tlsConfig != nil {
+			tlsConfig.InsecureSkipVerify = true
+		}
+	}
+
+	syncerCfg := replication.BinlogSyncerConfig{
+		ServerID:  uint32(r.cfg.ServerID),
+		Flavor:    r.cfg.Flavor,
+		Host:      r.cfg.From.Host,
+		Port:      uint16(r.cfg.From.Port),
+		User:      r.cfg.From.User,
+		Password:  r.cfg.From.Password,
+		Charset:   r.cfg.Charset,
+		TLSConfig: tlsConfig,
+	}
+	common.SetDefaultReplicationCfg(&syncerCfg, common.MaxBinlogSyncerReconnect)
+
+	if !r.cfg.EnableGTID {
+		syncerCfg.RawModeEnabled = true
+	}
+
+	if r.cfg.Flavor == mysql.MariaDBFlavor {
+		syncerCfg.DumpCommandFlag |= dumpFlagSendAnnotateRowsEvent
+	}
+
+	r.syncerCfg = syncerCfg
+	return nil
 }

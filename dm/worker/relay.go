@@ -29,7 +29,6 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/relay"
 	"github.com/pingcap/dm/relay/purger"
-	rr "github.com/pingcap/dm/relay/retry"
 )
 
 // RelayHolder for relay unit
@@ -77,36 +76,13 @@ type realRelayHolder struct {
 }
 
 // NewRealRelayHolder creates a new RelayHolder
-func NewRealRelayHolder(cfg *config.SourceConfig) RelayHolder {
-	clone := cfg.DecryptPassword()
-	relayCfg := &relay.Config{
-		EnableGTID:  clone.EnableGTID,
-		AutoFixGTID: clone.AutoFixGTID,
-		Flavor:      clone.Flavor,
-		RelayDir:    clone.RelayDir,
-		ServerID:    clone.ServerID,
-		Charset:     clone.Charset,
-		From: relay.DBConfig{
-			Host:     clone.From.Host,
-			Port:     clone.From.Port,
-			User:     clone.From.User,
-			Password: clone.From.Password,
-		},
-		BinLogName: clone.RelayBinLogName,
-		BinlogGTID: clone.RelayBinlogGTID,
-		ReaderRetry: rr.ReaderRetryConfig{ // we use config from TaskChecker now
-			BackoffRollback: cfg.Checker.BackoffRollback.Duration,
-			BackoffMax:      cfg.Checker.BackoffMax.Duration,
-			BackoffMin:      cfg.Checker.BackoffMin.Duration,
-			BackoffJitter:   cfg.Checker.BackoffJitter,
-			BackoffFactor:   cfg.Checker.BackoffFactor,
-		},
-	}
+func NewRealRelayHolder(sourceCfg *config.SourceConfig) RelayHolder {
+	cfg := relay.FromSourceCfg(sourceCfg)
 
 	h := &realRelayHolder{
-		cfg:   cfg,
+		cfg:   sourceCfg,
 		stage: pb.Stage_New,
-		relay: relay.NewRelay(relayCfg),
+		relay: relay.NewRelay(cfg),
 		l:     log.With(zap.String("component", "relay holder")),
 	}
 	h.closed.Set(closedTrue)
@@ -309,24 +285,8 @@ func (h *realRelayHolder) Result() *pb.ProcessResult {
 }
 
 // Update update relay config online
-func (h *realRelayHolder) Update(ctx context.Context, cfg *config.SourceConfig) error {
-	relayCfg := &relay.Config{
-		AutoFixGTID: cfg.AutoFixGTID,
-		Charset:     cfg.Charset,
-		From: relay.DBConfig{
-			Host:     cfg.From.Host,
-			Port:     cfg.From.Port,
-			User:     cfg.From.User,
-			Password: cfg.From.Password,
-		},
-		ReaderRetry: rr.ReaderRetryConfig{ // we use config from TaskChecker now
-			BackoffRollback: cfg.Checker.BackoffRollback.Duration,
-			BackoffMax:      cfg.Checker.BackoffMax.Duration,
-			BackoffMin:      cfg.Checker.BackoffMin.Duration,
-			BackoffJitter:   cfg.Checker.BackoffJitter,
-			BackoffFactor:   cfg.Checker.BackoffFactor,
-		},
-	}
+func (h *realRelayHolder) Update(ctx context.Context, sourceCfg *config.SourceConfig) error {
+	relayCfg := relay.FromSourceCfg(sourceCfg)
 
 	stage := h.Stage()
 
