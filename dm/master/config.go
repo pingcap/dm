@@ -14,6 +14,7 @@
 package master
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -55,9 +56,8 @@ var (
 // NewConfig creates a config for dm-master
 func NewConfig() *Config {
 	cfg := &Config{}
-	cfg.Debug = false
-	cfg.FlagSet = flag.NewFlagSet("dm-master", flag.ContinueOnError)
-	fs := cfg.FlagSet
+	cfg.flagSet = flag.NewFlagSet("dm-master", flag.ContinueOnError)
+	fs := cfg.flagSet
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 	fs.BoolVar(&cfg.printSampleConfig, "print-sample-config", false, "print sample config file of dm-worker")
@@ -88,7 +88,7 @@ func NewConfig() *Config {
 
 // Config is the configuration for dm-master
 type Config struct {
-	*flag.FlagSet `json:"-"`
+	flagSet *flag.FlagSet
 
 	LogLevel  string `toml:"log-level" json:"log-level"`
 	LogFile   string `toml:"log-file" json:"log-file"`
@@ -96,14 +96,14 @@ type Config struct {
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
 	RPCTimeoutStr string        `toml:"rpc-timeout" json:"rpc-timeout"`
-	RPCTimeout    time.Duration `json:"-"`
+	RPCTimeout    time.Duration `toml:"-" json:"-"`
 	RPCRateLimit  float64       `toml:"rpc-rate-limit" json:"rpc-rate-limit"`
 	RPCRateBurst  int           `toml:"rpc-rate-burst" json:"rpc-rate-burst"`
 
 	MasterAddr    string `toml:"master-addr" json:"master-addr"`
 	AdvertiseAddr string `toml:"advertise-addr" json:"advertise-addr"`
 
-	ConfigFile string `json:"config-file"`
+	ConfigFile string `toml:"config-file" json:"config-file"`
 
 	// etcd relative config items
 	// NOTE: we use `MasterAddr` to generate `ClientUrls` and `AdvertiseClientUrls`
@@ -114,8 +114,7 @@ type Config struct {
 	AdvertisePeerUrls   string `toml:"advertise-peer-urls" json:"advertise-peer-urls"`
 	InitialCluster      string `toml:"initial-cluster" json:"initial-cluster"`
 	InitialClusterState string `toml:"initial-cluster-state" json:"initial-cluster-state"`
-	Join                string `toml:"join" json:"join"`   // cluster's client address (endpoints), not peer address
-	Debug               bool   `toml:"debug" json:"debug"` // only use for test
+	Join                string `toml:"join" json:"join"` // cluster's client address (endpoints), not peer address
 
 	// directory path used to store source config files when upgrading from v1.0.x.
 	// if this path set, DM-master leader will try to upgrade from v1.0.x to the current version.
@@ -137,10 +136,22 @@ func (c *Config) String() string {
 	return string(cfg)
 }
 
+// Toml returns TOML format representation of config
+func (c *Config) Toml() (string, error) {
+	var b bytes.Buffer
+
+	err := toml.NewEncoder(&b).Encode(c)
+	if err != nil {
+		log.L().Error("fail to marshal config to toml", log.ShortError(err))
+	}
+
+	return b.String(), nil
+}
+
 // Parse parses flag definitions from the argument list.
 func (c *Config) Parse(arguments []string) error {
 	// Parse first to get config file.
-	err := c.FlagSet.Parse(arguments)
+	err := c.flagSet.Parse(arguments)
 	if err != nil {
 		return terror.ErrMasterConfigParseFlagSet.Delegate(err)
 	}
@@ -173,13 +184,13 @@ func (c *Config) Parse(arguments []string) error {
 	}
 
 	// Parse again to replace with command line options.
-	err = c.FlagSet.Parse(arguments)
+	err = c.flagSet.Parse(arguments)
 	if err != nil {
 		return terror.ErrMasterConfigParseFlagSet.Delegate(err)
 	}
 
-	if len(c.FlagSet.Args()) != 0 {
-		return terror.ErrMasterConfigInvalidFlag.Generate(c.FlagSet.Arg(0))
+	if len(c.flagSet.Args()) != 0 {
+		return terror.ErrMasterConfigInvalidFlag.Generate(c.flagSet.Arg(0))
 	}
 
 	return c.adjust()

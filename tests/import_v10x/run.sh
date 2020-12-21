@@ -75,9 +75,10 @@ function run() {
 
     # check task config, just a simple match
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "get-task-config test --file $WORK_DIR/task.yaml" \
+        "get-config task test --file $WORK_DIR/task.yaml" \
         "\"result\": true" 1
 
+    sed -i "s/password: '\*\*\*\*\*\*'/password: \"\"/g" $WORK_DIR/task.yaml
     diff $cur/conf/task.yaml $WORK_DIR/task.yaml || exit 1
     
     run_sql "show create table \`dm_meta\`.\`test_syncer_checkpoint\`" $TIDB_PORT $TIDB_PASSWORD

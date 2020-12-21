@@ -17,6 +17,7 @@ import (
 	"io/ioutil"
 	"path"
 	"sort"
+	"strings"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/pkg/terror"
@@ -311,6 +312,16 @@ func (t *testConfig) TestTaskBlockAllowList(c *C) {
 	c.Assert(cfg.BAList["source-1"], Equals, filterRules2)
 }
 
+func WordCount(s string) map[string]int {
+	words := strings.Fields(s)
+	wordCount := make(map[string]int)
+	for i := range words {
+		wordCount[words[i]]++
+	}
+
+	return wordCount
+}
+
 func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	var (
 		shardMode           = ShardOptimistic
@@ -352,6 +363,17 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 			TargetSchema:  "db",
 			TargetTable:   "tbl",
 		}
+		routeRule3 = router.TableRule{
+			SchemaPattern: "database*",
+			TablePattern:  "table*",
+		}
+		routeRule4 = router.TableRule{
+			SchemaPattern: "schema*",
+			TablePattern:  "tbs*",
+			TargetSchema:  "schema",
+			TargetTable:   "tbs",
+		}
+
 		filterRule1 = bf.BinlogEventRule{
 			SchemaPattern: "db*",
 			TablePattern:  "tbl1*",
@@ -429,7 +451,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				Security:         &security,
 				RawDBCfg:         &rawDBCfg,
 			},
-			RouteRules:  []*router.TableRule{&routeRule1, &routeRule2},
+			RouteRules:  []*router.TableRule{&routeRule2, &routeRule1, &routeRule3},
 			FilterRules: []*bf.BinlogEventRule{&filterRule1, &filterRule2},
 			BAList:      &baList1,
 			MydumperConfig: MydumperConfig{
@@ -472,9 +494,9 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	}
 	stCfg2.From = source2DBCfg
 	stCfg2.BAList = &baList2
+	stCfg2.RouteRules = []*router.TableRule{&routeRule4, &routeRule1, &routeRule2}
 
-	var cfg TaskConfig
-	cfg.FromSubTaskConfigs(stCfg1, stCfg2)
+	cfg := FromSubTaskConfigs(stCfg1, stCfg2)
 
 	cfg2 := TaskConfig{
 		Name:                    name,
@@ -493,9 +515,9 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 			{
 				SourceID:           source1,
 				Meta:               stCfg1.Meta,
-				FilterRules:        []string{"filter-01-01", "filter-01-02"},
+				FilterRules:        []string{"filter-01", "filter-02"},
 				ColumnMappingRules: []string{},
-				RouteRules:         []string{"route-01-01", "route-01-02"},
+				RouteRules:         []string{"route-01", "route-02", "route-03"},
 				BWListName:         "",
 				BAListName:         "balist-01",
 				MydumperConfigName: "dump-01",
@@ -511,57 +533,52 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 			{
 				SourceID:           source2,
 				Meta:               stCfg2.Meta,
-				FilterRules:        []string{"filter-02-01", "filter-02-02"},
+				FilterRules:        []string{"filter-01", "filter-02"},
 				ColumnMappingRules: []string{},
-				RouteRules:         []string{"route-02-01", "route-02-02"},
+				RouteRules:         []string{"route-01", "route-02", "route-04"},
 				BWListName:         "",
 				BAListName:         "balist-02",
-				MydumperConfigName: "dump-02",
+				MydumperConfigName: "dump-01",
 				Mydumper:           nil,
 				MydumperThread:     0,
-				LoaderConfigName:   "load-02",
+				LoaderConfigName:   "load-01",
 				Loader:             nil,
 				LoaderThread:       0,
-				SyncerConfigName:   "sync-02",
+				SyncerConfigName:   "sync-01",
 				Syncer:             nil,
 				SyncerThread:       0,
 			},
 		},
 		OnlineDDLScheme: onlineDDLScheme,
 		Routes: map[string]*router.TableRule{
-			"route-01-01": stCfg1.RouteRules[0],
-			"route-01-02": stCfg1.RouteRules[1],
-			"route-02-01": stCfg2.RouteRules[0],
-			"route-02-02": stCfg2.RouteRules[1],
+			"route-01": &routeRule1,
+			"route-02": &routeRule2,
+			"route-03": &routeRule3,
+			"route-04": &routeRule4,
 		},
 		Filters: map[string]*bf.BinlogEventRule{
-			"filter-01-01": stCfg1.FilterRules[0],
-			"filter-01-02": stCfg1.FilterRules[1],
-			"filter-02-01": stCfg2.FilterRules[0],
-			"filter-02-02": stCfg2.FilterRules[1],
+			"filter-01": &filterRule1,
+			"filter-02": &filterRule2,
 		},
 		ColumnMappings: nil,
 		BWList:         nil,
 		BAList: map[string]*filter.Rules{
-			"balist-01": stCfg1.BAList,
-			"balist-02": stCfg2.BAList,
+			"balist-01": &baList1,
+			"balist-02": &baList2,
 		},
 		Mydumpers: map[string]*MydumperConfig{
 			"dump-01": &stCfg1.MydumperConfig,
-			"dump-02": &stCfg2.MydumperConfig,
 		},
 		Loaders: map[string]*LoaderConfig{
 			"load-01": &stCfg1.LoaderConfig,
-			"load-02": &stCfg2.LoaderConfig,
 		},
 		Syncers: map[string]*SyncerConfig{
 			"sync-01": &stCfg1.SyncerConfig,
-			"sync-02": &stCfg2.SyncerConfig,
 		},
 		CleanDumpFile: stCfg1.CleanDumpFile,
 	}
 
-	c.Assert(cfg.String(), Equals, cfg2.String()) // some nil/(null value) compare may not equal, so use YAML format to compare.
+	c.Assert(WordCount(cfg.String()), DeepEquals, WordCount(cfg2.String())) // since rules are unordered, so use WordCount to compare
 
 	c.Assert(cfg.adjust(), IsNil)
 	stCfgs, err := cfg.SubTaskConfigs(map[string]DBConfig{source1: source1DBCfg, source2: source2DBCfg})
@@ -632,19 +649,19 @@ func (t *testConfig) TestMySQLInstance(c *C) {
 	m.MydumperConfigName = "test"
 	err = m.VerifyAndAdjust()
 	c.Assert(terror.ErrConfigMydumperCfgConflict.Equal(err), IsTrue)
-	m.RemoveDuplicateCfg()
+	m.MydumperConfigName = ""
 
 	m.Loader = &LoaderConfig{}
 	m.LoaderConfigName = "test"
 	err = m.VerifyAndAdjust()
 	c.Assert(terror.ErrConfigLoaderCfgConflict.Equal(err), IsTrue)
-	m.RemoveDuplicateCfg()
+	m.Loader = nil
 
 	m.Syncer = &SyncerConfig{}
 	m.SyncerConfigName = "test"
 	err = m.VerifyAndAdjust()
 	c.Assert(terror.ErrConfigSyncerCfgConflict.Equal(err), IsTrue)
-	m.RemoveDuplicateCfg()
+	m.SyncerConfigName = ""
 
 	c.Assert(m.VerifyAndAdjust(), IsNil)
 
