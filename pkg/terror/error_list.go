@@ -401,6 +401,7 @@ const (
 	codeSyncerReplaceEvent
 	codeSyncerOperatorNotExist
 	codeSyncerReplaceEventNotExist
+	codeSyncerParseDDL
 )
 
 // DM-master error code
@@ -622,7 +623,7 @@ var (
 	ErrDropMultipleTables     = New(codeDropMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allowed operation: drop multiple tables in one statement", "It is recommended to include only one DDL operation in a statement executed upstream. Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/handle-failed-sql-statements")
 	ErrRenameMultipleTables   = New(codeRenameMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allowed operation: rename multiple tables in one statement", "It is recommended to include only one DDL operation in a statement executed upstream. Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/handle-failed-sql-statements")
 	ErrAlterMultipleTables    = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allowed operation: alter multiple tables in one statement", "It is recommended to include only one DDL operation in a statement executed upstream. Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/handle-failed-sql-statements")
-	ErrParseSQL               = New(codeParseSQL, ClassFunctional, ScopeInternal, LevelHigh, "parse statement", "Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/handle-failed-sql-statements")
+	ErrParseSQL               = New(codeParseSQL, ClassFunctional, ScopeInternal, LevelHigh, "parse statement: %s", "")
 	ErrUnknownTypeDDL         = New(codeUnknownTypeDDL, ClassFunctional, ScopeInternal, LevelHigh, "unknown type ddl %+v", "Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/handle-failed-sql-statements")
 	ErrRestoreASTNode         = New(codeRestoreASTNode, ClassFunctional, ScopeInternal, LevelHigh, "restore ast node", "")
 	ErrParseGTID              = New(codeParseGTID, ClassFunctional, ScopeInternal, LevelHigh, "parse GTID %s", "")
@@ -976,6 +977,7 @@ var (
 	ErrSyncerReplaceEvent                   = New(codeSyncerReplaceEvent, ClassSyncUnit, ScopeInternal, LevelHigh, "", "")
 	ErrSyncerOperatorNotExist               = New(codeSyncerOperatorNotExist, ClassSyncUnit, ScopeInternal, LevelLow, "error operator not exist, position: %s", "")
 	ErrSyncerReplaceEventNotExist           = New(codeSyncerReplaceEventNotExist, ClassSyncUnit, ScopeInternal, LevelHigh, "replace event not exist, location: %s", "")
+	ErrSyncerParseDDL                       = New(codeSyncerParseDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "parse DDL: %s", "Please confirm your DDL statement is correct and needed. For TiDB compatible DDL, see https://docs.pingcap.com/tidb/stable/mysql-compatibility#ddl. You can use `handle-error` command to skip or replace the DDL or add a binlog filter rule to ignore it if the DDL is not needed.")
 
 	// DM-master error
 	ErrMasterSQLOpNilRequest        = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid", "")
