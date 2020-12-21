@@ -561,6 +561,8 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 				return err
 			}
 		} else {
+			// set UUIDSuffix even not checkpoint exist
+			// so we will still remove relay dir
 			cfg.UUIDSuffix = binlog.MinUUIDSuffix
 		}
 	}
