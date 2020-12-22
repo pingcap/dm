@@ -29,7 +29,8 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     check_log_contain_with_retry "mock upstream instance restart" $WORK_DIR/worker1/log/dm-worker.log
-    check_log_contain_with_retry "dispatch auto resume task" $WORK_DIR/worker1/log/dm-worker.log
+    # check_log_contain_with_retry "dispatch auto resume task" $WORK_DIR/worker1/log/dm-worker.log
+    check_log_contain_with_retry "meet error when read from local binlog, will switch to remote binlog" $WORK_DIR/worker1/log/dm-worker.log
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 

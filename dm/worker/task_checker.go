@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 //// Backoff related constants
@@ -116,6 +117,11 @@ type backoffController struct {
 
 	// task name -> the latest auto resume time
 	latestResumeTime map[string]time.Time
+
+	latestRelayPausedTime time.Time
+	latestRelayBlockTime  time.Time
+	latestRelayResumeTime time.Time
+	relayBackoff          *backoff.Backoff
 }
 
 // newBackoffController returns a new backoffController instance
@@ -273,7 +279,72 @@ func (tsc *realTaskStatusChecker) getResumeStrategy(stStatus *pb.SubTaskStatus, 
 	return ResumeDispatch
 }
 
-func (tsc *realTaskStatusChecker) check() {
+func (tsc *realTaskStatusChecker) getRelayResumeStrategy(relayStatus *pb.RelayStatus, duration time.Duration) ResumeStrategy {
+	// relay that is not paused or paused manually, just ignore it
+	if relayStatus == nil || relayStatus.Stage != pb.Stage_Paused || relayStatus.Result == nil || relayStatus.Result.IsCanceled {
+		return ResumeIgnore
+	}
+
+	for _, err := range relayStatus.Result.Errors {
+		if _, ok := retry.UnresumableRelayErrCodes[err.ErrCode]; ok {
+			return ResumeNoSense
+		}
+	}
+
+	if time.Since(tsc.bc.latestRelayResumeTime) < duration {
+		return ResumeSkip
+	}
+
+	return ResumeDispatch
+}
+
+func (tsc *realTaskStatusChecker) checkRelayStatus() {
+	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
+	defer cancel()
+
+	relayStatus := tsc.w.relayHolder.Status(ctx)
+	if tsc.bc.relayBackoff == nil {
+		tsc.bc.relayBackoff, _ = backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin.Duration, tsc.cfg.BackoffMax.Duration)
+		tsc.bc.latestRelayPausedTime = time.Now()
+		tsc.bc.latestRelayResumeTime = time.Now()
+	}
+	rbf := tsc.bc.relayBackoff
+	duration := rbf.Current()
+	strategy := tsc.getRelayResumeStrategy(relayStatus, duration)
+	switch strategy {
+	case ResumeIgnore:
+		if time.Since(tsc.bc.latestRelayPausedTime) > tsc.cfg.BackoffRollback.Duration {
+			rbf.Rollback()
+			// after each rollback, reset this timer
+			tsc.bc.latestRelayPausedTime = time.Now()
+		}
+	case ResumeNoSense:
+		// this strategy doesn't forward or rollback backoff
+		tsc.bc.latestRelayPausedTime = time.Now()
+		blockTime := tsc.bc.latestRelayBlockTime
+		if !blockTime.IsZero() {
+			tsc.l.Warn("relay can't auto resume", zap.Duration("paused duration", time.Since(blockTime)))
+		} else {
+			tsc.bc.latestRelayBlockTime = time.Now()
+			tsc.l.Warn("relay can't auto resume")
+		}
+	case ResumeSkip:
+		tsc.l.Warn("backoff skip auto resume relay", zap.Time("latestResumeTime", tsc.bc.latestRelayResumeTime), zap.Duration("duration", duration))
+		tsc.bc.latestRelayPausedTime = time.Now()
+	case ResumeDispatch:
+		tsc.bc.latestRelayPausedTime = time.Now()
+		err := tsc.w.operateRelay(tsc.ctx, pb.RelayOp_ResumeRelay)
+		if err != nil {
+			tsc.l.Error("dispatch auto resume relay failed", zap.Error(err))
+		} else {
+			tsc.l.Info("dispatch auto resume relay")
+			tsc.bc.latestRelayResumeTime = time.Now()
+			rbf.BoundaryForward()
+		}
+	}
+}
+
+func (tsc *realTaskStatusChecker) checkTaskStatus() {
 	allSubTaskStatus := tsc.w.getAllSubTaskStatus()
 
 	defer func() {
@@ -332,4 +403,11 @@ func (tsc *realTaskStatusChecker) check() {
 			}
 		}
 	}
+}
+
+func (tsc *realTaskStatusChecker) check() {
+	if tsc.w.cfg.EnableRelay {
+		tsc.checkRelayStatus()
+	}
+	tsc.checkTaskStatus()
 }
