@@ -38,6 +38,7 @@ func diffDataLoop(ctx context.Context, count int, interval time.Duration, schema
 			if err == nil {
 				return nil
 			}
+			log.L().Warn("diff data error", zap.Int("count", i+1), log.ShortError(err))
 		}
 	}
 	return err
