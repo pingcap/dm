@@ -58,12 +58,13 @@ type Meta interface {
 	Dirty() bool
 
 	// AddDir adds sub relay directory for server UUID (without suffix)
-	// the added sub relay directory's suffix is incremented
+	// if uuidSuffix is not zero value, add sub relay directory with uuidSuffix (bound to a new source)
+	// otherwise the added sub relay directory's suffix is incremented (master/slave switch)
 	// after sub relay directory added, the internal binlog pos should be reset
 	// and binlog pos will be set again when new binlog events received
 	// @serverUUID should be a server_uuid for MySQL or MariaDB
 	// if set @newPos / @newGTID, old value will be replaced
-	AddDir(serverUUID string, newPos *mysql.Position, newGTID gtid.Set) error
+	AddDir(serverUUID string, newPos *mysql.Position, newGTID gtid.Set, uuidSuffix int) error
 
 	// Pos returns current (UUID with suffix, Position) pair
 	Pos() (string, mysql.Position)
@@ -268,7 +269,7 @@ func (lm *LocalMeta) Dir() string {
 }
 
 // AddDir implements Meta.AddDir
-func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID gtid.Set) error {
+func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID gtid.Set, uuidSuffix int) error {
 	lm.Lock()
 	defer lm.Unlock()
 
@@ -276,7 +277,11 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 
 	if len(lm.currentUUID) == 0 {
 		// no UUID exists yet, simply add it
-		newUUID = utils.AddSuffixForUUID(serverUUID, minUUIDSufix)
+		if uuidSuffix == 0 {
+			newUUID = utils.AddSuffixForUUID(serverUUID, minUUIDSufix)
+		} else {
+			newUUID = utils.AddSuffixForUUID(serverUUID, uuidSuffix)
+		}
 	} else {
 		_, suffix, err := utils.ParseSuffixForUUID(lm.currentUUID)
 		if err != nil {
@@ -343,7 +348,10 @@ func (lm *LocalMeta) GTID() (string, gtid.Set) {
 	lm.RLock()
 	defer lm.RUnlock()
 
-	return lm.currentUUID, lm.gset.Clone()
+	if lm.gset != nil {
+		return lm.currentUUID, lm.gset.Clone()
+	}
+	return lm.currentUUID, nil
 }
 
 // UUID implements Meta.UUID
