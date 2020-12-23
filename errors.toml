@@ -65,9 +65,9 @@ workaround = "It is recommended to include only one DDL operation in a statement
 tags = ["internal", "high"]
 
 [error.DM-functional-11006]
-message = "parse statement"
+message = "parse statement: %s"
 description = ""
-workaround = "Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/handle-failed-sql-statements"
+workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-functional-11007]
@@ -765,6 +765,12 @@ message = ""
 description = ""
 workaround = ""
 tags = ["internal", "low"]
+
+[error.DM-functional-11123]
+message = "didn't found binlog location in dumped metadata file %s"
+description = ""
+workaround = "Please check log of dump unit, there maybe errors when read upstream binlog status"
+tags = ["upstream", "low"]
 
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
@@ -1886,6 +1892,12 @@ tags = ["internal", "low"]
 message = "replace event not exist, location: %s"
 description = ""
 workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-sync-unit-36067]
+message = "parse DDL: %s"
+description = ""
+workaround = "Please confirm your DDL statement is correct and needed. For TiDB compatible DDL, see https://docs.pingcap.com/tidb/stable/mysql-compatibility#ddl. You can use `handle-error` command to skip or replace the DDL or add a binlog filter rule to ignore it if the DDL is not needed."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38001]

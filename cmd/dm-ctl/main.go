@@ -14,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -76,6 +77,8 @@ func main() {
 		helpUsage(cfg)
 		os.Exit(0)
 	}
+
+	args = aliasArgs(args)
 
 	// now, we use checker in dmctl while it using some pkg which log some thing when running
 	// to make dmctl output more clear, simply redirect log to file rather output to stdout
@@ -193,6 +196,10 @@ func interactionMode() {
 		}
 	}()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go common.SyncMasterEndpoints(ctx)
+
 	loop()
 
 	fmt.Println("dmctl exit")
@@ -229,6 +236,7 @@ func loop() {
 		}
 
 		args := strings.Fields(line)
+		args = aliasArgs(args)
 		err = ctl.Start(args)
 		if err != nil {
 			fmt.Println("fail to run:", args)
@@ -239,4 +247,21 @@ func loop() {
 			fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
 		}
 	}
+}
+
+func aliasArgs(args []string) []string {
+	args = aliasGetTaskCfgCmd(args)
+	return args
+}
+
+func aliasGetTaskCfgCmd(args []string) []string {
+	for i, arg := range args {
+		if arg == "get-task-config" {
+			args = append(args[:i+1], args[i:]...)
+			args[i] = "get-config"
+			args[i+1] = "task"
+			return args
+		}
+	}
+	return args
 }

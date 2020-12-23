@@ -22,6 +22,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = Suite(&testSuite{})
@@ -232,10 +233,10 @@ Finished dump at: 2020-09-30 12:16:49
 	}
 
 	for _, tc := range testCases {
-		err := ioutil.WriteFile(f.Name(), []byte(tc.source), 0644)
-		c.Assert(err, IsNil)
-		loc, loc2, err := ParseMetaData(f.Name(), "mysql")
-		c.Assert(err, IsNil)
+		err2 := ioutil.WriteFile(f.Name(), []byte(tc.source), 0644)
+		c.Assert(err2, IsNil)
+		loc, loc2, err2 := ParseMetaData(f.Name(), "mysql")
+		c.Assert(err2, IsNil)
 		c.Assert(loc.Position, DeepEquals, tc.pos)
 		gs, _ := gtid.ParserGTID("mysql", tc.gsetStr)
 		c.Assert(loc.GetGTID(), DeepEquals, gs)
@@ -247,4 +248,12 @@ Finished dump at: 2020-09-30 12:16:49
 			c.Assert(loc2, IsNil)
 		}
 	}
+
+	noBinlogLoc := `Started dump at: 2020-12-02 17:13:56
+Finished dump at: 2020-12-02 17:13:56
+`
+	err = ioutil.WriteFile(f.Name(), []byte(noBinlogLoc), 0644)
+	c.Assert(err, IsNil)
+	_, _, err = ParseMetaData(f.Name(), "mysql")
+	c.Assert(terror.ErrMetadataNoBinlogLoc.Equal(err), IsTrue)
 }

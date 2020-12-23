@@ -1457,6 +1457,11 @@ func (l *Loader) getMydumpMetadata() error {
 	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
 	loc, _, err := dumpling.ParseMetaData(metafile, l.cfg.Flavor)
 	if err != nil {
+		if terror.ErrMetadataNoBinlogLoc.Equal(err) {
+			l.logger.Warn("dumped metadata doesn't have binlog location, it's OK if DM doesn't enter incremental mode")
+			return nil
+		}
+
 		toPrint, err2 := ioutil.ReadFile(metafile)
 		if err2 != nil {
 			toPrint = []byte(err2.Error())

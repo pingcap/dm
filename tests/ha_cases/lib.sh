@@ -20,8 +20,8 @@ function load_data() {
     run_sql "CREATE DATABASE if not exists ${db};" $port $pswd
     run_sql "DROP TABLE if exists ${db}.t${i};" $port $pswd
     run_sql "CREATE TABLE ${db}.t${i}(i TINYINT, j INT UNIQUE KEY);" $port $pswd
-    for j in $(seq 80); do
-        run_sql "INSERT INTO ${db}.t${i} VALUES ($j,${j}000$j),($j,${j}001$j);" $port $pswd
+    for j in $(seq 800); do
+        run_sql "INSERT INTO ${db}.t${i} VALUES ($j,${j}00$j),($j,${j}01$j);" $port $pswd
         sleep 0.1
     done
 }

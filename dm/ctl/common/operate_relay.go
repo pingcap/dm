@@ -23,9 +23,15 @@ import (
 func OperateRelay(op pb.RelayOp, workers []string) (*pb.OperateWorkerRelayResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli := MasterClient()
-	return cli.OperateWorkerRelayTask(ctx, &pb.OperateWorkerRelayRequest{
-		Op:      op,
-		Sources: workers,
-	})
+	resp := &pb.OperateWorkerRelayResponse{}
+	err := SendRequest(
+		ctx,
+		"OperateWorkerRelayTask",
+		&pb.OperateWorkerRelayRequest{
+			Op:      op,
+			Sources: workers,
+		},
+		&resp,
+	)
+	return resp, err
 }
