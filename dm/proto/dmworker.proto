@@ -17,6 +17,8 @@ service Worker {
     rpc OperateV1Meta(OperateV1MetaRequest) returns(OperateV1MetaResponse) {}
 
     rpc HandleError(HandleWorkerErrorRequest) returns(CommonWorkerResponse) {}
+
+    rpc GetWorkerCfg(GetWorkerCfgRequest) returns(GetWorkerCfgResponse) {}
 }
 
 enum TaskOp {
@@ -359,4 +361,11 @@ message HandleWorkerErrorRequest {
     string task = 2; // task name
     string binlogPos = 3; // binlog-pos (that's file:pos format)
     repeated string sqls = 4; // sqls (use for replace)
+}
+
+message GetWorkerCfgRequest {
+}
+
+message GetWorkerCfgResponse {
+    string cfg = 1;
 }

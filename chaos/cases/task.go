@@ -23,6 +23,7 @@ import (
 
 	"github.com/chaos-mesh/go-sqlsmith"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/mysql"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -30,12 +31,13 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 const (
 	tableCount      = 10               // tables count in schema.
 	fullInsertCount = 100              // `INSERT INTO` count (not rows count) for each table in full stage.
-	diffCount       = 10               // diff data check count
+	diffCount       = 30               // diff data check count
 	diffInterval    = 10 * time.Second // diff data check interval
 	incrRoundTime   = 20 * time.Second // time to generate incremental data in one round
 )
@@ -72,7 +74,7 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 	var (
 		sourceDBs   = make([]*conn.BaseDB, 0, len(taskCfg.MySQLInstances))
 		sourceConns = make([]*dbConn, 0, len(taskCfg.MySQLInstances))
-		results     = make(results, 0, len(taskCfg.MySQLInstances))
+		res         = make(results, 0, len(taskCfg.MySQLInstances))
 	)
 	for i := range taskCfg.MySQLInstances { // only use necessary part of sources.
 		cfg := sourcesCfg[i]
@@ -86,7 +88,7 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 		}
 		sourceDBs = append(sourceDBs, db)
 		sourceConns = append(sourceConns, conn)
-		results = append(results, singleResult{})
+		res = append(res, singleResult{})
 	}
 
 	targetDB, err := conn.DefaultDBProvider.Apply(targetCfg)
@@ -110,7 +112,7 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 		schema:      schema,
 		tables:      make([]string, 0),
 		taskCfg:     taskCfg,
-		results:     results,
+		results:     res,
 	}
 	t.ss.SetDB(schema)
 	return t, nil
@@ -276,7 +278,7 @@ func (t *task) incrLoop() error {
 			}
 
 			// diff data
-			err = t.diffIncrData(ctx2)
+			err = t.diffIncrData(t.ctx)
 			if err != nil {
 				cancel2()
 				return err
@@ -356,6 +358,10 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 				i2 := i
 				eg.Go(func() error {
 					if err2 := conn2.execSQLs(ctx, query); err2 != nil {
+						if utils.IsMySQLError(err2, mysql.ErrDupFieldName) {
+							t.logger.Warn("ignore duplicate field name for ddl", log.ShortError(err))
+							return nil
+						}
 						return err2
 					}
 					t.results[i2].DDL++

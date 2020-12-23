@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
@@ -112,7 +113,9 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 		defer r.wg.Done()
 		err := r.parser.ParseFile(pos.Name, int64(pos.Pos), r.onEvent)
 		if err != nil {
-			r.logger.Error("fail to parse binlog file", zap.Error(err))
+			if errors.Cause(err) != context.Canceled {
+				r.logger.Error("fail to parse binlog file", zap.Error(err))
+			}
 			select {
 			case r.ech <- err:
 			case <-r.ctx.Done():

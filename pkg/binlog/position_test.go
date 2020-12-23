@@ -765,3 +765,31 @@ func (t *testPositionSuite) TestSetGTID(c *C) {
 	c.Assert(loc2.gtidSet.String(), Equals, GTIDSetStr)
 	c.Assert(CompareLocation(loc, loc2, true), Equals, 1)
 }
+
+func (t *testPositionSuite) TestExtractSuffix(c *C) {
+	testCases := []struct {
+		name   string
+		suffix int
+	}{
+		{
+			"",
+			MinUUIDSuffix,
+		}, {
+			"mysql-bin.00005",
+			MinUUIDSuffix,
+		},
+		{
+			"mysql-bin|000001.000001",
+			1,
+		}, {
+			"mysql-bin|000005.000004",
+			5,
+		},
+	}
+
+	for _, tc := range testCases {
+		suffix, err := ExtractSuffix(tc.name)
+		c.Assert(err, IsNil)
+		c.Assert(suffix, Equals, tc.suffix)
+	}
+}

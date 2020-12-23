@@ -16,13 +16,13 @@ function usage_and_arg_test() {
     check_task_wrong_arg
     check_task_wrong_config_file
 
-#    echo "pause_relay_wrong_arg"
-#    pause_relay_wrong_arg
-#    pause_relay_wihout_worker
-#
-#    echo "resume_relay_wrong_arg"
-#    resume_relay_wrong_arg
-#    resume_relay_wihout_worker
+    echo "pause_relay_wrong_arg"
+    pause_relay_wrong_arg
+    pause_relay_wihout_worker
+
+    echo "resume_relay_wrong_arg"
+    resume_relay_wrong_arg
+    resume_relay_wihout_worker
 
     echo "pause_task_wrong_arg"
     pause_task_wrong_arg
@@ -57,10 +57,10 @@ function usage_and_arg_test() {
 #    update_master_config_wrong_arg
 #    update_master_config_wrong_config_file
 #
-#    echo "purge_relay_wrong_arg"
-#    purge_relay_wrong_arg
-#    purge_relay_wihout_worker
-#    purge_relay_filename_with_multi_workers
+    echo "purge_relay_wrong_arg"
+    purge_relay_wrong_arg
+    purge_relay_wihout_worker
+    purge_relay_filename_with_multi_workers
 
     echo "operate_source_empty_arg"
     operate_source_empty_arg
@@ -147,13 +147,13 @@ function run() {
         '"worker": "worker1"' 1 \
         '"worker": "worker2"' 1
 
-#    echo "pause_relay_success"
-#    pause_relay_success
-#    query_status_stopped_relay
-#    # pause twice won't receive an error now
-#    # pause_relay_fail
-#    resume_relay_success
-#    query_status_with_no_tasks
+    echo "pause_relay_success"
+    pause_relay_success
+    query_status_stopped_relay
+    # pause twice won't receive an error now
+    # pause_relay_fail
+    resume_relay_success
+    query_status_with_no_tasks
 
     echo "dmctl_check_task"
     check_task_pass $TASK_CONF
@@ -174,10 +174,9 @@ function run() {
         "\"stage\": \"Running\"" 4
     # update_task_not_paused $TASK_CONF
 
-    echo "get_task_config"
-    get_task_config_wrong_name
-    get_task_config_to_file
-    get_task_config_recover_etcd
+    echo "get_config"
+    get_config_wrong_arg
+    get_config_to_file
 
     # retry to wait for recovered from etcd ready
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \

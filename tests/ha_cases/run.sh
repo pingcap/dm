@@ -19,7 +19,7 @@ function test_running() {
     # make sure task to step in "Sync" stage
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2 \
+        "\"stage\": \"Running\"" 4 \
         "\"unit\": \"Sync\"" 2
 
     echo "use sync_diff_inspector to check full dump loader"
@@ -49,11 +49,11 @@ function test_multi_task_running() {
     # make sure task to step in "Sync" stage
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2 \
+        "\"stage\": \"Running\"" 4 \
         "\"unit\": \"Sync\"" 2
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test2" \
-        "\"stage\": \"Running\"" 2 \
+        "\"stage\": \"Running\"" 4 \
         "\"unit\": \"Sync\"" 2
 
     echo "use sync_diff_inspector to check full dump loader"
@@ -155,11 +155,11 @@ function test_kill_master() {
     echo "check master2,3 are running"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     run_sql_file_withdb $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
     run_sql_file_withdb $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test
@@ -208,33 +208,33 @@ function test_kill_and_isolate_worker() {
     isolate_worker 4 "isolate"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     echo "isolate dm-worker3"
     isolate_worker 3 "isolate"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
-        "\"stage\": \"Running\"" 1 \
+        "\"stage\": \"Running\"" 2 \
         "\"result\": false" 1
     
     echo "disable isolate dm-worker4"
     isolate_worker 4 "disable_isolate"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     echo "query-status from all dm-master"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
     
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "pause-task test"\
@@ -278,7 +278,7 @@ function test_kill_master_in_sync() {
     check_http_alive 127.0.0.1:$MASTER_PORT2/apis/${API_VERSION}/status/test '"stage": "Running"' 10
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     # waiting for syncing
     wait
@@ -316,15 +316,15 @@ function test_kill_worker_in_sync() {
     echo "query-status from all dm-master"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 
     # waiting for syncing
     wait
@@ -401,7 +401,7 @@ function test_standalone_running() {
     # test should still running
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test"\
-        "\"stage\": \"Running\"" 1
+        "\"stage\": \"Running\"" 2
 
     echo "[$(date)] <<<<<< finish test_standalone_running >>>>>>"
 }
@@ -448,7 +448,7 @@ function test_pause_task() {
         
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status $name"\
-            "\"stage\": \"Running\"" 2
+            "\"stage\": \"Running\"" 4
     done
 
     # waiting for syncing
@@ -496,7 +496,7 @@ function test_stop_task() {
 
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status ${task_name[$idx]}"\
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
     done
 
     # waiting for syncing
@@ -539,7 +539,7 @@ function test_multi_task_reduce_and_restart_worker() {
 
             echo "try to kill worker port ${worker_ports[$[ $idx - 1 ] ]}"
             ps aux | grep dm-worker${idx} |awk '{print $2}'|xargs kill || true
-            check_port_offline ${worker_ports[$[ $idx - 1] ]} 20
+            run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT2 "list-member --worker --name=worker$idx" '"stage": "offline"' 1
 
             echo "start dm-worker${idx}"
             run_dm_worker $WORK_DIR/worker${idx} ${worker_ports[$[ $idx - 1] ]} $cur/conf/dm-worker${idx}.toml
@@ -558,7 +558,7 @@ function test_multi_task_reduce_and_restart_worker() {
             for name in ${task_name[@]}; do
                 run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
                     "query-status $name"\
-                    "\"stage\": \"Running\"" 2
+                    "\"stage\": \"Running\"" 4
             done
 
             # waiting for syncing
@@ -575,7 +575,7 @@ function test_multi_task_reduce_and_restart_worker() {
             done
             search_str="\"stage\": \"Running\""
             running_count=$(echo $status_str | sed "s/$search_str/$search_str\n/g" | grep -c "$search_str")
-            if [ $running_count != 4 ]; then
+            if [ $running_count != 8 ]; then
                 echo "error running worker"
                 echo $status_str
                 exit 1

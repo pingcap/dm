@@ -113,6 +113,8 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.OperateV1Meta, err = client.OperateV1Meta(ctx, req.OperateV1Meta)
 	case CmdHandleError:
 		resp.HandleError, err = client.HandleError(ctx, req.HandleError)
+	case CmdGetWorkerCfg:
+		resp.GetWorkerCfg, err = client.GetWorkerCfg(ctx, req.GetWorkerCfg)
 	default:
 		return nil, terror.ErrMasterGRPCInvalidReqType.Generate(req.Type)
 	}

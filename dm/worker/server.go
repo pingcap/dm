@@ -49,7 +49,7 @@ var (
 	keepaliveTime           = 3 * time.Second
 	retryConnectSleepTime   = time.Second
 	syncMasterEndpointsTime = 3 * time.Second
-	getMinPosForSubTaskFunc = getMinPosForSubTask
+	getMinLocForSubTaskFunc = getMinLocForSubTask
 )
 
 // Server accepts RPC requests
@@ -546,16 +546,24 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	if cfg.EnableRelay {
 		dctx, dcancel := context.WithTimeout(s.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
 		defer dcancel()
-		minPos, err1 := getMinPosInAllSubTasks(dctx, subTaskCfgs)
+		minLoc, err1 := getMinLocInAllSubTasks(dctx, subTaskCfgs)
 		if err1 != nil {
 			return err1
 		}
 
-		// TODO: support GTID
-		// don't contain GTID information in checkpoint table, just set it to empty
-		if minPos != nil {
-			cfg.RelayBinLogName = binlog.AdjustPosition(*minPos).Name
-			cfg.RelayBinlogGTID = ""
+		if minLoc != nil {
+			log.L().Info("get min location in all subtasks", zap.Stringer("location", *minLoc))
+			cfg.RelayBinLogName = binlog.AdjustPosition(minLoc.Position).Name
+			cfg.RelayBinlogGTID = minLoc.GTIDSetStr()
+			// set UUIDSuffix when bound to a source
+			cfg.UUIDSuffix, err = binlog.ExtractSuffix(minLoc.Position.Name)
+			if err != nil {
+				return err
+			}
+		} else {
+			// set UUIDSuffix even not checkpoint exist
+			// so we will still remove relay dir
+			cfg.UUIDSuffix = binlog.MinUUIDSuffix
 		}
 	}
 
@@ -634,32 +642,31 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 }
 
 // all subTask in subTaskCfgs should have same source
-// this function return the min position in all subtasks, used for relay's position
-// TODO: get min gtidSet
-func getMinPosInAllSubTasks(ctx context.Context, subTaskCfgs []*config.SubTaskConfig) (minPos *mysql.Position, err error) {
+// this function return the min location in all subtasks, used for relay's location
+func getMinLocInAllSubTasks(ctx context.Context, subTaskCfgs []*config.SubTaskConfig) (minLoc *binlog.Location, err error) {
 	for _, subTaskCfg := range subTaskCfgs {
-		pos, err := getMinPosForSubTaskFunc(ctx, subTaskCfg)
+		loc, err := getMinLocForSubTaskFunc(ctx, subTaskCfg)
 		if err != nil {
 			return nil, err
 		}
 
-		if pos == nil {
+		if loc == nil {
 			continue
 		}
 
-		if minPos == nil {
-			minPos = pos
+		if minLoc == nil {
+			minLoc = loc
 		} else {
-			if minPos.Compare(*pos) >= 1 {
-				minPos = pos
+			if binlog.CompareLocation(*minLoc, *loc, subTaskCfg.EnableGTID) >= 1 {
+				minLoc = loc
 			}
 		}
 	}
 
-	return minPos, nil
+	return minLoc, nil
 }
 
-func getMinPosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minPos *mysql.Position, err error) {
+func getMinLocForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minLoc *binlog.Location, err error) {
 	if subTaskCfg.Mode == config.ModeFull {
 		return nil, nil
 	}
@@ -682,7 +689,7 @@ func getMinPosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) 
 	}
 
 	location := checkpoint.GlobalPoint()
-	return &location.Position, nil
+	return &location, nil
 }
 
 // unifyMasterBinlogPos eliminates different masterBinlog in one response
@@ -775,4 +782,14 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 		Result: true,
 		Worker: s.cfg.Name,
 	}, nil
+}
+
+// GetWorkerCfg get worker config
+func (s *Server) GetWorkerCfg(ctx context.Context, req *pb.GetWorkerCfgRequest) (*pb.GetWorkerCfgResponse, error) {
+	log.L().Info("", zap.String("request", "GetWorkerCfg"), zap.Stringer("payload", req))
+	var err error
+	resp := &pb.GetWorkerCfgResponse{}
+
+	resp.Cfg, err = s.cfg.Toml()
+	return resp, err
 }
