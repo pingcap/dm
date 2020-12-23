@@ -18,6 +18,7 @@ EOF
 
 function run() {
     run_sql_source1 "SET @@GLOBAL.SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE,ANSI_QUOTES'"
+    run_sql_source2 "SET @@GLOBAL.SQL_MODE=''"
 
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'

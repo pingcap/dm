@@ -8,6 +8,8 @@ insert into t1 (uid, name) values (10001, 'Gabriel García Márquez'), (10002, '
 insert into t2 (uid, name) values (20001, 'José Arcadio Buendía'), (20002, 'Úrsula Iguarán'), (20003, 'José Arcadio');
 create view v1 as select id from t1;
 
+drop database if exists `shardview1`;
+drop database if exists `shardview2`;
 create database `shardview1`;
 create database `shardview2`;
 create table shardview1.t1 (id int primary key);
