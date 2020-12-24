@@ -36,8 +36,6 @@ function real_run() {
     echo "use sync_diff_inspector to check full dump data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    read -p 123
-
     run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl $online_ddl_scheme
     run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl $online_ddl_scheme
 
@@ -80,7 +78,7 @@ function run() {
 
 if [ "$ONLINE_DDL_ENABLE" == true ]; then
     run gh-ost
-#    run pt
+    run pt
 else
     echo "[$(date)] <<<<<< skip online ddl test! >>>>>>"
 fi
