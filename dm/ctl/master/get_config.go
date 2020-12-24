@@ -76,14 +76,19 @@ func getCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 
-	cli := common.MasterClient()
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
 
-	resp, err := cli.GetCfg(ctx, &pb.GetCfgRequest{
-		Type: tp,
-		Name: cfgName,
-	})
+	resp := &pb.GetCfgResponse{}
+	err = common.SendRequest(
+		ctx,
+		"GetCfg",
+		&pb.GetCfgRequest{
+			Type: tp,
+			Name: cfgName,
+		},
+		&resp,
+	)
 	if err != nil {
 		common.PrintLines("can not get %s config of %s", cfgType, cfgName)
 		return

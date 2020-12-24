@@ -80,13 +80,17 @@ func listMemberFunc(cmd *cobra.Command, _ []string) (err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cli := common.MasterClient()
-	resp, err := cli.ListMember(ctx, &pb.ListMemberRequest{
-		Leader: leader,
-		Master: master,
-		Worker: worker,
-		Names:  listMemberFlags.names,
-	})
+	resp := &pb.ListMemberResponse{}
+	err = common.SendRequest(ctx,
+		"ListMember",
+		&pb.ListMemberRequest{
+			Leader: leader,
+			Master: master,
+			Worker: worker,
+			Names:  listMemberFlags.names,
+		},
+		&resp,
+	)
 
 	if err != nil {
 		return

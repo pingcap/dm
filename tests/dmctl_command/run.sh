@@ -9,45 +9,13 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 help_cnt=34
 
 function run() {
-    # check dmctl alone output
-    # it should usage for root command
-
-    $PWD/bin/dmctl.test DEVEL > $WORK_DIR/help.log
-    help_msg=$(cat $WORK_DIR/help.log)
-    help_msg_cnt=$(echo "${help_msg}" | wc -l |xargs)
-    if [ "$help_msg_cnt" != $help_cnt ]; then
-        echo "dmctl case 1 help failed: $help_msg"
-        echo $help_msg_cnt
-        exit 1
-    fi
-
     # check dmctl output with help flag
     # it should usage for root command
     $PWD/bin/dmctl.test DEVEL --help > $WORK_DIR/help.log
     help_msg=$(cat $WORK_DIR/help.log)
     help_msg_cnt=$(echo "${help_msg}" | wc -l |xargs)
     if [ "$help_msg_cnt" != $help_cnt ]; then
-        echo "dmctl case 2 help failed: $help_msg"
-        exit 1
-    fi
-
-    # check dmctl command start-task alone output
-    # it should usage for start-task
-    $PWD/bin/dmctl.test DEVEL start-task > $WORK_DIR/help.log
-    help_msg=$(cat $WORK_DIR/help.log)
-    echo $help_msg | grep -q "dmctl start-task"
-    if [ $? -ne 0 ]; then
-        echo "dmctl case 3 help failed: $help_msg"
-        exit 1
-    fi
-
-    # check dmctl command start-task output with help flag
-    # it should usage for start-task
-    $PWD/bin/dmctl.test DEVEL start-task --help > $WORK_DIR/help.log
-    help_msg=$(cat $WORK_DIR/help.log)
-    echo $help_msg | grep -q "dmctl start-task"
-    if [ $? -ne 0 ]; then
-        echo "dmctl case 4 help failed: $help_msg"
+        echo "dmctl case 1 help failed: $help_msg"
         exit 1
     fi
 
@@ -60,7 +28,7 @@ function run() {
 
     echo $help_msg | grep -q "dmctl start-task"
     if [ $? -ne 0 ]; then
-        echo "dmctl case 5 help failed: $help_msg"
+        echo "dmctl case 2 help failed: $help_msg"
         exit 1
     fi
 
@@ -70,12 +38,12 @@ function run() {
     help_msg=$(cat $WORK_DIR/help.log)
     help_msg_cnt=$(echo "${help_msg}" | wc -l |xargs)
     if [ "$help_msg_cnt" != 1 ]; then
-        echo "dmctl case 6 help failed: $help_msg"
+        echo "dmctl case 3 help failed: $help_msg"
         exit 1
     fi
     echo $help_msg | grep -q "parse cmd flags err: 'xxxx' is an invalid flag"
     if [ $? -ne 0 ]; then
-        echo "dmctl case 6 help failed: $help_msg"
+        echo "dmctl case 3 help failed: $help_msg"
         exit 1
     fi
 
