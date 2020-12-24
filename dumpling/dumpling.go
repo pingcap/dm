@@ -223,7 +223,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		dumpConfig.Threads = cfg.Threads
 	}
 	if cfg.ChunkFilesize != "" {
-		dumpConfig.FileSize, err = export.ParseFileSize(cfg.ChunkFilesize)
+		dumpConfig.FileSize, err = parseFileSize(cfg.ChunkFilesize)
 		if err != nil {
 			m.logger.Warn("parsed some unsupported arguments", zap.Error(err))
 			return nil, err
