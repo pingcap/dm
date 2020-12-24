@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] 2020-12-25
+
+### Improvements
+
+- Support the relay log feature in high availability scenarios [#1353](https://github.com/pingcap/dm/pull/1353)
+    - DM-worker supports storing relay logs only locally.
+    - In scenarios where a DM-worker node is down or is offline due to network fluctuations, the newly scheduled DM-worker pulls the upstream binlog again.
+- Restrict the `handle-error` command to only handle DDL errors to avoid misuse [#1303](https://github.com/pingcap/dm/pull/1303)
+- Support simultaneously connecting multiple DM-master nodes and automatically switching connected nodes in dmctl [#1349](https://github.com/pingcap/dm/pull/1349)
+- Add the `get-config` command to get the configuration of migration tasks and DM components [#1348](https://github.com/pingcap/dm/pull/1348)
+- Support migrating SQL statements like `ALTER TABLE ADD COLUMN (xx, xx)` [#1345](https://github.com/pingcap/dm/pull/1345)
+- Support automatically filtering SQL statements like `CREATE/ALTER/DROP EVENT` [#1343](https://github.com/pingcap/dm/pull/1343)
+- Support checking whether `server-id` is set for the upstream MySQL/MariaDB instance during the incremental replication [#1315](https://github.com/pingcap/dm/pull/1315)
+- Support replicating schemas and tables with `sql` in their names during the full import [#1259](https://github.com/pingcap/dm/pull/1259)
+
+### Bug fixes
+
+- Fix the issue that restarting a task might cause `fail to initial unit Sync of subtask` error [#1274](https://github.com/pingcap/dm/pull/1274)
+- Fix the issue that the `pause-task` command might be blocked when it is executed during the full import [#1269](https://github.com/pingcap/dm/pull/1269) [#1277](https://github.com/pingcap/dm/pull/1277)
+- Fix the issue that DM fails to create a data source for a MariaDB instance when `enable-gtid: true` is configured [#1344](https://github.com/pingcap/dm/pull/1344)
+- Fix the issue that the `query-status` command might be blocked when it is executed [#1293](https://github.com/pingcap/dm/pull/1293)
+- Fix the issue that concurrently coordinating multiple DDL statements in the pessimistic shard DDL mode might block the task [#1263](https://github.com/pingcap/dm/pull/1263)
+- Fix the issue that running the `pause-task` command might get the meaningless `sql: connection is already closed` error [#1304](https://github.com/pingcap/dm/pull/1304)
+- Fix the issue that the full migration fails when the upstream instance does not have the `REPLICATION` privilege [#1326](https://github.com/pingcap/dm/pull/1326)
+- Fix the issue that the `route-rules` configuration of a shard merge task does not take effect in the full import when the `SQL_MODE` of the task contains `ANSI_QUOTES` [#1314](https://github.com/pingcap/dm/pull/1314)
+- Fix the issue that DM fails to automatically apply the `SQL_MODE` of the upstream database during the incremental replication [#1307](https://github.com/pingcap/dm/pull/1307)
+- Fix the issue that DM logs the `fail to parse binlog status_vars` warning when automatically parsing the `SQL_MODE` of the upstream database [#1299](https://github.com/pingcap/dm/pull/1299)
+
 ## [2.0.0] 2020-10-30
 
 ### Improvements
