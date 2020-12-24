@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file.
 - Add the `get-config` command to get the configuration of migration tasks and DM components [#1348](https://github.com/pingcap/dm/pull/1348)
 - Support migrating SQL statements like `ALTER TABLE ADD COLUMN (xx, xx)` [#1345](https://github.com/pingcap/dm/pull/1345)
 - Support automatically filtering SQL statements like `CREATE/ALTER/DROP EVENT` [#1343](https://github.com/pingcap/dm/pull/1343)
-- Support checking whether `server-id` is set for the upstream MySQL/MariaDB instance during the incremental replication [#1315](https://github.com/pingcap/dm/pull/1315)
+- Support checking whether `server-id` is set for the upstream MySQL/MariaDB instance before the incremental replication task starts [#1315](https://github.com/pingcap/dm/pull/1315)
 - Support replicating schemas and tables with `sql` in their names during the full import [#1259](https://github.com/pingcap/dm/pull/1259)
 
 ### Bug fixes
