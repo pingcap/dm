@@ -108,7 +108,10 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	})
 
 	newCtx, cancel := context.WithCancel(ctx)
-	err = export.Dump(newCtx, m.dumpConfig)
+	var dumpling *export.Dumper
+	if dumpling, err = export.NewDumper(newCtx, m.dumpConfig); err == nil {
+		err = dumpling.Dump()
+	}
 	cancel()
 
 	if err != nil {
