@@ -18,11 +18,11 @@ require (
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
 	github.com/pingcap/dumpling v0.0.0-20201028073240-ac8d8f304ab3
-	github.com/pingcap/errors v0.11.5-0.20201029093017-5a7df2af2ac7
+	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
 	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
-	github.com/pingcap/parser v0.0.0-20201123080035-8f4c6ab94e11
-	github.com/pingcap/tidb v1.1.0-beta.0.20201119113654-22feeb4aef75
+	github.com/pingcap/parser v0.0.0-20201222091346-02c8ff27d0bc
+	github.com/pingcap/tidb v1.1.0-beta.0.20201224021059-213942149427
 	github.com/pingcap/tidb-tools v4.0.9-0.20201127090955-2707c97b3853+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
@@ -34,7 +34,7 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285
 	github.com/tidwall/gjson v1.6.1
 	github.com/tidwall/sjson v1.1.2
-	github.com/tikv/pd v1.1.0-beta.0.20201119053953-51eff4c1fa05
+	github.com/tikv/pd v1.1.0-beta.0.20201125070607-d4b90eee0c70
 	github.com/unrolled/render v1.0.1
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200824191128-ae9734ed278b
 	go.uber.org/zap v1.16.0
