@@ -144,7 +144,7 @@ jobs:
           GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
 
     - name: Run test cases after upgrade
-      working-directory: ${{ env.working-directoryr }}
+      working-directory: ${{ env.working-directory }}
       run: |
         cd ${{ env.working-directory }}/tests/tiup/docker
         docker-compose exec -T control bash -c "source /root/.profile && cd /go/src/github.com/pingcap/dm && ./tests/tiup/upgrade-tidb.sh after_upgrade nightly"
