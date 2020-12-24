@@ -111,6 +111,7 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	var dumpling *export.Dumper
 	if dumpling, err = export.NewDumper(newCtx, m.dumpConfig); err == nil {
 		err = dumpling.Dump()
+		dumpling.Close()
 	}
 	cancel()
 
@@ -260,6 +261,8 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	if !cfg.CaseSensitive {
 		dumpConfig.TableFilter = filter.CaseInsensitive(dumpConfig.TableFilter)
 	}
+
+	dumpConfig.TransactionalConsistency = true
 
 	return dumpConfig, nil
 }

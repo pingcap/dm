@@ -18,7 +18,7 @@ require (
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/pingcap/br v5.0.0-rc.0.20201223100334-c344d1edf20c+incompatible // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
-	github.com/pingcap/dumpling v0.0.0-20201214082521-11d8d5dad312
+	github.com/pingcap/dumpling v0.0.0-20201224072139-0b4f03a32916
 	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
 	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
