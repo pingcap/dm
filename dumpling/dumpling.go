@@ -245,6 +245,9 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		dumpConfig.Security.KeyPath = db.Security.SSLKey
 	}
 
+	// `true` means dumpling will release lock after working connection established
+	dumpConfig.TransactionalConsistency = true
+
 	extraArgs := strings.Fields(cfg.ExtraArgs)
 	if len(extraArgs) > 0 {
 		err := parseExtraArgs(&m.logger, dumpConfig, ParseArgLikeBash(extraArgs))
@@ -261,8 +264,6 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	if !cfg.CaseSensitive {
 		dumpConfig.TableFilter = filter.CaseInsensitive(dumpConfig.TableFilter)
 	}
-
-	dumpConfig.TransactionalConsistency = true
 
 	return dumpConfig, nil
 }
