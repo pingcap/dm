@@ -16,6 +16,7 @@ package streamer
 import (
 	"context"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -189,20 +190,29 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 // relaySubDirUpdated checks whether the relay sub directory updated
 // including file changed, created, removed, etc.
 func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir string,
-	latestFilePath, latestFile string, latestFileSize int64) (string, error) {
+	latestFilePath, latestFile string, latestFileSize int64, updatePathCh chan string, errCh chan error) {
+	var err error
+	defer func() {
+		if err != nil {
+			errCh <- err
+		}
+	}()
+
 	// create polling watcher
 	watcher2 := watcher.NewWatcher()
 
 	// Add before Start
 	// no need to Remove, it will be closed and release when return
-	err := watcher2.Add(dir)
+	err = watcher2.Add(dir)
 	if err != nil {
-		return "", terror.ErrAddWatchForRelayLogDir.Delegate(err, dir)
+		err = terror.ErrAddWatchForRelayLogDir.Delegate(err, dir)
+		return
 	}
 
 	err = watcher2.Start(watcherInterval)
 	if err != nil {
-		return "", terror.ErrWatcherStart.Delegate(err, dir)
+		err = terror.ErrWatcherStart.Delegate(err, dir)
+		return
 	}
 	defer watcher2.Close()
 
@@ -269,60 +279,91 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 	// try collect newer relay log file to check whether newer exists before watching
 	newerFiles, err := CollectBinlogFilesCmp(dir, latestFile, FileCmpBigger)
 	if err != nil {
-		return "", terror.Annotatef(err, "collect newer files from %s in dir %s", latestFile, dir)
+		err = terror.Annotatef(err, "collect newer files from %s in dir %s", latestFile, dir)
+		return
 	}
 
 	// check the latest relay log file whether updated when adding watching and collecting newer
 	cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
 	if err != nil {
-		return "", err
+		return
 	} else if cmp < 0 {
-		return "", terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
+		err = terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
+		return
 	} else if cmp > 0 {
-		// the latest relay log file already updated, need to parse from it again (not need to re-collect relay log files)
-		return latestFilePath, nil
+		updatePathCh <- latestFilePath
+		return
 	} else if len(newerFiles) > 0 {
 		// check whether newer relay log file exists
 		nextFilePath := filepath.Join(dir, newerFiles[0])
 		log.L().Info("newer relay log file is already generated, start parse from it", zap.String("new file", nextFilePath))
-		return nextFilePath, nil
+		updatePathCh <- nextFilePath
+		return
 	}
 
 	res := <-result
-	return res.updatePath, res.err
+	if res.err != nil {
+		err = res.err
+		return
+	}
+
+	updatePathCh <- res.updatePath
 }
 
 // needSwitchSubDir checks whether the reader need to switch to next relay sub directory
-func needSwitchSubDir(relayDir, currentUUID, latestFilePath string, latestFileSize int64, UUIDs []string) (
-	needSwitch, needReParse bool, nextUUID string, nextBinlogName string, err error) {
-	nextUUID, _, err = getNextUUID(currentUUID, UUIDs)
-	if err != nil {
-		return false, false, "", "", terror.Annotatef(err, "current UUID %s, UUIDs %v", currentUUID, UUIDs)
-	} else if len(nextUUID) == 0 {
-		// no next sub dir exists, not need to switch
-		return false, false, "", "", nil
-	}
+func needSwitchSubDir(ctx context.Context, relayDir, currentUUID, latestFilePath string, latestFileSize int64, switchCh chan struct {
+	nextUUID       string
+	nextBinlogName string
+}, errCh chan error) {
+	var (
+		err            error
+		nextUUID       string
+		nextBinlogName string
+		uuids          []string
+	)
 
-	// try get the first binlog file in next sub directory
-	nextBinlogName, err = getFirstBinlogName(relayDir, nextUUID)
-	if err != nil {
-		// NOTE: current we can not handle `errors.IsNotFound(err)` easily
-		// because creating sub directory and writing relay log file are not atomic
-		// so we let user to pause syncing before switching relay's master server
-		return false, false, "", "", err
-	}
+	ticker := time.NewTicker(watcherInterval)
+	defer func() {
+		ticker.Stop()
+		if err != nil {
+			errCh <- err
+		}
+	}()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// reload uuid
+			uuids, err = utils.ParseUUIDIndex(path.Join(relayDir, utils.UUIDIndexFilename))
+			if err != nil {
+				return
+			}
+			nextUUID, _, err = getNextUUID(currentUUID, uuids)
+			if err != nil {
+				return
+			}
+			if len(nextUUID) == 0 {
+				continue
+			}
 
-	// check the latest relay log file whether updated when checking next sub directory
-	cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
-	if err != nil {
-		return false, false, "", "", err
-	} else if cmp < 0 {
-		return false, false, "", "", terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
-	} else if cmp > 0 {
-		// the latest relay log file already updated, need to parse from it again (not need to switch to sub directory)
-		return false, true, "", "", nil
-	}
+			// try get the first binlog file in next sub directory
+			nextBinlogName, err = getFirstBinlogName(relayDir, nextUUID)
+			if err != nil {
+				// because creating sub directory and writing relay log file are not atomic
+				// just continue to observe subdir
+				if terror.ErrBinlogFilesNotFound.Equal(err) {
+					err = nil
+					continue
+				}
+				return
+			}
 
-	// need to switch to next sub directory
-	return true, false, nextUUID, nextBinlogName, nil
+			switchCh <- struct {
+				nextUUID       string
+				nextBinlogName string
+			}{nextUUID, nextBinlogName}
+			return
+		}
+	}
 }

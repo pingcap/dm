@@ -14,12 +14,13 @@
 package streamer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
-	"regexp"
 	"sync"
 	"time"
 
@@ -307,15 +308,19 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 		data            = []byte("meaningless file content")
 		size            = int64(len(data))
 		watcherInterval = 100 * time.Millisecond
+		updatePathCh    = make(chan string, 1)
+		errCh           = make(chan error, 1)
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// a. relay log dir not exist
-	upNotExist, err := relaySubDirUpdated(ctx, watcherInterval, "/not-exists-directory", "/not-exists-filepath", "not-exists-file", 0)
+	relaySubDirUpdated(ctx, watcherInterval, "/not-exists-directory", "/not-exists-filepath", "not-exists-file", 0, updatePathCh, errCh)
+	c.Assert(len(errCh), Equals, 1)
+	c.Assert(len(updatePathCh), Equals, 0)
+	err := <-errCh
 	c.Assert(err, ErrorMatches, ".*(no such file or directory|The system cannot find the file specified).*")
-	c.Assert(upNotExist, Equals, "")
 
 	// create relay log dir
 	subDir := c.MkDir()
@@ -325,18 +330,22 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	}
 
 	// b. relay file not found
-	upNotExist, err = relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0)
+	relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0, updatePathCh, errCh)
+	c.Assert(len(errCh), Equals, 1)
+	c.Assert(len(updatePathCh), Equals, 0)
+	err = <-errCh
 	c.Assert(err, ErrorMatches, ".*not found.*")
-	c.Assert(upNotExist, Equals, "")
 
 	// create the first relay file
 	err = ioutil.WriteFile(relayPaths[0], nil, 0600)
 	c.Assert(err, IsNil)
 
 	// c. latest file path not exist
-	upNotExist, err = relaySubDirUpdated(ctx, watcherInterval, subDir, "/no-exists-filepath", relayFiles[0], 0)
+	relaySubDirUpdated(ctx, watcherInterval, subDir, "/no-exists-filepath", relayFiles[0], 0, updatePathCh, errCh)
+	c.Assert(len(errCh), Equals, 1)
+	c.Assert(len(updatePathCh), Equals, 0)
+	err = <-errCh
 	c.Assert(err, ErrorMatches, ".*(no such file or directory|The system cannot find the file specified).*")
-	c.Assert(upNotExist, Equals, "")
 
 	// 1. file increased when adding watching
 	err = ioutil.WriteFile(relayPaths[0], data, 0600)
@@ -345,8 +354,10 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		up, err2 := relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0)
-		c.Assert(err2, IsNil)
+		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0, updatePathCh, errCh)
+		c.Assert(len(errCh), Equals, 0)
+		c.Assert(len(updatePathCh), Equals, 1)
+		up := <-updatePathCh
 		c.Assert(up, Equals, relayPaths[0])
 	}()
 	wg.Wait()
@@ -357,9 +368,11 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		up, err2 := relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], size)
-		c.Assert(err2, ErrorMatches, ".*file size of relay log.*become smaller.*")
-		c.Assert(up, Equals, "")
+		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], size, updatePathCh, errCh)
+		c.Assert(len(errCh), Equals, 1)
+		c.Assert(len(updatePathCh), Equals, 0)
+		err = <-errCh
+		c.Assert(err, ErrorMatches, ".*file size of relay log.*become smaller.*")
 	}()
 	wg.Wait()
 
@@ -369,8 +382,10 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		up, err2 := relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0)
-		c.Assert(err2, IsNil)
+		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0, updatePathCh, errCh)
+		c.Assert(len(errCh), Equals, 0)
+		c.Assert(len(updatePathCh), Equals, 1)
+		up := <-updatePathCh
 		c.Assert(up, Equals, relayPaths[1])
 	}()
 	wg.Wait()
@@ -379,8 +394,10 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		up, err2 := relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[1], relayFiles[1], 0)
-		c.Assert(err2, IsNil)
+		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[1], relayFiles[1], 0, updatePathCh, errCh)
+		c.Assert(len(errCh), Equals, 0)
+		c.Assert(len(updatePathCh), Equals, 1)
+		up := <-updatePathCh
 		c.Assert(up, Equals, relayPaths[1])
 	}()
 
@@ -394,8 +411,10 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		up, err2 := relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[1], relayFiles[1], size)
-		c.Assert(err2, IsNil)
+		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[1], relayFiles[1], size, updatePathCh, errCh)
+		c.Assert(len(errCh), Equals, 0)
+		c.Assert(len(updatePathCh), Equals, 1)
+		up := <-updatePathCh
 		c.Assert(up, Equals, relayPaths[2])
 	}()
 
@@ -412,8 +431,10 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		up, err2 := relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[2], relayFiles[2], size)
-		c.Assert(err2, IsNil)
+		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[2], relayFiles[2], size, updatePathCh, errCh)
+		c.Assert(len(errCh), Equals, 0)
+		c.Assert(len(updatePathCh), Equals, 1)
+		up := <-updatePathCh
 		c.Assert(up, Equals, relayPaths[2])
 	}()
 
@@ -451,37 +472,50 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 		latestFilePath string
 		latestFileSize int64
 		data           = []byte("binlog file data")
+		switchCh       = make(chan struct {
+			nextUUID       string
+			nextBinlogName string
+		}, 1)
+		errCh = make(chan error, 1)
 	)
+
+	ctx := context.Background()
 
 	// invalid UUID in UUIDs, error
 	UUIDs = append(UUIDs, "invalid.uuid")
-	needSwitch, needReParse, nextUUID, nextBinlogName, err := needSwitchSubDir(
-		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
+	t.writeUUIDs(c, relayDir, UUIDs)
+	needSwitchSubDir(ctx, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	c.Assert(len(errCh), Equals, 1)
+	c.Assert(len(switchCh), Equals, 0)
+	err := <-errCh
 	c.Assert(err, ErrorMatches, ".*not valid.*")
-	c.Assert(needSwitch, IsFalse)
-	c.Assert(needReParse, IsFalse)
-	c.Assert(nextUUID, Equals, "")
-	c.Assert(nextBinlogName, Equals, "")
+
 	UUIDs = UUIDs[:len(UUIDs)-1] // remove the invalid UUID
+	t.writeUUIDs(c, relayDir, UUIDs)
 
 	// no next UUID, no need switch
-	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(
-		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
-	c.Assert(err, IsNil)
-	c.Assert(needSwitch, IsFalse)
-	c.Assert(needReParse, IsFalse)
-	c.Assert(nextUUID, Equals, "")
-	c.Assert(nextBinlogName, Equals, "")
+	newCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	needSwitchSubDir(newCtx, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	c.Assert(len(errCh), Equals, 0)
+	c.Assert(len(switchCh), Equals, 0)
 
-	// no binlog file in next sub directory, error
+	// no next sub directory
 	currentUUID = UUIDs[0]
-	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(
-		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
+	needSwitchSubDir(ctx, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	c.Assert(len(errCh), Equals, 1)
+	c.Assert(len(switchCh), Equals, 0)
+	err = <-errCh
 	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*(no such file or directory|The system cannot find the file specified).*", UUIDs[1]))
-	c.Assert(needSwitch, IsFalse)
-	c.Assert(needReParse, IsFalse)
-	c.Assert(nextUUID, Equals, "")
-	c.Assert(nextBinlogName, Equals, "")
+
+	// create next sub directory, block
+	err = os.Mkdir(filepath.Join(relayDir, UUIDs[1]), 0700)
+	c.Assert(err, IsNil)
+	newCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel2()
+	needSwitchSubDir(newCtx2, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	c.Assert(len(errCh), Equals, 0)
+	c.Assert(len(switchCh), Equals, 0)
 
 	// create a relay log file in the next sub directory
 	nextBinlogPath := filepath.Join(relayDir, UUIDs[1], "mysql-bin.000001")
@@ -490,51 +524,28 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 	err = ioutil.WriteFile(nextBinlogPath, nil, 0600)
 	c.Assert(err, IsNil)
 
-	// latest relay log file not exists, error
-	latestFilePath = filepath.Join(relayDir, UUIDs[0], "mysql-bin.000001")
-	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(
-		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
-	c.Assert(err, ErrorMatches, fmt.Sprintf(
-		".*%s.*(no such file or directory|The system cannot find the path specified).*",
-		regexp.QuoteMeta(latestFilePath)))
-	c.Assert(needSwitch, IsFalse)
-	c.Assert(needReParse, IsFalse)
-	c.Assert(nextUUID, Equals, "")
-	c.Assert(nextBinlogName, Equals, "")
-
-	// create the latest relay log file
-	err = os.MkdirAll(filepath.Dir(latestFilePath), 0700)
-	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(latestFilePath, data, 0600)
-	c.Assert(err, IsNil)
-
-	// file size not updated, switch to the next
+	// switch to the next
 	latestFileSize = int64(len(data))
-	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(
-		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
-	c.Assert(err, IsNil)
-	c.Assert(needSwitch, IsTrue)
-	c.Assert(needReParse, IsFalse)
-	c.Assert(nextUUID, Equals, UUIDs[1])
-	c.Assert(nextBinlogName, Equals, filepath.Base(nextBinlogPath))
+	needSwitchSubDir(ctx, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	c.Assert(len(errCh), Equals, 0)
+	c.Assert(len(switchCh), Equals, 1)
+	res := <-switchCh
+	c.Assert(res.nextUUID, Equals, UUIDs[1])
+	c.Assert(res.nextBinlogName, Equals, filepath.Base(nextBinlogPath))
+}
 
-	// file size increased, parse it again
-	latestFileSize = 0
-	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(
-		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
-	c.Assert(err, IsNil)
-	c.Assert(needSwitch, IsFalse)
-	c.Assert(needReParse, IsTrue)
-	c.Assert(nextUUID, Equals, "")
-	c.Assert(nextBinlogName, Equals, "")
+func (t *testFileSuite) writeUUIDs(c *C, relayDir string, UUIDs []string) []byte {
+	indexPath := path.Join(relayDir, utils.UUIDIndexFilename)
+	var buf bytes.Buffer
+	for _, uuid := range UUIDs {
+		_, err := buf.WriteString(uuid)
+		c.Assert(err, IsNil)
+		_, err = buf.WriteString("\n")
+		c.Assert(err, IsNil)
+	}
 
-	// file size decreased, error
-	latestFileSize = int64(len(data)) + 1
-	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(
-		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
-	c.Assert(err, ErrorMatches, ".*become smaller.*")
-	c.Assert(needSwitch, IsFalse)
-	c.Assert(needReParse, IsFalse)
-	c.Assert(nextUUID, Equals, "")
-	c.Assert(nextBinlogName, Equals, "")
+	// write the index file
+	err := ioutil.WriteFile(indexPath, buf.Bytes(), 0600)
+	c.Assert(err, IsNil)
+	return buf.Bytes()
 }
