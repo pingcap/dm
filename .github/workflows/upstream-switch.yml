@@ -43,6 +43,10 @@ jobs:
     - name: Setup containers
       run: |
           docker-compose -f ./tests/upstream_switch/docker-compose.yml up -d
+
+    - name: Run test cases
+      run: |
+        bash ./tests/upstream_switch/case.sh
         
     - name: Copy logs to hack permission
       if: ${{ always() }}
@@ -60,10 +64,6 @@ jobs:
         name: upstream-switch-logs
         path: |
           ./log.log
-
-    - name: Run test cases
-      run: |
-        bash ./tests/upstream_switch/case.sh
 
     # send Slack notify if failed.
     # NOTE: With the exception of `GITHUB_TOKEN`, secrets are not passed to the runner when a workflow is triggered from a forked repository.
