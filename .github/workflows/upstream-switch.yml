@@ -14,8 +14,6 @@ jobs:
   upstream-database-switch:
     name: upstream-database-switch
     runs-on: ubuntu-18.04
-    env:
-      working-directory: ${{ github.workspace }}/go/src/github.com/pingcap/dm
 
     steps:
     - name: Set up Go 1.13
