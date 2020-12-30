@@ -45,6 +45,22 @@ jobs:
     - name: Setup containers
       run: |
           docker-compose -f ./tests/upstream_switch/docker-compose.yml up -d
+        
+   - name: Copy logs to hack permission
+      if: ${{ always() }}
+      run: |
+        mkdir ./logs
+        sudo cp -r -L /tmp/log.log ./log.log
+        sudo chown -R runner ./log.log
+    # Update logs as artifact seems not stable, so we set `continue-on-error: true` here.
+    - name: Upload logs
+      continue-on-error: true
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: upstream-switch-logs
+        path: |
+          ./log.log
 
     - name: Run test cases
       run: |
