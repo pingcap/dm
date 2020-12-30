@@ -77,6 +77,7 @@ func parseExtraArgs(logger *log.Logger, dumpCfg *export.Config, args []string) e
 	dumplingFlagSet.StringVar(&dumpCfg.Security.CertPath, "cert", dumpCfg.Security.CertPath, "The path name to the client certificate file for TLS connection")
 	dumplingFlagSet.StringVar(&dumpCfg.Security.KeyPath, "key", dumpCfg.Security.KeyPath, "The path name to the client private key file for TLS connection")
 	dumplingFlagSet.BoolVar(&noLocks, "no-locks", false, "")
+	dumplingFlagSet.BoolVar(&dumpCfg.TransactionalConsistency, "transactional-consistency", true, "Only support transactional consistency")
 
 	err := dumplingFlagSet.Parse(args)
 	if err != nil {

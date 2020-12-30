@@ -108,7 +108,11 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	})
 
 	newCtx, cancel := context.WithCancel(ctx)
-	err = export.Dump(newCtx, m.dumpConfig)
+	var dumpling *export.Dumper
+	if dumpling, err = export.NewDumper(newCtx, m.dumpConfig); err == nil {
+		err = dumpling.Dump()
+		dumpling.Close()
+	}
 	cancel()
 
 	if err != nil {
@@ -241,6 +245,9 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		dumpConfig.Security.CertPath = db.Security.SSLCert
 		dumpConfig.Security.KeyPath = db.Security.SSLKey
 	}
+
+	// `true` means dumpling will release lock after working connection established
+	dumpConfig.TransactionalConsistency = true
 
 	extraArgs := strings.Fields(cfg.ExtraArgs)
 	if len(extraArgs) > 0 {
