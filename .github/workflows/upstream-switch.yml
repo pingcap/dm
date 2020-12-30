@@ -43,15 +43,11 @@ jobs:
       run: make build dm_integration_test_build
     
     - name: Setup containers
-      working-directory: ${{ env.working-directory }}
       run: |
-          cd ${{ env.working-directory }}/tests/upstream_switch
-          GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
+          docker-compose -f ./tests/upstream_switch/docker-compose.yml up -d
 
     - name: Run test cases
-      working-directory: ${{ env.working-directoryr }}
       run: |
-        cd ${{ env.working-directory }}
         bash ./tests/upstream_switch/case.sh
 
     # send Slack notify if failed.
