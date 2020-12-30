@@ -1798,7 +1798,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// pre-filter of sharding
 		if s.cfg.ShardMode == config.ShardPessimistic {
-			switch stmt.(type) {
+			switch n := stmt.(type) {
 			case *ast.DropDatabaseStmt:
 				err = s.dropSchemaInSharding(ec.tctx, tableNames[0][0].Schema)
 				if err != nil {
@@ -1806,6 +1806,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 				}
 				continue
 			case *ast.DropTableStmt:
+				if n.IsView {
+					// `break` to avoid below `continue`, so this DROP VIEW sql could be added to `needHandleDDLs`
+					break
+				}
 				sourceID, _ := GenTableID(tableNames[0][0].Schema, tableNames[0][0].Name)
 				err = s.sgk.LeaveGroup(tableNames[1][0].Schema, tableNames[1][0].Name, []string{sourceID})
 				if err != nil {
@@ -1868,7 +1872,18 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return err
 	}
 
-	if s.cfg.ShardMode == "" {
+	// VIEW statements are not needed sharding synchronized, so pretend this is no-shard-mode
+	skipShardHandle := false
+	switch n := parseResult.stmt.(type) {
+	case *ast.CreateViewStmt:
+		skipShardHandle = true
+	case *ast.DropTableStmt:
+		if n.IsView {
+			skipShardHandle = true
+		}
+	}
+
+	if s.cfg.ShardMode == "" || skipShardHandle {
 		ec.tctx.L().Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 
 		// interrupted after flush old checkpoint and before track DDL.
@@ -1942,8 +1957,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	source, _ = GenTableID(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name)
 
-	var annotate string
-	switch ddlInfo.stmt.(type) {
+	var (
+		annotate string
+		trySync  bool // below `switch` may let some statements skip sharding sync
+	)
+	switch n := ddlInfo.stmt.(type) {
 	case *ast.CreateDatabaseStmt:
 		// for CREATE DATABASE, we do nothing. when CREATE TABLE under this DATABASE, sharding groups will be added
 	case *ast.CreateTableStmt:
@@ -1953,7 +1971,18 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			return err
 		}
 		annotate = "add table to shard group"
+	case *ast.CreateViewStmt:
+		// for CREATE VIEW, we directly execute it in downstream to avoid sharding sync cost.
+	case *ast.DropTableStmt:
+		// for DROP VIEW, we directly execute it in downstream to avoid sharding sync cost.
+		if !n.IsView {
+			trySync = true
+		}
 	default:
+		trySync = true
+	}
+
+	if trySync {
 		needShardingHandle, group, synced, active, remain, err = s.sgk.TrySync(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, source, *startLocation, *ec.currentLocation, needHandleDDLs)
 		if err != nil {
 			return err

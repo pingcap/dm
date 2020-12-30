@@ -1188,6 +1188,7 @@ func (l *Loader) restoreView(ctx context.Context, conn *DBConn, sqlFile, schema,
 				continue
 			}
 
+			// handle route-rules below. we could skip SET and only check DROP/CREATE
 			if strings.HasPrefix(query, "DROP") {
 				query = renameShardingTable(query, view, dstView, false)
 			} else if strings.HasPrefix(query, "CREATE") {

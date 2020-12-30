@@ -801,6 +801,76 @@ function DM_RestartMaster() {
     "clean_table" "optimistic"
 }
 
+function DM_SyncView_CASE() {
+    # sync of view didn't need shard DDL synchronization
+    run_sql_source2 "create view ${shardddl1}.v1 as select * from ${shardddl1}.${tb1};"
+    sleep 1
+    run_sql_tidb "show create view ${shardddl}.v"
+    check_contains "View: v"
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "\"result\": true" 1 \
+        "no DDL lock exists" 1
+
+    # test reference across database
+    run_sql_source1 "create view ${shardddl2}.v2 as select * from ${shardddl1}.${tb1};"
+    sleep 1
+    run_sql_tidb "show create view ${shardddl}.v"
+    check_contains "View: v"
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "\"result\": true" 1 \
+        "no DDL lock exists" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"result\": true" 3
+
+    # test drop view
+    run_sql_source2 "drop view ${shardddl1}.v1;"
+    sleep 1
+    # drop so "not exist" error
+    run_sql_tidb "show create view ${shardddl}.v" && exit 1 || true
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "\"result\": true" 1 \
+        "no DDL lock exists" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"result\": true" 3
+
+    run_sql_source1 "drop view ${shardddl2}.v2;"
+    sleep 1
+    run_sql_tidb "show create view ${shardddl}.v" && exit 1 || true
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "\"result\": true" 1 \
+        "no DDL lock exists" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"result\": true" 3
+
+    # test not in sync group
+    run_sql_source1 "create view ${shardddl2}.notsyncview as select * from ${shardddl1}.${tb1};"
+    sleep 1
+    run_sql_tidb "show create view ${shardddl}.notsyncview"
+    check_contains "View: notsyncview"
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"result\": true" 3
+
+    run_sql_source1 "drop view ${shardddl2}.notsyncview;"
+    sleep 1
+    run_sql_tidb "show create view ${shardddl}.notsyncview"  && exit 1 || true
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"result\": true" 3
+}
+
+function DM_SyncView() {
+    run_case SyncView "double-source-pessimistic-view" "init_table 111 112 211" "clean_table" "pessimistic"
+    run_case SyncView "double-source-optimistic-view" "init_table 111 112 211" "clean_table" "optimistic"
+}
+
 function run() {
     init_cluster
     init_database
@@ -816,8 +886,8 @@ function run() {
     done
 
     DM_RemoveLock
-
     DM_RestartMaster
+    DM_SyncView
 }
 
 cleanup_data $shardddl
