@@ -25,8 +25,19 @@ jobs:
     
     - name: Check out code
       uses: actions/checkout@v2
+
+    - name: Cache go modules
+      uses: actions/cache@v2
       with:
-        path: go/src/github.com/pingcap/dm
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
+    
+    - name: Cache tools
+      uses: actions/cache@v2
+      with:
+        path: |
+          **/tools
+        key: ${{ runner.os }}-dm-tools-${{ hashFiles('**/tools/go.sum') }}
 
     - name: Build DM binary
       run: make build dm_integration_test_build
