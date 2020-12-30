@@ -46,12 +46,13 @@ jobs:
       run: |
           docker-compose -f ./tests/upstream_switch/docker-compose.yml up -d
         
-   - name: Copy logs to hack permission
+    - name: Copy logs to hack permission
       if: ${{ always() }}
       run: |
         mkdir ./logs
         sudo cp -r -L /tmp/log.log ./log.log
         sudo chown -R runner ./log.log
+
     # Update logs as artifact seems not stable, so we set `continue-on-error: true` here.
     - name: Upload logs
       continue-on-error: true
