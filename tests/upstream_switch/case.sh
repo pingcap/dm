@@ -100,13 +100,13 @@ function gen_full_data() {
 
     exec_sql $host1 "create database ${db};"
     exec_sql $host1 "create table ${db}.${tb}(id int primary key, a int);"
-    for i in $(seq 1 100); do
+    for i in $(seq 1 1000); do
         exec_sql $host1 "insert into ${db}.${tb} values($i,$i);"
     done
 
     exec_sql $host2 "create database ${db};"
     exec_sql $host2 "create table ${db}.${tb}(id int primary key, a int);"
-    for i in $(seq 101 200); do
+    for i in $(seq 1001 2000); do
         exec_sql $host2 "insert into ${db}.${tb} values($i,$i);"
     done
 }
