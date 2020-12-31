@@ -86,9 +86,17 @@ function wait_mysql() {
         fi
         sleep 1
     done
+    i=0
+
     server_id=$(echo "show variables like 'server_id';" | mysql -uroot -h$1 -P3306 -p123456 | awk 'NR==2' | awk  '{print $2}')
-    if [ "$server_id" != $2 ]; then
-        echo "different server_id: " $server_id ", expect: " $2
-        exit 1
+    while [ "$server_id" != $2 ]; do
+        echo "wait server_id"
+        i=$((i+1))
+        if [ "$i" -gt 20 ]; then
+            echo "different server_id: $server_id, expect: $2, host: $1"
+            exit 1
+        fi
+        sleep 1
+        server_id=$(echo "show variables like 'server_id';" | mysql -uroot -h$1 -P3306 -p123456 | awk 'NR==2' | awk  '{print $2}')
     fi
 }
