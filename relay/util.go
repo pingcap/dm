@@ -18,9 +18,7 @@ import (
 	"database/sql"
 	"strings"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
-	"go.uber.org/zap"
 )
 
 // isNewServer checks whether is connecting to a new server.
@@ -33,7 +31,6 @@ func isNewServer(ctx context.Context, prevUUID string, db *sql.DB, flavor string
 	if err != nil {
 		return false, err
 	}
-	log.L().Info("new server", zap.String("old", prevUUID), zap.String("new", uuid))
 	if strings.HasPrefix(prevUUID, uuid) {
 		// same server as before
 		return false, nil
