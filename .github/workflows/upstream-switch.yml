@@ -52,8 +52,8 @@ jobs:
       if: ${{ always() }}
       run: |
         mkdir ./logs
-        sudo cp -r -L /tmp/log.log ./log.log
-        sudo chown -R runner ./log.log
+        sudo cp -L /tmp/dm_test/upstream_switch/*/*.log ./logs
+        sudo chown -R runner ./logs
 
     # Update logs as artifact seems not stable, so we set `continue-on-error: true` here.
     - name: Upload logs
@@ -63,7 +63,7 @@ jobs:
       with:
         name: upstream-switch-logs
         path: |
-          ./log.log
+          ./logs
 
     # send Slack notify if failed.
     # NOTE: With the exception of `GITHUB_TOKEN`, secrets are not passed to the runner when a workflow is triggered from a forked repository.
