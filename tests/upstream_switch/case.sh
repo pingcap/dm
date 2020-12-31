@@ -100,13 +100,13 @@ function gen_full_data() {
 
     exec_sql $host1 "create database ${db};"
     exec_sql $host1 "create table ${db}.${tb}(id int primary key, a int);"
-    for i in $(seq 1 1000); do
+    for i in $(seq 1 100); do
         exec_sql $host1 "insert into ${db}.${tb} values($i,$i);"
     done
 
     exec_sql $host2 "create database ${db};"
     exec_sql $host2 "create table ${db}.${tb}(id int primary key, a int);"
-    for i in $(seq 1001 2000); do
+    for i in $(seq 101 200); do
         exec_sql $host2 "insert into ${db}.${tb} values($i,$i);"
     done
 }
@@ -115,18 +115,18 @@ function gen_full_data() {
 function gen_incr_data() {
     echo "-------gen_incr_data--------"
 
-    for i in $(seq 2001 2500); do
+    for i in $(seq 201 250); do
         exec_sql $host1 "insert into ${db}.${tb} values($i,$i);"
     done
-    for i in $(seq 2501 3000); do
+    for i in $(seq 251 300); do
         exec_sql $host2 "insert into ${db}.${tb} values($i,$i);"
     done
     exec_sql $host1 "alter table ${db}.${tb} add column b int;"
     exec_sql $host2 "alter table ${db}.${tb} add column b int;"
-    for i in $(seq 3001 3500); do
+    for i in $(seq 301 350); do
         exec_sql $host1 "insert into ${db}.${tb} values($i,$i,$i);"
     done
-    for i in $(seq 3501 4000); do
+    for i in $(seq 351 400); do
         exec_sql $host2 "insert into ${db}.${tb} values($i,$i,$i);"
     done
 
@@ -135,10 +135,10 @@ function gen_incr_data() {
     wait_mysql $host1 2
     wait_mysql $host2 2
 
-    for i in $(seq 4001 4500); do
+    for i in $(seq 401 450); do
         exec_sql $host1 "insert into ${db}.${tb} values($i,$i,$i);"
     done
-    for i in $(seq 4501 5000); do
+    for i in $(seq 451 500); do
         exec_sql $host2 "insert into ${db}.${tb} values($i,$i,$i);"
     done
     exec_sql $host1 "alter table ${db}.${tb} add column c int;"
@@ -147,10 +147,10 @@ function gen_incr_data() {
     docker-compose -f $CUR/docker-compose.yml unpause mysql8_master
     wait_mysql $host2 1
 
-    for i in $(seq 5001 5500); do
+    for i in $(seq 501 550); do
         exec_sql $host1 "insert into ${db}.${tb} values($i,$i,$i,$i);"
     done
-    for i in $(seq 5501 6000); do
+    for i in $(seq 551 600); do
         exec_sql $host2 "insert into ${db}.${tb} values($i,$i,$i,$i);"
     done
 }
