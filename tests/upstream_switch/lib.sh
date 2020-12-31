@@ -56,7 +56,7 @@ function prepare_less_binlogs() {
 
 
 function get_master_status() {
-    arr=$(echo "show master status;" | mysql -uroot -h$1 -P3306 -p123456 | awk 'NR==2' )
+    arr=$(echo "show master status;" | MYSQL_PWD=123456 mysql -uroot -h$1 -P3306 | awk 'NR==2' )
     echo $arr
 }
 
