@@ -52,7 +52,7 @@ jobs:
       if: ${{ always() }}
       run: |
         mkdir ./logs
-        sudo cp -L /tmp/dm_test/upstream_switch/*/*.log ./logs
+        sudo cp -L /tmp/dm_test/upstream_switch/*/log/*.log ./logs
         sudo chown -R runner ./logs
 
     # Update logs as artifact seems not stable, so we set `continue-on-error: true` here.
