@@ -199,6 +199,7 @@ function test() {
     run_dm_components
     create_sources
     start_task
+    check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
     gen_incr_data
     verify_result
     clean_task
