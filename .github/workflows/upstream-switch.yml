@@ -38,7 +38,7 @@ jobs:
         key: ${{ runner.os }}-dm-tools-${{ hashFiles('**/tools/go.sum') }}
 
     - name: Build DM binary
-      run: make build dm_integration_test_build
+      run: make dm_integration_test_build
     
     - name: Setup containers
       run: |
