@@ -590,6 +590,7 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 	}
 
 	r.updateMetricsRelaySubDirIndex()
+	r.logger.Info("resetup meta", zap.String("uuid", uuid))
 
 	return nil
 }

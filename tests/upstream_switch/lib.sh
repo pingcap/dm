@@ -3,7 +3,7 @@
 set -eu
 
 export TEST_DIR=/tmp/dm_test
-export TEST_NAME="upstream-switch"
+export TEST_NAME="upstream_switch"
 
 WORK_DIR=$TEST_DIR/$TEST_NAME
 rm -rf $WORK_DIR
@@ -23,7 +23,7 @@ WORKER1_PORT=8262
 WORKER2_PORT=8263
 
 function exec_sql() {
-    echo $2 | mysql -uroot -h$1 -P3306 -p123456
+    echo $2 | MYSQL_PWD=123456 mysql -uroot -h$1 -P3306
 }
 
 function exec_tidb() {
