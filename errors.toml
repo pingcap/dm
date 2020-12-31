@@ -1372,6 +1372,12 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+[error.DM-relay-unit-30044]
+message = "receive fake rotate event with differend server_id"
+description = ""
+workaround = "Please use `resume-relay` command if upstream database has changed"
+tags = ["internal", "high"]
+
 [error.DM-dump-unit-32001]
 message = "mydumper/dumpling runs with error, with output (may empty): %s"
 description = ""
