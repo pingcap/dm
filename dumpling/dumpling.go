@@ -20,8 +20,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
@@ -221,7 +219,6 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	dumpConfig.CompleteInsert = true // always keep column name in `INSERT INTO` statements.
 	dumpConfig.Logger = m.logger.Logger
 	dumpConfig.NoViews = false
-	dumpConfig.Labels = prometheus.Labels{"task": cfg.Name}
 
 	if cfg.Threads > 0 {
 		dumpConfig.Threads = cfg.Threads
