@@ -98,5 +98,5 @@ function wait_mysql() {
         fi
         sleep 1
         server_id=$(echo "show variables like 'server_id';" | mysql -uroot -h$1 -P3306 -p123456 | awk 'NR==2' | awk  '{print $2}')
-    fi
+    done
 }
