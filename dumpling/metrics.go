@@ -14,6 +14,7 @@
 package dumpling
 
 import (
+	"github.com/pingcap/dumpling/v4/export"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/pingcap/dm/pkg/metricsproxy"
@@ -33,8 +34,10 @@ var (
 // RegisterMetrics registers metrics.
 func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(dumplingExitWithErrorCounter)
+	export.RegisterMetrics(registry)
 }
 
 func (m *Dumpling) removeLabelValuesWithTaskInMetrics(task string) {
 	dumplingExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	export.RemoveLabelValuesWithTaskInMetrics(prometheus.Labels{"task": task})
 }
