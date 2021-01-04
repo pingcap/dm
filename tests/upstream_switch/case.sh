@@ -144,6 +144,11 @@ function gen_incr_data() {
     exec_sql $host1 "alter table ${db}.${tb} add column c int;"
     exec_sql $host2 "alter table ${db}.${tb} add column c int;"
 
+    # make sure relay switch before unpause
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status task_pessimistic -s mysql-replica-02" \
+        "relaySubDir.*000002" 1
+
     docker-compose -f $CUR/docker-compose.yml unpause mysql8_master
     wait_mysql $host2 1
 
@@ -199,7 +204,6 @@ function test() {
     run_dm_components
     create_sources
     start_task
-    check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
     gen_incr_data
     verify_result
     clean_task
