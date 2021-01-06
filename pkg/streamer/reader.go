@@ -605,10 +605,7 @@ func (r *BinlogReader) parseFile(
 		return false, false, latestPos, "", "", nil
 	}
 
-	switchCh := make(chan struct {
-		nextUUID       string
-		nextBinlogName string
-	}, 1)
+	switchCh := make(chan SwitchPath, 1)
 	switchErrCh := make(chan error, 1)
 	updatePathCh := make(chan string, 1)
 	updateErrCh := make(chan error, 1)

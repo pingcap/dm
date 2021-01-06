@@ -43,6 +43,12 @@ const (
 	FileCmpBigger
 )
 
+// SwitchPath represents next binlog file path which should be switched
+type SwitchPath struct {
+	nextUUID       string
+	nextBinlogName string
+}
+
 // CollectAllBinlogFiles collects all valid binlog files in dir
 func CollectAllBinlogFiles(dir string) ([]string, error) {
 	if dir == "" {
@@ -311,10 +317,7 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 }
 
 // needSwitchSubDir checks whether the reader need to switch to next relay sub directory
-func needSwitchSubDir(ctx context.Context, relayDir, currentUUID, latestFilePath string, latestFileSize int64, switchCh chan struct {
-	nextUUID       string
-	nextBinlogName string
-}, errCh chan error) {
+func needSwitchSubDir(ctx context.Context, relayDir, currentUUID, latestFilePath string, latestFileSize int64, switchCh chan SwitchPath, errCh chan error) {
 	var (
 		err            error
 		nextUUID       string
@@ -359,10 +362,7 @@ func needSwitchSubDir(ctx context.Context, relayDir, currentUUID, latestFilePath
 				return
 			}
 
-			switchCh <- struct {
-				nextUUID       string
-				nextBinlogName string
-			}{nextUUID, nextBinlogName}
+			switchCh <- SwitchPath{nextUUID, nextBinlogName}
 			return
 		}
 	}

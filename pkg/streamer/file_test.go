@@ -472,11 +472,8 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 		latestFilePath string
 		latestFileSize int64
 		data           = []byte("binlog file data")
-		switchCh       = make(chan struct {
-			nextUUID       string
-			nextBinlogName string
-		}, 1)
-		errCh = make(chan error, 1)
+		switchCh       = make(chan SwitchPath, 1)
+		errCh          = make(chan error, 1)
 	)
 
 	ctx := context.Background()
