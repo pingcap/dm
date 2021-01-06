@@ -640,6 +640,12 @@ func (r *BinlogReader) parseFile(
 	case <-ctx.Done():
 		return false, false, 0, "", "", nil
 	case switchResp := <-switchCh:
+		// wait to ensure old file not updated
+		pathUpdated := utils.WaitSomething(3, watcherInterval, func() bool { return len(updatePathCh) > 0 })
+		if pathUpdated {
+			// re-parse it
+			return false, true, latestPos, "", "", nil
+		}
 		// update new uuid
 		if err = r.updateUUIDs(); err != nil {
 			return false, false, 0, "", "", nil
