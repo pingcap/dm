@@ -23,7 +23,7 @@ spec:
     matchLabels:
       app: dm-worker
   serviceName: dm-worker
-  replicas: 3 # 3 DM-worker instances
+  replicas: 4 # 4 DM-worker instances
   podManagementPolicy: Parallel
   template:
     metadata:
