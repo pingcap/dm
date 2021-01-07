@@ -1,0 +1,7 @@
+source-id: "replica-03"
+
+from:
+  host: "mariadb-0.sources" # same namespace with MySQL
+  user: "root"
+  password: ""
+  port: 3306

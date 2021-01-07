@@ -1,6 +1,7 @@
 ---
 name: "task_single"
 task-mode: all
+timezone: "UTC"
 
 target-database:
   host: "tidb-0.tidb"
@@ -10,7 +11,7 @@ target-database:
 
 mysql-instances:
   -
-    source-id: "mysql-replica-01"
+    source-id: "replica-01"
     black-white-list:  "instance"
     mydumper-thread: 4
     loader-thread: 16

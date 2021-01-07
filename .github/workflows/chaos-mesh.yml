@@ -106,33 +106,35 @@ jobs:
     #   run: |
     #     kind load docker-image dm:chaos --name dm-chaos
 
-    # Set up upstream MySQL instances
-    - name: Set up MySQL
+    # Set up upstream instances
+    - name: Set up sources
       run: |
-         kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
-         kubectl get -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
-         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/mysql.yaml
-    - name: Wait for MySQL ready # kubectl wait --all not working
+         kubectl apply -f $GITHUB_WORKSPACE/chaos/manifests/sources.yaml
+         kubectl get -f $GITHUB_WORKSPACE/chaos/manifests/sources.yaml
+         kubectl describe -f $GITHUB_WORKSPACE/chaos/manifests/sources.yaml
+    - name: Wait for sources ready # kubectl wait --all not working
       run: |
-         kubectl wait --for=condition=Ready pod/mysql-0 --timeout=300s || true
+         kubectl wait --for=condition=Ready pod/mysql57-0 --timeout=300s || true
+         kubectl wait --for=condition=Ready pod/mysql8-0 --timeout=300s || true
+         kubectl wait --for=condition=Ready pod/mariadb-0 --timeout=300s || true
          sleep 10
-         kubectl wait --for=condition=Ready pod/mysql-1 --timeout=300s || true
          echo show pvc
-         kubectl get pvc -l app=mysql -o wide
+         kubectl get pvc -l app=sources -o wide
          echo show pv
          kubectl get pv -o wide
          echo show svc
-         kubectl get svc -l app=mysql -o wide
+         kubectl get svc -l app=sources -o wide
          echo show sts
-         kubectl get sts -l app=mysql -o wide
+         kubectl get sts -l app=sources -o wide
          echo show po
-         kubectl get po -l app=mysql -o wide
+         kubectl get po -l app=sources -o wide
          echo describe po
-         kubectl describe po -l app=mysql
+         kubectl describe po -l app=sources
          echo describe pvc
-         kubectl describe pvc -l app=mysql
-         kubectl wait --for=condition=Ready pod/mysql-0 --timeout=0s
-         kubectl wait --for=condition=Ready pod/mysql-1 --timeout=0s
+         kubectl describe pvc -l app=sources
+         kubectl wait --for=condition=Ready pod/mysql57-0 --timeout=0s
+         kubectl wait --for=condition=Ready pod/mysql8-0 --timeout=0s
+         kubectl wait --for=condition=Ready pod/mariadb-0 --timeout=0s
 
     # Set up downstream TiDB instance (deploy a TiDB with mockTiKV, not a TidbCluster managed by TiDB-operator)
     - name: Set up TiDB
