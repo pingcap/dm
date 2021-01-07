@@ -841,7 +841,7 @@ function DM_SyncView_CASE() {
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "show-ddl-locks" \
             "\"ID\": \"test-\`shardddl\`.\`tb\`\"" 1
-        sleep 2
+        sleep 5
         run_sql_tidb "show create view ${shardddl}.v" && exit 1 || true
     fi
 
