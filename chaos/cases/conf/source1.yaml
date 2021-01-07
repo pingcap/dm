@@ -1,6 +1,6 @@
 source-id: "replica-01"
-enable-gtid: false
-enable-relay: false
+enable-gtid: true
+enable-relay: true
 
 from:
   host: "mysql57-0.sources" # same namespace with MySQL
