@@ -802,6 +802,61 @@ function DM_RestartMaster() {
 }
 
 function DM_SyncView_CASE() {
+    # test sharding lock mixed VIEW
+    # 1/3 shard DDL
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column c int;"
+
+    run_sql_source1 "create view ${shardddl1}.v1 as select * from ${shardddl1}.${tb1};"
+    sleep 1
+    run_sql_tidb "show create view ${shardddl}.v"
+    check_contains "View: v"
+    if [[ "$1" = "pessimistic" ]]; then
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` INT' 1
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "show-ddl-locks" \
+            "\"result\": true" 1 \
+            "no DDL lock exists" 1
+    else
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "show-ddl-locks" \
+            "\"ID\": \"test-\`shardddl\`.\`tb\`\"" 1
+    fi
+
+    # 2/3 shard DDL
+    run_sql_source1 "alter table ${shardddl1}.${tb2} add column c int;"
+
+    run_sql_source1 "drop view ${shardddl1}.v1;"
+    if [[ "$1" = "pessimistic" ]]; then
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` INT' 1
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "show-ddl-locks" \
+            "\"result\": true" 1 \
+            'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` INT' 1
+        # DDL lock will stop sync of VIEW
+    else
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "show-ddl-locks" \
+            "\"ID\": \"test-\`shardddl\`.\`tb\`\"" 1
+        sleep 2
+        run_sql_tidb "show create view ${shardddl}.v" && exit 1 || true
+    fi
+
+    # 3/3 shard DDL
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column c int;"
+    if [[ "$1" = "pessimistic" ]]; then
+        sleep 1
+        run_sql_tidb "show create view ${shardddl}.v" && exit 1 || true
+    fi
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "\"result\": true" 1 \
+        "no DDL lock exists" 1
+
+    # --------------------------------------------------
     # sync of view didn't need shard DDL synchronization
     run_sql_source2 "create view ${shardddl1}.v1 as select * from ${shardddl1}.${tb1};"
     sleep 1
@@ -874,6 +929,7 @@ function DM_SyncView() {
 function run() {
     init_cluster
     init_database
+
     start=71
     end=103
     except=(072 074 075 083 084 087 088 089 090 091 092 093)
