@@ -95,6 +95,10 @@ type Process interface {
 	IsClosed() bool
 	// SaveMeta save relay meta
 	SaveMeta(pos mysql.Position, gset gtid.Set) error
+	// ResetMeta reset relay meta
+	ResetMeta()
+	// PurgeRelayDir will clear all contents under w.cfg.RelayDir
+	PurgeRelayDir() error
 }
 
 // Relay relays mysql binlog to local file.
@@ -199,8 +203,8 @@ func (r *Relay) process(ctx context.Context) error {
 		return err
 	}
 
-	if isNew {
-		// re-setup meta for new server
+	if isNew || r.cfg.UUIDSuffix > 0 {
+		// re-setup meta for new server or new source
 		err = r.reSetupMeta(ctx)
 		if err != nil {
 			return err
@@ -214,7 +218,7 @@ func (r *Relay) process(ctx context.Context) error {
 		}
 	}
 
-	reader2, err := r.setUpReader()
+	reader2, err := r.setUpReader(ctx)
 	if err != nil {
 		return err
 	}
@@ -262,7 +266,7 @@ func (r *Relay) process(ctx context.Context) error {
 		if err != nil {
 			r.logger.Error("fail to close binlog event reader", zap.Error(err))
 		}
-		reader2, err = r.setUpReader() // setup a new one
+		reader2, err = r.setUpReader(ctx) // setup a new one
 		if err != nil {
 			return err
 		}
@@ -270,8 +274,8 @@ func (r *Relay) process(ctx context.Context) error {
 	}
 }
 
-// purgeRelayDir will clear all contents under w.cfg.RelayDir
-func (r *Relay) purgeRelayDir() error {
+// PurgeRelayDir implements the dm.Unit interface
+func (r *Relay) PurgeRelayDir() error {
 	dir := r.cfg.RelayDir
 	d, err := os.Open(dir)
 	// fail to open dir, return directly
@@ -383,7 +387,13 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 	var (
 		_, lastPos  = r.meta.Pos()
 		_, lastGTID = r.meta.GTID()
+		err         error
 	)
+	if lastGTID == nil {
+		if lastGTID, err = gtid.ParserGTID(r.cfg.Flavor, ""); err != nil {
+			return err
+		}
+	}
 
 	for {
 		// 1. read events from upstream server
@@ -510,7 +520,32 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	err = r.meta.AddDir(uuid, nil, nil)
+
+	var newPos *mysql.Position
+	var newGset gtid.Set
+	var newUUIDSufiix int
+	if r.cfg.UUIDSuffix > 0 {
+		// if bound or rebound to a source, clear all relay log and meta
+		if err = r.PurgeRelayDir(); err != nil {
+			return err
+		}
+		r.ResetMeta()
+
+		newUUIDSufiix = r.cfg.UUIDSuffix
+		// reset the UUIDSuffix
+		r.cfg.UUIDSuffix = 0
+
+		if len(r.cfg.BinLogName) != 0 {
+			newPos = &mysql.Position{Name: r.cfg.BinLogName, Pos: binlog.MinPosition.Pos}
+		}
+		if len(r.cfg.BinlogGTID) != 0 {
+			newGset, err = gtid.ParserGTID(r.cfg.Flavor, r.cfg.BinlogGTID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	err = r.meta.AddDir(uuid, newPos, newGset, newUUIDSufiix)
 	if err != nil {
 		return err
 	}
@@ -606,7 +641,18 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 }
 
 // setUpReader setups the underlying reader used to read binlog events from the upstream master server.
-func (r *Relay) setUpReader() (reader.Reader, error) {
+func (r *Relay) setUpReader(ctx context.Context) (reader.Reader, error) {
+	ctx2, cancel := context.WithTimeout(ctx, utils.DefaultDBTimeout)
+	defer cancel()
+
+	randomServerID, err := utils.ReuseServerID(ctx2, r.cfg.ServerID, r.db)
+	if err != nil {
+		// should never happened unless the master has too many slave
+		return nil, terror.Annotate(err, "fail to get random server id for relay reader")
+	}
+	r.syncerCfg.ServerID = randomServerID
+	r.cfg.ServerID = randomServerID
+
 	uuid, pos := r.meta.Pos()
 	_, gs := r.meta.GTID()
 	cfg := &reader.Config{
@@ -618,7 +664,7 @@ func (r *Relay) setUpReader() (reader.Reader, error) {
 	}
 
 	reader2 := reader.NewReader(cfg)
-	err := reader2.Start()
+	err = reader2.Start()
 	if err != nil {
 		// do not log the whole config to protect the password in `SyncConfig`.
 		// and other config items should already logged before or included in `err`.
@@ -662,6 +708,12 @@ func (r *Relay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
 	}
 	r.relayMetaHub.SetMeta(r.meta.UUID(), pos, gset)
 	return nil
+}
+
+// ResetMeta reset relay meta
+func (r *Relay) ResetMeta() {
+	r.meta = NewLocalMeta(r.cfg.Flavor, r.cfg.RelayDir)
+	r.relayMetaHub.ClearMeta()
 }
 
 // FlushMeta flush relay meta

@@ -36,7 +36,7 @@ func NewPurgeRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		//Use:   "purge-relay <-w worker> [--inactive] [--time] [--filename] [--sub-dir]",
 		//Short: "purge dm-worker's relay log files, choose 1 of 2 methods",
-		Use:   "purge-relay <-s source> [--filename] [--sub-dir]",
+		Use:   "purge-relay <-s source> <-f filename> [--sub-dir directory]",
 		Short: "purge relay log files of the DM-worker according to the specified filename",
 		RunE:  purgeRelayFunc,
 	}
@@ -59,24 +59,25 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
 		return
 	}
 	if len(sources) == 0 {
-		fmt.Println("must specify at least one source (`-s` / `--source`)")
-		err = errors.New("please check output to see error")
+		err = errors.New("must specify at least one source (`-s` / `--source`)")
 		return
 	}
 
 	filename, err := cmd.Flags().GetString("filename")
 	if err != nil {
-		common.PrintLines("error in parse `--filename`")
+		return
+	}
+
+	if len(filename) == 0 {
+		err = errors.New("must specify the name of the terminal file before which to purge relay log files. (`-f` / `--filename`)")
 		return
 	}
 
 	subDir, err := cmd.Flags().GetString("sub-dir")
 	if err != nil {
-		common.PrintLines("error in parse `--sub-dir`")
 		return
 	}
 
@@ -86,8 +87,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	}
 
 	if len(filename) > 0 && len(sources) > 1 {
-		fmt.Println("for --filename, can only specify one source per time")
-		err = errors.New("please check output to see error")
+		err = errors.New("for --filename, can only specify one source per time")
 		return
 	}
 	if len(subDir) > 0 {

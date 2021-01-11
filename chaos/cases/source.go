@@ -39,8 +39,8 @@ func createSources(ctx context.Context, cli pb.MasterClient, cfg *config) error 
 		return err
 	}
 
-	var cfg1 config2.SourceConfig
-	var cfg2 config2.SourceConfig
+	cfg1 := config2.NewSourceConfig()
+	cfg2 := config2.NewSourceConfig()
 	if err = cfg1.ParseYaml(string(s1Content)); err != nil {
 		return err
 	}
