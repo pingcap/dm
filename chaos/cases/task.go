@@ -37,8 +37,8 @@ import (
 const (
 	tableCount      = 10               // tables count in schema.
 	fullInsertCount = 100              // `INSERT INTO` count (not rows count) for each table in full stage.
-	diffCount       = 30               // diff data check count
-	diffInterval    = 10 * time.Second // diff data check interval
+	diffCount       = 10               // diff data check count
+	diffInterval    = 20 * time.Second // diff data check interval
 	incrRoundTime   = 20 * time.Second // time to generate incremental data in one round
 )
 
@@ -343,7 +343,7 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 		default:
 		}
 
-		if rand.Intn(1000) < 10 {
+		if rand.Intn(3000) < 10 {
 			query, err = randDDL(t.ss)
 			if err != nil {
 				return err
