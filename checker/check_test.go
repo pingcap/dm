@@ -93,7 +93,7 @@ func (s *testCheckerSuite) TestDumpPrivilegeChecking(c *tc.C) {
 	mock := s.initMockDB(c)
 	mock.ExpectQuery("SHOW GRANTS").WillReturnRows(sqlmock.NewRows([]string{"Grants for User"}).
 		AddRow("GRANT USAGE ON *.* TO 'haha'@'%'"))
-	c.Assert(CheckSyncConfig(context.Background(), cfgs), tc.ErrorMatches, "(.|\n)*lack of RELOAD,SELECT privilege(.|\n)*")
+	c.Assert(CheckSyncConfig(context.Background(), cfgs), tc.ErrorMatches, "(.|\n)*lack of RELOAD,Select privilege(.|\n)*")
 
 	mock = s.initMockDB(c)
 	mock.ExpectQuery("SHOW GRANTS").WillReturnRows(sqlmock.NewRows([]string{"Grants for User"}).
@@ -110,7 +110,9 @@ func (s *testCheckerSuite) TestReplicationPrivilegeChecking(c *tc.C) {
 	mock := s.initMockDB(c)
 	mock.ExpectQuery("SHOW GRANTS").WillReturnRows(sqlmock.NewRows([]string{"Grants for User"}).
 		AddRow("GRANT USAGE ON *.* TO 'haha'@'%'"))
-	c.Assert(CheckSyncConfig(context.Background(), cfgs), tc.ErrorMatches, "(.|\n)*lack of REPLICATION SLAVE,REPLICATION CLIENT privilege(.|\n)*")
+	err := CheckSyncConfig(context.Background(), cfgs)
+	c.Assert(err, tc.ErrorMatches, "(.|\n)*lack.*REPLICATION SLAVE(.|\n)*")
+	c.Assert(err, tc.ErrorMatches, "(.|\n)*lack.*REPLICATION CLIENT(.|\n)*")
 
 	mock = s.initMockDB(c)
 	mock.ExpectQuery("SHOW GRANTS").WillReturnRows(sqlmock.NewRows([]string{"Grants for User"}).
