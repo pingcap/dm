@@ -262,6 +262,19 @@ function run() {
 #    purge_relay_success $max_binlog_name $SOURCE_ID1
     new_relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
     [ "$new_relay_log_count" -eq 1 ]
+
+    run_sql_source1 "alter table dmctl.t_1 add column aaa int"
+    run_sql_source1 "alter table dmctl.t_2 add column aaa int"
+    run_sql_source2 "alter table dmctl.t_1 add column aaa int"
+    run_sql_source2 "alter table dmctl.t_2 add column aaa int"
+
+    # all t_1 synced, all t_2 unsynced
+    run_sql_source1 "alter table dmctl.t_2 add column bbb int"
+    run_sql_source2 "alter table dmctl.t_2 add column bbb int"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "detect inconsistent DDL sequence" 2
 }
 
 cleanup_data dmctl

@@ -21,7 +21,8 @@ target-database:
 mysql-instances:
 - source-id: mysql-replica-01
   meta: null
-  filter-rules: []
+  filter-rules:
+  - filter-01
   column-mapping-rules:
   - cm-01
   route-rules:
@@ -40,7 +41,8 @@ mysql-instances:
   syncer-thread: 0
 - source-id: mysql-replica-02
   meta: null
-  filter-rules: []
+  filter-rules:
+  - filter-02
   column-mapping-rules:
   - cm-02
   route-rules:
@@ -69,7 +71,21 @@ routes:
     table-pattern: ""
     target-schema: dmctl
     target-table: ""
-filters: {}
+filters:
+  filter-01:
+    schema-pattern: dmctl
+    table-pattern: t_1
+    events:
+    - all
+    sql-pattern: []
+    action: Do
+  filter-02:
+    schema-pattern: dmctl
+    table-pattern: t_2
+    events: []
+    sql-pattern:
+    - alter table .* add column `aaa` int
+    action: Ignore
 column-mappings:
   cm-01:
     schema-pattern: dmctl

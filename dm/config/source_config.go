@@ -19,6 +19,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 )
 
 const (
@@ -71,6 +72,9 @@ type SourceConfig struct {
 
 	// deprecated tracer, to keep compatibility with older version
 	Tracer map[string]interface{} `yaml:"tracer" toml:"tracer" json:"-"`
+
+	CaseSensitive bool                  `yaml:"case-sensitive" toml:"case-sensitive" json:"case-sensitive"`
+	Filters       []*bf.BinlogEventRule `yaml:"filters" toml:"filters" json:"filters"`
 }
 
 // NewSourceConfig creates a new base config for upstream MySQL/MariaDB source.
@@ -188,6 +192,11 @@ func (c *SourceConfig) Verify() error {
 	}
 
 	c.DecryptPassword()
+
+	_, err = bf.NewBinlogEvent(c.CaseSensitive, c.Filters)
+	if err != nil {
+		return terror.ErrConfigBinlogEventFilter.Delegate(err)
+	}
 
 	return nil
 }
