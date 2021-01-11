@@ -25,10 +25,11 @@ import (
 )
 
 // createSources does `operate-source create` operation for two sources.
-// NOTE: we put two source config files (`source1.yaml` and `source2.yaml`) in `conf` directory.
+// NOTE: we put source config files in `conf` directory.
 func createSources(ctx context.Context, cli pb.MasterClient, cfg *config) error {
 	s1Path := filepath.Join(cfg.ConfigDir, "source1.yaml")
 	s2Path := filepath.Join(cfg.ConfigDir, "source2.yaml")
+	s3Path := filepath.Join(cfg.ConfigDir, "source3.yaml")
 
 	s1Content, err := ioutil.ReadFile(s1Path)
 	if err != nil {
@@ -38,19 +39,28 @@ func createSources(ctx context.Context, cli pb.MasterClient, cfg *config) error 
 	if err != nil {
 		return err
 	}
+	s3Content, err := ioutil.ReadFile(s3Path)
+	if err != nil {
+		return err
+	}
 
 	cfg1 := config2.NewSourceConfig()
 	cfg2 := config2.NewSourceConfig()
+	cfg3 := config2.NewSourceConfig()
 	if err = cfg1.ParseYaml(string(s1Content)); err != nil {
 		return err
 	}
 	if err = cfg2.ParseYaml(string(s2Content)); err != nil {
 		return err
 	}
+	if err = cfg3.ParseYaml(string(s3Content)); err != nil {
+		return err
+	}
 
 	// replace DB config.
 	cfg1.From = cfg.Source1
 	cfg2.From = cfg.Source2
+	cfg3.From = cfg.Source3
 	s1Content2, err := cfg1.Yaml()
 	if err != nil {
 		return err
@@ -59,10 +69,14 @@ func createSources(ctx context.Context, cli pb.MasterClient, cfg *config) error 
 	if err != nil {
 		return err
 	}
+	s3Content3, err := cfg3.Yaml()
+	if err != nil {
+		return err
+	}
 
 	resp, err := cli.OperateSource(ctx, &pb.OperateSourceRequest{
 		Op:     pb.SourceOp_StartSource,
-		Config: []string{s1Content2, s2Content2},
+		Config: []string{s1Content2, s2Content2, s3Content3},
 	})
 	if err != nil {
 		return err
