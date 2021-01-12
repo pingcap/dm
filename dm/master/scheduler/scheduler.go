@@ -1180,8 +1180,10 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 	// 1. check if last bound is still available. if not, random pick one unbound source.
 	source := s.lastBound[w.baseInfo.Name].Source
 	// if lastBound not found, or this source has been bounded to another worker (a free worker). and we also check that
-	// source still exists
-	if _, ok := s.unbounds[source]; !ok || source == "" {
+	// source still exists.
+	// if worker doesn't in lastBound, we'll get empty source and it's not in unbounds
+	if _, ok := s.unbounds[source]; !ok {
+		source = ""
 		for source = range s.unbounds {
 			break // got a source.
 		}
