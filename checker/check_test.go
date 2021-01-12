@@ -93,7 +93,9 @@ func (s *testCheckerSuite) TestDumpPrivilegeChecking(c *tc.C) {
 	mock := s.initMockDB(c)
 	mock.ExpectQuery("SHOW GRANTS").WillReturnRows(sqlmock.NewRows([]string{"Grants for User"}).
 		AddRow("GRANT USAGE ON *.* TO 'haha'@'%'"))
-	c.Assert(CheckSyncConfig(context.Background(), cfgs), tc.ErrorMatches, "(.|\n)*lack of RELOAD,Select privilege(.|\n)*")
+	err := CheckSyncConfig(context.Background(), cfgs)
+	c.Assert(err, tc.ErrorMatches, "(.|\n)*lack.*RELOAD(.|\n)*")
+	c.Assert(err, tc.ErrorMatches, "(.|\n)*lack.*Select(.|\n)*")
 
 	mock = s.initMockDB(c)
 	mock.ExpectQuery("SHOW GRANTS").WillReturnRows(sqlmock.NewRows([]string{"Grants for User"}).
