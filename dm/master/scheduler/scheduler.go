@@ -111,6 +111,9 @@ type Scheduler struct {
 	// - when bounded the source to a worker.
 	unbounds map[string]struct{}
 
+	// a mirror of bounds which not delete. worker -> SourceBound
+	lastBound map[string]ha.SourceBound
+
 	// expectant relay stages for sources, source ID -> stage.
 	// add:
 	// - bound the source to a worker (at first time).
@@ -143,6 +146,7 @@ func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 		workers:             make(map[string]*Worker),
 		bounds:              make(map[string]*Worker),
 		unbounds:            make(map[string]struct{}),
+		lastBound:           make(map[string]ha.SourceBound),
 		expectRelayStages:   make(map[string]ha.Stage),
 		expectSubTaskStages: make(map[string]map[string]ha.Stage),
 		securityCfg:         securityCfg,
@@ -906,6 +910,11 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	lastSourceBoundM, _, err := ha.GetLastSourceBounds(cli)
+	if err != nil {
+		return 0, err
+	}
+	s.lastBound = lastSourceBoundM
 
 	// 3. get all history offline status.
 	kam, rev, err := ha.GetKeepAliveWorkers(cli)
@@ -1164,14 +1173,20 @@ func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent, toLock bool) error {
 	return nil
 }
 
-// tryBoundForWorker tries to bound a random unbounded source to the worker.
+// tryBoundForWorker tries to bound a source to the worker. first try last source of this worker, then randomly pick one
 // returns (true, nil) after bounded.
 func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
-	// 1. check whether any unbound source exists.
-	var source string
-	for source = range s.unbounds {
-		break // got a source.
+	// TODO previous source has higher priority
+	// 1. check if last bound is still available. if not, random pick one unbound source.
+	source := s.lastBound[w.baseInfo.Name].Source
+	// if lastBound not found, or this source has been bounded to another worker (a free worker). and we also check that
+	// source still exists
+	if _, ok := s.unbounds[source]; !ok || source == "" {
+		for source = range s.unbounds {
+			break // got a source.
+		}
 	}
+
 	if source == "" {
 		s.logger.Info("no unbound sources need to bound", zap.Stringer("worker", w.BaseInfo()))
 		return false, nil
@@ -1280,7 +1295,7 @@ func (s *Scheduler) deleteWorker(name string) {
 
 // updateStatusForBound updates the in-memory status for bound, including:
 // - update the stage of worker to `Bound`.
-// - record the bound relationship in the scheduler.
+// - record the bound relationship and last bound relationship in the scheduler.
 // this func is called after the bound relationship existed in etcd.
 func (s *Scheduler) updateStatusForBound(w *Worker, b ha.SourceBound) error {
 	err := w.ToBound(b)
@@ -1288,6 +1303,7 @@ func (s *Scheduler) updateStatusForBound(w *Worker, b ha.SourceBound) error {
 		return err
 	}
 	s.bounds[b.Source] = w
+	s.lastBound[b.Worker] = b
 	return nil
 }
 

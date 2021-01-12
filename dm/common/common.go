@@ -38,6 +38,10 @@ var (
 	// UpstreamBoundWorkerKeyAdapter used to store address of worker in which MySQL-tasks which are running.
 	// k/v: Encode(name) -> the bound relationship.
 	UpstreamBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/bound-worker/")
+	// UpstreamLastBoundWorkerKeyAdapter used to store address of worker in which MySQL-tasks which are running.
+	// different with UpstreamBoundWorkerKeyAdapter, this kv should not be deleted when unbound, to provide a priority
+	// k/v: Encode(name) -> the bound relationship.
+	UpstreamLastBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/last-bound-worker/")
 	// TaskConfigKeyAdapter used to store task config string.
 	// k/v: Encode(task-name) -> task-config-string
 	TaskConfigKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/task/")

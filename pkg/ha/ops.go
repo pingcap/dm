@@ -33,9 +33,9 @@ func PutRelayStageSourceBound(cli *clientv3.Client, stage Stage, bound SourceBou
 	if err != nil {
 		return 0, err
 	}
-	ops := make([]clientv3.Op, 0, 2)
+	ops := make([]clientv3.Op, 0, 3)
 	ops = append(ops, ops1...)
-	ops = append(ops, op2)
+	ops = append(ops, op2...)
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
 }
