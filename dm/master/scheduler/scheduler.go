@@ -1218,9 +1218,16 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 	// 1. try to find history workers, then random Free worker.
 	var worker *Worker
 	for workerName, bound := range s.lastBound {
-		if bound.Source == source && s.workers[workerName].Stage() == WorkerFree {
-			worker = s.workers[workerName]
-			break
+		if bound.Source == source {
+			w, ok := s.workers[workerName]
+			if !ok {
+				// a not found worker
+				continue
+			}
+			if w.Stage() == WorkerFree {
+				worker = w
+				break
+			}
 		}
 	}
 
