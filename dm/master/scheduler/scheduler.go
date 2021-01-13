@@ -1176,12 +1176,12 @@ func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent, toLock bool) error {
 // tryBoundForWorker tries to bound a source to the worker. first try last source of this worker, then randomly pick one
 // returns (true, nil) after bounded.
 func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
-	// TODO previous source has higher priority
-	// 1. check if last bound is still available. if not, random pick one unbound source.
+	// 1. check if last bound is still available.
+	// if lastBound not found, or this source has been bounded to another worker (we also check that source still exists
+	// here), randomly pick one from unbounds.
+	// NOTE: if worker isn't in lastBound, we'll get "zero" SourceBound and it's OK, because "zero" string is not in
+	// unbounds
 	source := s.lastBound[w.baseInfo.Name].Source
-	// if lastBound not found, or this source has been bounded to another worker (a free worker). and we also check that
-	// source still exists.
-	// if worker doesn't in lastBound, we'll get empty source and it's not in unbounds
 	if _, ok := s.unbounds[source]; !ok {
 		source = ""
 		for source = range s.unbounds {
@@ -1215,14 +1215,24 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 // tryBoundForSource tries to bound a source to a random Free worker.
 // returns (true, nil) after bounded.
 func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
-	// 1. try to find a random Free worker.
+	// 1. try to find history workers, then random Free worker.
 	var worker *Worker
-	for _, w := range s.workers {
-		if w.Stage() == WorkerFree {
-			worker = w
+	for workerName, bound := range s.lastBound {
+		if bound.Source == source && s.workers[workerName].Stage() == WorkerFree {
+			worker = s.workers[workerName]
 			break
 		}
 	}
+
+	if worker == nil {
+		for _, w := range s.workers {
+			if w.Stage() == WorkerFree {
+				worker = w
+				break
+			}
+		}
+	}
+
 	if worker == nil {
 		s.logger.Info("no free worker exists for bound", zap.String("source", source))
 		return false, nil
