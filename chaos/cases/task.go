@@ -39,7 +39,7 @@ const (
 	fullInsertCount = 100              // `INSERT INTO` count (not rows count) for each table in full stage.
 	diffCount       = 10               // diff data check count
 	diffInterval    = 20 * time.Second // diff data check interval
-	incrRoundTime   = 20 * time.Second // time to generate incremental data in one round
+	incrRoundTime   = 10 * time.Second // time to generate incremental data in one round
 )
 
 // task is a data migration task test case with one or more sources.
