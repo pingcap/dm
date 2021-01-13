@@ -703,7 +703,84 @@ function test_config_name() {
     echo "[$(date)] <<<<<< finish test_config_name >>>>>>"
 }
 
+function check_bound() {
+    bound1=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT1" list-member --name worker1 \
+        | grep 'source' | awk -F: '{print $2}')
+    bound2=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT1" list-member --name worker2 \
+        | grep 'source' | awk -F: '{print $2}')
+    if [[ $worker1bound != $bound1 || $worker2bound != $bound2 ]]; then
+        echo "worker1bound $worker1bound bound1 $bound1"
+        echo "worker2bound $worker2bound bound2 $bound2"
+        exit 1
+    fi
+}
+
+function start_2_worker_ensure_bound() {
+    worker_ports=(0 $WORKER1_PORT $WORKER2_PORT $WORKER3_PORT $WORKER4_PORT $WORKER5_PORT)
+
+    echo "start worker$1"
+    run_dm_worker $WORK_DIR/worker$1 ${worker_ports[$1]} $cur/conf/dm-worker$1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:${worker_ports[$1]}
+    echo "start worker$2"
+    run_dm_worker $WORK_DIR/worker$2 ${worker_ports[$2]} $cur/conf/dm-worker$2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:${worker_ports[$2]}
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
+        "list-member --name worker$1 --name worker$2" \
+        "\"source\": \"mysql-replica-01\"" 1 \
+        "\"source\": \"mysql-replica-02\"" 1
+}
+
+function kill_2_worker_ensure_unbound() {
+    echo "kill dm-worker$1"
+    ps aux | grep dm-worker$1 |awk '{print $2}'|xargs kill || true
+    echo "kill dm-worker$2"
+    ps aux | grep dm-worker$2 |awk '{print $2}'|xargs kill || true
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
+        "list-member --name worker$1 --name worker$2" \
+        "\"source\": \"\"" 2
+}
+
+function test_last_bound() {
+    echo "[$(date)] <<<<<< start test_last_bound >>>>>>"
+    test_running
+
+    worker1bound=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT1" list-member --name worker1 \
+        | grep 'source' | awk -F: '{print $2}')
+    echo "worker1bound $worker1bound"
+    worker2bound=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT1" list-member --name worker2 \
+        | grep 'source' | awk -F: '{print $2}')
+    echo "worker2bound $worker2bound"
+
+    kill_2_worker_ensure_unbound 1 2
+
+    # start 1 then 2
+    start_2_worker_ensure_bound 1 2
+
+    check_bound
+
+    kill_2_worker_ensure_unbound 1 2
+
+    # start 2 then 1
+    start_2_worker_ensure_bound 2 1
+
+    check_bound
+
+    # kill 12, start 34, kill 34
+    kill_2_worker_ensure_unbound 1 2
+    start_2_worker_ensure_bound 3 4
+    kill_2_worker_ensure_unbound 3 4
+
+    # start 1 then 2
+    start_2_worker_ensure_bound 1 2
+
+    # check
+    check_bound
+
+    echo "[$(date)] <<<<<< finish test_last_bound >>>>>>"
+}
+
 function run() {
+    test_last_bound
     test_config_name                           # TICASE-915, 916, 954, 955
     test_join_masters_and_worker               # TICASE-928, 930, 931, 961, 932, 957
     test_kill_master                           # TICASE-996, 958
