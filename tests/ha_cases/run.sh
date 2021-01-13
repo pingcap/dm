@@ -716,14 +716,14 @@ function check_bound() {
 }
 
 function start_2_worker_ensure_bound() {
-    worker_ports=(0 $WORKER1_PORT $WORKER2_PORT $WORKER3_PORT $WORKER4_PORT $WORKER5_PORT)
+    worker_ports_2=(0 $WORKER1_PORT $WORKER2_PORT $WORKER3_PORT $WORKER4_PORT $WORKER5_PORT)
 
     echo "start worker$1"
-    run_dm_worker $WORK_DIR/worker$1 ${worker_ports[$1]} $cur/conf/dm-worker$1.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:${worker_ports[$1]}
+    run_dm_worker $WORK_DIR/worker$1 ${worker_ports_2[$1]} $cur/conf/dm-worker$1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:${worker_ports_2[$1]}
     echo "start worker$2"
-    run_dm_worker $WORK_DIR/worker$2 ${worker_ports[$2]} $cur/conf/dm-worker$2.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:${worker_ports[$2]}
+    run_dm_worker $WORK_DIR/worker$2 ${worker_ports_2[$2]} $cur/conf/dm-worker$2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:${worker_ports_2[$2]}
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "list-member --name worker$1 --name worker$2" \
         "\"source\": \"mysql-replica-01\"" 1 \
