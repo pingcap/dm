@@ -333,6 +333,11 @@ func deleteSourceBoundOp(worker string) clientv3.Op {
 	return clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(worker))
 }
 
+// deleteLastSourceBoundOp returns a DELETE ectd operation for the last bound relationship of the specified DM-worker.
+func deleteLastSourceBoundOp(worker string) clientv3.Op {
+	return clientv3.OpDelete(common.UpstreamLastBoundWorkerKeyAdapter.Encode(worker))
+}
+
 // putSourceBoundOp returns PUT etcd operations for the bound relationship.
 // k/v: worker-name -> bound relationship.
 func putSourceBoundOp(bound SourceBound) ([]clientv3.Op, error) {

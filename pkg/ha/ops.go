@@ -48,7 +48,8 @@ func DeleteSourceCfgRelayStageSourceBound(cli *clientv3.Client, source, worker s
 	sourceCfgOp := deleteSourceCfgOp(source)
 	relayStageOp := deleteRelayStageOp(source)
 	sourceBoundOp := deleteSourceBoundOp(worker)
-	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, sourceCfgOp, relayStageOp, sourceBoundOp)
+	lastBoundOp := deleteLastSourceBoundOp(worker)
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, sourceCfgOp, relayStageOp, sourceBoundOp, lastBoundOp)
 	return rev, err
 }
 
