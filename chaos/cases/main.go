@@ -90,7 +90,7 @@ func main() {
 		log.L().Error("fail to check members ready", zap.Error(err)) // only log a error, still try to do other things.
 	}
 
-	// create two sources.
+	// create sources.
 	err = createSources(ctx, masterCli, cfg)
 	if err != nil {
 		log.L().Error("fail to create source", zap.Error(err))
@@ -98,7 +98,7 @@ func main() {
 	}
 
 	// set upstream and downstream instances state.
-	err = setInstancesState(ctx, cfg.Target, cfg.Source1, cfg.Source2)
+	err = setInstancesState(ctx, cfg.Target, cfg.Source1, cfg.Source2, cfg.Source3)
 	if err != nil {
 		log.L().Error("fail to set instances state", zap.Error(err))
 		os.Exit(2)
@@ -109,7 +109,7 @@ func main() {
 	defer cancel3()
 
 	// run tests cases
-	err = runCases(ctx3, masterCli, cfg.ConfigDir, cfg.Target, cfg.Source1, cfg.Source2)
+	err = runCases(ctx3, masterCli, cfg.ConfigDir, cfg.Target, cfg.Source1, cfg.Source2, cfg.Source3)
 	if err != nil {
 		log.L().Error("run cases failed", zap.Error(err))
 		os.Exit(2)
