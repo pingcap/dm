@@ -111,7 +111,7 @@ type Scheduler struct {
 	// - when bounded the source to a worker.
 	unbounds map[string]struct{}
 
-	// a mirror of bounds which not delete. worker -> SourceBound
+	// a mirror of bounds whose element is not deleted when worker unbound. worker -> SourceBound
 	lastBound map[string]ha.SourceBound
 
 	// expectant relay stages for sources, source ID -> stage.
