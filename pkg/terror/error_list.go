@@ -334,6 +334,7 @@ const (
 	codeLoadUnitDumpDirNotFound
 	codeLoadUnitDuplicateTableFile
 	codeLoadUnitGenBAList
+	codeLoadUnitNoTableFileForView
 )
 
 // Sync unit error code
@@ -914,6 +915,7 @@ var (
 	ErrLoadUnitDumpDirNotFound     = New(codeLoadUnitDumpDirNotFound, ClassLoadUnit, ScopeInternal, LevelHigh, "%s does not exist or it's not a dir", "")
 	ErrLoadUnitDuplicateTableFile  = New(codeLoadUnitDuplicateTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid table schema file, duplicated item - %s", "")
 	ErrLoadUnitGenBAList           = New(codeLoadUnitGenBAList, ClassLoadUnit, ScopeInternal, LevelHigh, "generate block allow list", "Please check the `block-allow-list` config in task configuration file.")
+	ErrLoadUnitNoTableFileForView  = New(codeLoadUnitNoTableFileForView, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid view sql file, cannot find table - %s", "")
 
 	// Sync unit error
 	ErrSyncerUnitPanic                   = New(codeSyncerUnitPanic, ClassSyncUnit, ScopeInternal, LevelHigh, "panic error: %v", "")

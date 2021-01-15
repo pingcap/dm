@@ -14,10 +14,13 @@
 package syncer
 
 import (
+	"fmt"
+
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -37,6 +40,9 @@ func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string
 	if len(tables) > 0 {
 		tbs := s.baList.ApplyOn(tables)
 		if len(tbs) != len(tables) {
+			s.tctx.L().Info("not all tables passed block-allow list",
+				zap.String("before", fmt.Sprintf("%v", tables)),
+				zap.String("after", fmt.Sprintf("%v", tbs)))
 			return true, nil
 		}
 	}

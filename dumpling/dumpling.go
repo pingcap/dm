@@ -218,6 +218,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	dumpConfig.TableFilter = tableFilter
 	dumpConfig.CompleteInsert = true // always keep column name in `INSERT INTO` statements.
 	dumpConfig.Logger = m.logger.Logger
+	dumpConfig.NoViews = false
 
 	if cfg.Threads > 0 {
 		dumpConfig.Threads = cfg.Threads

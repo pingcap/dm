@@ -28,6 +28,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pingcap/parser"
+	tmysql "github.com/pingcap/parser/mysql"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
@@ -36,6 +39,7 @@ import (
 	"github.com/pingcap/dm/pkg/dumpling"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
@@ -384,7 +388,9 @@ type Loader struct {
 
 	// db -> tables
 	// table -> data files
-	db2Tables  map[string]Tables2DataFiles
+	db2Tables map[string]Tables2DataFiles
+	// db -> views
+	db2Views   map[string]map[string]struct{}
 	tableInfos map[string]*tableInfo
 
 	// for every worker goroutine, not for every data file
@@ -421,6 +427,7 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 	loader := &Loader{
 		cfg:        cfg,
 		db2Tables:  make(map[string]Tables2DataFiles),
+		db2Views:   make(map[string]map[string]struct{}),
 		tableInfos: make(map[string]*tableInfo),
 		workerWg:   new(sync.WaitGroup),
 		logger:     log.With(zap.String("task", cfg.Name), zap.String("unit", "load")),
@@ -946,6 +953,44 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 	return nil
 }
 
+func (l *Loader) prepareViewFiles(files map[string]struct{}) error {
+	for file := range files {
+		if !strings.HasSuffix(file, "-schema-view.sql") {
+			continue
+		}
+
+		idx := strings.LastIndex(file, "-schema-view.sql")
+		name := file[:idx]
+		fields := strings.Split(name, ".")
+		if len(fields) != 2 {
+			l.logger.Warn("invalid view file", zap.String("file", file))
+			continue
+		}
+
+		db, table := fields[0], fields[1]
+		if l.skipSchemaAndTable(&filter.Table{Schema: db, Name: table}) {
+			l.logger.Warn("ignore view file", zap.String("view file", file))
+			continue
+		}
+		// because there's a table file for view file, we skip this check
+		tables := l.db2Tables[db]
+		if _, ok := tables[table]; !ok {
+			return terror.ErrLoadUnitNoTableFileForView.Generate(file)
+		}
+
+		views, ok := l.db2Views[db]
+		if !ok {
+			l.db2Views[db] = map[string]struct{}{}
+			views = l.db2Views[db]
+		}
+		views[table] = struct{}{}
+
+		l.totalFileCount.Add(1) // for view
+	}
+
+	return nil
+}
+
 func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 	var dataFilesNumber float64
 
@@ -1046,6 +1091,11 @@ func (l *Loader) prepare() error {
 		return err
 	}
 
+	// Sql file for create view
+	if err := l.prepareViewFiles(files); err != nil {
+		return err
+	}
+
 	// Sql file for restore data
 	return l.prepareDataFiles(files)
 }
@@ -1081,6 +1131,104 @@ func (l *Loader) restoreTable(ctx context.Context, conn *DBConn, sqlFile, schema
 			return terror.Annotatef(err, "run table schema failed - dbfile %s", sqlFile)
 		}
 	}
+	return nil
+}
+
+// restoreView drops dummy table and create view
+func (l *Loader) restoreView(ctx context.Context, conn *DBConn, sqlFile, schema, view string) error {
+	// dumpling will generate such a viewFile
+	// /*!40101 SET NAMES binary*/;
+	// DROP TABLE IF EXISTS `v2`;
+	// DROP VIEW IF EXISTS `v2`;
+	// SET @PREV_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT;
+	// SET @PREV_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS;
+	// SET @PREV_COLLATION_CONNECTION=@@COLLATION_CONNECTION;
+	// SET character_set_client = utf8;
+	// SET character_set_results = utf8;
+	// SET collation_connection = utf8_general_ci;
+	// CREATE ALGORITHM=UNDEFINED DEFINER="root"@"localhost" SQL SECURITY DEFINER VIEW "all_mode"."v2" AS select "all_mode"."t2"."id" AS "id" from "all_mode"."t2";
+	// SET character_set_client = @PREV_CHARACTER_SET_CLIENT;
+	// SET character_set_results = @PREV_CHARACTER_SET_RESULTS;
+	// SET collation_connection = @PREV_COLLATION_CONNECTION;
+	f, err := os.Open(sqlFile)
+	if err != nil {
+		return terror.ErrLoadUnitReadSchemaFile.Delegate(err)
+	}
+	defer f.Close()
+
+	tctx := tcontext.NewContext(ctx, l.logger)
+
+	var sqls []string
+	dstSchema, dstView := fetchMatchedLiteral(tctx, l.tableRouter, schema, view)
+	sqls = append(sqls, fmt.Sprintf("USE `%s`;", unescapePercent(dstSchema, l.logger)))
+	sqlMode, err := tmysql.GetSQLMode(l.cfg.SQLMode)
+	if err != nil {
+		// should not happened
+		return terror.ErrGetSQLModeFromStr.Generate(l.cfg.SQLMode)
+	}
+
+	data := make([]byte, 0, 1024*1024)
+	br := bufio.NewReader(f)
+	for {
+		line, err := br.ReadString('\n')
+		if err == io.EOF {
+			break
+		}
+
+		realLine := strings.TrimSpace(line[:len(line)-1])
+		if len(realLine) == 0 {
+			continue
+		}
+
+		data = append(data, []byte(realLine)...)
+		if data[len(data)-1] == ';' {
+			query := string(data)
+			data = data[0:0]
+			if strings.HasPrefix(query, "/*") && strings.HasSuffix(query, "*/;") {
+				continue
+			}
+
+			// handle route-rules below. we could skip SET and only check DROP/CREATE
+			if strings.HasPrefix(query, "DROP") {
+				query = renameShardingTable(query, view, dstView, false)
+			} else if strings.HasPrefix(query, "CREATE") {
+				// create view statement could be complicated because it has a select
+				p := parser.New()
+				p.SetSQLMode(sqlMode)
+				stmt, err := p.ParseOneStmt(query, "", "")
+				if err != nil {
+					return terror.ErrLoadUnitParseStatement.Generate(query)
+				}
+
+				tableNames, err := parserpkg.FetchDDLTableNames(schema, stmt)
+				if err != nil {
+					return terror.WithScope(err, terror.ScopeInternal)
+				}
+				targetTableNames := make([]*filter.Table, 0, len(tableNames))
+				for i := range tableNames {
+					dstSchema, dstTable := fetchMatchedLiteral(tctx, l.tableRouter, tableNames[i].Schema, tableNames[i].Name)
+					tableName := &filter.Table{
+						Schema: dstSchema,
+						Name:   dstTable,
+					}
+					targetTableNames = append(targetTableNames, tableName)
+				}
+				query, err = parserpkg.RenameDDLTable(stmt, targetTableNames)
+				if err != nil {
+					return terror.WithScope(err, terror.ScopeInternal)
+				}
+			}
+
+			l.logger.Debug("view create statement", zap.String("sql", query))
+
+			sqls = append(sqls, query)
+		}
+	}
+	err = conn.executeSQL(tctx, sqls)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+
 	return nil
 }
 
@@ -1194,18 +1342,9 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	}
 
 	dispatchMap := make(map[string]*fileJob)
-
-	// restore db in sort
-	dbs := make([]string, 0, len(l.db2Tables))
-	for db := range l.db2Tables {
-		dbs = append(dbs, db)
-	}
-
 	tctx := tcontext.NewContext(ctx, l.logger)
 
-	for _, db := range dbs {
-		tables := l.db2Tables[db]
-
+	for db, tables := range l.db2Tables {
 		// create db
 		dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
 		l.logger.Info("start to create schema", zap.String("schema file", dbFile))
@@ -1274,7 +1413,19 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			}
 		}
 	}
-	l.logger.Info("finish to create tables", zap.Duration("cost time", time.Since(begin)))
+
+	for db, views := range l.db2Views {
+		for view := range views {
+			viewFile := fmt.Sprintf("%s/%s.%s-schema-view.sql", l.cfg.Dir, db, view)
+			l.logger.Info("start to create view", zap.String("view file", viewFile))
+			err := l.restoreView(ctx, dbConn, viewFile, db, view)
+			if err != nil {
+				return err
+			}
+			l.logger.Info("finish to create view", zap.String("view file", viewFile))
+		}
+	}
+	l.logger.Info("finish to create tables and views", zap.Duration("cost time", time.Since(begin)))
 
 	// a simple and naive approach to dispatch files randomly based on the feature of golang map(range by random)
 	for _, j := range dispatchMap {

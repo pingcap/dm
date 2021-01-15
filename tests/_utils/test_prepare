@@ -8,6 +8,7 @@ function cleanup_data() {
         run_sql "drop database if exists \`${target_db}\`" $TIDB_PORT $TIDB_PASSWORD
     done
     run_sql "drop database if exists dm_meta" $TIDB_PORT $TIDB_PASSWORD
+    run_sql "drop database if exists sync_diff_inspector" $TIDB_PORT $TIDB_PASSWORD
 }
 
 function cleanup_process() {

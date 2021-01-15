@@ -1492,6 +1492,12 @@ description = ""
 workaround = "Please check the `block-allow-list` config in task configuration file."
 tags = ["internal", "high"]
 
+[error.DM-load-unit-34017]
+message = "invalid view sql file, cannot find table - %s"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
 [error.DM-sync-unit-36001]
 message = "panic error: %v"
 description = ""

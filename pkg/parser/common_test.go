@@ -67,6 +67,9 @@ var sqls = []string{
 	"alter table `t1` partition by list (a) (partition x default)",
 	"alter table `t1` partition by system_time (partition x history, partition y current)",
 	"alter database `test` charset utf8mb4",
+	"create view `v1` as select * from `t1`",
+	"create view `v1` as select `t1`.`c1` AS `c1` from `t1`",
+	"drop view `v1`",
 	"alter table `t1` add column (c1 int, c2 int)",
 }
 
@@ -172,6 +175,9 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{"ALTER TABLE `test`.`t1` PARTITION BY LIST (`a`) (PARTITION `x` DEFAULT)"},
 		{"ALTER TABLE `test`.`t1` PARTITION BY SYSTEM_TIME (PARTITION `x` HISTORY,PARTITION `y` CURRENT)"},
 		{"ALTER DATABASE `test` CHARACTER SET = utf8mb4"},
+		{"CREATE ALGORITHM = UNDEFINED DEFINER = CURRENT_USER SQL SECURITY DEFINER VIEW `test`.`v1` AS SELECT * FROM `test`.`t1`"},
+		{"CREATE ALGORITHM = UNDEFINED DEFINER = CURRENT_USER SQL SECURITY DEFINER VIEW `test`.`v1` AS SELECT `test`.`t1`.`c1` AS `c1` FROM `test`.`t1`"},
+		{"DROP VIEW IF EXISTS `test`.`v1`"},
 		{"ALTER TABLE `test`.`t1` ADD COLUMN `c1` INT", "ALTER TABLE `test`.`t1` ADD COLUMN `c2` INT"},
 	}
 
@@ -217,6 +223,9 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "")}},
+		{{genTableName("test", "v1"), genTableName("test", "t1")}},
+		{{genTableName("test", "v1"), genTableName("test", "t1"), genTableName("test", "t1")}},
+		{{genTableName("test", "v1")}},
 		{{genTableName("test", "t1")}, {genTableName("test", "t1")}},
 	}
 
@@ -262,6 +271,9 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xtest", "")}},
+		{{genTableName("xtest", "v1"), genTableName("xtest", "t1")}},
+		{{genTableName("xtest", "v1"), genTableName("xtest", "t1"), genTableName("xtest", "t1")}},
+		{{genTableName("xtest", "v1")}},
 		{{genTableName("xtest", "t1")}, {genTableName("xtest", "t1")}},
 	}
 
@@ -307,6 +319,9 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{"ALTER TABLE `xtest`.`xt1` PARTITION BY LIST (`a`) (PARTITION `x` DEFAULT)"},
 		{"ALTER TABLE `xtest`.`xt1` PARTITION BY SYSTEM_TIME (PARTITION `x` HISTORY,PARTITION `y` CURRENT)"},
 		{"ALTER DATABASE `xtest` CHARACTER SET = utf8mb4"},
+		{"CREATE ALGORITHM = UNDEFINED DEFINER = CURRENT_USER SQL SECURITY DEFINER VIEW `xtest`.`v1` AS SELECT * FROM `xtest`.`t1`"},
+		{"CREATE ALGORITHM = UNDEFINED DEFINER = CURRENT_USER SQL SECURITY DEFINER VIEW `xtest`.`v1` AS SELECT `xtest`.`t1`.`c1` AS `c1` FROM `xtest`.`t1`"},
+		{"DROP VIEW IF EXISTS `xtest`.`v1`"},
 		{"ALTER TABLE `xtest`.`t1` ADD COLUMN `c1` INT", "ALTER TABLE `xtest`.`t1` ADD COLUMN `c2` INT"},
 	}
 
