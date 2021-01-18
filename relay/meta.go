@@ -473,7 +473,7 @@ func (lm *LocalMeta) loadMetaData() error {
 		return terror.ErrRelayLoadMetaData.Delegate(err)
 	}
 
-	gset, err := gtid.ParserGTID(lm.flavor, lm.BinlogGTID)
+	gset, err := gtid.ParserGTID("", lm.BinlogGTID)
 	if err != nil {
 		return terror.ErrRelayLoadMetaData.Delegate(err)
 	}
