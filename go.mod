@@ -22,11 +22,12 @@ require (
 	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
 	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
-	github.com/pingcap/parser v0.0.0-20201222091346-02c8ff27d0bc
-	github.com/pingcap/tidb v1.1.0-beta.0.20201224021059-213942149427
-	github.com/pingcap/tidb-tools v4.0.10-0.20201127090955-2707c97b3853+incompatible
+	github.com/pingcap/parser v0.0.0-20210108074737-814a888e05e2
+	github.com/pingcap/tidb v1.1.0-beta.0.20210108095858-c2ee8d37c22f
+	github.com/pingcap/tidb-tools v4.0.10-0.20210106041835-b7bb2754a8df+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
+	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/siddontang/go-mysql v0.0.0-20200222075837-12e89848f047
 	github.com/soheilhy/cmux v0.1.4
@@ -39,6 +40,7 @@ require (
 	github.com/unrolled/render v1.0.1
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200824191128-ae9734ed278b
 	go.uber.org/zap v1.16.0
+	golang.org/x/exp v0.0.0-20200513190911-00229845015e // indirect
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20200824131525-c12d262b63d8
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0

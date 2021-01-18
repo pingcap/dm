@@ -377,42 +377,8 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.genRouter(), IsNil)
-	i := 0
-	for _, e := range allEvents {
-		switch ev := e.Event.(type) {
-		case *replication.QueryEvent:
-			query := string(ev.Query)
 
-			result, err := syncer.parseDDLSQL(query, p, string(ev.Schema))
-			c.Assert(err, IsNil)
-			if !result.isDDL {
-				continue // BEGIN event
-			}
-			querys, _, err := syncer.resolveDDLSQL(tcontext.Background(), p, result.stmt, string(ev.Schema))
-			c.Assert(err, IsNil)
-			if len(querys) == 0 {
-				continue
-			}
-
-			for j, sql := range querys {
-				stmt, err := p.ParseOneStmt(sql, "", "")
-				c.Assert(err, IsNil)
-
-				tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt)
-				c.Assert(err, IsNil)
-				r, err := syncer.skipQuery(tableNames, stmt, sql)
-				c.Assert(err, IsNil)
-				c.Assert(r, Equals, res[i][j])
-			}
-		case *replication.RowsEvent:
-			r, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
-			c.Assert(err, IsNil)
-			c.Assert(r, Equals, res[i][0])
-		default:
-			continue
-		}
-		i++
-	}
+	checkEventWithTableResult(c, syncer, allEvents, p, res)
 }
 
 func (s *testSyncerSuite) TestIgnoreDB(c *C) {
@@ -543,43 +509,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(syncer.genRouter(), IsNil)
 
-	i := 0
-	for _, e := range allEvents {
-		switch ev := e.Event.(type) {
-		case *replication.QueryEvent:
-			query := string(ev.Query)
-			result, err := syncer.parseDDLSQL(query, p, string(ev.Schema))
-			c.Assert(err, IsNil)
-			if !result.isDDL {
-				continue // BEGIN event
-			}
-
-			querys, _, err := syncer.resolveDDLSQL(tcontext.Background(), p, result.stmt, string(ev.Schema))
-			c.Assert(err, IsNil)
-			if len(querys) == 0 {
-				continue
-			}
-
-			for j, sql := range querys {
-				stmt, err := p.ParseOneStmt(sql, "", "")
-				c.Assert(err, IsNil)
-
-				tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt)
-				c.Assert(err, IsNil)
-				r, err := syncer.skipQuery(tableNames, stmt, sql)
-				c.Assert(err, IsNil)
-				c.Assert(r, Equals, res[i][j])
-			}
-		case *replication.RowsEvent:
-			r, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
-			c.Assert(err, IsNil)
-			c.Assert(r, Equals, res[i][0])
-
-		default:
-			continue
-		}
-		i++
-	}
+	checkEventWithTableResult(c, syncer, allEvents, p, res)
 }
 
 func (s *testSyncerSuite) TestSkipDML(c *C) {
@@ -1580,6 +1510,45 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 		c.Assert(syncer.schemaTracker.Reset(), IsNil)
 		c.Assert(mock.ExpectationsWereMet(), IsNil)
 		c.Assert(checkPointMock.ExpectationsWereMet(), IsNil)
+	}
+}
+
+func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.BinlogEvent, p *parser.Parser, res [][]bool) {
+	i := 0
+	for _, e := range allEvents {
+		switch ev := e.Event.(type) {
+		case *replication.QueryEvent:
+			query := string(ev.Query)
+
+			result, err := syncer.parseDDLSQL(query, p, string(ev.Schema))
+			c.Assert(err, IsNil)
+			if !result.isDDL {
+				continue // BEGIN event
+			}
+			querys, _, err := syncer.resolveDDLSQL(tcontext.Background(), p, result.stmt, string(ev.Schema))
+			c.Assert(err, IsNil)
+			if len(querys) == 0 {
+				continue
+			}
+
+			for j, sql := range querys {
+				stmt, err := p.ParseOneStmt(sql, "", "")
+				c.Assert(err, IsNil)
+
+				tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt)
+				c.Assert(err, IsNil)
+				r, err := syncer.skipQuery(tableNames, stmt, sql)
+				c.Assert(err, IsNil)
+				c.Assert(r, Equals, res[i][j])
+			}
+		case *replication.RowsEvent:
+			r, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+			c.Assert(err, IsNil)
+			c.Assert(r, Equals, res[i][0])
+		default:
+			continue
+		}
+		i++
 	}
 }
 
