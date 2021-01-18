@@ -47,16 +47,31 @@ type Set interface {
 // ParserGTID parses GTID from string
 func ParserGTID(flavor, gtidStr string) (Set, error) {
 	var (
-		m   Set
-		err error
+		m    Set
+		err  error
+		gtid mysql.GTIDSet
 	)
 
-	gtid, err := mysql.ParseGTIDSet(flavor, gtidStr)
-	if err != nil {
-		return nil, terror.ErrParseGTID.Delegate(err, gtidStr)
+	fla := flavor
+	switch fla {
+	case mysql.MySQLFlavor, mysql.MariaDBFlavor:
+		gtid, err = mysql.ParseGTIDSet(fla, gtidStr)
+	case "":
+		fla = mysql.MySQLFlavor
+		gtid, err = mysql.ParseGTIDSet(fla, gtidStr)
+		if err != nil {
+			fla = mysql.MariaDBFlavor
+			gtid, err = mysql.ParseGTIDSet(mysql.MariaDBFlavor, gtidStr)
+		}
+	default:
+		err = terror.ErrNotSupportedFlavor.Generate(flavor)
 	}
 
-	switch flavor {
+	if err != nil {
+		return nil, err
+	}
+
+	switch fla {
 	case mysql.MariaDBFlavor:
 		m = &MariadbGTIDSet{}
 	case mysql.MySQLFlavor:
