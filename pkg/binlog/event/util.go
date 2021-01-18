@@ -459,6 +459,7 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 					}
 					buf = append(buf, b)
 				}
+				b = byte(1) // reset to any non-zero value
 			}
 			value = append(value, buf...)
 		default:
