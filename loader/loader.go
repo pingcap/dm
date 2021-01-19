@@ -282,6 +282,14 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 
 		tctx := tcontext.NewContext(ctx, w.logger)
 		err2 = w.checkPoint.Init(tctx, baseFile, finfo.Size())
+		failpoint.Inject("WaitLoaderStopAfterInitCheckpoint", func(v failpoint.Value) {
+			t := v.(int)
+			w.logger.Info("wait loader stop after init checkpoint")
+			w.wg.Add(1)
+			time.Sleep(time.Duration(t) * time.Second)
+			w.wg.Done()
+		})
+
 		if err2 != nil {
 			w.logger.Error("fail to initial checkpoint", zap.String("data file", file), zap.Int64("offset", offset), log.ShortError(err2))
 			return err2
@@ -649,6 +657,14 @@ func (l *Loader) Restore(ctx context.Context) error {
 		return err
 	}
 
+	failpoint.Inject("WaitLoaderStopBeforeLoadCheckpoint", func(v failpoint.Value) {
+		t := v.(int)
+		l.logger.Info("wait loader stop before load checkpoint")
+		l.wg.Add(1)
+		time.Sleep(time.Duration(t) * time.Second)
+		l.wg.Done()
+	})
+
 	// not update checkpoint in memory when restoring, so when re-Restore, we need to load checkpoint from DB
 	err := l.checkPoint.Load(tcontext.NewContext(ctx, l.logger))
 	if err != nil {
@@ -657,6 +673,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 	err = l.checkPoint.CalcProgress(l.db2Tables)
 	if err != nil {
 		l.logger.Error("calc load process", log.ShortError(err))
+		return err
 	}
 	l.loadFinishedSize()
 
@@ -686,6 +703,9 @@ func (l *Loader) Restore(ctx context.Context) error {
 	if err == nil {
 		l.finish.Set(true)
 		l.logger.Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
+		if l.cfg.CleanDumpFile && l.checkPoint.AllFinished() {
+			l.cleanDumpFiles()
+		}
 	} else if errors.Cause(err) != context.Canceled {
 		return err
 	}
@@ -713,9 +733,6 @@ func (l *Loader) Close() {
 	err := l.toDB.Close()
 	if err != nil {
 		l.logger.Error("close downstream DB error", log.ShortError(err))
-	}
-	if l.cfg.CleanDumpFile && l.checkPoint.AllFinished() {
-		l.cleanDumpFiles()
 	}
 	l.checkPoint.Close()
 	l.removeLabelValuesWithTaskInMetrics(l.cfg.Name)
