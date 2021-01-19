@@ -24,7 +24,6 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -628,52 +627,58 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 		lastGTID        gtid.Set
 		previousGset, _ = gtid.ParserGTID(mysql.MySQLFlavor, "")
 	)
-	type FileEventType struct {
-		filename   string
-		eventTypes []replication.EventType
+
+	type EventResult struct {
+		eventType replication.EventType
+		result    string
+	}
+
+	type FileEventResult struct {
+		filename     string
+		eventResults []EventResult
 	}
 
 	testCase := []struct {
-		serverUUID     string
-		uuid           string
-		gtidStr        string
-		fileEventTypes []FileEventType
+		serverUUID      string
+		uuid            string
+		gtidStr         string
+		fileEventResult []FileEventResult
 	}{
 		{
 			"ba8f633f-1f15-11eb-b1c7-0242ac110002",
 			"ba8f633f-1f15-11eb-b1c7-0242ac110002.000001",
 			"ba8f633f-1f15-11eb-b1c7-0242ac110002:0",
-			[]FileEventType{
+			[]FileEventResult{
 				{
 					"mysql.000001",
-					[]replication.EventType{
-						replication.PREVIOUS_GTIDS_EVENT,
-						replication.QUERY_EVENT,
-						replication.XID_EVENT,
-						replication.QUERY_EVENT,
-						replication.XID_EVENT,
-						replication.ROTATE_EVENT,
+					[]EventResult{
+						{replication.PREVIOUS_GTIDS_EVENT, ""},
+						{replication.QUERY_EVENT, "mysql|000001.000001"},
+						{replication.XID_EVENT, "mysql|000001.000001"},
+						{replication.QUERY_EVENT, "mysql|000001.000001"},
+						{replication.XID_EVENT, "mysql|000001.000002"},
+						{replication.ROTATE_EVENT, ""},
 					},
 				},
 				{
 					"mysql.000002",
-					[]replication.EventType{
-						replication.PREVIOUS_GTIDS_EVENT,
-						replication.QUERY_EVENT,
-						replication.XID_EVENT,
-						replication.QUERY_EVENT,
-						replication.XID_EVENT,
-						replication.ROTATE_EVENT,
+					[]EventResult{
+						{replication.PREVIOUS_GTIDS_EVENT, ""},
+						{replication.QUERY_EVENT, "mysql|000001.000002"},
+						{replication.XID_EVENT, "mysql|000001.000002"},
+						{replication.QUERY_EVENT, "mysql|000001.000002"},
+						{replication.XID_EVENT, "mysql|000001.000003"},
+						{replication.ROTATE_EVENT, ""},
 					},
 				},
 				{
 					"mysql.000003",
-					[]replication.EventType{
-						replication.PREVIOUS_GTIDS_EVENT,
-						replication.QUERY_EVENT,
-						replication.XID_EVENT,
-						replication.QUERY_EVENT,
-						replication.XID_EVENT,
+					[]EventResult{
+						{replication.PREVIOUS_GTIDS_EVENT, ""},
+						{replication.QUERY_EVENT, "mysql|000001.000003"},
+						{replication.XID_EVENT, "mysql|000001.000003"},
+						{replication.QUERY_EVENT, "mysql|000001.000003"},
+						{replication.XID_EVENT, "mysql|000002.000001"},
 					},
 				},
 			},
@@ -682,31 +687,31 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 			"bf6227a7-1f15-11eb-9afb-0242ac110004",
 			"bf6227a7-1f15-11eb-9afb-0242ac110004.000002",
 			"bf6227a7-1f15-11eb-9afb-0242ac110004:20",
-			[]FileEventType{
+			[]FileEventResult{
 				{
 					"mysql.000001",
-					[]replication.EventType{
-						replication.PREVIOUS_GTIDS_EVENT,
-						replication.QUERY_EVENT,
-						replication.XID_EVENT,
-						replication.QUERY_EVENT,
-						replication.XID_EVENT,
-						replication.ROTATE_EVENT,
+					[]EventResult{
+						{replication.PREVIOUS_GTIDS_EVENT, ""},
+						{replication.QUERY_EVENT, "mysql|000002.000001"},
+						{replication.XID_EVENT, "mysql|000002.000001"},
+						{replication.QUERY_EVENT, "mysql|000002.000001"},
+						{replication.XID_EVENT, "mysql|000002.000002"},
+						{replication.ROTATE_EVENT, ""},
 					},
 				}, {
 					"mysql.000002",
-					[]replication.EventType{
-						replication.PREVIOUS_GTIDS_EVENT,
-						replication.QUERY_EVENT,
-						replication.XID_EVENT,
-						replication.QUERY_EVENT,
-						replication.XID_EVENT,
-						replication.ROTATE_EVENT,
+					[]EventResult{
+						{replication.PREVIOUS_GTIDS_EVENT, ""},
+						{replication.QUERY_EVENT, "mysql|000002.000002"},
+						{replication.XID_EVENT, "mysql|000002.000002"},
+						{replication.QUERY_EVENT, "mysql|000002.000002"},
+						{replication.XID_EVENT, "mysql|000003.000001"},
+						{replication.ROTATE_EVENT, ""},
 					},
 				}, {
 					"mysql.000003",
-					[]replication.EventType{
-						replication.PREVIOUS_GTIDS_EVENT,
+					[]EventResult{
+						{replication.PREVIOUS_GTIDS_EVENT, ""},
 					},
 				},
 			},
@@ -714,15 +719,15 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 			"bcbf9d42-1f15-11eb-a41c-0242ac110003",
 			"bcbf9d42-1f15-11eb-a41c-0242ac110003.000003",
 			"bcbf9d42-1f15-11eb-a41c-0242ac110003:30",
-			[]FileEventType{
+			[]FileEventResult{
 				{
 					"mysql.000001",
-					[]replication.EventType{
-						replication.PREVIOUS_GTIDS_EVENT,
-						replication.QUERY_EVENT,
-						replication.XID_EVENT,
-						replication.QUERY_EVENT,
-						replication.XID_EVENT,
+					[]EventResult{
+						{replication.PREVIOUS_GTIDS_EVENT, ""},
+						{replication.QUERY_EVENT, "mysql|000003.000001"},
+						{replication.XID_EVENT, "mysql|000003.000001"},
+						{replication.QUERY_EVENT, "mysql|000003.000001"},
+						{replication.XID_EVENT, "mysql|000003.000001"},
 					},
 				},
 			},
@@ -739,12 +744,9 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 	c.Assert(err, IsNil)
 
 	var allEvents []*replication.BinlogEvent
+	var allResults []string
 
-	// prePosMap record previous uuid's last file's size
-	// when master switch, we get the previous uuid's last pos now
-	prePosMap := make(map[string]uint32)
 	for _, subDir := range testCase {
-		prePosMap[subDir.serverUUID] = lastPos
 		lastPos = 4
 		lastGTID, err = gtid.ParserGTID(mysql.MySQLFlavor, subDir.gtidStr)
 		c.Assert(err, IsNil)
@@ -752,12 +754,20 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 		err = os.MkdirAll(uuidDir, 0700)
 		c.Assert(err, IsNil)
 
-		for _, fileEventType := range subDir.fileEventTypes {
-			events, lastPos, lastGTID, previousGset = t.genEvents(c, fileEventType.eventTypes, lastPos, lastGTID, previousGset)
+		for _, fileEventResult := range subDir.fileEventResult {
+			eventTypes := []replication.EventType{}
+			for _, eventResult := range fileEventResult.eventResults {
+				eventTypes = append(eventTypes, eventResult.eventType)
+				if len(eventResult.result) != 0 {
+					allResults = append(allResults, eventResult.result)
+				}
+			}
+
+			events, lastPos, lastGTID, previousGset = t.genEvents(c, eventTypes, lastPos, lastGTID, previousGset)
 			allEvents = append(allEvents, events...)
 
 			// write binlog file
-			f, err2 := os.OpenFile(path.Join(uuidDir, fileEventType.filename), os.O_CREATE|os.O_WRONLY, 0600)
+			f, err2 := os.OpenFile(path.Join(uuidDir, fileEventResult.filename), os.O_CREATE|os.O_WRONLY, 0600)
 			c.Assert(err2, IsNil)
 			_, err = f.Write(replication.BinLogFileHeader)
 			c.Assert(err, IsNil)
@@ -768,7 +778,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 			f.Close()
 
 			// write meta file
-			meta := Meta{BinLogName: fileEventType.filename, BinLogPos: lastPos, BinlogGTID: previousGset.String()}
+			meta := Meta{BinLogName: fileEventResult.filename, BinLogPos: lastPos, BinlogGTID: previousGset.String()}
 			metaFile, err2 := os.Create(path.Join(uuidDir, utils.MetaFilename))
 			c.Assert(err2, IsNil)
 			err = toml.NewEncoder(metaFile).Encode(meta)
@@ -792,39 +802,27 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 			continue // ignore fake event
 		}
 		obtainBaseEvents = append(obtainBaseEvents, ev)
-		// start after the first nil previous event
-		if len(obtainBaseEvents) == len(allEvents)-1 {
+		// start from the first format description event
+		if len(obtainBaseEvents) == len(allEvents) {
 			break
 		}
 	}
 
-	preGset, err := gtid.ParserGTID(mysql.MySQLFlavor, "")
+	preGset, err := mysql.ParseGTIDSet(mysql.MySQLFlavor, "")
 	c.Assert(err, IsNil)
-	// allEvents: [FORMAT_DESCRIPTION_EVENT, PREVIOUS_GTIDS_EVENT, GTID_EVENT, QUERY_EVENT...]
-	// obtainBaseEvents: [FORMAT_DESCRIPTION_EVENT(generated), GTID_EVENT, QUERY_EVENT...]
+
+	gtidEventCount := 0
 	for i, event := range obtainBaseEvents {
-		if i == 0 {
-			c.Assert(event.Header.EventType, Equals, replication.FORMAT_DESCRIPTION_EVENT)
-			continue
-		}
-		c.Assert(event.Header, DeepEquals, allEvents[i+1].Header)
-		switch ev := event.Event.(type) {
-		case *replication.GTIDEvent:
-			pos, err2 := r.getPosByGTID(preGset.Origin().Clone())
+		c.Assert(event.Header, DeepEquals, allEvents[i].Header)
+		if ev, ok := event.Event.(*replication.GTIDEvent); ok {
 			u, _ := uuid.FromBytes(ev.SID)
+			c.Assert(preGset.Update(fmt.Sprintf("%s:%d", u.String(), ev.GNO)), IsNil)
+
+			pos, err2 := r.getPosByGTID(preGset.Clone())
 			c.Assert(err2, IsNil)
-			// new uuid dir
-			if len(preGset.String()) != 0 && !strings.Contains(preGset.String(), u.String()) {
-				c.Assert(pos.Pos, Equals, prePosMap[u.String()], Commentf("a %d", i))
-			} else {
-				c.Assert(pos.Pos, Equals, event.Header.LogPos-event.Header.EventSize, Commentf("b %d", i))
-			}
-		case *replication.QueryEvent:
-			err2 := preGset.Set(ev.GSet)
-			c.Assert(err2, IsNil)
-		case *replication.XIDEvent:
-			err2 := preGset.Set(ev.GSet)
-			c.Assert(err2, IsNil)
+			c.Assert(pos.Name, Equals, allResults[gtidEventCount])
+			c.Assert(pos.Pos, Equals, uint32(4))
+			gtidEventCount++
 		}
 	}
 }
@@ -854,7 +852,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	c.Assert(s, IsNil)
 
 	s, err = r.StartSyncByGTID(t.lastGTID.Origin().Clone())
-	c.Assert(err, ErrorMatches, ".*no relay subdir match gtid.*")
+	c.Assert(err, ErrorMatches, ".*no relay pos match gtid.*")
 	c.Assert(s, IsNil)
 
 	// write UUIDs into index file
@@ -869,7 +867,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	c.Assert(s, IsNil)
 
 	s, err = r.StartSyncByGTID(t.lastGTID.Origin().Clone())
-	c.Assert(err, ErrorMatches, ".*load meta data.*no such file or directory.*")
+	c.Assert(err, ErrorMatches, ".*no such file or directory.*")
 	c.Assert(s, IsNil)
 
 	// can not re-start the reader

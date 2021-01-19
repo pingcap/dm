@@ -772,6 +772,12 @@ description = ""
 workaround = "Please check log of dump unit, there maybe errors when read upstream binlog status"
 tags = ["upstream", "low"]
 
+[error.DM-functional-11124]
+message = "no previous gtid event in relay log file %s"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""

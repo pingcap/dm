@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
@@ -118,59 +117,19 @@ func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
 	return nil
 }
 
-// getUUIDByGTID gets uuid subdir which contain the gtid set
-func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
-	// get flush logs from oldest to newest
-	for _, uuid := range r.uuids {
-		filename := path.Join(r.cfg.RelayDir, uuid, utils.MetaFilename)
-		var meta Meta
-		_, err := toml.DecodeFile(filename, &meta)
-		if err != nil {
-			return "", terror.ErrRelayLoadMetaData.Delegate(err)
-		}
-
-		gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, meta.BinlogGTID)
-		if err != nil {
-			return "", terror.ErrRelayLoadMetaData.Delegate(err)
-		}
-		if gs.Contain(gset) {
-			r.tctx.L().Info("get uuid subdir by gtid", zap.Stringer("GTID Set", gset), zap.String("uuid", uuid), zap.Stringer("latest GTID Set in subdir", gs))
-			return uuid, nil
-		}
-	}
-
-	// TODO: use a better mechanism to call relay.meta.Flush
-	// get the meta save in memory
-	relayMetaHub := GetRelayMetaHub()
-	relayMeta := relayMetaHub.GetMeta()
-
-	if len(relayMeta.UUID) > 0 {
-		gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, relayMeta.BinlogGTID)
-		if err != nil {
-			return "", terror.ErrRelayLoadMetaData.Delegate(err)
-		}
-		if gs.Contain(gset) {
-			r.tctx.L().Info("get uuid subdir by gtid", zap.Stringer("GTID Set", gset), zap.String("uuid", relayMeta.UUID))
-			return relayMeta.UUID, nil
-		}
-	}
-	return "", terror.ErrNoUUIDDirMatchGTID.Generate(gset.String())
-}
-
-// GetFilePosByGTID tries to get Pos by GTID for file
-func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gset mysql.GTIDSet) (uint32, error) {
+// CheckFileByGTID check whether gset contains file's previous_gset
+func (r *BinlogReader) CheckFileByGTID(ctx context.Context, filePath string, gset mysql.GTIDSet) (bool, error) {
 	fileReader := reader.NewFileReader(&reader.FileReaderConfig{Timezone: r.cfg.Timezone})
 	defer fileReader.Close()
 	err := fileReader.StartSyncByPos(mysql.Position{Name: filePath, Pos: 4})
 	if err != nil {
-		return 0, err
+		return false, err
 	}
 
-	lastPos := uint32(0)
 	for {
 		select {
 		case <-ctx.Done():
-			return 0, nil
+			return false, nil
 		default:
 		}
 
@@ -179,95 +138,60 @@ func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gs
 		cancel()
 		if err != nil {
 			// reach end of file
+			// Maybe we can only Parse the first two Format_desc and Previous_gtids events.
 			if terror.ErrReaderReachEndOfFile.Equal(err) {
-				return lastPos, nil
+				return false, terror.ErrPreviousGTIDNotExist.Generate(filePath)
 			}
-			return 0, err
+			return false, err
 		}
 
-		switch ev := e.Event.(type) {
-		case *replication.PreviousGTIDsEvent:
-			// nil previous gtid event, continue to parse file
-			if len(ev.GTIDSets) == 0 {
-				break
-			}
+		if ev, ok := e.Event.(*replication.PreviousGTIDsEvent); ok {
 			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, ev.GTIDSets)
 			if err != nil {
-				return 0, err
+				return false, err
 			}
-			// if PreviousGITDsEvent contain but not equal the gset, go to previous file
-			if gs.Contain(gset) {
-				// continue to parse file if gset equals gs
-				if gset.Contain(gs) {
-					break
-				}
-				return 0, nil
+			if gset.Contain(gs) {
+				return true, nil
 			}
-		case *replication.RotateEvent:
-			// should not happen
-			if e.Header.Timestamp != 0 && e.Header.LogPos != 0 {
-				return lastPos, nil
-			}
-			continue
-		case *replication.GTIDEvent:
-			u, _ := uuid.FromBytes(ev.SID)
-			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, fmt.Sprintf("%s:%d", u.String(), ev.GNO))
-			if err != nil {
-				return 0, err
-			}
-			// meet first gtid event greater than gset
-			if !gset.Contain(gs) {
-				return lastPos, nil
-			}
-		case *replication.MariadbGTIDEvent:
-			GTID := ev.GTID
-			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
-			if err != nil {
-				return 0, err
-			}
-			// meet first gtid event greater than gset
-			if !gset.Contain(gs) {
-				return lastPos, nil
-			}
+			return false, nil
 		}
-		lastPos = e.Header.LogPos
 	}
 }
 
-// getPosByGTID gets position by gtid
+// getPosByGTID gets file position by gtid, result should be (filename, 4)
 func (r *BinlogReader) getPosByGTID(gset mysql.GTIDSet) (*mysql.Position, error) {
-	uuid, err := r.getUUIDByGTID(gset)
-	if err != nil {
-		return nil, err
-	}
-	_, suffix, err := utils.ParseSuffixForUUID(uuid)
-	if err != nil {
-		return nil, err
-	}
-
-	uuidDir := path.Join(r.cfg.RelayDir, uuid)
-	allFiles, err := CollectAllBinlogFiles(uuidDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// iterate files from the newest one
-	for i := len(allFiles) - 1; i >= 0; i-- {
-		file := allFiles[i]
-		filePath := path.Join(uuidDir, file)
-		pos, err := r.GetFilePosByGTID(r.tctx.Ctx, filePath, gset)
+	// start from newest uuid dir
+	for i := len(r.uuids) - 1; i >= 0; i-- {
+		uuid := r.uuids[i]
+		_, suffix, err := utils.ParseSuffixForUUID(uuid)
 		if err != nil {
 			return nil, err
 		}
-		if pos != 0 {
-			fileName, err := binlog.ParseFilename(file)
+
+		uuidDir := path.Join(r.cfg.RelayDir, uuid)
+		allFiles, err := CollectAllBinlogFiles(uuidDir)
+		if err != nil {
+			return nil, err
+		}
+
+		// iterate files from the newest one
+		for i := len(allFiles) - 1; i >= 0; i-- {
+			file := allFiles[i]
+			filePath := path.Join(uuidDir, file)
+			contain, err := r.CheckFileByGTID(r.tctx.Ctx, filePath, gset)
 			if err != nil {
 				return nil, err
 			}
-			return &mysql.Position{
-				Name: binlog.ConstructFilenameWithUUIDSuffix(fileName, utils.SuffixIntToStr(suffix)),
-				Pos:  uint32(pos),
-			}, nil
+			if contain {
+				fileName, err := binlog.ParseFilename(file)
+				if err != nil {
+					return nil, err
+				}
+				return &mysql.Position{
+					Name: binlog.ConstructFilenameWithUUIDSuffix(fileName, utils.SuffixIntToStr(suffix)),
+					Pos:  4,
+				}, nil
+			}
 		}
 	}
 	return nil, terror.ErrNoRelayPosMatchGTID.Generate(gset.String())
