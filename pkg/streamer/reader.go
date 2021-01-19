@@ -30,6 +30,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/binlog/reader"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
@@ -492,7 +493,8 @@ func (r *BinlogReader) parseFile(
 			switch e.Event.(type) {
 			case *replication.RowsEvent, *replication.QueryEvent, *replication.GTIDEvent, *replication.XIDEvent:
 				// simply replace event header
-				e.Header.EventType = replication.HEARTBEAT_EVENT
+				e = event.GenHeartbeatEvent(e.Header)
+			default:
 			}
 		}
 
