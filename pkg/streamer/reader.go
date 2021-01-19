@@ -74,6 +74,8 @@ type BinlogReader struct {
 	tctx *tcontext.Context
 
 	prevGset, currGset mysql.GTIDSet
+
+	replaceWithHeartbeat bool
 }
 
 // NewBinlogReader creates a new BinlogReader
@@ -459,9 +461,9 @@ func (r *BinlogReader) parseFile(
 				break
 			}
 			u, _ := uuid.FromBytes(ev.SID)
-			err2 := r.advanceCurrentGtidSet(fmt.Sprintf("%s:%d", u.String(), ev.GNO))
-			if err2 != nil {
-				return errors.Trace(err2)
+			r.replaceWithHeartbeat, err = r.advanceCurrentGtidSet(fmt.Sprintf("%s:%d", u.String(), ev.GNO))
+			if err != nil {
+				return errors.Trace(err)
 			}
 			latestPos = int64(e.Header.LogPos)
 		case *replication.MariadbGTIDEvent:
@@ -470,9 +472,9 @@ func (r *BinlogReader) parseFile(
 				break
 			}
 			GTID := ev.GTID
-			err2 := r.advanceCurrentGtidSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
-			if err2 != nil {
-				return errors.Trace(err2)
+			r.replaceWithHeartbeat, err = r.advanceCurrentGtidSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
+			if err != nil {
+				return errors.Trace(err)
 			}
 			latestPos = int64(e.Header.LogPos)
 		case *replication.XIDEvent:
@@ -484,6 +486,14 @@ func (r *BinlogReader) parseFile(
 		default:
 			// update file pos
 			latestPos = int64(e.Header.LogPos)
+		}
+
+		if r.replaceWithHeartbeat {
+			switch e.Event.(type) {
+			case *replication.RowsEvent, *replication.QueryEvent, *replication.GTIDEvent, *replication.XIDEvent:
+				// simply replace event header
+				e.Header.EventType = replication.HEARTBEAT_EVENT
+			}
 		}
 
 		select {
@@ -590,7 +600,8 @@ func (r *BinlogReader) getCurrentGtidSet() mysql.GTIDSet {
 	return r.currGset.Clone()
 }
 
-func (r *BinlogReader) advanceCurrentGtidSet(gtid string) error {
+// advanceCurrentGtidSet advance gtid set and return whether currGset equals preGset
+func (r *BinlogReader) advanceCurrentGtidSet(gtid string) (bool, error) {
 	if r.currGset == nil {
 		r.currGset = r.prevGset.Clone()
 	}
@@ -599,7 +610,9 @@ func (r *BinlogReader) advanceCurrentGtidSet(gtid string) error {
 	if err == nil {
 		if !r.currGset.Equal(prev) {
 			r.prevGset = prev
+			return false, nil
 		}
+		return true, nil
 	}
-	return err
+	return false, err
 }
