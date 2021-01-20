@@ -491,7 +491,7 @@ func (r *BinlogReader) parseFile(
 
 		if r.replaceWithHeartbeat {
 			switch e.Event.(type) {
-			case *replication.RowsEvent, *replication.QueryEvent, *replication.GTIDEvent, *replication.XIDEvent:
+			case *replication.RowsEvent, *replication.QueryEvent, *replication.GTIDEvent, *replication.XIDEvent, *replication.TableMapEvent:
 				// replace with heartbeat event
 				e = event.GenHeartbeatEvent(e.Header)
 			default:
