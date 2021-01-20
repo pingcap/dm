@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"io"
 	"math"
@@ -329,7 +330,7 @@ func getSQLMode(statusVars []byte) (mysql.SQLMode, error) {
 	if !ok {
 		if err == nil {
 			// should not happen
-			err = errors.New("Q_SQL_MODE_CODE not found in status_vars")
+			err = fmt.Errorf("Q_SQL_MODE_CODE not found in status_vars %v", statusVars)
 		}
 		return mysql.ModeNone, err
 	}
