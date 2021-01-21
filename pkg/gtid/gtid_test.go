@@ -58,6 +58,14 @@ func (s *testGTIDSuite) TestGTID(c *C) {
 		{"mysql", []interface{}{matserUUIDs[0]}, fmt.Sprintf("%s:1-2", matserUUIDs[1]), "", ""},
 		{"mysql", []interface{}{matserUUIDs[0], matserUUIDs[1]}, fmt.Sprintf("%s:1-2,%s:1-2", matserUUIDs[0], matserUUIDs[1]), fmt.Sprintf("%s:1-12,%s:1-4,%s:1-4", matserUUIDs[0], matserUUIDs[1], matserUUIDs[2]), fmt.Sprintf("%s:1-2,%s:1-2,%s:1-4", matserUUIDs[0], matserUUIDs[1], matserUUIDs[2])},
 		{"mysql", []interface{}{matserUUIDs[0], matserUUIDs[2]}, fmt.Sprintf("%s:1-2", matserUUIDs[1]), fmt.Sprintf("%s:1-12,%s:1-3,%s:1-4", matserUUIDs[0], matserUUIDs[1], matserUUIDs[2]), fmt.Sprintf("%s:1-2", matserUUIDs[1])},
+		{"", []interface{}{uint32(1)}, "1-1-1,2-2-2", "1-1-12,4-4-4", "1-1-1,4-4-4"},
+		{"", []interface{}{uint32(1)}, "2-2-2", "1-2-12,2-2-3,4-4-4", "2-2-2,4-4-4"},
+		{"", []interface{}{uint32(1), uint32(3)}, "1-1-1,3-3-4,2-2-2", "1-1-12,3-3-8,4-4-4", "1-1-1,3-3-4,4-4-4"},
+		{"", []interface{}{uint32(1), uint32(3)}, "2-2-2", "1-2-12,2-2-3,3-3-8,4-4-4", "2-2-2,4-4-4"},
+		{"", []interface{}{matserUUIDs[0]}, fmt.Sprintf("%s:1-2,%s:1-2", matserUUIDs[0], matserUUIDs[1]), fmt.Sprintf("%s:1-12,%s:1-4", matserUUIDs[0], matserUUIDs[2]), fmt.Sprintf("%s:1-2,%s:1-4", matserUUIDs[0], matserUUIDs[2])},
+		{"", []interface{}{matserUUIDs[0]}, fmt.Sprintf("%s:1-2", matserUUIDs[1]), fmt.Sprintf("%s:1-12,%s:1-3,%s:1-4", matserUUIDs[0], matserUUIDs[1], matserUUIDs[2]), fmt.Sprintf("%s:1-2,%s:1-4", matserUUIDs[1], matserUUIDs[2])},
+		{"", []interface{}{matserUUIDs[0], matserUUIDs[1]}, fmt.Sprintf("%s:1-2,%s:1-2", matserUUIDs[0], matserUUIDs[1]), fmt.Sprintf("%s:1-12,%s:1-4,%s:1-4", matserUUIDs[0], matserUUIDs[1], matserUUIDs[2]), fmt.Sprintf("%s:1-2,%s:1-2,%s:1-4", matserUUIDs[0], matserUUIDs[1], matserUUIDs[2])},
+		{"", []interface{}{matserUUIDs[0], matserUUIDs[2]}, fmt.Sprintf("%s:1-2", matserUUIDs[1]), fmt.Sprintf("%s:1-12,%s:1-3,%s:1-4", matserUUIDs[0], matserUUIDs[1], matserUUIDs[2]), fmt.Sprintf("%s:1-2", matserUUIDs[1])},
 	}
 
 	for _, cs := range cases {
