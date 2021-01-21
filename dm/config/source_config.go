@@ -138,7 +138,7 @@ func (c *SourceConfig) ParseYaml(content string) error {
 		return terror.ErrConfigYamlTransform.Delegate(err, "decode source config")
 	}
 	c.adjust()
-	return c.Verify()
+	return nil
 }
 
 // EncodeToml encodes config.

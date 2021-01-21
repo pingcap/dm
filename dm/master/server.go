@@ -996,6 +996,10 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 			return cfgs, err
 		}
 
+		if err = cfg.Verify(); err != nil {
+			return cfgs, err
+		}
+
 		fromDB.Close()
 		cfgs[i] = cfg
 	}
