@@ -37,6 +37,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/common"
+	binlogReader "github.com/pingcap/dm/pkg/binlog/reader"
 	"github.com/pingcap/dm/pkg/conn"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -565,17 +566,25 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 	}
 
 	// try adjust meta with start pos from config
-	adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID, latestPosName, latestGTIDStr)
+	_, err = r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID, latestPosName, latestGTIDStr)
 	if err != nil {
 		return err
 	}
 
-	if adjusted {
-		_, pos := r.meta.Pos()
-		_, gtid := r.meta.GTID()
-		r.logger.Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gtid))
+	_, pos := r.meta.Pos()
+	_, gtid := r.meta.GTID()
+	if r.cfg.EnableGTID {
+		gtid, err = r.adjustGTID(ctx, gtid)
+		if err != nil {
+			return terror.Annotate(err, "fail to adjust gtid for relay")
+		}
+		err = r.SaveMeta(pos, gtid)
+		if err != nil {
+			return err
+		}
 	}
 
+	r.logger.Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gtid))
 	r.updateMetricsRelaySubDirIndex()
 
 	return nil
@@ -908,4 +917,18 @@ func (r *Relay) setSyncConfig() error {
 
 	r.syncerCfg = syncerCfg
 	return nil
+}
+
+// AdjustGTID implements Relay.AdjustGTID
+func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error) {
+	// setup a TCP binlog reader (because no relay can be used when upgrading).
+	syncCfg := r.syncerCfg
+	randomServerID, err := utils.ReuseServerID(ctx, r.cfg.ServerID, r.db)
+	if err != nil {
+		return nil, terror.Annotate(err, "fail to get random server id when relay adjust gtid")
+	}
+	syncCfg.ServerID = randomServerID
+
+	tcpReader := binlogReader.NewTCPReader(syncCfg)
+	return binlogReader.GetPreviousGTIDFromGTIDSet(ctx, tcpReader, gset)
 }

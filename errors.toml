@@ -773,7 +773,7 @@ workaround = "Please check log of dump unit, there maybe errors when read upstre
 tags = ["upstream", "low"]
 
 [error.DM-functional-11124]
-message = "no previous gtid event in relay log file %s"
+message = "no previous gtid event from binlog %s"
 description = ""
 workaround = ""
 tags = ["internal", "high"]

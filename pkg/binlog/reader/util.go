@@ -140,3 +140,38 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 		}
 	}
 }
+
+// GetPreviousGTIDFromGTIDSet tries to get previous GTID sets from Previous_GTID_EVENT GTID for the specified GITD Set.
+func GetPreviousGTIDFromGTIDSet(ctx context.Context, r Reader, gset gtid.Set) (gtid.Set, error) {
+	err := r.StartSyncByGTID(gset)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	for {
+		var e *replication.BinlogEvent
+		e, err = r.GetEvent(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		switch e.Header.EventType {
+		case replication.ROTATE_EVENT:
+			if e.Header.Timestamp == 0 || e.Header.LogPos == 0 { // fake rotate event
+				continue
+			}
+			return nil, terror.ErrPreviousGTIDNotExist.Generate(gset.String())
+		case replication.FORMAT_DESCRIPTION_EVENT:
+			continue
+		case replication.PREVIOUS_GTIDS_EVENT:
+			previousGset, err := event.GTIDsFromPreviousGTIDsEvent(e)
+			return previousGset, err
+		case replication.MARIADB_GTID_LIST_EVENT:
+			previousGset, err := event.GTIDsFromMariaDBGTIDListEvent(e)
+			return previousGset, err
+		default:
+			return nil, terror.ErrPreviousGTIDNotExist.Generate(gset.String())
+		}
+	}
+}
