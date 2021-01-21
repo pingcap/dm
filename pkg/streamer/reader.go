@@ -76,8 +76,6 @@ type BinlogReader struct {
 	tctx *tcontext.Context
 
 	prevGset, currGset mysql.GTIDSet
-
-	replaceWithHeartbeat bool
 }
 
 // NewBinlogReader creates a new BinlogReader
@@ -121,8 +119,8 @@ func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
 	return nil
 }
 
-// CheckFileByGTID check whether gset contains file's previous_gset
-func (r *BinlogReader) CheckFileByGTID(ctx context.Context, filePath string, gset mysql.GTIDSet) (bool, error) {
+// IsGTIDCoverPreviousFiles check whether gset contains file's previous_gset
+func (r *BinlogReader) IsGTIDCoverPreviousFiles(ctx context.Context, filePath string, gset mysql.GTIDSet) (bool, error) {
 	fileReader := reader.NewFileReader(&reader.FileReaderConfig{Timezone: r.cfg.Timezone})
 	defer fileReader.Close()
 	err := fileReader.StartSyncByPos(mysql.Position{Name: filePath, Pos: 4})
@@ -192,7 +190,7 @@ func (r *BinlogReader) getPosByGTID(gset mysql.GTIDSet) (*mysql.Position, error)
 			// if file's gset not contain previous_gtids_event's gset
 			// that means some event before the file havn't been replication
 			// so we go to previous file
-			contain, err := r.CheckFileByGTID(r.tctx.Ctx, filePath, gset)
+			contain, err := r.IsGTIDCoverPreviousFiles(r.tctx.Ctx, filePath, gset)
 			if err != nil {
 				return nil, err
 			}
@@ -438,6 +436,7 @@ func (r *BinlogReader) parseFile(
 
 	uuidSuffix := utils.SuffixIntToStr(suffixInt) // current UUID's suffix, which will be added to binlog name
 	latestPos = offset                            // set to argument passed in
+	replaceWithHeartbeat := false
 
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		r.tctx.L().Debug("read event", zap.Reflect("header", e.Header))
@@ -474,7 +473,7 @@ func (r *BinlogReader) parseFile(
 				break
 			}
 			u, _ := uuid.FromBytes(ev.SID)
-			r.replaceWithHeartbeat, err = r.advanceCurrentGtidSet(fmt.Sprintf("%s:%d", u.String(), ev.GNO))
+			replaceWithHeartbeat, err = r.advanceCurrentGtidSet(fmt.Sprintf("%s:%d", u.String(), ev.GNO))
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -485,7 +484,7 @@ func (r *BinlogReader) parseFile(
 				break
 			}
 			GTID := ev.GTID
-			r.replaceWithHeartbeat, err = r.advanceCurrentGtidSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
+			replaceWithHeartbeat, err = r.advanceCurrentGtidSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -506,7 +505,7 @@ func (r *BinlogReader) parseFile(
 		// replace it with HEARTBEAT event
 		// for Mariadb, it will bee replaced with MARIADB_GTID_LIST_EVENT
 		// In DM, we replace both of them with HEARTBEAT event
-		if r.replaceWithHeartbeat {
+		if replaceWithHeartbeat {
 			switch e.Event.(type) {
 			case *replication.RowsEvent, *replication.QueryEvent, *replication.GTIDEvent, *replication.XIDEvent, *replication.TableMapEvent:
 				// replace with heartbeat event
