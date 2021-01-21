@@ -1004,7 +1004,7 @@ func (t *testReaderSuite) TestAdvanceCurrentGTIDSet(c *C) {
 	c.Assert(mysqlGset.Equal(r.prevGset), IsTrue)
 	c.Assert(r.currGset.String(), Equals, "b60868af-5a6f-11e9-9ea3-0242ac160006:1-7")
 
-	r.cfg.Flavor=mysql.MariaDBFlavor
+	r.cfg.Flavor = mysql.MariaDBFlavor
 	r.prevGset = mariadbGset.Clone()
 	r.currGset = nil
 	notUpdated, err = r.advanceCurrentGtidSet("0-1-3")
