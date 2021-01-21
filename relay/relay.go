@@ -574,6 +574,8 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 	_, pos := r.meta.Pos()
 	_, gtid := r.meta.GTID()
 	if r.cfg.EnableGTID {
+		// Adjust given gtid
+		// This means we always pull the binlog from the beginning of file.
 		gtid, err = r.adjustGTID(ctx, gtid)
 		if err != nil {
 			return terror.Annotate(err, "fail to adjust gtid for relay")

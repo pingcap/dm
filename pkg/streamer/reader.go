@@ -189,6 +189,9 @@ func (r *BinlogReader) getPosByGTID(gset mysql.GTIDSet) (*mysql.Position, error)
 		for i := len(allFiles) - 1; i >= 0; i-- {
 			file := allFiles[i]
 			filePath := path.Join(uuidDir, file)
+			// if file's gset not contain previous_gtids_event's gset
+			// that means some event before the file havn't been replication
+			// so we go to previous file
 			contain, err := r.CheckFileByGTID(r.tctx.Ctx, filePath, gset)
 			if err != nil {
 				return nil, err
@@ -198,6 +201,7 @@ func (r *BinlogReader) getPosByGTID(gset mysql.GTIDSet) (*mysql.Position, error)
 				if err != nil {
 					return nil, err
 				}
+				// Start at the beginning of the file
 				return &mysql.Position{
 					Name: binlog.ConstructFilenameWithUUIDSuffix(fileName, utils.SuffixIntToStr(suffix)),
 					Pos:  4,
@@ -497,6 +501,11 @@ func (r *BinlogReader) parseFile(
 			latestPos = int64(e.Header.LogPos)
 		}
 
+		// align with MySQL
+		// if an event's gtid has been contained by given gset
+		// replace it with HEARTBEAT event
+		// for Mariadb, it will bee replaced with MARIADB_GTID_LIST_EVENT
+		// In DM, we replace both of them with HEARTBEAT event
 		if r.replaceWithHeartbeat {
 			switch e.Event.(type) {
 			case *replication.RowsEvent, *replication.QueryEvent, *replication.GTIDEvent, *replication.XIDEvent, *replication.TableMapEvent:
@@ -615,6 +624,9 @@ func (r *BinlogReader) advanceCurrentGtidSet(gtid string) (bool, error) {
 	if r.currGset == nil {
 		r.currGset = r.prevGset.Clone()
 	}
+	// Special treatment for Maridb
+	// MaridbGTIDSet.Update(gtid) will replace gset with given gtid
+	// ref https://github.com/siddontang/go-mysql/blob/0c5789dd0bd378b4b84f99b320a2d35a80d8858f/mysql/mariadb_gtid.go#L96
 	if r.cfg.Flavor == mysql.MariaDBFlavor {
 		gset, err := mysql.ParseMariadbGTIDSet(gtid)
 		if err != nil {

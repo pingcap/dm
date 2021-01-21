@@ -142,6 +142,7 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 }
 
 // GetPreviousGTIDFromGTIDSet tries to get previous GTID sets from Previous_GTID_EVENT GTID for the specified GITD Set.
+// events should be [fake_rotate_event,format_description_event,previous_gtids_event/mariadb_gtid_list_event]
 func GetPreviousGTIDFromGTIDSet(ctx context.Context, r Reader, gset gtid.Set) (gtid.Set, error) {
 	err := r.StartSyncByGTID(gset)
 	if err != nil {
