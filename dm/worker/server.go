@@ -43,13 +43,14 @@ import (
 )
 
 var (
-	cmuxReadTimeout         = 10 * time.Second
-	dialTimeout             = 3 * time.Second
-	keepaliveTimeout        = 3 * time.Second
-	keepaliveTime           = 3 * time.Second
-	retryConnectSleepTime   = time.Second
-	syncMasterEndpointsTime = 3 * time.Second
-	getMinLocForSubTaskFunc = getMinLocForSubTask
+	cmuxReadTimeout           = 10 * time.Second
+	dialTimeout               = 3 * time.Second
+	keepaliveTimeout          = 3 * time.Second
+	keepaliveTime             = 3 * time.Second
+	retryGetSourceBoundConfig = 5
+	retryConnectSleepTime     = time.Second
+	syncMasterEndpointsTime   = 3 * time.Second
+	getMinLocForSubTaskFunc   = getMinLocForSubTask
 )
 
 // Server accepts RPC requests
@@ -257,6 +258,10 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 					bound, cfg, rev1, err1 := ha.GetSourceBoundConfig(s.etcdClient, s.cfg.Name)
 					if err1 != nil {
 						log.L().Error("get source bound from etcd failed, will retry later", zap.Error(err1), zap.Int("retryNum", retryNum))
+						retryNum++
+						if retryNum > retryGetSourceBoundConfig && etcdutil.IsLimitedRetryableError(err1) {
+							return err1
+						}
 						break
 					}
 					rev = rev1
@@ -282,7 +287,6 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 						}
 					}
 				}
-				retryNum++
 			}
 		} else {
 			if err != nil {
