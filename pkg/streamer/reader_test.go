@@ -984,6 +984,40 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	c.Assert(s, IsNil)
 }
 
+func (t *testReaderSuite) TestAdvanceCurrentGTIDSet(c *C) {
+	var (
+		baseDir        = c.MkDir()
+		cfg            = &BinlogReaderConfig{RelayDir: baseDir, Flavor: mysql.MySQLFlavor}
+		r              = NewBinlogReader(log.L(), cfg)
+		mysqlGset, _   = mysql.ParseMysqlGTIDSet("b60868af-5a6f-11e9-9ea3-0242ac160006:1-6")
+		mariadbGset, _ = mysql.ParseMariadbGTIDSet("0-1-5")
+	)
+	r.prevGset = mysqlGset.Clone()
+	r.currGset = nil
+	notUpdated, err := r.advanceCurrentGtidSet("b60868af-5a6f-11e9-9ea3-0242ac160006:6")
+	c.Assert(err, IsNil)
+	c.Assert(notUpdated, IsTrue)
+	c.Assert(mysqlGset.Equal(r.currGset), IsTrue)
+	notUpdated, err = r.advanceCurrentGtidSet("b60868af-5a6f-11e9-9ea3-0242ac160006:7")
+	c.Assert(err, IsNil)
+	c.Assert(notUpdated, IsFalse)
+	c.Assert(mysqlGset.Equal(r.prevGset), IsTrue)
+	c.Assert(r.currGset.String(), Equals, "b60868af-5a6f-11e9-9ea3-0242ac160006:1-7")
+
+	r.cfg.Flavor=mysql.MariaDBFlavor
+	r.prevGset = mariadbGset.Clone()
+	r.currGset = nil
+	notUpdated, err = r.advanceCurrentGtidSet("0-1-3")
+	c.Assert(err, IsNil)
+	c.Assert(notUpdated, IsTrue)
+	c.Assert(mariadbGset.Equal(r.currGset), IsTrue)
+	notUpdated, err = r.advanceCurrentGtidSet("0-1-6")
+	c.Assert(err, IsNil)
+	c.Assert(notUpdated, IsFalse)
+	c.Assert(mariadbGset.Equal(r.prevGset), IsTrue)
+	c.Assert(r.currGset.String(), Equals, "0-1-6")
+}
+
 func (t *testReaderSuite) genBinlogEvents(c *C, latestPos uint32, latestGTID gtid.Set) ([]*replication.BinlogEvent, uint32, gtid.Set) {
 	var (
 		header = &replication.EventHeader{

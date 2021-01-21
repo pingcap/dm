@@ -610,10 +610,19 @@ func (r *BinlogReader) getCurrentGtidSet() mysql.GTIDSet {
 	return r.currGset.Clone()
 }
 
-// advanceCurrentGtidSet advance gtid set and return whether currGset equals preGset
+// advanceCurrentGtidSet advance gtid set and return whether currGset not updated
 func (r *BinlogReader) advanceCurrentGtidSet(gtid string) (bool, error) {
 	if r.currGset == nil {
 		r.currGset = r.prevGset.Clone()
+	}
+	if r.cfg.Flavor == mysql.MariaDBFlavor {
+		gset, err := mysql.ParseMariadbGTIDSet(gtid)
+		if err != nil {
+			return false, err
+		}
+		if r.currGset.Contain(gset) {
+			return true, nil
+		}
 	}
 	prev := r.currGset.Clone()
 	err := r.currGset.Update(gtid)
