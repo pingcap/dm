@@ -7,13 +7,14 @@ server-id: 101
 source-id: mysql-replica-01
 
 #flavor: mysql/mariadb
-flavor: mysql
 
 #directory that used to store relay log
 relay-dir: ./relay_log
 
 #enable gtid in relay log unit
-enable-gtid: false
+enable-gtid: true
+
+relay-binlog-gtid: "e68f6068-53ec-11eb-9c5f-0242ac110003:1-50"
 
 #charset of DSN of source mysql/mariadb instance
 # charset: ''
