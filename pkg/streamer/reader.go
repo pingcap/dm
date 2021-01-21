@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/binlog/reader"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -129,6 +130,8 @@ func (r *BinlogReader) CheckFileByGTID(ctx context.Context, filePath string, gse
 		return false, err
 	}
 
+	var gs gtid.Set
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -141,23 +144,28 @@ func (r *BinlogReader) CheckFileByGTID(ctx context.Context, filePath string, gse
 		cancel()
 		if err != nil {
 			// reach end of file
-			// Maybe we can only Parse the first two Format_desc and Previous_gtids events.
+			// Maybe we can only Parse the first three fakeRotate, Format_desc and Previous_gtids events.
 			if terror.ErrReaderReachEndOfFile.Equal(err) {
 				return false, terror.ErrPreviousGTIDNotExist.Generate(filePath)
 			}
 			return false, err
 		}
 
-		if ev, ok := e.Event.(*replication.PreviousGTIDsEvent); ok {
-			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, ev.GTIDSets)
-			if err != nil {
-				return false, err
-			}
-			if gset.Contain(gs) {
-				return true, nil
-			}
-			return false, nil
+		if e.Header.EventType == replication.PREVIOUS_GTIDS_EVENT {
+			gs, err = event.GTIDsFromPreviousGTIDsEvent(e)
+		} else if e.Header.EventType == replication.MARIADB_GTID_LIST_EVENT {
+			gs, err = event.GTIDsFromMariaDBGTIDListEvent(e)
+		} else {
+			continue
 		}
+
+		if err != nil {
+			return false, err
+		}
+		if gset.Contain(gs.Origin()) {
+			return true, nil
+		}
+		return false, nil
 	}
 }
 
