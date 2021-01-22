@@ -507,6 +507,8 @@ func (r *BinlogReader) parseFile(
 		// In DM, we replace both of them with HEARTBEAT event
 		if replaceWithHeartbeat {
 			switch e.Event.(type) {
+			// Only replace transaction event
+			// Other events such as FormatDescriptionEvent, RotateEvent, etc. should be the same as before
 			case *replication.RowsEvent, *replication.QueryEvent, *replication.GTIDEvent, *replication.XIDEvent, *replication.TableMapEvent:
 				// replace with heartbeat event
 				e = event.GenHeartbeatEvent(e.Header)
