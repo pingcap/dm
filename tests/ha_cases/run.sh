@@ -703,7 +703,47 @@ function test_config_name() {
     echo "[$(date)] <<<<<< finish test_config_name >>>>>>"
 }
 
+function test_last_bound() {
+    echo "[$(date)] <<<<<< start test_last_bound >>>>>>"
+    test_running
+
+    worker1bound=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT1" list-member --name worker1 \
+        | grep 'source' | awk -F: '{print $2}')
+    echo "worker1bound $worker1bound"
+    worker2bound=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT1" list-member --name worker2 \
+        | grep 'source' | awk -F: '{print $2}')
+    echo "worker2bound $worker2bound"
+
+    kill_2_worker_ensure_unbound 1 2
+
+    # start 1 then 2
+    start_2_worker_ensure_bound 1 2
+
+    check_bound
+
+    kill_2_worker_ensure_unbound 1 2
+
+    # start 2 then 1
+    start_2_worker_ensure_bound 2 1
+
+    check_bound
+
+    # kill 12, start 34, kill 34
+    kill_2_worker_ensure_unbound 1 2
+    start_2_worker_ensure_bound 3 4
+    kill_2_worker_ensure_unbound 3 4
+
+    # start 1 then 2
+    start_2_worker_ensure_bound 1 2
+
+    # check
+    check_bound
+
+    echo "[$(date)] <<<<<< finish test_last_bound >>>>>>"
+}
+
 function run() {
+    test_last_bound
     test_config_name                           # TICASE-915, 916, 954, 955
     test_join_masters_and_worker               # TICASE-928, 930, 931, 961, 932, 957
     test_kill_master                           # TICASE-996, 958
