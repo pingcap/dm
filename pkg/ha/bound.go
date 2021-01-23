@@ -86,11 +86,11 @@ func sourceBoundFromJSON(s string) (b SourceBound, err error) {
 func PutSourceBound(cli *clientv3.Client, bounds ...SourceBound) (int64, error) {
 	ops := make([]clientv3.Op, 0, len(bounds))
 	for _, bound := range bounds {
-		op, err := putSourceBoundOp(bound)
+		boundOps, err := putSourceBoundOp(bound)
 		if err != nil {
 			return 0, err
 		}
-		ops = append(ops, op)
+		ops = append(ops, boundOps...)
 	}
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
@@ -130,6 +130,29 @@ func GetSourceBound(cli *clientv3.Client, worker string) (map[string]SourceBound
 	}
 
 	sbm, err = sourceBoundFromResp(worker, resp)
+	if err != nil {
+		return sbm, 0, err
+	}
+
+	return sbm, resp.Header.Revision, nil
+}
+
+// GetLastSourceBounds gets all last source bound relationship. Different with GetSourceBound, "last source bound" will
+// not be deleted when worker offline
+func GetLastSourceBounds(cli *clientv3.Client) (map[string]SourceBound, int64, error) {
+	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
+	defer cancel()
+
+	var (
+		sbm = make(map[string]SourceBound)
+	)
+	resp, err := cli.Get(ctx, common.UpstreamLastBoundWorkerKeyAdapter.Path(), clientv3.WithPrefix())
+
+	if err != nil {
+		return sbm, 0, err
+	}
+
+	sbm, err = sourceBoundFromResp("", resp)
 	if err != nil {
 		return sbm, 0, err
 	}
@@ -310,14 +333,22 @@ func deleteSourceBoundOp(worker string) clientv3.Op {
 	return clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(worker))
 }
 
-// putSourceBoundOp returns a PUT etcd operation for the bound relationship.
+// deleteLastSourceBoundOp returns a DELETE ectd operation for the last bound relationship of the specified DM-worker.
+func deleteLastSourceBoundOp(worker string) clientv3.Op {
+	return clientv3.OpDelete(common.UpstreamLastBoundWorkerKeyAdapter.Encode(worker))
+}
+
+// putSourceBoundOp returns PUT etcd operations for the bound relationship.
 // k/v: worker-name -> bound relationship.
-func putSourceBoundOp(bound SourceBound) (clientv3.Op, error) {
+func putSourceBoundOp(bound SourceBound) ([]clientv3.Op, error) {
 	value, err := bound.toJSON()
 	if err != nil {
-		return clientv3.Op{}, err
+		return []clientv3.Op{}, err
 	}
-	key := common.UpstreamBoundWorkerKeyAdapter.Encode(bound.Worker)
+	key1 := common.UpstreamBoundWorkerKeyAdapter.Encode(bound.Worker)
+	op1 := clientv3.OpPut(key1, value)
+	key2 := common.UpstreamLastBoundWorkerKeyAdapter.Encode(bound.Worker)
+	op2 := clientv3.OpPut(key2, value)
 
-	return clientv3.OpPut(key, value), nil
+	return []clientv3.Op{op1, op2}, nil
 }
