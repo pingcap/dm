@@ -994,6 +994,12 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+[error.DM-config-20037]
+message = "generate binlog event filter"
+description = ""
+workaround = "Please check the `filters` config in source and task configuration files."
+tags = ["internal", "high"]
+
 [error.DM-binlog-op-22001]
 message = ""
 description = ""
@@ -1675,7 +1681,7 @@ tags = ["internal", "high"]
 [error.DM-sync-unit-36030]
 message = "generate binlog event filter"
 description = ""
-workaround = ""
+workaround = "Pleass check the `filters` config in source and task configuration files."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36031]

@@ -111,6 +111,9 @@ type Scheduler struct {
 	// - when bounded the source to a worker.
 	unbounds map[string]struct{}
 
+	// a mirror of bounds whose element is not deleted when worker unbound. worker -> SourceBound
+	lastBound map[string]ha.SourceBound
+
 	// expectant relay stages for sources, source ID -> stage.
 	// add:
 	// - bound the source to a worker (at first time).
@@ -143,6 +146,7 @@ func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 		workers:             make(map[string]*Worker),
 		bounds:              make(map[string]*Worker),
 		unbounds:            make(map[string]struct{}),
+		lastBound:           make(map[string]ha.SourceBound),
 		expectRelayStages:   make(map[string]ha.Stage),
 		expectSubTaskStages: make(map[string]map[string]ha.Stage),
 		securityCfg:         securityCfg,
@@ -906,6 +910,11 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	lastSourceBoundM, _, err := ha.GetLastSourceBounds(cli)
+	if err != nil {
+		return 0, err
+	}
+	s.lastBound = lastSourceBoundM
 
 	// 3. get all history offline status.
 	kam, rev, err := ha.GetKeepAliveWorkers(cli)
@@ -1164,14 +1173,22 @@ func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent, toLock bool) error {
 	return nil
 }
 
-// tryBoundForWorker tries to bound a random unbounded source to the worker.
+// tryBoundForWorker tries to bound a source to the worker. first try last source of this worker, then randomly pick one
 // returns (true, nil) after bounded.
 func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
-	// 1. check whether any unbound source exists.
-	var source string
-	for source = range s.unbounds {
-		break // got a source.
+	// 1. check if last bound is still available.
+	// if lastBound not found, or this source has been bounded to another worker (we also check that source still exists
+	// here), randomly pick one from unbounds.
+	// NOTE: if worker isn't in lastBound, we'll get "zero" SourceBound and it's OK, because "zero" string is not in
+	// unbounds
+	source := s.lastBound[w.baseInfo.Name].Source
+	if _, ok := s.unbounds[source]; !ok {
+		source = ""
+		for source = range s.unbounds {
+			break // got a source.
+		}
 	}
+
 	if source == "" {
 		s.logger.Info("no unbound sources need to bound", zap.Stringer("worker", w.BaseInfo()))
 		return false, nil
@@ -1198,14 +1215,31 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 // tryBoundForSource tries to bound a source to a random Free worker.
 // returns (true, nil) after bounded.
 func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
-	// 1. try to find a random Free worker.
+	// 1. try to find history workers, then random Free worker.
 	var worker *Worker
-	for _, w := range s.workers {
-		if w.Stage() == WorkerFree {
-			worker = w
-			break
+	for workerName, bound := range s.lastBound {
+		if bound.Source == source {
+			w, ok := s.workers[workerName]
+			if !ok {
+				// a not found worker
+				continue
+			}
+			if w.Stage() == WorkerFree {
+				worker = w
+				break
+			}
 		}
 	}
+
+	if worker == nil {
+		for _, w := range s.workers {
+			if w.Stage() == WorkerFree {
+				worker = w
+				break
+			}
+		}
+	}
+
 	if worker == nil {
 		s.logger.Info("no free worker exists for bound", zap.String("source", source))
 		return false, nil
@@ -1280,7 +1314,7 @@ func (s *Scheduler) deleteWorker(name string) {
 
 // updateStatusForBound updates the in-memory status for bound, including:
 // - update the stage of worker to `Bound`.
-// - record the bound relationship in the scheduler.
+// - record the bound relationship and last bound relationship in the scheduler.
 // this func is called after the bound relationship existed in etcd.
 func (s *Scheduler) updateStatusForBound(w *Worker, b ha.SourceBound) error {
 	err := w.ToBound(b)
@@ -1288,6 +1322,7 @@ func (s *Scheduler) updateStatusForBound(w *Worker, b ha.SourceBound) error {
 		return err
 	}
 	s.bounds[b.Source] = w
+	s.lastBound[b.Worker] = b
 	return nil
 }
 

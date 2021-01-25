@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	. "github.com/pingcap/check"
+	filter "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -72,6 +73,7 @@ func (t *testMaster) TestCollectSourceConfigFilesV1Import(c *C) {
 	// fix empty map after marshal/unmarshal becomes nil
 	cfg1.From.Session = map[string]string{}
 	cfg1.Tracer = map[string]interface{}{}
+	cfg1.Filters = []*filter.BinlogEventRule{}
 	c.Assert(cfg1.LoadFromFile("./source.yaml"), IsNil)
 	cfg1.From.Host = host
 	cfg1.From.Port = port
