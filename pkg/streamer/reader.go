@@ -160,10 +160,7 @@ func (r *BinlogReader) IsGTIDCoverPreviousFiles(ctx context.Context, filePath st
 		if err != nil {
 			return false, err
 		}
-		if gset.Contain(gs.Origin()) {
-			return true, nil
-		}
-		return false, nil
+		return gset.Contain(gs.Origin()), nil
 	}
 }
 
