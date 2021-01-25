@@ -184,9 +184,9 @@ func (r *BinlogReader) getPosByGTID(gset mysql.GTIDSet) (*mysql.Position, error)
 		for i := len(allFiles) - 1; i >= 0; i-- {
 			file := allFiles[i]
 			filePath := path.Join(uuidDir, file)
-			// if file's gset not contain previous_gtids_event's gset
-			// that means some event before the file havn't been replication
-			// so we go to previous file
+			// if input `gset` not contain previous_gtids_event's gset (complementary set of `gset` overlap with
+			// previous_gtids_event), that means there're some needed events in previous files.
+			// so we go to previous one
 			contain, err := r.IsGTIDCoverPreviousFiles(r.tctx.Ctx, filePath, gset)
 			if err != nil {
 				return nil, err
