@@ -592,6 +592,11 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 			cfg.FilterRules[j] = c.Filters[name]
 		}
 
+		_, err := bf.NewBinlogEvent(cfg.CaseSensitive, cfg.FilterRules)
+		if err != nil {
+			return nil, terror.ErrConfigBinlogEventFilter.Delegate(err)
+		}
+
 		cfg.ColumnMappingRules = make([]*column.Rule, len(inst.ColumnMappingRules))
 		for j, name := range inst.ColumnMappingRules {
 			cfg.ColumnMappingRules[j] = c.ColumnMappings[name]
@@ -605,7 +610,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 
 		cfg.CleanDumpFile = c.CleanDumpFile
 
-		err := cfg.Adjust(true)
+		err = cfg.Adjust(true)
 		if err != nil {
 			return nil, terror.Annotatef(err, "source %s", inst.SourceID)
 		}

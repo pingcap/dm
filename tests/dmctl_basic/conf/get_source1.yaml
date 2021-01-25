@@ -30,3 +30,17 @@ checker:
   backoff-factor: 2
 server-id: 123456
 tracer: {}
+case-sensitive: false
+filters:
+- schema-pattern: dmctl
+  table-pattern: t_1
+  events: []
+  sql-pattern:
+  - alter table .* add column `aaa` int
+  action: Ignore
+- schema-pattern: dmctl
+  table-pattern: t_2
+  events: []
+  sql-pattern:
+  - alter table .* add column `aaa` int
+  action: Ignore

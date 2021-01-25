@@ -30,3 +30,5 @@ checker:
   backoff-factor: 2
 server-id: 654321
 tracer: {}
+case-sensitive: false
+filters: []
