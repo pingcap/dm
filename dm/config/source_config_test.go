@@ -24,6 +24,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -75,6 +76,7 @@ func (t *testConfig) TestConfig(c *C) {
 	// fix empty map after marshal/unmarshal becomes nil
 	clone1.From.Session = map[string]string{}
 	clone1.Tracer = map[string]interface{}{}
+	clone1.Filters = []*bf.BinlogEventRule{}
 	clone2 := cfg.DecryptPassword()
 	c.Assert(clone2, DeepEquals, clone1)
 
