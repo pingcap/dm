@@ -815,7 +815,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 	case config.ModeIncrement:
 		// load meta from task config
 		if cp.cfg.Meta == nil {
-			cp.logCtx.L().Warn("don't set meta in increment task-mode")
+			cp.logCtx.L().Warn("didn't set meta in increment task-mode")
 			cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil, cp.cfg.EnableGTID)
 			return nil
 		}

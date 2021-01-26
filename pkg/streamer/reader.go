@@ -517,7 +517,7 @@ func (r *BinlogReader) parseFile(
 				// not fake rotate event, update file pos
 				latestPos = int64(e.Header.LogPos)
 			} else {
-				r.tctx.L().Debug("skip fake rotate event %+v", zap.Reflect("header", e.Header))
+				r.tctx.L().Debug("skip fake rotate event", zap.Reflect("header", e.Header))
 			}
 
 			// currently, we do not switch to the next relay log file when we receive the RotateEvent,
