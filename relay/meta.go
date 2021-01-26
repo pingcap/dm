@@ -194,7 +194,7 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 	lm.BinlogGTID = binlogGTID
 	lm.gset = gset
 
-	return true, nil
+	return true, lm.doFlush()
 }
 
 // Save implements Meta.Save

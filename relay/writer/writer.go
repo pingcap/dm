@@ -35,9 +35,8 @@ type Result struct {
 
 // RecoverResult represents a result for a binlog recover operation.
 type RecoverResult struct {
-	// true if recover operation has done and successfully.
-	// false if no recover operation has done or unsuccessfully.
-	Recovered bool
+	// if truncate trailing incomplete events during recovering in relay log
+	Truncated bool
 	// the latest binlog position after recover operation has done.
 	LatestPos gmysql.Position
 	// the latest binlog GTID set after recover operation has done.

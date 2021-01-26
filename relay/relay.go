@@ -333,7 +333,10 @@ func (r *Relay) tryRecoverLatestFile(ctx context.Context, parser2 *parser.Parser
 	// NOTE: recover a relay log file with too many binlog events may take a little long time.
 	result, err := writer2.Recover(ctx)
 	if err == nil {
-		if result.Recovered {
+		relayLogHasMore := result.LatestPos.Compare(latestPos) > 0 ||
+			(result.LatestGTIDs != nil && !result.LatestGTIDs.Equal(latestGTID) && result.LatestGTIDs.Contain(latestGTID))
+
+		if result.Truncated || relayLogHasMore {
 			r.logger.Warn("relay log file recovered",
 				zap.Stringer("from position", latestPos), zap.Stringer("to position", result.LatestPos), log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
 
@@ -368,12 +371,7 @@ func (r *Relay) tryRecoverLatestFile(ctx context.Context, parser2 *parser.Parser
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v after recovered", result.LatestPos, result.LatestGTIDs)
 			}
-		} else if result.LatestPos.Compare(latestPos) > 0 ||
-			(result.LatestGTIDs != nil && !result.LatestGTIDs.Equal(latestGTID) && result.LatestGTIDs.Contain(latestGTID)) {
-			r.logger.Warn("relay log file have more events",
-				zap.Stringer("after position", latestPos), zap.Stringer("until position", result.LatestPos), log.WrapStringerField("after GTID set", latestGTID), log.WrapStringerField("until GTID set", result.LatestGTIDs))
 		}
-
 	}
 	return terror.Annotatef(err, "recover for UUID %s with config %+v", uuid, cfg)
 }
