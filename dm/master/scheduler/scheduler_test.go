@@ -944,3 +944,77 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 	cancel3()
 	wg.Wait()
 }
+
+func (t *testScheduler) TestLastBound(c *C) {
+	defer clearTestInfoOperation(c)
+
+	var (
+		logger      = log.L()
+		s           = NewScheduler(&logger, config.Security{})
+		sourceID1   = "mysql-replica-1"
+		sourceID2   = "mysql-replica-2"
+		workerName1 = "dm-worker-1"
+		workerName2 = "dm-worker-2"
+		workerName3 = "dm-worker-3"
+		workerName4 = "dm-worker-4"
+		sourceCfg1  config.SourceConfig
+	)
+
+	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
+	sourceCfg1.SourceID = sourceID1
+	sourceCfg2 := sourceCfg1
+	sourceCfg2.SourceID = sourceID2
+	worker1 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName1}}
+	worker2 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName2}}
+	worker3 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName3}}
+	worker4 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName4}}
+
+	// step 1: start an empty scheduler without listening the worker event
+	s.started = true
+	s.etcdCli = etcdTestCli
+	s.workers[workerName1] = worker1
+	s.workers[workerName2] = worker2
+	s.workers[workerName3] = worker3
+	s.workers[workerName4] = worker4
+
+	s.lastBound[workerName1] = ha.SourceBound{Source: sourceID1}
+	s.lastBound[workerName2] = ha.SourceBound{Source: sourceID2}
+	s.unbounds[sourceID1] = struct{}{}
+	s.unbounds[sourceID2] = struct{}{}
+
+	// worker1 goes to last bounded source
+	worker1.ToFree()
+	bounded, err := s.tryBoundForWorker(worker1)
+	c.Assert(err, IsNil)
+	c.Assert(bounded, IsTrue)
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker1)
+
+	// worker3 has to bounded to source2
+	worker3.ToFree()
+	bounded, err = s.tryBoundForWorker(worker3)
+	c.Assert(err, IsNil)
+	c.Assert(bounded, IsTrue)
+	c.Assert(s.bounds[sourceID2], DeepEquals, worker3)
+
+	// though worker2 has a previous source, that source is not available, so not bound
+	worker2.ToFree()
+	bounded, err = s.tryBoundForWorker(worker2)
+	c.Assert(err, IsNil)
+	c.Assert(bounded, IsFalse)
+
+	// worker4 is used to test whether source2 should be bounded to worker2 rather than a new worker
+	worker4.ToFree()
+	bounded, err = s.tryBoundForWorker(worker4)
+	c.Assert(err, IsNil)
+	c.Assert(bounded, IsFalse)
+
+	// after worker3 become offline, worker2 should be bounded to worker2
+	s.updateStatusForUnbound(sourceID2)
+	_, ok := s.bounds[sourceID2]
+	c.Assert(ok, IsFalse)
+	worker3.ToOffline()
+	bounded, err = s.tryBoundForSource(sourceID2)
+	c.Assert(err, IsNil)
+	c.Assert(bounded, IsTrue)
+	c.Assert(s.bounds[sourceID2], DeepEquals, worker2)
+}

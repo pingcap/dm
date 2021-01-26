@@ -14,6 +14,7 @@
 package gtid
 
 import (
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/terror"
@@ -47,16 +48,35 @@ type Set interface {
 // ParserGTID parses GTID from string
 func ParserGTID(flavor, gtidStr string) (Set, error) {
 	var (
-		m   Set
-		err error
+		m    Set
+		err  error
+		gtid mysql.GTIDSet
 	)
 
-	gtid, err := mysql.ParseGTIDSet(flavor, gtidStr)
-	if err != nil {
-		return nil, terror.ErrParseGTID.Delegate(err, gtidStr)
+	if len(flavor) == 0 && len(gtidStr) == 0 {
+		return nil, errors.Errorf("empty flavor with empty gtid is invalid")
 	}
 
-	switch flavor {
+	fla := flavor
+	switch fla {
+	case mysql.MySQLFlavor, mysql.MariaDBFlavor:
+		gtid, err = mysql.ParseGTIDSet(fla, gtidStr)
+	case "":
+		fla = mysql.MySQLFlavor
+		gtid, err = mysql.ParseGTIDSet(fla, gtidStr)
+		if err != nil {
+			fla = mysql.MariaDBFlavor
+			gtid, err = mysql.ParseGTIDSet(fla, gtidStr)
+		}
+	default:
+		err = terror.ErrNotSupportedFlavor.Generate(flavor)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	switch fla {
 	case mysql.MariaDBFlavor:
 		m = &MariadbGTIDSet{}
 	case mysql.MySQLFlavor:
