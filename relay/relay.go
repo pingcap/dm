@@ -439,8 +439,8 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		binlogTransformDurationHistogram.Observe(time.Since(transformTimer).Seconds())
 		if len(tResult.NextLogName) > 0 && tResult.NextLogName > lastPos.Name {
 			lastPos = mysql.Position{
-				Name: string(tResult.NextLogName),
-				Pos:  uint32(tResult.LogPos),
+				Name: tResult.NextLogName,
+				Pos:  tResult.LogPos,
 			}
 			r.logger.Info("rotate event", zap.Stringer("position", lastPos))
 		}
