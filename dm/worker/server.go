@@ -63,6 +63,9 @@ type Server struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
+	kpaCtx    context.Context
+	kpaCancel context.CancelFunc
+
 	cfg *Config
 
 	rootLis    net.Listener
@@ -143,16 +146,21 @@ func (s *Server) Start() error {
 		defer s.wg.Done()
 		// TODO: handle fatal error from observeSourceBound
 		//nolint:errcheck
-		s.observeSourceBound(s.ctx, revBound)
+		for {
+			s.observeSourceBound(s.ctx, revBound)
+			s.stopKeepAlive()
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-time.After(keepaliveTimeout * 2):
+				s.wg.Add(1)
+				go s.startKeepAlive()
+			}
+		}
 	}()
 
 	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		// worker keepalive with master
-		// If worker loses connect from master, it would stop all task and try to connect master again.
-		s.KeepAlive()
-	}()
+	go s.startKeepAlive()
 
 	// create a cmux
 	m := cmux.New(s.rootLis)
@@ -189,6 +197,18 @@ func (s *Server) Start() error {
 		err = nil
 	}
 	return terror.ErrWorkerStartService.Delegate(err)
+}
+
+func (s *Server) startKeepAlive() {
+	defer s.wg.Done()
+	// worker keepalive with master
+	// If worker loses connect from master, it would stop all task and try to connect master again.
+	s.kpaCtx, s.kpaCancel = context.WithCancel(context.Background())
+	s.KeepAlive()
+}
+
+func (s *Server) stopKeepAlive() {
+	s.kpaCancel()
 }
 
 func (s *Server) syncMasterEndpoints(ctx context.Context) {

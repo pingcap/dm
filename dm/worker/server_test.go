@@ -23,6 +23,7 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/tikv/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
@@ -223,6 +224,74 @@ func (t *testServer) TestServer(c *C) {
 
 	// test worker, just make sure testing sort
 	t.testWorker(c)
+}
+
+func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
+	var (
+		masterAddr   = "127.0.0.1:8261"
+		keepAliveTTL = int64(1)
+	)
+	etcdDir := c.MkDir()
+	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
+	c.Assert(err, IsNil)
+	defer ETCD.Close()
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.KeepAliveTTL = keepAliveTTL
+
+	s := NewServer(cfg)
+	go s.Start()
+	defer s.cancel()
+
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return !s.closed.Get()
+	}), IsTrue)
+
+	etcdCli, err := clientv3.New(clientv3.Config{
+		Endpoints:            GetJoinURLs(s.cfg.Join),
+		DialTimeout:          dialTimeout,
+		DialKeepAliveTime:    keepaliveTime,
+		DialKeepAliveTimeout: keepaliveTimeout,
+	})
+	c.Assert(err, IsNil)
+	sourceCfg := loadSourceConfigWithoutPassword(c)
+	sourceCfg.EnableRelay = false
+	_, err = ha.PutSourceCfg(etcdCli, sourceCfg)
+	c.Assert(err, IsNil)
+
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/ha/FailToGetSourceCfg", `return(true)`), IsNil)
+	sourceBound := ha.NewSourceBound(sourceCfg.SourceID, s.cfg.Name)
+	_, err = ha.PutSourceBound(etcdCli, sourceBound)
+	c.Assert(err, IsNil)
+
+	c.Assert(utils.WaitSomething(30, time.Second, func() bool {
+		select {
+		case <-s.kpaCtx.Done():
+			return true
+		default:
+			return false
+		}
+	}), IsTrue)
+	failpoint.Disable("github.com/pingcap/dm/pkg/ha/FailToGetSourceCfg")
+
+	_, err = ha.PutSourceBound(etcdCli, sourceBound)
+	c.Assert(err, IsNil)
+	_, err = ha.PutSourceCfg(etcdCli, sourceCfg)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		s.Mutex.Lock()
+		defer s.Mutex.Unlock()
+		return s.worker != nil
+	}), IsTrue)
+
+	_, err = ha.DeleteSourceBound(etcdCli, s.cfg.Name)
+	c.Assert(err, IsNil)
+
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		s.Mutex.Lock()
+		defer s.Mutex.Unlock()
+		return s.worker == nil
+	}), IsTrue)
 }
 
 func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
