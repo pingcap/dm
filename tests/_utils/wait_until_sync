@@ -17,6 +17,10 @@ while true; do
     sleep 5
     echo "$cmd" | $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.$pid.out" DEVEL -master-addr=$master_addr > $dmctl_log 2>&1
 
+    value="\"stage\": \"Paused\""
+    # below grep will print the count of $value, exit when not 0
+    sed "s/$value/$value\n/g" $dmctl_log | grep -c "$value" && exit 1 || true
+
     value="\"unit\": \"Dump\""
     got=$(sed "s/$value/$value\n/g" $dmctl_log | grep -c "$value")
     if [ "$got" -eq 1 ]; then

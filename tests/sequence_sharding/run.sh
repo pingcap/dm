@@ -50,9 +50,11 @@ function run() {
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "task can't auto resume"
 
     # resume manually
+    # this operation may not return 3 `"result": true`, because worker may
+    # - response too slowly to resume, so resume still see old error and waitOperationOk will return early
+    # - response too quickly, so resume see error of "still conflict" in next lines
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task sequence_sharding" \
-        "\"result\": true" 3
 
     # still conflict
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
