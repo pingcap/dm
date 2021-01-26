@@ -496,7 +496,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		}
 
 		if needSavePos {
-			err = r.SaveMeta(lastPos, lastGTID)
+			err = r.SaveMeta(lastPos, lastGTID.Clone())
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v into meta", lastPos, lastGTID)
 			}
