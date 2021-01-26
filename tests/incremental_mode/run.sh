@@ -77,7 +77,9 @@ function run() {
 
     # update mysql config
     sed -i "s/root/dm_incremental/g" $WORK_DIR/source1.yaml
+    sed -i "s/relay-binlog-gtid: ''/relay-binlog-gtid: '$gtid1'/g" $WORK_DIR/source1.yaml
     sed -i "s/root/dm_incremental/g" $WORK_DIR/source2.yaml
+
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source update $WORK_DIR/source1.yaml" \
         "Update worker config is not supported by dm-ha now" 1
@@ -93,8 +95,8 @@ function run() {
     echo "start task in incremental mode"
     cat $cur/conf/dm-task.yaml > $WORK_DIR/dm-task.yaml
     sed -i "s/task-mode-placeholder/incremental/g" $WORK_DIR/dm-task.yaml
-    sed -i "s/binlog-name-placeholder-1/$name1/g" $WORK_DIR/dm-task.yaml
-    sed -i "s/binlog-pos-placeholder-1/$pos1/g" $WORK_DIR/dm-task.yaml
+    sed -i "s/binlog-name-placeholder-1//g" $WORK_DIR/dm-task.yaml
+    sed -i "s/binlog-pos-placeholder-1//g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-gtid-placeholder-1/$gtid1/g" $WORK_DIR/dm-task.yaml
 
     sed -i "s/binlog-name-placeholder-2/$name2/g" $WORK_DIR/dm-task.yaml
@@ -110,7 +112,7 @@ function run() {
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
-        "Running" 3
+        "Running" 4
     # we use failpoint to let worker sleep 8 second when executeSQLs, to increase possibility of
     # meeting an error of context cancel.
     # when below check pass, it means we filter out that error, or that error doesn't happen.
@@ -146,8 +148,7 @@ function run() {
 
     # resume-task to next stage
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "resume-task test"\
-        "\"result\": true" 3
+        "resume-task test"
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
@@ -155,8 +156,7 @@ function run() {
 
     # resume-task to next stage
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "resume-task test"\
-        "\"result\": true" 3
+        "resume-task test"
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
@@ -164,8 +164,7 @@ function run() {
 
     # resume-task to next stage
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "resume-task test"\
-        "\"result\": true" 3
+        "resume-task test"
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
@@ -173,8 +172,7 @@ function run() {
 
     # resume-task to next stage
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "resume-task test"\
-        "\"result\": true" 3
+        "resume-task test"
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
