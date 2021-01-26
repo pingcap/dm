@@ -66,18 +66,18 @@ func (s *Syncer) Status(ctx context.Context) interface{} {
 		st.BinlogType = binlogTypeToString(s.streamerController.GetBinlogType())
 	}
 
-	// If a syncer unit is waiting for relay log catch up, it has not executed
-	// LoadMeta and will return a parsed binlog name error. As we can find mysql
-	// position in syncer status, we record this error only in debug level.
-	realPos, err := binlog.RealMySQLPos(syncerLocation.Position)
-	if err != nil {
-		s.tctx.L().Debug("fail to parse real mysql position", zap.Stringer("position", syncerLocation.Position), log.ShortError(err))
-	}
 	if s.cfg.EnableGTID {
 		if masterGTIDSet != nil && syncerLocation.GetGTID() != nil && masterGTIDSet.Equal(syncerLocation.GetGTID()) {
 			st.Synced = true
 		}
 	} else {
+		// If a syncer unit is waiting for relay log catch up, it has not executed
+		// LoadMeta and will return a parsed binlog name error. As we can find mysql
+		// position in syncer status, we record this error only in debug level.
+		realPos, err := binlog.RealMySQLPos(syncerLocation.Position)
+		if err != nil {
+			s.tctx.L().Debug("fail to parse real mysql position", zap.Stringer("position", syncerLocation.Position), log.ShortError(err))
+		}
 		st.Synced = utils.CompareBinlogPos(masterPos, realPos, 0) == 0
 	}
 
