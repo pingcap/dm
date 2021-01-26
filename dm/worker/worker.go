@@ -21,6 +21,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
@@ -190,36 +191,41 @@ func (w *Worker) Close() {
 }
 
 // StartSubTask creates a sub task an run it
-func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage) {
+func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage) error {
 	w.Lock()
 	defer w.Unlock()
 
 	// copy some config item from dm-worker's source config
-	copyConfigFromSource(cfg, w.cfg)
+	err := copyConfigFromSource(cfg, w.cfg)
+	if err != nil {
+		return err
+	}
+
 	// directly put cfg into subTaskHolder
 	// the unique of subtask should be assured by etcd
 	st := NewSubTask(cfg, w.etcdClient)
 	w.subTaskHolder.recordSubTask(st)
 	if w.closed.Get() == closedTrue {
 		st.fail(terror.ErrWorkerAlreadyClosed.Generate())
-		return
+		return nil
 	}
 
 	cfg2, err := cfg.DecryptPassword()
 	if err != nil {
 		st.fail(errors.Annotate(err, "start sub task"))
-		return
+		return nil
 	}
 	st.cfg = cfg2
 
 	if w.relayPurger != nil && w.relayPurger.Purging() {
 		// TODO: retry until purged finished
 		st.fail(terror.ErrWorkerRelayIsPurging.Generate(cfg.Name))
-		return
+		return nil
 	}
 
 	w.l.Info("subtask created", zap.Stringer("config", cfg2))
 	st.Run(expectStage)
+	return nil
 }
 
 // UpdateSubTask update config for a sub task
@@ -419,9 +425,8 @@ func (w *Worker) operateSubTaskStage(stage ha.Stage, subTaskCfg config.SubTaskCo
 		if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
 			// create the subtask for expected running and paused stage.
 			log.L().Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
-			w.StartSubTask(&subTaskCfg, stage.Expect)
-			// error is nil, opErrTypeBeforeOp will be ignored
-			return opErrTypeBeforeOp, nil
+			err := w.StartSubTask(&subTaskCfg, stage.Expect)
+			return opErrTypeBeforeOp, err
 		}
 		if stage.Expect == pb.Stage_Running {
 			op = pb.TaskOp_Resume
@@ -623,7 +628,7 @@ func (w *Worker) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 }
 
 // copyConfigFromSource copies config items from source config to sub task
-func copyConfigFromSource(cfg *config.SubTaskConfig, sourceCfg *config.SourceConfig) {
+func copyConfigFromSource(cfg *config.SubTaskConfig, sourceCfg *config.SourceConfig) error {
 	cfg.From = sourceCfg.From
 
 	cfg.Flavor = sourceCfg.Flavor
@@ -634,6 +639,28 @@ func copyConfigFromSource(cfg *config.SubTaskConfig, sourceCfg *config.SourceCon
 
 	// we can remove this from SubTaskConfig later, because syncer will always read from relay
 	cfg.AutoFixGTID = sourceCfg.AutoFixGTID
+
+	if cfg.CaseSensitive != sourceCfg.CaseSensitive {
+		log.L().Warn("different case-sensitive config between task config and source config, use `true` for it.")
+	}
+	cfg.CaseSensitive = cfg.CaseSensitive || sourceCfg.CaseSensitive
+	filter, err := bf.NewBinlogEvent(cfg.CaseSensitive, cfg.FilterRules)
+	if err != nil {
+		return err
+	}
+
+	for _, filterRule := range sourceCfg.Filters {
+		if err = filter.AddRule(filterRule); err != nil {
+			// task level config has higher priority
+			if errors.IsAlreadyExists(errors.Cause(err)) {
+				log.L().Warn("filter config already exist in source config, overwrite it", log.ShortError(err))
+				continue
+			}
+			return err
+		}
+		cfg.FilterRules = append(cfg.FilterRules, filterRule)
+	}
+	return nil
 }
 
 // getAllSubTaskStatus returns all subtask status of this worker, note the field
