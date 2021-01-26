@@ -203,7 +203,7 @@ func (r *Relay) process(ctx context.Context) error {
 		return err
 	}
 
-	if isNew || r.cfg.UUIDSuffix > 0 {
+	if isNew {
 		// re-setup meta for new server or new source
 		err = r.reSetupMeta(ctx)
 		if err != nil {
