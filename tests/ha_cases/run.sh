@@ -720,6 +720,9 @@ function test_last_bound() {
     start_2_worker_ensure_bound 1 2
 
     check_bound
+    # only contains 1 "will try purge ..." which is printed the first time dm worker start
+    check_log_contains $WORK_DIR/worker1/log/dm-worker.log "will try purge whole relay dir for new relay log" 1
+    check_log_contains $WORK_DIR/worker2/log/dm-worker.log "will try purge whole relay dir for new relay log" 1
 
     kill_2_worker_ensure_unbound 1 2
 
@@ -727,6 +730,8 @@ function test_last_bound() {
     start_2_worker_ensure_bound 2 1
 
     check_bound
+    check_log_contains $WORK_DIR/worker1/log/dm-worker.log "will try purge whole relay dir for new relay log" 1
+    check_log_contains $WORK_DIR/worker2/log/dm-worker.log "will try purge whole relay dir for new relay log" 1
 
     # kill 12, start 34, kill 34
     kill_2_worker_ensure_unbound 1 2
@@ -738,6 +743,8 @@ function test_last_bound() {
 
     # check
     check_bound
+    check_log_contains $WORK_DIR/worker1/log/dm-worker.log "will try purge whole relay dir for new relay log" 1
+    check_log_contains $WORK_DIR/worker2/log/dm-worker.log "will try purge whole relay dir for new relay log" 1
 
     echo "[$(date)] <<<<<< finish test_last_bound >>>>>>"
 }

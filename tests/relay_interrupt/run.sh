@@ -91,25 +91,24 @@ function run() {
             "\"result\": false" 1 \
             "subtasks with name test for sources \[mysql-replica-01\] already exist" 1
 
-# TODO(csuzhangxc): support relay log again.
-#        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-#            "query-status test" \
-#            "\"binlogType\": \"local\"" 1
-#
-#        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "\"binlogType\": \"local\"" 1
 
-#        prepare_data2 $i
-#        echo "read binlog from relay log failed, and will use remote binlog"
+        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+        prepare_data2 $i
+        echo "read binlog from relay log failed, and will use remote binlog"
         kill_dm_worker
         export GO_FAILPOINTS="github.com/pingcap/dm/pkg/streamer/GetEventFromLocalFailed=return()"
         run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
         check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
         sleep 8
-#        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-#            "query-status test" \
-#            "\"binlogType\": \"remote\"" 1
-#
-#        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "\"binlogType\": \"remote\"" 1
+
+        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
         export GO_FAILPOINTS=''
         cleanup_process

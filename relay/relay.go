@@ -278,6 +278,7 @@ func (r *Relay) process(ctx context.Context) error {
 func (r *Relay) PurgeRelayDir() error {
 	dir := r.cfg.RelayDir
 	d, err := os.Open(dir)
+	r.logger.Info("will try purge whole relay dir for new relay log", zap.String("relayDir", dir))
 	// fail to open dir, return directly
 	if err != nil {
 		if err == os.ErrNotExist {
