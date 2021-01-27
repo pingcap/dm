@@ -33,8 +33,11 @@ import (
 // SampleConfigFile is sample config file of dm-worker
 // later we can read it from dm/worker/dm-worker.toml
 // and assign it to SampleConfigFile while we build dm-worker
-var SampleConfigFile string
-var defaultKeepAliveTTL = int64(10)
+var (
+	SampleConfigFile         string
+	defaultKeepAliveTTL      = int64(60)      // 1 minute
+	relayEnabledKeepAliveTTL = int64(60 * 30) // 30 minutes
+)
 
 // NewConfig creates a new base config for worker.
 func NewConfig() *Config {
