@@ -231,6 +231,7 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 		masterAddr   = "127.0.0.1:8261"
 		keepAliveTTL = int64(1)
 	)
+	// start etcd server
 	etcdDir := c.MkDir()
 	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
 	c.Assert(err, IsNil)
@@ -239,39 +240,106 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	cfg.KeepAliveTTL = keepAliveTTL
 
-	s := NewServer(cfg)
-	go s.Start()
-	defer s.cancel()
-
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return !s.closed.Get()
-	}), IsTrue)
-
+	// new etcd client
 	etcdCli, err := clientv3.New(clientv3.Config{
-		Endpoints:            GetJoinURLs(s.cfg.Join),
+		Endpoints:            GetJoinURLs(cfg.Join),
 		DialTimeout:          dialTimeout,
 		DialKeepAliveTime:    keepaliveTime,
 		DialKeepAliveTimeout: keepaliveTimeout,
 	})
 	c.Assert(err, IsNil)
+
+	// watch woker event(oneline or offline)
+	var (
+		wg       sync.WaitGroup
+		startRev int64 = 1
+	)
+	workerEvCh := make(chan ha.WorkerEvent, 10)
+	workerErrCh := make(chan error, 10)
+	ctx, cancel := context.WithCancel(context.Background())
+	wg.Add(1)
+	go func() {
+		defer func() {
+			close(workerEvCh)
+			close(workerErrCh)
+			wg.Done()
+		}()
+		ha.WatchWorkerEvent(ctx, etcdCli, startRev, workerEvCh, workerErrCh)
+	}()
+
+	// start worker server
+	s := NewServer(cfg)
+	defer s.Close()
+	go func() {
+		err1 := s.Start()
+		c.Assert(err1, IsNil)
+	}()
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return !s.closed.Get()
+	}), IsTrue)
+
+	// check if the worker is online
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		select {
+		case ev, _ := <-workerEvCh:
+			if !ev.IsDeleted {
+				return true
+			}
+			return false
+		default:
+			return false
+		}
+	}), IsTrue)
+
+	// enable failpont
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/ha/FailToGetSourceCfg", `return(true)`), IsNil)
 	sourceCfg := loadSourceConfigWithoutPassword(c)
 	sourceCfg.EnableRelay = false
 	_, err = ha.PutSourceCfg(etcdCli, sourceCfg)
 	c.Assert(err, IsNil)
-
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/ha/FailToGetSourceCfg", `return(true)`), IsNil)
 	sourceBound := ha.NewSourceBound(sourceCfg.SourceID, s.cfg.Name)
 	_, err = ha.PutSourceBound(etcdCli, sourceBound)
 	c.Assert(err, IsNil)
 
-	c.Assert(utils.WaitSomething(30, time.Second, func() bool {
+	// do check until worker offline
+	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
 		select {
-		case <-s.kpaCtx.Done():
+		case ev, _ := <-workerEvCh:
+			if ev.IsDeleted {
+				return true
+			}
+			return false
+		default:
+			return false
+		}
+	}), IsTrue)
+
+	// keepalive stop and restart
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		select {
+		case <-s.kaCtx.Done():
 			return true
 		default:
 			return false
 		}
 	}), IsTrue)
+
+	// check if the worker is online
+	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
+		select {
+		case ev, _ := <-workerEvCh:
+			if !ev.IsDeleted {
+				return true
+			}
+			return false
+		default:
+			return false
+		}
+	}), IsTrue)
+	cancel()
+	wg.Wait()
+
+	//nolint:errcheck
 	failpoint.Disable("github.com/pingcap/dm/pkg/ha/FailToGetSourceCfg")
 
 	_, err = ha.PutSourceBound(etcdCli, sourceBound)
@@ -286,7 +354,6 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 
 	_, err = ha.DeleteSourceBound(etcdCli, s.cfg.Name)
 	c.Assert(err, IsNil)
-
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		s.Mutex.Lock()
 		defer s.Mutex.Unlock()

@@ -63,8 +63,8 @@ type Server struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	kpaCtx    context.Context
-	kpaCancel context.CancelFunc
+	kaCtx    context.Context
+	kaCancel context.CancelFunc
 
 	cfg *Config
 
@@ -142,25 +142,24 @@ func (s *Server) Start() error {
 	}()
 
 	s.wg.Add(1)
+	s.startKeepAlive()
+
+	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		// TODO: handle fatal error from observeSourceBound
-		//nolint:errcheck
 		for {
+			//nolint:errcheck
 			s.observeSourceBound(s.ctx, revBound)
 			s.stopKeepAlive()
 			select {
 			case <-s.ctx.Done():
 				return
-			case <-time.After(keepaliveTimeout * 2):
+			case <-time.After(keepaliveTimeout):
 				s.wg.Add(1)
-				go s.startKeepAlive()
+				s.startKeepAlive()
 			}
 		}
 	}()
-
-	s.wg.Add(1)
-	go s.startKeepAlive()
 
 	// create a cmux
 	m := cmux.New(s.rootLis)
@@ -199,16 +198,20 @@ func (s *Server) Start() error {
 	return terror.ErrWorkerStartService.Delegate(err)
 }
 
+// worker keepalive with master
+// If worker loses connect from master, it would stop all task and try to connect master again.
 func (s *Server) startKeepAlive() {
+	s.kaCtx, s.kaCancel = context.WithCancel(s.ctx)
+	go s.doStartKeepAlive()
+}
+
+func (s *Server) doStartKeepAlive() {
 	defer s.wg.Done()
-	// worker keepalive with master
-	// If worker loses connect from master, it would stop all task and try to connect master again.
-	s.kpaCtx, s.kpaCancel = context.WithCancel(context.Background())
 	s.KeepAlive()
 }
 
 func (s *Server) stopKeepAlive() {
-	s.kpaCancel()
+	s.kaCancel()
 }
 
 func (s *Server) syncMasterEndpoints(ctx context.Context) {
@@ -563,9 +566,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		subTaskCfg.LogFile = s.cfg.LogFile
 		subTaskCfg.LogFormat = s.cfg.LogFormat
 		subTaskCfgClone := subTaskCfg
-		if err = copyConfigFromSource(&subTaskCfgClone, cfg); err != nil {
-			return err
-		}
+		copyConfigFromSource(&subTaskCfgClone, cfg)
 		subTaskCfgs = append(subTaskCfgs, &subTaskCfgClone)
 	}
 
@@ -631,9 +632,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 			continue
 		}
 		log.L().Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
-		if err := w.StartSubTask(subTaskCfg, expectStage.Expect); err != nil {
-			return err
-		}
+		w.StartSubTask(subTaskCfg, expectStage.Expect)
 	}
 
 	w.wg.Add(1)
