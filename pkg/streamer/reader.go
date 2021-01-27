@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
@@ -31,8 +30,10 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/binlog/reader"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -118,59 +119,21 @@ func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
 	return nil
 }
 
-// getUUIDByGTID gets uuid subdir which contain the gtid set
-func (r *BinlogReader) getUUIDByGTID(gset mysql.GTIDSet) (string, error) {
-	// get flush logs from oldest to newest
-	for _, uuid := range r.uuids {
-		filename := path.Join(r.cfg.RelayDir, uuid, utils.MetaFilename)
-		var meta Meta
-		_, err := toml.DecodeFile(filename, &meta)
-		if err != nil {
-			return "", terror.ErrRelayLoadMetaData.Delegate(err)
-		}
-
-		gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, meta.BinlogGTID)
-		if err != nil {
-			return "", terror.ErrRelayLoadMetaData.Delegate(err)
-		}
-		if gs.Contain(gset) {
-			r.tctx.L().Info("get uuid subdir by gtid", zap.Stringer("GTID Set", gset), zap.String("uuid", uuid), zap.Stringer("latest GTID Set in subdir", gs))
-			return uuid, nil
-		}
-	}
-
-	// TODO: use a better mechanism to call relay.meta.Flush
-	// get the meta save in memory
-	relayMetaHub := GetRelayMetaHub()
-	relayMeta := relayMetaHub.GetMeta()
-
-	if len(relayMeta.UUID) > 0 {
-		gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, relayMeta.BinlogGTID)
-		if err != nil {
-			return "", terror.ErrRelayLoadMetaData.Delegate(err)
-		}
-		if gs.Contain(gset) {
-			r.tctx.L().Info("get uuid subdir by gtid", zap.Stringer("GTID Set", gset), zap.String("uuid", relayMeta.UUID))
-			return relayMeta.UUID, nil
-		}
-	}
-	return "", terror.ErrNoUUIDDirMatchGTID.Generate(gset.String())
-}
-
-// GetFilePosByGTID tries to get Pos by GTID for file
-func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gset mysql.GTIDSet) (uint32, error) {
+// IsGTIDCoverPreviousFiles check whether gset contains file's previous_gset
+func (r *BinlogReader) IsGTIDCoverPreviousFiles(ctx context.Context, filePath string, gset mysql.GTIDSet) (bool, error) {
 	fileReader := reader.NewFileReader(&reader.FileReaderConfig{Timezone: r.cfg.Timezone})
 	defer fileReader.Close()
 	err := fileReader.StartSyncByPos(mysql.Position{Name: filePath, Pos: 4})
 	if err != nil {
-		return 0, err
+		return false, err
 	}
 
-	lastPos := uint32(0)
+	var gs gtid.Set
+
 	for {
 		select {
 		case <-ctx.Done():
-			return 0, nil
+			return false, nil
 		default:
 		}
 
@@ -179,95 +142,66 @@ func (r *BinlogReader) GetFilePosByGTID(ctx context.Context, filePath string, gs
 		cancel()
 		if err != nil {
 			// reach end of file
+			// Maybe we can only Parse the first three fakeRotate, Format_desc and Previous_gtids events.
 			if terror.ErrReaderReachEndOfFile.Equal(err) {
-				return lastPos, nil
+				return false, terror.ErrPreviousGTIDNotExist.Generate(filePath)
 			}
-			return 0, err
+			return false, err
 		}
 
-		switch ev := e.Event.(type) {
-		case *replication.PreviousGTIDsEvent:
-			// nil previous gtid event, continue to parse file
-			if len(ev.GTIDSets) == 0 {
-				break
-			}
-			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, ev.GTIDSets)
-			if err != nil {
-				return 0, err
-			}
-			// if PreviousGITDsEvent contain but not equal the gset, go to previous file
-			if gs.Contain(gset) {
-				// continue to parse file if gset equals gs
-				if gset.Contain(gs) {
-					break
-				}
-				return 0, nil
-			}
-		case *replication.RotateEvent:
-			// should not happen
-			if e.Header.Timestamp != 0 && e.Header.LogPos != 0 {
-				return lastPos, nil
-			}
+		if e.Header.EventType == replication.PREVIOUS_GTIDS_EVENT {
+			gs, err = event.GTIDsFromPreviousGTIDsEvent(e)
+		} else if e.Header.EventType == replication.MARIADB_GTID_LIST_EVENT {
+			gs, err = event.GTIDsFromMariaDBGTIDListEvent(e)
+		} else {
 			continue
-		case *replication.GTIDEvent:
-			u, _ := uuid.FromBytes(ev.SID)
-			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, fmt.Sprintf("%s:%d", u.String(), ev.GNO))
-			if err != nil {
-				return 0, err
-			}
-			// meet first gtid event greater than gset
-			if !gset.Contain(gs) {
-				return lastPos, nil
-			}
-		case *replication.MariadbGTIDEvent:
-			GTID := ev.GTID
-			gs, err := mysql.ParseGTIDSet(r.cfg.Flavor, fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
-			if err != nil {
-				return 0, err
-			}
-			// meet first gtid event greater than gset
-			if !gset.Contain(gs) {
-				return lastPos, nil
-			}
 		}
-		lastPos = e.Header.LogPos
+
+		if err != nil {
+			return false, err
+		}
+		return gset.Contain(gs.Origin()), nil
 	}
 }
 
-// getPosByGTID gets position by gtid
+// getPosByGTID gets file position by gtid, result should be (filename, 4)
 func (r *BinlogReader) getPosByGTID(gset mysql.GTIDSet) (*mysql.Position, error) {
-	uuid, err := r.getUUIDByGTID(gset)
-	if err != nil {
-		return nil, err
-	}
-	_, suffix, err := utils.ParseSuffixForUUID(uuid)
-	if err != nil {
-		return nil, err
-	}
-
-	uuidDir := path.Join(r.cfg.RelayDir, uuid)
-	allFiles, err := CollectAllBinlogFiles(uuidDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// iterate files from the newest one
-	for i := len(allFiles) - 1; i >= 0; i-- {
-		file := allFiles[i]
-		filePath := path.Join(uuidDir, file)
-		pos, err := r.GetFilePosByGTID(r.tctx.Ctx, filePath, gset)
+	// start from newest uuid dir
+	for i := len(r.uuids) - 1; i >= 0; i-- {
+		uuid := r.uuids[i]
+		_, suffix, err := utils.ParseSuffixForUUID(uuid)
 		if err != nil {
 			return nil, err
 		}
-		if pos != 0 {
-			fileName, err := binlog.ParseFilename(file)
+
+		uuidDir := path.Join(r.cfg.RelayDir, uuid)
+		allFiles, err := CollectAllBinlogFiles(uuidDir)
+		if err != nil {
+			return nil, err
+		}
+
+		// iterate files from the newest one
+		for i := len(allFiles) - 1; i >= 0; i-- {
+			file := allFiles[i]
+			filePath := path.Join(uuidDir, file)
+			// if input `gset` not contain previous_gtids_event's gset (complementary set of `gset` overlap with
+			// previous_gtids_event), that means there're some needed events in previous files.
+			// so we go to previous one
+			contain, err := r.IsGTIDCoverPreviousFiles(r.tctx.Ctx, filePath, gset)
 			if err != nil {
 				return nil, err
 			}
-			return &mysql.Position{
-				Name: binlog.ConstructFilenameWithUUIDSuffix(fileName, utils.SuffixIntToStr(suffix)),
-				Pos:  uint32(pos),
-			}, nil
+			if contain {
+				fileName, err := binlog.ParseFilename(file)
+				if err != nil {
+					return nil, err
+				}
+				// Start at the beginning of the file
+				return &mysql.Position{
+					Name: binlog.ConstructFilenameWithUUIDSuffix(fileName, utils.SuffixIntToStr(suffix)),
+					Pos:  4,
+				}, nil
+			}
 		}
 	}
 	return nil, terror.ErrNoRelayPosMatchGTID.Generate(gset.String())
@@ -499,6 +433,7 @@ func (r *BinlogReader) parseFile(
 
 	uuidSuffix := utils.SuffixIntToStr(suffixInt) // current UUID's suffix, which will be added to binlog name
 	latestPos = offset                            // set to argument passed in
+	replaceWithHeartbeat := false
 
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		r.tctx.L().Debug("read event", zap.Reflect("header", e.Header))
@@ -535,9 +470,9 @@ func (r *BinlogReader) parseFile(
 				break
 			}
 			u, _ := uuid.FromBytes(ev.SID)
-			err2 := r.advanceCurrentGtidSet(fmt.Sprintf("%s:%d", u.String(), ev.GNO))
-			if err2 != nil {
-				return errors.Trace(err2)
+			replaceWithHeartbeat, err = r.advanceCurrentGtidSet(fmt.Sprintf("%s:%d", u.String(), ev.GNO))
+			if err != nil {
+				return errors.Trace(err)
 			}
 			latestPos = int64(e.Header.LogPos)
 		case *replication.MariadbGTIDEvent:
@@ -546,9 +481,9 @@ func (r *BinlogReader) parseFile(
 				break
 			}
 			GTID := ev.GTID
-			err2 := r.advanceCurrentGtidSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
-			if err2 != nil {
-				return errors.Trace(err2)
+			replaceWithHeartbeat, err = r.advanceCurrentGtidSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
+			if err != nil {
+				return errors.Trace(err)
 			}
 			latestPos = int64(e.Header.LogPos)
 		case *replication.XIDEvent:
@@ -560,6 +495,22 @@ func (r *BinlogReader) parseFile(
 		default:
 			// update file pos
 			latestPos = int64(e.Header.LogPos)
+		}
+
+		// align with MySQL
+		// if an event's gtid has been contained by given gset
+		// replace it with HEARTBEAT event
+		// for Mariadb, it will bee replaced with MARIADB_GTID_LIST_EVENT
+		// In DM, we replace both of them with HEARTBEAT event
+		if replaceWithHeartbeat {
+			switch e.Event.(type) {
+			// Only replace transaction event
+			// Other events such as FormatDescriptionEvent, RotateEvent, etc. should be the same as before
+			case *replication.RowsEvent, *replication.QueryEvent, *replication.GTIDEvent, *replication.XIDEvent, *replication.TableMapEvent:
+				// replace with heartbeat event
+				e = event.GenHeartbeatEvent(e.Header)
+			default:
+			}
 		}
 
 		select {
@@ -666,16 +617,31 @@ func (r *BinlogReader) getCurrentGtidSet() mysql.GTIDSet {
 	return r.currGset.Clone()
 }
 
-func (r *BinlogReader) advanceCurrentGtidSet(gtid string) error {
+// advanceCurrentGtidSet advance gtid set and return whether currGset not updated
+func (r *BinlogReader) advanceCurrentGtidSet(gtid string) (bool, error) {
 	if r.currGset == nil {
 		r.currGset = r.prevGset.Clone()
+	}
+	// Special treatment for Maridb
+	// MaridbGTIDSet.Update(gtid) will replace gset with given gtid
+	// ref https://github.com/siddontang/go-mysql/blob/0c5789dd0bd378b4b84f99b320a2d35a80d8858f/mysql/mariadb_gtid.go#L96
+	if r.cfg.Flavor == mysql.MariaDBFlavor {
+		gset, err := mysql.ParseMariadbGTIDSet(gtid)
+		if err != nil {
+			return false, err
+		}
+		if r.currGset.Contain(gset) {
+			return true, nil
+		}
 	}
 	prev := r.currGset.Clone()
 	err := r.currGset.Update(gtid)
 	if err == nil {
 		if !r.currGset.Equal(prev) {
 			r.prevGset = prev
+			return false, nil
 		}
+		return true, nil
 	}
-	return err
+	return false, err
 }

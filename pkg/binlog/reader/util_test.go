@@ -62,3 +62,32 @@ func (t *testTCPReaderSuite) TestGetGTIDsForPos(c *C) {
 	c.Assert(err, ErrorMatches, ".*invalid position .* or GTID not enabled in upstream.*")
 	c.Assert(gs, IsNil)
 }
+
+// added to testTCPReaderSuite to re-use DB connection.
+func (t *testTCPReaderSuite) TestGetPreviousGTIDFromGTIDSet(c *C) {
+	var (
+		cfg = replication.BinlogSyncerConfig{
+			ServerID:       serverIDs[1],
+			Flavor:         flavor,
+			Host:           t.host,
+			Port:           uint16(t.port),
+			User:           t.user,
+			Password:       t.password,
+			UseDecimal:     true,
+			VerifyChecksum: true,
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
+	)
+	defer cancel()
+
+	_, endGS, err := utils.GetMasterStatus(ctx, t.db, flavor)
+	c.Assert(err, IsNil)
+
+	r1 := NewTCPReader(cfg)
+	c.Assert(r1, NotNil)
+	defer r1.Close()
+
+	gs, err := GetPreviousGTIDFromGTIDSet(ctx, r1, endGS)
+	c.Assert(err, IsNil)
+	c.Assert(endGS.Contain(gs), IsTrue)
+}
