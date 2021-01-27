@@ -15,13 +15,19 @@ package streamer
 
 import (
 	"context"
+	"time"
 
+	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
+)
+
+var (
+	heartbeatInterval = 30 * time.Second
 )
 
 // TODO: maybe one day we can make a pull request to go-mysql to support LocalStreamer.
@@ -51,7 +57,20 @@ func (s *LocalStreamer) GetEvent(ctx context.Context) (*replication.BinlogEvent,
 		failpoint.Return(nil, terror.ErrSyncClosed.Generate())
 	})
 
+	failpoint.Inject("SetHeartbeatInterval", func(v failpoint.Value) {
+		i := v.(int)
+		log.L().Info("will change heartbeat interval", zap.Int("new", i))
+		heartbeatInterval = time.Duration(i) * time.Second
+	})
+
+	// MySQL will send heartbeat event 30s by default
+	heartbeatTicker := time.NewTicker(heartbeatInterval)
+	heartbeatHeader := &replication.EventHeader{}
+	defer heartbeatTicker.Stop()
+
 	select {
+	case <-heartbeatTicker.C:
+		return event.GenHeartbeatEvent(heartbeatHeader), nil
 	case c := <-s.ch:
 		return c, nil
 	case s.err = <-s.ech:
