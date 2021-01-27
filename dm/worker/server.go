@@ -566,7 +566,9 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		subTaskCfg.LogFile = s.cfg.LogFile
 		subTaskCfg.LogFormat = s.cfg.LogFormat
 		subTaskCfgClone := subTaskCfg
-		copyConfigFromSource(&subTaskCfgClone, cfg)
+		if err = copyConfigFromSource(&subTaskCfgClone, cfg); err != nil {
+			return err
+		}
 		subTaskCfgs = append(subTaskCfgs, &subTaskCfgClone)
 	}
 
@@ -632,7 +634,9 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 			continue
 		}
 		log.L().Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
-		w.StartSubTask(subTaskCfg, expectStage.Expect)
+		if err := w.StartSubTask(subTaskCfg, expectStage.Expect); err != nil {
+			return err
+		}
 	}
 
 	w.wg.Add(1)

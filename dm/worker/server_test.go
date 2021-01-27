@@ -281,7 +281,7 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 	// check if the worker is online
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		select {
-		case ev, _ := <-workerEvCh:
+		case ev := <-workerEvCh:
 			if !ev.IsDeleted {
 				return true
 			}
@@ -304,7 +304,7 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 	// do check until worker offline
 	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
 		select {
-		case ev, _ := <-workerEvCh:
+		case ev := <-workerEvCh:
 			if ev.IsDeleted {
 				return true
 			}
@@ -314,20 +314,10 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 		}
 	}), IsTrue)
 
-	// keepalive stop and restart
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		select {
-		case <-s.kaCtx.Done():
-			return true
-		default:
-			return false
-		}
-	}), IsTrue)
-
 	// check if the worker is online
 	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
 		select {
-		case ev, _ := <-workerEvCh:
+		case ev := <-workerEvCh:
 			if !ev.IsDeleted {
 				return true
 			}
