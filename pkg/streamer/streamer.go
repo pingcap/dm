@@ -63,13 +63,10 @@ func (s *LocalStreamer) GetEvent(ctx context.Context) (*replication.BinlogEvent,
 		heartbeatInterval = time.Duration(i) * time.Second
 	})
 
-	// MySQL will send heartbeat event 30s by default
-	heartbeatTicker := time.NewTicker(heartbeatInterval)
-	heartbeatHeader := &replication.EventHeader{}
-	defer heartbeatTicker.Stop()
-
 	select {
-	case <-heartbeatTicker.C:
+	case <-time.After(heartbeatInterval):
+		// MySQL will send heartbeat event 30s by default
+		heartbeatHeader := &replication.EventHeader{}
 		return event.GenHeartbeatEvent(heartbeatHeader), nil
 	case c := <-s.ch:
 		return c, nil
