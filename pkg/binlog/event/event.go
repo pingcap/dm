@@ -851,3 +851,19 @@ func GenDummyEvent(header *replication.EventHeader, latestPos uint32, eventSize 
 	ev, err := GenQueryEvent(&headerClone, latestPos, 0, 0, 0, nil, nil, queryBytes)
 	return ev, err
 }
+
+// GenHeartbeatEvent generates a heartbeat event.
+// ref: https://dev.mysql.com/doc/internals/en/heartbeat-event.html
+func GenHeartbeatEvent(header *replication.EventHeader) *replication.BinlogEvent {
+	// modify header
+	headerClone := *header // do a copy
+	headerClone.Flags = 0
+	headerClone.EventSize = 39
+	headerClone.Timestamp = 0
+	headerClone.EventType = replication.HEARTBEAT_EVENT
+
+	eventBytes := make([]byte, 39)
+	ev := &replication.BinlogEvent{Header: &headerClone, Event: &replication.GenericEvent{Data: eventBytes}}
+
+	return ev
+}
