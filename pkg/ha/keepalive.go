@@ -142,6 +142,7 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 			}
 
 			oldCancel := keepAliveCancel
+			//nolint:lostcancel
 			keepAliveCtx, keepAliveCancel = context.WithCancel(ctx)
 			ch, err = cli.KeepAlive(keepAliveCtx, lease.ID)
 			if err != nil {
