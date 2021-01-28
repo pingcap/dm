@@ -222,8 +222,8 @@ func (lm *LocalMeta) Save(pos mysql.Position, gset gtid.Set) error {
 
 // Flush implements Meta.Flush
 func (lm *LocalMeta) Flush() error {
-	lm.RLock()
-	defer lm.RUnlock()
+	lm.Lock()
+	defer lm.Unlock()
 
 	return lm.doFlush()
 }

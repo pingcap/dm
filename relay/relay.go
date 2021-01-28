@@ -571,21 +571,33 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 	}
 
 	_, pos := r.meta.Pos()
-	_, gtid := r.meta.GTID()
+	_, gs := r.meta.GTID()
 	if r.cfg.EnableGTID {
 		// Adjust given gtid
 		// This means we always pull the binlog from the beginning of file.
-		gtid, err = r.adjustGTID(ctx, gtid)
+		gs, err = r.adjustGTID(ctx, gs)
 		if err != nil {
 			return terror.Annotate(err, "fail to adjust gtid for relay")
 		}
-		err = r.SaveMeta(pos, gtid)
+		// in MySQL, we expect `PreviousGTIDsEvent` contains ALL previous GTID sets, but in fact it may lack a part of them sometimes,
+		// e.g we expect `00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100`,
+		// but may be `00c04543-f584-11e9-a765-0242ac120002:50-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:60-100`.
+		// and when DM requesting MySQL to send binlog events with this EXCLUDED GTID sets, some errors like
+		// `ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.`
+		// may occur, so we force to reset the START part of any GTID set.
+		oldGs := gs.Clone()
+		if mysqlGs, ok := gs.(*gtid.MySQLGTIDSet); ok {
+			if mysqlGs.ResetStart() {
+				r.logger.Warn("force to reset the start part of GTID sets", zap.Stringer("from GTID set", oldGs), zap.Stringer("to GTID set", mysqlGs))
+			}
+		}
+		err = r.SaveMeta(pos, gs)
 		if err != nil {
 			return err
 		}
 	}
 
-	r.logger.Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gtid))
+	r.logger.Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gs))
 	r.updateMetricsRelaySubDirIndex()
 
 	return nil
@@ -614,6 +626,11 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 	for {
 		select {
 		case <-flushTicker.C:
+			r.RLock()
+			if r.closed.Get() {
+				r.RUnlock()
+				return
+			}
 			if r.meta.Dirty() {
 				err := r.FlushMeta()
 				if err != nil {
@@ -622,28 +639,43 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 					r.logger.Info("flush meta finished", zap.Stringer("meta", r.meta))
 				}
 			}
+			r.RUnlock()
 		case <-masterStatusTicker.C:
+			r.RLock()
+			if r.closed.Get() {
+				r.RUnlock()
+				return
+			}
 			ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 			pos, _, err := utils.GetMasterStatus(ctx2, r.db, r.cfg.Flavor)
 			cancel2()
 			if err != nil {
 				r.logger.Warn("get master status", zap.Error(err))
+				r.RUnlock()
 				continue
 			}
 			index, err := binlog.GetFilenameIndex(pos.Name)
 			if err != nil {
 				r.logger.Error("parse binlog file name", zap.String("file name", pos.Name), log.ShortError(err))
+				r.RUnlock()
 				continue
 			}
 			relayLogFileGauge.WithLabelValues("master").Set(float64(index))
 			relayLogPosGauge.WithLabelValues("master").Set(float64(pos.Pos))
+			r.RUnlock()
 		case <-trimUUIDsTicker.C:
+			r.RLock()
+			if r.closed.Get() {
+				r.RUnlock()
+				return
+			}
 			trimmed, err := r.meta.TrimUUIDs()
 			if err != nil {
 				r.logger.Error("trim UUIDs", zap.Error(err))
 			} else if len(trimmed) > 0 {
 				r.logger.Info("trim UUIDs", zap.String("UUIDs", strings.Join(trimmed, ";")))
 			}
+			r.RUnlock()
 		case <-ctx.Done():
 			return
 		}
