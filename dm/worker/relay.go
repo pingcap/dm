@@ -234,6 +234,11 @@ func (h *realRelayHolder) stopRelay(ctx context.Context, op pb.RelayOp) error {
 	h.stage = pb.Stage_Stopped
 	h.Unlock() // unlock to make `run` can return
 
+	// purge relay dir when delete source
+	if err := h.relay.PurgeRelayDir(); err != nil {
+		return err
+	}
+
 	// now, when try to stop relay unit, we close relay holder
 	h.Close()
 	return nil
