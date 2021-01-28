@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/pingcap/failpoint"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
@@ -38,6 +39,13 @@ var (
 	defaultKeepAliveTTL      = int64(60)      // 1 minute
 	relayEnabledKeepAliveTTL = int64(60 * 30) // 30 minutes
 )
+
+func init() {
+	failpoint.Inject("defaultKeepAliveTTL", func(val failpoint.Value) {
+		i := val.(int)
+		defaultKeepAliveTTL = int64(i)
+	})
+}
 
 // NewConfig creates a new base config for worker.
 func NewConfig() *Config {

@@ -121,32 +121,43 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 		case _, ok := <-ch:
 			if !ok {
 				log.L().Info("keep alive channel is closed")
+				keepAliveCancel() // make go vet happy
 				return nil
 			}
 		case <-ctx.Done():
 			log.L().Info("ctx is canceled, keepalive will exit now")
+			keepAliveCancel() // make go vet happy
 			return nil
 		case newTTL := <-keepAliveUpdateCh:
 			// create a new lease with new TTL, and overwrite original KV
-			cliCtx, cancel := context.WithTimeout(ctx, etcdutil.DefaultRequestTimeout)
-			defer cancel()
-			lease, err = cli.Grant(cliCtx, newTTL)
+			// make use of defer in function scope
+			leaseID, err := func() (clientv3.LeaseID, error) {
+				cliCtx, cancel := context.WithTimeout(ctx, etcdutil.DefaultRequestTimeout)
+				defer cancel()
+				lease, err = cli.Grant(cliCtx, newTTL)
+				if err != nil {
+					log.L().Error("meet error when change keepalive TTL", zap.Error(err))
+					return 0, err
+				}
+				_, err = cli.Put(cliCtx, k, workerEventJSON, clientv3.WithLease(lease.ID))
+				if err != nil {
+					log.L().Error("meet error when change keepalive TTL", zap.Error(err))
+					return 0, err
+				}
+				return lease.ID, nil
+			}()
 			if err != nil {
-				log.L().Error("meet error when change keepalive TTL", zap.Error(err))
-				return err
-			}
-			_, err = cli.Put(cliCtx, k, workerEventJSON, clientv3.WithLease(lease.ID))
-			if err != nil {
-				log.L().Error("meet error when change keepalive TTL", zap.Error(err))
+				keepAliveCancel() // make go vet happy
 				return err
 			}
 
 			oldCancel := keepAliveCancel
 			//nolint:lostcancel
 			keepAliveCtx, keepAliveCancel = context.WithCancel(ctx)
-			ch, err = cli.KeepAlive(keepAliveCtx, lease.ID)
+			ch, err = cli.KeepAlive(keepAliveCtx, leaseID)
 			if err != nil {
 				log.L().Error("meet error when change keepalive TTL", zap.Error(err))
+				keepAliveCancel() // make go vet happy
 				return err
 			}
 			// after new keepalive is succeed, we cancel the old keepalive
