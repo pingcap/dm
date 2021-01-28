@@ -33,6 +33,7 @@ import (
 	"github.com/google/uuid"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go-mysql/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
@@ -62,6 +63,11 @@ func (t *testReaderSuite) SetUpSuite(c *C) {
 	t.lastPos = 0
 	t.lastGTID, err = gtid.ParserGTID(mysql.MySQLFlavor, "ba8f633f-1f15-11eb-b1c7-0242ac110002:0")
 	c.Assert(err, IsNil)
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/SetHeartbeatInterval", "return(10000)"), IsNil)
+}
+
+func (t *testReaderSuite) TearDownSuite(c *C) {
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/SetHeartbeatInterval"), IsNil)
 }
 
 func (t *testReaderSuite) TestParseFileBase(c *C) {
