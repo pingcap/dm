@@ -1,4 +1,4 @@
-# Data Migration Platform
+# TiDB Data Migration Platform
 
 [![Build Status](https://internal.pingcap.net/idc-jenkins/job/build_dm_multi_branch/job/master/badge/icon)](https://internal.pingcap.net/idc-jenkins/job/build_dm_multi_branch/job/master)
 ![GitHub release](https://img.shields.io/github/tag/pingcap/dm.svg)
@@ -8,7 +8,7 @@
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fpingcap%2Fdm.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fpingcap%2Fdm?ref=badge_shield)
 [![Discuss in Slack](https://img.shields.io/badge/slack-sig--migrate-4A154B?logo=slack)](https://slack.tidb.io/invite?team=tidb-community&channel=sig-migrate&ref=github_sig)
 
-**DM** is an integrated platform, supports migrating data from MySQL/MariaDB to TiDB.
+[**TiDB Data Migration (DM)**](https://docs.pingcap.com/tidb-data-migration/stable) is an integrated data migration task management platform that supports full data migration and incremental data replication from MySQL/MariaDB into [TiDB](https://docs.pingcap.com/tidb/stable). It helps reduce the operations cost and simplify the troubleshooting process.
 
 ## Architecture
 
@@ -27,9 +27,10 @@ To check the code style and build binaries, you can simply run:
 make build
 ```
 
-Notice DM supports building with Go version `Go >= 1.11.4`, and unit test preparation can be found in [Running/Unit Test](tests/README.md#Unit-Test)
+Note that DM supports building with Go version `Go >= 1.11.4`, and unit test preparation can be found in [Running/Unit Test](tests/README.md#Unit-Test)
 
 If you only want to build binaries, you can run:
+
 ```bash
 make dm-worker  # build DM-worker
 
@@ -40,9 +41,9 @@ make dmctl      # build dmctl
 
 When DM is built successfully, you can find binaries in the `bin` directory.
 
-## Run Test
+## Run tests
 
-Run all tests, including unit test and integration test
+Run all tests, including unit tests and integration tests:
 
 ```bash
 make test
@@ -50,25 +51,34 @@ make test
 
 ## Installing
 
-Please reference to "Deploy" section in [our doc](https://docs.pingcap.com/tidb-data-migration/)
+See the "Deploy" section in [our doc](https://docs.pingcap.com/tidb-data-migration/)
 
 ## Config File
 
-Please reference to "Configuration" section in [our doc](https://docs.pingcap.com/tidb-data-migration/dev/config-overview)
+See the "Configuration" section in [our doc](https://docs.pingcap.com/tidb-data-migration/dev/config-overview)
 
 ## Roadmap
 
 Read the [Roadmap](roadmap.md).
 
-
 ## Contributing
+
 Contributions are welcomed and greatly appreciated. See [CONTRIBUTING.md](./CONTRIBUTING.md)
 for details on submitting patches and the contribution workflow.
 
 Any questions? Let's discuss in [#sig-migrate in Slack](https://slack.tidb.io/invite?team=tidb-community&channel=sig-migrate&ref=github_sig)
 
 ## License
+
 DM is under the Apache 2.0 license. See the [LICENSE](./LICENSE) file for details.
 
-
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fpingcap%2Fdm.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fpingcap%2Fdm?ref=badge_large)
+
+## More resources
+
+- TiDB blog
+
+    - [English](https://pingcap.com/blog/)
+    - [简体中文](https://pingcap.com/blog-cn/)
+
+- [TiDB Monthly](https://pingcap.com/weekly/
