@@ -211,11 +211,45 @@ func (r *Relay) process(ctx context.Context) error {
 			return err
 		}
 	} else {
+		// connected to last source
 		r.updateMetricsRelaySubDirIndex()
 		// if not a new server, try to recover the latest relay log file.
 		err = r.tryRecoverLatestFile(ctx, parser2)
 		if err != nil {
 			return err
+		}
+
+		// resuming will take the risk that upstream has purge the binlog relay is needed.
+		// when this worker is down, HA may schedule the source to other workers and forward the sync progress,
+		// when the source is scheduled back to this worker, we could start relay from sync checkpoint's location which
+		// is newer, and purge the outdated relay logs.
+		checkpointIsNewer := false
+		checkpointBinlogName := r.cfg.BinLogName
+		checkpointBinlogGset, err2 := gtid.ParserGTID(r.cfg.Flavor, r.cfg.BinlogGTID)
+		if err2 != nil {
+			return err2
+		}
+		if r.cfg.EnableGTID {
+			_, metaGset := r.meta.GTID()
+			if checkpointBinlogGset.Contain(metaGset) && !checkpointBinlogGset.Equal(metaGset) {
+				checkpointIsNewer = true
+			}
+		} else {
+			_, metaPos := r.meta.Pos()
+			if checkpointBinlogName > metaPos.Name {
+				checkpointIsNewer = true
+			}
+		}
+
+		if checkpointIsNewer {
+			err2 = r.PurgeRelayDir()
+			if err2 != nil {
+				return err2
+			}
+			err2 = r.SaveMeta(mysql.Position{Name: checkpointBinlogName, Pos: binlog.MinPosition.Pos}, checkpointBinlogGset)
+			if err2 != nil {
+				return err2
+			}
 		}
 	}
 
