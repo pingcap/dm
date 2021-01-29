@@ -32,6 +32,7 @@ var (
 )
 
 // NotifyKeepAliveChange is used to dynamically change keepalive TTL and don't let watcher observe a DELETE of old key
+// please make sure the config of TTL is also updated.
 func NotifyKeepAliveChange(newTTL int64) {
 	keepAliveUpdateCh <- newTTL
 }

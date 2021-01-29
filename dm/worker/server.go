@@ -590,6 +590,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		startRelay = !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
 		// change keepalive TTL to 30 minutes if it's default value
 		if s.cfg.KeepAliveTTL == defaultKeepAliveTTL {
+			s.cfg.KeepAliveTTL = relayEnabledKeepAliveTTL
 			ha.NotifyKeepAliveChange(relayEnabledKeepAliveTTL)
 		}
 	}
