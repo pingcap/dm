@@ -579,18 +579,6 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 		if err != nil {
 			return terror.Annotate(err, "fail to adjust gtid for relay")
 		}
-		// in MySQL, we expect `PreviousGTIDsEvent` contains ALL previous GTID sets, but in fact it may lack a part of them sometimes,
-		// e.g we expect `00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100`,
-		// but may be `00c04543-f584-11e9-a765-0242ac120002:50-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:60-100`.
-		// and when DM requesting MySQL to send binlog events with this EXCLUDED GTID sets, some errors like
-		// `ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.`
-		// may occur, so we force to reset the START part of any GTID set.
-		oldGs := gs.Clone()
-		if mysqlGs, ok := gs.(*gtid.MySQLGTIDSet); ok {
-			if mysqlGs.ResetStart() {
-				r.logger.Warn("force to reset the start part of GTID sets", zap.Stringer("from GTID set", oldGs), zap.Stringer("to GTID set", mysqlGs))
-			}
-		}
 		err = r.SaveMeta(pos, gs)
 		if err != nil {
 			return err
@@ -953,6 +941,8 @@ func (r *Relay) setSyncConfig() error {
 }
 
 // AdjustGTID implements Relay.AdjustGTID
+// starting sync at returned gset will wholly fetch a binlog from beginning of the file.
+// TODO: check if starting fetch at the middle of binlog is also acceptable
 func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error) {
 	// setup a TCP binlog reader (because no relay can be used when upgrading).
 	syncCfg := r.syncerCfg
@@ -963,5 +953,22 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 	syncCfg.ServerID = randomServerID
 
 	tcpReader := binlogReader.NewTCPReader(syncCfg)
-	return binlogReader.GetPreviousGTIDFromGTIDSet(ctx, tcpReader, gset)
+	resultGs, err := binlogReader.GetPreviousGTIDFromGTIDSet(ctx, tcpReader, gset)
+	if err != nil {
+		return nil, err
+	}
+
+	// in MySQL, we expect `PreviousGTIDsEvent` contains ALL previous GTID sets, but in fact it may lack a part of them sometimes,
+	// e.g we expect `00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100`,
+	// but may be `00c04543-f584-11e9-a765-0242ac120002:50-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:60-100`.
+	// and when DM requesting MySQL to send binlog events with this EXCLUDED GTID sets, some errors like
+	// `ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.`
+	// may occur, so we force to reset the START part of any GTID set.
+	oldGs := resultGs.Clone()
+	if mysqlGs, ok := resultGs.(*gtid.MySQLGTIDSet); ok {
+		if mysqlGs.ResetStart() {
+			r.logger.Warn("force to reset the start part of GTID sets", zap.Stringer("from GTID set", oldGs), zap.Stringer("to GTID set", mysqlGs))
+		}
+	}
+	return resultGs, nil
 }
