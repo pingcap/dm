@@ -84,6 +84,10 @@ func workerEventFromKey(key string) (WorkerEvent, error) {
 func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, keepAliveTTL int64) error {
 	cliCtx, cancel := context.WithTimeout(ctx, etcdutil.DefaultRequestTimeout)
 	defer cancel()
+	// TTL in keepAliveUpdateCh has higher priority
+	for len(keepAliveUpdateCh) > 0 {
+		keepAliveTTL = <-keepAliveUpdateCh
+	}
 	lease, err := cli.Grant(cliCtx, keepAliveTTL)
 	if err != nil {
 		return err
