@@ -55,7 +55,7 @@ See the "Deploy" section in [our doc](https://docs.pingcap.com/tidb-data-migrati
 
 ## Config File
 
-See the "Configuration" section in [our doc](https://docs.pingcap.com/tidb-data-migration/dev/config-overview)
+See the "Configuration" section in [our doc](https://docs.pingcap.com/tidb-data-migration/stable/config-overview)
 
 ## Roadmap
 
