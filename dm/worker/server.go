@@ -149,12 +149,15 @@ func (s *Server) Start() error {
 		defer s.wg.Done()
 		for {
 			//nolint:errcheck
-			s.observeSourceBound(s.ctx, revBound)
+			err1 := s.observeSourceBound(s.ctx, revBound)
+			if err1 == nil {
+				return
+			}
 			s.stopKeepAlive()
 			select {
 			case <-s.ctx.Done():
 				return
-			case <-time.After(keepaliveTimeout):
+			case <-time.After(time.Duration(s.cfg.KeepAliveTTL) * time.Second * 2):
 				s.wg.Add(1)
 				s.startKeepAlive()
 			}

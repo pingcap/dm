@@ -249,7 +249,7 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	// watch woker event(oneline or offline)
+	// watch worker event(oneline or offline)
 	var (
 		wg       sync.WaitGroup
 		startRev int64 = 1
@@ -315,7 +315,7 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 	}), IsTrue)
 
 	// check if the worker is online
-	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(5, time.Duration(s.cfg.KeepAliveTTL)*time.Second, func() bool {
 		select {
 		case ev := <-workerEvCh:
 			if !ev.IsDeleted {
