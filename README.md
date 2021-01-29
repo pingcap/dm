@@ -81,4 +81,4 @@ DM is under the Apache 2.0 license. See the [LICENSE](./LICENSE) file for detail
     - [English](https://pingcap.com/blog/)
     - [简体中文](https://pingcap.com/blog-cn/)
 
-- [TiDB Monthly](https://pingcap.com/weekly/
+- [TiDB Monthly](https://pingcap.com/weekly/)
