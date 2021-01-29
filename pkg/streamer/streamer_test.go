@@ -19,6 +19,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
@@ -31,6 +32,11 @@ type testStreamerSuite struct {
 }
 
 func (t *testStreamerSuite) TestStreamer(c *C) {
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/SetHeartbeatInterval", "return(10000)"), IsNil)
+	defer func() {
+		c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/SetHeartbeatInterval"), IsNil)
+	}()
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
@@ -97,4 +103,18 @@ func (t *testStreamerSuite) TestStreamer(c *C) {
 	ev2, err = s.GetEvent(ctx)
 	c.Assert(terror.ErrNeedSyncAgain.Equal(err), IsTrue)
 	c.Assert(ev2, IsNil)
+}
+
+func (t *testStreamerSuite) TestHeartbeat(c *C) {
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/SetHeartbeatInterval", "return(1)"), IsNil)
+	defer func() {
+		c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/SetHeartbeatInterval"), IsNil)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	s := newLocalStreamer()
+	ev, err := s.GetEvent(ctx)
+	c.Assert(err, IsNil)
+	c.Assert(ev.Header.EventType, Equals, replication.HEARTBEAT_EVENT)
 }
