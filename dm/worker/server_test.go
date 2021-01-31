@@ -285,10 +285,9 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 			if !ev.IsDeleted {
 				return true
 			}
-			return false
 		default:
-			return false
 		}
+		return false
 	}), IsTrue)
 
 	// enable failpont
@@ -308,10 +307,9 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 			if ev.IsDeleted {
 				return true
 			}
-			return false
 		default:
-			return false
 		}
+		return false
 	}), IsTrue)
 
 	// check if the worker is online
@@ -321,16 +319,15 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 			if !ev.IsDeleted {
 				return true
 			}
-			return false
 		default:
-			return false
 		}
+		return false
 	}), IsTrue)
+
+	// stop watching and disable failpoint
 	cancel()
 	wg.Wait()
-
-	//nolint:errcheck
-	failpoint.Disable("github.com/pingcap/dm/pkg/ha/FailToGetSourceCfg")
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/ha/FailToGetSourceCfg"), IsNil)
 
 	_, err = ha.PutSourceBound(etcdCli, sourceBound)
 	c.Assert(err, IsNil)

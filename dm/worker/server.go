@@ -141,14 +141,12 @@ func (s *Server) Start() error {
 		s.wg.Done()
 	}()
 
-	s.wg.Add(1)
 	s.startKeepAlive()
 
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		for {
-			//nolint:errcheck
 			err1 := s.observeSourceBound(s.ctx, revBound)
 			if err1 == nil {
 				return
@@ -158,7 +156,6 @@ func (s *Server) Start() error {
 			case <-s.ctx.Done():
 				return
 			case <-time.After(time.Duration(s.cfg.KeepAliveTTL) * time.Second * 2):
-				s.wg.Add(1)
 				s.startKeepAlive()
 			}
 		}
@@ -204,6 +201,7 @@ func (s *Server) Start() error {
 // worker keepalive with master
 // If worker loses connect from master, it would stop all task and try to connect master again.
 func (s *Server) startKeepAlive() {
+	s.wg.Add(1)
 	s.kaCtx, s.kaCancel = context.WithCancel(s.ctx)
 	go s.doStartKeepAlive()
 }
