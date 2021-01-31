@@ -418,6 +418,8 @@ func (c *TaskConfig) adjust() error {
 	}
 
 	iids := make(map[string]int) // source-id -> instance-index
+	gobalConfigReferCount := map[string]int{}
+	prefixs := []string{"RouteRules", "FilterRules", "ColumnMappingRules", "Mydumper", "Loader", "Syncer"}
 	duplicateErrorStrings := make([]string, 0)
 	for i, inst := range c.MySQLInstances {
 		if err := inst.VerifyAndAdjust(); err != nil {
@@ -447,16 +449,19 @@ func (c *TaskConfig) adjust() error {
 			if _, ok := c.Routes[name]; !ok {
 				return terror.ErrConfigRouteRuleNotFound.Generate(i, name)
 			}
+			gobalConfigReferCount[prefixs[0]+name]++
 		}
 		for _, name := range inst.FilterRules {
 			if _, ok := c.Filters[name]; !ok {
 				return terror.ErrConfigFilterRuleNotFound.Generate(i, name)
 			}
+			gobalConfigReferCount[prefixs[1]+name]++
 		}
 		for _, name := range inst.ColumnMappingRules {
 			if _, ok := c.ColumnMappings[name]; !ok {
 				return terror.ErrConfigColumnMappingNotFound.Generate(i, name)
 			}
+			gobalConfigReferCount[prefixs[2]+name]++
 		}
 
 		// only when BAList is empty use BWList
@@ -472,6 +477,7 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigMydumperCfgNotFound.Generate(i, inst.MydumperConfigName)
 			}
+			gobalConfigReferCount[prefixs[3]+inst.MydumperConfigName]++
 			inst.Mydumper = new(MydumperConfig)
 			*inst.Mydumper = *rule // ref mydumper config
 		}
@@ -499,6 +505,7 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigLoaderCfgNotFound.Generate(i, inst.LoaderConfigName)
 			}
+			gobalConfigReferCount[prefixs[4]+inst.LoaderConfigName]++
 			inst.Loader = new(LoaderConfig)
 			*inst.Loader = *rule // ref loader config
 		}
@@ -518,6 +525,7 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigSyncerCfgNotFound.Generate(i, inst.SyncerConfigName)
 			}
+			gobalConfigReferCount[prefixs[5]+inst.SyncerConfigName]++
 			inst.Syncer = new(SyncerConfig)
 			*inst.Syncer = *rule // ref syncer config
 		}
@@ -548,6 +556,42 @@ func (c *TaskConfig) adjust() error {
 		return terror.ErrConfigDuplicateCfgItem.Generate(strings.Join(duplicateErrorStrings, "\n"))
 	}
 
+	for route := range c.Routes {
+		if gobalConfigReferCount[prefixs[0]+route] == 0 {
+			log.L().Error("route in gobal configuration isn't used", zap.String("route", route))
+			return terror.ErrConfigGobalConfigUnused.Generate()
+		}
+	}
+	for filter := range c.Filters {
+		if gobalConfigReferCount[prefixs[1]+filter] == 0 {
+			log.L().Error("filter in gobal configuration isn't used", zap.String("filter", filter))
+			return terror.ErrConfigGobalConfigUnused.Generate()
+		}
+	}
+	for columnMapping := range c.ColumnMappings {
+		if gobalConfigReferCount[prefixs[2]+columnMapping] == 0 {
+			log.L().Error("column-mapping in gobal configuration isn't used", zap.String("columnMapping", columnMapping))
+			return terror.ErrConfigGobalConfigUnused.Generate()
+		}
+	}
+	for mydumper := range c.Mydumpers {
+		if gobalConfigReferCount[prefixs[3]+mydumper] == 0 {
+			log.L().Error("mydumper in gobal configuration isn't used", zap.String("mydumper", mydumper))
+			return terror.ErrConfigGobalConfigUnused.Generate()
+		}
+	}
+	for loader := range c.Loaders {
+		if gobalConfigReferCount[prefixs[4]+loader] == 0 {
+			log.L().Error("loader in gobal configuration isn't used", zap.String("loader", loader))
+			return terror.ErrConfigGobalConfigUnused.Generate()
+		}
+	}
+	for syncer := range c.Syncers {
+		if gobalConfigReferCount[prefixs[5]+syncer] == 0 {
+			log.L().Error("syncer in gobal configuration isn't used", zap.String("syncer", syncer))
+			return terror.ErrConfigGobalConfigUnused.Generate()
+		}
+	}
 	if c.Timezone != "" {
 		_, err := time.LoadLocation(c.Timezone)
 		if err != nil {
