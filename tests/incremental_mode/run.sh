@@ -45,7 +45,7 @@ function run() {
 
     # relay should be started after source bounded
     sleep 1
-    # and now default keepalive TTL is 30 mimnutes
+    # and now default keepalive TTL is 30 minutes
     killall -9 dm-worker.test
     sleep 3
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
