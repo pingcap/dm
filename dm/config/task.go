@@ -418,7 +418,7 @@ func (c *TaskConfig) adjust() error {
 	}
 
 	iids := make(map[string]int) // source-id -> instance-index
-	gobalConfigReferCount := map[string]int{}
+	globalConfigReferCount := map[string]int{}
 	prefixs := []string{"RouteRules", "FilterRules", "ColumnMappingRules", "Mydumper", "Loader", "Syncer"}
 	duplicateErrorStrings := make([]string, 0)
 	for i, inst := range c.MySQLInstances {
@@ -449,19 +449,19 @@ func (c *TaskConfig) adjust() error {
 			if _, ok := c.Routes[name]; !ok {
 				return terror.ErrConfigRouteRuleNotFound.Generate(i, name)
 			}
-			gobalConfigReferCount[prefixs[0]+name]++
+			globalConfigReferCount[prefixs[0]+name]++
 		}
 		for _, name := range inst.FilterRules {
 			if _, ok := c.Filters[name]; !ok {
 				return terror.ErrConfigFilterRuleNotFound.Generate(i, name)
 			}
-			gobalConfigReferCount[prefixs[1]+name]++
+			globalConfigReferCount[prefixs[1]+name]++
 		}
 		for _, name := range inst.ColumnMappingRules {
 			if _, ok := c.ColumnMappings[name]; !ok {
 				return terror.ErrConfigColumnMappingNotFound.Generate(i, name)
 			}
-			gobalConfigReferCount[prefixs[2]+name]++
+			globalConfigReferCount[prefixs[2]+name]++
 		}
 
 		// only when BAList is empty use BWList
@@ -477,14 +477,13 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigMydumperCfgNotFound.Generate(i, inst.MydumperConfigName)
 			}
-			gobalConfigReferCount[prefixs[3]+inst.MydumperConfigName]++
+			globalConfigReferCount[prefixs[3]+inst.MydumperConfigName]++
 			inst.Mydumper = new(MydumperConfig)
 			*inst.Mydumper = *rule // ref mydumper config
 		}
 		if inst.Mydumper == nil {
-			if len(c.Mydumpers) != 0 && inst.MydumperThread == 0 {
+			if len(c.Mydumpers) != 0 {
 				log.L().Warn("mysql instance don't refer mydumper's configuration with mydumper-config-name, the default configuration will be used", zap.Int("mysql instance", i))
-				return terror.ErrConfigUnreferingCofig.Generate()
 			}
 			defaultCfg := defaultMydumperConfig()
 			inst.Mydumper = &defaultCfg
@@ -506,14 +505,13 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigLoaderCfgNotFound.Generate(i, inst.LoaderConfigName)
 			}
-			gobalConfigReferCount[prefixs[4]+inst.LoaderConfigName]++
+			globalConfigReferCount[prefixs[4]+inst.LoaderConfigName]++
 			inst.Loader = new(LoaderConfig)
 			*inst.Loader = *rule // ref loader config
 		}
 		if inst.Loader == nil {
-			if len(c.Loaders) != 0 && inst.LoaderThread == 0 {
+			if len(c.Loaders) != 0 {
 				log.L().Warn("mysql instance don't refer loader's configuration with loader-config-name, the default configuration will be used", zap.Int("mysql instance", i))
-				return terror.ErrConfigUnreferingCofig.Generate()
 			}
 			defaultCfg := defaultLoaderConfig()
 			inst.Loader = &defaultCfg
@@ -527,14 +525,13 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigSyncerCfgNotFound.Generate(i, inst.SyncerConfigName)
 			}
-			gobalConfigReferCount[prefixs[5]+inst.SyncerConfigName]++
+			globalConfigReferCount[prefixs[5]+inst.SyncerConfigName]++
 			inst.Syncer = new(SyncerConfig)
 			*inst.Syncer = *rule // ref syncer config
 		}
 		if inst.Syncer == nil {
-			if len(c.Syncers) != 0 && inst.SyncerThread == 0 {
+			if len(c.Syncers) != 0 {
 				log.L().Warn("mysql instance don't refer syncer's configuration with syncer-config-name, the default configuration will be used", zap.Int("mysql instance", i))
-				return terror.ErrConfigUnreferingCofig.Generate()
 			}
 			defaultCfg := defaultSyncerConfig()
 			inst.Syncer = &defaultCfg
@@ -559,42 +556,42 @@ func (c *TaskConfig) adjust() error {
 		return terror.ErrConfigDuplicateCfgItem.Generate(strings.Join(duplicateErrorStrings, "\n"))
 	}
 
+	unusedConfigs := []string{}
 	for route := range c.Routes {
-		if gobalConfigReferCount[prefixs[0]+route] == 0 {
-			log.L().Error("route in gobal configuration isn't used", zap.String("route", route))
-			return terror.ErrConfigGobalConfigUnused.Generate()
+		if globalConfigReferCount[prefixs[0]+route] == 0 {
+			unusedConfigs = append(unusedConfigs, route)
 		}
 	}
 	for filter := range c.Filters {
-		if gobalConfigReferCount[prefixs[1]+filter] == 0 {
-			log.L().Error("filter in gobal configuration isn't used", zap.String("filter", filter))
-			return terror.ErrConfigGobalConfigUnused.Generate()
+		if globalConfigReferCount[prefixs[1]+filter] == 0 {
+			unusedConfigs = append(unusedConfigs, filter)
 		}
 	}
 	for columnMapping := range c.ColumnMappings {
-		if gobalConfigReferCount[prefixs[2]+columnMapping] == 0 {
-			log.L().Error("column-mapping in gobal configuration isn't used", zap.String("columnMapping", columnMapping))
-			return terror.ErrConfigGobalConfigUnused.Generate()
+		if globalConfigReferCount[prefixs[2]+columnMapping] == 0 {
+			unusedConfigs = append(unusedConfigs, columnMapping)
 		}
 	}
 	for mydumper := range c.Mydumpers {
-		if gobalConfigReferCount[prefixs[3]+mydumper] == 0 {
-			log.L().Error("mydumper in gobal configuration isn't used", zap.String("mydumper", mydumper))
-			return terror.ErrConfigGobalConfigUnused.Generate()
+		if globalConfigReferCount[prefixs[3]+mydumper] == 0 {
+			unusedConfigs = append(unusedConfigs, mydumper)
 		}
 	}
 	for loader := range c.Loaders {
-		if gobalConfigReferCount[prefixs[4]+loader] == 0 {
-			log.L().Error("loader in gobal configuration isn't used", zap.String("loader", loader))
-			return terror.ErrConfigGobalConfigUnused.Generate()
+		if globalConfigReferCount[prefixs[4]+loader] == 0 {
+			unusedConfigs = append(unusedConfigs, loader)
 		}
 	}
 	for syncer := range c.Syncers {
-		if gobalConfigReferCount[prefixs[5]+syncer] == 0 {
-			log.L().Error("syncer in gobal configuration isn't used", zap.String("syncer", syncer))
-			return terror.ErrConfigGobalConfigUnused.Generate()
+		if globalConfigReferCount[prefixs[5]+syncer] == 0 {
+			unusedConfigs = append(unusedConfigs, syncer)
 		}
 	}
+
+	if len(unusedConfigs) != 0 {
+		return terror.ErrConfigGlobalConfigsUnused.Generate(unusedConfigs)
+	}
+
 	if c.Timezone != "" {
 		_, err := time.LoadLocation(c.Timezone)
 		if err != nil {
