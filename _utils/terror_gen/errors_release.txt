@@ -165,8 +165,7 @@ ErrConfigMoreThanOne,[code=20034:class=config:scope=internal:level=high], "Messa
 ErrConfigEtcdParse,[code=20035:class=config:scope=internal:level=high], "Message: incapable config of %s from etcd"
 ErrConfigMissingForBound,[code=20036:class=config:scope=internal:level=high], "Message: source bound %s doesn't have related source config in etcd"
 ErrConfigBinlogEventFilter,[code=20037:class=config:scope=internal:level=high], "Message: generate binlog event filter, Workaround: Please check the `filters` config in source and task configuration files."
-ErrConfigUnreferingCofig,[code=20038:class=config:scope=internal:level=high], "Message: instances don't refer configurations with xxx-config-name, Workaround: Please check the configuration files."
-ErrConfigGobalConfigUnused,[code=20039:class=config:scope=internal:level=high], "Message: partial function configurations are set in gobal configurations but instances don't use them, Workaround: Please check the configuration files."
+ErrConfigGlobalConfigsUnused,[code=20038:class=config:scope=internal:level=high], "Message: The configurations as following %v are set in gobal configuration but instances don't use them, Workaround: Please check the configuration files."
 ErrBinlogExtractPosition,[code=22001:class=binlog-op:scope=internal:level=high]
 ErrBinlogInvalidFilename,[code=22002:class=binlog-op:scope=internal:level=high], "Message: invalid binlog filename"
 ErrBinlogParsePosFromStr,[code=22003:class=binlog-op:scope=internal:level=high]
