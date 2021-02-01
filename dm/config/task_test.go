@@ -14,6 +14,7 @@
 package config
 
 import (
+	"fmt"
 	"io/ioutil"
 	"path"
 	"sort"
@@ -27,6 +28,317 @@ import (
 
 	"github.com/coreos/go-semver/semver"
 )
+
+func (t *testConfig) TestUnusedTaskConfig(c *C) {
+	var correctTaskConfig = `---
+name: test
+task-mode: all
+shard-mode: "pessimistic"       
+meta-schema: "dm_meta"         
+timezone: "Asia/Shanghai"     
+case-sensitive: false        
+online-ddl-scheme: "gh-ost" 
+clean-dump-file: true     
+
+target-database:
+  host: "127.0.0.1"
+  port: 4000
+  user: "root"
+  password: ""
+
+routes:
+  route-rule-1:
+    schema-pattern: "test_*"
+    target-schema: "test"
+  route-rule-2:
+    schema-pattern: "test_*"
+    target-schema: "test"
+
+filters: 
+  filter-rule-1:
+    schema-pattern: "test_*"
+    events: ["truncate table", "drop table"]
+    action: Ignore
+  filter-rule-2:
+    schema-pattern: "test_*"
+    events: ["all dml"]
+    action: Do
+
+column-mappings:
+  column-mapping-rule-1:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    expression: "partition id"
+    source-column: "id"
+    target-column: "id"
+    arguments: ["1", "test", "t", "_"]
+  column-mapping-rule-2:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    expression: "partition id"
+    source-column: "id"
+    target-column: "id"
+    arguments: ["2", "test", "t", "_"]
+
+mydumpers:
+  global1:
+    threads: 4
+    chunk-filesize: 64
+    skip-tz-utc: true
+    extra-args: "--consistency none"
+  global2:
+    threads: 8
+    chunk-filesize: 128
+    skip-tz-utc: true
+    extra-args: "--consistency none"
+
+loaders:
+  global1:
+    pool-size: 16
+    dir: "./dumped_data1"
+  global2:
+    pool-size: 8
+    dir: "./dumped_data2"
+
+syncers:
+  global1:
+    worker-count: 16
+    batch: 100 
+    enable-ansi-quotes: true
+    safe-mode: false  
+  global2:
+    worker-count: 32
+    batch: 100 
+    enable-ansi-quotes: true
+    safe-mode: false  
+
+mysql-instances:
+  - source-id: "mysql-replica-01"
+    route-rules: ["route-rule-2"]
+    filter-rules: ["filter-rule-2"]
+    column-mapping-rules: ["column-mapping-rule-2"]
+    mydumper-config-name: "global1"
+    loader-config-name: "global1"
+    syncer-config-name: "global1"
+
+  - source-id: "mysql-replica-02"
+    route-rules: ["route-rule-1"]
+    filter-rules: ["filter-rule-1"]
+    column-mapping-rules: ["column-mapping-rule-1"]
+    mydumper-config-name: "global2"
+    loader-config-name: "global2"
+    syncer-config-name: "global2"
+`
+	taskConfig := NewTaskConfig()
+	err := taskConfig.Decode(correctTaskConfig)
+	fmt.Println("-----error------", err)
+	c.Assert(err, IsNil)
+	var errorTaskConfig1 = `---
+name: test
+task-mode: all
+shard-mode: "pessimistic"       
+meta-schema: "dm_meta"         
+timezone: "Asia/Shanghai"     
+case-sensitive: false        
+online-ddl-scheme: "gh-ost" 
+clean-dump-file: true     
+
+target-database:
+  host: "127.0.0.1"
+  port: 4000
+  user: "root"
+  password: ""
+
+routes:
+  route-rule-1:
+    schema-pattern: "test_*"
+    target-schema: "test"
+  route-rule-2:
+    schema-pattern: "test_*"
+    target-schema: "test"
+
+filters: 
+  filter-rule-1:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    events: ["truncate table", "drop table"]
+    action: Ignore
+  filter-rule-2:
+    schema-pattern: "test_*"
+    events: ["all dml"]
+    action: Do
+
+column-mappings:
+  column-mapping-rule-1:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    expression: "partition id"
+    source-column: "id"
+    target-column: "id"
+    arguments: ["1", "test", "t", "_"]
+  column-mapping-rule-2:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    expression: "partition id"
+    source-column: "id"
+    target-column: "id"
+    arguments: ["2", "test", "t", "_"]
+
+mydumpers:
+  global1:
+    threads: 4
+    chunk-filesize: 64
+    skip-tz-utc: true
+    extra-args: "--consistency none"
+  global2:
+    threads: 8
+    chunk-filesize: 128
+    skip-tz-utc: true
+    extra-args: "--consistency none"
+
+loaders:
+  global1:
+    pool-size: 16
+    dir: "./dumped_data1"
+  global2:
+    pool-size: 8
+    dir: "./dumped_data2"
+
+syncers:
+  global1:
+    worker-count: 16
+    batch: 100 
+    enable-ansi-quotes: true
+    safe-mode: false  
+  global2:
+    worker-count: 32
+    batch: 100 
+    enable-ansi-quotes: true
+    safe-mode: false  
+
+mysql-instances:
+  - source-id: "mysql-replica-01"
+    route-rules: ["route-rule-1"]
+    filter-rules: ["filter-rule-1"]
+    column-mapping-rules: ["column-mapping-rule-1"]
+    mydumper-config-name: "global1"
+    loader-config-name: "global1"
+    syncer-config-name: "global1"
+
+  - source-id: "mysql-replica-02"
+    route-rules: ["route-rule-1"]
+    filter-rules: ["filter-rule-1"]
+    column-mapping-rules: ["column-mapping-rule-1"]
+    mydumper-config-name: "global2"
+    loader-config-name: "global2"
+    syncer-config-name: "global2"
+`
+	taskConfig = NewTaskConfig()
+	err = taskConfig.Decode(errorTaskConfig1)
+	fmt.Println("-----error1------", err)
+	c.Assert(err, NotNil)
+	var errorTaskConfig2 = `---
+name: test
+task-mode: all
+shard-mode: "pessimistic"       
+meta-schema: "dm_meta"         
+timezone: "Asia/Shanghai"     
+case-sensitive: false        
+online-ddl-scheme: "gh-ost" 
+clean-dump-file: true     
+
+target-database:
+  host: "127.0.0.1"
+  port: 4000
+  user: "root"
+  password: ""
+
+routes:
+  route-rule-1:
+    schema-pattern: "test_*"
+    target-schema: "test"
+  route-rule-2:
+    schema-pattern: "test_*"
+    target-schema: "test"
+
+filters: 
+  filter-rule-1:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    events: ["truncate table", "drop table"]
+    action: Ignore
+  filter-rule-2:
+    schema-pattern: "test_*"
+    events: ["all dml"]
+    action: Do
+
+column-mappings:
+  column-mapping-rule-1:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    expression: "partition id"
+    source-column: "id"
+    target-column: "id"
+    arguments: ["1", "test", "t", "_"]
+  column-mapping-rule-2:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    expression: "partition id"
+    source-column: "id"
+    target-column: "id"
+    arguments: ["2", "test", "t", "_"]
+
+mydumpers:
+  global1:
+    threads: 4
+    chunk-filesize: 64
+    skip-tz-utc: true
+    extra-args: "--consistency none"
+  global2:
+    threads: 8
+    chunk-filesize: 128
+    skip-tz-utc: true
+    extra-args: "--consistency none"
+
+loaders:
+  global1:
+    pool-size: 16
+    dir: "./dumped_data1"
+  global2:
+    pool-size: 8
+    dir: "./dumped_data2"
+
+syncers:
+  global1:
+    worker-count: 16
+    batch: 100 
+    enable-ansi-quotes: true
+    safe-mode: false  
+  global2:
+    worker-count: 32
+    batch: 100 
+    enable-ansi-quotes: true
+    safe-mode: false  
+
+mysql-instances:
+  - source-id: "mysql-replica-01"
+    route-rules: ["route-rule-1"]
+    filter-rules: ["filter-rule-2"]
+    column-mapping-rules: ["column-mapping-rule-2"]
+    mydumper-config-name: "global1"
+    loader-config-name: "global1"
+    syncer-config-name: "global1"
+
+  - source-id: "mysql-replica-02"
+    route-rules: ["route-rule-1"]
+    filter-rules: ["filter-rule-1"]
+    column-mapping-rules: ["column-mapping-rule-1"]
+`
+	taskConfig = NewTaskConfig()
+	err = taskConfig.Decode(errorTaskConfig2)
+	fmt.Println("-----error2------", err)
+	c.Assert(err, NotNil)
+}
 
 func (t *testConfig) TestInvalidTaskConfig(c *C) {
 	var errorTaskConfig1 = `---
