@@ -14,30 +14,34 @@ jobs:
 
   make_build:
     name: Make Build
-    runs-on: ubuntu-18.04
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
 
     - name: Set up Go 1.13
       uses: actions/setup-go@v2
       with:
         go-version: 1.13
-    
+
     - name: Check out code
       uses: actions/checkout@v2
-    
+
     - name: Cache go modules
       uses: actions/cache@v2
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
-    
+
     - name: Cache tools
       uses: actions/cache@v2
       with:
         path: |
           **/tools
         key: ${{ runner.os }}-dm-tools-${{ hashFiles('**/tools/go.sum') }}
-    
+
     - name: Build
       run: make build
 
