@@ -226,6 +226,7 @@ const (
 	codeConfigEtcdParse
 	codeConfigMissingForBound
 	codeConfigBinlogEventFilter
+	codeConfigUnreferingConfig
 	codeConfigGobalConfigUnused
 )
 
@@ -824,6 +825,7 @@ var (
 	ErrConfigEtcdParse              = New(codeConfigEtcdParse, ClassConfig, ScopeInternal, LevelHigh, "incapable config of %s from etcd", "")
 	ErrConfigMissingForBound        = New(codeConfigMissingForBound, ClassConfig, ScopeInternal, LevelHigh, "source bound %s doesn't have related source config in etcd", "")
 	ErrConfigBinlogEventFilter      = New(codeConfigBinlogEventFilter, ClassConfig, ScopeInternal, LevelHigh, "generate binlog event filter", "Please check the `filters` config in source and task configuration files.")
+	ErrConfigUnreferingCofig        = New(codeConfigUnreferingConfig, ClassConfig, ScopeInternal, LevelHigh, "instances don't refer configurations with xxx-config-name", "Please check the configuration files.")
 	ErrConfigGobalConfigUnused      = New(codeConfigGobalConfigUnused, ClassConfig, ScopeInternal, LevelHigh, "partial function configurations are set in gobal configurations but instances don't use them", "Please check the configuration files.")
 
 	// Binlog operation error

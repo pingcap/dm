@@ -484,6 +484,7 @@ func (c *TaskConfig) adjust() error {
 		if inst.Mydumper == nil {
 			if len(c.Mydumpers) != 0 {
 				log.L().Warn("mysql instance don't refer mydumper's configuration with mydumper-config-name, the default configuration will be used", zap.Int("mysql instance", i))
+				return terror.ErrConfigUnreferingCofig.Generate()
 			}
 			defaultCfg := defaultMydumperConfig()
 			inst.Mydumper = &defaultCfg
@@ -512,6 +513,7 @@ func (c *TaskConfig) adjust() error {
 		if inst.Loader == nil {
 			if len(c.Loaders) != 0 {
 				log.L().Warn("mysql instance don't refer loader's configuration with loader-config-name, the default configuration will be used", zap.Int("mysql instance", i))
+				return terror.ErrConfigUnreferingCofig.Generate()
 			}
 			defaultCfg := defaultLoaderConfig()
 			inst.Loader = &defaultCfg
@@ -532,6 +534,7 @@ func (c *TaskConfig) adjust() error {
 		if inst.Syncer == nil {
 			if len(c.Syncers) != 0 {
 				log.L().Warn("mysql instance don't refer syncer's configuration with syncer-config-name, the default configuration will be used", zap.Int("mysql instance", i))
+				return terror.ErrConfigUnreferingCofig.Generate()
 			}
 			defaultCfg := defaultSyncerConfig()
 			inst.Syncer = &defaultCfg

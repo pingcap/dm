@@ -1000,6 +1000,18 @@ description = ""
 workaround = "Please check the `filters` config in source and task configuration files."
 tags = ["internal", "high"]
 
+[error.DM-config-20038]
+message = "instances don't refer configurations with xxx-config-name"
+description = ""
+workaround = "Please check the configuration files."
+tags = ["internal", "high"]
+
+[error.DM-config-20039]
+message = "partial function configurations are set in gobal configurations but instances don't use them"
+description = ""
+workaround = "Please check the configuration files."
+tags = ["internal", "high"]
+
 [error.DM-binlog-op-22001]
 message = ""
 description = ""
