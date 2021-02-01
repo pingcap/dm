@@ -736,6 +736,11 @@ function test_last_bound() {
     # kill 12, start 34, kill 34
     kill_2_worker_ensure_unbound 1 2
     start_2_worker_ensure_bound 3 4
+    # let other workers rather then 1 2 forward the syncer's progress
+    run_sql_file_withdb $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
+    run_sql "flush logs;" $MYSQL_PORT2 $MYSQL_PASSWORD2
+    run_sql_file_withdb $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test
+    sleep 1
     kill_2_worker_ensure_unbound 3 4
 
     # start 1 then 2
@@ -743,8 +748,11 @@ function test_last_bound() {
 
     # check
     check_bound
-    check_log_contains $WORK_DIR/worker1/log/dm-worker.log "will try purge whole relay dir for new relay log" 1
-    check_log_contains $WORK_DIR/worker2/log/dm-worker.log "will try purge whole relay dir for new relay log" 1
+    # other workers has forwarded the sync progress, if moved to a new binlog file, original relay log could be removed
+    num1=`grep "will try purge whole relay dir for new relay log" $WORK_DIR/worker1/log/dm-worker.log | wc -l`
+    num2=`grep "will try purge whole relay dir for new relay log" $WORK_DIR/worker2/log/dm-worker.log | wc -l`
+    echo "num1$num1 num2$num2"
+    [[ $num1+$num2 -eq 3 ]]
 
     echo "[$(date)] <<<<<< finish test_last_bound >>>>>>"
 }

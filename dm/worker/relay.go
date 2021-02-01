@@ -191,7 +191,7 @@ func (h *realRelayHolder) Operate(ctx context.Context, op pb.RelayOp) error {
 	return terror.ErrWorkerRelayOperNotSupport.Generate(op.String())
 }
 
-func (h *realRelayHolder) pauseRelay(ctx context.Context, op pb.RelayOp) error {
+func (h *realRelayHolder) pauseRelay(_ context.Context, op pb.RelayOp) error {
 	h.Lock()
 	if h.stage != pb.Stage_Running {
 		h.Unlock()
@@ -210,7 +210,7 @@ func (h *realRelayHolder) pauseRelay(ctx context.Context, op pb.RelayOp) error {
 	return nil
 }
 
-func (h *realRelayHolder) resumeRelay(ctx context.Context, op pb.RelayOp) error {
+func (h *realRelayHolder) resumeRelay(_ context.Context, op pb.RelayOp) error {
 	h.Lock()
 	defer h.Unlock()
 	if h.stage != pb.Stage_Paused {
@@ -225,7 +225,7 @@ func (h *realRelayHolder) resumeRelay(ctx context.Context, op pb.RelayOp) error 
 	return nil
 }
 
-func (h *realRelayHolder) stopRelay(ctx context.Context, op pb.RelayOp) error {
+func (h *realRelayHolder) stopRelay(_ context.Context, op pb.RelayOp) error {
 	h.Lock()
 	if h.stage == pb.Stage_Stopped {
 		h.Unlock()
@@ -233,11 +233,6 @@ func (h *realRelayHolder) stopRelay(ctx context.Context, op pb.RelayOp) error {
 	}
 	h.stage = pb.Stage_Stopped
 	h.Unlock() // unlock to make `run` can return
-
-	// purge relay dir when delete source
-	if err := h.relay.PurgeRelayDir(); err != nil {
-		return err
-	}
 
 	// now, when try to stop relay unit, we close relay holder
 	h.Close()

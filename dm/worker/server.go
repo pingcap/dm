@@ -588,7 +588,6 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 			return err
 		}
 		startRelay = !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
-		// TODO: try PurgeRelayDir if not found relay, but if not found, that's not bound so we didn't know the path of dir
 	}
 	go func() {
 		w.Start(startRelay)

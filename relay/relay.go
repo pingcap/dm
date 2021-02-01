@@ -221,32 +221,34 @@ func (r *Relay) process(ctx context.Context) error {
 
 		// resuming will take the risk that upstream has purge the binlog relay is needed.
 		// when this worker is down, HA may schedule the source to other workers and forward the sync progress,
-		// when the source is scheduled back to this worker, we could start relay from sync checkpoint's location which
-		// is newer, and purge the outdated relay logs.
-		checkpointIsNewer := false
-		checkpointBinlogName := r.cfg.BinLogName
-		checkpointBinlogGset, err2 := gtid.ParserGTID(r.cfg.Flavor, r.cfg.BinlogGTID)
+		// and then when the source is scheduled back to this worker, we could start relay from sync checkpoint's
+		// location which is newer, and now could purge the outdated relay logs.
+		//
+		// locations in `r.cfg` is set to min needed location of subtasks (higher priority) or source config specified
+		isRelayMetaOutdated := false
+		neededBinlogName := r.cfg.BinLogName
+		neededBinlogGset, err2 := gtid.ParserGTID(r.cfg.Flavor, r.cfg.BinlogGTID)
 		if err2 != nil {
 			return err2
 		}
 		if r.cfg.EnableGTID {
 			_, metaGset := r.meta.GTID()
-			if checkpointBinlogGset.Contain(metaGset) && !checkpointBinlogGset.Equal(metaGset) {
-				checkpointIsNewer = true
+			if neededBinlogGset.Contain(metaGset) && !neededBinlogGset.Equal(metaGset) {
+				isRelayMetaOutdated = true
 			}
 		} else {
 			_, metaPos := r.meta.Pos()
-			if checkpointBinlogName > metaPos.Name {
-				checkpointIsNewer = true
+			if neededBinlogName > metaPos.Name {
+				isRelayMetaOutdated = true
 			}
 		}
 
-		if checkpointIsNewer {
+		if isRelayMetaOutdated {
 			err2 = r.PurgeRelayDir()
 			if err2 != nil {
 				return err2
 			}
-			err2 = r.SaveMeta(mysql.Position{Name: checkpointBinlogName, Pos: binlog.MinPosition.Pos}, checkpointBinlogGset)
+			err2 = r.SaveMeta(mysql.Position{Name: neededBinlogName, Pos: binlog.MinPosition.Pos}, neededBinlogGset)
 			if err2 != nil {
 				return err2
 			}
