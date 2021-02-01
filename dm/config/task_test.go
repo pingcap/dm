@@ -14,7 +14,6 @@
 package config
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path"
 	"sort"
@@ -131,7 +130,6 @@ mysql-instances:
 `
 	taskConfig := NewTaskConfig()
 	err := taskConfig.Decode(correctTaskConfig)
-	fmt.Println("-----error------", err)
 	c.Assert(err, IsNil)
 	var errorTaskConfig1 = `---
 name: test
@@ -235,7 +233,6 @@ mysql-instances:
 `
 	taskConfig = NewTaskConfig()
 	err = taskConfig.Decode(errorTaskConfig1)
-	fmt.Println("-----error1------", err)
 	c.Assert(err, NotNil)
 	var errorTaskConfig2 = `---
 name: test
@@ -336,7 +333,6 @@ mysql-instances:
 `
 	taskConfig = NewTaskConfig()
 	err = taskConfig.Decode(errorTaskConfig2)
-	fmt.Println("-----error2------", err)
 	c.Assert(err, NotNil)
 }
 
