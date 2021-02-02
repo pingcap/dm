@@ -16,6 +16,7 @@ package ha
 import (
 	"context"
 	"encoding/json"
+	"sync/atomic"
 	"time"
 
 	"go.etcd.io/etcd/clientv3"
@@ -83,7 +84,8 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 	for len(KeepAliveUpdateCh) > 0 {
 		keepAliveTTL = <-KeepAliveUpdateCh
 	}
-	CurrentKeepAliveTTL = keepAliveTTL
+	// though in regular routine there's no concurrent KeepAlive, we need to handle tests
+	atomic.StoreInt64(&CurrentKeepAliveTTL, keepAliveTTL)
 
 	k := common.WorkerKeepAliveKeyAdapter.Encode(workerName)
 	workerEventJSON, err := WorkerEvent{
