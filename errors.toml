@@ -1000,6 +1000,12 @@ description = ""
 workaround = "Please check the `filters` config in source and task configuration files."
 tags = ["internal", "high"]
 
+[error.DM-config-20038]
+message = "The configurations as following %v are set in global configuration but instances don't use them"
+description = ""
+workaround = "Please check the configuration files."
+tags = ["internal", "high"]
+
 [error.DM-binlog-op-22001]
 message = ""
 description = ""
