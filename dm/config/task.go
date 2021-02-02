@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"sort"
 	"strings"
 	"time"
 
@@ -418,6 +419,8 @@ func (c *TaskConfig) adjust() error {
 	}
 
 	iids := make(map[string]int) // source-id -> instance-index
+	globalConfigReferCount := map[string]int{}
+	prefixs := []string{"RouteRules", "FilterRules", "ColumnMappingRules", "Mydumper", "Loader", "Syncer"}
 	duplicateErrorStrings := make([]string, 0)
 	for i, inst := range c.MySQLInstances {
 		if err := inst.VerifyAndAdjust(); err != nil {
@@ -447,16 +450,19 @@ func (c *TaskConfig) adjust() error {
 			if _, ok := c.Routes[name]; !ok {
 				return terror.ErrConfigRouteRuleNotFound.Generate(i, name)
 			}
+			globalConfigReferCount[prefixs[0]+name]++
 		}
 		for _, name := range inst.FilterRules {
 			if _, ok := c.Filters[name]; !ok {
 				return terror.ErrConfigFilterRuleNotFound.Generate(i, name)
 			}
+			globalConfigReferCount[prefixs[1]+name]++
 		}
 		for _, name := range inst.ColumnMappingRules {
 			if _, ok := c.ColumnMappings[name]; !ok {
 				return terror.ErrConfigColumnMappingNotFound.Generate(i, name)
 			}
+			globalConfigReferCount[prefixs[2]+name]++
 		}
 
 		// only when BAList is empty use BWList
@@ -472,10 +478,14 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigMydumperCfgNotFound.Generate(i, inst.MydumperConfigName)
 			}
+			globalConfigReferCount[prefixs[3]+inst.MydumperConfigName]++
 			inst.Mydumper = new(MydumperConfig)
 			*inst.Mydumper = *rule // ref mydumper config
 		}
 		if inst.Mydumper == nil {
+			if len(c.Mydumpers) != 0 {
+				log.L().Warn("mysql instance don't refer mydumper's configuration with mydumper-config-name, the default configuration will be used", zap.String("mysql instance", inst.SourceID))
+			}
 			defaultCfg := defaultMydumperConfig()
 			inst.Mydumper = &defaultCfg
 		} else if inst.Mydumper.ChunkFilesize == "" {
@@ -496,10 +506,14 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigLoaderCfgNotFound.Generate(i, inst.LoaderConfigName)
 			}
+			globalConfigReferCount[prefixs[4]+inst.LoaderConfigName]++
 			inst.Loader = new(LoaderConfig)
 			*inst.Loader = *rule // ref loader config
 		}
 		if inst.Loader == nil {
+			if len(c.Loaders) != 0 {
+				log.L().Warn("mysql instance don't refer loader's configuration with loader-config-name, the default configuration will be used", zap.String("mysql instance", inst.SourceID))
+			}
 			defaultCfg := defaultLoaderConfig()
 			inst.Loader = &defaultCfg
 		}
@@ -512,10 +526,14 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigSyncerCfgNotFound.Generate(i, inst.SyncerConfigName)
 			}
+			globalConfigReferCount[prefixs[5]+inst.SyncerConfigName]++
 			inst.Syncer = new(SyncerConfig)
 			*inst.Syncer = *rule // ref syncer config
 		}
 		if inst.Syncer == nil {
+			if len(c.Syncers) != 0 {
+				log.L().Warn("mysql instance don't refer syncer's configuration with syncer-config-name, the default configuration will be used", zap.String("mysql instance", inst.SourceID))
+			}
 			defaultCfg := defaultSyncerConfig()
 			inst.Syncer = &defaultCfg
 		}
@@ -537,6 +555,43 @@ func (c *TaskConfig) adjust() error {
 	}
 	if len(duplicateErrorStrings) > 0 {
 		return terror.ErrConfigDuplicateCfgItem.Generate(strings.Join(duplicateErrorStrings, "\n"))
+	}
+
+	unusedConfigs := []string{}
+	for route := range c.Routes {
+		if globalConfigReferCount[prefixs[0]+route] == 0 {
+			unusedConfigs = append(unusedConfigs, route)
+		}
+	}
+	for filter := range c.Filters {
+		if globalConfigReferCount[prefixs[1]+filter] == 0 {
+			unusedConfigs = append(unusedConfigs, filter)
+		}
+	}
+	for columnMapping := range c.ColumnMappings {
+		if globalConfigReferCount[prefixs[2]+columnMapping] == 0 {
+			unusedConfigs = append(unusedConfigs, columnMapping)
+		}
+	}
+	for mydumper := range c.Mydumpers {
+		if globalConfigReferCount[prefixs[3]+mydumper] == 0 {
+			unusedConfigs = append(unusedConfigs, mydumper)
+		}
+	}
+	for loader := range c.Loaders {
+		if globalConfigReferCount[prefixs[4]+loader] == 0 {
+			unusedConfigs = append(unusedConfigs, loader)
+		}
+	}
+	for syncer := range c.Syncers {
+		if globalConfigReferCount[prefixs[5]+syncer] == 0 {
+			unusedConfigs = append(unusedConfigs, syncer)
+		}
+	}
+
+	if len(unusedConfigs) != 0 {
+		sort.Strings(unusedConfigs)
+		return terror.ErrConfigGlobalConfigsUnused.Generate(unusedConfigs)
 	}
 
 	if c.Timezone != "" {
@@ -592,6 +647,11 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 			cfg.FilterRules[j] = c.Filters[name]
 		}
 
+		_, err := bf.NewBinlogEvent(cfg.CaseSensitive, cfg.FilterRules)
+		if err != nil {
+			return nil, terror.ErrConfigBinlogEventFilter.Delegate(err)
+		}
+
 		cfg.ColumnMappingRules = make([]*column.Rule, len(inst.ColumnMappingRules))
 		for j, name := range inst.ColumnMappingRules {
 			cfg.ColumnMappingRules[j] = c.ColumnMappings[name]
@@ -605,7 +665,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 
 		cfg.CleanDumpFile = c.CleanDumpFile
 
-		err := cfg.Adjust(true)
+		err = cfg.Adjust(true)
 		if err != nil {
 			return nil, terror.Annotatef(err, "source %s", inst.SourceID)
 		}

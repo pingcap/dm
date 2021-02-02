@@ -511,25 +511,31 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	r.cfg.EnableGTID = true
 	r.cfg.BinlogGTID = "24ecd093-8cec-11e9-aa0d-0242ac170002:1-23"
 	r.cfg.BinLogName = "mysql-bin.000005"
+
+	c.Assert(r.setSyncConfig(), IsNil)
+	// all adjusted gset should be empty since we didn't flush logs
+	emptyGTID, err := gtid.ParserGTID(r.cfg.Flavor, "")
+	c.Assert(err, IsNil)
+
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid001 := fmt.Sprintf("%s.000001", uuid)
-	t.verifyMetadata(c, r, uuid001, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, r.cfg.BinlogGTID, []string{uuid001})
+	t.verifyMetadata(c, r, uuid001, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, emptyGTID.String(), []string{uuid001})
 
 	// re-setup meta again, often happen when connecting a server behind a VIP.
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid002 := fmt.Sprintf("%s.000002", uuid)
-	t.verifyMetadata(c, r, uuid002, minCheckpoint, r.cfg.BinlogGTID, []string{uuid001, uuid002})
+	t.verifyMetadata(c, r, uuid002, minCheckpoint, emptyGTID.String(), []string{uuid001, uuid002})
 
 	r.cfg.BinLogName = "mysql-bin.000002"
 	r.cfg.BinlogGTID = "24ecd093-8cec-11e9-aa0d-0242ac170002:1-50,24ecd093-8cec-11e9-aa0d-0242ac170003:1-50"
 	r.cfg.UUIDSuffix = 2
 	c.Assert(r.reSetupMeta(ctx), IsNil)
-	t.verifyMetadata(c, r, uuid002, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, r.cfg.BinlogGTID, []string{uuid002})
+	t.verifyMetadata(c, r, uuid002, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, emptyGTID.String(), []string{uuid002})
 
 	// re-setup meta again, often happen when connecting a server behind a VIP.
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid003 := fmt.Sprintf("%s.000003", uuid)
-	t.verifyMetadata(c, r, uuid003, minCheckpoint, r.cfg.BinlogGTID, []string{uuid002, uuid003})
+	t.verifyMetadata(c, r, uuid003, minCheckpoint, emptyGTID.String(), []string{uuid002, uuid003})
 }
 
 func (t *testRelaySuite) verifyMetadata(c *C, r *Relay, uuidExpected string,

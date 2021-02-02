@@ -86,6 +86,10 @@ func (s *Syncer) setInitActiveRelayLog(ctx context.Context) error {
 		activeUUID = latestUUID
 	}
 
+	if len(pos.Name) == 0 {
+		s.tctx.Logger.Warn("empty position, may because only specify GTID and hasn't saved according binlog position")
+		return nil
+	}
 	err = s.readerHub.UpdateActiveRelayLog(s.cfg.Name, activeUUID, pos.Name)
 	s.tctx.L().Info("current earliest active relay log", log.WrapStringerField("active relay log", s.readerHub.EarliestActiveRelayLog()))
 	return err
@@ -93,6 +97,11 @@ func (s *Syncer) setInitActiveRelayLog(ctx context.Context) error {
 
 func (s *Syncer) updateActiveRelayLog(pos mysql.Position) error {
 	if s.binlogType != LocalBinlog {
+		return nil
+	}
+
+	if len(pos.Name) == 0 {
+		s.tctx.Logger.Warn("empty position, may because only specify GTID and hasn't saved according binlog position")
 		return nil
 	}
 

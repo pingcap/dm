@@ -37,6 +37,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/common"
+	binlogReader "github.com/pingcap/dm/pkg/binlog/reader"
 	"github.com/pingcap/dm/pkg/conn"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -439,8 +440,8 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		binlogTransformDurationHistogram.Observe(time.Since(transformTimer).Seconds())
 		if len(tResult.NextLogName) > 0 && tResult.NextLogName > lastPos.Name {
 			lastPos = mysql.Position{
-				Name: string(tResult.NextLogName),
-				Pos:  uint32(tResult.LogPos),
+				Name: tResult.NextLogName,
+				Pos:  tResult.LogPos,
 			}
 			r.logger.Info("rotate event", zap.Stringer("position", lastPos))
 		}
@@ -509,7 +510,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		}
 
 		if needSavePos {
-			err = r.SaveMeta(lastPos, lastGTID)
+			err = r.SaveMeta(lastPos, lastGTID.Clone())
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v into meta", lastPos, lastGTID)
 			}
@@ -578,17 +579,27 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 	}
 
 	// try adjust meta with start pos from config
-	adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID, latestPosName, latestGTIDStr)
+	_, err = r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID, latestPosName, latestGTIDStr)
 	if err != nil {
 		return err
 	}
 
-	if adjusted {
-		_, pos := r.meta.Pos()
-		_, gtid := r.meta.GTID()
-		r.logger.Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gtid))
+	_, pos := r.meta.Pos()
+	_, gtid := r.meta.GTID()
+	if r.cfg.EnableGTID {
+		// Adjust given gtid
+		// This means we always pull the binlog from the beginning of file.
+		gtid, err = r.adjustGTID(ctx, gtid)
+		if err != nil {
+			return terror.Annotate(err, "fail to adjust gtid for relay")
+		}
+		err = r.SaveMeta(pos, gtid)
+		if err != nil {
+			return err
+		}
 	}
 
+	r.logger.Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gtid))
 	r.updateMetricsRelaySubDirIndex()
 	r.logger.Info("resetup meta", zap.String("uuid", uuid))
 
@@ -922,4 +933,18 @@ func (r *Relay) setSyncConfig() error {
 
 	r.syncerCfg = syncerCfg
 	return nil
+}
+
+// AdjustGTID implements Relay.AdjustGTID
+func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error) {
+	// setup a TCP binlog reader (because no relay can be used when upgrading).
+	syncCfg := r.syncerCfg
+	randomServerID, err := utils.ReuseServerID(ctx, r.cfg.ServerID, r.db)
+	if err != nil {
+		return nil, terror.Annotate(err, "fail to get random server id when relay adjust gtid")
+	}
+	syncCfg.ServerID = randomServerID
+
+	tcpReader := binlogReader.NewTCPReader(syncCfg)
+	return binlogReader.GetPreviousGTIDFromGTIDSet(ctx, tcpReader, gset)
 }
