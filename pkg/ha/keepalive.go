@@ -146,6 +146,7 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 			return nil
 		case newTTL := <-KeepAliveUpdateCh:
 			// create a new lease with new TTL, and overwrite original KV
+			oldLeaseID := leaseID
 			leaseID, err = grantAndPutKV(k, workerEventJSON, newTTL)
 			if err != nil {
 				keepAliveCancel() // make go vet happy
@@ -161,8 +162,13 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 				return err
 			}
 			log.L().Info("dynamically changed keepalive TTL to", zap.Int64("ttl in seconds", newTTL))
+
 			// after new keepalive is succeed, we cancel the old keepalive
 			oldCancel()
+			_, err2 := revokeLease(cli, oldLeaseID)
+			if err2 != nil {
+				log.L().Warn("fail to revoke lease", zap.Error(err))
+			}
 		}
 	}
 }
