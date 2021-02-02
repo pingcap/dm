@@ -41,10 +41,9 @@ var (
 )
 
 func init() {
-	failpoint.Inject("defaultKeepAliveTTLs", func(val failpoint.Value) {
+	failpoint.Inject("defaultKeepAliveTTL", func(val failpoint.Value) {
 		i := val.(int)
 		defaultKeepAliveTTL = int64(i)
-		defaultRelayKeepAliveTTL = int64(i)
 	})
 }
 
