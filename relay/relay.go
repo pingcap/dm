@@ -379,21 +379,19 @@ func (r *Relay) tryRecoverLatestFile(ctx context.Context, parser2 *parser.Parser
 				zap.Stringer("from position", latestPos), zap.Stringer("to position", result.LatestPos), log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
 
 			if result.LatestGTIDs != nil {
-				if mysqlGS, ok := result.LatestGTIDs.(*gtid.MySQLGTIDSet); ok {
-					// in MySQL, we expect `PreviousGTIDsEvent` contains ALL previous GTID sets, but in fact it may lack a part of them sometimes,
-					// e.g we expect `00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100`,
-					// but may be `00c04543-f584-11e9-a765-0242ac120002:50-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:60-100`.
-					// and when DM requesting MySQL to send binlog events with this EXCLUDED GTID sets, some errors like
-					// `ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.`
-					// may occur, so we force to reset the START part of any GTID set.
-					oldGs1 := mysqlGS.Clone()
-					if mysqlGS.ResetStart() {
-						r.logger.Warn("force to reset the start part of recovered GTID sets", zap.Stringer("from GTID set", oldGs1), zap.Stringer("to GTID set", mysqlGS))
-						// also need to reset start for `latestGTID`.
-						oldGs2 := latestGTID.Clone()
-						if latestGTID.(*gtid.MySQLGTIDSet).ResetStart() {
-							r.logger.Warn("force to reset the start part of latest GTID sets", zap.Stringer("from GTID set", oldGs2), zap.Stringer("to GTID set", latestGTID))
-						}
+				gs := result.LatestGTIDs
+				oldGs1 := gs.Clone()
+				// in MySQL, we expect `PreviousGTIDsEvent` contains ALL previous GTID sets, but in fact it may lack a part of them sometimes,
+				// e.g we expect `00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100`,
+				// but may be `00c04543-f584-11e9-a765-0242ac120002:50-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:60-100`.
+				// and when DM requesting MySQL to send binlog events with this EXCLUDED GTID sets, some errors like
+				// `ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.`
+				// may occur, so we force to reset the START part of any GTID set.
+				if gs.ResetStart() {
+					r.logger.Warn("force to reset the start part of recovered GTID sets", zap.Stringer("from GTID set", oldGs1), zap.Stringer("to GTID set", gs))
+					oldGs2 := latestGTID.Clone()
+					if latestGTID.ResetStart() {
+						r.logger.Warn("force to reset the start part of latest GTID sets", zap.Stringer("from GTID set", oldGs2), zap.Stringer("to GTID set", latestGTID))
 					}
 				}
 			}
@@ -1001,10 +999,8 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 	// `ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.`
 	// may occur, so we force to reset the START part of any GTID set.
 	oldGs := resultGs.Clone()
-	if mysqlGs, ok := resultGs.(*gtid.MySQLGTIDSet); ok {
-		if mysqlGs.ResetStart() {
-			r.logger.Warn("force to reset the start part of GTID sets", zap.Stringer("from GTID set", oldGs), zap.Stringer("to GTID set", mysqlGs))
-		}
+	if resultGs.ResetStart() {
+		r.logger.Warn("force to reset the start part of GTID sets", zap.Stringer("from GTID set", oldGs), zap.Stringer("to GTID set", resultGs))
 	}
 	return resultGs, nil
 }
