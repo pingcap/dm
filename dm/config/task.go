@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"sort"
 	"strings"
 	"time"
 
@@ -589,6 +590,7 @@ func (c *TaskConfig) adjust() error {
 	}
 
 	if len(unusedConfigs) != 0 {
+		sort.Strings(unusedConfigs)
 		return terror.ErrConfigGlobalConfigsUnused.Generate(unusedConfigs)
 	}
 

@@ -235,7 +235,7 @@ mysql-instances:
 	err = taskConfig.Decode(errorTaskConfig)
 	c.Check(err, NotNil)
 	//c.Assert(err, ErrorMatches, "*The configurations as following [route-rule-2 filter-rule-2 column-mapping-rule-2] are set in global configuration but*")
-	c.Assert(err, ErrorMatches, `[\s\S]*The configurations as following [\s\S]* are set in global configuration[\s\S]*`)
+	c.Assert(err, ErrorMatches, `[\s\S]*The configurations as following \[column-mapping-rule-2 filter-rule-2 route-rule-2\] are set in global configuration[\s\S]*`)
 }
 
 func (t *testConfig) TestInvalidTaskConfig(c *C) {
