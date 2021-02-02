@@ -37,7 +37,7 @@ import (
 var (
 	SampleConfigFile         string
 	defaultKeepAliveTTL      = int64(60)      // 1 minute
-	relayEnabledKeepAliveTTL = int64(60 * 30) // 30 minutes
+	defaultRelayKeepAliveTTL = int64(60 * 30) // 30 minutes
 )
 
 func init() {
@@ -66,6 +66,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: dm-master cluster's "${master-addr}")`)
 	fs.StringVar(&cfg.Name, "name", "", "human-readable name for DM-worker member")
 	fs.Int64Var(&cfg.KeepAliveTTL, "keepalive-ttl", defaultKeepAliveTTL, "dm-worker's TTL for keepalive with etcd (in seconds)")
+	fs.Int64Var(&cfg.RelayKeepAliveTTL, "relay-keepalive-ttl", defaultRelayKeepAliveTTL, "dm-worker's TTL for keepalive with etcd when handle relay enabled sources (in seconds)")
 
 	fs.StringVar(&cfg.SSLCA, "ssl-ca", "", "path of file that contains list of trusted SSL CAs for connection")
 	fs.StringVar(&cfg.SSLCert, "ssl-cert", "", "path of file that contains X509 certificate in PEM format for connection")
@@ -91,7 +92,8 @@ type Config struct {
 
 	ConfigFile string `toml:"config-file" json:"config-file"`
 	// TODO: in the future dm-workers should share a same ttl from dm-master
-	KeepAliveTTL int64 `toml:"keepalive-ttl" json:"keepalive-ttl"`
+	KeepAliveTTL      int64 `toml:"keepalive-ttl" json:"keepalive-ttl"`
+	RelayKeepAliveTTL int64 `toml:"relay-keepalive-ttl" json:"relay-keepalive-ttl"`
 
 	// tls config
 	config.Security

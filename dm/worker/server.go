@@ -385,6 +385,7 @@ func (s *Server) stopWorker(sourceID string) error {
 		s.Unlock()
 		return terror.ErrWorkerSourceNotMatch
 	}
+	s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
 	s.setWorker(nil, false)
 	s.Unlock()
 	w.Close()
@@ -588,13 +589,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 			return err
 		}
 		startRelay = !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
-		// change keepalive TTL to 30 minutes if it's default value
-		// is relayStage is not running, we choose to change keepalive here instead of at relayStage switching
-		if s.cfg.KeepAliveTTL == defaultKeepAliveTTL {
-			log.L().Warn("will increase keepalive TTL because relay is enabled and current TTL is default value", zap.Int64("change to", relayEnabledKeepAliveTTL))
-			s.cfg.KeepAliveTTL = relayEnabledKeepAliveTTL
-			ha.NotifyKeepAliveChange(relayEnabledKeepAliveTTL)
-		}
+		s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
 	}
 	go func() {
 		w.Start(startRelay)
