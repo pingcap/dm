@@ -144,22 +144,22 @@ func (s *Server) Start() error {
 	s.startKeepAlive()
 
 	s.wg.Add(1)
-	go func() {
+	go func(ctx context.Context) {
 		defer s.wg.Done()
 		for {
-			err1 := s.observeSourceBound(s.ctx, revBound)
+			err1 := s.observeSourceBound(ctx, revBound)
 			if err1 == nil {
 				return
 			}
 			s.stopKeepAlive()
 			select {
-			case <-s.ctx.Done():
+			case <-ctx.Done():
 				return
 			case <-time.After(time.Duration(s.cfg.KeepAliveTTL) * time.Second * 2):
 				s.startKeepAlive()
 			}
 		}
-	}()
+	}(s.ctx)
 
 	// create a cmux
 	m := cmux.New(s.rootLis)
