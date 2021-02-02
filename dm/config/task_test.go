@@ -234,7 +234,8 @@ mysql-instances:
 	taskConfig = NewTaskConfig()
 	err = taskConfig.Decode(errorTaskConfig)
 	c.Check(err, NotNil)
-	c.Assert(err, ErrorMatches, "*The configurations as following [route-rule-2 filter-rule-2 column-mapping-rule-2] are set in global configuration but*")
+	//c.Assert(err, ErrorMatches, "*The configurations as following [route-rule-2 filter-rule-2 column-mapping-rule-2] are set in global configuration but*")
+	c.Assert(err, ErrorMatches, `[\s\S]*The configurations as following [\s\S]* are set in global configuration[\s\S]*`)
 }
 
 func (t *testConfig) TestInvalidTaskConfig(c *C) {
@@ -469,7 +470,7 @@ filters:
 	c.Assert(err, IsNil)
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
-	c.Assert(err, IsNil)
+	c.Assert(err, NotNil)
 	c.Assert(taskConfig.IsSharding, IsTrue)
 	c.Assert(taskConfig.ShardMode, Equals, ShardOptimistic)
 	taskConfig.MySQLInstances[0].RouteRules = []string{"route-rule-1", "route-rule-2", "route-rule-1", "route-rule-2"}
