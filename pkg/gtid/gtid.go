@@ -15,7 +15,6 @@ package gtid
 
 import (
 	"fmt"
-	"reflect"
 	"sort"
 
 	"github.com/pingcap/errors"
@@ -288,7 +287,7 @@ func (g *MySQLGTIDSet) String() string {
 	if g.set == nil {
 		return ""
 	}
-	return g.set.String()
+	return sortGTIDSet(g)
 }
 
 /************************ mariadb gtid set ***************************/
@@ -450,22 +449,20 @@ func (m *MariadbGTIDSet) String() string {
 	if m.set == nil {
 		return ""
 	}
-	return m.set.String()
+	return sortGTIDSet(m)
 }
 
-func DisplayGTIDSet(gs interface{}) string {
+func sortGTIDSet(gs interface{}) string {
 	var (
 		sortedGTIDSet string
 		gtids         []string
 	)
-	switch reflect.TypeOf(gs).Elem().Name() {
-	case "MySQLGTIDSet":
-		m := gs.(*MySQLGTIDSet)
+	switch m := gs.(type) {
+	case *MySQLGTIDSet:
 		for _, v := range m.set.Sets {
 			gtids = append(gtids, fmt.Sprintf("%v", v))
 		}
-	case "MariadbGTIDSet":
-		m := gs.(*MariadbGTIDSet)
+	case *MariadbGTIDSet:
 		for k, v := range m.set.Sets {
 			gtids = append(gtids, fmt.Sprintf("%d:%v", k, v))
 		}
