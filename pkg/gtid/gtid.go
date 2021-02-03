@@ -14,6 +14,10 @@
 package gtid
 
 import (
+	"fmt"
+	"reflect"
+	"sort"
+
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
@@ -447,4 +451,31 @@ func (m *MariadbGTIDSet) String() string {
 		return ""
 	}
 	return m.set.String()
+}
+
+func DisplayGTIDSet(gs interface{}) string {
+	var (
+		sortedGTIDSet string
+		gtids         []string
+	)
+	switch reflect.TypeOf(gs).Elem().Name() {
+	case "MySQLGTIDSet":
+		m := gs.(*MySQLGTIDSet)
+		for _, v := range m.set.Sets {
+			gtids = append(gtids, fmt.Sprintf("%v", v))
+		}
+	case "MariadbGTIDSet":
+		m := gs.(*MariadbGTIDSet)
+		for k, v := range m.set.Sets {
+			gtids = append(gtids, fmt.Sprintf("%d:%v", k, v))
+		}
+	}
+	sort.Strings(gtids)
+	for i, gtid := range gtids {
+		sortedGTIDSet += gtid
+		if i != len(gtids)-1 {
+			sortedGTIDSet += ", "
+		}
+	}
+	return sortedGTIDSet
 }
