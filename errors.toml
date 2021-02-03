@@ -1391,7 +1391,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-relay-unit-30044]
-message = "receive fake rotate event with differend server_id"
+message = "receive fake rotate event with different server_id"
 description = ""
 workaround = "Please use `resume-relay` command if upstream database has changed"
 tags = ["internal", "high"]
@@ -2961,4 +2961,3 @@ message = ""
 description = ""
 workaround = ""
 tags = ["not-set", "high"]
-
