@@ -556,29 +556,64 @@ func (r *BinlogReader) parseFile(
 		return false, false, latestPos, "", "", nil
 	}
 
-	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(r.cfg.RelayDir, currentUUID, fullPath, latestPos, r.uuids)
-	if err != nil {
+	switchCh := make(chan SwitchPath, 1)
+	switchErrCh := make(chan error, 1)
+	updatePathCh := make(chan string, 1)
+	updateErrCh := make(chan error, 1)
+	newCtx, cancel := context.WithCancel(ctx)
+	var wg sync.WaitGroup
+	defer func() {
+		cancel()
+		wg.Wait()
+	}()
+
+	wg.Add(1)
+	go func(latestPos int64) {
+		defer func() {
+			close(switchCh)
+			close(switchErrCh)
+			wg.Done()
+		}()
+		needSwitchSubDir(newCtx, r.cfg.RelayDir, currentUUID, fullPath, latestPos, switchCh, switchErrCh)
+	}(latestPos)
+
+	wg.Add(1)
+	go func(latestPos int64) {
+		defer func() {
+			close(updatePathCh)
+			close(updateErrCh)
+			wg.Done()
+		}()
+		relaySubDirUpdated(newCtx, watcherInterval, relayLogDir, fullPath, relayLogFile, latestPos, updatePathCh, updateErrCh)
+	}(latestPos)
+
+	select {
+	case <-ctx.Done():
+		return false, false, 0, "", "", nil
+	case switchResp := <-switchCh:
+		// wait to ensure old file not updated
+		pathUpdated := utils.WaitSomething(3, watcherInterval, func() bool { return len(updatePathCh) > 0 })
+		if pathUpdated {
+			// re-parse it
+			return false, true, latestPos, "", "", nil
+		}
+		// update new uuid
+		if err = r.updateUUIDs(); err != nil {
+			return false, false, 0, "", "", nil
+		}
+		return true, false, 0, switchResp.nextUUID, switchResp.nextBinlogName, nil
+	case updatePath := <-updatePathCh:
+		if strings.HasSuffix(updatePath, relayLogFile) {
+			// current relay log file updated, need to re-parse it
+			return false, true, latestPos, "", "", nil
+		}
+		// need parse next relay log file or re-collect files
+		return false, false, latestPos, "", "", nil
+	case err := <-switchErrCh:
 		return false, false, 0, "", "", err
-	} else if needReParse {
-		// need to re-parse the current relay log file
-		return false, true, latestPos, "", "", nil
-	} else if needSwitch {
-		// need to switch to next relay sub directory
-		return true, false, 0, nextUUID, nextBinlogName, nil
-	}
-
-	updatedPath, err := relaySubDirUpdated(ctx, watcherInterval, relayLogDir, fullPath, relayLogFile, latestPos)
-	if err != nil {
+	case err := <-updateErrCh:
 		return false, false, 0, "", "", err
 	}
-
-	if strings.HasSuffix(updatedPath, relayLogFile) {
-		// current relay log file updated, need to re-parse it
-		return false, true, latestPos, "", "", nil
-	}
-
-	// need parse next relay log file or re-collect files
-	return false, false, latestPos, "", "", nil
 }
 
 // updateUUIDs re-parses UUID index file and updates UUID list
