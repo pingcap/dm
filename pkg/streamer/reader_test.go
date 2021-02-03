@@ -281,12 +281,12 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	// no valid update for relay sub dir, timeout
+	// no valid update for relay sub dir, timeout, no error
 	ctx1, cancel1 := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel1()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
 		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
-	c.Assert(errors.Cause(err), Equals, ctx1.Err())
+	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(0))
@@ -374,6 +374,7 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 
 	// invalid UUID in UUID list, error
 	r.uuids = []string{currentUUID, "invalid.uuid"}
+	t.writeUUIDs(c, baseDir, r.uuids)
 	ctx1, cancel1 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel1()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
@@ -388,6 +389,7 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 
 	// next sub dir exits, need to switch
 	r.uuids = []string{currentUUID, switchedUUID}
+	t.writeUUIDs(c, baseDir, r.uuids)
 	err = os.MkdirAll(nextRelayDir, 0700)
 	c.Assert(err, IsNil)
 	err = ioutil.WriteFile(nextFullPath, replication.BinLogFileHeader, 0600)
@@ -433,12 +435,12 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	c.Assert(err, IsNil)
 	defer f.Close()
 
-	// file has no data, meet io.EOF error (when reading file header) and ignore it. but will get `context deadline exceeded` error
+	// file has no data, meet io.EOF error (when reading file header) and ignore it.
 	ctx1, cancel1 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel1()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
 		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
-	c.Assert(errors.Cause(err), Equals, context.DeadlineExceeded)
+	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(0))
@@ -1157,5 +1159,21 @@ func (t *testReaderSuite) uuidListToBytes(c *C, UUIDs []string) []byte {
 		_, err = buf.WriteString("\n")
 		c.Assert(err, IsNil)
 	}
+	return buf.Bytes()
+}
+
+func (t *testReaderSuite) writeUUIDs(c *C, relayDir string, UUIDs []string) []byte {
+	indexPath := path.Join(relayDir, utils.UUIDIndexFilename)
+	var buf bytes.Buffer
+	for _, uuid := range UUIDs {
+		_, err := buf.WriteString(uuid)
+		c.Assert(err, IsNil)
+		_, err = buf.WriteString("\n")
+		c.Assert(err, IsNil)
+	}
+
+	// write the index file
+	err := ioutil.WriteFile(indexPath, buf.Bytes(), 0600)
+	c.Assert(err, IsNil)
 	return buf.Bytes()
 }
