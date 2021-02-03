@@ -59,6 +59,7 @@ var (
 type Server struct {
 	sync.Mutex
 	wg     sync.WaitGroup
+	kaWg   sync.WaitGroup
 	closed sync2.AtomicBool
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -151,13 +152,7 @@ func (s *Server) Start() error {
 			if err1 == nil {
 				return
 			}
-			s.stopKeepAlive()
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(time.Duration(s.cfg.KeepAliveTTL) * time.Second * 2):
-				s.startKeepAlive()
-			}
+			s.restartKeepAlive()
 		}
 	}(s.ctx)
 
@@ -201,18 +196,24 @@ func (s *Server) Start() error {
 // worker keepalive with master
 // If worker loses connect from master, it would stop all task and try to connect master again.
 func (s *Server) startKeepAlive() {
-	s.wg.Add(1)
+	s.kaWg.Add(1)
 	s.kaCtx, s.kaCancel = context.WithCancel(s.ctx)
 	go s.doStartKeepAlive()
 }
 
 func (s *Server) doStartKeepAlive() {
-	defer s.wg.Done()
+	defer s.kaWg.Done()
 	s.KeepAlive()
 }
 
 func (s *Server) stopKeepAlive() {
 	s.kaCancel()
+	s.kaWg.Wait()
+}
+
+func (s *Server) restartKeepAlive() {
+	s.stopKeepAlive()
+	s.startKeepAlive()
 }
 
 func (s *Server) syncMasterEndpoints(ctx context.Context) {
@@ -354,6 +355,7 @@ func (s *Server) doClose() {
 // Close close the RPC server, this function can be called multiple times
 func (s *Server) Close() {
 	s.doClose()
+	s.stopKeepAlive()
 	s.wg.Wait()
 }
 
