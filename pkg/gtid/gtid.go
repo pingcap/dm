@@ -14,10 +14,13 @@
 package gtid
 
 import (
-	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
+	"fmt"
+	"reflect"
+	"sort"
 
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/errors"
+	"github.com/siddontang/go-mysql/mysql"
 )
 
 // Set provide gtid operations for syncer
@@ -447,4 +450,32 @@ func (m *MariadbGTIDSet) String() string {
 		return ""
 	}
 	return m.set.String()
+}
+
+func DisplayGTIDSet(gs interface{}) string {
+	var (
+		displayGTIDs string
+		gtids        []string
+	)
+	switch reflect.TypeOf(gs).Elem().Name() {
+	case "MariadbGTIDSet":
+		m := gs.(*MariadbGTIDSet)
+		for k, v := range m.set.Sets {
+			gtids = append(gtids, fmt.Sprintf("%d:%v", k, v))
+		}
+	case "MySQLGTIDSet":
+		m := gs.(*MySQLGTIDSet)
+		for _, v := range m.set.Sets {
+			gtids = append(gtids, fmt.Sprintf("%v", v))
+		}
+	}
+	sort.Strings(gtids)
+	for i, gtid := range gtids {
+		if i != len(gtid)-1 {
+			displayGTIDs += gtid + ", "
+		} else {
+			displayGTIDs += gtid
+		}
+	}
+	return displayGTIDs
 }
