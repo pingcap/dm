@@ -569,21 +569,13 @@ func (r *BinlogReader) parseFile(
 
 	wg.Add(1)
 	go func(latestPos int64) {
-		defer func() {
-			close(switchCh)
-			close(switchErrCh)
-			wg.Done()
-		}()
+		defer wg.Done()
 		needSwitchSubDir(newCtx, r.cfg.RelayDir, currentUUID, fullPath, latestPos, switchCh, switchErrCh)
 	}(latestPos)
 
 	wg.Add(1)
 	go func(latestPos int64) {
-		defer func() {
-			close(updatePathCh)
-			close(updateErrCh)
-			wg.Done()
-		}()
+		defer wg.Done()
 		relaySubDirUpdated(newCtx, watcherInterval, relayLogDir, fullPath, relayLogFile, latestPos, updatePathCh, updateErrCh)
 	}(latestPos)
 
