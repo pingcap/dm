@@ -204,18 +204,54 @@ func (r *Relay) process(ctx context.Context) error {
 		return err
 	}
 
-	if isNew || r.cfg.UUIDSuffix > 0 {
+	if isNew {
 		// re-setup meta for new server or new source
 		err = r.reSetupMeta(ctx)
 		if err != nil {
 			return err
 		}
 	} else {
+		// connected to last source
 		r.updateMetricsRelaySubDirIndex()
 		// if not a new server, try to recover the latest relay log file.
 		err = r.tryRecoverLatestFile(ctx, parser2)
 		if err != nil {
 			return err
+		}
+
+		// resuming will take the risk that upstream has purge the binlog relay is needed.
+		// when this worker is down, HA may schedule the source to other workers and forward the sync progress,
+		// and then when the source is scheduled back to this worker, we could start relay from sync checkpoint's
+		// location which is newer, and now could purge the outdated relay logs.
+		//
+		// locations in `r.cfg` is set to min needed location of subtasks (higher priority) or source config specified
+		isRelayMetaOutdated := false
+		neededBinlogName := r.cfg.BinLogName
+		neededBinlogGset, err2 := gtid.ParserGTID(r.cfg.Flavor, r.cfg.BinlogGTID)
+		if err2 != nil {
+			return err2
+		}
+		if r.cfg.EnableGTID {
+			_, metaGset := r.meta.GTID()
+			if neededBinlogGset.Contain(metaGset) && !neededBinlogGset.Equal(metaGset) {
+				isRelayMetaOutdated = true
+			}
+		} else {
+			_, metaPos := r.meta.Pos()
+			if neededBinlogName > metaPos.Name {
+				isRelayMetaOutdated = true
+			}
+		}
+
+		if isRelayMetaOutdated {
+			err2 = r.PurgeRelayDir()
+			if err2 != nil {
+				return err2
+			}
+			err2 = r.SaveMeta(mysql.Position{Name: neededBinlogName, Pos: binlog.MinPosition.Pos}, neededBinlogGset)
+			if err2 != nil {
+				return err2
+			}
 		}
 	}
 
@@ -279,6 +315,7 @@ func (r *Relay) process(ctx context.Context) error {
 func (r *Relay) PurgeRelayDir() error {
 	dir := r.cfg.RelayDir
 	d, err := os.Open(dir)
+	r.logger.Info("will try purge whole relay dir for new relay log", zap.String("relayDir", dir))
 	// fail to open dir, return directly
 	if err != nil {
 		if err == os.ErrNotExist {
@@ -334,26 +371,27 @@ func (r *Relay) tryRecoverLatestFile(ctx context.Context, parser2 *parser.Parser
 	// NOTE: recover a relay log file with too many binlog events may take a little long time.
 	result, err := writer2.Recover(ctx)
 	if err == nil {
-		if result.Recovered {
+		relayLogHasMore := result.LatestPos.Compare(latestPos) > 0 ||
+			(result.LatestGTIDs != nil && !result.LatestGTIDs.Equal(latestGTID) && result.LatestGTIDs.Contain(latestGTID))
+
+		if result.Truncated || relayLogHasMore {
 			r.logger.Warn("relay log file recovered",
 				zap.Stringer("from position", latestPos), zap.Stringer("to position", result.LatestPos), log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
 
 			if result.LatestGTIDs != nil {
-				if mysqlGS, ok := result.LatestGTIDs.(*gtid.MySQLGTIDSet); ok {
-					// in MySQL, we expect `PreviousGTIDsEvent` contains ALL previous GTID sets, but in fact it may lack a part of them sometimes,
-					// e.g we expect `00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100`,
-					// but may be `00c04543-f584-11e9-a765-0242ac120002:50-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:60-100`.
-					// and when DM requesting MySQL to send binlog events with this EXCLUDED GTID sets, some errors like
-					// `ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.`
-					// may occur, so we force to reset the START part of any GTID set.
-					oldGs1 := mysqlGS.Clone()
-					if mysqlGS.ResetStart() {
-						r.logger.Warn("force to reset the start part of recovered GTID sets", zap.Stringer("from GTID set", oldGs1), zap.Stringer("to GTID set", mysqlGS))
-						// also need to reset start for `latestGTID`.
-						oldGs2 := latestGTID.Clone()
-						if latestGTID.(*gtid.MySQLGTIDSet).ResetStart() {
-							r.logger.Warn("force to reset the start part of latest GTID sets", zap.Stringer("from GTID set", oldGs2), zap.Stringer("to GTID set", latestGTID))
-						}
+				gs := result.LatestGTIDs
+				oldGs1 := gs.Clone()
+				// in MySQL, we expect `PreviousGTIDsEvent` contains ALL previous GTID sets, but in fact it may lack a part of them sometimes,
+				// e.g we expect `00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100`,
+				// but may be `00c04543-f584-11e9-a765-0242ac120002:50-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:60-100`.
+				// and when DM requesting MySQL to send binlog events with this EXCLUDED GTID sets, some errors like
+				// `ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.`
+				// may occur, so we force to reset the START part of any GTID set.
+				if gs.ResetStart() {
+					r.logger.Warn("force to reset the start part of recovered GTID sets", zap.Stringer("from GTID set", oldGs1), zap.Stringer("to GTID set", gs))
+					oldGs2 := latestGTID.Clone()
+					if latestGTID.ResetStart() {
+						r.logger.Warn("force to reset the start part of latest GTID sets", zap.Stringer("from GTID set", oldGs2), zap.Stringer("to GTID set", latestGTID))
 					}
 				}
 			}
@@ -369,12 +407,7 @@ func (r *Relay) tryRecoverLatestFile(ctx context.Context, parser2 *parser.Parser
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v after recovered", result.LatestPos, result.LatestGTIDs)
 			}
-		} else if result.LatestPos.Compare(latestPos) > 0 ||
-			(result.LatestGTIDs != nil && !result.LatestGTIDs.Equal(latestGTID) && result.LatestGTIDs.Contain(latestGTID)) {
-			r.logger.Warn("relay log file have more events",
-				zap.Stringer("after position", latestPos), zap.Stringer("until position", result.LatestPos), log.WrapStringerField("after GTID set", latestGTID), log.WrapStringerField("until GTID set", result.LatestGTIDs))
 		}
-
 	}
 	return terror.Annotatef(err, "recover for UUID %s with config %+v", uuid, cfg)
 }
@@ -585,21 +618,21 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 	}
 
 	_, pos := r.meta.Pos()
-	_, gtid := r.meta.GTID()
+	_, gs := r.meta.GTID()
 	if r.cfg.EnableGTID {
 		// Adjust given gtid
 		// This means we always pull the binlog from the beginning of file.
-		gtid, err = r.adjustGTID(ctx, gtid)
+		gs, err = r.adjustGTID(ctx, gs)
 		if err != nil {
 			return terror.Annotate(err, "fail to adjust gtid for relay")
 		}
-		err = r.SaveMeta(pos, gtid)
+		err = r.SaveMeta(pos, gs)
 		if err != nil {
 			return err
 		}
 	}
 
-	r.logger.Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gtid))
+	r.logger.Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gs))
 	r.updateMetricsRelaySubDirIndex()
 	r.logger.Info("resetup meta", zap.String("uuid", uuid))
 
@@ -629,6 +662,11 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 	for {
 		select {
 		case <-flushTicker.C:
+			r.RLock()
+			if r.closed.Get() {
+				r.RUnlock()
+				return
+			}
 			if r.meta.Dirty() {
 				err := r.FlushMeta()
 				if err != nil {
@@ -637,28 +675,43 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 					r.logger.Info("flush meta finished", zap.Stringer("meta", r.meta))
 				}
 			}
+			r.RUnlock()
 		case <-masterStatusTicker.C:
+			r.RLock()
+			if r.closed.Get() {
+				r.RUnlock()
+				return
+			}
 			ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 			pos, _, err := utils.GetMasterStatus(ctx2, r.db, r.cfg.Flavor)
 			cancel2()
 			if err != nil {
 				r.logger.Warn("get master status", zap.Error(err))
+				r.RUnlock()
 				continue
 			}
 			index, err := binlog.GetFilenameIndex(pos.Name)
 			if err != nil {
 				r.logger.Error("parse binlog file name", zap.String("file name", pos.Name), log.ShortError(err))
+				r.RUnlock()
 				continue
 			}
 			relayLogFileGauge.WithLabelValues("master").Set(float64(index))
 			relayLogPosGauge.WithLabelValues("master").Set(float64(pos.Pos))
+			r.RUnlock()
 		case <-trimUUIDsTicker.C:
+			r.RLock()
+			if r.closed.Get() {
+				r.RUnlock()
+				return
+			}
 			trimmed, err := r.meta.TrimUUIDs()
 			if err != nil {
 				r.logger.Error("trim UUIDs", zap.Error(err))
 			} else if len(trimmed) > 0 {
 				r.logger.Info("trim UUIDs", zap.String("UUIDs", strings.Join(trimmed, ";")))
 			}
+			r.RUnlock()
 		case <-ctx.Done():
 			return
 		}
@@ -936,6 +989,8 @@ func (r *Relay) setSyncConfig() error {
 }
 
 // AdjustGTID implements Relay.AdjustGTID
+// starting sync at returned gset will wholly fetch a binlog from beginning of the file.
+// TODO: check if starting fetch at the middle of binlog is also acceptable
 func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error) {
 	// setup a TCP binlog reader (because no relay can be used when upgrading).
 	syncCfg := r.syncerCfg
@@ -946,5 +1001,20 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 	syncCfg.ServerID = randomServerID
 
 	tcpReader := binlogReader.NewTCPReader(syncCfg)
-	return binlogReader.GetPreviousGTIDFromGTIDSet(ctx, tcpReader, gset)
+	resultGs, err := binlogReader.GetPreviousGTIDFromGTIDSet(ctx, tcpReader, gset)
+	if err != nil {
+		return nil, err
+	}
+
+	// in MySQL, we expect `PreviousGTIDsEvent` contains ALL previous GTID sets, but in fact it may lack a part of them sometimes,
+	// e.g we expect `00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100`,
+	// but may be `00c04543-f584-11e9-a765-0242ac120002:50-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:60-100`.
+	// and when DM requesting MySQL to send binlog events with this EXCLUDED GTID sets, some errors like
+	// `ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.`
+	// may occur, so we force to reset the START part of any GTID set.
+	oldGs := resultGs.Clone()
+	if resultGs.ResetStart() {
+		r.logger.Warn("force to reset the start part of GTID sets", zap.Stringer("from GTID set", oldGs), zap.Stringer("to GTID set", resultGs))
+	}
+	return resultGs, nil
 }
