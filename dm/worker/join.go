@@ -97,7 +97,7 @@ func (s *Server) KeepAlive() {
 		})
 
 		{
-			err1 := ha.KeepAlive(s.ctx, s.etcdClient, s.cfg.Name, s.cfg.KeepAliveTTL)
+			err1 := ha.KeepAlive(s.kaCtx, s.etcdClient, s.cfg.Name, s.cfg.KeepAliveTTL)
 			log.L().Warn("keepalive with master goroutine paused", zap.Error(err1))
 		}
 
@@ -110,7 +110,7 @@ func (s *Server) KeepAlive() {
 			return // return if failed to stop the worker.
 		}
 		select {
-		case <-s.ctx.Done():
+		case <-s.kaCtx.Done():
 			log.L().Info("keepalive with master goroutine exited!")
 			return
 		case <-time.After(retryConnectSleepTime):
