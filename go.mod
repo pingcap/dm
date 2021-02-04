@@ -29,7 +29,7 @@ require (
 	github.com/rakyll/statik v0.1.6
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
-	github.com/siddontang/go-mysql v0.0.0-20200222075837-12e89848f047
+	github.com/siddontang/go-mysql v1.1.1-0.20200824131207-0c5789dd0bd3
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
