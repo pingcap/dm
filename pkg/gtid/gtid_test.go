@@ -402,8 +402,9 @@ func (s *testGTIDSuite) TestMariaDBGTIDTruncate(c *C) {
 	}
 }
 
-func (s *testGTIDSuite) TestMySQLGTIDResetStart(c *C) {
+func (s *testGTIDSuite) TestGTIDSetResetStart(c *C) {
 	var (
+		gMaria, _ = ParserGTID("", "1-2-3")
 		flavor    = "mysql"
 		gNil      *MySQLGTIDSet
 		gEmpty, _ = ParserGTID(flavor, "")
@@ -413,24 +414,29 @@ func (s *testGTIDSuite) TestMySQLGTIDResetStart(c *C) {
 		g4, _     = ParserGTID(flavor, "00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100")
 		g5, _     = ParserGTID(flavor, "00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:50-100")
 		g6, _     = ParserGTID(flavor, "00c04543-f584-11e9-a765-0242ac120002:40-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:50-100")
+		g7, _     = ParserGTID(flavor, "00c04543-f584-11e9-a765-0242ac120002:10-20:30-100")
 	)
 
+	c.Assert(gMaria.ResetStart(), IsFalse)
 	c.Assert(gNil.ResetStart(), IsFalse)
-	c.Assert(gEmpty.(*MySQLGTIDSet).ResetStart(), IsFalse)
+	c.Assert(gEmpty.ResetStart(), IsFalse)
 
-	c.Assert(g1.(*MySQLGTIDSet).ResetStart(), IsFalse)
+	c.Assert(g1.ResetStart(), IsFalse)
 
-	c.Assert(g2.(*MySQLGTIDSet).ResetStart(), IsTrue)
+	c.Assert(g2.ResetStart(), IsTrue)
 	c.Assert(g2.Equal(g1), IsTrue)
 
-	c.Assert(g3.(*MySQLGTIDSet).ResetStart(), IsTrue)
+	c.Assert(g3.ResetStart(), IsTrue)
 	c.Assert(g3.Equal(g1), IsTrue)
 
-	c.Assert(g4.(*MySQLGTIDSet).ResetStart(), IsFalse)
+	c.Assert(g4.ResetStart(), IsFalse)
 
-	c.Assert(g5.(*MySQLGTIDSet).ResetStart(), IsTrue)
+	c.Assert(g5.ResetStart(), IsTrue)
 	c.Assert(g5.Equal(g4), IsTrue)
 
-	c.Assert(g6.(*MySQLGTIDSet).ResetStart(), IsTrue)
+	c.Assert(g6.ResetStart(), IsTrue)
 	c.Assert(g6.Equal(g4), IsTrue)
+
+	c.Assert(g7.ResetStart(), IsTrue)
+	// TODO: currently g7 will become "00c04543-f584-11e9-a765-0242ac120002:1-20:1-100", will fix soon
 }

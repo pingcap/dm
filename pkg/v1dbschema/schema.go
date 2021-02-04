@@ -185,10 +185,8 @@ func getGTIDsForPos(tctx *tcontext.Context, pos gmysql.Position, tcpReader reade
 	defer func() {
 		if err == nil && gs != nil {
 			oldGs := gs.Clone()
-			if mysqlGs, ok := gs.(*gtid.MySQLGTIDSet); ok {
-				if mysqlGs.ResetStart() {
-					tctx.L().Warn("force to reset the start part of GTID sets", zap.Stringer("from GTID set", oldGs), zap.Stringer("to GTID set", mysqlGs))
-				}
+			if gs.ResetStart() {
+				tctx.L().Warn("force to reset the start part of GTID sets", zap.Stringer("from GTID set", oldGs), zap.Stringer("to GTID set", gs))
 			}
 		}
 	}()
