@@ -233,6 +233,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	cfg.Join = masterAddr
 	cfg.KeepAliveTTL = keepAliveTTL
+	cfg.RelayKeepAliveTTL = keepAliveTTL
 
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:            GetJoinURLs(cfg.Join),
@@ -344,6 +345,7 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	cfg.Join = masterAddr
 	cfg.KeepAliveTTL = keepAliveTTL
+	cfg.RelayKeepAliveTTL = keepAliveTTL
 
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:            GetJoinURLs(cfg.Join),

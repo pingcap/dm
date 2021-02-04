@@ -311,6 +311,7 @@ const (
 	codeRelayRemoveFileFail
 	codeRelayPurgeArgsNotValid
 	codePreviousGTIDsNotValid
+	codeRotateEventWithDifferentServerID
 )
 
 // Dump unit error code
@@ -899,6 +900,7 @@ var (
 	ErrRelayRemoveFileFail               = New(codeRelayRemoveFileFail, ClassRelayUnit, ScopeInternal, LevelHigh, "remove relay log %s %s", "")
 	ErrRelayPurgeArgsNotValid            = New(codeRelayPurgeArgsNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "args (%T) %+v not valid", "")
 	ErrPreviousGTIDsNotValid             = New(codePreviousGTIDsNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "previousGTIDs %s not valid", "")
+	ErrRotateEventWithDifferentServerID  = New(codeRotateEventWithDifferentServerID, ClassRelayUnit, ScopeInternal, LevelHigh, "receive fake rotate event with different server_id", "Please use `resume-relay` command if upstream database has changed")
 
 	// Dump unit error
 	ErrDumpUnitRuntime        = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper/dumpling runs with error, with output (may empty): %s", "")

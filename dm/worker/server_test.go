@@ -23,6 +23,7 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/tikv/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
@@ -109,6 +110,7 @@ func (t *testServer) TestServer(c *C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	cfg.KeepAliveTTL = keepAliveTTL
+	cfg.RelayKeepAliveTTL = keepAliveTTL
 
 	NewRelayHolder = NewDummyRelayHolder
 	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
@@ -225,6 +227,128 @@ func (t *testServer) TestServer(c *C) {
 	t.testWorker(c)
 }
 
+func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
+	var (
+		masterAddr   = "127.0.0.1:8261"
+		keepAliveTTL = int64(1)
+	)
+	// start etcd server
+	etcdDir := c.MkDir()
+	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
+	c.Assert(err, IsNil)
+	defer ETCD.Close()
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.KeepAliveTTL = keepAliveTTL
+
+	// new etcd client
+	etcdCli, err := clientv3.New(clientv3.Config{
+		Endpoints:            GetJoinURLs(cfg.Join),
+		DialTimeout:          dialTimeout,
+		DialKeepAliveTime:    keepaliveTime,
+		DialKeepAliveTimeout: keepaliveTimeout,
+	})
+	c.Assert(err, IsNil)
+
+	// watch worker event(oneline or offline)
+	var (
+		wg       sync.WaitGroup
+		startRev int64 = 1
+	)
+	workerEvCh := make(chan ha.WorkerEvent, 10)
+	workerErrCh := make(chan error, 10)
+	ctx, cancel := context.WithCancel(context.Background())
+	wg.Add(1)
+	go func() {
+		defer func() {
+			close(workerEvCh)
+			close(workerErrCh)
+			wg.Done()
+		}()
+		ha.WatchWorkerEvent(ctx, etcdCli, startRev, workerEvCh, workerErrCh)
+	}()
+
+	// start worker server
+	s := NewServer(cfg)
+	defer s.Close()
+	go func() {
+		err1 := s.Start()
+		c.Assert(err1, IsNil)
+	}()
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return !s.closed.Get()
+	}), IsTrue)
+
+	// check if the worker is online
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		select {
+		case ev := <-workerEvCh:
+			if !ev.IsDeleted {
+				return true
+			}
+		default:
+		}
+		return false
+	}), IsTrue)
+
+	// enable failpont
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/ha/FailToGetSourceCfg", `return(true)`), IsNil)
+	sourceCfg := loadSourceConfigWithoutPassword(c)
+	sourceCfg.EnableRelay = false
+	_, err = ha.PutSourceCfg(etcdCli, sourceCfg)
+	c.Assert(err, IsNil)
+	sourceBound := ha.NewSourceBound(sourceCfg.SourceID, s.cfg.Name)
+	_, err = ha.PutSourceBound(etcdCli, sourceBound)
+	c.Assert(err, IsNil)
+
+	// do check until worker offline
+	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
+		select {
+		case ev := <-workerEvCh:
+			if ev.IsDeleted {
+				return true
+			}
+		default:
+		}
+		return false
+	}), IsTrue)
+
+	// check if the worker is online
+	c.Assert(utils.WaitSomething(5, time.Duration(s.cfg.KeepAliveTTL)*time.Second, func() bool {
+		select {
+		case ev := <-workerEvCh:
+			if !ev.IsDeleted {
+				return true
+			}
+		default:
+		}
+		return false
+	}), IsTrue)
+
+	// stop watching and disable failpoint
+	cancel()
+	wg.Wait()
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/ha/FailToGetSourceCfg"), IsNil)
+
+	_, err = ha.PutSourceBound(etcdCli, sourceBound)
+	c.Assert(err, IsNil)
+	_, err = ha.PutSourceCfg(etcdCli, sourceCfg)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		s.Mutex.Lock()
+		defer s.Mutex.Unlock()
+		return s.worker != nil
+	}), IsTrue)
+
+	_, err = ha.DeleteSourceBound(etcdCli, s.cfg.Name)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		s.Mutex.Lock()
+		defer s.Mutex.Unlock()
+		return s.worker == nil
+	}), IsTrue)
+}
+
 func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	var (
 		masterAddr   = "127.0.0.1:8261"
@@ -238,6 +362,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	cfg.KeepAliveTTL = keepAliveTTL
+	cfg.RelayKeepAliveTTL = keepAliveTTL
 
 	s := NewServer(cfg)
 	etcdCli, err := clientv3.New(clientv3.Config{
@@ -375,7 +500,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, dir string, hostName string) *embed.Etcd {
 	ETCD.Close()
 	time.Sleep(6 * time.Second)
-	// When worker server fail to keepalive with etcd, sever should close its worker
+	// When worker server fail to keepalive with etcd, server should close its worker
 	c.Assert(s.getWorker(true), IsNil)
 	c.Assert(s.getSourceStatus(true).Result, IsNil)
 	ETCD, err := createMockETCD(dir, "http://"+hostName)

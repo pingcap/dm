@@ -485,6 +485,19 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			continue
 		}
 
+		// fake rotate event
+		if _, ok := e.Event.(*replication.RotateEvent); ok && e.Header.Timestamp == 0 && e.Header.LogPos == 0 {
+			isNew, err2 := isNewServer(ctx, r.meta.UUID(), r.db, r.cfg.Flavor)
+			if err2 != nil {
+				return err2
+			}
+			// upstream database switch
+			// report an error, let outer logic handle it
+			if isNew {
+				return terror.ErrRotateEventWithDifferentServerID.Generate()
+			}
+		}
+
 		// 3. save events into file
 		writeTimer := time.Now()
 		r.logger.Debug("writing binlog event", zap.Reflect("header", e.Header))
@@ -621,6 +634,7 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 
 	r.logger.Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gs))
 	r.updateMetricsRelaySubDirIndex()
+	r.logger.Info("resetup meta", zap.String("uuid", uuid))
 
 	return nil
 }

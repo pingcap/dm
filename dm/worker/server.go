@@ -43,13 +43,14 @@ import (
 )
 
 var (
-	cmuxReadTimeout         = 10 * time.Second
-	dialTimeout             = 3 * time.Second
-	keepaliveTimeout        = 3 * time.Second
-	keepaliveTime           = 3 * time.Second
-	retryConnectSleepTime   = time.Second
-	syncMasterEndpointsTime = 3 * time.Second
-	getMinLocForSubTaskFunc = getMinLocForSubTask
+	cmuxReadTimeout           = 10 * time.Second
+	dialTimeout               = 3 * time.Second
+	keepaliveTimeout          = 3 * time.Second
+	keepaliveTime             = 3 * time.Second
+	retryGetSourceBoundConfig = 5
+	retryConnectSleepTime     = time.Second
+	syncMasterEndpointsTime   = 3 * time.Second
+	getMinLocForSubTaskFunc   = getMinLocForSubTask
 )
 
 // Server accepts RPC requests
@@ -58,9 +59,13 @@ var (
 type Server struct {
 	sync.Mutex
 	wg     sync.WaitGroup
+	kaWg   sync.WaitGroup
 	closed sync2.AtomicBool
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	kaCtx    context.Context
+	kaCancel context.CancelFunc
 
 	cfg *Config
 
@@ -137,21 +142,19 @@ func (s *Server) Start() error {
 		s.wg.Done()
 	}()
 
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		// TODO: handle fatal error from observeSourceBound
-		//nolint:errcheck
-		s.observeSourceBound(s.ctx, revBound)
-	}()
+	s.startKeepAlive()
 
 	s.wg.Add(1)
-	go func() {
+	go func(ctx context.Context) {
 		defer s.wg.Done()
-		// worker keepalive with master
-		// If worker loses connect from master, it would stop all task and try to connect master again.
-		s.KeepAlive()
-	}()
+		for {
+			err1 := s.observeSourceBound(ctx, revBound)
+			if err1 == nil {
+				return
+			}
+			s.restartKeepAlive()
+		}
+	}(s.ctx)
 
 	// create a cmux
 	m := cmux.New(s.rootLis)
@@ -188,6 +191,29 @@ func (s *Server) Start() error {
 		err = nil
 	}
 	return terror.ErrWorkerStartService.Delegate(err)
+}
+
+// worker keepalive with master
+// If worker loses connect from master, it would stop all task and try to connect master again.
+func (s *Server) startKeepAlive() {
+	s.kaWg.Add(1)
+	s.kaCtx, s.kaCancel = context.WithCancel(s.ctx)
+	go s.doStartKeepAlive()
+}
+
+func (s *Server) doStartKeepAlive() {
+	defer s.kaWg.Done()
+	s.KeepAlive()
+}
+
+func (s *Server) stopKeepAlive() {
+	s.kaCancel()
+	s.kaWg.Wait()
+}
+
+func (s *Server) restartKeepAlive() {
+	s.stopKeepAlive()
+	s.startKeepAlive()
 }
 
 func (s *Server) syncMasterEndpoints(ctx context.Context) {
@@ -257,6 +283,10 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 					bound, cfg, rev1, err1 := ha.GetSourceBoundConfig(s.etcdClient, s.cfg.Name)
 					if err1 != nil {
 						log.L().Error("get source bound from etcd failed, will retry later", zap.Error(err1), zap.Int("retryNum", retryNum))
+						retryNum++
+						if retryNum > retryGetSourceBoundConfig && etcdutil.IsLimitedRetryableError(err1) {
+							return err1
+						}
 						break
 					}
 					rev = rev1
@@ -282,7 +312,6 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 						}
 					}
 				}
-				retryNum++
 			}
 		} else {
 			if err != nil {
@@ -326,6 +355,7 @@ func (s *Server) doClose() {
 // Close close the RPC server, this function can be called multiple times
 func (s *Server) Close() {
 	s.doClose()
+	s.stopKeepAlive()
 	s.wg.Wait()
 }
 
@@ -385,6 +415,7 @@ func (s *Server) stopWorker(sourceID string) error {
 		s.Unlock()
 		return terror.ErrWorkerSourceNotMatch
 	}
+	s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
 	s.setWorker(nil, false)
 	s.Unlock()
 	w.Close()
@@ -588,6 +619,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 			return err
 		}
 		startRelay = !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
+		s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
 	}
 	go func() {
 		w.Start(startRelay)
