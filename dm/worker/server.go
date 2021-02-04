@@ -385,6 +385,7 @@ func (s *Server) stopWorker(sourceID string) error {
 		s.Unlock()
 		return terror.ErrWorkerSourceNotMatch
 	}
+	s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
 	s.setWorker(nil, false)
 	s.Unlock()
 	w.Close()
@@ -588,6 +589,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 			return err
 		}
 		startRelay = !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
+		s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
 	}
 	go func() {
 		w.Start(startRelay)

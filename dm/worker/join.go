@@ -118,3 +118,15 @@ func (s *Server) KeepAlive() {
 		}
 	}
 }
+
+// UpdateKeepAliveTTL updates keepalive key with new lease TTL in place, to avoid watcher observe a DELETE event
+// this function should not be concurrently called
+func (s *Server) UpdateKeepAliveTTL(newTTL int64) {
+	if ha.CurrentKeepAliveTTL == newTTL {
+		log.L().Info("not changing keepalive TTL, skip", zap.Int64("ttl", newTTL))
+		return
+	}
+	ha.CurrentKeepAliveTTL = newTTL
+	ha.KeepAliveUpdateCh <- newTTL
+	log.L().Debug("received update keepalive TTL request, should be updated soon", zap.Int64("new ttl", newTTL))
+}
