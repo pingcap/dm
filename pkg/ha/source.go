@@ -16,6 +16,7 @@ package ha
 import (
 	"context"
 
+	"github.com/pingcap/failpoint"
 	"go.etcd.io/etcd/clientv3"
 
 	"github.com/pingcap/dm/dm/common"
@@ -50,6 +51,9 @@ func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (map[string]co
 		resp *clientv3.GetResponse
 		err  error
 	)
+	failpoint.Inject("FailToGetSourceCfg", func() {
+		failpoint.Return(scm, 0, context.DeadlineExceeded)
+	})
 	if source != "" {
 		resp, err = cli.Get(ctx, common.UpstreamConfigKeyAdapter.Encode(source), clientv3.WithRev(rev))
 	} else {
