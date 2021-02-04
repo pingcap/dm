@@ -990,7 +990,6 @@ func (r *Relay) setSyncConfig() error {
 
 // AdjustGTID implements Relay.AdjustGTID
 // starting sync at returned gset will wholly fetch a binlog from beginning of the file.
-// TODO: check if starting fetch at the middle of binlog is also acceptable
 func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error) {
 	// setup a TCP binlog reader (because no relay can be used when upgrading).
 	syncCfg := r.syncerCfg
