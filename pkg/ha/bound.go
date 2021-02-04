@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/pingcap/failpoint"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
@@ -119,6 +120,9 @@ func GetSourceBound(cli *clientv3.Client, worker string) (map[string]SourceBound
 		resp *clientv3.GetResponse
 		err  error
 	)
+	failpoint.Inject("FailToGetSourceCfg", func() {
+		failpoint.Return(sbm, 0, context.DeadlineExceeded)
+	})
 	if worker != "" {
 		resp, err = cli.Get(ctx, common.UpstreamBoundWorkerKeyAdapter.Encode(worker))
 	} else {
