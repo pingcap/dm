@@ -109,10 +109,11 @@ function run() {
         "start-task $cur/conf/dm-task.yaml"
 
     # both with and without relay should error
+    # (different version of MySQL has different error message, only compare error code here)
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status $TASK_NAME" \
         "no relay pos match gtid" 1 \
-        "but the master has purged binary logs containing GTIDs that the slave requires" 1
+        "ERROR 1236 (HY000)" 1
 }
 
 cleanup_data gtid
