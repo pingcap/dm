@@ -47,12 +47,11 @@ function run() {
     new_gtid2=${uuid2}:$((end_gtid_num2 + 3))
     echo "new_gtid1 $new_gtid1 new_gtid2 $new_gtid2"
 
-    run_sql "SET gtid_next='$new_gtid1';insert into gtid.t1 values (3);SET gtid_next='AUTOMATIC';" $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql "SET gtid_next='$new_gtid2';insert into gtid.t2 values (3);SET gtid_next='AUTOMATIC'" $MYSQL_PORT2 $MYSQL_PASSWORD2
-    run_sql "flush logs" $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql "flush logs" $MYSQL_PORT2 $MYSQL_PASSWORD2
-    run_sql "insert into gtid.t1 values (4)" $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql "insert into gtid.t2 values (4)" $MYSQL_PORT2 $MYSQL_PASSWORD2
+    run_sql_source1 "SET gtid_next='$new_gtid1';insert into gtid.t1 values (3);SET gtid_next='AUTOMATIC';"
+    run_sql_source2 "SET gtid_next='$new_gtid2';insert into gtid.t2 values (3);SET gtid_next='AUTOMATIC'"
+    run_sql_both_source "flush logs"
+    run_sql_source1 "insert into gtid.t1 values (4)"
+    run_sql_source2 "insert into gtid.t2 values (4)"
     # now Previous_gtids event is 09bec856-ba95-11ea-850a-58f2b4af5188:1-4:6
 
     sleep 1
@@ -60,8 +59,8 @@ function run() {
         "stop-task test"\
         "\"result\": true" 3
 
-    run_sql "insert into gtid.t1 values (5)" $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql "insert into gtid.t2 values (5)" $MYSQL_PORT2 $MYSQL_PASSWORD2
+    run_sql_source1 "insert into gtid.t1 values (5)"
+    run_sql_source2 "insert into gtid.t2 values (5)"
     # now Previous_gtids event is 09bec856-ba95-11ea-850a-58f2b4af5188:1-6
 
     # remove relay-dir, now relay starting point(syncer checkpoint) should be 09bec856-ba95-11ea-850a-58f2b4af5188:1-4:6
@@ -76,12 +75,44 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
+    # we didn't lost 09bec856-ba95-11ea-850a-58f2b4af5188:5, which is insert into gtid.tx values (5)
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/dm-task.yaml"\
         "\"result\": true" 3
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    # TODO: test if should error, error indeed
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "stop-task test"\
+        "\"result\": true" 3
+
+    run_sql_source1 "insert into gtid.t1 values (7)"
+    run_sql_source2 "insert into gtid.t2 values (7)"
+    run_sql_both_source "flush logs"
+    run_sql_source1 "insert into gtid.t1 values (8)"
+    run_sql_source2 "insert into gtid.t2 values (8)"
+    sleep 2
+    run_sql_both_source "purge binary logs before '`date '+%Y-%m-%d %H:%M:%S'`'"
+
+    # remove relay-dir, now relay starting point(syncer checkpoint) should be 09bec856-ba95-11ea-850a-58f2b4af5188:1-6
+    # which is already purged
+    pkill -hup dm-worker.test 2>/dev/null || true
+    check_port_offline $WORKER1_PORT 20
+    check_port_offline $WORKER2_PORT 20
+    rm -rf $WORK_DIR/worker1/relay_log || true
+    rm -rf $WORK_DIR/worker2/relay_log || true
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/dm-task.yaml"
+
+    # both with and without relay should error
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status $TASK_NAME" \
+        "no relay pos match gtid" 1 \
+        "but the master has purged binary logs containing GTIDs that the slave requires" 1
 }
 
 cleanup_data gtid

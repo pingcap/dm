@@ -393,7 +393,6 @@ func (r *Relay) tryRecoverLatestFile(ctx context.Context, parser2 *parser.Parser
 				r.logger.Warn("some GTIDs are missing in the meta data, this is usually due to the process was interrupted while writing the meta data. force to update GTIDs",
 					log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
 				latestGTID = result.LatestGTIDs.Clone()
-				// TODO: check this Truncate support gap
 			} else if err = latestGTID.Truncate(result.LatestGTIDs); err != nil {
 				return err
 			}
