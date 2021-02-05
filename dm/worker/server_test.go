@@ -110,6 +110,7 @@ func (t *testServer) TestServer(c *C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	cfg.KeepAliveTTL = keepAliveTTL
+	cfg.RelayKeepAliveTTL = keepAliveTTL
 
 	NewRelayHolder = NewDummyRelayHolder
 	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
@@ -361,6 +362,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	cfg.KeepAliveTTL = keepAliveTTL
+	cfg.RelayKeepAliveTTL = keepAliveTTL
 
 	s := NewServer(cfg)
 	etcdCli, err := clientv3.New(clientv3.Config{
@@ -498,7 +500,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, dir string, hostName string) *embed.Etcd {
 	ETCD.Close()
 	time.Sleep(6 * time.Second)
-	// When worker server fail to keepalive with etcd, sever should close its worker
+	// When worker server fail to keepalive with etcd, server should close its worker
 	c.Assert(s.getWorker(true), IsNil)
 	c.Assert(s.getSourceStatus(true).Result, IsNil)
 	ETCD, err := createMockETCD(dir, "http://"+hostName)
