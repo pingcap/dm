@@ -387,6 +387,10 @@ func (r *Relay) tryRecoverLatestFile(ctx context.Context, parser2 *parser.Parser
 				if err2 != nil {
 					return err2
 				}
+				latestGTID, err2 = utils.AddGSetWithPurged(ctx, latestGTID, dbConn)
+				if err2 != nil {
+					return err2
+				}
 			}
 
 			if result.LatestGTIDs != nil && !result.LatestGTIDs.Equal(latestGTID) && result.LatestGTIDs.Contain(latestGTID) {
