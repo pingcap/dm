@@ -40,7 +40,6 @@ type Set interface {
 	// NOTE: the original GTID sets should contain the end GTID sets, otherwise it's invalid.
 	// like truncating `00c04543-f584-11e9-a765-0242ac120002:1-100` with `00c04543-f584-11e9-a765-0242ac120002:40-60`
 	// should become `00c04543-f584-11e9-a765-0242ac120002:1-60`.
-	// TODO: support gap
 	Truncate(end Set) error
 
 	String() string
