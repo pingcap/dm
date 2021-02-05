@@ -473,3 +473,46 @@ func ExtractTiDBVersion(version string) (*semver.Version, error) {
 	rawVersion = strings.TrimPrefix(rawVersion, "v")
 	return semver.NewVersion(rawVersion)
 }
+
+// AddGSetWithPurged is used to handle this case: https://github.com/pingcap/dm/issues/1418
+// we might get a gtid set from Previous_gtids event in binlog, but that gtid set can't be used to start a gtid sync
+// because it doesn't cover all gtid_purged. The error of using it will be
+// ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.
+// so we add gtid_purged to it.
+func AddGSetWithPurged(ctx context.Context, gset gtid.Set, conn *sql.Conn) (gtid.Set, error) {
+	if _, ok := gset.(*gtid.MariadbGTIDSet); ok {
+		// TODO: check MariaDB really don't need this (MariaDB doesn't have a gtid_purged though)
+		return gset, nil
+	}
+
+	var (
+		gtidStr string
+		row     *sql.Row
+		err     error
+	)
+
+	failpoint.Inject("GetGTIDPurged", func(val failpoint.Value) {
+		str := val.(string)
+		gtidStr = str
+		failpoint.Goto("bypass")
+	})
+	row = conn.QueryRowContext(ctx, "select @@GLOBAL.gtid_purged")
+	err = row.Scan(&gtidStr)
+	if err != nil {
+		log.L().Error("can't get @@GLOBAL.gtid_purged when try to add it to gtid set", zap.Error(err))
+		return gset, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	failpoint.Label("bypass")
+	if gtidStr == "" {
+		return gset, nil
+	}
+
+	newGset := gset.Origin()
+	err = newGset.Update(gtidStr)
+	if err != nil {
+		return nil, err
+	}
+	ret := &gtid.MySQLGTIDSet{}
+	_ = ret.Set(newGset)
+	return ret, nil
+}
