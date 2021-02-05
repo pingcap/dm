@@ -554,8 +554,6 @@ func (t *testRelaySuite) verifyMetadata(c *C, r *Relay, uuidExpected string,
 	c.Assert(err, IsNil)
 	c.Assert(uuid, Equals, uuidExpected)
 	c.Assert(pos, DeepEquals, posExpected)
-	fmt.Println(gs)
-	fmt.Println(gsExpected)
 	c.Assert(gs.Equal(gsExpected), IsTrue)
 
 	indexFile := filepath.Join(r.cfg.RelayDir, utils.UUIDIndexFilename)
