@@ -88,7 +88,7 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 	// recover
 	rres, err := w.Recover(context.Background())
 	c.Assert(err, check.IsNil)
-	c.Assert(rres.Recovered, check.IsFalse)
+	c.Assert(rres.Truncated, check.IsFalse)
 
 	// write event
 	res, err := w.WriteEvent(ev)
@@ -599,7 +599,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	// try recover, but in fact do nothing
 	result, err := w.Recover(context.Background())
 	c.Assert(err, check.IsNil)
-	c.Assert(result.Recovered, check.IsFalse)
+	c.Assert(result.Truncated, check.IsFalse)
 	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
 	c.Assert(result.LatestGTIDs, check.DeepEquals, expectedGTIDs)
 
@@ -629,7 +629,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	// try recover, truncate the incomplete event
 	result, err = w.Recover(context.Background())
 	c.Assert(err, check.IsNil)
-	c.Assert(result.Recovered, check.IsTrue)
+	c.Assert(result.Truncated, check.IsTrue)
 	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
 	c.Assert(result.LatestGTIDs, check.DeepEquals, expectedGTIDs)
 
@@ -657,7 +657,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	// try recover, truncate the incomplete transaction
 	result, err = w.Recover(context.Background())
 	c.Assert(err, check.IsNil)
-	c.Assert(result.Recovered, check.IsTrue)
+	c.Assert(result.Truncated, check.IsTrue)
 	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
 	c.Assert(result.LatestGTIDs, check.DeepEquals, expectedGTIDs)
 
@@ -688,7 +688,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(err, check.IsNil)
 	result, err = w.Recover(context.Background())
 	c.Assert(err, check.IsNil)
-	c.Assert(result.Recovered, check.IsFalse)
+	c.Assert(result.Truncated, check.IsFalse)
 	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
 	c.Assert(result.LatestGTIDs, check.DeepEquals, expectedGTIDs)
 
@@ -715,7 +715,7 @@ func (t *testFileWriterSuite) TestRecoverMySQLNone(c *check.C) {
 	// no file specified to recover
 	result, err := w1.Recover(context.Background())
 	c.Assert(err, check.IsNil)
-	c.Assert(result.Recovered, check.IsFalse)
+	c.Assert(result.Truncated, check.IsFalse)
 
 	cfg.Filename = "mysql-bin.000001"
 	w2 := NewFileWriter(log.L(), cfg, t.parser)
@@ -725,5 +725,5 @@ func (t *testFileWriterSuite) TestRecoverMySQLNone(c *check.C) {
 	// file not exist, no need to recover
 	result, err = w2.Recover(context.Background())
 	c.Assert(err, check.IsNil)
-	c.Assert(result.Recovered, check.IsFalse)
+	c.Assert(result.Truncated, check.IsFalse)
 }

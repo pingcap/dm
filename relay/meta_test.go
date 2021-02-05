@@ -16,6 +16,7 @@ package relay
 import (
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
 
 	. "github.com/pingcap/check"
@@ -96,7 +97,16 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 	dirty := lm.Dirty()
 	c.Assert(dirty, IsFalse)
 
+	// set currentUUID because lm.doFlush need it
+	currentUUID := "uuid.000001"
+	c.Assert(os.MkdirAll(path.Join(dir, currentUUID), 0777), IsNil)
+	setLocalMetaWithCurrentUUID := func() {
+		lm = NewLocalMeta("mysql", dir)
+		lm.(*LocalMeta).currentUUID = currentUUID
+	}
+
 	// adjust to start pos
+	setLocalMetaWithCurrentUUID()
 	latestBinlogName := "mysql-bin.000009"
 	latestGTIDStr := "85ab69d1-b21f-11e6-9c5e-64006a8978d2:45-57"
 	cs0 := cases[0]
@@ -104,43 +114,49 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(adjusted, IsTrue)
 	uuid, pos = lm.Pos()
-	c.Assert(uuid, Equals, "")
+	c.Assert(uuid, Equals, currentUUID)
 	c.Assert(pos.Name, Equals, cs0.pos.Name)
 	uuid, gset = lm.GTID()
-	c.Assert(uuid, Equals, "")
+	c.Assert(uuid, Equals, currentUUID)
 	c.Assert(gset.String(), Equals, "")
 
 	// adjust to start pos with enableGTID
+	setLocalMetaWithCurrentUUID()
 	adjusted, err = lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), true, latestBinlogName, latestGTIDStr)
 	c.Assert(err, IsNil)
 	c.Assert(adjusted, IsTrue)
 	uuid, pos = lm.Pos()
-	c.Assert(uuid, Equals, "")
+	c.Assert(uuid, Equals, currentUUID)
 	c.Assert(pos.Name, Equals, cs0.pos.Name)
 	uuid, gset = lm.GTID()
-	c.Assert(uuid, Equals, "")
+	c.Assert(uuid, Equals, currentUUID)
 	c.Assert(gset, DeepEquals, cs0.gset)
 
 	// adjust to the last binlog if start pos is empty
+	setLocalMetaWithCurrentUUID()
 	adjusted, err = lm.AdjustWithStartPos("", cs0.gset.String(), false, latestBinlogName, latestGTIDStr)
 	c.Assert(err, IsNil)
 	c.Assert(adjusted, IsTrue)
 	uuid, pos = lm.Pos()
-	c.Assert(uuid, Equals, "")
+	c.Assert(uuid, Equals, currentUUID)
 	c.Assert(pos.Name, Equals, latestBinlogName)
 	uuid, gset = lm.GTID()
-	c.Assert(uuid, Equals, "")
+	c.Assert(uuid, Equals, currentUUID)
 	c.Assert(gset.String(), Equals, "")
 
+	setLocalMetaWithCurrentUUID()
 	adjusted, err = lm.AdjustWithStartPos("", "", true, latestBinlogName, latestGTIDStr)
 	c.Assert(err, IsNil)
 	c.Assert(adjusted, IsTrue)
 	uuid, pos = lm.Pos()
-	c.Assert(uuid, Equals, "")
+	c.Assert(uuid, Equals, currentUUID)
 	c.Assert(pos.Name, Equals, latestBinlogName)
 	uuid, gset = lm.GTID()
-	c.Assert(uuid, Equals, "")
+	c.Assert(uuid, Equals, currentUUID)
 	c.Assert(gset.String(), Equals, latestGTIDStr)
+
+	// reset
+	lm.(*LocalMeta).currentUUID = ""
 
 	for _, cs := range cases {
 		err = lm.AddDir(cs.uuid, nil, nil, 0)
@@ -209,7 +225,7 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 	dirty = lm.Dirty()
 	c.Assert(dirty, IsFalse)
 
-	currentUUID, pos := lm.Pos()
+	currentUUID, pos = lm.Pos()
 	c.Assert(currentUUID, Equals, cs.uuidWithSuffix)
 	c.Assert(pos, DeepEquals, cs.pos)
 
