@@ -481,7 +481,6 @@ func ExtractTiDBVersion(version string) (*semver.Version, error) {
 // so we add gtid_purged to it.
 func AddGSetWithPurged(ctx context.Context, gset gtid.Set, conn *sql.Conn) (gtid.Set, error) {
 	if _, ok := gset.(*gtid.MariadbGTIDSet); ok {
-		// TODO: check MariaDB really don't need this (MariaDB doesn't have a gtid_purged though)
 		return gset, nil
 	}
 
