@@ -22,7 +22,6 @@ schema = "dmctl"
 table = "t_target"
 ignore-columns = ["id"]
 is-sharding = true
-index-fields = "b"
 
 [[table-config.source-tables]]
 instance-id = "source-1"

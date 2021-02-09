@@ -22,7 +22,6 @@ schema = "safe_mode_target"
 table = "t_target"
 ignore-columns = ["id"]
 is-sharding = true
-index-field = "uid"
 
 [[table-config.source-tables]]
 instance-id = "source-1"

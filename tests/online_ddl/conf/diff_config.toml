@@ -22,7 +22,6 @@ schema = "online_ddl"
 table = "t_target"
 ignore-columns = ["id"]
 is-sharding = true
-index-field = "uid"
 
 [[table-config.source-tables]]
 instance-id = "source-1"
