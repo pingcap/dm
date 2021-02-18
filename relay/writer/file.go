@@ -411,7 +411,7 @@ func (w *FileWriter) doRecovering(ctx context.Context) (RecoverResult, error) {
 	// in most cases, we think the file is fine, so compare the size is simpler.
 	if fs.Size() == latestPos {
 		return RecoverResult{
-			Recovered:   false, // no recovering for the file
+			Truncated:   false,
 			LatestPos:   gmysql.Position{Name: w.filename.Get(), Pos: uint32(latestPos)},
 			LatestGTIDs: latestGTIDs,
 		}, nil
@@ -431,7 +431,7 @@ func (w *FileWriter) doRecovering(ctx context.Context) (RecoverResult, error) {
 	}
 
 	return RecoverResult{
-		Recovered:   true,
+		Truncated:   true,
 		LatestPos:   gmysql.Position{Name: w.filename.Get(), Pos: uint32(latestPos)},
 		LatestGTIDs: latestGTIDs,
 	}, nil

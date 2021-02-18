@@ -42,6 +42,9 @@ type Set interface {
 	// should become `00c04543-f584-11e9-a765-0242ac120002:1-60`.
 	Truncate(end Set) error
 
+	// ResetStart reset the start of interval to 1 (only meaningful for MySQLGTIDSet), returns true if Set is changed
+	ResetStart() bool
+
 	String() string
 }
 
@@ -260,7 +263,6 @@ func (g *MySQLGTIDSet) Truncate(end Set) error {
 // ResetStart resets the start part of GTID sets,
 // like `00c04543-f584-11e9-a765-0242ac120002:40-60` will be reset to `00c04543-f584-11e9-a765-0242ac120002:1-60`.
 // return `true` if reset real happen.
-// NOTE: for MariaDB GTID, no this function exists because its format is `domainID-serverID-SeqNum`.
 func (g *MySQLGTIDSet) ResetStart() bool {
 	if g == nil || g.set == nil {
 		return false
@@ -440,6 +442,11 @@ func (m *MariadbGTIDSet) Truncate(end Set) error {
 	}
 
 	return nil
+}
+
+// ResetStart does nothing because for MariaDB its GTID set format is `domainID-serverID-SeqNum`.
+func (m *MariadbGTIDSet) ResetStart() bool {
+	return false
 }
 
 func (m *MariadbGTIDSet) String() string {

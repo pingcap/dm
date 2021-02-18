@@ -84,6 +84,16 @@ func (s *testGTIDSuite) TestGTID(c *C) {
 	}
 }
 
+func (s *testGTIDSuite) TestSortingGTIDSet(c *C) {
+	// check mysql
+	gSet, err := ParserGTID("mysql", "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:1-94321383,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,05474d3c-28c7-11e7-8352-203db246dd3d:1-170,10b039fc-c843-11e7-8f6a-1866daf8d810:1-308290454,686e1ab6-c47e-11e7-a42c-6c92bf46f384:1-34981190,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423")
+	c.Assert(err, IsNil)
+	sortedGTIDSet := "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170,10b039fc-c843-11e7-8f6a-1866daf8d810:1-308290454,3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:1-94321383,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,686e1ab6-c47e-11e7-a42c-6c92bf46f384:1-34981190"
+	c.Assert(sortedGTIDSet, Equals, gSet.String())
+	// check mariadb
+	// TODO: when go-mysql add sorting for mariadb, finish here
+}
+
 func (s *testGTIDSuite) TestMinGTIDSet(c *C) {
 	gset := MinGTIDSet(mysql.MySQLFlavor)
 	_, ok := gset.(*MySQLGTIDSet)
@@ -392,8 +402,9 @@ func (s *testGTIDSuite) TestMariaDBGTIDTruncate(c *C) {
 	}
 }
 
-func (s *testGTIDSuite) TestMySQLGTIDResetStart(c *C) {
+func (s *testGTIDSuite) TestGTIDSetResetStart(c *C) {
 	var (
+		gMaria, _ = ParserGTID("", "1-2-3")
 		flavor    = "mysql"
 		gNil      *MySQLGTIDSet
 		gEmpty, _ = ParserGTID(flavor, "")
@@ -403,24 +414,29 @@ func (s *testGTIDSuite) TestMySQLGTIDResetStart(c *C) {
 		g4, _     = ParserGTID(flavor, "00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100")
 		g5, _     = ParserGTID(flavor, "00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:50-100")
 		g6, _     = ParserGTID(flavor, "00c04543-f584-11e9-a765-0242ac120002:40-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:50-100")
+		g7, _     = ParserGTID(flavor, "00c04543-f584-11e9-a765-0242ac120002:10-20:30-100")
 	)
 
+	c.Assert(gMaria.ResetStart(), IsFalse)
 	c.Assert(gNil.ResetStart(), IsFalse)
-	c.Assert(gEmpty.(*MySQLGTIDSet).ResetStart(), IsFalse)
+	c.Assert(gEmpty.ResetStart(), IsFalse)
 
-	c.Assert(g1.(*MySQLGTIDSet).ResetStart(), IsFalse)
+	c.Assert(g1.ResetStart(), IsFalse)
 
-	c.Assert(g2.(*MySQLGTIDSet).ResetStart(), IsTrue)
+	c.Assert(g2.ResetStart(), IsTrue)
 	c.Assert(g2.Equal(g1), IsTrue)
 
-	c.Assert(g3.(*MySQLGTIDSet).ResetStart(), IsTrue)
+	c.Assert(g3.ResetStart(), IsTrue)
 	c.Assert(g3.Equal(g1), IsTrue)
 
-	c.Assert(g4.(*MySQLGTIDSet).ResetStart(), IsFalse)
+	c.Assert(g4.ResetStart(), IsFalse)
 
-	c.Assert(g5.(*MySQLGTIDSet).ResetStart(), IsTrue)
+	c.Assert(g5.ResetStart(), IsTrue)
 	c.Assert(g5.Equal(g4), IsTrue)
 
-	c.Assert(g6.(*MySQLGTIDSet).ResetStart(), IsTrue)
+	c.Assert(g6.ResetStart(), IsTrue)
 	c.Assert(g6.Equal(g4), IsTrue)
+
+	c.Assert(g7.ResetStart(), IsTrue)
+	// TODO: currently g7 will become "00c04543-f584-11e9-a765-0242ac120002:1-20:1-100", will fix soon
 }

@@ -148,7 +148,17 @@ func DoOpsInOneCmpsTxnWithRetry(cli *clientv3.Client, cmps []clientv3.Cmp, opsTh
 // IsRetryableError check whether error is retryable error for etcd to build again
 func IsRetryableError(err error) bool {
 	switch errors.Cause(err) {
-	case v3rpc.ErrCompacted, v3rpc.ErrNoLeader, v3rpc.ErrNoSpace:
+	case v3rpc.ErrCompacted, v3rpc.ErrNoLeader, v3rpc.ErrNoSpace, context.DeadlineExceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsLimitedRetryableError check whether error is retryable error for etcd to build again in a limited number of times
+func IsLimitedRetryableError(err error) bool {
+	switch errors.Cause(err) {
+	case v3rpc.ErrNoSpace, context.DeadlineExceeded:
 		return true
 	default:
 		return false

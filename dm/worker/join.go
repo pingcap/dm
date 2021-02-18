@@ -97,7 +97,7 @@ func (s *Server) KeepAlive() {
 		})
 
 		{
-			err1 := ha.KeepAlive(s.ctx, s.etcdClient, s.cfg.Name, s.cfg.KeepAliveTTL)
+			err1 := ha.KeepAlive(s.kaCtx, s.etcdClient, s.cfg.Name, s.cfg.KeepAliveTTL)
 			log.L().Warn("keepalive with master goroutine paused", zap.Error(err1))
 		}
 
@@ -110,11 +110,23 @@ func (s *Server) KeepAlive() {
 			return // return if failed to stop the worker.
 		}
 		select {
-		case <-s.ctx.Done():
+		case <-s.kaCtx.Done():
 			log.L().Info("keepalive with master goroutine exited!")
 			return
 		case <-time.After(retryConnectSleepTime):
 			// Try to connect master again
 		}
 	}
+}
+
+// UpdateKeepAliveTTL updates keepalive key with new lease TTL in place, to avoid watcher observe a DELETE event
+// this function should not be concurrently called
+func (s *Server) UpdateKeepAliveTTL(newTTL int64) {
+	if ha.CurrentKeepAliveTTL == newTTL {
+		log.L().Info("not changing keepalive TTL, skip", zap.Int64("ttl", newTTL))
+		return
+	}
+	ha.CurrentKeepAliveTTL = newTTL
+	ha.KeepAliveUpdateCh <- newTTL
+	log.L().Debug("received update keepalive TTL request, should be updated soon", zap.Int64("new ttl", newTTL))
 }

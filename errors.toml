@@ -1000,6 +1000,12 @@ description = ""
 workaround = "Please check the `filters` config in source and task configuration files."
 tags = ["internal", "high"]
 
+[error.DM-config-20038]
+message = "The configurations as following %v are set in global configuration but instances don't use them"
+description = ""
+workaround = "Please check the configuration files."
+tags = ["internal", "high"]
+
 [error.DM-binlog-op-22001]
 message = ""
 description = ""
@@ -1382,6 +1388,12 @@ tags = ["internal", "high"]
 message = "previousGTIDs %s not valid"
 description = ""
 workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-relay-unit-30044]
+message = "receive fake rotate event with different server_id"
+description = ""
+workaround = "Please use `resume-relay` command if upstream database has changed"
 tags = ["internal", "high"]
 
 [error.DM-dump-unit-32001]
@@ -2949,4 +2961,3 @@ message = ""
 description = ""
 workaround = ""
 tags = ["not-set", "high"]
-

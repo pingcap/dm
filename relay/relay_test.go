@@ -206,7 +206,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	c.Assert(err, IsNil)
 	latestGTID2, err := gtid.ParserGTID(relayCfg.Flavor, latestGTIDStr2)
 	c.Assert(err, IsNil)
-	g, _, data := genBinlogEventsWithGTIDs(c, relayCfg.Flavor, previousGTIDSet, latestGTID1, latestGTID2)
+	g, events, data := genBinlogEventsWithGTIDs(c, relayCfg.Flavor, previousGTIDSet, latestGTID1, latestGTID2)
 
 	// write events into relay log file
 	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0600)
@@ -214,8 +214,11 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 
 	// all events/transactions are complete, no need to recover
 	c.Assert(r.tryRecoverLatestFile(context.Background(), parser2), IsNil)
-	// now, we do not update position/GTID set in meta if not recovered
-	t.verifyMetadata(c, r, uuidWithSuffix, startPos, "", []string{uuidWithSuffix})
+	// now, we will update position/GTID set in meta to latest location in relay logs
+	lastEvent := events[len(events)-1]
+	pos := startPos
+	pos.Pos = lastEvent.Header.LogPos
+	t.verifyMetadata(c, r, uuidWithSuffix, pos, recoverGTIDSetStr, []string{uuidWithSuffix})
 
 	// write some invalid data into the relay log file
 	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
