@@ -18,11 +18,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/siddontang/go-mysql/mysql"
+
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 var (
