@@ -179,7 +179,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	registerOnce.Do(metrics.RegistryMetrics)
 
-	// HTTP handlers on etcd's client IP:port
+	// HTTP handlers on etcd's client IP:port. etcd will add a builtin `/metrics` route
 	// NOTE: after received any HTTP request from chrome browser,
 	// the server may be blocked when closing sometime.
 	// And any request to etcd's builtin handler has the same problem.
@@ -187,10 +187,9 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// But I haven't figured it out.
 	// (maybe more requests are sent from chrome or its extensions).
 	userHandles := map[string]http.Handler{
-		"/apis/":   apiHandler,
-		"/status":  getStatusHandle(),
-		"/debug/":  getDebugHandler(),
-		"/metrics": metrics.GetMetricsHandler(),
+		"/apis/":  apiHandler,
+		"/status": getStatusHandle(),
+		"/debug/": getDebugHandler(),
 	}
 
 	// gRPC API server

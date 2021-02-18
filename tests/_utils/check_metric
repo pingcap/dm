@@ -16,10 +16,8 @@ shift 3
 
 counter=0
 while [ $counter -lt $retry_count ]; do
-    metric=$(curl -s http://127.0.0.1:$port/metrics | grep $metric_name | awk '{print $2}')
-    cmp1=$(awk 'BEGIN{ print "'$lower'"<"'$metric'" }')
-    cmp2=$(awk 'BEGIN{ print "'$metric'"<"'$upper'" }')
-    if [ $cmp1 -eq 1 ] && [ $cmp2 -eq 1 ]; then
+    metric=$(curl -s http://127.0.0.1:$port/metrics | grep $metric_name | grep -v "#" | awk '{print $2}')
+    if [ $lower -lt $metric ] && [ $metric -lt $upper ]; then
         exit 0
     fi
     ((counter+=1))
