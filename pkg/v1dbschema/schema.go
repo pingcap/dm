@@ -105,6 +105,10 @@ func updateSyncerCheckpoint(tctx *tcontext.Context, dbConn *conn.BaseConn, taskN
 			if err != nil {
 				return terror.Annotatef(err, "get GTID sets for position %s", pos)
 			}
+			gs, err = utils.AddGSetWithPurged(tctx.Context(), gs, dbConn.DBConn)
+			if err != nil {
+				return terror.Annotatef(err, "get GTID sets for position %s", pos)
+			}
 			logger.Info("got global checkpoint GTID sets", log.WrapStringerField("GTID sets", gs))
 		}
 	}
@@ -176,21 +180,6 @@ func getGlobalPos(tctx *tcontext.Context, dbConn *conn.BaseConn, tableName, sour
 
 // getGTIDsForPos gets the GTID sets for the position.
 func getGTIDsForPos(tctx *tcontext.Context, pos gmysql.Position, tcpReader reader.Reader) (gs gtid.Set, err error) {
-	// in MySQL, we expect `PreviousGTIDsEvent` contains ALL previous GTID sets, but in fact it may lack a part of them sometimes,
-	// e.g we expect `00c04543-f584-11e9-a765-0242ac120002:1-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-100`,
-	// but may be `00c04543-f584-11e9-a765-0242ac120002:50-100,03fc0263-28c7-11e7-a653-6c0b84d59f30:60-100`.
-	// and when DM requesting MySQL to send binlog events with this EXCLUDED GTID sets, some errors like
-	// `ERROR 1236 (HY000): The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires.`
-	// may occur, so we force to reset the START part of any GTID set.
-	defer func() {
-		if err == nil && gs != nil {
-			oldGs := gs.Clone()
-			if gs.ResetStart() {
-				tctx.L().Warn("force to reset the start part of GTID sets", zap.Stringer("from GTID set", oldGs), zap.Stringer("to GTID set", gs))
-			}
-		}
-	}()
-
 	// NOTE: because we have multiple unit test cases updating/clearing binlog in the upstream,
 	// we may encounter errors when reading binlog event but cleared by another test case.
 	failpoint.Inject("MockGetGTIDsForPos", func(val failpoint.Value) {
