@@ -8,8 +8,6 @@ check-thread-count = 4
 
 sample-percent = 100
 
-use-rowid = false
-
 use-checksum = true
 
 fix-sql-file = "fix.sql"
@@ -24,7 +22,6 @@ schema = "sequence_safe_mode_target"
 table = "t_target"
 ignore-columns = ["id"]
 is-sharding = true
-index-field = "uid"
 
 [[table-config.source-tables]]
 instance-id = "source-1"
