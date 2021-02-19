@@ -85,6 +85,7 @@ syncers:
   global:
     worker-count: 16
     batch: 100
+    checkpoint-flush-interval: 1
 
 filters:
   user-filter-1:
