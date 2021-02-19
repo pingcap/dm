@@ -37,7 +37,7 @@ func NewPurgeRelayCmd() *cobra.Command {
 		//Use:   "purge-relay <-w worker> [--inactive] [--time] [--filename] [--sub-dir]",
 		//Short: "purge dm-worker's relay log files, choose 1 of 2 methods",
 		Use:   "purge-relay <-s source> <-f filename> [--sub-dir directory]",
-		Short: "purge relay log files of the DM-worker according to the specified filename",
+		Short: "Purges relay log files of the DM-worker according to the specified filename",
 		RunE:  purgeRelayFunc,
 	}
 	//cmd.Flags().BoolP("inactive", "i", false, "whether try to purge all inactive relay log files")

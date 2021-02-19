@@ -75,7 +75,9 @@ function recover_max_binlog_size() {
 }
 
 function run() {
-    inject_points=("github.com/pingcap/dm/syncer/SyncerEventTimeout=return(1)")
+    inject_points=(
+        "github.com/pingcap/dm/pkg/streamer/SetHeartbeatInterval=return(1)"
+    )
     export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 
     run_sql "show variables like 'max_binlog_size'\G" $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -250,16 +252,22 @@ function run() {
 #    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10
 #    show_ddl_locks_no_locks $TASK_NAME
 
-    # sleep 1s to ensure syncer unit has flushed global checkpoint and updates
+    # make sure every shard table in source 1 has be forwarded to newer binlog, so older relay log could be purged
+    run_sql_source1 "flush logs"
+    run_sql_source1 "update dmctl.t_1 set d = '' where id = 13"
+    run_sql_source1 "update dmctl.t_2 set d = '' where id = 12"
+
+    # sleep 2*1s to ensure syncer unit has flushed global checkpoint and updates
     # updated ActiveRelayLog
-    sleep 1
+    sleep 2
     server_uuid=$(tail -n 1 $WORK_DIR/worker1/relay_log/server-uuid.index)
-    run_sql "show binary logs\G" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_source1 "show binary logs\G"
     max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
     binlog_count=$(grep Log_name "$SQL_RESULT_FILE" | wc -l)
     relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
     [ "$binlog_count" -eq "$relay_log_count" ]
-#    purge_relay_success $max_binlog_name $SOURCE_ID1
+    [ "$relay_log_count" -ne 1 ]
+    purge_relay_success $max_binlog_name $SOURCE_ID1
     new_relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
     [ "$new_relay_log_count" -eq 1 ]
 
