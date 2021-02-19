@@ -139,7 +139,7 @@ syncers:
     worker-count: 16
     batch: 100
     queue-size: 1024
-    checkpoint-flush-interval: 30
+    checkpoint-flush-interval: 1
     max-retry: 0
     auto-fix-gtid: false
     enable-gtid: false
