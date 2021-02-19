@@ -28,6 +28,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	"github.com/siddontang/go-mysql/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
@@ -178,6 +179,9 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 		relayCfg = newRelayCfg(c, mysql.MySQLFlavor)
 		r        = NewRelay(relayCfg).(*Relay)
 	)
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged", `return("406a3f61-690d-11e7-87c5-6c92bf46f384:1-122")`), IsNil)
+	//nolint:errcheck
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged")
 	c.Assert(r.Init(context.Background()), IsNil)
 	// purge old relay dir
 	f, err := os.Create(filepath.Join(r.cfg.RelayDir, "old_relay_log"))
@@ -256,9 +260,10 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 		previousGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
 		latestGTIDStr1     = "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
 		latestGTIDStr2     = "53bfca22-690d-11e7-8a62-18ded7a37b78:495"
-		recoverGTIDSetStr  = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-505,406a3f61-690d-11e7-87c5-6c92bf46f384:1-456" // 406a3f61-690d-11e7-87c5-6c92bf46f384:123-456 --> 406a3f61-690d-11e7-87c5-6c92bf46f384:1-456
-		filename           = "mysql-bin.000001"
-		startPos           = gmysql.Position{Name: filename, Pos: 123}
+		// if no @@gtid_purged, 406a3f61-690d-11e7-87c5-6c92bf46f384:123-456 should be not changed
+		recoverGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-505,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
+		filename          = "mysql-bin.000001"
+		startPos          = gmysql.Position{Name: filename, Pos: 123}
 
 		parser2  = parser.New()
 		relayCfg = newRelayCfg(c, mysql.MySQLFlavor)

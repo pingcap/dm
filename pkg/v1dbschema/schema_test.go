@@ -113,13 +113,15 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 		endGS, _ = gtid.ParserGTID(gmysql.MySQLFlavor, "ccb992ad-a557-11ea-ba6a-0242ac140002:1-16")
 	)
 
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGTIDsForPos", `return("ccb992ad-a557-11ea-ba6a-0242ac140002:10-16")`), IsNil) // need `ResetStart`.
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGTIDsForPos", `return("ccb992ad-a557-11ea-ba6a-0242ac140002:10-16")`), IsNil)
 	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGTIDsForPos")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged", `return("ccb992ad-a557-11ea-ba6a-0242ac140002:1-9")`), IsNil)
+	//nolint:errcheck
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged")
 
 	dbConn, err := t.db.GetBaseConn(tctx.Ctx)
 	c.Assert(err, IsNil)
-
 	defer func() {
 		_, err = dbConn.ExecuteSQL(tctx, nil, cfg.Name, []string{
 			`DROP DATABASE ` + cfg.MetaSchema,
