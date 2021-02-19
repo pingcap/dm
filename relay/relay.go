@@ -383,6 +383,7 @@ func (r *Relay) tryRecoverLatestFile(ctx context.Context, parser2 *parser.Parser
 				if err2 != nil {
 					return err2
 				}
+				defer dbConn.Close()
 				result.LatestGTIDs, err2 = utils.AddGSetWithPurged(ctx, result.LatestGTIDs, dbConn)
 				if err2 != nil {
 					return err2
@@ -1006,5 +1007,6 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 	if err2 != nil {
 		return nil, err2
 	}
+	defer dbConn.Close()
 	return utils.AddGSetWithPurged(ctx, resultGs, dbConn)
 }
