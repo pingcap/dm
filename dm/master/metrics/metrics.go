@@ -15,12 +15,10 @@ package metrics
 
 import (
 	"context"
-	"net/http"
 	"time"
 
 	cpu "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/pingcap/dm/pkg/metricsproxy"
 )
@@ -129,11 +127,6 @@ func RegistryMetrics() {
 	registry.MustRegister(ddlErrCounter)
 	registry.MustRegister(workerEventErrCounter)
 	registry.MustRegister(startLeaderCounter)
-}
-
-// GetMetricsHandler returns prometheus HTTP Handler
-func GetMetricsHandler() http.Handler {
-	return promhttp.Handler()
 }
 
 // ReportWorkerStage is a setter for workerState
