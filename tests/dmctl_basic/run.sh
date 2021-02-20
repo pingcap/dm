@@ -112,6 +112,8 @@ function run() {
 
     run_dm_master $WORK_DIR/master $MASTER_PORT $dm_master_conf
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    # only one master, check it should be leader and etcd metrics works
+    check_metric $MASTER_PORT 'etcd_server_has_leader' 3 0 2
     
     usage_and_arg_test
 
