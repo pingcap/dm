@@ -364,7 +364,10 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 			}
 			lastOffset = cur
 
-			w.jobQueue <- j
+			select {
+			case <-ctx.Done():
+			case w.jobQueue <- j:
+			}
 		}
 
 	}
