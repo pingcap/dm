@@ -1,6 +1,17 @@
 groups:
 - name: alert.rules
   rules:
+  - alert: DM_master_all_down
+    expr: up{job="dm_master"} == 0
+    labels:
+      env: ENV_LABELS_ENV
+      level: critical
+      expr: up{job="dm_master"} == 0
+    annotations:
+      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values: {{ $value }}'
+      value: '{{ $value }}'
+      summary: DM master all down, metrics not relyable
+
   - alert: DM_remain_storage_of_relay_log
     expr: dm_relay_space{type="available"} < 10*1024*1024*1024
     labels:
@@ -126,12 +137,12 @@ groups:
       summary: dm syncer binlog file not catch up master server exceed 10 min
 
   - alert: DM_binlog_file_gap_between_relay_syncer
-    expr: dm_relay_binlog_file{node="relay"} - ON(instance, job) dm_syncer_binlog_file{node="syncer"} > 1
+    expr: dm_relay_binlog_file{node="relay"} - ON(instance, job) group_right dm_syncer_binlog_file{node="syncer"} > 1
     for: 10m
     labels:
       env: ENV_LABELS_ENV
       level: critical
-      expr: dm_relay_binlog_file{node="relay"} - ON(instance, job) dm_syncer_binlog_file{node="syncer"} > 1
+      expr: dm_relay_binlog_file{node="relay"} - ON(instance, job) group_right dm_syncer_binlog_file{node="syncer"} > 1
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
       value: '{{ $value }}'
