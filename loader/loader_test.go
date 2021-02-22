@@ -29,7 +29,7 @@ var _ = Suite(&testWorkerSuite{})
 
 type testWorkerSuite struct {
 	tmpDir string
-	w *Worker
+	w      *Worker
 }
 
 func (t *testWorkerSuite) SetUpSuite(c *C) {
@@ -44,7 +44,7 @@ func (t *testWorkerSuite) TearDownSuite(c *C) {
 }
 
 func (t *testWorkerSuite) TestDispatchSQL(c *C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	file, err := os.Create(path.Join(t.tmpDir, "test.sql"))
 	c.Assert(err, IsNil)
 	sql := `INSERT INTO t1 VALUES
