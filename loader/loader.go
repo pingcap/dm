@@ -249,9 +249,11 @@ func (w *Worker) restoreDataFile(ctx context.Context, filePath string, offset in
 	// dispatchSQL completed, send nil to make sure all dmls are applied to target database
 	// we don't want to close and re-make chan frequently
 	// but if we need to re-call w.run, we need re-make jobQueue chan
-	w.jobQueue <- nil
-	w.wg.Wait()
-
+	select {
+	case <-ctx.Done():
+	case w.jobQueue <- nil:
+		w.wg.Wait()
+	}
 	w.logger.Info("finish to restore dump sql file", zap.String("data file", filePath))
 	return nil
 }

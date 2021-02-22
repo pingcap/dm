@@ -28,8 +28,9 @@ import (
 var _ = Suite(&testWorkerSuite{})
 
 type testWorkerSuite struct {
-	tmpDir string
-	w      *Worker
+	file      *os.File
+	tableInfo *tableInfo
+	w         *Worker
 }
 
 func (t *testWorkerSuite) SetUpSuite(c *C) {
@@ -37,31 +38,53 @@ func (t *testWorkerSuite) SetUpSuite(c *C) {
 	l := NewLoader(cfg)
 	l.toDBConns = make([]*DBConn, 1)
 	t.w = NewWorker(l, 0)
-	t.tmpDir = c.MkDir()
+
+	file, err := os.Create(path.Join(c.MkDir(), "test.sql"))
+	c.Assert(err, IsNil)
+	sql := `INSERT INTO t1 VALUES
+(10,1,9223372036854775807,123.123,123456789012.1234567890120000000);
+INSERT INTO t1 VALUES
+(9,1,9223372036854775807,123.123,123456789012.1234567890120000000),
+(8,1,9223372036854775807,123.123,123456789012.1234567890120000000);
+`
+	_, err = file.WriteString(sql)
+	c.Assert(err, IsNil)
+	t.file = file
+	t.tableInfo = &tableInfo{}
 }
 
 func (t *testWorkerSuite) TearDownSuite(c *C) {
 }
 
+func (t *testWorkerSuite) TestRestoreDataFile(c *C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	// make jobQueue buffer to 2, because we have 2 sql in prepare data.
+	// so that jobQueue <- nil in restoreDataFile will blocked.
+	t.w.jobQueue = make(chan *dataJob, 2)
+
+	var eg errgroup.Group
+	eg.Go(func() error {
+		return t.w.restoreDataFile(ctx, t.file.Name(), 0, t.tableInfo)
+	})
+
+	eg.Go(func() error {
+		// cancel ctx in another goroutine.
+		// sleep to wait restoreDataFile blocked
+		time.Sleep(time.Second)
+		cancel()
+		return nil
+	})
+	c.Assert(eg.Wait(), IsNil)
+}
+
 func (t *testWorkerSuite) TestDispatchSQL(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	file, err := os.Create(path.Join(t.tmpDir, "test.sql"))
-	c.Assert(err, IsNil)
-	sql := `INSERT INTO t1 VALUES
-(10,1,9223372036854775807,123.123,123456789012.1234567890120000000,"\0\0\0\0\0\0\0A","1000-01-01","9999-12-31 23:59:59","1973-12-30 15:30:00","23:59:59",1970,"x","x\"x","blob","text","enum2","a,b"),
-(9,1,9223372036854775807,123.123,123456789012.1234567890120000000,"\0\0\0\0\0\0\0A","1000-01-01","9999-12-31 23:59:59","1973-12-30 15:30:00","23:59:59",1970,"x","x\",\nx","blob","text","enum2","a,b");
-(8,1,9223372036854775807,123.123,123456789012.1234567890120000000,"\0\0\0\0\0\0\0A","1000-01-01","9999-12-31 23:59:59","1973-12-30 15:30:00","23:59:59",1970,"x","x\",\nx","blob","text\n","enum2",  "	a,b ");
-`
-	_, err = file.WriteString(sql)
-	c.Assert(err, IsNil)
-
-	mockTable := &tableInfo{}
 	// make jobQueue full to see whether ctx.cancel worked.
 	t.w.jobQueue = make(chan *dataJob, 1)
 	t.w.jobQueue <- nil
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return t.w.dispatchSQL(ctx, file.Name(), 0, mockTable)
+		return t.w.dispatchSQL(ctx, t.file.Name(), 0, t.tableInfo)
 	})
 
 	eg.Go(func() error {
