@@ -2746,7 +2746,7 @@ func (s *Syncer) setSyncCfg() error {
 	}
 
 	syncCfg := replication.BinlogSyncerConfig{
-		ServerID:                uint32(s.cfg.ServerID),
+		ServerID:                s.cfg.ServerID,
 		Flavor:                  s.cfg.Flavor,
 		Host:                    s.cfg.From.Host,
 		Port:                    uint16(s.cfg.From.Port),
