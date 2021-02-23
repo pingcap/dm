@@ -81,6 +81,7 @@ function run() {
         earliest_relay_log1=`ls $WORK_DIR/worker1/relay-dir/$server_uuid1 | sort | head -n 1`
         purge_relay_success $max_binlog_name $SOURCE_ID1
         earliest_relay_log2=`ls $WORK_DIR/worker1/relay-dir/$server_uuid1 | sort | head -n 1`
+        echo "earliest_relay_log1: $earliest_relay_log1 earliest_relay_log2: $earliest_relay_log2"
         [ "$earliest_relay_log1" != "$earliest_relay_log2" ]
 
         server_uuid1=$(tail -n 1 $WORK_DIR/worker2/relay-dir/server-uuid.index)
@@ -89,8 +90,11 @@ function run() {
         earliest_relay_log1=`ls $WORK_DIR/worker2/relay-dir/$server_uuid1 | sort | head -n 1`
         purge_relay_success $max_binlog_name $SOURCE_ID2
         earliest_relay_log2=`ls $WORK_DIR/worker2/relay-dir/$server_uuid1 | sort | head -n 1`
+        echo "earliest_relay_log1: $earliest_relay_log1 earliest_relay_log2: $earliest_relay_log2"
         [ "$earliest_relay_log1" != "$earliest_relay_log2" ]
     done
+
+    kill $pid
 }
 
 cleanup_data $TEST_NAME
