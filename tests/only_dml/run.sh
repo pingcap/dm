@@ -78,23 +78,24 @@ function run() {
         server_uuid1=$(tail -n 1 $WORK_DIR/worker1/relay-dir/server-uuid.index)
         run_sql_source1 "show binary logs\G"
         max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
-        earliest_relay_log1=`ls $WORK_DIR/worker1/relay-dir/$server_uuid1 | sort | head -n 1`
+        earliest_relay_log1=`ls $WORK_DIR/worker1/relay-dir/$server_uuid1 | grep -v 'relay.meta' | sort | head -n 1`
         purge_relay_success $max_binlog_name $SOURCE_ID1
-        earliest_relay_log2=`ls $WORK_DIR/worker1/relay-dir/$server_uuid1 | sort | head -n 1`
+        earliest_relay_log2=`ls $WORK_DIR/worker1/relay-dir/$server_uuid1 | grep -v 'relay.meta' | sort | head -n 1`
         echo "earliest_relay_log1: $earliest_relay_log1 earliest_relay_log2: $earliest_relay_log2"
         [ "$earliest_relay_log1" != "$earliest_relay_log2" ]
 
         server_uuid1=$(tail -n 1 $WORK_DIR/worker2/relay-dir/server-uuid.index)
         run_sql_source2 "show binary logs\G"
         max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
-        earliest_relay_log1=`ls $WORK_DIR/worker2/relay-dir/$server_uuid1 | sort | head -n 1`
+        earliest_relay_log1=`ls $WORK_DIR/worker2/relay-dir/$server_uuid1 | grep -v 'relay.meta' | sort | head -n 1`
         purge_relay_success $max_binlog_name $SOURCE_ID2
-        earliest_relay_log2=`ls $WORK_DIR/worker2/relay-dir/$server_uuid1 | sort | head -n 1`
+        earliest_relay_log2=`ls $WORK_DIR/worker2/relay-dir/$server_uuid1 | grep -v 'relay.meta' | sort | head -n 1`
         echo "earliest_relay_log1: $earliest_relay_log1 earliest_relay_log2: $earliest_relay_log2"
         [ "$earliest_relay_log1" != "$earliest_relay_log2" ]
     done
 
     kill $pid
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 cleanup_data $TEST_NAME
