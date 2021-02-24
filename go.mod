@@ -48,4 +48,6 @@ require (
 	gopkg.in/yaml.v2 v2.3.0
 )
 
+replace github.com/pingcap/dumpling v0.0.0-20210219084522-e78ac945a1b8 => github.com/lance6716/dumpling v0.0.0-20210224114553-ef292b4360c0
+
 go 1.13
