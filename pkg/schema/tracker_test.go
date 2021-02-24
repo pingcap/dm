@@ -131,7 +131,7 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 
 	cts, err := tracker.GetCreateTable(context.Background(), "testdb", "foo")
 	c.Assert(err, IsNil)
-	c.Assert(cts, Equals, "CREATE TABLE \"foo\" ( \"a\" varchar(255) NOT NULL, \"b\" datetime NOT NULL DEFAULT '0000-00-00 00:00:00', PRIMARY KEY (\"a\")) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
+	c.Assert(cts, Equals, "CREATE TABLE \"foo\" ( \"a\" varchar(255) NOT NULL, \"b\" datetime NOT NULL DEFAULT '0000-00-00 00:00:00', PRIMARY KEY (\"a\") /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
 
 	// Drop one column from the table.
 	err = tracker.Exec(ctx, "testdb", "alter table foo drop column \"b\"")
