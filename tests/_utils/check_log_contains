@@ -10,7 +10,7 @@ if [ "$#" -ge 3 ]; then
     num=$3
 fi
 
-got=`grep -F "$text" $log | wc -l`
+got=`grep "$text" $log | wc -l`
 
 if [ $num -eq 0 ]; then
     if [ $got -eq 0 ]; then
