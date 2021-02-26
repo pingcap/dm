@@ -22,3 +22,5 @@ WORKER5_PORT=18263
 SOURCE_ID1="mysql-replica-01"
 SOURCE_ID2="mysql-replica-02"
 RESET_MASTER=${RESET_MASTER:-true}
+
+VERBOSE=${VERBOSE:-false}

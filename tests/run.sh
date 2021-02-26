@@ -76,10 +76,19 @@ start_services
 function run() {
     script=$1
     echo "Running test $script..."
-    TEST_DIR="$TEST_DIR" \
-    PATH="tests/_utils:$PATH" \
-    TEST_NAME="$(basename "$(dirname "$script")")" \
-    bash +x "$script"
+    # run in verbose mode?
+    echo "Verbose mode = $VERBOSE"
+    if [ $VERBOSE == true ]; then
+        TEST_DIR="$TEST_DIR" \
+        PATH="tests/_utils:$PATH" \
+        TEST_NAME="$(basename "$(dirname "$script")")" \
+        bash -x "$script"
+    else
+        TEST_DIR="$TEST_DIR" \
+        PATH="tests/_utils:$PATH" \
+        TEST_NAME="$(basename "$(dirname "$script")")" \
+        bash +x "$script"
+    fi
 }
 
 if [ "$test_case" == "*" ]; then
