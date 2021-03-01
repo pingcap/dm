@@ -64,6 +64,8 @@ var (
 			Name:      "cpu_usage",
 			Help:      "the cpu usage of worker",
 		})
+
+	currentRegistry *prometheus.Registry
 )
 
 type statusHandler struct {
@@ -112,7 +114,7 @@ func RegistryMetrics() {
 	registry.MustRegister(opErrCounter)
 
 	relay.RegisterMetrics(registry)
-	dumpling.RegisterMetrics(registry)
+	dumpling.SaveAndRegisterMetrics(registry)
 	loader.RegisterMetrics(registry)
 	syncer.RegisterMetrics(registry)
 	prometheus.DefaultGatherer = registry

@@ -14,7 +14,10 @@
 package dumpling
 
 import (
+	"github.com/pingcap/dumpling/v4/export"
+	"github.com/pingcap/failpoint"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/metricsproxy"
 )
@@ -28,13 +31,23 @@ var (
 			Name:      "exit_with_error_count",
 			Help:      "counter for dumpling exit with error",
 		}, []string{"task", "source_id"})
+
+	// save prometheus.Registry to use it register dumpling metrics when creating subtask
+	currentRegistry *prometheus.Registry
 )
 
-// RegisterMetrics registers metrics.
-func RegisterMetrics(registry *prometheus.Registry) {
+// SaveAndRegisterMetrics registers metrics and saves the given registry for later use.
+func SaveAndRegisterMetrics(registry *prometheus.Registry) {
+	currentRegistry = registry
 	registry.MustRegister(dumplingExitWithErrorCounter)
 }
 
-func (m *Dumpling) removeLabelValuesWithTaskInMetrics(task string) {
-	dumplingExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+func (m *Dumpling) removeLabelValuesWithTaskInMetrics(task, source string) {
+	labels := prometheus.Labels{"task": task, "source_id": source}
+	dumplingExitWithErrorCounter.DeleteAllAboutLabels(labels)
+	failpoint.Inject("SkipRemovingDumplingMetrics", func(_ failpoint.Value) {
+		m.logger.Info("", zap.String("failpoint", "SkipRemovingDumplingMetrics"))
+		failpoint.Return()
+	})
+	export.RemoveLabelValuesWithTaskInMetrics(labels)
 }
