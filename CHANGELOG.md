@@ -24,7 +24,7 @@ All notable changes to this project will be documented in this file.
 ### Bug fixes
 - Fix the issue of data loss during the full data migration occurred because DM frequently restarts the task [#1378](https://github.com/pingcap/dm/pull/1378)
 - Fix the issue that an incremental replication task fails to start when the binlog position is not specified together with GTID in the task configuration [#1393](https://github.com/pingcap/dm/pull/1393)
-- Fix the issue that DM-worker’s binding relationships become abnormal when the disk and network environments are poor [#1396](https://github.com/pingcap/dm/pull/1396)
+- Fix the issue that DM-worker's binding relationships become abnormal when the disk and network environments are poor [#1396](https://github.com/pingcap/dm/pull/1396)
 - Fix the issue that enabling the relay log feature might cause data loss when the GTIDs specified in upstream binlog `previous_gtids` events are not consecutive [#1390](https://github.com/pingcap/dm/pull/1390) [#1430](https://github.com/pingcap/dm/pull/1430)
 
 ## [2.0.1] 2020-12-25
