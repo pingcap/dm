@@ -31,15 +31,13 @@ var (
 			Name:      "exit_with_error_count",
 			Help:      "counter for dumpling exit with error",
 		}, []string{"task", "source_id"})
-
-	// save prometheus.Registry to use it register dumpling metrics when creating subtask
-	currentRegistry *prometheus.Registry
 )
 
-// SaveAndRegisterMetrics registers metrics and saves the given registry for later use.
-func SaveAndRegisterMetrics(registry *prometheus.Registry) {
-	currentRegistry = registry
+// RegisterMetrics registers metrics and saves the given registry for later use.
+func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(dumplingExitWithErrorCounter)
+	export.InitMetricsVector(prometheus.Labels{"task": "", "source_id": ""})
+	export.RegisterMetrics(registry)
 }
 
 func (m *Dumpling) removeLabelValuesWithTaskInMetrics(task, source string) {

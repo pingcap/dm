@@ -267,12 +267,6 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	}
 
 	dumpConfig.Labels = prometheus.Labels{"task": m.cfg.Name, "source_id": m.cfg.SourceID}
-	export.InitMetricsVector(dumpConfig.Labels)
-	if currentRegistry == nil {
-		m.logger.Error("didn't init prometheus registry, this should not happen")
-	} else {
-		export.RegisterMetrics(currentRegistry)
-	}
 
 	return dumpConfig, nil
 }
