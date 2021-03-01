@@ -14,7 +14,10 @@
 package dumpling
 
 import (
+	"github.com/pingcap/dumpling/v4/export"
+	"github.com/pingcap/failpoint"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/metricsproxy"
 )
@@ -30,11 +33,19 @@ var (
 		}, []string{"task", "source_id"})
 )
 
-// RegisterMetrics registers metrics.
+// RegisterMetrics registers metrics and saves the given registry for later use.
 func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(dumplingExitWithErrorCounter)
+	export.InitMetricsVector(prometheus.Labels{"task": "", "source_id": ""})
+	export.RegisterMetrics(registry)
 }
 
-func (m *Dumpling) removeLabelValuesWithTaskInMetrics(task string) {
-	dumplingExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+func (m *Dumpling) removeLabelValuesWithTaskInMetrics(task, source string) {
+	labels := prometheus.Labels{"task": task, "source_id": source}
+	dumplingExitWithErrorCounter.DeleteAllAboutLabels(labels)
+	failpoint.Inject("SkipRemovingDumplingMetrics", func(_ failpoint.Value) {
+		m.logger.Info("", zap.String("failpoint", "SkipRemovingDumplingMetrics"))
+		failpoint.Return()
+	})
+	export.RemoveLabelValuesWithTaskInMetrics(labels)
 }
