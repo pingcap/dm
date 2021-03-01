@@ -92,8 +92,6 @@ function run() {
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20
 
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     # start a task in `incremental` mode
     # using account with limited privileges
@@ -135,7 +133,17 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    dmctl_start_task $WORK_DIR/dm-task.yaml
+    dmctl_start_task $WORK_DIR/dm-task.yaml --remove-meta
+
+    # check not specify binlog name could also update active relay log
+    if [ $worker1_run_source_1 -gt 0 ]; then
+        grep -E ".*current earliest active relay log.*$name1" $WORK_DIR/worker1/log/dm-worker.log
+    else
+        grep -E ".*current earliest active relay log.*$name1" $WORK_DIR/worker2/log/dm-worker.log
+    fi
+
+    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
