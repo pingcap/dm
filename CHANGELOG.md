@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 - When binding an idle upstream data source to an idle DM-worker node, DM-master nodes firstly choose the most recent binding of that DM-worker node [#1373](https://github.com/pingcap/dm/pull/1373)
 - Improve the stability of DM automatically getting the SQL mode from the binlog file [#1382](https://github.com/pingcap/dm/pull/1382)
 - Support automatically parsing GTIDs of different formats in the source configuration file [#1385](https://github.com/pingcap/dm/pull/1385)
-- Extend DM-worker’s TTL for keepalive to reduce scheduling caused by poor network [#1405](https://github.com/pingcap/dm/pull/1405)
+- Extend DM-worker's TTL for keepalive to reduce scheduling caused by poor network [#1405](https://github.com/pingcap/dm/pull/1405)
 - Support reporting an error when the configuration file contains configuration items that are not referenced [#1410](https://github.com/pingcap/dm/pull/1410)
 - Improve the display of a GTID set by sorting it in dictionary order [#1424](https://github.com/pingcap/dm/pull/1424)
 - Optimize monitoring and alerting rules [#1438](https://github.com/pingcap/dm/pull/1438)
