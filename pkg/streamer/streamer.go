@@ -17,6 +17,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -27,7 +28,7 @@ import (
 )
 
 var (
-	heartbeatInterval = 30 * time.Second
+	heartbeatInterval = common.MasterHeartbeatPeriod
 )
 
 // TODO: maybe one day we can make a pull request to go-mysql to support LocalStreamer.

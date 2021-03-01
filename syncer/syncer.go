@@ -165,6 +165,9 @@ type Syncer struct {
 	heartbeat *Heartbeat
 
 	readerHub *streamer.ReaderHub
+	// when user starts a new task with GTID and no binlog file name, we can't know active relay log at init time
+	// at this case, we update active relay log when receive fake rotate event
+	recordedActiveRelayLog bool
 
 	errOperatorHolder *operator.Holder
 
@@ -216,6 +219,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		// only need to sync DDL in sharding mode
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
+	syncer.recordedActiveRelayLog = false
 
 	return syncer
 }
@@ -1510,6 +1514,19 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 		if string(ev.NextLogName) <= ec.lastLocation.Position.Name {
 			return nil // not rotate to the next binlog file, ignore it
 		}
+		if !s.recordedActiveRelayLog {
+			if err := s.updateActiveRelayLog(mysql.Position{
+				Name: string(ev.NextLogName),
+				Pos:  uint32(ev.Position),
+			}); err != nil {
+				ec.tctx.L().Warn("failed to update active relay log, will try to update when flush checkpoint",
+					zap.ByteString("NextLogName", ev.NextLogName),
+					zap.Uint64("Position", ev.Position),
+					zap.Error(err))
+			} else {
+				s.recordedActiveRelayLog = true
+			}
+		}
 	}
 
 	*ec.currentLocation = binlog.InitLocation(
@@ -2729,7 +2746,7 @@ func (s *Syncer) setSyncCfg() error {
 	}
 
 	syncCfg := replication.BinlogSyncerConfig{
-		ServerID:                uint32(s.cfg.ServerID),
+		ServerID:                s.cfg.ServerID,
 		Flavor:                  s.cfg.Flavor,
 		Host:                    s.cfg.From.Host,
 		Port:                    uint16(s.cfg.From.Port),
