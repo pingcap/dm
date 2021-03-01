@@ -117,6 +117,9 @@ function run() {
     echo "check data"
     mysql -uroot -h127.0.0.1 -P4400 --default-character-set utf8 --ssl-ca $cur/conf/ca.pem --ssl-cert $cur/conf/dm.pem --ssl-key $cur/conf/dm.key -E -e "select count(*) from tls.t" > "$TEST_DIR/sql_res.$TEST_NAME.txt"
     check_contains "count(*): 20"
+
+    # https://github.com/pingcap/dm/issues/1458
+    check_log_not_contains $WORK_DIR/master1/log/dm-master.log "remote error: tls: bad certificate"
 }
 
 cleanup_data tls

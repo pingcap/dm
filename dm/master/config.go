@@ -406,7 +406,9 @@ func parseURLs(s string) ([]url.URL, error) {
 
 func genEmbedEtcdConfigWithLogger(logLevel string) *embed.Config {
 	cfg := embed.NewConfig()
-	cfg.EnableGRPCGateway = true // enable gRPC gateway for the internal etcd.
+	// disable grpc gateway because https://github.com/etcd-io/etcd/issues/12713
+	// TODO: wait above issue fixed
+	//cfg.EnableGRPCGateway = true // enable gRPC gateway for the internal etcd.
 
 	// use zap as the logger for embed etcd
 	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.
