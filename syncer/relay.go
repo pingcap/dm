@@ -91,6 +91,7 @@ func (s *Syncer) setInitActiveRelayLog(ctx context.Context) error {
 		return nil
 	}
 	err = s.readerHub.UpdateActiveRelayLog(s.cfg.Name, activeUUID, pos.Name)
+	s.recordedActiveRelayLog = true
 	s.tctx.L().Info("current earliest active relay log", log.WrapStringerField("active relay log", s.readerHub.EarliestActiveRelayLog()))
 	return err
 }
