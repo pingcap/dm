@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Improvements
 
 - Relay log GA
-  - Align the relay unit‘s behavior of pulling and sending binlogs with that of the secondary MySQL database [#1390](https://github.com/pingcap/dm/pull/1390)
+  - Align the relay unit's behavior of pulling and sending binlogs with that of the secondary MySQL database [#1390](https://github.com/pingcap/dm/pull/1390)
   - Reduce the scenarios where relay logs need to be purged [#1400](https://github.com/pingcap/dm/pull/1400)
   - Support sending heartbeat events when the relay log feature is enabled to display task progress with regular updates [#1404](https://github.com/pingcap/dm/pull/1404)
 - Support automatically recognizing the switching of upstream data sources when the source configuration needs no update, for example, when the IP address does not change [#1364](https://github.com/pingcap/dm/pull/1364)
