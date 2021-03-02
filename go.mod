@@ -16,14 +16,13 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/grpc-ecosystem/grpc-gateway v1.14.3
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
-	github.com/pingcap/br v5.0.0-rc.0.20201223100334-c344d1edf20c+incompatible // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
-	github.com/pingcap/dumpling v0.0.0-20201224084933-34903c7475cf
+	github.com/pingcap/dumpling v0.0.0-20210226040140-2e8afecad630
 	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
 	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
-	github.com/pingcap/parser v0.0.0-20210108074737-814a888e05e2
-	github.com/pingcap/tidb v1.1.0-beta.0.20210108095858-c2ee8d37c22f
+	github.com/pingcap/parser v0.0.0-20210224050355-ce3c7711a45f
+	github.com/pingcap/tidb v1.1.0-beta.0.20210224053248-b226130926a2
 	github.com/pingcap/tidb-tools v4.0.10-0.20210106041835-b7bb2754a8df+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
@@ -36,13 +35,13 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285
 	github.com/tidwall/gjson v1.6.1
 	github.com/tidwall/sjson v1.1.2
-	github.com/tikv/pd v1.1.0-beta.0.20201125070607-d4b90eee0c70
+	github.com/tikv/pd v1.1.0-beta.0.20210204070145-eb7fc53a8d98
 	github.com/unrolled/render v1.0.1
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200824191128-ae9734ed278b
 	go.uber.org/zap v1.16.0
 	golang.org/x/exp v0.0.0-20200513190911-00229845015e // indirect
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
-	golang.org/x/sys v0.0.0-20200824131525-c12d262b63d8
+	golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/genproto v0.0.0-20200224152610-e50cd9704f63
 	google.golang.org/grpc v1.27.1

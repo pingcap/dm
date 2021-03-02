@@ -50,7 +50,7 @@ function fail_acquire_global_lock() {
     check_log_contains $WORK_DIR/worker2/log/dm-worker.log "you need (at least one of) the RELOAD privilege(s) for this operation"
     check_log_contains $WORK_DIR/worker2/log/dm-worker.log "error is not resumable"
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "\"stage\": \"Paused\"" 3 \
         "you need (at least one of) the RELOAD privilege(s) for this operation" 2
@@ -81,6 +81,8 @@ function escape_schema() {
     run_sql_file $cur/data/db2.prepare.user.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_count 'Query OK, 0 rows affected' 7
 
+    export GO_FAILPOINTS='github.com/pingcap/dm/dumpling/SkipRemovingDumplingMetrics=return("")'
+
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
@@ -102,6 +104,10 @@ function escape_schema() {
     echo "check dump files have been cleaned"
     ls $WORK_DIR/worker1/dumped_data.test && exit 1 || echo "worker1 auto removed dump files"
     ls $WORK_DIR/worker2/dumped_data.test && exit 1 || echo "worker2 auto removed dump files"
+    export GO_FAILPOINTS=''
+
+    check_metric $WORKER1_PORT 'dumpling_dump_finished_tables' 3 0 3
+    check_metric $WORKER2_PORT 'dumpling_dump_finished_tables' 3 0 3
 
     cleanup_data full/mode
     cleanup_process $*

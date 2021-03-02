@@ -20,19 +20,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/dumpling/v4/export"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
+	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-
-	"github.com/pingcap/dumpling/v4/export"
-	"github.com/pingcap/errors"
-	"github.com/pingcap/failpoint"
-	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
-	"github.com/siddontang/go/sync2"
-	"go.uber.org/zap"
 )
 
 // Dumpling dumps full data from a MySQL-compatible database
@@ -150,7 +151,7 @@ func (m *Dumpling) Close() {
 		return
 	}
 
-	m.removeLabelValuesWithTaskInMetrics(m.cfg.Name)
+	m.removeLabelValuesWithTaskInMetrics(m.cfg.Name, m.cfg.SourceID)
 	// do nothing, external will cancel the command (if running)
 	m.closed.Set(true)
 }
@@ -264,6 +265,8 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	if !cfg.CaseSensitive {
 		dumpConfig.TableFilter = filter.CaseInsensitive(dumpConfig.TableFilter)
 	}
+
+	dumpConfig.Labels = prometheus.Labels{"task": m.cfg.Name, "source_id": m.cfg.SourceID}
 
 	return dumpConfig, nil
 }
