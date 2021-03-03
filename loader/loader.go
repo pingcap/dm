@@ -1193,8 +1193,7 @@ type restoreSchemaJob struct {
 	loader           *Loader
 	session          *DBConn
 	database         string
-	table            string   // empty if it's a schema of database
-	dataFiles        []string // empty if it's a schema of database
+	table            string // empty if it's a schema of database
 	pathOfSchemaFile string
 }
 
@@ -1311,16 +1310,14 @@ func (q *jobQueue) isClosed() bool {
 // schema restorer
 type schemaRestorer struct {
 	loader  *Loader
-	conn    *DBConn
 	q       *jobQueue
 	running sync.Mutex
 }
 
 // `newSchemaRestorer` consturct a schema restorer
-func newSchemaRestorer(loader *Loader, conn *DBConn, queue *jobQueue) *schemaRestorer {
+func newSchemaRestorer(loader *Loader, queue *jobQueue) *schemaRestorer {
 	return &schemaRestorer{
 		loader: loader,
-		conn:   conn,
 		q:      queue,
 	}
 }
@@ -1377,29 +1374,11 @@ func (restore *schemaRestorer) close() {
 
 func (l *Loader) restoreData(ctx context.Context) error {
 	begin := time.Now()
-
-	baseConn, err := l.toDB.GetBaseConn(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		err2 := l.toDB.CloseBaseConn(baseConn)
-		if err2 != nil {
-			l.logger.Warn("fail to close connection", zap.Error(err2))
-		}
-	}()
-
-	dbConn := &DBConn{
-		cfg:      l.cfg,
-		baseConn: baseConn,
-		resetBaseConnFn: func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error) {
-			return nil, terror.ErrDBBadConn.Generate("bad connection error restoreData")
-		},
-	}
 	dispatchMap := make(map[string]*fileJob)
 	schemaJobQueue := newJobQueue(ctx)
-	concurrency := 8 // where to set up?
+	concurrency := 8 // where to set up? how about `min(l.cfg.PoolSize, vCPU*len(l.db2Tables))`?
 	schemaRestorers := make([]*schemaRestorer, 0, concurrency)
+
 	// function of db/table schema restoring
 	schemaJobHandler := func(ctx context.Context, job *restoreSchemaJob) error {
 		if job.isSchemaOfDatabase() { // restore database schema
@@ -1416,100 +1395,91 @@ func (l *Loader) restoreData(ctx context.Context) error {
 				return err
 			}
 			job.loader.logger.Info("finish to create table", zap.String("table file", job.pathOfSchemaFile))
-
-			restoringFiles := l.checkPoint.GetRestoringFileInfo(job.database, job.table)
-			job.loader.logger.Debug("restoring table data", zap.String("schema", job.database), zap.String("table", job.table), zap.Reflect("data files", restoringFiles))
-
-			info := job.loader.tableInfos[tableName(job.database, job.table)]
-			for _, file := range job.dataFiles {
-				select {
-				case <-ctx.Done():
-					job.loader.logger.Warn("stop generate data file job", log.ShortError(ctx.Err()))
-					return ctx.Err()
-				default:
-					// do nothing
-				}
-
-				job.loader.logger.Debug("dispatch data file", zap.String("schema", job.database), zap.String("table", job.table), zap.String("data file", file))
-				// note: `uninitializedOffset` variable scope is outside
-				offset := int64(uninitializedOffset)
-				posSet, ok := restoringFiles[file]
-				if ok {
-					offset = posSet[0]
-				}
-
-				j := &fileJob{
-					schema:   job.database,
-					table:    job.table,
-					dataFile: file,
-					offset:   offset,
-					info:     info,
-				}
-				// note: `dispatchMap` variable scope is outside
-				dispatchMap[fmt.Sprintf("%s_%s_%s", job.database, job.table, file)] = j
-			}
 			return nil
 		}
 		return nil
 	}
+
 	// function of close schema restorers
 	closeSchemaRestorers := func(restorers []*schemaRestorer) {
 		for _, restorer := range restorers {
 			restorer.close()
 		}
 	}
+
 	// run schemaRestorer concurrently
 	for i := 0; i < concurrency; i++ {
-		schemaRestorers = append(schemaRestorers, newSchemaRestorer(l, dbConn, schemaJobQueue))
+		schemaRestorers = append(schemaRestorers, newSchemaRestorer(l, schemaJobQueue))
 		go schemaRestorers[i].run(schemaJobHandler)
 	}
-	// restore db in sort
+
+	// `for v := range map` would present random order
+	// `dbs` array keep same order for restore schema job generating
+	var err error
+	dbSessionPool := make([]*DBConn, 0, concurrency)
 	dbs := make([]string, 0, len(l.db2Tables))
 	for db := range l.db2Tables {
 		dbs = append(dbs, db)
 	}
 	tctx := tcontext.NewContext(ctx, l.logger)
 	// restore db schema
-	for _, db := range dbs {
+	for dbSessionID, db := range dbs {
 		schemaFile := l.cfg.Dir + "/" + db + "-schema-create.sql" // cache friendly
 		if schemaJobQueue.isClosed() {
 			break
 		}
+		// lazy open database connection
+		if dbSessionID == len(dbSessionPool) {
+			baseConn, err := l.toDB.GetBaseConn(ctx)
+			if err != nil {
+				break
+			}
+			defer func(baseConn *conn.BaseConn) {
+				err := l.toDB.CloseBaseConn(baseConn)
+				if err != nil {
+					l.logger.Warn("fail to close connection", zap.Error(err))
+				}
+			}(baseConn)
+			dbSessionPool = append(dbSessionPool, &DBConn{
+				cfg:      l.cfg,
+				baseConn: baseConn,
+				resetBaseConnFn: func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error) {
+					return nil, terror.ErrDBBadConn.Generate("bad connection error restoreData")
+				},
+			})
+		}
 		err = schemaJobQueue.push(&restoreSchemaJob{
 			loader:           l,
-			session:          dbConn,
+			session:          dbSessionPool[dbSessionID],
 			database:         db,
 			table:            "",
 			pathOfSchemaFile: schemaFile,
 		})
 		if err != nil {
-			schemaJobQueue.broke(err)
 			break
 		}
 	}
 	if err != nil {
+		schemaJobQueue.close()
+		closeSchemaRestorers(schemaRestorers)
 		return err
 	}
 	err = schemaJobQueue.run()
 	if err != nil {
+		schemaJobQueue.close()
 		closeSchemaRestorers(schemaRestorers)
 		return err
 	}
+
 	// restore table schema
 tblSchemaLoop:
-	for _, db := range dbs {
-		table2DataFileMap := l.db2Tables[db]
-		tnames := make([]string, 0, len(table2DataFileMap))
-		for tableName := range table2DataFileMap {
-			tnames = append(tnames, tableName)
-		}
-		for _, table := range tnames {
+	for dbSessionID, db := range dbs {
+		for table := range l.db2Tables[db] {
 			schemaFile := l.cfg.Dir + "/" + db + "." + table + "-schema.sql" // cache friendly
 			if _, ok := l.tableInfos[tableName(db, table)]; !ok {
 				l.tableInfos[tableName(db, table)], err = parseTable(tctx, l.tableRouter, db, table, schemaFile, l.cfg.LoaderConfig.SQLMode)
 				if err != nil {
 					err = terror.Annotatef(err, "parse table %s/%s", db, table)
-					schemaJobQueue.broke(err)
 					break tblSchemaLoop
 				}
 			}
@@ -1520,31 +1490,64 @@ tblSchemaLoop:
 			if schemaJobQueue.isClosed() {
 				break tblSchemaLoop
 			}
-			err = schemaJobQueue.push(&restoreSchemaJob{
+			job := &restoreSchemaJob{
 				loader:           l,
-				session:          dbConn,
+				session:          dbSessionPool[dbSessionID],
 				database:         db,
 				table:            table,
-				dataFiles:        table2DataFileMap[table],
 				pathOfSchemaFile: schemaFile,
-			})
+			}
+			err = schemaJobQueue.push(job)
 			if err != nil {
-				schemaJobQueue.broke(err)
 				break tblSchemaLoop
 			}
 		}
 	}
 	if err != nil {
+		schemaJobQueue.close()
+		closeSchemaRestorers(schemaRestorers)
 		return err
 	}
 	err = schemaJobQueue.run()
 	schemaJobQueue.close()
+	closeSchemaRestorers(schemaRestorers)
 	if err != nil {
-		closeSchemaRestorers(schemaRestorers)
 		return err
 	}
 	// all schemas was restored
 	l.logger.Info("finish to create tables", zap.Duration("cost time", time.Since(begin)))
+
+	// generate restore table data file job
+	for _, db := range dbs {
+		table2DataFileMap := l.db2Tables[db]
+		for table := range table2DataFileMap {
+			for _, file := range table2DataFileMap[table] {
+				select {
+				case <-ctx.Done():
+					l.logger.Warn("stop generate data file job", log.ShortError(ctx.Err()))
+					return ctx.Err()
+				default:
+					// do nothing
+				}
+				restoringFiles := l.checkPoint.GetRestoringFileInfo(db, table)
+				l.logger.Debug("restoring table data", zap.String("schema", db), zap.String("table", table), zap.Reflect("data files", restoringFiles))
+				l.logger.Debug("dispatch data file", zap.String("schema", db), zap.String("table", table), zap.String("data file", file))
+
+				offset := int64(uninitializedOffset)
+				posSet, ok := restoringFiles[file]
+				if ok {
+					offset = posSet[0]
+				}
+				dispatchMap[fmt.Sprintf("%s_%s_%s", db, table, file)] = &fileJob{
+					schema:   db,
+					table:    table,
+					dataFile: file,
+					offset:   offset,
+					info:     l.tableInfos[tableName(db, table)],
+				}
+			}
+		}
+	}
 
 	// a simple and naive approach to dispatch files randomly based on the feature of golang map(range by random)
 	for _, j := range dispatchMap {
