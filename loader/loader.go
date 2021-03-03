@@ -1471,7 +1471,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	tctx := tcontext.NewContext(ctx, l.logger)
 	// restore db schema
 	for _, db := range dbs {
-		dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
+		schemaFile := l.cfg.Dir + "/" + db + "-schema-create.sql" // cache friendly
 		if schemaJobQueue.isClosed() {
 			break
 		}
@@ -1480,7 +1480,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			session:          dbConn,
 			database:         db,
 			table:            "",
-			pathOfSchemaFile: dbFile,
+			pathOfSchemaFile: schemaFile,
 		})
 		if err != nil {
 			schemaJobQueue.broke(err)
@@ -1498,15 +1498,15 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	// restore table schema
 tblSchemaLoop:
 	for _, db := range dbs {
-		tables := l.db2Tables[db]
-		tnames := make([]string, 0, len(tables))
-		for t := range tables {
-			tnames = append(tnames, t)
+		table2DataFileMap := l.db2Tables[db]
+		tnames := make([]string, 0, len(table2DataFileMap))
+		for tableName := range table2DataFileMap {
+			tnames = append(tnames, tableName)
 		}
 		for _, table := range tnames {
-			tableFile := l.cfg.Dir + "/" + db + "." + table + "-schema.sql"
+			schemaFile := l.cfg.Dir + "/" + db + "." + table + "-schema.sql" // cache friendly
 			if _, ok := l.tableInfos[tableName(db, table)]; !ok {
-				l.tableInfos[tableName(db, table)], err = parseTable(tctx, l.tableRouter, db, table, tableFile, l.cfg.LoaderConfig.SQLMode)
+				l.tableInfos[tableName(db, table)], err = parseTable(tctx, l.tableRouter, db, table, schemaFile, l.cfg.LoaderConfig.SQLMode)
 				if err != nil {
 					err = terror.Annotatef(err, "parse table %s/%s", db, table)
 					schemaJobQueue.broke(err)
@@ -1525,7 +1525,8 @@ tblSchemaLoop:
 				session:          dbConn,
 				database:         db,
 				table:            table,
-				pathOfSchemaFile: tableFile,
+				dataFiles:        table2DataFileMap[table],
+				pathOfSchemaFile: schemaFile,
 			})
 			if err != nil {
 				schemaJobQueue.broke(err)
