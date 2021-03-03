@@ -1390,7 +1390,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			job.loader.logger.Info("finish to create schema", zap.String("schema file", job.pathOfSchemaFile))
 		} else if job.isSchemaOfTable() { // restore table schema
 			job.loader.logger.Info("start to create table", zap.String("table file", job.pathOfSchemaFile))
-			err := l.restoreTable(ctx, job.session, job.pathOfSchemaFile, job.database, job.table)
+			err := job.loader.restoreTable(ctx, job.session, job.pathOfSchemaFile, job.database, job.table)
 			if err != nil {
 				return err
 			}
@@ -1490,14 +1490,13 @@ tblSchemaLoop:
 			if schemaJobQueue.isClosed() {
 				break tblSchemaLoop
 			}
-			job := &restoreSchemaJob{
+			err = schemaJobQueue.push(&restoreSchemaJob{
 				loader:           l,
 				session:          dbSessionPool[dbSessionID],
 				database:         db,
 				table:            table,
 				pathOfSchemaFile: schemaFile,
-			}
-			err = schemaJobQueue.push(job)
+			})
 			if err != nil {
 				break tblSchemaLoop
 			}
