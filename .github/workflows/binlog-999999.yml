@@ -61,6 +61,8 @@ jobs:
           sed -i "s/host: 127.0.0.1/host: 172.28.128.5/g" ./tests/incremental_mode/conf/source2.yaml
           sed -i "s/port: 3307/port: 3306/g" ./tests/incremental_mode/conf/source2.yaml
           MYSQL_HOST1=172.28.128.4 MYSQL_PORT1=3306 MYSQL_HOST2=172.28.128.5 MYSQL_PORT2=3306 make integration_test CASE=incremental_mode
+          echo "show binary logs;" | mysql -h172.28.128.4 -p123456 | grep -q "mysql-bin.1000000"
+          echo "show binary logs;" | mysql -h172.28.128.5 -p123456 | grep -q "mysql-bin.1000000"
 
       - name: Copy logs to hack permission
         if: ${{ always() }}

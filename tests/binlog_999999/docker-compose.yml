@@ -36,4 +36,4 @@ services:
     image: mysql:5.7.32
     command: --default-authentication-plugin=mysql_native_password --log-bin=/var/lib/mysql/mysql-bin --server-id=1 --binlog-format=ROW --gtid_mode=ON --enforce-gtid-consistency=true
     volumes:
-      - /tmp/mysql1-data:/var/lib/mysql
+      - /tmp/mysql2-data:/var/lib/mysql
