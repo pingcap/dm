@@ -18,6 +18,8 @@ services:
     <<: *default-node
     container_name: mysql1
     hostname: mysql1
+    ports:
+      - "3306:3306"
     networks:
       db-networks:
         ipv4_address: 172.28.128.4
@@ -30,6 +32,8 @@ services:
     <<: *default-node
     container_name: mysql2
     hostname: mysql2
+    ports:
+      - "3307:3306"
     networks:
       db-networks:
         ipv4_address: 172.28.128.5

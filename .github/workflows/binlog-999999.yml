@@ -40,29 +40,40 @@ jobs:
       - name: Build DM binary
         run: make dm_integration_test_build
 
-      - name: Setup containers
+      - name: Setup containers and binaries
         run: |
           docker-compose -f ./tests/binlog_999999/docker-compose.yml up -d
+          curl http://download.pingcap.org/tidb-enterprise-tools-nightly-linux-amd64.tar.gz | tar xz
+          mv tidb-enterprise-tools-nightly-linux-amd64/bin/sync_diff_inspector bin/
+          curl http://download.pingcap.org/tidb-nightly-linux-amd64.tar.gz | tar xz
+          mv tidb-nightly-linux-amd64/bin/tidb-server bin/
 
       - name: change binlog sequence number to 999998
         run: |
-          echo "reset master;" | mysql -h172.28.128.4 -p123456
-          echo "reset master;" | mysql -h172.28.128.5 -p123456
-          docker-compose down
-          mv /tmp/mysql1-data/mysql-bin.000001 /tmp/mysql1-data/mysql-bin.999998
-          echo "./mysql-bin.999998" > /tmp/mysql1-data/mysql-bin.index
-          mv /tmp/mysql2-data/mysql-bin.000001 /tmp/mysql2-data/mysql-bin.999998
-          echo "./mysql-bin.999998" > /tmp/mysql2-data/mysql-bin.index
+          while ! mysqladmin -h127.0.0.1 -P3306 -p123456 -uroot ping --connect-timeout=1 > /dev/null 2>&1 ; do
+            echo "wait mysql"
+            sleep 1
+          done
+          while ! mysqladmin -h127.0.0.1 -P3307 -p123456 -uroot ping --connect-timeout=1 > /dev/null 2>&1 ; do
+            echo "wait mysql"
+            sleep 1
+          done
+
+          echo "reset master;" | mysql -uroot -h127.0.0.1 -P3306 -p123456
+          echo "reset master;" | mysql -uroot -h127.0.0.1 -P3307 -p123456
+          docker-compose -f ./tests/binlog_999999/docker-compose.yml down
+
+          sudo mv /tmp/mysql1-data/mysql-bin.000001 /tmp/mysql1-data/mysql-bin.999998
+          sudo bash -c "echo './mysql-bin.999998' > /tmp/mysql1-data/mysql-bin.index"
+          sudo mv /tmp/mysql2-data/mysql-bin.000001 /tmp/mysql2-data/mysql-bin.999998
+          sudo bash -c "echo './mysql-bin.999998' > /tmp/mysql2-data/mysql-bin.index"
           docker-compose -f ./tests/binlog_999999/docker-compose.yml up -d
 
       - name: Run test cases
         run: |
-          sed -i "s/host: 127.0.0.1/host: 172.28.128.4/g" ./tests/incremental_mode/conf/source1.yaml
-          sed -i "s/host: 127.0.0.1/host: 172.28.128.5/g" ./tests/incremental_mode/conf/source2.yaml
-          sed -i "s/port: 3307/port: 3306/g" ./tests/incremental_mode/conf/source2.yaml
-          MYSQL_HOST1=172.28.128.4 MYSQL_PORT1=3306 MYSQL_HOST2=172.28.128.5 MYSQL_PORT2=3306 make integration_test CASE=incremental_mode
-          echo "show binary logs;" | mysql -h172.28.128.4 -p123456 | grep -q "mysql-bin.1000000"
-          echo "show binary logs;" | mysql -h172.28.128.5 -p123456 | grep -q "mysql-bin.1000000"
+          RESET_MASTER=false make integration_test CASE=incremental_mode
+          echo "show binary logs;" | mysql -uroot -h127.0.0.1 -P3306 -p123456 | grep -q "mysql-bin.1000000"
+          echo "show binary logs;" | mysql -uroot -h127.0.0.1 -P3307 -p123456 | grep -q "mysql-bin.1000000"
 
       - name: Copy logs to hack permission
         if: ${{ always() }}
