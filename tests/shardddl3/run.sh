@@ -834,9 +834,7 @@ function DM_109_CASE() {
 }
 
 function DM_109() {
-    # FIXME: this should be passed after https://github.com/pingcap/tidb-tools/pull/415 is merged
-    # run_case 109 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
-    echo "passed"
+    run_case 109 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
 function DM_110_CASE() {
