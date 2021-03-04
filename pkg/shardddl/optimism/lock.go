@@ -126,9 +126,35 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	}
 
 	var emptyDDLs = []string{}
-	newDDLs = []string{}
 	oldTable := l.tables[callerSource][callerSchema][callerTable]
 	oldJoined := l.joined
+
+	lastTableInfo := schemacmp.Encode(newTIs[len(newTIs)-1])
+	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
+		zap.Stringer("from", oldTable), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
+	l.tables[callerSource][callerSchema][callerTable] = lastTableInfo
+
+	lastJoined := lastTableInfo
+	// try to join tables.
+	for source, schemaTables := range l.tables {
+		for schema, tables := range schemaTables {
+			for table, ti := range tables {
+				if source != callerSource || schema != callerSchema || table != callerTable {
+					lastJoined2, err2 := lastJoined.Join(ti)
+					if err2 != nil {
+						// NOTE: conflict detected.
+						return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+							err2, l.ID, fmt.Sprintf("fail to join table info %s with %s", lastJoined, ti))
+					}
+					lastJoined = lastJoined2
+				}
+			}
+		}
+	}
+	// update the current joined table info, if it's actually changed it should be logged in `if cmp != 0` block.
+	l.joined = lastJoined
+
+	newDDLs = []string{}
 	newTable := oldTable
 	newJoined := oldJoined
 
@@ -232,13 +258,6 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		log.L().Warn("new table info >= new joined table info", zap.Stringer("table info", newTable), zap.Stringer("joined table info", newJoined))
 		return ddls, nil // NOTE: this should not happen.
 	}
-
-	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
-		zap.Stringer("from", l.tables[callerSource][callerSchema][callerTable]), zap.Stringer("to", newTable), zap.Strings("ddls", ddls))
-	l.tables[callerSource][callerSchema][callerTable] = newTable
-
-	// update the current joined table info, if it's actually changed it should be logged in `if cmp != 0` block.
-	l.joined = newJoined
 
 	return newDDLs, nil
 }
