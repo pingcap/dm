@@ -46,8 +46,8 @@ jobs:
 
       - name: change binlog sequence number to 999998
         run: |
-          echo "reset master;" | mysql -h mysql1 -P 3306 -p 123456
-          echo "reset master;" | mysql -h mysql2 -P 3306 -p 123456
+          echo "reset master;" | mysql -h 172.28.128.4 -P 3306 -p 123456
+          echo "reset master;" | mysql -h 172.28.128.5 -P 3306 -p 123456
           docker-compose down
           mv /tmp/mysql1-data/mysql-bin.000001 /tmp/mysql1-data/mysql-bin.999998
           echo "./mysql-bin.999998" > /tmp/mysql1-data/mysql-bin.index
@@ -57,7 +57,10 @@ jobs:
 
       - name: Run test cases
         run: |
-          make integration_test CASE=incremental_mode
+          sed -i "s/host: 127.0.0.1/host: 172.28.128.4/g" ./tests/incremental_mode/conf/source1.yaml
+          sed -i "s/host: 127.0.0.1/host: 172.28.128.5/g" ./tests/incremental_mode/conf/source2.yaml
+          sed -i "s/port: 3307/port: 3306/g" ./tests/incremental_mode/conf/source2.yaml
+          MYSQL_HOST1=172.28.128.4 MYSQL_PORT1=3306 MYSQL_HOST2=172.28.128.5 MYSQL_PORT2=3306 make integration_test CASE=incremental_mode
 
       - name: Copy logs to hack permission
         if: ${{ always() }}

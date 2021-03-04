@@ -20,7 +20,7 @@ services:
     hostname: mysql1
     networks:
       db-networks:
-        ipv4_address: 172.28.0.201
+        ipv4_address: 172.28.128.4
     image: mysql:5.7.32
     command: --default-authentication-plugin=mysql_native_password --log-bin=/var/lib/mysql/mysql-bin --server-id=1 --binlog-format=ROW --gtid_mode=ON --enforce-gtid-consistency=true
     restart: always
@@ -33,8 +33,8 @@ services:
     container_name: mysql2
     hostname: mysql2
     networks:
-      dm-tiup:
-        ipv4_address: 172.28.0.202
+      db-networks:
+        ipv4_address: 172.28.128.5
     image: mysql:5.7.32
     command: --default-authentication-plugin=mysql_native_password --log-bin=/var/lib/mysql/mysql-bin --server-id=1 --binlog-format=ROW --gtid_mode=ON --enforce-gtid-consistency=true
     restart: always
