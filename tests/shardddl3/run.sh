@@ -849,6 +849,166 @@ function DM_112 {
     "clean_table" "optimistic"
 }
 
+function DM_113_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int, add column c int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column b int, add column c int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column b int, add column c int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12,12);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_113 {
+    run_case 113 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 113 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function DM_114_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b, drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column b, drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop column b, drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_114 {
+    run_case 114 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int, c int);\"" \
+    "clean_table" "pessimistic"
+    run_case 114 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int, c int);\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_115_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    # Rollbacking a drop ddl causes data inconsistency.
+    run_sql_tidb_with_retry "select count(1) from ${shardddl}.${tb} where a=1 and b=1;" "count(1)"
+    # Manually fix it so that we can check the sync diff.
+    run_sql_tidb "update ${shardddl}.${tb} set b=null where a=1;"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_115 {
+    # run_case 115 "double-source-pessimistic" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
+    # "clean_table" "pessimistic"
+    run_case 115 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_116_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int, drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column b int, drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column b int, drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_116 {
+    # run_case 116 "double-source-pessimistic" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c int);\"" \
+    # "clean_table" "pessimistic"
+    run_case 116 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c int);\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_117_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} change column b c int;"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "because schema conflict detected" 1
+}
+
+function DM_117 {
+    # run_case 117 "double-source-pessimistic" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
+    # "clean_table" "pessimistic"
+    run_case 117 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
+    "clean_table" "optimistic"
+}
+
 function DM_RemoveLock_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
@@ -975,7 +1135,7 @@ function run() {
     init_cluster
     init_database
 
-    DM_112
+    DM_117
     return
 
     start=71
