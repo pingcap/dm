@@ -114,6 +114,26 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		}
 	}()
 
+	// joinTable join other tables
+	joinTable := func(joined schemacmp.Table) (schemacmp.Table, error) {
+		for source, schemaTables := range l.tables {
+			for schema, tables := range schemaTables {
+				for table, ti := range tables {
+					if source != callerSource || schema != callerSchema || table != callerTable {
+						newJoined, err2 := joined.Join(ti)
+						if err2 != nil {
+							// NOTE: conflict detected.
+							return newJoined, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+								err2, l.ID, fmt.Sprintf("fail to join table info %s with %s", joined, ti))
+						}
+						joined = newJoined
+					}
+				}
+			}
+		}
+		return joined, nil
+	}
+
 	// should not happen
 	if len(ddls) != len(newTIs) || len(newTIs) == 0 {
 		return ddls, terror.ErrMasterInconsistentOptimisticDDLsAndInfo.Generate(len(ddls), len(newTIs))
@@ -140,22 +160,9 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		zap.Stringer("from", oldTable), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
 	l.tables[callerSource][callerSchema][callerTable] = lastTableInfo
 
-	lastJoined := lastTableInfo
-	// try to join tables.
-	for source, schemaTables := range l.tables {
-		for schema, tables := range schemaTables {
-			for table, ti := range tables {
-				if source != callerSource || schema != callerSchema || table != callerTable {
-					lastJoined2, err2 := lastJoined.Join(ti)
-					if err2 != nil {
-						// NOTE: conflict detected.
-						return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
-							err2, l.ID, fmt.Sprintf("fail to join table info %s with %s", lastJoined, ti))
-					}
-					lastJoined = lastJoined2
-				}
-			}
-		}
+	lastJoined, err := joinTable(lastTableInfo)
+	if err != nil {
+		return emptyDDLs, err
 	}
 	// update the current joined table info, if it's actually changed it should be logged in `if cmp != 0` block.
 	l.joined = lastJoined
@@ -174,7 +181,6 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 			return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
 				err, l.ID, fmt.Sprintf("there will be conflicts if DDLs %s are applied to the downstream. old table info: %s, new table info: %s", ddls, oldTable, newTable))
 		}
-		newJoined = newTable
 
 		// special case: if the DDL does not affect the schema at all, assume it is
 		// idempotent and just execute the DDL directly.
@@ -186,20 +192,9 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		}
 
 		// try to join tables.
-		for source, schemaTables := range l.tables {
-			for schema, tables := range schemaTables {
-				for table, ti := range tables {
-					if source != callerSource || schema != callerSchema || table != callerTable {
-						newJoined2, err2 := newJoined.Join(ti)
-						if err2 != nil {
-							// NOTE: conflict detected.
-							return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
-								err2, l.ID, fmt.Sprintf("fail to join table info %s with %s", newJoined, ti))
-						}
-						newJoined = newJoined2
-					}
-				}
-			}
+		newJoined, err = joinTable(newTable)
+		if err != nil {
+			return emptyDDLs, err
 		}
 
 		cmp, err = oldJoined.Compare(newJoined)
