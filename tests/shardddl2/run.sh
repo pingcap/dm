@@ -688,7 +688,66 @@ function DM_068() {
      run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, id datetime);\"; \
      run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, id datetime);\"" \
     "clean_table" "pessimistic"
-    run_case 068 "double-source-pessimistic" \
+    run_case 068 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, id datetime);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, id datetime);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, id datetime);\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_ADD_DROP_COLUMNS_CASE {
+    # add cols
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column col1 int, add column col2 int, add column col3 int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,now(),1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,now());"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,now());"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column col1 int, add column col2 int, add column col3 int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,now(),4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,now(),5,5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,now());"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column col1 int, add column col2 int, add column col3 int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,now(),7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,now(),8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,now(),9,9,9);"
+
+    # drop cols
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column col1, drop column col2;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(11,now(),11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(12,now(),12,12,12);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(13,now(),13,13,13);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column col1, drop column col2;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(14,now(),14);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(15,now(),15);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(16,now(),16,16,16);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop column col1, drop column col2;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(17,now(),17);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(18,now(),18);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(19,now(),19);"
+
+    # add and drop
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column col4 int, drop column col3;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(21,now(),21);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(22,now(),22);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(23,now(),23);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column col4 int, drop column col3;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(24,now(),24);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(25,now(),25);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(26,now(),26);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column col4 int, drop column col3;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(27,now(),27);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(28,now(),28);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(29,now(),29);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_ADD_DROP_COLUMNS() {
+    run_case ADD_DROP_COLUMNS "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, id datetime);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, id datetime);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, id datetime);\"" \
+    "clean_table" "pessimistic"
+    run_case ADD_DROP_COLUMNS "double-source-optimistic" \
     "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, id datetime);\"; \
      run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, id datetime);\"; \
      run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, id datetime);\"" \
@@ -698,16 +757,17 @@ function DM_068() {
 function run() {
     init_cluster
     init_database
-    start=36
-    end=70
-    except=(042 044 045 052 053 054 055 060 061 069 070)
-    for i in $(seq -f "%03g" ${start} ${end}); do
-        if [[ ${except[@]} =~ $i ]]; then
-            continue
-        fi
-        DM_${i}
-        sleep 1
-    done
+#    start=36
+#    end=70
+#    except=(042 044 045 052 053 054 055 060 061 069 070)
+#    for i in $(seq -f "%03g" ${start} ${end}); do
+#        if [[ ${except[@]} =~ $i ]]; then
+#            continue
+#        fi
+#        DM_${i}
+#        sleep 1
+#    done
+    DM_ADD_DROP_COLUMNS
 }
 
 cleanup_data $shardddl
