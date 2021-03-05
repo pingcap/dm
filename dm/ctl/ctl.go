@@ -75,6 +75,7 @@ func NewRootCmd() *cobra.Command {
 		master.NewGetCfgCmd(),
 		master.NewHandleErrorCmd(),
 	)
+	// copied from (*cobra.Command).InitDefaultHelpCmd
 	helpCmd := &cobra.Command{
 		Use:   "help [command]",
 		Short: "Gets help about any command.",
@@ -85,10 +86,10 @@ Simply type ` + cmd.Name() + ` help [path to command] for full details.`,
 			cmd, _, e := c.Root().Find(args)
 			if cmd == nil || e != nil {
 				c.Printf("Unknown help topic %#q\n", args)
-				c.Root().Usage()
+				_ = c.Root().Usage()
 			} else {
 				cmd.InitDefaultHelpFlag() // make possible 'help' flag to be shown
-				cmd.Help()
+				_ = cmd.Help()
 			}
 		},
 	}
