@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/go-sql-driver/mysql"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
@@ -112,7 +113,9 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 		mockDB.ExpectClose()
 	})
 
-	err = db.Ping()
+	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
+	defer cancel()
+	err = db.PingContext(ctx)
 	failpoint.Inject("failDBPing", func(_ failpoint.Value) {
 		err = errors.New("injected error")
 	})
