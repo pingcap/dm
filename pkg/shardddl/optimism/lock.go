@@ -114,6 +114,11 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		}
 	}()
 
+	// should not happen
+	if len(ddls) != len(newTIs) || len(newTIs) == 0 {
+		return ddls, terror.ErrMasterInconsistentOptimisticDDLsAndInfo.Generate(len(ddls), len(newTIs))
+	}
+
 	// handle the case where <callerSource, callerSchema, callerTable>
 	// is not in old source tables and current new source tables.
 	// duplicate append is not a problem.
@@ -129,6 +134,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	oldTable := l.tables[callerSource][callerSchema][callerTable]
 	oldJoined := l.joined
 
+	// update table info and joined info base on the last new table info
 	lastTableInfo := schemacmp.Encode(newTIs[len(newTIs)-1])
 	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
 		zap.Stringer("from", oldTable), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
@@ -158,6 +164,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	newTable := oldTable
 	newJoined := oldJoined
 
+	// join and compare every new table info
 	for idx, newTI := range newTIs {
 		oldTable = newTable
 		oldJoined = newJoined

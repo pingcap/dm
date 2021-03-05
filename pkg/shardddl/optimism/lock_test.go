@@ -933,6 +933,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 		DDLs8_2 = []string{"ALTER TABLE bar ADD COLUMN c2 TEXT"}
 		ti5     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 TEXT)`)
 		ti6     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 DATETIME, c3 INT)`)
+		ti6_1   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 DATETIME)`)
 		ti7     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c3 INT)`)
 		ti8     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 TEXT, c3 INT)`)
 
@@ -1045,7 +1046,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 
 	// TrySync for the second table with another schema (add two columns, one of them will cause conflict).
 	vers[source][db][tbls[1]]++
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs6, []*model.TableInfo{ti6}, tts, vers[source][db][tbls[1]])
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs6, []*model.TableInfo{ti6_1, ti6}, tts, vers[source][db][tbls[1]])
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
@@ -1089,6 +1090,157 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(ready[source][db][tbls[1]], IsTrue)
 
 	// all tables synced now.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+}
+
+func (t *testLock) TestLockTrySyncMultipleChangeDDL(c *C) {
+	var (
+		ID               = "test_lock_try_sync_normal-`foo`.`bar`"
+		task             = "test_lock_try_sync_normal"
+		sources          = []string{"mysql-replica-1", "mysql-replica-2"}
+		downSchema       = "db"
+		downTable        = "bar"
+		dbs              = []string{"db1", "db2"}
+		tbls             = []string{"bar1", "bar2"}
+		tableCount       = len(sources) * len(dbs) * len(tbls)
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c2 INT", "ALTER TABLE DROP COLUMN c1"}
+		DDLs2            = []string{"ALTER TABLE bar DROP COLUMN c2", "ALTER TABLE bar ADD COLUMN c3 TEXT"}
+		//		DDLs3            = []string{"ALTER TABLE bar DROP COLUMN c3"}
+		//		DDLs4            = []string{"ALTER TABLE bar DROP COLUMN c2", "ALTER TABLE bar DROP COLUMN c1"}
+		ti0   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti1_1 = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
+		ti1   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c2 INT)`)
+		ti2   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c3 TEXT)`)
+		ti2_1 = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		//		ti3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 BIGINT)`)
+		//		ti4              = ti0
+		//		ti4_1            = ti1
+		tables = map[string]map[string]struct{}{
+			dbs[0]: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
+			dbs[1]: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
+		}
+		tts = []TargetTable{
+			newTargetTable(task, sources[0], downSchema, downTable, tables),
+			newTargetTable(task, sources[1], downSchema, downTable, tables),
+		}
+
+		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+
+		vers = map[string]map[string]map[string]int64{
+			sources[0]: {
+				dbs[0]: {tbls[0]: 0, tbls[1]: 0},
+				dbs[1]: {tbls[0]: 0, tbls[1]: 0},
+			},
+			sources[1]: {
+				dbs[0]: {tbls[0]: 0, tbls[1]: 0},
+				dbs[1]: {tbls[0]: 0, tbls[1]: 0},
+			},
+		}
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// inconsistent ddls and table infos
+	vers[sources[0]][dbs[0]][tbls[0]]++
+	DDLs, err := l.TrySync(sources[0], dbs[0], tbls[0], DDLs1[:1], []*model.TableInfo{ti1_1, ti1}, tts, vers[sources[0]][dbs[0]][tbls[0]])
+	c.Assert(DDLs, DeepEquals, DDLs1[:1])
+	c.Assert(terror.ErrMasterInconsistentOptimisticDDLsAndInfo.Equal(err), IsTrue)
+
+	vers[sources[0]][dbs[0]][tbls[0]]++
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs1, []*model.TableInfo{ti1}, tts, vers[sources[0]][dbs[0]][tbls[0]])
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	c.Assert(terror.ErrMasterInconsistentOptimisticDDLsAndInfo.Equal(err), IsTrue)
+
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// CASE: all tables execute a same multiple change DDLs1
+	syncedCount := 0
+	resultDDLs1 := map[string]map[string]map[string][]string{
+		sources[0]: {
+			dbs[0]: {tbls[0]: DDLs1[:1], tbls[1]: DDLs1[:1]},
+			dbs[1]: {tbls[0]: DDLs1[:1], tbls[1]: DDLs1[:1]},
+		},
+		sources[1]: {
+			dbs[0]: {tbls[0]: DDLs1[:1], tbls[1]: DDLs1[:1]},
+			dbs[1]: {tbls[0]: DDLs1[:1], tbls[1]: DDLs1}, // only last table sync DROP COLUMN
+		},
+	}
+	for _, source := range sources {
+		for _, db := range dbs {
+			for _, tbl := range tbls {
+				vers[source][db][tbl]++
+				DDLs, err = l.TrySync(source, db, tbl, DDLs1, []*model.TableInfo{ti1_1, ti1}, tts, vers[source][db][tbl])
+				c.Assert(err, IsNil)
+				c.Assert(DDLs, DeepEquals, resultDDLs1[source][db][tbl])
+				c.Assert(l.versions, DeepEquals, vers)
+
+				syncedCount++
+				synced, _ := l.IsSynced()
+				c.Assert(synced, Equals, syncedCount == tableCount)
+				c.Assert(synced, Equals, l.synced)
+			}
+		}
+	}
+	// synced again after all tables applied the DDL.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// CASE: TrySync again after synced is idempotent.
+	// both ddl will sync again
+	vers[sources[0]][dbs[0]][tbls[0]]++
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs1, []*model.TableInfo{ti1_1, ti1}, tts, vers[sources[0]][dbs[0]][tbls[0]])
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	c.Assert(l.versions, DeepEquals, vers)
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// CASE: all tables execute a same multiple change DDLs2
+	syncedCount = 0
+	resultDDLs2 := map[string]map[string]map[string][]string{
+		sources[0]: {
+			dbs[0]: {tbls[0]: DDLs2[1:], tbls[1]: DDLs2[1:]},
+			dbs[1]: {tbls[0]: DDLs2[1:], tbls[1]: DDLs2[1:]},
+		},
+		sources[1]: {
+			dbs[0]: {tbls[0]: DDLs2[1:], tbls[1]: DDLs2[1:]},
+			dbs[1]: {tbls[0]: DDLs2[1:], tbls[1]: DDLs2}, // only last table sync DROP COLUMN
+		},
+	}
+	for _, source := range sources {
+		for _, db := range dbs {
+			for _, tbl := range tbls {
+				vers[source][db][tbl]++
+				DDLs, err = l.TrySync(source, db, tbl, DDLs2, []*model.TableInfo{ti2_1, ti2}, tts, vers[source][db][tbl])
+				c.Assert(err, IsNil)
+				c.Assert(DDLs, DeepEquals, resultDDLs2[source][db][tbl])
+				c.Assert(l.versions, DeepEquals, vers)
+
+				syncedCount++
+				synced, _ := l.IsSynced()
+				c.Assert(synced, Equals, syncedCount == tableCount)
+				c.Assert(synced, Equals, l.synced)
+			}
+		}
+	}
+	// synced again after all tables applied the DDL.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// CASE: TrySync again after synced is idempotent.
+	// only the second ddl(ADD COLUMN) will sync, the first one(DROP COLUMN) will not sync since oldJoined==newJoined
+	vers[sources[0]][dbs[0]][tbls[0]]++
+	DDLs, err = l.TrySync(sources[0], dbs[0], tbls[0], DDLs2, []*model.TableInfo{ti2_1, ti2}, tts, vers[sources[0]][dbs[0]][tbls[0]])
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs2[1:])
+	c.Assert(l.versions, DeepEquals, vers)
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
 }
