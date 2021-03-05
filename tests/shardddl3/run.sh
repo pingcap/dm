@@ -679,6 +679,176 @@ function DM_103() {
     "clean_table" "optimistic"
 }
 
+function DM_109_CASE() {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify b int not null;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} modify b int not null;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} modify b int not null;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12);"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_sql_tidb_with_retry "select is_nullable from information_schema.columns \
+        where table_schema='${shardddl}' and table_name='${tb}' and column_name ='b';" "NO"
+}
+
+function DM_109() {
+    run_case 109 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
+    "clean_table" "pessimistic"
+    run_case 109 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_110_CASE() {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify b int default 10;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1}(a) values(4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} modify b int default 10;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1}(a) values(7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1}(a) values(8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} modify b int default 10;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1}(a) values(10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1}(a) values(11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2}(a) values(12);"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_110() {
+    run_case 110 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int not null);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int not null);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int not null);\"" \
+    "clean_table" "pessimistic"
+    run_case 110 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int not null);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int not null);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int not null);\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_111_CASE() {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify b int default 0;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1}(a) values(4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} modify b int default -1;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1}(a) values(7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1}(a) values(8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} modify b int default -1;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1}(a) values(10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1}(a) values(11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2}(a) values(12);"
+    if [[ "$1" = "pessimistic" ]]; then
+        check_log_contain_with_retry "is different with" $WORK_DIR/master/log/dm-master.log
+    else
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "because schema conflict detected" 1
+    fi
+}
+
+function DM_111() {
+    run_case 111 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int not null);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int not null);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int not null);\"" \
+    "clean_table" "pessimistic"
+    run_case 111 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int not null);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int not null);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int not null);\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_112_CASE() {
+    # Test rollback NULL to NOT NULL.
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify b int not null;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify b int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_sql_tidb_with_retry "select is_nullable from information_schema.columns \
+        where table_schema='${shardddl}' and table_name='${tb}' and column_name ='b';" "YES"
+
+    # Test rollback NOT NULL to NULL
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify b int not null;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} modify b int not null;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} modify b int not null;"
+
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify b int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(13,13);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(14,14);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(15,15);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify b int not null;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(16,16);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(17,17);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(18,18);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_sql_tidb_with_retry "select is_nullable from information_schema.columns \
+        where table_schema='${shardddl}' and table_name='${tb}' and column_name ='b';" "NO"
+}
+
+function DM_112 {
+    # run_case 112 "double-source-pessimistic" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
+    # "clean_table" "pessimistic"
+    run_case 112 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
+    "clean_table" "optimistic"
+}
+
 function DM_RemoveLock_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
@@ -804,6 +974,10 @@ function DM_RestartMaster() {
 function run() {
     init_cluster
     init_database
+
+    DM_112
+    return
+
     start=71
     end=103
     except=(072 074 075 083 084 087 088 089 090 091 092 093)

@@ -203,7 +203,7 @@ function check_log_contain_with_retry() {
             echo "check log contain failed $k-th time (file not exist), retry later"
             continue
         fi
-        got=`grep "$text" $log1 | wc -l`
+        got=`grep -a "$text" $log1 | wc -l`
         if [[ $got -ne 0 ]]; then
             rc=1
             break
@@ -214,7 +214,7 @@ function check_log_contain_with_retry() {
                 echo "check log contain failed $k-th time (file not exist), retry later"
                 continue
             fi
-            got=`grep "$text" $log2 | wc -l`
+            got=`grep -a "$text" $log2 | wc -l`
             if [[ $got -ne 0 ]]; then
                 rc=1
                 break
