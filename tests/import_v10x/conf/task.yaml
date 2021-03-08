@@ -4,7 +4,7 @@ is-sharding: false
 shard-mode: ""
 ignore-checking-items: []
 meta-schema: dm_meta
-enable-heartbeat: true
+enable-heartbeat: false
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1
 timezone: Asia/Shanghai

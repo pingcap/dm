@@ -626,7 +626,10 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.Mode = c.TaskMode
 		cfg.CaseSensitive = c.CaseSensitive
 		cfg.MetaSchema = c.MetaSchema
-		cfg.EnableHeartbeat = c.EnableHeartbeat
+		cfg.EnableHeartbeat = false
+		if c.EnableHeartbeat {
+			log.L().Warn("DM 2.0 does not support heartbeat feature, will overwrite it to false")
+		}
 		cfg.HeartbeatUpdateInterval = c.HeartbeatUpdateInterval
 		cfg.HeartbeatReportInterval = c.HeartbeatReportInterval
 		cfg.Timezone = c.Timezone
