@@ -98,6 +98,8 @@ func SubTaskConfigFromV1TOML(data []byte) (config.SubTaskConfig, error) {
 	}
 
 	cfg := v1Cfg.SubTaskConfig
+	// DM v2.0 doesn't support heartbeat, overwrite it to false
+	cfg.EnableHeartbeat = false
 	cfg.MydumperConfig.ChunkFilesize = strconv.FormatInt(v1Cfg.ChunkFilesize, 10)
 	err = cfg.Adjust(true)
 	if err != nil {
