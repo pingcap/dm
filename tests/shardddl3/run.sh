@@ -703,6 +703,7 @@ function DM_109_CASE() {
         where table_schema='${shardddl}' and table_name='${tb}' and column_name ='b';" "NO"
 }
 
+# Change NULL to NOT NULL.
 function DM_109() {
     run_case 109 "double-source-pessimistic" \
     "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
@@ -738,6 +739,7 @@ function DM_110_CASE() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
+# Change NOT NULL to NULL with the same default value.
 function DM_110() {
     run_case 110 "double-source-pessimistic" \
     "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int not null);\"; \
@@ -779,6 +781,7 @@ function DM_111_CASE() {
     fi
 }
 
+# Change NOT NULL to NULL with the different default value.
 function DM_111() {
     run_case 111 "double-source-pessimistic" \
     "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int not null);\"; \
@@ -836,6 +839,7 @@ function DM_112_CASE() {
         where table_schema='${shardddl}' and table_name='${tb}' and column_name ='b';" "NO"
 }
 
+# Modify nullable and rollback.
 function DM_112 {
     # run_case 112 "double-source-pessimistic" \
     # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
@@ -854,17 +858,17 @@ function DM_113_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
 
-    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int, add column c int;"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column (b int, c int);"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(5);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(6);"
 
-    run_sql_source2 "alter table ${shardddl1}.${tb1} add column b int, add column c int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column (b int, c int);"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9);"
 
-    run_sql_source2 "alter table ${shardddl1}.${tb2} add column b int, add column c int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column (b int, c int);"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10,10);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11,11);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12,12);"
@@ -872,6 +876,7 @@ function DM_113_CASE {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
+# Add multiple columns to a single table.
 function DM_113 {
     run_case 113 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
     run_case 113 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
@@ -900,6 +905,7 @@ function DM_114_CASE {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
+# Delete multiple columns from a single table.
 function DM_114 {
     run_case 114 "double-source-pessimistic" \
     "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
@@ -935,6 +941,7 @@ function DM_115_CASE {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
+# Delete a column and rollback by adding it back.
 function DM_115 {
     # run_case 115 "double-source-pessimistic" \
     # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
@@ -953,7 +960,7 @@ function DM_116_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
 
-    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int, drop column c;"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int, drop column c;"    
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
@@ -971,12 +978,13 @@ function DM_116_CASE {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
+# Add and delete multiple columns at the same time.
 function DM_116 {
-    # run_case 116 "double-source-pessimistic" \
-    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c int);\"" \
-    # "clean_table" "pessimistic"
+    run_case 116 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c int);\"" \
+    "clean_table" "pessimistic"
     run_case 116 "double-source-optimistic" \
     "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
      run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
@@ -996,6 +1004,7 @@ function DM_117_CASE {
         "because schema conflict detected" 1
 }
 
+# Rename column name.
 function DM_117 {
     # run_case 117 "double-source-pessimistic" \
     # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
@@ -1135,7 +1144,9 @@ function run() {
     init_cluster
     init_database
 
-    DM_117
+    for i in {116..116}; do
+        DM_"$i"
+    done
     return
 
     start=71
