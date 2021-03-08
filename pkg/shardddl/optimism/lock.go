@@ -151,48 +151,48 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	}
 
 	var emptyDDLs = []string{}
-	oldTable := l.tables[callerSource][callerSchema][callerTable]
+	prevTable := l.tables[callerSource][callerSchema][callerTable]
 	oldJoined := l.joined
 
 	// update table info and joined info base on the last new table info
 	lastTableInfo := schemacmp.Encode(newTIs[len(newTIs)-1])
 	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
-		zap.Stringer("from", oldTable), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
+		zap.Stringer("from", prevTable), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
 	l.tables[callerSource][callerSchema][callerTable] = lastTableInfo
 
 	lastJoined, err := joinTable(lastTableInfo)
 	if err != nil {
 		return emptyDDLs, err
 	}
-	// update the current joined table info, if it's actually changed it should be logged in `if cmp != 0` block.
+	// update the current joined table info, it should be logged in `if cmp != 0` block below.
 	l.joined = lastJoined
 
 	newDDLs = []string{}
-	newTable := oldTable
+	nextTable := prevTable
 	newJoined := oldJoined
 
 	// join and compare every new table info
 	for idx, newTI := range newTIs {
-		oldTable = newTable
+		prevTable = nextTable
 		oldJoined = newJoined
-		newTable = schemacmp.Encode(newTI)
+		nextTable = schemacmp.Encode(newTI)
 		// special case: check whether DDLs making the schema become part of larger and another part of smaller.
-		if _, err = oldTable.Compare(newTable); err != nil {
+		if _, err = prevTable.Compare(nextTable); err != nil {
 			return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
-				err, l.ID, fmt.Sprintf("there will be conflicts if DDLs %s are applied to the downstream. old table info: %s, new table info: %s", ddls, oldTable, newTable))
+				err, l.ID, fmt.Sprintf("there will be conflicts if DDLs %s are applied to the downstream. old table info: %s, new table info: %s", ddls, prevTable, nextTable))
 		}
 
 		// special case: if the DDL does not affect the schema at all, assume it is
 		// idempotent and just execute the DDL directly.
 		// if any real conflicts after joined exist, they will be detected by the following steps.
 		var cmp int
-		if cmp, err = newTable.Compare(oldJoined); err == nil && cmp == 0 {
+		if cmp, err = nextTable.Compare(oldJoined); err == nil && cmp == 0 {
 			newDDLs = append(newDDLs, ddls[idx])
 			continue
 		}
 
 		// try to join tables.
-		newJoined, err = joinTable(newTable)
+		newJoined, err = joinTable(nextTable)
 		if err != nil {
 			return emptyDDLs, err
 		}
@@ -235,21 +235,21 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		// and any DML with smaller schema can fit both the larger or smaller schema.
 		// To make it easy to implement, we will temporarily choose strategy-B.
 
-		cmp, _ = oldTable.Compare(newTable) // we have checked `err` returned above.
+		cmp, _ = prevTable.Compare(nextTable) // we have checked `err` returned above.
 		if cmp < 0 {
 			// let every table to replicate the DDL.
 			newDDLs = append(newDDLs, ddls[idx])
 			continue
 		} else if cmp > 0 {
-			// do nothing except the last table.
+			// last shard table won't go here
 			continue
 		}
 
 		// compare the current table's info with joined info.
-		cmp, err = newTable.Compare(newJoined)
+		cmp, err = nextTable.Compare(newJoined)
 		if err != nil {
 			return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
-				err, l.ID, "can't compare table info (new table info) %s with (new joined table info) %s", newTable, newJoined) // NOTE: this should not happen.
+				err, l.ID, "can't compare table info (new table info) %s with (new joined table info) %s", nextTable, newJoined) // NOTE: this should not happen.
 		}
 		if cmp < 0 {
 			// no need to replicate DDLs, because has a larger joined schema (in the downstream).
@@ -257,7 +257,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 			// now, they should re-try until replicated successfully, try to implement better strategy later.
 			continue
 		}
-		log.L().Warn("new table info >= new joined table info", zap.Stringer("table info", newTable), zap.Stringer("joined table info", newJoined))
+		log.L().Warn("new table info >= new joined table info", zap.Stringer("table info", nextTable), zap.Stringer("joined table info", newJoined))
 		return ddls, nil // NOTE: this should not happen.
 	}
 
