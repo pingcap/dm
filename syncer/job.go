@@ -72,6 +72,7 @@ type job struct {
 	startLocation   binlog.Location // start location of the sql in binlog, for handle_error
 	currentLocation binlog.Location // end location of the sql in binlog, for user to skip sql manually by changing checkpoint
 	ddls            []string
+	originSQL       string // show origin sql when error, only DDL now
 }
 
 func (j *job) String() string {
@@ -99,7 +100,7 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 // when cfg.ShardMode == "", ddlInfo == nil，sourceTbls != nil, we use sourceTbls to record ddl affected tables.
 // when cfg.ShardMode == ShardOptimistic || ShardPessimistic, ddlInfo != nil, sourceTbls == nil.
 func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation, cmdLocation binlog.Location,
-	sourceTbls map[string]map[string]struct{}) *job {
+	sourceTbls map[string]map[string]struct{}, originSQL string) *job {
 
 	j := &job{
 		tp:              ddl,
@@ -107,6 +108,7 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation,
 		location:        location,
 		startLocation:   startLocation,
 		currentLocation: cmdLocation,
+		originSQL:       originSQL,
 	}
 
 	if ddlInfo != nil {
