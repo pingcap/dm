@@ -165,8 +165,8 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 		err = lm.Save(cs.pos, cs.gset)
 		c.Assert(err, IsNil)
 
-		currentUUID, pos2 := lm.Pos()
-		c.Assert(currentUUID, Equals, cs.uuidWithSuffix)
+		currentUUID2, pos2 := lm.Pos()
+		c.Assert(currentUUID2, Equals, cs.uuidWithSuffix)
 		c.Assert(pos2, DeepEquals, cs.pos)
 
 		currentUUID, gset = lm.GTID()

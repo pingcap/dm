@@ -468,6 +468,7 @@ const (
 	codeMasterTLSConfigNotValid
 	codeMasterBoundChanging
 	codeMasterFailToImportFromV10x
+	codeMasterInconsistentOptimistDDLsAndInfo
 )
 
 // DM-worker error code
@@ -1054,6 +1055,8 @@ var (
 	ErrMasterBoundChanging = New(codeMasterBoundChanging, ClassDMMaster, ScopeInternal, LevelLow, "source bound is changed too frequently, last old bound %s:, new bound %s", "Please try again later")
 
 	ErrMasterFailToImportFromV10x = New(codeMasterFailToImportFromV10x, ClassDMMaster, ScopeInternal, LevelHigh, "fail to import DM cluster from v1.0.x", "Please confirm that you have not violated any restrictions in the upgrade documentation.")
+
+	ErrMasterInconsistentOptimisticDDLsAndInfo = New(codeMasterInconsistentOptimistDDLsAndInfo, ClassDMMaster, ScopeInternal, LevelHigh, "inconsistent count of optimistic ddls and table infos, ddls: %d, table info: %d", "")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set", "")
