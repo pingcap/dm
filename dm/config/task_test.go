@@ -805,6 +805,11 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	// deprecated config will not recover
 	stCfgs[0].EnableANSIQuotes = stCfg1.EnableANSIQuotes
 	stCfgs[1].EnableANSIQuotes = stCfg2.EnableANSIQuotes
+	// some features are disabled
+	c.Assert(stCfg1.EnableHeartbeat, IsTrue)
+	c.Assert(stCfg2.EnableHeartbeat, IsTrue)
+	stCfg1.EnableHeartbeat = false
+	stCfg2.EnableHeartbeat = false
 	c.Assert(stCfgs[0].String(), Equals, stCfg1.String())
 	c.Assert(stCfgs[1].String(), Equals, stCfg2.String())
 }
