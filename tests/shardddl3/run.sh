@@ -1018,6 +1018,236 @@ function DM_117 {
     "clean_table" "optimistic"
 }
 
+function DM_118_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3,3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop index idx, add index idx(c3,c1,c2);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop index idx, add index idx(c3,c1,c2);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop index idx, add index idx(c3,c1,c2);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10,10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11,11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12,12,12);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_sql_tidb_with_retry "select group_concat(column_name) from INFORMATION_SCHEMA.STATISTICS \
+        where table_schema='${shardddl}' and table_name='${tb}' and index_name='idx' order by seq_in_index;" "c3,c1,c2"
+}
+
+
+# Adjust index fields combination.
+function DM_118 {
+    run_case 118 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int, index idx(c1, c2, c3));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int, index idx(c1, c2, c3));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int, c3 int, index idx(c1, c2, c3));\"" \
+    "clean_table" "pessimistic"
+    run_case 118 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int, index idx(c1, c2, c3));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int, index idx(c1, c2, c3));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int, c3 int, index idx(c1, c2, c3));\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_119_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3,3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add index idx(c1,c2);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add index idx(c1,c3);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9,9);"
+    
+    if [[ "$1" = "pessimistic" ]]; then
+        check_log_contain_with_retry "is different with" $WORK_DIR/master/log/dm-master.log
+    else
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "because schema conflict detected" 1
+    fi
+}
+
+# Add index with the same name but with different fields.
+function DM_119 {
+    run_case 119 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int, c3 int);\"" \
+    "clean_table" "pessimistic"
+    run_case 119 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int, c3 int);\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_120_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add index idx1(c1), add index idx2(c2);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add index idx1(c1), add index idx2(c2);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add index idx1(c1), add index idx2(c2);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12,12);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_sql_tidb_with_retry "select group_concat(index_name) from INFORMATION_SCHEMA.STATISTICS \
+        where table_schema='${shardddl}' and table_name='${tb}' and index_name like 'idx%' order by index_name;" "idx1,idx2"
+}
+
+function DM_120 {
+    run_case 120 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int);\"" \
+    "clean_table" "pessimistic"
+    run_case 120 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int);\"" \
+    "clean_table" "optimistic"   
+}
+
+function DM_121_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add index idx(c1);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add index idx(c1,c2);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
+    
+    if [[ "$1" = "pessimistic" ]]; then
+        check_log_contain_with_retry "is different with" $WORK_DIR/master/log/dm-master.log
+    else
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "because schema conflict detected" 1
+    fi
+}
+
+# Add index with the same name but with different fields.
+function DM_121 {
+    # run_case 121 "double-source-pessimistic" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
+    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int);\"" \
+    # "clean_table" "pessimistic"
+    run_case 121 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int);\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_122_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop index idx1, drop index idx2;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop index idx1, drop index idx2;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop index idx1, drop index idx2;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12,12);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_sql_tidb_with_retry "select count(1) from INFORMATION_SCHEMA.STATISTICS \
+        where table_schema='${shardddl}' and table_name='${tb}' and index_name like 'idx%';" "count(1): 0"
+}
+
+function DM_122 {
+    run_case 122 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, index idx1(c1), index idx2(c2));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, index idx1(c1), index idx2(c2));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int, index idx1(c1), index idx2(c2));\"" \
+    "clean_table" "pessimistic"
+    run_case 122 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, index idx1(c1), index idx2(c2));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, index idx1(c1), index idx2(c2));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int, index idx1(c1), index idx2(c2));\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_123_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2,2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3,3,3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop index idx1, add index idx1(c2,c1), drop index idx2, add index idx2(c4,c3);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5,5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,6,6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop index idx1, add index idx1(c2,c1), drop index idx2, add index idx2(c4,c3);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9,9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop index idx1, add index idx1(c2,c1), drop index idx2, add index idx2(c4,c3);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10,10,10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11,11,11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12,12,12,12);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_sql_tidb_with_retry "select group_concat(column_name) from INFORMATION_SCHEMA.STATISTICS \
+        where table_schema='${shardddl}' and table_name='${tb}' and index_name like 'idx%' order by index_name,seq_in_index;" "c2,c1,c4,c3"
+}
+
+function DM_123 {
+    run_case 123 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int, c4 int, index idx1(c1, c2), index idx2(c3, c4));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int, c4 int, index idx1(c1, c2), index idx2(c3, c4));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int, c3 int, c4 int, index idx1(c1, c2), index idx2(c3, c4));\"" \
+    "clean_table" "pessimistic"
+    run_case 123 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int, c4 int, index idx1(c1, c2), index idx2(c3, c4));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int, c4 int, index idx1(c1, c2), index idx2(c3, c4));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int, c3 int, c4 int, index idx1(c1, c2), index idx2(c3, c4));\"" \
+    "clean_table" "optimistic"
+}
+
 function DM_RemoveLock_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
@@ -1144,10 +1374,12 @@ function run() {
     init_cluster
     init_database
 
-    for i in {116..116}; do
-        DM_"$i"
-    done
+    DM_123
     return
+    # for i in {121..121}; do
+    #     DM_"$i"
+    # done
+    # return
 
     start=71
     end=103
