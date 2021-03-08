@@ -20,6 +20,7 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/failpoint"
 	"go.etcd.io/etcd/clientv3"
 	v3rpc "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 	"go.etcd.io/etcd/integration"
@@ -1008,7 +1009,7 @@ func (t *testScheduler) TestLastBound(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(bounded, IsFalse)
 
-	// after worker3 become offline, worker2 should be bounded to worker2
+	// after worker3 become offline, source2 should be bounded to worker2
 	s.updateStatusForUnbound(sourceID2)
 	_, ok := s.bounds[sourceID2]
 	c.Assert(ok, IsFalse)
@@ -1017,4 +1018,94 @@ func (t *testScheduler) TestLastBound(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(bounded, IsTrue)
 	c.Assert(s.bounds[sourceID2], DeepEquals, worker2)
+}
+
+func (t *testScheduler) TestTransferSource(c *C) {
+	defer clearTestInfoOperation(c)
+
+	var (
+		logger      = log.L()
+		s           = NewScheduler(&logger, config.Security{})
+		sourceID1   = "mysql-replica-1"
+		sourceID2   = "mysql-replica-2"
+		sourceID3   = "mysql-replica-3"
+		sourceID4   = "mysql-replica-4"
+		workerName1 = "dm-worker-1"
+		workerName2 = "dm-worker-2"
+		workerName3 = "dm-worker-3"
+		workerName4 = "dm-worker-4"
+	)
+
+	worker1 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName1}}
+	worker2 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName2}}
+	worker3 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName3}}
+	worker4 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName4}}
+
+	// step 1: start an empty scheduler
+	s.started = true
+	s.etcdCli = etcdTestCli
+	s.workers[workerName1] = worker1
+	s.workers[workerName2] = worker2
+	s.workers[workerName3] = worker3
+	s.workers[workerName4] = worker4
+	s.sourceCfgs[sourceID1] = config.SourceConfig{}
+	s.sourceCfgs[sourceID2] = config.SourceConfig{}
+
+	worker1.ToFree()
+	c.Assert(s.boundSourceToWorker(sourceID1, worker1), IsNil)
+	worker2.ToFree()
+	c.Assert(s.boundSourceToWorker(sourceID2, worker2), IsNil)
+
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker1)
+	c.Assert(s.bounds[sourceID2], DeepEquals, worker2)
+
+	worker3.ToFree()
+	worker4.ToFree()
+
+	// test invalid transfer: source not exists
+	c.Assert(s.TransferSource("not-exist", workerName3), NotNil)
+
+	// test valid transfer: source -> worker = bound -> free
+	c.Assert(s.TransferSource(sourceID1, workerName4), IsNil)
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker4)
+	c.Assert(worker1.Stage(), Equals, WorkerFree)
+
+	// test valid transfer: source -> worker = unbound -> free
+	s.sourceCfgs[sourceID3] = config.SourceConfig{}
+	s.unbounds[sourceID3] = struct{}{}
+	c.Assert(s.TransferSource(sourceID3, workerName3), IsNil)
+	c.Assert(s.bounds[sourceID3], DeepEquals, worker3)
+
+	// test valid transfer: self
+	c.Assert(s.TransferSource(sourceID3, workerName3), IsNil)
+	c.Assert(s.bounds[sourceID3], DeepEquals, worker3)
+
+	// test invalid transfer: source -> worker = bound -> bound
+	c.Assert(s.TransferSource(sourceID1, workerName3), NotNil)
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker4)
+	c.Assert(s.bounds[sourceID3], DeepEquals, worker3)
+
+	// test invalid transfer: source -> worker = bound -> offline
+	worker1.ToOffline()
+	c.Assert(s.TransferSource(sourceID1, workerName1), NotNil)
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker4)
+
+	// test invalid transfer: source -> worker = unbound -> bound
+	s.sourceCfgs[sourceID4] = config.SourceConfig{}
+	s.unbounds[sourceID4] = struct{}{}
+	c.Assert(s.TransferSource(sourceID4, workerName3), NotNil)
+	c.Assert(s.bounds[sourceID3], DeepEquals, worker3)
+	delete(s.unbounds, sourceID4)
+	delete(s.sourceCfgs, sourceID4)
+
+	worker1.ToFree()
+	// now we have (worker1, nil) (worker2, source2) (worker3, source3) (worker4, source1)
+
+	// test fail halfway won't left old worker unbound
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/scheduler/failToReplaceSourceBound", `return()`), IsNil)
+	//nolint:errcheck
+	defer failpoint.Disable("github.com/pingcap/dm/dm/master/scheduler/failToReplaceSourceBound")
+	c.Assert(s.TransferSource(sourceID1, workerName1), NotNil)
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker4)
+	c.Assert(worker1.Stage(), Equals, WorkerFree)
 }

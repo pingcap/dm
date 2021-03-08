@@ -15,10 +15,12 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/pingcap/failpoint"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
@@ -349,6 +351,68 @@ func (s *Scheduler) GetSourceCfgByID(source string) *config.SourceConfig {
 	}
 	clone := cfg
 	return &clone
+}
+
+// TransferSource unbinds the source and binds it to a free worker. If fails halfway, the old worker should try recover
+func (s *Scheduler) TransferSource(source, worker string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	// 1. check existence.or no need
+	if _, ok := s.sourceCfgs[source]; !ok {
+		return terror.ErrSchedulerSourceCfgExist.Generate(source)
+	}
+	w, ok := s.workers[worker]
+	if !ok {
+		return terror.ErrSchedulerWorkerNotExist.Generate(worker)
+	}
+	oldWorker, hasOldWorker := s.bounds[source]
+	if hasOldWorker && oldWorker.BaseInfo().Name == worker {
+		return nil
+	}
+
+	// 2. check new worker is free
+	stage := w.Stage()
+	if stage != WorkerFree {
+		return terror.ErrSchedulerWorkerInvalidTrans.Generate(worker, stage, WorkerBound)
+	}
+
+	// 3. deal with old worker
+	if !hasOldWorker {
+		s.logger.Warn("in transfer source, found a free worker and not bound source, which should not happened",
+			zap.String("source", source),
+			zap.String("worker", worker))
+		// 3.1 bound it directly
+		err := s.boundSourceToWorker(source, w)
+		if err == nil {
+			delete(s.unbounds, source)
+		}
+		return err
+	}
+
+	defer func() {
+		_, err := s.tryBoundForWorker(oldWorker)
+		if err != nil {
+			s.logger.Warn("in transfer source, error when try bound the old worker", zap.Error(err))
+		}
+	}()
+
+	// 4. replace the source bound
+	failpoint.Inject("failToReplaceSourceBound", func(_ failpoint.Value) {
+		failpoint.Return(errors.New("failToPutSourceBound"))
+	})
+	_, err := ha.ReplaceSourceBound(s.etcdCli, source, oldWorker.BaseInfo().Name, worker)
+	if err != nil {
+		return err
+	}
+	oldWorker.ToFree()
+	// we have checked w.stage is free, so there should not be an error
+	_ = s.updateStatusForBound(w, ha.NewSourceBound(source, worker))
+	return nil
 }
 
 // AddSubTasks adds the information of one or more subtasks for one task.
