@@ -99,9 +99,9 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 	grantAndPutKV := func(k, v string, ttl int64) (clientv3.LeaseID, error) {
 		cliCtx, cancel := context.WithTimeout(ctx, etcdutil.DefaultRequestTimeout)
 		defer cancel()
-		lease, err := cli.Grant(cliCtx, ttl)
-		if err != nil {
-			return 0, err
+		lease, err2 := cli.Grant(cliCtx, ttl)
+		if err2 != nil {
+			return 0, err2
 		}
 		_, err = cli.Put(cliCtx, k, v, clientv3.WithLease(lease.ID))
 		if err != nil {

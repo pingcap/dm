@@ -50,7 +50,7 @@ func (lk *LockKeeper) TrySync(info Info, tts []TargetTable) (string, []string, e
 		l = lk.locks[lockID]
 	}
 
-	newDDLs, err := l.TrySync(info.Source, info.UpSchema, info.UpTable, info.DDLs, info.TableInfoAfter, tts, info.Version)
+	newDDLs, err := l.TrySync(info.Source, info.UpSchema, info.UpTable, info.DDLs, info.TableInfosAfter, tts, info.Version)
 	return lockID, newDDLs, err
 }
 
