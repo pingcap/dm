@@ -81,13 +81,13 @@ func (t *testOptimist) TestOptimist(c *C) {
 		tiBefore       = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
 		tiAfter1       = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
 		tiAfter2       = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
-		info1          = o.ConstructInfo("foo-1", "bar-1", downSchema, downTable, DDLs1, tiBefore, tiAfter1)
+		info1          = o.ConstructInfo("foo-1", "bar-1", downSchema, downTable, DDLs1, tiBefore, []*model.TableInfo{tiAfter1})
 		op1            = optimism.NewOperation(ID, task, source, info1.UpSchema, info1.UpTable, DDLs1, optimism.ConflictNone, false)
-		info2          = o.ConstructInfo("foo-1", "bar-2", downSchema, downTable, DDLs2, tiBefore, tiAfter2)
+		info2          = o.ConstructInfo("foo-1", "bar-2", downSchema, downTable, DDLs2, tiBefore, []*model.TableInfo{tiAfter2})
 		op2            = optimism.NewOperation(ID, task, source, info2.UpSchema, info2.UpTable, DDLs2, optimism.ConflictDetected, false)
 
 		infoCreate = o.ConstructInfo("foo-new", "bar-new", downSchema, downTable,
-			[]string{`CREATE TABLE bar (id INT PRIMARY KEY)`}, tiBefore, tiBefore) // same table info.
+			[]string{`CREATE TABLE bar (id INT PRIMARY KEY)`}, tiBefore, []*model.TableInfo{tiBefore}) // same table info.
 		infoDrop = o.ConstructInfo("foo-new", "bar-new", downSchema, downTable,
 			[]string{`DROP TABLE bar`}, nil, nil) // both table infos are nil.
 	)
