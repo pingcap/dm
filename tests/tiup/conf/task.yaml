@@ -2,6 +2,7 @@
 name: upgrade_via_tiup
 task-mode: all
 is-sharding: true
+enable-heartbeat: true
 
 target-database:
   host: tidb

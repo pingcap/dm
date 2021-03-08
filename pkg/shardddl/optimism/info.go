@@ -44,8 +44,8 @@ type Info struct {
 	DownTable  string   `json:"down-table"`  // downstream/target table name
 	DDLs       []string `json:"ddls"`        // DDL statements
 
-	TableInfoBefore *model.TableInfo `json:"table-info-before"` // the tracked table schema before applying the DDLs
-	TableInfoAfter  *model.TableInfo `json:"table-info-after"`  // the tracked table schema after applying the DDLs
+	TableInfoBefore *model.TableInfo   `json:"table-info-before"` // the tracked table schema before applying the DDLs
+	TableInfosAfter []*model.TableInfo `json:"table-info-after"`  // the tracked table schema after applying the DDLs
 
 	// only used to report to the caller of the watcher, do not marsh it.
 	// if it's true, it means the Info has been deleted in etcd.
@@ -57,7 +57,7 @@ type Info struct {
 
 // NewInfo creates a new Info instance.
 func NewInfo(task, source, upSchema, upTable, downSchema, downTable string,
-	DDLs []string, tableInfoBefore, tableInfoAfter *model.TableInfo) Info {
+	DDLs []string, tableInfoBefore *model.TableInfo, tableInfosAfter []*model.TableInfo) Info {
 	return Info{
 		Task:            task,
 		Source:          source,
@@ -67,7 +67,7 @@ func NewInfo(task, source, upSchema, upTable, downSchema, downTable string,
 		DownTable:       downTable,
 		DDLs:            DDLs,
 		TableInfoBefore: tableInfoBefore,
-		TableInfoAfter:  tableInfoAfter,
+		TableInfosAfter: tableInfosAfter,
 	}
 }
 
