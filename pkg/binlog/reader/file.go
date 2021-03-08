@@ -121,7 +121,7 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 			case <-r.ctx.Done():
 			}
 		} else {
-			r.logger.Info("parse end of binlog file", zap.Stringer("pos", pos))
+			r.logger.Info("parse end of binlog file", zap.Uint32("pos", r.readOffset.Get()))
 			close(r.endCh)
 		}
 	}()
