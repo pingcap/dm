@@ -87,6 +87,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 		isDBDDL  bool
 		tiBefore *model.TableInfo
 		tiAfter  *model.TableInfo
+		tisAfter []*model.TableInfo
 		err      error
 	)
 
@@ -120,19 +121,19 @@ func (s *Syncer) handleQueryEventOptimistic(
 		if err = s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
 			return err
 		}
-	}
-
-	if !isDBDDL {
-		tiAfter, err = s.getTable(ec.tctx, upSchema, upTable, downSchema, downTable)
-		if err != nil {
-			return err
+		if !isDBDDL {
+			tiAfter, err = s.getTable(ec.tctx, upSchema, upTable, downSchema, downTable)
+			if err != nil {
+				return err
+			}
+			tisAfter = append(tisAfter, tiAfter)
 		}
 	}
 
 	// in optimistic mode, don't `saveTablePoint` before execute DDL,
 	// because it has no `UnresolvedTables` to prevent the flush of this checkpoint.
 
-	info := s.optimist.ConstructInfo(upSchema, upTable, downSchema, downTable, needHandleDDLs, tiBefore, tiAfter)
+	info := s.optimist.ConstructInfo(upSchema, upTable, downSchema, downTable, needHandleDDLs, tiBefore, tisAfter)
 
 	var (
 		rev    int64
