@@ -478,7 +478,7 @@ func (l *Lock) GetVersion(source string, schema string, table string) int64 {
 	return l.versions[source][schema][table]
 }
 
-// AddDifferentFieldLenColumns checks whether
+// AddDifferentFieldLenColumns checks whether dm adds columns with different field lengths
 func AddDifferentFieldLenColumns(lockID, ddl string, oldJoined, newJoined schemacmp.Table) error {
 	if stmt, err := parser.New().ParseOneStmt(ddl, "", ""); err != nil {
 		return terror.ErrShardDDLOptimismTrySyncFail.Delegate(
