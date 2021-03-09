@@ -246,6 +246,11 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 
 		cmp, _ = prevTable.Compare(nextTable) // we have checked `err` returned above.
 		if cmp < 0 {
+			// check for add column with different field lengths
+			err = AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined)
+			if err != nil {
+				return ddls, err
+			}
 			// let every table to replicate the DDL.
 			newDDLs = append(newDDLs, ddls[idx])
 			continue
@@ -492,7 +497,7 @@ func AddDifferentFieldLenColumns(lockID, ddl string, oldJoined, newJoined schema
 			oldCol, ok1 := oldJoinedCols[col]
 			newCol, ok2 := newJoinedCols[col]
 			if ok1 && ok2 {
-				if newCol.Flen > oldCol.Flen {
+				if newCol.Flen != oldCol.Flen {
 					return terror.ErrShardDDLOptimismTrySyncFail.Generate(
 						lockID, fmt.Sprintf("add columns with different field lengths."+
 							"ddl: %s, origLen: %d, newLen: %d", ddl, oldCol.Flen, newCol.Flen))

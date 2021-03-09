@@ -839,9 +839,9 @@ function DM_109() {
 
 function DM_110_CASE() {
     DM_DIFFRENT_FIELD_FLAG_CASE \
-    "int(11) zerofill" "2" \
-    "int(11)" "4" \
-    "int(11) zerofill" "'66666'"
+    "varchar(5)" "'22222'" \
+    "varchar(4)" "'4444'" \
+    "varchar(3)" "'666'"
 }
 
 function DM_110() {
@@ -850,13 +850,24 @@ function DM_110() {
 
 function DM_111_CASE() {
     DM_DIFFRENT_FIELD_FLAG_CASE \
+    "int(11) zerofill" "2" \
+    "int(11)" "4" \
+    "int(11) zerofill" "'66666'"
+}
+
+function DM_111() {
+    run_case 111 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function DM_112_CASE() {
+    DM_DIFFRENT_FIELD_FLAG_CASE \
     "int(11) unsigned" "2" \
     "int(11)" "4" \
     "int(11) unsigned" "'66666'"
 }
 
-function DM_111() {
-    run_case 111 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+function DM_112() {
+    run_case 112 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
 function DM_RemoveLock_CASE() {
@@ -985,7 +996,7 @@ function run() {
     init_cluster
     init_database
     start=71
-    end=111
+    end=112
     except=(072 074 075 083 084 087 088 089 090 091 092 093)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then

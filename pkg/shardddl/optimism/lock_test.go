@@ -1471,6 +1471,7 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 	)
 	c.Assert(AddDifferentFieldLenColumns(ID, DDLs1[0], table1, table2), IsNil)
 	c.Assert(AddDifferentFieldLenColumns(ID, DDLs2[0], table2, table3), ErrorMatches, ".*add columns with different field lengths.*")
+	c.Assert(AddDifferentFieldLenColumns(ID, DDLs1[0], table3, table2), ErrorMatches, ".*add columns with different field lengths.*")
 
 	// the initial status is synced but not resolved.
 	t.checkLockSynced(c, l)
@@ -1486,11 +1487,30 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 	t.checkLockNoDone(c, l)
 	c.Assert(l.IsResolved(), IsFalse)
 
-	// TrySync for the second table, the joined schema become larger.
+	// TrySync for the second table, add a table with a larger field length
 	vers[source][db][tbls[1]]++
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, []*model.TableInfo{ti2}, tts, vers[source][db][tbls[1]])
 	c.Assert(err, ErrorMatches, ".*add columns with different field lengths.*")
 	c.Assert(DDLs, DeepEquals, DDLs2)
+	c.Assert(l.versions, DeepEquals, vers)
+
+	// case 2: add a column with a smaller field length
+	l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+
+	// TrySync for the first table, no table has done the DDLs operation.
+	vers[source][db][tbls[0]]--
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, []*model.TableInfo{ti2}, tts, vers[source][db][tbls[1]])
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs2)
+	c.Assert(l.versions, DeepEquals, vers)
+	t.checkLockNoDone(c, l)
+	c.Assert(l.IsResolved(), IsFalse)
+
+	// TrySync for the second table, add a table with a smaller field length
+	vers[source][db][tbls[0]]++
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs1, []*model.TableInfo{ti1}, tts, vers[source][db][tbls[0]])
+	c.Assert(err, ErrorMatches, ".*add columns with different field lengths.*")
+	c.Assert(DDLs, DeepEquals, DDLs1)
 	c.Assert(l.versions, DeepEquals, vers)
 }
 
