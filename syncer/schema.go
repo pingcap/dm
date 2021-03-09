@@ -22,6 +22,8 @@ import (
 	"github.com/pingcap/parser/model"
 
 	"github.com/pingcap/dm/dm/pb"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -74,7 +76,14 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 		if err != nil {
 			return "", terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, req.Database, req.Table)
 		}
-		return "", nil
+
+		ti, err := s.schemaTracker.GetTable(req.Database, req.Table)
+		if err != nil {
+			return "", err
+		}
+
+		err = s.checkpoint.FlushPointWithTableInfo(tcontext.NewContext(ctx, log.L()), req.Database, req.Table, ti)
+		return "", err
 	case pb.SchemaOp_RemoveSchema:
 		// we only drop the schema in the schema-tracker now,
 		// so if we drop the schema and continue to replicate any DDL/DML, it will try to get schema from downstream again.

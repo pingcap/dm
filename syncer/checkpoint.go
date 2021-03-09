@@ -211,6 +211,9 @@ type CheckPoint interface {
 	// corresponding to Meta.Flush
 	FlushPointsExcept(tctx *tcontext.Context, exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error
 
+	// FlushPointWithTableInfo flushed the table point with given table info
+	FlushPointWithTableInfo(tctx *tcontext.Context, schema string, table string, ti *model.TableInfo) error
+
 	// GlobalPoint returns the global binlog stream's checkpoint
 	// corresponding to Meta.Pos and Meta.GTID
 	GlobalPoint() binlog.Location
@@ -550,6 +553,43 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 	}
 
 	cp.globalPointSaveTime = time.Now()
+	return nil
+}
+
+// FlushPointWithTableInfo implements CheckPoint.FlushPointWithTableInfo
+func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, schema string, table string, ti *model.TableInfo) error {
+	cp.RLock()
+	defer cp.RUnlock()
+
+	sqls := make([]string, 0, 10)
+	args := make([][]interface{}, 0, 10)
+
+	point := cp.points[schema][table]
+
+	tiBytes, err := json.Marshal(ti)
+	if err != nil {
+		return terror.ErrSchemaTrackerCannotSerialize.Delegate(err, schema, table)
+	}
+
+	location := point.MySQLLocation()
+	sql2, arg := cp.genUpdateSQL(schema, table, location, nil, tiBytes, false)
+	sqls = append(sqls, sql2)
+	args = append(args, arg)
+
+	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
+	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
+	defer cancel()
+	_, err = cp.dbConn.executeSQL(tctx2, sqls, args...)
+	if err != nil {
+		return err
+	}
+
+	err = point.save(point.location, ti)
+	if err != nil {
+		return err
+	}
+	point.flush()
+
 	return nil
 }
 
