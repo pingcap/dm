@@ -1143,7 +1143,7 @@ function DM_121_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
     
-    # TODO: DM should detect conflicts and give human readable error messages.
+    # FIXME: DM should detect conflicts and give human readable error messages.
     # For example:
     # if [[ "$1" = "pessimistic" ]]; then
     #     check_log_contain_with_retry "is different with" $WORK_DIR/master/log/dm-master.log
