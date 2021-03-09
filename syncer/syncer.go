@@ -1709,7 +1709,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 }
 
 func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, originSQL string) error {
-	if originSQL == "BEGIN"{
+	if originSQL == "BEGIN" {
 		return nil
 	}
 
