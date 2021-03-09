@@ -69,7 +69,7 @@ func (s *Syncer) initOptimisticShardDDL(ctx context.Context) error {
 func (s *Syncer) handleQueryEventOptimistic(
 	ev *replication.QueryEvent, ec eventContext,
 	needHandleDDLs []string, needTrackDDLs []trackedDDL,
-	onlineDDLTableNames map[string]*filter.Table) error {
+	onlineDDLTableNames map[string]*filter.Table, originSQL string) error {
 	// interrupted after flush old checkpoint and before track DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
 		err := handleFlushCheckpointStage(1, val.(int), "before track DDL")
@@ -199,7 +199,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 		tableNames: needTrackDDLs[0].tableNames,
 		stmt:       needTrackDDLs[0].stmt,
 	}
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil, originSQL)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
