@@ -362,7 +362,7 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 		return terror.ErrSchedulerNotStarted.Generate()
 	}
 
-	// 1. check existence.or no need
+	// 1. check existence or no need
 	if _, ok := s.sourceCfgs[source]; !ok {
 		return terror.ErrSchedulerSourceCfgExist.Generate(source)
 	}
@@ -393,7 +393,6 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 		}
 		return err
 	}
-
 	defer func() {
 		_, err := s.tryBoundForWorker(oldWorker)
 		if err != nil {

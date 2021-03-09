@@ -107,7 +107,7 @@ func DeleteSourceBound(cli *clientv3.Client, workers ...string) (int64, error) {
 	return rev, err
 }
 
-// ReplaceSourceBound do delete an old bound and put a new bound in one transaction, so a bound source will not become
+// ReplaceSourceBound deletes an old bound and puts a new bound in one transaction, so a bound source will not become
 // unbound because of failing halfway
 func ReplaceSourceBound(cli *clientv3.Client, source, oldWorker, newWorker string) (int64, error) {
 	ops := make([]clientv3.Op, 0, 3)
