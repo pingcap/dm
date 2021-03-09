@@ -140,7 +140,7 @@ function DM_REPLACE_ERROR_CASE() {
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "unsupported add column .* constraint UNIQUE KEY" 1 \
-            "origin DDL: \[alter table ${db}.${tb1} add column new_col text, add column c int unique\]" 1
+            "origin SQL: \[alter table ${db}.${tb1} add column new_col text, add column c int unique\]" 1
 
     # replace sql
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
