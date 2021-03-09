@@ -191,13 +191,13 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
 		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
 		ti3              = ti1
-		i11              = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, ti1)
-		i12              = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs1, ti0, ti1)
-		i21              = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs2, ti1, ti2)
+		i11              = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i12              = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i21              = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2})
 		i23              = optimism.NewInfo(task, source2, "foo-2", "bar-3", downSchema, downTable,
-			[]string{`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`}, ti2, ti2)
-		i31 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs3, ti2, ti3)
-		i33 = optimism.NewInfo(task, source2, "foo-2", "bar-3", downSchema, downTable, DDLs3, ti2, ti3)
+			[]string{`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`}, ti2, []*model.TableInfo{ti2})
+		i31 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs3, ti2, []*model.TableInfo{ti3})
+		i33 = optimism.NewInfo(task, source2, "foo-2", "bar-3", downSchema, downTable, DDLs3, ti2, []*model.TableInfo{ti3})
 	)
 
 	st1.AddTable("foo", "bar-1", downSchema, downTable)
@@ -661,9 +661,9 @@ func (t *testOptimist) TestOptimistLockConflict(c *C) {
 		ti1                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
 		ti2                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
 		ti3                = ti0
-		i1                 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, ti1)
-		i2                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs2, ti0, ti2)
-		i3                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs3, ti2, ti3)
+		i1                 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i2                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs2, ti0, []*model.TableInfo{ti2})
+		i3                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs3, ti2, []*model.TableInfo{ti3})
 	)
 
 	st1.AddTable("foo", "bar-1", downSchema, downTable)
@@ -756,10 +756,10 @@ func (t *testOptimist) TestOptimistLockMultipleTarget(c *C) {
 		DDLs               = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
 		ti0                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
 		ti1                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
-		i11                = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable1, DDLs, ti0, ti1)
-		i12                = optimism.NewInfo(task, source, upSchema, upTables[1], downSchema, downTable1, DDLs, ti0, ti1)
-		i21                = optimism.NewInfo(task, source, upSchema, upTables[2], downSchema, downTable2, DDLs, ti0, ti1)
-		i22                = optimism.NewInfo(task, source, upSchema, upTables[3], downSchema, downTable2, DDLs, ti0, ti1)
+		i11                = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable1, DDLs, ti0, []*model.TableInfo{ti1})
+		i12                = optimism.NewInfo(task, source, upSchema, upTables[1], downSchema, downTable1, DDLs, ti0, []*model.TableInfo{ti1})
+		i21                = optimism.NewInfo(task, source, upSchema, upTables[2], downSchema, downTable2, DDLs, ti0, []*model.TableInfo{ti1})
+		i22                = optimism.NewInfo(task, source, upSchema, upTables[3], downSchema, downTable2, DDLs, ti0, []*model.TableInfo{ti1})
 	)
 
 	sts.AddTable(upSchema, upTables[0], downSchema, downTable1)
@@ -941,9 +941,9 @@ func (t *testOptimist) TestOptimistInitSchema(c *C) {
 		ti0         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
 		ti1         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
 		ti2         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 INT)`)
-		i11         = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable, DDLs1, ti0, ti1)
-		i12         = optimism.NewInfo(task, source, upSchema, upTables[1], downSchema, downTable, DDLs1, ti0, ti1)
-		i21         = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable, DDLs2, ti1, ti2)
+		i11         = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i12         = optimism.NewInfo(task, source, upSchema, upTables[1], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i21         = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2})
 	)
 
 	st.AddTable(upSchema, upTables[0], downSchema, downTable)
