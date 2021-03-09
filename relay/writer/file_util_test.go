@@ -575,3 +575,48 @@ func (t *testFileUtilSuite) testGetTxnPosGTIDsIllegalGTID(c *check.C, gtidEv *re
 	c.Assert(pos, check.Equals, int64(0))
 	c.Assert(gSet, check.IsNil)
 }
+
+func (t *testFileUtilSuite) TestDontTruncateOnlyHeader(c *check.C) {
+	var (
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+		}
+		latestPos              = 4
+		previousGSetMySQL, _   = gtid.ParserGTID("mysql", "3ccc475b-2343-11e7-be21-6c0b84d59f30:14")
+		previousGSetMariaDB, _ = gtid.ParserGTID("mariadb", "0-1-5")
+	)
+
+	formatDescEv, err := event.GenFormatDescriptionEvent(header, uint32(latestPos))
+	c.Assert(err, check.IsNil)
+	latestPos += len(formatDescEv.RawData)
+
+	mysqlGTIDev, _ := event.GenPreviousGTIDsEvent(header, uint32(latestPos), previousGSetMySQL)
+	mariaDBGTIDev, _ := event.GenMariaDBGTIDListEvent(header, uint32(latestPos), previousGSetMariaDB)
+
+	t.testDontTruncate(c, []*replication.BinlogEvent{formatDescEv, mysqlGTIDev})
+	t.testDontTruncate(c, []*replication.BinlogEvent{formatDescEv, mariaDBGTIDev})
+}
+
+func (t *testFileUtilSuite) testDontTruncate(c *check.C, events []*replication.BinlogEvent) {
+	var (
+		filename = filepath.Join(c.MkDir(), "dont-truncate.000001")
+		parser2  = parser.New()
+	)
+
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0644)
+	c.Assert(err, check.IsNil)
+
+	_, err = f.Write(replication.BinLogFileHeader)
+	c.Assert(err, check.IsNil)
+
+	for _, ev := range events {
+		_, err = f.Write(ev.RawData)
+		c.Assert(err, check.IsNil)
+
+		stat, _ := f.Stat()
+		pos, _, err := getTxnPosGTIDs(context.Background(), filename, parser2)
+		c.Assert(err, check.IsNil)
+		c.Assert(pos, check.Equals, stat.Size())
+	}
+}
