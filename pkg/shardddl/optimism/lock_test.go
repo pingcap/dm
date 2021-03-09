@@ -17,6 +17,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"github.com/pingcap/tidb/util/mock"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -1432,6 +1433,65 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 	c.Assert(l.IsDone(source, db, "not-exist"), IsFalse)
 	c.Assert(l.IsDone(source, "not-exist", tbls[0]), IsFalse)
 	c.Assert(l.IsDone("not-exist", db, tbls[0]), IsFalse)
+}
+
+func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
+	var (
+		ID         = "test_lock_try_mark_done-`foo`.`bar`"
+		task       = "test_lock_try_mark_done"
+		source     = "mysql-replica-1"
+		downSchema = "foo"
+		downTable  = "bar"
+		db         = "foo"
+		tbls       = []string{"bar1", "bar2"}
+		p          = parser.New()
+		se         = mock.NewContext()
+
+		tblID int64 = 111
+		ti0         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 VARCHAR(4))`)
+		ti2         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 VARCHAR(5))`)
+
+		DDLs1 = []string{"ALTER TABLE bar ADD COLUMN c1 VARCHAR(4)"}
+		DDLs2 = []string{"ALTER TABLE bar ADD COLUMN c1 VARCHAR(5)"}
+
+		table1 = schemacmp.Encode(ti0)
+		table2 = schemacmp.Encode(ti1)
+		table3 = schemacmp.Encode(ti2)
+
+		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
+		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
+		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+
+		vers = map[string]map[string]map[string]int64{
+			source: {
+				db: {tbls[0]: 0, tbls[1]: 0},
+			},
+		}
+	)
+	c.Assert(AddDifferentFieldLenColumns(ID, DDLs1[0], table1, table2), IsNil)
+	c.Assert(AddDifferentFieldLenColumns(ID, DDLs2[0], table2, table3), ErrorMatches, ".*add columns with different field lengths.*")
+
+	// the initial status is synced but not resolved.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+	c.Assert(l.IsResolved(), IsFalse)
+
+	// TrySync for the first table, no table has done the DDLs operation.
+	vers[source][db][tbls[0]]++
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, []*model.TableInfo{ti1}, tts, vers[source][db][tbls[0]])
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	c.Assert(l.versions, DeepEquals, vers)
+	t.checkLockNoDone(c, l)
+	c.Assert(l.IsResolved(), IsFalse)
+
+	// TrySync for the second table, the joined schema become larger.
+	vers[source][db][tbls[1]]++
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, []*model.TableInfo{ti2}, tts, vers[source][db][tbls[1]])
+	c.Assert(err, ErrorMatches, ".*add columns with different field lengths.*")
+	c.Assert(DDLs, DeepEquals, DDLs2)
+	c.Assert(l.versions, DeepEquals, vers)
 }
 
 func (t *testLock) trySyncForAllTablesLarger(c *C, l *Lock,
