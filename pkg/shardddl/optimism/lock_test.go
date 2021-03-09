@@ -933,12 +933,12 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
 		DDLs2            = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME", "ALTER TABLE bar ADD COLUMN c2 INT"}
 		DDLs3            = []string{"ALTER TABLE bar DROP COLUMN c2"}
-		DDLs4            = []string{"ALTER TABLE bar DROP COLUMN c1"}
-		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
-		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
-		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
-		ti3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
-		ti4              = ti0
+		DDLs4 = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		ti0   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
+		ti3   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
+		ti4   = ti0
 
 		DDLs5   = []string{"ALTER TABLE bar ADD COLUMN c2 TEXT"}
 		DDLs6   = []string{"ALTER TABLE bar ADD COLUMN c2 DATETIME", "ALTER TABLE bar ADD COLUMN c3 INT"}
