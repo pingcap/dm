@@ -38,6 +38,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -1198,55 +1199,39 @@ type restoreSchemaJob struct {
 }
 
 // check is schema of database
-func (job *restoreSchemaJob) isSchemaOfDatabase() (yes bool) {
+func (job *restoreSchemaJob) isDB() (yes bool) {
 	yes = (job.table == "")
 	return
 }
 
 // check is schema of table
-func (job *restoreSchemaJob) isSchemaOfTable() (yes bool) {
-	yes = (job.table != "")
+func (job *restoreSchemaJob) isTable() (yes bool) {
+	yes = !job.isDB()
 	return
 }
 
-// job queue of schema restoring
+// `jobQueue` of schema restoring which support consumptions concurrently
 type jobQueue struct {
 	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-	msgq   chan *restoreSchemaJob
-	closed bool         // msgq closed flag
-	lock   sync.RWMutex // rwlock of `closed`
-	err    chan error
+	wg     sync.WaitGroup         // wait group of jobs
+	msgq   chan *restoreSchemaJob // job message queue channel
+	closed bool                   // msgq closed flag
+	lock   sync.RWMutex           // rwlock of `closed`
+
+	eg *errgroup.Group // err wait group of consumer's go-routines
 }
 
 // `newJobQueue` consturct a jobQueue
 func newJobQueue(ctx context.Context) *jobQueue {
-	selfCtx, cancel := context.WithCancel(ctx)
+	eg, selfCtx := errgroup.WithContext(ctx)
 	return &jobQueue{
-		ctx:    selfCtx,
-		cancel: cancel,
-		msgq:   make(chan *restoreSchemaJob, 1),
-		err:    make(chan error),
-		closed: false,
+		ctx:  selfCtx,
+		msgq: make(chan *restoreSchemaJob, 1),
+		eg:   eg,
 	}
 }
 
-// broke job queue
-// -> err
-// <- done
-func (q *jobQueue) broke(err error) {
-	if !q.isClosed() {
-		select {
-		case <-q.ctx.Done():
-		case q.err <- err:
-		}
-	}
-}
-
-// push job to job queue
-// -> msg
-// <- done/err
+// `push` will append a job to the queue
 func (q *jobQueue) push(job *restoreSchemaJob) error {
 	q.lock.RLock()
 	defer q.lock.RUnlock() // avoid send to closed channel
@@ -1259,9 +1244,6 @@ func (q *jobQueue) push(job *restoreSchemaJob) error {
 			// cancel job
 			err = q.ctx.Err()
 			q.wg.Done()
-		case err = <-q.err:
-			// cancel job
-			q.wg.Done()
 		case q.msgq <- job:
 		}
 	}
@@ -1269,8 +1251,7 @@ func (q *jobQueue) push(job *restoreSchemaJob) error {
 	return err
 }
 
-// run job queue
-// <- done/err
+// `run` will drive job consumption and wait it done
 func (q *jobQueue) run() error {
 	waitCh := make(chan struct{})
 	go func() {
@@ -1281,95 +1262,66 @@ func (q *jobQueue) run() error {
 	select {
 	case <-q.ctx.Done():
 		err = q.ctx.Err()
-	case err = <-q.err:
 	case <-waitCh:
 	}
 	return err
 }
 
-// close job queue
-// -> msgq/done
-func (q *jobQueue) close() {
+// `close` wait jobs done and close queue forever
+func (q *jobQueue) close() error {
 	if !q.isClosed() {
 		q.lock.Lock()
-		q.closed = true
-		// queue is closeing
+		// queue is closing
 		close(q.msgq)
-		q.cancel()
+		q.closed = true
 		q.lock.Unlock()
+		// wait until go-routines of consumption was exited
+		return q.eg.Wait()
 	}
+	return errors.New("queue was already closed")
 }
 
-// check is job queue already closed
+// `isClosed` check is the job queue already closed
 func (q *jobQueue) isClosed() bool {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 	return q.closed
 }
 
-// schema restorer
-type schemaRestorer struct {
-	loader  *Loader
-	q       *jobQueue
-	running sync.Mutex
-}
+// `startConsumer` run a go-routine of job consumption with user defined handler
+func (q *jobQueue) startConsumer(handler func(ctx context.Context, job *restoreSchemaJob) error) {
+	q.eg.Go(func() error {
+		defer func() {
+			// whatever, cancel all reserved jobs
+			for range q.msgq {
+				q.wg.Done()
+			}
+		}()
 
-// `newSchemaRestorer` consturct a schema restorer
-func newSchemaRestorer(loader *Loader, queue *jobQueue) *schemaRestorer {
-	return &schemaRestorer{
-		loader: loader,
-		q:      queue,
-	}
-}
-
-// run a loop of job consumption
-func (restore *schemaRestorer) run(handler func(ctx context.Context, job *restoreSchemaJob) error) {
-	restore.running.Lock()
-	defer restore.running.Unlock()
-
-	if !restore.q.isClosed() {
+		if q.isClosed() {
+			return nil
+		}
+		// start consumption
 		var err error
 	consumeLoop:
 		for {
 			select {
-			case <-restore.q.ctx.Done():
+			case <-q.ctx.Done():
+				err = q.ctx.Err()
 				break consumeLoop
-			case job := <-restore.q.msgq:
+			case job := <-q.msgq:
 				if job == nil {
 					break consumeLoop
 				}
-				err = handler(restore.q.ctx, job)
+				err = handler(q.ctx, job)
+				q.wg.Done()
 				if err != nil {
 					break consumeLoop
 				}
-				restore.q.wg.Done()
 			}
 		}
-
-		if err != nil {
-			restore.q.broke(err)
-			restore.q.wg.Done()
-		}
-
-		for range restore.q.msgq {
-			// cancel job
-			restore.q.wg.Done()
-		}
-	}
-}
-
-// close `schemaRestorer`, wait for consume loop exit
-func (restore *schemaRestorer) close() {
-	waitCh := make(chan struct{})
-	go func() {
-		defer restore.running.Unlock()
-		restore.running.Lock()
-		close(waitCh)
-	}()
-	select {
-	case <-restore.q.ctx.Done():
-	case <-waitCh:
-	}
+		return err
+	})
 }
 
 func (l *Loader) restoreData(ctx context.Context) error {
@@ -1377,40 +1329,30 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	dispatchMap := make(map[string]*fileJob)
 	schemaJobQueue := newJobQueue(ctx)
 	concurrency := 8 // where to set up? how about `min(l.cfg.PoolSize, vCPU*len(l.db2Tables))`?
-	schemaRestorers := make([]*schemaRestorer, 0, concurrency)
 
-	// function of db/table schema restoring
+	// procedure of db/table schema restoring
 	schemaJobHandler := func(ctx context.Context, job *restoreSchemaJob) error {
-		if job.isSchemaOfDatabase() { // restore database schema
+		if job.isDB() { // restore database schema
 			job.loader.logger.Info("start to create schema", zap.String("schema file", job.pathOfSchemaFile))
 			err := job.loader.restoreSchema(ctx, job.session, job.pathOfSchemaFile, job.database)
 			if err != nil {
 				return err
 			}
 			job.loader.logger.Info("finish to create schema", zap.String("schema file", job.pathOfSchemaFile))
-		} else if job.isSchemaOfTable() { // restore table schema
+		} else if job.isTable() { // restore table schema
 			job.loader.logger.Info("start to create table", zap.String("table file", job.pathOfSchemaFile))
 			err := job.loader.restoreTable(ctx, job.session, job.pathOfSchemaFile, job.database, job.table)
 			if err != nil {
 				return err
 			}
 			job.loader.logger.Info("finish to create table", zap.String("table file", job.pathOfSchemaFile))
-			return nil
 		}
 		return nil
 	}
 
-	// function of close schema restorers
-	closeSchemaRestorers := func(restorers []*schemaRestorer) {
-		for _, restorer := range restorers {
-			restorer.close()
-		}
-	}
-
-	// run schemaRestorer concurrently
+	// run multiple go-routines of consumers which carry user defined procedure(handler) concurrently
 	for i := 0; i < concurrency; i++ {
-		schemaRestorers = append(schemaRestorers, newSchemaRestorer(l, schemaJobQueue))
-		go schemaRestorers[i].run(schemaJobHandler)
+		schemaJobQueue.startConsumer(schemaJobHandler)
 	}
 
 	// `for v := range map` would present random order
@@ -1424,11 +1366,8 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	tctx := tcontext.NewContext(ctx, l.logger)
 	// restore db schema
 	for dbSessionID, db := range dbs {
-		schemaFile := l.cfg.Dir + "/" + db + "-schema-create.sql" // cache friendly
-		if schemaJobQueue.isClosed() {
-			break
-		}
-		// lazy open database connection
+		// open database connections at first time
+		dbSessionID %= concurrency
 		if dbSessionID == len(dbSessionPool) {
 			baseConn, err := l.toDB.GetBaseConn(ctx)
 			if err != nil {
@@ -1448,6 +1387,11 @@ func (l *Loader) restoreData(ctx context.Context) error {
 				},
 			})
 		}
+		if schemaJobQueue.isClosed() {
+			break
+		}
+		schemaFile := l.cfg.Dir + "/" + db + "-schema-create.sql" // cache friendly
+		// push a database schema restoring job to the queue
 		err = schemaJobQueue.push(&restoreSchemaJob{
 			loader:           l,
 			session:          dbSessionPool[dbSessionID],
@@ -1459,21 +1403,21 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			break
 		}
 	}
+	// check producing error
 	if err != nil {
 		schemaJobQueue.close()
-		closeSchemaRestorers(schemaRestorers)
 		return err
 	}
+	// run jobs & wait
 	err = schemaJobQueue.run()
 	if err != nil {
 		schemaJobQueue.close()
-		closeSchemaRestorers(schemaRestorers)
 		return err
 	}
-
 	// restore table schema
 tblSchemaLoop:
 	for dbSessionID, db := range dbs {
+		dbSessionID %= concurrency
 		for table := range l.db2Tables[db] {
 			schemaFile := l.cfg.Dir + "/" + db + "." + table + "-schema.sql" // cache friendly
 			if _, ok := l.tableInfos[tableName(db, table)]; !ok {
@@ -1490,6 +1434,7 @@ tblSchemaLoop:
 			if schemaJobQueue.isClosed() {
 				break tblSchemaLoop
 			}
+			// push a table schema restoring job to the queue
 			err = schemaJobQueue.push(&restoreSchemaJob{
 				loader:           l,
 				session:          dbSessionPool[dbSessionID],
@@ -1502,14 +1447,13 @@ tblSchemaLoop:
 			}
 		}
 	}
+	// check producing error
 	if err != nil {
 		schemaJobQueue.close()
-		closeSchemaRestorers(schemaRestorers)
 		return err
 	}
-	err = schemaJobQueue.run()
-	schemaJobQueue.close()
-	closeSchemaRestorers(schemaRestorers)
+	// wait whole task done & close queue
+	err = schemaJobQueue.close()
 	if err != nil {
 		return err
 	}
