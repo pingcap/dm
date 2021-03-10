@@ -134,19 +134,20 @@ function DM_REPLACE_ERROR_CASE() {
     run_sql_source1 "insert into ${db}.${tb1} values(1,1);"
 
     # error in TiDB
-    run_sql_source1 "alter table ${db}.${tb1} add column c int unique;"
-    run_sql_source1 "insert into ${db}.${tb1} values(2,2,2);"
+    run_sql_source1 "alter table ${db}.${tb1} add column new_col text, add column c int unique;"
+    run_sql_source1 "insert into ${db}.${tb1} values(2,2,'haha',2);"
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "unsupported add column .* constraint UNIQUE KEY" 1
+            "unsupported add column .* constraint UNIQUE KEY" 1 \
+            "origin SQL: \[alter table ${db}.${tb1} add column new_col text, add column c int unique\]" 1
 
     # replace sql
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "handle-error test replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
+            "handle-error test replace alter table ${db}.${tb1} add column new_col text, add column c int; alter table ${db}.${tb1} add unique(c);" \
             "\"result\": true" 2
 
-    run_sql_source1 "insert into ${db}.${tb1} values(3,3,3);"
+    run_sql_source1 "insert into ${db}.${tb1} values(3,3,'hihi',3);"
 
     run_sql_tidb_with_retry "select count(1) from ${db}.${tb1};" "count(1): 3"
 }
@@ -1395,7 +1396,7 @@ function DM_SKIP_INCOMPATIBLE_DDL_CASE() {
     run_sql_source1 "/*!50003 drop function ${db}.hello*/;"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
-            "drop function `hello`" 1 \
+            "drop function `hello`" 2 \
             "Please confirm your DDL statement is correct and needed." 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \

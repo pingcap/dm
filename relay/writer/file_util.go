@@ -194,6 +194,8 @@ func getTxnPosGTIDs(ctx context.Context, filename string, p *parser.Parser) (int
 
 		// NOTE: only update pos/GTID set for DDL/XID to get an complete transaction.
 		switch ev := e.Event.(type) {
+		case *replication.FormatDescriptionEvent:
+			latestPos = int64(e.Header.LogPos)
 		case *replication.QueryEvent:
 			isDDL := common.CheckIsDDL(string(ev.Query), p)
 			if isDDL {
@@ -238,6 +240,7 @@ func getTxnPosGTIDs(ctx context.Context, filename string, p *parser.Parser) (int
 			}
 			latestGSet = gSet.Origin()
 			flavor = gmysql.MySQLFlavor
+			latestPos = int64(e.Header.LogPos)
 		case *replication.MariadbGTIDListEvent:
 			// a MariadbGTIDListEvent logged in every binlog to record the current replication state if GTID enabled
 			// ref: https://mariadb.com/kb/en/library/gtid_list_event/
@@ -247,6 +250,7 @@ func getTxnPosGTIDs(ctx context.Context, filename string, p *parser.Parser) (int
 			}
 			latestGSet = gSet.Origin()
 			flavor = gmysql.MariaDBFlavor
+			latestPos = int64(e.Header.LogPos)
 		}
 	}
 
