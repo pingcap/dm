@@ -304,7 +304,6 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 
 	lastOffset := cur
 
-	ansiquote := strings.Contains(w.cfg.SQLMode, "ANSI_QUOTES")
 	data := make([]byte, 0, 1024*1024)
 	br := bufio.NewReader(f)
 	for {
@@ -343,7 +342,8 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 					return terror.Annotatef(err, "file %s", file)
 				}
 			} else if table.sourceTable != table.targetTable {
-				query = renameShardingTable(query, table.sourceTable, table.targetTable, ansiquote)
+				// dumped data files always use backquote as quotes
+				query = renameShardingTable(query, table.sourceTable, table.targetTable, false)
 			}
 
 			idx := strings.Index(query, "INSERT INTO")
