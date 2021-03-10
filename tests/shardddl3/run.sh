@@ -704,7 +704,7 @@ function DM_104() {
     run_case 104 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
-function ADD_DROP_INDEX_CASE() {
+function add_drop_index_test() {
     action=$1
     col1=$2
     col2=$3
@@ -727,7 +727,7 @@ function ADD_DROP_INDEX_CASE() {
 }
 
 function DM_105_CASE() {
-    ADD_DROP_INDEX_CASE "add" "(b)" "(c)"
+    add_drop_index_test "add" "(b)" "(c)"
     run_sql_tidb_with_retry "select count(b) from ${shardddl}.${tb};" "count(b): 9"
     run_sql_tidb_with_retry "select count(c) from ${shardddl}.${tb};" "count(c): 9"
 }
@@ -747,7 +747,7 @@ function DM_105() {
 }
 
 function DM_106_CASE() {
-    ADD_DROP_INDEX_CASE "drop" "" ""
+    add_drop_index_test "drop" "" ""
 }
 
 function DM_106() {
@@ -790,7 +790,7 @@ function DM_107() {
     run_case 107 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
-function DM_DIFFRENT_FIELD_FLAG_CASE() {
+function different_field_flag_test() {
     type1=$1
     val1=$2
     type2=$3
@@ -816,7 +816,7 @@ function DM_DIFFRENT_FIELD_FLAG_CASE() {
 }
 
 function DM_108_CASE() {
-    DM_DIFFRENT_FIELD_FLAG_CASE \
+    different_field_flag_test \
     "decimal(5,2)" "2" \
     "decimal(7,4)" "4" \
     "decimal(9,6)" "6"
@@ -827,7 +827,7 @@ function DM_108() {
 }
 
 function DM_109_CASE() {
-    DM_DIFFRENT_FIELD_FLAG_CASE \
+    different_field_flag_test \
     "varchar(3)" "'222'" \
     "varchar(4)" "'4444'" \
     "varchar(5)" "'66666'"
@@ -838,7 +838,7 @@ function DM_109() {
 }
 
 function DM_110_CASE() {
-    DM_DIFFRENT_FIELD_FLAG_CASE \
+    different_field_flag_test \
     "varchar(5)" "'22222'" \
     "varchar(4)" "'4444'" \
     "varchar(3)" "'666'"
@@ -849,7 +849,7 @@ function DM_110() {
 }
 
 function DM_111_CASE() {
-    DM_DIFFRENT_FIELD_FLAG_CASE \
+    different_field_flag_test \
     "int(11) zerofill" "2" \
     "int(11)" "4" \
     "int(11) zerofill" "'66666'"
@@ -860,7 +860,7 @@ function DM_111() {
 }
 
 function DM_112_CASE() {
-    DM_DIFFRENT_FIELD_FLAG_CASE \
+    different_field_flag_test \
     "int(11) unsigned" "2" \
     "int(11)" "4" \
     "int(11) unsigned" "'66666'"
