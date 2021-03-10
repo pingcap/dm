@@ -874,6 +874,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	c.Assert(DDLs, DeepEquals, []string{})
 	c.Assert(l.versions, DeepEquals, vers)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
+	// join table isn't updated
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, -1)
 	ready = l.Ready()
