@@ -92,7 +92,7 @@ func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []
 // for non-intrusive, a broadcast mechanism needed to notify conflict tables after the conflict has resolved, or even a block mechanism needed.
 // for intrusive, a DML prune or transform mechanism needed for two different schemas (before and after the conflict resolved).
 func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
-	ddls []string, newTIs []*model.TableInfo, tts []TargetTable, infoVersion int64) (newDDLs []string, err error) {
+	ddls []string, newTIs []*model.TableInfo, tts []TargetTable, infoVersion int64, ignoreConflict bool) (newDDLs []string, err error) {
 	l.mu.Lock()
 	defer func() {
 		if len(newDDLs) > 0 {
@@ -137,7 +137,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	}
 
 	// should not happen
-	if len(ddls) != len(newTIs) || len(newTIs) == 0 {
+	if !ignoreConflict && (len(ddls) != len(newTIs) || len(newTIs) == 0) {
 		return ddls, terror.ErrMasterInconsistentOptimisticDDLsAndInfo.Generate(len(ddls), len(newTIs))
 	}
 
@@ -157,6 +157,15 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	oldJoined := l.joined
 
 	lastTableInfo := schemacmp.Encode(newTIs[len(newTIs)-1])
+
+	defer func() {
+		if ignoreConflict || err == nil {
+			log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
+				zap.Stringer("from", prevTable), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
+			l.tables[callerSource][callerSchema][callerTable] = lastTableInfo
+		}
+	}()
+
 	lastJoined, err := joinTable(lastTableInfo)
 	if err != nil {
 		return emptyDDLs, err
@@ -165,10 +174,6 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	defer func() {
 		// only update table info and joined info if no error
 		if err == nil {
-			// update table info and joined info base on the last new table info
-			log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
-				zap.Stringer("from", l.tables[callerSource][callerSchema][callerTable]), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
-			l.tables[callerSource][callerSchema][callerTable] = lastTableInfo
 			// update the current joined table info, it should be logged in `if cmp != 0` block below.
 			l.joined = lastJoined
 		}

@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/parser/format"
 	"github.com/pingcap/parser/model"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
@@ -83,7 +84,21 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 		}
 
 		err = s.checkpoint.FlushPointWithTableInfo(tcontext.NewContext(ctx, log.L()), req.Database, req.Table, ti)
-		return "", err
+		if err != nil {
+			return "", err
+		}
+
+		if s.cfg.ShardMode == config.ShardOptimistic {
+			downSchema, downTable := s.renameShardingSchema(req.Database, req.Table)
+			info := s.optimist.ConstructInfo(req.Database, req.Table, downSchema, downTable, []string{""}, nil, []*model.TableInfo{ti})
+			info.IgnoreConflict = true
+			log.L().Info("resolve conflict with operateschema")
+			_, err = s.optimist.PutInfo(info)
+			if err != nil {
+				return "", err
+			}
+		}
+
 	case pb.SchemaOp_RemoveSchema:
 		// we only drop the schema in the schema-tracker now,
 		// so if we drop the schema and continue to replicate any DDL/DML, it will try to get schema from downstream again.

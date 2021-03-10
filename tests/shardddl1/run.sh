@@ -527,7 +527,7 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
     # WARN: set schema of source2.table2
     # Actually it should be tb2(a,b), dml is {a: 9, b: 'iii'}
     # Now we set it to tb2(c,b), dml become {c: 9, b: 'iii'}
-    # This only work for a "rename ddl"
+    # This may only work for a "rename ddl"
     echo 'CREATE TABLE `tb2` ( `c` int NOT NULL, `b` varchar(10) DEFAULT NULL, PRIMARY KEY (`c`)) ENGINE=InnoDB DEFAULT CHARSET=latin1' > ${WORK_DIR}/schema2.sql
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-schema set -s mysql-replica-02 test -d ${shardddl1} -t ${tb2} ${WORK_DIR}/schema2.sql" \
@@ -549,27 +549,38 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
         "\"result\": true" 2
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-
-    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(13);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(14,'eee');"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(15,'fff');"
-
-    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column b;"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(16);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(17);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(18,'iii');"
-
-    run_sql_source2 "alter table ${shardddl1}.${tb2} drop column b;"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(19);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(20);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(21);"
-
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "\"result\": true" 3
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "no DDL lock exists" 1
+
+    # now, it works as normal
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column d int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(13,'mmm',13);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(14,'nnn');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(15,'ooo');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column d int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(16,'ppp',16);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(17,'qqq',17);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(18,'rrr');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column d int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(19,'sss',19);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(20,'ttt',20);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(21,'uuu',21);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"result\": true" 3
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "no DDL lock exists" 1
+
+    read v1
 }
 
 # workaround of rename column in optimistic mode currently until we support it
@@ -585,16 +596,16 @@ function DM_RENAME_COLUMN_OPTIMISTIC() {
 function run() {
     init_cluster
     init_database
-    start=1
-    end=35
-    except=(024 025 029)
-    for i in $(seq -f "%03g" ${start} ${end}); do
-        if [[ ${except[@]} =~ $i ]]; then
-            continue
-        fi
-        DM_${i}
-        sleep 1
-    done
+#    start=1
+#    end=35
+#    except=(024 025 029)
+#    for i in $(seq -f "%03g" ${start} ${end}); do
+#        if [[ ${except[@]} =~ $i ]]; then
+#            continue
+#        fi
+#        DM_${i}
+#        sleep 1
+#    done
     DM_RENAME_COLUMN_OPTIMISTIC
 }
 
