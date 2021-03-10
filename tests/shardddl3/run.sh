@@ -768,6 +768,7 @@ function DM_107_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column col1 int not null"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values (2,2);"
+    # TODO: check the handle-error message in the future
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "fail to handle shard ddl \[ALTER TABLE \`shardddl\`.\`tb\` ADD COLUMN \`col1\` INT NOT NULL\]" 1 \
