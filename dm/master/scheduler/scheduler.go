@@ -381,24 +381,17 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 		return terror.ErrSchedulerWorkerInvalidTrans.Generate(worker, stage, WorkerBound)
 	}
 
-	// 3. deal with old worker
+	// 3. if no old worker, bound it directly
 	if !hasOldWorker {
 		s.logger.Warn("in transfer source, found a free worker and not bound source, which should not happened",
 			zap.String("source", source),
 			zap.String("worker", worker))
-		// 3.1 bound it directly
 		err := s.boundSourceToWorker(source, w)
 		if err == nil {
 			delete(s.unbounds, source)
 		}
 		return err
 	}
-	defer func() {
-		_, err := s.tryBoundForWorker(oldWorker)
-		if err != nil {
-			s.logger.Warn("in transfer source, error when try bound the old worker", zap.Error(err))
-		}
-	}()
 
 	// 4. replace the source bound
 	failpoint.Inject("failToReplaceSourceBound", func(_ failpoint.Value) {
@@ -411,6 +404,12 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 	oldWorker.ToFree()
 	// we have checked w.stage is free, so there should not be an error
 	_ = s.updateStatusForBound(w, ha.NewSourceBound(source, worker))
+
+	// 5. try bound the old worker
+	_, err = s.tryBoundForWorker(oldWorker)
+	if err != nil {
+		s.logger.Warn("in transfer source, error when try bound the old worker", zap.Error(err))
+	}
 	return nil
 }
 
