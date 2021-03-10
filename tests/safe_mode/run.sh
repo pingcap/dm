@@ -7,6 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function consistency_none() {
+    run_sql_source2 "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES'"
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -52,6 +53,7 @@ function consistency_none() {
     gtid2=$(grep "GTID:" $WORK_DIR/worker2/dumped_data.test/metadata|tail -1|awk -F: '{print $2,":",$3}'|tr -d ' ')
     check_log_contains $WORK_DIR/worker2/log/dm-worker.log "\[\"enable safe-mode because of inconsistent dump, will exit at\"\] \[task=test\] \[unit=\"binlog replication\"\] \[location=\"position: ($name2, $pos2), gtid-set: $gtid2\"\]"
 
+    run_sql_source2 "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
     cleanup_data safe_mode_target
     cleanup_process $*
 }
