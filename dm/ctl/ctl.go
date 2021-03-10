@@ -83,13 +83,13 @@ func NewRootCmd() *cobra.Command {
 Simply type ` + cmd.Name() + ` help [path to command] for full details.`,
 
 		Run: func(c *cobra.Command, args []string) {
-			cmd, _, e := c.Root().Find(args)
-			if cmd == nil || e != nil {
+			cmd2, _, e := c.Root().Find(args)
+			if cmd2 == nil || e != nil {
 				c.Printf("Unknown help topic %#q\n", args)
 				_ = c.Root().Usage()
 			} else {
-				cmd.InitDefaultHelpFlag() // make possible 'help' flag to be shown
-				_ = cmd.Help()
+				cmd2.InitDefaultHelpFlag() // make possible 'help' flag to be shown
+				_ = cmd2.Help()
 			}
 		},
 	}

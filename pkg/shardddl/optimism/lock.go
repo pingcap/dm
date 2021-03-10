@@ -156,18 +156,23 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	prevTable := l.tables[callerSource][callerSchema][callerTable]
 	oldJoined := l.joined
 
-	// update table info and joined info base on the last new table info
 	lastTableInfo := schemacmp.Encode(newTIs[len(newTIs)-1])
-	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
-		zap.Stringer("from", prevTable), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
-	l.tables[callerSource][callerSchema][callerTable] = lastTableInfo
-
 	lastJoined, err := joinTable(lastTableInfo)
 	if err != nil {
 		return emptyDDLs, err
 	}
-	// update the current joined table info, it should be logged in `if cmp != 0` block below.
-	l.joined = lastJoined
+
+	defer func() {
+		// only update table info and joined info if no error
+		if err == nil {
+			// update table info and joined info base on the last new table info
+			log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
+				zap.Stringer("from", l.tables[callerSource][callerSchema][callerTable]), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
+			l.tables[callerSource][callerSchema][callerTable] = lastTableInfo
+			// update the current joined table info, it should be logged in `if cmp != 0` block below.
+			l.joined = lastJoined
+		}
+	}()
 
 	newDDLs = []string{}
 	nextTable := prevTable
@@ -180,8 +185,9 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		nextTable = schemacmp.Encode(newTI)
 		// special case: check whether DDLs making the schema become part of larger and another part of smaller.
 		if _, err = prevTable.Compare(nextTable); err != nil {
-			return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+			err = terror.ErrShardDDLOptimismTrySyncFail.Delegate(
 				err, l.ID, fmt.Sprintf("there will be conflicts if DDLs %s are applied to the downstream. old table info: %s, new table info: %s", ddls, prevTable, nextTable))
+			return emptyDDLs, err
 		}
 
 		// special case: if the DDL does not affect the schema at all, assume it is
@@ -206,6 +212,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 			// resolving conflict in non-intrusive mode.
 			log.L().Warn("resolving conflict", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
 				zap.Stringer("joined-from", oldJoined), zap.Stringer("joined-to", newJoined), zap.Strings("ddls", ddls))
+			err = nil
 			return ddls, nil
 		}
 		if cmp != 0 {
@@ -262,8 +269,9 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		// compare the current table's info with joined info.
 		cmp, err = nextTable.Compare(newJoined)
 		if err != nil {
-			return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+			err = terror.ErrShardDDLOptimismTrySyncFail.Delegate(
 				err, l.ID, "can't compare table info (new table info) %s with (new joined table info) %s", nextTable, newJoined) // NOTE: this should not happen.
+			return emptyDDLs, err
 		}
 		if cmp < 0 {
 			// no need to replicate DDLs, because has a larger joined schema (in the downstream).

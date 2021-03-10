@@ -874,8 +874,8 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	c.Assert(DDLs, DeepEquals, []string{})
 	c.Assert(l.versions, DeepEquals, vers)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
-	c.Assert(err, ErrorMatches, ".*at tuple index.*")
-	c.Assert(cmp, Equals, 0)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 
@@ -885,15 +885,27 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
 	c.Assert(l.versions, DeepEquals, vers)
-	ready = l.Ready()
-	c.Assert(ready[source][db][tbls[0]], IsFalse)
-	c.Assert(ready[source][db][tbls[1]], IsTrue) // the second table become synced now.
+	ready = l.Ready() // all table ready
+	c.Assert(ready[source][db][tbls[0]], IsTrue)
+	c.Assert(ready[source][db][tbls[1]], IsTrue)
 	cmp, err = l.tables[source][db][tbls[0]].Compare(l.Joined())
 	c.Assert(err, IsNil)
-	c.Assert(cmp, Equals, -1)
+	c.Assert(cmp, Equals, 0)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 0)
+
+	// TrySync for the second table, succeed now
+	vers[source][db][tbls[1]]++
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, []*model.TableInfo{ti2_1, ti2}, tts, vers[source][db][tbls[1]])
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs2)
+	c.Assert(l.versions, DeepEquals, vers)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[1]], IsTrue)
 
 	// TrySync for the first table.
 	vers[source][db][tbls[0]]++
@@ -919,13 +931,13 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 		tblID      int64 = 111
 		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
 		DDLs2            = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME", "ALTER TABLE bar ADD COLUMN c2 INT"}
-		DDLs3            = []string{"ALTER TABLE bar DROP COLUMN c2"}
-		DDLs4            = []string{"ALTER TABLE bar DROP COLUMN c1"}
-		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
-		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
-		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
-		ti3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
-		ti4              = ti0
+		//	DDLs3            = []string{"ALTER TABLE bar DROP COLUMN c2"}
+		DDLs4 = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		ti0   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
+		ti3   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
+		ti4   = ti0
 
 		DDLs5   = []string{"ALTER TABLE bar ADD COLUMN c2 TEXT"}
 		DDLs6   = []string{"ALTER TABLE bar ADD COLUMN c2 DATETIME", "ALTER TABLE bar ADD COLUMN c3 INT"}
@@ -977,8 +989,9 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(DDLs, DeepEquals, []string{})
 	c.Assert(l.versions, DeepEquals, vers)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
-	c.Assert(err, ErrorMatches, ".*at tuple index.*")
-	c.Assert(cmp, Equals, 0)
+	// join table isn't updated
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 
@@ -989,20 +1002,8 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(DDLs, DeepEquals, []string{})
 	c.Assert(l.versions, DeepEquals, vers)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
-	c.Assert(err, ErrorMatches, ".*at tuple index.*")
-	c.Assert(cmp, Equals, 0)
-
-	// TrySync for the second table to drop the non-conflict column, the conflict should still exist.
-	vers[source][db][tbls[1]]++
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs3, []*model.TableInfo{ti3}, tts, vers[source][db][tbls[1]])
-	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
-	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.versions, DeepEquals, vers)
-	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
-	c.Assert(err, ErrorMatches, ".*at tuple index.*")
-	c.Assert(cmp, Equals, 0)
-	ready = l.Ready()
-	c.Assert(ready[source][db][tbls[1]], IsFalse)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
 
 	// TrySync for the second table to drop the conflict column, the conflict should be resolved.
 	vers[source][db][tbls[1]]++
@@ -1051,8 +1052,8 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
-	c.Assert(err, ErrorMatches, ".*at tuple index.*")
-	c.Assert(cmp, Equals, 0)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
 	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
