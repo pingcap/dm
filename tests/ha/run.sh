@@ -88,6 +88,17 @@ function run() {
     echo "wait and check task running"
     check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Running"' 10
 
+    # manually transfer a exist source to a newly started worker
+    run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "transfer-source $SOURCE_ID1 worker3" \
+        "\"result\": true" 1
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member --name worker3" \
+        "$SOURCE_ID1" 1
+
     echo "query-status from all dm-master"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \

@@ -74,6 +74,7 @@ func NewRootCmd() *cobra.Command {
 		master.NewOperateSchemaCmd(),
 		master.NewGetCfgCmd(),
 		master.NewHandleErrorCmd(),
+		master.NewTransferSourceCmd(),
 	)
 	// copied from (*cobra.Command).InitDefaultHelpCmd
 	helpCmd := &cobra.Command{

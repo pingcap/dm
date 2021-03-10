@@ -67,6 +67,11 @@ function usage_and_arg_test() {
     operate_source_wrong_config_file
     operate_source_invalid_op $MYSQL1_CONF
     operate_source_stop_not_created_config $MYSQL1_CONF
+
+    echo "transfer_source_empty_arg"
+    transfer_source_empty_arg
+    transfer_source_less_arg
+    transfer_source_more_arg
 }
 
 function recover_max_binlog_size() {
@@ -130,11 +135,12 @@ function run() {
         "operate-source stop $cur/conf/source1.yaml $SOURCE_ID2" \
         "\"result\": true" 3
 
+    # ensure source1 is bound to worker1
     dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
-    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
-
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $dm_worker1_conf
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+
+    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source show" \
@@ -177,6 +183,9 @@ function run() {
         "\"source\": \"$SOURCE_ID2\"" 1 \
         "\"stage\": \"Running\"" 4
     # update_task_not_paused $TASK_CONF
+
+    transfer_source_valid $SOURCE_ID1 worker1 # transfer to self
+    transfer_source_invalid $SOURCE_ID1 worker2
 
     echo "get_config"
     get_config_wrong_arg

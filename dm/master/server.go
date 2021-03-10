@@ -1985,7 +1985,7 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleErrorRequest) (*
 // TransferSource implements MasterServer.TransferSource
 func (s *Server) TransferSource(ctx context.Context, req *pb.TransferSourceRequest) (*pb.TransferSourceResponse, error) {
 	var (
-		resp2 *pb.TransferSourceResponse
+		resp2 = &pb.TransferSourceResponse{}
 		err2  error
 	)
 	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
