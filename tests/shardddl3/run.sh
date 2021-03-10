@@ -1532,8 +1532,6 @@ function DM_131_CASE() {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-    run_sql_tidb_with_retry "select is_nullable from information_schema.columns \
-        where table_schema='${shardddl}' and table_name='${tb}' and column_name ='b';" "YES"
 
     # Test rollback NOT NULL to NULL
     run_sql_source1 "alter table ${shardddl1}.${tb1} modify b int not null;"
@@ -1569,6 +1567,293 @@ function DM_131 {
      run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
      run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
     "clean_table" "optimistic"
+}
+
+function DM_132_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop primary key, add primary key(a, b);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop primary key, add primary key(a, b);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop primary key, add primary key(a, b);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12);"
+
+    # FIXME: DM should report an error to user that data constraints become smaller and may not be able to rollback.
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+
+# Expand the primary key field.
+function DM_132 {
+    # start a TiDB alter-pk
+    pkill -hup tidb-server 2>/dev/null || true
+    wait_process_exit tidb-server
+    run_tidb_server 4000 $TIDB_PASSWORD $cur/conf/tidb-alter-pk-config.toml
+
+    run_case 132 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
+        "clean_table" "pessimistic"
+
+    run_case 132 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
+        "clean_table" "optimistic"
+
+    # don't revert tidb until DM_135
+}
+
+function DM_133_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop primary key, add primary key(a);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop primary key, add primary key(a);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop primary key, add primary key(a);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+# Shrink the primary key field.
+function DM_133 {
+    run_case 133 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a,b));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a,b));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int, primary key(a,b));\"" \
+        "clean_table" "pessimistic"
+
+    run_case 133 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a,b));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a,b));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int, primary key(a,b));\"" \
+        "clean_table" "optimistic"
+}
+
+function DM_134_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop primary key, add primary key(b);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop primary key, add primary key(b);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop primary key, add primary key(b);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+# Change the primary key field.
+function DM_134 {
+    run_case 134 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int, primary key(a));\"" \
+        "clean_table" "pessimistic"
+
+    run_case 134 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int, primary key(a));\"" \
+        "clean_table" "optimistic"
+}
+
+function DM_135() {
+    # TODO
+
+    # revert tidb
+    pkill -hup tidb-server 2>/dev/null || true
+    wait_process_exit tidb-server
+    run_tidb_server 4000 $TIDB_PASSWORD
+}
+
+function DM_136_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop index uk, add unique key uk(a, b);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop index uk, add unique key uk(a, b);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop index uk, add unique key uk(a, b);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12,12);"
+
+    # FIXME: DM should report an error to user that data constraints become smaller and may not be able to rollback.
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+# Expand the unique key field.
+function DM_136 {
+    # run_case 136 "double-source-pessimistic" \
+    #     "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b int, unique key uk(a));\"; \
+    #      run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b int, unique key uk(a));\"; \
+    #      run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int, b int, unique key uk(a));\"" \
+    #     "clean_table" "pessimistic"
+
+    run_case 136 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b int, unique key uk(a));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b int, unique key uk(a));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int, b int, unique key uk(a));\"" \
+        "clean_table" "optimistic"
+}
+
+function DM_137_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop index uk, add unique key uk(a);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop index uk, add unique key uk(a);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop index uk, add unique key uk(a);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12,12);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+# Shrink the unique key field.
+function DM_137 {
+    # run_case 137 "double-source-pessimistic" \
+    #     "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b int, unique key uk(a, b));\"; \
+    #      run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b int, unique key uk(a, b));\"; \
+    #      run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int, b int, unique key uk(a, b));\"" \
+    #     "clean_table" "pessimistic"
+
+    run_case 137 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b int, unique key uk(a, b));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int, b int, unique key uk(a, b));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int, b int, unique key uk(a, b));\"" \
+        "clean_table" "optimistic"
+}
+
+function DM_138_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add unique key uk(a);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add unique key uk(a);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add unique key uk(a);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+
+# Add the unique key.
+function DM_138 {
+    run_case 138 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
+        "clean_table" "pessimistic"
+
+    run_case 138 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
+        "clean_table" "optimistic"
+}
+
+function DM_139_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop index uk;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop index uk;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop index uk;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12);"
+
+    # FIXME: DM should report an error to user that this operation may not be able to rollback.
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+# Drop the unique key.
+function DM_139 {
+    run_case 139 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int, unique key uk(a));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int, unique key uk(a));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int, unique key uk(a));\"" \
+        "clean_table" "pessimistic"
+
+    run_case 139 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int, unique key uk(a));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int, unique key uk(a));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int, unique key uk(a));\"" \
+        "clean_table" "optimistic"
 }
 
 function DM_RemoveLock_CASE() {
@@ -1697,11 +1982,8 @@ function run() {
     init_cluster
     init_database
 
-    DM_125
-    return
-
     # For test temporarily.
-    for i in {113..131}; do
+    for i in {132..139}; do
         DM_"$i"
     done
     return
