@@ -78,7 +78,7 @@ function run() {
     echo "Running test $script..."
     # run in verbose mode?
     echo "Verbose mode = $VERBOSE"
-    if [ $VERBOSE == true ]; then
+    if $VERBOSE ; then
         TEST_DIR="$TEST_DIR" \
         PATH="tests/_utils:$PATH" \
         TEST_NAME="$(basename "$(dirname "$script")")" \
