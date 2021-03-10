@@ -174,7 +174,7 @@ function run() {
     test_session_config
 
     test_query_timeout
-    
+
     test_stop_task_before_checkpoint
 
     export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
@@ -243,8 +243,15 @@ function run() {
     pkill -hup tidb-server 2>/dev/null || true
     wait_process_exit tidb-server
 
+    # test pause and resume relay
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "pause-relay -s mysql-replica-01" \
+        "\"result\": true" 2
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-relay -s mysql-replica-01" \
+        "\"result\": true" 2
 
     sleep 2
     # dm-worker execute sql failed, and will try auto resume task
