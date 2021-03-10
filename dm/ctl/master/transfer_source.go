@@ -24,7 +24,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewOperateSourceCmd creates a OperateSource command
+// NewTransferSourceCmd creates a TransferSource command
 func NewTransferSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "transfer-source <source-id> <worker-id>",
