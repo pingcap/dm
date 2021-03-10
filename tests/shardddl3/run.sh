@@ -679,6 +679,198 @@ function DM_103() {
     "clean_table" "optimistic"
 }
 
+function DM_104_CASE() {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add new_col1 int not null default 10;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values(1);"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add new_col2 int not null default 20;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(3);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(4);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add new_col2 int not null default 20;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (id) values(5);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add new_col1 int not null default 10;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} (id) values(6);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add new_col1 int not null default 10;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add new_col2 int not null default 20;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values(7);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} (id) values(8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} (id) values(9);"
+    run_sql_tidb_with_retry "select count(1) from ${shardddl}.${tb};" "count(1): 9"
+}
+
+function DM_104() {
+    # currently not support pessimistic
+    # run_case 104 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 104 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function add_drop_index_test() {
+    action=$1
+    col1=$2
+    col2=$3
+    run_sql_source1 "alter table ${shardddl1}.${tb1} ${action} index new_idx1${col1};"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1);"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} ${action} index new_idx2${col2};"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(2,2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(3,3,3);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(4,4,4);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} ${action} index new_idx2${col2};"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} ${action} index new_idx1${col1};"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(6,6,6);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} ${action} index new_idx1${col1};"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} ${action} index new_idx2${col2};"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
+    run_sql_tidb_with_retry "select count(1) from ${shardddl}.${tb};" "count(1): 9"
+}
+
+function DM_105_CASE() {
+    add_drop_index_test "add" "(b)" "(c)"
+    run_sql_tidb_with_retry "select count(b) from ${shardddl}.${tb};" "count(b): 9"
+    run_sql_tidb_with_retry "select count(c) from ${shardddl}.${tb};" "count(c): 9"
+}
+
+function DM_105() {
+    # currently not support pessimistic
+    # run_case 105 "double-source-pessimistic" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
+    # run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
+    # run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int, c int);\"" \
+    # "clean_table" "pessimistic"
+    run_case 105 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int, c int);\"" \
+     "clean_table" "optimistic"
+}
+
+function DM_106_CASE() {
+    add_drop_index_test "drop" "" ""
+}
+
+function DM_106() {
+    # currently not support pessimistic
+    # run_case 106 "double-source-pessimistic" \
+    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int, index new_idx1(b), index new_idx2(c));\"; \
+    # run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int, index new_idx1(b), index new_idx2(c));\"; \
+    # run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int, c int, index new_idx1(b), index new_idx2(c));\"" \
+    # "clean_table" "pessimistic"
+    run_case 106 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int, index new_idx1(b), index new_idx2(c));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int, index new_idx1(b), index new_idx2(c));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int, c int, index new_idx1(b), index new_idx2(c));\"" \
+     "clean_table" "optimistic"
+}
+
+function DM_107_CASE() {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column col1 int not null"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values (2,2);"
+    # TODO: check the handle-error message in the future
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "fail to handle shard ddl \[ALTER TABLE \`shardddl\`.\`tb\` ADD COLUMN \`col1\` INT NOT NULL\]" 1 \
+        "because schema conflict detected" 1
+
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(3);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column col1 int not null;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values (4,4);"
+
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(5);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column col1 int not null"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values (6,6);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3 'fail'
+}
+
+function DM_107() {
+    # FIXME: should be positive in the future
+    # run_case 107 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 107 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function different_field_flag_test() {
+    type1=$1
+    val1=$2
+    type2=$3
+    val2=$4
+    type3=$5
+    val3=$6
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column col1 $type1"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values (2,${val1});"
+
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(3);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column col1 $type2"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values (4,${val2});"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "because schema conflict detected" 1
+
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(5);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column col1 $type3"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values (6,${val3});"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3 'fail'
+}
+
+function DM_108_CASE() {
+    different_field_flag_test \
+    "decimal(5,2)" "2" \
+    "decimal(7,4)" "4" \
+    "decimal(9,6)" "6"
+}
+
+function DM_108() {
+    run_case 108 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function DM_109_CASE() {
+    different_field_flag_test \
+    "varchar(3)" "'222'" \
+    "varchar(4)" "'4444'" \
+    "varchar(5)" "'66666'"
+}
+
+function DM_109() {
+    run_case 109 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function DM_110_CASE() {
+    different_field_flag_test \
+    "varchar(5)" "'22222'" \
+    "varchar(4)" "'4444'" \
+    "varchar(3)" "'666'"
+}
+
+function DM_110() {
+    run_case 110 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function DM_111_CASE() {
+    different_field_flag_test \
+    "int(11) zerofill" "2" \
+    "int(11)" "4" \
+    "int(11) zerofill" "'66666'"
+}
+
+function DM_111() {
+    run_case 111 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function DM_112_CASE() {
+    different_field_flag_test \
+    "int(11) unsigned" "2" \
+    "int(11)" "4" \
+    "int(11) unsigned" "'66666'"
+}
+
+function DM_112() {
+    run_case 112 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
 function DM_113_CASE {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
@@ -1509,13 +1701,13 @@ function run() {
     return
 
     # For test temporarily.
-    for i in {109..127}; do
+    for i in {113..131}; do
         DM_"$i"
     done
     return
 
     start=71
-    end=103
+    end=112
     except=(072 074 075 083 084 087 088 089 090 091 092 093)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
