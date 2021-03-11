@@ -156,18 +156,23 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	prevTable := l.tables[callerSource][callerSchema][callerTable]
 	oldJoined := l.joined
 
-	// update table info and joined info base on the last new table info
 	lastTableInfo := schemacmp.Encode(newTIs[len(newTIs)-1])
-	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
-		zap.Stringer("from", prevTable), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
-	l.tables[callerSource][callerSchema][callerTable] = lastTableInfo
-
 	lastJoined, err := joinTable(lastTableInfo)
 	if err != nil {
 		return emptyDDLs, err
 	}
-	// update the current joined table info, it should be logged in `if cmp != 0` block below.
-	l.joined = lastJoined
+
+	defer func() {
+		// only update table info and joined info if no error
+		if err == nil {
+			// update table info and joined info base on the last new table info
+			log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
+				zap.Stringer("from", l.tables[callerSource][callerSchema][callerTable]), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
+			l.tables[callerSource][callerSchema][callerTable] = lastTableInfo
+			// update the current joined table info, it should be logged in `if cmp != 0` block below.
+			l.joined = lastJoined
+		}
+	}()
 
 	newDDLs = []string{}
 	nextTable := prevTable
