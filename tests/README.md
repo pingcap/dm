@@ -14,6 +14,7 @@
     * [gh-ost](https://github.com/github/gh-ost) # must be added to path, or you can `export GHOST_BINARY=/path/to/gh-ost-binary`
     * [pt-online-schema-change](https://www.percona.com/doc/percona-toolkit/LATEST/pt-online-schema-change.html) # must be added to path, or you can `export PTOSC_BINARY=/path/to/pt-osc-binary`
     * [GNU sed](https://www.gnu.org/software/sed/) # must be added to path, BSD sed user should be attention
+    * [GNU awk](https://www.gnu.org/software/gawk/) # must be added to path
 
 2. The following programs must be installed:
 
