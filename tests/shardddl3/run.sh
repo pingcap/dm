@@ -1856,6 +1856,55 @@ function DM_139 {
         "clean_table" "optimistic"
 }
 
+function DM_Partition_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(100),(101),(102),(103),(104),(105);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(200),(201),(202),(203),(204),(205);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(300),(301),(302),(303),(304),(305);"
+
+    # Add partitioning.
+    run_sql_source1 "alter table ${shardddl1}.${tb1} partition by range(id)(partition p0 values less than (106));"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "ALTER TABLE \`${shardddl1}\`.\`${tb1}\` PARTITION BY RANGE (\`id\`) (PARTITION \`p0\` VALUES LESS THAN (106))" 1 \
+        "alter table partition is unsupported" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "handle-error test skip"
+
+    # Add new partition.
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add partition (partition p1 values less than (112));"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(106),(107),(108),(109),(110),(111);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(206),(207),(208),(209),(210),(211);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(306),(307),(308),(309),(310),(311);"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "ALTER TABLE \`${shardddl1}\`.\`${tb1}\` ADD PARTITION (PARTITION \`p1\` VALUES LESS THAN (112))" 1 \
+        "Partition management on a not partitioned table is not possible" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "handle-error test skip"
+
+    # Remove partition.
+    run_sql_source1 "delete from ${shardddl1}.${tb1} where id >= 106;"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop partition p1;"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "ALTER TABLE \`${shardddl1}\`.\`${tb1}\` DROP PARTITION \`p1\`" 1 \
+        "Partition management on a not partitioned table is not possible" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "handle-error test skip"
+
+    # Remove partitioning.
+    run_sql_source1 "alter table ${shardddl1}.${tb1} remove partitioning;"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "ALTER TABLE \`${shardddl1}\`.\`${tb1}\` REMOVE PARTITIONING" 1 \
+        "Unsupported remove partitioning" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "handle-error test skip"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_Partition {
+    run_case Partition "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case Partition "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
 function DM_RemoveLock_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
@@ -1982,10 +2031,8 @@ function run() {
     init_cluster
     init_database
 
-    # For test temporarily.
-    for i in {132..139}; do
-        DM_"$i"
-    done
+    DM_Partition
+
     return
 
     start=71
