@@ -2,6 +2,7 @@ use incremental_mode;
 insert into t1 (id, name) values (3, 'Eddard Stark');
 update t1 set name = 'Arya Stark' where id = 1;
 update t1 set name = 'Catelyn Stark' where name = 'catelyn';
+flush logs;
 
 -- test multi column index with generated column
 alter table t1 add column info json;
@@ -11,6 +12,7 @@ insert into t1 (id, name, info) values (4, 'gentest', '{"id": 123}');
 insert into t1 (id, name, info) values (5, 'gentest', '{"id": 124}');
 update t1 set info = '{"id": 120}' where id = 1;
 update t1 set info = '{"id": 121}' where id = 2;
+flush logs;
 update t1 set info = '{"id": 122}' where id = 3;
 
 -- test genColumnCache is reset after ddl
