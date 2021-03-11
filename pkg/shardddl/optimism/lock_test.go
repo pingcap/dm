@@ -16,6 +16,7 @@ package optimism
 import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"github.com/pingcap/tidb/util/mock"
@@ -1122,7 +1123,7 @@ func (t *testLock) TestLockTrySyncMultipleChangeDDL(c *C) {
 		p                = parser.New()
 		se               = mock.NewContext()
 		tblID      int64 = 111
-		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c2 INT", "ALTER TABLE DROP COLUMN c1"}
+		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c2 INT", "ALTER TABLE bar DROP COLUMN c1"}
 		DDLs2            = []string{"ALTER TABLE bar DROP COLUMN c2", "ALTER TABLE bar ADD COLUMN c3 TEXT"}
 		//		DDLs3            = []string{"ALTER TABLE bar DROP COLUMN c3"}
 		//		DDLs4            = []string{"ALTER TABLE bar DROP COLUMN c2", "ALTER TABLE bar DROP COLUMN c1"}
@@ -1451,8 +1452,8 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 
 func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 	var (
-		ID         = "test_lock_try_mark_done-`foo`.`bar`"
-		task       = "test_lock_try_mark_done"
+		ID         = "test_lock_add_diff_flen_cols-`foo`.`bar`"
+		task       = "test_lock_add_diff_flen_cols"
 		source     = "mysql-replica-1"
 		downSchema = "foo"
 		downTable  = "bar"
@@ -1483,9 +1484,15 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 			},
 		}
 	)
-	c.Assert(AddDifferentFieldLenColumns(ID, DDLs1[0], table1, table2), IsNil)
-	c.Assert(AddDifferentFieldLenColumns(ID, DDLs2[0], table2, table3), ErrorMatches, ".*add columns with different field lengths.*")
-	c.Assert(AddDifferentFieldLenColumns(ID, DDLs1[0], table3, table2), ErrorMatches, ".*add columns with different field lengths.*")
+	col, err := AddDifferentFieldLenColumns(ID, DDLs1[0], table1, table2)
+	c.Assert(col, Equals, "c1")
+	c.Assert(err, IsNil)
+	col, err = AddDifferentFieldLenColumns(ID, DDLs2[0], table2, table3)
+	c.Assert(col, Equals, "c1")
+	c.Assert(err, ErrorMatches, ".*add columns with different field lengths.*")
+	col, err = AddDifferentFieldLenColumns(ID, DDLs1[0], table3, table2)
+	c.Assert(col, Equals, "c1")
+	c.Assert(err, ErrorMatches, ".*add columns with different field lengths.*")
 
 	// the initial status is synced but not resolved.
 	t.checkLockSynced(c, l)
@@ -1526,6 +1533,110 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 	c.Assert(err, ErrorMatches, ".*add columns with different field lengths.*")
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	c.Assert(l.versions, DeepEquals, vers)
+}
+
+func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
+	var (
+		ID         = "test_lock_add_not_fully_dropped_cols-`foo`.`bar`"
+		task       = "test_lock_add_not_fully_dropped_cols"
+		source     = "mysql-replica-1"
+		downSchema = "foo"
+		downTable  = "bar"
+		db         = "foo"
+		tbls       = []string{"bar1", "bar2"}
+		p          = parser.New()
+		se         = mock.NewContext()
+
+		tblID int64 = 111
+		ti0         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, b int, c int)`)
+		ti1         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, b int)`)
+		ti2         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti3         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c int)`)
+
+		DDLs1 = []string{"ALTER TABLE bar DROP COLUMN c"}
+		DDLs2 = []string{"ALTER TABLE bar DROP COLUMN b"}
+		DDLs3 = []string{"ALTER TABLE bar ADD COLUMN b INT"}
+		DDLs4 = []string{"ALTER TABLE bar ADD COLUMN c INT"}
+
+		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
+		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
+		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+
+		vers = map[string]map[string]map[string]int64{
+			source: {
+				db: {tbls[0]: 0, tbls[1]: 0},
+			},
+		}
+	)
+	col, err := GetColumnName(ID, DDLs1[0], ast.AlterTableDropColumn)
+	c.Assert(col, Equals, "c")
+	c.Assert(err, IsNil)
+	col, err = GetColumnName(ID, DDLs2[0], ast.AlterTableDropColumn)
+	c.Assert(col, Equals, "b")
+	c.Assert(err, IsNil)
+
+	// the initial status is synced but not resolved.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+	c.Assert(l.IsResolved(), IsFalse)
+
+	// TrySync for the first table, drop the first column
+	vers[source][db][tbls[0]]++
+	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, []*model.TableInfo{ti1}, tts, vers[source][db][tbls[0]])
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, []string{})
+	c.Assert(l.versions, DeepEquals, vers)
+	c.Assert(l.IsResolved(), IsFalse)
+
+	// TrySync for the first table, drop column b
+	vers[source][db][tbls[0]]++
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, []*model.TableInfo{ti2}, tts, vers[source][db][tbls[0]])
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, []string{})
+	c.Assert(l.versions, DeepEquals, vers)
+	c.Assert(l.IsResolved(), IsFalse)
+
+	// TrySync for the second table, drop column b, this column should be dropped
+	vers[source][db][tbls[1]]++
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, []*model.TableInfo{ti3}, tts, vers[source][db][tbls[1]])
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs2)
+	c.Assert(l.versions, DeepEquals, vers)
+	c.Assert(l.IsResolved(), IsFalse)
+	// Simulate watch done operation from dm-worker
+	c.Assert(l.UpdateColumns(DDLs), IsNil)
+
+	// TrySync for the first table, add column b, should succeed, because this column is fully dropped in the downstream
+	vers[source][db][tbls[0]]++
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, []*model.TableInfo{ti1}, tts, vers[source][db][tbls[0]])
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs3)
+	c.Assert(l.versions, DeepEquals, vers)
+	c.Assert(l.IsResolved(), IsFalse)
+
+	// TrySync for the first table, add column b, should fail, because this column isn't fully dropped in the downstream
+	vers[source][db][tbls[0]]++
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs4, []*model.TableInfo{ti0}, tts, vers[source][db][tbls[0]])
+	c.Assert(err, ErrorMatches, ".*add column c that wasn't fully dropped in downstream.*")
+	c.Assert(l.IsResolved(), IsFalse)
+
+	// TrySync for the second table, drop column b, this column should be dropped
+	vers[source][db][tbls[1]]++
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, []*model.TableInfo{ti2}, tts, vers[source][db][tbls[1]])
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	c.Assert(l.versions, DeepEquals, vers)
+	c.Assert(l.IsResolved(), IsFalse)
+	// Simulate watch done operation from dm-worker
+	c.Assert(l.UpdateColumns(DDLs), IsNil)
+
+	// TrySync for the first table, add column b, should fail, because this column isn't fully dropped in the downstream
+	vers[source][db][tbls[0]]++
+	DDLs, err = l.TrySync(source, db, tbls[0], DDLs4, []*model.TableInfo{ti0}, tts, vers[source][db][tbls[0]])
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs4)
+	c.Assert(l.versions, DeepEquals, vers)
+	c.Assert(l.IsResolved(), IsFalse)
 }
 
 func (t *testLock) trySyncForAllTablesLarger(c *C, l *Lock,

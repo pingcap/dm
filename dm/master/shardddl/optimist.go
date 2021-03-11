@@ -469,6 +469,10 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 				continue
 			}
 
+			err := lock.UpdateColumns(op.DDLs)
+			if err != nil {
+				o.logger.Error("fail to update lock columns", zap.Error(err))
+			}
 			// in optimistic mode, we always try to mark a table as done after received the `done` status of the DDLs operation.
 			// NOTE: even all tables have done their previous DDLs operations, the lock may still not resolved,
 			// because these tables may have different schemas.

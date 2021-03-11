@@ -56,6 +56,10 @@ type Lock struct {
 
 	// upstream source ID -> upstream schema name -> upstream table name -> info version.
 	versions map[string]map[string]map[string]int64
+
+	// record the partially dropped columns
+	// column name -> interface{}
+	columns map[string]interface{}
 }
 
 // NewLock creates a new Lock instance.
@@ -71,6 +75,7 @@ func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []
 		done:       make(map[string]map[string]map[string]bool),
 		synced:     true,
 		versions:   make(map[string]map[string]map[string]int64),
+		columns:    make(map[string]interface{}),
 	}
 	l.addTables(tts)
 	metrics.ReportDDLPending(task, metrics.DDLPendingNone, metrics.DDLPendingSynced)
@@ -194,6 +199,12 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		// if any real conflicts after joined exist, they will be detected by the following steps.
 		var cmp int
 		if cmp, err = nextTable.Compare(oldJoined); err == nil && cmp == 0 {
+			if col, err := GetColumnName(l.ID, ddls[idx], ast.AlterTableAddColumns); err != nil {
+				return newDDLs, err
+			} else if _, ok := l.columns[col]; len(col) > 0 && ok {
+				return newDDLs, terror.ErrShardDDLOptimismTrySyncFail.Generate(
+					l.ID, fmt.Sprintf("add column %s that wasn't fully dropped in downstream. ddl: %s", col, ddls[idx]))
+			}
 			newDDLs = append(newDDLs, ddls[idx])
 			continue
 		}
@@ -221,9 +232,9 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 			// for these two cases, we should execute the DDLs to the downstream to update the schema.
 			log.L().Info("joined table info changed", zap.String("lock", l.ID), zap.Int("cmp", cmp), zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined),
 				zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable), zap.Strings("ddls", ddls))
-			// check for add column with different field lengths
+			// check for add column with a larger field len
 			if cmp < 0 {
-				err = AddDifferentFieldLenColumns(l.ID, ddls[idx], oldJoined, newJoined)
+				_, err = AddDifferentFieldLenColumns(l.ID, ddls[idx], oldJoined, newJoined)
 				if err != nil {
 					return ddls, err
 				}
@@ -251,15 +262,22 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 
 		cmp, _ = prevTable.Compare(nextTable) // we have checked `err` returned above.
 		if cmp < 0 {
-			// check for add column with different field lengths
-			err = AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined)
-			if err != nil {
+			// check for add column with a smaller field len
+			if col, err := AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined); err != nil {
 				return ddls, err
+			} else if _, ok := l.columns[col]; len(col) > 0 && ok {
+				return ddls, terror.ErrShardDDLOptimismTrySyncFail.Generate(
+					l.ID, fmt.Sprintf("add column %s that wasn't fully dropped in downstream. ddl: %s", col, ddls[idx]))
 			}
 			// let every table to replicate the DDL.
 			newDDLs = append(newDDLs, ddls[idx])
 			continue
 		} else if cmp > 0 {
+			if col, err := GetColumnName(l.ID, ddls[idx], ast.AlterTableDropColumn); err != nil {
+				return ddls, err
+			} else if len(col) > 0 {
+				l.columns[col] = struct{}{}
+			}
 			// last shard table won't go here
 			continue
 		}
@@ -488,27 +506,64 @@ func (l *Lock) GetVersion(source string, schema string, table string) int64 {
 	return l.versions[source][schema][table]
 }
 
+// GetVersion return version of info in lock.
+func (l *Lock) UpdateColumns(ddls []string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	for _, ddl := range ddls {
+		col, err := GetColumnName(l.ID, ddl, ast.AlterTableDropColumn)
+		if err != nil {
+			return err
+		}
+		if len(col) > 0 {
+			delete(l.columns, col)
+		}
+	}
+	return nil
+}
+
 // AddDifferentFieldLenColumns checks whether dm adds columns with different field lengths
-func AddDifferentFieldLenColumns(lockID, ddl string, oldJoined, newJoined schemacmp.Table) error {
+func AddDifferentFieldLenColumns(lockID, ddl string, oldJoined, newJoined schemacmp.Table) (string, error) {
+	col, err := GetColumnName(lockID, ddl, ast.AlterTableAddColumns)
+	if err != nil {
+		return col, err
+	}
+	if len(col) > 0 {
+		oldJoinedCols := schemacmp.DecodeColumnFieldTypes(oldJoined)
+		newJoinedCols := schemacmp.DecodeColumnFieldTypes(newJoined)
+		oldCol, ok1 := oldJoinedCols[col]
+		newCol, ok2 := newJoinedCols[col]
+		if ok1 && ok2 {
+			if newCol.Flen != oldCol.Flen {
+				return col, terror.ErrShardDDLOptimismTrySyncFail.Generate(
+					lockID, fmt.Sprintf("add columns with different field lengths."+
+						"ddl: %s, origLen: %d, newLen: %d", ddl, oldCol.Flen, newCol.Flen))
+			}
+		}
+	}
+	return col, nil
+}
+
+// GetColumnName checks whether dm adds/drops a column, and return this column's name
+func GetColumnName(lockID, ddl string, tp ast.AlterTableType) (string, error) {
 	if stmt, err := parser.New().ParseOneStmt(ddl, "", ""); err != nil {
-		return terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+		return "", terror.ErrShardDDLOptimismTrySyncFail.Delegate(
 			err, lockID, fmt.Sprintf("fail to parse ddl %s", ddl))
 	} else if v, ok := stmt.(*ast.AlterTableStmt); ok && len(v.Specs) > 0 {
 		spec := v.Specs[0]
-		if spec.Tp == ast.AlterTableAddColumns && len(spec.NewColumns) > 0 {
-			col := spec.NewColumns[0].Name.Name.O
-			oldJoinedCols := schemacmp.DecodeColumnFieldTypes(oldJoined)
-			newJoinedCols := schemacmp.DecodeColumnFieldTypes(newJoined)
-			oldCol, ok1 := oldJoinedCols[col]
-			newCol, ok2 := newJoinedCols[col]
-			if ok1 && ok2 {
-				if newCol.Flen != oldCol.Flen {
-					return terror.ErrShardDDLOptimismTrySyncFail.Generate(
-						lockID, fmt.Sprintf("add columns with different field lengths."+
-							"ddl: %s, origLen: %d, newLen: %d", ddl, oldCol.Flen, newCol.Flen))
+		if spec.Tp == tp {
+			switch spec.Tp {
+			case ast.AlterTableAddColumns:
+				if len(spec.NewColumns) > 0 {
+					return spec.NewColumns[0].Name.Name.O, nil
+				}
+			case ast.AlterTableDropColumn:
+				if spec.OldColumnName != nil {
+					return spec.OldColumnName.Name.O, nil
 				}
 			}
 		}
 	}
-	return nil
+	return "", nil
 }
