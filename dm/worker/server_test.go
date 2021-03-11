@@ -532,6 +532,7 @@ func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.
 }
 
 func (t *testServer) TestGetMinLocInAllSubTasks(c *C) {
+
 	subTaskCfg := map[string]config.SubTaskConfig{
 		"test2": {Name: "test2"},
 		"test3": {Name: "test3"},
@@ -542,8 +543,9 @@ func (t *testServer) TestGetMinLocInAllSubTasks(c *C) {
 	c.Assert(minLoc.Position.Name, Equals, "mysql-binlog.00001")
 	c.Assert(minLoc.Position.Pos, Equals, uint32(12))
 
-	for _, subtask := range subTaskCfg {
-		subtask.EnableGTID = true
+	for k, cfg := range subTaskCfg {
+		cfg.EnableGTID = true
+		subTaskCfg[k] = cfg
 	}
 
 	minLoc, err = getMinLocInAllSubTasks(context.Background(), subTaskCfg)

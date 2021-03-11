@@ -400,17 +400,17 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	c.Assert(w.relayHolder, NotNil)
 	_, err = ha.PutSourceCfg(etcdCli, sourceCfg)
 	c.Assert(err, IsNil)
-	_, err = ha.PutRelayStageSourceBound(etcdCli, ha.NewRelayStage(pb.Stage_Running, sourceCfg.SourceID),
+	rev, err := ha.PutRelayStageSourceBound(etcdCli, ha.NewRelayStage(pb.Stage_Running, sourceCfg.SourceID),
 		ha.NewSourceBound(sourceCfg.SourceID, cfg.Name))
-	c.Assert(err, IsNil)
-	rev, err := ha.DeleteSourceCfgRelayStageSourceBound(etcdCli, sourceCfg.SourceID, cfg.Name)
 	c.Assert(err, IsNil)
 	// check relay stage, should be running
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return w.relayHolder.Stage() == pb.Stage_Running
 	}), IsTrue)
-	// step 3: trigger etcd compaction and check whether we can receive it through watcher
+	// step 3: trigger etcd compaction and check whether we can receive it through watcher, then we delete relay stage
 	_, err = etcdCli.Compact(ctx, rev)
+	c.Assert(err, IsNil)
+	rev, err = ha.DeleteSourceCfgRelayStageSourceBound(etcdCli, sourceCfg.SourceID, cfg.Name)
 	c.Assert(err, IsNil)
 	relayStageCh := make(chan ha.Stage, 10)
 	relayErrCh := make(chan error, 10)
@@ -421,19 +421,9 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	case <-time.After(300 * time.Millisecond):
 		c.Fatal("fail to get etcd error compacted")
 	}
-	// step 4: watch relay stage from startRev
-	var wg sync.WaitGroup
-	ctx1, cancel1 := context.WithCancel(ctx)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		c.Assert(w.observeRelayStage(ctx1, etcdCli, startRev), IsNil)
-	}()
-	// step 5: should stop the running relay
+	// step 4: should stop the running relay because see deletion after compaction
 	time.Sleep(time.Second)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return w.relayHolder.Stage() == pb.Stage_Stopped
 	}), IsTrue)
-	cancel1()
-	wg.Wait()
 }
