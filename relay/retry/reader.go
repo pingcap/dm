@@ -27,7 +27,7 @@ import (
 type ReaderRetryConfig struct {
 	BackoffRollback time.Duration `toml:"backoff-rollback" json:"backoff-rollback"`
 	BackoffMax      time.Duration `toml:"backoff-max" json:"backoff-max"`
-	// unexpose config
+	// unexposed config
 	BackoffMin    time.Duration `json:"-"`
 	BackoffJitter bool          `json:"-"`
 	BackoffFactor float64       `json:"-"`
