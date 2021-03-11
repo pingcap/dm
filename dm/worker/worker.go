@@ -28,6 +28,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
@@ -68,7 +69,8 @@ type Worker struct {
 	name string
 }
 
-// NewWorker creates a new Worker
+// NewWorker creates a new Worker. The functionality of relay and subtask is disabled by default, need call EnableRelay
+// and EnableSubtask later
 func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name string) (w *Worker, err error) {
 	w = &Worker{
 		cfg:           cfg,
@@ -89,18 +91,6 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name strin
 		}
 	}(w)
 
-	if cfg.EnableRelay {
-		// initial relay holder, the cfg's password need decrypt
-		w.relayHolder = NewRelayHolder(cfg)
-		purger1, err1 := w.relayHolder.Init([]purger.PurgeInterceptor{
-			w,
-		})
-		if err1 != nil {
-			return nil, err1
-		}
-		w.relayPurger = purger1
-	}
-
 	// initial task status checker
 	if w.cfg.Checker.CheckEnable {
 		tsc := NewTaskStatusChecker(w.cfg.Checker, w)
@@ -119,17 +109,7 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name strin
 }
 
 // Start starts working
-func (w *Worker) Start(startRelay bool) {
-
-	if w.cfg.EnableRelay && startRelay {
-		log.L().Info("relay is started")
-		// start relay
-		w.relayHolder.Start()
-
-		// start purger
-		w.relayPurger.Start()
-	}
-
+func (w *Worker) Start() {
 	// start task status checker
 	if w.cfg.Checker.CheckEnable {
 		w.taskStatusChecker.Start()
@@ -188,6 +168,81 @@ func (w *Worker) Close() {
 
 	w.closed.Set(closedTrue)
 	w.l.Info("Stop worker")
+}
+
+// EnableRelay enables the functionality of start/watch/handle relay
+func (w *Worker) EnableRelay() error {
+	// 1. adjust relay starting position, to the earliest of subtasks
+	_, subTaskCfgs, _, err := ha.GetSubTaskStageConfig(w.etcdClient, w.cfg.SourceID)
+	if err != nil {
+		return err
+	}
+	dctx, dcancel := context.WithTimeout(w.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
+	defer dcancel()
+	minLoc, err1 := getMinLocInAllSubTasks(dctx, subTaskCfgs)
+	if err1 != nil {
+		return err1
+	}
+
+	if minLoc != nil {
+		log.L().Info("get min location in all subtasks", zap.Stringer("location", *minLoc))
+		w.cfg.RelayBinLogName = binlog.AdjustPosition(minLoc.Position).Name
+		w.cfg.RelayBinlogGTID = minLoc.GTIDSetStr()
+		// set UUIDSuffix when bound to a source
+		w.cfg.UUIDSuffix, err = binlog.ExtractSuffix(minLoc.Position.Name)
+		if err != nil {
+			return err
+		}
+	} else {
+		// set UUIDSuffix even not checkpoint exist
+		// so we will still remove relay dir
+		w.cfg.UUIDSuffix = binlog.MinUUIDSuffix
+	}
+
+	// 2. initial relay holder, the cfg's password need decrypt
+	w.relayHolder = NewRelayHolder(w.cfg)
+	relayPurger, err := w.relayHolder.Init([]purger.PurgeInterceptor{
+		w,
+	})
+	if err != nil {
+		return err
+	}
+	w.relayPurger = relayPurger
+
+	// 3. get relay stage from etcd and check if need starting
+	// we get the newest relay stages directly which will omit the relay stage PUT/DELETE event
+	// because triggering these events is useless now
+	relayStage, revRelay, err := ha.GetRelayStage(w.etcdClient, w.cfg.SourceID)
+	if err != nil {
+		// TODO: need retry
+		return err
+	}
+	startImmediately := !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
+	if startImmediately {
+		log.L().Info("relay is started")
+		w.relayHolder.Start()
+		w.relayPurger.Start()
+	}
+
+	// 4. watch relay stage
+	w.wg.Add(1)
+	go func() {
+		defer w.wg.Done()
+		// TODO: handle fatal error from observeRelayStage
+		//nolint:errcheck
+		w.observeRelayStage(w.ctx, w.etcdClient, revRelay)
+	}()
+	return nil
+}
+
+// EnableSubtask TODO
+func (w *Worker) EnableSubtask() {
+
+}
+
+// DisableSubtask TODO
+func (w *Worker) DisableSubtask() {
+
 }
 
 // StartSubTask creates a sub task an run it

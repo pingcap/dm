@@ -532,14 +532,10 @@ func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.
 }
 
 func (t *testServer) TestGetMinLocInAllSubTasks(c *C) {
-	subTaskCfg := []*config.SubTaskConfig{
-		{
-			Name: "test2",
-		}, {
-			Name: "test3",
-		}, {
-			Name: "test1",
-		},
+	subTaskCfg := map[string]config.SubTaskConfig{
+		"test2": {Name: "test2"},
+		"test3": {Name: "test3"},
+		"test1": {Name: "test1"},
 	}
 	minLoc, err := getMinLocInAllSubTasks(context.Background(), subTaskCfg)
 	c.Assert(err, IsNil)
@@ -666,7 +662,7 @@ func (t *testServer) TestUnifyMasterBinlogPos(c *C) {
 	c.Assert(relay.RelayCatchUpMaster, IsTrue)
 }
 
-func getFakeLocForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minLoc *binlog.Location, err error) {
+func getFakeLocForSubTask(ctx context.Context, subTaskCfg config.SubTaskConfig) (minLoc *binlog.Location, err error) {
 	gset1, _ := gtid.ParserGTID(mysql.MySQLFlavor, "ba8f633f-1f15-11eb-b1c7-0242ac110001:1-30")
 	gset2, _ := gtid.ParserGTID(mysql.MySQLFlavor, "ba8f633f-1f15-11eb-b1c7-0242ac110001:1-50")
 	gset3, _ := gtid.ParserGTID(mysql.MySQLFlavor, "ba8f633f-1f15-11eb-b1c7-0242ac110001:1-50,ba8f633f-1f15-11eb-b1c7-0242ac110002:1")

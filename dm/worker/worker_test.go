@@ -252,7 +252,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	defer cancel()
 	defer w.Close()
 	go func() {
-		w.Start(false)
+		w.Start()
 	}()
 	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
 		return w.closed.Get() == closedFalse
@@ -366,7 +366,8 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	defer cancel()
 	defer w.Close()
 	go func() {
-		w.Start(true)
+		c.Assert(w.EnableRelay(), IsNil)
+		w.Start()
 	}()
 	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
 		return w.closed.Get() == closedFalse
