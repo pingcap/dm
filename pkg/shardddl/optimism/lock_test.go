@@ -932,13 +932,13 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 		tblID      int64 = 111
 		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
 		DDLs2            = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME", "ALTER TABLE bar ADD COLUMN c2 INT"}
-		//	DDLs3            = []string{"ALTER TABLE bar DROP COLUMN c2"}
-		DDLs4 = []string{"ALTER TABLE bar DROP COLUMN c1"}
-		ti0   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
-		ti1   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
-		ti2   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
-		ti3   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
-		ti4   = ti0
+		DDLs3            = []string{"ALTER TABLE bar DROP COLUMN c2"}
+		DDLs4            = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
+		ti3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
+		ti4              = ti0
 
 		DDLs5   = []string{"ALTER TABLE bar ADD COLUMN c2 TEXT"}
 		DDLs6   = []string{"ALTER TABLE bar ADD COLUMN c2 DATETIME", "ALTER TABLE bar ADD COLUMN c3 INT"}
@@ -1005,6 +1005,18 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, -1)
+
+	// TrySync for the second table to drop the non-conflict column, the conflict should still exist.
+	vers[source][db][tbls[1]]++
+	DDLs, err = l.TrySync(source, db, tbls[1], DDLs3, []*model.TableInfo{ti3}, tts, vers[source][db][tbls[1]])
+	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
+	c.Assert(DDLs, DeepEquals, []string{})
+	c.Assert(l.versions, DeepEquals, vers)
+	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+	ready = l.Ready()
+	c.Assert(ready[source][db][tbls[1]], IsFalse)
 
 	// TrySync for the second table to drop the conflict column, the conflict should be resolved.
 	vers[source][db][tbls[1]]++
