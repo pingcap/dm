@@ -1905,6 +1905,59 @@ function DM_Partition {
     run_case Partition "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
+function DM_140_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(100),(101),(102),(103),(104),(105);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(200),(201),(202),(203),(204),(205);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(300),(301),(302),(303),(304),(305);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} engine=innodb;"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "This type of ALTER TABLE is currently unsupported" 1
+}
+
+# Defragment.
+function DM_140 {
+    run_case 140 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 140 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function DM_141_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(100),(101),(102),(103),(104),(105);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(200),(201),(202),(203),(204),(205);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(300),(301),(302),(303),(304),(305);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} ROW_FORMAT=COMPACT;"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "This type of ALTER TABLE is currently unsupported" 1
+}
+
+# Modify row format.
+function DM_141 {
+    run_case 141 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 141 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
+function DM_142_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(100),(101),(102),(103),(104),(105);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(200),(201),(202),(203),(204),(205);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(300),(301),(302),(303),(304),(305);"
+
+    # FIXME: DM should detect table renaming and report an error.
+    run_sql_source1 "use ${shardddl1}; rename table ${tb1} to ${tb1}_new;"    
+
+    run_sql_source1 "use ${shardddl1}; drop table if exists ${tb1}_new;"
+}
+
+# Rename table.
+function DM_142 {
+    run_case 142 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 142 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
 function DM_RemoveLock_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
@@ -2031,8 +2084,9 @@ function run() {
     init_cluster
     init_database
 
-    DM_Partition
-
+    DM_140
+    DM_141
+    DM_142
     return
 
     start=71
