@@ -47,11 +47,34 @@ func (t *testServer) testWorker(c *C) {
 		NewRelayHolder = NewRealRelayHolder
 	}()
 
-	_, err := NewWorker(&cfg, nil, "")
-	c.Assert(err, ErrorMatches, "init error")
+	var (
+		masterAddr   = tempurl.Alloc()[len("http://"):]
+		keepAliveTTL = int64(1)
+	)
+	etcdDir := c.MkDir()
+	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
+	c.Assert(err, IsNil)
+	defer ETCD.Close()
+	workerCfg := NewConfig()
+	c.Assert(workerCfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	workerCfg.Join = masterAddr
+	workerCfg.KeepAliveTTL = keepAliveTTL
+	workerCfg.RelayKeepAliveTTL = keepAliveTTL
+
+	etcdCli, err := clientv3.New(clientv3.Config{
+		Endpoints:            GetJoinURLs(workerCfg.Join),
+		DialTimeout:          dialTimeout,
+		DialKeepAliveTime:    keepaliveTime,
+		DialKeepAliveTimeout: keepaliveTimeout,
+	})
+	c.Assert(err, IsNil)
+
+	w, err := NewWorker(&cfg, etcdCli, "")
+	c.Assert(err, IsNil)
+	c.Assert(w.EnableRelay(), ErrorMatches, "init error")
 
 	NewRelayHolder = NewDummyRelayHolder
-	w, err := NewWorker(&cfg, nil, "")
+	w, err = NewWorker(&cfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	c.Assert(w.StatusJSON(context.Background(), ""), HasLen, emptyWorkerStatusInfoJSONLength)
 	//c.Assert(w.closed.Get(), Equals, closedFalse)

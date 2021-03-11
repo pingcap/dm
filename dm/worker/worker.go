@@ -177,6 +177,13 @@ func (w *Worker) EnableRelay() error {
 	if err != nil {
 		return err
 	}
+	for k, subTaskCfg := range subTaskCfgs {
+		if err2 := copyConfigFromSource(&subTaskCfg, w.cfg); err2 != nil {
+			return err2
+		}
+		subTaskCfgs[k] = subTaskCfg
+	}
+
 	dctx, dcancel := context.WithTimeout(w.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
 	defer dcancel()
 	minLoc, err1 := getMinLocInAllSubTasks(dctx, subTaskCfgs)
