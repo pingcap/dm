@@ -1593,7 +1593,6 @@ function DM_132_CASE {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
-
 # Expand the primary key field.
 function DM_132 {
     # start a TiDB alter-pk
@@ -1856,56 +1855,144 @@ function DM_139 {
         "clean_table" "optimistic"
 }
 
-function DM_Partition_CASE {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(100),(101),(102),(103),(104),(105);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(200),(201),(202),(203),(204),(205);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(300),(301),(302),(303),(304),(305);"
+function DM_140_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10),(11),(12),(13),(14),(15);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(20),(21),(22),(23),(24),(25);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(30),(31),(32),(33),(34),(35);"
 
-    # Add partitioning.
     run_sql_source1 "alter table ${shardddl1}.${tb1} partition by range(id)(partition p0 values less than (106));"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "ALTER TABLE \`${shardddl1}\`.\`${tb1}\` PARTITION BY RANGE (\`id\`) (PARTITION \`p0\` VALUES LESS THAN (106))" 1 \
         "alter table partition is unsupported" 1
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "handle-error test skip"
+}
 
-    # Add new partition.
-    run_sql_source1 "alter table ${shardddl1}.${tb1} add partition (partition p1 values less than (112));"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(106),(107),(108),(109),(110),(111);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(206),(207),(208),(209),(210),(211);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(306),(307),(308),(309),(310),(311);"
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
-        "ALTER TABLE \`${shardddl1}\`.\`${tb1}\` ADD PARTITION (PARTITION \`p1\` VALUES LESS THAN (112))" 1 \
-        "Partition management on a not partitioned table is not possible" 1
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "handle-error test skip"
+# Add partitioning
+function DM_140 {
+    run_case 140 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 140 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
 
-    # Remove partition.
-    run_sql_source1 "delete from ${shardddl1}.${tb1} where id >= 106;"
-    run_sql_source1 "alter table ${shardddl1}.${tb1} drop partition p1;"
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
-        "ALTER TABLE \`${shardddl1}\`.\`${tb1}\` DROP PARTITION \`p1\`" 1 \
-        "Partition management on a not partitioned table is not possible" 1
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "handle-error test skip"
+function DM_141_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10),(11),(12),(13),(14),(15);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(20),(21),(22),(23),(24),(25);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(30),(31),(32),(33),(34),(35);"
 
-    # Remove partitioning.
-    run_sql_source1 "alter table ${shardddl1}.${tb1} remove partitioning;"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} remove partitioning"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "ALTER TABLE \`${shardddl1}\`.\`${tb1}\` REMOVE PARTITIONING" 1 \
         "Unsupported remove partitioning" 1
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "handle-error test skip"
-
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
-function DM_Partition {
-    run_case Partition "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
-    run_case Partition "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+# Remove partitioning.
+function DM_141 {
+    run_case 141 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id)(partition p0 values less than (100));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id)(partition p0 values less than (100));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key) partition by range(id)(partition p0 values less than (100));\"" \
+        "clean_table" "pessimistic"
+    run_case 141 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id)(partition p0 values less than (100));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id)(partition p0 values less than (100));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key) partition by range(id)(partition p0 values less than (100));\"" \
+        "clean_table" "optimistic"
 }
 
-function DM_140_CASE {
+function DM_142_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10),(11),(12),(13),(14),(15);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(20),(21),(22),(23),(24),(25);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(30),(31),(32),(33),(34),(35);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add partition (partition p1 values less than (200));"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(110),(111),(112),(113),(114),(115);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add partition (partition p1 values less than (200));"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(120),(121),(122),(123),(124),(125);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add partition (partition p1 values less than (200));"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(130),(131),(132),(133),(134),(135);"
+}
+
+# Add new partition.
+function DM_142 {
+    run_case 142 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id)(partition p0 values less than (100));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id)(partition p0 values less than (100));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key) partition by range(id)(partition p0 values less than (100));\"" \
+        "clean_table" "pessimistic"
+
+    run_case 142 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id)(partition p0 values less than (100));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id)(partition p0 values less than (100));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key) partition by range(id)(partition p0 values less than (100));\"" \
+        "clean_table" "optimistic"
+}
+
+function DM_143_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10),(11),(12),(13),(14),(15),(110),(111),(112),(113),(114),(115);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(20),(21),(22),(23),(24),(25),(120),(121),(122),(123),(124),(125);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(30),(31),(32),(33),(34),(35),(130),(131),(132),(133),(134),(135);"
+
+    run_sql_source1 "delete from ${shardddl1}.${tb1} where id >= 100;"
+    run_sql_source2 "delete from ${shardddl1}.${tb1} where id >= 100;"
+    run_sql_source2 "delete from ${shardddl1}.${tb2} where id >= 100;"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop partition p1;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop partition p1;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop partition p1;"
+}
+
+# Remove partition.
+function DM_143 {
+    run_case 143 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id) \
+        (partition p0 values less than (100), partition p1 values less than (200));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id) \
+         (partition p0 values less than (100), partition p1 values less than (200));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key) partition by range(id) \
+         (partition p0 values less than (100), partition p1 values less than (200));\"" \
+        "clean_table" "pessimistic"
+    run_case 143 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id) \
+        (partition p0 values less than (100), partition p1 values less than (200));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id) \
+         (partition p0 values less than (100), partition p1 values less than (200));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key) partition by range(id) \
+         (partition p0 values less than (100), partition p1 values less than (200));\"" \
+        "clean_table" "optimistic"
+}
+
+function DM_144_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10),(11),(12),(13),(14),(15),(110),(111),(112),(113),(114),(115);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(20),(21),(22),(23),(24),(25),(120),(121),(122),(123),(124),(125);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(30),(31),(32),(33),(34),(35),(130),(131),(132),(133),(134),(135);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} reorganize partition p0,p1 into (partition p0 values less than (200))"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "ALTER TABLE \`${shardddl1}\`.\`${tb1}\` REORGANIZE PARTITION \`p0\`,\`p1\` INTO (PARTITION \`p0\` VALUES LESS THAN (200))" 1 \
+        "Unsupported reorganize partition" 1
+}
+
+# Reorganize partition.
+function DM_144 {
+    run_case 144 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id) \
+        (partition p0 values less than (100), partition p1 values less than (200));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id) \
+         (partition p0 values less than (100), partition p1 values less than (200));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key) partition by range(id) \
+         (partition p0 values less than (100), partition p1 values less than (200));\"" \
+        "clean_table" "pessimistic"
+    run_case 144 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id) \
+        (partition p0 values less than (100), partition p1 values less than (200));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id) \
+         (partition p0 values less than (100), partition p1 values less than (200));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key) partition by range(id) \
+         (partition p0 values less than (100), partition p1 values less than (200));\"" \
+        "clean_table" "optimistic"
+}
+
+function DM_145_CASE {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(100),(101),(102),(103),(104),(105);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(200),(201),(202),(203),(204),(205);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(300),(301),(302),(303),(304),(305);"
@@ -1918,12 +2005,12 @@ function DM_140_CASE {
 }
 
 # Defragment.
-function DM_140 {
-    run_case 140 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
-    run_case 140 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+function DM_145 {
+    run_case 145 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 145 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
-function DM_141_CASE {
+function DM_146_CASE {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(100),(101),(102),(103),(104),(105);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(200),(201),(202),(203),(204),(205);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(300),(301),(302),(303),(304),(305);"
@@ -1936,12 +2023,12 @@ function DM_141_CASE {
 }
 
 # Modify row format.
-function DM_141 {
-    run_case 141 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
-    run_case 141 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+function DM_146 {
+    run_case 146 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 146 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
-function DM_142_CASE {
+function DM_147_CASE {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(100),(101),(102),(103),(104),(105);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(200),(201),(202),(203),(204),(205);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(300),(301),(302),(303),(304),(305);"
@@ -1953,9 +2040,9 @@ function DM_142_CASE {
 }
 
 # Rename table.
-function DM_142 {
-    run_case 142 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
-    run_case 142 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+function DM_147 {
+    run_case 147 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case 147 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
 function DM_RemoveLock_CASE() {
@@ -2084,9 +2171,9 @@ function run() {
     init_cluster
     init_database
 
-    DM_140
-    DM_141
-    DM_142
+    for i in {140..147}; do
+        DM_"$i"
+    done
     return
 
     start=71
