@@ -87,7 +87,7 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name strin
 	}
 	// keep running until canceled in `Close`.
 	w.ctx, w.cancel = context.WithCancel(context.Background())
-	w.closed.Set(false)
+	w.closed.Set(true)
 	w.subTaskEnabled.Set(false)
 	w.relayEnabled.Set(false)
 
@@ -238,7 +238,7 @@ func (w *Worker) EnableRelay() (err error) {
 	}
 	startImmediately := !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
 	if startImmediately {
-		log.L().Info("relay is started")
+		w.l.Info("relay is started")
 		w.relayHolder.Start()
 		w.relayPurger.Start()
 	}
@@ -253,6 +253,7 @@ func (w *Worker) EnableRelay() (err error) {
 	}()
 
 	w.relayEnabled.Set(true)
+	w.l.Info("relay enabled")
 	return nil
 }
 
@@ -301,14 +302,14 @@ func (w *Worker) EnableHandleSubtasks() error {
 		return err
 	}
 
-	log.L().Info("starting to handle mysql source", zap.String("sourceCfg", w.cfg.String()), zap.Any("subTasks", subTaskCfgM))
+	w.l.Info("starting to handle mysql source", zap.String("sourceCfg", w.cfg.String()), zap.Any("subTasks", subTaskCfgM))
 
 	for _, subTaskCfg := range subTaskCfgM {
 		expectStage := subTaskStages[subTaskCfg.Name]
 		if expectStage.IsDeleted {
 			continue
 		}
-		log.L().Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
+		w.l.Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
 		// "for range" of a map will use same value address, so we'd better not pass value address to other function
 		clone := subTaskCfg
 		if err2 := w.StartSubTask(&clone, expectStage.Expect); err2 != nil {
@@ -326,6 +327,7 @@ func (w *Worker) EnableHandleSubtasks() error {
 	}()
 
 	w.subTaskEnabled.Set(true)
+	w.l.Info("handling subtask enabled")
 	return nil
 }
 
