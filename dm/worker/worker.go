@@ -242,16 +242,6 @@ func (w *Worker) EnableRelay() error {
 	return nil
 }
 
-// EnableSubtask TODO
-func (w *Worker) EnableSubtask() {
-
-}
-
-// DisableSubtask TODO
-func (w *Worker) DisableSubtask() {
-
-}
-
 // StartSubTask creates a sub task an run it
 func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage) error {
 	w.Lock()

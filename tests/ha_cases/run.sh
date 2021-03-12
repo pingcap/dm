@@ -511,7 +511,6 @@ function test_stop_task() {
 
 
 function test_multi_task_reduce_and_restart_worker() {
-    # here
     echo "[$(date)] <<<<<< start test_multi_task_reduce_and_restart_worker >>>>>>"
     test_multi_task_running
 
