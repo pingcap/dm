@@ -393,7 +393,22 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 		return err
 	}
 
-	// 4. replace the source bound
+	// 4. if there's old worker, make sure it's not running
+	var runningTasks []string
+	for task, subtaskM := range s.expectSubTaskStages {
+		subtaskStage, ok2 := subtaskM[source]
+		if !ok2 {
+			continue
+		}
+		if subtaskStage.Expect == pb.Stage_Running {
+			runningTasks = append(runningTasks, task)
+		}
+	}
+	if len(runningTasks) > 0 {
+		return terror.ErrSchedulerRequireNotRunning.Generate(runningTasks, source)
+	}
+
+	// 5. replace the source bound
 	failpoint.Inject("failToReplaceSourceBound", func(_ failpoint.Value) {
 		failpoint.Return(errors.New("failToPutSourceBound"))
 	})
@@ -405,7 +420,7 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 	// we have checked w.stage is free, so there should not be an error
 	_ = s.updateStatusForBound(w, ha.NewSourceBound(source, worker))
 
-	// 5. try bound the old worker
+	// 6. try bound the old worker
 	_, err = s.tryBoundForWorker(oldWorker)
 	if err != nil {
 		s.logger.Warn("in transfer source, error when try bound the old worker", zap.Error(err))

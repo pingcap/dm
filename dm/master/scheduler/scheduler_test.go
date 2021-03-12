@@ -1103,8 +1103,13 @@ func (t *testScheduler) TestTransferSource(c *C) {
 
 	// test fail halfway won't left old worker unbound
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/scheduler/failToReplaceSourceBound", `return()`), IsNil)
-	//nolint:errcheck
-	defer failpoint.Disable("github.com/pingcap/dm/dm/master/scheduler/failToReplaceSourceBound")
+	c.Assert(s.TransferSource(sourceID1, workerName1), NotNil)
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker4)
+	c.Assert(worker1.Stage(), Equals, WorkerFree)
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/master/scheduler/failToReplaceSourceBound"), IsNil)
+
+	// test can't transfer when there's any running task on the source
+	s.expectSubTaskStages["test"] = map[string]ha.Stage{sourceID1: {Expect: pb.Stage_Running}}
 	c.Assert(s.TransferSource(sourceID1, workerName1), NotNil)
 	c.Assert(s.bounds[sourceID1], DeepEquals, worker4)
 	c.Assert(worker1.Stage(), Equals, WorkerFree)

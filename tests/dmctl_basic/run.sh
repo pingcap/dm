@@ -157,6 +157,9 @@ function run() {
         '"worker": "worker1"' 1 \
         '"worker": "worker2"' 1
 
+    transfer_source_valid $SOURCE_ID1 worker1 # transfer to self
+    transfer_source_invalid $SOURCE_ID1 worker2
+
     echo "pause_relay_success"
     pause_relay_success
     query_status_stopped_relay
@@ -183,9 +186,6 @@ function run() {
         "\"source\": \"$SOURCE_ID2\"" 1 \
         "\"stage\": \"Running\"" 4
     # update_task_not_paused $TASK_CONF
-
-    transfer_source_valid $SOURCE_ID1 worker1 # transfer to self
-    transfer_source_invalid $SOURCE_ID1 worker2
 
     echo "get_config"
     get_config_wrong_arg
