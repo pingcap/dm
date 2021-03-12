@@ -241,7 +241,7 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result Resu
 		if err == nil {
 			// update binlog filename if needed
 			nextFile := string(rotateEv.NextLogName)
-			if nextFile > currFile {
+			if gmysql.CompareBinlogFileName(nextFile, currFile) == 1 {
 				// record the next filename, but not create it.
 				// even it's a fake RotateEvent, we still need to record it,
 				// because if we do not specify the filename when creating the writer (like Auto-Position),
