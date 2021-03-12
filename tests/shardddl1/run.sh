@@ -552,9 +552,6 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "\"result\": true" 3
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "show-ddl-locks" \
-        "no DDL lock exists" 1
 
     # now, it works as normal
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column d int;"
@@ -573,14 +570,12 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(21,'uuu',21);"
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "\"result\": true" 3
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "show-ddl-locks" \
         "no DDL lock exists" 1
-
-    read v1
 }
 
 # workaround of rename column in optimistic mode currently until we support it
@@ -596,16 +591,16 @@ function DM_RENAME_COLUMN_OPTIMISTIC() {
 function run() {
     init_cluster
     init_database
-#    start=1
-#    end=35
-#    except=(024 025 029)
-#    for i in $(seq -f "%03g" ${start} ${end}); do
-#        if [[ ${except[@]} =~ $i ]]; then
-#            continue
-#        fi
-#        DM_${i}
-#        sleep 1
-#    done
+    start=1
+    end=35
+    except=(024 025 029)
+    for i in $(seq -f "%03g" ${start} ${end}); do
+        if [[ ${except[@]} =~ $i ]]; then
+            continue
+        fi
+        DM_${i}
+        sleep 1
+    done
     DM_RENAME_COLUMN_OPTIMISTIC
 }
 

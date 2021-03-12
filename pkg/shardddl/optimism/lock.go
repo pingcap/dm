@@ -91,8 +91,16 @@ func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []
 // TODO: but both of these modes are difficult to be implemented in DM-worker now, try to do that later.
 // for non-intrusive, a broadcast mechanism needed to notify conflict tables after the conflict has resolved, or even a block mechanism needed.
 // for intrusive, a DML prune or transform mechanism needed for two different schemas (before and after the conflict resolved).
-func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
-	ddls []string, newTIs []*model.TableInfo, tts []TargetTable, infoVersion int64, ignoreConflict bool) (newDDLs []string, err error) {
+func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err error) {
+	var (
+		callerSource   = info.Source
+		callerSchema   = info.UpSchema
+		callerTable    = info.UpTable
+		ddls           = info.DDLs
+		newTIs         = info.TableInfosAfter
+		infoVersion    = info.Version
+		ignoreConflict = info.IgnoreConflict
+	)
 	l.mu.Lock()
 	defer func() {
 		if len(newDDLs) > 0 {
@@ -137,7 +145,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	}
 
 	// should not happen
-	if !ignoreConflict && (len(ddls) != len(newTIs) || len(newTIs) == 0) {
+	if len(ddls) != len(newTIs) || len(newTIs) == 0 {
 		return ddls, terror.ErrMasterInconsistentOptimisticDDLsAndInfo.Generate(len(ddls), len(newTIs))
 	}
 
@@ -159,6 +167,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	lastTableInfo := schemacmp.Encode(newTIs[len(newTIs)-1])
 
 	defer func() {
+		// only update table info if no error or ignore conflict
 		if ignoreConflict || err == nil {
 			log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
 				zap.Stringer("from", prevTable), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
@@ -172,7 +181,6 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 	}
 
 	defer func() {
-		// only update table info and joined info if no error
 		if err == nil {
 			// update the current joined table info, it should be logged in `if cmp != 0` block below.
 			l.joined = lastJoined
