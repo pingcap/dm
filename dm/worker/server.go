@@ -582,8 +582,8 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 
 	if cfg.EnableRelay {
 		s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
-		if err := w.EnableRelay(); err != nil {
-			return err
+		if err2 := w.EnableRelay(); err2 != nil {
+			return err2
 		}
 	}
 	go w.Start()
