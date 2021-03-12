@@ -35,17 +35,17 @@ type Filename struct {
 
 // LessThan checks whether this filename < other filename.
 func (f Filename) LessThan(other Filename) bool {
-	return f.BaseName == other.BaseName && f.Seq < other.Seq
+	return f.BaseName == other.BaseName && f.SeqInt64 < other.SeqInt64
 }
 
 // GreaterThanOrEqualTo checks whether this filename >= other filename.
 func (f Filename) GreaterThanOrEqualTo(other Filename) bool {
-	return f.BaseName == other.BaseName && f.Seq >= other.Seq
+	return f.BaseName == other.BaseName && f.SeqInt64 >= other.SeqInt64
 }
 
 // GreaterThan checks whether this filename > other filename.
 func (f Filename) GreaterThan(other Filename) bool {
-	return f.BaseName == other.BaseName && f.Seq > other.Seq
+	return f.BaseName == other.BaseName && f.SeqInt64 > other.SeqInt64
 }
 
 // ParseFilename parses a string representation binlog filename into a `Filename`.

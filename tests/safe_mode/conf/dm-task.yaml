@@ -5,6 +5,7 @@ is-sharding: true
 meta-schema: "dm_meta"
 enable-heartbeat: false
 timezone: "Asia/Shanghai"
+ignore-checking-items: ["auto_increment_ID"]
 
 target-database:
   host: "127.0.0.1"
@@ -16,7 +17,6 @@ mysql-instances:
   - source-id: "mysql-replica-01"
     block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
-    column-mapping-rules: ["instance-1"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -24,7 +24,6 @@ mysql-instances:
   - source-id: "mysql-replica-02"
     block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
-    column-mapping-rules: ["instance-2"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -46,23 +45,6 @@ routes:
   sharding-route-rules-schema:
     schema-pattern: safe_mode_test
     target-schema: safe_mode_target
-
-column-mappings:
-  instance-1:
-    schema-pattern: "safe_mode_test"
-    table-pattern: "t*"
-    expression: "partition id"
-    source-column: "id"
-    target-column: "id"
-    arguments: ["1", "", "t"]
-
-  instance-2:
-    schema-pattern: "safe_mode_test"
-    table-pattern: "t*"
-    expression: "partition id"
-    source-column: "id"
-    target-column: "id"
-    arguments: ["2", "", "t"]
 
 mydumpers:
   global:

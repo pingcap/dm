@@ -49,3 +49,5 @@ require (
 )
 
 go 1.13
+
+replace github.com/siddontang/go-mysql v1.1.1-0.20200824131207-0c5789dd0bd3 => github.com/lance6716/go-mysql v1.1.1-0.20210303100354-b0e44c2c5623

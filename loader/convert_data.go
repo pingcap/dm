@@ -51,7 +51,7 @@ func parseInsertStmt(sql []byte, table *tableInfo, columnMapping *cm.Mapping) ([
 	//	INSERT INTO `t1` (`id`,`uid`,`name`,`info`) VALUES
 	//	(1,10001,"Gabriel García Márquez",NULL),
 	//	(2,10002,"Cien años de soledad",NULL);
-	// otherwise dumped SQL file has content like folloing:
+	// otherwise dumped SQL file has content like following:
 	//	INSERT INTO `t1` VALUES
 	//	(1,"hello"),
 	//	(2,"world");
