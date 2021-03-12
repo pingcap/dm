@@ -34,7 +34,7 @@ func NewOperateSchemaCmd() *cobra.Command {
 	cmd.Flags().StringP("database", "d", "", "database name of the table")
 	cmd.Flags().StringP("table", "t", "", "table name")
 	cmd.Flags().Bool("flush", false, "flush the table info and checkpoint imediately")
-	cmd.Flags().Bool("sync", false, "sync the table info to master to resolve shard ddl lock, only for optimistic mode now.")
+	cmd.Flags().Bool("sync", false, "sync the table info to master to resolve shard ddl lock, only for optimistic mode now")
 	return cmd
 }
 

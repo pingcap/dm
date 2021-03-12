@@ -391,7 +391,7 @@ func (o *Optimist) handleInfo(ctx context.Context, infoCh <-chan optimism.Info) 
 			if !ok {
 				return
 			}
-			o.logger.Info("receive a shard DDL info", zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), zap.Bool("ignore conflict", info.IgnoreConflict))
+			o.logger.Info("receive a shard DDL info", zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted))
 
 			// avoid new ddl added while previous ddl resolved and remove lock
 			// change lock granularity if needed
