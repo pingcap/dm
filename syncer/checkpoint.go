@@ -558,8 +558,8 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 
 // FlushPointWithTableInfo implements CheckPoint.FlushPointWithTableInfo
 func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, schema string, table string, ti *model.TableInfo) error {
-	cp.RLock()
-	defer cp.RUnlock()
+	cp.Lock()
+	defer cp.Unlock()
 
 	sqls := make([]string, 0, 10)
 	args := make([][]interface{}, 0, 10)
