@@ -507,10 +507,10 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
     # TODO: support set schema automatically base on upstream schema
     echo 'CREATE TABLE `tb1` ( `c` int NOT NULL, `b` varchar(10) DEFAULT NULL, PRIMARY KEY (`c`)) ENGINE=InnoDB DEFAULT CHARSET=latin1' > ${WORK_DIR}/schema1.sql
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-schema set -s mysql-replica-01 test -d ${shardddl1} -t ${tb1} ${WORK_DIR}/schema1.sql" \
+        "operate-schema set -s mysql-replica-01 test -d ${shardddl1} -t ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
         "\"result\": true" 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-schema set -s mysql-replica-02 test -d ${shardddl1} -t ${tb1} ${WORK_DIR}/schema1.sql" \
+        "operate-schema set -s mysql-replica-02 test -d ${shardddl1} -t ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
         "\"result\": true" 2
 
     # fourth, resume-task
@@ -530,7 +530,7 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
     # This may only work for a "rename ddl"
     echo 'CREATE TABLE `tb2` ( `c` int NOT NULL, `b` varchar(10) DEFAULT NULL, PRIMARY KEY (`c`)) ENGINE=InnoDB DEFAULT CHARSET=latin1' > ${WORK_DIR}/schema2.sql
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-schema set -s mysql-replica-02 test -d ${shardddl1} -t ${tb2} ${WORK_DIR}/schema2.sql" \
+        "operate-schema set -s mysql-replica-02 test -d ${shardddl1} -t ${tb2} ${WORK_DIR}/schema2.sql --flush --sync" \
         "\"result\": true" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -591,16 +591,16 @@ function DM_RENAME_COLUMN_OPTIMISTIC() {
 function run() {
     init_cluster
     init_database
-    start=1
-    end=35
-    except=(024 025 029)
-    for i in $(seq -f "%03g" ${start} ${end}); do
-        if [[ ${except[@]} =~ $i ]]; then
-            continue
-        fi
-        DM_${i}
-        sleep 1
-    done
+#    start=1
+#    end=35
+#    except=(024 025 029)
+#    for i in $(seq -f "%03g" ${start} ${end}); do
+#        if [[ ${except[@]} =~ $i ]]; then
+#            continue
+#        fi
+#        DM_${i}
+#        sleep 1
+#    done
     DM_RENAME_COLUMN_OPTIMISTIC
 }
 

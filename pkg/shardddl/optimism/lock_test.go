@@ -1018,12 +1018,12 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
 		DDLs2            = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME", "ALTER TABLE bar ADD COLUMN c2 INT"}
 		DDLs3            = []string{"ALTER TABLE bar DROP COLUMN c2"}
-		DDLs4 = []string{"ALTER TABLE bar DROP COLUMN c1"}
-		ti0   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
-		ti1   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
-		ti2   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
-		ti3   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
-		ti4   = ti0
+		DDLs4            = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
+		ti3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
+		ti4              = ti0
 
 		DDLs5   = []string{"ALTER TABLE bar ADD COLUMN c2 TEXT"}
 		DDLs6   = []string{"ALTER TABLE bar ADD COLUMN c2 DATETIME", "ALTER TABLE bar ADD COLUMN c3 INT"}
@@ -1099,7 +1099,9 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 
 	// TrySync for the second table to drop the non-conflict column, the conflict should still exist.
 	vers[source][db][tbls[1]]++
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs3, []*model.TableInfo{ti3}, tts, vers[source][db][tbls[1]])
+	info = NewInfo(task, source, db, tbls[1], downSchema, downTable, DDLs3, nil, []*model.TableInfo{ti3})
+	info.Version = vers[source][db][tbls[1]]
+	DDLs, err = l.TrySync(info, tts)
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
 	c.Assert(l.versions, DeepEquals, vers)
@@ -1621,7 +1623,9 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 
 	// TrySync for the first table, no table has done the DDLs operation.
 	vers[source][db][tbls[0]]++
-	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, []*model.TableInfo{ti1}, tts, vers[source][db][tbls[0]])
+	info := NewInfo(task, source, db, tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1})
+	info.Version = vers[source][db][tbls[0]]
+	DDLs, err := l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	c.Assert(l.versions, DeepEquals, vers)
@@ -1630,7 +1634,9 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 
 	// TrySync for the second table, add a table with a larger field length
 	vers[source][db][tbls[1]]++
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, []*model.TableInfo{ti2}, tts, vers[source][db][tbls[1]])
+	info = NewInfo(task, source, db, tbls[1], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2})
+	info.Version = vers[source][db][tbls[0]]
+	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, ErrorMatches, ".*add columns with different field lengths.*")
 	c.Assert(DDLs, DeepEquals, DDLs2)
 	c.Assert(l.versions, DeepEquals, vers)
@@ -1640,7 +1646,9 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 
 	// TrySync for the first table, no table has done the DDLs operation.
 	vers[source][db][tbls[0]]--
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, []*model.TableInfo{ti2}, tts, vers[source][db][tbls[1]])
+	info = NewInfo(task, source, db, tbls[1], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2})
+	info.Version = vers[source][db][tbls[1]]
+	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
 	c.Assert(l.versions, DeepEquals, vers)
@@ -1649,7 +1657,9 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 
 	// TrySync for the second table, add a table with a smaller field length
 	vers[source][db][tbls[0]]++
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs1, []*model.TableInfo{ti1}, tts, vers[source][db][tbls[0]])
+	info = NewInfo(task, source, db, tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1})
+	info.Version = vers[source][db][tbls[0]]
+	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, ErrorMatches, ".*add columns with different field lengths.*")
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	c.Assert(l.versions, DeepEquals, vers)

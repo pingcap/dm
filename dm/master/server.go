@@ -1737,6 +1737,8 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest
 					Database: req.Database,
 					Table:    req.Table,
 					Schema:   req.Schema,
+					Flush:    req.Flush,
+					Sync:     req.Sync,
 				},
 			}
 

@@ -27,12 +27,14 @@ import (
 // NewOperateSchemaCmd creates a OperateSchema command.
 func NewOperateSchemaCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "operate-schema <operate-type> <-s source ...> <task-name | task-file> <-d database> <-t table> [schema-file]",
+		Use:   "operate-schema <operate-type> <-s source ...> <task-name | task-file> <-d database> <-t table> [schema-file] [--flush] [--sync]",
 		Short: "`get`/`set`/`remove` the schema for an upstream table.",
 		RunE:  operateSchemaCmd,
 	}
 	cmd.Flags().StringP("database", "d", "", "database name of the table")
 	cmd.Flags().StringP("table", "t", "", "table name")
+	cmd.Flags().Bool("flush", false, "flush the table info and checkpoint imediately")
+	cmd.Flags().Bool("sync", false, "sync the table info to master to resolve shard ddl lock, only for optimistic mode now.")
 	return cmd
 }
 
@@ -109,6 +111,21 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 		return
 	}
 
+	flush, err := cmd.Flags().GetBool("flush")
+	if err != nil {
+		return
+	}
+	if flush && op != pb.SchemaOp_SetSchema {
+		err = errors.New("--flush flag is only used to set schema")
+	}
+	sync, err := cmd.Flags().GetBool("sync")
+	if err != nil {
+		return
+	}
+	if sync && op != pb.SchemaOp_SetSchema {
+		err = errors.New("--sync flag is only used to set schema")
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -123,6 +140,8 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 			Database: database,
 			Table:    table,
 			Schema:   string(schemaContent),
+			Flush:    flush,
+			Sync:     sync,
 		},
 		&resp,
 	)
