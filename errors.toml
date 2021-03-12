@@ -2710,6 +2710,12 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+[error.DM-dm-worker-40079]
+message = "relay config of worker %s is changed too frequently, last relay source %s:, new relay source %s"
+description = ""
+workaround = "Please try again later"
+tags = ["internal", "low"]
+
 [error.DM-dm-tracer-42001]
 message = "parse dm-tracer config flag set"
 description = ""

@@ -31,7 +31,11 @@ import (
 )
 
 const (
-	defaultGetSourceBoundConfigRetry = 3                     // the retry time for we get two different bounds
+	// we need two steps to get a name/id and query config using that id.
+	// since above steps can't be put into one etcd transaction, we combine and re-run the first step into the second
+	// step, and check the name/id is still valid. if not valid, retry the second step using new name/id
+	defaultGetSourceBoundConfigRetry = 3
+	defaultGetRelayConfigRetry       = 3
 	retryInterval                    = 50 * time.Millisecond // retry interval when we get two different bounds
 )
 
@@ -227,7 +231,7 @@ func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, con
 				retryNum = 0 // stop retry
 			case <-time.After(retryInterval):
 				// retryInterval shouldn't be too long because the longer we wait, bound is more
-				// possibly to be different from newBound
+				// possible to be different from newBound
 			}
 			continue
 		}
@@ -346,12 +350,12 @@ func sourceBoundFromResp(worker string, resp *clientv3.GetResponse) (map[string]
 	return sbm, nil
 }
 
-// deleteSourceBoundOp returns a DELETE ectd operation for the bound relationship of the specified DM-worker.
+// deleteSourceBoundOp returns a DELETE etcd operation for the bound relationship of the specified DM-worker.
 func deleteSourceBoundOp(worker string) clientv3.Op {
 	return clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(worker))
 }
 
-// deleteLastSourceBoundOp returns a DELETE ectd operation for the last bound relationship of the specified DM-worker.
+// deleteLastSourceBoundOp returns a DELETE etcd operation for the last bound relationship of the specified DM-worker.
 func deleteLastSourceBoundOp(worker string) clientv3.Op {
 	return clientv3.OpDelete(common.UpstreamLastBoundWorkerKeyAdapter.Encode(worker))
 }
