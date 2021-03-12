@@ -77,19 +77,15 @@ func (t *testServer) testWorker(c *C) {
 	w, err = NewWorker(&cfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	c.Assert(w.StatusJSON(context.Background(), ""), HasLen, emptyWorkerStatusInfoJSONLength)
-	//c.Assert(w.closed.Get(), Equals, closedFalse)
-	//go func() {
-	//	w.Start()
-	//}()
 
 	// close twice
 	w.Close()
-	c.Assert(w.closed.Get(), Equals, closedTrue)
+	c.Assert(w.closed.Get(), IsTrue)
 	c.Assert(w.subTaskHolder.getAllSubTasks(), HasLen, 0)
 	w.Close()
-	c.Assert(w.closed.Get(), Equals, closedTrue)
+	c.Assert(w.closed.Get(), IsTrue)
 	c.Assert(w.subTaskHolder.getAllSubTasks(), HasLen, 0)
-	c.Assert(w.closed.Get(), Equals, closedTrue)
+	c.Assert(w.closed.Get(), IsTrue)
 
 	c.Assert(w.StartSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",
@@ -278,7 +274,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 		w.Start()
 	}()
 	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
-		return w.closed.Get() == closedFalse
+		return !w.closed.Get()
 	}), IsTrue)
 	// step 2: Put a subtask config and subtask stage to this source, then delete it
 	subtaskCfg := config.SubTaskConfig{}
@@ -393,7 +389,7 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 		w.Start()
 	}()
 	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
-		return w.closed.Get() == closedFalse
+		return !w.closed.Get()
 	}), IsTrue)
 	// step 2: Put a relay stage to this source, then delete it
 	// put mysql config into relative etcd key adapter to trigger operation event

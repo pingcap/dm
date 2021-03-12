@@ -148,6 +148,7 @@ func (s *Server) Start() error {
 	go func(ctx context.Context) {
 		defer s.wg.Done()
 		for {
+			// TODO: ObserveRelayConfig?
 			err1 := s.observeSourceBound(ctx, revBound)
 			if err1 == nil {
 				return
@@ -572,7 +573,7 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	go w.Start()
 
 	isStarted := utils.WaitSomething(50, 100*time.Millisecond, func() bool {
-		return w.closed.Get() == closedFalse
+		return !w.closed.Get()
 	})
 	if !isStarted {
 		// TODO: add more mechanism to wait or un-bound the source

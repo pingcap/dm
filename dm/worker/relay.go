@@ -70,7 +70,7 @@ type realRelayHolder struct {
 
 	l log.Logger
 
-	closed sync2.AtomicInt32
+	closed sync2.AtomicBool
 	stage  pb.Stage
 	result *pb.ProcessResult // the process result, nil when is processing
 }
@@ -85,13 +85,13 @@ func NewRealRelayHolder(sourceCfg *config.SourceConfig) RelayHolder {
 		relay: relay.NewRelay(cfg),
 		l:     log.With(zap.String("component", "relay holder")),
 	}
-	h.closed.Set(closedTrue)
+	h.closed.Set(true)
 	return h
 }
 
 // Init initializes the holder
 func (h *realRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.Purger, error) {
-	h.closed.Set(closedFalse)
+	h.closed.Set(false)
 
 	// initial relay purger
 	operators := []purger.RelayOperator{
@@ -120,7 +120,7 @@ func (h *realRelayHolder) Start() {
 
 // Close closes the holder
 func (h *realRelayHolder) Close() {
-	if !h.closed.CompareAndSwap(closedFalse, closedTrue) {
+	if !h.closed.CompareAndSwap(false, true) {
 		return
 	}
 
@@ -153,7 +153,7 @@ func (h *realRelayHolder) run() {
 
 // Status returns relay unit's status
 func (h *realRelayHolder) Status(ctx context.Context) *pb.RelayStatus {
-	if h.closed.Get() == closedTrue || h.relay.IsClosed() {
+	if h.closed.Get() || h.relay.IsClosed() {
 		return &pb.RelayStatus{
 			Stage: pb.Stage_Stopped,
 		}
@@ -168,7 +168,7 @@ func (h *realRelayHolder) Status(ctx context.Context) *pb.RelayStatus {
 
 // Error returns relay unit's status
 func (h *realRelayHolder) Error() *pb.RelayError {
-	if h.closed.Get() == closedTrue || h.relay.IsClosed() {
+	if h.closed.Get() || h.relay.IsClosed() {
 		return &pb.RelayError{
 			Msg: "relay stopped",
 		}

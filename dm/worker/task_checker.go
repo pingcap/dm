@@ -141,7 +141,7 @@ type realTaskStatusChecker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
-	closed sync2.AtomicInt32
+	closed sync2.AtomicBool
 
 	cfg config.CheckerConfig
 	l   log.Logger
@@ -157,7 +157,7 @@ func NewRealTaskStatusChecker(cfg config.CheckerConfig, w *Worker) TaskStatusChe
 		w:   w,
 		bc:  newBackoffController(),
 	}
-	tsc.closed.Set(closedTrue)
+	tsc.closed.Set(true)
 	return tsc
 }
 
@@ -180,7 +180,7 @@ func (tsc *realTaskStatusChecker) Start() {
 
 // Close implements TaskStatusChecker.Close
 func (tsc *realTaskStatusChecker) Close() {
-	if !tsc.closed.CompareAndSwap(closedFalse, closedTrue) {
+	if !tsc.closed.CompareAndSwap(false, true) {
 		return
 	}
 
@@ -193,7 +193,7 @@ func (tsc *realTaskStatusChecker) Close() {
 func (tsc *realTaskStatusChecker) run() {
 	// keep running until canceled in `Close`.
 	tsc.ctx, tsc.cancel = context.WithCancel(context.Background())
-	tsc.closed.Set(closedFalse)
+	tsc.closed.Set(false)
 
 	failpoint.Inject("TaskCheckInterval", func(val failpoint.Value) {
 		interval, err := time.ParseDuration(val.(string))

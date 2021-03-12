@@ -149,6 +149,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(relayExitWithErrorCounter)
 }
 
+// TODO: add a context to stop it
 func reportRelayLogSpaceInBackground(dirpath string) error {
 	if len(dirpath) == 0 {
 		return terror.ErrRelayLogDirpathEmpty.Generate()
