@@ -177,11 +177,8 @@ func (w *Worker) EnableRelay() error {
 	if err != nil {
 		return err
 	}
-	for k, subTaskCfg := range subTaskCfgs {
-		if err2 := copyConfigFromSource(&subTaskCfg, w.cfg); err2 != nil {
-			return err2
-		}
-		subTaskCfgs[k] = subTaskCfg
+	if err = copyConfigFromSourceForEach(subTaskCfgs, w.cfg); err != nil {
+		return err
 	}
 
 	dctx, dcancel := context.WithTimeout(w.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
@@ -239,6 +236,45 @@ func (w *Worker) EnableRelay() error {
 		//nolint:errcheck
 		w.observeRelayStage(w.ctx, w.etcdClient, revRelay)
 	}()
+	return nil
+}
+
+// EnableHandleSubtasks enables the functionality of start/watch/handle subtasks
+func (w *Worker) EnableHandleSubtasks() error {
+	// we get the newest subtask stages directly which will omit the subtask stage PUT/DELETE event
+	// because triggering these events is useless now
+	subTaskStages, subTaskCfgM, revSubTask, err := ha.GetSubTaskStageConfig(w.etcdClient, w.cfg.SourceID)
+	if err != nil {
+		return err
+	}
+
+	if err = copyConfigFromSourceForEach(subTaskCfgM, w.cfg); err != nil {
+		return err
+	}
+
+	log.L().Info("starting to handle mysql source", zap.String("sourceCfg", w.cfg.String()), zap.Any("subTasks", subTaskCfgM))
+
+	for _, subTaskCfg := range subTaskCfgM {
+		expectStage := subTaskStages[subTaskCfg.Name]
+		if expectStage.IsDeleted {
+			continue
+		}
+		log.L().Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
+		// for range of a map will use a same value-address, so we'd better not pass value-address to other function
+		clone := subTaskCfg
+		if err := w.StartSubTask(&clone, expectStage.Expect); err != nil {
+			return err
+		}
+	}
+
+	w.wg.Add(1)
+	go func() {
+		defer w.wg.Done()
+		// TODO: handle fatal error from observeSubtaskStage
+		//nolint:errcheck
+		w.observeSubtaskStage(w.ctx, w.etcdClient, revSubTask)
+	}()
+
 	return nil
 }
 
@@ -711,6 +747,17 @@ func copyConfigFromSource(cfg *config.SubTaskConfig, sourceCfg *config.SourceCon
 			return err
 		}
 		cfg.FilterRules = append(cfg.FilterRules, filterRule)
+	}
+	return nil
+}
+
+// copyConfigFromSourceForEach do copyConfigFromSource for each value in subTaskCfgM and change subTaskCfgM in-place
+func copyConfigFromSourceForEach(subTaskCfgM map[string]config.SubTaskConfig, sourceCfg *config.SourceConfig) error {
+	for k, subTaskCfg := range subTaskCfgM {
+		if err2 := copyConfigFromSource(&subTaskCfg, sourceCfg); err2 != nil {
+			return err2
+		}
+		subTaskCfgM[k] = subTaskCfg
 	}
 	return nil
 }

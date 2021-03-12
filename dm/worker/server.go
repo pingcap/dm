@@ -557,23 +557,6 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		return terror.ErrWorkerAlreadyStart.Generate()
 	}
 
-	// we get the newest subtask stages directly which will omit the subtask stage PUT/DELETE event
-	// because triggering these events is useless now
-	subTaskStages, subTaskCfgm, revSubTask, err := ha.GetSubTaskStageConfig(s.etcdClient, cfg.SourceID)
-	if err != nil {
-		return err
-	}
-
-	subTaskCfgs := make([]*config.SubTaskConfig, 0, len(subTaskCfgm))
-	for _, subTaskCfg := range subTaskCfgm {
-		clone := subTaskCfg
-		if err2 := copyConfigFromSource(&clone, cfg); err2 != nil {
-			return err2
-		}
-		subTaskCfgs = append(subTaskCfgs, &clone)
-	}
-
-	log.L().Info("starting to handle mysql source", zap.String("sourceCfg", cfg.String()), zap.Reflect("subTasks", subTaskCfgs))
 	w, err := NewWorker(cfg, s.etcdClient, s.cfg.Name)
 	if err != nil {
 		return err
@@ -596,27 +579,9 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		return terror.ErrWorkerNoStart
 	}
 
-	for _, subTaskCfg := range subTaskCfgs {
-		expectStage := subTaskStages[subTaskCfg.Name]
-		if expectStage.IsDeleted {
-			continue
-		}
-		log.L().Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
-		if err := w.StartSubTask(subTaskCfg, expectStage.Expect); err != nil {
-			return err
-		}
-	}
-
-	w.wg.Add(1)
-	go func() {
-		defer w.wg.Done()
-		// TODO: handle fatal error from observeSubtaskStage
-		//nolint:errcheck
-		w.observeSubtaskStage(w.ctx, s.etcdClient, revSubTask)
-	}()
-
+	err = w.EnableHandleSubtasks()
 	log.L().Info("started to handle mysql source", zap.String("sourceCfg", cfg.String()))
-	return nil
+	return err
 }
 
 func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
