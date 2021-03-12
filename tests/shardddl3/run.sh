@@ -1605,7 +1605,6 @@ function DM_132 {
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
         "clean_table" "pessimistic"
-
     run_case 132 "double-source-optimistic" \
         "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
@@ -1645,7 +1644,6 @@ function DM_133 {
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a,b));\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int, primary key(a,b));\"" \
         "clean_table" "pessimistic"
-
     run_case 133 "double-source-optimistic" \
         "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a,b));\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a,b));\"; \
@@ -1683,7 +1681,6 @@ function DM_134 {
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a));\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int, primary key(a));\"" \
         "clean_table" "pessimistic"
-
     run_case 134 "double-source-optimistic" \
         "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a));\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a));\"; \
@@ -1691,8 +1688,30 @@ function DM_134 {
         "clean_table" "optimistic"
 }
 
+function DM_135_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    if ! run_sql_source1 "alter table ${shardddl1}.${tb1} drop primary key, add primary key(b);" 2>&1 | \
+        grep "Incorrect table definition; there can be only one auto column and it must be defined as a key" >/dev/null;
+    then
+        echo "sql should be failed because there can be only one auto column and it must be defined as a key" >&2
+        return 255
+    fi
+}
+
 function DM_135() {
-    # TODO
+    run_case 135 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int auto_increment primary key, b int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (a int auto_increment primary key, b int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (a int auto_increment primary key, b int);\"" \
+        "clean_table" "pessimistic"
+    run_case 135 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int auto_increment primary key, b int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (a int auto_increment primary key, b int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (a int auto_increment primary key, b int);\"" \
+        "clean_table" "optimistic"
 
     # revert tidb
     pkill -hup tidb-server 2>/dev/null || true
@@ -2171,13 +2190,8 @@ function run() {
     init_cluster
     init_database
 
-    for i in {140..147}; do
-        DM_"$i"
-    done
-    return
-
     start=71
-    end=112
+    end=147
     except=(072 074 075 083 084 087 088 089 090 091 092 093)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
