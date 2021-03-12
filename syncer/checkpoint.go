@@ -34,6 +34,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/model"
@@ -577,7 +578,7 @@ func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, sche
 	args = append(args, arg)
 
 	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
-	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
+	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(utils.DefaultDBTimeout)
 	defer cancel()
 	_, err = cp.dbConn.executeSQL(tctx2, sqls, args...)
 	if err != nil {
