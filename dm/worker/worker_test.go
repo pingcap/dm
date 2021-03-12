@@ -410,7 +410,7 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	// step 3: trigger etcd compaction and check whether we can receive it through watcher, then we delete relay stage
 	_, err = etcdCli.Compact(ctx, rev)
 	c.Assert(err, IsNil)
-	rev, err = ha.DeleteSourceCfgRelayStageSourceBound(etcdCli, sourceCfg.SourceID, cfg.Name)
+	_, err = ha.DeleteSourceCfgRelayStageSourceBound(etcdCli, sourceCfg.SourceID, cfg.Name)
 	c.Assert(err, IsNil)
 	relayStageCh := make(chan ha.Stage, 10)
 	relayErrCh := make(chan error, 10)

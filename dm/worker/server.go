@@ -566,10 +566,11 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 
 	subTaskCfgs := make([]*config.SubTaskConfig, 0, len(subTaskCfgm))
 	for _, subTaskCfg := range subTaskCfgm {
-		if err2 := copyConfigFromSource(&subTaskCfg, cfg); err2 != nil {
+		clone := subTaskCfg
+		if err2 := copyConfigFromSource(&clone, cfg); err2 != nil {
 			return err2
 		}
-		subTaskCfgs = append(subTaskCfgs, &subTaskCfg)
+		subTaskCfgs = append(subTaskCfgs, &clone)
 	}
 
 	log.L().Info("starting to handle mysql source", zap.String("sourceCfg", cfg.String()), zap.Reflect("subTasks", subTaskCfgs))
