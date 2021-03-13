@@ -206,10 +206,12 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.done = nil
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
+	// TODO: worker.relayEnabled
 	syncer.enableRelay = cfg.UseRelay
 
 	syncer.checkpoint = NewRemoteCheckPoint(syncer.tctx, cfg, syncer.checkpointID())
 
+	// TODO: worker.relayEnabled
 	syncer.binlogType = toBinlogType(cfg.UseRelay)
 	syncer.errOperatorHolder = operator.NewHolder(&logger)
 	syncer.readerHub = streamer.GetReaderHub()

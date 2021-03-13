@@ -598,7 +598,7 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 		st.l.Info("wait condition between two units", zap.Stringer("previous unit", pu.Type()), zap.Stringer("unit", cu.Type()))
 		hub := GetConditionHub()
 
-		if hub.w.relayHolder == nil {
+		if !hub.w.relayEnabled.Get() {
 			return nil
 		}
 

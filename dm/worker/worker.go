@@ -61,6 +61,7 @@ type Worker struct {
 	subTaskHolder  *subTaskHolder
 
 	// relay functionality
+	// during relayEnabled == true, relayHolder and relayPurger should not be nil
 	relayEnabled sync2.AtomicBool
 	relayCtx     context.Context
 	relayCancel  context.CancelFunc
@@ -160,12 +161,10 @@ func (w *Worker) Close() {
 	w.subTaskHolder.closeAllSubTasks()
 
 	if w.relayHolder != nil {
-		// close relay
 		w.relayHolder.Close()
 	}
 
 	if w.relayPurger != nil {
-		// close purger
 		w.relayPurger.Close()
 	}
 
@@ -270,17 +269,26 @@ func (w *Worker) DisableRelay() {
 	w.relayCancel()
 	w.relayWg.Wait()
 
-	if w.relayHolder != nil {
-		w.relayHolder.Close()
-		w.relayHolder = nil
-	}
-
-	if w.relayPurger != nil {
-		w.relayPurger.Close()
-		w.relayPurger = nil
-	}
-
 	w.relayEnabled.Set(false)
+
+	// refresh task checker know latest relayEnabled, to avoid accessing relayHolder
+	if w.cfg.Checker.CheckEnable {
+		w.l.Info("refresh task checker")
+		w.taskStatusChecker.Close()
+		w.taskStatusChecker.Start()
+		w.l.Info("finish refreshing task checker")
+	}
+
+	if w.relayHolder != nil {
+		r := w.relayHolder
+		w.relayHolder = nil
+		r.Close()
+	}
+	if w.relayPurger != nil {
+		r := w.relayPurger
+		w.relayPurger = nil
+		r.Close()
+	}
 }
 
 // EnableHandleSubtasks enables the functionality of start/watch/handle subtasks
@@ -344,10 +352,10 @@ func (w *Worker) DisableHandleSubtasks() {
 
 	w.Lock()
 	defer w.Unlock()
+	w.subTaskEnabled.Set(false)
 
 	// close all sub tasks
 	w.subTaskHolder.closeAllSubTasks()
-	w.subTaskEnabled.Set(false)
 }
 
 // StartSubTask creates a sub task an run it
@@ -377,7 +385,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage) e
 	}
 	st.cfg = cfg2
 
-	if w.relayPurger != nil && w.relayPurger.Purging() {
+	if w.relayEnabled.Get() && w.relayPurger.Purging() {
 		// TODO: retry until purged finished
 		st.fail(terror.ErrWorkerRelayIsPurging.Generate(cfg.Name))
 		return nil
@@ -730,7 +738,7 @@ func (w *Worker) operateRelay(ctx context.Context, op pb.RelayOp) error {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	if w.relayHolder != nil {
+	if w.relayEnabled.Get() {
 		return w.relayHolder.Operate(ctx, op)
 	}
 
@@ -744,7 +752,7 @@ func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) erro
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	if w.relayPurger != nil {
+	if w.relayEnabled.Get() {
 		return w.relayPurger.Do(ctx, req)
 	}
 

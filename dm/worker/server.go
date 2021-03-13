@@ -525,7 +525,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	}
 
 	resp.SubTaskStatus = w.QueryStatus(ctx, req.Name)
-	if w.relayHolder != nil {
+	if w.relayEnabled.Get() {
 		sourceStatus.RelayStatus = w.relayHolder.Status(ctx)
 	}
 

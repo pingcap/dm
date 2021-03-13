@@ -504,6 +504,7 @@ func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, d
 	time.Sleep(6 * time.Second)
 	// When worker server fail to keepalive with etcd, server should close its worker
 	c.Assert(s.getWorker(true), IsNil)
+
 	c.Assert(s.getSourceStatus(true).Result, IsNil)
 	ETCD, err := createMockETCD(dir, "http://"+hostName)
 	c.Assert(err, IsNil)

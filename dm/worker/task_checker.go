@@ -406,7 +406,7 @@ func (tsc *realTaskStatusChecker) checkTaskStatus() {
 }
 
 func (tsc *realTaskStatusChecker) check() {
-	if tsc.w.cfg.EnableRelay {
+	if tsc.w.relayEnabled.Get() {
 		tsc.checkRelayStatus()
 	}
 	tsc.checkTaskStatus()
