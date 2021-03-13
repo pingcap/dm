@@ -111,6 +111,20 @@ func DeleteSourceBound(cli *clientv3.Client, workers ...string) (int64, error) {
 	return rev, err
 }
 
+// ReplaceSourceBound deletes an old bound and puts a new bound in one transaction, so a bound source will not become
+// unbound because of failing halfway
+func ReplaceSourceBound(cli *clientv3.Client, source, oldWorker, newWorker string) (int64, error) {
+	ops := make([]clientv3.Op, 0, 3)
+	ops = append(ops, deleteSourceBoundOp(oldWorker))
+	op, err := putSourceBoundOp(NewSourceBound(source, newWorker))
+	if err != nil {
+		return 0, err
+	}
+	ops = append(ops, op...)
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
+	return rev, err
+}
+
 // GetSourceBound gets the source bound relationship for the specified DM-worker.
 // if the bound relationship for the worker name not exist, return with `err == nil`.
 // if the worker name is "", it will return all bound relationships as a map{worker-name: bound}.

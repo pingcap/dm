@@ -604,6 +604,7 @@ const (
 	codeSchedulerSubTaskOpTaskNotExist
 	codeSchedulerSubTaskOpSourceNotExist
 	codeSchedulerTaskNotExist
+	codeSchedulerRequireNotRunning
 )
 
 // dmctl error code
@@ -1194,6 +1195,7 @@ var (
 	ErrSchedulerSubTaskOpTaskNotExist     = New(codeSchedulerSubTaskOpTaskNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "subtasks with name %s need to be operate not exist", "Please use `query-status` command to see tasks.")
 	ErrSchedulerSubTaskOpSourceNotExist   = New(codeSchedulerSubTaskOpSourceNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v need to be operate not exist", "")
 	ErrSchedulerTaskNotExist              = New(codeSchedulerTaskNotExist, ClassScheduler, ScopeInternal, LevelMedium, "task with name %s not exist", "Please use `query-status` command to see tasks.")
+	ErrSchedulerRequireNotRunning         = New(codeSchedulerRequireNotRunning, ClassScheduler, ScopeInternal, LevelHigh, "tasks %v on source %s should not be running", "Please use `pause-task [-s source ...] task` to pause them first")
 
 	// dmctl
 	ErrCtlGRPCCreateConn = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")
