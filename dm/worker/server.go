@@ -115,20 +115,6 @@ func (s *Server) Start() error {
 	}
 
 	s.setWorker(nil, true)
-	bound, sourceCfg, revBound, err := ha.GetSourceBoundConfig(s.etcdClient, s.cfg.Name)
-	if err != nil {
-		return err
-	}
-	if !bound.IsEmpty() {
-		log.L().Warn("worker has been assigned source before keepalive", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted))
-		err = s.startWorker(&sourceCfg)
-		s.setSourceStatus(bound.Source, err, true)
-		if err != nil {
-			// if DM-worker can't handle pre-assigned source before keepalive, it simply exits with the error,
-			// because no re-assigned mechanism exists for keepalived DM-worker yet.
-			return err
-		}
-	}
 
 	s.wg.Add(1)
 	go func() {
@@ -143,6 +129,31 @@ func (s *Server) Start() error {
 	}()
 
 	s.startKeepAlive()
+
+	bound, sourceCfg, revBound, err := ha.GetSourceBoundConfig(s.etcdClient, s.cfg.Name)
+	if err != nil {
+		return err
+	}
+	if !bound.IsEmpty() {
+		log.L().Warn("worker has been assigned source before keepalive", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted))
+		w, err2 := s.getOrStartWorker(&sourceCfg)
+		s.setSourceStatus(bound.Source, err2, true)
+		if err2 != nil {
+			// if DM-worker can't handle pre-assigned source before keepalive, it simply exits with the error,
+			// because no re-assigned mechanism exists for keepalived DM-worker yet.
+			return err2
+		}
+		if sourceCfg.EnableRelay {
+			s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
+			if err2 = w.EnableRelay(); err2 != nil {
+				return err2
+			}
+		}
+		if err2 = w.EnableHandleSubtasks(); err2 != nil {
+			return err2
+		}
+		w.l.Info("started to handle mysql source", zap.String("sourceCfg", sourceCfg.String()))
+	}
 
 	s.wg.Add(1)
 	go func(ctx context.Context) {
@@ -306,10 +317,19 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 							log.L().Error("fail to stop worker", zap.Error(err))
 							return err // return if failed to stop the worker.
 						}
-						err1 = s.startWorker(&cfg)
-						s.setSourceStatus(bound.Source, err1, true)
-						if err1 != nil {
-							log.L().Error("fail to operate sourceBound on worker", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted), zap.Error(err1))
+						w, err2 := s.getOrStartWorker(&cfg)
+						if err2 == nil {
+							if cfg.EnableRelay {
+								s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
+								if err2 = w.EnableRelay(); err2 != nil {
+									return err2
+								}
+							}
+							err2 = w.EnableHandleSubtasks()
+						}
+						s.setSourceStatus(bound.Source, err2, true)
+						if err2 != nil {
+							w.l.Error("fail to operate sourceBound on worker", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted), zap.Error(err2))
 						}
 					}
 				}
@@ -416,6 +436,7 @@ func (s *Server) stopWorker(sourceID string) error {
 		s.Unlock()
 		return terror.ErrWorkerSourceNotMatch
 	}
+	// TODO: and when disable relay
 	s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
 	s.setWorker(nil, false)
 	s.Unlock()
@@ -471,7 +492,17 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 	if !ok {
 		return terror.ErrWorkerFailToGetSourceConfigFromEtcd.Generate(bound.Source)
 	}
-	return s.startWorker(&sourceCfg)
+	w, err := s.getOrStartWorker(&sourceCfg)
+	if err != nil {
+		return err
+	}
+	if sourceCfg.EnableRelay {
+		s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
+		if err = w.EnableRelay(); err != nil {
+			return err
+		}
+	}
+	return w.EnableHandleSubtasks()
 }
 
 // QueryStatus implements WorkerServer.QueryStatus
@@ -547,29 +578,23 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 	}, nil
 }
 
-func (s *Server) startWorker(cfg *config.SourceConfig) error {
+func (s *Server) getOrStartWorker(cfg *config.SourceConfig) (*Worker, error) {
 	s.Lock()
 	defer s.Unlock()
 	if w := s.getWorker(false); w != nil {
 		if w.cfg.SourceID == cfg.SourceID {
 			log.L().Info("mysql source is being handled", zap.String("sourceID", s.worker.cfg.SourceID))
-			return nil
+			return w, nil
 		}
-		return terror.ErrWorkerAlreadyStart.Generate()
+		return nil, terror.ErrWorkerAlreadyStart.Generate(w.name, w.cfg.SourceID, cfg.SourceID)
 	}
 
 	w, err := NewWorker(cfg, s.etcdClient, s.cfg.Name)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	s.setWorker(w, false)
 
-	if cfg.EnableRelay {
-		s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
-		if err2 := w.EnableRelay(); err2 != nil {
-			return err2
-		}
-	}
 	go w.Start()
 
 	isStarted := utils.WaitSomething(50, 100*time.Millisecond, func() bool {
@@ -577,12 +602,9 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	})
 	if !isStarted {
 		// TODO: add more mechanism to wait or un-bound the source
-		return terror.ErrWorkerNoStart
+		return nil, terror.ErrWorkerNoStart
 	}
-
-	err = w.EnableHandleSubtasks()
-	log.L().Info("started to handle mysql source", zap.String("sourceCfg", cfg.String()))
-	return err
+	return w, nil
 }
 
 func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {

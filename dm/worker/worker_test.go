@@ -172,7 +172,11 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 		if s.closed.Get() {
 			return false
 		}
-		c.Assert(s.startWorker(&sourceConfig), IsNil)
+		w, err2 := s.getOrStartWorker(&sourceConfig)
+		c.Assert(err2, IsNil)
+		// we set sourceConfig.EnableRelay = true above
+		c.Assert(w.EnableRelay(), IsNil)
+		c.Assert(w.EnableHandleSubtasks(), IsNil)
 		return true
 	}), IsTrue)
 	// start task
