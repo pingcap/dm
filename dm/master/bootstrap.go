@@ -104,16 +104,16 @@ func (s *Server) importFromV10x(ctx context.Context) error {
 		return err
 	}
 
-	// 5. create sources.
-	logger.Info("add source config into cluster")
-	err = s.addSourcesV1Import(tctx, sourceCfgs)
+	// 5. upgrade v1.0.x downstream metadata table.
+	logger.Info("upgrading downstream metadata tables")
+	err = s.upgradeDBSchemaV1Import(tctx, subtaskCfgs)
 	if err != nil {
 		return err
 	}
 
-	// 6. upgrade v1.0.x downstream metadata table.
-	logger.Info("upgrading downstream metadata tables")
-	err = s.upgradeDBSchemaV1Import(tctx, subtaskCfgs)
+	// 6. create sources.
+	logger.Info("add source config into cluster")
+	err = s.addSourcesV1Import(tctx, sourceCfgs)
 	if err != nil {
 		return err
 	}

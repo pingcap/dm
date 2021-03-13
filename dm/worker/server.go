@@ -439,6 +439,7 @@ func (s *Server) stopWorker(sourceID string) error {
 	// TODO: and when disable relay
 	s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
 	s.setWorker(nil, false)
+	s.setSourceStatus("", nil, false)
 	s.Unlock()
 	w.Close()
 	return nil
