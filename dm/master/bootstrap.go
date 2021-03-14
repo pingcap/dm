@@ -116,7 +116,7 @@ func (s *Server) importFromV10x(ctx context.Context) error {
 		Context:        ctx,
 		SubTaskConfigs: subtaskCfgs,
 	}
-	err = upgrade.UpgradeNotUpdateVersion(s.etcdClient, uctx)
+	err = upgrade.UntouchVersionUpgrade(s.etcdClient, uctx)
 	if err != nil {
 		return err
 	}

@@ -502,7 +502,6 @@ func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, d
 	time.Sleep(6 * time.Second)
 	// When worker server fail to keepalive with etcd, server should close its worker
 	c.Assert(s.getWorker(true), IsNil)
-
 	c.Assert(s.getSourceStatus(true).Result, IsNil)
 	ETCD, err := createMockETCD(dir, "http://"+hostName)
 	c.Assert(err, IsNil)
@@ -521,6 +520,9 @@ func (t *testServer) testSubTaskRecover(c *C, s *Server, dir string) {
 
 	t.testOperateWorker(c, s, dir, true)
 
+	// because we split starting worker and enabling handling subtasks into two parts, a query-status may occur between
+	// them, thus get a result of no subtask running
+	// TODO: use a lock to avoid query-status occur between them
 	utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		status, err = workerCli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
 		if err != nil {

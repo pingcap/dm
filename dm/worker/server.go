@@ -525,7 +525,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		return resp, nil
 	}
 
-	// TODO: return relay status also, to make use of one lock
+	// TODO: return relay status as well, to make use of one lock
 	resp.SubTaskStatus = w.QueryStatus(ctx, req.Name)
 	if w.relayEnabled.Get() {
 		sourceStatus.RelayStatus = w.relayHolder.Status(ctx)

@@ -42,11 +42,6 @@ func (t *testServer) testWorker(c *C) {
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
 
-	NewRelayHolder = NewDummyRelayHolderWithInitError
-	defer func() {
-		NewRelayHolder = NewRealRelayHolder
-	}()
-
 	var (
 		masterAddr   = tempurl.Alloc()[len("http://"):]
 		keepAliveTTL = int64(1)
@@ -69,6 +64,10 @@ func (t *testServer) testWorker(c *C) {
 	})
 	c.Assert(err, IsNil)
 
+	NewRelayHolder = NewDummyRelayHolderWithInitError
+	defer func() {
+		NewRelayHolder = NewRealRelayHolder
+	}()
 	w, err := NewWorker(&cfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	c.Assert(w.EnableRelay(), ErrorMatches, "init error")

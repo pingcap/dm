@@ -95,8 +95,9 @@ func TryUpgrade(cli *clientv3.Client, uctx Context) error {
 	return err
 }
 
-// UpgradeNotUpdateVersion does same as TryUpgrade except for PutVersion. This function is called when upgrade from v1.0
-func UpgradeNotUpdateVersion(cli *clientv3.Client, uctx Context) error {
+// UntouchVersionUpgrade runs all upgrade functions but doesn't change cluster version. This function is called when
+// upgrade from v1.0, with a later PutVersion in caller after success
+func UntouchVersionUpgrade(cli *clientv3.Client, uctx Context) error {
 	for _, upgrade := range upgrades {
 		err := upgrade(cli, uctx)
 		if err != nil {
@@ -112,8 +113,7 @@ func upgradeToVer1(cli *clientv3.Client, uctx Context) error {
 	return nil
 }
 
-// upgradeToVer2 does upgrade operations from Ver1 to Ver2 (v2.0.0-rc.3) to upgrade syncer checkpoint schema
-// TODO: determine v2.0.0-rc.3 or another version in above line
+// upgradeToVer2 does upgrade operations from Ver1 to Ver2 (v2.0.0-GA) to upgrade syncer checkpoint schema
 func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 	upgradeTaskName := "upgradeToVer2"
 	logger := log.L().WithFields(zap.String("task", upgradeTaskName))
