@@ -40,7 +40,7 @@ import (
 // Worker manages sub tasks and process units for data migration
 type Worker struct {
 	// ensure no other operation can be done when closing (we can use `WatGroup`/`Context` to archive this)/
-	// seems only guarding subTaskHolder
+	// TODO: check if it only guards subTaskHolder
 	sync.RWMutex
 
 	wg     sync.WaitGroup
@@ -219,7 +219,7 @@ func (w *Worker) EnableRelay() (err error) {
 
 	// 2. initial relay holder, the cfg's password need decrypt
 	w.relayHolder = NewRelayHolder(w.cfg)
-	relayPurger, err := w.relayHolder.Init([]purger.PurgeInterceptor{
+	relayPurger, err := w.relayHolder.Init(w.relayCtx, []purger.PurgeInterceptor{
 		w,
 	})
 	if err != nil {
@@ -258,8 +258,7 @@ func (w *Worker) EnableRelay() (err error) {
 
 // DisableRelay disables the functionality of start/watch/handle relay
 func (w *Worker) DisableRelay() {
-	// TODO: use CAS?
-	if !w.relayEnabled.Get() {
+	if !w.relayEnabled.CompareAndSwap(true, false) {
 		w.l.Warn("already disabled relay")
 		return
 	}
@@ -268,8 +267,6 @@ func (w *Worker) DisableRelay() {
 
 	w.relayCancel()
 	w.relayWg.Wait()
-
-	w.relayEnabled.Set(false)
 
 	// refresh task checker know latest relayEnabled, to avoid accessing relayHolder
 	if w.cfg.Checker.CheckEnable {
@@ -341,8 +338,7 @@ func (w *Worker) EnableHandleSubtasks() error {
 
 // DisableHandleSubtasks disables the functionality of start/watch/handle subtasks
 func (w *Worker) DisableHandleSubtasks() {
-	// TODO: use CAS?
-	if !w.subTaskEnabled.Get() {
+	if !w.subTaskEnabled.CompareAndSwap(true, false) {
 		w.l.Warn("already disabled handling subtasks")
 		return
 	}
@@ -352,7 +348,6 @@ func (w *Worker) DisableHandleSubtasks() {
 
 	w.Lock()
 	defer w.Unlock()
-	w.subTaskEnabled.Set(false)
 
 	// close all sub tasks
 	w.subTaskHolder.closeAllSubTasks()
@@ -450,20 +445,29 @@ func (w *Worker) OperateSubTask(name string, op pb.TaskOp) error {
 	return err
 }
 
-// QueryStatus query worker's sub tasks' status
-func (w *Worker) QueryStatus(ctx context.Context, name string) []*pb.SubTaskStatus {
+// QueryStatus query worker's sub tasks' status. If relay enabled, also return source status
+// TODO: `ctx` is used to get upstream master status in every subtasks and source.
+// reduce it to only call once and remove `unifyMasterBinlogPos`, also remove below ctx2
+func (w *Worker) QueryStatus(ctx context.Context, name string) ([]*pb.SubTaskStatus, *pb.RelayStatus) {
 	w.RLock()
 	defer w.RUnlock()
 
 	if w.closed.Get() {
 		w.l.Warn("querying status from a closed worker")
-		return nil
+		return nil, nil
 	}
 
 	// use one timeout for all tasks. increase this value if it's too short.
 	ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 	defer cancel2()
-	return w.Status(ctx2, name)
+	var (
+		subtaskStatus = w.Status(ctx2, name)
+		relayStatus   *pb.RelayStatus
+	)
+	if w.relayEnabled.Get() {
+		relayStatus = w.relayHolder.Status(ctx2)
+	}
+	return subtaskStatus, relayStatus
 }
 
 func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {

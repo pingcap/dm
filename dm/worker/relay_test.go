@@ -159,7 +159,8 @@ func (t *testRelay) TestRelay(c *C) {
 }
 
 func (t *testRelay) testInit(c *C, holder *realRelayHolder) {
-	_, err := holder.Init(nil)
+	ctx := context.Background()
+	_, err := holder.Init(ctx, nil)
 	c.Assert(err, IsNil)
 
 	r, ok := holder.relay.(*DummyRelay)
@@ -169,7 +170,7 @@ func (t *testRelay) testInit(c *C, holder *realRelayHolder) {
 	r.InjectInitError(initErr)
 	defer r.InjectInitError(nil)
 
-	_, err = holder.Init(nil)
+	_, err = holder.Init(ctx, nil)
 	c.Assert(err, ErrorMatches, ".*"+initErr.Error()+".*")
 }
 

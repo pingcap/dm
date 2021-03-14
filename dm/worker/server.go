@@ -525,12 +525,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		return resp, nil
 	}
 
-	// TODO: return relay status as well, to make use of one lock
-	resp.SubTaskStatus = w.QueryStatus(ctx, req.Name)
-	if w.relayEnabled.Get() {
-		sourceStatus.RelayStatus = w.relayHolder.Status(ctx)
-	}
-
+	resp.SubTaskStatus, sourceStatus.RelayStatus = w.QueryStatus(ctx, req.Name)
 	unifyMasterBinlogPos(resp, w.cfg.EnableGTID)
 
 	if len(resp.SubTaskStatus) == 0 {

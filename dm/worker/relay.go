@@ -23,7 +23,6 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
@@ -34,7 +33,7 @@ import (
 // RelayHolder for relay unit
 type RelayHolder interface {
 	// Init initializes the holder
-	Init(interceptors []purger.PurgeInterceptor) (purger.Purger, error)
+	Init(ctx context.Context, interceptors []purger.PurgeInterceptor) (purger.Purger, error)
 	// Start starts run the relay
 	Start()
 	// Close closes the holder
@@ -90,7 +89,7 @@ func NewRealRelayHolder(sourceCfg *config.SourceConfig) RelayHolder {
 }
 
 // Init initializes the holder
-func (h *realRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.Purger, error) {
+func (h *realRelayHolder) Init(ctx context.Context, interceptors []purger.PurgeInterceptor) (purger.Purger, error) {
 	h.closed.Set(false)
 
 	// initial relay purger
@@ -99,9 +98,6 @@ func (h *realRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.P
 		streamer.GetReaderHub(),
 	}
 
-	// TODO: refine the context usage of relay, and it may need to be initialized before handle any subtasks.
-	ctx, cancel := context.WithTimeout(context.Background(), unit.DefaultInitTimeout)
-	defer cancel()
 	if err := h.relay.Init(ctx); err != nil {
 		return nil, terror.Annotate(err, "initial relay unit")
 	}
@@ -356,7 +352,7 @@ func NewDummyRelayHolderWithInitError(cfg *config.SourceConfig) RelayHolder {
 }
 
 // Init implements interface of RelayHolder
-func (d *dummyRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.Purger, error) {
+func (d *dummyRelayHolder) Init(ctx context.Context, interceptors []purger.PurgeInterceptor) (purger.Purger, error) {
 	// initial relay purger
 	operators := []purger.RelayOperator{
 		d,

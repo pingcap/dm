@@ -14,6 +14,7 @@
 package relay
 
 import (
+	"context"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -149,8 +150,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(relayExitWithErrorCounter)
 }
 
-// TODO: add a context to stop it
-func reportRelayLogSpaceInBackground(dirpath string) error {
+func reportRelayLogSpaceInBackground(ctx context.Context, dirpath string) error {
 	if len(dirpath) == 0 {
 		return terror.ErrRelayLogDirpathEmpty.Generate()
 	}
@@ -159,7 +159,10 @@ func reportRelayLogSpaceInBackground(dirpath string) error {
 		ticker := time.NewTicker(time.Second * 10)
 		defer ticker.Stop()
 
-		for range ticker.C {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
 			size, err := utils.GetStorageSize(dirpath)
 			if err != nil {
 				log.L().Error("fail to update relay log storage size", log.ShortError(err))
