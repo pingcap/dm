@@ -56,17 +56,17 @@ func (s *Server) bootstrap(ctx context.Context) error {
 		if err != nil {
 			return terror.ErrMasterFailToImportFromV10x.Delegate(err)
 		}
+	} else {
+		uctx := upgrade.Context{
+			Context:        ctx,
+			SubTaskConfigs: s.scheduler.GetSubTaskCfgs(),
+		}
+		err := upgrade.TryUpgrade(s.etcdClient, uctx)
+		if err != nil {
+			return err
+		}
 	}
 
-	uctx := upgrade.Context{
-		Context:        ctx,
-		SubTaskConfigs: s.scheduler.GetSubTaskCfgs(),
-	}
-	err := upgrade.TryUpgrade(s.etcdClient, uctx)
-
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -104,9 +104,19 @@ func (s *Server) importFromV10x(ctx context.Context) error {
 		return err
 	}
 
-	// 5. upgrade v1.0.x downstream metadata table.
+	// 5. upgrade v1.0.x downstream metadata table and run v2.0 upgrading routines.
+	//    some v2.0 upgrading routines are also altering schema, if we run them after adding sources, DM worker will
+	//    meet error.
 	logger.Info("upgrading downstream metadata tables")
 	err = s.upgradeDBSchemaV1Import(tctx, subtaskCfgs)
+	if err != nil {
+		return err
+	}
+	uctx := upgrade.Context{
+		Context:        ctx,
+		SubTaskConfigs: subtaskCfgs,
+	}
+	err = upgrade.UpgradeNotUpdateVersion(s.etcdClient, uctx)
 	if err != nil {
 		return err
 	}
@@ -127,7 +137,7 @@ func (s *Server) importFromV10x(ctx context.Context) error {
 
 	// 8. mark the upgrade operation as done.
 	logger.Info("marking upgrade from v1.0.x as done")
-	_, err = upgrade.PutVersion(s.etcdClient, upgrade.MinVersion)
+	_, err = upgrade.PutVersion(s.etcdClient, upgrade.CurrentVersion)
 	if err != nil {
 		return err
 	}

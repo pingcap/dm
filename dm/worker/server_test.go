@@ -167,8 +167,6 @@ func (t *testServer) TestServer(c *C) {
 	subtaskCfg.MydumperPath = mydumperPath
 
 	sourceCfg := loadSourceConfigWithoutPassword(c)
-	_, err = ha.PutSubTaskCfg(s.etcdClient, subtaskCfg)
-	c.Assert(err, IsNil)
 	_, err = ha.PutSubTaskCfgStage(s.etcdClient, []config.SubTaskConfig{subtaskCfg},
 		[]ha.Stage{ha.NewSubTaskStage(pb.Stage_Running, sourceCfg.SourceID, subtaskCfg.Name)})
 	c.Assert(err, IsNil)
@@ -522,9 +520,25 @@ func (t *testServer) testSubTaskRecover(c *C, s *Server, dir string) {
 	c.Assert(status.Msg, Equals, terror.ErrWorkerNoStart.Error())
 
 	t.testOperateWorker(c, s, dir, true)
+
+	utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		status, err = workerCli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
+		if err != nil {
+			return false
+		}
+		if status.Result == false {
+			return false
+		}
+		if len(status.SubTaskStatus) == 0 || status.SubTaskStatus[0].Stage != pb.Stage_Running {
+			return false
+		}
+		return true
+	})
+
 	status, err = workerCli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
 	c.Assert(err, IsNil)
 	c.Assert(status.Result, IsTrue)
+	c.Assert(status.SubTaskStatus, HasLen, 1)
 	c.Assert(status.SubTaskStatus[0].Stage, Equals, pb.Stage_Running)
 }
 

@@ -525,6 +525,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		return resp, nil
 	}
 
+	// TODO: return relay status also, to make use of one lock
 	resp.SubTaskStatus = w.QueryStatus(ctx, req.Name)
 	if w.relayEnabled.Get() {
 		sourceStatus.RelayStatus = w.relayHolder.Status(ctx)
@@ -674,10 +675,10 @@ func getMinLocForSubTask(ctx context.Context, subTaskCfg config.SubTaskConfig) (
 // see https://github.com/pingcap/dm/issues/727
 func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 	var (
-		syncStatus          []*pb.SubTaskStatus_Sync
-		syncMasterBinlog    []*mysql.Position
-		lastestMasterBinlog mysql.Position // not pointer, to make use of zero value and avoid nil check
-		relayMasterBinlog   *mysql.Position
+		syncStatus         []*pb.SubTaskStatus_Sync
+		syncMasterBinlog   []*mysql.Position
+		latestMasterBinlog mysql.Position // not pointer, to make use of zero value and avoid nil check
+		relayMasterBinlog  *mysql.Position
 	)
 
 	// uninitialized mysql.Position is less than any initialized mysql.Position
@@ -685,10 +686,10 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 		var err error
 		relayMasterBinlog, err = utils.DecodeBinlogPosition(resp.SourceStatus.RelayStatus.MasterBinlog)
 		if err != nil {
-			log.L().Error("failed to decode relay's master binlog position", zap.Stringer("response", resp), zap.Error(err))
+			log.L().Warn("failed to decode relay's master binlog position", zap.Stringer("response", resp), zap.Error(err))
 			return
 		}
-		lastestMasterBinlog = *relayMasterBinlog
+		latestMasterBinlog = *relayMasterBinlog
 	}
 
 	for _, stStatus := range resp.SubTaskStatus {
@@ -698,11 +699,11 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 
 			position, err := utils.DecodeBinlogPosition(s.Sync.MasterBinlog)
 			if err != nil {
-				log.L().Error("failed to decode sync's master binlog position", zap.Stringer("response", resp), zap.Error(err))
+				log.L().Warn("failed to decode sync's master binlog position", zap.Stringer("response", resp), zap.Error(err))
 				return
 			}
-			if lastestMasterBinlog.Compare(*position) < 0 {
-				lastestMasterBinlog = *position
+			if latestMasterBinlog.Compare(*position) < 0 {
+				latestMasterBinlog = *position
 			}
 			syncMasterBinlog = append(syncMasterBinlog, position)
 		}
@@ -710,33 +711,33 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 
 	// re-check relay
 	if resp.SourceStatus.RelayStatus != nil && resp.SourceStatus.RelayStatus.Stage != pb.Stage_Stopped &&
-		lastestMasterBinlog.Compare(*relayMasterBinlog) != 0 {
+		latestMasterBinlog.Compare(*relayMasterBinlog) != 0 {
 
-		resp.SourceStatus.RelayStatus.MasterBinlog = lastestMasterBinlog.String()
+		resp.SourceStatus.RelayStatus.MasterBinlog = latestMasterBinlog.String()
 
 		// if enableGTID, modify output binlog position doesn't affect RelayCatchUpMaster, skip check
 		if !enableGTID {
 			relayPos, err := utils.DecodeBinlogPosition(resp.SourceStatus.RelayStatus.RelayBinlog)
 			if err != nil {
-				log.L().Error("failed to decode relay binlog position", zap.Stringer("response", resp), zap.Error(err))
+				log.L().Warn("failed to decode relay binlog position", zap.Stringer("response", resp), zap.Error(err))
 				return
 			}
-			catchUp := lastestMasterBinlog.Compare(*relayPos) == 0
+			catchUp := latestMasterBinlog.Compare(*relayPos) == 0
 
 			resp.SourceStatus.RelayStatus.RelayCatchUpMaster = catchUp
 		}
 	}
 	// re-check syncer
 	for i, sStatus := range syncStatus {
-		if lastestMasterBinlog.Compare(*syncMasterBinlog[i]) != 0 {
+		if latestMasterBinlog.Compare(*syncMasterBinlog[i]) != 0 {
 			syncerPos, err := utils.DecodeBinlogPosition(sStatus.Sync.SyncerBinlog)
 			if err != nil {
-				log.L().Error("failed to decode syncer binlog position", zap.Stringer("response", resp), zap.Error(err))
+				log.L().Warn("failed to decode syncer binlog position", zap.Stringer("response", resp), zap.Error(err))
 				return
 			}
-			synced := lastestMasterBinlog.Compare(*syncerPos) == 0
+			synced := latestMasterBinlog.Compare(*syncerPos) == 0
 
-			sStatus.Sync.MasterBinlog = lastestMasterBinlog.String()
+			sStatus.Sync.MasterBinlog = latestMasterBinlog.String()
 			sStatus.Sync.Synced = synced
 		}
 	}

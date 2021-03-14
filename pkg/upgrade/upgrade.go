@@ -95,6 +95,17 @@ func TryUpgrade(cli *clientv3.Client, uctx Context) error {
 	return err
 }
 
+// UpgradeNotUpdateVersion does same as TryUpgrade except for PutVersion. This function is called when upgrade from v1.0
+func UpgradeNotUpdateVersion(cli *clientv3.Client, uctx Context) error {
+	for _, upgrade := range upgrades {
+		err := upgrade(cli, uctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // upgradeToVer1 does upgrade operations from Ver0 to Ver1.
 // in fact, this do nothing now, and just for demonstration.
 func upgradeToVer1(cli *clientv3.Client, uctx Context) error {
