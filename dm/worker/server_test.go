@@ -522,7 +522,6 @@ func (t *testServer) testSubTaskRecover(c *C, s *Server, dir string) {
 
 	// because we split starting worker and enabling handling subtasks into two parts, a query-status may occur between
 	// them, thus get a result of no subtask running
-	// TODO: use a lock to avoid query-status occur between them
 	utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		status, err = workerCli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
 		if err != nil {

@@ -39,8 +39,9 @@ import (
 
 // Worker manages sub tasks and process units for data migration
 type Worker struct {
-	// ensure no other operation can be done when closing (we can use `WatGroup`/`Context` to archive this)/
-	// TODO: check if it only guards subTaskHolder
+	// ensure no other operation can be done when closing (we can use `WatGroup`/`Context` to archive this)
+	// TODO: check what does it guards. Now it's used to guard relayHolder and relayPurger (maybe subTaskHolder?) since
+	// query-status maybe access them when closing/disable functionalities
 	sync.RWMutex
 
 	wg     sync.WaitGroup
@@ -179,6 +180,8 @@ func (w *Worker) Close() {
 
 // EnableRelay enables the functionality of start/watch/handle relay
 func (w *Worker) EnableRelay() (err error) {
+	w.Lock()
+	defer w.Unlock()
 	if w.relayEnabled.Get() {
 		w.l.Warn("already enabled relay")
 		return nil
@@ -191,7 +194,8 @@ func (w *Worker) EnableRelay() (err error) {
 	if err != nil {
 		return err
 	}
-	if err = copyConfigFromSourceForEach(subTaskCfgs, w.cfg); err != nil {
+	// we just use subTaskCfgs to adjust relay's binlog location, so set `enableRelay` arbitrary
+	if err = copyConfigFromSourceForEach(subTaskCfgs, w.cfg, true); err != nil {
 		return err
 	}
 
@@ -253,17 +257,18 @@ func (w *Worker) EnableRelay() (err error) {
 
 	w.relayEnabled.Set(true)
 	w.l.Info("relay enabled")
+	w.subTaskHolder.resetAllSubTasks(true)
 	return nil
 }
 
 // DisableRelay disables the functionality of start/watch/handle relay
 func (w *Worker) DisableRelay() {
+	w.Lock()
+	defer w.Unlock()
 	if !w.relayEnabled.CompareAndSwap(true, false) {
 		w.l.Warn("already disabled relay")
 		return
 	}
-
-	// TODO: check if running subtask need accessing relay
 
 	w.relayCancel()
 	w.relayWg.Wait()
@@ -275,6 +280,8 @@ func (w *Worker) DisableRelay() {
 		w.taskStatusChecker.Start()
 		w.l.Info("finish refreshing task checker")
 	}
+
+	w.subTaskHolder.resetAllSubTasks(false)
 
 	if w.relayHolder != nil {
 		r := w.relayHolder
@@ -290,6 +297,8 @@ func (w *Worker) DisableRelay() {
 
 // EnableHandleSubtasks enables the functionality of start/watch/handle subtasks
 func (w *Worker) EnableHandleSubtasks() error {
+	w.Lock()
+	defer w.Unlock()
 	if w.subTaskEnabled.Get() {
 		w.l.Warn("already enabled handling subtasks")
 		return nil
@@ -303,7 +312,8 @@ func (w *Worker) EnableHandleSubtasks() error {
 		return err
 	}
 
-	if err = copyConfigFromSourceForEach(subTaskCfgM, w.cfg); err != nil {
+	// TODO: make sure relayEnabled is not changing
+	if err = copyConfigFromSourceForEach(subTaskCfgM, w.cfg, w.relayEnabled.Get()); err != nil {
 		return err
 	}
 
@@ -317,7 +327,7 @@ func (w *Worker) EnableHandleSubtasks() error {
 		w.l.Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
 		// "for range" of a map will use same value address, so we'd better not pass value address to other function
 		clone := subTaskCfg
-		if err2 := w.StartSubTask(&clone, expectStage.Expect); err2 != nil {
+		if err2 := w.StartSubTask(&clone, expectStage.Expect, false); err2 != nil {
 			w.subTaskHolder.closeAllSubTasks()
 			return err2
 		}
@@ -354,12 +364,14 @@ func (w *Worker) DisableHandleSubtasks() {
 }
 
 // StartSubTask creates a sub task an run it
-func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage) error {
-	w.Lock()
-	defer w.Unlock()
+func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, needLock bool) error {
+	if needLock {
+		w.Lock()
+		defer w.Unlock()
+	}
 
 	// copy some config item from dm-worker's source config
-	err := copyConfigFromSource(cfg, w.cfg)
+	err := copyConfigFromSource(cfg, w.cfg, w.relayEnabled.Get())
 	if err != nil {
 		return err
 	}
@@ -597,7 +609,7 @@ func (w *Worker) operateSubTaskStage(stage ha.Stage, subTaskCfg config.SubTaskCo
 		if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
 			// create the subtask for expected running and paused stage.
 			log.L().Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
-			err := w.StartSubTask(&subTaskCfg, stage.Expect)
+			err := w.StartSubTask(&subTaskCfg, stage.Expect, true)
 			return opErrTypeBeforeOp, err
 		}
 		if stage.Expect == pb.Stage_Running {
@@ -799,15 +811,15 @@ func (w *Worker) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 	return st.OperateSchema(ctx, req)
 }
 
-// copyConfigFromSource copies config items from source config to sub task
-func copyConfigFromSource(cfg *config.SubTaskConfig, sourceCfg *config.SourceConfig) error {
+// copyConfigFromSource copies config items from source config and worker's relayEnabled to sub task
+func copyConfigFromSource(cfg *config.SubTaskConfig, sourceCfg *config.SourceConfig, enableRelay bool) error {
 	cfg.From = sourceCfg.From
 
 	cfg.Flavor = sourceCfg.Flavor
 	cfg.ServerID = sourceCfg.ServerID
 	cfg.RelayDir = sourceCfg.RelayDir
 	cfg.EnableGTID = sourceCfg.EnableGTID
-	cfg.UseRelay = sourceCfg.EnableRelay
+	cfg.UseRelay = enableRelay
 
 	// we can remove this from SubTaskConfig later, because syncer will always read from relay
 	cfg.AutoFixGTID = sourceCfg.AutoFixGTID
@@ -836,9 +848,13 @@ func copyConfigFromSource(cfg *config.SubTaskConfig, sourceCfg *config.SourceCon
 }
 
 // copyConfigFromSourceForEach do copyConfigFromSource for each value in subTaskCfgM and change subTaskCfgM in-place
-func copyConfigFromSourceForEach(subTaskCfgM map[string]config.SubTaskConfig, sourceCfg *config.SourceConfig) error {
+func copyConfigFromSourceForEach(
+	subTaskCfgM map[string]config.SubTaskConfig,
+	sourceCfg *config.SourceConfig,
+	enableRelay bool,
+) error {
 	for k, subTaskCfg := range subTaskCfgM {
-		if err2 := copyConfigFromSource(&subTaskCfg, sourceCfg); err2 != nil {
+		if err2 := copyConfigFromSource(&subTaskCfg, sourceCfg, enableRelay); err2 != nil {
 			return err2
 		}
 		subTaskCfgM[k] = subTaskCfg

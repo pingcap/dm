@@ -39,8 +39,8 @@ import (
 )
 
 const (
-	// the timout to wait for relay catchup when switching from load unit to sync unit.
-	waitRelayCatchupTimeout = 5 * time.Minute
+	// the timeout to wait for relay catchup when switching from load unit to sync unit.
+	waitRelayCatchupTimeout = 30 * time.Second
 )
 
 // createRealUnits is subtask units initializer
