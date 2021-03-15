@@ -104,6 +104,8 @@ service Master {
     }
 
     rpc GetMasterCfg(GetMasterCfgRequest) returns(GetMasterCfgResponse) {}
+
+    rpc TransferSource(TransferSourceRequest) returns(TransferSourceResponse) {}
 }
 
 message StartTaskRequest {
@@ -425,4 +427,14 @@ message HandleErrorResponse {
     bool result = 1;
     string msg = 2;
     repeated CommonWorkerResponse sources = 3;
+}
+
+message TransferSourceRequest {
+    string source = 1;
+    string worker = 2;
+}
+
+message TransferSourceResponse {
+    bool result = 1;
+    string msg = 2;
 }

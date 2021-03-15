@@ -375,6 +375,26 @@ func (mr *MockMasterClientMockRecorder) StartTask(arg0, arg1 interface{}, arg2 .
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartTask", reflect.TypeOf((*MockMasterClient)(nil).StartTask), varargs...)
 }
 
+// TransferSource mocks base method
+func (m *MockMasterClient) TransferSource(arg0 context.Context, arg1 *pb.TransferSourceRequest, arg2 ...grpc.CallOption) (*pb.TransferSourceResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "TransferSource", varargs...)
+	ret0, _ := ret[0].(*pb.TransferSourceResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TransferSource indicates an expected call of TransferSource
+func (mr *MockMasterClientMockRecorder) TransferSource(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferSource", reflect.TypeOf((*MockMasterClient)(nil).TransferSource), varargs...)
+}
+
 // UnlockDDLLock mocks base method
 func (m *MockMasterClient) UnlockDDLLock(arg0 context.Context, arg1 *pb.UnlockDDLLockRequest, arg2 ...grpc.CallOption) (*pb.UnlockDDLLockResponse, error) {
 	m.ctrl.T.Helper()
@@ -691,6 +711,21 @@ func (m *MockMasterServer) StartTask(arg0 context.Context, arg1 *pb.StartTaskReq
 func (mr *MockMasterServerMockRecorder) StartTask(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartTask", reflect.TypeOf((*MockMasterServer)(nil).StartTask), arg0, arg1)
+}
+
+// TransferSource mocks base method
+func (m *MockMasterServer) TransferSource(arg0 context.Context, arg1 *pb.TransferSourceRequest) (*pb.TransferSourceResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TransferSource", arg0, arg1)
+	ret0, _ := ret[0].(*pb.TransferSourceResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TransferSource indicates an expected call of TransferSource
+func (mr *MockMasterServerMockRecorder) TransferSource(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferSource", reflect.TypeOf((*MockMasterServer)(nil).TransferSource), arg0, arg1)
 }
 
 // UnlockDDLLock mocks base method
