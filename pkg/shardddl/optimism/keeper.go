@@ -111,6 +111,7 @@ func (lk *LockKeeper) Clear() {
 	lk.locks = make(map[string]*Lock)
 }
 
+// SetColumnMap sets the column map received from etcd
 func (lk *LockKeeper) SetColumnMap(colm map[string]map[string]interface{}) {
 	lk.mu.Lock()
 	defer lk.mu.Unlock()

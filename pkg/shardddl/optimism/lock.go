@@ -513,6 +513,7 @@ func (l *Lock) GetVersion(source string, schema string, table string) int64 {
 	return l.versions[source][schema][table]
 }
 
+// AddDroppedColumn adds a dropped column name in both etcd and lock's column map
 func (l *Lock) AddDroppedColumn(col string) error {
 	if _, ok := l.columns[col]; ok {
 		return nil
