@@ -104,7 +104,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 			downSchema, downTable := s.renameShardingSchema(req.Database, req.Table)
 			info := s.optimist.ConstructInfo(req.Database, req.Table, downSchema, downTable, []string{""}, nil, []*model.TableInfo{ti})
 			info.IgnoreConflict = true
-			log.L().Info("sync info with operateschema", zap.Stringer("info", info))
+			log.L().Info("sync info with operate-schema", zap.Stringer("info", info))
 			_, err = s.optimist.PutInfo(info)
 			if err != nil {
 				return "", err
