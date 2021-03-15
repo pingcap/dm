@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -219,8 +220,8 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 }
 
 type testWorkerFunctionalities struct {
-	createUnitCount         int
-	expectedCreateUnitCount int
+	createUnitCount         int32
+	expectedCreateUnitCount int32
 }
 
 var _ = Suite(&testWorkerFunctionalities{})
@@ -231,18 +232,20 @@ func (t *testWorkerFunctionalities) SetUpSuite(c *C) {
 		return NewRealSubTask(cfg, etcdClient)
 	}
 	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
-		t.createUnitCount++
+		atomic.AddInt32(&t.createUnitCount, 1)
 		mockDumper := NewMockUnit(pb.UnitType_Dump)
 		mockLoader := NewMockUnit(pb.UnitType_Load)
 		mockSync := NewMockUnit(pb.UnitType_Sync)
 		return []unit.Unit{mockDumper, mockLoader, mockSync}
 	}
+	getMinLocForSubTaskFunc = getFakeLocForSubTask
 }
 
 func (t *testWorkerFunctionalities) TearDownSuite(c *C) {
 	NewRelayHolder = NewRealRelayHolder
 	NewSubTask = NewRealSubTask
 	createUnits = createRealUnits
+	getMinLocForSubTaskFunc = getMinLocForSubTask
 }
 
 func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
@@ -304,7 +307,9 @@ func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
 	t.testEnableRelay(c, w, etcdCli, sourceCfg, cfg)
 	c.Assert(w.subTaskHolder.findSubTask(subtaskCfg.Name).cfg.UseRelay, IsTrue)
 	t.expectedCreateUnitCount++
-	c.Assert(t.createUnitCount, Equals, t.expectedCreateUnitCount)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return atomic.LoadInt32(&t.createUnitCount) == t.expectedCreateUnitCount
+	}), IsTrue)
 
 	// test5: when subTaskEnabled is true, switch off relay
 	c.Assert(w.subTaskEnabled.Get(), IsTrue)
@@ -312,7 +317,9 @@ func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
 
 	c.Assert(w.subTaskHolder.findSubTask(subtaskCfg.Name).cfg.UseRelay, IsFalse)
 	t.expectedCreateUnitCount++
-	c.Assert(t.createUnitCount, Equals, t.expectedCreateUnitCount)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return atomic.LoadInt32(&t.createUnitCount) == t.expectedCreateUnitCount
+	}), IsTrue)
 
 	// test6: when relayEnabled is false, switch off subtask
 	c.Assert(w.relayEnabled.Get(), IsFalse)
@@ -330,6 +337,8 @@ func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
 	// we already added subtaskCfg, so below EnableHandleSubtasks will find an extra subtask
 	t.expectedCreateUnitCount++
 	t.testEnableHandleSubtasks(c, w, etcdCli, subtaskCfg2, sourceCfg)
+	c.Assert(w.subTaskHolder.findSubTask(subtaskCfg.Name).cfg.UseRelay, IsTrue)
+	c.Assert(w.subTaskHolder.findSubTask(subtaskCfg2.Name).cfg.UseRelay, IsTrue)
 
 	// test8: when relayEnabled is true, switch off subtask
 	c.Assert(w.relayEnabled.Get(), IsTrue)
@@ -380,7 +389,9 @@ func (t *testWorkerFunctionalities) testEnableHandleSubtasks(c *C, w *Worker, et
 		return w.subTaskHolder.findSubTask(subtaskCfg.Name) != nil
 	}), IsTrue)
 	t.expectedCreateUnitCount++
-	c.Assert(t.createUnitCount, Equals, t.expectedCreateUnitCount)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return atomic.LoadInt32(&t.createUnitCount) == t.expectedCreateUnitCount
+	}), IsTrue)
 }
 
 type testWorkerEtcdCompact struct{}
