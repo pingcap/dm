@@ -84,7 +84,7 @@ func filterDashboard(str string, dashboard string, title string) string {
 		str = strings.ReplaceAll(str, fmt.Sprintf("${%s}", datasource), datasourceName)
 	}
 
-	// delete input defination
+	// delete input definition
 	if gjson.Get(str, "__inputs").Exists() {
 		str, err = sjson.Delete(str, "__inputs")
 		checkErr(err, "delete path failed")

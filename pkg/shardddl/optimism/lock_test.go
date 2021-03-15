@@ -1637,7 +1637,7 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 
 	// TrySync for the first table, add column b, should fail, because this column isn't fully dropped in the downstream
 	vers[source][db][tbls[0]]++
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs4, []*model.TableInfo{ti0}, tts, vers[source][db][tbls[0]])
+	_, err = l.TrySync(source, db, tbls[0], DDLs4, []*model.TableInfo{ti0}, tts, vers[source][db][tbls[0]])
 	c.Assert(err, ErrorMatches, ".*add column c that wasn't fully dropped in downstream.*")
 	c.Assert(l.IsResolved(), IsFalse)
 

@@ -123,7 +123,7 @@ func getDBAndTableFromFilename(filename string) (string, string, error) {
 	}
 	fields := strings.Split(filename[:idx], ".")
 	if len(fields) != 2 && len(fields) != 3 {
-		return "", "", fmt.Errorf("%s doesn't have correct `.` seperator", filename)
+		return "", "", fmt.Errorf("%s doesn't have correct `.` separator", filename)
 	}
 	return fields[0], fields[1], nil
 }
