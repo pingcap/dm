@@ -26,7 +26,7 @@ type testLoaderSuite struct{}
 
 func (*testLoaderSuite) TestJobQueue(c *C) {
 	procedure := func(ctx context.Context, jobsCount int, handler func(ctx context.Context, job *restoreSchemaJob) error) error {
-		jobQueue := newJobQueue(ctx, 16)
+		jobQueue := newJobQueue(ctx, 16, 16)
 		jobQueue.startConsumers(handler)
 		for i := 0; i < jobsCount; i++ {
 			err := jobQueue.push(&restoreSchemaJob{})
