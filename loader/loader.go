@@ -1201,16 +1201,16 @@ type restoreSchemaJob struct {
 type jobQueue struct {
 	ctx           context.Context
 	msgq          chan *restoreSchemaJob // job message queue channel
-	consumerCount uint16                 // count of consumers
+	consumerCount int                    // count of consumers
 	eg            *errgroup.Group        // err wait group of consumer's go-routines
 }
 
 // `newJobQueue` consturct a jobQueue
-func newJobQueue(ctx context.Context, consumerCount uint16) *jobQueue {
+func newJobQueue(ctx context.Context, consumerCount, length int) *jobQueue {
 	eg, selfCtx := errgroup.WithContext(ctx)
 	return &jobQueue{
 		ctx:           selfCtx,
-		msgq:          make(chan *restoreSchemaJob, 1),
+		msgq:          make(chan *restoreSchemaJob, length),
 		consumerCount: consumerCount,
 		eg:            eg,
 	}
@@ -1276,7 +1276,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	dbSessionPool := make([]*DBConn, 0, concurrency)
 
 	// run consumers of restore database schema queue
-	dbRestoreQueue := newJobQueue(ctx, uint16(concurrency))
+	dbRestoreQueue := newJobQueue(ctx, concurrency, concurrency /** length of queue*/)
 	dbRestoreQueue.startConsumers(func(ctx context.Context, job *restoreSchemaJob) error {
 		// restore database schema
 		job.loader.logger.Info("start to create schema", zap.String("schema file", job.filepath))
@@ -1339,7 +1339,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	}
 
 	// run consumers of restore table schema queue
-	tblRestoreQueue := newJobQueue(ctx, uint16(concurrency))
+	tblRestoreQueue := newJobQueue(ctx, concurrency, concurrency /** length of queue*/)
 	tblRestoreQueue.startConsumers(func(ctx context.Context, job *restoreSchemaJob) error {
 		job.loader.logger.Info("start to create table", zap.String("table file", job.filepath))
 		err := job.loader.restoreTable(ctx, job.session, job.filepath, job.database, job.table)
