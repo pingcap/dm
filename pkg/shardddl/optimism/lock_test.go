@@ -31,6 +31,7 @@ var _ = Suite(&testLock{})
 
 func (t *testLock) SetUpSuite(c *C) {
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)
+	clearTestInfoOperation(c)
 }
 
 func (t *testLock) TestLockTrySyncNormal(c *C) {
@@ -66,7 +67,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 			newTargetTable(task, sources[1], downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			sources[0]: {
@@ -360,7 +361,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 			newTargetTable(task, source, downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -439,7 +440,7 @@ func (t *testLock) TestLockTrySyncNullNotNull(c *C) {
 			newTargetTable(task, source, downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -506,7 +507,7 @@ func (t *testLock) TestLockTrySyncIntBigint(c *C) {
 			newTargetTable(task, source, downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -557,7 +558,7 @@ func (t *testLock) TestLockTrySyncNoDiff(c *C) {
 			newTargetTable(task, source, downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -599,7 +600,7 @@ func (t *testLock) TestLockTrySyncNewTable(c *C) {
 
 		tables = map[string]map[string]struct{}{db1: {tbl1: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source1, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 		vers   = map[string]map[string]map[string]int64{
 			source1: {
 				db1: {tbl1: 0},
@@ -692,7 +693,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -839,7 +840,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -954,7 +955,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -1144,7 +1145,7 @@ func (t *testLock) TestLockTrySyncMultipleChangeDDL(c *C) {
 			newTargetTable(task, sources[1], downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			sources[0]: {
@@ -1282,7 +1283,7 @@ func (t *testLock) TestTryRemoveTable(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbl1: struct{}{}, tbl2: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -1371,7 +1372,7 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -1476,7 +1477,7 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -1516,7 +1517,7 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 	c.Assert(l.versions, DeepEquals, vers)
 
 	// case 2: add a column with a smaller field length
-	l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+	l = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 	// TrySync for the first table, no table has done the DDLs operation.
 	vers[source][db][tbls[0]]--
@@ -1560,11 +1561,23 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(etcdTestCli, ID, task, downSchema, downTable, ti0, tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
 				db: {tbls[0]: 0, tbls[1]: 0},
+			},
+		}
+
+		colm1 = map[string]map[string]interface{}{
+			ID: {
+				"b": struct{}{},
+				"c": struct{}{},
+			},
+		}
+		colm2 = map[string]map[string]interface{}{
+			ID: {
+				"c": struct{}{},
 			},
 		}
 	)
@@ -1596,6 +1609,10 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 	c.Assert(l.versions, DeepEquals, vers)
 	c.Assert(l.IsResolved(), IsFalse)
 
+	colm, _, err := GetAllDroppedColumns(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(colm, DeepEquals, colm1)
+
 	// TrySync for the second table, drop column b, this column should be dropped
 	vers[source][db][tbls[1]]++
 	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, []*model.TableInfo{ti3}, tts, vers[source][db][tbls[1]])
@@ -1604,7 +1621,11 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 	c.Assert(l.versions, DeepEquals, vers)
 	c.Assert(l.IsResolved(), IsFalse)
 	// Simulate watch done operation from dm-worker
-	c.Assert(l.UpdateColumns(DDLs), IsNil)
+	c.Assert(l.DeleteColumnsByDDLs(DDLs), IsNil)
+
+	colm, _, err = GetAllDroppedColumns(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(colm, DeepEquals, colm2)
 
 	// TrySync for the first table, add column b, should succeed, because this column is fully dropped in the downstream
 	vers[source][db][tbls[0]]++
@@ -1628,7 +1649,7 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 	c.Assert(l.versions, DeepEquals, vers)
 	c.Assert(l.IsResolved(), IsFalse)
 	// Simulate watch done operation from dm-worker
-	c.Assert(l.UpdateColumns(DDLs), IsNil)
+	c.Assert(l.DeleteColumnsByDDLs(DDLs), IsNil)
 
 	// TrySync for the first table, add column b, should fail, because this column isn't fully dropped in the downstream
 	vers[source][db][tbls[0]]++

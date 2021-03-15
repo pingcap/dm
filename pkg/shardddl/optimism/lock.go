@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
+	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/master/metrics"
@@ -32,6 +33,8 @@ import (
 // This information does not need to be persistent, and can be re-constructed from the shard DDL info.
 type Lock struct {
 	mu sync.RWMutex
+
+	cli *clientv3.Client
 
 	ID   string // lock's ID
 	Task string // lock's corresponding task name
@@ -64,8 +67,9 @@ type Lock struct {
 
 // NewLock creates a new Lock instance.
 // NOTE: we MUST give the initial table info when creating the lock now.
-func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []TargetTable) *Lock {
+func NewLock(cli *clientv3.Client, ID, task, downSchema, downTable string, ti *model.TableInfo, tts []TargetTable) *Lock {
 	l := &Lock{
+		cli:        cli,
 		ID:         ID,
 		Task:       task,
 		DownSchema: downSchema,
@@ -276,7 +280,10 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 			if col, err := GetColumnName(l.ID, ddls[idx], ast.AlterTableDropColumn); err != nil {
 				return ddls, err
 			} else if len(col) > 0 {
-				l.columns[col] = struct{}{}
+				err = l.AddDroppedColumn(col)
+				if err != nil {
+					log.L().Error("fail to add dropped column info in etcd", zap.Error(err))
+				}
 			}
 			// last shard table won't go here
 			continue
@@ -506,20 +513,42 @@ func (l *Lock) GetVersion(source string, schema string, table string) int64 {
 	return l.versions[source][schema][table]
 }
 
-// GetVersion return version of info in lock.
-func (l *Lock) UpdateColumns(ddls []string) error {
+func (l *Lock) AddDroppedColumn(col string) error {
+	if _, ok := l.columns[col]; ok {
+		return nil
+	}
+
+	_, _, err := PutDroppedColumn(l.cli, l.ID, col)
+	if err != nil {
+		return err
+	}
+	l.columns[col] = struct{}{}
+	return nil
+}
+
+// DeleteColumnsByDDLs deletes the dropped columns by DDLs.
+func (l *Lock) DeleteColumnsByDDLs(ddls []string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	colsToDelete := make([]string, 0, len(ddls))
 	for _, ddl := range ddls {
 		col, err := GetColumnName(l.ID, ddl, ast.AlterTableDropColumn)
 		if err != nil {
 			return err
 		}
 		if len(col) > 0 {
-			delete(l.columns, col)
+			colsToDelete = append(colsToDelete, col)
 		}
 	}
+	_, _, err := DeleteDroppedColumns(l.cli, l.ID, colsToDelete...)
+	if err != nil {
+		return err
+	}
+	for _, col := range colsToDelete {
+		delete(l.columns, col)
+	}
+
 	return nil
 }
 

@@ -17,6 +17,8 @@ import (
 	"sort"
 	"sync"
 
+	"go.etcd.io/etcd/clientv3"
+
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -24,7 +26,8 @@ import (
 // The lock information do not need to be persistent, and can be re-constructed from the shard DDL info.
 type LockKeeper struct {
 	mu    sync.RWMutex
-	locks map[string]*Lock // lockID -> Lock
+	locks map[string]*Lock                  // lockID -> Lock
+	colm  map[string]map[string]interface{} // lockID -> not fully dropped column name -> interface{}
 }
 
 // NewLockKeeper creates a new LockKeeper instance.
@@ -35,7 +38,7 @@ func NewLockKeeper() *LockKeeper {
 }
 
 // TrySync tries to sync the lock.
-func (lk *LockKeeper) TrySync(info Info, tts []TargetTable) (string, []string, error) {
+func (lk *LockKeeper) TrySync(cli *clientv3.Client, info Info, tts []TargetTable) (string, []string, error) {
 	var (
 		lockID = genDDLLockID(info)
 		l      *Lock
@@ -46,8 +49,13 @@ func (lk *LockKeeper) TrySync(info Info, tts []TargetTable) (string, []string, e
 	defer lk.mu.Unlock()
 
 	if l, ok = lk.locks[lockID]; !ok {
-		lk.locks[lockID] = NewLock(lockID, info.Task, info.DownSchema, info.DownTable, info.TableInfoBefore, tts)
+		lk.locks[lockID] = NewLock(cli, lockID, info.Task, info.DownSchema, info.DownTable, info.TableInfoBefore, tts)
 		l = lk.locks[lockID]
+		if lk.colm != nil {
+			if columns, ok := lk.colm[lockID]; ok {
+				l.columns = columns
+			}
+		}
 	}
 
 	newDDLs, err := l.TrySync(info.Source, info.UpSchema, info.UpTable, info.DDLs, info.TableInfosAfter, tts, info.Version)
@@ -101,6 +109,13 @@ func (lk *LockKeeper) Clear() {
 	defer lk.mu.Unlock()
 
 	lk.locks = make(map[string]*Lock)
+}
+
+func (lk *LockKeeper) SetColumnMap(colm map[string]map[string]interface{}) {
+	lk.mu.Lock()
+	defer lk.mu.Unlock()
+
+	lk.colm = colm
 }
 
 // genDDLLockID generates DDL lock ID from its info.

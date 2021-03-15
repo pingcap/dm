@@ -245,27 +245,39 @@ func (o *Optimist) rebuildLocks() (revSource, revInfo, revOperation int64, err e
 	}
 	o.logger.Info("get history shard DDL lock operation", zap.Int64("revision", revOperation))
 
+	colm, _, err := optimism.GetAllDroppedColumns(o.cli)
+	if err != nil {
+		// only log the error, and don't return it to forbid the startup of the DM-master leader.
+		// then these unexpected columns can be handled by the user.
+		o.logger.Error("fail to recover colms", log.ShortError(err))
+	}
+
 	// recover the shard DDL lock based on history shard DDL info & lock operation.
-	err = o.recoverLocks(ifm, opm)
+	err = o.recoverLocks(ifm, opm, colm)
 	if err != nil {
 		// only log the error, and don't return it to forbid the startup of the DM-master leader.
 		// then these unexpected locks can be handled by the user.
 		o.logger.Error("fail to recover locks", log.ShortError(err))
 	}
+
 	return revSource, revInfo, revOperation, nil
 }
 
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.
 func (o *Optimist) recoverLocks(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
-	opm map[string]map[string]map[string]map[string]optimism.Operation) error {
+	opm map[string]map[string]map[string]map[string]optimism.Operation,
+	colm map[string]map[string]interface{}) error {
 	// construct locks based on the shard DDL info.
+	o.lk.SetColumnMap(colm)
+	defer o.lk.SetColumnMap(nil)
+
 	for task, ifTask := range ifm {
 		for _, ifSource := range ifTask {
 			for _, ifSchema := range ifSource {
 				for _, info := range ifSchema {
 					tts := o.tk.FindTables(task, info.DownSchema, info.DownTable)
-					_, _, err := o.lk.TrySync(info, tts)
+					_, _, err := o.lk.TrySync(o.cli, info, tts)
 					if err != nil {
 						return err
 					}
@@ -291,6 +303,11 @@ func (o *Optimist) recoverLocks(
 					}
 					if op.Done {
 						lock.TryMarkDone(op.Source, op.UpSchema, op.UpTable)
+						err := lock.DeleteColumnsByDDLs(op.DDLs)
+						if err != nil {
+							o.logger.Error("fail to update lock columns", zap.Error(err))
+							continue
+						}
 					}
 				}
 			}
@@ -469,7 +486,7 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 				continue
 			}
 
-			err := lock.UpdateColumns(op.DDLs)
+			err := lock.DeleteColumnsByDDLs(op.DDLs)
 			if err != nil {
 				o.logger.Error("fail to update lock columns", zap.Error(err))
 			}
@@ -501,7 +518,7 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 
 // handleLock handles a single shard DDL lock.
 func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, skipDone bool) error {
-	lockID, newDDLs, err := o.lk.TrySync(info, tts)
+	lockID, newDDLs, err := o.lk.TrySync(o.cli, info, tts)
 	var cfStage = optimism.ConflictNone
 	if err != nil {
 		cfStage = optimism.ConflictDetected // we treat any errors returned from `TrySync` as conflict detected now.
