@@ -48,6 +48,7 @@ var (
 	keepaliveTimeout          = 3 * time.Second
 	keepaliveTime             = 3 * time.Second
 	retryGetSourceBoundConfig = 5
+	retryGetRelayConfig       = 5
 	retryConnectSleepTime     = time.Second
 	syncMasterEndpointsTime   = 3 * time.Second
 	getMinLocForSubTaskFunc   = getMinLocForSubTask
@@ -130,6 +131,33 @@ func (s *Server) Start() error {
 
 	s.startKeepAlive()
 
+	relaySource, revRelay, err := ha.GetRelayConfig(s.etcdClient, s.cfg.Name)
+	if err != nil {
+		return err
+	}
+	if relaySource != nil {
+		log.L().Warn("worker has been assigned relay before keepalive", zap.String("relay source", relaySource.SourceID))
+		w, err2 := s.getOrStartWorker(relaySource)
+		s.setSourceStatus(relaySource.SourceID, err2, true)
+		if err2 != nil {
+			// if DM-worker can't handle pre-assigned source before keepalive, it simply exits with the error,
+			// because no re-assigned mechanism exists for keepalived DM-worker yet.
+			return err2
+		}
+		s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
+		if err2 = w.EnableRelay(); err2 != nil {
+			return err2
+		}
+	}
+
+	s.wg.Add(1)
+	go func(ctx context.Context) {
+		defer s.wg.Done()
+		// TODO: handle fatal error from observeSourceBound
+		//nolint:errcheck
+		s.observeRelayConfig(ctx, revRelay)
+	}(s.ctx)
+
 	bound, sourceCfg, revBound, err := ha.GetSourceBoundConfig(s.etcdClient, s.cfg.Name)
 	if err != nil {
 		return err
@@ -143,12 +171,6 @@ func (s *Server) Start() error {
 			// because no re-assigned mechanism exists for keepalived DM-worker yet.
 			return err2
 		}
-		if sourceCfg.EnableRelay {
-			s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
-			if err2 = w.EnableRelay(); err2 != nil {
-				return err2
-			}
-		}
 		if err2 = w.EnableHandleSubtasks(); err2 != nil {
 			return err2
 		}
@@ -159,7 +181,6 @@ func (s *Server) Start() error {
 	go func(ctx context.Context) {
 		defer s.wg.Done()
 		for {
-			// TODO: ObserveRelayConfig?
 			err1 := s.observeSourceBound(ctx, revBound)
 			if err1 == nil {
 				return
@@ -264,6 +285,84 @@ func (s *Server) syncMasterEndpoints(ctx context.Context) {
 	}
 }
 
+func (s *Server) observeRelayConfig(ctx context.Context, rev int64) error {
+	var wg sync.WaitGroup
+	for {
+		relayCh := make(chan ha.RelaySource, 10)
+		relayErrCh := make(chan error, 10)
+		wg.Add(1)
+		// use ctx1, cancel1 to make sure old watcher has been released
+		ctx1, cancel1 := context.WithCancel(ctx)
+		go func() {
+			defer func() {
+				close(relayCh)
+				close(relayErrCh)
+				wg.Done()
+			}()
+			ha.WatchRelayConfig(ctx1, s.etcdClient, s.cfg.Name, rev+1, relayCh, relayErrCh)
+		}()
+		err := s.handleRelayConfig(ctx1, relayCh, relayErrCh)
+		cancel1()
+		wg.Wait()
+
+		if etcdutil.IsRetryableError(err) {
+			rev = 0
+			retryNum := 1
+			for rev == 0 {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(500 * time.Millisecond):
+					relaySource, rev1, err1 := ha.GetRelayConfig(s.etcdClient, s.cfg.Name)
+					if err1 != nil {
+						log.L().Error("get relay config from etcd failed, will retry later", zap.Error(err1), zap.Int("retryNum", retryNum))
+						retryNum++
+						if retryNum > retryGetRelayConfig && etcdutil.IsLimitedRetryableError(err1) {
+							return err1
+						}
+						break
+					}
+					rev = rev1
+					if relaySource == nil {
+						err = s.stopWorker("")
+						if err != nil {
+							log.L().Error("fail to stop worker", zap.Error(err))
+							return err // return if failed to stop the worker.
+						}
+					} else {
+						if w := s.getWorker(true); w != nil && w.cfg.SourceID == relaySource.SourceID {
+							continue
+						}
+						err = s.stopWorker("")
+						if err != nil {
+							log.L().Error("fail to stop worker", zap.Error(err))
+							return err // return if failed to stop the worker.
+						}
+						w, err2 := s.getOrStartWorker(relaySource)
+						s.setSourceStatus(relaySource.SourceID, err2, true)
+						if err2 != nil {
+							w.l.Error("fail to recover observeRelayConfig",
+								zap.String("relay source", relaySource.SourceID),
+								zap.Error(err2))
+						}
+						s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
+						if err2 = w.EnableRelay(); err2 != nil {
+							return err2
+						}
+					}
+				}
+			}
+		} else {
+			if err != nil {
+				log.L().Error("observeRelayConfig is failed and will quit now", zap.Error(err))
+			} else {
+				log.L().Info("observeRelayConfig will quit now")
+			}
+			return err
+		}
+	}
+}
+
 func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 	var wg sync.WaitGroup
 	for {
@@ -319,12 +418,6 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 						}
 						w, err2 := s.getOrStartWorker(&cfg)
 						if err2 == nil {
-							if cfg.EnableRelay {
-								s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
-								if err2 = w.EnableRelay(); err2 != nil {
-									return err2
-								}
-							}
 							err2 = w.EnableHandleSubtasks()
 						}
 						s.setSourceStatus(bound.Source, err2, true)
@@ -436,7 +529,6 @@ func (s *Server) stopWorker(sourceID string) error {
 		s.Unlock()
 		return terror.ErrWorkerSourceNotMatch
 	}
-	// TODO: and when disable relay
 	s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
 	s.setWorker(nil, false)
 	s.setSourceStatus("", nil, false)
@@ -480,9 +572,54 @@ OUTER:
 	return nil
 }
 
+func (s *Server) handleRelayConfig(ctx context.Context, relayCh chan ha.RelaySource, errCh chan error) error {
+OUTER:
+	for {
+		select {
+		case <-ctx.Done():
+			break OUTER
+		case relaySource, ok := <-relayCh:
+			if !ok {
+				break OUTER
+			}
+			log.L().Info("receive relay source", zap.String("relay source", relaySource.Source), zap.Bool("is deleted", relaySource.IsDeleted))
+			err := s.operateRelaySource(relaySource)
+			s.setSourceStatus(relaySource.Source, err, true)
+			if err != nil {
+				opErrCounter.WithLabelValues(s.cfg.Name, opErrTypeRelaySource).Inc()
+				log.L().Error("fail to operate relay source on worker",
+					zap.String("relay source", relaySource.Source),
+					zap.Bool("is deleted", relaySource.IsDeleted),
+					zap.Error(err))
+				if etcdutil.IsRetryableError(err) {
+					return err
+				}
+			}
+		case err, ok := <-errCh:
+			// currently no value is sent to errCh
+			if !ok {
+				break OUTER
+			}
+			// TODO: Deal with err
+			log.L().Error("WatchRelayConfig received an error", zap.Error(err))
+			if etcdutil.IsRetryableError(err) {
+				return err
+			}
+		}
+	}
+	log.L().Info("worker server is closed, handleRelayConfig will quit now")
+	return nil
+}
+
 func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 	if bound.IsDeleted {
-		return s.stopWorker(bound.Source)
+		// TODO: will worker be modified on other goroutine?
+		w := s.getWorker(true)
+		w.DisableHandleSubtasks()
+		if !w.relayEnabled.Get() {
+			return s.stopWorker(bound.Source)
+		}
+		return nil
 	}
 	scm, _, err := ha.GetSourceCfg(s.etcdClient, bound.Source, bound.Revision)
 	if err != nil {
@@ -497,13 +634,34 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 	if err != nil {
 		return err
 	}
-	if sourceCfg.EnableRelay {
-		s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
-		if err = w.EnableRelay(); err != nil {
-			return err
-		}
-	}
 	return w.EnableHandleSubtasks()
+}
+
+func (s *Server) operateRelaySource(relaySource ha.RelaySource) error {
+	if relaySource.IsDeleted {
+		// TODO: will worker be modified on other goroutine?
+		w := s.getWorker(true)
+		s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
+		w.DisableRelay()
+		if !w.subTaskEnabled.Get() {
+			return s.stopWorker(relaySource.Source)
+		}
+		return nil
+	}
+	scm, _, err := ha.GetSourceCfg(s.etcdClient, relaySource.Source, relaySource.Revision)
+	if err != nil {
+		// TODO: need retry
+		return err
+	}
+	sourceCfg, ok := scm[relaySource.Source]
+	if !ok {
+		return terror.ErrWorkerFailToGetSourceConfigFromEtcd.Generate(relaySource.Source)
+	}
+	w, err := s.getOrStartWorker(&sourceCfg)
+	if err != nil {
+		return err
+	}
+	return w.EnableRelay()
 }
 
 // QueryStatus implements WorkerServer.QueryStatus

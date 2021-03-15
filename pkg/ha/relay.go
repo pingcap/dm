@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/common"
@@ -26,6 +27,16 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
+
+// RelaySource represents the bound relationship between the DM-worker instance and its upstream relay source.
+type RelaySource struct {
+	Source string
+	// only used to report to the caller of the watcher, do not marsh it.
+	// if it's true, it means the bound has been deleted in etcd.
+	IsDeleted bool
+	// record the etcd ModRevision of this bound
+	Revision int64
+}
 
 // PutRelayConfig puts the relay config for given workers.
 // k/v: worker-name -> source-id.
@@ -139,4 +150,55 @@ func putRelayConfigOp(worker, source string) clientv3.Op {
 // deleteRelayConfigOp returns a DELETE etcd operation for the relay relationship of the specified DM-worker.
 func deleteRelayConfigOp(worker string) clientv3.Op {
 	return clientv3.OpDelete(common.UpstreamRelayWorkerKeyAdapter.Encode(worker))
+}
+
+// WatchRelayConfig watches PUT & DELETE operations for the relay relationship of the specified DM-worker.
+// For the DELETE operations, it returns an nil source config.
+func WatchRelayConfig(ctx context.Context, cli *clientv3.Client,
+	worker string, revision int64, outCh chan<- RelaySource, errCh chan<- error) {
+	ch := cli.Watch(ctx, common.UpstreamRelayWorkerKeyAdapter.Encode(worker), clientv3.WithRev(revision))
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case resp, ok := <-ch:
+			if !ok {
+				return
+			}
+			if resp.Canceled {
+				// TODO(csuzhangxc): do retry here.
+				if resp.Err() != nil {
+					select {
+					case errCh <- resp.Err():
+					case <-ctx.Done():
+					}
+				}
+				return
+			}
+
+			for _, ev := range resp.Events {
+				var bound RelaySource
+				switch ev.Type {
+				case mvccpb.PUT:
+					bound.Source = string(ev.Kv.Value)
+					bound.IsDeleted = false
+				case mvccpb.DELETE:
+					bound.IsDeleted = true
+				default:
+					// this should not happen.
+					log.L().Error("unsupported etcd event type", zap.Reflect("kv", ev.Kv), zap.Reflect("type", ev.Type))
+					continue
+				}
+				bound.Revision = ev.Kv.ModRevision
+
+				select {
+				case outCh <- bound:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}
+
 }

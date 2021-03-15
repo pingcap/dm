@@ -33,7 +33,7 @@ func PutRelayStageSourceBound(cli *clientv3.Client, stage Stage, bound SourceBou
 	if err != nil {
 		return 0, err
 	}
-	ops := make([]clientv3.Op, 0, 3)
+	ops := make([]clientv3.Op, 0, len(ops1)+len(op2))
 	ops = append(ops, ops1...)
 	ops = append(ops, op2...)
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
@@ -49,7 +49,13 @@ func DeleteSourceCfgRelayStageSourceBound(cli *clientv3.Client, source, worker s
 	relayStageOp := deleteRelayStageOp(source)
 	sourceBoundOp := deleteSourceBoundOp(worker)
 	lastBoundOp := deleteLastSourceBoundOp(worker)
-	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, sourceCfgOp, relayStageOp, sourceBoundOp, lastBoundOp)
+	ops := make([]clientv3.Op, 0, 3+len(sourceBoundOp))
+	ops = append(ops, sourceCfgOp)
+	ops = append(ops, relayStageOp)
+	ops = append(ops, sourceBoundOp...)
+	ops = append(ops, lastBoundOp)
+
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
 }
 
