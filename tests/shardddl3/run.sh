@@ -1106,6 +1106,7 @@ function DM_119_CASE {
     #         "query-status test" \
     #         "because schema conflict detected" 1
     # fi
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10 "fail"
 }
 
 # Add index with the same name but with different fields.
@@ -1183,15 +1184,16 @@ function DM_121_CASE {
     #         "query-status test" \
     #         "because schema conflict detected" 1
     # fi
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10 "fail"
 }
 
 # Add index with the same name but with different fields.
 function DM_121 {
-    # run_case 121 "double-source-pessimistic" \
-    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int);\"" \
-    # "clean_table" "pessimistic"
+    run_case 121 "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int);\"" \
+    "clean_table" "pessimistic"
     run_case 121 "double-source-optimistic" \
     "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
      run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
