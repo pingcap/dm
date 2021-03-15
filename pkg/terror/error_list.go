@@ -551,6 +551,7 @@ const (
 	codeWorkerTLSConfigNotValid
 	codeWorkerFailConnectMaster
 	codeWorkerWaitRelayCatchupGTID
+	codeWorkerRelayConfigChanging
 )
 
 // DM-tracer error code
@@ -603,6 +604,7 @@ const (
 	codeSchedulerSubTaskOpTaskNotExist
 	codeSchedulerSubTaskOpSourceNotExist
 	codeSchedulerTaskNotExist
+	codeSchedulerRequireNotRunning
 )
 
 // dmctl error code
@@ -1138,6 +1140,7 @@ var (
 	ErrWorkerDDLLockOpNotFound              = New(codeWorkerDDLLockOpNotFound, ClassDMWorker, ScopeInternal, LevelHigh, "missing shard DDL lock operation for shard DDL info (%s)", "")
 	ErrWorkerTLSConfigNotValid              = New(codeWorkerTLSConfigNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "TLS config not valid", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in worker configuration file.")
 	ErrWorkerFailConnectMaster              = New(codeWorkerFailConnectMaster, ClassDMWorker, ScopeInternal, LevelHigh, "cannot connect with master endpoints: %v", "Please check network connection of worker")
+	ErrWorkerRelayConfigChanging            = New(codeWorkerRelayConfigChanging, ClassDMWorker, ScopeInternal, LevelLow, "relay config of worker %s is changed too frequently, last relay source %s:, new relay source %s", "Please try again later")
 
 	// DM-tracer error
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set", "")
@@ -1192,6 +1195,7 @@ var (
 	ErrSchedulerSubTaskOpTaskNotExist     = New(codeSchedulerSubTaskOpTaskNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "subtasks with name %s need to be operate not exist", "Please use `query-status` command to see tasks.")
 	ErrSchedulerSubTaskOpSourceNotExist   = New(codeSchedulerSubTaskOpSourceNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v need to be operate not exist", "")
 	ErrSchedulerTaskNotExist              = New(codeSchedulerTaskNotExist, ClassScheduler, ScopeInternal, LevelMedium, "task with name %s not exist", "Please use `query-status` command to see tasks.")
+	ErrSchedulerRequireNotRunning         = New(codeSchedulerRequireNotRunning, ClassScheduler, ScopeInternal, LevelHigh, "tasks %v on source %s should not be running", "Please use `pause-task [-s source ...] task` to pause them first")
 
 	// dmctl
 	ErrCtlGRPCCreateConn = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")
