@@ -1982,6 +1982,26 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleErrorRequest) (*
 	}, nil
 }
 
+// TransferSource implements MasterServer.TransferSource
+func (s *Server) TransferSource(ctx context.Context, req *pb.TransferSourceRequest) (*pb.TransferSourceResponse, error) {
+	var (
+		resp2 = &pb.TransferSourceResponse{}
+		err2  error
+	)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
+	if shouldRet {
+		return resp2, err2
+	}
+
+	err := s.scheduler.TransferSource(req.Source, req.Worker)
+	if err != nil {
+		resp2.Msg = err.Error()
+		return resp2, nil
+	}
+	resp2.Result = true
+	return resp2, nil
+}
+
 // sharedLogic does some shared logic for each RPC implementation
 // arguments with `Pointer` suffix should be pointer to that variable its name indicated
 // return `true` means caller should return with variable that `xxPointer` modified
