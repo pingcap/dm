@@ -171,6 +171,7 @@ func (st *SubTask) Init() error {
 			return terror.Annotatef(err, "fail to get fresh status of subtask %s %s", st.cfg.Name, u.Type())
 		} else if !isFresh {
 			skipIdx = i
+			// TODO: why after print it, nothing continued?
 			st.l.Info("continue unit", zap.Stringer("unit", u.Type()))
 			break
 		}
@@ -215,6 +216,7 @@ func (st *SubTask) run() {
 		st.fail(err)
 		return
 	} else if ctx.Err() != nil {
+		st.l.Error("exit SubTask.run because of", log.ShortError(ctx.Err()))
 		return
 	}
 

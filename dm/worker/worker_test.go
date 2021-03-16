@@ -356,7 +356,7 @@ func (t *testWorkerFunctionalities) testEnableRelay(c *C, w *Worker, etcdCli *cl
 
 	_, err := ha.PutSourceCfg(etcdCli, sourceCfg)
 	c.Assert(err, IsNil)
-	_, err = ha.PutRelayStageSourceBound(etcdCli, ha.NewRelayStage(pb.Stage_Running, sourceCfg.SourceID),
+	_, err = ha.PutRelayStageRelayConfigSourceBound(etcdCli, ha.NewRelayStage(pb.Stage_Running, sourceCfg.SourceID),
 		ha.NewSourceBound(sourceCfg.SourceID, cfg.Name))
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
@@ -576,7 +576,7 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	c.Assert(w.relayHolder, NotNil)
 	_, err = ha.PutSourceCfg(etcdCli, sourceCfg)
 	c.Assert(err, IsNil)
-	rev, err := ha.PutRelayStageSourceBound(etcdCli, ha.NewRelayStage(pb.Stage_Running, sourceCfg.SourceID),
+	rev, err := ha.PutRelayStageRelayConfigSourceBound(etcdCli, ha.NewRelayStage(pb.Stage_Running, sourceCfg.SourceID),
 		ha.NewSourceBound(sourceCfg.SourceID, cfg.Name))
 	c.Assert(err, IsNil)
 	// check relay stage, should be running

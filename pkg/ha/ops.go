@@ -21,10 +21,11 @@ import (
 	"github.com/pingcap/dm/pkg/etcdutil"
 )
 
-// PutRelayStageSourceBound puts the following data in one txn.
+// PutRelayStageRelayConfigSourceBound puts the following data in one txn.
 // - relay stage.
+// - relay config for a worker
 // - source bound relationship.
-func PutRelayStageSourceBound(cli *clientv3.Client, stage Stage, bound SourceBound) (int64, error) {
+func PutRelayStageRelayConfigSourceBound(cli *clientv3.Client, stage Stage, bound SourceBound) (int64, error) {
 	ops1, err := putRelayStageOp(stage)
 	if err != nil {
 		return 0, err
@@ -33,9 +34,11 @@ func PutRelayStageSourceBound(cli *clientv3.Client, stage Stage, bound SourceBou
 	if err != nil {
 		return 0, err
 	}
-	ops := make([]clientv3.Op, 0, len(ops1)+len(op2))
+	op3 := putRelayConfigOp(bound.Worker, bound.Source)
+	ops := make([]clientv3.Op, 0, len(ops1)+len(op2)+1)
 	ops = append(ops, ops1...)
 	ops = append(ops, op2...)
+	ops = append(ops, op3)
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
 }

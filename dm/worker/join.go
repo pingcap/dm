@@ -16,7 +16,6 @@ package worker
 import (
 	"context"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pingcap/failpoint"
@@ -120,18 +119,8 @@ func (s *Server) KeepAlive() {
 	}
 }
 
-// TODO: a channel is enough to avoid data race, check TTL not changed at receiving end of channel
-var keepAliveLock sync.Mutex
-
 // UpdateKeepAliveTTL updates keepalive key with new lease TTL in place, to avoid watcher observe a DELETE event
 func (s *Server) UpdateKeepAliveTTL(newTTL int64) {
-	keepAliveLock.Lock()
-	defer keepAliveLock.Unlock()
-	if ha.CurrentKeepAliveTTL == newTTL {
-		log.L().Info("not changing keepalive TTL, skip", zap.Int64("ttl", newTTL))
-		return
-	}
-	ha.CurrentKeepAliveTTL = newTTL
 	ha.KeepAliveUpdateCh <- newTTL
 	log.L().Debug("received update keepalive TTL request, should be updated soon", zap.Int64("new ttl", newTTL))
 }

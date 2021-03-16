@@ -14,7 +14,12 @@
 package worker
 
 import (
+	"context"
 	"sync"
+
+	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // subTaskHolder holds subtask instances.
@@ -53,7 +58,10 @@ func (h *subTaskHolder) resetAllSubTasks(useRelay bool) {
 	for _, st := range h.subTasks {
 		stage := st.Stage()
 		st.Close()
+		// TODO: make a st.reset
+		st.ctx, st.cancel = context.WithCancel(context.Background())
 		st.cfg.UseRelay = useRelay
+		log.L().Warn("lance test", zap.Any("stage", stage))
 		st.Run(stage)
 	}
 }

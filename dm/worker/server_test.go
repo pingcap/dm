@@ -472,7 +472,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		// put mysql config into relative etcd key adapter to trigger operation event
 		_, err := ha.PutSourceCfg(s.etcdClient, sourceCfg)
 		c.Assert(err, IsNil)
-		_, err = ha.PutRelayStageSourceBound(s.etcdClient, ha.NewRelayStage(pb.Stage_Running, sourceCfg.SourceID),
+		_, err = ha.PutRelayStageRelayConfigSourceBound(s.etcdClient, ha.NewRelayStage(pb.Stage_Running, sourceCfg.SourceID),
 			ha.NewSourceBound(sourceCfg.SourceID, s.cfg.Name))
 		c.Assert(err, IsNil)
 		// worker should be started and without error

@@ -153,7 +153,7 @@ func (s *Server) Start() error {
 	s.wg.Add(1)
 	go func(ctx context.Context) {
 		defer s.wg.Done()
-		// TODO: handle fatal error from observeSourceBound
+		// TODO: handle fatal error from observeRelayConfig
 		//nolint:errcheck
 		s.observeRelayConfig(ctx, revRelay)
 	}(s.ctx)
@@ -661,6 +661,7 @@ func (s *Server) operateRelaySource(relaySource ha.RelaySource) error {
 	if err != nil {
 		return err
 	}
+	s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
 	return w.EnableRelay()
 }
 
