@@ -464,6 +464,25 @@ function DM_035() {
     run_case 035 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
+function DM_RENAME_TABLE_CASE() {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(1);"
+
+    run_sql_source1 "rename table ${shardddl1}.${tb1} to ${shardddl1}.${tb3};"
+    run_sql_source2 "rename table ${shardddl1}.${tb1} to ${shardddl1}.${tb3};"
+    run_sql_source2 "rename table ${shardddl1}.${tb2} to ${shardddl1}.${tb4};"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\`RENAME TABLE\` statement not supported in $1 mode" 2
+}
+
+function DM_RENAME_TABLE() {
+    run_case RENAME_TABLE "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case RENAME_TABLE "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
 function run() {
     init_cluster
     init_database
@@ -477,6 +496,7 @@ function run() {
         DM_${i}
         sleep 1
     done
+    DM_RENAME_TABLE
 }
 
 cleanup_data $shardddl

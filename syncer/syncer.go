@@ -1837,6 +1837,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			case *ast.TruncateTableStmt:
 				ec.tctx.L().Info("ignore truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
 				continue
+			// TODO: Support rename a table to the same shard group
+			// e.g. upstream: tb* -> downstream: tb, rename tb1 to tb2
+			case *ast.RenameTableStmt:
+				return terror.ErrSyncerUnsupportedStmt.Generate("RENAME TABLE", config.ShardPessimistic)
 			}
 
 			// in sharding mode, we only support to do one ddl in one event
@@ -1856,6 +1860,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			case *ast.TruncateTableStmt:
 				ec.tctx.L().Info("ignore truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
 				continue
+			case *ast.RenameTableStmt:
+				return terror.ErrSyncerUnsupportedStmt.Generate("RENAME TABLE", config.ShardOptimistic)
 			}
 		}
 
