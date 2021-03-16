@@ -641,7 +641,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	c.Assert(err, check.IsNil)
 	_, err = optimism.PutInfo(etcdTestCli, info1)
 	c.Assert(err, check.IsNil)
-	_, succ, err = optimism.PutOperation(etcdTestCli, false, op1)
+	_, succ, err = optimism.PutOperation(etcdTestCli, false, op1, 0)
 	c.Assert(succ, check.IsTrue)
 	c.Assert(err, check.IsNil)
 

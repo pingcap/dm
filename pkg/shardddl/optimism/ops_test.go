@@ -34,17 +34,18 @@ func (t *testForEtcd) TestDeleteInfosOperationsSchema(c *C) {
 	)
 
 	// put info.
-	_, err := PutInfo(etcdTestCli, info)
+	rev, err := PutInfo(etcdTestCli, info)
 	c.Assert(err, IsNil)
 	ifm, _, err := GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(ifm, HasLen, 1)
 	infoWithVer := info
 	infoWithVer.Version = 1
+	infoWithVer.ModRevision = rev
 	c.Assert(ifm[task][source][upSchema][upTable], DeepEquals, infoWithVer)
 
 	// put operation.
-	_, _, err = PutOperation(etcdTestCli, false, op)
+	_, _, err = PutOperation(etcdTestCli, false, op, 0)
 	c.Assert(err, IsNil)
 	opm, _, err := GetAllOperations(etcdTestCli)
 	c.Assert(err, IsNil)
@@ -59,7 +60,7 @@ func (t *testForEtcd) TestDeleteInfosOperationsSchema(c *C) {
 	c.Assert(isc, DeepEquals, is)
 
 	// DELETE info and operation with version 0
-	_, deleted, err := DeleteInfosOperationsSchema(etcdTestCli, []Info{info}, []Operation{op}, is)
+	_, deleted, err := DeleteInfosOperationsSchemaColumn(etcdTestCli, []Info{info}, []Operation{op}, is)
 	c.Assert(err, IsNil)
 	c.Assert(deleted, IsFalse)
 
@@ -75,7 +76,7 @@ func (t *testForEtcd) TestDeleteInfosOperationsSchema(c *C) {
 	c.Assert(isc.IsEmpty(), IsFalse)
 
 	// DELETE info and operation with version 1
-	_, deleted, err = DeleteInfosOperationsSchema(etcdTestCli, []Info{infoWithVer}, []Operation{op}, is)
+	_, deleted, err = DeleteInfosOperationsSchemaColumn(etcdTestCli, []Info{infoWithVer}, []Operation{op}, is)
 	c.Assert(err, IsNil)
 	c.Assert(deleted, IsTrue)
 
@@ -133,6 +134,7 @@ func (t *testForEtcd) TestSourceTablesInfo(c *C) {
 	c.Assert(ifm[task][source][upSchema], HasLen, 1)
 	i11WithVer := i11
 	i11WithVer.Version = 1
+	i11WithVer.ModRevision = rev3
 	c.Assert(ifm[task][source][upSchema][upTable], DeepEquals, i11WithVer)
 
 	// put/update source tables and delete info.

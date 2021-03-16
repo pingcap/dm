@@ -96,7 +96,7 @@ func operationFromJSON(s string) (o Operation, err error) {
 }
 
 // PutOperation puts the shard DDL operation into etcd.
-func PutOperation(cli *clientv3.Client, skipDone bool, op Operation) (rev int64, putted bool, err error) {
+func PutOperation(cli *clientv3.Client, skipDone bool, op Operation, infoModRev int64) (rev int64, putted bool, err error) {
 	value, err := op.toJSON()
 	if err != nil {
 		return 0, false, err
@@ -106,6 +106,7 @@ func PutOperation(cli *clientv3.Client, skipDone bool, op Operation) (rev int64,
 
 	cmpsNotExist := make([]clientv3.Cmp, 0, 1)
 	cmpsNotDone := make([]clientv3.Cmp, 0, 1)
+	cmpsLessRev := make([]clientv3.Cmp, 0, 1)
 	if skipDone {
 		opDone := op
 		opDone.Done = true // set `done` to `true`.
@@ -115,6 +116,7 @@ func PutOperation(cli *clientv3.Client, skipDone bool, op Operation) (rev int64,
 		}
 		cmpsNotExist = append(cmpsNotExist, clientv3util.KeyMissing(key))
 		cmpsNotDone = append(cmpsNotDone, clientv3.Compare(clientv3.Value(key), "!=", valueDone))
+		cmpsLessRev = append(cmpsLessRev, clientv3.Compare(clientv3.ModRevision(key), "<", infoModRev))
 	}
 
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
@@ -130,6 +132,20 @@ func PutOperation(cli *clientv3.Client, skipDone bool, op Operation) (rev int64,
 
 	// txn 2: try to PUT if the key "the `done`" field is not `true`.
 	resp, err = cli.Txn(ctx).If(cmpsNotDone...).Then(opPut).Commit()
+	if err != nil {
+		return 0, false, err
+	} else if resp.Succeeded {
+		return resp.Header.Revision, resp.Succeeded, nil
+	}
+
+	// txn 3: try to PUT if the key has less mod revision than info's mod revision, which means this operation is an old one
+	// without this, failed case time series:
+	// 1. dm-master received an old done DDL operation from dm-worker
+	// 2. dm-worker putted a new DDL info into dm-master
+	// 3. dm-master quited before dm-master putted the DDL operation to dm-worker
+	// 4. dm-master restarted and tried to put DDL operation, but found a done one and failed to put
+	// 5. dm-worker didn't receive a DDL operation, will get blocked forever
+	resp, err = cli.Txn(ctx).If(cmpsLessRev...).Then(opPut).Commit()
 	if err != nil {
 		return 0, false, err
 	}

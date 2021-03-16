@@ -518,8 +518,9 @@ func (l *Lock) AddDroppedColumn(col string) error {
 	if _, ok := l.columns[col]; ok {
 		return nil
 	}
+	log.L().Debug("add not fully dropped columns", zap.String("lockID", l.ID), zap.String("column", col))
 
-	_, _, err := PutDroppedColumn(l.cli, l.ID, col)
+	_, _, err := PutDroppedColumn(l.cli, l.Task, l.DownSchema, l.DownTable, col)
 	if err != nil {
 		return err
 	}
@@ -542,12 +543,17 @@ func (l *Lock) DeleteColumnsByDDLs(ddls []string) error {
 			colsToDelete = append(colsToDelete, col)
 		}
 	}
-	_, _, err := DeleteDroppedColumns(l.cli, l.ID, colsToDelete...)
-	if err != nil {
-		return err
-	}
-	for _, col := range colsToDelete {
-		delete(l.columns, col)
+	if len(colsToDelete) > 0 {
+		log.L().Debug("delete not fully dropped columns",
+			zap.String("lockID", l.ID), zap.Strings("columns", colsToDelete))
+
+		_, _, err := DeleteDroppedColumns(l.cli, l.Task, l.DownSchema, l.DownTable, colsToDelete...)
+		if err != nil {
+			return err
+		}
+		for _, col := range colsToDelete {
+			delete(l.columns, col)
+		}
 	}
 
 	return nil

@@ -272,7 +272,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// mark op11 as done.
 	op11c := op11
 	op11c.Done = true
-	_, putted, err := optimism.PutOperation(etcdTestCli, false, op11c)
+	_, putted, err := optimism.PutOperation(etcdTestCli, false, op11c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
@@ -330,7 +330,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// mark op12 as done, the lock should be resolved.
 	op12c := op12
 	op12c.Done = true
-	_, putted, err = optimism.PutOperation(etcdTestCli, false, op12c)
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op12c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
@@ -491,7 +491,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// mark op21 as done.
 	op21c := op21
 	op21c.Done = true
-	_, putted, err = optimism.PutOperation(etcdTestCli, false, op21c)
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op21c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
@@ -511,7 +511,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// mark op23 as done.
 	op23c := op23
 	op23c.Done = true
-	_, putted, err = optimism.PutOperation(etcdTestCli, false, op23c)
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op23c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
@@ -570,7 +570,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// mark op31 as done.
 	op31c := op31
 	op31c.Done = true
-	_, putted, err = optimism.PutOperation(etcdTestCli, false, op31c)
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op31c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
@@ -623,7 +623,7 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 	// mark op33 as done, the lock should be resolved.
 	op33c := op33
 	op33c.Done = true
-	_, putted, err = optimism.PutOperation(etcdTestCli, false, op33c)
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op33c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
@@ -866,12 +866,12 @@ func (t *testOptimist) TestOptimistLockMultipleTarget(c *C) {
 	op11c := op12
 	op11c.Done = true
 	op11c.UpTable = i11.UpTable // overwrite `UpTable`.
-	_, putted, err := optimism.PutOperation(etcdTestCli, false, op11c)
+	_, putted, err := optimism.PutOperation(etcdTestCli, false, op11c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	op12c := op12
 	op12c.Done = true
-	_, putted, err = optimism.PutOperation(etcdTestCli, false, op12c)
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op12c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
@@ -900,12 +900,12 @@ func (t *testOptimist) TestOptimistLockMultipleTarget(c *C) {
 	op21c := op22
 	op21c.Done = true
 	op21c.UpTable = i21.UpTable // overwrite `UpTable`.
-	_, putted, err = optimism.PutOperation(etcdTestCli, false, op21c)
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op21c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	op22c := op22
 	op22c.Done = true
-	_, putted, err = optimism.PutOperation(etcdTestCli, false, op22c)
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op22c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {
@@ -999,12 +999,12 @@ func (t *testOptimist) TestOptimistInitSchema(c *C) {
 	op11c := op12
 	op11c.Done = true
 	op11c.UpTable = i11.UpTable // overwrite `UpTable`.
-	_, putted, err := optimism.PutOperation(etcdTestCli, false, op11c)
+	_, putted, err := optimism.PutOperation(etcdTestCli, false, op11c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	op12c := op12
 	op12c.Done = true
-	_, putted, err = optimism.PutOperation(etcdTestCli, false, op12c)
+	_, putted, err = optimism.PutOperation(etcdTestCli, false, op12c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(utils.WaitSomething(backOff, waitTime, func() bool {

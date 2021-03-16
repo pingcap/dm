@@ -53,10 +53,10 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	)
 
 	// put the same keys twice.
-	rev1, succ, err := PutOperation(etcdTestCli, false, op11)
+	rev1, succ, err := PutOperation(etcdTestCli, false, op11, 0)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsTrue)
-	rev2, succ, err := PutOperation(etcdTestCli, false, op11)
+	rev2, succ, err := PutOperation(etcdTestCli, false, op11, 0)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsTrue)
 	c.Assert(rev2, Greater, rev1)
@@ -76,7 +76,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	c.Assert(<-wch, DeepEquals, op11)
 
 	// put for another task.
-	rev3, succ, err := PutOperation(etcdTestCli, false, op21)
+	rev3, succ, err := PutOperation(etcdTestCli, false, op21, 0)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsTrue)
 
@@ -109,7 +109,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 
 	// put for `skipDone` with `done` in etcd, the operations should not be skipped.
 	// case: kv's "the `done` field is not `true`".
-	rev5, succ, err := PutOperation(etcdTestCli, true, op11)
+	rev5, succ, err := PutOperation(etcdTestCli, true, op11, 0)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsTrue)
 	c.Assert(rev5, Greater, rev4)
@@ -126,7 +126,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 
 	// put for `skipDone` with `done` in etcd, the operations should not be skipped.
 	// case: kv "not exist".
-	rev6, succ, err := PutOperation(etcdTestCli, true, op11)
+	rev6, succ, err := PutOperation(etcdTestCli, true, op11, 0)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsTrue)
 
@@ -139,15 +139,22 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	// update op11 to `done`.
 	op11c := op11
 	op11c.Done = true
-	rev7, succ, err := PutOperation(etcdTestCli, true, op11c)
+	rev7, succ, err := PutOperation(etcdTestCli, true, op11c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsTrue)
 	c.Assert(rev7, Greater, rev6)
 
+	// put for `skipDone` with `done` in etcd, the operations should not be skipped.
+	// case: operation modRevision < info's modRevision
+	rev8, succ, err := PutOperation(etcdTestCli, true, op11c, rev7+10)
+	c.Assert(err, IsNil)
+	c.Assert(succ, IsTrue)
+	c.Assert(rev8, Greater, rev7)
+
 	// put for `skipDone` with `done` in etcd, the operations should be skipped.
 	// case: kv's ("exist" and "the `done` field is `true`").
-	rev8, succ, err := PutOperation(etcdTestCli, true, op11)
+	rev9, succ, err := PutOperation(etcdTestCli, true, op11, rev6)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsFalse)
-	c.Assert(rev8, Equals, rev7)
+	c.Assert(rev9, Equals, rev8)
 }

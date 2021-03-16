@@ -1074,6 +1074,7 @@ function DM_DropAddColumn_CASE() {
 function DM_DropAddColumn() {
     for i in `seq 0 5`
     do
+    echo "run DM_DropAddColumn case #${i}"
     run_case DropAddColumn "double-source-optimistic" \
     "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
      run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"" \

@@ -53,6 +53,9 @@ type Info struct {
 
 	// only set it when get/watch from etcd
 	Version int64 `json:"-"`
+
+	// only set it when get/watch from etcd
+	ModRevision int64 `json:"-"`
 }
 
 // NewInfo creates a new Info instance.
@@ -129,6 +132,7 @@ func GetAllInfo(cli *clientv3.Client) (map[string]map[string]map[string]map[stri
 			return nil, 0, err2
 		}
 		info.Version = kv.Version
+		info.ModRevision = kv.ModRevision
 
 		if _, ok := ifm[info.Task]; !ok {
 			ifm[info.Task] = make(map[string]map[string]map[string]Info)
@@ -179,6 +183,7 @@ func WatchInfo(ctx context.Context, cli *clientv3.Client, revision int64,
 				case mvccpb.PUT:
 					info, err = infoFromJSON(string(ev.Kv.Value))
 					info.Version = ev.Kv.Version
+					info.ModRevision = ev.Kv.ModRevision
 				case mvccpb.DELETE:
 					info, err = infoFromJSON(string(ev.PrevKv.Value))
 					info.IsDeleted = true

@@ -22,11 +22,16 @@ var _ = Suite(&testColumn{})
 func (t *testColumn) TestColumnETCD(c *C) {
 	defer clearTestInfoOperation(c)
 
-	lockID := "test-`shardddl`.`tb`"
-	rev1, putted, err := PutDroppedColumn(etcdTestCli, lockID, "a")
+	var (
+		task       = "test"
+		downSchema = "shardddl"
+		downTable  = "tb"
+		lockID     = "test-`shardddl`.`tb`"
+	)
+	rev1, putted, err := PutDroppedColumn(etcdTestCli, task, downSchema, downTable, "a")
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
-	rev2, putted, err := PutDroppedColumn(etcdTestCli, lockID, "b")
+	rev2, putted, err := PutDroppedColumn(etcdTestCli, task, downSchema, downTable, "b")
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(rev2, Greater, rev1)
@@ -41,7 +46,7 @@ func (t *testColumn) TestColumnETCD(c *C) {
 	c.Assert(colm, DeepEquals, expectedColm)
 	c.Assert(rev3, Equals, rev2)
 
-	rev4, deleted, err := DeleteDroppedColumns(etcdTestCli, lockID, "b")
+	rev4, deleted, err := DeleteDroppedColumns(etcdTestCli, task, downSchema, downTable, "b")
 	c.Assert(err, IsNil)
 	c.Assert(deleted, IsTrue)
 	c.Assert(rev4, Greater, rev3)
