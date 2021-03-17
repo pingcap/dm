@@ -190,12 +190,8 @@ func (w *Worker) EnableRelay() (err error) {
 
 	// 1. adjust relay starting position, to the earliest of subtasks
 	var subTaskCfgs map[string]config.SubTaskConfig
-	_, subTaskCfgs, _, err = ha.GetSubTaskStageConfig(w.etcdClient, w.cfg.SourceID)
+	_, subTaskCfgs, _, err = w.fetchSubTasksAndAdjust()
 	if err != nil {
-		return err
-	}
-	// we just use subTaskCfgs to adjust relay's binlog location, so set `enableRelay` arbitrary
-	if err = copyConfigFromSourceForEach(subTaskCfgs, w.cfg, true); err != nil {
 		return err
 	}
 
@@ -307,13 +303,8 @@ func (w *Worker) EnableHandleSubtasks() error {
 
 	// we get the newest subtask stages directly which will omit the subtask stage PUT/DELETE event
 	// because triggering these events is useless now
-	subTaskStages, subTaskCfgM, revSubTask, err := ha.GetSubTaskStageConfig(w.etcdClient, w.cfg.SourceID)
+	subTaskStages, subTaskCfgM, revSubTask, err := w.fetchSubTasksAndAdjust()
 	if err != nil {
-		return err
-	}
-
-	// TODO: make sure relayEnabled is not changing
-	if err = copyConfigFromSourceForEach(subTaskCfgM, w.cfg, w.relayEnabled.Get()); err != nil {
 		return err
 	}
 
@@ -361,6 +352,23 @@ func (w *Worker) DisableHandleSubtasks() {
 
 	// close all sub tasks
 	w.subTaskHolder.closeAllSubTasks()
+}
+
+// fetchSubTasksAndAdjust gets source's subtask stages and configs, adjust some values by worker's config and status
+// source **must not be empty**
+// return map{task name -> subtask stage}, map{task name -> subtask config}, revision, error.
+func (w *Worker) fetchSubTasksAndAdjust() (map[string]ha.Stage, map[string]config.SubTaskConfig, int64, error) {
+	// we get the newest subtask stages directly which will omit the subtask stage PUT/DELETE event
+	// because triggering these events is useless now
+	subTaskStages, subTaskCfgM, revSubTask, err := ha.GetSubTaskStageConfig(w.etcdClient, w.cfg.SourceID)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+
+	if err = copyConfigFromSourceForEach(subTaskCfgM, w.cfg, w.relayEnabled.Get()); err != nil {
+		return nil, nil, 0, err
+	}
+	return subTaskStages, subTaskCfgM, revSubTask, nil
 }
 
 // StartSubTask creates a sub task an run it
@@ -482,8 +490,8 @@ func (w *Worker) QueryStatus(ctx context.Context, name string) ([]*pb.SubTaskSta
 	return subtaskStatus, relayStatus
 }
 
-func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {
-	subTaskStages, subTaskCfgm, revSubTask, err := ha.GetSubTaskStageConfig(etcdCli, w.cfg.SourceID)
+func (w *Worker) resetSubtaskStage() (int64, error) {
+	subTaskStages, subTaskCfgm, revSubTask, err := w.fetchSubTasksAndAdjust()
 	if err != nil {
 		return 0, err
 	}
@@ -545,7 +553,7 @@ func (w *Worker) observeSubtaskStage(ctx context.Context, etcdCli *clientv3.Clie
 				case <-ctx.Done():
 					return nil
 				case <-time.After(500 * time.Millisecond):
-					rev, err = w.resetSubtaskStage(etcdCli)
+					rev, err = w.resetSubtaskStage()
 					if err != nil {
 						log.L().Error("resetSubtaskStage is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
 					}
