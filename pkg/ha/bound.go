@@ -357,10 +357,8 @@ func sourceBoundFromResp(worker string, resp *clientv3.GetResponse) (map[string]
 
 // deleteSourceBoundOp returns a DELETE etcd operation for the bound relationship of the specified DM-worker.
 func deleteSourceBoundOp(worker string) []clientv3.Op {
-	// TODO: move this to stop-relay, and wait until worker has disabled relay
 	return []clientv3.Op{
 		clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(worker)),
-		clientv3.OpDelete(common.UpstreamRelayWorkerKeyAdapter.Encode(worker)),
 	}
 }
 

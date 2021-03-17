@@ -123,7 +123,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 		taskName = "sub-task-name"
 		port     = 8263
 	)
-	hostName := "127.0.0.1:8261"
+	hostName := "127.0.0.1:18261"
 	etcdDir := c.MkDir()
 	ETCD, err := createMockETCD(etcdDir, "http://"+hostName)
 	c.Assert(err, IsNil)
@@ -131,6 +131,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.Join = hostName
 	sourceConfig := loadSourceConfigWithoutPassword(c)
 	sourceConfig.Checker.CheckEnable = true
 	sourceConfig.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}

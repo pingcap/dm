@@ -1102,7 +1102,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 
 		for _, sid := range toRemove {
 			boundM[sid] = s.scheduler.GetWorkerBySource(sid)
-			err := s.scheduler.RemoveSourceCfg(sid)
+			err3 := s.scheduler.RemoveSourceCfg(sid)
 			// TODO(lance6716):
 			// user could not copy-paste same command if encounter error halfway:
 			// `operate-source stop  correct-id-1     wrong-id-2`
@@ -1111,8 +1111,8 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 			//                       not exist, error
 			// find a way to distinguish this scenario and wrong source id
 			// or give a command to show existing source id
-			if err != nil {
-				resp.Msg = err.Error()
+			if err3 != nil {
+				resp.Msg = err3.Error()
 				return resp, nil
 			}
 		}
@@ -1126,6 +1126,13 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 	}
 
 	resp.Result = true
+	// tell user he should use `start-relay` to manually specify relay workers
+	for _, cfg := range cfgs {
+		if cfg.EnableRelay {
+			resp.Msg = "Please use `start-relay` to specify which workers should pull relay log of relay-enabled sources."
+		}
+	}
+
 	var noWorkerMsg string
 	switch req.Op {
 	case pb.SourceOp_StartSource, pb.SourceOp_ShowSource:
@@ -1996,6 +2003,34 @@ func (s *Server) TransferSource(ctx context.Context, req *pb.TransferSourceReque
 	}
 
 	err := s.scheduler.TransferSource(req.Source, req.Worker)
+	if err != nil {
+		resp2.Msg = err.Error()
+		return resp2, nil
+	}
+	resp2.Result = true
+	return resp2, nil
+}
+
+// OperateRelay implements MasterServer.OperateRelay
+func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) (*pb.OperateRelayResponse, error) {
+	var (
+		resp2 = &pb.OperateRelayResponse{}
+		err   error
+	)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err)
+	if shouldRet {
+		return resp2, err
+	}
+
+	switch req.Op {
+	case pb.RelayOpV2_StartRelayV2:
+		err = s.scheduler.StartRelay(req.Source, req.Worker)
+	case pb.RelayOpV2_StopRelayV2:
+		err = s.scheduler.StopRelay(req.Source, req.Worker)
+	default:
+		// should not happen
+		return resp2, fmt.Errorf("only support start-relay or stop-relay, op: %s", req.Op.String())
+	}
 	if err != nil {
 		resp2.Msg = err.Error()
 		return resp2, nil

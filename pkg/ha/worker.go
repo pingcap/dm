@@ -94,8 +94,12 @@ func GetAllWorkerInfo(cli *clientv3.Client) (map[string]WorkerInfo, int64, error
 	return ifm, resp.Header.Revision, nil
 }
 
-// DeleteWorkerInfo deletes the specified DM-worker information.
-func DeleteWorkerInfo(cli *clientv3.Client, worker string) (int64, error) {
-	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clientv3.OpDelete(common.WorkerRegisterKeyAdapter.Encode(worker)))
+// DeleteWorkerInfoRelayConfig deletes the specified DM-worker information and its relay config.
+func DeleteWorkerInfoRelayConfig(cli *clientv3.Client, worker string) (int64, error) {
+	ops := []clientv3.Op{
+		clientv3.OpDelete(common.WorkerRegisterKeyAdapter.Encode(worker)),
+		clientv3.OpDelete(common.UpstreamRelayWorkerKeyAdapter.Encode(worker)),
+	}
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
 }

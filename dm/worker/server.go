@@ -473,6 +473,7 @@ func (s *Server) Close() {
 	s.wg.Wait()
 }
 
+// is needLock is false, we should make sure Server has been locked in caller
 func (s *Server) getWorker(needLock bool) *Worker {
 	if needLock {
 		s.Lock()
@@ -481,6 +482,7 @@ func (s *Server) getWorker(needLock bool) *Worker {
 	return s.worker
 }
 
+// is needLock is false, we should make sure Server has been locked in caller
 func (s *Server) setWorker(worker *Worker, needLock bool) {
 	if needLock {
 		s.Lock()
@@ -532,8 +534,8 @@ func (s *Server) stopWorker(sourceID string) error {
 	s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
 	s.setWorker(nil, false)
 	s.setSourceStatus("", nil, false)
-	s.Unlock()
 	w.Close()
+	s.Unlock()
 	return nil
 }
 
@@ -639,7 +641,6 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 
 func (s *Server) operateRelaySource(relaySource ha.RelaySource) error {
 	if relaySource.IsDeleted {
-		// TODO: will worker be modified on other goroutine?
 		w := s.getWorker(true)
 		s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
 		w.DisableRelay()

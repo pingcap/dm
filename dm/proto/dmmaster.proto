@@ -106,6 +106,8 @@ service Master {
     rpc GetMasterCfg(GetMasterCfgRequest) returns(GetMasterCfgResponse) {}
 
     rpc TransferSource(TransferSourceRequest) returns(TransferSourceResponse) {}
+
+    rpc OperateRelay(OperateRelayRequest) returns(OperateRelayResponse) {}
 }
 
 message StartTaskRequest {
@@ -437,4 +439,21 @@ message TransferSourceRequest {
 message TransferSourceResponse {
     bool result = 1;
     string msg = 2;
+}
+
+message OperateRelayRequest {
+    RelayOpV2 op = 1;
+    string source = 2;
+    repeated string worker = 3;
+}
+
+message OperateRelayResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+enum RelayOpV2 {
+    InvalidRelayOpV2 = 0;
+    StartRelayV2 = 1;
+    StopRelayV2 = 2;
 }

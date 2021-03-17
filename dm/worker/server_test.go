@@ -489,7 +489,9 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		w := s.getWorker(true)
 		c.Assert(w, NotNil)
 		c.Assert(w.closed.Get(), IsFalse)
-		_, err := ha.DeleteSourceCfgRelayStageSourceBound(s.etcdClient, sourceCfg.SourceID, s.cfg.Name)
+		_, err := ha.DeleteRelayConfig(s.etcdClient, w.name)
+		c.Assert(err, IsNil)
+		_, err = ha.DeleteSourceCfgRelayStageSourceBound(s.etcdClient, sourceCfg.SourceID, s.cfg.Name)
 		c.Assert(err, IsNil)
 		// worker should be closed and without error
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
