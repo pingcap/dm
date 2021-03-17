@@ -562,7 +562,7 @@ func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, sche
 	cp.Lock()
 	defer cp.Unlock()
 
-	sqls := make([]string, 0, 10)
+	sqls := make([]string, 0, 1)
 	args := make([][]interface{}, 0, 10)
 
 	point := cp.points[schema][table]
