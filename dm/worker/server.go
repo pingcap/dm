@@ -557,73 +557,19 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		return terror.ErrWorkerAlreadyStart.Generate()
 	}
 
-	// we get the newest subtask stages directly which will omit the subtask stage PUT/DELETE event
-	// because triggering these events is useless now
-	subTaskStages, subTaskCfgm, revSubTask, err := ha.GetSubTaskStageConfig(s.etcdClient, cfg.SourceID)
-	if err != nil {
-		return err
-	}
-
-	subTaskCfgs := make([]*config.SubTaskConfig, 0, len(subTaskCfgm))
-	for _, subTaskCfg := range subTaskCfgm {
-		subTaskCfg.LogLevel = s.cfg.LogLevel
-		subTaskCfg.LogFile = s.cfg.LogFile
-		subTaskCfg.LogFormat = s.cfg.LogFormat
-		subTaskCfgClone := subTaskCfg
-		if err = copyConfigFromSource(&subTaskCfgClone, cfg); err != nil {
-			return err
-		}
-		subTaskCfgs = append(subTaskCfgs, &subTaskCfgClone)
-	}
-
-	if cfg.EnableRelay {
-		dctx, dcancel := context.WithTimeout(s.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
-		defer dcancel()
-		minLoc, err1 := getMinLocInAllSubTasks(dctx, subTaskCfgs)
-		if err1 != nil {
-			return err1
-		}
-
-		if minLoc != nil {
-			log.L().Info("get min location in all subtasks", zap.Stringer("location", *minLoc))
-			cfg.RelayBinLogName = binlog.AdjustPosition(minLoc.Position).Name
-			cfg.RelayBinlogGTID = minLoc.GTIDSetStr()
-			// set UUIDSuffix when bound to a source
-			cfg.UUIDSuffix, err = binlog.ExtractSuffix(minLoc.Position.Name)
-			if err != nil {
-				return err
-			}
-		} else {
-			// set UUIDSuffix even not checkpoint exist
-			// so we will still remove relay dir
-			cfg.UUIDSuffix = binlog.MinUUIDSuffix
-		}
-	}
-
-	log.L().Info("starting to handle mysql source", zap.String("sourceCfg", cfg.String()), zap.Reflect("subTasks", subTaskCfgs))
 	w, err := NewWorker(cfg, s.etcdClient, s.cfg.Name)
 	if err != nil {
 		return err
 	}
 	s.setWorker(w, false)
 
-	startRelay := false
-	var revRelay int64
 	if cfg.EnableRelay {
-		var relayStage ha.Stage
-		// we get the newest relay stages directly which will omit the relay stage PUT/DELETE event
-		// because triggering these events is useless now
-		relayStage, revRelay, err = ha.GetRelayStage(s.etcdClient, cfg.SourceID)
-		if err != nil {
-			// TODO: need retry
-			return err
-		}
-		startRelay = !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
 		s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
+		if err2 := w.EnableRelay(); err2 != nil {
+			return err2
+		}
 	}
-	go func() {
-		w.Start(startRelay)
-	}()
+	go w.Start()
 
 	isStarted := utils.WaitSomething(50, 100*time.Millisecond, func() bool {
 		return w.closed.Get() == closedFalse
@@ -633,37 +579,9 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		return terror.ErrWorkerNoStart
 	}
 
-	for _, subTaskCfg := range subTaskCfgs {
-		expectStage := subTaskStages[subTaskCfg.Name]
-		if expectStage.IsDeleted {
-			continue
-		}
-		log.L().Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
-		if err := w.StartSubTask(subTaskCfg, expectStage.Expect); err != nil {
-			return err
-		}
-	}
-
-	w.wg.Add(1)
-	go func() {
-		defer w.wg.Done()
-		// TODO: handle fatal error from observeSubtaskStage
-		//nolint:errcheck
-		w.observeSubtaskStage(w.ctx, s.etcdClient, revSubTask)
-	}()
-
-	if cfg.EnableRelay {
-		w.wg.Add(1)
-		go func() {
-			defer w.wg.Done()
-			// TODO: handle fatal error from observeRelayStage
-			//nolint:errcheck
-			w.observeRelayStage(w.ctx, s.etcdClient, revRelay)
-		}()
-	}
-
+	err = w.EnableHandleSubtasks()
 	log.L().Info("started to handle mysql source", zap.String("sourceCfg", cfg.String()))
-	return nil
+	return err
 }
 
 func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
@@ -679,7 +597,7 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 
 // all subTask in subTaskCfgs should have same source
 // this function return the min location in all subtasks, used for relay's location
-func getMinLocInAllSubTasks(ctx context.Context, subTaskCfgs []*config.SubTaskConfig) (minLoc *binlog.Location, err error) {
+func getMinLocInAllSubTasks(ctx context.Context, subTaskCfgs map[string]config.SubTaskConfig) (minLoc *binlog.Location, err error) {
 	for _, subTaskCfg := range subTaskCfgs {
 		loc, err := getMinLocForSubTaskFunc(ctx, subTaskCfg)
 		if err != nil {
@@ -702,7 +620,7 @@ func getMinLocInAllSubTasks(ctx context.Context, subTaskCfgs []*config.SubTaskCo
 	return minLoc, nil
 }
 
-func getMinLocForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minLoc *binlog.Location, err error) {
+func getMinLocForSubTask(ctx context.Context, subTaskCfg config.SubTaskConfig) (minLoc *binlog.Location, err error) {
 	if subTaskCfg.Mode == config.ModeFull {
 		return nil, nil
 	}
