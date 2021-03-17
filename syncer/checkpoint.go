@@ -213,7 +213,7 @@ type CheckPoint interface {
 	FlushPointsExcept(tctx *tcontext.Context, exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error
 
 	// FlushPointWithTableInfo flushed the table point with given table info
-	FlushPointWithTableInfo(tctx *tcontext.Context, schema, table string, ti *model.TableInfo) error
+	FlushPointWithTableInfo(tctx *tcontext.Context, sourceSchema, sourceTable string, ti *model.TableInfo) error
 
 	// GlobalPoint returns the global binlog stream's checkpoint
 	// corresponding to Meta.Pos and Meta.GTID
@@ -558,22 +558,22 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 }
 
 // FlushPointWithTableInfo implements CheckPoint.FlushPointWithTableInfo
-func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, schema string, table string, ti *model.TableInfo) error {
+func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, sourceSchema string, sourceTable string, ti *model.TableInfo) error {
 	cp.Lock()
 	defer cp.Unlock()
 
 	sqls := make([]string, 0, 1)
 	args := make([][]interface{}, 0, 10)
 
-	point := cp.points[schema][table]
+	point := cp.points[sourceSchema][sourceTable]
 
 	tiBytes, err := json.Marshal(ti)
 	if err != nil {
-		return terror.ErrSchemaTrackerCannotSerialize.Delegate(err, schema, table)
+		return terror.ErrSchemaTrackerCannotSerialize.Delegate(err, sourceSchema, sourceTable)
 	}
 
 	location := point.MySQLLocation()
-	sql2, arg := cp.genUpdateSQL(schema, table, location, nil, tiBytes, false)
+	sql2, arg := cp.genUpdateSQL(sourceSchema, sourceTable, location, nil, tiBytes, false)
 	sqls = append(sqls, sql2)
 	args = append(args, arg)
 
