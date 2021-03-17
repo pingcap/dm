@@ -28,6 +28,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
@@ -68,7 +69,8 @@ type Worker struct {
 	name string
 }
 
-// NewWorker creates a new Worker
+// NewWorker creates a new Worker. The functionality of relay and subtask is disabled by default, need call EnableRelay
+// and EnableSubtask later
 func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name string) (w *Worker, err error) {
 	w = &Worker{
 		cfg:           cfg,
@@ -89,18 +91,6 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name strin
 		}
 	}(w)
 
-	if cfg.EnableRelay {
-		// initial relay holder, the cfg's password need decrypt
-		w.relayHolder = NewRelayHolder(cfg)
-		purger1, err1 := w.relayHolder.Init([]purger.PurgeInterceptor{
-			w,
-		})
-		if err1 != nil {
-			return nil, err1
-		}
-		w.relayPurger = purger1
-	}
-
 	// initial task status checker
 	if w.cfg.Checker.CheckEnable {
 		tsc := NewTaskStatusChecker(w.cfg.Checker, w)
@@ -119,17 +109,7 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name strin
 }
 
 // Start starts working
-func (w *Worker) Start(startRelay bool) {
-
-	if w.cfg.EnableRelay && startRelay {
-		log.L().Info("relay is started")
-		// start relay
-		w.relayHolder.Start()
-
-		// start purger
-		w.relayPurger.Start()
-	}
-
+func (w *Worker) Start() {
 	// start task status checker
 	if w.cfg.Checker.CheckEnable {
 		w.taskStatusChecker.Start()
@@ -188,6 +168,122 @@ func (w *Worker) Close() {
 
 	w.closed.Set(closedTrue)
 	w.l.Info("Stop worker")
+}
+
+// EnableRelay enables the functionality of start/watch/handle relay
+func (w *Worker) EnableRelay() error {
+	// 1. adjust relay starting position, to the earliest of subtasks
+	_, subTaskCfgs, _, err := w.fetchSubTasksAndAdjust()
+	if err != nil {
+		return err
+	}
+
+	dctx, dcancel := context.WithTimeout(w.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
+	defer dcancel()
+	minLoc, err1 := getMinLocInAllSubTasks(dctx, subTaskCfgs)
+	if err1 != nil {
+		return err1
+	}
+
+	if minLoc != nil {
+		log.L().Info("get min location in all subtasks", zap.Stringer("location", *minLoc))
+		w.cfg.RelayBinLogName = binlog.AdjustPosition(minLoc.Position).Name
+		w.cfg.RelayBinlogGTID = minLoc.GTIDSetStr()
+		// set UUIDSuffix when bound to a source
+		w.cfg.UUIDSuffix, err = binlog.ExtractSuffix(minLoc.Position.Name)
+		if err != nil {
+			return err
+		}
+	} else {
+		// set UUIDSuffix even not checkpoint exist
+		// so we will still remove relay dir
+		w.cfg.UUIDSuffix = binlog.MinUUIDSuffix
+	}
+
+	// 2. initial relay holder, the cfg's password need decrypt
+	w.relayHolder = NewRelayHolder(w.cfg)
+	relayPurger, err := w.relayHolder.Init([]purger.PurgeInterceptor{
+		w,
+	})
+	if err != nil {
+		return err
+	}
+	w.relayPurger = relayPurger
+
+	// 3. get relay stage from etcd and check if need starting
+	// we get the newest relay stages directly which will omit the relay stage PUT/DELETE event
+	// because triggering these events is useless now
+	relayStage, revRelay, err := ha.GetRelayStage(w.etcdClient, w.cfg.SourceID)
+	if err != nil {
+		// TODO: need retry
+		return err
+	}
+	startImmediately := !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
+	if startImmediately {
+		log.L().Info("relay is started")
+		w.relayHolder.Start()
+		w.relayPurger.Start()
+	}
+
+	// 4. watch relay stage
+	w.wg.Add(1)
+	go func() {
+		defer w.wg.Done()
+		// TODO: handle fatal error from observeRelayStage
+		//nolint:errcheck
+		w.observeRelayStage(w.ctx, w.etcdClient, revRelay)
+	}()
+	return nil
+}
+
+// EnableHandleSubtasks enables the functionality of start/watch/handle subtasks
+func (w *Worker) EnableHandleSubtasks() error {
+	subTaskStages, subTaskCfgM, revSubTask, err := w.fetchSubTasksAndAdjust()
+	if err != nil {
+		return err
+	}
+
+	log.L().Info("starting to handle mysql source", zap.String("sourceCfg", w.cfg.String()), zap.Any("subTasks", subTaskCfgM))
+
+	for _, subTaskCfg := range subTaskCfgM {
+		expectStage := subTaskStages[subTaskCfg.Name]
+		if expectStage.IsDeleted {
+			continue
+		}
+		log.L().Info("start to create subtask", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
+		// for range of a map will use a same value-address, so we'd better not pass value-address to other function
+		clone := subTaskCfg
+		if err := w.StartSubTask(&clone, expectStage.Expect); err != nil {
+			return err
+		}
+	}
+
+	w.wg.Add(1)
+	go func() {
+		defer w.wg.Done()
+		// TODO: handle fatal error from observeSubtaskStage
+		//nolint:errcheck
+		w.observeSubtaskStage(w.ctx, w.etcdClient, revSubTask)
+	}()
+
+	return nil
+}
+
+// fetchSubTasksAndAdjust gets source's subtask stages and configs, adjust some values by worker's config and status
+// source **must not be empty**
+// return map{task name -> subtask stage}, map{task name -> subtask config}, revision, error.
+func (w *Worker) fetchSubTasksAndAdjust() (map[string]ha.Stage, map[string]config.SubTaskConfig, int64, error) {
+	// we get the newest subtask stages directly which will omit the subtask stage PUT/DELETE event
+	// because triggering these events is useless now
+	subTaskStages, subTaskCfgM, revSubTask, err := ha.GetSubTaskStageConfig(w.etcdClient, w.cfg.SourceID)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+
+	if err = copyConfigFromSourceForEach(subTaskCfgM, w.cfg); err != nil {
+		return nil, nil, 0, err
+	}
+	return subTaskStages, subTaskCfgM, revSubTask, nil
 }
 
 // StartSubTask creates a sub task an run it
@@ -298,8 +394,8 @@ func (w *Worker) QueryStatus(ctx context.Context, name string) []*pb.SubTaskStat
 	return w.Status(ctx2, name)
 }
 
-func (w *Worker) resetSubtaskStage(etcdCli *clientv3.Client) (int64, error) {
-	subTaskStages, subTaskCfgm, revSubTask, err := ha.GetSubTaskStageConfig(etcdCli, w.cfg.SourceID)
+func (w *Worker) resetSubtaskStage() (int64, error) {
+	subTaskStages, subTaskCfgm, revSubTask, err := w.fetchSubTasksAndAdjust()
 	if err != nil {
 		return 0, err
 	}
@@ -361,7 +457,7 @@ func (w *Worker) observeSubtaskStage(ctx context.Context, etcdCli *clientv3.Clie
 				case <-ctx.Done():
 					return nil
 				case <-time.After(500 * time.Millisecond):
-					rev, err = w.resetSubtaskStage(etcdCli)
+					rev, err = w.resetSubtaskStage()
 					if err != nil {
 						log.L().Error("resetSubtaskStage is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
 					}
@@ -659,6 +755,17 @@ func copyConfigFromSource(cfg *config.SubTaskConfig, sourceCfg *config.SourceCon
 			return err
 		}
 		cfg.FilterRules = append(cfg.FilterRules, filterRule)
+	}
+	return nil
+}
+
+// copyConfigFromSourceForEach do copyConfigFromSource for each value in subTaskCfgM and change subTaskCfgM in-place
+func copyConfigFromSourceForEach(subTaskCfgM map[string]config.SubTaskConfig, sourceCfg *config.SourceConfig) error {
+	for k, subTaskCfg := range subTaskCfgM {
+		if err2 := copyConfigFromSource(&subTaskCfg, sourceCfg); err2 != nil {
+			return err2
+		}
+		subTaskCfgM[k] = subTaskCfg
 	}
 	return nil
 }
