@@ -213,7 +213,7 @@ type CheckPoint interface {
 	FlushPointsExcept(tctx *tcontext.Context, exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error
 
 	// FlushPointWithTableInfo flushed the table point with given table info
-	FlushPointWithTableInfo(tctx *tcontext.Context, schema string, table string, ti *model.TableInfo) error
+	FlushPointWithTableInfo(tctx *tcontext.Context, schema, table string, ti *model.TableInfo) error
 
 	// GlobalPoint returns the global binlog stream's checkpoint
 	// corresponding to Meta.Pos and Meta.GTID
