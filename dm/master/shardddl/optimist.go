@@ -501,7 +501,7 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 	var cfStage = optimism.ConflictNone
 	if info.IgnoreConflict {
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
-				zap.String("lock", lockID), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
+			zap.String("lock", lockID), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
 	} else if err != nil {
 		cfStage = optimism.ConflictDetected // we treat any errors returned from `TrySync` as conflict detected now.
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
