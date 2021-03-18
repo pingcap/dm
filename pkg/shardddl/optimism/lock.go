@@ -526,6 +526,7 @@ func (l *Lock) GetVersion(source string, schema string, table string) int64 {
 	return l.versions[source][schema][table]
 }
 
+// IsDroppedColumn checks whether this column is a not fully dropped column for this lock
 func (l *Lock) IsDroppedColumn(info Info, col string) bool {
 	if _, ok := l.columns[col]; !ok {
 		return false
