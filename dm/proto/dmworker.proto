@@ -323,6 +323,8 @@ message OperateWorkerSchemaRequest {
     string database = 4; // database name
     string table = 5; // table name
     string schema = 6; // schema content, a `CREATE TABLE` statement
+    bool flush = 7; // flush table info and checkpoint
+    bool sync = 8; // sync the table info to master
 }
 
 // copied `TaskMeta` from release-1.0 branch.

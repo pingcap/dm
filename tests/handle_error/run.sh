@@ -1420,6 +1420,10 @@ function DM_REPLACE_DEFAULT_VALUE_CASE() {
     run_sql_source1 "insert into ${db}.${tb1} values(4,4);"
     run_sql_source2 "insert into ${db}.${tb1} values(5);"
     run_sql_source2 "insert into ${db}.${tb2} values(6);"
+
+    # make sure order is source1.table1, source2.table1, source2.table2
+    run_sql_tidb_with_retry "select count(1) from ${db}.${tb}" "count(1): 6"
+
     run_sql_source2 "alter table ${db}.${tb1} add new_col1 int default 2;"
     run_sql_source1 "insert into ${db}.${tb1} values(7,7);"
     run_sql_source2 "insert into ${db}.${tb1} values(8,8);"
