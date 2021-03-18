@@ -50,4 +50,7 @@ require (
 
 go 1.13
 
-replace github.com/siddontang/go-mysql v1.1.1-0.20200824131207-0c5789dd0bd3 => github.com/lance6716/go-mysql v1.1.1-0.20210303100354-b0e44c2c5623
+replace (
+	github.com/pingcap/tidb-tools v5.0.0-rc.0.20210310030049-c82efd92f571+incompatible => github.com/gozssky/tidb-tools v5.0.0-rc.0.20210317100904-7d2be5b528c1+incompatible
+	github.com/siddontang/go-mysql v1.1.1-0.20200824131207-0c5789dd0bd3 => github.com/lance6716/go-mysql v1.1.1-0.20210303100354-b0e44c2c5623
+)
