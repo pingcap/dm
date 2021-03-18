@@ -72,7 +72,7 @@ func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []
 		synced:     true,
 		versions:   make(map[string]map[string]map[string]int64),
 	}
-	l.addTables(tts)
+	l.addTables(l.joined, tts)
 	metrics.ReportDDLPending(task, metrics.DDLPendingNone, metrics.DDLPendingSynced)
 
 	return l
@@ -100,6 +100,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		newTIs         = info.TableInfosAfter
 		infoVersion    = info.Version
 		ignoreConflict = info.IgnoreConflict
+		oldTable       = schemacmp.Encode(info.TableInfoBefore)
 	)
 	l.mu.Lock()
 	defer func() {
@@ -155,7 +156,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 	tts = append(tts, newTargetTable(l.Task, callerSource, l.DownSchema, l.DownTable,
 		map[string]map[string]struct{}{callerSchema: {callerTable: struct{}{}}}))
 	// add any new source tables.
-	l.addTables(tts)
+	l.addTables(oldTable, tts)
 	if val, ok := l.versions[callerSource][callerSchema][callerTable]; !ok || val < infoVersion {
 		l.versions[callerSource][callerSchema][callerTable] = infoVersion
 	}
@@ -205,6 +206,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		// special case: if the DDL does not affect the schema at all, assume it is
 		// idempotent and just execute the DDL directly.
 		// if any real conflicts after joined exist, they will be detected by the following steps.
+		// this often happens when executing `CREATE TABLE` statement
 		var cmp int
 		if cmp, err = nextTable.Compare(oldJoined); err == nil && cmp == 0 {
 			newDDLs = append(newDDLs, ddls[idx])
@@ -465,7 +467,7 @@ func (l *Lock) tryRevertDone(source, schema, table string) {
 }
 
 // addTables adds any not-existing tables into the lock.
-func (l *Lock) addTables(tts []TargetTable) {
+func (l *Lock) addTables(tb schemacmp.Table, tts []TargetTable) {
 	for _, tt := range tts {
 		if _, ok := l.tables[tt.Source]; !ok {
 			l.tables[tt.Source] = make(map[string]map[string]schemacmp.Table)
@@ -480,8 +482,7 @@ func (l *Lock) addTables(tts []TargetTable) {
 			}
 			for table := range tables {
 				if _, ok := l.tables[tt.Source][schema][table]; !ok {
-					// NOTE: the newly added table uses the current table info.
-					l.tables[tt.Source][schema][table] = l.joined
+					l.tables[tt.Source][schema][table] = tb
 					l.done[tt.Source][schema][table] = false
 					l.versions[tt.Source][schema][table] = 0
 					log.L().Info("table added to the lock", zap.String("lock", l.ID),
