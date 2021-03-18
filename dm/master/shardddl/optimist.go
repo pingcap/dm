@@ -521,7 +521,10 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, skipDone bool) error {
 	lockID, newDDLs, err := o.lk.TrySync(o.cli, info, tts)
 	var cfStage = optimism.ConflictNone
-	if err != nil {
+	if info.IgnoreConflict {
+		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
+			zap.String("lock", lockID), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
+	} else if err != nil {
 		cfStage = optimism.ConflictDetected // we treat any errors returned from `TrySync` as conflict detected now.
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
 			zap.String("lock", lockID), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
@@ -555,6 +558,10 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 		if err != nil {
 			return err
 		}
+		return nil
+	}
+
+	if info.IgnoreConflict {
 		return nil
 	}
 

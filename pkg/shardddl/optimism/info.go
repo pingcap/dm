@@ -54,6 +54,9 @@ type Info struct {
 	// only set it when get/watch from etcd
 	Version int64 `json:"-"`
 
+	// use to resolve conflict
+	IgnoreConflict bool `json:"ignore-conflict"`
+
 	// only set it when get/watch from etcd
 	ModRevision int64 `json:"-"`
 }
