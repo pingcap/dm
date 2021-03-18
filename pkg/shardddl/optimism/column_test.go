@@ -26,34 +26,54 @@ func (t *testColumn) TestColumnETCD(c *C) {
 		task       = "test"
 		downSchema = "shardddl"
 		downTable  = "tb"
-		lockID     = "test-`shardddl`.`tb`"
+		source1    = "mysql-replica-1"
+		source2    = "mysql-replica-2"
+		upSchema1  = "shardddl1"
+		upTable1   = "tb1"
+		upSchema2  = "shardddl2"
+		upTable2   = "tb2"
+		info1      = NewInfo(task, source1, upSchema1, upTable1, downSchema, downTable, nil, nil, nil)
+		info2      = NewInfo(task, source1, upSchema2, upTable2, downSchema, downTable, nil, nil, nil)
+		info3      = NewInfo(task, source2, upSchema1, upTable1, downSchema, downTable, nil, nil, nil)
+		lockID     = genDDLLockID(info1)
 	)
-	rev1, putted, err := PutDroppedColumn(etcdTestCli, task, downSchema, downTable, "a")
+	rev1, putted, err := PutDroppedColumn(etcdTestCli, info1, "a")
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
-	rev2, putted, err := PutDroppedColumn(etcdTestCli, task, downSchema, downTable, "b")
+	rev2, putted, err := PutDroppedColumn(etcdTestCli, info1, "b")
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(rev2, Greater, rev1)
-
-	expectedColm := map[string]map[string]interface{}{
-		lockID: {
-			"a": struct{}{},
-			"b": struct{}{}},
-	}
-	colm, rev3, err := GetAllDroppedColumns(etcdTestCli)
+	rev3, putted, err := PutDroppedColumn(etcdTestCli, info2, "b")
 	c.Assert(err, IsNil)
-	c.Assert(colm, DeepEquals, expectedColm)
-	c.Assert(rev3, Equals, rev2)
-
-	rev4, deleted, err := DeleteDroppedColumns(etcdTestCli, task, downSchema, downTable, "b")
+	c.Assert(putted, IsTrue)
+	c.Assert(rev3, Greater, rev2)
+	rev4, putted, err := PutDroppedColumn(etcdTestCli, info3, "b")
 	c.Assert(err, IsNil)
-	c.Assert(deleted, IsTrue)
+	c.Assert(putted, IsTrue)
 	c.Assert(rev4, Greater, rev3)
 
-	delete(expectedColm[lockID], "b")
+	expectedColm := map[string]map[string]map[string]map[string]map[string]interface{}{
+		lockID: {
+			"a": {source1: {upSchema1: {upTable1: struct{}{}}}},
+			"b": {source1: {upSchema1: {upTable1: struct{}{}},
+				upSchema2: {upTable2: struct{}{}}},
+				source2: {upSchema1: {upTable1: struct{}{}}}},
+		},
+	}
 	colm, rev5, err := GetAllDroppedColumns(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(colm, DeepEquals, expectedColm)
 	c.Assert(rev5, Equals, rev4)
+
+	rev6, deleted, err := DeleteDroppedColumns(etcdTestCli, task, downSchema, downTable, "b")
+	c.Assert(err, IsNil)
+	c.Assert(deleted, IsTrue)
+	c.Assert(rev6, Greater, rev5)
+
+	delete(expectedColm[lockID], "b")
+	colm, rev7, err := GetAllDroppedColumns(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(colm, DeepEquals, expectedColm)
+	c.Assert(rev7, Equals, rev6)
 }

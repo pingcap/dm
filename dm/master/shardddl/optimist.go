@@ -267,7 +267,7 @@ func (o *Optimist) rebuildLocks() (revSource, revInfo, revOperation int64, err e
 func (o *Optimist) recoverLocks(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
 	opm map[string]map[string]map[string]map[string]optimism.Operation,
-	colm map[string]map[string]interface{}) error {
+	colm map[string]map[string]map[string]map[string]map[string]interface{}) error {
 	// construct locks based on the shard DDL info.
 	o.lk.SetColumnMap(colm)
 	defer o.lk.SetColumnMap(nil)

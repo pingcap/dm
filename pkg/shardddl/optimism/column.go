@@ -21,8 +21,8 @@ import (
 )
 
 // GetAllDroppedColumns gets the all dropped columns.
-func GetAllDroppedColumns(cli *clientv3.Client) (map[string]map[string]interface{}, int64, error) {
-	colm := make(map[string]map[string]interface{})
+func GetAllDroppedColumns(cli *clientv3.Client) (map[string]map[string]map[string]map[string]map[string]interface{}, int64, error) {
+	colm := make(map[string]map[string]map[string]map[string]map[string]interface{})
 	op := clientv3.OpGet(common.ShardDDLOptimismDroppedColumnsKeyAdapter.Path(), clientv3.WithPrefix())
 	respTxn, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, op)
 	if err != nil {
@@ -40,20 +40,33 @@ func GetAllDroppedColumns(cli *clientv3.Client) (map[string]map[string]interface
 			downSchema := keys[1]
 			downTable := keys[2]
 			column := keys[3]
-			info := Info{Task: task, DownSchema: downSchema, DownTable: downTable}
+			source := keys[4]
+			upSchema := keys[5]
+			upTable := keys[6]
+			info := NewInfo(task, source, upSchema, upTable, downSchema, downTable, nil, nil, nil)
 			lockID := genDDLLockID(info)
 			if _, ok := colm[lockID]; !ok {
-				colm[lockID] = make(map[string]interface{})
+				colm[lockID] = make(map[string]map[string]map[string]map[string]interface{})
 			}
-			colm[lockID][column] = struct{}{}
+			if _, ok := colm[lockID][column]; !ok {
+				colm[lockID][column] = make(map[string]map[string]map[string]interface{})
+			}
+			if _, ok := colm[lockID][column][source]; !ok {
+				colm[lockID][column][source] = make(map[string]map[string]interface{})
+			}
+			if _, ok := colm[lockID][column][source][downSchema]; !ok {
+				colm[lockID][column][source][downSchema] = make(map[string]interface{})
+			}
+			colm[lockID][column][source][downSchema][downTable] = struct{}{}
 		}
 	}
 	return colm, rev, nil
 }
 
 // PutDroppedColumn puts the undropped column name into ectd.
-func PutDroppedColumn(cli *clientv3.Client, task, downSchema, downTable, column string) (rev int64, putted bool, err error) {
-	key := common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(task, downSchema, downTable, column)
+func PutDroppedColumn(cli *clientv3.Client, info Info, column string) (rev int64, putted bool, err error) {
+	key := common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(
+		info.Task, info.DownSchema, info.DownTable, column, info.Source, info.UpSchema, info.UpTable)
 
 	op := clientv3.OpPut(key, "")
 
@@ -68,7 +81,7 @@ func PutDroppedColumn(cli *clientv3.Client, task, downSchema, downTable, column 
 func DeleteDroppedColumns(cli *clientv3.Client, task, downSchema, downTable string, columns ...string) (rev int64, deleted bool, err error) {
 	ops := make([]clientv3.Op, 0, len(columns))
 	for _, col := range columns {
-		ops = append(ops, deleteDroppedColumnOp(task, downSchema, downTable, col))
+		ops = append(ops, deleteDroppedColumnByColumnOp(task, downSchema, downTable, col))
 	}
 	resp, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	if err != nil {
@@ -77,12 +90,12 @@ func DeleteDroppedColumns(cli *clientv3.Client, task, downSchema, downTable stri
 	return rev, resp.Succeeded, nil
 }
 
-// deleteDroppedColumnOp returns a DELETE etcd operation for init schema.
-func deleteDroppedColumnOp(task, downSchema, downTable, column string) clientv3.Op {
-	return clientv3.OpDelete(common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(task, downSchema, downTable, column))
+// deleteDroppedColumnOp returns a DELETE etcd operation for the specified task and column name.
+func deleteDroppedColumnByColumnOp(task, downSchema, downTable, column string) clientv3.Op {
+	return clientv3.OpDelete(common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(task, downSchema, downTable, column), clientv3.WithPrefix())
 }
 
-// deleteDroppedColumnOp returns a DELETE etcd operation for init schema.
-func deleteDroppedColumnsOp(task, downSchema, downTable string) clientv3.Op {
-	return clientv3.OpDelete(common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(task, downSchema, downTable), clientv3.WithPrefix())
+// deleteDroppedColumnsByLockOp returns a DELETE etcd operation for the specified task.
+func deleteDroppedColumnsByLockOp(task, downSchema, downTable string) clientv3.Op {
+	return clientv3.OpDelete(common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(task), clientv3.WithPrefix())
 }

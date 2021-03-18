@@ -26,8 +26,9 @@ import (
 // The lock information do not need to be persistent, and can be re-constructed from the shard DDL info.
 type LockKeeper struct {
 	mu    sync.RWMutex
-	locks map[string]*Lock                  // lockID -> Lock
-	colm  map[string]map[string]interface{} // lockID -> not fully dropped column name -> interface{}
+	locks map[string]*Lock // lockID -> Lock
+	// lockID -> column name -> source -> upSchema -> upTable -> interface{}
+	colm map[string]map[string]map[string]map[string]map[string]interface{}
 }
 
 // NewLockKeeper creates a new LockKeeper instance.
@@ -58,7 +59,7 @@ func (lk *LockKeeper) TrySync(cli *clientv3.Client, info Info, tts []TargetTable
 		}
 	}
 
-	newDDLs, err := l.TrySync(info.Source, info.UpSchema, info.UpTable, info.DDLs, info.TableInfosAfter, tts, info.Version)
+	newDDLs, err := l.TrySync(info, tts)
 	return lockID, newDDLs, err
 }
 
@@ -112,7 +113,7 @@ func (lk *LockKeeper) Clear() {
 }
 
 // SetColumnMap sets the column map received from etcd
-func (lk *LockKeeper) SetColumnMap(colm map[string]map[string]interface{}) {
+func (lk *LockKeeper) SetColumnMap(colm map[string]map[string]map[string]map[string]map[string]interface{}) {
 	lk.mu.Lock()
 	defer lk.mu.Unlock()
 

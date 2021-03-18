@@ -61,8 +61,8 @@ type Lock struct {
 	versions map[string]map[string]map[string]int64
 
 	// record the partially dropped columns
-	// column name -> interface{}
-	columns map[string]interface{}
+	// column name -> source -> upSchema -> upTable -> interface{}
+	columns map[string]map[string]map[string]map[string]interface{}
 }
 
 // NewLock creates a new Lock instance.
@@ -79,7 +79,7 @@ func NewLock(cli *clientv3.Client, ID, task, downSchema, downTable string, ti *m
 		done:       make(map[string]map[string]map[string]bool),
 		synced:     true,
 		versions:   make(map[string]map[string]map[string]int64),
-		columns:    make(map[string]interface{}),
+		columns:    make(map[string]map[string]map[string]map[string]interface{}),
 	}
 	l.addTables(tts)
 	metrics.ReportDDLPending(task, metrics.DDLPendingNone, metrics.DDLPendingSynced)
@@ -100,8 +100,15 @@ func NewLock(cli *clientv3.Client, ID, task, downSchema, downTable string, ti *m
 // TODO: but both of these modes are difficult to be implemented in DM-worker now, try to do that later.
 // for non-intrusive, a broadcast mechanism needed to notify conflict tables after the conflict has resolved, or even a block mechanism needed.
 // for intrusive, a DML prune or transform mechanism needed for two different schemas (before and after the conflict resolved).
-func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
-	ddls []string, newTIs []*model.TableInfo, tts []TargetTable, infoVersion int64) (newDDLs []string, err error) {
+func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err error) {
+	var (
+		callerSource = info.Source
+		callerSchema = info.UpSchema
+		callerTable  = info.UpTable
+		ddls         = info.DDLs
+		newTIs       = info.TableInfosAfter
+		infoVersion  = info.Version
+	)
 	l.mu.Lock()
 	defer func() {
 		if len(newDDLs) > 0 {
@@ -205,7 +212,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		if cmp, err = nextTable.Compare(oldJoined); err == nil && cmp == 0 {
 			if col, err := GetColumnName(l.ID, ddls[idx], ast.AlterTableAddColumns); err != nil {
 				return newDDLs, err
-			} else if _, ok := l.columns[col]; len(col) > 0 && ok {
+			} else if len(col) > 0 && l.IsDroppedColumn(info, col) {
 				return newDDLs, terror.ErrShardDDLOptimismTrySyncFail.Generate(
 					l.ID, fmt.Sprintf("add column %s that wasn't fully dropped in downstream. ddl: %s", col, ddls[idx]))
 			}
@@ -269,7 +276,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 			// check for add column with a smaller field len
 			if col, err := AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined); err != nil {
 				return ddls, err
-			} else if _, ok := l.columns[col]; len(col) > 0 && ok {
+			} else if len(col) > 0 && l.IsDroppedColumn(info, col) {
 				return ddls, terror.ErrShardDDLOptimismTrySyncFail.Generate(
 					l.ID, fmt.Sprintf("add column %s that wasn't fully dropped in downstream. ddl: %s", col, ddls[idx]))
 			}
@@ -280,7 +287,7 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 			if col, err := GetColumnName(l.ID, ddls[idx], ast.AlterTableDropColumn); err != nil {
 				return ddls, err
 			} else if len(col) > 0 {
-				err = l.AddDroppedColumn(col)
+				err = l.AddDroppedColumn(info, col)
 				if err != nil {
 					log.L().Error("fail to add dropped column info in etcd", zap.Error(err))
 				}
@@ -513,18 +520,46 @@ func (l *Lock) GetVersion(source string, schema string, table string) int64 {
 	return l.versions[source][schema][table]
 }
 
+func (l *Lock) IsDroppedColumn(info Info, col string) bool {
+	if _, ok := l.columns[col]; !ok {
+		return false
+	}
+	source, upSchema, upTable := info.Source, info.UpSchema, info.UpTable
+	if _, ok := l.columns[col][source]; !ok {
+		return false
+	}
+	if _, ok := l.columns[col][source][upSchema]; !ok {
+		return false
+	}
+	if _, ok := l.columns[col][source][upSchema][upTable]; !ok {
+		return false
+	}
+	return true
+}
+
 // AddDroppedColumn adds a dropped column name in both etcd and lock's column map
-func (l *Lock) AddDroppedColumn(col string) error {
-	if _, ok := l.columns[col]; ok {
+func (l *Lock) AddDroppedColumn(info Info, col string) error {
+	if l.IsDroppedColumn(info, col) {
 		return nil
 	}
-	log.L().Debug("add not fully dropped columns", zap.String("lockID", l.ID), zap.String("column", col))
+	log.L().Debug("add not fully dropped columns", zap.Stringer("info", info), zap.String("column", col))
 
-	_, _, err := PutDroppedColumn(l.cli, l.Task, l.DownSchema, l.DownTable, col)
+	source, upSchema, upTable := info.Source, info.UpSchema, info.UpTable
+	_, _, err := PutDroppedColumn(l.cli, info, col)
 	if err != nil {
 		return err
 	}
-	l.columns[col] = struct{}{}
+
+	if _, ok := l.columns[col]; !ok {
+		l.columns[col] = make(map[string]map[string]map[string]interface{})
+	}
+	if _, ok := l.columns[col][source]; !ok {
+		l.columns[col][source] = make(map[string]map[string]interface{})
+	}
+	if _, ok := l.columns[col][source][upSchema]; !ok {
+		l.columns[col][source][upSchema] = make(map[string]interface{})
+	}
+	l.columns[col][source][upSchema][upTable] = struct{}{}
 	return nil
 }
 
@@ -551,6 +586,7 @@ func (l *Lock) DeleteColumnsByDDLs(ddls []string) error {
 		if err != nil {
 			return err
 		}
+
 		for _, col := range colsToDelete {
 			delete(l.columns, col)
 		}

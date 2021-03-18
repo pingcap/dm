@@ -80,8 +80,8 @@ var (
 	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name) -> table schema.
 	ShardDDLOptimismInitSchemaKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/init-schema/")
 	// ShardDDLOptimismDroppedColumnsKeyAdapter is used to store the columns that are not fully dropped
-	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name, column-name) -> empty
-	ShardDDLOptimismDroppedColumnsKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/undropped-columns/")
+	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name, column-name, source-id, upstream-schema-name, upstream-table-name) -> empty
+	ShardDDLOptimismDroppedColumnsKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/dropped-columns/")
 )
 
 func keyAdapterKeysLen(s KeyAdapter) int {
@@ -96,9 +96,10 @@ func keyAdapterKeysLen(s KeyAdapter) int {
 		return 2
 	case ShardDDLOptimismInitSchemaKeyAdapter:
 		return 3
-	case ShardDDLOptimismInfoKeyAdapter, ShardDDLOptimismOperationKeyAdapter, ShardDDLOptimismDroppedColumnsKeyAdapter:
+	case ShardDDLOptimismInfoKeyAdapter, ShardDDLOptimismOperationKeyAdapter:
 		return 4
-
+	case ShardDDLOptimismDroppedColumnsKeyAdapter:
+		return 7
 	}
 	return -1
 }
