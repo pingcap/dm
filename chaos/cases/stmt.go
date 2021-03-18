@@ -17,6 +17,8 @@ import (
 	"math/rand"
 
 	"github.com/chaos-mesh/go-sqlsmith"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 )
 
 type dmlType int
@@ -44,8 +46,53 @@ func randDML(ss *sqlsmith.SQLSmith) (dml string, t dmlType, err error) {
 
 // randDDL generates `ALTER TABLE` DDL.
 func randDDL(ss *sqlsmith.SQLSmith) (string, error) {
-	return ss.AlterTableStmt(&sqlsmith.DDLOptions{
-		OnlineDDL: false,
-		Tables:    make([]string, 0),
-	})
+	for {
+		sql, err := ss.AlterTableStmt(&sqlsmith.DDLOptions{
+			OnlineDDL: false,
+			Tables:    make([]string, 0),
+		})
+
+		if err != nil {
+			return sql, err
+		} else if !isValidSQL(sql) {
+			continue
+		}
+
+		return sql, nil
+	}
+}
+
+func isValidSQL(sql string) bool {
+	_, err := parser.New().ParseOneStmt(sql, "", "")
+	return err == nil
+}
+
+func isNotNullNonDefaultAddCol(sql string) (bool, error) {
+	stmt, err := parser.New().ParseOneStmt(sql, "", "")
+	if err != nil {
+		return false, err
+	}
+	v, ok := stmt.(*ast.AlterTableStmt)
+	if !ok {
+		return false, nil
+	}
+
+	if len(v.Specs) == 0 || v.Specs[0].Tp != ast.AlterTableAddColumns || len(v.Specs[0].NewColumns) == 0 {
+		return false, nil
+	}
+
+	spec := v.Specs[0]
+	notNull := false
+	for _, newCol := range spec.NewColumns {
+		for _, opt := range newCol.Options {
+			if opt.Tp == ast.ColumnOptionDefaultValue {
+				return false, nil
+			}
+			if opt.Tp == ast.ColumnOptionNotNull {
+				notNull = true
+			}
+		}
+	}
+
+	return notNull, nil
 }

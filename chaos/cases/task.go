@@ -348,6 +348,16 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 			if err != nil {
 				return err
 			}
+
+			// Unsupported ddl in optimistic mode. e.g. ALTER TABLE table_name ADD column column_name INT NOT NULL;
+			if t.taskCfg.ShardMode == config2.ShardOptimistic {
+				if yes, err := isNotNullNonDefaultAddCol(query); err != nil {
+					return err
+				} else if yes {
+					continue
+				}
+			}
+
 			t.logger.Info("executing DDL", zap.String("query", query))
 			// for DDL, we execute the statement for all upstream sources.
 			// NOTE: no re-order inject even for optimistic shard DDL now.
