@@ -1573,15 +1573,15 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 			},
 		}
 
-		colm1 = map[string]map[string]interface{}{
+		colm1 = map[string]map[string]map[string]map[string]map[string]interface{}{
 			ID: {
-				"b": struct{}{},
-				"c": struct{}{},
+				"b": {source: {db: {tbls[0]: struct{}{}}}},
+				"c": {source: {db: {tbls[0]: struct{}{}}}},
 			},
 		}
-		colm2 = map[string]map[string]interface{}{
+		colm2 = map[string]map[string]map[string]map[string]map[string]interface{}{
 			ID: {
-				"c": struct{}{},
+				"c": {source: {db: {tbls[0]: struct{}{}}}},
 			},
 		}
 	)
@@ -1597,17 +1597,15 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 	t.checkLockNoDone(c, l)
 	c.Assert(l.IsResolved(), IsFalse)
 
-	// TrySync for the first table, drop the first column
-	vers[source][db][tbls[0]]++
-	DDLs, err := l.TrySync(source, db, tbls[0], DDLs1, []*model.TableInfo{ti1}, tts, vers[source][db][tbls[0]])
+	// TrySync for the first table, drop column c
+	DDLs, err := l.TrySync(newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers), tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
 	c.Assert(l.versions, DeepEquals, vers)
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the first table, drop column b
-	vers[source][db][tbls[0]]++
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs2, []*model.TableInfo{ti2}, tts, vers[source][db][tbls[0]])
+	DDLs, err = l.TrySync(newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2}, vers), tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
 	c.Assert(l.versions, DeepEquals, vers)
@@ -1618,8 +1616,7 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 	c.Assert(colm, DeepEquals, colm1)
 
 	// TrySync for the second table, drop column b, this column should be dropped
-	vers[source][db][tbls[1]]++
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs2, []*model.TableInfo{ti3}, tts, vers[source][db][tbls[1]])
+	DDLs, err = l.TrySync(newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti0, []*model.TableInfo{ti3}, vers), tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
 	c.Assert(l.versions, DeepEquals, vers)
@@ -1632,22 +1629,19 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 	c.Assert(colm, DeepEquals, colm2)
 
 	// TrySync for the first table, add column b, should succeed, because this column is fully dropped in the downstream
-	vers[source][db][tbls[0]]++
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs3, []*model.TableInfo{ti1}, tts, vers[source][db][tbls[0]])
+	DDLs, err = l.TrySync(newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs3, ti2, []*model.TableInfo{ti1}, vers), tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
 	c.Assert(l.versions, DeepEquals, vers)
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the first table, add column b, should fail, because this column isn't fully dropped in the downstream
-	vers[source][db][tbls[0]]++
-	_, err = l.TrySync(source, db, tbls[0], DDLs4, []*model.TableInfo{ti0}, tts, vers[source][db][tbls[0]])
+	_, err = l.TrySync(newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs4, ti1, []*model.TableInfo{ti0}, vers), tts)
 	c.Assert(err, ErrorMatches, ".*add column c that wasn't fully dropped in downstream.*")
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the second table, drop column b, this column should be dropped
-	vers[source][db][tbls[1]]++
-	DDLs, err = l.TrySync(source, db, tbls[1], DDLs1, []*model.TableInfo{ti2}, tts, vers[source][db][tbls[1]])
+	DDLs, err = l.TrySync(newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs1, ti3, []*model.TableInfo{ti2}, vers), tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	c.Assert(l.versions, DeepEquals, vers)
@@ -1655,9 +1649,8 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 	// Simulate watch done operation from dm-worker
 	c.Assert(l.DeleteColumnsByDDLs(DDLs), IsNil)
 
-	// TrySync for the first table, add column b, should fail, because this column isn't fully dropped in the downstream
-	vers[source][db][tbls[0]]++
-	DDLs, err = l.TrySync(source, db, tbls[0], DDLs4, []*model.TableInfo{ti0}, tts, vers[source][db][tbls[0]])
+	// TrySync for the first table, add column b, should succeed, because this column is fully dropped in the downstream
+	DDLs, err = l.TrySync(newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs4, ti1, []*model.TableInfo{ti0}, vers), tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs4)
 	c.Assert(l.versions, DeepEquals, vers)

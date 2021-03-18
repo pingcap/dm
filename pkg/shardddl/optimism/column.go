@@ -54,10 +54,10 @@ func GetAllDroppedColumns(cli *clientv3.Client) (map[string]map[string]map[strin
 			if _, ok := colm[lockID][column][source]; !ok {
 				colm[lockID][column][source] = make(map[string]map[string]interface{})
 			}
-			if _, ok := colm[lockID][column][source][downSchema]; !ok {
-				colm[lockID][column][source][downSchema] = make(map[string]interface{})
+			if _, ok := colm[lockID][column][source][upSchema]; !ok {
+				colm[lockID][column][source][upSchema] = make(map[string]interface{})
 			}
-			colm[lockID][column][source][downSchema][downTable] = struct{}{}
+			colm[lockID][column][source][upSchema][upTable] = struct{}{}
 		}
 	}
 	return colm, rev, nil
