@@ -1028,6 +1028,9 @@ function DM_DropAddColumn_CASE() {
 
     restart_master_on_pos $reset "3"
 
+    # make sure drop column c is synced
+    sleep 2
+
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column c int;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(6,6);"
 
