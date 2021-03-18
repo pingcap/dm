@@ -64,6 +64,7 @@ func GetAllDroppedColumns(cli *clientv3.Client) (map[string]map[string]map[strin
 }
 
 // PutDroppedColumn puts the undropped column name into ectd.
+// When we drop a column, we save this column's name in etcd.
 func PutDroppedColumn(cli *clientv3.Client, info Info, column string) (rev int64, putted bool, err error) {
 	key := common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(
 		info.Task, info.DownSchema, info.DownTable, column, info.Source, info.UpSchema, info.UpTable)
@@ -78,6 +79,9 @@ func PutDroppedColumn(cli *clientv3.Client, info Info, column string) (rev int64
 }
 
 // DeleteDroppedColumns tries to delete the dropped columns for the specified lock ID.
+// Only when this column is fully dropped in downstream database,
+// in other words, **we receive a `Done` DDL group from dm-worker)**,
+// we can delete this column's name from the etcd.
 func DeleteDroppedColumns(cli *clientv3.Client, task, downSchema, downTable string, columns ...string) (rev int64, deleted bool, err error) {
 	ops := make([]clientv3.Op, 0, len(columns))
 	for _, col := range columns {

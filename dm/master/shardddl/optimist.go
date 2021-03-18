@@ -282,6 +282,10 @@ func (o *Optimist) recoverLocks(
 		for _, ifSource := range ifTask {
 			for _, ifSchema := range ifSource {
 				for _, info := range ifSchema {
+					// We should return err after all infos are set up.
+					// If we stopped recovering locks once we meet an error,
+					// dm-master leader may not have the full information for the other "normal" locks,
+					// which will cause the sync error in dm-worker.
 					err := o.handleInfo(info)
 					setFirstErr(err)
 				}

@@ -1028,8 +1028,9 @@ function DM_DropAddColumn_CASE() {
 
     restart_master_on_pos $reset "3"
 
-    # make sure drop column c is synced
-    sleep 2
+    # make sure column c is fully dropped in the downstream
+    check_log_contain_with_retry 'finish to handle ddls in optimistic shard mode' $WORK_DIR/worker1/log/dm-worker.log
+    check_log_contain_with_retry 'finish to handle ddls in optimistic shard mode' $WORK_DIR/worker2/log/dm-worker.log
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column c int;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(6,6);"

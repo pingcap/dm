@@ -1615,7 +1615,7 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(colm, DeepEquals, colm1)
 
-	// TrySync for the second table, drop column b, this column should be dropped
+	// TrySync for the second table, drop column b, this column should be fully dropped
 	DDLs, err = l.TrySync(newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti0, []*model.TableInfo{ti3}, vers), tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
@@ -1635,12 +1635,12 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 	c.Assert(l.versions, DeepEquals, vers)
 	c.Assert(l.IsResolved(), IsFalse)
 
-	// TrySync for the first table, add column b, should fail, because this column isn't fully dropped in the downstream
+	// TrySync for the first table, add column c, should fail, because this column isn't fully dropped in the downstream
 	_, err = l.TrySync(newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs4, ti1, []*model.TableInfo{ti0}, vers), tts)
 	c.Assert(err, ErrorMatches, ".*add column c that wasn't fully dropped in downstream.*")
 	c.Assert(l.IsResolved(), IsFalse)
 
-	// TrySync for the second table, drop column b, this column should be dropped
+	// TrySync for the second table, drop column c, this column should be fully dropped
 	DDLs, err = l.TrySync(newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs1, ti3, []*model.TableInfo{ti2}, vers), tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -1649,7 +1649,7 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 	// Simulate watch done operation from dm-worker
 	c.Assert(l.DeleteColumnsByDDLs(DDLs), IsNil)
 
-	// TrySync for the first table, add column b, should succeed, because this column is fully dropped in the downstream
+	// TrySync for the first table, add column c, should succeed, because this column is fully dropped in the downstream
 	DDLs, err = l.TrySync(newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs4, ti1, []*model.TableInfo{ti0}, vers), tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs4)
