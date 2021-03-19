@@ -62,7 +62,7 @@ type Lock struct {
 
 	// record the partially dropped columns
 	// column name -> source -> upSchema -> upTable -> interface{}
-	columns map[string]map[string]map[string]map[string]interface{}
+	columns map[string]map[string]map[string]map[string]struct{}
 }
 
 // NewLock creates a new Lock instance.
@@ -79,7 +79,7 @@ func NewLock(cli *clientv3.Client, ID, task, downSchema, downTable string, ti *m
 		done:       make(map[string]map[string]map[string]bool),
 		synced:     true,
 		versions:   make(map[string]map[string]map[string]int64),
-		columns:    make(map[string]map[string]map[string]map[string]interface{}),
+		columns:    make(map[string]map[string]map[string]map[string]struct{}),
 	}
 	l.addTables(tts)
 	metrics.ReportDDLPending(task, metrics.DDLPendingNone, metrics.DDLPendingSynced)
@@ -558,19 +558,21 @@ func (l *Lock) AddDroppedColumn(info Info, col string) error {
 	}
 
 	if _, ok := l.columns[col]; !ok {
-		l.columns[col] = make(map[string]map[string]map[string]interface{})
+		l.columns[col] = make(map[string]map[string]map[string]struct{})
 	}
 	if _, ok := l.columns[col][source]; !ok {
-		l.columns[col][source] = make(map[string]map[string]interface{})
+		l.columns[col][source] = make(map[string]map[string]struct{})
 	}
 	if _, ok := l.columns[col][source][upSchema]; !ok {
-		l.columns[col][source][upSchema] = make(map[string]interface{})
+		l.columns[col][source][upSchema] = make(map[string]struct{})
 	}
 	l.columns[col][source][upSchema][upTable] = struct{}{}
 	return nil
 }
 
-// DeleteColumnsByDDLs deletes the dropped columns by DDLs.
+// DeleteColumnsByDDLs deletes the partially dropped columns that extracted from DDLs.
+// We can remove columns from the partially dropped columns map unless this column is dropped in the downstream database,
+// that is to say, op.Done is true and ddls contains drop column DDL.
 func (l *Lock) DeleteColumnsByDDLs(ddls []string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()

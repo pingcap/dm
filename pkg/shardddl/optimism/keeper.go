@@ -27,8 +27,8 @@ import (
 type LockKeeper struct {
 	mu    sync.RWMutex
 	locks map[string]*Lock // lockID -> Lock
-	// lockID -> column name -> source -> upSchema -> upTable -> interface{}
-	colm map[string]map[string]map[string]map[string]map[string]interface{}
+	// lockID -> column name -> source -> upSchema -> upTable -> struct{}
+	colm map[string]map[string]map[string]map[string]map[string]struct{}
 }
 
 // NewLockKeeper creates a new LockKeeper instance.
@@ -113,7 +113,7 @@ func (lk *LockKeeper) Clear() {
 }
 
 // SetColumnMap sets the column map received from etcd
-func (lk *LockKeeper) SetColumnMap(colm map[string]map[string]map[string]map[string]map[string]interface{}) {
+func (lk *LockKeeper) SetColumnMap(colm map[string]map[string]map[string]map[string]map[string]struct{}) {
 	lk.mu.Lock()
 	defer lk.mu.Unlock()
 

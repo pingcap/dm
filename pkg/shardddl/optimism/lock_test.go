@@ -31,6 +31,9 @@ var _ = Suite(&testLock{})
 
 func (t *testLock) SetUpSuite(c *C) {
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)
+}
+
+func (t *testLock) TearDownSuite(c *C) {
 	clearTestInfoOperation(c)
 }
 
