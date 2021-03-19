@@ -100,7 +100,6 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		newTIs         = info.TableInfosAfter
 		infoVersion    = info.Version
 		ignoreConflict = info.IgnoreConflict
-		oldTable       = schemacmp.Encode(info.TableInfoBefore)
 	)
 	l.mu.Lock()
 	defer func() {
@@ -150,6 +149,11 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		return ddls, terror.ErrMasterInconsistentOptimisticDDLsAndInfo.Generate(len(ddls), len(newTIs))
 	}
 
+	// should not happen
+	if info.TableInfoBefore == nil {
+		return ddls, terror.ErrMasterOptimisticTableInfoBeforeNotExist.Generate(ddls)
+	}
+	oldTable := schemacmp.Encode(info.TableInfoBefore)
 	// handle the case where <callerSource, callerSchema, callerTable>
 	// is not in old source tables and current new source tables.
 	// duplicate append is not a problem.

@@ -17,6 +17,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -44,6 +45,10 @@ func (lk *LockKeeper) TrySync(info Info, tts []TargetTable) (string, []string, e
 
 	lk.mu.Lock()
 	defer lk.mu.Unlock()
+
+	if info.TableInfoBefore == nil {
+		return "", nil, terror.ErrMasterOptimisticTableInfoBeforeNotExist.Generate(info.DDLs)
+	}
 
 	if l, ok = lk.locks[lockID]; !ok {
 		lk.locks[lockID] = NewLock(lockID, info.Task, info.DownSchema, info.DownTable, info.TableInfoBefore, tts)
