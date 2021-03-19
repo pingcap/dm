@@ -331,7 +331,8 @@ function DM_028_CASE() {
 }
 
 function DM_028() {
-    run_case 028 "single-source-pessimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key);\"" "clean_table" ""
+    run_sql_tidb "create table ${shardddl}.${tb} (a varchar(10), primary key(a) clustered);"
+    run_case 028 "single-source-pessimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (a varchar(10), PRIMARY KEY (a));\"" "clean_table" ""
 }
 
 function DM_030_CASE() {
