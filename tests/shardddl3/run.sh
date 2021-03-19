@@ -1323,9 +1323,6 @@ function DM_125_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "show-ddl-locks" \
-        "\"unsynced\": \[[\n ]*\]" 1
 }
 
 # Drop multiple indexes and then rollback.
@@ -1358,9 +1355,6 @@ function DM_126_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9,9,9);"
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "show-ddl-locks" \
-        "\"unsynced\": \[[\n ]*\]" 1
 }
 
 # Ajust multiple indexes combination and then rollback.
@@ -1393,9 +1387,6 @@ function DM_127_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "show-ddl-locks" \
-        "\"unsynced\": \[[\n ]*\]" 1
 }
 
 # Add and drop index at the same time and then rollback.
