@@ -464,6 +464,130 @@ function DM_035() {
     run_case 035 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
+
+function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,'ccc');"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} change a c int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,'fff');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} change a c int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,'ggg');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,'hhh');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,'iii');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} change a c int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,'jjj');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,'kkk');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,'lll');"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "because schema conflict detected" 2
+
+    # first, execute sql in downstream TiDB
+    run_sql_tidb "alter table ${shardddl}.${tb} change a c int;"
+
+    # second, skip the unsupported ddl
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "handle-error test skip" \
+        "\"result\": true" 3
+
+    # dmls fail
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "Paused" 2
+        #"Error 1054: Unknown column 'a' in 'field list'" 2 // may more than 2 dml error
+
+    # third, set schema to be same with upstream
+    # TODO: support set schema automatically base on upstream schema
+    echo 'CREATE TABLE `tb1` ( `c` int NOT NULL, `b` varchar(10) DEFAULT NULL, PRIMARY KEY (`c`)) ENGINE=InnoDB DEFAULT CHARSET=latin1' > ${WORK_DIR}/schema1.sql
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-schema set -s mysql-replica-01 test -d ${shardddl1} -t ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
+        "\"result\": true" 2
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-schema set -s mysql-replica-02 test -d ${shardddl1} -t ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
+        "\"result\": true" 2
+
+    # fourth, resume-task
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task test" \
+        "\"result\": true" 3
+    
+    # WARN: if it's sequence_sharding, the other tables will not be fixed
+    # source2.table2's dml fails
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "Error 1054: Unknown column 'a' in 'field list'" 1
+
+    # WARN: set schema of source2.table2
+    # Actually it should be tb2(a,b), dml is {a: 9, b: 'iii'}
+    # Now we set it to tb2(c,b), dml become {c: 9, b: 'iii'}
+    # This may only work for a "rename ddl"
+    echo 'CREATE TABLE `tb2` ( `c` int NOT NULL, `b` varchar(10) DEFAULT NULL, PRIMARY KEY (`c`)) ENGINE=InnoDB DEFAULT CHARSET=latin1' > ${WORK_DIR}/schema2.sql
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-schema set -s mysql-replica-02 test -d ${shardddl1} -t ${tb2} ${WORK_DIR}/schema2.sql --flush --sync" \
+        "\"result\": true" 2
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "resume-task test -s mysql-replica-02" \
+        "\"result\": true" 2
+
+    # source2.table2's ddl fails
+    # Unknown column 'a' in 'tb2'
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "Unknown column 'a' in 'tb2'" 1
+
+    # skip source2.table2's ddl
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "handle-error test skip -s mysql-replica-02" \
+        "\"result\": true" 2
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"result\": true" 3
+
+    # now, it works as normal
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column d int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(13,'mmm',13);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(14,'nnn');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(15,'ooo');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column d int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(16,'ppp',16);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(17,'qqq',17);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(18,'rrr');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column d int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(19,'sss',19);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(20,'ttt',20);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(21,'uuu',21);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"result\": true" 3
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "no DDL lock exists" 1
+}
+
+# workaround of rename column in optimistic mode currently until we support it
+# maybe also work for some other unsupported ddls in optimistic mode
+function DM_RENAME_COLUMN_OPTIMISTIC() {
+    run_case RENAME_COLUMN_OPTIMISTIC "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10)) DEFAULT CHARSET=latin1;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10)) DEFAULT CHARSET=latin1;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10)) DEFAULT CHARSET=latin1;\"" \
+    "clean_table" "optimistic"
+}
+
 function run() {
     init_cluster
     init_database
@@ -477,6 +601,7 @@ function run() {
         DM_${i}
         sleep 1
     done
+    DM_RENAME_COLUMN_OPTIMISTIC
 }
 
 cleanup_data $shardddl

@@ -53,6 +53,9 @@ type Info struct {
 
 	// only set it when get/watch from etcd
 	Version int64 `json:"-"`
+
+	// use to resolve conflict
+	IgnoreConflict bool `json:"ignore-conflict"`
 }
 
 // NewInfo creates a new Info instance.
