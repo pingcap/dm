@@ -77,9 +77,9 @@ function DM_073() {
 
 function DM_076_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} add primary key(id);"
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "query-status test" \
-            "Unsupported add primary key" 1
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 function DM_076() {
@@ -99,7 +99,9 @@ function DM_077_CASE() {
 }
 
 function DM_077() {
+    run_sql_tidb "create table ${shardddl}.${tb} (id int, primary key(id) clustered);"
     run_case 077 "single-source-pessimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key);\"" "clean_table" ""
+    run_sql_tidb "create table ${shardddl}.${tb} (id int, primary key(id) clustered);"
     run_case 077 "single-source-optimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key);\"" "clean_table" ""
 }
 
@@ -112,15 +114,9 @@ function DM_078_CASE() {
 }
 
 function DM_078() {
-    # start a TiDB alter-pk
-    pkill -hup tidb-server 2>/dev/null || true
-    wait_process_exit tidb-server
-    run_tidb_server 4000 $TIDB_PASSWORD $cur/conf/tidb-alter-pk-config.toml
-
     run_case 078 "single-source-pessimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int unique, a int, b varchar(10));\"" "clean_table" ""
     run_case 078 "single-source-optimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int unique, a int, b varchar(10));\"" "clean_table" ""
 
-    # don't revert tidb until DM_079
 }
 
 function DM_079_CASE() {
@@ -134,11 +130,6 @@ function DM_079_CASE() {
 function DM_079() {
     run_case 079 "single-source-pessimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"" "clean_table" ""
     run_case 079 "single-source-optimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"" "clean_table" ""
-
-    # revert tidb
-    pkill -hup tidb-server 2>/dev/null || true
-    wait_process_exit tidb-server
-    run_tidb_server 4000 $TIDB_PASSWORD
 }
 
 function DM_080_CASE() {
