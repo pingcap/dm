@@ -1576,13 +1576,13 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 			},
 		}
 
-		colm1 = map[string]map[string]map[string]map[string]map[string]interface{}{
+		colm1 = map[string]map[string]map[string]map[string]map[string]struct{}{
 			ID: {
 				"b": {source: {db: {tbls[0]: struct{}{}}}},
 				"c": {source: {db: {tbls[0]: struct{}{}}}},
 			},
 		}
-		colm2 = map[string]map[string]map[string]map[string]map[string]interface{}{
+		colm2 = map[string]map[string]map[string]map[string]map[string]struct{}{
 			ID: {
 				"c": {source: {db: {tbls[0]: struct{}{}}}},
 			},
