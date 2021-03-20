@@ -59,7 +59,6 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 	// NOTE: tidb uses a **global** config so can't isolate tracker's config from each other. If that isolation is needed,
 	// we might SetGlobalConfig before every call to tracker, or use some patch like https://github.com/bouk/monkey
 	toSet := tidbConfig.NewConfig()
-	toSet.AlterPrimaryKey = true
 	// bypass wait time of https://github.com/pingcap/tidb/pull/20550
 	toSet.TiKVClient.AsyncCommit.SafeWindow = 0
 	toSet.TiKVClient.AsyncCommit.AllowedClockDrift = 0
