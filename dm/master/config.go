@@ -45,6 +45,7 @@ const (
 	defaultAutoCompactionMode      = "periodic"
 	defaultAutoCompactionRetention = "1h"
 	defaultQuotaBackendBytes       = 2 * 1024 * 1024 * 1024 // 2GB
+	quotaBackendBytesLowerBound    = 500 * 1024 * 1024      // 500MB
 )
 
 var (
@@ -308,6 +309,13 @@ func (c *Config) adjust() error {
 
 	if c.Join != "" {
 		c.Join = utils.WrapSchemes(c.Join, c.SSLCA != "")
+	}
+
+	if c.QuotaBackendBytes < quotaBackendBytesLowerBound {
+		log.L().Warn("quota-backend-bytes is too low, will adjust it",
+			zap.Int64("from", c.QuotaBackendBytes),
+			zap.Int64("to", quotaBackendBytesLowerBound))
+		c.QuotaBackendBytes = quotaBackendBytesLowerBound
 	}
 
 	return err
