@@ -99,7 +99,7 @@ func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 
 func (t *testServer) TestServer(c *C) {
 	var (
-		masterAddr   = "127.0.0.1:8261"
+		masterAddr   = tempurl.Alloc()[len("http://"):]
 		workerAddr1  = "127.0.0.1:8262"
 		keepAliveTTL = int64(1)
 	)
@@ -109,6 +109,7 @@ func (t *testServer) TestServer(c *C) {
 	defer ETCD.Close()
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.Join = masterAddr
 	cfg.KeepAliveTTL = keepAliveTTL
 	cfg.RelayKeepAliveTTL = keepAliveTTL
 
@@ -227,7 +228,7 @@ func (t *testServer) TestServer(c *C) {
 
 func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 	var (
-		masterAddr   = "127.0.0.1:8261"
+		masterAddr   = tempurl.Alloc()[len("http://"):]
 		keepAliveTTL = int64(1)
 	)
 	// start etcd server
@@ -237,6 +238,7 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 	defer ETCD.Close()
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.Join = masterAddr
 	cfg.KeepAliveTTL = keepAliveTTL
 
 	// new etcd client
@@ -349,7 +351,7 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 
 func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	var (
-		masterAddr   = "127.0.0.1:8261"
+		masterAddr   = tempurl.Alloc()[len("http://"):]
 		keepAliveTTL = int64(1)
 		startRev     = int64(1)
 	)
@@ -359,6 +361,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	defer ETCD.Close()
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.Join = masterAddr
 	cfg.KeepAliveTTL = keepAliveTTL
 	cfg.RelayKeepAliveTTL = keepAliveTTL
 
