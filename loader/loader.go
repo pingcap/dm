@@ -1197,7 +1197,7 @@ type restoreSchemaJob struct {
 	filepath string // file path of dumpped schema file
 }
 
-// `jobQueue` of schema restoring which (only)support consumptions concurrently
+// `jobQueue` of schema restoring which (only) support consumptions concurrently
 type jobQueue struct {
 	ctx           context.Context
 	msgq          chan *restoreSchemaJob // job message queue channel
@@ -1276,7 +1276,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	dbSessionPool := make([]*DBConn, 0, concurrency)
 
 	// run consumers of restore database schema queue
-	dbRestoreQueue := newJobQueue(ctx, concurrency, concurrency /** length of queue*/)
+	dbRestoreQueue := newJobQueue(ctx, concurrency, concurrency /** length of queue */)
 	dbRestoreQueue.startConsumers(func(ctx context.Context, job *restoreSchemaJob) error {
 		// restore database schema
 		job.loader.logger.Info("start to create schema", zap.String("schema file", job.filepath))
@@ -1339,7 +1339,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	}
 
 	// run consumers of restore table schema queue
-	tblRestoreQueue := newJobQueue(ctx, concurrency, concurrency /** length of queue*/)
+	tblRestoreQueue := newJobQueue(ctx, concurrency, concurrency /** length of queue */)
 	tblRestoreQueue.startConsumers(func(ctx context.Context, job *restoreSchemaJob) error {
 		job.loader.logger.Info("start to create table", zap.String("table file", job.filepath))
 		err := job.loader.restoreTable(ctx, job.session, job.filepath, job.database, job.table)
