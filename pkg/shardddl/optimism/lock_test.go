@@ -650,10 +650,10 @@ func (t *testLock) TestLockTrySyncNewTable(c *C) {
 	c.Assert(ready[source1], HasLen, 1)
 	c.Assert(ready[source1][db1], HasLen, 2)
 	c.Assert(ready[source1][db1][tbl1], IsTrue)
-	c.Assert(ready[source1][db1][tbl2], IsFalse)
+	c.Assert(ready[source1][db1][tbl2], IsTrue)
 	c.Assert(ready[source2], HasLen, 1)
 	c.Assert(ready[source2][db2], HasLen, 2)
-	c.Assert(ready[source2][db2][tbl1], IsFalse)
+	c.Assert(ready[source2][db2][tbl1], IsTrue)
 	c.Assert(ready[source2][db2][tbl2], IsTrue)
 
 	info = newInfoWithVersion(task, source1, db1, tbl2, downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
@@ -670,26 +670,8 @@ func (t *testLock) TestLockTrySyncNewTable(c *C) {
 	c.Assert(ready[source1][db1][tbl2], IsTrue)
 	c.Assert(ready[source2], HasLen, 1)
 	c.Assert(ready[source2][db2], HasLen, 2)
-	c.Assert(ready[source2][db2][tbl1], IsFalse)
-	c.Assert(ready[source2][db2][tbl2], IsTrue)
-
-	info = newInfoWithVersion(task, source2, db2, tbl1, downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
-	DDLs, err = l.TrySync(info, tts)
-	c.Assert(err, IsNil)
-	c.Assert(DDLs, DeepEquals, DDLs1)
-	c.Assert(l.versions, DeepEquals, vers)
-
-	ready = l.Ready()
-	c.Assert(ready, HasLen, 2)
-	c.Assert(ready[source1], HasLen, 1)
-	c.Assert(ready[source1][db1], HasLen, 2)
-	c.Assert(ready[source1][db1][tbl1], IsTrue)
-	c.Assert(ready[source1][db1][tbl2], IsTrue)
-	c.Assert(ready[source2], HasLen, 1)
-	c.Assert(ready[source2][db2], HasLen, 2)
 	c.Assert(ready[source2][db2][tbl1], IsTrue)
 	c.Assert(ready[source2][db2][tbl2], IsTrue)
-
 }
 
 func (t *testLock) TestLockTrySyncRevert(c *C) {
