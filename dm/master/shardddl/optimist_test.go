@@ -148,6 +148,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	t.testOptimist(c, noRestart)
 	t.testOptimist(c, restartOnly)
 	t.testOptimist(c, restartNewInstance)
+	t.TestSortInfos(c)
 }
 
 func (t *testOptimist) testOptimist(c *C, restart int) {
@@ -1028,4 +1029,71 @@ func (t *testOptimist) TestOptimistInitSchema(c *C) {
 	is, _, err = optimism.GetInitSchema(etcdTestCli, task, downSchema, downTable)
 	c.Assert(err, IsNil)
 	c.Assert(is.TableInfo, DeepEquals, ti1) // the init schema is ti1 now.
+}
+
+func (t *testOptimist) TestSortInfos(c *C) {
+	defer clearOptimistTestSourceInfoOperation(c)
+
+	var (
+		task       = "test-optimist-init-schema"
+		sources     = []string{"mysql-replica-1","mysql-replica-2"}
+		upSchema   = "foo"
+		upTables   = []string{"bar-1", "bar-2"}
+		downSchema = "foo"
+		downTable  = "bar"
+
+		p           = parser.New()
+		se          = mock.NewContext()
+		tblID int64 = 111
+		DDLs1       = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		DDLs2       = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
+		ti0         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 INT)`)
+		i11         = optimism.NewInfo(task, sources[0], upSchema, upTables[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i12         = optimism.NewInfo(task, sources[0], upSchema, upTables[1], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i21         = optimism.NewInfo(task, sources[1], upSchema, upTables[1], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2})
+	)
+
+	rev1, err := optimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+	ifm, _, err := optimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	infos := sortInfos(ifm)
+	c.Assert(len(infos), Equals, 1)
+	i11.Version = 1
+	i11.ReVision = rev1
+	c.Assert(infos[0], DeepEquals, i11)
+
+	rev2, err := optimism.PutInfo(etcdTestCli, i12)
+	c.Assert(err, IsNil)
+	ifm, _, err = optimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	infos = sortInfos(ifm)
+	c.Assert(len(infos), Equals, 2)
+	i11.Version = 1
+	i11.ReVision = rev1
+	i12.Version = 1
+	i12.ReVision = rev2
+	c.Assert(infos[0], DeepEquals, i11)
+	c.Assert(infos[1], DeepEquals, i12)
+
+	rev3, err := optimism.PutInfo(etcdTestCli, i21)
+	c.Assert(err, IsNil)
+	rev4, err := optimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+	ifm, _, err = optimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	infos = sortInfos(ifm)
+	c.Assert(len(infos), Equals, 3)
+
+	i11.Version = 2
+	i11.ReVision = rev4
+	i12.Version = 1
+	i12.ReVision = rev2
+	i21.Version = 1
+	i21.ReVision = rev3
+	c.Assert(infos[0], DeepEquals, i12)
+	c.Assert(infos[1], DeepEquals, i21)
+	c.Assert(infos[2], DeepEquals, i11)
 }
