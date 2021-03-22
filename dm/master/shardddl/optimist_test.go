@@ -1036,7 +1036,7 @@ func (t *testOptimist) TestSortInfos(c *C) {
 
 	var (
 		task       = "test-optimist-init-schema"
-		sources     = []string{"mysql-replica-1","mysql-replica-2"}
+		sources    = []string{"mysql-replica-1", "mysql-replica-2"}
 		upSchema   = "foo"
 		upTables   = []string{"bar-1", "bar-2"}
 		downSchema = "foo"

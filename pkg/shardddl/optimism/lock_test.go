@@ -14,11 +14,14 @@
 package optimism
 
 import (
+	"testing"
+
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"github.com/pingcap/tidb/util/mock"
+	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -27,6 +30,15 @@ import (
 type testLock struct{}
 
 var _ = Suite(&testLock{})
+
+func TestLock(t *testing.T) {
+	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
+	defer mockCluster.Terminate(t)
+
+	etcdTestCli = mockCluster.RandClient()
+
+	TestingT(t)
+}
 
 func (t *testLock) SetUpSuite(c *C) {
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)
@@ -1596,4 +1608,94 @@ func newInfoWithVersion(task, source, upSchema, upTable, downSchema, downTable s
 	vers[source][upSchema][upTable]++
 	info.Version = vers[source][upSchema][upTable]
 	return info
+}
+
+func (t *testLock) TestLockTrySyncReceived(c *C) {
+	var (
+		ID               = "test_lock_try_sync_index-`foo`.`bar`"
+		task             = "test_lock_try_sync_index"
+		source           = "mysql-replica-1"
+		downSchema       = "db"
+		downTable        = "bar"
+		db               = "db"
+		tbls             = []string{"bar1", "bar2"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar DROP INDEX idx_c1"}
+		DDLs2            = []string{"ALTER TABLE bar ADD INDEX new_idx(c1)"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, UNIQUE INDEX idx_c1(c1))`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, INDEX new_idx(c1))`)
+		tables           = map[string]map[string]struct{}{
+			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
+		}
+		tts = []TargetTable{
+			newTargetTable(task, source, downSchema, downTable, tables),
+		}
+
+		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+
+		vers = map[string]map[string]map[string]int64{
+			source: {
+				db: {tbls[0]: 0, tbls[1]: 0},
+			},
+		}
+		received = map[string]map[string]map[string]bool{
+			source: {
+				db: {tbls[0]: false, tbls[1]: false},
+			},
+		}
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// try sync for one table, `DROP INDEX` returned directly (to make schema become more compatible).
+	// `DROP INDEX` is handled like `ADD COLUMN`.
+	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
+	DDLs, err := l.TrySync(info, tts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	c.Assert(l.versions, DeepEquals, vers)
+	synced, remain := l.IsSynced()
+	c.Assert(synced, Equals, l.synced)
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+
+	received[source][db][tbls[0]] = true
+	// tb1 equals joined
+	c.Assert(l.received, DeepEquals, received)
+	cmp, err := l.tables[source][db][tbls[1]].Compare(schemacmp.Encode(ti0))
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+
+	// try sync ADD another INDEX for another table
+	// `ADD INDEX` is handled like `DROP COLUMN`.
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2}, vers)
+	DDLs, err = l.TrySync(info, tts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, []string{}) // no DDLs returned
+	c.Assert(l.versions, DeepEquals, vers)
+	synced, remain = l.IsSynced()
+	c.Assert(synced, Equals, l.synced)
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+
+	received[source][db][tbls[1]] = true
+	// tb0 equals joined
+	c.Assert(l.received, DeepEquals, received)
+	cmp, err = l.tables[source][db][tbls[0]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+
+	// try sync ADD INDEX for first table
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2}, vers)
+	DDLs, err = l.TrySync(info, tts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs2)
+	c.Assert(l.versions, DeepEquals, vers)
+	c.Assert(l.received, DeepEquals, received)
+	t.checkLockSynced(c, l)
 }
