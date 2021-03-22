@@ -255,27 +255,43 @@ func (o *Optimist) rebuildLocks() (revSource, revInfo, revOperation int64, err e
 	return revSource, revInfo, revOperation, nil
 }
 
+// sortInfos sort all infos by revision
+func sortInfos(ifm map[string]map[string]map[string]map[string]optimism.Info) []optimism.Info {
+	infos := make([]optimism.Info, 0, len(ifm))
+
+	for _, ifTask := range ifm {
+		for _, ifSource := range ifTask {
+			for _, ifSchema := range ifSource {
+				for _, info := range ifSchema {
+					infos = append(infos, info)
+				}
+			}
+		}
+	}
+
+	// sort according to the ReVision
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].ReVision < infos[j].ReVision
+	})
+	return infos
+}
+
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.
 func (o *Optimist) recoverLocks(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
 	opm map[string]map[string]map[string]map[string]optimism.Operation) error {
 	// construct locks based on the shard DDL info.
-	for task, ifTask := range ifm {
-		for _, ifSource := range ifTask {
-			for _, ifSchema := range ifSource {
-				for _, info := range ifSchema {
-					tts := o.tk.FindTables(task, info.DownSchema, info.DownTable)
-					_, _, err := o.lk.TrySync(info, tts)
-					if err != nil {
-						return err
-					}
-					// never mark the lock operation from `done` to `not-done` when recovering.
-					err = o.handleLock(info, tts, true)
-					if err != nil {
-						return err
-					}
-				}
-			}
+	infos := sortInfos(ifm)
+	for _, info := range infos {
+		tts := o.tk.FindTables(info.Task, info.DownSchema, info.DownTable)
+		_, _, err := o.lk.TrySync(info, tts)
+		if err != nil {
+			return err
+		}
+		// never mark the lock operation from `done` to `not-done` when recovering.
+		err = o.handleLock(info, tts, true)
+		if err != nil {
+			return err
 		}
 	}
 
