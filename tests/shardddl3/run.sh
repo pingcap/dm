@@ -1597,11 +1597,6 @@ function DM_132_CASE {
 
 # Expand the primary key field.
 function DM_132 {
-    # start a TiDB alter-pk
-    pkill -hup tidb-server 2>/dev/null || true
-    wait_process_exit tidb-server
-    run_tidb_server 4000 $TIDB_PASSWORD $cur/conf/tidb-alter-pk-config.toml
-
     run_case 132 "double-source-pessimistic" \
         "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
@@ -1612,8 +1607,6 @@ function DM_132 {
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
         "clean_table" "optimistic"
-
-    # don't revert tidb until DM_135
 }
 
 function DM_133_CASE {
@@ -1714,11 +1707,6 @@ function DM_135() {
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int auto_increment primary key, b int);\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb2} (a int auto_increment primary key, b int);\"" \
         "clean_table" "optimistic"
-
-    # revert tidb
-    pkill -hup tidb-server 2>/dev/null || true
-    wait_process_exit tidb-server
-    run_tidb_server 4000 $TIDB_PASSWORD
 }
 
 function DM_136_CASE {
