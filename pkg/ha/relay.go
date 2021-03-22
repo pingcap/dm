@@ -85,7 +85,7 @@ func GetAllRelayConfig(cli *clientv3.Client) (map[string]map[string]struct{}, in
 		worker := keys[0]
 		var (
 			ok      bool
-			workers = map[string]struct{}{}
+			workers map[string]struct{}
 		)
 		if workers, ok = ret[source]; !ok {
 			workers = map[string]struct{}{}
