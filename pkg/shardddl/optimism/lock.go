@@ -61,7 +61,7 @@ type Lock struct {
 	versions map[string]map[string]map[string]int64
 
 	// record the partially dropped columns
-	// column name -> source -> upSchema -> upTable -> interface{}
+	// column name -> source -> upSchema -> upTable -> struct{}
 	columns map[string]map[string]map[string]map[string]struct{}
 }
 
@@ -571,7 +571,7 @@ func (l *Lock) AddDroppedColumn(info Info, col string) error {
 }
 
 // DeleteColumnsByDDLs deletes the partially dropped columns that extracted from DDLs.
-// We can remove columns from the partially dropped columns map unless this column is dropped in the downstream database,
+// We can not remove columns from the partially dropped columns map unless this column is dropped in the downstream database,
 // that is to say, op.Done is true and ddls contains drop column DDL.
 func (l *Lock) DeleteColumnsByDDLs(ddls []string) error {
 	l.mu.Lock()
