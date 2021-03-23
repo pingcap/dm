@@ -165,7 +165,7 @@ func (r *Relay) Init(ctx context.Context) (err error) {
 	r.relayMetaHub = pkgstreamer.GetRelayMetaHub()
 	r.relayMetaHub.ClearMeta()
 
-	return reportRelayLogSpaceInBackground(r.cfg.RelayDir)
+	return reportRelayLogSpaceInBackground(ctx, r.cfg.RelayDir)
 }
 
 // Process implements the dm.Unit interface.
