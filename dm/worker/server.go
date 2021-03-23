@@ -115,20 +115,6 @@ func (s *Server) Start() error {
 	}
 
 	s.setWorker(nil, true)
-	bound, sourceCfg, revBound, err := ha.GetSourceBoundConfig(s.etcdClient, s.cfg.Name)
-	if err != nil {
-		return err
-	}
-	if !bound.IsEmpty() {
-		log.L().Warn("worker has been assigned source before keepalive", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted))
-		err = s.startWorker(&sourceCfg)
-		s.setSourceStatus(bound.Source, err, true)
-		if err != nil {
-			// if DM-worker can't handle pre-assigned source before keepalive, it simply exits with the error,
-			// because no re-assigned mechanism exists for keepalived DM-worker yet.
-			return err
-		}
-	}
 
 	s.wg.Add(1)
 	go func() {
@@ -144,10 +130,36 @@ func (s *Server) Start() error {
 
 	s.startKeepAlive()
 
+	bound, sourceCfg, revBound, err := ha.GetSourceBoundConfig(s.etcdClient, s.cfg.Name)
+	if err != nil {
+		return err
+	}
+	if !bound.IsEmpty() {
+		log.L().Warn("worker has been assigned source before keepalive", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted))
+		w, err2 := s.getOrStartWorker(&sourceCfg)
+		s.setSourceStatus(bound.Source, err2, true)
+		if err2 != nil {
+			// if DM-worker can't handle pre-assigned source before keepalive, it simply exits with the error,
+			// because no re-assigned mechanism exists for keepalived DM-worker yet.
+			return err2
+		}
+		if sourceCfg.EnableRelay {
+			s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
+			if err2 = w.EnableRelay(); err2 != nil {
+				return err2
+			}
+		}
+		if err2 = w.EnableHandleSubtasks(); err2 != nil {
+			return err2
+		}
+		w.l.Info("started to handle mysql source", zap.String("sourceCfg", sourceCfg.String()))
+	}
+
 	s.wg.Add(1)
 	go func(ctx context.Context) {
 		defer s.wg.Done()
 		for {
+			// TODO: ObserveRelayConfig?
 			err1 := s.observeSourceBound(ctx, revBound)
 			if err1 == nil {
 				return
@@ -305,10 +317,19 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 							log.L().Error("fail to stop worker", zap.Error(err))
 							return err // return if failed to stop the worker.
 						}
-						err1 = s.startWorker(&cfg)
-						s.setSourceStatus(bound.Source, err1, true)
-						if err1 != nil {
-							log.L().Error("fail to operate sourceBound on worker", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted), zap.Error(err1))
+						w, err2 := s.getOrStartWorker(&cfg)
+						if err2 == nil {
+							if cfg.EnableRelay {
+								s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
+								if err2 = w.EnableRelay(); err2 != nil {
+									return err2
+								}
+							}
+							err2 = w.EnableHandleSubtasks()
+						}
+						s.setSourceStatus(bound.Source, err2, true)
+						if err2 != nil {
+							w.l.Error("fail to operate sourceBound on worker", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted), zap.Error(err2))
 						}
 					}
 				}
@@ -415,8 +436,10 @@ func (s *Server) stopWorker(sourceID string) error {
 		s.Unlock()
 		return terror.ErrWorkerSourceNotMatch
 	}
+	// TODO: and when disable relay
 	s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
 	s.setWorker(nil, false)
+	s.setSourceStatus("", nil, false)
 	s.Unlock()
 	w.Close()
 	return nil
@@ -470,7 +493,17 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 	if !ok {
 		return terror.ErrWorkerFailToGetSourceConfigFromEtcd.Generate(bound.Source)
 	}
-	return s.startWorker(&sourceCfg)
+	w, err := s.getOrStartWorker(&sourceCfg)
+	if err != nil {
+		return err
+	}
+	if sourceCfg.EnableRelay {
+		s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
+		if err = w.EnableRelay(); err != nil {
+			return err
+		}
+	}
+	return w.EnableHandleSubtasks()
 }
 
 // QueryStatus implements WorkerServer.QueryStatus
@@ -492,11 +525,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		return resp, nil
 	}
 
-	resp.SubTaskStatus = w.QueryStatus(ctx, req.Name)
-	if w.relayHolder != nil {
-		sourceStatus.RelayStatus = w.relayHolder.Status(ctx)
-	}
-
+	resp.SubTaskStatus, sourceStatus.RelayStatus = w.QueryStatus(ctx, req.Name)
 	unifyMasterBinlogPos(resp, w.cfg.EnableGTID)
 
 	if len(resp.SubTaskStatus) == 0 {
@@ -546,42 +575,33 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 	}, nil
 }
 
-func (s *Server) startWorker(cfg *config.SourceConfig) error {
+func (s *Server) getOrStartWorker(cfg *config.SourceConfig) (*Worker, error) {
 	s.Lock()
 	defer s.Unlock()
 	if w := s.getWorker(false); w != nil {
 		if w.cfg.SourceID == cfg.SourceID {
 			log.L().Info("mysql source is being handled", zap.String("sourceID", s.worker.cfg.SourceID))
-			return nil
+			return w, nil
 		}
-		return terror.ErrWorkerAlreadyStart.Generate()
+		return nil, terror.ErrWorkerAlreadyStart.Generate(w.name, w.cfg.SourceID, cfg.SourceID)
 	}
 
 	w, err := NewWorker(cfg, s.etcdClient, s.cfg.Name)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	s.setWorker(w, false)
 
-	if cfg.EnableRelay {
-		s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
-		if err2 := w.EnableRelay(); err2 != nil {
-			return err2
-		}
-	}
 	go w.Start()
 
 	isStarted := utils.WaitSomething(50, 100*time.Millisecond, func() bool {
-		return w.closed.Get() == closedFalse
+		return !w.closed.Get()
 	})
 	if !isStarted {
 		// TODO: add more mechanism to wait or un-bound the source
-		return terror.ErrWorkerNoStart
+		return nil, terror.ErrWorkerNoStart
 	}
-
-	err = w.EnableHandleSubtasks()
-	log.L().Info("started to handle mysql source", zap.String("sourceCfg", cfg.String()))
-	return err
+	return w, nil
 }
 
 func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
@@ -650,10 +670,10 @@ func getMinLocForSubTask(ctx context.Context, subTaskCfg config.SubTaskConfig) (
 // see https://github.com/pingcap/dm/issues/727
 func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 	var (
-		syncStatus          []*pb.SubTaskStatus_Sync
-		syncMasterBinlog    []*mysql.Position
-		lastestMasterBinlog mysql.Position // not pointer, to make use of zero value and avoid nil check
-		relayMasterBinlog   *mysql.Position
+		syncStatus         []*pb.SubTaskStatus_Sync
+		syncMasterBinlog   []*mysql.Position
+		latestMasterBinlog mysql.Position // not pointer, to make use of zero value and avoid nil check
+		relayMasterBinlog  *mysql.Position
 	)
 
 	// uninitialized mysql.Position is less than any initialized mysql.Position
@@ -661,10 +681,10 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 		var err error
 		relayMasterBinlog, err = utils.DecodeBinlogPosition(resp.SourceStatus.RelayStatus.MasterBinlog)
 		if err != nil {
-			log.L().Error("failed to decode relay's master binlog position", zap.Stringer("response", resp), zap.Error(err))
+			log.L().Warn("failed to decode relay's master binlog position", zap.Stringer("response", resp), zap.Error(err))
 			return
 		}
-		lastestMasterBinlog = *relayMasterBinlog
+		latestMasterBinlog = *relayMasterBinlog
 	}
 
 	for _, stStatus := range resp.SubTaskStatus {
@@ -674,11 +694,11 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 
 			position, err := utils.DecodeBinlogPosition(s.Sync.MasterBinlog)
 			if err != nil {
-				log.L().Error("failed to decode sync's master binlog position", zap.Stringer("response", resp), zap.Error(err))
+				log.L().Warn("failed to decode sync's master binlog position", zap.Stringer("response", resp), zap.Error(err))
 				return
 			}
-			if lastestMasterBinlog.Compare(*position) < 0 {
-				lastestMasterBinlog = *position
+			if latestMasterBinlog.Compare(*position) < 0 {
+				latestMasterBinlog = *position
 			}
 			syncMasterBinlog = append(syncMasterBinlog, position)
 		}
@@ -686,33 +706,33 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 
 	// re-check relay
 	if resp.SourceStatus.RelayStatus != nil && resp.SourceStatus.RelayStatus.Stage != pb.Stage_Stopped &&
-		lastestMasterBinlog.Compare(*relayMasterBinlog) != 0 {
+		latestMasterBinlog.Compare(*relayMasterBinlog) != 0 {
 
-		resp.SourceStatus.RelayStatus.MasterBinlog = lastestMasterBinlog.String()
+		resp.SourceStatus.RelayStatus.MasterBinlog = latestMasterBinlog.String()
 
 		// if enableGTID, modify output binlog position doesn't affect RelayCatchUpMaster, skip check
 		if !enableGTID {
 			relayPos, err := utils.DecodeBinlogPosition(resp.SourceStatus.RelayStatus.RelayBinlog)
 			if err != nil {
-				log.L().Error("failed to decode relay binlog position", zap.Stringer("response", resp), zap.Error(err))
+				log.L().Warn("failed to decode relay binlog position", zap.Stringer("response", resp), zap.Error(err))
 				return
 			}
-			catchUp := lastestMasterBinlog.Compare(*relayPos) == 0
+			catchUp := latestMasterBinlog.Compare(*relayPos) == 0
 
 			resp.SourceStatus.RelayStatus.RelayCatchUpMaster = catchUp
 		}
 	}
 	// re-check syncer
 	for i, sStatus := range syncStatus {
-		if lastestMasterBinlog.Compare(*syncMasterBinlog[i]) != 0 {
+		if latestMasterBinlog.Compare(*syncMasterBinlog[i]) != 0 {
 			syncerPos, err := utils.DecodeBinlogPosition(sStatus.Sync.SyncerBinlog)
 			if err != nil {
-				log.L().Error("failed to decode syncer binlog position", zap.Stringer("response", resp), zap.Error(err))
+				log.L().Warn("failed to decode syncer binlog position", zap.Stringer("response", resp), zap.Error(err))
 				return
 			}
-			synced := lastestMasterBinlog.Compare(*syncerPos) == 0
+			synced := latestMasterBinlog.Compare(*syncerPos) == 0
 
-			sStatus.Sync.MasterBinlog = lastestMasterBinlog.String()
+			sStatus.Sync.MasterBinlog = latestMasterBinlog.String()
 			sStatus.Sync.Synced = synced
 		}
 	}
