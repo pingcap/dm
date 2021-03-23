@@ -554,13 +554,12 @@ function test_multi_task_reduce_and_restart_worker() {
         check_port_offline ${worker_ports[$[ $wk - 1] ]} 20
         # just one worker was killed should be safe
         echo "${worker_inuse[$i]} was killed"
+        for name in ${task_name[@]}; do
+            run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+                "query-status $name"\
+                "\"stage\": \"Running\"" 4
+        done
         if [ $i = 0 ]; then
-            for name in ${task_name[@]}; do
-                run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-                    "query-status $name"\
-                    "\"stage\": \"Running\"" 4
-            done
-
             # waiting for syncing
             wait
             sleep 2
@@ -568,18 +567,6 @@ function test_multi_task_reduce_and_restart_worker() {
             check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
             check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml
             echo "data checked after one worker was killed"
-        else
-            status_str=""
-            for name in ${task_name[@]}; do
-                status_str=$status_str$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1":$MASTER_PORT query-status $name)
-            done
-            search_str="\"stage\": \"Running\""
-            running_count=$(echo $status_str | sed "s/$search_str/$search_str\n/g" | grep -c "$search_str")
-            if [ $running_count != 8 ]; then
-                echo "error running worker"
-                echo $status_str
-                exit 1
-            fi
         fi
     done
     echo "[$(date)] <<<<<< finish test_multi_task_reduce_and_restart_worker >>>>>>"
