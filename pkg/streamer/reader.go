@@ -437,10 +437,9 @@ func (r *BinlogReader) parseFile(
 	latestPos = offset                            // set to argument passed in
 	// when r.usingGTID, we can't return latestPos to continue parsing, because latestPos may lies between GTIDEvent and
 	// XIDEvent so replaceWithHeartbeat can't be correctly calculated
+	// TODO: should we send GTID related events only when receiving XID?
 	latestCommittedPos := offset
 	replaceWithHeartbeat := false
-
-	// should we send GTID related event when XID?
 
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		r.tctx.L().Debug("read event", zap.Reflect("header", e.Header))
