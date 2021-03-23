@@ -56,7 +56,7 @@ type Info struct {
 
 	// only set it when get from etcd
 	// use for sort infos in recoverlock
-	ReVision int64 `json:"-"`
+	Revision int64 `json:"-"`
 
 	// use to resolve conflict
 	IgnoreConflict bool `json:"ignore-conflict"`
@@ -136,7 +136,7 @@ func GetAllInfo(cli *clientv3.Client) (map[string]map[string]map[string]map[stri
 			return nil, 0, err2
 		}
 		info.Version = kv.Version
-		info.ReVision = kv.ModRevision
+		info.Revision = kv.ModRevision
 
 		if _, ok := ifm[info.Task]; !ok {
 			ifm[info.Task] = make(map[string]map[string]map[string]Info)

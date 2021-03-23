@@ -1063,7 +1063,7 @@ func (t *testOptimist) TestSortInfos(c *C) {
 	infos := sortInfos(ifm)
 	c.Assert(len(infos), Equals, 1)
 	i11.Version = 1
-	i11.ReVision = rev1
+	i11.Revision = rev1
 	c.Assert(infos[0], DeepEquals, i11)
 
 	rev2, err := optimism.PutInfo(etcdTestCli, i12)
@@ -1073,9 +1073,9 @@ func (t *testOptimist) TestSortInfos(c *C) {
 	infos = sortInfos(ifm)
 	c.Assert(len(infos), Equals, 2)
 	i11.Version = 1
-	i11.ReVision = rev1
+	i11.Revision = rev1
 	i12.Version = 1
-	i12.ReVision = rev2
+	i12.Revision = rev2
 	c.Assert(infos[0], DeepEquals, i11)
 	c.Assert(infos[1], DeepEquals, i12)
 
@@ -1089,11 +1089,11 @@ func (t *testOptimist) TestSortInfos(c *C) {
 	c.Assert(len(infos), Equals, 3)
 
 	i11.Version = 2
-	i11.ReVision = rev4
+	i11.Revision = rev4
 	i12.Version = 1
-	i12.ReVision = rev2
+	i12.Revision = rev2
 	i21.Version = 1
-	i21.ReVision = rev3
+	i21.Revision = rev3
 	c.Assert(infos[0], DeepEquals, i12)
 	c.Assert(infos[1], DeepEquals, i21)
 	c.Assert(infos[2], DeepEquals, i11)

@@ -271,9 +271,9 @@ func sortInfos(ifm map[string]map[string]map[string]map[string]optimism.Info) []
 		}
 	}
 
-	// sort according to the ReVision
+	// sort according to the Revision
 	sort.Slice(infos, func(i, j int) bool {
-		return infos[i].ReVision < infos[j].ReVision
+		return infos[i].Revision < infos[j].Revision
 	})
 	return infos
 }
