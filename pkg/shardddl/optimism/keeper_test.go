@@ -14,29 +14,17 @@
 package optimism
 
 import (
-	"testing"
-
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"github.com/pingcap/tidb/util/mock"
-	"go.etcd.io/etcd/integration"
 )
 
 type testKeeper struct{}
 
 var _ = Suite(&testKeeper{})
-
-func TestKeeper(t *testing.T) {
-	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
-	defer mockCluster.Terminate(t)
-
-	etcdTestCli = mockCluster.RandClient()
-
-	TestingT(t)
-}
 
 func (t *testKeeper) TestLockKeeper(c *C) {
 	var (
