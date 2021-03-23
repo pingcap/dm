@@ -2243,7 +2243,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38055]
-message = "table info before not exist in optimistic ddls: %v"
+message = "table-info-before not exist in optimistic ddls: %v"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
