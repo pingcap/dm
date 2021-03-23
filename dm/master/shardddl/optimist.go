@@ -22,6 +22,7 @@ import (
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/optimism"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // Optimist is used to coordinate the shard DDL migration in optimism mode.
@@ -276,12 +278,50 @@ func sortInfos(ifm map[string]map[string]map[string]map[string]optimism.Info) []
 	return infos
 }
 
+// buildLockJoinedAndTTS build joined table and target table slice for lock by history infos
+func (o *Optimist) buildLockJoinedAndTTS(ifm map[string]map[string]map[string]map[string]optimism.Info) (map[string]schemacmp.Table, map[string][]optimism.TargetTable) {
+	lockJoined := make(map[string]schemacmp.Table)
+	lockTTS := make(map[string][]optimism.TargetTable)
+
+	for _, taskInfos := range ifm {
+		for _, sourceInfos := range taskInfos {
+			for _, schemaInfos := range sourceInfos {
+				for _, info := range schemaInfos {
+					lockID := utils.GenDDLLockID(info.Task, info.DownSchema, info.DownTable)
+					if joined, ok := lockJoined[lockID]; !ok {
+						lockJoined[lockID] = schemacmp.Encode(info.TableInfoBefore)
+					} else {
+						newJoined, err := joined.Join(schemacmp.Encode(info.TableInfoBefore))
+						// ignore error, will report it in TrySync later
+						if err != nil {
+							o.logger.Error(fmt.Sprintf("fail to join table info %s with %s, lockID: %s in recover lock", joined, newJoined, lockID), log.ShortError(err))
+						} else {
+							lockJoined[lockID] = newJoined
+						}
+					}
+					if _, ok := lockTTS[lockID]; !ok {
+						lockTTS[lockID] = o.tk.FindTables(info.Task, info.DownSchema, info.DownTable)
+					}
+				}
+			}
+		}
+	}
+	return lockJoined, lockTTS
+}
+
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.
 func (o *Optimist) recoverLocks(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
 	opm map[string]map[string]map[string]map[string]optimism.Operation) error {
-	// construct locks based on the shard DDL info.
+	// construct joined table based on the shard DDL info.
+	o.logger.Info("build lock joined and tts")
+	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm)
+	// build lock and restore table info
+	o.logger.Info("rebuild locks and tables")
+	o.lk.RebuildLocksAndTables(ifm, lockJoined, lockTTS)
+	// sort infos by revision
 	infos := sortInfos(ifm)
+
 	for _, info := range infos {
 		tts := o.tk.FindTables(info.Task, info.DownSchema, info.DownTable)
 		_, _, err := o.lk.TrySync(info, tts)

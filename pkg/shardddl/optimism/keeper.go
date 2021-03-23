@@ -19,6 +19,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 )
 
 // LockKeeper used to keep and handle DDL lock conveniently.
@@ -32,6 +33,31 @@ type LockKeeper struct {
 func NewLockKeeper() *LockKeeper {
 	return &LockKeeper{
 		locks: make(map[string]*Lock),
+	}
+}
+
+// RebuildLocksAndTables rebuild the locks and tables
+func (lk *LockKeeper) RebuildLocksAndTables(
+	ifm map[string]map[string]map[string]map[string]Info,
+	lockJoined map[string]schemacmp.Table,
+	lockTTS map[string][]TargetTable) {
+	var (
+		lock *Lock
+		ok   bool
+	)
+	for _, taskInfos := range ifm {
+		for _, sourceInfos := range taskInfos {
+			for _, schemaInfos := range sourceInfos {
+				for _, info := range schemaInfos {
+					lockID := utils.GenDDLLockID(info.Task, info.DownSchema, info.DownTable)
+					if lock, ok = lk.locks[lockID]; !ok {
+						lk.locks[lockID] = NewLock(lockID, info.Task, info.DownSchema, info.DownTable, lockJoined[lockID], lockTTS[lockID])
+						lock = lk.locks[lockID]
+					}
+					lock.receiveTable(info.Source, info.UpSchema, info.UpTable, schemacmp.Encode(info.TableInfoBefore))
+				}
+			}
+		}
 	}
 }
 
@@ -51,7 +77,7 @@ func (lk *LockKeeper) TrySync(info Info, tts []TargetTable) (string, []string, e
 	}
 
 	if l, ok = lk.locks[lockID]; !ok {
-		lk.locks[lockID] = NewLock(lockID, info.Task, info.DownSchema, info.DownTable, info.TableInfoBefore, tts)
+		lk.locks[lockID] = NewLock(lockID, info.Task, info.DownSchema, info.DownTable, schemacmp.Encode(info.TableInfoBefore), tts)
 		l = lk.locks[lockID]
 	}
 

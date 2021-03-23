@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	tiddl "github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/util/mock"
@@ -1096,4 +1097,61 @@ func (t *testOptimist) TestSortInfos(c *C) {
 	c.Assert(infos[0], DeepEquals, i12)
 	c.Assert(infos[1], DeepEquals, i21)
 	c.Assert(infos[2], DeepEquals, i11)
+}
+
+func (t *testOptimist) TestBuildLockJoinedAndTable(c *C) {
+	defer clearOptimistTestSourceInfoOperation(c)
+
+	var (
+		logger           = log.L()
+		o                = NewOptimist(&logger)
+		task             = "task"
+		source1          = "mysql-replica-1"
+		source2          = "mysql-replica-2"
+		downSchema       = "db"
+		downTable        = "tbl"
+		st1              = optimism.NewSourceTables(task, source1)
+		st2              = optimism.NewSourceTables(task, source2)
+		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		DDLs2            = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
+		ti3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c2 INT)`)
+
+		i11 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i21 = optimism.NewInfo(task, source2, "foo", "bar-1", downSchema, downTable, DDLs2, ti2, []*model.TableInfo{ti3})
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	st1.AddTable("db", "tbl-1", downSchema, downTable)
+	st2.AddTable("db", "tbl-1", downSchema, downTable)
+
+	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	_, err := optimism.PutSourceTables(etcdTestCli, st1)
+	c.Assert(err, IsNil)
+	_, err = optimism.PutSourceTables(etcdTestCli, st2)
+	c.Assert(err, IsNil)
+
+	_, err = optimism.PutInfo(etcdTestCli, i21)
+	c.Assert(err, IsNil)
+	_, err = optimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+
+	ifm, _, err := optimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+
+	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm)
+	c.Assert(len(lockJoined), Equals, 1)
+	c.Assert(len(lockTTS), Equals, 1)
+	joined, ok := lockJoined[utils.GenDDLLockID(task, downSchema, downTable)]
+	c.Assert(ok, IsTrue)
+	cmp, err := joined.Compare(schemacmp.Encode(ti2))
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
 }

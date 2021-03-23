@@ -19,7 +19,6 @@ import (
 
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"go.uber.org/zap"
 
@@ -67,13 +66,13 @@ type Lock struct {
 
 // NewLock creates a new Lock instance.
 // NOTE: we MUST give the initial table info when creating the lock now.
-func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []TargetTable) *Lock {
+func NewLock(ID, task, downSchema, downTable string, joined schemacmp.Table, tts []TargetTable) *Lock {
 	l := &Lock{
 		ID:         ID,
 		Task:       task,
 		DownSchema: downSchema,
 		DownTable:  downTable,
-		joined:     schemacmp.Encode(ti),
+		joined:     joined,
 		tables:     make(map[string]map[string]map[string]schemacmp.Table),
 		received:   make(map[string]map[string]map[string]bool),
 		done:       make(map[string]map[string]map[string]bool),
@@ -484,6 +483,8 @@ func (l *Lock) receiveTable(callerSource string, callerSchema string, callerTabl
 	if !l.received[callerSource][callerSchema][callerTable] {
 		l.received[callerSource][callerSchema][callerTable] = true
 		l.tables[callerSource][callerSchema][callerTable] = table
+		log.L().Info("receive a table info", zap.String("source", callerSource), zap.String("schema", callerSchema),
+			zap.String("table", callerTable), zap.String("table info", table.String()))
 	}
 }
 
