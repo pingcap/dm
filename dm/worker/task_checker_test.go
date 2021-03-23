@@ -91,7 +91,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	cfg.MetaDir = dir
 	w, err := NewWorker(&cfg, nil, "")
 	c.Assert(err, check.IsNil)
-	w.closed.Set(closedFalse)
+	w.closed.Set(false)
 
 	tsc := NewRealTaskStatusChecker(config.CheckerConfig{
 		CheckEnable:     true,
@@ -208,7 +208,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 	cfg.MetaDir = dir
 	w, err := NewWorker(&cfg, nil, "")
 	c.Assert(err, check.IsNil)
-	w.closed.Set(closedFalse)
+	w.closed.Set(false)
 
 	tsc := NewRealTaskStatusChecker(config.CheckerConfig{
 		CheckEnable:     true,
