@@ -149,7 +149,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	t.testOptimist(c, noRestart)
 	t.testOptimist(c, restartOnly)
 	t.testOptimist(c, restartNewInstance)
-	t.TestSortInfos(c)
+	t.testSortInfos(c)
 }
 
 func (t *testOptimist) testOptimist(c *C, restart int) {
@@ -1032,7 +1032,7 @@ func (t *testOptimist) TestOptimistInitSchema(c *C) {
 	c.Assert(is.TableInfo, DeepEquals, ti1) // the init schema is ti1 now.
 }
 
-func (t *testOptimist) TestSortInfos(c *C) {
+func (t *testOptimist) testSortInfos(c *C) {
 	defer clearOptimistTestSourceInfoOperation(c)
 
 	var (
