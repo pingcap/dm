@@ -75,6 +75,7 @@ type BinlogReader struct {
 
 	tctx *tcontext.Context
 
+	usingGTID          bool
 	prevGset, currGset mysql.GTIDSet
 }
 
@@ -251,6 +252,7 @@ func (r *BinlogReader) StartSyncByPos(pos mysql.Position) (Streamer, error) {
 // StartSyncByGTID start sync by gtid
 func (r *BinlogReader) StartSyncByGTID(gset mysql.GTIDSet) (Streamer, error) {
 	r.tctx.L().Info("begin to sync binlog", zap.Stringer("GTID Set", gset))
+	r.usingGTID = true
 
 	if r.running {
 		return nil, terror.ErrReaderAlreadyRunning.Generate()
@@ -433,7 +435,12 @@ func (r *BinlogReader) parseFile(
 
 	uuidSuffix := utils.SuffixIntToStr(suffixInt) // current UUID's suffix, which will be added to binlog name
 	latestPos = offset                            // set to argument passed in
+	// when r.usingGTID, we can't return latestPos to continue parsing, because latestPos may lies between GTIDEvent and
+	// XIDEvent so replaceWithHeartbeat can't be correctly calculated
+	latestCommittedPos := offset
 	replaceWithHeartbeat := false
+
+	// should we send GTID related event when XID?
 
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		r.tctx.L().Debug("read event", zap.Reflect("header", e.Header))
@@ -451,6 +458,7 @@ func (r *BinlogReader) parseFile(
 			if e.Header.Timestamp != 0 && e.Header.LogPos != 0 {
 				// not fake rotate event, update file pos
 				latestPos = int64(e.Header.LogPos)
+				latestCommittedPos = latestPos
 			} else {
 				r.tctx.L().Debug("skip fake rotate event", zap.Reflect("header", e.Header))
 			}
@@ -489,6 +497,7 @@ func (r *BinlogReader) parseFile(
 		case *replication.XIDEvent:
 			ev.GSet = r.getCurrentGtidSet()
 			latestPos = int64(e.Header.LogPos)
+			latestCommittedPos = latestPos
 		case *replication.QueryEvent:
 			ev.GSet = r.getCurrentGtidSet()
 			latestPos = int64(e.Header.LogPos)
@@ -597,7 +606,11 @@ func (r *BinlogReader) parseFile(
 	case updatePath := <-updatePathCh:
 		if strings.HasSuffix(updatePath, relayLogFile) {
 			// current relay log file updated, need to re-parse it
-			return false, true, latestPos, "", "", nil
+			returnPos := latestPos
+			if r.usingGTID {
+				returnPos = latestCommittedPos
+			}
+			return false, true, returnPos, "", "", nil
 		}
 		// need parse next relay log file or re-collect files
 		return false, false, latestPos, "", "", nil

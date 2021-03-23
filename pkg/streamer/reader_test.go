@@ -1026,6 +1026,96 @@ func (t *testReaderSuite) TestAdvanceCurrentGTIDSet(c *C) {
 	c.Assert(r.currGset.String(), Equals, "0-1-6")
 }
 
+func (t *testReaderSuite) TestReParseUsingGTID(c *C) {
+	var (
+		baseDir   = c.MkDir()
+		cfg       = &BinlogReaderConfig{RelayDir: baseDir, Flavor: mysql.MySQLFlavor}
+		r         = NewBinlogReader(log.L(), cfg)
+		uuid      = "ba8f633f-1f15-11eb-b1c7-0242ac110002.000001"
+		gtidStr   = "ba8f633f-1f15-11eb-b1c7-0242ac110002:1"
+		file      = "mysql.000001"
+		latestPos uint32
+	)
+
+	startGTID, err := gtid.ParserGTID(mysql.MySQLFlavor, "")
+	c.Assert(err, IsNil)
+	lastGTID, err := gtid.ParserGTID(mysql.MySQLFlavor, gtidStr)
+	c.Assert(err, IsNil)
+
+	// prepare a minimal relay log file
+	c.Assert(ioutil.WriteFile(r.indexPath, []byte(uuid), 0600), IsNil)
+
+	uuidDir := path.Join(baseDir, uuid)
+	c.Assert(os.MkdirAll(uuidDir, 0700), IsNil)
+	f, err := os.OpenFile(path.Join(uuidDir, file), os.O_CREATE|os.O_WRONLY, 0600)
+	c.Assert(err, IsNil)
+	_, err = f.Write(replication.BinLogFileHeader)
+	c.Assert(err, IsNil)
+
+	meta := Meta{BinLogName: file, BinLogPos: latestPos, BinlogGTID: startGTID.String()}
+	metaFile, err := os.Create(path.Join(uuidDir, utils.MetaFilename))
+	c.Assert(err, IsNil)
+	c.Assert(toml.NewEncoder(metaFile).Encode(meta), IsNil)
+	c.Assert(metaFile.Close(), IsNil)
+
+	// prepare some regular events,
+	// FORMAT_DESC + PREVIOUS_GTIDS, some events generated from a DDL, some events generated from a DML
+	genType := []replication.EventType{
+		replication.PREVIOUS_GTIDS_EVENT,
+		replication.QUERY_EVENT,
+		replication.XID_EVENT}
+	events, _, _, latestGTIDSet := t.genEvents(c, genType, 4, lastGTID, startGTID)
+	c.Assert(events, HasLen, 1+1+2+5)
+
+	// write FORMAT_DESC + PREVIOUS_GTIDS
+	_, err = f.Write(events[0].RawData)
+	c.Assert(err, IsNil)
+	_, err = f.Write(events[1].RawData)
+	c.Assert(err, IsNil)
+
+	// test now
+	s, err := r.StartSyncByGTID(latestGTIDSet.Origin())
+	c.Assert(err, IsNil)
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		expected := map[uint32]replication.EventType{}
+		for _, e := range events {
+			switch e.Event.(type) {
+			// keeps same
+			case *replication.FormatDescriptionEvent, *replication.PreviousGTIDsEvent:
+				expected[e.Header.LogPos] = e.Header.EventType
+			default:
+				expected[e.Header.LogPos] = replication.HEARTBEAT_EVENT
+			}
+		}
+		// fake rotate
+		expected[0] = replication.ROTATE_EVENT
+		lastLogPos := events[len(events)-1].Header.LogPos
+
+		ctx, cancel := context.WithCancel(context.Background())
+		for {
+			ev, err2 := s.GetEvent(ctx)
+			c.Assert(err2, IsNil)
+			c.Assert(ev.Header.EventType, Equals, expected[ev.Header.LogPos])
+			if ev.Header.LogPos == lastLogPos {
+				break
+			}
+		}
+		cancel()
+		wg.Done()
+	}()
+
+	for i := 2; i < len(events); i++ {
+		// hope a second is enough to trigger needReParse
+		time.Sleep(time.Second)
+		_, err = f.Write(events[i].RawData)
+		c.Assert(err, IsNil)
+	}
+	wg.Wait()
+}
+
 func (t *testReaderSuite) genBinlogEvents(c *C, latestPos uint32, latestGTID gtid.Set) ([]*replication.BinlogEvent, uint32, gtid.Set) {
 	var (
 		header = &replication.EventHeader{
