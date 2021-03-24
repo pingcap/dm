@@ -748,7 +748,7 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 	verifyHeader(c, userVarEv.Header, expectedHeader, replication.USER_VAR_EVENT, latestPos, uint32(len(userVarEv.RawData)))
 	// verify the body
 	nameStart := uint32(eventHeaderLen + 4)
-	nameEnd := uint32(eventSize-1) - crc32Len
+	nameEnd := eventSize - 1 - crc32Len
 	nameLen := nameEnd - nameStart
 	c.Assert(nameLen, Equals, uint32(1)) // name-length==1
 	c.Assert(userVarEv.RawData[nameStart:nameEnd], DeepEquals, dummyUserVarName[:nameLen])
@@ -774,7 +774,7 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 		c.Assert(queryEvBody.StatusVars, DeepEquals, []byte{})
 		c.Assert(queryEvBody.Schema, DeepEquals, []byte{})
 		queryStart := uint32(eventHeaderLen + 4 + 4 + 1 + 2 + 2 + 1)
-		queryEnd := uint32(eventSize) - crc32Len
+		queryEnd := eventSize - crc32Len
 		queryLen := queryEnd - queryStart
 		c.Assert(queryEvBody.Query, HasLen, int(queryLen))
 		if queryLen <= dummyQueryLen {
