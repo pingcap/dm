@@ -467,16 +467,40 @@ function DM_035() {
 
 function DM_RENAME_TABLE_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column a int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column a int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column a int;"
+
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
 
     run_sql_source1 "rename table ${shardddl1}.${tb1} to ${shardddl1}.${tb3};"
     run_sql_source2 "rename table ${shardddl1}.${tb1} to ${shardddl1}.${tb3};"
     run_sql_source2 "rename table ${shardddl1}.${tb2} to ${shardddl1}.${tb4};"
 
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
-        "\`RENAME TABLE\` statement not supported in $1 mode" 2
+    run_sql_source1 "insert into ${shardddl1}.${tb3} values(7,7)"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb4} values(9,9);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb3} add column b int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb3} add column b int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb4} add column b int;"
+
+    run_sql_source1 "insert into ${shardddl1}.${tb3} values(10,10,10)"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(11,11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb4} values(12,12,12);"
+
+    if [[ "$1" = "pessimistic" ]]; then
+        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    else
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "\`RENAME TABLE\` statement not supported in $1 mode" 2
+    fi
 }
 
 function DM_RENAME_TABLE() {
