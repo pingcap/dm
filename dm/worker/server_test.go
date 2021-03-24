@@ -167,8 +167,6 @@ func (t *testServer) TestServer(c *C) {
 	subtaskCfg.MydumperPath = mydumperPath
 
 	sourceCfg := loadSourceConfigWithoutPassword(c)
-	_, err = ha.PutSubTaskCfg(s.etcdClient, subtaskCfg)
-	c.Assert(err, IsNil)
 	_, err = ha.PutSubTaskCfgStage(s.etcdClient, []config.SubTaskConfig{subtaskCfg},
 		[]ha.Stage{ha.NewSubTaskStage(pb.Stage_Running, sourceCfg.SourceID, subtaskCfg.Name)})
 	c.Assert(err, IsNil)
@@ -389,7 +387,9 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	rev, err := ha.DeleteSourceBound(etcdCli, cfg.Name)
 	c.Assert(err, IsNil)
 	// step 2: start source at this worker
-	c.Assert(s.startWorker(&sourceCfg), IsNil)
+	w, err := s.getOrStartWorker(&sourceCfg)
+	c.Assert(err, IsNil)
+	c.Assert(w.EnableHandleSubtasks(), IsNil)
 	// step 3: trigger etcd compaction and check whether we can receive it through watcher
 	_, err = etcdCli.Compact(ctx, rev)
 	c.Assert(err, IsNil)
@@ -478,20 +478,20 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		// worker should be started and without error
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 			w := s.getWorker(true)
-			return w != nil && w.closed.Get() == closedFalse
+			return w != nil && !w.closed.Get()
 		}), IsTrue)
 		c.Assert(s.getSourceStatus(true).Result, IsNil)
 	} else {
 		// worker should be started before stopped
 		w := s.getWorker(true)
 		c.Assert(w, NotNil)
-		c.Assert(w.closed.Get() == closedFalse, IsTrue)
+		c.Assert(w.closed.Get(), IsFalse)
 		_, err := ha.DeleteSourceCfgRelayStageSourceBound(s.etcdClient, sourceCfg.SourceID, s.cfg.Name)
 		c.Assert(err, IsNil)
 		// worker should be started and without error
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 			currentWorker := s.getWorker(true)
-			return currentWorker == nil && w.closed.Get() == closedTrue
+			return currentWorker == nil && w.closed.Get()
 		}), IsTrue)
 		c.Assert(s.getSourceStatus(true).Result, IsNil)
 	}
@@ -519,9 +519,27 @@ func (t *testServer) testSubTaskRecover(c *C, s *Server, dir string) {
 	c.Assert(status.Msg, Equals, terror.ErrWorkerNoStart.Error())
 
 	t.testOperateWorker(c, s, dir, true)
+
+	// because we split starting worker and enabling handling subtasks into two parts, a query-status may occur between
+	// them, thus get a result of no subtask running
+	utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		status, err = workerCli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
+		if err != nil {
+			return false
+		}
+		if status.Result == false {
+			return false
+		}
+		if len(status.SubTaskStatus) == 0 || status.SubTaskStatus[0].Stage != pb.Stage_Running {
+			return false
+		}
+		return true
+	})
+
 	status, err = workerCli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
 	c.Assert(err, IsNil)
 	c.Assert(status.Result, IsTrue)
+	c.Assert(status.SubTaskStatus, HasLen, 1)
 	c.Assert(status.SubTaskStatus[0].Stage, Equals, pb.Stage_Running)
 }
 
@@ -532,22 +550,20 @@ func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.
 }
 
 func (t *testServer) TestGetMinLocInAllSubTasks(c *C) {
-	subTaskCfg := []*config.SubTaskConfig{
-		{
-			Name: "test2",
-		}, {
-			Name: "test3",
-		}, {
-			Name: "test1",
-		},
+
+	subTaskCfg := map[string]config.SubTaskConfig{
+		"test2": {Name: "test2"},
+		"test3": {Name: "test3"},
+		"test1": {Name: "test1"},
 	}
 	minLoc, err := getMinLocInAllSubTasks(context.Background(), subTaskCfg)
 	c.Assert(err, IsNil)
 	c.Assert(minLoc.Position.Name, Equals, "mysql-binlog.00001")
 	c.Assert(minLoc.Position.Pos, Equals, uint32(12))
 
-	for _, subtask := range subTaskCfg {
-		subtask.EnableGTID = true
+	for k, cfg := range subTaskCfg {
+		cfg.EnableGTID = true
+		subTaskCfg[k] = cfg
 	}
 
 	minLoc, err = getMinLocInAllSubTasks(context.Background(), subTaskCfg)
@@ -666,7 +682,7 @@ func (t *testServer) TestUnifyMasterBinlogPos(c *C) {
 	c.Assert(relay.RelayCatchUpMaster, IsTrue)
 }
 
-func getFakeLocForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minLoc *binlog.Location, err error) {
+func getFakeLocForSubTask(ctx context.Context, subTaskCfg config.SubTaskConfig) (minLoc *binlog.Location, err error) {
 	gset1, _ := gtid.ParserGTID(mysql.MySQLFlavor, "ba8f633f-1f15-11eb-b1c7-0242ac110001:1-30")
 	gset2, _ := gtid.ParserGTID(mysql.MySQLFlavor, "ba8f633f-1f15-11eb-b1c7-0242ac110001:1-50")
 	gset3, _ := gtid.ParserGTID(mysql.MySQLFlavor, "ba8f633f-1f15-11eb-b1c7-0242ac110001:1-50,ba8f633f-1f15-11eb-b1c7-0242ac110002:1")
