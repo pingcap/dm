@@ -23,7 +23,6 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
@@ -34,7 +33,7 @@ import (
 // RelayHolder for relay unit
 type RelayHolder interface {
 	// Init initializes the holder
-	Init(interceptors []purger.PurgeInterceptor) (purger.Purger, error)
+	Init(ctx context.Context, interceptors []purger.PurgeInterceptor) (purger.Purger, error)
 	// Start starts run the relay
 	Start()
 	// Close closes the holder
@@ -70,7 +69,7 @@ type realRelayHolder struct {
 
 	l log.Logger
 
-	closed sync2.AtomicInt32
+	closed sync2.AtomicBool
 	stage  pb.Stage
 	result *pb.ProcessResult // the process result, nil when is processing
 }
@@ -85,13 +84,13 @@ func NewRealRelayHolder(sourceCfg *config.SourceConfig) RelayHolder {
 		relay: relay.NewRelay(cfg),
 		l:     log.With(zap.String("component", "relay holder")),
 	}
-	h.closed.Set(closedTrue)
+	h.closed.Set(true)
 	return h
 }
 
 // Init initializes the holder
-func (h *realRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.Purger, error) {
-	h.closed.Set(closedFalse)
+func (h *realRelayHolder) Init(ctx context.Context, interceptors []purger.PurgeInterceptor) (purger.Purger, error) {
+	h.closed.Set(false)
 
 	// initial relay purger
 	operators := []purger.RelayOperator{
@@ -99,9 +98,6 @@ func (h *realRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.P
 		streamer.GetReaderHub(),
 	}
 
-	// TODO: refine the context usage of relay, and it may need to be initialized before handle any subtasks.
-	ctx, cancel := context.WithTimeout(context.Background(), unit.DefaultInitTimeout)
-	defer cancel()
 	if err := h.relay.Init(ctx); err != nil {
 		return nil, terror.Annotate(err, "initial relay unit")
 	}
@@ -120,7 +116,7 @@ func (h *realRelayHolder) Start() {
 
 // Close closes the holder
 func (h *realRelayHolder) Close() {
-	if !h.closed.CompareAndSwap(closedFalse, closedTrue) {
+	if !h.closed.CompareAndSwap(false, true) {
 		return
 	}
 
@@ -153,7 +149,7 @@ func (h *realRelayHolder) run() {
 
 // Status returns relay unit's status
 func (h *realRelayHolder) Status(ctx context.Context) *pb.RelayStatus {
-	if h.closed.Get() == closedTrue || h.relay.IsClosed() {
+	if h.closed.Get() || h.relay.IsClosed() {
 		return &pb.RelayStatus{
 			Stage: pb.Stage_Stopped,
 		}
@@ -168,7 +164,7 @@ func (h *realRelayHolder) Status(ctx context.Context) *pb.RelayStatus {
 
 // Error returns relay unit's status
 func (h *realRelayHolder) Error() *pb.RelayError {
-	if h.closed.Get() == closedTrue || h.relay.IsClosed() {
+	if h.closed.Get() || h.relay.IsClosed() {
 		return &pb.RelayError{
 			Msg: "relay stopped",
 		}
@@ -356,7 +352,7 @@ func NewDummyRelayHolderWithInitError(cfg *config.SourceConfig) RelayHolder {
 }
 
 // Init implements interface of RelayHolder
-func (d *dummyRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.Purger, error) {
+func (d *dummyRelayHolder) Init(ctx context.Context, interceptors []purger.PurgeInterceptor) (purger.Purger, error) {
 	// initial relay purger
 	operators := []purger.RelayOperator{
 		d,
