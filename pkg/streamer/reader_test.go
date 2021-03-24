@@ -89,14 +89,15 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	relayDir := filepath.Join(baseDir, currentUUID)
 	cfg := &BinlogReaderConfig{RelayDir: baseDir, Flavor: mysql.MySQLFlavor}
 	r := NewBinlogReader(log.L(), cfg)
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
-		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err := r.parseFile(
+		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, ErrorMatches, ".*invalid-current-uuid.*")
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(0))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 
 	// change to valid currentUUID
 	currentUUID = "b60868af-5a6f-11e9-9ea3-0242ac160006.000001"
@@ -106,14 +107,15 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	r = NewBinlogReader(log.L(), cfg)
 
 	// relay log file not exists, failed
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
-		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
+		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, ErrorMatches, ".*(no such file or directory|The system cannot find the path specified).*")
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(0))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 
 	// empty relay log file, failed, got EOF
 	err = os.MkdirAll(relayDir, 0700)
@@ -121,14 +123,15 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0600)
 	c.Assert(err, IsNil)
 	defer f.Close()
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
-		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
+		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(errors.Cause(err), Equals, io.EOF)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(0))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 
 	// write some events to binlog file
 	_, err = f.Write(replication.BinLogFileHeader)
@@ -141,14 +144,15 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	t.purgeStreamer(c, s)
 
 	// base test with only one valid binlog file
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
-		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
+		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(baseEvents[len(baseEvents)-1].Header.LogPos))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 
 	// try get events back, firstParse should have fake RotateEvent
 	var fakeRotateEventCount int
@@ -173,14 +177,15 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 
 	// try get events back, not firstParse should have no fake RotateEvent
 	firstParse = false
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
-		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
+		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(baseEvents[len(baseEvents)-1].Header.LogPos))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 	fakeRotateEventCount = 0
 	i = 0
 	for {
@@ -208,26 +213,28 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	c.Assert(err, IsNil)
 
 	// latest is still the end_log_pos of the last event, not the next relay file log file's position
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
-		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
+		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(rotateEv.Header.LogPos))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 	t.purgeStreamer(c, s)
 
 	// parse from a non-zero offset
 	offset = int64(rotateEv.Header.LogPos - rotateEv.Header.EventSize)
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
-		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
+		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(rotateEv.Header.LogPos))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 
 	// should only got a RotateEvent and a FormatDescriptionEven
 	i = 0
@@ -284,14 +291,15 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 	// no valid update for relay sub dir, timeout, no error
 	ctx1, cancel1 := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel1()
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
-		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err := r.parseFile(
+		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(0))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 	t.purgeStreamer(c, s)
 
 	// current relay log file updated, need to re-parse it
@@ -306,14 +314,15 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 	}()
 	ctx2, cancel2 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel2()
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
-		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
+		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsTrue)
 	c.Assert(latestPos, Equals, int64(baseEvents[len(baseEvents)-1].Header.LogPos))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 	wg.Wait()
 	t.purgeStreamer(c, s)
 
@@ -327,14 +336,15 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 	}()
 	ctx3, cancel3 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel3()
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
-		ctx3, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
+		ctx3, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(extraEvents[0].Header.LogPos))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 	wg.Wait()
 	t.purgeStreamer(c, s)
 }
@@ -377,14 +387,15 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 	t.writeUUIDs(c, baseDir, r.uuids)
 	ctx1, cancel1 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel1()
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
-		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err := r.parseFile(
+		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, ErrorMatches, ".*not valid.*")
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(0))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 	t.purgeStreamer(c, s)
 
 	// next sub dir exits, need to switch
@@ -398,14 +409,15 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 	// has relay log file in next sub directory, need to switch
 	ctx2, cancel2 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel2()
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
-		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
+		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsTrue)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(0))
 	c.Assert(nextUUID, Equals, switchedUUID)
 	c.Assert(nextBinlogName, Equals, nextFilename)
+	c.Assert(replaceWithHeartbeat, Equals, false)
 	t.purgeStreamer(c, s)
 
 	// NOTE: if we want to test the returned `needReParse` of `needSwitchSubDir`,
@@ -438,14 +450,15 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	// file has no data, meet io.EOF error (when reading file header) and ignore it.
 	ctx1, cancel1 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel1()
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
-		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err := r.parseFile(
+		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsFalse)
 	c.Assert(latestPos, Equals, int64(0))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 
 	_, err = f.Write(replication.BinLogFileHeader)
 	c.Assert(err, IsNil)
@@ -459,14 +472,15 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	// meet `err EOF` error (when parsing binlog event) ignored
 	ctx2, cancel2 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel2()
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
-		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
+		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsTrue)
 	c.Assert(latestPos, Equals, int64(baseEvents[len(baseEvents)-1].Header.LogPos))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+	c.Assert(replaceWithHeartbeat, Equals, false)
 }
 
 func (t *testReaderSuite) TestUpdateUUIDs(c *C) {
@@ -1073,7 +1087,7 @@ func (t *testReaderSuite) TestReParseUsingGTID(c *C) {
 	_, err = f.Write(events[1].RawData)
 	c.Assert(err, IsNil)
 
-	// test now
+	// we use latestGTIDSet to start sync, which means we already received all binlog events, so expect no DML/DDL
 	s, err := r.StartSyncByGTID(latestGTIDSet.Origin())
 	c.Assert(err, IsNil)
 	var wg sync.WaitGroup
