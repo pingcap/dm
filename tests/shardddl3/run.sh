@@ -1040,7 +1040,8 @@ function DM_DropAddColumn_CASE() {
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
-        "because schema conflict detected" 1
+        "because schema conflict detected" 1 \
+        "add column b that wasn't fully dropped in downstream" 1
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3 'fail'
 

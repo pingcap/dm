@@ -23,11 +23,11 @@ import (
 func (t *testForEtcd) TestOperationJSON(c *C) {
 	o1 := NewOperation("test-ID", "test", "mysql-replica-1", "db-1", "tbl-1", []string{
 		"ALTER TABLE tbl ADD COLUMN c1 INT",
-	}, ConflictDetected, true)
+	}, ConflictDetected, "conflict", true)
 
 	j, err := o1.toJSON()
 	c.Assert(err, IsNil)
-	c.Assert(j, Equals, `{"id":"test-ID","task":"test","source":"mysql-replica-1","up-schema":"db-1","up-table":"tbl-1","ddls":["ALTER TABLE tbl ADD COLUMN c1 INT"],"conflict-stage":"detected","done":true}`)
+	c.Assert(j, Equals, `{"id":"test-ID","task":"test","source":"mysql-replica-1","up-schema":"db-1","up-table":"tbl-1","ddls":["ALTER TABLE tbl ADD COLUMN c1 INT"],"conflict-stage":"detected","conflict-message":"conflict","done":true}`)
 	c.Assert(j, Equals, o1.String())
 
 	o2, err := operationFromJSON(j)
@@ -48,8 +48,8 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 		ID2          = "test2-`foo`.`bar`"
 		source1      = "mysql-replica-1"
 		DDLs         = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		op11         = NewOperation(ID1, task1, source1, upSchema, upTable, DDLs, ConflictNone, false)
-		op21         = NewOperation(ID2, task2, source1, upSchema, upTable, DDLs, ConflictResolved, true)
+		op11         = NewOperation(ID1, task1, source1, upSchema, upTable, DDLs, ConflictNone, "", false)
+		op21         = NewOperation(ID2, task2, source1, upSchema, upTable, DDLs, ConflictResolved, "", true)
 	)
 
 	// put the same keys twice.

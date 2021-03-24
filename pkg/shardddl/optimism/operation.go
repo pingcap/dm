@@ -49,19 +49,20 @@ const (
 // and is deleted when removing the lock by DM-master.
 // because we need the newest stage in Operation to recover the lock when restarting DM-master.
 type Operation struct {
-	ID            string        `json:"id"`             // the corresponding DDL lock ID
-	Task          string        `json:"task"`           // data migration task name
-	Source        string        `json:"source"`         // upstream source ID
-	UpSchema      string        `json:"up-schema"`      // upstream/source schema name, different sources can have the same schema name
-	UpTable       string        `json:"up-table"`       // upstream/source table name, different sources can have the same table name
-	DDLs          []string      `json:"ddls"`           // DDL statements need to apply to the downstream.
-	ConflictStage ConflictStage `json:"conflict-stage"` // current conflict stage.
-	Done          bool          `json:"done"`           // whether the operation has done
+	ID            string        `json:"id"`               // the corresponding DDL lock ID
+	Task          string        `json:"task"`             // data migration task name
+	Source        string        `json:"source"`           // upstream source ID
+	UpSchema      string        `json:"up-schema"`        // upstream/source schema name, different sources can have the same schema name
+	UpTable       string        `json:"up-table"`         // upstream/source table name, different sources can have the same table name
+	DDLs          []string      `json:"ddls"`             // DDL statements need to apply to the downstream.
+	ConflictStage ConflictStage `json:"conflict-stage"`   // current conflict stage.
+	ConflictMsg   string        `json:"conflict-message"` // current conflict message
+	Done          bool          `json:"done"`             // whether the operation has done
 }
 
 // NewOperation creates a new Operation instance.
 func NewOperation(ID, task, source, upSchema, upTable string,
-	DDLs []string, conflictStage ConflictStage, done bool) Operation {
+	DDLs []string, conflictStage ConflictStage, conflictMsg string, done bool) Operation {
 	return Operation{
 		ID:            ID,
 		Task:          task,
@@ -70,6 +71,7 @@ func NewOperation(ID, task, source, upSchema, upTable string,
 		UpTable:       upTable,
 		DDLs:          DDLs,
 		ConflictStage: conflictStage,
+		ConflictMsg:   conflictMsg,
 		Done:          done,
 	}
 }

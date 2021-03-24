@@ -525,11 +525,13 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, skipDone bool) error {
 	lockID, newDDLs, err := o.lk.TrySync(o.cli, info, tts)
 	var cfStage = optimism.ConflictNone
+	var cfMsg = ""
 	if info.IgnoreConflict {
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
 			zap.String("lock", lockID), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
 	} else if err != nil {
 		cfStage = optimism.ConflictDetected // we treat any errors returned from `TrySync` as conflict detected now.
+		cfMsg = err.Error()
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
 			zap.String("lock", lockID), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
 	} else {
@@ -569,7 +571,7 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 		return nil
 	}
 
-	op := optimism.NewOperation(lockID, lock.Task, info.Source, info.UpSchema, info.UpTable, newDDLs, cfStage, false)
+	op := optimism.NewOperation(lockID, lock.Task, info.Source, info.UpSchema, info.UpTable, newDDLs, cfStage, cfMsg, false)
 	rev, succ, err := optimism.PutOperation(o.cli, skipDone, op, info.ModRevision)
 	if err != nil {
 		return err
@@ -641,7 +643,7 @@ func (o *Optimist) deleteInfosOps(lock *optimism.Lock) (bool, error) {
 				info := optimism.NewInfo(lock.Task, source, schema, table, lock.DownSchema, lock.DownTable, nil, nil, nil)
 				info.Version = lock.GetVersion(source, schema, table)
 				infos = append(infos, info)
-				ops = append(ops, optimism.NewOperation(lock.ID, lock.Task, source, schema, table, nil, optimism.ConflictNone, false))
+				ops = append(ops, optimism.NewOperation(lock.ID, lock.Task, source, schema, table, nil, optimism.ConflictNone, "", false))
 			}
 		}
 	}
