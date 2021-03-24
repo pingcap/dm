@@ -142,7 +142,7 @@ func GenFakeRotateEvent(nextLogName string, logPos uint64, serverID uint32) (*re
 
 	// body
 	binary.LittleEndian.PutUint64(rawData[headerLen:], logPos)
-	copy(rawData[headerLen+8:], []byte(nextLogName))
+	copy(rawData[headerLen+8:], nextLogName)
 
 	// decode header
 	h := &replication.EventHeader{}
