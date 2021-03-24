@@ -77,7 +77,7 @@ func (t *testFileUtilSuite) TestCheckBinlogHeaderExist(c *check.C) {
 	// invalid data
 	invalidData := make([]byte, len(replication.BinLogFileHeader))
 	copy(invalidData, replication.BinLogFileHeader)
-	invalidData[0] = uint8(invalidData[0]) + 1
+	invalidData[0] = invalidData[0] + 1
 	err = ioutil.WriteFile(filename, invalidData, 0644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkBinlogHeaderExist(filename)
