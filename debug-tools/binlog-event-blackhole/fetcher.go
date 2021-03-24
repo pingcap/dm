@@ -142,7 +142,7 @@ func readEventsWithoutGoMySQL(ctx context.Context, conn *client.Conn) (uint64, u
 			log.L().Warn("receive EOF packet, retrying")
 			continue
 		default:
-			log.L().Warn("invalid stream header, retrying", zap.Uint8("header", uint8(data[0])))
+			log.L().Warn("invalid stream header, retrying", zap.Uint8("header", data[0]))
 			continue
 		}
 	}
