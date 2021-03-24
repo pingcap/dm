@@ -781,8 +781,6 @@ func (s *Scheduler) StartRelay(source string, workers []string) error {
 		return terror.ErrSchedulerNotStarted.Generate()
 	}
 
-	// TODO: remove old relay config, where caused by EnableRelay
-
 	// 1. precheck
 	if _, ok := s.sourceCfgs[source]; !ok {
 		return terror.ErrSchedulerSourceCfgNotExist.Generate(source)
@@ -934,6 +932,31 @@ func (s *Scheduler) StopRelay(source string, workers []string) error {
 		delete(s.expectRelayStages, source)
 	}
 	return nil
+}
+
+func (s *Scheduler) GetRelayWorkers(source string) ([]*Worker, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if !s.started {
+		return nil, terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	workers := s.relayWorkers[source]
+	var ret []*Worker
+	for w := range workers {
+		worker, ok := s.workers[w]
+		if !ok {
+			// should not happen
+			s.logger.Error("worker instance for relay worker not found", zap.String("worker", w))
+			continue
+		}
+		ret = append(ret, worker)
+	}
+	sort.Slice(ret, func(i, j int) bool {
+		return ret[i].baseInfo.Name < ret[j].baseInfo.Name
+	})
+	return ret, nil
 }
 
 // UpdateExpectRelayStage updates the current expect relay stage.

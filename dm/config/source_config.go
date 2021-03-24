@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/siddontang/go-mysql/mysql"
@@ -291,6 +292,7 @@ func (c *SourceConfig) AdjustServerID(ctx context.Context, db *sql.DB) error {
 		return terror.WithScope(err, terror.ScopeUpstream)
 	}
 
+	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 5; i++ {
 		randomValue := uint32(rand.Intn(100000))
 		randomServerID := defaultBaseServerID + randomValue
