@@ -9,3 +9,4 @@ ssl-ca = "dir-placeholer/ca.pem"
 ssl-cert = "dir-placeholer/dm.pem"
 ssl-key = "dir-placeholer/dm.key"
 cert-allowed-cn = ["dm"]
+auto-compaction-retention = "3s"
