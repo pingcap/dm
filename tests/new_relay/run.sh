@@ -46,7 +46,7 @@ function run() {
 
     # subtask is preferred to scheduled to another relay worker
     pkill -hup -f dm-worker1.toml 2>/dev/null || true
-    wait_process_exit dm-worker1.toml
+    wait_pattern_exit dm-worker1.toml
     # worker1 is down, worker2 has running relay and sync unit
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status -s $SOURCE_ID1" \

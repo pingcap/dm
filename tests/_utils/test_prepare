@@ -20,6 +20,20 @@ function cleanup_process() {
     wait_process_exit dm-syncer.test
 }
 
+function wait_pattern_exit() {
+    pattern=$1
+    while true
+    do
+        c=$(pgrep -f $pattern | xargs ps)
+        if [[ $c == "" ]]; then
+            echo "wait pattern $pattern exit..."
+            break
+        fi
+        echo $c
+        sleep 0.2
+    done
+}
+
 if [ "$RESET_MASTER" = true ]; then
     run_sql "RESET MASTER" $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql "RESET MASTER" $MYSQL_PORT2 $MYSQL_PASSWORD2

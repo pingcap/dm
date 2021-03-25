@@ -308,8 +308,8 @@ func testMockSchedulerForRelay(ctx context.Context, wg *sync.WaitGroup, c *check
 		}(ctx1, name)
 		c.Assert(scheduler2.StartRelay(sources[i], []string{workers[i]}), check.IsNil)
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-			relayWorkers, err := scheduler2.GetRelayWorkers(sources[i])
-			c.Assert(err, check.IsNil)
+			relayWorkers, err2 := scheduler2.GetRelayWorkers(sources[i])
+			c.Assert(err2, check.IsNil)
 			return len(relayWorkers) == 1 && relayWorkers[0].BaseInfo().Name == name
 		}), check.IsTrue)
 	}
@@ -369,7 +369,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	c.Assert(resp.Msg, check.Matches, ".*relevant worker-client not found")
+	c.Assert(resp.Msg, check.Matches, "sources .* haven't been added")
 
 	// query with invalid task name
 	resp, err = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{

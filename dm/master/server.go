@@ -633,18 +633,16 @@ func extractSources(s *Server, req hasWokers) ([]string, error) {
 	var sources []string
 
 	if len(req.GetSources()) > 0 {
-		// query specified dm-workers
-		invalidWorkers := make([]string, 0, len(req.GetSources()))
-		for _, source := range req.GetSources() {
-			w := s.scheduler.GetWorkerBySource(source)
-			if w == nil || w.Stage() == scheduler.WorkerOffline {
-				invalidWorkers = append(invalidWorkers, source)
+		sources = req.GetSources()
+		var invalidSource []string
+		for _, source := range sources {
+			if s.scheduler.GetSourceCfgByID(source) == nil {
+				invalidSource = append(invalidSource, source)
 			}
 		}
-		if len(invalidWorkers) > 0 {
-			return nil, errors.Errorf("%s relevant worker-client not found", strings.Join(invalidWorkers, ", "))
+		if len(invalidSource) > 0 {
+			return nil, errors.Errorf("sources %s haven't been added", invalidSource)
 		}
-		sources = req.GetSources()
 	} else if len(req.GetName()) > 0 {
 		// query specified task's sources
 		sources = s.getTaskResources(req.GetName())
@@ -820,7 +818,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 				continue
 			}
 			wg.Add(1)
-			go func(worker *scheduler.Worker) {
+			go func(worker *scheduler.Worker, source string) {
 				defer wg.Done()
 				resp, err3 := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
 				var workerResp *pb.CommonWorkerResponse
@@ -831,7 +829,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 				}
 				workerResp.Source = source
 				setWorkerResp(workerResp)
-			}(worker)
+			}(worker, source)
 		}
 	}
 	wg.Wait()
@@ -936,8 +934,9 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 	var wg sync.WaitGroup
 	for _, source := range sources {
 		var (
-			workers []*scheduler.Worker
-			err2    error
+			workers       []*scheduler.Worker
+			workerNameSet = make(map[string]struct{}, 0)
+			err2          error
 		)
 		if relayWorker {
 			workers, err2 = s.scheduler.GetRelayWorkers(source)
@@ -945,15 +944,21 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 				handleErr(err2, source, "")
 				continue
 			}
-		} else {
-			// subtask workers
-			worker := s.scheduler.GetWorkerBySource(source)
-			if worker == nil {
-				err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", source)
-				handleErr(err, source, "")
-				continue
+			// returned workers is not duplicated
+			for _, w := range workers {
+				workerNameSet[w.BaseInfo().Name] = struct{}{}
 			}
-			workers = append(workers, worker)
+		}
+
+		// subtask workers
+		taskWorker := s.scheduler.GetWorkerBySource(source)
+		if taskWorker == nil && len(workers) == 0 {
+			err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", source)
+			handleErr(err, source, "")
+			continue
+		}
+		if _, ok := workerNameSet[taskWorker.BaseInfo().Name]; !ok {
+			workers = append(workers, taskWorker)
 		}
 
 		for _, worker := range workers {
