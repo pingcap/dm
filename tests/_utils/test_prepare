@@ -24,11 +24,9 @@ function wait_pattern_exit() {
     pattern=$1
     while true
     do
-        pgrep -f $pattern > /dev/null 2>&1
-        ret=$?
-        if [ "$ret" != "0" ]; then
+        if [ "pgrep -f $pattern" != "0" ]; then
             echo "pattern $pattern already exit"
-            break
+            return 0
         fi
         sleep 0.2
         echo "wait pattern $pattern exit..."

@@ -304,6 +304,7 @@ func testMockSchedulerForRelay(ctx context.Context, wg *sync.WaitGroup, c *check
 		cancels = append(cancels, cancel1)
 		go func(ctx context.Context, workerName string) {
 			defer wg.Done()
+			// TODO: why this will get context cancel?
 			c.Assert(ha.KeepAlive(ctx, etcdTestCli, workerName, keepAliveTTL), check.IsNil)
 		}(ctx1, name)
 		c.Assert(scheduler2.StartRelay(sources[i], []string{workers[i]}), check.IsNil)
