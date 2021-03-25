@@ -262,7 +262,7 @@ function DM_020() {
 function DM_021_CASE() {
     # same as "rename ${shardddl}.${tb} to ${shardddl}.${tb};"
     run_sql_source1 "rename table ${shardddl1}.${tb1} to ${shardddl1}.${tb2};"
-    check_log_contain_with_retry "\`RENAME TABLE\` statement not supported in .* mode" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+    check_log_contain_with_retry "Table '${shardddl}.${tb}' already exist" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
 }
 
 function DM_021() {
