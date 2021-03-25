@@ -73,7 +73,7 @@ func (s *testDBSuite) SetUpSuite(c *C) {
 
 func (s *testDBSuite) resetBinlogSyncer(c *C) {
 	cfg := replication.BinlogSyncerConfig{
-		ServerID:       uint32(s.cfg.ServerID),
+		ServerID:       s.cfg.ServerID,
 		Flavor:         "mysql",
 		Host:           s.cfg.From.Host,
 		Port:           uint16(s.cfg.From.Port),

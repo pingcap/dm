@@ -132,7 +132,7 @@ func GenFormatDescriptionEvent(header *replication.EventHeader, latestPos uint32
 
 	// mysql-server version, 50 bytes
 	serverVer := make([]byte, mysqlVersionLen)
-	copy(serverVer, []byte(mysqlVersion))
+	copy(serverVer, mysqlVersion)
 	err = binary.Write(payload, binary.LittleEndian, serverVer)
 	if err != nil {
 		return nil, terror.ErrBinlogWriteBinaryData.AnnotateDelegate(err, "write mysql-server version %v", serverVer)
@@ -825,7 +825,7 @@ func GenDummyEvent(header *replication.EventHeader, latestPos uint32, eventSize 
 		)
 		copy(nameBytes, dummyUserVarName)
 		// name_length, 4 bytes
-		err := binary.Write(payload, binary.LittleEndian, uint32(nameLen))
+		err := binary.Write(payload, binary.LittleEndian, nameLen)
 		if err != nil {
 			return nil, terror.ErrBinlogWriteBinaryData.AnnotateDelegate(err, "write USER_VAR_EVENT name length %d", nameLen)
 		}
