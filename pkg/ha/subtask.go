@@ -24,17 +24,6 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// PutSubTaskCfg puts the subtask configs of the specified source and task name into etcd.
-// k/k/v: sourceID, taskName -> subtask config.
-func PutSubTaskCfg(cli *clientv3.Client, cfgs ...config.SubTaskConfig) (int64, error) {
-	ops, err := putSubTaskCfgOp(cfgs...)
-	if err != nil {
-		return 0, err
-	}
-	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
-	return rev, err
-}
-
 // GetSubTaskCfg gets the subtask config of the specified source and task name.
 // if the config for the source not exist, return with `err == nil` and `revision=0`.
 // if task name is "", will return all the subtaskConfigs as a map{taskName: subtaskConfig} of the source

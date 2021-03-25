@@ -2663,9 +2663,9 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40071]
-message = "mysql source handler worker already started"
+message = "mysql source worker %s has already started with source %s, but get a request with source %s"
 description = ""
-workaround = ""
+workaround = "Please try restart this DM-worker"
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40072]
