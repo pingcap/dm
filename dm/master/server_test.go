@@ -283,6 +283,39 @@ func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sour
 	return scheduler2, cancels
 }
 
+func testMockSchedulerForRelay(ctx context.Context, wg *sync.WaitGroup, c *check.C, sources, workers []string, password string, workerClients map[string]workerrpc.Client) (*scheduler.Scheduler, []context.CancelFunc) {
+	logger := log.L()
+	scheduler2 := scheduler.NewScheduler(&logger, config.Security{})
+	err := scheduler2.Start(ctx, etcdTestCli)
+	c.Assert(err, check.IsNil)
+	cancels := make([]context.CancelFunc, 0, 2)
+	for i := range workers {
+		// add worker to scheduler's workers map
+		name := workers[i]
+		c.Assert(scheduler2.AddWorker(name, workers[i]), check.IsNil)
+		scheduler2.SetWorkerClientForTest(name, workerClients[workers[i]])
+		// operate mysql config on this worker
+		cfg := config.NewSourceConfig()
+		cfg.SourceID = sources[i]
+		cfg.From.Password = password
+		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil, check.Commentf("all sources: %v", sources))
+		wg.Add(1)
+		ctx1, cancel1 := context.WithCancel(ctx)
+		cancels = append(cancels, cancel1)
+		go func(ctx context.Context, workerName string) {
+			defer wg.Done()
+			c.Assert(ha.KeepAlive(ctx, etcdTestCli, workerName, keepAliveTTL), check.IsNil)
+		}(ctx1, name)
+		c.Assert(scheduler2.StartRelay(sources[i], []string{workers[i]}), check.IsNil)
+		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+			relayWorkers, err := scheduler2.GetRelayWorkers(sources[i])
+			c.Assert(err, check.IsNil)
+			return len(relayWorkers) == 1 && relayWorkers[0].BaseInfo().Name == name
+		}), check.IsTrue)
+	}
+	return scheduler2, cancels
+}
+
 func (t *testMaster) TestQueryStatus(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
@@ -323,7 +356,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 		t.workerClients[worker] = newMockRPCClient(mockWorkerClient)
 	}
 	ctx, cancel = context.WithCancel(context.Background())
-	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
+	server.scheduler, _ = testMockSchedulerForRelay(ctx, &wg, c, sources, workers, "", t.workerClients)
 	resp, err = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
 		Sources: sources,
 	})
@@ -837,6 +870,10 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 		}
 	}
 
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	server.scheduler, _ = testMockSchedulerForRelay(ctx, &wg, c, nil, nil, "", t.workerClients)
+
 	// test PurgeWorkerRelay with invalid dm-worker[s]
 	resp, err := server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
 		Sources:  []string{"invalid-source1", "invalid-source2"},
@@ -848,14 +885,14 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	c.Assert(resp.Sources, check.HasLen, 2)
 	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
-		c.Assert(w.Msg, check.Matches, ".*relevant worker-client not found")
+		c.Assert(w.Msg, check.Matches, "relay worker for source .* not found.*")
 	}
+	clearSchedulerEnv(c, cancel, &wg)
 
-	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(context.Background())
 	// test PurgeWorkerRelay successfully
 	mockPurgeRelay(true)
-	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
+	server.scheduler, _ = testMockSchedulerForRelay(ctx, &wg, c, sources, workers, "", t.workerClients)
 	resp, err = server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
 		Sources:  sources,
 		Time:     now,
@@ -872,7 +909,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	ctx, cancel = context.WithCancel(context.Background())
 	// test PurgeWorkerRelay with error response
 	mockPurgeRelay(false)
-	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
+	server.scheduler, _ = testMockSchedulerForRelay(ctx, &wg, c, sources, workers, "", t.workerClients)
 	resp, err = server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
 		Sources:  sources,
 		Time:     now,

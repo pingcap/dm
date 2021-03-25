@@ -815,6 +815,10 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 			continue
 		}
 		for _, worker := range workers {
+			if worker == nil {
+				setWorkerResp(errorCommonWorkerResponse(fmt.Sprintf("relay worker instance for source %s not found, please `start-relay` first", source), source, ""))
+				continue
+			}
 			wg.Add(1)
 			go func(worker *scheduler.Worker) {
 				defer wg.Done()
