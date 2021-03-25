@@ -1585,7 +1585,7 @@ func newInfoWithVersion(task, source, upSchema, upTable, downSchema, downTable s
 	return info
 }
 
-func (t *testLock) TestLockTrySyncReceived(c *C) {
+func (t *testLock) TestLockTrySyncDifferentIndex(c *C) {
 	var (
 		ID               = "test_lock_try_sync_index-`foo`.`bar`"
 		task             = "test_lock_try_sync_index"
