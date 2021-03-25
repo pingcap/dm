@@ -5,11 +5,12 @@ process=$1
 
 while true
 do
-    c=$(pgrep $process | xargs ps)
-    if [[ $c == "" ]]; then
-        echo "wait process $process exit..."
+    pgrep $process > /dev/null 2>&1
+    ret=$?
+    if [ "$ret" != "0" ]; then
+        echo "process $process already exit"
         break
     fi
-    echo $c
     sleep 0.2
+    echo "wait process $process exit..."
 done

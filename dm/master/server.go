@@ -935,7 +935,7 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 	for _, source := range sources {
 		var (
 			workers       []*scheduler.Worker
-			workerNameSet = make(map[string]struct{}, 0)
+			workerNameSet = make(map[string]struct{})
 			err2          error
 		)
 		if relayWorker {
