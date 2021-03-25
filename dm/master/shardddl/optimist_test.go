@@ -658,14 +658,13 @@ func (t *testOptimist) TestOptimistLockConflict(c *C) {
 		tblID        int64 = 111
 		DDLs1              = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
 		DDLs2              = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME"}
-		DDLs3              = []string{"ALTER TABLE bar DROP COLUMN c1"}
 		ti0                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
 		ti1                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
 		ti2                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
 		ti3                = ti0
 		i1                 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
 		i2                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs2, ti0, []*model.TableInfo{ti2})
-		i3                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs3, ti2, []*model.TableInfo{ti3})
+		i3                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti3})
 	)
 
 	st1.AddTable("foo", "bar-1", downSchema, downTable)
@@ -716,6 +715,7 @@ func (t *testOptimist) TestOptimistLockConflict(c *C) {
 	c.Assert(len(errCh), Equals, 0)
 
 	// PUT i3, no conflict now.
+	// case for handle-error replace
 	rev3, err := optimism.PutInfo(etcdTestCli, i3)
 	c.Assert(err, IsNil)
 	// wait operation for i3 become available.

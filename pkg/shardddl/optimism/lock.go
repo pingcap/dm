@@ -45,12 +45,6 @@ type Lock struct {
 	// if all of them are the same, then we call the lock `synced`.
 	tables map[string]map[string]map[string]schemacmp.Table
 
-	// receives record whether the lock receives a table's info
-	// usptream source ID -> upstream schema name -> upstream table name -> bool
-	// if an info of table hasn't received, we use the joined table instead
-	// if the info received, mark it received and replace the table info in `tables`
-	received map[string]map[string]map[string]bool
-
 	synced bool
 
 	// whether DDLs operations have done (execute the shard DDL) to the downstream.
@@ -74,7 +68,6 @@ func NewLock(ID, task, downSchema, downTable string, joined schemacmp.Table, tts
 		DownTable:  downTable,
 		joined:     joined,
 		tables:     make(map[string]map[string]map[string]schemacmp.Table),
-		received:   make(map[string]map[string]map[string]bool),
 		done:       make(map[string]map[string]map[string]bool),
 		synced:     true,
 		versions:   make(map[string]map[string]map[string]int64),
@@ -107,6 +100,8 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		newTIs         = info.TableInfosAfter
 		infoVersion    = info.Version
 		ignoreConflict = info.IgnoreConflict
+		oldSynced      = l.synced
+		emptyDDLs      = []string{}
 	)
 	l.mu.Lock()
 	defer func() {
@@ -118,7 +113,6 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		l.mu.Unlock()
 	}()
 
-	oldSynced := l.synced
 	defer func() {
 		_, remain := l.syncStatus()
 		l.synced = remain == 0
@@ -160,7 +154,6 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 	if info.TableInfoBefore == nil {
 		return ddls, terror.ErrMasterOptimisticTableInfoBeforeNotExist.Generate(ddls)
 	}
-	oldTable := schemacmp.Encode(info.TableInfoBefore)
 	// handle the case where <callerSource, callerSchema, callerTable>
 	// is not in old source tables and current new source tables.
 	// duplicate append is not a problem.
@@ -168,17 +161,11 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		map[string]map[string]struct{}{callerSchema: {callerTable: struct{}{}}}))
 	// add any new source tables.
 	l.addTables(tts)
-	l.receiveTable(callerSource, callerSchema, callerTable, oldTable)
 	if val, ok := l.versions[callerSource][callerSchema][callerTable]; !ok || val < infoVersion {
 		l.versions[callerSource][callerSchema][callerTable] = infoVersion
 	}
 
-	var emptyDDLs = []string{}
-	prevTable := l.tables[callerSource][callerSchema][callerTable]
-	oldJoined := l.joined
-
 	lastTableInfo := schemacmp.Encode(newTIs[len(newTIs)-1])
-
 	defer func() {
 		// only update table info if no error or ignore conflict
 		if ignoreConflict || err == nil {
@@ -187,6 +174,19 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 			l.tables[callerSource][callerSchema][callerTable] = lastTableInfo
 		}
 	}()
+
+	prevTable := schemacmp.Encode(info.TableInfoBefore)
+	// if preTable not equal table in master, we always use preTable
+	// this often happens when an info TrySync twice, e.g. worker restart/resume task
+	if cmp, err := prevTable.Compare(l.tables[callerSource][callerSchema][callerTable]); err != nil || cmp != 0 {
+		l.tables[callerSource][callerSchema][callerTable] = prevTable
+		prevJoined, err := joinTable(prevTable)
+		if err != nil {
+			return emptyDDLs, err
+		}
+		l.joined = prevJoined
+	}
+	oldJoined := l.joined
 
 	lastJoined, err := joinTable(lastTableInfo)
 	if err != nil {
@@ -333,7 +333,6 @@ func (l *Lock) TryRemoveTable(source, schema, table string) bool {
 	}
 
 	delete(l.tables[source][schema], table)
-	delete(l.received[source][schema], table)
 	_, remain := l.syncStatus()
 	l.synced = remain == 0
 	delete(l.done[source][schema], table)
@@ -479,35 +478,23 @@ func (l *Lock) tryRevertDone(source, schema, table string) {
 	l.done[source][schema][table] = false
 }
 
-func (l *Lock) receiveTable(callerSource string, callerSchema string, callerTable string, table schemacmp.Table) {
-	if !l.received[callerSource][callerSchema][callerTable] {
-		l.received[callerSource][callerSchema][callerTable] = true
-		l.tables[callerSource][callerSchema][callerTable] = table
-		log.L().Info("receive a table info", zap.String("source", callerSource), zap.String("schema", callerSchema),
-			zap.String("table", callerTable), zap.String("table info", table.String()))
-	}
-}
-
 // addTables adds any not-existing tables into the lock.
 func (l *Lock) addTables(tts []TargetTable) {
 	for _, tt := range tts {
 		if _, ok := l.tables[tt.Source]; !ok {
 			l.tables[tt.Source] = make(map[string]map[string]schemacmp.Table)
-			l.received[tt.Source] = make(map[string]map[string]bool)
 			l.done[tt.Source] = make(map[string]map[string]bool)
 			l.versions[tt.Source] = make(map[string]map[string]int64)
 		}
 		for schema, tables := range tt.UpTables {
 			if _, ok := l.tables[tt.Source][schema]; !ok {
 				l.tables[tt.Source][schema] = make(map[string]schemacmp.Table)
-				l.received[tt.Source][schema] = make(map[string]bool)
 				l.done[tt.Source][schema] = make(map[string]bool)
 				l.versions[tt.Source][schema] = make(map[string]int64)
 			}
 			for table := range tables {
 				if _, ok := l.tables[tt.Source][schema][table]; !ok {
 					l.tables[tt.Source][schema][table] = l.joined
-					l.received[tt.Source][schema][table] = false
 					l.done[tt.Source][schema][table] = false
 					l.versions[tt.Source][schema][table] = 0
 					log.L().Info("table added to the lock", zap.String("lock", l.ID),

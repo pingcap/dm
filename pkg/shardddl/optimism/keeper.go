@@ -54,7 +54,7 @@ func (lk *LockKeeper) RebuildLocksAndTables(
 						lk.locks[lockID] = NewLock(lockID, info.Task, info.DownSchema, info.DownTable, lockJoined[lockID], lockTTS[lockID])
 						lock = lk.locks[lockID]
 					}
-					lock.receiveTable(info.Source, info.UpSchema, info.UpTable, schemacmp.Encode(info.TableInfoBefore))
+					lock.tables[info.Source][info.UpSchema][info.UpTable] = schemacmp.Encode(info.TableInfoBefore)
 				}
 			}
 		}
