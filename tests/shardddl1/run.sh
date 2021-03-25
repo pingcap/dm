@@ -599,7 +599,7 @@ function DM_RECOVER_LOCK_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(3,3,'aaa');"
     check_log_contain_with_retry "putted a shard DDL.*tb1.*ALTER TABLE .* ADD COLUMN" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log 
 
-    # tb1(a,c); tb2(a)
+    # tb1(a,b,c); tb2(a)
     run_sql_source2 "alter table ${shardddl1}.${tb2} drop column b;"
     check_log_contain_with_retry "putted a shard DDL.*tb2.*ALTER TABLE .* DROP COLUMN" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log 
 
