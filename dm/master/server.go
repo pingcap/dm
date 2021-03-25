@@ -794,7 +794,16 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 		},
 	}
 
-	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
+	var (
+		workerResps  = make([]*pb.CommonWorkerResponse, 0, len(req.Sources))
+		workerRespMu sync.Mutex
+	)
+	setWorkerResp := func(resp *pb.CommonWorkerResponse) {
+		workerRespMu.Lock()
+		workerResps = append(workerResps, resp)
+		workerRespMu.Unlock()
+	}
+
 	var wg sync.WaitGroup
 	for _, source := range req.Sources {
 		workers, err := s.scheduler.GetRelayWorkers(source)
@@ -802,7 +811,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 			return nil, err
 		}
 		if len(workers) == 0 {
-			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("relay worker for source %s not found, please `start-relay` first", source), source, "")
+			setWorkerResp(errorCommonWorkerResponse(fmt.Sprintf("relay worker for source %s not found, please `start-relay` first", source), source, ""))
 			continue
 		}
 		for _, worker := range workers {
@@ -817,27 +826,26 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 					workerResp = resp.PurgeRelay
 				}
 				workerResp.Source = source
-				workerRespCh <- workerResp
+				setWorkerResp(workerResp)
 			}(worker)
 		}
 	}
 	wg.Wait()
 
 	workerRespMap := make(map[string][]*pb.CommonWorkerResponse, len(req.Sources))
-	for len(workerRespCh) > 0 {
-		workerResp := <-workerRespCh
+	for _, workerResp := range workerResps {
 		workerRespMap[workerResp.Source] = append(workerRespMap[workerResp.Source], workerResp)
 	}
 
 	sort.Strings(req.Sources)
-	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Sources))
+	returnResps := make([]*pb.CommonWorkerResponse, 0, len(req.Sources))
 	for _, worker := range req.Sources {
-		workerResps = append(workerResps, workerRespMap[worker]...)
+		returnResps = append(returnResps, workerRespMap[worker]...)
 	}
 
 	return &pb.PurgeWorkerRelayResponse{
 		Result:  true,
-		Sources: workerResps,
+		Sources: returnResps,
 	}, nil
 }
 
@@ -895,18 +903,18 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 		Type:        workerrpc.CmdQueryStatus,
 		QueryStatus: &pb.QueryStatusRequest{Name: taskName},
 	}
+
 	var (
 		workerResps  = make([]*pb.QueryStatusResponse, 0, len(sources))
 		workerRespMu sync.Mutex
 	)
-
 	setWorkerResp := func(resp *pb.QueryStatusResponse) {
 		workerRespMu.Lock()
 		workerResps = append(workerResps, resp)
 		workerRespMu.Unlock()
 	}
 
-	handleErr := func(err error, source string) {
+	handleErr := func(err error, source string, worker string) {
 		log.L().Error("response error", zap.Error(err))
 		resp := &pb.QueryStatusResponse{
 			Result: false,
@@ -914,6 +922,9 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 			SourceStatus: &pb.SourceStatus{
 				Source: source,
 			},
+		}
+		if worker != "" {
+			resp.SourceStatus.Worker = worker
 		}
 		setWorkerResp(resp)
 	}
@@ -927,7 +938,7 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 		if relayWorker {
 			workers, err2 = s.scheduler.GetRelayWorkers(source)
 			if err2 != nil {
-				handleErr(err2, source)
+				handleErr(err2, source, "")
 				continue
 			}
 		} else {
@@ -935,7 +946,7 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 			worker := s.scheduler.GetWorkerBySource(source)
 			if worker == nil {
 				err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", source)
-				handleErr(err, source)
+				handleErr(err, source, "")
 				continue
 			}
 			workers = append(workers, worker)
@@ -964,7 +975,12 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 			}, func(args ...interface{}) {
 				defer wg.Done()
 				sourceID, _ := args[0].(string)
-				handleErr(terror.ErrMasterNoEmitToken.Generate(sourceID), sourceID)
+				w, _ := args[1].(*scheduler.Worker)
+				workerName := ""
+				if w != nil {
+					workerName = w.BaseInfo().Name
+				}
+				handleErr(terror.ErrMasterNoEmitToken.Generate(sourceID), sourceID, workerName)
 			}, source, worker)
 		}
 	}

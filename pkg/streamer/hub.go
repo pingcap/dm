@@ -143,6 +143,7 @@ func (h *ReaderHub) EarliestActiveRelayLog() *RelayLogInfo {
 	return rli
 }
 
+// TODO: no use now, remove later
 // RelayMetaHub holds information for relay metas
 type RelayMetaHub struct {
 	mu   sync.RWMutex

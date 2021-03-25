@@ -6,6 +6,7 @@ cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 TASK_NAME="test"
+SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 API_VERSION="v1alpha1"
 
@@ -23,7 +24,6 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
 
     cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
-    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
     dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -44,13 +44,47 @@ function run() {
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
-    # kill dm-worker1, now worker2 is preferred to scheduled
-    pkill -hup dm-worker1.toml 2>/dev/null || true
+    # subtask is preferred to scheduled to another relay worker
+    pkill -hup -f dm-worker1.toml 2>/dev/null || true
     wait_process_exit dm-worker1.toml
+    # worker1 is down, worker2 has running relay and sync unit
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status -s $SOURCE_ID1" \
+        "connect: connection refused" 1 \
+        "\"stage\": \"Running\"" 2
+
+    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    # after restarting, worker will purge relay log directory because checkpoint is newer than relay.meta
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+
+    run_sql_file $cur/data/db1.increment3.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status -s $SOURCE_ID1" \
-        "fail me" 1
+        "\"result\": true" 3 \
+        "\"worker\": \"worker1\"" 1 \
+        "\"worker\": \"worker2\"" 1
+
+    # test purge-relay for all relay workers
+    run_sql_source1 "show binary logs\G"
+    max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
+    server_uuid_1=$(tail -n 1 $WORK_DIR/worker1/relay-dir/server-uuid.index)
+    relay_log_count_1=$(($(ls $WORK_DIR/worker1/relay-dir/$server_uuid_1 | wc -l) - 1))
+    server_uuid_2=$(tail -n 1 $WORK_DIR/worker2/relay-dir/server-uuid.index)
+    relay_log_count_2=$(($(ls $WORK_DIR/worker2/relay-dir/$server_uuid_2 | wc -l) - 1))
+    [ "$relay_log_count_1" -ne 1 ]
+    [ "$relay_log_count_2" -ne 1 ]
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "purge-relay --filename $max_binlog_name -s $SOURCE_ID1" \
+        "\"result\": true" 3
+    new_relay_log_count_1=$(($(ls $WORK_DIR/worker1/relay-dir/$server_uuid | wc -l) - 1))
+    new_relay_log_count_2=$(($(ls $WORK_DIR/worker2/relay-dir/$server_uuid | wc -l) - 1))
+    [ "$new_relay_log_count_1" -eq 1 ]
+    [ "$new_relay_log_count_2" -eq 1 ]
 }
 
 cleanup_data $TEST_NAME

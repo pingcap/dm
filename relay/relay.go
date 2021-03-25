@@ -248,9 +248,21 @@ func (r *Relay) process(ctx context.Context) error {
 			if err2 != nil {
 				return err2
 			}
-			err2 = r.SaveMeta(mysql.Position{Name: neededBinlogName, Pos: binlog.MinPosition.Pos}, neededBinlogGset)
-			if err2 != nil {
-				return err2
+			uuidWithSuffix := r.meta.UUID() // only change after switch
+			uuid, _, err3 := utils.ParseSuffixForUUID(uuidWithSuffix)
+			if err3 != nil {
+				r.logger.Error("parse suffix for UUID when relay meta oudated", zap.String("UUID", uuidWithSuffix), zap.Error(err))
+				return err3
+			}
+
+			pos := &mysql.Position{Name: neededBinlogName, Pos: binlog.MinPosition.Pos}
+			err = r.meta.AddDir(uuid, pos, neededBinlogGset, r.cfg.UUIDSuffix)
+			if err != nil {
+				return err
+			}
+			err = r.meta.Load()
+			if err != nil {
+				return err
 			}
 		}
 	}

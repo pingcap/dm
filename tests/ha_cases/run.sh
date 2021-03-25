@@ -369,7 +369,6 @@ function test_standalone_running() {
     check_sync_diff $WORK_DIR $cur/conf/diff-standalone-config.toml
 
     cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
-    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
     dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/standalone-task2.yaml" \
@@ -396,7 +395,7 @@ function test_standalone_running() {
     echo "kill $worker_name"
     ps aux | grep dm-worker${worker_idx} |awk '{print $2}'|xargs kill || true
     check_port_offline ${worker_ports[$worker_idx]} 20
-    rm -rf $WORK_DIR/worker${worker_idx}/relay_log
+    rm -rf $WORK_DIR/worker${worker_idx}/relay-dir
 
     # test running, test2 fail
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
