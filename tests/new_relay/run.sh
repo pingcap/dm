@@ -81,8 +81,8 @@ function run() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "purge-relay --filename $max_binlog_name -s $SOURCE_ID1" \
         "\"result\": true" 3
-    new_relay_log_count_1=$(($(ls $WORK_DIR/worker1/relay-dir/$server_uuid | wc -l) - 1))
-    new_relay_log_count_2=$(($(ls $WORK_DIR/worker2/relay-dir/$server_uuid | wc -l) - 1))
+    new_relay_log_count_1=$(($(ls $WORK_DIR/worker1/relay-dir/$server_uuid_1 | wc -l) - 1))
+    new_relay_log_count_2=$(($(ls $WORK_DIR/worker2/relay-dir/$server_uuid_2 | wc -l) - 1))
     [ "$new_relay_log_count_1" -eq 1 ]
     [ "$new_relay_log_count_2" -eq 1 ]
 }

@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"math"
 	"math/rand"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -255,6 +256,9 @@ func (c *SourceConfig) Adjust(ctx context.Context, db *sql.DB) (err error) {
 
 	if len(c.RelayDir) == 0 {
 		c.RelayDir = defaultRelayDir
+	}
+	if filepath.IsAbs(c.RelayDir) {
+		log.L().Warn("using an absolute relay path, relay log can't work when starting multiple relay worker")
 	}
 
 	return nil

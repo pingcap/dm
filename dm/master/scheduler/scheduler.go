@@ -934,6 +934,7 @@ func (s *Scheduler) StopRelay(source string, workers []string) error {
 	return nil
 }
 
+// GetRelayWorkers returns all alive worker instances for a relay source
 func (s *Scheduler) GetRelayWorkers(source string) ([]*Worker, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

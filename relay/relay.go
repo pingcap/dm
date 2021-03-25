@@ -118,8 +118,6 @@ type Relay struct {
 		sync.RWMutex
 		info *pkgstreamer.RelayLogInfo
 	}
-
-	relayMetaHub *pkgstreamer.RelayMetaHub
 }
 
 // NewRealRelay creates an instance of Relay.
@@ -161,9 +159,6 @@ func (r *Relay) Init(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	r.relayMetaHub = pkgstreamer.GetRelayMetaHub()
-	r.relayMetaHub.ClearMeta()
 
 	return reportRelayLogSpaceInBackground(ctx, r.cfg.RelayDir)
 }
@@ -791,17 +786,12 @@ func (r *Relay) IsClosed() bool {
 
 // SaveMeta save relay meta and update meta in RelayLogInfo
 func (r *Relay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
-	if err := r.meta.Save(pos, gset); err != nil {
-		return err
-	}
-	r.relayMetaHub.SetMeta(r.meta.UUID(), pos, gset)
-	return nil
+	return r.meta.Save(pos, gset)
 }
 
 // ResetMeta reset relay meta
 func (r *Relay) ResetMeta() {
 	r.meta = NewLocalMeta(r.cfg.Flavor, r.cfg.RelayDir)
-	r.relayMetaHub.ClearMeta()
 }
 
 // FlushMeta flush relay meta
