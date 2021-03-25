@@ -24,13 +24,14 @@ function wait_pattern_exit() {
     pattern=$1
     while true
     do
-        c=$(pgrep -f $pattern | xargs ps)
-        if [[ $c == "" ]]; then
-            echo "wait pattern $pattern exit..."
+        pgrep -f $pattern > /dev/null 2>&1
+        ret=$?
+        if [ "$ret" != "0" ]; then
+            echo "pattern $pattern already exit"
             break
         fi
-        echo $c
         sleep 0.2
+        echo "wait pattern $pattern exit..."
     done
 }
 

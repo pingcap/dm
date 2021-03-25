@@ -950,15 +950,18 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 			}
 		}
 
-		// subtask workers
+		// subtask workers may have been found in relay workers
 		taskWorker := s.scheduler.GetWorkerBySource(source)
-		if taskWorker == nil && len(workers) == 0 {
+		if taskWorker != nil {
+			if _, ok := workerNameSet[taskWorker.BaseInfo().Name]; !ok {
+				workers = append(workers, taskWorker)
+			}
+		}
+
+		if len(workers) == 0 {
 			err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", source)
 			handleErr(err, source, "")
 			continue
-		}
-		if _, ok := workerNameSet[taskWorker.BaseInfo().Name]; !ok {
-			workers = append(workers, taskWorker)
 		}
 
 		for _, worker := range workers {
