@@ -179,7 +179,7 @@ func (h *Holder) RemoveOutdated(flushLocation binlog.Location) error {
 			return err
 		}
 		if binlog.ComparePosition(position, flushLocation.Position) == -1 {
-			h.logger.Info("remove a outdated operator", zap.Stringer("position", position), zap.Stringer("flush postion", flushLocation.Position), zap.Stringer("operator", h.operators[pos]))
+			h.logger.Info("remove a outdated operator", zap.Stringer("position", position), zap.Stringer("flush position", flushLocation.Position), zap.Stringer("operator", h.operators[pos]))
 			delete(h.operators, pos)
 		}
 	}

@@ -79,6 +79,15 @@ var (
 	// ShardDDLOptimismInitSchemaKeyAdapter is used to store the initial schema (before constructed the lock) of merged tables.
 	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name) -> table schema.
 	ShardDDLOptimismInitSchemaKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/init-schema/")
+	// ShardDDLOptimismDroppedColumnsKeyAdapter is used to store the columns that are not fully dropped
+	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name, column-name, source-id, upstream-schema-name, upstream-table-name) -> empty
+	// If we don't identify different upstream tables, we may report an error for tb2 in the following case.
+	// Time series: (+a/-a means add/drop column a)
+	//	    older ----------------> newer
+	// tb1: +a +b +c           -c
+	// tb2:                       +a +b +c
+	// tb3:          +a +b +c
+	ShardDDLOptimismDroppedColumnsKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/dropped-columns/")
 )
 
 func keyAdapterKeysLen(s KeyAdapter) int {
@@ -95,7 +104,8 @@ func keyAdapterKeysLen(s KeyAdapter) int {
 		return 3
 	case ShardDDLOptimismInfoKeyAdapter, ShardDDLOptimismOperationKeyAdapter:
 		return 4
-
+	case ShardDDLOptimismDroppedColumnsKeyAdapter:
+		return 7
 	}
 	return -1
 }
