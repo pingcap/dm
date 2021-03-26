@@ -155,7 +155,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	t.testOptimist(c, cli, noRestart)
 	t.testOptimist(c, cli, restartOnly)
 	t.testOptimist(c, cli, restartNewInstance)
-	t.testSortInfos(c)
+	t.testSortInfos(c, cli)
 }
 
 func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
@@ -1040,8 +1040,10 @@ func (t *testOptimist) TestOptimistInitSchema(c *C) {
 	c.Assert(is.TableInfo, DeepEquals, ti1) // the init schema is ti1 now.
 }
 
-func (t *testOptimist) testSortInfos(c *C) {
-	defer clearOptimistTestSourceInfoOperation(c)
+func (t *testOptimist) testSortInfos(c *C, cli *clientv3.Client) {
+	defer func() {
+		c.Assert(optimism.ClearTestInfoOperationSchema(cli), IsNil)
+	}()
 
 	var (
 		task       = "test-optimist-init-schema"
@@ -1064,9 +1066,9 @@ func (t *testOptimist) testSortInfos(c *C) {
 		i21         = optimism.NewInfo(task, sources[1], upSchema, upTables[1], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2})
 	)
 
-	rev1, err := optimism.PutInfo(etcdTestCli, i11)
+	rev1, err := optimism.PutInfo(cli, i11)
 	c.Assert(err, IsNil)
-	ifm, _, err := optimism.GetAllInfo(etcdTestCli)
+	ifm, _, err := optimism.GetAllInfo(cli)
 	c.Assert(err, IsNil)
 	infos := sortInfos(ifm)
 	c.Assert(len(infos), Equals, 1)
@@ -1074,9 +1076,9 @@ func (t *testOptimist) testSortInfos(c *C) {
 	i11.Revision = rev1
 	c.Assert(infos[0], DeepEquals, i11)
 
-	rev2, err := optimism.PutInfo(etcdTestCli, i12)
+	rev2, err := optimism.PutInfo(cli, i12)
 	c.Assert(err, IsNil)
-	ifm, _, err = optimism.GetAllInfo(etcdTestCli)
+	ifm, _, err = optimism.GetAllInfo(cli)
 	c.Assert(err, IsNil)
 	infos = sortInfos(ifm)
 	c.Assert(len(infos), Equals, 2)
@@ -1087,11 +1089,11 @@ func (t *testOptimist) testSortInfos(c *C) {
 	c.Assert(infos[0], DeepEquals, i11)
 	c.Assert(infos[1], DeepEquals, i12)
 
-	rev3, err := optimism.PutInfo(etcdTestCli, i21)
+	rev3, err := optimism.PutInfo(cli, i21)
 	c.Assert(err, IsNil)
-	rev4, err := optimism.PutInfo(etcdTestCli, i11)
+	rev4, err := optimism.PutInfo(cli, i11)
 	c.Assert(err, IsNil)
-	ifm, _, err = optimism.GetAllInfo(etcdTestCli)
+	ifm, _, err = optimism.GetAllInfo(cli)
 	c.Assert(err, IsNil)
 	infos = sortInfos(ifm)
 	c.Assert(len(infos), Equals, 3)
