@@ -530,6 +530,7 @@ func (s *Server) getSourceStatus(needLock bool) pb.SourceStatus {
 	return s.sourceStatus
 }
 
+// TODO: move some call to setWorker/getOrStartWorker
 func (s *Server) setSourceStatus(source string, err error, needLock bool) {
 	if needLock {
 		s.Lock()
@@ -809,6 +810,7 @@ func (s *Server) getOrStartWorker(cfg *config.SourceConfig, needLock bool) (*Wor
 		return nil, terror.ErrWorkerAlreadyStart.Generate(w.name, w.cfg.SourceID, cfg.SourceID)
 	}
 
+	log.L().Info("will start a now worker", zap.String("sourceID", cfg.SourceID))
 	w, err := NewWorker(cfg, s.etcdClient, s.cfg.Name)
 	if err != nil {
 		return nil, err
