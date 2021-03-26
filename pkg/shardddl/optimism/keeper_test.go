@@ -15,8 +15,10 @@ package optimism
 
 import (
 	. "github.com/pingcap/check"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"github.com/pingcap/tidb/util/mock"
 )
 
@@ -390,4 +392,64 @@ func (t *testKeeper) TestTargetTablesForTask(c *C) {
 				"foo-1": {"bar-3": struct{}{}, "bar-4": struct{}{}},
 			}),
 	})
+}
+
+func (t *testKeeper) TestRebuildLocksAndTables(c *C) {
+	var (
+		lk               = NewLockKeeper()
+		task             = "task"
+		source1          = "mysql-replica-1"
+		source2          = "mysql-replica-2"
+		upSchema         = "foo"
+		upTable          = "bar"
+		downSchema       = "db"
+		downTable        = "tbl"
+		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		DDLs2            = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
+		ti3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c2 INT)`)
+
+		i11 = NewInfo(task, source1, upSchema, upTable, downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i21 = NewInfo(task, source2, upSchema, upTable, downSchema, downTable, DDLs2, ti2, []*model.TableInfo{ti3})
+
+		tts = []TargetTable{
+			newTargetTable(task, source1, downSchema, downTable, map[string]map[string]struct{}{upSchema: {upTable: struct{}{}}}),
+			newTargetTable(task, source2, downSchema, downTable, map[string]map[string]struct{}{upSchema: {upTable: struct{}{}}}),
+		}
+
+		lockID = utils.GenDDLLockID(task, downSchema, downTable)
+
+		ifm = map[string]map[string]map[string]map[string]Info{
+			task: {
+				source1: {upSchema: {upTable: i11}},
+				source2: {upSchema: {upTable: i21}},
+			},
+		}
+		lockJoined = map[string]schemacmp.Table{
+			lockID: schemacmp.Encode(ti2),
+		}
+		lockTTS = map[string][]TargetTable{
+			lockID: tts,
+		}
+	)
+
+	lk.RebuildLocksAndTables(ifm, lockJoined, lockTTS)
+	locks := lk.Locks()
+	c.Assert(len(locks), Equals, 1)
+	lock, ok := locks[lockID]
+	c.Assert(ok, IsTrue)
+	cmp, err := lock.Joined().Compare(schemacmp.Encode(ti2))
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+	cmp, err = lock.tables[source1][upSchema][upTable].Compare(schemacmp.Encode(ti0))
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+	cmp, err = lock.tables[source2][upSchema][upTable].Compare(schemacmp.Encode(ti2))
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
 }

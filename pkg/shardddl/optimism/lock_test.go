@@ -14,11 +14,14 @@
 package optimism
 
 import (
+	"testing"
+
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"github.com/pingcap/tidb/util/mock"
+	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -27,6 +30,15 @@ import (
 type testLock struct{}
 
 var _ = Suite(&testLock{})
+
+func TestLock(t *testing.T) {
+	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
+	defer mockCluster.Terminate(t)
+
+	etcdTestCli = mockCluster.RandClient()
+
+	TestingT(t)
+}
 
 func (t *testLock) SetUpSuite(c *C) {
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)
@@ -65,7 +77,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 			newTargetTable(task, sources[1], downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 		vers = map[string]map[string]map[string]int64{
 			sources[0]: {
@@ -100,7 +112,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 
 		for _, db := range dbs {
 			for _, tbl := range tbls {
-				info := newInfoWithVersion(task, source, db, tbl, downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+				info := newInfoWithVersion(task, source, db, tbl, downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 				DDLs, err := l.TrySync(info, tts)
 				c.Assert(err, IsNil)
 				c.Assert(DDLs, DeepEquals, DDLs1)
@@ -119,7 +131,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	t.checkLockNoDone(c, l)
 
 	// CASE: TrySync again after synced is idempotent.
-	info := newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info := newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err := l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -129,7 +141,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 
 	// CASE: need to add more than one DDL to reach the desired schema (schema become larger).
 	// add two columns for one table.
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2_1, ti2}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2_1, ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
@@ -139,7 +151,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
 
 	// TrySync again is idempotent (more than one DDL).
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2_1, ti2}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2_1, ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
@@ -149,7 +161,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
 
 	// add only the first column for another table.
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs2[0:1], nil, []*model.TableInfo{ti2_1}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs2[0:1], ti1, []*model.TableInfo{ti2_1}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2[0:1])
@@ -165,17 +177,18 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 1)
 
-	// TrySync again (only the first DDL).
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs2[0:1], nil, []*model.TableInfo{ti2_1}, vers)
+	// TrySync again is idempotent
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs2[0:1], ti1, []*model.TableInfo{ti2_1}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
-	c.Assert(DDLs, DeepEquals, []string{}) // NOTE: special case, joined has larger schema.
+	c.Assert(DDLs, DeepEquals, DDLs2[0:1])
 	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
+	c.Assert(ready[sources[0]][dbs[0]][tbls[0]], IsTrue)
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsFalse)
 
 	// add the second column for another table.
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs2[1:2], nil, []*model.TableInfo{ti2}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs2[1:2], ti2_1, []*model.TableInfo{ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2[1:2])
@@ -191,24 +204,13 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(cmp, Equals, 0)
 
 	// Try again (for the second DDL).
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs2[1:2], nil, []*model.TableInfo{ti2}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs2[1:2], ti2_1, []*model.TableInfo{ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2[1:2])
 	c.Assert(l.versions, DeepEquals, vers)
 
-	// try add columns for all tables to reach the same schema.
-	resultDDLs := map[string]map[string]map[string][]string{
-		sources[0]: {
-			dbs[0]: {tbls[0]: DDLs2[1:], tbls[1]: DDLs2[1:]},
-			dbs[1]: {tbls[0]: DDLs2, tbls[1]: DDLs2},
-		},
-		sources[1]: {
-			dbs[0]: {tbls[0]: DDLs2, tbls[1]: DDLs2},
-			dbs[1]: {tbls[0]: DDLs2, tbls[1]: DDLs2},
-		},
-	}
-	t.trySyncForAllTablesLarger(c, l, DDLs2, []*model.TableInfo{ti2_1, ti2}, tts, vers, resultDDLs)
+	t.trySyncForAllTablesLarger(c, l, DDLs2, ti1, []*model.TableInfo{ti2_1, ti2}, tts, vers)
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
 
@@ -230,7 +232,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 		for _, db := range dbs {
 			for _, tbl := range tbls {
 				syncedCount++
-				info = newInfoWithVersion(task, source, db, tbl, downSchema, downTable, DDLs3, nil, []*model.TableInfo{ti3}, vers)
+				info = newInfoWithVersion(task, source, db, tbl, downSchema, downTable, DDLs3, ti2, []*model.TableInfo{ti3}, vers)
 				DDLs, err = l.TrySync(info, tts)
 				c.Assert(err, IsNil)
 				c.Assert(l.versions, DeepEquals, vers)
@@ -253,7 +255,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 
 	// CASE: need to drop more than one DDL to reach the desired schema (schema become smaller).
 	// drop two columns for one table.
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs4, nil, []*model.TableInfo{ti4_1, ti4}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs4, ti3, []*model.TableInfo{ti4_1, ti4}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
@@ -263,17 +265,17 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsTrue)
 
 	// TrySync again is idempotent.
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs4, nil, []*model.TableInfo{ti4_1, ti4}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs4, ti3, []*model.TableInfo{ti4_1, ti4}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
-	c.Assert(DDLs, DeepEquals, DDLs4[:1])
+	c.Assert(DDLs, DeepEquals, []string{})
 	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[sources[0]][dbs[0]][tbls[0]], IsFalse)
 	c.Assert(ready[sources[0]][dbs[0]][tbls[1]], IsTrue)
 
 	// drop only the first column for another table.
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs4[0:1], nil, []*model.TableInfo{ti4_1}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs4[0:1], ti3, []*model.TableInfo{ti4_1}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
@@ -286,14 +288,14 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// TrySync again (only the first DDL).
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs4[0:1], nil, []*model.TableInfo{ti4_1}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs4[0:1], ti3, []*model.TableInfo{ti4_1}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
 	c.Assert(l.versions, DeepEquals, vers)
 
 	// drop the second column for another table.
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs4[1:2], nil, []*model.TableInfo{ti4}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs4[1:2], ti4_1, []*model.TableInfo{ti4}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
@@ -306,7 +308,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 	c.Assert(cmp, Equals, 0)
 
 	// TrySync again (for the second DDL).
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs4[1:2], nil, []*model.TableInfo{ti4}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[1], downSchema, downTable, DDLs4[1:2], ti4_1, []*model.TableInfo{ti4}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
@@ -318,7 +320,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 		for schema, tables := range schemaTables {
 			for table, synced2 := range tables {
 				if synced2 { // do not `TrySync` again for previous two (un-synced now).
-					info = newInfoWithVersion(task, source, schema, table, downSchema, downTable, DDLs4, nil, []*model.TableInfo{ti4_1, ti4}, vers)
+					info = newInfoWithVersion(task, source, schema, table, downSchema, downTable, DDLs4, ti3, []*model.TableInfo{ti4_1, ti4}, vers)
 					DDLs, err = l.TrySync(info, tts)
 					c.Assert(err, IsNil)
 					c.Assert(l.versions, DeepEquals, vers)
@@ -360,7 +362,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 			newTargetTable(task, source, downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -375,7 +377,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 
 	// try sync for one table, `DROP INDEX` returned directly (to make schema become more compatible).
 	// `DROP INDEX` is handled like `ADD COLUMN`.
-	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err := l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -386,7 +388,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 	c.Assert(remain, Equals, 1)
 
 	// try sync for another table, also got `DROP INDEX` now.
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -395,7 +397,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 
 	// try sync for one table, `ADD INDEX` not returned directly (to keep the schema more compatible).
 	// `ADD INDEX` is handled like `DROP COLUMN`.
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{}) // no DDLs returned
@@ -406,7 +408,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 	c.Assert(remain, Equals, 1)
 
 	// try sync for another table, got `ADD INDEX` now.
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
@@ -439,7 +441,7 @@ func (t *testLock) TestLockTrySyncNullNotNull(c *C) {
 			newTargetTable(task, source, downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -454,28 +456,28 @@ func (t *testLock) TestLockTrySyncNullNotNull(c *C) {
 
 	for i := 0; i < 2; i++ { // two round
 		// try sync for one table, from `NULL` to `NOT NULL`, no DDLs returned.
-		info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+		info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 		DDLs, err := l.TrySync(info, tts)
 		c.Assert(err, IsNil)
 		c.Assert(DDLs, DeepEquals, []string{})
 		c.Assert(l.versions, DeepEquals, vers)
 
 		// try sync for another table, DDLs returned.
-		info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+		info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 		DDLs, err = l.TrySync(info, tts)
 		c.Assert(err, IsNil)
 		c.Assert(DDLs, DeepEquals, DDLs1)
 		c.Assert(l.versions, DeepEquals, vers)
 
 		// try sync for one table, from `NOT NULL` to `NULL`, DDLs returned.
-		info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2}, vers)
+		info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2}, vers)
 		DDLs, err = l.TrySync(info, tts)
 		c.Assert(err, IsNil)
 		c.Assert(DDLs, DeepEquals, DDLs2)
 		c.Assert(l.versions, DeepEquals, vers)
 
 		// try sync for another table, from `NOT NULL` to `NULL`, DDLs, returned.
-		info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2}, vers)
+		info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2}, vers)
 		DDLs, err = l.TrySync(info, tts)
 		c.Assert(err, IsNil)
 		c.Assert(DDLs, DeepEquals, DDLs2)
@@ -506,7 +508,7 @@ func (t *testLock) TestLockTrySyncIntBigint(c *C) {
 			newTargetTable(task, source, downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -520,14 +522,14 @@ func (t *testLock) TestLockTrySyncIntBigint(c *C) {
 	t.checkLockNoDone(c, l)
 
 	// try sync for one table, from `INT` to `BIGINT`, DDLs returned.
-	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err := l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	c.Assert(l.versions, DeepEquals, vers)
 
 	// try sync for another table, DDLs returned.
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -557,7 +559,7 @@ func (t *testLock) TestLockTrySyncNoDiff(c *C) {
 			newTargetTable(task, source, downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -571,7 +573,7 @@ func (t *testLock) TestLockTrySyncNoDiff(c *C) {
 	t.checkLockNoDone(c, l)
 
 	// try sync for one table.
-	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err := l.TrySync(info, tts)
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
@@ -599,7 +601,7 @@ func (t *testLock) TestLockTrySyncNewTable(c *C) {
 
 		tables = map[string]map[string]struct{}{db1: {tbl1: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source1, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 		vers   = map[string]map[string]map[string]int64{
 			source1: {
 				db1: {tbl1: 0},
@@ -615,7 +617,7 @@ func (t *testLock) TestLockTrySyncNewTable(c *C) {
 	t.checkLockNoDone(c, l)
 
 	// TrySync for a new table as the caller.
-	info := newInfoWithVersion(task, source2, db2, tbl2, downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info := newInfoWithVersion(task, source2, db2, tbl2, downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err := l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -631,7 +633,7 @@ func (t *testLock) TestLockTrySyncNewTable(c *C) {
 	c.Assert(ready[source2][db2][tbl2], IsTrue)
 
 	// TrySync for two new tables as extra sources.
-	// we treat all newly added sources as synced.
+	// newly added work table use tableInfoBefore as table info
 	tts = append(tts,
 		newTargetTable(task, source1, downSchema, downTable, map[string]map[string]struct{}{db1: {tbl2: struct{}{}}}),
 		newTargetTable(task, source2, downTable, downTable, map[string]map[string]struct{}{db2: {tbl1: struct{}{}}}),
@@ -639,7 +641,24 @@ func (t *testLock) TestLockTrySyncNewTable(c *C) {
 	vers[source1][db1][tbl2] = 0
 	vers[source2][db2][tbl1] = 0
 
-	info = newInfoWithVersion(task, source1, db1, tbl1, downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info = newInfoWithVersion(task, source1, db1, tbl1, downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
+	DDLs, err = l.TrySync(info, tts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	c.Assert(l.versions, DeepEquals, vers)
+
+	ready = l.Ready()
+	c.Assert(ready, HasLen, 2)
+	c.Assert(ready[source1], HasLen, 1)
+	c.Assert(ready[source1][db1], HasLen, 2)
+	c.Assert(ready[source1][db1][tbl1], IsTrue)
+	c.Assert(ready[source1][db1][tbl2], IsTrue)
+	c.Assert(ready[source2], HasLen, 1)
+	c.Assert(ready[source2][db2], HasLen, 2)
+	c.Assert(ready[source2][db2][tbl1], IsTrue)
+	c.Assert(ready[source2][db2][tbl2], IsTrue)
+
+	info = newInfoWithVersion(task, source1, db1, tbl2, downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -692,7 +711,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -707,7 +726,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 
 	// CASE: revert for single DDL.
 	// TrySync for one table.
-	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err := l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -723,7 +742,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// revert for the table, become synced again.
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
@@ -733,7 +752,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 
 	// CASE: revert for multiple DDLs.
 	// TrySync for one table.
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs3, nil, []*model.TableInfo{ti4, ti3}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs3, ti0, []*model.TableInfo{ti4, ti3}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
@@ -749,7 +768,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// revert part of the DDLs.
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs4, nil, []*model.TableInfo{ti4}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs4, ti3, []*model.TableInfo{ti4}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs4)
@@ -764,7 +783,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// revert the reset part of the DDLs.
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs5, nil, []*model.TableInfo{ti5}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs5, ti4, []*model.TableInfo{ti5}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs5)
@@ -774,7 +793,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 
 	// CASE: revert part of multiple DDLs.
 	// TrySync for one table.
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs6, nil, []*model.TableInfo{ti7, ti6}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs6, ti0, []*model.TableInfo{ti7, ti6}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs6)
@@ -789,7 +808,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// revert part of the DDLs.
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs7, nil, []*model.TableInfo{ti7}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs7, ti3, []*model.TableInfo{ti7}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs7)
@@ -804,7 +823,7 @@ func (t *testLock) TestLockTrySyncRevert(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// TrySync for another table.
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs8, nil, []*model.TableInfo{ti8}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs8, ti0, []*model.TableInfo{ti8}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs8)
@@ -839,7 +858,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -853,7 +872,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	t.checkLockNoDone(c, l)
 
 	// TrySync for the first table, construct the joined schema.
-	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err := l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -869,7 +888,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// TrySync for the second table with another schema (add two columns, one of them will cause conflict).
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2_1, ti2}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti0, []*model.TableInfo{ti2_1, ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
@@ -882,7 +901,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 
 	// TrySync for the first table to resolve the conflict.
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs3, nil, []*model.TableInfo{ti3}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs3, ti1, []*model.TableInfo{ti3}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
@@ -898,7 +917,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	c.Assert(cmp, Equals, 0)
 
 	// TrySync for the second table, succeed now
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2_1, ti2}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti0, []*model.TableInfo{ti2_1, ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
@@ -910,7 +929,7 @@ func (t *testLock) TestLockTrySyncConflictNonIntrusive(c *C) {
 	c.Assert(ready[source][db][tbls[1]], IsTrue)
 
 	// TrySync for the first table.
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs4, nil, []*model.TableInfo{ti4_1, ti4}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs4, ti0, []*model.TableInfo{ti4_1, ti4}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs4)
@@ -933,19 +952,17 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 		tblID      int64 = 111
 		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
 		DDLs2            = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME", "ALTER TABLE bar ADD COLUMN c2 INT"}
-		DDLs3            = []string{"ALTER TABLE bar DROP COLUMN c2"}
-		DDLs4            = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		DDLs3            = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME"}
 		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
 		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
 		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME, c2 INT)`)
 		ti3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
-		ti4              = ti0
 
 		DDLs5   = []string{"ALTER TABLE bar ADD COLUMN c2 TEXT"}
 		DDLs6   = []string{"ALTER TABLE bar ADD COLUMN c2 DATETIME", "ALTER TABLE bar ADD COLUMN c3 INT"}
-		DDLs7   = []string{"ALTER TABLE bar DROP COLUMN c2"}
-		DDLs8_1 = []string{"ALTER TABLE bar ADD COLUMN c3 INT"}
-		DDLs8_2 = []string{"ALTER TABLE bar ADD COLUMN c2 TEXT"}
+		DDLs7   = []string{"ALTER TABLE bar ADD COLUMN c3 INT"}
+		DDLs8_1 = DDLs7
+		DDLs8_2 = DDLs5
 		ti5     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 TEXT)`)
 		ti6     = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 DATETIME, c3 INT)`)
 		ti6_1   = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 DATETIME)`)
@@ -954,7 +971,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -969,7 +986,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 
 	// CASE: conflict happen, revert all changes to resolve the conflict.
 	// TrySync for the first table, construct the joined schema.
-	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err := l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -985,7 +1002,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// TrySync for the second table with another schema (add two columns, one of them will cause conflict).
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti3, ti2}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti0, []*model.TableInfo{ti3, ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
@@ -998,7 +1015,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 
 	// TrySync again.
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti3, ti2}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti0, []*model.TableInfo{ti3, ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
@@ -1007,22 +1024,10 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, -1)
 
-	// TrySync for the second table to drop the non-conflict column, the conflict should still exist.
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs3, nil, []*model.TableInfo{ti3}, vers)
+	// TrySync for the second table to replace a new ddl without non-conflict column, the conflict should still exist.
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs3, ti0, []*model.TableInfo{ti3}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
-	c.Assert(DDLs, DeepEquals, []string{})
-	c.Assert(l.versions, DeepEquals, vers)
-	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
-	c.Assert(err, IsNil)
-	c.Assert(cmp, Equals, -1)
-	ready = l.Ready()
-	c.Assert(ready[source][db][tbls[1]], IsFalse)
-
-	// TrySync for the second table to drop the conflict column, the conflict should be resolved.
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs4, nil, []*model.TableInfo{ti4}, vers)
-	DDLs, err = l.TrySync(info, tts)
-	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, []string{})
 	c.Assert(l.versions, DeepEquals, vers)
 	cmp, err = l.tables[source][db][tbls[1]].Compare(l.Joined())
@@ -1032,7 +1037,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 
 	// TrySync for the second table as we did for the first table, the lock should be synced.
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs)
@@ -1045,7 +1050,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 
 	// CASE: conflict happen, revert part of changes to resolve the conflict.
 	// TrySync for the first table, construct the joined schema.
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs5, nil, []*model.TableInfo{ti5}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs5, ti1, []*model.TableInfo{ti5}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs5)
@@ -1061,7 +1066,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// TrySync for the second table with another schema (add two columns, one of them will cause conflict).
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs6, nil, []*model.TableInfo{ti6_1, ti6}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs6, ti1, []*model.TableInfo{ti6_1, ti6}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(terror.ErrShardDDLOptimismTrySyncFail.Equal(err), IsTrue)
 	c.Assert(DDLs, DeepEquals, []string{})
@@ -1072,12 +1077,12 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[1]], IsFalse)
 
-	// TrySync for the second table to drop the conflict column, the conflict should be resolved.
+	// TrySync for the second table to replace a new ddl without conflict column, the conflict should be resolved.
 	// but both of tables are not synced now.
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs7, nil, []*model.TableInfo{ti7}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs7, ti1, []*model.TableInfo{ti7}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
-	c.Assert(DDLs, DeepEquals, DDLs7) // special case: these DDLs should not be replicated to the downstream.
+	c.Assert(DDLs, DeepEquals, DDLs7)
 	c.Assert(l.versions, DeepEquals, vers)
 	ready = l.Ready()
 	c.Assert(ready[source][db][tbls[0]], IsFalse)
@@ -1090,7 +1095,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(cmp, Equals, -1)
 
 	// TrySync for the first table to become synced.
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs8_1, nil, []*model.TableInfo{ti8}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs8_1, ti5, []*model.TableInfo{ti8}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs8_1)
@@ -1098,7 +1103,7 @@ func (t *testLock) TestLockTrySyncConflictIntrusive(c *C) {
 	c.Assert(ready[source][db][tbls[0]], IsTrue)
 
 	// TrySync for the second table to become synced.
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs8_2, nil, []*model.TableInfo{ti8}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs8_2, ti7, []*model.TableInfo{ti8}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs8_2)
@@ -1144,7 +1149,7 @@ func (t *testLock) TestLockTrySyncMultipleChangeDDL(c *C) {
 			newTargetTable(task, sources[1], downSchema, downTable, tables),
 		}
 
-		l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 		vers = map[string]map[string]map[string]int64{
 			sources[0]: {
@@ -1163,12 +1168,12 @@ func (t *testLock) TestLockTrySyncMultipleChangeDDL(c *C) {
 	t.checkLockNoDone(c, l)
 
 	// inconsistent ddls and table infos
-	info := newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs1[:1], nil, []*model.TableInfo{ti1_1, ti1}, vers)
+	info := newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs1[:1], ti0, []*model.TableInfo{ti1_1, ti1}, vers)
 	DDLs, err := l.TrySync(info, tts)
 	c.Assert(DDLs, DeepEquals, DDLs1[:1])
 	c.Assert(terror.ErrMasterInconsistentOptimisticDDLsAndInfo.Equal(err), IsTrue)
 
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(DDLs, DeepEquals, DDLs1)
 	c.Assert(terror.ErrMasterInconsistentOptimisticDDLsAndInfo.Equal(err), IsTrue)
@@ -1191,7 +1196,7 @@ func (t *testLock) TestLockTrySyncMultipleChangeDDL(c *C) {
 	for _, source := range sources {
 		for _, db := range dbs {
 			for _, tbl := range tbls {
-				info = newInfoWithVersion(task, source, db, tbl, downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1_1, ti1}, vers)
+				info = newInfoWithVersion(task, source, db, tbl, downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1_1, ti1}, vers)
 				DDLs, err = l.TrySync(info, tts)
 				c.Assert(err, IsNil)
 				c.Assert(DDLs, DeepEquals, resultDDLs1[source][db][tbl])
@@ -1210,7 +1215,7 @@ func (t *testLock) TestLockTrySyncMultipleChangeDDL(c *C) {
 
 	// CASE: TrySync again after synced is idempotent.
 	// both ddl will sync again
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1_1, ti1}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1_1, ti1}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -1233,7 +1238,7 @@ func (t *testLock) TestLockTrySyncMultipleChangeDDL(c *C) {
 	for _, source := range sources {
 		for _, db := range dbs {
 			for _, tbl := range tbls {
-				info = newInfoWithVersion(task, source, db, tbl, downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2_1, ti2}, vers)
+				info = newInfoWithVersion(task, source, db, tbl, downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2_1, ti2}, vers)
 				DDLs, err = l.TrySync(info, tts)
 				c.Assert(err, IsNil)
 				c.Assert(DDLs, DeepEquals, resultDDLs2[source][db][tbl])
@@ -1251,11 +1256,10 @@ func (t *testLock) TestLockTrySyncMultipleChangeDDL(c *C) {
 	t.checkLockNoDone(c, l)
 
 	// CASE: TrySync again after synced is idempotent.
-	// only the second ddl(ADD COLUMN) will sync, the first one(DROP COLUMN) will not sync since oldJoined==newJoined
-	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2_1, ti2}, vers)
+	info = newInfoWithVersion(task, sources[0], dbs[0], tbls[0], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2_1, ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
-	c.Assert(DDLs, DeepEquals, DDLs2[1:])
+	c.Assert(DDLs, DeepEquals, DDLs2)
 	c.Assert(l.versions, DeepEquals, vers)
 	t.checkLockSynced(c, l)
 	t.checkLockNoDone(c, l)
@@ -1282,7 +1286,7 @@ func (t *testLock) TestTryRemoveTable(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbl1: struct{}{}, tbl2: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -1297,7 +1301,7 @@ func (t *testLock) TestTryRemoveTable(c *C) {
 
 	// CASE: remove a table as normal.
 	// TrySync for the first table.
-	info := newInfoWithVersion(task, source, db, tbl1, downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info := newInfoWithVersion(task, source, db, tbl1, downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err := l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -1322,7 +1326,7 @@ func (t *testLock) TestTryRemoveTable(c *C) {
 	// CASE: remove a table will not rebuild joined schema now.
 	// TrySync to add the second back.
 	vers[source][db][tbl2] = 0
-	info = newInfoWithVersion(task, source, db, tbl2, downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2}, vers)
+	info = newInfoWithVersion(task, source, db, tbl2, downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
@@ -1372,7 +1376,7 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -1387,7 +1391,7 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the first table, no table has done the DDLs operation.
-	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err := l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -1402,7 +1406,7 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the second table, the joined schema become larger.
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti1, ti2}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti0, []*model.TableInfo{ti1, ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs2)
@@ -1421,7 +1425,7 @@ func (t *testLock) TestLockTryMarkDone(c *C) {
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the first table, all tables become synced.
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs3, nil, []*model.TableInfo{ti3}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs3, ti1, []*model.TableInfo{ti3}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs3)
@@ -1477,7 +1481,7 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 
 		tables = map[string]map[string]struct{}{db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}}}
 		tts    = []TargetTable{newTargetTable(task, source, downSchema, downTable, tables)}
-		l      = NewLock(ID, task, downSchema, downTable, ti0, tts)
+		l      = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 		vers = map[string]map[string]map[string]int64{
 			source: {
@@ -1495,7 +1499,7 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the first table, no table has done the DDLs operation.
-	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err := l.TrySync(info, tts)
 	c.Assert(err, IsNil)
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -1504,18 +1508,18 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the second table, add a table with a larger field length
-	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti0, []*model.TableInfo{ti2}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, ErrorMatches, ".*add columns with different field lengths.*")
 	c.Assert(DDLs, DeepEquals, DDLs2)
 	c.Assert(l.versions, DeepEquals, vers)
 
 	// case 2: add a column with a smaller field length
-	l = NewLock(ID, task, downSchema, downTable, ti0, tts)
+	l = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
 
 	// TrySync for the first table, no table has done the DDLs operation.
 	vers[source][db][tbls[0]]--
-	info = NewInfo(task, source, db, tbls[1], downSchema, downTable, DDLs2, nil, []*model.TableInfo{ti2})
+	info = NewInfo(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti0, []*model.TableInfo{ti2})
 	info.Version = vers[source][db][tbls[1]]
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, IsNil)
@@ -1525,7 +1529,7 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 	c.Assert(l.IsResolved(), IsFalse)
 
 	// TrySync for the second table, add a table with a smaller field length
-	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, nil, []*model.TableInfo{ti1}, vers)
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
 	DDLs, err = l.TrySync(info, tts)
 	c.Assert(err, ErrorMatches, ".*add columns with different field lengths.*")
 	c.Assert(DDLs, DeepEquals, DDLs1)
@@ -1533,14 +1537,14 @@ func (t *testLock) TestAddDifferentFieldLenColumns(c *C) {
 }
 
 func (t *testLock) trySyncForAllTablesLarger(c *C, l *Lock,
-	DDLs []string, tis []*model.TableInfo, tts []TargetTable, vers map[string]map[string]map[string]int64, resultDDLs map[string]map[string]map[string][]string) {
+	DDLs []string, tableInfoBefore *model.TableInfo, tis []*model.TableInfo, tts []TargetTable, vers map[string]map[string]map[string]int64) {
 	for source, schemaTables := range l.Ready() {
 		for schema, tables := range schemaTables {
 			for table := range tables {
-				info := newInfoWithVersion(l.Task, source, schema, table, l.DownSchema, l.DownTable, DDLs, nil, tis, vers)
+				info := newInfoWithVersion(l.Task, source, schema, table, l.DownSchema, l.DownTable, DDLs, tableInfoBefore, tis, vers)
 				DDLs2, err := l.TrySync(info, tts)
 				c.Assert(err, IsNil)
-				c.Assert(DDLs2, DeepEquals, resultDDLs[source][schema][table])
+				c.Assert(DDLs2, DeepEquals, DDLs)
 			}
 		}
 	}
@@ -1579,4 +1583,82 @@ func newInfoWithVersion(task, source, upSchema, upTable, downSchema, downTable s
 	vers[source][upSchema][upTable]++
 	info.Version = vers[source][upSchema][upTable]
 	return info
+}
+
+func (t *testLock) TestLockTrySyncDifferentIndex(c *C) {
+	var (
+		ID               = "test_lock_try_sync_index-`foo`.`bar`"
+		task             = "test_lock_try_sync_index"
+		source           = "mysql-replica-1"
+		downSchema       = "db"
+		downTable        = "bar"
+		db               = "db"
+		tbls             = []string{"bar1", "bar2"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		DDLs1            = []string{"ALTER TABLE bar DROP INDEX idx_c1"}
+		DDLs2            = []string{"ALTER TABLE bar ADD INDEX new_idx(c1)"}
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, UNIQUE INDEX idx_c1(c1))`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, INDEX new_idx(c1))`)
+		tables           = map[string]map[string]struct{}{
+			db: {tbls[0]: struct{}{}, tbls[1]: struct{}{}},
+		}
+		tts = []TargetTable{
+			newTargetTable(task, source, downSchema, downTable, tables),
+		}
+
+		l = NewLock(ID, task, downSchema, downTable, schemacmp.Encode(ti0), tts)
+
+		vers = map[string]map[string]map[string]int64{
+			source: {
+				db: {tbls[0]: 0, tbls[1]: 0},
+			},
+		}
+	)
+
+	// the initial status is synced.
+	t.checkLockSynced(c, l)
+	t.checkLockNoDone(c, l)
+
+	// try sync for one table, `DROP INDEX` returned directly (to make schema become more compatible).
+	// `DROP INDEX` is handled like `ADD COLUMN`.
+	info := newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1}, vers)
+	DDLs, err := l.TrySync(info, tts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs1)
+	c.Assert(l.versions, DeepEquals, vers)
+	synced, remain := l.IsSynced()
+	c.Assert(synced, Equals, l.synced)
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+
+	cmp, err := l.tables[source][db][tbls[1]].Compare(schemacmp.Encode(ti0))
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+
+	// try sync ADD another INDEX for another table
+	// `ADD INDEX` is handled like `DROP COLUMN`.
+	info = newInfoWithVersion(task, source, db, tbls[1], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2}, vers)
+	DDLs, err = l.TrySync(info, tts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, []string{}) // no DDLs returned
+	c.Assert(l.versions, DeepEquals, vers)
+	synced, remain = l.IsSynced()
+	c.Assert(synced, Equals, l.synced)
+	c.Assert(synced, IsFalse)
+	c.Assert(remain, Equals, 1)
+
+	cmp, err = l.tables[source][db][tbls[0]].Compare(l.joined)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+
+	// try sync ADD INDEX for first table
+	info = newInfoWithVersion(task, source, db, tbls[0], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2}, vers)
+	DDLs, err = l.TrySync(info, tts)
+	c.Assert(err, IsNil)
+	c.Assert(DDLs, DeepEquals, DDLs2)
+	c.Assert(l.versions, DeepEquals, vers)
+	t.checkLockSynced(c, l)
 }

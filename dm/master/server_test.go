@@ -637,6 +637,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		op1      = optimism.NewOperation(ID, taskName, sources[0], info1.UpSchema, info1.UpTable, DDLs1, optimism.ConflictNone, false)
 	)
 
+	st1.AddTable("foo-1", "bar-1", schema, table)
 	_, err = optimism.PutSourceTables(etcdTestCli, st1)
 	c.Assert(err, check.IsNil)
 	_, err = optimism.PutInfo(etcdTestCli, info1)
