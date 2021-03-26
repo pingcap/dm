@@ -21,6 +21,7 @@ import (
 )
 
 // GetAllDroppedColumns gets the all partially dropped columns.
+// return lockID -> column-name -> source-id -> upstream-schema-name -> upstream-table-name
 func GetAllDroppedColumns(cli *clientv3.Client) (map[string]map[string]map[string]map[string]map[string]struct{}, int64, error) {
 	colm := make(map[string]map[string]map[string]map[string]map[string]struct{})
 	op := clientv3.OpGet(common.ShardDDLOptimismDroppedColumnsKeyAdapter.Path(), clientv3.WithPrefix())

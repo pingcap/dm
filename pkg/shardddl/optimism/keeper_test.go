@@ -431,6 +431,14 @@ func (t *testKeeper) TestRebuildLocksAndTables(c *C) {
 				source2: {upSchema: {upTable: i21}},
 			},
 		}
+		colm = map[string]map[string]map[string]map[string]map[string]struct{}{
+			lockID: {
+				"c3": {
+					source1: {upSchema: {upTable: {}}},
+					source2: {upSchema: {upTable: {}}},
+				},
+			},
+		}
 		lockJoined = map[string]schemacmp.Table{
 			lockID: schemacmp.Encode(ti2),
 		}
@@ -439,7 +447,7 @@ func (t *testKeeper) TestRebuildLocksAndTables(c *C) {
 		}
 	)
 
-	lk.RebuildLocksAndTables(etcdTestCli, ifm, lockJoined, lockTTS)
+	lk.RebuildLocksAndTables(etcdTestCli, ifm, colm, lockJoined, lockTTS)
 	locks := lk.Locks()
 	c.Assert(len(locks), Equals, 1)
 	lock, ok := locks[lockID]
@@ -453,4 +461,5 @@ func (t *testKeeper) TestRebuildLocksAndTables(c *C) {
 	cmp, err = lock.tables[source2][upSchema][upTable].Compare(schemacmp.Encode(ti2))
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 0)
+	c.Assert(lock.columns, DeepEquals, colm[lockID])
 }

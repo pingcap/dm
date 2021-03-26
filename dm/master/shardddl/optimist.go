@@ -322,14 +322,12 @@ func (o *Optimist) recoverLocks(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
 	opm map[string]map[string]map[string]map[string]optimism.Operation,
 	colm map[string]map[string]map[string]map[string]map[string]struct{}) error {
-	o.lk.SetColumnMap(colm)
-	defer o.lk.SetColumnMap(nil)
 	// construct joined table based on the shard DDL info.
 	o.logger.Info("build lock joined and tts")
 	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm)
 	// build lock and restore table info
 	o.logger.Info("rebuild locks and tables")
-	o.lk.RebuildLocksAndTables(o.cli, ifm, lockJoined, lockTTS)
+	o.lk.RebuildLocksAndTables(o.cli, ifm, colm, lockJoined, lockTTS)
 	// sort infos by revision
 	infos := sortInfos(ifm)
 	var firstErr error

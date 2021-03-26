@@ -29,8 +29,6 @@ import (
 type LockKeeper struct {
 	mu    sync.RWMutex
 	locks map[string]*Lock // lockID -> Lock
-	// lockID -> column name -> source -> upSchema -> upTable -> struct{}
-	colm map[string]map[string]map[string]map[string]map[string]struct{}
 }
 
 // NewLockKeeper creates a new LockKeeper instance.
@@ -44,6 +42,7 @@ func NewLockKeeper() *LockKeeper {
 func (lk *LockKeeper) RebuildLocksAndTables(
 	cli *clientv3.Client,
 	ifm map[string]map[string]map[string]map[string]Info,
+	colm map[string]map[string]map[string]map[string]map[string]struct{},
 	lockJoined map[string]schemacmp.Table,
 	lockTTS map[string][]TargetTable) {
 	var (
@@ -60,6 +59,9 @@ func (lk *LockKeeper) RebuildLocksAndTables(
 						lock = lk.locks[lockID]
 					}
 					lock.tables[info.Source][info.UpSchema][info.UpTable] = schemacmp.Encode(info.TableInfoBefore)
+					if columns, ok := colm[lockID]; ok {
+						lock.columns = columns
+					}
 				}
 			}
 		}
@@ -84,11 +86,6 @@ func (lk *LockKeeper) TrySync(cli *clientv3.Client, info Info, tts []TargetTable
 	if l, ok = lk.locks[lockID]; !ok {
 		lk.locks[lockID] = NewLock(cli, lockID, info.Task, info.DownSchema, info.DownTable, schemacmp.Encode(info.TableInfoBefore), tts)
 		l = lk.locks[lockID]
-		if lk.colm != nil {
-			if columns, ok := lk.colm[lockID]; ok {
-				l.columns = columns
-			}
-		}
 	}
 
 	newDDLs, err := l.TrySync(info, tts)
@@ -142,14 +139,6 @@ func (lk *LockKeeper) Clear() {
 	defer lk.mu.Unlock()
 
 	lk.locks = make(map[string]*Lock)
-}
-
-// SetColumnMap sets the column map received from etcd
-func (lk *LockKeeper) SetColumnMap(colm map[string]map[string]map[string]map[string]map[string]struct{}) {
-	lk.mu.Lock()
-	defer lk.mu.Unlock()
-
-	lk.colm = colm
 }
 
 // genDDLLockID generates DDL lock ID from its info.
