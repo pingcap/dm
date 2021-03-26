@@ -67,6 +67,11 @@ function usage_and_arg_test() {
     operate_source_wrong_config_file
     operate_source_invalid_op $MYSQL1_CONF
     operate_source_stop_not_created_config $MYSQL1_CONF
+
+    echo "transfer_source_empty_arg"
+    transfer_source_empty_arg
+    transfer_source_less_arg
+    transfer_source_more_arg
 }
 
 function recover_max_binlog_size() {
@@ -75,7 +80,9 @@ function recover_max_binlog_size() {
 }
 
 function run() {
-    inject_points=("github.com/pingcap/dm/syncer/SyncerEventTimeout=return(1)")
+    inject_points=(
+        "github.com/pingcap/dm/pkg/streamer/SetHeartbeatInterval=return(1)"
+    )
     export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 
     run_sql "show variables like 'max_binlog_size'\G" $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -110,6 +117,8 @@ function run() {
 
     run_dm_master $WORK_DIR/master $MASTER_PORT $dm_master_conf
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    # only one master, check it should be leader and etcd metrics works
+    check_metric $MASTER_PORT 'etcd_server_has_leader' 3 0 2
     
     usage_and_arg_test
 
@@ -126,11 +135,12 @@ function run() {
         "operate-source stop $cur/conf/source1.yaml $SOURCE_ID2" \
         "\"result\": true" 3
 
+    # ensure source1 is bound to worker1
     dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
-    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
-
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $dm_worker1_conf
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+
+    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source show" \
@@ -146,6 +156,9 @@ function run() {
         "\"result\": true" 3 \
         '"worker": "worker1"' 1 \
         '"worker": "worker2"' 1
+
+    transfer_source_valid $SOURCE_ID1 worker1 # transfer to self
+    transfer_source_invalid $SOURCE_ID1 worker2
 
     echo "pause_relay_success"
     pause_relay_success
@@ -250,16 +263,22 @@ function run() {
 #    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10
 #    show_ddl_locks_no_locks $TASK_NAME
 
-    # sleep 1s to ensure syncer unit has flushed global checkpoint and updates
+    # make sure every shard table in source 1 has be forwarded to newer binlog, so older relay log could be purged
+    run_sql_source1 "flush logs"
+    run_sql_source1 "update dmctl.t_1 set d = '' where id = 13"
+    run_sql_source1 "update dmctl.t_2 set d = '' where id = 12"
+
+    # sleep 2*1s to ensure syncer unit has flushed global checkpoint and updates
     # updated ActiveRelayLog
-    sleep 1
+    sleep 2
     server_uuid=$(tail -n 1 $WORK_DIR/worker1/relay_log/server-uuid.index)
-    run_sql "show binary logs\G" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_source1 "show binary logs\G"
     max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
     binlog_count=$(grep Log_name "$SQL_RESULT_FILE" | wc -l)
     relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
     [ "$binlog_count" -eq "$relay_log_count" ]
-#    purge_relay_success $max_binlog_name $SOURCE_ID1
+    [ "$relay_log_count" -ne 1 ]
+    purge_relay_success $max_binlog_name $SOURCE_ID1
     new_relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
     [ "$new_relay_log_count" -eq 1 ]
 

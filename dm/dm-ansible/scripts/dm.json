@@ -2007,7 +2007,7 @@
             "x": 12,
             "y": 10
           },
-          "id": 5,
+          "id": 7,
           "legend": {
             "alignAsTable": true,
             "avg": false,
@@ -2495,7 +2495,7 @@
           "gridPos": {
             "h": 7,
             "w": 6,
-            "x": 12,
+            "x": 18,
             "y": 17
           },
           "id": 25,

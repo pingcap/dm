@@ -20,8 +20,12 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/format"
 	"github.com/pingcap/parser/model"
+	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -74,7 +78,40 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 		if err != nil {
 			return "", terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, req.Database, req.Table)
 		}
-		return "", nil
+
+		if !req.Flush && !req.Sync {
+			break
+		}
+
+		ti, err := s.schemaTracker.GetTable(req.Database, req.Table)
+		if err != nil {
+			return "", err
+		}
+
+		if req.Flush {
+			log.L().Info("flush table info", zap.String("table info", newSQL))
+			err = s.checkpoint.FlushPointWithTableInfo(tcontext.NewContext(ctx, log.L()), req.Database, req.Table, ti)
+			if err != nil {
+				return "", err
+			}
+		}
+
+		if req.Sync {
+			if s.cfg.ShardMode != config.ShardOptimistic {
+				log.L().Warn("ignore --sync flag", zap.String("shard mode", s.cfg.ShardMode))
+				break
+			}
+			downSchema, downTable := s.renameShardingSchema(req.Database, req.Table)
+			// use new table info as tableInfoBefore, we can also use the origin table from schemaTracker
+			info := s.optimist.ConstructInfo(req.Database, req.Table, downSchema, downTable, []string{""}, ti, []*model.TableInfo{ti})
+			info.IgnoreConflict = true
+			log.L().Info("sync info with operate-schema", zap.Stringer("info", info))
+			_, err = s.optimist.PutInfo(info)
+			if err != nil {
+				return "", err
+			}
+		}
+
 	case pb.SchemaOp_RemoveSchema:
 		// we only drop the schema in the schema-tracker now,
 		// so if we drop the schema and continue to replicate any DDL/DML, it will try to get schema from downstream again.

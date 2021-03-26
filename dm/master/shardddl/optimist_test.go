@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	tiddl "github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/util/mock"
@@ -148,6 +149,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	t.testOptimist(c, noRestart)
 	t.testOptimist(c, restartOnly)
 	t.testOptimist(c, restartNewInstance)
+	t.testSortInfos(c)
 }
 
 func (t *testOptimist) testOptimist(c *C, restart int) {
@@ -191,13 +193,13 @@ func (t *testOptimist) testOptimist(c *C, restart int) {
 		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
 		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
 		ti3              = ti1
-		i11              = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, ti1)
-		i12              = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs1, ti0, ti1)
-		i21              = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs2, ti1, ti2)
+		i11              = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i12              = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i21              = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2})
 		i23              = optimism.NewInfo(task, source2, "foo-2", "bar-3", downSchema, downTable,
-			[]string{`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`}, ti2, ti2)
-		i31 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs3, ti2, ti3)
-		i33 = optimism.NewInfo(task, source2, "foo-2", "bar-3", downSchema, downTable, DDLs3, ti2, ti3)
+			[]string{`CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`}, ti2, []*model.TableInfo{ti2})
+		i31 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs3, ti2, []*model.TableInfo{ti3})
+		i33 = optimism.NewInfo(task, source2, "foo-2", "bar-3", downSchema, downTable, DDLs3, ti2, []*model.TableInfo{ti3})
 	)
 
 	st1.AddTable("foo", "bar-1", downSchema, downTable)
@@ -656,14 +658,13 @@ func (t *testOptimist) TestOptimistLockConflict(c *C) {
 		tblID        int64 = 111
 		DDLs1              = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
 		DDLs2              = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME"}
-		DDLs3              = []string{"ALTER TABLE bar DROP COLUMN c1"}
 		ti0                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
 		ti1                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
 		ti2                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
 		ti3                = ti0
-		i1                 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, ti1)
-		i2                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs2, ti0, ti2)
-		i3                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs3, ti2, ti3)
+		i1                 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i2                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs2, ti0, []*model.TableInfo{ti2})
+		i3                 = optimism.NewInfo(task, source1, "foo", "bar-2", downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti3})
 	)
 
 	st1.AddTable("foo", "bar-1", downSchema, downTable)
@@ -714,6 +715,7 @@ func (t *testOptimist) TestOptimistLockConflict(c *C) {
 	c.Assert(len(errCh), Equals, 0)
 
 	// PUT i3, no conflict now.
+	// case for handle-error replace
 	rev3, err := optimism.PutInfo(etcdTestCli, i3)
 	c.Assert(err, IsNil)
 	// wait operation for i3 become available.
@@ -756,10 +758,10 @@ func (t *testOptimist) TestOptimistLockMultipleTarget(c *C) {
 		DDLs               = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
 		ti0                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
 		ti1                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
-		i11                = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable1, DDLs, ti0, ti1)
-		i12                = optimism.NewInfo(task, source, upSchema, upTables[1], downSchema, downTable1, DDLs, ti0, ti1)
-		i21                = optimism.NewInfo(task, source, upSchema, upTables[2], downSchema, downTable2, DDLs, ti0, ti1)
-		i22                = optimism.NewInfo(task, source, upSchema, upTables[3], downSchema, downTable2, DDLs, ti0, ti1)
+		i11                = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable1, DDLs, ti0, []*model.TableInfo{ti1})
+		i12                = optimism.NewInfo(task, source, upSchema, upTables[1], downSchema, downTable1, DDLs, ti0, []*model.TableInfo{ti1})
+		i21                = optimism.NewInfo(task, source, upSchema, upTables[2], downSchema, downTable2, DDLs, ti0, []*model.TableInfo{ti1})
+		i22                = optimism.NewInfo(task, source, upSchema, upTables[3], downSchema, downTable2, DDLs, ti0, []*model.TableInfo{ti1})
 	)
 
 	sts.AddTable(upSchema, upTables[0], downSchema, downTable1)
@@ -941,9 +943,9 @@ func (t *testOptimist) TestOptimistInitSchema(c *C) {
 		ti0         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
 		ti1         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
 		ti2         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 INT)`)
-		i11         = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable, DDLs1, ti0, ti1)
-		i12         = optimism.NewInfo(task, source, upSchema, upTables[1], downSchema, downTable, DDLs1, ti0, ti1)
-		i21         = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable, DDLs2, ti1, ti2)
+		i11         = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i12         = optimism.NewInfo(task, source, upSchema, upTables[1], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i21         = optimism.NewInfo(task, source, upSchema, upTables[0], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2})
 	)
 
 	st.AddTable(upSchema, upTables[0], downSchema, downTable)
@@ -1028,4 +1030,128 @@ func (t *testOptimist) TestOptimistInitSchema(c *C) {
 	is, _, err = optimism.GetInitSchema(etcdTestCli, task, downSchema, downTable)
 	c.Assert(err, IsNil)
 	c.Assert(is.TableInfo, DeepEquals, ti1) // the init schema is ti1 now.
+}
+
+func (t *testOptimist) testSortInfos(c *C) {
+	defer clearOptimistTestSourceInfoOperation(c)
+
+	var (
+		task       = "test-optimist-init-schema"
+		sources    = []string{"mysql-replica-1", "mysql-replica-2"}
+		upSchema   = "foo"
+		upTables   = []string{"bar-1", "bar-2"}
+		downSchema = "foo"
+		downTable  = "bar"
+
+		p           = parser.New()
+		se          = mock.NewContext()
+		tblID int64 = 111
+		DDLs1       = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
+		DDLs2       = []string{"ALTER TABLE bar ADD COLUMN c2 INT"}
+		ti0         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
+		ti2         = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT, c2 INT)`)
+		i11         = optimism.NewInfo(task, sources[0], upSchema, upTables[0], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i12         = optimism.NewInfo(task, sources[0], upSchema, upTables[1], downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i21         = optimism.NewInfo(task, sources[1], upSchema, upTables[1], downSchema, downTable, DDLs2, ti1, []*model.TableInfo{ti2})
+	)
+
+	rev1, err := optimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+	ifm, _, err := optimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	infos := sortInfos(ifm)
+	c.Assert(len(infos), Equals, 1)
+	i11.Version = 1
+	i11.Revision = rev1
+	c.Assert(infos[0], DeepEquals, i11)
+
+	rev2, err := optimism.PutInfo(etcdTestCli, i12)
+	c.Assert(err, IsNil)
+	ifm, _, err = optimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	infos = sortInfos(ifm)
+	c.Assert(len(infos), Equals, 2)
+	i11.Version = 1
+	i11.Revision = rev1
+	i12.Version = 1
+	i12.Revision = rev2
+	c.Assert(infos[0], DeepEquals, i11)
+	c.Assert(infos[1], DeepEquals, i12)
+
+	rev3, err := optimism.PutInfo(etcdTestCli, i21)
+	c.Assert(err, IsNil)
+	rev4, err := optimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+	ifm, _, err = optimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	infos = sortInfos(ifm)
+	c.Assert(len(infos), Equals, 3)
+
+	i11.Version = 2
+	i11.Revision = rev4
+	i12.Version = 1
+	i12.Revision = rev2
+	i21.Version = 1
+	i21.Revision = rev3
+	c.Assert(infos[0], DeepEquals, i12)
+	c.Assert(infos[1], DeepEquals, i21)
+	c.Assert(infos[2], DeepEquals, i11)
+}
+
+func (t *testOptimist) TestBuildLockJoinedAndTable(c *C) {
+	defer clearOptimistTestSourceInfoOperation(c)
+
+	var (
+		logger           = log.L()
+		o                = NewOptimist(&logger)
+		task             = "task"
+		source1          = "mysql-replica-1"
+		source2          = "mysql-replica-2"
+		downSchema       = "db"
+		downTable        = "tbl"
+		st1              = optimism.NewSourceTables(task, source1)
+		st2              = optimism.NewSourceTables(task, source2)
+		DDLs1            = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
+		DDLs2            = []string{"ALTER TABLE bar DROP COLUMN c1"}
+		p                = parser.New()
+		se               = mock.NewContext()
+		tblID      int64 = 111
+		ti0              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
+		ti1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
+		ti2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
+		ti3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c2 INT)`)
+
+		i11 = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, DDLs1, ti0, []*model.TableInfo{ti1})
+		i21 = optimism.NewInfo(task, source2, "foo", "bar-1", downSchema, downTable, DDLs2, ti2, []*model.TableInfo{ti3})
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	st1.AddTable("db", "tbl-1", downSchema, downTable)
+	st2.AddTable("db", "tbl-1", downSchema, downTable)
+
+	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	_, err := optimism.PutSourceTables(etcdTestCli, st1)
+	c.Assert(err, IsNil)
+	_, err = optimism.PutSourceTables(etcdTestCli, st2)
+	c.Assert(err, IsNil)
+
+	_, err = optimism.PutInfo(etcdTestCli, i21)
+	c.Assert(err, IsNil)
+	_, err = optimism.PutInfo(etcdTestCli, i11)
+	c.Assert(err, IsNil)
+
+	ifm, _, err := optimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+
+	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm)
+	c.Assert(len(lockJoined), Equals, 1)
+	c.Assert(len(lockTTS), Equals, 1)
+	joined, ok := lockJoined[utils.GenDDLLockID(task, downSchema, downTable)]
+	c.Assert(ok, IsTrue)
+	cmp, err := joined.Compare(schemacmp.Encode(ti2))
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
 }

@@ -59,7 +59,6 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 	// NOTE: tidb uses a **global** config so can't isolate tracker's config from each other. If that isolation is needed,
 	// we might SetGlobalConfig before every call to tracker, or use some patch like https://github.com/bouk/monkey
 	toSet := tidbConfig.NewConfig()
-	toSet.AlterPrimaryKey = true
 	// bypass wait time of https://github.com/pingcap/tidb/pull/20550
 	toSet.TiKVClient.AsyncCommit.SafeWindow = 0
 	toSet.TiKVClient.AsyncCommit.AllowedClockDrift = 0
@@ -297,8 +296,11 @@ func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo)
 	// to recover a CreateTableStmt from a TableInfo yet.
 
 	// First enqueue the DDL job.
-	var jobID int64
-	err := kv.RunInNewTxn(tr.store, true /*retryable*/, func(txn kv.Transaction) error {
+	var (
+		jobID int64
+		ctx   = context.Background()
+	)
+	err := kv.RunInNewTxn(ctx, tr.store, true /*retryable*/, func(_ context.Context, txn kv.Transaction) error {
 		// reallocate IDs
 		idsCount := 2
 		if ti.Partition != nil {
@@ -340,7 +342,7 @@ func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo)
 	lease := tr.dom.DDL().GetLease() * 2
 	for i := 0; i < waitDDLRetryCount; i++ {
 		var job *model.Job
-		err = kv.RunInNewTxn(tr.store, false /*retryable*/, func(txn kv.Transaction) error {
+		err = kv.RunInNewTxn(ctx, tr.store, false /*retryable*/, func(_ context.Context, txn kv.Transaction) error {
 			m := meta.NewMeta(txn)
 			var e error
 			job, e = m.GetHistoryDDLJob(jobID)

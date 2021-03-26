@@ -34,6 +34,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/model"
@@ -210,6 +211,9 @@ type CheckPoint interface {
 	// @exceptTables: [[schema, table]... ]
 	// corresponding to Meta.Flush
 	FlushPointsExcept(tctx *tcontext.Context, exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error
+
+	// FlushPointWithTableInfo flushed the table point with given table info
+	FlushPointWithTableInfo(tctx *tcontext.Context, sourceSchema, sourceTable string, ti *model.TableInfo) error
 
 	// GlobalPoint returns the global binlog stream's checkpoint
 	// corresponding to Meta.Pos and Meta.GTID
@@ -550,6 +554,43 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 	}
 
 	cp.globalPointSaveTime = time.Now()
+	return nil
+}
+
+// FlushPointWithTableInfo implements CheckPoint.FlushPointWithTableInfo
+func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, sourceSchema string, sourceTable string, ti *model.TableInfo) error {
+	cp.Lock()
+	defer cp.Unlock()
+
+	sqls := make([]string, 0, 1)
+	args := make([][]interface{}, 0, 10)
+
+	point := cp.points[sourceSchema][sourceTable]
+
+	tiBytes, err := json.Marshal(ti)
+	if err != nil {
+		return terror.ErrSchemaTrackerCannotSerialize.Delegate(err, sourceSchema, sourceTable)
+	}
+
+	location := point.MySQLLocation()
+	sql2, arg := cp.genUpdateSQL(sourceSchema, sourceTable, location, nil, tiBytes, false)
+	sqls = append(sqls, sql2)
+	args = append(args, arg)
+
+	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
+	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(utils.DefaultDBTimeout)
+	defer cancel()
+	_, err = cp.dbConn.executeSQL(tctx2, sqls, args...)
+	if err != nil {
+		return err
+	}
+
+	err = point.save(point.location, ti)
+	if err != nil {
+		return err
+	}
+	point.flush()
+
 	return nil
 }
 

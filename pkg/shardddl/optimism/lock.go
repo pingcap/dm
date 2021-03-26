@@ -17,7 +17,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"go.uber.org/zap"
 
@@ -43,6 +44,7 @@ type Lock struct {
 	// upstream source ID -> upstream schema name -> upstream table name -> table info.
 	// if all of them are the same, then we call the lock `synced`.
 	tables map[string]map[string]map[string]schemacmp.Table
+
 	synced bool
 
 	// whether DDLs operations have done (execute the shard DDL) to the downstream.
@@ -58,13 +60,13 @@ type Lock struct {
 
 // NewLock creates a new Lock instance.
 // NOTE: we MUST give the initial table info when creating the lock now.
-func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []TargetTable) *Lock {
+func NewLock(ID, task, downSchema, downTable string, joined schemacmp.Table, tts []TargetTable) *Lock {
 	l := &Lock{
 		ID:         ID,
 		Task:       task,
 		DownSchema: downSchema,
 		DownTable:  downTable,
-		joined:     schemacmp.Encode(ti),
+		joined:     joined,
 		tables:     make(map[string]map[string]map[string]schemacmp.Table),
 		done:       make(map[string]map[string]map[string]bool),
 		synced:     true,
@@ -89,8 +91,18 @@ func NewLock(ID, task, downSchema, downTable string, ti *model.TableInfo, tts []
 // TODO: but both of these modes are difficult to be implemented in DM-worker now, try to do that later.
 // for non-intrusive, a broadcast mechanism needed to notify conflict tables after the conflict has resolved, or even a block mechanism needed.
 // for intrusive, a DML prune or transform mechanism needed for two different schemas (before and after the conflict resolved).
-func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
-	ddls []string, newTI *model.TableInfo, tts []TargetTable, infoVersion int64) (newDDLs []string, err error) {
+func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err error) {
+	var (
+		callerSource   = info.Source
+		callerSchema   = info.UpSchema
+		callerTable    = info.UpTable
+		ddls           = info.DDLs
+		newTIs         = info.TableInfosAfter
+		infoVersion    = info.Version
+		ignoreConflict = info.IgnoreConflict
+		oldSynced      = l.synced
+		emptyDDLs      = []string{}
+	)
 	l.mu.Lock()
 	defer func() {
 		if len(newDDLs) > 0 {
@@ -101,34 +113,6 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		l.mu.Unlock()
 	}()
 
-	// handle the case where <callerSource, callerSchema, callerTable>
-	// is not in old source tables and current new source tables.
-	// duplicate append is not a problem.
-	tts = append(tts, newTargetTable(l.Task, callerSource, l.DownSchema, l.DownTable,
-		map[string]map[string]struct{}{callerSchema: {callerTable: struct{}{}}}))
-	// add any new source tables.
-	l.addTables(tts)
-	if val, ok := l.versions[callerSource][callerSchema][callerTable]; !ok || val < infoVersion {
-		l.versions[callerSource][callerSchema][callerTable] = infoVersion
-	}
-
-	var emptyDDLs = []string{}
-	oldTable := l.tables[callerSource][callerSchema][callerTable]
-	newTable := schemacmp.Encode(newTI)
-
-	// special case: check whether DDLs making the schema become part of larger and another part of smaller.
-	if _, err = oldTable.Compare(newTable); err != nil {
-		return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
-			err, l.ID, fmt.Sprintf("there will be conflicts if DDLs %s are applied to the downstream. old table info: %s, new table info: %s", ddls, oldTable, newTable))
-	}
-
-	oldJoined := l.joined
-	newJoined := newTable
-	l.tables[callerSource][callerSchema][callerTable] = newTable
-	log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
-		zap.Stringer("from", oldTable), zap.Stringer("to", newTable), zap.Strings("ddls", ddls))
-
-	oldSynced := l.synced
 	defer func() {
 		_, remain := l.syncStatus()
 		l.synced = remain == 0
@@ -141,94 +125,189 @@ func (l *Lock) TrySync(callerSource, callerSchema, callerTable string,
 		}
 	}()
 
-	// special case: if the DDL does not affect the schema at all, assume it is
-	// idempotent and just execute the DDL directly.
-	// if any real conflicts after joined exist, they will be detected by the following steps.
-	var cmp int
-	if cmp, err = newTable.Compare(oldJoined); err == nil && cmp == 0 {
-		return ddls, nil
-	}
-
-	// try to join tables.
-	for source, schemaTables := range l.tables {
-		for schema, tables := range schemaTables {
-			for table, ti := range tables {
-				if source != callerSource || schema != callerSchema || table != callerTable {
-					newJoined2, err2 := newJoined.Join(ti)
-					if err2 != nil {
-						// NOTE: conflict detected.
-						return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
-							err2, l.ID, fmt.Sprintf("fail to join table info %s with %s", newJoined, ti))
+	// joinTable join other tables
+	joinTable := func(joined schemacmp.Table) (schemacmp.Table, error) {
+		for source, schemaTables := range l.tables {
+			for schema, tables := range schemaTables {
+				for table, ti := range tables {
+					if source != callerSource || schema != callerSchema || table != callerTable {
+						newJoined, err2 := joined.Join(ti)
+						if err2 != nil {
+							// NOTE: conflict detected.
+							return newJoined, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+								err2, l.ID, fmt.Sprintf("fail to join table info %s with %s", joined, ti))
+						}
+						joined = newJoined
 					}
-					newJoined = newJoined2
 				}
 			}
 		}
+		return joined, nil
 	}
 
-	// update the current joined table info, if it's actually changed it should be logged in `if cmp != 0` block.
-	l.joined = newJoined
+	// should not happen
+	if len(ddls) != len(newTIs) || len(newTIs) == 0 {
+		return ddls, terror.ErrMasterInconsistentOptimisticDDLsAndInfo.Generate(len(ddls), len(newTIs))
+	}
 
-	cmp, err = oldJoined.Compare(newJoined)
-	// FIXME: Compute DDLs through schema diff instead of propagating DDLs directly.
-	// and now we MUST ensure different sources execute same DDLs to the downstream multiple times is safe.
+	// should not happen
+	if info.TableInfoBefore == nil {
+		return ddls, terror.ErrMasterOptimisticTableInfoBeforeNotExist.Generate(ddls)
+	}
+	// handle the case where <callerSource, callerSchema, callerTable>
+	// is not in old source tables and current new source tables.
+	// duplicate append is not a problem.
+	tts = append(tts, newTargetTable(l.Task, callerSource, l.DownSchema, l.DownTable,
+		map[string]map[string]struct{}{callerSchema: {callerTable: struct{}{}}}))
+	// add any new source tables.
+	l.addTables(tts)
+	if val, ok := l.versions[callerSource][callerSchema][callerTable]; !ok || val < infoVersion {
+		l.versions[callerSource][callerSchema][callerTable] = infoVersion
+	}
+
+	lastTableInfo := schemacmp.Encode(newTIs[len(newTIs)-1])
+	defer func() {
+		// only update table info if no error or ignore conflict
+		if ignoreConflict || err == nil {
+			log.L().Info("update table info", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
+				zap.Stringer("from", l.tables[callerSource][callerSchema][callerTable]), zap.Stringer("to", lastTableInfo), zap.Strings("ddls", ddls))
+			l.tables[callerSource][callerSchema][callerTable] = lastTableInfo
+		}
+	}()
+
+	prevTable := schemacmp.Encode(info.TableInfoBefore)
+	// if preTable not equal table in master, we always use preTable
+	// this often happens when an info TrySync twice, e.g. worker restart/resume task
+	if cmp, err := prevTable.Compare(l.tables[callerSource][callerSchema][callerTable]); err != nil || cmp != 0 {
+		l.tables[callerSource][callerSchema][callerTable] = prevTable
+		prevJoined, err := joinTable(prevTable)
+		if err != nil {
+			return emptyDDLs, err
+		}
+		l.joined = prevJoined
+	}
+	oldJoined := l.joined
+
+	lastJoined, err := joinTable(lastTableInfo)
 	if err != nil {
-		// resolving conflict in non-intrusive mode.
-		log.L().Warn("resolving conflict", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
-			zap.Stringer("joined-from", oldJoined), zap.Stringer("joined-to", newJoined), zap.Strings("ddls", ddls))
-		return ddls, nil
-	}
-	if cmp != 0 {
-		// < 0: the joined schema become larger after applied these DDLs.
-		//      this often happens when executing `ADD COLUMN` for the FIRST table.
-		// > 0: the joined schema become smaller after applied these DDLs.
-		//      this often happens when executing `DROP COLUMN` for the LAST table.
-		// for these two cases, we should execute the DDLs to the downstream to update the schema.
-		log.L().Info("joined table info changed", zap.String("lock", l.ID), zap.Int("cmp", cmp), zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined),
-			zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable), zap.Strings("ddls", ddls))
-		return ddls, nil
+		return emptyDDLs, err
 	}
 
-	// NOTE: now, different DM-workers do not wait for each other when executing DDL/DML,
-	// when coordinating the shard DDL between multiple DM-worker instances,
-	// a possible sequences:
-	//   1. DM-worker-A do this `trySync` and DM-master let it to `ADD COLUMN`.
-	//   2. DM-worker-B do this `trySync` again.
-	//   3. DM-worker-B replicate DML to the downstream.
-	//   4. DM-worker-A replicate `ADD COLUMN` to the downstream.
-	// in order to support DML from DM-worker-B matches the downstream schema,
-	// two strategies exist:
-	//   A. DM-worker-B waits for DM-worker-A to finish the replication of the DDL before replicating DML.
-	//   B. DM-worker-B also replicates the DDL before replicating DML,
-	//      but this MUST ensure we can tolerate replicating the DDL multiple times.
-	// for `DROP COLUMN` or other DDL which makes the schema become smaller,
-	// this is not a problem because all DML with larger schema should already replicated to the downstream,
-	// and any DML with smaller schema can fit both the larger or smaller schema.
-	// To make it easy to implement, we will temporarily choose strategy-B.
+	defer func() {
+		if err == nil {
+			// update the current joined table info, it should be logged in `if cmp != 0` block below.
+			l.joined = lastJoined
+		}
+	}()
 
-	cmp, _ = oldTable.Compare(newTable) // we have checked `err` returned above.
-	if cmp < 0 {
-		// let every table to replicate the DDL.
-		return ddls, nil
-	} else if cmp > 0 {
-		// do nothing except the last table.
-		return emptyDDLs, nil
+	newDDLs = []string{}
+	nextTable := prevTable
+	newJoined := oldJoined
+
+	// join and compare every new table info
+	for idx, newTI := range newTIs {
+		prevTable = nextTable
+		oldJoined = newJoined
+		nextTable = schemacmp.Encode(newTI)
+		// special case: check whether DDLs making the schema become part of larger and another part of smaller.
+		if _, err = prevTable.Compare(nextTable); err != nil {
+			return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+				err, l.ID, fmt.Sprintf("there will be conflicts if DDLs %s are applied to the downstream. old table info: %s, new table info: %s", ddls, prevTable, nextTable))
+		}
+
+		// special case: if the DDL does not affect the schema at all, assume it is
+		// idempotent and just execute the DDL directly.
+		// if any real conflicts after joined exist, they will be detected by the following steps.
+		// this often happens when executing `CREATE TABLE` statement
+		var cmp int
+		if cmp, err = nextTable.Compare(oldJoined); err == nil && cmp == 0 {
+			newDDLs = append(newDDLs, ddls[idx])
+			continue
+		}
+
+		// try to join tables.
+		newJoined, err = joinTable(nextTable)
+		if err != nil {
+			return emptyDDLs, err
+		}
+
+		cmp, err = oldJoined.Compare(newJoined)
+		// FIXME: Compute DDLs through schema diff instead of propagating DDLs directly.
+		// and now we MUST ensure different sources execute same DDLs to the downstream multiple times is safe.
+		if err != nil {
+			// resolving conflict in non-intrusive mode.
+			log.L().Warn("resolving conflict", zap.String("lock", l.ID), zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable),
+				zap.Stringer("joined-from", oldJoined), zap.Stringer("joined-to", newJoined), zap.Strings("ddls", ddls))
+			return ddls, nil
+		}
+		if cmp != 0 {
+			// < 0: the joined schema become larger after applied these DDLs.
+			//      this often happens when executing `ADD COLUMN` for the FIRST table.
+			// > 0: the joined schema become smaller after applied these DDLs.
+			//      this often happens when executing `DROP COLUMN` for the LAST table.
+			// for these two cases, we should execute the DDLs to the downstream to update the schema.
+			log.L().Info("joined table info changed", zap.String("lock", l.ID), zap.Int("cmp", cmp), zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined),
+				zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable), zap.Strings("ddls", ddls))
+			// check for add column with different field lengths
+			if cmp < 0 {
+				err = AddDifferentFieldLenColumns(l.ID, ddls[idx], oldJoined, newJoined)
+				if err != nil {
+					return ddls, err
+				}
+			}
+			newDDLs = append(newDDLs, ddls[idx])
+			continue
+		}
+
+		// NOTE: now, different DM-workers do not wait for each other when executing DDL/DML,
+		// when coordinating the shard DDL between multiple DM-worker instances,
+		// a possible sequences:
+		//   1. DM-worker-A do this `trySync` and DM-master let it to `ADD COLUMN`.
+		//   2. DM-worker-B do this `trySync` again.
+		//   3. DM-worker-B replicate DML to the downstream.
+		//   4. DM-worker-A replicate `ADD COLUMN` to the downstream.
+		// in order to support DML from DM-worker-B matches the downstream schema,
+		// two strategies exist:
+		//   A. DM-worker-B waits for DM-worker-A to finish the replication of the DDL before replicating DML.
+		//   B. DM-worker-B also replicates the DDL before replicating DML,
+		//      but this MUST ensure we can tolerate replicating the DDL multiple times.
+		// for `DROP COLUMN` or other DDL which makes the schema become smaller,
+		// this is not a problem because all DML with larger schema should already replicated to the downstream,
+		// and any DML with smaller schema can fit both the larger or smaller schema.
+		// To make it easy to implement, we will temporarily choose strategy-B.
+
+		cmp, _ = prevTable.Compare(nextTable) // we have checked `err` returned above.
+		if cmp < 0 {
+			// check for add column with different field lengths
+			err = AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined)
+			if err != nil {
+				return ddls, err
+			}
+			// let every table to replicate the DDL.
+			newDDLs = append(newDDLs, ddls[idx])
+			continue
+		} else if cmp > 0 {
+			// last shard table won't go here
+			continue
+		}
+
+		// compare the current table's info with joined info.
+		cmp, err = nextTable.Compare(newJoined)
+		if err != nil {
+			return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+				err, l.ID, "can't compare table info (new table info) %s with (new joined table info) %s", nextTable, newJoined) // NOTE: this should not happen.
+		}
+		if cmp < 0 {
+			// no need to replicate DDLs, because has a larger joined schema (in the downstream).
+			// FIXME: if the previous tables reached the joined schema has not replicated to the downstream,
+			// now, they should re-try until replicated successfully, try to implement better strategy later.
+			continue
+		}
+		log.L().Warn("new table info >= new joined table info", zap.Stringer("table info", nextTable), zap.Stringer("joined table info", newJoined))
+		return ddls, nil // NOTE: this should not happen.
 	}
 
-	// compare the current table's info with joined info.
-	cmp, err = newTable.Compare(newJoined)
-	if err != nil {
-		return emptyDDLs, terror.ErrShardDDLOptimismTrySyncFail.Delegate(
-			err, l.ID, "can't compare table info (new table info) %s with (new joined table info) %s", newTable, newJoined) // NOTE: this should not happen.
-	}
-	if cmp < 0 {
-		// no need to replicate DDLs, because has a larger joined schema (in the downstream).
-		// FIXME: if the previous tables reached the joined schema has not replicated to the downstream,
-		// now, they should re-try until replicated successfully, try to implement better strategy later.
-		return emptyDDLs, nil
-	}
-	log.L().Warn("new table info >= new joined table info", zap.Stringer("table info", newTable), zap.Stringer("joined table info", newJoined))
-	return ddls, nil // NOTE: this should not happen.
+	return newDDLs, nil
 }
 
 // TryRemoveTable tries to remove a table in the lock.
@@ -415,7 +494,6 @@ func (l *Lock) addTables(tts []TargetTable) {
 			}
 			for table := range tables {
 				if _, ok := l.tables[tt.Source][schema][table]; !ok {
-					// NOTE: the newly added table uses the current table info.
 					l.tables[tt.Source][schema][table] = l.joined
 					l.done[tt.Source][schema][table] = false
 					l.versions[tt.Source][schema][table] = 0
@@ -434,4 +512,29 @@ func (l *Lock) GetVersion(source string, schema string, table string) int64 {
 	defer l.mu.RUnlock()
 
 	return l.versions[source][schema][table]
+}
+
+// AddDifferentFieldLenColumns checks whether dm adds columns with different field lengths
+func AddDifferentFieldLenColumns(lockID, ddl string, oldJoined, newJoined schemacmp.Table) error {
+	if stmt, err := parser.New().ParseOneStmt(ddl, "", ""); err != nil {
+		return terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+			err, lockID, fmt.Sprintf("fail to parse ddl %s", ddl))
+	} else if v, ok := stmt.(*ast.AlterTableStmt); ok && len(v.Specs) > 0 {
+		spec := v.Specs[0]
+		if spec.Tp == ast.AlterTableAddColumns && len(spec.NewColumns) > 0 {
+			col := spec.NewColumns[0].Name.Name.O
+			oldJoinedCols := schemacmp.DecodeColumnFieldTypes(oldJoined)
+			newJoinedCols := schemacmp.DecodeColumnFieldTypes(newJoined)
+			oldCol, ok1 := oldJoinedCols[col]
+			newCol, ok2 := newJoinedCols[col]
+			if ok1 && ok2 {
+				if newCol.Flen != oldCol.Flen {
+					return terror.ErrShardDDLOptimismTrySyncFail.Generate(
+						lockID, fmt.Sprintf("add columns with different field lengths."+
+							"ddl: %s, origLen: %d, newLen: %d", ddl, oldCol.Flen, newCol.Flen))
+				}
+			}
+		}
+	}
+	return nil
 }

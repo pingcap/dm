@@ -26,18 +26,22 @@ func (t *testFilenameSuite) TestFilenameCmp(c *C) {
 	f1 := Filename{
 		BaseName: "mysql-bin",
 		Seq:      "000001",
+		SeqInt64: 1,
 	}
 	f2 := Filename{
 		BaseName: "mysql-bin",
 		Seq:      "000002",
+		SeqInt64: 2,
 	}
 	f3 := Filename{
 		BaseName: "mysql-bin",
 		Seq:      "000001", // == f1
+		SeqInt64: 1,
 	}
 	f4 := Filename{
 		BaseName: "bin-mysq", // diff BaseName
 		Seq:      "000001",
+		SeqInt64: 1,
 	}
 
 	c.Assert(f1.LessThan(f2), IsTrue)

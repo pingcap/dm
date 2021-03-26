@@ -179,7 +179,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	registerOnce.Do(metrics.RegistryMetrics)
 
-	// HTTP handlers on etcd's client IP:port
+	// HTTP handlers on etcd's client IP:port. etcd will add a builtin `/metrics` route
 	// NOTE: after received any HTTP request from chrome browser,
 	// the server may be blocked when closing sometime.
 	// And any request to etcd's builtin handler has the same problem.
@@ -187,10 +187,9 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// But I haven't figured it out.
 	// (maybe more requests are sent from chrome or its extensions).
 	userHandles := map[string]http.Handler{
-		"/apis/":   apiHandler,
-		"/status":  getStatusHandle(),
-		"/debug/":  getDebugHandler(),
-		"/metrics": metrics.GetMetricsHandler(),
+		"/apis/":  apiHandler,
+		"/status": getStatusHandle(),
+		"/debug/": getDebugHandler(),
 	}
 
 	// gRPC API server
@@ -553,7 +552,7 @@ func (s *Server) GetSubTaskCfg(ctx context.Context, req *pb.GetSubTaskCfgRequest
 				Msg:    err.Error(),
 			}, nil
 		}
-		cfgs = append(cfgs, string(cfgBytes))
+		cfgs = append(cfgs, cfgBytes)
 	}
 
 	return &pb.GetSubTaskCfgResponse{
@@ -1738,6 +1737,8 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest
 					Database: req.Database,
 					Table:    req.Table,
 					Schema:   req.Schema,
+					Flush:    req.Flush,
+					Sync:     req.Sync,
 				},
 			}
 
@@ -1981,6 +1982,26 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleErrorRequest) (*
 		Result:  true,
 		Sources: workerResps,
 	}, nil
+}
+
+// TransferSource implements MasterServer.TransferSource
+func (s *Server) TransferSource(ctx context.Context, req *pb.TransferSourceRequest) (*pb.TransferSourceResponse, error) {
+	var (
+		resp2 = &pb.TransferSourceResponse{}
+		err2  error
+	)
+	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
+	if shouldRet {
+		return resp2, err2
+	}
+
+	err := s.scheduler.TransferSource(req.Source, req.Worker)
+	if err != nil {
+		resp2.Msg = err.Error()
+		return resp2, nil
+	}
+	resp2.Result = true
+	return resp2, nil
 }
 
 // sharedLogic does some shared logic for each RPC implementation

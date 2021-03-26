@@ -28,7 +28,7 @@ import (
 func NewPauseRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pause-relay <-s source ...>",
-		Short: "pause DM-worker's relay unit",
+		Short: "Pauses DM-worker's relay unit.",
 		RunE:  pauseRelayFunc,
 	}
 	return cmd

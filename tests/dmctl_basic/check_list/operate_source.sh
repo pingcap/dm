@@ -25,4 +25,3 @@ function operate_source_invalid_op() {
         "operate-source invalid $source_conf" \
         "invalid operate" 1
 }
-

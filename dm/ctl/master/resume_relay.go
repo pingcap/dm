@@ -28,7 +28,7 @@ import (
 func NewResumeRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "resume-relay <-s source ...>",
-		Short: "resume DM-worker's relay unit",
+		Short: "Resumes DM-worker's relay unit.",
 		RunE:  resumeRelayFunc,
 	}
 	return cmd

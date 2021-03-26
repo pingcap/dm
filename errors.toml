@@ -1918,6 +1918,12 @@ description = ""
 workaround = "Please confirm your DDL statement is correct and needed. For TiDB compatible DDL, see https://docs.pingcap.com/tidb/stable/mysql-compatibility#ddl. You can use `handle-error` command to skip or replace the DDL or add a binlog filter rule to ignore it if the DDL is not needed."
 tags = ["internal", "high"]
 
+[error.DM-sync-unit-36068]
+message = "`%s` statement not supported in %s mode"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
 [error.DM-dm-master-38001]
 message = "nil request not valid"
 description = ""
@@ -2234,6 +2240,18 @@ tags = ["internal", "low"]
 message = "fail to import DM cluster from v1.0.x"
 description = ""
 workaround = "Please confirm that you have not violated any restrictions in the upgrade documentation."
+tags = ["internal", "high"]
+
+[error.DM-dm-master-38054]
+message = "inconsistent count of optimistic ddls and table infos, ddls: %d, table info: %d"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-dm-master-38055]
+message = "table-info-before not exist in optimistic ddls: %v"
+description = ""
+workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40001]
@@ -2657,9 +2675,9 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40071]
-message = "mysql source handler worker already started"
+message = "mysql source worker %s has already started with source %s, but get a request with source %s"
 description = ""
-workaround = ""
+workaround = "Please try restart this DM-worker"
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40072]
@@ -2703,6 +2721,12 @@ message = "cannot compare gtid between loader and relay, loader gtid: %s, relay 
 description = ""
 workaround = ""
 tags = ["internal", "high"]
+
+[error.DM-dm-worker-40079]
+message = "relay config of worker %s is changed too frequently, last relay source %s:, new relay source %s"
+description = ""
+workaround = "Please try again later"
+tags = ["internal", "low"]
 
 [error.DM-dm-tracer-42001]
 message = "parse dm-tracer config flag set"
@@ -2944,6 +2968,12 @@ description = ""
 workaround = "Please use `query-status` command to see tasks."
 tags = ["internal", "medium"]
 
+[error.DM-scheduler-46019]
+message = "tasks %v on source %s should not be running"
+description = ""
+workaround = "Please use `pause-task [-s source ...] task` to pause them first"
+tags = ["internal", "high"]
+
 [error.DM-dmctl-48001]
 message = "can not create grpc connection"
 description = ""
@@ -2961,3 +2991,4 @@ message = ""
 description = ""
 workaround = ""
 tags = ["not-set", "high"]
+

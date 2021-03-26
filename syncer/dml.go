@@ -340,7 +340,7 @@ func columnValue(value interface{}, ft *types.FieldType) string {
 	case int32:
 		data = strconv.FormatInt(int64(v), 10)
 	case int64:
-		data = strconv.FormatInt(int64(v), 10)
+		data = strconv.FormatInt(v, 10)
 	case uint8:
 		data = strconv.FormatUint(uint64(v), 10)
 	case uint16:
@@ -348,7 +348,7 @@ func columnValue(value interface{}, ft *types.FieldType) string {
 	case uint32:
 		data = strconv.FormatUint(uint64(v), 10)
 	case uint64:
-		data = strconv.FormatUint(uint64(v), 10)
+		data = strconv.FormatUint(v, 10)
 	case float32:
 		data = strconv.FormatFloat(float64(v), 'f', -1, 32)
 	case float64:

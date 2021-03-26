@@ -77,7 +77,7 @@ func (t *testForEtcd) TestInfoJSON(c *C) {
 
 	j, err := i1.toJSON()
 	c.Assert(err, IsNil)
-	c.Assert(j, Equals, `{"task":"test","source":"mysql-replica-1","up-schema":"db-1","up-table":"tbl-1","down-schema":"db","down-table":"tbl","ddls":["ALTER TABLE tbl ADD COLUMN c1 INT","ALTER TABLE tbl ADD COLUMN c2 INT"],"table-info-before":null,"table-info-after":null}`)
+	c.Assert(j, Equals, `{"task":"test","source":"mysql-replica-1","up-schema":"db-1","up-table":"tbl-1","down-schema":"db","down-table":"tbl","ddls":["ALTER TABLE tbl ADD COLUMN c1 INT","ALTER TABLE tbl ADD COLUMN c2 INT"],"table-info-before":null,"table-info-after":null,"ignore-conflict":false}`)
 	c.Assert(j, Equals, i1.String())
 
 	i2, err := infoFromJSON(j)
@@ -105,9 +105,9 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 		tblI2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
 		tblI3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)
 		tblI4              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT, c3 INT)`)
-		i11                = NewInfo(task1, source1, upSchema, upTable, downSchema, downTable, []string{"ALTER TABLE bar ADD COLUMN c1 INT"}, tblI1, tblI2)
-		i12                = NewInfo(task1, source2, upSchema, upTable, downSchema, downTable, []string{"ALTER TABLE bar ADD COLUMN c2 INT"}, tblI2, tblI3)
-		i21                = NewInfo(task2, source1, upSchema, upTable, downSchema, downTable, []string{"ALTER TABLE bar ADD COLUMN c3 INT"}, tblI3, tblI4)
+		i11                = NewInfo(task1, source1, upSchema, upTable, downSchema, downTable, []string{"ALTER TABLE bar ADD COLUMN c1 INT"}, tblI1, []*model.TableInfo{tblI2})
+		i12                = NewInfo(task1, source2, upSchema, upTable, downSchema, downTable, []string{"ALTER TABLE bar ADD COLUMN c2 INT"}, tblI2, []*model.TableInfo{tblI3})
+		i21                = NewInfo(task2, source1, upSchema, upTable, downSchema, downTable, []string{"ALTER TABLE bar ADD COLUMN c3 INT"}, tblI3, []*model.TableInfo{tblI4})
 	)
 
 	// put the same key twice.
@@ -128,6 +128,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1][source1][upSchema], HasLen, 1)
 	i11WithVer := i11
 	i11WithVer.Version = 2
+	i11WithVer.Revision = ifm[task1][source1][upSchema][upTable].Revision
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 
 	// put another key and get again with 2 info.
@@ -141,6 +142,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 	i12WithVer := i12
 	i12WithVer.Version = 1
+	i12WithVer.Revision = ifm[task1][source2][upSchema][upTable].Revision
 	c.Assert(ifm[task1][source2][upSchema][upTable], DeepEquals, i12WithVer)
 
 	// start the watcher.
@@ -210,8 +212,10 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm, HasKey, task1)
 	c.Assert(ifm, HasKey, task2)
 	c.Assert(ifm[task1], HasLen, 1)
+	i11WithVer.Revision = ifm[task1][source1][upSchema][upTable].Revision
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 	c.Assert(ifm[task2], HasLen, 1)
+	i21WithVer.Revision = ifm[task2][source1][upSchema][upTable].Revision
 	c.Assert(ifm[task2][source1][upSchema][upTable], DeepEquals, i21WithVer)
 
 	// watch the deletion for i12.
