@@ -562,7 +562,7 @@ func (l *Lock) AddDroppedColumn(info Info, col string) error {
 	if l.IsDroppedColumn(info, col) {
 		return nil
 	}
-	log.L().Debug("add partially dropped columns", zap.Stringer("info", info), zap.String("column", col))
+	log.L().Debug("add partially dropped columns", zap.String("column", col), zap.Stringer("info", info))
 
 	source, upSchema, upTable := info.Source, info.UpSchema, info.UpTable
 	_, _, err := PutDroppedColumn(l.cli, info, col)
