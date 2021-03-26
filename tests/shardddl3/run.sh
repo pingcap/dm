@@ -1009,32 +1009,6 @@ function DM_116 {
     "clean_table" "optimistic"
 }
 
-function DM_117_CASE {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
-
-    run_sql_source1 "alter table ${shardddl1}.${tb1} change column b c int;"
-
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
-        "because schema conflict detected" 1
-}
-
-# Rename field name.
-function DM_117 {
-    # run_case 117 "double-source-pessimistic" \
-    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
-    # "clean_table" "pessimistic"
-    run_case 117 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
-    "clean_table" "optimistic"
-}
-
 function DM_118_CASE {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1,1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2,2);"
@@ -1057,7 +1031,6 @@ function DM_118_CASE {
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
-
 
 # Adjust index fields combination.
 function DM_118 {
@@ -2165,7 +2138,7 @@ function run() {
 
     start=71
     end=146
-    except=(072 074 075 083 084 087 088 089 090 091 092 093)
+    except=(072 074 075 083 084 087 088 089 090 091 092 093 117)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
             continue
