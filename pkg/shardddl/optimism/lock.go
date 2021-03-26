@@ -539,7 +539,7 @@ func (l *Lock) GetVersion(source string, schema string, table string) int64 {
 	return l.versions[source][schema][table]
 }
 
-// IsDroppedColumn checks whether this column is a not fully dropped column for this lock
+// IsDroppedColumn checks whether this column is a partially dropped column for this lock
 func (l *Lock) IsDroppedColumn(info Info, col string) bool {
 	if _, ok := l.columns[col]; !ok {
 		return false
@@ -562,7 +562,7 @@ func (l *Lock) AddDroppedColumn(info Info, col string) error {
 	if l.IsDroppedColumn(info, col) {
 		return nil
 	}
-	log.L().Debug("add not fully dropped columns", zap.Stringer("info", info), zap.String("column", col))
+	log.L().Debug("add partially dropped columns", zap.Stringer("info", info), zap.String("column", col))
 
 	source, upSchema, upTable := info.Source, info.UpSchema, info.UpTable
 	_, _, err := PutDroppedColumn(l.cli, info, col)
@@ -601,7 +601,7 @@ func (l *Lock) DeleteColumnsByDDLs(ddls []string) error {
 		}
 	}
 	if len(colsToDelete) > 0 {
-		log.L().Debug("delete not fully dropped columns",
+		log.L().Debug("delete partially dropped columns",
 			zap.String("lockID", l.ID), zap.Strings("columns", colsToDelete))
 
 		_, _, err := DeleteDroppedColumns(l.cli, l.Task, l.DownSchema, l.DownTable, colsToDelete...)
