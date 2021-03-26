@@ -2164,7 +2164,7 @@ function run() {
     init_database
 
     start=71
-    end=147
+    end=146
     except=(072 074 075 083 084 087 088 089 090 091 092 093)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
