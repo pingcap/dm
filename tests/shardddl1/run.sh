@@ -631,6 +631,70 @@ function DM_RENAME_COLUMN_OPTIMISTIC() {
     "clean_table" "optimistic"
 }
 
+function DM_RECOVER_LOCK_CASE() {
+    # tb1(a,b) tb2(a,b)
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(2,2);"
+
+    # tb1(a,b,c); tb2(a,b)
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column c varchar(10);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(3,3,'aaa');"
+    check_log_contain_with_retry "putted a shard DDL.*tb1.*ALTER TABLE .* ADD COLUMN" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log 
+
+    # tb1(a,b,c); tb2(a)
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop column b;"
+    check_log_contain_with_retry "putted a shard DDL.*tb2.*ALTER TABLE .* DROP COLUMN" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log 
+
+    echo "restart dm-master"
+    ps aux | grep dm-master |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT 20
+    sleep 2
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(5);"
+    check_log_contain_with_retry "putted a shard DDL.*tb1.*ALTER TABLE .* DROP COLUMN" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log 
+
+    # tb1(a,c); tb2(a,b)
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column b int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(6,'ccc');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(7,7);"
+    check_log_contain_with_retry "putted a shard DDL.*tb2.*ALTER TABLE .* ADD COLUMN" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log 
+
+    # recover lock, tb1's info: (a,b,c)->(a,c); tb2's info: (a)->(a,b)
+    # joined(a,b,c); tb1(a,b,c); tb2(a)
+    # TrySync tb1: joined(a,b,c); tb1(a,c); tb2(a)
+    # TrySync tb2: joined(a,c); tb1(a,c); tb2(a,b)
+    echo "restart dm-master"
+    ps aux | grep dm-master |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT 20
+    sleep 2
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(8,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column c varchar(10) after a;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,'fff',10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(11,'ggg',11);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "no DDL lock exists" 1
+}
+
+function DM_RECOVER_LOCK() {
+    run_case RECOVER_LOCK "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int) DEFAULT CHARSET=latin1;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int) DEFAULT CHARSET=latin1;\"" \
+    "clean_table" "optimistic"
+}
+
 function run() {
     init_cluster
     init_database
@@ -646,6 +710,7 @@ function run() {
     done
     DM_RENAME_TABLE
     DM_RENAME_COLUMN_OPTIMISTIC
+    DM_RECOVER_LOCK
 }
 
 cleanup_data $shardddl
