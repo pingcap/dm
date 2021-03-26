@@ -41,7 +41,7 @@ func (t *testForEtcd) TestDeleteInfosOperationsSchema(c *C) {
 	c.Assert(ifm, HasLen, 1)
 	infoWithVer := info
 	infoWithVer.Version = 1
-	infoWithVer.ModRevision = rev
+	infoWithVer.Revision = rev
 	c.Assert(ifm[task][source][upSchema][upTable], DeepEquals, infoWithVer)
 
 	// put operation.
@@ -134,7 +134,7 @@ func (t *testForEtcd) TestSourceTablesInfo(c *C) {
 	c.Assert(ifm[task][source][upSchema], HasLen, 1)
 	i11WithVer := i11
 	i11WithVer.Version = 1
-	i11WithVer.ModRevision = rev3
+	i11WithVer.Revision = rev3
 	c.Assert(ifm[task][source][upSchema][upTable], DeepEquals, i11WithVer)
 
 	// put/update source tables and delete info.

@@ -572,7 +572,7 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 	}
 
 	op := optimism.NewOperation(lockID, lock.Task, info.Source, info.UpSchema, info.UpTable, newDDLs, cfStage, cfMsg, false)
-	rev, succ, err := optimism.PutOperation(o.cli, skipDone, op, info.ModRevision)
+	rev, succ, err := optimism.PutOperation(o.cli, skipDone, op, info.Revision)
 	if err != nil {
 		return err
 	}

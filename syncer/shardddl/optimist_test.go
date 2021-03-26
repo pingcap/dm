@@ -147,7 +147,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(ifm[task][source][info1.UpSchema], HasLen, 1)
 	info1WithVer := info1
 	info1WithVer.Version = 1
-	info1WithVer.ModRevision = rev1
+	info1WithVer.Revision = rev1
 	c.Assert(ifm[task][source][info1.UpSchema][info1.UpTable], DeepEquals, info1WithVer)
 	opc := op1c
 	opc.Done = true
@@ -171,7 +171,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(err, IsNil)
 	infoCreateWithVer := infoCreate
 	infoCreateWithVer.Version = 1
-	infoCreateWithVer.ModRevision = rev3
+	infoCreateWithVer.Revision = rev3
 	c.Assert(ifm[task][source][infoCreate.UpSchema][infoCreate.UpTable], DeepEquals, infoCreateWithVer)
 	c.Assert(o.tables.Tables[infoCreate.DownSchema][infoCreate.DownTable][infoCreate.UpSchema], HasKey, infoCreate.UpTable)
 

@@ -128,7 +128,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1][source1][upSchema], HasLen, 1)
 	i11WithVer := i11
 	i11WithVer.Version = 2
-	i11WithVer.ModRevision = rev2
+	i11WithVer.Revision = rev2
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 
 	// put another key and get again with 2 info.
@@ -142,7 +142,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 	i12WithVer := i12
 	i12WithVer.Version = 1
-	i12WithVer.ModRevision = rev4
+	i12WithVer.Revision = rev4
 	c.Assert(ifm[task1][source2][upSchema][upTable], DeepEquals, i12WithVer)
 
 	// start the watcher.
@@ -164,7 +164,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	infoWithVer := <-wch
 	i21WithVer := i21
 	i21WithVer.Version = 1
-	i21WithVer.ModRevision = rev5
+	i21WithVer.Revision = rev5
 	c.Assert(infoWithVer, DeepEquals, i21WithVer)
 	c.Assert(len(ech), Equals, 0)
 
@@ -174,7 +174,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(err, IsNil)
 	infoWithVer = <-wch
 	i21WithVer.Version++
-	i21WithVer.ModRevision = rev6
+	i21WithVer.Revision = rev6
 	c.Assert(infoWithVer, DeepEquals, i21WithVer)
 	c.Assert(len(ech), Equals, 0)
 
@@ -195,7 +195,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(err, IsNil)
 	infoWithVer = <-wch
 	i21WithVer.Version = 1
-	i21WithVer.ModRevision = rev7
+	i21WithVer.Revision = rev7
 	c.Assert(infoWithVer, DeepEquals, i21WithVer)
 	c.Assert(len(ech), Equals, 0)
 

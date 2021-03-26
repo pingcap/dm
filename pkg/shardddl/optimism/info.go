@@ -58,7 +58,7 @@ type Info struct {
 	IgnoreConflict bool `json:"ignore-conflict"`
 
 	// only set it when get/watch from etcd
-	ModRevision int64 `json:"-"`
+	Revision int64 `json:"-"`
 }
 
 // NewInfo creates a new Info instance.
@@ -135,7 +135,7 @@ func GetAllInfo(cli *clientv3.Client) (map[string]map[string]map[string]map[stri
 			return nil, 0, err2
 		}
 		info.Version = kv.Version
-		info.ModRevision = kv.ModRevision
+		info.Revision = kv.ModRevision
 
 		if _, ok := ifm[info.Task]; !ok {
 			ifm[info.Task] = make(map[string]map[string]map[string]Info)
@@ -186,7 +186,7 @@ func WatchInfo(ctx context.Context, cli *clientv3.Client, revision int64,
 				case mvccpb.PUT:
 					info, err = infoFromJSON(string(ev.Kv.Value))
 					info.Version = ev.Kv.Version
-					info.ModRevision = ev.Kv.ModRevision
+					info.Revision = ev.Kv.ModRevision
 				case mvccpb.DELETE:
 					info, err = infoFromJSON(string(ev.PrevKv.Value))
 					info.IsDeleted = true
