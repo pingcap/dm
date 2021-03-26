@@ -20,6 +20,7 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
+	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/master/metrics"
@@ -31,6 +32,8 @@ import (
 // This information does not need to be persistent, and can be re-constructed from the shard DDL info.
 type Lock struct {
 	mu sync.RWMutex
+
+	cli *clientv3.Client
 
 	ID   string // lock's ID
 	Task string // lock's corresponding task name
@@ -56,12 +59,17 @@ type Lock struct {
 
 	// upstream source ID -> upstream schema name -> upstream table name -> info version.
 	versions map[string]map[string]map[string]int64
+
+	// record the partially dropped columns
+	// column name -> source -> upSchema -> upTable -> struct{}
+	columns map[string]map[string]map[string]map[string]struct{}
 }
 
 // NewLock creates a new Lock instance.
 // NOTE: we MUST give the initial table info when creating the lock now.
-func NewLock(ID, task, downSchema, downTable string, joined schemacmp.Table, tts []TargetTable) *Lock {
+func NewLock(cli *clientv3.Client, ID, task, downSchema, downTable string, joined schemacmp.Table, tts []TargetTable) *Lock {
 	l := &Lock{
+		cli:        cli,
 		ID:         ID,
 		Task:       task,
 		DownSchema: downSchema,
@@ -71,6 +79,7 @@ func NewLock(ID, task, downSchema, downTable string, joined schemacmp.Table, tts
 		done:       make(map[string]map[string]map[string]bool),
 		synced:     true,
 		versions:   make(map[string]map[string]map[string]int64),
+		columns:    make(map[string]map[string]map[string]map[string]struct{}),
 	}
 	l.addTables(tts)
 	metrics.ReportDDLPending(task, metrics.DDLPendingNone, metrics.DDLPendingSynced)
@@ -221,6 +230,12 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		// this often happens when executing `CREATE TABLE` statement
 		var cmp int
 		if cmp, err = nextTable.Compare(oldJoined); err == nil && cmp == 0 {
+			if col, err := GetColumnName(l.ID, ddls[idx], ast.AlterTableAddColumns); err != nil {
+				return newDDLs, err
+			} else if len(col) > 0 && l.IsDroppedColumn(info, col) {
+				return newDDLs, terror.ErrShardDDLOptimismTrySyncFail.Generate(
+					l.ID, fmt.Sprintf("add column %s that wasn't fully dropped in downstream. ddl: %s", col, ddls[idx]))
+			}
 			newDDLs = append(newDDLs, ddls[idx])
 			continue
 		}
@@ -248,9 +263,9 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 			// for these two cases, we should execute the DDLs to the downstream to update the schema.
 			log.L().Info("joined table info changed", zap.String("lock", l.ID), zap.Int("cmp", cmp), zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined),
 				zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable), zap.Strings("ddls", ddls))
-			// check for add column with different field lengths
+			// check for add column with a larger field len
 			if cmp < 0 {
-				err = AddDifferentFieldLenColumns(l.ID, ddls[idx], oldJoined, newJoined)
+				_, err = AddDifferentFieldLenColumns(l.ID, ddls[idx], oldJoined, newJoined)
 				if err != nil {
 					return ddls, err
 				}
@@ -278,15 +293,25 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 
 		cmp, _ = prevTable.Compare(nextTable) // we have checked `err` returned above.
 		if cmp < 0 {
-			// check for add column with different field lengths
-			err = AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined)
-			if err != nil {
+			// check for add column with a smaller field len
+			if col, err := AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined); err != nil {
 				return ddls, err
+			} else if len(col) > 0 && l.IsDroppedColumn(info, col) {
+				return ddls, terror.ErrShardDDLOptimismTrySyncFail.Generate(
+					l.ID, fmt.Sprintf("add column %s that wasn't fully dropped in downstream. ddl: %s", col, ddls[idx]))
 			}
 			// let every table to replicate the DDL.
 			newDDLs = append(newDDLs, ddls[idx])
 			continue
 		} else if cmp > 0 {
+			if col, err := GetColumnName(l.ID, ddls[idx], ast.AlterTableDropColumn); err != nil {
+				return ddls, err
+			} else if len(col) > 0 {
+				err = l.AddDroppedColumn(info, col)
+				if err != nil {
+					log.L().Error("fail to add dropped column info in etcd", zap.Error(err))
+				}
+			}
 			// last shard table won't go here
 			continue
 		}
@@ -514,27 +539,123 @@ func (l *Lock) GetVersion(source string, schema string, table string) int64 {
 	return l.versions[source][schema][table]
 }
 
+// IsDroppedColumn checks whether this column is a partially dropped column for this lock
+func (l *Lock) IsDroppedColumn(info Info, col string) bool {
+	if _, ok := l.columns[col]; !ok {
+		return false
+	}
+	source, upSchema, upTable := info.Source, info.UpSchema, info.UpTable
+	if _, ok := l.columns[col][source]; !ok {
+		return false
+	}
+	if _, ok := l.columns[col][source][upSchema]; !ok {
+		return false
+	}
+	if _, ok := l.columns[col][source][upSchema][upTable]; !ok {
+		return false
+	}
+	return true
+}
+
+// AddDroppedColumn adds a dropped column name in both etcd and lock's column map
+func (l *Lock) AddDroppedColumn(info Info, col string) error {
+	if l.IsDroppedColumn(info, col) {
+		return nil
+	}
+	log.L().Debug("add partially dropped columns", zap.String("column", col), zap.Stringer("info", info))
+
+	source, upSchema, upTable := info.Source, info.UpSchema, info.UpTable
+	_, _, err := PutDroppedColumn(l.cli, info, col)
+	if err != nil {
+		return err
+	}
+
+	if _, ok := l.columns[col]; !ok {
+		l.columns[col] = make(map[string]map[string]map[string]struct{})
+	}
+	if _, ok := l.columns[col][source]; !ok {
+		l.columns[col][source] = make(map[string]map[string]struct{})
+	}
+	if _, ok := l.columns[col][source][upSchema]; !ok {
+		l.columns[col][source][upSchema] = make(map[string]struct{})
+	}
+	l.columns[col][source][upSchema][upTable] = struct{}{}
+	return nil
+}
+
+// DeleteColumnsByDDLs deletes the partially dropped columns that extracted from DDLs.
+// We can not remove columns from the partially dropped columns map unless this column is dropped in the downstream database,
+// that is to say, op.Done is true and ddls contains drop column DDL.
+func (l *Lock) DeleteColumnsByDDLs(ddls []string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	colsToDelete := make([]string, 0, len(ddls))
+	for _, ddl := range ddls {
+		col, err := GetColumnName(l.ID, ddl, ast.AlterTableDropColumn)
+		if err != nil {
+			return err
+		}
+		if len(col) > 0 {
+			colsToDelete = append(colsToDelete, col)
+		}
+	}
+	if len(colsToDelete) > 0 {
+		log.L().Debug("delete partially dropped columns",
+			zap.String("lockID", l.ID), zap.Strings("columns", colsToDelete))
+
+		_, _, err := DeleteDroppedColumns(l.cli, l.Task, l.DownSchema, l.DownTable, colsToDelete...)
+		if err != nil {
+			return err
+		}
+
+		for _, col := range colsToDelete {
+			delete(l.columns, col)
+		}
+	}
+
+	return nil
+}
+
 // AddDifferentFieldLenColumns checks whether dm adds columns with different field lengths
-func AddDifferentFieldLenColumns(lockID, ddl string, oldJoined, newJoined schemacmp.Table) error {
+func AddDifferentFieldLenColumns(lockID, ddl string, oldJoined, newJoined schemacmp.Table) (string, error) {
+	col, err := GetColumnName(lockID, ddl, ast.AlterTableAddColumns)
+	if err != nil {
+		return col, err
+	}
+	if len(col) > 0 {
+		oldJoinedCols := schemacmp.DecodeColumnFieldTypes(oldJoined)
+		newJoinedCols := schemacmp.DecodeColumnFieldTypes(newJoined)
+		oldCol, ok1 := oldJoinedCols[col]
+		newCol, ok2 := newJoinedCols[col]
+		if ok1 && ok2 && newCol.Flen != oldCol.Flen {
+			return col, terror.ErrShardDDLOptimismTrySyncFail.Generate(
+				lockID, fmt.Sprintf("add columns with different field lengths."+
+					"ddl: %s, origLen: %d, newLen: %d", ddl, oldCol.Flen, newCol.Flen))
+		}
+	}
+	return col, nil
+}
+
+// GetColumnName checks whether dm adds/drops a column, and return this column's name
+func GetColumnName(lockID, ddl string, tp ast.AlterTableType) (string, error) {
 	if stmt, err := parser.New().ParseOneStmt(ddl, "", ""); err != nil {
-		return terror.ErrShardDDLOptimismTrySyncFail.Delegate(
+		return "", terror.ErrShardDDLOptimismTrySyncFail.Delegate(
 			err, lockID, fmt.Sprintf("fail to parse ddl %s", ddl))
 	} else if v, ok := stmt.(*ast.AlterTableStmt); ok && len(v.Specs) > 0 {
 		spec := v.Specs[0]
-		if spec.Tp == ast.AlterTableAddColumns && len(spec.NewColumns) > 0 {
-			col := spec.NewColumns[0].Name.Name.O
-			oldJoinedCols := schemacmp.DecodeColumnFieldTypes(oldJoined)
-			newJoinedCols := schemacmp.DecodeColumnFieldTypes(newJoined)
-			oldCol, ok1 := oldJoinedCols[col]
-			newCol, ok2 := newJoinedCols[col]
-			if ok1 && ok2 {
-				if newCol.Flen != oldCol.Flen {
-					return terror.ErrShardDDLOptimismTrySyncFail.Generate(
-						lockID, fmt.Sprintf("add columns with different field lengths."+
-							"ddl: %s, origLen: %d, newLen: %d", ddl, oldCol.Flen, newCol.Flen))
+		if spec.Tp == tp {
+			switch spec.Tp {
+			case ast.AlterTableAddColumns:
+				if len(spec.NewColumns) > 0 {
+					return spec.NewColumns[0].Name.Name.O, nil
+				}
+			case ast.AlterTableDropColumn:
+				if spec.OldColumnName != nil {
+					return spec.OldColumnName.Name.O, nil
 				}
 			}
 		}
 	}
-	return nil
+	return "", nil
 }

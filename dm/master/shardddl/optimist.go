@@ -247,13 +247,21 @@ func (o *Optimist) rebuildLocks() (revSource, revInfo, revOperation int64, err e
 	}
 	o.logger.Info("get history shard DDL lock operation", zap.Int64("revision", revOperation))
 
+	colm, _, err := optimism.GetAllDroppedColumns(o.cli)
+	if err != nil {
+		// only log the error, and don't return it to forbid the startup of the DM-master leader.
+		// then these unexpected columns can be handled by the user.
+		o.logger.Error("fail to recover colms", log.ShortError(err))
+	}
+
 	// recover the shard DDL lock based on history shard DDL info & lock operation.
-	err = o.recoverLocks(ifm, opm)
+	err = o.recoverLocks(ifm, opm, colm)
 	if err != nil {
 		// only log the error, and don't return it to forbid the startup of the DM-master leader.
 		// then these unexpected locks can be handled by the user.
 		o.logger.Error("fail to recover locks", log.ShortError(err))
 	}
+
 	return revSource, revInfo, revOperation, nil
 }
 
@@ -312,26 +320,30 @@ func (o *Optimist) buildLockJoinedAndTTS(ifm map[string]map[string]map[string]ma
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.
 func (o *Optimist) recoverLocks(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
-	opm map[string]map[string]map[string]map[string]optimism.Operation) error {
+	opm map[string]map[string]map[string]map[string]optimism.Operation,
+	colm map[string]map[string]map[string]map[string]map[string]struct{}) error {
 	// construct joined table based on the shard DDL info.
 	o.logger.Info("build lock joined and tts")
 	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm)
 	// build lock and restore table info
 	o.logger.Info("rebuild locks and tables")
-	o.lk.RebuildLocksAndTables(ifm, lockJoined, lockTTS)
+	o.lk.RebuildLocksAndTables(o.cli, ifm, colm, lockJoined, lockTTS)
 	// sort infos by revision
 	infos := sortInfos(ifm)
+	var firstErr error
+	setFirstErr := func(err error) {
+		if firstErr == nil && err != nil {
+			firstErr = err
+		}
+	}
 
 	for _, info := range infos {
-		tts := o.tk.FindTables(info.Task, info.DownSchema, info.DownTable)
-		_, _, err := o.lk.TrySync(info, tts)
-		if err != nil {
-			return err
-		}
 		// never mark the lock operation from `done` to `not-done` when recovering.
-		err = o.handleLock(info, tts, true)
+		err := o.handleInfo(info, true)
 		if err != nil {
-			return err
+			o.logger.Error("fail to handle info while recovering locks", zap.Error(err))
+			setFirstErr(err)
+			continue
 		}
 	}
 
@@ -347,12 +359,17 @@ func (o *Optimist) recoverLocks(
 					}
 					if op.Done {
 						lock.TryMarkDone(op.Source, op.UpSchema, op.UpTable)
+						err := lock.DeleteColumnsByDDLs(op.DDLs)
+						if err != nil {
+							o.logger.Error("fail to update lock columns", zap.Error(err))
+							continue
+						}
 					}
 				}
 			}
 		}
 	}
-	return nil
+	return firstErr
 }
 
 // watchSourceInfoOperation watches the etcd operation for source tables, shard DDL infos and shard DDL operations.
@@ -394,7 +411,7 @@ func (o *Optimist) watchSourceInfoOperation(
 	}()
 	go func() {
 		defer wg.Done()
-		o.handleInfo(ctx, infoCh)
+		o.handleInfoPut(ctx, infoCh)
 	}()
 
 	// watch for the shard DDL lock operation and handle them.
@@ -437,8 +454,8 @@ func (o *Optimist) handleSourceTables(ctx context.Context, sourceCh <-chan optim
 	}
 }
 
-// handleInfo handles PUT and DELETE for the shard DDL info.
-func (o *Optimist) handleInfo(ctx context.Context, infoCh <-chan optimism.Info) {
+// handleInfoPut handles PUT and DELETE for the shard DDL info.
+func (o *Optimist) handleInfoPut(ctx context.Context, infoCh <-chan optimism.Info) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -470,33 +487,36 @@ func (o *Optimist) handleInfo(ctx context.Context, infoCh <-chan optimism.Info) 
 				continue
 			}
 
-			added := o.tk.AddTable(info.Task, info.Source, info.UpSchema, info.UpTable, info.DownSchema, info.DownTable)
-			o.logger.Debug("a table added for info", zap.Bool("added", added), zap.Stringer("info", info))
-
-			tts := o.tk.FindTables(info.Task, info.DownSchema, info.DownTable)
-			if tts == nil {
-				// WATCH for SourceTables may fall behind WATCH for Info although PUT earlier,
-				// so we try to get SourceTables again.
-				// NOTE: check SourceTables for `info.Source` if needed later.
-				stm, _, err := optimism.GetAllSourceTables(o.cli)
-				if err != nil {
-					o.logger.Error("fail to get source tables", log.ShortError(err))
-				} else if tts2 := optimism.TargetTablesForTask(info.Task, info.DownSchema, info.DownTable, stm); tts2 != nil {
-					tts = tts2
-				}
-			}
 			// put operation for the table. we don't set `skipDone=true` now,
 			// because in optimism mode, one table may execute/done multiple DDLs but other tables may do nothing.
-			err := o.handleLock(info, tts, false)
-			if err != nil {
-				o.logger.Error("fail to handle the shard DDL lock", zap.Stringer("info", info), log.ShortError(err))
-				metrics.ReportDDLError(info.Task, metrics.InfoErrHandleLock)
-				o.mu.Unlock()
-				continue
-			}
+			_ = o.handleInfo(info, false)
 			o.mu.Unlock()
 		}
 	}
+}
+
+func (o *Optimist) handleInfo(info optimism.Info, skipDone bool) error {
+	added := o.tk.AddTable(info.Task, info.Source, info.UpSchema, info.UpTable, info.DownSchema, info.DownTable)
+	o.logger.Debug("a table added for info", zap.Bool("added", added), zap.Stringer("info", info))
+
+	tts := o.tk.FindTables(info.Task, info.DownSchema, info.DownTable)
+	if tts == nil {
+		// WATCH for SourceTables may fall behind WATCH for Info although PUT earlier,
+		// so we try to get SourceTables again.
+		// NOTE: check SourceTables for `info.Source` if needed later.
+		stm, _, err := optimism.GetAllSourceTables(o.cli)
+		if err != nil {
+			o.logger.Error("fail to get source tables", log.ShortError(err))
+		} else if tts2 := optimism.TargetTablesForTask(info.Task, info.DownSchema, info.DownTable, stm); tts2 != nil {
+			tts = tts2
+		}
+	}
+	err := o.handleLock(info, tts, skipDone)
+	if err != nil {
+		o.logger.Error("fail to handle the shard DDL lock", zap.Stringer("info", info), log.ShortError(err))
+		metrics.ReportDDLError(info.Task, metrics.InfoErrHandleLock)
+	}
+	return err
 }
 
 // handleOperationPut handles PUT for the shard DDL lock operations.
@@ -525,6 +545,10 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 				continue
 			}
 
+			err := lock.DeleteColumnsByDDLs(op.DDLs)
+			if err != nil {
+				o.logger.Error("fail to update lock columns", zap.Error(err))
+			}
 			// in optimistic mode, we always try to mark a table as done after received the `done` status of the DDLs operation.
 			// NOTE: even all tables have done their previous DDLs operations, the lock may still not resolved,
 			// because these tables may have different schemas.
@@ -553,13 +577,15 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 
 // handleLock handles a single shard DDL lock.
 func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, skipDone bool) error {
-	lockID, newDDLs, err := o.lk.TrySync(info, tts)
+	lockID, newDDLs, err := o.lk.TrySync(o.cli, info, tts)
 	var cfStage = optimism.ConflictNone
+	var cfMsg = ""
 	if info.IgnoreConflict {
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
 			zap.String("lock", lockID), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
 	} else if err != nil {
 		cfStage = optimism.ConflictDetected // we treat any errors returned from `TrySync` as conflict detected now.
+		cfMsg = err.Error()
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
 			zap.String("lock", lockID), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
 	} else {
@@ -599,8 +625,8 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 		return nil
 	}
 
-	op := optimism.NewOperation(lockID, lock.Task, info.Source, info.UpSchema, info.UpTable, newDDLs, cfStage, false)
-	rev, succ, err := optimism.PutOperation(o.cli, skipDone, op)
+	op := optimism.NewOperation(lockID, lock.Task, info.Source, info.UpSchema, info.UpTable, newDDLs, cfStage, cfMsg, false)
+	rev, succ, err := optimism.PutOperation(o.cli, skipDone, op, info.Revision)
 	if err != nil {
 		return err
 	}
@@ -671,13 +697,13 @@ func (o *Optimist) deleteInfosOps(lock *optimism.Lock) (bool, error) {
 				info := optimism.NewInfo(lock.Task, source, schema, table, lock.DownSchema, lock.DownTable, nil, nil, nil)
 				info.Version = lock.GetVersion(source, schema, table)
 				infos = append(infos, info)
-				ops = append(ops, optimism.NewOperation(lock.ID, lock.Task, source, schema, table, nil, optimism.ConflictNone, false))
+				ops = append(ops, optimism.NewOperation(lock.ID, lock.Task, source, schema, table, nil, optimism.ConflictNone, "", false))
 			}
 		}
 	}
 	// NOTE: we rely on only `task`, `downSchema`, and `downTable` used for deletion.
 	initSchema := optimism.NewInitSchema(lock.Task, lock.DownSchema, lock.DownTable, nil)
-	rev, deleted, err := optimism.DeleteInfosOperationsSchema(o.cli, infos, ops, initSchema)
+	rev, deleted, err := optimism.DeleteInfosOperationsSchemaColumn(o.cli, infos, ops, initSchema)
 	if err != nil {
 		return deleted, err
 	}

@@ -304,7 +304,7 @@ func (s *testTaskCheckerSuite) TestIsResumableError(c *check.C) {
 		{terror.ErrParserParseRelayLog.New("parse relay log file bin.000018 from offset 500 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file bin.000018 from offset 0 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004/bin.000018: get event err EOF, need 1567488104 but got 316323"), false},
 		// unresumable terror codes
 		{terror.ErrSyncUnitDDLWrongSequence.Generate("wrong sequence", "right sequence"), false},
-		{terror.ErrSyncerShardDDLConflict.Generate("conflict DDL"), false},
+		{terror.ErrSyncerShardDDLConflict.Generate("conflict DDL", "conflict"), false},
 		// others
 		{nil, true},
 		{errors.New("unknown error"), true},

@@ -27,6 +27,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/optimism"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 type testOptimist struct {
@@ -82,9 +83,9 @@ func (t *testOptimist) TestOptimist(c *C) {
 		tiAfter1       = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
 		tiAfter2       = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 DATETIME)`)
 		info1          = o.ConstructInfo("foo-1", "bar-1", downSchema, downTable, DDLs1, tiBefore, []*model.TableInfo{tiAfter1})
-		op1            = optimism.NewOperation(ID, task, source, info1.UpSchema, info1.UpTable, DDLs1, optimism.ConflictNone, false)
+		op1            = optimism.NewOperation(ID, task, source, info1.UpSchema, info1.UpTable, DDLs1, optimism.ConflictNone, "", false)
 		info2          = o.ConstructInfo("foo-1", "bar-2", downSchema, downTable, DDLs2, tiBefore, []*model.TableInfo{tiAfter2})
-		op2            = optimism.NewOperation(ID, task, source, info2.UpSchema, info2.UpTable, DDLs2, optimism.ConflictDetected, false)
+		op2            = optimism.NewOperation(ID, task, source, info2.UpSchema, info2.UpTable, DDLs2, optimism.ConflictDetected, terror.ErrShardDDLOptimismTrySyncFail.Generate(ID, "conflict").Error(), false)
 
 		infoCreate = o.ConstructInfo("foo-new", "bar-new", downSchema, downTable,
 			[]string{`CREATE TABLE bar (id INT PRIMARY KEY)`}, tiBefore, []*model.TableInfo{tiBefore}) // same table info.
@@ -119,7 +120,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(*info1c, DeepEquals, info1)
 
 	// put the lock operation.
-	rev2, putted, err := optimism.PutOperation(etcdTestCli, false, op1)
+	rev2, putted, err := optimism.PutOperation(etcdTestCli, false, op1, rev1)
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
 	c.Assert(putted, IsTrue)
@@ -146,7 +147,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(ifm[task][source][info1.UpSchema], HasLen, 1)
 	info1WithVer := info1
 	info1WithVer.Version = 1
-	info1WithVer.Revision = ifm[task][source][info1.UpSchema][info1.UpTable].Revision
+	info1WithVer.Revision = rev1
 	c.Assert(ifm[task][source][info1.UpSchema][info1.UpTable], DeepEquals, info1WithVer)
 	opc := op1c
 	opc.Done = true
@@ -170,7 +171,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(err, IsNil)
 	infoCreateWithVer := infoCreate
 	infoCreateWithVer.Version = 1
-	infoCreateWithVer.Revision = ifm[task][source][infoCreate.UpSchema][infoCreate.UpTable].Revision
+	infoCreateWithVer.Revision = rev3
 	c.Assert(ifm[task][source][infoCreate.UpSchema][infoCreate.UpTable], DeepEquals, infoCreateWithVer)
 	c.Assert(o.tables.Tables[infoCreate.DownSchema][infoCreate.DownTable][infoCreate.UpSchema], HasKey, infoCreate.UpTable)
 
@@ -191,7 +192,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 	c.Assert(o.PendingOperation(), IsNil)
 
 	// put another lock operation.
-	rev6, putted, err := optimism.PutOperation(etcdTestCli, false, op2)
+	rev6, putted, err := optimism.PutOperation(etcdTestCli, false, op2, rev5)
 	c.Assert(err, IsNil)
 	c.Assert(rev6, Greater, rev5)
 	c.Assert(putted, IsTrue)
