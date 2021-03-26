@@ -128,6 +128,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1][source1][upSchema], HasLen, 1)
 	i11WithVer := i11
 	i11WithVer.Version = 2
+	i11WithVer.Revision = ifm[task1][source1][upSchema][upTable].Revision
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 
 	// put another key and get again with 2 info.
@@ -141,6 +142,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 	i12WithVer := i12
 	i12WithVer.Version = 1
+	i12WithVer.Revision = ifm[task1][source2][upSchema][upTable].Revision
 	c.Assert(ifm[task1][source2][upSchema][upTable], DeepEquals, i12WithVer)
 
 	// start the watcher.
@@ -210,8 +212,10 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm, HasKey, task1)
 	c.Assert(ifm, HasKey, task2)
 	c.Assert(ifm[task1], HasLen, 1)
+	i11WithVer.Revision = ifm[task1][source1][upSchema][upTable].Revision
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 	c.Assert(ifm[task2], HasLen, 1)
+	i21WithVer.Revision = ifm[task2][source1][upSchema][upTable].Revision
 	c.Assert(ifm[task2][source1][upSchema][upTable], DeepEquals, i21WithVer)
 
 	// watch the deletion for i12.
