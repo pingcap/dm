@@ -2037,23 +2037,6 @@ function DM_146 {
     run_case 146 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
-function DM_147_CASE {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(100),(101),(102),(103),(104),(105);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(200),(201),(202),(203),(204),(205);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(300),(301),(302),(303),(304),(305);"
-
-    # FIXME: DM should detect table renaming and report an error.
-    run_sql_source1 "use ${shardddl1}; rename table ${tb1} to ${tb1}_new;"    
-
-    run_sql_source1 "use ${shardddl1}; drop table if exists ${tb1}_new;"
-}
-
-# Rename table.
-function DM_147 {
-    run_case 147 "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
-    run_case 147 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
-}
-
 function DM_RemoveLock_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
