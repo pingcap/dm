@@ -928,43 +928,6 @@ function DM_114 {
     "clean_table" "optimistic"
 }
 
-function DM_115_CASE {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
-
-    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
-
-    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int;"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
-
-    # Rollbacking a drop ddl causes data inconsistency.
-    # FIXME: DM should report an error to users and pause the task when such a circumstance happens.
-    run_sql_tidb_with_retry "select count(1) from ${shardddl}.${tb} where a=1 and b=1;" "count(1)"
-    # Manually fix it so that we can check the sync diff.
-    run_sql_tidb "update ${shardddl}.${tb} set b=null where a=1;"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-}
-
-# Drop a field and then rollback by adding it back.
-function DM_115 {
-    # run_case 115 "double-source-pessimistic" \
-    # "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
-    #  run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
-    # "clean_table" "pessimistic"
-    run_case 115 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
-    "clean_table" "optimistic"
-}
-
 function DM_116_CASE {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
@@ -2232,7 +2195,7 @@ function run() {
 
     start=71
     end=146
-    except=(072 074 075 083 084 087 088 089 090 091 092 093 117)
+    except=(072 074 075 083 084 087 088 089 090 091 092 093 115 117)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
             continue
