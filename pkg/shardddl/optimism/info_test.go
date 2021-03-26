@@ -215,8 +215,10 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm, HasKey, task1)
 	c.Assert(ifm, HasKey, task2)
 	c.Assert(ifm[task1], HasLen, 1)
+	i11WithVer.Revision = ifm[task1][source1][upSchema][upTable].Revision
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 	c.Assert(ifm[task2], HasLen, 1)
+	i21WithVer.Revision = ifm[task2][source1][upSchema][upTable].Revision
 	c.Assert(ifm[task2][source1][upSchema][upTable], DeepEquals, i21WithVer)
 
 	// watch the deletion for i12.

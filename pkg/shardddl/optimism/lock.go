@@ -19,7 +19,6 @@ import (
 
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
@@ -48,6 +47,7 @@ type Lock struct {
 	// upstream source ID -> upstream schema name -> upstream table name -> table info.
 	// if all of them are the same, then we call the lock `synced`.
 	tables map[string]map[string]map[string]schemacmp.Table
+
 	synced bool
 
 	// whether DDLs operations have done (execute the shard DDL) to the downstream.
@@ -67,14 +67,14 @@ type Lock struct {
 
 // NewLock creates a new Lock instance.
 // NOTE: we MUST give the initial table info when creating the lock now.
-func NewLock(cli *clientv3.Client, ID, task, downSchema, downTable string, ti *model.TableInfo, tts []TargetTable) *Lock {
+func NewLock(cli *clientv3.Client, ID, task, downSchema, downTable string, joined schemacmp.Table, tts []TargetTable) *Lock {
 	l := &Lock{
 		cli:        cli,
 		ID:         ID,
 		Task:       task,
 		DownSchema: downSchema,
 		DownTable:  downTable,
-		joined:     schemacmp.Encode(ti),
+		joined:     joined,
 		tables:     make(map[string]map[string]map[string]schemacmp.Table),
 		done:       make(map[string]map[string]map[string]bool),
 		synced:     true,
@@ -109,6 +109,8 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		newTIs         = info.TableInfosAfter
 		infoVersion    = info.Version
 		ignoreConflict = info.IgnoreConflict
+		oldSynced      = l.synced
+		emptyDDLs      = []string{}
 	)
 	l.mu.Lock()
 	defer func() {
@@ -120,7 +122,6 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		l.mu.Unlock()
 	}()
 
-	oldSynced := l.synced
 	defer func() {
 		_, remain := l.syncStatus()
 		l.synced = remain == 0
@@ -158,6 +159,10 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		return ddls, terror.ErrMasterInconsistentOptimisticDDLsAndInfo.Generate(len(ddls), len(newTIs))
 	}
 
+	// should not happen
+	if info.TableInfoBefore == nil {
+		return ddls, terror.ErrMasterOptimisticTableInfoBeforeNotExist.Generate(ddls)
+	}
 	// handle the case where <callerSource, callerSchema, callerTable>
 	// is not in old source tables and current new source tables.
 	// duplicate append is not a problem.
@@ -169,12 +174,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		l.versions[callerSource][callerSchema][callerTable] = infoVersion
 	}
 
-	var emptyDDLs = []string{}
-	prevTable := l.tables[callerSource][callerSchema][callerTable]
-	oldJoined := l.joined
-
 	lastTableInfo := schemacmp.Encode(newTIs[len(newTIs)-1])
-
 	defer func() {
 		// only update table info if no error or ignore conflict
 		if ignoreConflict || err == nil {
@@ -183,6 +183,19 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 			l.tables[callerSource][callerSchema][callerTable] = lastTableInfo
 		}
 	}()
+
+	prevTable := schemacmp.Encode(info.TableInfoBefore)
+	// if preTable not equal table in master, we always use preTable
+	// this often happens when an info TrySync twice, e.g. worker restart/resume task
+	if cmp, err := prevTable.Compare(l.tables[callerSource][callerSchema][callerTable]); err != nil || cmp != 0 {
+		l.tables[callerSource][callerSchema][callerTable] = prevTable
+		prevJoined, err := joinTable(prevTable)
+		if err != nil {
+			return emptyDDLs, err
+		}
+		l.joined = prevJoined
+	}
+	oldJoined := l.joined
 
 	lastJoined, err := joinTable(lastTableInfo)
 	if err != nil {
@@ -214,6 +227,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 		// special case: if the DDL does not affect the schema at all, assume it is
 		// idempotent and just execute the DDL directly.
 		// if any real conflicts after joined exist, they will be detected by the following steps.
+		// this often happens when executing `CREATE TABLE` statement
 		var cmp int
 		if cmp, err = nextTable.Compare(oldJoined); err == nil && cmp == 0 {
 			if col, err := GetColumnName(l.ID, ddls[idx], ast.AlterTableAddColumns); err != nil {
@@ -505,7 +519,6 @@ func (l *Lock) addTables(tts []TargetTable) {
 			}
 			for table := range tables {
 				if _, ok := l.tables[tt.Source][schema][table]; !ok {
-					// NOTE: the newly added table uses the current table info.
 					l.tables[tt.Source][schema][table] = l.joined
 					l.done[tt.Source][schema][table] = false
 					l.versions[tt.Source][schema][table] = 0
