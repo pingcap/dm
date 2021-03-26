@@ -38,7 +38,7 @@ type Stage struct {
 	// only used to report to the caller of the watcher, do not marsh it.
 	// if it's true, it means the stage has been deleted in etcd.
 	IsDeleted bool `json:"-"`
-	// record the etcd ModRevision of this Stage
+	// record the etcd Revision of this Stage
 	Revision int64 `json:"-"`
 }
 

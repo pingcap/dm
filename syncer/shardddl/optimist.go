@@ -148,7 +148,7 @@ func (o *Optimist) GetOperation(ctx context.Context, info optimism.Info, rev int
 // DoneOperation marks the shard DDL lock operation as done.
 func (o *Optimist) DoneOperation(op optimism.Operation) error {
 	op.Done = true
-	_, _, err := optimism.PutOperation(o.cli, false, op)
+	_, _, err := optimism.PutOperation(o.cli, false, op, 0)
 	if err != nil {
 		return err
 	}

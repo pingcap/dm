@@ -411,6 +411,7 @@ const (
 	codeSyncerOperatorNotExist
 	codeSyncerReplaceEventNotExist
 	codeSyncerParseDDL
+	codeSyncerUnsupportedStmt
 )
 
 // DM-master error code
@@ -469,6 +470,7 @@ const (
 	codeMasterBoundChanging
 	codeMasterFailToImportFromV10x
 	codeMasterInconsistentOptimistDDLsAndInfo
+	codeMasterOptimisticTableInfobeforeNotExist
 )
 
 // DM-worker error code
@@ -992,12 +994,13 @@ var (
 	ErrSyncerUnitExecWithNoBlockingDDL      = New(codeSyncerUnitExecWithNoBlockingDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "process unit not waiting for sharding DDL to sync", "")
 	ErrSyncerUnitGenBAList                  = New(codeSyncerUnitGenBAList, ClassSyncUnit, ScopeInternal, LevelHigh, "generate block allow list", "Please check the `block-allow-list` config in task configuration file.")
 	ErrSyncerUnitHandleDDLFailed            = New(codeSyncerUnitHandleDDLFailed, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle ddl job for %s", "")
-	ErrSyncerShardDDLConflict               = New(codeSyncerShardDDLConflict, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle shard ddl %v in optimistic mode, because schema conflict detected", "Please use show-ddl-locks command for more details.")
+	ErrSyncerShardDDLConflict               = New(codeSyncerShardDDLConflict, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle shard ddl %v in optimistic mode, because schema conflict detected, conflict error: %s", "Please use show-ddl-locks command for more details.")
 	ErrSyncerFailpoint                      = New(codeSyncerFailpoint, ClassSyncUnit, ScopeInternal, LevelLow, "failpoint specified error", "")
 	ErrSyncerReplaceEvent                   = New(codeSyncerReplaceEvent, ClassSyncUnit, ScopeInternal, LevelHigh, "", "")
 	ErrSyncerOperatorNotExist               = New(codeSyncerOperatorNotExist, ClassSyncUnit, ScopeInternal, LevelLow, "error operator not exist, position: %s", "")
 	ErrSyncerReplaceEventNotExist           = New(codeSyncerReplaceEventNotExist, ClassSyncUnit, ScopeInternal, LevelHigh, "replace event not exist, location: %s", "")
 	ErrSyncerParseDDL                       = New(codeSyncerParseDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "parse DDL: %s", "Please confirm your DDL statement is correct and needed. For TiDB compatible DDL, see https://docs.pingcap.com/tidb/stable/mysql-compatibility#ddl. You can use `handle-error` command to skip or replace the DDL or add a binlog filter rule to ignore it if the DDL is not needed.")
+	ErrSyncerUnsupportedStmt                = New(codeSyncerUnsupportedStmt, ClassSyncUnit, ScopeInternal, LevelHigh, "`%s` statement not supported in %s mode", "")
 
 	// DM-master error
 	ErrMasterSQLOpNilRequest        = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid", "")
@@ -1059,6 +1062,7 @@ var (
 	ErrMasterFailToImportFromV10x = New(codeMasterFailToImportFromV10x, ClassDMMaster, ScopeInternal, LevelHigh, "fail to import DM cluster from v1.0.x", "Please confirm that you have not violated any restrictions in the upgrade documentation.")
 
 	ErrMasterInconsistentOptimisticDDLsAndInfo = New(codeMasterInconsistentOptimistDDLsAndInfo, ClassDMMaster, ScopeInternal, LevelHigh, "inconsistent count of optimistic ddls and table infos, ddls: %d, table info: %d", "")
+	ErrMasterOptimisticTableInfoBeforeNotExist = New(codeMasterOptimisticTableInfobeforeNotExist, ClassDMMaster, ScopeInternal, LevelHigh, "table-info-before not exist in optimistic ddls: %v", "")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set", "")

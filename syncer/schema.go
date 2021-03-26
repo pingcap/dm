@@ -102,7 +102,8 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 				break
 			}
 			downSchema, downTable := s.renameShardingSchema(req.Database, req.Table)
-			info := s.optimist.ConstructInfo(req.Database, req.Table, downSchema, downTable, []string{""}, nil, []*model.TableInfo{ti})
+			// use new table info as tableInfoBefore, we can also use the origin table from schemaTracker
+			info := s.optimist.ConstructInfo(req.Database, req.Table, downSchema, downTable, []string{""}, ti, []*model.TableInfo{ti})
 			info.IgnoreConflict = true
 			log.L().Info("sync info with operate-schema", zap.Stringer("info", info))
 			_, err = s.optimist.PutInfo(info)

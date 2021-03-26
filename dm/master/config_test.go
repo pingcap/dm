@@ -191,6 +191,9 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}})
 	c.Assert(etcdCfg.InitialCluster, check.DeepEquals, fmt.Sprintf("dm-master-%s=http://127.0.0.1:8291", hostname))
 	c.Assert(etcdCfg.ClusterState, check.Equals, embed.ClusterStateFlagExisting)
+	c.Assert(etcdCfg.AutoCompactionMode, check.Equals, "periodic")
+	c.Assert(etcdCfg.AutoCompactionRetention, check.Equals, "1h")
+	c.Assert(etcdCfg.QuotaBackendBytes, check.Equals, int64(2*1024*1024*1024))
 
 	cfg2 := *cfg1
 	cfg2.MasterAddr = "127.0.0.1\n:8261"
