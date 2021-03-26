@@ -728,7 +728,8 @@ func (r *Relay) setUpReader(ctx context.Context) (reader.Reader, error) {
 	ctx2, cancel := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 	defer cancel()
 
-	randomServerID, err := utils.ReuseServerID(ctx2, r.cfg.ServerID, r.db)
+	// always use a new random serverID
+	randomServerID, err := utils.GetRandomServerID(ctx2, r.db)
 	if err != nil {
 		// should never happened unless the master has too many slave
 		return nil, terror.Annotate(err, "fail to get random server id for relay reader")
@@ -993,7 +994,8 @@ func (r *Relay) setSyncConfig() error {
 func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error) {
 	// setup a TCP binlog reader (because no relay can be used when upgrading).
 	syncCfg := r.syncerCfg
-	randomServerID, err := utils.ReuseServerID(ctx, r.cfg.ServerID, r.db)
+	// always use a new random serverID
+	randomServerID, err := utils.GetRandomServerID(ctx, r.db)
 	if err != nil {
 		return nil, terror.Annotate(err, "fail to get random server id when relay adjust gtid")
 	}
