@@ -634,7 +634,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		tiBefore = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
 		tiAfter1 = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 TEXT)`)
 		info1    = optimism.NewInfo(taskName, sources[0], "foo-1", "bar-1", schema, table, DDLs1, tiBefore, []*model.TableInfo{tiAfter1})
-		op1      = optimism.NewOperation(ID, taskName, sources[0], info1.UpSchema, info1.UpTable, DDLs1, optimism.ConflictNone, false)
+		op1      = optimism.NewOperation(ID, taskName, sources[0], info1.UpSchema, info1.UpTable, DDLs1, optimism.ConflictNone, "", false)
 	)
 
 	st1.AddTable("foo-1", "bar-1", schema, table)
@@ -642,7 +642,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 	c.Assert(err, check.IsNil)
 	_, err = optimism.PutInfo(etcdTestCli, info1)
 	c.Assert(err, check.IsNil)
-	_, succ, err = optimism.PutOperation(etcdTestCli, false, op1)
+	_, succ, err = optimism.PutOperation(etcdTestCli, false, op1, 0)
 	c.Assert(succ, check.IsTrue)
 	c.Assert(err, check.IsNil)
 
@@ -1471,7 +1471,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(listResp.Members, check.HasLen, 3)
 
-	// make sure s3 is not the leader, otherwise it will take some time to campain a new leader after close s3, and it may cause timeout
+	// make sure s3 is not the leader, otherwise it will take some time to campaign a new leader after close s3, and it may cause timeout
 	c.Assert(utils.WaitSomething(20, 500*time.Millisecond, func() bool {
 		_, leaderID, _, err = s1.election.LeaderInfo(ctx)
 		if err != nil {

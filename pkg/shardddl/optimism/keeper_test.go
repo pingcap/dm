@@ -59,7 +59,7 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 	)
 
 	// lock with 2 sources.
-	lockID1, newDDLs, err := lk.TrySync(i11, tts1)
+	lockID1, newDDLs, err := lk.TrySync(etcdTestCli, i11, tts1)
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
@@ -71,7 +71,7 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
 
-	lockID1, newDDLs, err = lk.TrySync(i12, tts1)
+	lockID1, newDDLs, err = lk.TrySync(etcdTestCli, i12, tts1)
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
@@ -83,7 +83,7 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 	c.Assert(remain, Equals, 0)
 
 	// lock with only 1 source.
-	lockID2, newDDLs, err := lk.TrySync(i21, tts2)
+	lockID2, newDDLs, err := lk.TrySync(etcdTestCli, i21, tts2)
 	c.Assert(err, IsNil)
 	c.Assert(lockID2, Equals, "task2-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
@@ -152,13 +152,13 @@ func (t *testKeeper) TestLockKeeperMultipleTarget(c *C) {
 	)
 
 	// lock for target1.
-	lockID1, newDDLs, err := lk.TrySync(i11, tts1)
+	lockID1, newDDLs, err := lk.TrySync(etcdTestCli, i11, tts1)
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
 
 	// lock for target2.
-	lockID2, newDDLs, err := lk.TrySync(i21, tts2)
+	lockID2, newDDLs, err := lk.TrySync(etcdTestCli, i21, tts2)
 	c.Assert(err, IsNil)
 	c.Assert(lockID2, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`rab`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
@@ -180,11 +180,11 @@ func (t *testKeeper) TestLockKeeperMultipleTarget(c *C) {
 	c.Assert(remain, Equals, 1)
 
 	// sync for two locks.
-	lockID1, newDDLs, err = lk.TrySync(i12, tts1)
+	lockID1, newDDLs, err = lk.TrySync(etcdTestCli, i12, tts1)
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
-	lockID2, newDDLs, err = lk.TrySync(i22, tts2)
+	lockID2, newDDLs, err = lk.TrySync(etcdTestCli, i22, tts2)
 	c.Assert(err, IsNil)
 	c.Assert(lockID2, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`rab`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
@@ -395,6 +395,7 @@ func (t *testKeeper) TestTargetTablesForTask(c *C) {
 }
 
 func (t *testKeeper) TestRebuildLocksAndTables(c *C) {
+	defer clearTestInfoOperation(c)
 	var (
 		lk               = NewLockKeeper()
 		task             = "task"
@@ -430,6 +431,14 @@ func (t *testKeeper) TestRebuildLocksAndTables(c *C) {
 				source2: {upSchema: {upTable: i21}},
 			},
 		}
+		colm = map[string]map[string]map[string]map[string]map[string]struct{}{
+			lockID: {
+				"c3": {
+					source1: {upSchema: {upTable: {}}},
+					source2: {upSchema: {upTable: {}}},
+				},
+			},
+		}
 		lockJoined = map[string]schemacmp.Table{
 			lockID: schemacmp.Encode(ti2),
 		}
@@ -438,7 +447,7 @@ func (t *testKeeper) TestRebuildLocksAndTables(c *C) {
 		}
 	)
 
-	lk.RebuildLocksAndTables(ifm, lockJoined, lockTTS)
+	lk.RebuildLocksAndTables(etcdTestCli, ifm, colm, lockJoined, lockTTS)
 	locks := lk.Locks()
 	c.Assert(len(locks), Equals, 1)
 	lock, ok := locks[lockID]
@@ -452,4 +461,5 @@ func (t *testKeeper) TestRebuildLocksAndTables(c *C) {
 	cmp, err = lock.tables[source2][upSchema][upTable].Compare(schemacmp.Encode(ti2))
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 0)
+	c.Assert(lock.columns, DeepEquals, colm[lockID])
 }

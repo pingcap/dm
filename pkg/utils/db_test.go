@@ -50,7 +50,7 @@ func (t *testDBSuite) TestGetFlavor(c *C) {
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
 	// others
-	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'version';`).WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("version", "unkown"))
+	mock.ExpectQuery(`SHOW GLOBAL VARIABLES LIKE 'version';`).WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("version", "unknown"))
 	flavor, err = GetFlavor(context.Background(), db)
 	c.Assert(err, IsNil)
 	c.Assert(flavor, Equals, "mysql") // as MySQL
