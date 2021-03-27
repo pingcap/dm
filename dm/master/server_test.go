@@ -919,7 +919,6 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	// 1. test pause-relay successfully
 	resp, err = server.OperateWorkerRelayTask(context.Background(), pauseReq)
 	c.Assert(err, check.IsNil)
-	fmt.Println(resp)
 	// you didn't create relay stage
 	c.Assert(resp.Result, check.IsTrue)
 	for _, source := range sources {

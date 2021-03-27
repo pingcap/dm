@@ -324,9 +324,9 @@ func (s *Server) observeRelayConfig(ctx context.Context, rev int64) error {
 					}
 					rev = rev1
 					if relaySource == nil {
-						err = s.stopWorker("", true)
+						err = s.disableRelay("")
 						if err != nil {
-							log.L().Error("fail to stop worker", zap.Error(err))
+							log.L().Error("fail to disableRelay after etcd retryable error", zap.Error(err))
 							return err // return if failed to stop the worker.
 						}
 					} else {
@@ -416,9 +416,9 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 					}
 					rev = rev1
 					if bound.IsEmpty() {
-						err = s.stopWorker("", true)
+						err = s.disableHandleSubtasks("")
 						if err != nil {
-							log.L().Error("fail to stop worker", zap.Error(err))
+							log.L().Error("fail to disableHandleSubtasks after etcd retryable error", zap.Error(err))
 							return err // return if failed to stop the worker.
 						}
 					} else {
@@ -644,20 +644,7 @@ OUTER:
 
 func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 	if bound.IsDeleted {
-		s.Lock()
-		w := s.getWorker(false)
-		if w == nil {
-			log.L().Warn("worker has already stopped before DisableHandleSubtasks", zap.Stringer("bound", bound))
-			s.Unlock()
-			return nil
-		}
-		w.DisableHandleSubtasks()
-		var err error
-		if !w.relayEnabled.Get() {
-			err = s.stopWorker(bound.Source, false)
-		}
-		s.Unlock()
-		return err
+		return s.disableHandleSubtasks(bound.Source)
 	}
 	scm, _, err := ha.GetSourceCfg(s.etcdClient, bound.Source, bound.Revision)
 	if err != nil {
@@ -676,23 +663,26 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 	return w.EnableHandleSubtasks()
 }
 
+func (s *Server) disableHandleSubtasks(source string) error {
+	s.Lock()
+	defer s.Unlock()
+	w := s.getWorker(false)
+	if w == nil {
+		log.L().Warn("worker has already stopped before DisableHandleSubtasks", zap.String("source", source))
+		return nil
+	}
+	w.DisableHandleSubtasks()
+	var err error
+	if !w.relayEnabled.Get() {
+		log.L().Info("relay is not enabled after disabling subtask, so stop worker")
+		err = s.stopWorker(source, false)
+	}
+	return err
+}
+
 func (s *Server) operateRelaySource(relaySource ha.RelaySource) error {
 	if relaySource.IsDeleted {
-		s.Lock()
-		w := s.getWorker(false)
-		if w == nil {
-			log.L().Warn("worker has already stopped before DisableRelay", zap.Any("relaySource", relaySource))
-			s.Unlock()
-			return nil
-		}
-		s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
-		w.DisableRelay()
-		var err error
-		if !w.subTaskEnabled.Get() {
-			err = s.stopWorker(relaySource.Source, false)
-		}
-		s.Unlock()
-		return err
+		return s.disableRelay(relaySource.Source)
 	}
 	scm, _, err := ha.GetSourceCfg(s.etcdClient, relaySource.Source, relaySource.Revision)
 	if err != nil {
@@ -710,6 +700,24 @@ func (s *Server) operateRelaySource(relaySource ha.RelaySource) error {
 	}
 	s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
 	return w.EnableRelay()
+}
+
+func (s *Server) disableRelay(source string) error {
+	s.Lock()
+	defer s.Unlock()
+	w := s.getWorker(false)
+	if w == nil {
+		log.L().Warn("worker has already stopped before DisableRelay", zap.Any("relaySource", source))
+		return nil
+	}
+	s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
+	w.DisableRelay()
+	var err error
+	if !w.subTaskEnabled.Get() {
+		log.L().Info("subtask is not enabled after disabling relay, so stop worker")
+		err = s.stopWorker(source, false)
+	}
+	return err
 }
 
 // QueryStatus implements WorkerServer.QueryStatus
