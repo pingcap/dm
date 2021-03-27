@@ -552,7 +552,7 @@ func (s *Server) GetSubTaskCfg(ctx context.Context, req *pb.GetSubTaskCfgRequest
 				Msg:    err.Error(),
 			}, nil
 		}
-		cfgs = append(cfgs, string(cfgBytes))
+		cfgs = append(cfgs, cfgBytes)
 	}
 
 	return &pb.GetSubTaskCfgResponse{

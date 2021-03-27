@@ -54,6 +54,10 @@ type Info struct {
 	// only set it when get/watch from etcd
 	Version int64 `json:"-"`
 
+	// only set it when get from etcd
+	// use for sort infos in recoverlock
+	Revision int64 `json:"-"`
+
 	// use to resolve conflict
 	IgnoreConflict bool `json:"ignore-conflict"`
 }
@@ -132,6 +136,7 @@ func GetAllInfo(cli *clientv3.Client) (map[string]map[string]map[string]map[stri
 			return nil, 0, err2
 		}
 		info.Version = kv.Version
+		info.Revision = kv.ModRevision
 
 		if _, ok := ifm[info.Task]; !ok {
 			ifm[info.Task] = make(map[string]map[string]map[string]Info)
@@ -182,6 +187,7 @@ func WatchInfo(ctx context.Context, cli *clientv3.Client, revision int64,
 				case mvccpb.PUT:
 					info, err = infoFromJSON(string(ev.Kv.Value))
 					info.Version = ev.Kv.Version
+					info.Revision = ev.Kv.ModRevision
 				case mvccpb.DELETE:
 					info, err = infoFromJSON(string(ev.PrevKv.Value))
 					info.IsDeleted = true
@@ -232,6 +238,7 @@ func ClearTestInfoOperationSchema(cli *clientv3.Client) error {
 	clearInfo := clientv3.OpDelete(common.ShardDDLOptimismInfoKeyAdapter.Path(), clientv3.WithPrefix())
 	clearOp := clientv3.OpDelete(common.ShardDDLOptimismOperationKeyAdapter.Path(), clientv3.WithPrefix())
 	clearISOp := clientv3.OpDelete(common.ShardDDLOptimismInitSchemaKeyAdapter.Path(), clientv3.WithPrefix())
-	_, err := cli.Txn(context.Background()).Then(clearSource, clearInfo, clearOp, clearISOp).Commit()
+	clearColumns := clientv3.OpDelete(common.ShardDDLOptimismDroppedColumnsKeyAdapter.Path(), clientv3.WithPrefix())
+	_, err := cli.Txn(context.Background()).Then(clearSource, clearInfo, clearOp, clearISOp, clearColumns).Commit()
 	return err
 }

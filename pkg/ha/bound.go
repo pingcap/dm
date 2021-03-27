@@ -47,7 +47,7 @@ type SourceBound struct {
 	// only used to report to the caller of the watcher, do not marsh it.
 	// if it's true, it means the bound has been deleted in etcd.
 	IsDeleted bool `json:"-"`
-	// record the etcd ModRevision of this bound
+	// record the etcd Revision of this bound
 	Revision int64 `json:"-"`
 }
 
