@@ -533,6 +533,10 @@ func (s *Server) setSourceStatus(source string, err error, needLock bool) {
 		s.Lock()
 		defer s.Unlock()
 	}
+	// now setSourceStatus will be concurrently called. skip setting a source status if worker has been closed
+	if s.getWorker(false) == nil && source != "" {
+		return
+	}
 	s.sourceStatus = pb.SourceStatus{
 		Source: source,
 		Worker: s.cfg.Name,
