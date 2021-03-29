@@ -1237,7 +1237,7 @@ func (q *jobQueue) close() error {
 
 // `startConsumers` run multiple go-routines of job consumption with user defined handler
 func (q *jobQueue) startConsumers(handler func(ctx context.Context, job *restoreSchemaJob) error) {
-	for i := 0; i < int(q.consumerCount); i++ {
+	for i := 0; i < q.consumerCount; i++ {
 		q.eg.Go(func() error {
 			var err error
 			var session *DBConn
