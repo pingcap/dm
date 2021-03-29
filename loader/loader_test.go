@@ -29,7 +29,13 @@ func (*testLoaderSuite) TestJobQueue(c *C) {
 		jobQueue := newJobQueue(ctx, 16, 16)
 		jobQueue.startConsumers(handler)
 		for i := 0; i < jobsCount; i++ {
-			err := jobQueue.push(&restoreSchemaJob{})
+			job := &restoreSchemaJob{
+				session: &DBConn{}, // just for testing
+			}
+			if i == jobsCount/2 {
+				job.database = "error"
+			}
+			err := jobQueue.push(job)
 			if err != nil {
 				runtimeErr := jobQueue.close()
 				if errors.ErrorEqual(err, context.Canceled) {
@@ -52,7 +58,10 @@ func (*testLoaderSuite) TestJobQueue(c *C) {
 			ctx:       context.Background(),
 			jobsCount: 128,
 			handler: func(ctx context.Context, job *restoreSchemaJob) error {
-				return injectErr
+				if job.database == "error" {
+					return injectErr
+				}
+				return nil
 			},
 			exceptedErr: injectErr,
 		},

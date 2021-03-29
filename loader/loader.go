@@ -1251,7 +1251,7 @@ func (q *jobQueue) startConsumers(handler func(ctx context.Context, job *restore
 					if !active {
 						break consumeLoop
 					}
-					if session == nil {
+					if session == nil && job.session == nil {
 						baseConn, err := job.loader.toDB.GetBaseConn(q.ctx)
 						if err != nil {
 							break consumeLoop
@@ -1270,7 +1270,9 @@ func (q *jobQueue) startConsumers(handler func(ctx context.Context, job *restore
 							},
 						}
 					}
-					job.session = session
+					if job.session == nil {
+						job.session = session
+					}
 					err = handler(q.ctx, job)
 					if err != nil {
 						break consumeLoop
