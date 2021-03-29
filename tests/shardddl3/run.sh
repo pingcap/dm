@@ -2237,6 +2237,62 @@ function DM_151 {
         "clean_table" "optimistic"
 }
 
+function DM_152_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+
+    # Add multiple fields.
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column a int, add column b varchar(20), add column c double;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column a int, add column b varchar(20), add column c double;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column a int, add column b varchar(20), add column c double;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,\"aaaa\",4.0);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,\"bbbb\",5.0);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,\"cccc\",6.0);"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    # Add multiple indexes.
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add unique index uni_a(a), add index idx_b(b);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add unique index uni_a(a), add index idx_b(b);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add unique index uni_a(a), add index idx_b(b);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,\"aaaa\",7.0);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,\"bbbb\",8.0);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,\"cccc\",9.0);"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    # Add and drop indexes.
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop index idx_b, add index idx_c(c);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop index idx_b, add index idx_c(c);"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop index idx_b, add index idx_c(c);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10,\"aaaa\",10.0);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11,\"bbbb\",11.0);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12,\"cccc\",12.0);"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    # Add and drop fields.
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b, add column d int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column b, add column d int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop column b, add column d int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(13,13,13.0,13);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(14,14,14.0,14);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(15,15,15.0,15);"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    # Drop all fields.
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column a, drop column c, drop column d;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column a, drop column c, drop column d;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop column a, drop column c, drop column d;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(16);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(17);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(18);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_152 {
+    run_case 152 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
 function DM_RemoveLock_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
@@ -2458,7 +2514,7 @@ function run() {
     init_database
 
     start=71
-    end=151
+    end=152
     except=(072 074 075 083 084 087 088 089 090 091 092 093)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
