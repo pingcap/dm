@@ -205,6 +205,10 @@ func unquotes(s string) string {
 func (s keyHexEncoderDecoderV2) Encode(keys ...string) string {
 	t := []string{string(s)}
 	for _, key := range keys {
+		// compatible for non-quoted elements when path.Join
+		if key == "" {
+			continue
+		}
 		t = append(t, quotes(hex.EncodeToString([]byte(key))))
 	}
 	return path.Join(t...)

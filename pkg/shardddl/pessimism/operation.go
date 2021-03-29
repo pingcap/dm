@@ -17,12 +17,12 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/pingcap/dm/dm/common"
-	"github.com/pingcap/dm/pkg/etcdutil"
-
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/clientv3/clientv3util"
 	"go.etcd.io/etcd/mvcc/mvccpb"
+
+	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/pkg/etcdutil"
 )
 
 // Operation represents a shard DDL coordinate operation.
