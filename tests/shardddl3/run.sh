@@ -1002,7 +1002,7 @@ function DM_116_CASE {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
-# Add and Drop multiple columns at the same time.
+# Add and Drop multiple fields at the same time.
 function DM_116 {
     run_case 116 "double-source-pessimistic" \
     "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
@@ -2097,13 +2097,144 @@ function DM_147_CASE {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
-# Add and Drop multiple columns and then rollback.
+# Add and Drop multiple fields and then rollback.
 function DM_147 {
     run_case 147 "double-source-optimistic" \
     "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
      run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
      run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c int);\"" \
     "clean_table" "optimistic"
+}
+
+function DM_148_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int after id, add column c int after b;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column b int after id, add column c int after b;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column b int after id, add column c int after b;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10,10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11,11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12,12,12);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+# Add multiple fields in a specific order.
+function DM_148 {
+    run_case 148 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
+        "clean_table" "pessimistic"
+    run_case 148 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
+        "clean_table" "optimistic"
+}
+
+function DM_149_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,\"aaaaaaa\");"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,\"bbbbbbb\");"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,\"ccccccc\");"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify column a varchar(20);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,\"aaaaaaaaaaaaaa\");"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,\"bbbbbbb\");"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,\"ccccccc\");"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} modify column a varchar(20);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,\"aaaaaaaaaaaaaa\");"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,\"bbbbbbbbbbbbbb\");"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,\"ccccccc\");"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} modify column a varchar(20);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,\"aaaaaaaaaaaaaa\");"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,\"bbbbbbbbbbbbbb\");"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,\"cccccccccccccc\");"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+# Increase field length.
+function DM_149 {
+    run_case 149 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a varchar(10));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a varchar(10));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a varchar(10));\"" \
+        "clean_table" "pessimistic"
+    run_case 149 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a varchar(10));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a varchar(10));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a varchar(10));\"" \
+        "clean_table" "optimistic"
+}
+
+function DM_150_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,\"aaaaaaa\");"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,\"bbbbbbb\");"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,\"ccccccc\");"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify column a varchar(10);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,\"aaaaaaa\");"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,\"bbbbbbb\");"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,\"ccccccc\");"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "Unsupported modify column: length 10 is less than origin 20" 1
+}
+
+# Increase field length.
+function DM_150 {
+    run_case 150 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a varchar(20));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a varchar(20));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a varchar(20));\"" \
+        "clean_table" "pessimistic"
+    run_case 150 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a varchar(20));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a varchar(20));\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a varchar(20));\"" \
+        "clean_table" "optimistic"
+}
+
+function DM_151_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} modify column a double;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4.0);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "Unsupported modify column: type double not match origin int(11), and tidb_enable_change_column_type is false" 1
+}
+
+function DM_151 {
+    run_case 151 "double-source-pessimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
+        "clean_table" "pessimistic"
+    run_case 151 "double-source-optimistic" \
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
+        "clean_table" "optimistic"
 }
 
 function DM_RemoveLock_CASE() {
@@ -2326,12 +2457,9 @@ function run() {
     init_cluster
     init_database
 
-    DM_147
-    return
-
     start=71
-    end=146
-    except=(072 074 075 083 084 087 088 089 090 091 092 093 115 117)
+    end=151
+    except=(072 074 075 083 084 087 088 089 090 091 092 093)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
             continue
