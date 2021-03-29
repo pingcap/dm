@@ -69,15 +69,16 @@ func (t *testForEtcd) TestTryUpgrade(c *C) {
 	c.Assert(rev1, Greater, int64(0))
 	c.Assert(ver.NotSet(), IsTrue)
 
-	// try to upgrade, but do nothing except the current version recorded.
+	// try to upgrade, run actual upgrade functions
 	c.Assert(TryUpgrade(etcdTestCli, newUpgradeContext()), IsNil)
 	ver, rev2, err := GetVersion(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
 	c.Assert(ver, DeepEquals, CurrentVersion)
-	c.Assert(mockVerNo, Equals, uint64(0))
+	c.Assert(mockVerNo, Equals, uint64(4))
 
 	// try to upgrade again, do nothing because the version is the same.
+	mockVerNo = 0
 	c.Assert(TryUpgrade(etcdTestCli, newUpgradeContext()), IsNil)
 	ver, rev3, err := GetVersion(etcdTestCli)
 	c.Assert(err, IsNil)
@@ -102,13 +103,14 @@ func (t *testForEtcd) TestTryUpgrade(c *C) {
 	c.Assert(mockVerNo, Equals, currentInternalNo+1)
 
 	// try to upgrade, to an older version, do nothing.
+	mockVerNo = 0
 	CurrentVersion = oldCurrentVer
 	c.Assert(TryUpgrade(etcdTestCli, newUpgradeContext()), IsNil)
 	ver, rev5, err := GetVersion(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(rev5, Equals, rev4)
 	c.Assert(ver, DeepEquals, newerVer) // not changed.
-	c.Assert(mockVerNo, Equals, currentInternalNo+1)
+	c.Assert(mockVerNo, Equals, uint64(0))
 }
 
 func (t *testForEtcd) TestUpgradeToVer3(c *C) {
