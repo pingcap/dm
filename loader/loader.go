@@ -1251,10 +1251,12 @@ func (q *jobQueue) startConsumers(handler func(ctx context.Context, job *restore
 					if !active {
 						break consumeLoop
 					}
+					// test condition for `job.session` means db session still could be controlled outside,
+					// it's used in unit test for now.
 					if session == nil && job.session == nil {
 						baseConn, err := job.loader.toDB.GetBaseConn(q.ctx)
 						if err != nil {
-							break consumeLoop
+							return err
 						}
 						defer func(baseConn *conn.BaseConn) {
 							err := job.loader.toDB.CloseBaseConn(baseConn)
