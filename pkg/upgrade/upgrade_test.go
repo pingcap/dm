@@ -45,7 +45,7 @@ func clearTestData(c *C) {
 
 type testForEtcd struct{}
 
-var _ = Suite(&testForEtcd{})
+var _ = SerialSuites(&testForEtcd{})
 
 func (t *testForEtcd) TestTryUpgrade(c *C) {
 	defer clearTestData(c)
@@ -109,4 +109,32 @@ func (t *testForEtcd) TestTryUpgrade(c *C) {
 	c.Assert(rev5, Equals, rev4)
 	c.Assert(ver, DeepEquals, newerVer) // not changed.
 	c.Assert(mockVerNo, Equals, currentInternalNo+1)
+}
+
+func (t *testForEtcd) TestUpgradeToVer3(c *C) {
+	ctx := context.Background()
+	uctx := Context{ctx, nil}
+	worker := "worker-1"
+	oldKey := common.UpstreamBoundWorkerKeyAdapterV1.Encode(worker)
+	oldVal := "test"
+
+	_, err := etcdTestCli.Put(ctx, oldKey, oldVal)
+	c.Assert(err, IsNil)
+	c.Assert(upgradeToVer3(etcdTestCli, uctx), IsNil)
+
+	newKey := common.UpstreamBoundWorkerKeyAdapter.Encode(worker)
+	resp, err := etcdTestCli.Get(ctx, newKey)
+	c.Assert(err, IsNil)
+	c.Assert(resp.Kvs, HasLen, 1)
+	c.Assert(string(resp.Kvs[0].Value), Equals, oldVal)
+
+	// test won't overwrite new value
+	newVal := "test2"
+	_, err = etcdTestCli.Put(ctx, newKey, newVal)
+	c.Assert(err, IsNil)
+	c.Assert(upgradeToVer3(etcdTestCli, uctx), IsNil)
+	resp, err = etcdTestCli.Get(ctx, newKey)
+	c.Assert(err, IsNil)
+	c.Assert(resp.Kvs, HasLen, 1)
+	c.Assert(string(resp.Kvs[0].Value), Equals, newVal)
 }

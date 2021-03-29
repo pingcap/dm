@@ -28,57 +28,57 @@ var (
 	ClusterVersionKey string = "/dm-cluster/version"
 	// WorkerRegisterKeyAdapter is used to encode and decode register key.
 	// k/v: Encode(worker-name) -> the information of the DM-worker node.
-	WorkerRegisterKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-worker/r/")
+	WorkerRegisterKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-worker/v2/r/")
 	// WorkerKeepAliveKeyAdapter is used to encode and decode keepalive key.
 	// k/v: Encode(worker-name) -> time
-	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-worker/a/")
+	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-worker/v2/a/")
 	// UpstreamConfigKeyAdapter stores all config of which MySQL-task has not stopped.
 	// k/v: Encode(source-id) -> config
-	UpstreamConfigKeyAdapter KeyAdapter = keyEncoderDecoderV2("/dm-master/upstream/config/")
+	UpstreamConfigKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/upstream/config/")
 	// UpstreamBoundWorkerKeyAdapter is used to store address of worker in which MySQL-tasks which are running.
 	// k/v: Encode(worker-name) -> the bound relationship.
-	UpstreamBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/bound-worker/")
+	UpstreamBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/bound-worker/")
 	// UpstreamLastBoundWorkerKeyAdapter is used to store address of worker in which MySQL-tasks which are running.
 	// different with UpstreamBoundWorkerKeyAdapter, this kv should not be deleted when unbound, to provide a priority
 	// k/v: Encode(worker-name) -> the bound relationship.
-	UpstreamLastBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/last-bound-worker/")
+	UpstreamLastBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/last-bound-worker/")
 	// UpstreamRelayWorkerKeyAdapter is used to store the upstream which this worker needs to pull relay log
 	// k/v: Encode(worker-name) -> source-id
-	UpstreamRelayWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/relay-worker/")
+	UpstreamRelayWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/relay-worker/")
 	// TaskConfigKeyAdapter is used to store task config string.
 	// k/v: Encode(task-name) -> task-config-string
-	TaskConfigKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/task/")
+	TaskConfigKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/task/")
 	// UpstreamSubTaskKeyAdapter is used to store SubTask which are subscribing data from MySQL source.
 	// k/v: Encode(source-id, task-name) -> SubTaskConfig
-	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/upstream/subtask/")
+	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/upstream/subtask/")
 	// StageRelayKeyAdapter is used to store the running stage of the relay.
 	// k/v: Encode(source-id) -> the running stage of the relay.
-	StageRelayKeyAdapter KeyAdapter = keyEncoderDecoderV2("/dm-master/stage/relay/")
+	StageRelayKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/stage/relay/")
 	// StageSubTaskKeyAdapter is used to store the running stage of the subtask.
 	// k/v: Encode(source-id, task-name) -> the running stage of the subtask.
-	StageSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/stage/subtask/")
+	StageSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/stage/subtask/")
 
 	// ShardDDLPessimismInfoKeyAdapter is used to store shard DDL info in pessimistic model.
 	// k/v: Encode(task-name, source-id) -> shard DDL info
-	ShardDDLPessimismInfoKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/shardddl-pessimism/info/")
+	ShardDDLPessimismInfoKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/shardddl-pessimism/info/")
 	// ShardDDLPessimismOperationKeyAdapter is used to store shard DDL operation in pessimistic model.
 	// k/v: Encode(task-name, source-id) -> shard DDL operation
-	ShardDDLPessimismOperationKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/shardddl-pessimism/operation/")
+	ShardDDLPessimismOperationKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/shardddl-pessimism/operation/")
 
 	// ShardDDLOptimismSourceTablesKeyAdapter is used to store INITIAL upstream schema & table names when starting the subtask.
 	// In other words, if any Info for this subtask exists, we should obey source tables in the Info.
 	// This is because the current upstream tables may not match the tables that the binlog stream has reached.
 	// k/v: Encode(task-name, source-id) -> upstream schema & table names.
-	ShardDDLOptimismSourceTablesKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/shardddl-optimism/source-tables/")
+	ShardDDLOptimismSourceTablesKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/shardddl-optimism/source-tables/")
 	// ShardDDLOptimismInfoKeyAdapter is used to store shard DDL info in optimistic model.
 	// k/v: Encode(task-name, source-id, upstream-schema-name, upstream-table-name) -> shard DDL info.
-	ShardDDLOptimismInfoKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/shardddl-optimism/info/")
+	ShardDDLOptimismInfoKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/shardddl-optimism/info/")
 	// ShardDDLOptimismOperationKeyAdapter is used to store shard DDL operation in optimistic model.
 	// k/v: Encode(task-name, source-id, upstream-schema-name, upstream-table-name) -> shard DDL operation.
-	ShardDDLOptimismOperationKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/shardddl-optimism/operation/")
+	ShardDDLOptimismOperationKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/shardddl-optimism/operation/")
 	// ShardDDLOptimismInitSchemaKeyAdapter is used to store the initial schema (before constructed the lock) of merged tables.
 	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name) -> table schema.
-	ShardDDLOptimismInitSchemaKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/shardddl-optimism/init-schema/")
+	ShardDDLOptimismInitSchemaKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/shardddl-optimism/init-schema/")
 	// ShardDDLOptimismDroppedColumnsKeyAdapter is used to store the columns that are not fully dropped
 	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name, column-name, source-id, upstream-schema-name, upstream-table-name) -> empty
 	// If we don't identify different upstream tables, we may report an error for tb2 in the following case.
@@ -87,7 +87,7 @@ var (
 	// tb1: +a +b +c           -c
 	// tb2:                       +a +b +c
 	// tb3:          +a +b +c
-	ShardDDLOptimismDroppedColumnsKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/shardddl-optimism/dropped-columns/")
+	ShardDDLOptimismDroppedColumnsKeyAdapter KeyAdapter = keyHexEncoderDecoderV2("/dm-master/v2/shardddl-optimism/dropped-columns/")
 )
 
 func keyAdapterKeysLen(s KeyAdapter) int {
@@ -105,6 +105,21 @@ func keyAdapterKeysLen(s KeyAdapter) int {
 	case ShardDDLOptimismInfoKeyAdapter, ShardDDLOptimismOperationKeyAdapter:
 		return 4
 	case ShardDDLOptimismDroppedColumnsKeyAdapter:
+		return 7
+	// used in upgrading
+	case WorkerRegisterKeyAdapterV1, UpstreamConfigKeyAdapterV1, UpstreamBoundWorkerKeyAdapterV1,
+		WorkerKeepAliveKeyAdapterV1, StageRelayKeyAdapterV1, TaskConfigKeyAdapterV1,
+		UpstreamLastBoundWorkerKeyAdapterV1, UpstreamRelayWorkerKeyAdapterV1:
+		return 1
+	case UpstreamSubTaskKeyAdapterV1, StageSubTaskKeyAdapterV1,
+		ShardDDLPessimismInfoKeyAdapterV1, ShardDDLPessimismOperationKeyAdapterV1,
+		ShardDDLOptimismSourceTablesKeyAdapterV1:
+		return 2
+	case ShardDDLOptimismInitSchemaKeyAdapterV1:
+		return 3
+	case ShardDDLOptimismInfoKeyAdapterV1, ShardDDLOptimismOperationKeyAdapterV1:
+		return 4
+	case ShardDDLOptimismDroppedColumnsKeyAdapterV1:
 		return 7
 	}
 	return -1
@@ -176,68 +191,15 @@ func (s keyHexEncoderDecoder) Path() string {
 
 // version V2 fixed the bug that XXDecoder.Encode("s1") is the prefix of XXDecoder.Encode("s10"), so watching prefix
 // gets unexpected KV
-type keyEncoderDecoderV2 string
+// also, always use keyHexEncoderDecoderV2 to avoid `/` in keys
 type keyHexEncoderDecoderV2 string
 
-const (
-	quote  = '`'
-	escape = '\\'
-)
-
 func quotes(s string) string {
-	var b strings.Builder
-	b.Grow(2 + len(s))
-	b.WriteByte(quote)
-	for _, c := range s {
-		switch c {
-		case quote, escape:
-			b.WriteByte(escape)
-			b.WriteString(string(c))
-		default:
-			b.WriteString(string(c))
-		}
-	}
-	b.WriteByte(quote)
-	return b.String()
+	return "`" + s + "`"
 }
 
 func unquotes(s string) string {
-	var b strings.Builder
-	b.Grow(len(s) - 2)
-	runes := []rune(s)
-	i := 1
-	for i < len(runes)-1 {
-		if runes[i] == escape {
-			i++
-		}
-		b.WriteString(string(runes[i]))
-		i++
-	}
-	return b.String()
-}
-
-func (s keyEncoderDecoderV2) Encode(keys ...string) string {
-	t := []string{string(s)}
-	for _, k := range keys {
-		t = append(t, quotes(k))
-	}
-	return path.Join(t...)
-}
-
-func (s keyEncoderDecoderV2) Decode(key string) ([]string, error) {
-	v := strings.TrimPrefix(key, string(s))
-	vals := strings.Split(v, "/")
-	if l := keyAdapterKeysLen(s); l != len(vals) {
-		return nil, terror.ErrDecodeEtcdKeyFail.Generate(fmt.Sprintf("decoder is %s, the key is %s", string(s), key))
-	}
-	for i, val := range vals {
-		vals[i] = unquotes(val)
-	}
-	return vals, nil
-}
-
-func (s keyEncoderDecoderV2) Path() string {
-	return string(s)
+	return s[1 : len(s)-1]
 }
 
 func (s keyHexEncoderDecoderV2) Encode(keys ...string) string {
@@ -266,3 +228,69 @@ func (s keyHexEncoderDecoderV2) Decode(key string) ([]string, error) {
 func (s keyHexEncoderDecoderV2) Path() string {
 	return string(s)
 }
+
+// used in upgrading
+var (
+	// WorkerRegisterKeyAdapterV1 is used to encode and decode register key.
+	// k/v: Encode(worker-name) -> the information of the DM-worker node.
+	WorkerRegisterKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-worker/r/")
+	// WorkerKeepAliveKeyAdapterV1 is used to encode and decode keepalive key.
+	// k/v: Encode(worker-name) -> time
+	WorkerKeepAliveKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-worker/a/")
+	// UpstreamConfigKeyAdapterV1 stores all config of which MySQL-task has not stopped.
+	// k/v: Encode(source-id) -> config
+	UpstreamConfigKeyAdapterV1 KeyAdapter = keyEncoderDecoder("/dm-master/upstream/config/")
+	// UpstreamBoundWorkerKeyAdapterV1 is used to store address of worker in which MySQL-tasks which are running.
+	// k/v: Encode(worker-name) -> the bound relationship.
+	UpstreamBoundWorkerKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/bound-worker/")
+	// UpstreamLastBoundWorkerKeyAdapterV1 is used to store address of worker in which MySQL-tasks which are running.
+	// different with UpstreamBoundWorkerKeyAdapterV1, this kv should not be deleted when unbound, to provide a priority
+	// k/v: Encode(worker-name) -> the bound relationship.
+	UpstreamLastBoundWorkerKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/last-bound-worker/")
+	// UpstreamRelayWorkerKeyAdapterV1 is used to store the upstream which this worker needs to pull relay log
+	// k/v: Encode(worker-name) -> source-id
+	UpstreamRelayWorkerKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/relay-worker/")
+	// TaskConfigKeyAdapterV1 is used to store task config string.
+	// k/v: Encode(task-name) -> task-config-string
+	TaskConfigKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/task/")
+	// UpstreamSubTaskKeyAdapterV1 is used to store SubTask which are subscribing data from MySQL source.
+	// k/v: Encode(source-id, task-name) -> SubTaskConfig
+	UpstreamSubTaskKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
+	// StageRelayKeyAdapterV1 is used to store the running stage of the relay.
+	// k/v: Encode(source-id) -> the running stage of the relay.
+	StageRelayKeyAdapterV1 KeyAdapter = keyEncoderDecoder("/dm-master/stage/relay/")
+	// StageSubTaskKeyAdapterV1 is used to store the running stage of the subtask.
+	// k/v: Encode(source-id, task-name) -> the running stage of the subtask.
+	StageSubTaskKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/stage/subtask/")
+
+	// ShardDDLPessimismInfoKeyAdapterV1 is used to store shard DDL info in pessimistic model.
+	// k/v: Encode(task-name, source-id) -> shard DDL info
+	ShardDDLPessimismInfoKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/info/")
+	// ShardDDLPessimismOperationKeyAdapterV1 is used to store shard DDL operation in pessimistic model.
+	// k/v: Encode(task-name, source-id) -> shard DDL operation
+	ShardDDLPessimismOperationKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/operation/")
+
+	// ShardDDLOptimismSourceTablesKeyAdapterV1 is used to store INITIAL upstream schema & table names when starting the subtask.
+	// In other words, if any Info for this subtask exists, we should obey source tables in the Info.
+	// This is because the current upstream tables may not match the tables that the binlog stream has reached.
+	// k/v: Encode(task-name, source-id) -> upstream schema & table names.
+	ShardDDLOptimismSourceTablesKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/source-tables/")
+	// ShardDDLOptimismInfoKeyAdapterV1 is used to store shard DDL info in optimistic model.
+	// k/v: Encode(task-name, source-id, upstream-schema-name, upstream-table-name) -> shard DDL info.
+	ShardDDLOptimismInfoKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/info/")
+	// ShardDDLOptimismOperationKeyAdapterV1 is used to store shard DDL operation in optimistic model.
+	// k/v: Encode(task-name, source-id, upstream-schema-name, upstream-table-name) -> shard DDL operation.
+	ShardDDLOptimismOperationKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/operation/")
+	// ShardDDLOptimismInitSchemaKeyAdapterV1 is used to store the initial schema (before constructed the lock) of merged tables.
+	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name) -> table schema.
+	ShardDDLOptimismInitSchemaKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/init-schema/")
+	// ShardDDLOptimismDroppedColumnsKeyAdapterV1 is used to store the columns that are not fully dropped
+	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name, column-name, source-id, upstream-schema-name, upstream-table-name) -> empty
+	// If we don't identify different upstream tables, we may report an error for tb2 in the following case.
+	// Time series: (+a/-a means add/drop column a)
+	//	    older ----------------> newer
+	// tb1: +a +b +c           -c
+	// tb2:                       +a +b +c
+	// tb3:          +a +b +c
+	ShardDDLOptimismDroppedColumnsKeyAdapterV1 KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/dropped-columns/")
+)
