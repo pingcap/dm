@@ -118,7 +118,7 @@ type Scheduler struct {
 
 	// expectant relay stages for sources, source ID -> stage.
 	// add:
-	// - bound the source to a worker (at first time).
+	// - bound the source to a worker (at first time). // TODO: change this to add a relay-enabled source
 	// - recover from etcd (calling `recoverSources`).
 	// update:
 	// - update stage by user request (calling `UpdateExpectRelayStage`).
@@ -386,7 +386,7 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 		s.logger.Warn("in transfer source, found a free worker and not bound source, which should not happened",
 			zap.String("source", source),
 			zap.String("worker", worker))
-		err := s.boundSourceToWorker(source, w)
+		err := s.boundSourceToWorker(source, w, s.sourceCfgs[source].EnableRelay)
 		if err == nil {
 			delete(s.unbounds, source)
 		}
@@ -412,7 +412,8 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 	failpoint.Inject("failToReplaceSourceBound", func(_ failpoint.Value) {
 		failpoint.Return(errors.New("failToPutSourceBound"))
 	})
-	_, err := ha.ReplaceSourceBound(s.etcdCli, source, oldWorker.BaseInfo().Name, worker)
+	enableRelay := s.sourceCfgs[source].EnableRelay
+	_, err := ha.ReplaceSourceBound(s.etcdCli, source, oldWorker.BaseInfo().Name, worker, enableRelay)
 	if err != nil {
 		return err
 	}
@@ -779,10 +780,16 @@ func (s *Scheduler) UpdateExpectRelayStage(newStage pb.Stage, sources ...string)
 		stages           = make([]ha.Stage, 0, len(sources))
 	)
 	for _, source := range sources {
-		if currStage, ok := s.expectRelayStages[source]; !ok {
+		if _, ok := s.sourceCfgs[source]; !ok {
 			notExistSourcesM[source] = struct{}{}
-		} else {
+			continue
+		}
+
+		if currStage, ok := s.expectRelayStages[source]; ok {
 			currStagesM[currStage.Expect.String()] = struct{}{}
+		} else {
+			s.logger.Warn("will write relay stage for a source that doesn't have previous stage",
+				zap.String("source", source))
 		}
 		stages = append(stages, ha.NewRelayStage(newStage, source))
 	}
@@ -1036,6 +1043,13 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 
 	// 6. put trigger source bounds info to etcd to order dm-workers to start source
 	if len(boundsToTrigger) > 0 {
+		for _, bound := range boundsToTrigger {
+			if s.sourceCfgs[bound.Source].EnableRelay {
+				if _, err2 := ha.PutRelayConfig(cli, bound.Source, bound.Worker); err2 != nil {
+					return 0, err2
+				}
+			}
+		}
 		_, err = ha.PutSourceBound(cli, boundsToTrigger...)
 		if err != nil {
 			return 0, nil
@@ -1180,6 +1194,11 @@ func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent, toLock bool) error {
 
 	// 2. check whether is bound.
 	if w.Stage() == WorkerBound {
+		if s.sourceCfgs[w.Bound().Source].EnableRelay {
+			if _, err := ha.PutRelayConfig(s.etcdCli, w.Bound().Source, w.Bound().Worker); err != nil {
+				return err
+			}
+		}
 		// TODO: When dm-worker keepalive is broken, it will turn off its own running source
 		// After keepalive is restored, this dm-worker should continue to run the previously bound source
 		// So we PutSourceBound here to trigger dm-worker to get this event and start source again.
@@ -1282,7 +1301,7 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 	}()
 
 	// 3. try to bound them.
-	err = s.boundSourceToWorker(source, w)
+	err = s.boundSourceToWorker(source, w, s.sourceCfgs[source].EnableRelay)
 	if err != nil {
 		return false, err
 	}
@@ -1323,7 +1342,7 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 	}
 
 	// 2. try to bound them.
-	err := s.boundSourceToWorker(source, worker)
+	err := s.boundSourceToWorker(source, worker, s.sourceCfgs[source].EnableRelay)
 	if err != nil {
 		return false, err
 	}
@@ -1332,23 +1351,31 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 
 // boundSourceToWorker bounds the source and worker together.
 // we should check the bound relationship of the source and the stage of the worker in the caller.
-func (s *Scheduler) boundSourceToWorker(source string, w *Worker) error {
+func (s *Scheduler) boundSourceToWorker(source string, w *Worker, enableRelay bool) error {
 	// 1. put the bound relationship into etcd.
 	var err error
 	bound := ha.NewSourceBound(source, w.BaseInfo().Name)
 	if _, ok := s.expectRelayStages[source]; ok {
 		// the relay stage exists before, only put the bound relationship.
+		// TODO: we also put relay config for that worker temporary
+		_, err = ha.PutRelayConfig(s.etcdCli, bound.Source, bound.Worker)
+		if err != nil {
+			return err
+		}
 		_, err = ha.PutSourceBound(s.etcdCli, bound)
-	} else {
-		// no relay stage exists before, create a `Runnng` stage and put it with the bound relationship.
+	} else if enableRelay {
+		// dont enable relay for it
+		// no relay stage exists before, create a `Running` stage and put it with the bound relationship.
 		stage := ha.NewRelayStage(pb.Stage_Running, source)
-		_, err = ha.PutRelayStageSourceBound(s.etcdCli, stage, bound)
+		_, err = ha.PutRelayStageRelayConfigSourceBound(s.etcdCli, stage, bound)
 		defer func() {
 			if err == nil {
 				// 1.1 if no error exist when returning, record the stage.
 				s.expectRelayStages[source] = stage
 			}
 		}()
+	} else {
+		_, err = ha.PutSourceBound(s.etcdCli, bound)
 	}
 	if err != nil {
 		return err
