@@ -939,6 +939,39 @@ function DM_114 {
     "clean_table" "optimistic"
 }
 
+function DM_115_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column (b int, c int);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column (b int, c int);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column b, drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b, drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(13);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(14);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(15);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+# Add multiple fileds and rollback.
+function DM_115 {
+    run_case 115 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
 function DM_116_CASE {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
@@ -980,6 +1013,51 @@ function DM_116 {
     "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
      run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
      run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c int);\"" \
+    "clean_table" "optimistic"
+}
+
+function DM_117_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b, drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,6);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column (b int, c int);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "because schema conflict detected" 1 \
+        "add column b that wasn't fully dropped in downstream" 1
+
+    # try to fix data
+    echo 'CREATE TABLE `tb1` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' > ${WORK_DIR}/schema.sql
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-schema set test ${WORK_DIR}/schema.sql -s mysql-replica-01 -d ${shardddl1} -t ${tb1}" \
+        "\"result\": true" 2
+
+    # skip this error
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "handle-error test skip" \
+        "\"result\": true" 2 \
+        "\"source 'mysql-replica-02' has no error\"" 1
+
+    run_sql_tidb "update ${shardddl}.${tb} set b=null, c=null where a=1;"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+# Drop multiple fields and rollback.
+function DM_117 {
+    run_case 117 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int, c int);\"" \
     "clean_table" "optimistic"
 }
 
@@ -1984,6 +2062,50 @@ function DM_146 {
     run_case 146 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
+function DM_147_CASE {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int, drop column c;"    
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column c int, drop column b;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "because schema conflict detected" 1 \
+        "add column c that wasn't fully dropped in downstream" 1
+
+    # try to fix data
+    echo 'CREATE TABLE `tb1` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' > ${WORK_DIR}/schema.sql
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-schema set test ${WORK_DIR}/schema.sql -s mysql-replica-01 -d ${shardddl1} -t ${tb1}" \
+        "\"result\": true" 2
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "handle-error test replace \"alter table ${shardddl1}.${tb1} drop column b\"" \
+        "\"result\": true" 2 \
+        "\"source 'mysql-replica-02' has no error\"" 1
+
+    run_sql_tidb "update ${shardddl}.${tb} set c=null where a=1;"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+# Add and Drop multiple columns and then rollback.
+function DM_147 {
+    run_case 147 "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c int);\"" \
+    "clean_table" "optimistic"
+}
+
 function DM_RemoveLock_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
@@ -2203,6 +2325,9 @@ function DM_DropAddColumn() {
 function run() {
     init_cluster
     init_database
+
+    DM_147
+    return
 
     start=71
     end=146
