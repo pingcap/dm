@@ -49,7 +49,7 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	c.Assert(subtaskCfg2.Adjust(true), IsNil)
 
 	// put relay stage and source bound.
-	rev1, err := PutRelayStageSourceBound(etcdTestCli, relayStage, bound)
+	rev1, err := PutRelayStageRelayConfigSourceBound(etcdTestCli, relayStage, bound)
 	c.Assert(err, IsNil)
 	c.Assert(rev1, Greater, int64(0))
 	// put source config.
