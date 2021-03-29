@@ -1224,7 +1224,7 @@ func (q *jobQueue) push(job *restoreSchemaJob) error {
 		err = q.ctx.Err()
 	case q.msgq <- job:
 	}
-	return err
+	return terror.WithScope(err, terror.ScopeInternal)
 }
 
 // `close` wait jobs done and close queue forever
@@ -1240,16 +1240,37 @@ func (q *jobQueue) startConsumers(handler func(ctx context.Context, job *restore
 	for i := 0; i < int(q.consumerCount); i++ {
 		q.eg.Go(func() error {
 			var err error
+			var session *DBConn
 		consumeLoop:
 			for {
 				select {
 				case <-q.ctx.Done():
 					err = q.ctx.Err()
 					break consumeLoop
-				case job := <-q.msgq:
-					if job == nil {
+				case job, active := <-q.msgq:
+					if !active {
 						break consumeLoop
 					}
+					if session == nil {
+						baseConn, err := job.loader.toDB.GetBaseConn(q.ctx)
+						if err != nil {
+							break consumeLoop
+						}
+						defer func(baseConn *conn.BaseConn) {
+							err := job.loader.toDB.CloseBaseConn(baseConn)
+							if err != nil {
+								job.loader.logger.Warn("fail to close connection", zap.Error(err))
+							}
+						}(baseConn)
+						session = &DBConn{
+							cfg:      job.loader.cfg,
+							baseConn: baseConn,
+							resetBaseConnFn: func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error) {
+								return nil, terror.ErrDBBadConn.Generate("bad connection error restoreData")
+							},
+						}
+					}
+					job.session = session
 					err = handler(q.ctx, job)
 					if err != nil {
 						break consumeLoop
@@ -1273,7 +1294,6 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		dbs = append(dbs, db)
 	}
 	tctx := tcontext.NewContext(ctx, l.logger)
-	dbSessionPool := make([]*DBConn, 0, concurrency)
 
 	// run consumers of restore database schema queue
 	dbRestoreQueue := newJobQueue(ctx, concurrency, concurrency /** length of queue */)
@@ -1289,32 +1309,10 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	})
 
 	// push database schema restoring jobs to the queue
-	for dbSessionID, db := range dbs {
-		// open database connections at first time
-		dbSessionID %= concurrency
-		if dbSessionID == len(dbSessionPool) {
-			baseConn, err := l.toDB.GetBaseConn(ctx)
-			if err != nil {
-				break
-			}
-			defer func(baseConn *conn.BaseConn) {
-				err := l.toDB.CloseBaseConn(baseConn)
-				if err != nil {
-					l.logger.Warn("fail to close connection", zap.Error(err))
-				}
-			}(baseConn)
-			dbSessionPool = append(dbSessionPool, &DBConn{
-				cfg:      l.cfg,
-				baseConn: baseConn,
-				resetBaseConnFn: func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error) {
-					return nil, terror.ErrDBBadConn.Generate("bad connection error restoreData")
-				},
-			})
-		}
+	for _, db := range dbs {
 		schemaFile := l.cfg.Dir + "/" + db + "-schema-create.sql" // cache friendly
 		err = dbRestoreQueue.push(&restoreSchemaJob{
 			loader:   l,
-			session:  dbSessionPool[dbSessionID],
 			database: db,
 			table:    "",
 			filepath: schemaFile,
@@ -1352,8 +1350,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 
 	// push table schema restoring jobs to the queue
 tblSchemaLoop:
-	for dbSessionID, db := range dbs {
-		dbSessionID %= concurrency
+	for _, db := range dbs {
 		for table := range l.db2Tables[db] {
 			schemaFile := l.cfg.Dir + "/" + db + "." + table + "-schema.sql" // cache friendly
 			if _, ok := l.tableInfos[tableName(db, table)]; !ok {
@@ -1369,7 +1366,6 @@ tblSchemaLoop:
 			}
 			err = tblRestoreQueue.push(&restoreSchemaJob{
 				loader:   l,
-				session:  dbSessionPool[dbSessionID],
 				database: db,
 				table:    table,
 				filepath: schemaFile,
