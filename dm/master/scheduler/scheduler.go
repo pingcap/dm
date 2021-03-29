@@ -1242,6 +1242,13 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 
 	// 6. put trigger source bounds info to etcd to order dm-workers to start source
 	if len(boundsToTrigger) > 0 {
+		for _, bound := range boundsToTrigger {
+			if s.sourceCfgs[bound.Source].EnableRelay {
+				if _, err2 := ha.PutRelayConfig(cli, bound.Source, bound.Worker); err2 != nil {
+					return 0, err2
+				}
+			}
+		}
 		_, err = ha.PutSourceBound(cli, boundsToTrigger...)
 		if err != nil {
 			return 0, nil

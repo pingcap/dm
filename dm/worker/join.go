@@ -104,7 +104,7 @@ func (s *Server) KeepAlive() {
 		failpoint.Label("bypass")
 
 		// TODO: report the error.
-		err := s.stopWorker("")
+		err := s.stopWorker("", true)
 		if err != nil {
 			log.L().Error("fail to stop worker", zap.Error(err))
 			return // return if failed to stop the worker.

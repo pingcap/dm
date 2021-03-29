@@ -335,17 +335,13 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 	_, err = ha.PutSourceCfg(etcdCli, sourceCfg)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		s.Mutex.Lock()
-		defer s.Mutex.Unlock()
-		return s.worker != nil
+		return s.getWorker(true) != nil
 	}), IsTrue)
 
 	_, err = ha.DeleteSourceBound(etcdCli, s.cfg.Name)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		s.Mutex.Lock()
-		defer s.Mutex.Unlock()
-		return s.worker == nil
+		return s.getWorker(true) == nil
 	}), IsTrue)
 }
 
@@ -390,7 +386,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	rev, err := ha.DeleteSourceBound(etcdCli, cfg.Name)
 	c.Assert(err, IsNil)
 	// step 2: start source at this worker
-	w, err := s.getOrStartWorker(&sourceCfg)
+	w, err := s.getOrStartWorker(&sourceCfg, true)
 	c.Assert(err, IsNil)
 	c.Assert(w.EnableHandleSubtasks(), IsNil)
 	// step 3: trigger etcd compaction and check whether we can receive it through watcher
@@ -426,7 +422,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	c.Assert(*cfg2, DeepEquals, sourceCfg)
 	cancel1()
 	wg.Wait()
-	c.Assert(s.stopWorker(sourceCfg.SourceID), IsNil)
+	c.Assert(s.stopWorker(sourceCfg.SourceID, true), IsNil)
 	// step 5: start observeSourceBound from compacted revision again, should start worker
 	ctx2, cancel2 := context.WithCancel(ctx)
 	wg.Add(1)
@@ -507,8 +503,7 @@ func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, d
 	time.Sleep(6 * time.Second)
 	// When worker server fail to keepalive with etcd, server should close its worker
 	c.Assert(s.getWorker(true), IsNil)
-	// source status could be nil or context canceled from handleSourceBound, skip this test
-	//c.Assert(s.getSourceStatus(true).Result, IsNil)
+	c.Assert(s.getSourceStatus(true).Result, IsNil)
 	ETCD, err := createMockETCD(dir, "http://"+hostName)
 	c.Assert(err, IsNil)
 	time.Sleep(3 * time.Second)
