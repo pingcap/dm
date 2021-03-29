@@ -77,9 +77,9 @@ function DM_073() {
 
 function DM_076_CASE() {
     run_sql_source1 "alter table ${shardddl1}.${tb1} add primary key(id);"
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "query-status test" \
-            "Unsupported add primary key" 1
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 function DM_076() {
@@ -99,7 +99,9 @@ function DM_077_CASE() {
 }
 
 function DM_077() {
+    run_sql_tidb "create table ${shardddl}.${tb} (id int, primary key(id) clustered);"
     run_case 077 "single-source-pessimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key);\"" "clean_table" ""
+    run_sql_tidb "create table ${shardddl}.${tb} (id int, primary key(id) clustered);"
     run_case 077 "single-source-optimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key);\"" "clean_table" ""
 }
 
@@ -112,15 +114,9 @@ function DM_078_CASE() {
 }
 
 function DM_078() {
-    # start a TiDB alter-pk
-    pkill -hup tidb-server 2>/dev/null || true
-    wait_process_exit tidb-server
-    run_tidb_server 4000 $TIDB_PASSWORD $cur/conf/tidb-alter-pk-config.toml
-
     run_case 078 "single-source-pessimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int unique, a int, b varchar(10));\"" "clean_table" ""
     run_case 078 "single-source-optimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int unique, a int, b varchar(10));\"" "clean_table" ""
 
-    # don't revert tidb until DM_079
 }
 
 function DM_079_CASE() {
@@ -134,11 +130,6 @@ function DM_079_CASE() {
 function DM_079() {
     run_case 079 "single-source-pessimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"" "clean_table" ""
     run_case 079 "single-source-optimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"" "clean_table" ""
-
-    # revert tidb
-    pkill -hup tidb-server 2>/dev/null || true
-    wait_process_exit tidb-server
-    run_tidb_server 4000 $TIDB_PASSWORD
 }
 
 function DM_080_CASE() {
@@ -928,6 +919,16 @@ function DM_RemoveLock() {
             "bound" 2
 }
 
+function restart_master() {
+    echo "restart dm-master"
+    ps aux | grep dm-master |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT 20
+    sleep 2
+
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+}
+
 function DM_RestartMaster_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
@@ -956,11 +957,7 @@ function DM_RestartMaster_CASE() {
                 'mysql-replica-02-`shardddl1`.`tb1`' 1
     fi
 
-    echo "restart dm-master"
-    ps aux | grep dm-master |awk '{print $2}'|xargs kill || true
-    check_port_offline $MASTER_PORT 20
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    restart_master
 
     if [[ "$1" = "pessimistic" ]]; then
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -993,6 +990,94 @@ function DM_RestartMaster() {
     "clean_table" "optimistic"
 }
 
+function restart_master_on_pos() {
+    if [ "$1" = "$2" ]; then
+        restart_master
+    fi
+}
+
+function DM_DropAddColumn_CASE() {
+    reset=$2
+
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(3,3);"
+
+    restart_master_on_pos $reset "1"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
+
+    restart_master_on_pos $reset "2"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column c;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+
+    restart_master_on_pos $reset "3"
+
+    # make sure column c is fully dropped in the downstream
+    check_log_contain_with_retry 'finish to handle ddls in optimistic shard mode' $WORK_DIR/worker1/log/dm-worker.log
+    check_log_contain_with_retry 'finish to handle ddls in optimistic shard mode' $WORK_DIR/worker2/log/dm-worker.log
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column c int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(6,6);"
+
+    restart_master_on_pos $reset "4"
+
+    # make sure task to step in "Sync" stage
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 3 \
+        "\"unit\": \"Sync\"" 2
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int after a;"
+
+    restart_master_on_pos $reset "5"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "because schema conflict detected" 1 \
+        "add column b that wasn't fully dropped in downstream" 1
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3 'fail'
+
+    # try to fix data
+    echo 'CREATE TABLE `tb1` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' > ${WORK_DIR}/schema.sql
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-schema set test ${WORK_DIR}/schema.sql -s mysql-replica-01 -d ${shardddl1} -t ${tb1}" \
+        "\"result\": true" 2
+
+    # skip this error
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "handle-error test skip" \
+        "\"result\": true" 2 \
+        "\"source 'mysql-replica-02' has no error\"" 1
+
+    run_sql_source1 "update ${shardddl1}.${tb1} set b=1 where a=1;"
+    run_sql_source1 "update ${shardddl1}.${tb1} set b=3 where a=3;"
+    run_sql_source1 "update ${shardddl1}.${tb1} set b=4 where a=4;"
+    run_sql_source1 "update ${shardddl1}.${tb1} set b=6 where a=6;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column c int"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(7,7,7);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_DropAddColumn() {
+    for i in `seq 0 5`
+    do
+    echo "run DM_DropAddColumn case #${i}"
+    run_case DropAddColumn "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"" \
+    "clean_table" "optimistic" "$i"
+    done
+}
+
 function run() {
     init_cluster
     init_database
@@ -1010,6 +1095,8 @@ function run() {
     DM_RemoveLock
 
     DM_RestartMaster
+
+    DM_DropAddColumn
 }
 
 cleanup_data $shardddl

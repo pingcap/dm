@@ -158,7 +158,7 @@ type SubTaskConfig struct {
 	// RelayDir get value from dm-worker config
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`
 
-	// UseRelay get value from dm-worker config
+	// UseRelay get value from dm-worker's relayEnabled
 	UseRelay bool     `toml:"use-relay" json:"use-relay"`
 	From     DBConfig `toml:"from" json:"from"`
 	To       DBConfig `toml:"to" json:"to"`

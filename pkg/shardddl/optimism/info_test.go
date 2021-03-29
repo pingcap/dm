@@ -128,6 +128,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1][source1][upSchema], HasLen, 1)
 	i11WithVer := i11
 	i11WithVer.Version = 2
+	i11WithVer.Revision = rev2
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 
 	// put another key and get again with 2 info.
@@ -141,6 +142,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 	i12WithVer := i12
 	i12WithVer.Version = 1
+	i12WithVer.Revision = rev4
 	c.Assert(ifm[task1][source2][upSchema][upTable], DeepEquals, i12WithVer)
 
 	// start the watcher.
@@ -157,20 +159,22 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 
 	// put another key for a different task.
 	// version start from 1
-	_, err = PutInfo(etcdTestCli, i21)
+	rev5, err := PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
 	infoWithVer := <-wch
 	i21WithVer := i21
 	i21WithVer.Version = 1
+	i21WithVer.Revision = rev5
 	c.Assert(infoWithVer, DeepEquals, i21WithVer)
 	c.Assert(len(ech), Equals, 0)
 
 	// put again
 	// version increase
-	_, err = PutInfo(etcdTestCli, i21)
+	rev6, err := PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
 	infoWithVer = <-wch
 	i21WithVer.Version++
+	i21WithVer.Revision = rev6
 	c.Assert(infoWithVer, DeepEquals, i21WithVer)
 	c.Assert(len(ech), Equals, 0)
 
@@ -187,10 +191,11 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 
 	// put again
 	// version reset to 1
-	_, err = PutInfo(etcdTestCli, i21)
+	rev7, err := PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
 	infoWithVer = <-wch
 	i21WithVer.Version = 1
+	i21WithVer.Revision = rev7
 	c.Assert(infoWithVer, DeepEquals, i21WithVer)
 	c.Assert(len(ech), Equals, 0)
 
@@ -210,8 +215,10 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm, HasKey, task1)
 	c.Assert(ifm, HasKey, task2)
 	c.Assert(ifm[task1], HasLen, 1)
+	i11WithVer.Revision = ifm[task1][source1][upSchema][upTable].Revision
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 	c.Assert(ifm[task2], HasLen, 1)
+	i21WithVer.Revision = ifm[task2][source1][upSchema][upTable].Revision
 	c.Assert(ifm[task2][source1][upSchema][upTable], DeepEquals, i21WithVer)
 
 	// watch the deletion for i12.
