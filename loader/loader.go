@@ -1399,6 +1399,9 @@ tblSchemaLoop:
 	for _, db := range dbs {
 		table2DataFileMap := l.db2Tables[db]
 		for table := range table2DataFileMap {
+			restoringFiles := l.checkPoint.GetRestoringFileInfo(db, table)
+			l.logger.Debug("restoring table data", zap.String("schema", db), zap.String("table", table), zap.Reflect("data files", restoringFiles))
+
 			for _, file := range table2DataFileMap[table] {
 				select {
 				case <-ctx.Done():
@@ -1407,8 +1410,6 @@ tblSchemaLoop:
 				default:
 					// do nothing
 				}
-				restoringFiles := l.checkPoint.GetRestoringFileInfo(db, table)
-				l.logger.Debug("restoring table data", zap.String("schema", db), zap.String("table", table), zap.Reflect("data files", restoringFiles))
 				l.logger.Debug("dispatch data file", zap.String("schema", db), zap.String("table", table), zap.String("data file", file))
 
 				offset := int64(uninitializedOffset)
