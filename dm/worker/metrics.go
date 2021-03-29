@@ -37,6 +37,7 @@ import (
 const (
 	opErrTypeBeforeOp    = "BeforeAnyOp"
 	opErrTypeSourceBound = "SourceBound"
+	opErrTypeRelaySource = "RelaySource"
 )
 
 var (
