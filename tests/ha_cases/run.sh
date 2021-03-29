@@ -727,7 +727,8 @@ function test_last_bound() {
     run_sql_file_withdb $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
     run_sql "flush logs;" $MYSQL_PORT2 $MYSQL_PASSWORD2
     run_sql_file_withdb $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test
-    sleep 1
+    # wait the checkpoint updated
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     kill_2_worker_ensure_unbound 3 4
 
     # start 1 then 2
@@ -738,7 +739,7 @@ function test_last_bound() {
     # other workers has forwarded the sync progress, if moved to a new binlog file, original relay log could be removed
     num1=`grep "will try purge whole relay dir for new relay log" $WORK_DIR/worker1/log/dm-worker.log | wc -l`
     num2=`grep "will try purge whole relay dir for new relay log" $WORK_DIR/worker2/log/dm-worker.log | wc -l`
-    echo "num1$num1 num2$num2"
+    echo "num1 $num1 num2 $num2"
     [[ $num1+$num2 -eq 3 ]]
 
     echo "[$(date)] <<<<<< finish test_last_bound >>>>>>"
