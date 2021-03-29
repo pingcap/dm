@@ -863,8 +863,15 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 //
 // we may need to refactor the concurrency model to make the work-flow more clearer later
 func (s *Syncer) flushCheckPoints() error {
-	if s.execError.Get() != nil {
-		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint", zap.Stringer("checkpoint", s.checkpoint))
+	err := s.execError.Get()
+	// TODO: for now, if any error occurred (including user canceled), checkpoint won't be updated. But if we have put
+	// optimistic shard info, DM-master may resolved the optimistic lock and let other worker execute DDL. So after this
+	// worker resume, it can not execute the DML/DDL in old binlog because of downstream table structure mismatching.
+	// We should find a way to (compensating) implement a transaction containing interaction with both etcd and SQL.
+	if err != nil {
+		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint",
+			zap.Stringer("checkpoint", s.checkpoint),
+			zap.Error(err))
 		return nil
 	}
 
@@ -885,7 +892,7 @@ func (s *Syncer) flushCheckPoints() error {
 		s.tctx.L().Info("prepare flush sqls", zap.Strings("shard meta sqls", shardMetaSQLs), zap.Reflect("shard meta arguments", shardMetaArgs))
 	}
 
-	err := s.checkpoint.FlushPointsExcept(s.tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
+	err = s.checkpoint.FlushPointsExcept(s.tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
 	if err != nil {
 		return terror.Annotatef(err, "flush checkpoint %s", s.checkpoint)
 	}

@@ -99,7 +99,7 @@ func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 
 func (t *testServer) TestServer(c *C) {
 	var (
-		masterAddr   = "127.0.0.1:8261"
+		masterAddr   = tempurl.Alloc()[len("http://"):]
 		workerAddr1  = "127.0.0.1:8262"
 		keepAliveTTL = int64(1)
 	)
@@ -109,6 +109,7 @@ func (t *testServer) TestServer(c *C) {
 	defer ETCD.Close()
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.Join = masterAddr
 	cfg.KeepAliveTTL = keepAliveTTL
 	cfg.RelayKeepAliveTTL = keepAliveTTL
 
@@ -227,7 +228,7 @@ func (t *testServer) TestServer(c *C) {
 
 func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 	var (
-		masterAddr   = "127.0.0.1:8261"
+		masterAddr   = tempurl.Alloc()[len("http://"):]
 		keepAliveTTL = int64(1)
 	)
 	// start etcd server
@@ -237,6 +238,7 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 	defer ETCD.Close()
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.Join = masterAddr
 	cfg.KeepAliveTTL = keepAliveTTL
 
 	// new etcd client
@@ -333,23 +335,19 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 	_, err = ha.PutSourceCfg(etcdCli, sourceCfg)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		s.Mutex.Lock()
-		defer s.Mutex.Unlock()
-		return s.worker != nil
+		return s.getWorker(true) != nil
 	}), IsTrue)
 
 	_, err = ha.DeleteSourceBound(etcdCli, s.cfg.Name)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		s.Mutex.Lock()
-		defer s.Mutex.Unlock()
-		return s.worker == nil
+		return s.getWorker(true) == nil
 	}), IsTrue)
 }
 
 func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	var (
-		masterAddr   = "127.0.0.1:8261"
+		masterAddr   = tempurl.Alloc()[len("http://"):]
 		keepAliveTTL = int64(1)
 		startRev     = int64(1)
 	)
@@ -359,6 +357,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	defer ETCD.Close()
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.Join = masterAddr
 	cfg.KeepAliveTTL = keepAliveTTL
 	cfg.RelayKeepAliveTTL = keepAliveTTL
 
@@ -387,7 +386,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	rev, err := ha.DeleteSourceBound(etcdCli, cfg.Name)
 	c.Assert(err, IsNil)
 	// step 2: start source at this worker
-	w, err := s.getOrStartWorker(&sourceCfg)
+	w, err := s.getOrStartWorker(&sourceCfg, true)
 	c.Assert(err, IsNil)
 	c.Assert(w.EnableHandleSubtasks(), IsNil)
 	// step 3: trigger etcd compaction and check whether we can receive it through watcher
@@ -423,7 +422,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	c.Assert(*cfg2, DeepEquals, sourceCfg)
 	cancel1()
 	wg.Wait()
-	c.Assert(s.stopWorker(sourceCfg.SourceID), IsNil)
+	c.Assert(s.stopWorker(sourceCfg.SourceID, true), IsNil)
 	// step 5: start observeSourceBound from compacted revision again, should start worker
 	ctx2, cancel2 := context.WithCancel(ctx)
 	wg.Add(1)
@@ -472,7 +471,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		// put mysql config into relative etcd key adapter to trigger operation event
 		_, err := ha.PutSourceCfg(s.etcdClient, sourceCfg)
 		c.Assert(err, IsNil)
-		_, err = ha.PutRelayStageSourceBound(s.etcdClient, ha.NewRelayStage(pb.Stage_Running, sourceCfg.SourceID),
+		_, err = ha.PutRelayStageRelayConfigSourceBound(s.etcdClient, ha.NewRelayStage(pb.Stage_Running, sourceCfg.SourceID),
 			ha.NewSourceBound(sourceCfg.SourceID, s.cfg.Name))
 		c.Assert(err, IsNil)
 		// worker should be started and without error
@@ -488,7 +487,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		c.Assert(w.closed.Get(), IsFalse)
 		_, err := ha.DeleteSourceCfgRelayStageSourceBound(s.etcdClient, sourceCfg.SourceID, s.cfg.Name)
 		c.Assert(err, IsNil)
-		// worker should be started and without error
+		// worker should be closed and without error
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 			currentWorker := s.getWorker(true)
 			return currentWorker == nil && w.closed.Get()
