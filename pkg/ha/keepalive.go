@@ -29,8 +29,8 @@ import (
 )
 
 var (
-	// CurrentKeepAliveTTL may be assigned to KeepAliveTTL or RelayKeepAliveTTL
-	CurrentKeepAliveTTL int64
+	// currentKeepAliveTTL may be assigned to KeepAliveTTL or RelayKeepAliveTTL
+	currentKeepAliveTTL int64
 	// KeepAliveUpdateCh is used to notify keepalive TTL changing, in order to let watcher not see a DELETE of old key
 	KeepAliveUpdateCh = make(chan int64, 10)
 )
@@ -84,8 +84,8 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 	for len(KeepAliveUpdateCh) > 0 {
 		keepAliveTTL = <-KeepAliveUpdateCh
 	}
-	// though in regular routine there's no concurrent KeepAlive, we need to handle tests
-	atomic.StoreInt64(&CurrentKeepAliveTTL, keepAliveTTL)
+	// a test concurrently call KeepAlive though in normal running we don't do that
+	atomic.StoreInt64(&currentKeepAliveTTL, keepAliveTTL)
 
 	k := common.WorkerKeepAliveKeyAdapter.Encode(workerName)
 	workerEventJSON, err := WorkerEvent{
@@ -145,6 +145,11 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 			keepAliveCancel() // make go vet happy
 			return nil
 		case newTTL := <-KeepAliveUpdateCh:
+			if newTTL == currentKeepAliveTTL {
+				log.L().Info("ignore same keepalive TTL change", zap.Int64("TTL", newTTL))
+				continue
+			}
+
 			// create a new lease with new TTL, and overwrite original KV
 			oldLeaseID := leaseID
 			leaseID, err = grantAndPutKV(k, workerEventJSON, newTTL)
@@ -161,6 +166,7 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 				keepAliveCancel() // make go vet happy
 				return err
 			}
+			currentKeepAliveTTL = newTTL
 			log.L().Info("dynamically changed keepalive TTL to", zap.Int64("ttl in seconds", newTTL))
 
 			// after new keepalive is succeed, we cancel the old keepalive
