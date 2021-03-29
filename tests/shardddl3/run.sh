@@ -114,9 +114,15 @@ function DM_078_CASE() {
 }
 
 function DM_078() {
+    # start a TiDB alter-pk
+    pkill -hup tidb-server 2>/dev/null || true
+    wait_process_exit tidb-server
+    run_tidb_server 4000 $TIDB_PASSWORD $cur/conf/tidb-alter-pk-config.toml
+
     run_case 078 "single-source-pessimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int unique, a int, b varchar(10));\"" "clean_table" ""
     run_case 078 "single-source-optimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (id int unique, a int, b varchar(10));\"" "clean_table" ""
 
+    # don't revert tidb until DM_079
 }
 
 function DM_079_CASE() {
@@ -130,6 +136,11 @@ function DM_079_CASE() {
 function DM_079() {
     run_case 079 "single-source-pessimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"" "clean_table" ""
     run_case 079 "single-source-optimistic" "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"" "clean_table" ""
+
+    # revert tidb
+    pkill -hup tidb-server 2>/dev/null || true
+    wait_process_exit tidb-server
+    run_tidb_server 4000 $TIDB_PASSWORD
 }
 
 function DM_080_CASE() {
