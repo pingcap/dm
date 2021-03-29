@@ -1622,11 +1622,13 @@ function DM_132_CASE {
 
 # Expand the primary key field.
 function DM_132 {
+    run_sql_tidb "create database if not exists ${shardddl}; create table ${shardddl}.${tb} (a int, b int, primary key(a) nonclustered);"
     run_case 132 "double-source-pessimistic" \
         "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int);\"" \
         "clean_table" "pessimistic"
+    run_sql_tidb "create database if not exists ${shardddl}; create table ${shardddl}.${tb} (a int, b int, primary key(a) nonclustered);"
     run_case 132 "double-source-optimistic" \
         "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int);\"; \
@@ -1659,11 +1661,13 @@ function DM_133_CASE {
 
 # Shrink the primary key field.
 function DM_133 {
+    run_sql_tidb "create database if not exists ${shardddl}; create table ${shardddl}.${tb} (a int, b int, primary key(a,b) nonclustered);"
     run_case 133 "double-source-pessimistic" \
         "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a,b));\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a,b));\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int, primary key(a,b));\"" \
         "clean_table" "pessimistic"
+    run_sql_tidb "create database if not exists ${shardddl}; create table ${shardddl}.${tb} (a int, b int, primary key(a,b) nonclustered);"
     run_case 133 "double-source-optimistic" \
         "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a,b));\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a,b));\"; \
@@ -1696,11 +1700,13 @@ function DM_134_CASE {
 
 # Change the primary key field.
 function DM_134 {
+    run_sql_tidb "create database if not exists ${shardddl}; create table ${shardddl}.${tb} (a int, b int, primary key(a) nonclustered);"
     run_case 134 "double-source-pessimistic" \
         "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a));\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a));\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb2} (a int, b int, primary key(a));\"" \
         "clean_table" "pessimistic"
+    run_sql_tidb "create database if not exists ${shardddl}; create table ${shardddl}.${tb} (a int, b int, primary key(a) nonclustered);"
     run_case 134 "double-source-optimistic" \
         "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a));\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int, b int, primary key(a));\"; \
@@ -1722,11 +1728,13 @@ function DM_135_CASE {
 }
 
 function DM_135() {
+    run_sql_tidb "create database if not exists ${shardddl}; create table ${shardddl}.${tb} (a int auto_increment, b int, primary key(a) nonclustered);"
     run_case 135 "double-source-pessimistic" \
         "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int auto_increment primary key, b int);\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int auto_increment primary key, b int);\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb2} (a int auto_increment primary key, b int);\"" \
         "clean_table" "pessimistic"
+    run_sql_tidb "create database if not exists ${shardddl}; create table ${shardddl}.${tb} (a int auto_increment, b int, primary key(a) nonclustered);"
     run_case 135 "double-source-optimistic" \
         "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int auto_increment primary key, b int);\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb1} (a int auto_increment primary key, b int);\"; \
