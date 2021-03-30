@@ -1037,7 +1037,7 @@ function DM_117_CASE {
         "add column b that wasn't fully dropped in downstream" 1
 
     # try to fix data
-    echo 'create table tb1(a int primary key, b int, c int);' > ${WORK_DIR}/schema.sql
+    echo 'create table tb1(a int primary key, b int, c int) engine=innodb default charset=latin1;' > ${WORK_DIR}/schema.sql
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-schema set test ${WORK_DIR}/schema.sql -s mysql-replica-01 -d ${shardddl1} -t ${tb1}" \
         "\"result\": true" 2
@@ -1055,9 +1055,9 @@ function DM_117_CASE {
 # Drop multiple fields and rollback.
 function DM_117 {
     run_case 117 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int, c int);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int) engine=innodb default charset=latin1;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int) engine=innodb default charset=latin1;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b int, c int) engine=innodb default charset=latin1;\"" \
     "clean_table" "optimistic"
 }
 
@@ -2091,7 +2091,7 @@ function DM_147_CASE {
         "add column c that wasn't fully dropped in downstream" 1
 
     # try to fix data
-    echo 'create table tbl(a int primary key, b int, c int);' > ${WORK_DIR}/schema.sql
+    echo 'create table tbl(a int primary key, b int, c int) engine=innodb default charset=latin1;' > ${WORK_DIR}/schema.sql
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-schema set test ${WORK_DIR}/schema.sql -s mysql-replica-01 -d ${shardddl1} -t ${tb1}" \
         "\"result\": true" 2
@@ -2115,9 +2115,9 @@ function DM_147_CASE {
 # Add and Drop multiple fields and then rollback.
 function DM_147 {
     run_case 147 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c int);\"" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c int) engine=innodb default charset=latin1;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c int) engine=innodb default charset=latin1;\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c int) engine=innodb default charset=latin1;\"" \
     "clean_table" "optimistic"
 }
 
