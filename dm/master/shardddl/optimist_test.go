@@ -37,7 +37,7 @@ import (
 
 type testOptimist struct{}
 
-var _ = Suite(&testOptimist{})
+var _ = SerialSuites(&testOptimist{})
 
 // clear keys in etcd test cluster.
 func clearOptimistTestSourceInfoOperation(c *C) {
