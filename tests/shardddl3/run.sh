@@ -2100,6 +2100,13 @@ function DM_147_CASE {
         "handle-error test replace \"alter table ${shardddl1}.${tb1} drop column b\"" \
         "\"result\": true" 2 \
         "\"source 'mysql-replica-02' has no error\"" 1
+    
+    
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "because schema conflict detected" 100 \
+        "add column c that wasn't fully dropped in downstream" 100
+
 
     run_sql_tidb "update ${shardddl}.${tb} set c=null where a=1;"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
