@@ -1037,7 +1037,7 @@ function DM_117_CASE {
         "add column b that wasn't fully dropped in downstream" 1
 
     # try to fix data
-    echo 'CREATE TABLE `tb1` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' > ${WORK_DIR}/schema.sql
+    echo 'create table tb1(a int primary key, b int, c int);' > ${WORK_DIR}/schema.sql
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-schema set test ${WORK_DIR}/schema.sql -s mysql-replica-01 -d ${shardddl1} -t ${tb1}" \
         "\"result\": true" 2
@@ -2091,7 +2091,7 @@ function DM_147_CASE {
         "add column c that wasn't fully dropped in downstream" 1
 
     # try to fix data
-    echo 'CREATE TABLE `tb1` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' > ${WORK_DIR}/schema.sql
+    echo 'create table tbl(a int primary key, b int, c int);' > ${WORK_DIR}/schema.sql
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-schema set test ${WORK_DIR}/schema.sql -s mysql-replica-01 -d ${shardddl1} -t ${tb1}" \
         "\"result\": true" 2
@@ -2100,11 +2100,6 @@ function DM_147_CASE {
         "handle-error test replace \"alter table ${shardddl1}.${tb1} drop column b\"" \
         "\"result\": true" 2 \
         "\"source 'mysql-replica-02' has no error\"" 1
-
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
-        "because schema conflict detected" 100 \
-        "add column c that wasn't fully dropped in downstream" 100
 
     run_sql_tidb "update ${shardddl}.${tb} set c=null where a=1;"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -2534,6 +2529,7 @@ function run() {
     init_cluster
     init_database
 
+    DM_117
     DM_147
     return
 
