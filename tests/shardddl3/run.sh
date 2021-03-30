@@ -2523,9 +2523,9 @@ function DM_DropAddColumn() {
     do
     echo "run DM_DropAddColumn case #${i}"
     run_case DropAddColumn "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"" \
-    "clean_table" "optimistic" "$i"
+        "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"; \
+            run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b int, c int);\"" \
+        "clean_table" "optimistic" "$i"
     done
 }
 
