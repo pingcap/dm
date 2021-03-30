@@ -137,15 +137,7 @@ func (s *Server) Start() error {
 	}
 	if relaySource != nil {
 		log.L().Warn("worker has been assigned relay before keepalive", zap.String("relay source", relaySource.SourceID))
-		w, err2 := s.getOrStartWorker(relaySource, true)
-		s.setSourceStatus(relaySource.SourceID, err2, true)
-		if err2 != nil {
-			// if DM-worker can't handle pre-assigned source before keepalive, it simply exits with the error,
-			// because no re-assigned mechanism exists for keepalived DM-worker yet.
-			return err2
-		}
-		s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
-		if err2 = w.EnableRelay(); err2 != nil {
+		if err2 := s.enableRelay(relaySource, true); err2 != nil {
 			return err2
 		}
 	}
@@ -164,17 +156,10 @@ func (s *Server) Start() error {
 	}
 	if !bound.IsEmpty() {
 		log.L().Warn("worker has been assigned source before keepalive", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted))
-		w, err2 := s.getOrStartWorker(&sourceCfg, true)
-		s.setSourceStatus(bound.Source, err2, true)
-		if err2 != nil {
-			// if DM-worker can't handle pre-assigned source before keepalive, it simply exits with the error,
-			// because no re-assigned mechanism exists for keepalived DM-worker yet.
+		if err2 := s.enableHandleSubtasks(&sourceCfg, true); err2 != nil {
 			return err2
 		}
-		if err2 = w.EnableHandleSubtasks(); err2 != nil {
-			return err2
-		}
-		w.l.Info("started to handle mysql source", zap.String("sourceCfg", sourceCfg.String()))
+		log.L().Info("started to handle mysql source", zap.String("sourceCfg", sourceCfg.String()))
 	}
 
 	s.wg.Add(1)
@@ -350,15 +335,9 @@ func (s *Server) observeRelayConfig(ctx context.Context, rev int64) error {
 								log.L().Error("fail to stop worker", zap.Error(err))
 								return err // return if failed to stop the worker.
 							}
-							w, err2 := s.getOrStartWorker(relaySource, false)
-							s.setSourceStatus(relaySource.SourceID, err2, false)
-							if err2 != nil {
-								w.l.Error("fail to recover observeRelayConfig",
-									zap.String("relay source", relaySource.SourceID),
-									zap.Error(err2))
-							}
-							s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
-							return w.EnableRelay()
+							log.L().Info("will recover observeRelayConfig",
+								zap.String("relay source", relaySource.SourceID))
+							return s.enableRelay(relaySource, false)
 						}()
 						if err2 != nil {
 							return err2
@@ -442,15 +421,9 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 								log.L().Error("fail to stop worker", zap.Error(err))
 								return err // return if failed to stop the worker.
 							}
-							w, err2 := s.getOrStartWorker(&cfg, false)
-							if err2 == nil {
-								err2 = w.EnableHandleSubtasks()
-							}
-							s.setSourceStatus(bound.Source, err2, false)
-							if err2 != nil {
-								w.l.Error("fail to operate sourceBound on worker", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted), zap.Error(err2))
-							}
-							return nil
+							log.L().Info("will recover observeSourceBound",
+								zap.String("relay source", cfg.SourceID))
+							return s.enableHandleSubtasks(&cfg, false)
 						}()
 						if err2 != nil {
 							return err2
@@ -504,7 +477,7 @@ func (s *Server) Close() {
 	s.wg.Wait()
 }
 
-// is needLock is false, we should make sure Server has been locked in caller
+// if needLock is false, we should make sure Server has been locked in caller
 func (s *Server) getWorker(needLock bool) *Worker {
 	if needLock {
 		s.Lock()
@@ -513,7 +486,7 @@ func (s *Server) getWorker(needLock bool) *Worker {
 	return s.worker
 }
 
-// is needLock is false, we should make sure Server has been locked in caller
+// if needLock is false, we should make sure Server has been locked in caller
 func (s *Server) setWorker(worker *Worker, needLock bool) {
 	if needLock {
 		s.Lock()
@@ -662,12 +635,25 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 	if !ok {
 		return terror.ErrWorkerFailToGetSourceConfigFromEtcd.Generate(bound.Source)
 	}
-	w, err := s.getOrStartWorker(&sourceCfg, true)
-	s.setSourceStatus(bound.Source, err, true)
+	return s.enableHandleSubtasks(&sourceCfg, true)
+}
+
+func (s *Server) enableHandleSubtasks(sourceCfg *config.SourceConfig, needLock bool) error {
+	if needLock {
+		s.Lock()
+		defer s.Unlock()
+	}
+
+	w, err := s.getOrStartWorker(sourceCfg, false)
+	s.setSourceStatus(sourceCfg.SourceID, err, false)
 	if err != nil {
 		return err
 	}
-	return w.EnableHandleSubtasks()
+	if err2 := w.EnableHandleSubtasks(); err2 != nil {
+		s.setSourceStatus(sourceCfg.SourceID, err2, false)
+		return err2
+	}
+	return nil
 }
 
 func (s *Server) disableHandleSubtasks(source string) error {
@@ -700,13 +686,28 @@ func (s *Server) operateRelaySource(relaySource ha.RelaySource) error {
 	if !ok {
 		return terror.ErrWorkerFailToGetSourceConfigFromEtcd.Generate(relaySource.Source)
 	}
-	w, err := s.getOrStartWorker(&sourceCfg, true)
-	s.setSourceStatus(relaySource.Source, err, true)
-	if err != nil {
-		return err
+	return s.enableRelay(&sourceCfg, true)
+}
+
+func (s *Server) enableRelay(sourceCfg *config.SourceConfig, needLock bool) error {
+	if needLock {
+		s.Lock()
+		defer s.Unlock()
+	}
+
+	w, err2 := s.getOrStartWorker(sourceCfg, false)
+	s.setSourceStatus(sourceCfg.SourceID, err2, false)
+	if err2 != nil {
+		// if DM-worker can't handle pre-assigned source before keepalive, it simply exits with the error,
+		// because no re-assigned mechanism exists for keepalived DM-worker yet.
+		return err2
 	}
 	s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
-	return w.EnableRelay()
+	if err2 = w.EnableRelay(); err2 != nil {
+		s.setSourceStatus(sourceCfg.SourceID, err2, false)
+		return err2
+	}
+	return nil
 }
 
 func (s *Server) disableRelay(source string) error {

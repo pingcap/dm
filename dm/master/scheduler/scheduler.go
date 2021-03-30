@@ -1682,7 +1682,7 @@ func (s *Scheduler) deleteWorker(name string) {
 // - update the stage of worker to `Bound`.
 // - record the bound relationship and last bound relationship in the scheduler.
 // this func is called after the bound relationship existed in etcd.
-// TODO: update s.unbounds here
+// TODO: we could only let updateStatusForBound and updateStatusForUnbound to update s.unbounds/bounds/lastBound
 func (s *Scheduler) updateStatusForBound(w *Worker, b ha.SourceBound) error {
 	err := w.ToBound(b)
 	if err != nil {
