@@ -381,7 +381,7 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 		default:
 		}
 
-		if rand.Intn(1000) < 10 {
+		if rand.Intn(3000) < 10 {
 			query, err = randDDL(t.ss)
 			if err != nil {
 				return err
