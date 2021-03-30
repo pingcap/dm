@@ -1952,6 +1952,8 @@ function DM_142_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(120),(121),(122),(123),(124),(125);"
     run_sql_source2 "alter table ${shardddl1}.${tb2} add partition (partition p1 values less than (200));"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(130),(131),(132),(133),(134),(135);"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 # Add new partition.
@@ -1980,6 +1982,8 @@ function DM_143_CASE {
     run_sql_source1 "alter table ${shardddl1}.${tb1} drop partition p1;"
     run_sql_source2 "alter table ${shardddl1}.${tb1} drop partition p1;"
     run_sql_source2 "alter table ${shardddl1}.${tb2} drop partition p1;"
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 # Remove partition.
