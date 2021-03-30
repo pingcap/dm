@@ -27,24 +27,9 @@ alter table t2 drop column c1;
 insert into t1 (id, c2) values (100006, '120006');
 insert into t2 (id, c2, c3) values (200006, '220006', 230006);
 
-alter table t2 add column c1 varchar(20);
--- at this point:
---      t1(id,     c2)
---      t2(id, c1, c2, c3)
-insert into t2 (id, c1, c2, c3) values (200007, '210007', '220007', 230007);
-insert into t1 (id, c2) values (100007, '120007');
-
-alter table t2 drop column c1;
--- at this point:
---      t1(id, c2)
---      t2(id, c2, c3)
-insert into t1 (id, c2) values (100008, '120008');
-insert into t2 (id, c2, c3) values (200008, '220008', 230008);
-
 alter table t1 add column c3 int;
 -- at this point:
 --      t1(id, c2, c3)
 --      t2(id, c2, c3)
-insert into t2 (id, c2, c3) values (200009, '220009', 230009);
-insert into t1 (id, c2, c3) values (100009, '120009', 130009);
-
+insert into t2 (id, c2, c3) values (200007, '220007', 230007);
+insert into t1 (id, c2, c3) values (100007, '120007', 130007);
