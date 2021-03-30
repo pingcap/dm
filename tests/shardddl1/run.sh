@@ -577,8 +577,7 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
         "\"result\": true" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "resume-task test -s mysql-replica-02" \
-        "\"result\": true" 2
+        "resume-task test -s mysql-replica-02"
 
     # source2.table2's ddl fails
     # Unknown column 'a' in 'tb2'
