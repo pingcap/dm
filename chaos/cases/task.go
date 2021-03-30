@@ -59,6 +59,8 @@ type task struct {
 	tables  []string
 	taskCfg config2.TaskConfig
 	results results
+
+	caseGenerator *CaseGenerator
 }
 
 // newTask creates a new task instance.
@@ -82,7 +84,7 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 		if err2 != nil {
 			return nil, err2
 		}
-		conn, err2 := createDBConn(ctx, db, schema)
+		conn, err2 := createDBConn(context.Background(), db, schema)
 		if err2 != nil {
 			return nil, err2
 		}
@@ -95,24 +97,25 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 	if err != nil {
 		return nil, err
 	}
-	targetConn, err := createDBConn(ctx, targetDB, schema)
+	targetConn, err := createDBConn(context.Background(), targetDB, schema)
 	if err != nil {
 		return nil, err
 	}
 
 	t := &task{
-		logger:      log.L().WithFields(zap.String("case", taskCfg.Name)),
-		ctx:         ctx,
-		cli:         cli,
-		ss:          sqlsmith.New(),
-		sourceDBs:   sourceDBs,
-		sourceConns: sourceConns,
-		targetDB:    targetDB,
-		targetConn:  targetConn,
-		schema:      schema,
-		tables:      make([]string, 0),
-		taskCfg:     taskCfg,
-		results:     res,
+		logger:        log.L().WithFields(zap.String("case", taskCfg.Name)),
+		ctx:           ctx,
+		cli:           cli,
+		ss:            sqlsmith.New(),
+		sourceDBs:     sourceDBs,
+		sourceConns:   sourceConns,
+		targetDB:      targetDB,
+		targetConn:    targetConn,
+		schema:        schema,
+		tables:        make([]string, 0),
+		taskCfg:       taskCfg,
+		results:       res,
+		caseGenerator: NewCaseGenerator(taskCfg.ShardMode),
 	}
 	t.ss.SetDB(schema)
 	return t, nil
@@ -264,6 +267,7 @@ func (t *task) createTask() error {
 
 // incrLoop enters the loop of generating incremental data and diff them.
 func (t *task) incrLoop() error {
+	t.caseGenerator.Start(t.ctx, t.schema, t.tables)
 	for {
 		select {
 		case <-t.ctx.Done():
@@ -290,8 +294,12 @@ func (t *task) incrLoop() error {
 
 // genIncrData generates data for the incremental stage in one round.
 // NOTE: it return nil for context done.
-func (t *task) genIncrData(ctx context.Context) (err error) {
+func (t *task) genIncrData(pCtx context.Context) (err error) {
 	t.logger.Info("generating data for incremental stage")
+	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
+	defer cancel()
+
+	getNewCase := true
 
 	defer func() {
 		if errors.Cause(err) == context.Canceled || errors.Cause(err) == context.DeadlineExceeded {
@@ -306,7 +314,7 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 					t.logger.Warn("ignore error when generating data for incremental stage", zap.Error(err))
 					// we don't known which connection was bad, so simply reset all of them for the next round.
 					for _, conn := range t.sourceConns {
-						if err2 := conn.resetConn(ctx); err2 != nil {
+						if err2 := conn.resetConn(context.Background()); err2 != nil {
 							t.logger.Warn("fail to reset connection", zap.Error(err2))
 						}
 						err = nil
@@ -316,12 +324,42 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 		}
 	}()
 
+	runCaseSQLs := func() error {
+		testSQLs := t.caseGenerator.GetSQLs()
+		if testSQLs == nil {
+			getNewCase = false
+			return nil
+		}
+		for _, testSQL := range testSQLs {
+			log.L().Warn("execute test case sql", zap.String("ddl", testSQL.statement))
+			if err2 := t.sourceConns[testSQL.source].execSQLs(ctx, testSQL.statement); err2 != nil {
+				return err2
+			}
+		}
+		return nil
+	}
+
+	defer func() {
+		for {
+			if !getNewCase {
+				return
+			}
+			log.L().Warn("complete test case sql")
+
+			if err2 := runCaseSQLs(); err2 != nil {
+				err = err2
+				return
+			}
+		}
+	}()
+
 	for {
 		select {
-		case <-ctx.Done():
+		case <-pCtx.Done():
 			return nil
 		default:
 		}
+
 		query, typ, err := randDML(t.ss)
 		if err != nil {
 			return err
@@ -343,7 +381,7 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 		default:
 		}
 
-		if rand.Intn(3000) < 10 {
+		if rand.Intn(1000) < 10 {
 			query, err = randDDL(t.ss)
 			if err != nil {
 				return err
@@ -351,8 +389,8 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 
 			// Unsupported ddl in optimistic mode. e.g. ALTER TABLE table_name ADD column column_name INT NOT NULL;
 			if t.taskCfg.ShardMode == config2.ShardOptimistic {
-				if yes, err := isNotNullNonDefaultAddCol(query); err != nil {
-					return err
+				if yes, err2 := isNotNullNonDefaultAddCol(query); err != nil {
+					return err2
 				} else if yes {
 					continue
 				}
@@ -379,6 +417,13 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 				})
 			}
 			if err = eg.Wait(); err != nil {
+				return err
+			}
+		}
+
+		if getNewCase && rand.Intn(3000) < 10 {
+			// execute sql of test cases
+			if err = runCaseSQLs(); err != nil {
 				return err
 			}
 		}

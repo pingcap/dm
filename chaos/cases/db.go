@@ -124,6 +124,8 @@ func ignoreExecSQLError(err error) bool {
 		return true
 	case errno.ErrTooBigRowsize: // HACK: we tolerate `Error 1118: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535`
 		return true
+	case errno.ErrCantDropFieldOrKey: // HACK: ignore error `Can't DROP '.*'; check that column/key exists`
+		return true
 	default:
 		return false
 	}
