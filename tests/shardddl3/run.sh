@@ -2286,13 +2286,21 @@ function DM_152_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(15,15,15.0,15);"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    # Drop all indexes.
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop index uni_a, drop index idx_c;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop index uni_a, drop index idx_c;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop index uni_a, drop index idx_c;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(16,16,16.0,16);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(17,17,17.0,17);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(18,18,18.0,18);"
+
     # Drop all fields.
     run_sql_source1 "alter table ${shardddl1}.${tb1} drop column a, drop column c, drop column d;"
     run_sql_source2 "alter table ${shardddl1}.${tb1} drop column a, drop column c, drop column d;"
     run_sql_source2 "alter table ${shardddl1}.${tb2} drop column a, drop column c, drop column d;"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(16);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(17);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(18);"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(19);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(20);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(21);"
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
@@ -2523,7 +2531,7 @@ function run() {
 
     start=71
     end=152
-    except=(072 074 075 083 084 087 088 089 090 091 092 093)
+    except=(072 074 075 083 084 087 088 089 090 091 092 093 147)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
             continue
