@@ -2100,13 +2100,6 @@ function DM_147_CASE {
         "handle-error test replace \"alter table ${shardddl1}.${tb1} drop column b\"" \
         "\"result\": true" 2 \
         "\"source 'mysql-replica-02' has no error\"" 1
-    
-    
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
-        "because schema conflict detected" 100 \
-        "add column c that wasn't fully dropped in downstream" 100
-
 
     run_sql_tidb "update ${shardddl}.${tb} set c=null where a=1;"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -2535,14 +2528,9 @@ function DM_DropAddColumn() {
 function run() {
     init_cluster
     init_database
-
-    DM_117
-    DM_147
-    return
-
     start=71
     end=152
-    except=(072 074 075 083 084 087 088 089 090 091 092 093 147)
+    except=(072 074 075 083 084 087 088 089 090 091 092 093)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
             continue
