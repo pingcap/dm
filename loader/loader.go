@@ -1254,14 +1254,14 @@ func (q *jobQueue) startConsumers(handler func(ctx context.Context, job *restore
 					// test condition for `job.session` means db session still could be controlled outside,
 					// it's used in unit test for now.
 					if session == nil && job.session == nil {
-						baseConn, err := job.loader.toDB.GetBaseConn(q.ctx)
-						if err != nil {
-							return err
+						baseConn, err2 := job.loader.toDB.GetBaseConn(q.ctx)
+						if err2 != nil {
+							return err2
 						}
 						defer func(baseConn *conn.BaseConn) {
-							err := job.loader.toDB.CloseBaseConn(baseConn)
-							if err != nil {
-								job.loader.logger.Warn("fail to close connection", zap.Error(err))
+							err2 := job.loader.toDB.CloseBaseConn(baseConn)
+							if err2 != nil {
+								job.loader.logger.Warn("fail to close connection", zap.Error(err2))
 							}
 						}(baseConn)
 						session = &DBConn{
@@ -1304,9 +1304,9 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	dbRestoreQueue.startConsumers(func(ctx context.Context, job *restoreSchemaJob) error {
 		// restore database schema
 		job.loader.logger.Info("start to create schema", zap.String("schema file", job.filepath))
-		err := job.loader.restoreSchema(ctx, job.session, job.filepath, job.database)
-		if err != nil {
-			return err
+		err2 := job.loader.restoreSchema(ctx, job.session, job.filepath, job.database)
+		if err2 != nil {
+			return err2
 		}
 		job.loader.logger.Info("finish to create schema", zap.String("schema file", job.filepath))
 		return nil
@@ -1344,9 +1344,9 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	tblRestoreQueue := newJobQueue(ctx, concurrency, concurrency /** length of queue */)
 	tblRestoreQueue.startConsumers(func(ctx context.Context, job *restoreSchemaJob) error {
 		job.loader.logger.Info("start to create table", zap.String("table file", job.filepath))
-		err := job.loader.restoreTable(ctx, job.session, job.filepath, job.database, job.table)
-		if err != nil {
-			return err
+		err2 := job.loader.restoreTable(ctx, job.session, job.filepath, job.database, job.table)
+		if err2 != nil {
+			return err2
 		}
 		job.loader.logger.Info("finish to create table", zap.String("table file", job.filepath))
 		return nil
