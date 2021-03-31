@@ -930,6 +930,16 @@ function DM_RemoveLock() {
             "bound" 2
 }
 
+function restart_master() {
+    echo "restart dm-master"
+    ps aux | grep dm-master |awk '{print $2}'|xargs kill || true
+    check_port_offline $MASTER_PORT 20
+    sleep 2
+
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+}
+
 function DM_RestartMaster_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
@@ -958,11 +968,7 @@ function DM_RestartMaster_CASE() {
                 'mysql-replica-02-`shardddl1`.`tb1`' 1
     fi
 
-    echo "restart dm-master"
-    ps aux | grep dm-master |awk '{print $2}'|xargs kill || true
-    check_port_offline $MASTER_PORT 20
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    restart_master
 
     if [[ "$1" = "pessimistic" ]]; then
         run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -995,8 +1001,6 @@ function DM_RestartMaster() {
     "clean_table" "optimistic"
 }
 
-<<<<<<< HEAD
-=======
 function restart_master_on_pos() {
     if [ "$1" = "$2" ]; then
         restart_master
@@ -1085,7 +1089,6 @@ function DM_DropAddColumn() {
     done
 }
 
->>>>>>> 8cd3e8a4... test: fix unstabled drop then add column (#1548)
 function run() {
     init_cluster
     init_database
@@ -1103,6 +1106,8 @@ function run() {
     DM_RemoveLock
 
     DM_RestartMaster
+
+    DM_DropAddColumn
 }
 
 cleanup_data $shardddl
