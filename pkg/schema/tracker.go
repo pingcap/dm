@@ -45,8 +45,8 @@ const (
 var (
 	// don't read clustered index variable from downstream because it may changed during syncing
 	// we always using OFF tidb_enable_clustered_index unless user set it in config
-	downstreamVars     = []string{"sql_mode", "tidb_skip_utf8_check"}
-	defaultSessionVars = map[string]string{"tidb_enable_clustered_index": "OFF"}
+	downstreamVars    = []string{"sql_mode", "tidb_skip_utf8_check"}
+	defaultGlobalVars = map[string]string{"tidb_enable_clustered_index": "OFF"}
 )
 
 // Tracker is used to track schema locally.
@@ -58,6 +58,7 @@ type Tracker struct {
 
 // NewTracker creates a new tracker. `sessionCfg` will be set as tracker's session variables if specified, or retrieve
 // some variable from downstream TiDB using `tidbConn`.
+// NOTE sessionCfg is a reference to caller
 func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, tidbConn *conn.BaseConn) (*Tracker, error) {
 	// NOTE: tidb uses a **global** config so can't isolate tracker's config from each other. If that isolation is needed,
 	// we might SetGlobalConfig before every call to tracker, or use some patch like https://github.com/bouk/monkey
@@ -97,13 +98,6 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 		}
 	}
 
-	// set default session vars even downstream tidb doesn't have it
-	for k, v := range defaultSessionVars {
-		if _, ok := sessionCfg[k]; !ok {
-			sessionCfg[k] = v
-		}
-	}
-
 	store, err := mockstore.NewMockStore(mockstore.WithStoreType(mockstore.MockTiKV))
 	if err != nil {
 		return nil, err
@@ -120,6 +114,19 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 	se, err := session.CreateSession(store)
 	if err != nil {
 		return nil, err
+	}
+
+	for k := range defaultGlobalVars {
+		// user's config has highest priority
+		if v, ok := sessionCfg[k]; ok {
+			defaultGlobalVars[k] = v
+		}
+	}
+	for k, v := range defaultGlobalVars {
+		err = se.GetSessionVars().GlobalVarsAccessor.SetGlobalSysVar(k, v)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	for k, v := range sessionCfg {
