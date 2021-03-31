@@ -146,6 +146,7 @@ vet:
 	$(GO) build -o bin/shadow golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow
 	@echo "vet"
 	@$(GO) vet -composites=false $(PACKAGES)
+	@echo "ok"
 	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES)
 
 terror_check:
