@@ -85,6 +85,20 @@ function run() {
     new_relay_log_count_2=$(($(ls $WORK_DIR/worker2/relay-dir/$server_uuid_2 | wc -l) - 1))
     [ "$new_relay_log_count_1" -eq 1 ]
     [ "$new_relay_log_count_2" -eq 1 ]
+
+    pkill -hup -f dm-worker1.toml 2>/dev/null || true
+    wait_pattern_exit dm-worker1.toml
+    pkill -hup -f dm-worker2.toml 2>/dev/null || true
+    wait_pattern_exit dm-worker2.toml
+
+    # if all relay workers are offline, relay-not-enabled worker should continue to sync
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status -s $SOURCE_ID1" \
+        "\"result\": true" 2 \
+        "\"worker\": \"worker3\"" 1
+
+    run_sql_file $cur/data/db1.increment4.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 cleanup_data $TEST_NAME
