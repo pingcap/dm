@@ -327,12 +327,6 @@ func (o *Optimist) recoverLocks(
 	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm)
 	// build lock and restore table info
 	o.logger.Info("rebuild locks and tables")
-	o.logger.Debug("(REMOVE ME) will rebuild locks and tables",
-		zap.Any("info map", ifm),
-		zap.Any("operation map", opm),
-		zap.Any("column map", colm),
-		zap.Any("lockJoined", lockJoined),
-		zap.Any("lockTTS", lockTTS))
 	o.lk.RebuildLocksAndTables(o.cli, ifm, colm, lockJoined, lockTTS)
 	// sort infos by revision
 	infos := sortInfos(ifm)
