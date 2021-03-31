@@ -108,7 +108,7 @@ func DoOpsInOneTxnWithRetry(cli *clientv3.Client, ops ...clientv3.Op) (*clientv3
 	ret, _, err := etcdDefaultTxnStrategy.Apply(tctx, etcdDefaultTxnRetryParam, func(t *tcontext.Context) (ret interface{}, err error) {
 		resp, err := cli.Txn(ctx).Then(ops...).Commit()
 		if err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 		return resp, nil
 	})
