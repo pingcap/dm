@@ -262,6 +262,7 @@ jobs:
       run: |
         mkdir ./logs
         sudo cp -r -L /var/log/containers/. ./logs
+        sudo find /var/lib/ -type f | grep -i dm-.*log$ | sudo xargs -i cp {} ./logs
         sudo chown -R runner ./logs
     # Update logs as artifact seems not stable, so we set `continue-on-error: true` here.
     - name: Upload logs

@@ -55,6 +55,7 @@ spec:
             - "--worker-addr=0.0.0.0:8262"
             - "--advertise-addr=$(MY_POD_NAME).dm-worker.$(MY_POD_NAMESPACE):8262"
             - "--join=dm-master-0.dm-master.$(MY_POD_NAMESPACE):8261,dm-master-1.dm-master.$(MY_POD_NAMESPACE):8261,dm-master-2.dm-master.$(MY_POD_NAMESPACE):8261"
+            - "--log-file=/var/log/$(MY_POD_NAME).log"
           readinessProbe:
             httpGet:
               port: 8262
