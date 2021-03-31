@@ -1771,3 +1771,43 @@ func createTableInfo(c *check.C, p *parser.Parser, se sessionctx.Context, tableI
 	}
 	return info
 }
+
+type testEtcd struct {
+}
+
+var _ = check.Suite(&testEtcd{})
+
+func (t *testEtcd) TestEtcdAutoCompaction(c *check.C) {
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+
+	cfg.DataDir = c.MkDir()
+	cfg.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg.AutoCompactionRetention = "1s"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s := NewServer(cfg)
+	c.Assert(s.Start(ctx), check.IsNil)
+
+	etcdCli, err := clientv3.New(clientv3.Config{
+		Endpoints: []string{cfg.MasterAddr},
+	})
+	c.Assert(err, check.IsNil)
+
+	for i := 0; i < 100; i++ {
+		_, err = etcdCli.Put(ctx, "key", fmt.Sprintf("%03d", i))
+		c.Assert(err, check.IsNil)
+	}
+	time.Sleep(3 * time.Second)
+	resp, err := etcdCli.Get(ctx, "key")
+	c.Assert(err, check.IsNil)
+
+	utils.WaitSomething(10, time.Second, func() bool {
+		_, err = etcdCli.Get(ctx, "key", clientv3.WithRev(resp.Header.Revision-1))
+		return err != nil
+	})
+	c.Assert(err, check.ErrorMatches, ".*required revision has been compacted.*")
+
+	cancel()
+	s.Close()
+}

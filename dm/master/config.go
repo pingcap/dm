@@ -37,11 +37,15 @@ import (
 )
 
 const (
-	defaultRPCTimeout          = "30s"
-	defaultNamePrefix          = "dm-master"
-	defaultDataDirPrefix       = "default"
-	defaultPeerUrls            = "http://127.0.0.1:8291"
-	defaultInitialClusterState = embed.ClusterStateFlagNew
+	defaultRPCTimeout              = "30s"
+	defaultNamePrefix              = "dm-master"
+	defaultDataDirPrefix           = "default"
+	defaultPeerUrls                = "http://127.0.0.1:8291"
+	defaultInitialClusterState     = embed.ClusterStateFlagNew
+	defaultAutoCompactionMode      = "periodic"
+	defaultAutoCompactionRetention = "1h"
+	defaultQuotaBackendBytes       = 2 * 1024 * 1024 * 1024 // 2GB
+	quotaBackendBytesLowerBound    = 500 * 1024 * 1024      // 500MB
 )
 
 var (
@@ -75,6 +79,9 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.PeerUrls, "peer-urls", defaultPeerUrls, "URLs for peer traffic")
 	fs.StringVar(&cfg.AdvertisePeerUrls, "advertise-peer-urls", "", `advertise URLs for peer traffic (default "${peer-urls}")`)
 	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: cluster's "${master-addr}" list, e.g. "127.0.0.1:8261,127.0.0.1:18261"`)
+	fs.StringVar(&cfg.AutoCompactionMode, "auto-compaction-mode", defaultAutoCompactionMode, `etcd's auto-compaction-mode, either 'periodic' or 'revision'`)
+	fs.StringVar(&cfg.AutoCompactionRetention, "auto-compaction-retention", defaultAutoCompactionRetention, `etcd's auto-compaction-retention, accept values like '5h' or '5' (5 hours in 'periodic' mode or 5 revisions in 'revision')`)
+	fs.Int64Var(&cfg.QuotaBackendBytes, "quota-backend-bytes", defaultQuotaBackendBytes, `etcd's storage quota in bytes`)
 
 	fs.StringVar(&cfg.SSLCA, "ssl-ca", "", "path of file that contains list of trusted SSL CAs for connection")
 	fs.StringVar(&cfg.SSLCert, "ssl-cert", "", "path of file that contains X509 certificate in PEM format for connection")
@@ -108,13 +115,16 @@ type Config struct {
 	// etcd relative config items
 	// NOTE: we use `MasterAddr` to generate `ClientUrls` and `AdvertiseClientUrls`
 	// NOTE: more items will be add when adding leader election
-	Name                string `toml:"name" json:"name"`
-	DataDir             string `toml:"data-dir" json:"data-dir"`
-	PeerUrls            string `toml:"peer-urls" json:"peer-urls"`
-	AdvertisePeerUrls   string `toml:"advertise-peer-urls" json:"advertise-peer-urls"`
-	InitialCluster      string `toml:"initial-cluster" json:"initial-cluster"`
-	InitialClusterState string `toml:"initial-cluster-state" json:"initial-cluster-state"`
-	Join                string `toml:"join" json:"join"` // cluster's client address (endpoints), not peer address
+	Name                    string `toml:"name" json:"name"`
+	DataDir                 string `toml:"data-dir" json:"data-dir"`
+	PeerUrls                string `toml:"peer-urls" json:"peer-urls"`
+	AdvertisePeerUrls       string `toml:"advertise-peer-urls" json:"advertise-peer-urls"`
+	InitialCluster          string `toml:"initial-cluster" json:"initial-cluster"`
+	InitialClusterState     string `toml:"initial-cluster-state" json:"initial-cluster-state"`
+	Join                    string `toml:"join" json:"join"` // cluster's client address (endpoints), not peer address
+	AutoCompactionMode      string `toml:"auto-compaction-mode" json:"auto-compaction-mode"`
+	AutoCompactionRetention string `toml:"auto-compaction-retention" json:"auto-compaction-retention"`
+	QuotaBackendBytes       int64  `toml:"quota-backend-bytes" json:"quota-backend-bytes"`
 
 	// directory path used to store source config files when upgrading from v1.0.x.
 	// if this path set, DM-master leader will try to upgrade from v1.0.x to the current version.
@@ -301,6 +311,13 @@ func (c *Config) adjust() error {
 		c.Join = utils.WrapSchemes(c.Join, c.SSLCA != "")
 	}
 
+	if c.QuotaBackendBytes < quotaBackendBytesLowerBound {
+		log.L().Warn("quota-backend-bytes is too low, will adjust it",
+			zap.Int64("from", c.QuotaBackendBytes),
+			zap.Int64("to", quotaBackendBytesLowerBound))
+		c.QuotaBackendBytes = quotaBackendBytesLowerBound
+	}
+
 	return err
 }
 
@@ -345,6 +362,9 @@ func (c *Config) genEmbedEtcdConfig(cfg *embed.Config) (*embed.Config, error) {
 
 	cfg.InitialCluster = c.InitialCluster
 	cfg.ClusterState = c.InitialClusterState
+	cfg.AutoCompactionMode = c.AutoCompactionMode
+	cfg.AutoCompactionRetention = c.AutoCompactionRetention
+	cfg.QuotaBackendBytes = c.QuotaBackendBytes
 
 	err = cfg.Validate() // verify & trigger the builder
 	if err != nil {
