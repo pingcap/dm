@@ -43,7 +43,10 @@ const (
 )
 
 var (
-	sessionVars = []string{"sql_mode", "tidb_skip_utf8_check"}
+	// don't read clustered index variable from downstream because it may changed during syncing
+	// we always using OFF tidb_enable_clustered_index unless user set it in config
+	downstreamVars     = []string{"sql_mode", "tidb_skip_utf8_check"}
+	defaultSessionVars = map[string]string{"tidb_enable_clustered_index": "OFF"}
 )
 
 // Tracker is used to track schema locally.
@@ -70,8 +73,8 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 
 	tctx := tcontext.NewContext(ctx, log.With(zap.String("component", "schema-tracker"), zap.String("task", task)))
 	// get variables if user doesn't specify
-	// all cfg in sessionVars should be lower case
-	for _, k := range sessionVars {
+	// all cfg in downstreamVars should be lower case
+	for _, k := range downstreamVars {
 		if _, ok := sessionCfg[k]; !ok {
 			var ignoredColumn interface{}
 			rows, err2 := tidbConn.QuerySQL(tctx, fmt.Sprintf("SHOW VARIABLES LIKE '%s'", k))
@@ -91,6 +94,13 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 			if err2 = rows.Err(); err2 != nil {
 				return nil, err2
 			}
+		}
+	}
+
+	// set default session vars even downstream tidb doesn't have it
+	for k, v := range defaultSessionVars {
+		if _, ok := sessionCfg[k]; !ok {
+			sessionCfg[k] = v
 		}
 	}
 
