@@ -58,7 +58,7 @@ type Tracker struct {
 
 // NewTracker creates a new tracker. `sessionCfg` will be set as tracker's session variables if specified, or retrieve
 // some variable from downstream TiDB using `tidbConn`.
-// NOTE sessionCfg is a reference to caller
+// NOTE **sessionCfg is a reference to caller**
 func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, tidbConn *conn.BaseConn) (*Tracker, error) {
 	// NOTE: tidb uses a **global** config so can't isolate tracker's config from each other. If that isolation is needed,
 	// we might SetGlobalConfig before every call to tracker, or use some patch like https://github.com/bouk/monkey
@@ -117,19 +117,19 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 	}
 
 	for k := range defaultGlobalVars {
-		// user's config has highest priority
-		if v, ok := sessionCfg[k]; ok {
-			defaultGlobalVars[k] = v
-		}
-	}
-	for k, v := range defaultGlobalVars {
-		err = se.GetSessionVars().GlobalVarsAccessor.SetGlobalSysVar(k, v)
-		if err != nil {
-			return nil, err
+		// user's config has highest priority, we will set sessionCfg below, so here simply delete it
+		if _, ok := sessionCfg[k]; ok {
+			delete(defaultGlobalVars, k)
 		}
 	}
 
 	for k, v := range sessionCfg {
+		err = se.GetSessionVars().SetSystemVar(k, v)
+		if err != nil {
+			return nil, err
+		}
+	}
+	for k, v := range defaultGlobalVars {
 		err = se.GetSessionVars().SetSystemVar(k, v)
 		if err != nil {
 			return nil, err
