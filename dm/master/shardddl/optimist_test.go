@@ -1169,3 +1169,66 @@ func (t *testOptimist) TestBuildLockJoinedAndTable(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 0)
 }
+
+func (t *testOptimist) TestBuildLockWithInitSchema(c *C) {
+	defer clearOptimistTestSourceInfoOperation(c)
+
+	var (
+		logger     = log.L()
+		o          = NewOptimist(&logger)
+		task       = "task"
+		source1    = "mysql-replica-1"
+		source2    = "mysql-replica-2"
+		downSchema = "db"
+		downTable  = "tbl"
+		st1        = optimism.NewSourceTables(task, source1)
+		st2        = optimism.NewSourceTables(task, source2)
+		p          = parser.New()
+		se         = mock.NewContext()
+		tblID      = int64(111)
+
+		ti0 = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (a INT PRIMARY KEY, b INT, c INT)`)
+		ti1 = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (a INT PRIMARY KEY, b INT)`)
+		ti2 = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (a INT PRIMARY KEY)`)
+
+		ddlDropB   = "ALTER TABLE bar dROP COLUMN b"
+		ddlDropC   = "ALTER TABLE bar DROP COLUMN c"
+		infoDropB  = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, []string{ddlDropC}, ti0, []*model.TableInfo{ti1})
+		infoDropC  = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, []string{ddlDropB}, ti1, []*model.TableInfo{ti2})
+		initSchema = optimism.NewInitSchema(task, downSchema, downTable, ti0)
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	st1.AddTable("foo", "bar-1", downSchema, downTable)
+	st2.AddTable("foo", "bar-1", downSchema, downTable)
+
+	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
+	_, err := optimism.PutSourceTables(etcdTestCli, st1)
+	c.Assert(err, IsNil)
+	_, err = optimism.PutSourceTables(etcdTestCli, st2)
+	c.Assert(err, IsNil)
+
+	_, err = optimism.PutInfo(etcdTestCli, infoDropB)
+	c.Assert(err, IsNil)
+	_, err = optimism.PutInfo(etcdTestCli, infoDropC)
+	c.Assert(err, IsNil)
+
+	stm, _, err := optimism.GetAllSourceTables(etcdTestCli)
+	c.Assert(err, IsNil)
+	o.tk.Init(stm)
+
+	ifm, _, err := optimism.GetAllInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+
+	initSchemas := map[string]map[string]map[string]optimism.InitSchema{task: {downSchema: {downTable: initSchema}}}
+	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm, initSchemas)
+	c.Assert(len(lockJoined), Equals, 1)
+	c.Assert(len(lockTTS), Equals, 1)
+	joined, ok := lockJoined[utils.GenDDLLockID(task, downSchema, downTable)]
+	c.Assert(ok, IsTrue)
+	cmp, err := joined.Compare(schemacmp.Encode(ti0))
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
+}
