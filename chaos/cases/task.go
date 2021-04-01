@@ -353,10 +353,12 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 			}
 
 			if err2 := runCaseSQLs(); err2 != nil {
+				log.L().Warn("get error", log.ShortError(err2))
 				err = err2
 				return
 			}
 			if err2 := t.updateSchema(); err2 != nil {
+				log.L().Warn("get error", log.ShortError(err2))
 				err = err2
 				return
 			}
@@ -436,6 +438,7 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 		if getNewCase && rand.Intn(1000) < 10 {
 			// execute sql of test cases
 			if err = runCaseSQLs(); err != nil {
+				log.L().Warn("get error", log.ShortError(err))
 				return err
 			}
 
@@ -444,6 +447,7 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 
 		if schemaChanged {
 			if err = t.updateSchema(); err != nil {
+				log.L().Warn("get error", log.ShortError(err))
 				return err
 			}
 		}
