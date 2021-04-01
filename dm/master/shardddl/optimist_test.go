@@ -1139,8 +1139,8 @@ func (t *testOptimist) TestBuildLockJoinedAndTable(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	st1.AddTable("db", "tbl-1", downSchema, downTable)
-	st2.AddTable("db", "tbl-1", downSchema, downTable)
+	st1.AddTable("foo", "bar-1", downSchema, downTable)
+	st2.AddTable("foo", "bar-1", downSchema, downTable)
 
 	c.Assert(o.Start(ctx, etcdTestCli), IsNil)
 	_, err := optimism.PutSourceTables(etcdTestCli, st1)
@@ -1153,10 +1153,14 @@ func (t *testOptimist) TestBuildLockJoinedAndTable(c *C) {
 	_, err = optimism.PutInfo(etcdTestCli, i11)
 	c.Assert(err, IsNil)
 
+	stm, _, err := optimism.GetAllSourceTables(etcdTestCli)
+	c.Assert(err, IsNil)
+	o.tk.Init(stm)
+
 	ifm, _, err := optimism.GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
 
-	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm)
+	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm, nil)
 	c.Assert(len(lockJoined), Equals, 1)
 	c.Assert(len(lockTTS), Equals, 1)
 	joined, ok := lockJoined[utils.GenDDLLockID(task, downSchema, downTable)]
