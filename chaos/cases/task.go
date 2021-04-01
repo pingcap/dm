@@ -333,6 +333,7 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 	runCaseSQLs := func() error {
 		testSQLs := t.caseGenerator.GetSQLs()
 		if testSQLs == nil {
+			log.L().Info("get nil")
 			getNewCase = false
 			return nil
 		}

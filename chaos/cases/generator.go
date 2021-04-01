@@ -20,6 +20,7 @@ import (
 	"time"
 
 	config2 "github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 const (
@@ -187,10 +188,12 @@ func (g *CaseGenerator) genSQLs(ctx context.Context) {
 						for idx, sql := range fullSqls {
 							fullSqls[idx].statement = fmt.Sprintf(sql.statement, g.schema, table)
 						}
+						log.L().Info(fmt.Sprintf("gen sql, %v", fullSqls))
 						g.sqlsChan <- fullSqls
 					}
 				}
 			}
+			log.L().Info("gen nil")
 			g.sqlsChan <- nil
 		}
 	}
