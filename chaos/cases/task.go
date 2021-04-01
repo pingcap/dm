@@ -306,6 +306,7 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 
 	defer func() {
 		if errors.Cause(err) == context.Canceled || errors.Cause(err) == context.DeadlineExceeded {
+			log.L().Info("context done.", log.ShortError(err))
 			err = nil // clear error for context done.
 		} else if err != nil {
 			select {
@@ -330,7 +331,6 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 	runCaseSQLs := func() error {
 		testSQLs := t.caseGenerator.GetSQLs()
 		if testSQLs == nil {
-			log.L().Info("get nil")
 			getNewCase = false
 			return nil
 		}
@@ -351,12 +351,10 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 			}
 
 			if err2 := runCaseSQLs(); err2 != nil {
-				log.L().Warn("get error", log.ShortError(err2))
 				err = err2
 				return
 			}
 			if err2 := t.updateSchema(); err2 != nil {
-				log.L().Warn("get error", log.ShortError(err2))
 				err = err2
 				return
 			}
@@ -436,7 +434,6 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 		if getNewCase && rand.Intn(100) < 10 {
 			// execute sql of test cases
 			if err = runCaseSQLs(); err != nil {
-				log.L().Warn("get error", log.ShortError(err))
 				return err
 			}
 
@@ -445,7 +442,6 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 
 		if schemaChanged {
 			if err = t.updateSchema(); err != nil {
-				log.L().Warn("get error", log.ShortError(err))
 				return err
 			}
 		}
