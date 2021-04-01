@@ -15,6 +15,7 @@ source $CUR/lib.sh
 function deploy_previous_v2() {
     # install TiUP-DM
     curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+    curl "https://tiup-mirrors.pingcap.com/root.json" > /root/.tiup/bin/root.json
     source /root/.profile
     tiup install dm
 

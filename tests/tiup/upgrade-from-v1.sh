@@ -93,6 +93,7 @@ function migrate_in_v1 {
 function import_to_v2_by_tiup() {
     # install TiUP-DM
     curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+    curl "https://tiup-mirrors.pingcap.com/root.json" > ~/.tiup/bin/root.json
     source /root/.profile
     tiup install dm
 
