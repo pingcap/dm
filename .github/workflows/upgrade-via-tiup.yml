@@ -1,7 +1,7 @@
 name: Upgrade via TiUP
 
 on:
-  push:
+  pull_request:
     branches:
     - master
   schedule:
