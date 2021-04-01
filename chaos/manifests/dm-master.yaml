@@ -64,6 +64,12 @@ spec:
             - "--advertise-peer-urls=http://$(MY_POD_NAME).dm-master.$(MY_POD_NAMESPACE):8291"
             - "--initial-cluster=dm-master-0=http://dm-master-0.dm-master.$(MY_POD_NAMESPACE):8291,dm-master-1=http://dm-master-1.dm-master.$(MY_POD_NAMESPACE):8291,dm-master-2=http://dm-master-2.dm-master.$(MY_POD_NAMESPACE):8291"
             - "--log-file=/var/log/$(MY_POD_NAME).log"
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+      volumes:
+        - name: varlog
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: dm-master

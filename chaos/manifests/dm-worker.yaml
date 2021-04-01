@@ -64,6 +64,12 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
             failureThreshold: 5
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+      volumes:
+        - name: varlog
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: dm-worker
