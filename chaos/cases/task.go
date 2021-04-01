@@ -433,7 +433,7 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 			schemaChanged = true
 		}
 
-		if getNewCase && rand.Intn(1000) < 10 {
+		if getNewCase && rand.Intn(100) < 10 {
 			// execute sql of test cases
 			if err = runCaseSQLs(); err != nil {
 				log.L().Warn("get error", log.ShortError(err))
