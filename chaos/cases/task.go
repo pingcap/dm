@@ -302,9 +302,6 @@ func (t *task) incrLoop() error {
 // NOTE: it return nil for context done.
 func (t *task) genIncrData(pCtx context.Context) (err error) {
 	t.logger.Info("generating data for incremental stage")
-	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
-	defer cancel()
-
 	getNewCase := true
 
 	defer func() {
@@ -312,7 +309,7 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 			err = nil // clear error for context done.
 		} else if err != nil {
 			select {
-			case <-ctx.Done():
+			case <-pCtx.Done():
 				t.logger.Warn("ignore error when generating data for incremental stage", zap.Error(err))
 				err = nil // some other errors like `connection is already closed` may also be reported for context done.
 			default:
@@ -339,7 +336,7 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 		}
 		for _, testSQL := range testSQLs {
 			log.L().Info("execute test case sql", zap.String("ddl", testSQL.statement), zap.Int("source", testSQL.source))
-			if err2 := t.sourceConns[testSQL.source].execSQLs(ctx, testSQL.statement); err2 != nil {
+			if err2 := t.sourceConns[testSQL.source].execDDLs(testSQL.statement); err2 != nil {
 				return err2
 			}
 		}
@@ -379,7 +376,7 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 		if err != nil {
 			return err
 		}
-		if err = t.sourceConns[idx].execSQLs(ctx, query); err != nil {
+		if err = t.sourceConns[idx].execDDLs(query); err != nil {
 			return err
 		}
 
@@ -418,7 +415,7 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 				conn2 := conn
 				i2 := i
 				eg.Go(func() error {
-					if err2 := conn2.execSQLs(ctx, query); err2 != nil {
+					if err2 := conn2.execDDLs(query); err2 != nil {
 						if utils.IsMySQLError(err2, mysql.ErrDupFieldName) {
 							t.logger.Warn("ignore duplicate field name for ddl", log.ShortError(err))
 							return nil
