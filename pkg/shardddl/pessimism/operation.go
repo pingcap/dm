@@ -220,8 +220,14 @@ func WatchOperationDelete(ctx context.Context, cli *clientv3.Client, task, sourc
 func watchOperation(ctx context.Context, cli *clientv3.Client, watchType mvccpb.Event_EventType,
 	task, source string, revision int64,
 	outCh chan<- Operation, errCh chan<- error) {
-	ch := cli.Watch(ctx, common.ShardDDLPessimismOperationKeyAdapter.Encode(task, source),
-		clientv3.WithPrefix(), clientv3.WithRev(revision), clientv3.WithPrevKV())
+	var ch clientv3.WatchChan
+	if task == "" && source == "" {
+		ch = cli.Watch(ctx, common.ShardDDLPessimismOperationKeyAdapter.Path(), clientv3.WithPrefix(),
+			clientv3.WithRev(revision), clientv3.WithPrevKV())
+	} else {
+		ch = cli.Watch(ctx, common.ShardDDLPessimismOperationKeyAdapter.Encode(task, source),
+			clientv3.WithRev(revision), clientv3.WithPrevKV())
+	}
 
 	for {
 		select {

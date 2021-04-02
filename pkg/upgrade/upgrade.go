@@ -118,10 +118,6 @@ func upgradeToVer1(cli *clientv3.Client, uctx Context) error {
 
 // upgradeToVer2 does upgrade operations from Ver1 to Ver2 (v2.0.0-GA) to upgrade syncer checkpoint schema
 func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
-	upgradeCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	uctx.Context = upgradeCtx
-	defer cancel()
-
 	upgradeTaskName := "upgradeToVer2"
 	logger := log.L().WithFields(zap.String("task", upgradeTaskName))
 
@@ -151,6 +147,13 @@ func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 			db.Close()
 		}
 	}()
+
+	// 10 seconds for each subtask
+	timeout := time.Duration(len(dbConfigs)) * 10 * time.Second
+	upgradeCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	uctx.Context = upgradeCtx
+	defer cancel()
+
 	for tableName, cfg := range dbConfigs {
 		targetDB, err := conn.DefaultDBProvider.Apply(cfg)
 		if err != nil {
@@ -183,7 +186,7 @@ func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 
 // upgradeToVer3 does upgrade operations from Ver2 (v2.0.0-GA) to Ver3 (v2.0.2) to upgrade etcd key encodings
 func upgradeToVer3(cli *clientv3.Client, uctx Context) error {
-	upgradeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	upgradeCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	uctx.Context = upgradeCtx
 	defer cancel()
 
@@ -192,71 +195,12 @@ func upgradeToVer3(cli *clientv3.Client, uctx Context) error {
 		new common.KeyAdapter
 	}{
 		{
-			common.WorkerRegisterKeyAdapterV1,
-			common.WorkerRegisterKeyAdapter,
-		},
-		{common.WorkerKeepAliveKeyAdapterV1,
-			common.WorkerKeepAliveKeyAdapter,
-		},
-		{
 			common.UpstreamConfigKeyAdapterV1,
 			common.UpstreamConfigKeyAdapter,
 		},
 		{
-			common.UpstreamBoundWorkerKeyAdapterV1,
-			common.UpstreamBoundWorkerKeyAdapter,
-		},
-		{
-			common.UpstreamLastBoundWorkerKeyAdapterV1,
-			common.UpstreamLastBoundWorkerKeyAdapter,
-		},
-		{
-			common.UpstreamRelayWorkerKeyAdapterV1,
-			common.UpstreamRelayWorkerKeyAdapter,
-		},
-		{
-			common.TaskConfigKeyAdapterV1,
-			common.TaskConfigKeyAdapter,
-		},
-		{
-			common.UpstreamSubTaskKeyAdapterV1,
-			common.UpstreamSubTaskKeyAdapter,
-		},
-		{
 			common.StageRelayKeyAdapterV1,
 			common.StageRelayKeyAdapter,
-		},
-		{
-			common.StageSubTaskKeyAdapterV1,
-			common.StageSubTaskKeyAdapter,
-		},
-		{
-			common.ShardDDLPessimismInfoKeyAdapterV1,
-			common.ShardDDLPessimismInfoKeyAdapter,
-		},
-		{
-			common.ShardDDLPessimismOperationKeyAdapterV1,
-			common.ShardDDLPessimismOperationKeyAdapter,
-		},
-		{
-			common.ShardDDLOptimismSourceTablesKeyAdapterV1,
-			common.ShardDDLOptimismSourceTablesKeyAdapter,
-		},
-		{
-			common.ShardDDLOptimismInfoKeyAdapterV1,
-			common.ShardDDLOptimismInfoKeyAdapter,
-		},
-		{
-			common.ShardDDLOptimismOperationKeyAdapterV1,
-			common.ShardDDLOptimismOperationKeyAdapter,
-		},
-		{
-			common.ShardDDLOptimismInitSchemaKeyAdapterV1,
-			common.ShardDDLOptimismInitSchemaKeyAdapter,
-		},
-		{
-			common.ShardDDLOptimismDroppedColumnsKeyAdapterV1,
-			common.ShardDDLOptimismDroppedColumnsKeyAdapter,
 		},
 	}
 

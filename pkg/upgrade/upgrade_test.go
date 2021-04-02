@@ -116,15 +116,15 @@ func (t *testForEtcd) TestTryUpgrade(c *C) {
 func (t *testForEtcd) TestUpgradeToVer3(c *C) {
 	ctx := context.Background()
 	uctx := Context{ctx, nil}
-	worker := "worker-1"
-	oldKey := common.UpstreamBoundWorkerKeyAdapterV1.Encode(worker)
+	source := "source-1"
+	oldKey := common.UpstreamConfigKeyAdapterV1.Encode(source)
 	oldVal := "test"
 
 	_, err := etcdTestCli.Put(ctx, oldKey, oldVal)
 	c.Assert(err, IsNil)
 	c.Assert(upgradeToVer3(etcdTestCli, uctx), IsNil)
 
-	newKey := common.UpstreamBoundWorkerKeyAdapter.Encode(worker)
+	newKey := common.UpstreamConfigKeyAdapter.Encode(source)
 	resp, err := etcdTestCli.Get(ctx, newKey)
 	c.Assert(err, IsNil)
 	c.Assert(resp.Kvs, HasLen, 1)
