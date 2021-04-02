@@ -41,6 +41,19 @@ type SQLs []SQL
 type Case []SQLs
 
 var (
+	// add some flags column, so we can make sure the order of new column in optimsitic
+	preSQLs1 = SQLs{
+		{"ALTER TABLE %s.%s ADD COLUMN case3_flag1 INT, ADD COLUMN case3_flag2 INT, ADD COLUMN case3_flag3 INT", source1},
+		{"ALTER TABLE %s.%s ADD COLUMN case3_flag1 INT, ADD COLUMN case3_flag2 INT, ADD COLUMN case3_flag3 INT", source2},
+		{"ALTER TABLE %s.%s ADD COLUMN case3_flag1 INT, ADD COLUMN case3_flag2 INT, ADD COLUMN case3_flag3 INT", source3},
+		{"ALTER TABLE %s.%s ADD COLUMN case4_flag1 INT, ADD COLUMN case4_flag2 INT, ADD COLUMN case4_flag3 INT", source1},
+		{"ALTER TABLE %s.%s ADD COLUMN case4_flag1 INT, ADD COLUMN case4_flag2 INT, ADD COLUMN case4_flag3 INT", source2},
+		{"ALTER TABLE %s.%s ADD COLUMN case4_flag1 INT, ADD COLUMN case4_flag2 INT, ADD COLUMN case4_flag3 INT", source3},
+		{"ALTER TABLE %s.%s ADD COLUMN case5_flag1 INT, ADD COLUMN case5_flag2 INT, ADD COLUMN case5_flag3 INT;", source1},
+		{"ALTER TABLE %s.%s ADD COLUMN case5_flag1 INT, ADD COLUMN case5_flag2 INT, ADD COLUMN case5_flag3 INT;", source2},
+		{"ALTER TABLE %s.%s ADD COLUMN case5_flag1 INT, ADD COLUMN case5_flag2 INT, ADD COLUMN case5_flag3 INT;", source3},
+	}
+
 	// ALL ADD COLUMN, ALL DROP COLUMN
 	case1 = Case{
 		{{"ALTER TABLE %s.%s ADD COLUMN case1 INT;", source1}},
@@ -61,49 +74,33 @@ var (
 			{"ALTER TABLE %s.%s DROP COLUMN case3_1;", source1},
 			{"ALTER TABLE %s.%s DROP COLUMN case3_2;", source1},
 			{"ALTER TABLE %s.%s DROP COLUMN case3_3;", source1},
-			{"ALTER TABLE %s.%s DROP COLUMN case3_flag;", source1},
 			{"ALTER TABLE %s.%s DROP COLUMN case3_1;", source2},
 			{"ALTER TABLE %s.%s DROP COLUMN case3_2;", source2},
 			{"ALTER TABLE %s.%s DROP COLUMN case3_3;", source2},
-			{"ALTER TABLE %s.%s DROP COLUMN case3_flag;", source2},
 			{"ALTER TABLE %s.%s DROP COLUMN case3_1;", source3},
 			{"ALTER TABLE %s.%s DROP COLUMN case3_2;", source3},
 			{"ALTER TABLE %s.%s DROP COLUMN case3_3;", source3},
-			{"ALTER TABLE %s.%s DROP COLUMN case3_flag;", source3},
 		},
-		{
-			{"ALTER TABLE %s.%s ADD COLUMN case3_flag INT;", source1},
-			{"ALTER TABLE %s.%s ADD COLUMN case3_flag INT;", source2},
-			{"ALTER TABLE %s.%s ADD COLUMN case3_flag INT;", source3},
-		},
-		{{"ALTER TABLE %s.%s ADD COLUMN case3_1 INT FIRST;", source1}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case3_2 INT AFTER id;", source2}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case3_3 INT AFTER case3_flag;", source3}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case3_2 INT AFTER id;", source1}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case3_3 INT AFTER case3_flag;", source2}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case3_1 INT FIRST;", source3}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case3_3 INT AFTER case3_flag;", source1}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case3_1 INT FIRST;", source2}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case3_2 INT AFTER id;", source3}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case3_1 INT AFTER case3_flag1;", source1}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case3_2 INT AFTER case3_flag2;", source2}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case3_3 INT AFTER case3_flag3;", source3}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case3_2 INT AFTER case3_flag2;", source1}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case3_3 INT AFTER case3_flag3;", source2}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case3_1 INT AFTER case3_flag1;", source3}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case3_3 INT AFTER case3_flag3;", source1}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case3_1 INT AFTER case3_flag1;", source2}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case3_2 INT AFTER case3_flag2;", source3}},
 	}
 	// MULTIPLE ADD COLUMN out of order
 	case4 = Case{
 		{
 			{"ALTER TABLE %s.%s DROP COLUMN case4_1, DROP COLUMN case4_2, DROP COLUMN case4_3;", source1},
-			{"ALTER TABLE %s.%s DROP COLUMN case4_flag;", source1},
 			{"ALTER TABLE %s.%s DROP COLUMN case4_1, DROP COLUMN case4_2, DROP COLUMN case4_3;", source2},
-			{"ALTER TABLE %s.%s DROP COLUMN case4_flag;", source2},
 			{"ALTER TABLE %s.%s DROP COLUMN case4_1, DROP COLUMN case4_2, DROP COLUMN case4_3;", source3},
-			{"ALTER TABLE %s.%s DROP COLUMN case4_flag;", source3},
 		},
-		{
-			{"ALTER TABLE %s.%s ADD COLUMN case4_flag INT;", source1},
-			{"ALTER TABLE %s.%s ADD COLUMN case4_flag INT;", source2},
-			{"ALTER TABLE %s.%s ADD COLUMN case4_flag INT;", source3},
-		},
-		{{"ALTER TABLE %s.%s ADD COLUMN case4_1 INT FIRST, ADD COLUMN case4_2 INT AFTER id, ADD COLUMN case4_3 INT AFTER case4_flag;", source1}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case4_2 INT AFTER id, ADD COLUMN case4_3 INT AFTER case4_flag, ADD COLUMN case4_1 INT FIRST;", source2}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case4_3 INT AFTER case4_flag, ADD COLUMN case4_1 INT FIRST, ADD COLUMN case4_2 INT AFTER id;", source3}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case4_1 INT AFTER case4_flag1, ADD COLUMN case4_2 INT AFTER case4_flag2, ADD COLUMN case4_3 INT AFTER case4_flag3;", source1}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case4_2 INT AFTER case4_flag2, ADD COLUMN case4_3 INT AFTER case4_flag3, ADD COLUMN case4_1 INT AFTER case4_flag1;", source2}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case4_3 INT AFTER case4_flag3, ADD COLUMN case4_1 INT AFTER case4_flag1, ADD COLUMN case4_2 INT AFTER case4_flag2;", source3}},
 	}
 	// MULTIPLE ADD COLUMN vs ADD columns
 	case5 = Case{
@@ -111,28 +108,19 @@ var (
 			{"ALTER TABLE %s.%s DROP COLUMN case5_1;", source1},
 			{"ALTER TABLE %s.%s DROP COLUMN case5_2;", source1},
 			{"ALTER TABLE %s.%s DROP COLUMN case5_3;", source1},
-			{"ALTER TABLE %s.%s DROP COLUMN case5_flag;", source1},
 			{"ALTER TABLE %s.%s DROP COLUMN case5_1;", source2},
 			{"ALTER TABLE %s.%s DROP COLUMN case5_2;", source2},
 			{"ALTER TABLE %s.%s DROP COLUMN case5_3;", source2},
-			{"ALTER TABLE %s.%s DROP COLUMN case5_flag;", source2},
 			{"ALTER TABLE %s.%s DROP COLUMN case5_1;", source3},
 			{"ALTER TABLE %s.%s DROP COLUMN case5_2;", source3},
 			{"ALTER TABLE %s.%s DROP COLUMN case5_3;", source3},
-			{"ALTER TABLE %s.%s DROP COLUMN case5_flag;", source3},
 		},
-		{
-			{"ALTER TABLE %s.%s ADD COLUMN case5_flag INT;", source1},
-			{"ALTER TABLE %s.%s ADD COLUMN case5_flag INT;", source2},
-			{"ALTER TABLE %s.%s ADD COLUMN case5_flag INT;", source3},
-		},
-		{{"ALTER TABLE %s.%s ADD COLUMN case5_1 INT FIRST;", source1}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case5_2 INT AFTER id, ADD COLUMN case5_1 INT FIRST;", source2}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case5_3 INT AFTER case5_flag, ADD COLUMN case5_1 INT FIRST, ADD COLUMN case5_2 INT AFTER id;", source3}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case5_3 INT AFTER case5_flag;", source2}},
-		{{"ALTER TABLE %s.%s ADD COLUMN case5_2 INT AFTER id, ADD COLUMN case5_3 INT AFTER case5_flag;", source1}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case5_1 INT AFTER case5_flag1;", source1}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case5_2 INT AFTER case5_flag2, ADD COLUMN case5_1 INT AFTER case5_flag1;", source2}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case5_3 INT AFTER case5_flag3, ADD COLUMN case5_1 INT AFTER case5_flag1, ADD COLUMN case5_2 INT AFTER case5_flag2;", source3}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case5_3 INT AFTER case5_flag3;", source2}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case5_2 INT AFTER case5_flag2, ADD COLUMN case5_3 INT AFTER case5_flag3;", source1}},
 	}
-
 	cases = map[string][]Case{
 		config2.ShardOptimistic: {
 			case1,
@@ -144,21 +132,28 @@ var (
 		config2.ShardPessimistic: {},
 		"":                       {},
 	}
+	preSQLs = map[string]SQLs{
+		config2.ShardOptimistic:  preSQLs1,
+		config2.ShardPessimistic: nil,
+		"":                       nil,
+	}
 )
 
 // CaseGenerator generator test cases.
 type CaseGenerator struct {
-	testCases []Case
-	sqlsChan  chan SQLs
-	schema    string
-	tables    []string
+	testCases   []Case
+	testPreSQLs SQLs
+	sqlsChan    chan SQLs
+	schema      string
+	tables      []string
 }
 
 // NewCaseGenerator creates a new CaseGenerator instance.
 func NewCaseGenerator(shardMode string) *CaseGenerator {
 	g := &CaseGenerator{
-		testCases: cases[shardMode],
-		sqlsChan:  make(chan SQLs),
+		testCases:   cases[shardMode],
+		sqlsChan:    make(chan SQLs),
+		testPreSQLs: preSQLs[shardMode],
 	}
 	return g
 }
@@ -199,4 +194,15 @@ func (g *CaseGenerator) genSQLs(ctx context.Context) {
 // GetSQLs gets sql from CaseGenerator
 func (g *CaseGenerator) GetSQLs() SQLs {
 	return <-g.sqlsChan
+}
+
+// GetPreSQLs gets preSQLs from CaseGenerator
+func (g *CaseGenerator) GetPreSQLs() SQLs {
+	testPreSQLs := make(SQLs, 0, len(g.testPreSQLs)*len(g.tables))
+	for _, table := range g.tables {
+		for _, sql := range g.testPreSQLs {
+			testPreSQLs = append(testPreSQLs, SQL{fmt.Sprintf(sql.statement, g.schema, table), sql.source})
+		}
+	}
+	return testPreSQLs
 }

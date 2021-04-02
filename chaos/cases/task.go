@@ -274,6 +274,17 @@ func (t *task) createTask() error {
 // incrLoop enters the loop of generating incremental data and diff them.
 func (t *task) incrLoop() error {
 	t.caseGenerator.Start(t.ctx, t.schema, t.tables)
+
+	// execute preSQLs in upstream
+	for _, sql := range t.caseGenerator.GetPreSQLs() {
+		if err := t.sourceConns[sql.source].execDDLs(sql.statement); err != nil {
+			return err
+		}
+	}
+	if err := t.updateSchema(); err != nil {
+		return err
+	}
+
 	for {
 		select {
 		case <-t.ctx.Done():

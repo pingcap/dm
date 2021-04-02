@@ -64,9 +64,9 @@ func createSources(ctx context.Context, cli pb.MasterClient, cfg *config) error 
 	cfg3.From = cfg.Source3
 
 	// reduce backoffmax for autoresume
-	cfg1.Checker.BackoffMax = config2.Duration{Duration: 10 * time.Second}
-	cfg2.Checker.BackoffMax = config2.Duration{Duration: 10 * time.Second}
-	cfg3.Checker.BackoffMax = config2.Duration{Duration: 10 * time.Second}
+	cfg1.Checker.BackoffMax = config2.Duration{Duration: 5 * time.Second}
+	cfg2.Checker.BackoffMax = config2.Duration{Duration: 5 * time.Second}
+	cfg3.Checker.BackoffMax = config2.Duration{Duration: 5 * time.Second}
 
 	s1Content2, err := cfg1.Yaml()
 	if err != nil {
