@@ -226,7 +226,8 @@ func WatchOperationPut(ctx context.Context, cli *clientv3.Client,
 	task, source, upSchema, upTable string, revision int64,
 	outCh chan<- Operation, errCh chan<- error) {
 	var ch clientv3.WatchChan
-	if task == "" && source == "" && upSchema == "" && upTable == "" {
+	// caller may use empty keys to expect a prefix watch
+	if upTable == "" {
 		ch = cli.Watch(ctx, common.ShardDDLOptimismOperationKeyAdapter.Path(), clientv3.WithPrefix(),
 			clientv3.WithRev(revision))
 	} else {

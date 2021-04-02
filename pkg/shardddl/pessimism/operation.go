@@ -221,7 +221,8 @@ func watchOperation(ctx context.Context, cli *clientv3.Client, watchType mvccpb.
 	task, source string, revision int64,
 	outCh chan<- Operation, errCh chan<- error) {
 	var ch clientv3.WatchChan
-	if task == "" && source == "" {
+	// caller may use empty keys to expect a prefix watch
+	if source == "" {
 		ch = cli.Watch(ctx, common.ShardDDLPessimismOperationKeyAdapter.Path(), clientv3.WithPrefix(),
 			clientv3.WithRev(revision), clientv3.WithPrevKV())
 	} else {

@@ -49,7 +49,7 @@ func (t *testCommon) TestKeyAdapter(c *C) {
 		{
 			keys:    []string{"mysql1"},
 			adapter: UpstreamConfigKeyAdapter,
-			want:    "/dm-master/upstream/config/6d7973716c31",
+			want:    "/dm-master/v2/upstream/config/6d7973716c31",
 		},
 		{
 			keys:    []string{"127.0.0.1:2382"},
@@ -74,7 +74,7 @@ func (t *testCommon) TestKeyAdapter(c *C) {
 		{
 			keys:    []string{"mysql/01"},
 			adapter: StageRelayKeyAdapter,
-			want:    "/dm-master/stage/relay/6d7973716c2f3031",
+			want:    "/dm-master/v2/stage/relay/6d7973716c2f3031",
 		},
 		{
 			keys:    []string{"mysql1", "中文1🀄️"},
