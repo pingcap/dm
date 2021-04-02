@@ -109,8 +109,8 @@ func (t *testUtilSuite) TestStatusVarsToKV(c *C) {
 				1:   {0, 0, 40, 0, 0, 0, 0, 0},
 				6:   {3, 115, 116, 100},
 				4:   {33, 0, 33, 0, 83, 0},
-				5:   {6, 83, 89, 83, 84, 69, 77}, // SYSTEM
-				128: {19, 29, 12},                // Q_HRNOW from mariaDB
+				5:   {6, 83, 89, 83, 84, 69, 77}, // "SYSTEM" of length 6
+				128: {19, 29, 12},                // Q_HRNOW from MariaDB
 			},
 			nil,
 		},
