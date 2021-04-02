@@ -1191,7 +1191,7 @@ func (t *testOptimist) TestBuildLockWithInitSchema(c *C) {
 		ti1 = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (a INT PRIMARY KEY, b INT)`)
 		ti2 = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (a INT PRIMARY KEY)`)
 
-		ddlDropB   = "ALTER TABLE bar dROP COLUMN b"
+		ddlDropB   = "ALTER TABLE bar DROP COLUMN b"
 		ddlDropC   = "ALTER TABLE bar DROP COLUMN c"
 		infoDropB  = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, []string{ddlDropC}, ti0, []*model.TableInfo{ti1})
 		infoDropC  = optimism.NewInfo(task, source1, "foo", "bar-1", downSchema, downTable, []string{ddlDropB}, ti1, []*model.TableInfo{ti2})
