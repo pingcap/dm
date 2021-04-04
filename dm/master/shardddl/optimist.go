@@ -247,6 +247,12 @@ func (o *Optimist) rebuildLocks() (revSource, revInfo, revOperation int64, err e
 	}
 	o.logger.Info("get history shard DDL lock operation", zap.Int64("revision", revOperation))
 
+	initSchemas, revInitSchemas, err := optimism.GetAllInitSchemas(o.cli)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	o.logger.Info("get all init schemas", zap.Int64("revision", revInitSchemas))
+
 	colm, _, err := optimism.GetAllDroppedColumns(o.cli)
 	if err != nil {
 		// only log the error, and don't return it to forbid the startup of the DM-master leader.
@@ -255,7 +261,7 @@ func (o *Optimist) rebuildLocks() (revSource, revInfo, revOperation int64, err e
 	}
 
 	// recover the shard DDL lock based on history shard DDL info & lock operation.
-	err = o.recoverLocks(ifm, opm, colm)
+	err = o.recoverLocks(ifm, opm, colm, initSchemas)
 	if err != nil {
 		// only log the error, and don't return it to forbid the startup of the DM-master leader.
 		// then these unexpected locks can be handled by the user.
@@ -287,28 +293,64 @@ func sortInfos(ifm map[string]map[string]map[string]map[string]optimism.Info) []
 }
 
 // buildLockJoinedAndTTS build joined table and target table slice for lock by history infos
-func (o *Optimist) buildLockJoinedAndTTS(ifm map[string]map[string]map[string]map[string]optimism.Info) (map[string]schemacmp.Table, map[string][]optimism.TargetTable) {
-	lockJoined := make(map[string]schemacmp.Table)
-	lockTTS := make(map[string][]optimism.TargetTable)
+func (o *Optimist) buildLockJoinedAndTTS(
+	ifm map[string]map[string]map[string]map[string]optimism.Info,
+	initSchemas map[string]map[string]map[string]optimism.InitSchema) (
+	map[string]schemacmp.Table, map[string][]optimism.TargetTable) {
 
+	type infoKey struct {
+		lockID   string
+		source   string
+		upSchema string
+		upTable  string
+	}
+	infos := make(map[infoKey]optimism.Info)
+	lockTTS := make(map[string][]optimism.TargetTable)
 	for _, taskInfos := range ifm {
 		for _, sourceInfos := range taskInfos {
 			for _, schemaInfos := range sourceInfos {
 				for _, info := range schemaInfos {
 					lockID := utils.GenDDLLockID(info.Task, info.DownSchema, info.DownTable)
-					if joined, ok := lockJoined[lockID]; !ok {
-						lockJoined[lockID] = schemacmp.Encode(info.TableInfoBefore)
+					if _, ok := lockTTS[lockID]; !ok {
+						lockTTS[lockID] = o.tk.FindTables(info.Task, info.DownSchema, info.DownTable)
+					}
+					infos[infoKey{lockID, info.Source, info.UpSchema, info.UpTable}] = info
+				}
+			}
+		}
+	}
+
+	lockJoined := make(map[string]schemacmp.Table)
+	for lockID, tts := range lockTTS {
+		for _, tt := range tts {
+			for upSchema, tables := range tt.UpTables {
+				for upTable := range tables {
+					var table schemacmp.Table
+					if info, ok := infos[infoKey{lockID, tt.Source, upSchema, upTable}]; ok && info.TableInfoBefore != nil {
+						table = schemacmp.Encode(info.TableInfoBefore)
+					} else if initSchema, ok := initSchemas[tt.Task][tt.DownSchema][tt.DownTable]; ok {
+						// If there is no optimism.Info for a upstream table, it indicates the table structure
+						// hasn't been changed since last removeLock. So the init schema should be its table info.
+						table = schemacmp.Encode(initSchema.TableInfo)
 					} else {
-						newJoined, err := joined.Join(schemacmp.Encode(info.TableInfoBefore))
+						o.logger.Error(
+							"can not find table info for upstream table",
+							zap.String("source", tt.Source),
+							zap.String("up-schema", upSchema),
+							zap.String("up-table", upTable),
+						)
+						continue
+					}
+					if joined, ok := lockJoined[lockID]; !ok {
+						lockJoined[lockID] = table
+					} else {
+						newJoined, err := joined.Join(table)
 						// ignore error, will report it in TrySync later
 						if err != nil {
 							o.logger.Error(fmt.Sprintf("fail to join table info %s with %s, lockID: %s in recover lock", joined, newJoined, lockID), log.ShortError(err))
 						} else {
 							lockJoined[lockID] = newJoined
 						}
-					}
-					if _, ok := lockTTS[lockID]; !ok {
-						lockTTS[lockID] = o.tk.FindTables(info.Task, info.DownSchema, info.DownTable)
 					}
 				}
 			}
@@ -321,10 +363,11 @@ func (o *Optimist) buildLockJoinedAndTTS(ifm map[string]map[string]map[string]ma
 func (o *Optimist) recoverLocks(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
 	opm map[string]map[string]map[string]map[string]optimism.Operation,
-	colm map[string]map[string]map[string]map[string]map[string]struct{}) error {
+	colm map[string]map[string]map[string]map[string]map[string]struct{},
+	initSchemas map[string]map[string]map[string]optimism.InitSchema) error {
 	// construct joined table based on the shard DDL info.
 	o.logger.Info("build lock joined and tts")
-	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm)
+	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm, initSchemas)
 	// build lock and restore table info
 	o.logger.Info("rebuild locks and tables")
 	o.lk.RebuildLocksAndTables(o.cli, ifm, colm, lockJoined, lockTTS)
