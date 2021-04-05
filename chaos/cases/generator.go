@@ -52,6 +52,9 @@ var (
 		{"ALTER TABLE %s.%s ADD COLUMN case5_flag1 INT, ADD COLUMN case5_flag2 INT, ADD COLUMN case5_flag3 INT;", source1},
 		{"ALTER TABLE %s.%s ADD COLUMN case5_flag1 INT, ADD COLUMN case5_flag2 INT, ADD COLUMN case5_flag3 INT;", source2},
 		{"ALTER TABLE %s.%s ADD COLUMN case5_flag1 INT, ADD COLUMN case5_flag2 INT, ADD COLUMN case5_flag3 INT;", source3},
+		{"ALTER TABLE %s.%s ADD COLUMN case9_flag INT;", source1},
+		{"ALTER TABLE %s.%s ADD COLUMN case9_flag INT;", source2},
+		{"ALTER TABLE %s.%s ADD COLUMN case9_flag INT;", source3},
 	}
 
 	// ALL ADD COLUMN, ALL DROP COLUMN
@@ -121,6 +124,48 @@ var (
 		{{"ALTER TABLE %s.%s ADD COLUMN case5_3 INT AFTER case5_flag3;", source2}},
 		{{"ALTER TABLE %s.%s ADD COLUMN case5_2 INT AFTER case5_flag2, ADD COLUMN case5_3 INT AFTER case5_flag3;", source1}},
 	}
+	// ALL ADD INDEX, ALL DROP INDEX
+	case6 = Case{
+		{{"ALTER TABLE %s.%s ADD INDEX case6_idx(case3_flag1);", source1}},
+		{{"ALTER TABLE %s.%s ADD INDEX case6_idx(case3_flag1);", source2}},
+		{{"ALTER TABLE %s.%s ADD INDEX case6_idx(case3_flag1);", source3}},
+		{{"ALTER TABLE %s.%s DROP INDEX case6_idx;", source1}},
+		{{"ALTER TABLE %s.%s DROP INDEX case6_idx;", source2}},
+		{{"ALTER TABLE %s.%s DROP INDEX case6_idx;", source3}},
+	}
+	// ADD INDEX, DROP INDEX for one source
+	case7 = Case{
+		{{"ALTER TABLE %s.%s ADD INDEX case7_idx(uuid);", source1}},
+		{{"ALTER TABLE %s.%s DROP INDEX case7_idx;", source1}},
+	}
+	// ADD MULTI-COLUMN INDEX
+	case8 = Case{
+		{
+			{"ALTER TABLE %s.%s DROP INDEX case8_idx;", source1},
+			{"ALTER TABLE %s.%s DROP INDEX case8_idx;", source2},
+			{"ALTER TABLE %s.%s DROP INDEX case8_idx;", source3},
+		},
+		{{"ALTER TABLE %s.%s ADD INDEX case8_idx(case4_flag1, case4_flag2, case4_flag3);", source1}},
+		{{"ALTER TABLE %s.%s ADD INDEX case8_idx(case4_flag1, case4_flag2, case4_flag3);", source2}},
+		{{"ALTER TABLE %s.%s ADD INDEX case8_idx(case4_flag1, case4_flag2, case4_flag3);", source3}},
+	}
+	// ADD COLUMN AND INDEX
+	case9 = Case{
+		{
+			{"ALTER TABLE %s.%s DROP INDEX case9_idx;", source1},
+			{"ALTER TABLE %s.%s DROP INDEX case9_idx;", source2},
+			{"ALTER TABLE %s.%s DROP INDEX case9_idx;", source3},
+			{"ALTER TABLE %s.%s DROP COLUMN case9;", source1},
+			{"ALTER TABLE %s.%s DROP COLUMN case9;", source2},
+			{"ALTER TABLE %s.%s DROP COLUMN case9;", source3},
+		},
+		{{"ALTER TABLE %s.%s ADD COLUMN case9 INT AFTER case9_flag;", source1}},
+		{{"ALTER TABLE %s.%s ADD INDEX case9_idx(case9);", source1}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case9 INT AFTER case9_flag;", source2}},
+		{{"ALTER TABLE %s.%s ADD INDEX case9_idx(case9);", source2}},
+		{{"ALTER TABLE %s.%s ADD COLUMN case9 INT AFTER case9_flag;", source3}},
+		{{"ALTER TABLE %s.%s ADD INDEX case9_idx(case9);", source3}},
+	}
 	cases = map[string][]Case{
 		config2.ShardOptimistic: {
 			case1,
@@ -128,6 +173,10 @@ var (
 			case3,
 			case4,
 			case5,
+			case6,
+			case7,
+			case8,
+			case9,
 		},
 		config2.ShardPessimistic: {},
 		"":                       {},

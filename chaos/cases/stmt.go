@@ -30,16 +30,17 @@ const (
 )
 
 // randDML generates DML (INSERT, UPDATE or DELETE).
-// NOTE: 3 DML types have the same weight now.
+// insert:update:delete=2:1:1
 func randDML(ss *sqlsmith.SQLSmith) (dml string, t dmlType, err error) {
-	t = dmlType(rand.Intn(3) + 1)
+	t = dmlType(rand.Intn(4) + 1)
 	switch t {
-	case insertDML:
-		dml, _, err = ss.InsertStmt(false)
 	case updateDML:
 		dml, _, err = ss.UpdateStmt()
 	case deleteDML:
 		dml, _, err = ss.DeleteStmt()
+	default:
+		t = insertDML
+		dml, _, err = ss.InsertStmt(false)
 	}
 	return
 }
