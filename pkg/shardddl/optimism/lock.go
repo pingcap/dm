@@ -187,7 +187,8 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 	prevTable := schemacmp.Encode(info.TableInfoBefore)
 	// if preTable not equal table in master, we always use preTable
 	// this often happens when an info TrySync twice, e.g. worker restart/resume task
-	if cmp, err := prevTable.Compare(l.tables[callerSource][callerSchema][callerTable]); err != nil || cmp != 0 {
+	if cmp, err2 := prevTable.Compare(l.tables[callerSource][callerSchema][callerTable]); err2 != nil || cmp != 0 {
+		log.L().Warn("table-info-before not equal table saved in master", zap.Stringer("master-table", l.tables[callerSource][callerSchema][callerTable]), zap.Stringer("table-info-before", prevTable))
 		l.tables[callerSource][callerSchema][callerTable] = prevTable
 		prevJoined, err := joinTable(prevTable)
 		if err != nil {
@@ -562,7 +563,7 @@ func (l *Lock) AddDroppedColumn(info Info, col string) error {
 	if l.IsDroppedColumn(info, col) {
 		return nil
 	}
-	log.L().Debug("add partially dropped columns", zap.String("column", col), zap.Stringer("info", info))
+	log.L().Debug("add partially dropped columns", zap.String("column", col), zap.String("info", info.ShortString()))
 
 	source, upSchema, upTable := info.Source, info.UpSchema, info.UpTable
 	_, _, err := PutDroppedColumn(l.cli, info, col)

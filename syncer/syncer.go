@@ -938,7 +938,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		case config.ShardOptimistic:
 			if len(sqlJob.ddls) == 0 {
 				ignore = true
-				tctx.L().Info("ignore shard DDLs in optimistic mode", log.WrapStringerField("info", s.optimist.PendingInfo()))
+				tctx.L().Info("ignore shard DDLs in optimistic mode", zap.String("info", s.optimist.PendingInfo().ShortString()))
 			}
 		}
 		if !ignore {
