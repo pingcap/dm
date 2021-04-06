@@ -136,6 +136,14 @@ type Scheduler struct {
 	// - remove/stop subtask by user request (calling `RemoveSubTasks`).
 	expectSubTaskStages map[string]map[string]ha.Stage
 
+	// a source has its relay workers. source-id -> set(worker-name)
+	// add:
+	// - start-relay
+	// - recover from etcd (calling `recoverRelayConfigs`)
+	// delete:
+	// - stop-relay
+	relayWorkers map[string]map[string]struct{}
+
 	securityCfg config.Security
 }
 
@@ -151,6 +159,7 @@ func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 		lastBound:           make(map[string]ha.SourceBound),
 		expectRelayStages:   make(map[string]ha.Stage),
 		expectSubTaskStages: make(map[string]map[string]ha.Stage),
+		relayWorkers:        make(map[string]map[string]struct{}),
 		securityCfg:         securityCfg,
 	}
 }
@@ -176,6 +185,10 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 		return err
 	}
 	err = s.recoverSubTasks(etcdCli)
+	if err != nil {
+		return err
+	}
+	err = s.recoverRelayConfigs(etcdCli)
 	if err != nil {
 		return err
 	}
@@ -279,7 +292,7 @@ func (s *Scheduler) RemoveSourceCfg(source string) error {
 		return terror.ErrSchedulerSourceCfgNotExist.Generate(source)
 	}
 
-	// 2. check whether any subtask exists for the source.
+	// 2. check whether any subtask or relay config exists for the source.
 	existingSubtasksM := make(map[string]struct{})
 	for task, cfg := range s.subTaskCfgs {
 		for source2 := range cfg {
@@ -292,13 +305,17 @@ func (s *Scheduler) RemoveSourceCfg(source string) error {
 	if len(existingSubtasks) > 0 {
 		return terror.ErrSchedulerSourceOpTaskExist.Generate(source, existingSubtasks)
 	}
+	relayWorkers := s.relayWorkers[source]
+	if len(relayWorkers) != 0 {
+		return terror.ErrSchedulerSourceOpRelayExist.Generate(source, strMapToSlice(relayWorkers))
+	}
 
 	// 3. find worker name by source ID.
 	var (
 		workerName string // empty should be fine below.
 		worker     *Worker
 	)
-	if w, ok := s.bounds[source]; ok {
+	if w, ok2 := s.bounds[source]; ok2 {
 		worker = w
 		workerName = w.BaseInfo().Name
 	}
@@ -375,10 +392,18 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 		return nil
 	}
 
-	// 2. check new worker is free
+	// 2. check new worker is free and not started relay for another source
 	stage := w.Stage()
 	if stage != WorkerFree {
 		return terror.ErrSchedulerWorkerInvalidTrans.Generate(worker, stage, WorkerBound)
+	}
+	for source2, workers := range s.relayWorkers {
+		if source2 == source {
+			continue
+		}
+		if _, ok2 := workers[worker]; ok2 {
+			return terror.ErrSchedulerRelayWorkersBusy.Generate(worker, source2)
+		}
 	}
 
 	// 3. if no old worker, bound it directly
@@ -684,7 +709,7 @@ func (s *Scheduler) RemoveWorker(name string) error {
 	}
 
 	// delete the info in etcd.
-	_, err := ha.DeleteWorkerInfo(s.etcdCli, name)
+	_, err := ha.DeleteWorkerInfoRelayConfig(s.etcdCli, name)
 	if err != nil {
 		return err
 	}
@@ -745,6 +770,166 @@ func (s *Scheduler) UnboundSources() []string {
 	}
 	sort.Strings(IDs)
 	return IDs
+}
+
+// StartRelay puts etcd key-value pairs to start relay on some workers
+func (s *Scheduler) StartRelay(source string, workers []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	// 1. precheck
+	if _, ok := s.sourceCfgs[source]; !ok {
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(source)
+	}
+	startedWorkers := s.relayWorkers[source]
+	if startedWorkers == nil {
+		startedWorkers = map[string]struct{}{}
+		s.relayWorkers[source] = startedWorkers
+	}
+	var (
+		notExistWorkers []string
+		// below two list means the worker that requested start-relay has bound to another source
+		boundWorkers, boundSources []string
+		alreadyStarted             []string
+	)
+	for _, worker := range workers {
+		if _, ok := s.workers[worker]; !ok {
+			notExistWorkers = append(notExistWorkers, worker)
+		}
+		if _, ok := startedWorkers[worker]; ok {
+			alreadyStarted = append(alreadyStarted, worker)
+		}
+
+		for source2, w := range s.bounds {
+			if source2 == source {
+				continue
+			}
+			if w.BaseInfo().Name == worker {
+				boundWorkers = append(boundWorkers, worker)
+				boundSources = append(boundSources, source2)
+			}
+		}
+	}
+	if len(notExistWorkers) > 0 {
+		return terror.ErrSchedulerWorkerNotExist.Generate(notExistWorkers)
+	}
+	if len(boundWorkers) > 0 {
+		return terror.ErrSchedulerRelayWorkersWrongBound.Generate(boundWorkers, boundSources)
+	}
+	if len(alreadyStarted) > 0 {
+		s.logger.Warn("some workers already started relay",
+			zap.String("source", source),
+			zap.Strings("already started workers", alreadyStarted))
+	}
+
+	// currently we forbid one worker starting multiple relay
+	// worker -> source
+	oldSource := map[string]string{}
+	for source2, workers2 := range s.relayWorkers {
+		if source2 == source {
+			continue
+		}
+		for w := range workers2 {
+			oldSource[w] = source2
+		}
+	}
+	var busyWorkers, busySources []string
+	for _, w := range workers {
+		source2 := oldSource[w]
+		if source2 != "" {
+			busyWorkers = append(busyWorkers, w)
+			busySources = append(busySources, source2)
+		}
+	}
+	if len(busyWorkers) > 0 {
+		return terror.ErrSchedulerRelayWorkersBusy.Generate(busyWorkers, busySources)
+	}
+
+	// 2. put etcd and update memory cache
+	// if there's no relay stage, create a running one. otherwise we should respect paused stage
+	if len(startedWorkers) == 0 {
+		stage := ha.NewRelayStage(pb.Stage_Running, source)
+		if _, err := ha.PutRelayStage(s.etcdCli, stage); err != nil {
+			return err
+		}
+		s.expectRelayStages[source] = stage
+	}
+	if _, err := ha.PutRelayConfig(s.etcdCli, source, workers...); err != nil {
+		return err
+	}
+	for _, w := range workers {
+		s.relayWorkers[source][w] = struct{}{}
+	}
+	return nil
+}
+
+// StopRelay deletes etcd key-value pairs to stop relay on some workers
+func (s *Scheduler) StopRelay(source string, workers []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	// 1. precheck
+	if _, ok := s.sourceCfgs[source]; !ok {
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(source)
+	}
+	startedWorkers := s.relayWorkers[source]
+	var (
+		notExistWorkers                    []string
+		unmatchedWorkers, unmatchedSources []string
+		alreadyStopped                     []string
+	)
+	for _, worker := range workers {
+		if _, ok := s.workers[worker]; !ok {
+			notExistWorkers = append(notExistWorkers, worker)
+		}
+		if _, ok := startedWorkers[worker]; !ok {
+			alreadyStopped = append(alreadyStopped, worker)
+		}
+		for source2, workers2 := range s.relayWorkers {
+			if source2 == source {
+				continue
+			}
+			if _, ok := workers2[worker]; ok {
+				unmatchedWorkers = append(unmatchedWorkers, worker)
+				unmatchedSources = append(unmatchedSources, source2)
+			}
+		}
+	}
+	if len(notExistWorkers) > 0 {
+		return terror.ErrSchedulerWorkerNotExist.Generate(notExistWorkers)
+	}
+	if len(unmatchedWorkers) > 0 {
+		return terror.ErrSchedulerRelayWorkersWrongRelay.Generate(unmatchedWorkers, unmatchedSources)
+	}
+	if len(alreadyStopped) > 0 {
+		s.logger.Warn("some workers already stopped relay",
+			zap.String("source", source),
+			zap.Strings("already stopped workers", alreadyStopped))
+	}
+
+	// 2. delete from etcd and update memory cache
+	if _, err := ha.DeleteRelayConfig(s.etcdCli, workers...); err != nil {
+		return err
+	}
+	for _, w := range workers {
+		delete(s.relayWorkers[source], w)
+	}
+	if len(s.relayWorkers[source]) == 0 {
+		if _, err := ha.DeleteRelayStage(s.etcdCli, source); err != nil {
+			return err
+		}
+		delete(s.relayWorkers, source)
+		delete(s.expectRelayStages, source)
+	}
+	return nil
 }
 
 // UpdateExpectRelayStage updates the current expect relay stage.
@@ -969,6 +1154,16 @@ func (s *Scheduler) recoverSubTasks(cli *clientv3.Client) error {
 	return nil
 }
 
+// recoverRelayConfigs recovers history relay configs for each worker from etcd.
+func (s *Scheduler) recoverRelayConfigs(cli *clientv3.Client) error {
+	relayWorkers, _, err := ha.GetAllRelayConfig(cli)
+	if err != nil {
+		return err
+	}
+	s.relayWorkers = relayWorkers
+	return nil
+}
+
 // recoverWorkersBounds recovers history DM-worker info and status from etcd.
 // and it also recovers the bound/unbound relationship.
 func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
@@ -1180,6 +1375,19 @@ func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent, toLock bool) error {
 
 	// 2. check whether is bound.
 	if w.Stage() == WorkerBound {
+<<<<<<< HEAD
+=======
+		// also put identical relay config for this worker
+		for source, workers := range s.relayWorkers {
+			if _, ok2 := workers[w.BaseInfo().Name]; ok2 {
+				_, err := ha.PutRelayConfig(s.etcdCli, source, w.BaseInfo().Name)
+				if err != nil {
+					return err
+				}
+				break
+			}
+		}
+>>>>>>> dda908dc... *: add start-relay/stop-relay command (#1515)
 		// TODO: When dm-worker keepalive is broken, it will turn off its own running source
 		// After keepalive is restored, this dm-worker should continue to run the previously bound source
 		// So we PutSourceBound here to trigger dm-worker to get this event and start source again.
@@ -1255,12 +1463,37 @@ func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent, toLock bool) error {
 func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 	// 1. check if last bound is still available.
 	// if lastBound not found, or this source has been bounded to another worker (we also check that source still exists
-	// here), randomly pick one from unbounds.
+	// here), use its relay source. if no relay source, randomly pick one from unbounds.
 	// NOTE: if worker isn't in lastBound, we'll get "zero" SourceBound and it's OK, because "zero" string is not in
 	// unbounds
 	source := s.lastBound[w.baseInfo.Name].Source
 	if _, ok := s.unbounds[source]; !ok {
 		source = ""
+	}
+
+	// try to find its relay source (currently only one relay source)
+	if source == "" {
+		for source2, workers := range s.relayWorkers {
+			if _, ok2 := workers[w.BaseInfo().Name]; ok2 {
+				source = source2
+				break
+			}
+		}
+	}
+	// found a relay source
+	if source != "" {
+		// currently worker can only handle same relay source and source bound, so we don't try bound another source
+		if oldWorker, ok := s.bounds[source]; ok {
+			s.logger.Info("worker has started relay for a source, but that source is bound to another worker, so we let this worker free",
+				zap.String("worker", w.BaseInfo().Name),
+				zap.String("relay source", source),
+				zap.String("bound worker for its relay source", oldWorker.BaseInfo().Name))
+			return false, nil
+		}
+	}
+
+	// randomly pick one from unbounds
+	if source == "" {
 		for source = range s.unbounds {
 			break // got a source.
 		}
@@ -1291,8 +1524,9 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 
 // tryBoundForSource tries to bound a source to a random Free worker.
 // returns (true, nil) after bounded.
+// called should update the s.unbounds
 func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
-	// 1. try to find history workers, then random Free worker.
+	// 1. try to find history workers...
 	var worker *Worker
 	for workerName, bound := range s.lastBound {
 		if bound.Source == source {
@@ -1307,7 +1541,21 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 			}
 		}
 	}
-
+	// then a relay worker for this source...
+	if worker == nil {
+		for workerName := range s.relayWorkers[source] {
+			w, ok := s.workers[workerName]
+			if !ok {
+				// a not found worker, should not happened
+				continue
+			}
+			if w.Stage() == WorkerFree {
+				worker = w
+				break
+			}
+		}
+	}
+	// and then a random Free worker.
 	if worker == nil {
 		for _, w := range s.workers {
 			if w.Stage() == WorkerFree {
@@ -1336,6 +1584,7 @@ func (s *Scheduler) boundSourceToWorker(source string, w *Worker) error {
 	// 1. put the bound relationship into etcd.
 	var err error
 	bound := ha.NewSourceBound(source, w.BaseInfo().Name)
+<<<<<<< HEAD
 	if _, ok := s.expectRelayStages[source]; ok {
 		// the relay stage exists before, only put the bound relationship.
 		_, err = ha.PutSourceBound(s.etcdCli, bound)
@@ -1350,6 +1599,9 @@ func (s *Scheduler) boundSourceToWorker(source string, w *Worker) error {
 			}
 		}()
 	}
+=======
+	_, err = ha.PutSourceBound(s.etcdCli, bound)
+>>>>>>> dda908dc... *: add start-relay/stop-relay command (#1515)
 	if err != nil {
 		return err
 	}
@@ -1380,6 +1632,9 @@ func (s *Scheduler) recordWorker(info ha.WorkerInfo) (*Worker, error) {
 // this func is used when removing the worker.
 // NOTE: trigger scheduler when the worker become offline, not when deleted.
 func (s *Scheduler) deleteWorker(name string) {
+	for _, workers := range s.relayWorkers {
+		delete(workers, name)
+	}
 	w, ok := s.workers[name]
 	if !ok {
 		return
@@ -1393,6 +1648,7 @@ func (s *Scheduler) deleteWorker(name string) {
 // - update the stage of worker to `Bound`.
 // - record the bound relationship and last bound relationship in the scheduler.
 // this func is called after the bound relationship existed in etcd.
+// TODO: we could only let updateStatusForBound and updateStatusForUnbound to update s.unbounds/bounds/lastBound
 func (s *Scheduler) updateStatusForBound(w *Worker, b ha.SourceBound) error {
 	err := w.ToBound(b)
 	if err != nil {

@@ -65,7 +65,7 @@ function setup_replica() {
     change_master_to_gtid $master_8_host $slave_8_host
 }
 
-function run_dm_components() {
+function run_dm_components_and_create_sources() {
     echo "-------run_dm_components--------"
 
     pkill -9 dm-master || true
@@ -77,22 +77,25 @@ function run_dm_components() {
         "alive" 1
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $CUR/conf/dm-worker1.toml
-    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $CUR/conf/dm-worker2.toml
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "list-member" \
-        "alive" 1 \
-        "free" 2
-}
-
-function create_sources() {
-    echo "-------create_sources--------"
-
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source create $CUR/conf/source1.yaml" \
         "\"result\": true" 2
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $CUR/conf/dm-worker2.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source create $CUR/conf/source2.yaml" \
         "\"result\": true" 2
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member" \
+        "alive" 1 \
+        "bound" 2
+}
+
+function start_relay() {
+    echo "-------start_relay--------"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s mysql-replica-02 worker2" \
+        "\"result\": true" 1
 }
 
 function gen_full_data() {
@@ -178,8 +181,8 @@ function clean_task() {
         "stop-task task_pessimistic" \
         "\result\": true" 3
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "pause-relay -s mysql-replica-02" \
-        "\result\": true" 2
+        "stop-relay -s mysql-replica-02 worker2" \
+        "\result\": true" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source stop mysql-replica-01" \
         "\result\": true" 2
@@ -201,8 +204,8 @@ function test() {
     prepare_binlogs
     setup_replica
     gen_full_data
-    run_dm_components
-    create_sources
+    run_dm_components_and_create_sources
+    start_relay
     start_task
     gen_incr_data
     verify_result

@@ -114,6 +114,7 @@ func DeleteSourceBound(cli *clientv3.Client, workers ...string) (int64, error) {
 // ReplaceSourceBound deletes an old bound and puts a new bound in one transaction, so a bound source will not become
 // unbound because of failing halfway
 func ReplaceSourceBound(cli *clientv3.Client, source, oldWorker, newWorker string) (int64, error) {
+<<<<<<< HEAD
 	ops := make([]clientv3.Op, 0, 3)
 	ops = append(ops, deleteSourceBoundOp(oldWorker))
 	op, err := putSourceBoundOp(NewSourceBound(source, newWorker))
@@ -121,6 +122,16 @@ func ReplaceSourceBound(cli *clientv3.Client, source, oldWorker, newWorker strin
 		return 0, err
 	}
 	ops = append(ops, op...)
+=======
+	deleteOps := deleteSourceBoundOp(oldWorker)
+	putOps, err := putSourceBoundOp(NewSourceBound(source, newWorker))
+	if err != nil {
+		return 0, err
+	}
+	ops := make([]clientv3.Op, 0, len(deleteOps)+len(putOps))
+	ops = append(ops, deleteOps...)
+	ops = append(ops, putOps...)
+>>>>>>> dda908dc... *: add start-relay/stop-relay command (#1515)
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
 }
@@ -351,8 +362,15 @@ func sourceBoundFromResp(worker string, resp *clientv3.GetResponse) (map[string]
 }
 
 // deleteSourceBoundOp returns a DELETE etcd operation for the bound relationship of the specified DM-worker.
+<<<<<<< HEAD
 func deleteSourceBoundOp(worker string) clientv3.Op {
 	return clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(worker))
+=======
+func deleteSourceBoundOp(worker string) []clientv3.Op {
+	return []clientv3.Op{
+		clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(worker)),
+	}
+>>>>>>> dda908dc... *: add start-relay/stop-relay command (#1515)
 }
 
 // deleteLastSourceBoundOp returns a DELETE etcd operation for the last bound relationship of the specified DM-worker.
