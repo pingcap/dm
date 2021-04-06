@@ -62,7 +62,7 @@ func (t *testForEtcd) TestWorkerInfoEtcd(c *C) {
 	c.Assert(ifm[worker2], DeepEquals, info2)
 
 	// delete info1.
-	rev4, err := DeleteWorkerInfo(etcdTestCli, worker1)
+	rev4, err := DeleteWorkerInfoRelayConfig(etcdTestCli, worker1)
 	c.Assert(err, IsNil)
 	c.Assert(rev4, Greater, rev3)
 

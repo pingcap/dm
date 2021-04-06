@@ -18,7 +18,7 @@ function usage_and_arg_test() {
 
     echo "pause_relay_wrong_arg"
     pause_relay_wrong_arg
-    pause_relay_wihout_worker
+    pause_relay_without_worker
 
     echo "resume_relay_wrong_arg"
     resume_relay_wrong_arg
@@ -59,7 +59,7 @@ function usage_and_arg_test() {
 #
     echo "purge_relay_wrong_arg"
     purge_relay_wrong_arg
-    purge_relay_wihout_worker
+    purge_relay_without_worker
     purge_relay_filename_with_multi_workers
 
     echo "operate_source_empty_arg"
@@ -72,6 +72,16 @@ function usage_and_arg_test() {
     transfer_source_empty_arg
     transfer_source_less_arg
     transfer_source_more_arg
+
+    echo "start_relay_empty_arg"
+    start_relay_empty_arg
+    start_relay_wrong_arg
+    start_relay_without_worker
+
+    echo "stop_relay_empty_arg"
+    stop_relay_empty_arg
+    stop_relay_wrong_arg
+    stop_relay_without_worker
 }
 
 function recover_max_binlog_size() {
@@ -160,6 +170,9 @@ function run() {
     transfer_source_valid $SOURCE_ID1 worker1 # transfer to self
     transfer_source_invalid $SOURCE_ID1 worker2
 
+    start_relay_success
+    start_relay_fail
+
     echo "pause_relay_success"
     pause_relay_success
     query_status_stopped_relay
@@ -187,6 +200,10 @@ function run() {
         "\"stage\": \"Running\"" 4
     # update_task_not_paused $TASK_CONF
 
+    # stop relay because get_config_to_file will stop source
+    stop_relay_fail
+    stop_relay_success
+
     echo "get_config"
     get_config_wrong_arg
     get_config_to_file
@@ -194,7 +211,7 @@ function run() {
     # retry to wait for recovered from etcd ready
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4 # relay enabled
+        "\"stage\": \"Running\"" 2
 
     echo "show_ddl_locks_no_locks"
     show_ddl_locks_no_locks $TASK_NAME
@@ -212,6 +229,8 @@ function run() {
     # update_task_worker_not_found $TASK_CONF 127.0.0.1:9999
     # update_task_success_single_worker $TASK_CONF $SOURCE_ID1
     # update_task_success $TASK_CONF
+
+    start_relay_success
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
