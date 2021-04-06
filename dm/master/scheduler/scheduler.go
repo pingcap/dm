@@ -1565,31 +1565,34 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 // returns (true, nil) after bounded.
 // called should update the s.unbounds
 func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
-	// 1. try to find history workers...
 	var worker *Worker
-	for workerName, bound := range s.lastBound {
-		if bound.Source == source {
-			w, ok := s.workers[workerName]
-			if !ok {
-				// a not found worker
-				continue
-			}
-			if w.Stage() == WorkerFree {
-				worker = w
-				s.logger.Info("found free history worker when source bound",
-					zap.String("worker", workerName),
-					zap.String("source", source))
-				break
+	relayWorkers := s.relayWorkers[source]
+	// 1. try to find a history worker in relay workers...
+	if len(relayWorkers) > 0 {
+		for workerName, bound := range s.lastBound {
+			if bound.Source == source {
+				w, ok := s.workers[workerName]
+				if !ok {
+					// a not found worker
+					continue
+				}
+				if _, ok2 := relayWorkers[workerName]; ok2 && w.Stage() == WorkerFree {
+					worker = w
+					s.logger.Info("found history relay worker when source bound",
+						zap.String("worker", workerName),
+						zap.String("source", source))
+					break
+				}
 			}
 		}
 	}
 	// then a relay worker for this source...
 	if worker == nil {
-		for workerName := range s.relayWorkers[source] {
+		for workerName := range relayWorkers {
 			w, ok := s.workers[workerName]
 			if !ok {
 				// a not found worker, should not happened
-				s.logger.Info("worker instance not found for relay worker", zap.String("worker", workerName))
+				s.logger.Warn("worker instance not found for relay worker", zap.String("worker", workerName))
 				continue
 			}
 			if w.Stage() == WorkerFree {
@@ -1598,6 +1601,25 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 					zap.String("worker", workerName),
 					zap.String("source", source))
 				break
+			}
+		}
+	}
+	// then a history worker for this source...
+	if worker == nil {
+		for workerName, bound := range s.lastBound {
+			if bound.Source == source {
+				w, ok := s.workers[workerName]
+				if !ok {
+					// a not found worker
+					continue
+				}
+				if w.Stage() == WorkerFree {
+					worker = w
+					s.logger.Info("found history worker when source bound",
+						zap.String("worker", workerName),
+						zap.String("source", source))
+					break
+				}
 			}
 		}
 	}
