@@ -164,12 +164,13 @@ func (t *testConfig) TestConfigVerify(c *C) {
 			".*not valid.*",
 		},
 		{
+			// after support `start-relay`, we always check Relay related config
 			func() *SourceConfig {
 				cfg := newConfig()
 				cfg.RelayBinLogName = "mysql-binlog"
 				return cfg
 			},
-			"",
+			".*not valid.*",
 		},
 		{
 			func() *SourceConfig {

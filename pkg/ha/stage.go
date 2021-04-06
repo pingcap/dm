@@ -99,6 +99,12 @@ func PutRelayStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	return rev, err
 }
 
+// DeleteRelayStage deleted the relay stage of this source
+func DeleteRelayStage(cli *clientv3.Client, source string) (int64, error) {
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, deleteRelayStageOp(source))
+	return rev, err
+}
+
 // PutSubTaskStage puts the stage of the subtask into etcd.
 // k/v: sourceID, task -> the running stage of the subtask.
 func PutSubTaskStage(cli *clientv3.Client, stages ...Stage) (int64, error) {

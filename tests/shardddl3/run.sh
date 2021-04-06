@@ -2460,19 +2460,23 @@ function DM_DropAddColumn_CASE() {
 
     restart_master_on_pos $reset "1"
 
-    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column c;"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(4,4);"
 
     restart_master_on_pos $reset "2"
-
-    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column c;"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
-
-    restart_master_on_pos $reset "3"
 
     # make sure column c is fully dropped in the downstream
     check_log_contain_with_retry 'finish to handle ddls in optimistic shard mode' $WORK_DIR/worker1/log/dm-worker.log
     check_log_contain_with_retry 'finish to handle ddls in optimistic shard mode' $WORK_DIR/worker2/log/dm-worker.log
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "no DDL lock exists" 1
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(5);"
+
+    restart_master_on_pos $reset "3"
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column c int;"
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(6,6);"
@@ -2482,7 +2486,7 @@ function DM_DropAddColumn_CASE() {
     # make sure task to step in "Sync" stage
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
-        "\"stage\": \"Running\"" 3 \
+        "\"stage\": \"Running\"" 2 \
         "\"unit\": \"Sync\"" 2
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int after a;"
