@@ -6,7 +6,7 @@ function purge_relay_wrong_arg() {
         "purge-relay <-s source> <-f filename> \[--sub-dir directory\] \[flags\]" 1
 }
 
-function purge_relay_wihout_worker() {
+function purge_relay_without_worker() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "purge-relay" \
         "must specify at least one source (\`-s\` \/ \`--source\`)" 1
