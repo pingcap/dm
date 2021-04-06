@@ -1339,6 +1339,7 @@ function DM_125_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    # FIXME: dm-master should remove this lock after all shards are synced.
     run_dm_ctl_with_rematch $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "show-ddl-locks" \
         "\"unsynced\": \[[\n ]*\]" 1
@@ -1374,6 +1375,7 @@ function DM_126_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9,9,9);"
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    # FIXME: dm-master should remove this lock after all shards are synced.
     run_dm_ctl_with_rematch $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "show-ddl-locks" \
         "\"unsynced\": \[[\n ]*\]" 1
@@ -1409,6 +1411,7 @@ function DM_127_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    # FIXME: dm-master should remove this lock after all shards are synced.
     run_dm_ctl_with_rematch $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "show-ddl-locks" \
         "\"unsynced\": \[[\n ]*\]" 1
@@ -1695,6 +1698,7 @@ function DM_134_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11);"
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12);"
 
+    # FIXME: dm-master should give warnings to users that constraint is changed.
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
