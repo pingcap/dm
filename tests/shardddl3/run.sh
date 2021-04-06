@@ -2537,6 +2537,45 @@ function DM_DropAddColumn() {
     done
 }
 
+function DM_INIT_SCHEMA_CASE() {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add new_col1 int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6);"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop new_col1;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9);"
+
+    check_log_contain_with_retry 'finish to handle ddls in optimistic shard mode.*DROP COLUMN' \
+        $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+
+    restart_master
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add new_col1 int;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12);"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop new_col1;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(13);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(14);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(15);"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"result\": true" 3
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+
+function DM_INIT_SCHEMA() {
+    run_case INIT_SCHEMA "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
+
 function run() {
     init_cluster
     init_database
@@ -2556,6 +2595,7 @@ function run() {
     DM_RestartMaster
 
     DM_DropAddColumn
+    DM_INIT_SCHEMA
 }
 
 cleanup_data $shardddl

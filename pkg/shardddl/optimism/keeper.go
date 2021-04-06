@@ -44,7 +44,9 @@ func (lk *LockKeeper) RebuildLocksAndTables(
 	ifm map[string]map[string]map[string]map[string]Info,
 	colm map[string]map[string]map[string]map[string]map[string]struct{},
 	lockJoined map[string]schemacmp.Table,
-	lockTTS map[string][]TargetTable) {
+	lockTTS map[string][]TargetTable,
+	missTable map[string]map[string]map[string]map[string]schemacmp.Table,
+) {
 	var (
 		lock *Lock
 		ok   bool
@@ -62,6 +64,17 @@ func (lk *LockKeeper) RebuildLocksAndTables(
 					if columns, ok := colm[lockID]; ok {
 						lock.columns = columns
 					}
+				}
+			}
+		}
+	}
+
+	// update missTable's table info for locks
+	for lockID, lockTable := range missTable {
+		for source, sourceTable := range lockTable {
+			for schema, schemaTable := range sourceTable {
+				for table, tableinfo := range schemaTable {
+					lk.locks[lockID].tables[source][schema][table] = tableinfo
 				}
 			}
 		}

@@ -447,7 +447,7 @@ func (t *testKeeper) TestRebuildLocksAndTables(c *C) {
 		}
 	)
 
-	lk.RebuildLocksAndTables(etcdTestCli, ifm, colm, lockJoined, lockTTS)
+	lk.RebuildLocksAndTables(etcdTestCli, ifm, colm, lockJoined, lockTTS, nil)
 	locks := lk.Locks()
 	c.Assert(len(locks), Equals, 1)
 	lock, ok := locks[lockID]

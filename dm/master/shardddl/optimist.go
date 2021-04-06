@@ -296,7 +296,8 @@ func sortInfos(ifm map[string]map[string]map[string]map[string]optimism.Info) []
 func (o *Optimist) buildLockJoinedAndTTS(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
 	initSchemas map[string]map[string]map[string]optimism.InitSchema) (
-	map[string]schemacmp.Table, map[string][]optimism.TargetTable) {
+	map[string]schemacmp.Table, map[string][]optimism.TargetTable,
+	map[string]map[string]map[string]map[string]schemacmp.Table) {
 
 	type infoKey struct {
 		lockID   string
@@ -321,6 +322,7 @@ func (o *Optimist) buildLockJoinedAndTTS(
 	}
 
 	lockJoined := make(map[string]schemacmp.Table)
+	missTable := make(map[string]map[string]map[string]map[string]schemacmp.Table)
 	for lockID, tts := range lockTTS {
 		for _, tt := range tts {
 			for upSchema, tables := range tt.UpTables {
@@ -332,6 +334,16 @@ func (o *Optimist) buildLockJoinedAndTTS(
 						// If there is no optimism.Info for a upstream table, it indicates the table structure
 						// hasn't been changed since last removeLock. So the init schema should be its table info.
 						table = schemacmp.Encode(initSchema.TableInfo)
+						if _, ok := missTable[lockID]; !ok {
+							missTable[lockID] = make(map[string]map[string]map[string]schemacmp.Table)
+						}
+						if _, ok := missTable[lockID][tt.Source]; !ok {
+							missTable[lockID][tt.Source] = make(map[string]map[string]schemacmp.Table)
+						}
+						if _, ok := missTable[lockID][tt.Source][upSchema]; !ok {
+							missTable[lockID][tt.Source][upSchema] = make(map[string]schemacmp.Table)
+						}
+						missTable[lockID][tt.Source][upSchema][upTable] = table
 					} else {
 						o.logger.Error(
 							"can not find table info for upstream table",
@@ -356,7 +368,7 @@ func (o *Optimist) buildLockJoinedAndTTS(
 			}
 		}
 	}
-	return lockJoined, lockTTS
+	return lockJoined, lockTTS, missTable
 }
 
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.
@@ -367,10 +379,10 @@ func (o *Optimist) recoverLocks(
 	initSchemas map[string]map[string]map[string]optimism.InitSchema) error {
 	// construct joined table based on the shard DDL info.
 	o.logger.Info("build lock joined and tts")
-	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm, initSchemas)
+	lockJoined, lockTTS, missTable := o.buildLockJoinedAndTTS(ifm, initSchemas)
 	// build lock and restore table info
 	o.logger.Info("rebuild locks and tables")
-	o.lk.RebuildLocksAndTables(o.cli, ifm, colm, lockJoined, lockTTS)
+	o.lk.RebuildLocksAndTables(o.cli, ifm, colm, lockJoined, lockTTS, missTable)
 	// sort infos by revision
 	infos := sortInfos(ifm)
 	var firstErr error
