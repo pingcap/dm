@@ -1046,7 +1046,7 @@ function DM_DropAddColumn_CASE() {
     # make sure task to step in "Sync" stage
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
-        "\"stage\": \"Running\"" 3 \
+        "\"stage\": \"Running\"" 2 \
         "\"unit\": \"Sync\"" 2
 
     run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int after a;"

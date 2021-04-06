@@ -154,6 +154,8 @@ func (w *Worker) Close() {
 	// cancel status output ticker and wait for return
 	w.cancel()
 	w.wg.Wait()
+	w.relayWg.Wait()
+	w.subTaskWg.Wait()
 
 	w.Lock()
 	defer w.Unlock()
