@@ -118,6 +118,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	)
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1
+	sourceCfg1.EnableRelay = true
 	sourceCfg2 := sourceCfg1
 	sourceCfg2.SourceID = sourceID2
 
@@ -1052,9 +1053,9 @@ func (t *testScheduler) TestTransferSource(c *C) {
 	s.sourceCfgs[sourceID2] = config.SourceConfig{}
 
 	worker1.ToFree()
-	c.Assert(s.boundSourceToWorker(sourceID1, worker1), IsNil)
+	c.Assert(s.boundSourceToWorker(sourceID1, worker1, false), IsNil)
 	worker2.ToFree()
-	c.Assert(s.boundSourceToWorker(sourceID2, worker2), IsNil)
+	c.Assert(s.boundSourceToWorker(sourceID2, worker2, false), IsNil)
 
 	c.Assert(s.bounds[sourceID1], DeepEquals, worker1)
 	c.Assert(s.bounds[sourceID2], DeepEquals, worker2)
