@@ -495,7 +495,14 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	defer cancel()
 
 	// create new done chan
+	// use lock of Syncer to avoid Close while Process
+	s.Lock()
+	if s.isClosed() {
+		s.Unlock()
+		return
+	}
 	s.done = make(chan struct{})
+	s.Unlock()
 
 	runFatalChan := make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
 	s.runFatalChan = runFatalChan
@@ -931,7 +938,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		case config.ShardOptimistic:
 			if len(sqlJob.ddls) == 0 {
 				ignore = true
-				tctx.L().Info("ignore shard DDLs in optimistic mode", log.WrapStringerField("info", s.optimist.PendingInfo()))
+				tctx.L().Info("ignore shard DDLs in optimistic mode", zap.String("info", s.optimist.PendingInfo().ShortString()))
 			}
 		}
 		if !ignore {
