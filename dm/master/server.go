@@ -1230,7 +1230,7 @@ func enableTLS(tlsCfg *config.Security) bool {
 		return false
 	}
 
-	if len(tlsCfg.SSLCA) == 0 || len(tlsCfg.SSLCert) == 0 || len(tlsCfg.SSLKey) == 0 {
+	if len(tlsCfg.SSLCA) == 0 {
 		return false
 	}
 
