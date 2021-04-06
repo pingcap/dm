@@ -18,9 +18,9 @@ function prepare_data() {
 
 function run() {
     failpoints=(
-                # 1152 is ErrAbortingConnection
-                "github.com/pingcap/dm/syncer/LoadCheckpointFailed=return(1152)"
-                "github.com/pingcap/dm/syncer/GetMasterStatusFailed=return(1152)"
+        # 1152 is ErrAbortingConnection
+        "github.com/pingcap/dm/syncer/LoadCheckpointFailed=return(1152)"
+        "github.com/pingcap/dm/syncer/GetMasterStatusFailed=return(1152)"
     )
 
     for(( i=0;i<${#failpoints[@]};i++)) do
@@ -42,6 +42,10 @@ function run() {
         cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
         sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
         dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-relay -s $SOURCE_ID1 worker1" \
+            "\"result\": true" 1
 
         echo "start task and query status, the sync unit will initial failed"
         task_conf="$cur/conf/dm-task.yaml"

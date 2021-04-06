@@ -79,6 +79,7 @@ func (t *testMaster) TestCollectSourceConfigFilesV1Import(c *C) {
 	cfg1.From.Port = port
 	cfg1.From.User = user
 	cfg1.From.Password = password
+	cfg1.RelayDir = "relay-dir"
 	cfg2 := cfg1.Clone()
 	cfg2.SourceID = "mysql-replica-02"
 
