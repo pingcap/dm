@@ -837,9 +837,7 @@ func (s *Scheduler) StartRelay(source string, workers []string) error {
 			oldSource[w] = source2
 		}
 	}
-	var (
-		busyWorkers, busySources []string
-	)
+	var busyWorkers, busySources []string
 	for _, w := range workers {
 		source2 := oldSource[w]
 		if source2 != "" {
