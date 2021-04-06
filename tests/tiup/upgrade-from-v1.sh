@@ -100,7 +100,7 @@ function import_to_v2_by_tiup() {
     # import from v1
     # TODO: update `--cluster-version` to the target version later.
     tiup install dmctl:$DM_V2_VER
-    tiup dm import --yes --dir=/home/tidb/dm-ansible --cluster-version $DM_V2_VER
+    tiup dm:v1.3.7 import --yes --dir=/home/tidb/dm-ansible --cluster-version $DM_V2_VER
     tiup dm start --yes $CLUSTER_NAME
 }
 
