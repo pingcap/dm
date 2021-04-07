@@ -18,8 +18,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"sync"
+	"sync/atomic"
 
+	"github.com/go-sql-driver/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
@@ -30,6 +33,8 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
+
+var customID int64
 
 // TCPReader is a binlog event reader which read binlog events from a TCP stream.
 type TCPReader struct {
@@ -121,6 +126,17 @@ func (r *TCPReader) Close() error {
 	if connID > 0 {
 		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4",
 			r.syncerCfg.User, r.syncerCfg.Password, r.syncerCfg.Host, r.syncerCfg.Port)
+		if r.syncerCfg.TLSConfig != nil {
+			tlsName := "replicate" + strconv.FormatInt(atomic.AddInt64(&customID, 1), 10)
+			err := mysql.RegisterTLSConfig(tlsName, r.syncerCfg.TLSConfig)
+			if err != nil {
+				return terror.WithScope(
+					terror.Annotatef(terror.DBErrorAdapt(err, terror.ErrDBDriverError),
+						"fail to register tls config", r.syncerCfg.Host, r.syncerCfg.Port), terror.ScopeUpstream)
+			}
+			dsn += "&tls=" + tlsName
+			defer mysql.DeregisterTLSConfig(tlsName)
+		}
 		db, err := sql.Open("mysql", dsn)
 		if err != nil {
 			return terror.WithScope(

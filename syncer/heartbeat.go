@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -83,7 +84,7 @@ type Heartbeat struct {
 	schema string // for which schema the heartbeat table belongs to
 	table  string // for which table the heartbeat table belongs to
 
-	primary     *sql.DB
+	primary     *conn.BaseDB
 	secondaryTs map[string]float64 // task-name => secondary (syncer) ts
 
 	cancel context.CancelFunc
@@ -122,12 +123,12 @@ func (h *Heartbeat) AddTask(name string) error {
 	if h.primary == nil {
 		// open DB
 		dbCfg := h.cfg.primaryCfg
-		dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8&interpolateParams=true&readTimeout=1m", dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port)
-		primary, err := sql.Open("mysql", dbDSN)
+		dbCfg.RawDBCfg.ReadTimeout = "1m"
+		baseDB, err := conn.DefaultDBProvider.Apply(dbCfg)
 		if err != nil {
 			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 		}
-		h.primary = primary
+		h.primary = baseDB
 
 		// init table
 		err = h.init()
@@ -275,7 +276,7 @@ func (h *Heartbeat) run(ctx context.Context) {
 // createTable creates heartbeat database if not exists in primary
 func (h *Heartbeat) createDatabase() error {
 	createDatabase := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", h.schema)
-	_, err := h.primary.Exec(createDatabase)
+	_, err := h.primary.DB.Exec(createDatabase)
 	h.logger.Info("create heartbeat schema", zap.String("sql", createDatabase))
 	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 }
@@ -289,7 +290,7 @@ func (h *Heartbeat) createTable() error {
   PRIMARY KEY (server_id)
 )`, tableName)
 
-	_, err := h.primary.Exec(createTableStmt)
+	_, err := h.primary.DB.Exec(createTableStmt)
 	h.logger.Info("create heartbeat table", zap.String("sql", createTableStmt))
 	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 }
@@ -297,7 +298,7 @@ func (h *Heartbeat) createTable() error {
 // updateTS use `REPLACE` statement to insert or update ts
 func (h *Heartbeat) updateTS() error {
 	query := fmt.Sprintf("REPLACE INTO `%s`.`%s` (`ts`, `server_id`) VALUES(UTC_TIMESTAMP(6), ?)", h.schema, h.table)
-	_, err := h.primary.Exec(query, h.cfg.serverID)
+	_, err := h.primary.DB.Exec(query, h.cfg.serverID)
 	h.logger.Debug("update ts", zap.String("sql", query), zap.Uint32("server ID", h.cfg.serverID))
 	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 }
@@ -330,7 +331,7 @@ func reportLag(taskName string, lag float64) {
 }
 
 func (h *Heartbeat) getPrimaryTS() (float64, error) {
-	return h.getTS(h.primary)
+	return h.getTS(h.primary.DB)
 }
 
 func (h *Heartbeat) getTS(db *sql.DB) (float64, error) {
