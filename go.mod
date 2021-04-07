@@ -17,7 +17,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.14.3
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
-	github.com/pingcap/dumpling v0.0.0-20210407081232-2781c1e39e26
+	github.com/pingcap/dumpling v0.0.0-20210407092432-e1cfe4ce0a53
 	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3
 	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
 	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
