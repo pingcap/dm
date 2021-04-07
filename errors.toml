@@ -1883,7 +1883,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36062]
-message = "fail to handle shard ddl %v in optimistic mode, because schema conflict detected"
+message = "fail to handle shard ddl %v in optimistic mode, because schema conflict detected, conflict error: %s"
 description = ""
 workaround = "Please use show-ddl-locks command for more details."
 tags = ["internal", "high"]
@@ -2244,6 +2244,12 @@ tags = ["internal", "high"]
 
 [error.DM-dm-master-38054]
 message = "inconsistent count of optimistic ddls and table infos, ddls: %d, table info: %d"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-dm-master-38055]
+message = "table-info-before not exist in optimistic ddls: %v"
 description = ""
 workaround = ""
 tags = ["internal", "high"]

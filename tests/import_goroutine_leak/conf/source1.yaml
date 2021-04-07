@@ -1,7 +1,7 @@
 source-id: mysql-replica-01
 flavor: ''
 enable-gtid: false
-enable-relay: true
+enable-relay: false # in this case enable-relay will trigger a subtask reset, which fails the test
 relay-binlog-name: ''
 relay-binlog-gtid: ''
 from:

@@ -37,6 +37,7 @@ import (
 var (
 	etcdTestCli      *clientv3.Client
 	etcdErrCompacted = v3rpc.ErrCompacted
+	tt               *testing.T
 )
 
 const (
@@ -54,6 +55,7 @@ func TestShardDDL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	tt = t
 
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer mockCluster.Terminate(t)

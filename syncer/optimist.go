@@ -177,7 +177,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	}
 
 	if op.ConflictStage == optimism.ConflictDetected {
-		return terror.ErrSyncerShardDDLConflict.Generate(needHandleDDLs)
+		return terror.ErrSyncerShardDDLConflict.Generate(needHandleDDLs, op.ConflictMsg)
 	}
 
 	// updated needHandleDDLs to DDLs received from DM-master.
