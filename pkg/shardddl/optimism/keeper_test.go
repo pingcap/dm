@@ -14,17 +14,29 @@
 package optimism
 
 import (
+	"testing"
+
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"github.com/pingcap/tidb/util/mock"
+	"go.etcd.io/etcd/integration"
 )
 
 type testKeeper struct{}
 
 var _ = Suite(&testKeeper{})
+
+func TestKeeper(t *testing.T) {
+	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
+	defer mockCluster.Terminate(t)
+
+	etcdTestCli = mockCluster.RandClient()
+
+	TestingT(t)
+}
 
 func (t *testKeeper) TestLockKeeper(c *C) {
 	var (
@@ -59,10 +71,11 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 	)
 
 	// lock with 2 sources.
-	lockID1, newDDLs, err := lk.TrySync(etcdTestCli, i11, tts1)
+	lockID1, newDDLs, cols, err := lk.TrySync(etcdTestCli, i11, tts1)
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
+	c.Assert(cols, DeepEquals, []string{})
 	lock1 := lk.FindLock(lockID1)
 	c.Assert(lock1, NotNil)
 	c.Assert(lock1.ID, Equals, lockID1)
@@ -71,10 +84,11 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
 
-	lockID1, newDDLs, err = lk.TrySync(etcdTestCli, i12, tts1)
+	lockID1, newDDLs, cols, err = lk.TrySync(etcdTestCli, i12, tts1)
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
+	c.Assert(cols, DeepEquals, []string{})
 	lock1 = lk.FindLock(lockID1)
 	c.Assert(lock1, NotNil)
 	c.Assert(lock1.ID, Equals, lockID1)
@@ -83,10 +97,11 @@ func (t *testKeeper) TestLockKeeper(c *C) {
 	c.Assert(remain, Equals, 0)
 
 	// lock with only 1 source.
-	lockID2, newDDLs, err := lk.TrySync(etcdTestCli, i21, tts2)
+	lockID2, newDDLs, cols, err := lk.TrySync(etcdTestCli, i21, tts2)
 	c.Assert(err, IsNil)
 	c.Assert(lockID2, Equals, "task2-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
+	c.Assert(cols, DeepEquals, []string{})
 	lock2 := lk.FindLock(lockID2)
 	c.Assert(lock2, NotNil)
 	c.Assert(lock2.ID, Equals, lockID2)
@@ -152,16 +167,18 @@ func (t *testKeeper) TestLockKeeperMultipleTarget(c *C) {
 	)
 
 	// lock for target1.
-	lockID1, newDDLs, err := lk.TrySync(etcdTestCli, i11, tts1)
+	lockID1, newDDLs, cols, err := lk.TrySync(etcdTestCli, i11, tts1)
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
+	c.Assert(cols, DeepEquals, []string{})
 
 	// lock for target2.
-	lockID2, newDDLs, err := lk.TrySync(etcdTestCli, i21, tts2)
+	lockID2, newDDLs, cols, err := lk.TrySync(etcdTestCli, i21, tts2)
 	c.Assert(err, IsNil)
 	c.Assert(lockID2, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`rab`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
+	c.Assert(cols, DeepEquals, []string{})
 
 	// check two locks exist.
 	lock1 := lk.FindLock(lockID1)
@@ -180,14 +197,16 @@ func (t *testKeeper) TestLockKeeperMultipleTarget(c *C) {
 	c.Assert(remain, Equals, 1)
 
 	// sync for two locks.
-	lockID1, newDDLs, err = lk.TrySync(etcdTestCli, i12, tts1)
+	lockID1, newDDLs, cols, err = lk.TrySync(etcdTestCli, i12, tts1)
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`bar`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
-	lockID2, newDDLs, err = lk.TrySync(etcdTestCli, i22, tts2)
+	c.Assert(cols, DeepEquals, []string{})
+	lockID2, newDDLs, cols, err = lk.TrySync(etcdTestCli, i22, tts2)
 	c.Assert(err, IsNil)
 	c.Assert(lockID2, DeepEquals, "test-lock-keeper-multiple-target-`foo`.`rab`")
 	c.Assert(newDDLs, DeepEquals, DDLs)
+	c.Assert(cols, DeepEquals, []string{})
 
 	lock1 = lk.FindLock(lockID1)
 	c.Assert(lock1, NotNil)
@@ -431,11 +450,11 @@ func (t *testKeeper) TestRebuildLocksAndTables(c *C) {
 				source2: {upSchema: {upTable: i21}},
 			},
 		}
-		colm = map[string]map[string]map[string]map[string]map[string]struct{}{
+		colm = map[string]map[string]map[string]map[string]map[string]bool{
 			lockID: {
 				"c3": {
-					source1: {upSchema: {upTable: {}}},
-					source2: {upSchema: {upTable: {}}},
+					source1: {upSchema: {upTable: false}},
+					source2: {upSchema: {upTable: false}},
 				},
 			},
 		}

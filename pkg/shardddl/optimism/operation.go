@@ -58,11 +58,12 @@ type Operation struct {
 	ConflictStage ConflictStage `json:"conflict-stage"`   // current conflict stage.
 	ConflictMsg   string        `json:"conflict-message"` // current conflict message
 	Done          bool          `json:"done"`             // whether the operation has done
+	Cols          []string      `json:"cols"`             // drop columns' name
 }
 
 // NewOperation creates a new Operation instance.
 func NewOperation(ID, task, source, upSchema, upTable string,
-	DDLs []string, conflictStage ConflictStage, conflictMsg string, done bool) Operation {
+	DDLs []string, conflictStage ConflictStage, conflictMsg string, done bool, cols []string) Operation {
 	return Operation{
 		ID:            ID,
 		Task:          task,
@@ -73,6 +74,7 @@ func NewOperation(ID, task, source, upSchema, upTable string,
 		ConflictStage: conflictStage,
 		ConflictMsg:   conflictMsg,
 		Done:          done,
+		Cols:          cols,
 	}
 }
 

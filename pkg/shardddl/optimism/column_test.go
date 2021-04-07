@@ -13,7 +13,9 @@
 
 package optimism
 
-import . "github.com/pingcap/check"
+import (
+	. "github.com/pingcap/check"
+)
 
 type testColumn struct{}
 
@@ -33,32 +35,30 @@ func (t *testColumn) TestColumnETCD(c *C) {
 		upSchema2  = "shardddl2"
 		upTable2   = "tb2"
 		info1      = NewInfo(task, source1, upSchema1, upTable1, downSchema, downTable, nil, nil, nil)
-		info2      = NewInfo(task, source1, upSchema2, upTable2, downSchema, downTable, nil, nil, nil)
-		info3      = NewInfo(task, source2, upSchema1, upTable1, downSchema, downTable, nil, nil, nil)
 		lockID     = genDDLLockID(info1)
 	)
-	rev1, putted, err := PutDroppedColumn(etcdTestCli, info1, "a")
+	rev1, putted, err := PutDroppedColumn(etcdTestCli, lockID, "a", source1, upSchema1, upTable1, false)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
-	rev2, putted, err := PutDroppedColumn(etcdTestCli, info1, "b")
+	rev2, putted, err := PutDroppedColumn(etcdTestCli, lockID, "b", source1, upSchema1, upTable1, false)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(rev2, Greater, rev1)
-	rev3, putted, err := PutDroppedColumn(etcdTestCli, info2, "b")
+	rev3, putted, err := PutDroppedColumn(etcdTestCli, lockID, "b", source1, upSchema2, upTable2, false)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(rev3, Greater, rev2)
-	rev4, putted, err := PutDroppedColumn(etcdTestCli, info3, "b")
+	rev4, putted, err := PutDroppedColumn(etcdTestCli, lockID, "b", source2, upSchema1, upTable1, false)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(rev4, Greater, rev3)
 
-	expectedColm := map[string]map[string]map[string]map[string]map[string]struct{}{
+	expectedColm := map[string]map[string]map[string]map[string]map[string]bool{
 		lockID: {
-			"a": {source1: {upSchema1: {upTable1: struct{}{}}}},
-			"b": {source1: {upSchema1: {upTable1: struct{}{}},
-				upSchema2: {upTable2: struct{}{}}},
-				source2: {upSchema1: {upTable1: struct{}{}}}},
+			"a": {source1: {upSchema1: {upTable1: false}}},
+			"b": {source1: {upSchema1: {upTable1: false},
+				upSchema2: {upTable2: false}},
+				source2: {upSchema1: {upTable1: false}}},
 		},
 	}
 	colm, rev5, err := GetAllDroppedColumns(etcdTestCli)
@@ -66,7 +66,7 @@ func (t *testColumn) TestColumnETCD(c *C) {
 	c.Assert(colm, DeepEquals, expectedColm)
 	c.Assert(rev5, Equals, rev4)
 
-	rev6, deleted, err := DeleteDroppedColumns(etcdTestCli, task, downSchema, downTable, "b")
+	rev6, deleted, err := DeleteDroppedColumns(etcdTestCli, lockID, "b")
 	c.Assert(err, IsNil)
 	c.Assert(deleted, IsTrue)
 	c.Assert(rev6, Greater, rev5)

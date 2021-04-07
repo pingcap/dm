@@ -29,7 +29,7 @@ func (t *testForEtcd) TestDeleteInfosOperationsSchema(c *C) {
 		downTable  = "bar"
 		DDLs       = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
 		info       = NewInfo(task, source, upSchema, upTable, downSchema, downTable, DDLs, nil, nil)
-		op         = NewOperation("test-ID", task, source, upSchema, upTable, DDLs, ConflictResolved, "", false)
+		op         = NewOperation("test-ID", task, source, upSchema, upTable, DDLs, ConflictResolved, "", false, []string{})
 		is         = NewInitSchema(task, downSchema, downTable, nil)
 	)
 

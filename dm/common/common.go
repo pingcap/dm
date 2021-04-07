@@ -80,7 +80,7 @@ var (
 	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name) -> table schema.
 	ShardDDLOptimismInitSchemaKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/init-schema/")
 	// ShardDDLOptimismDroppedColumnsKeyAdapter is used to store the columns that are not fully dropped
-	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name, column-name, source-id, upstream-schema-name, upstream-table-name) -> empty
+	// k/v: Encode(lock-id, column-name, source-id, upstream-schema-name, upstream-table-name) -> bool
 	// If we don't identify different upstream tables, we may report an error for tb2 in the following case.
 	// Time series: (+a/-a means add/drop column a)
 	//	    older ----------------> newer
@@ -105,7 +105,7 @@ func keyAdapterKeysLen(s KeyAdapter) int {
 	case ShardDDLOptimismInfoKeyAdapter, ShardDDLOptimismOperationKeyAdapter:
 		return 4
 	case ShardDDLOptimismDroppedColumnsKeyAdapter:
-		return 7
+		return 5
 	}
 	return -1
 }
