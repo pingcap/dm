@@ -1066,6 +1066,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(2), "b"}}}},
 		mockBinlogEvent{typ: Delete, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(1), "a"}}}},
 		mockBinlogEvent{typ: Update, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(2), "b"}, {int32(1), "b"}}}},
+
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"test_1", "create table test_1.t_3(id int primary key, name varchar(24))"}},
+		mockBinlogEvent{typ: DDL, args: []interface{}{"test_1", "alter table test_1.t_3 drop primary key"}},
+		mockBinlogEvent{typ: DDL, args: []interface{}{"test_1", "alter table test_1.t_3 add primary key(id, name)"}},
 	}
 
 	mockStreamerProducer := &MockStreamProducer{s.generateEvents(events1, c)}
@@ -1143,6 +1147,30 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			update,
 			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int64(580981944116838401), "b"},
+		}, {
+			flush,
+			"",
+			nil,
+		}, {
+			ddl,
+			"CREATE TABLE IF NOT EXISTS `test_1`.`t_3` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			nil,
+		}, {
+			flush,
+			"",
+			nil,
+		}, {
+			ddl,
+			"ALTER TABLE `test_1`.`t_3` DROP PRIMARY KEY",
+			nil,
+		}, {
+			flush,
+			"",
+			nil,
+		}, {
+			ddl,
+			"ALTER TABLE `test_1`.`t_3` ADD PRIMARY KEY(`id`, `name`)",
+			nil,
 		},
 	}
 

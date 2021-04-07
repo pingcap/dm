@@ -75,6 +75,8 @@ func NewRootCmd() *cobra.Command {
 		master.NewGetCfgCmd(),
 		master.NewHandleErrorCmd(),
 		master.NewTransferSourceCmd(),
+		master.NewStartRelayCmd(),
+		master.NewStopRelayCmd(),
 	)
 	// copied from (*cobra.Command).InitDefaultHelpCmd
 	helpCmd := &cobra.Command{
