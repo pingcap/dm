@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
@@ -49,7 +50,6 @@ import (
 	"github.com/pingcap/dm/relay/retry"
 	"github.com/pingcap/dm/relay/transformer"
 	"github.com/pingcap/dm/relay/writer"
-	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 var (
@@ -69,6 +69,8 @@ const (
 
 // NewRelay creates an instance of Relay.
 var NewRelay = NewRealRelay
+
+var _ Process = &Relay{}
 
 // Process defines mysql-like relay log process unit
 type Process interface {
@@ -198,6 +200,11 @@ func (r *Relay) process(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	failpoint.Inject("NewUpstreamServer", func(_ failpoint.Value) {
+		// test a bug which caused by upstream switching
+		isNew = true
+	})
 
 	if isNew {
 		// re-setup meta for new server or new source
