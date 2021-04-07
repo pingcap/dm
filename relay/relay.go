@@ -916,6 +916,7 @@ func (r *Relay) Reload(newCfg *Config) error {
 	r.cfg.Charset = newCfg.Charset
 
 	r.closeDB()
+	r.cfg.From.RawDBCfg.ReadTimeout = showStatusConnectionTimeout
 	db, err := conn.DefaultDBProvider.Apply(r.cfg.From)
 	if err != nil {
 		return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
