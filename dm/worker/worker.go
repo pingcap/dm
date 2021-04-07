@@ -294,6 +294,7 @@ func (w *Worker) DisableRelay() {
 		w.relayPurger = nil
 		r.Close()
 	}
+	w.l.Info("relay disabled")
 }
 
 // EnableHandleSubtasks enables the functionality of start/watch/handle subtasks
@@ -359,6 +360,7 @@ func (w *Worker) DisableHandleSubtasks() {
 
 	// close all sub tasks
 	w.subTaskHolder.closeAllSubTasks()
+	w.l.Info("handling subtask enabled")
 }
 
 // fetchSubTasksAndAdjust gets source's subtask stages and configs, adjust some values by worker's config and status
