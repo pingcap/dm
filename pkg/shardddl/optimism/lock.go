@@ -264,11 +264,13 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, err erro
 			// for these two cases, we should execute the DDLs to the downstream to update the schema.
 			log.L().Info("joined table info changed", zap.String("lock", l.ID), zap.Int("cmp", cmp), zap.Stringer("from", oldJoined), zap.Stringer("to", newJoined),
 				zap.String("source", callerSource), zap.String("schema", callerSchema), zap.String("table", callerTable), zap.Strings("ddls", ddls))
-			// check for add column with a larger field len
 			if cmp < 0 {
-				_, err = AddDifferentFieldLenColumns(l.ID, ddls[idx], oldJoined, newJoined)
-				if err != nil {
-					return ddls, err
+				// check for add column with a larger field len
+				if col, err2 := AddDifferentFieldLenColumns(l.ID, ddls[idx], oldJoined, newJoined); err2 != nil {
+					return ddls, err2
+				} else if len(col) > 0 && l.IsDroppedColumn(info, col) {
+					return ddls, terror.ErrShardDDLOptimismTrySyncFail.Generate(
+						l.ID, fmt.Sprintf("add column %s that wasn't fully dropped in downstream. ddl: %s", col, ddls[idx]))
 				}
 			}
 			newDDLs = append(newDDLs, ddls[idx])
@@ -563,7 +565,7 @@ func (l *Lock) AddDroppedColumn(info Info, col string) error {
 	if l.IsDroppedColumn(info, col) {
 		return nil
 	}
-	log.L().Debug("add partially dropped columns", zap.String("column", col), zap.String("info", info.ShortString()))
+	log.L().Info("add partially dropped columns", zap.String("column", col), zap.String("info", info.ShortString()))
 
 	source, upSchema, upTable := info.Source, info.UpSchema, info.UpTable
 	_, _, err := PutDroppedColumn(l.cli, info, col)
@@ -602,7 +604,7 @@ func (l *Lock) DeleteColumnsByDDLs(ddls []string) error {
 		}
 	}
 	if len(colsToDelete) > 0 {
-		log.L().Debug("delete partially dropped columns",
+		log.L().Info("delete partially dropped columns",
 			zap.String("lockID", l.ID), zap.Strings("columns", colsToDelete))
 
 		_, _, err := DeleteDroppedColumns(l.cli, l.Task, l.DownSchema, l.DownTable, colsToDelete...)
