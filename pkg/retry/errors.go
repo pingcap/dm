@@ -62,8 +62,7 @@ var (
 
 	// UnresumableErrCodes is a set of unresumeable err codes.
 	UnresumableErrCodes = map[int32]struct{}{
-		int32(terror.ErrSyncUnitDDLWrongSequence.Code()): {},
-		//	int32(terror.ErrSyncerShardDDLConflict.Code()):      {},
+		int32(terror.ErrSyncUnitDDLWrongSequence.Code()):    {},
 		int32(terror.ErrDumpUnitGlobalLock.Code()):          {},
 		int32(terror.ErrDumpUnitRuntime.Code()):             {},
 		int32(terror.ErrSyncerUnitDMLColumnNotMatch.Code()): {},
