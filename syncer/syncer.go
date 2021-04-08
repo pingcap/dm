@@ -946,7 +946,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		fp := false
 		failpoint.Inject("ExecDDLError", func() {
 			s.tctx.L().Warn("execute ddl error", zap.Strings("DDL", sqlJob.ddls), zap.String("failpoint", "ExecDDLError"))
-			err = errors.Errorf("execute ddl %s error", sqlJob.ddls[0])
+			err = errors.Errorf("execute ddl %v error", sqlJob.ddls)
 			fp = true
 		})
 
