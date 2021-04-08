@@ -172,6 +172,7 @@ function test_kill_master() {
 
 
 function test_kill_and_isolate_worker() {
+    export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/defaultKeepAliveTTL=return(1)"
     echo "[$(date)] <<<<<< start test_kill_and_isolate_worker >>>>>>"
     test_running
 
@@ -265,6 +266,7 @@ function test_kill_and_isolate_worker() {
     echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     echo "[$(date)] <<<<<< finish test_kill_and_isolate_worker >>>>>>"
+    export GO_FAILPOINTS=""
 }
 
 # usage: test_kill_master_in_sync leader
