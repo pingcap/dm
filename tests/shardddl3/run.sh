@@ -2506,7 +2506,7 @@ function DM_DropAddColumn_CASE() {
 
     # try to fix data
     echo 'CREATE TABLE `tb1` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' > ${WORK_DIR}/schema.sql
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-schema set test ${WORK_DIR}/schema.sql -s mysql-replica-01 -d ${shardddl1} -t ${tb1}" \
         "\"result\": true" 2
 
@@ -2658,6 +2658,67 @@ function DM_DROP_COLUMN_EXEC_ERROR() {
     "clean_table" "optimistic"
 }
 
+function DM_DROP_COLUMN_ALL_DONE_CASE() {
+    # get worker of source1
+    w="1"
+    got=`grep "mysql-replica-01" $WORK_DIR/worker1/log/dm-worker.log | wc -l`
+    if [[ "$got" = "0" ]]; then
+        w="2"
+    fi
+
+    restart_worker $w "github.com/pingcap/dm/syncer/ExecDDLError=return()"
+
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,'ccc');"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column b;"
+    check_log_contain_with_retry 'finish to handle ddls in optimistic shard mode.*tb1 drop column' \
+        $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "execute .* error" 1
+
+    run_sql_source2 "alter table ${shardddl1}.${tb2} drop column b;"
+    check_log_contain_with_retry 'finish to handle ddls in optimistic shard mode.*tb2 drop column' \
+        $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+
+    restart_master
+
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6);"
+
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column b varchar(10);"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "because schema conflict detected" 1 \
+        "add column b that wasn't fully dropped in downstream" 1
+
+    restart_worker $w ""
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column b varchar(10);"
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b varchar(10);"
+
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,'ddd');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,'eee');"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,'fff');"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"result\": true" 3
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_DROP_COLUMN_ALL_DONE() {
+    run_case DROP_COLUMN_ALL_DONE "double-source-optimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, b varchar(10));\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, b varchar(10));\"" \
+    "clean_table" "optimistic"
+}
+
 function run() {
     init_cluster
     init_database
@@ -2679,6 +2740,7 @@ function run() {
     DM_DropAddColumn
     DM_INIT_SCHEMA
     DM_DROP_COLUMN_EXEC_ERROR
+    DM_DROP_COLUMN_ALL_DONE
 }
 
 cleanup_data $shardddl

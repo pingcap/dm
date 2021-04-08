@@ -18,6 +18,7 @@ import (
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // PutSourceTablesInfo puts source tables and a shard DDL info.
@@ -62,7 +63,7 @@ func DeleteInfosOperationsSchemaColumn(cli *clientv3.Client, infos []Info, ops [
 		opsDel = append(opsDel, deleteOperationOp(op))
 	}
 	opsDel = append(opsDel, deleteInitSchemaOp(schema.Task, schema.DownSchema, schema.DownTable))
-	opsDel = append(opsDel, deleteDroppedColumnsByLockOp(schema.Task, schema.DownSchema, schema.DownTable))
+	opsDel = append(opsDel, deleteDroppedColumnsByLockOp(utils.GenDDLLockID(schema.Task, schema.DownSchema, schema.DownTable)))
 	resp, rev, err := etcdutil.DoOpsInOneCmpsTxnWithRetry(cli, cmps, opsDel, []clientv3.Op{})
 	if err != nil {
 		return 0, false, err

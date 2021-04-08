@@ -375,7 +375,7 @@ func (o *Optimist) buildLockJoinedAndTTS(
 func (o *Optimist) recoverLocks(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
 	opm map[string]map[string]map[string]map[string]optimism.Operation,
-	colm map[string]map[string]map[string]map[string]map[string]struct{},
+	colm map[string]map[string]map[string]map[string]map[string]int,
 	initSchemas map[string]map[string]map[string]optimism.InitSchema) error {
 	// construct joined table based on the shard DDL info.
 	o.logger.Info("build lock joined and tts")
@@ -414,7 +414,7 @@ func (o *Optimist) recoverLocks(
 					}
 					if op.Done {
 						lock.TryMarkDone(op.Source, op.UpSchema, op.UpTable)
-						err := lock.DeleteColumnsByDDLs(op.DDLs)
+						err := lock.DeleteColumnsByOp(op)
 						if err != nil {
 							o.logger.Error("fail to update lock columns", zap.Error(err))
 							continue
@@ -600,7 +600,7 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 				continue
 			}
 
-			err := lock.DeleteColumnsByDDLs(op.DDLs)
+			err := lock.DeleteColumnsByOp(op)
 			if err != nil {
 				o.logger.Error("fail to update lock columns", zap.Error(err))
 			}
@@ -632,7 +632,7 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 
 // handleLock handles a single shard DDL lock.
 func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, skipDone bool) error {
-	lockID, newDDLs, err := o.lk.TrySync(o.cli, info, tts)
+	lockID, newDDLs, cols, err := o.lk.TrySync(o.cli, info, tts)
 	var cfStage = optimism.ConflictNone
 	var cfMsg = ""
 	if info.IgnoreConflict {
@@ -645,7 +645,7 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 			zap.String("lock", lockID), zap.String("info", info.ShortString()), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
 	} else {
 		o.logger.Info("the shard DDL lock returned some DDLs",
-			zap.String("lock", lockID), zap.Strings("ddls", newDDLs), zap.String("info", info.ShortString()), zap.Bool("is deleted", info.IsDeleted))
+			zap.String("lock", lockID), zap.Strings("ddls", newDDLs), zap.Strings("cols", cols), zap.String("info", info.ShortString()), zap.Bool("is deleted", info.IsDeleted))
 
 		// try to record the init schema before applied the DDL to the downstream.
 		initSchema := optimism.NewInitSchema(info.Task, info.DownSchema, info.DownTable, info.TableInfoBefore)
@@ -680,7 +680,7 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 		return nil
 	}
 
-	op := optimism.NewOperation(lockID, lock.Task, info.Source, info.UpSchema, info.UpTable, newDDLs, cfStage, cfMsg, false)
+	op := optimism.NewOperation(lockID, lock.Task, info.Source, info.UpSchema, info.UpTable, newDDLs, cfStage, cfMsg, false, cols)
 	rev, succ, err := optimism.PutOperation(o.cli, skipDone, op, info.Revision)
 	if err != nil {
 		return err
@@ -752,7 +752,7 @@ func (o *Optimist) deleteInfosOps(lock *optimism.Lock) (bool, error) {
 				info := optimism.NewInfo(lock.Task, source, schema, table, lock.DownSchema, lock.DownTable, nil, nil, nil)
 				info.Version = lock.GetVersion(source, schema, table)
 				infos = append(infos, info)
-				ops = append(ops, optimism.NewOperation(lock.ID, lock.Task, source, schema, table, nil, optimism.ConflictNone, "", false))
+				ops = append(ops, optimism.NewOperation(lock.ID, lock.Task, source, schema, table, nil, optimism.ConflictNone, "", false, nil))
 			}
 		}
 	}
