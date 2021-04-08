@@ -172,7 +172,10 @@ function test_kill_master() {
 
 
 function test_kill_and_isolate_worker() {
-    export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/defaultKeepAliveTTL=return(1)"
+    inject_points=("github.com/pingcap/dm/dm/worker/defaultKeepAliveTTL=return(1)"
+                   "github.com/pingcap/dm/dm/worker/defaultRelayKeepAliveTTL=return(2)"
+                   )
+    export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
     echo "[$(date)] <<<<<< start test_kill_and_isolate_worker >>>>>>"
     test_running
 
