@@ -375,7 +375,7 @@ func (o *Optimist) buildLockJoinedAndTTS(
 func (o *Optimist) recoverLocks(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
 	opm map[string]map[string]map[string]map[string]optimism.Operation,
-	colm map[string]map[string]map[string]map[string]map[string]bool,
+	colm map[string]map[string]map[string]map[string]map[string]int,
 	initSchemas map[string]map[string]map[string]optimism.InitSchema) error {
 	// construct joined table based on the shard DDL info.
 	o.logger.Info("build lock joined and tts")

@@ -28,6 +28,15 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
+const (
+	// DropNotDone represents master haven't received done for the col
+	DropNotDone = iota
+	// DropPartiallyDone represents master receive done for the col
+	DropPartiallyDone
+	// DropDone represents master receive done and ddl for the col(executed in downstream)
+	DropDone
+)
+
 // Lock represents the shard DDL lock in memory.
 // This information does not need to be persistent, and can be re-constructed from the shard DDL info.
 type Lock struct {
@@ -61,8 +70,8 @@ type Lock struct {
 	versions map[string]map[string]map[string]int64
 
 	// record the partially dropped columns
-	// column name -> source -> upSchema -> upTable -> bool
-	columns map[string]map[string]map[string]map[string]bool
+	// column name -> source -> upSchema -> upTable -> int
+	columns map[string]map[string]map[string]map[string]int
 }
 
 // NewLock creates a new Lock instance.
@@ -79,7 +88,7 @@ func NewLock(cli *clientv3.Client, ID, task, downSchema, downTable string, joine
 		done:       make(map[string]map[string]map[string]bool),
 		synced:     true,
 		versions:   make(map[string]map[string]map[string]int64),
-		columns:    make(map[string]map[string]map[string]map[string]bool),
+		columns:    make(map[string]map[string]map[string]map[string]int),
 	}
 	l.addTables(tts)
 	metrics.ReportDDLPending(task, metrics.DDLPendingNone, metrics.DDLPendingSynced)
@@ -580,21 +589,21 @@ func (l *Lock) AddDroppedColumn(info Info, col string) error {
 	}
 	log.L().Info("add partially dropped columns", zap.String("column", col), zap.String("info", info.ShortString()))
 
-	_, _, err := PutDroppedColumn(l.cli, genDDLLockID(info), col, info.Source, info.UpSchema, info.UpTable, false)
+	_, _, err := PutDroppedColumn(l.cli, genDDLLockID(info), col, info.Source, info.UpSchema, info.UpTable, DropNotDone)
 	if err != nil {
 		return err
 	}
 
 	if _, ok := l.columns[col]; !ok {
-		l.columns[col] = make(map[string]map[string]map[string]bool)
+		l.columns[col] = make(map[string]map[string]map[string]int)
 	}
 	if _, ok := l.columns[col][source]; !ok {
-		l.columns[col][source] = make(map[string]map[string]bool)
+		l.columns[col][source] = make(map[string]map[string]int)
 	}
 	if _, ok := l.columns[col][source][upSchema]; !ok {
-		l.columns[col][source][upSchema] = make(map[string]bool)
+		l.columns[col][source][upSchema] = make(map[string]int)
 	}
-	l.columns[col][source][upSchema][upTable] = false
+	l.columns[col][source][upSchema][upTable] = DropNotDone
 	return nil
 }
 
@@ -607,32 +616,50 @@ func (l *Lock) DeleteColumnsByOp(op Operation) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	colsToDelete := make([]string, 0, len(op.Cols))
+	doneCols := make(map[string]struct{}, len(op.DDLs))
+	for _, ddl := range op.DDLs {
+		col, err := GetColumnName(l.ID, ddl, ast.AlterTableDropColumn)
+		if err != nil {
+			return err
+		}
+		if len(col) > 0 {
+			doneCols[col] = struct{}{}
+		}
+	}
 
+	colsToDelete := make([]string, 0, len(op.Cols))
 	for _, col := range op.Cols {
+		done := DropPartiallyDone
 		if l.IsDroppedColumn(op.Source, op.UpSchema, op.UpTable, col) {
-			// mark col done
-			_, _, err := PutDroppedColumn(l.cli, op.ID, col, op.Source, op.UpSchema, op.UpTable, true)
+			if _, ok := doneCols[col]; ok {
+				done = DropDone
+			}
+			// mark col PartiallyDone/Done
+			_, _, err := PutDroppedColumn(l.cli, op.ID, col, op.Source, op.UpSchema, op.UpTable, done)
 			if err != nil {
 				log.L().Error("cannot put drop column to etcd", log.ShortError(err))
 				return err
 			}
-			l.columns[col][op.Source][op.UpSchema][op.UpTable] = true
+			l.columns[col][op.Source][op.UpSchema][op.UpTable] = done
 		}
-		allDone := true
 
+		allDone := true
+		dropDone := false
 	OUTER:
 		for _, schemaCols := range l.columns[col] {
 			for _, tableCols := range schemaCols {
 				for _, done := range tableCols {
-					if !done {
+					if done == DropDone {
+						dropDone = true
+					}
+					if done == DropNotDone {
 						allDone = false
 						break OUTER
 					}
 				}
 			}
 		}
-		if allDone {
+		if allDone && dropDone {
 			colsToDelete = append(colsToDelete, col)
 		}
 	}

@@ -37,28 +37,28 @@ func (t *testColumn) TestColumnETCD(c *C) {
 		info1      = NewInfo(task, source1, upSchema1, upTable1, downSchema, downTable, nil, nil, nil)
 		lockID     = genDDLLockID(info1)
 	)
-	rev1, putted, err := PutDroppedColumn(etcdTestCli, lockID, "a", source1, upSchema1, upTable1, false)
+	rev1, putted, err := PutDroppedColumn(etcdTestCli, lockID, "a", source1, upSchema1, upTable1, DropNotDone)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
-	rev2, putted, err := PutDroppedColumn(etcdTestCli, lockID, "b", source1, upSchema1, upTable1, false)
+	rev2, putted, err := PutDroppedColumn(etcdTestCli, lockID, "b", source1, upSchema1, upTable1, DropNotDone)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(rev2, Greater, rev1)
-	rev3, putted, err := PutDroppedColumn(etcdTestCli, lockID, "b", source1, upSchema2, upTable2, false)
+	rev3, putted, err := PutDroppedColumn(etcdTestCli, lockID, "b", source1, upSchema2, upTable2, DropNotDone)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(rev3, Greater, rev2)
-	rev4, putted, err := PutDroppedColumn(etcdTestCli, lockID, "b", source2, upSchema1, upTable1, false)
+	rev4, putted, err := PutDroppedColumn(etcdTestCli, lockID, "b", source2, upSchema1, upTable1, DropNotDone)
 	c.Assert(err, IsNil)
 	c.Assert(putted, IsTrue)
 	c.Assert(rev4, Greater, rev3)
 
-	expectedColm := map[string]map[string]map[string]map[string]map[string]bool{
+	expectedColm := map[string]map[string]map[string]map[string]map[string]int{
 		lockID: {
-			"a": {source1: {upSchema1: {upTable1: false}}},
-			"b": {source1: {upSchema1: {upTable1: false},
-				upSchema2: {upTable2: false}},
-				source2: {upSchema1: {upTable1: false}}},
+			"a": {source1: {upSchema1: {upTable1: DropNotDone}}},
+			"b": {source1: {upSchema1: {upTable1: DropNotDone},
+				upSchema2: {upTable2: DropNotDone}},
+				source2: {upSchema1: {upTable1: DropNotDone}}},
 		},
 	}
 	colm, rev5, err := GetAllDroppedColumns(etcdTestCli)

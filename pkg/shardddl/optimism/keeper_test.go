@@ -450,11 +450,11 @@ func (t *testKeeper) TestRebuildLocksAndTables(c *C) {
 				source2: {upSchema: {upTable: i21}},
 			},
 		}
-		colm = map[string]map[string]map[string]map[string]map[string]bool{
+		colm = map[string]map[string]map[string]map[string]map[string]int{
 			lockID: {
 				"c3": {
-					source1: {upSchema: {upTable: false}},
-					source2: {upSchema: {upTable: false}},
+					source1: {upSchema: {upTable: DropNotDone}},
+					source2: {upSchema: {upTable: DropNotDone}},
 				},
 			},
 		}

@@ -24,9 +24,9 @@ import (
 
 // GetAllDroppedColumns gets the all partially dropped columns.
 // return lockID -> column-name -> source-id -> upstream-schema-name -> upstream-table-name
-func GetAllDroppedColumns(cli *clientv3.Client) (map[string]map[string]map[string]map[string]map[string]bool, int64, error) {
-	colm := make(map[string]map[string]map[string]map[string]map[string]bool)
-	done := false
+func GetAllDroppedColumns(cli *clientv3.Client) (map[string]map[string]map[string]map[string]map[string]int, int64, error) {
+	var done int
+	colm := make(map[string]map[string]map[string]map[string]map[string]int)
 	op := clientv3.OpGet(common.ShardDDLOptimismDroppedColumnsKeyAdapter.Path(), clientv3.WithPrefix())
 	respTxn, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, op)
 	if err != nil {
@@ -50,16 +50,16 @@ func GetAllDroppedColumns(cli *clientv3.Client) (map[string]map[string]map[strin
 			upSchema := keys[3]
 			upTable := keys[4]
 			if _, ok := colm[lockID]; !ok {
-				colm[lockID] = make(map[string]map[string]map[string]map[string]bool)
+				colm[lockID] = make(map[string]map[string]map[string]map[string]int)
 			}
 			if _, ok := colm[lockID][column]; !ok {
-				colm[lockID][column] = make(map[string]map[string]map[string]bool)
+				colm[lockID][column] = make(map[string]map[string]map[string]int)
 			}
 			if _, ok := colm[lockID][column][source]; !ok {
-				colm[lockID][column][source] = make(map[string]map[string]bool)
+				colm[lockID][column][source] = make(map[string]map[string]int)
 			}
 			if _, ok := colm[lockID][column][source][upSchema]; !ok {
-				colm[lockID][column][source][upSchema] = make(map[string]bool)
+				colm[lockID][column][source][upSchema] = make(map[string]int)
 			}
 			colm[lockID][column][source][upSchema][upTable] = done
 		}
@@ -69,7 +69,7 @@ func GetAllDroppedColumns(cli *clientv3.Client) (map[string]map[string]map[strin
 
 // PutDroppedColumn puts the partially dropped column name into ectd.
 // When we drop a column, we save this column's name in etcd.
-func PutDroppedColumn(cli *clientv3.Client, lockID, column, source, upSchema, upTable string, done bool) (rev int64, putted bool, err error) {
+func PutDroppedColumn(cli *clientv3.Client, lockID, column, source, upSchema, upTable string, done int) (rev int64, putted bool, err error) {
 	key := common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(lockID, column, source, upSchema, upTable)
 	val, err := json.Marshal(done)
 	if err != nil {
