@@ -32,6 +32,7 @@ import (
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/purger"
@@ -182,6 +183,7 @@ func (w *Worker) Close() {
 
 // EnableRelay enables the functionality of start/watch/handle relay
 func (w *Worker) EnableRelay() (err error) {
+	w.l.Info("enter EnableRelay")
 	w.Lock()
 	defer w.Unlock()
 	if w.relayEnabled.Get() {
@@ -239,7 +241,7 @@ func (w *Worker) EnableRelay() (err error) {
 	}
 	startImmediately := !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
 	if startImmediately {
-		w.l.Info("relay is started")
+		w.l.Info("start relay for existing relay stage")
 		w.relayHolder.Start()
 		w.relayPurger.Start()
 	}
@@ -261,6 +263,7 @@ func (w *Worker) EnableRelay() (err error) {
 
 // DisableRelay disables the functionality of start/watch/handle relay
 func (w *Worker) DisableRelay() {
+	w.l.Info("enter DisableRelay")
 	w.Lock()
 	defer w.Unlock()
 	if !w.relayEnabled.CompareAndSwap(true, false) {
@@ -291,10 +294,12 @@ func (w *Worker) DisableRelay() {
 		w.relayPurger = nil
 		r.Close()
 	}
+	w.l.Info("relay disabled")
 }
 
 // EnableHandleSubtasks enables the functionality of start/watch/handle subtasks
 func (w *Worker) EnableHandleSubtasks() error {
+	w.l.Info("enter EnableHandleSubtasks")
 	w.Lock()
 	defer w.Unlock()
 	if w.subTaskEnabled.Get() {
@@ -341,6 +346,7 @@ func (w *Worker) EnableHandleSubtasks() error {
 
 // DisableHandleSubtasks disables the functionality of start/watch/handle subtasks
 func (w *Worker) DisableHandleSubtasks() {
+	w.l.Info("enter DisableHandleSubtasks")
 	if !w.subTaskEnabled.CompareAndSwap(true, false) {
 		w.l.Warn("already disabled handling subtasks")
 		return
@@ -354,6 +360,7 @@ func (w *Worker) DisableHandleSubtasks() {
 
 	// close all sub tasks
 	w.subTaskHolder.closeAllSubTasks()
+	w.l.Info("handling subtask enabled")
 }
 
 // fetchSubTasksAndAdjust gets source's subtask stages and configs, adjust some values by worker's config and status
@@ -765,6 +772,7 @@ func (w *Worker) operateRelay(ctx context.Context, op pb.RelayOp) error {
 	}
 
 	if w.relayEnabled.Get() {
+		// TODO: lock the worker?
 		return w.relayHolder.Operate(ctx, op)
 	}
 
@@ -778,12 +786,35 @@ func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) erro
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	if w.relayEnabled.Get() {
-		return w.relayPurger.Do(ctx, req)
+	if !w.relayEnabled.Get() {
+		w.l.Warn("enable-relay is false, ignore purge relay")
+		return nil
 	}
 
-	w.l.Warn("enable-relay is false, ignore purge relay")
-	return nil
+	if !w.subTaskEnabled.Get() {
+		w.l.Info("worker received purge-relay but didn't handling subtasks, read global checkpoint to decided active relay log")
+
+		uuid := w.relayHolder.Status(ctx).RelaySubDir
+
+		_, subTaskCfgs, _, err := w.fetchSubTasksAndAdjust()
+		if err != nil {
+			return err
+		}
+		for _, subTaskCfg := range subTaskCfgs {
+			loc, err2 := getMinLocForSubTaskFunc(ctx, subTaskCfg)
+			if err2 != nil {
+				return err2
+			}
+			w.l.Info("update active relay log with",
+				zap.String("task name", subTaskCfg.Name),
+				zap.String("uuid", uuid),
+				zap.String("binlog name", loc.Position.Name))
+			if err3 := streamer.GetReaderHub().UpdateActiveRelayLog(subTaskCfg.Name, uuid, loc.Position.Name); err3 != nil {
+				w.l.Error("Error when update active relay log", zap.Error(err3))
+			}
+		}
+	}
+	return w.relayPurger.Do(ctx, req)
 }
 
 // ForbidPurge implements PurgeInterceptor.ForbidPurge

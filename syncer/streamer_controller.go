@@ -252,6 +252,7 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 	if err != nil {
 		if err != context.Canceled && err != context.DeadlineExceeded {
 			c.Lock()
+			tctx.L().Error("meet error when get binlog event", zap.Error(err))
 			c.meetError = true
 			c.Unlock()
 		}
