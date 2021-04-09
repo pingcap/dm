@@ -284,7 +284,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 						l.ID, fmt.Sprintf("add column %s that wasn't fully dropped in downstream. ddl: %s", col, ddls[idx]))
 				}
 			} else {
-				if col, err2 := GetColumnName(l.ID, ddls[idx], ast.AlterTableDropColumn); err != nil {
+				if col, err2 := GetColumnName(l.ID, ddls[idx], ast.AlterTableDropColumn); err2 != nil {
 					return ddls, cols, err2
 				} else if len(col) > 0 {
 					err = l.AddDroppedColumn(info, col)

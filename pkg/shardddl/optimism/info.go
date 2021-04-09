@@ -112,6 +112,7 @@ func (i Info) ShortString() string {
 		DownSchema:     i.DownSchema,
 		DownTable:      i.DownTable,
 		DDLs:           i.DDLs,
+		IsDeleted:      i.IsDeleted,
 		Version:        i.Version,
 		Revision:       i.Revision,
 		IgnoreConflict: i.IgnoreConflict,
