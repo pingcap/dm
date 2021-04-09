@@ -89,6 +89,34 @@ func GetInitSchema(cli *clientv3.Client, task, downSchema, downTable string) (In
 	return is, rev, nil
 }
 
+// GetAllInitSchemas gets all init schemas from etcd.
+// This function should often be called by DM-master.
+// k/k/k/v: task-name -> downstream-schema-name -> downstream-table-name -> InitSchema.
+func GetAllInitSchemas(cli *clientv3.Client) (map[string]map[string]map[string]InitSchema, int64, error) {
+	initSchemas := make(map[string]map[string]map[string]InitSchema)
+	op := clientv3.OpGet(common.ShardDDLOptimismInitSchemaKeyAdapter.Path(), clientv3.WithPrefix())
+	respTxn, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, op)
+	if err != nil {
+		return nil, 0, err
+	}
+	resp := respTxn.Responses[0].GetResponseRange()
+
+	for _, kv := range resp.Kvs {
+		schema, err := initSchemaFromJSON(string(kv.Value))
+		if err != nil {
+			return nil, 0, err
+		}
+		if _, ok := initSchemas[schema.Task]; !ok {
+			initSchemas[schema.Task] = make(map[string]map[string]InitSchema)
+		}
+		if _, ok := initSchemas[schema.Task][schema.DownSchema]; !ok {
+			initSchemas[schema.Task][schema.DownSchema] = make(map[string]InitSchema)
+		}
+		initSchemas[schema.Task][schema.DownSchema][schema.DownTable] = schema
+	}
+	return initSchemas, rev, nil
+}
+
 // PutInitSchemaIfNotExist puts the InitSchema into ectd if no previous one exists.
 func PutInitSchemaIfNotExist(cli *clientv3.Client, is InitSchema) (rev int64, putted bool, err error) {
 	value, err := is.toJSON()
