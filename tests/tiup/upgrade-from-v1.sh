@@ -14,6 +14,7 @@ source $CUR/lib.sh
 # script following the docs to deploy dm 1.0.6 using ./ansible_data/inventory.ini
 function deploy_v1_by_ansible() {
     # step 1
+    apt-get update
     apt-get -y install git curl sshpass python-pip sudo
 
     # step 2

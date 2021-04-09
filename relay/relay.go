@@ -119,8 +119,6 @@ type Relay struct {
 		sync.RWMutex
 		info *pkgstreamer.RelayLogInfo
 	}
-
-	relayMetaHub *pkgstreamer.RelayMetaHub
 }
 
 // NewRealRelay creates an instance of Relay.
@@ -162,9 +160,6 @@ func (r *Relay) Init(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	r.relayMetaHub = pkgstreamer.GetRelayMetaHub()
-	r.relayMetaHub.ClearMeta()
 
 	return reportRelayLogSpaceInBackground(ctx, r.cfg.RelayDir)
 }
@@ -254,9 +249,21 @@ func (r *Relay) process(ctx context.Context) error {
 			if err2 != nil {
 				return err2
 			}
-			err2 = r.SaveMeta(mysql.Position{Name: neededBinlogName, Pos: binlog.MinPosition.Pos}, neededBinlogGset)
-			if err2 != nil {
-				return err2
+			uuidWithSuffix := r.meta.UUID() // only change after switch
+			uuid, _, err3 := utils.ParseSuffixForUUID(uuidWithSuffix)
+			if err3 != nil {
+				r.logger.Error("parse suffix for UUID when relay meta oudated", zap.String("UUID", uuidWithSuffix), zap.Error(err))
+				return err3
+			}
+
+			pos := &mysql.Position{Name: neededBinlogName, Pos: binlog.MinPosition.Pos}
+			err = r.meta.AddDir(uuid, pos, neededBinlogGset, r.cfg.UUIDSuffix)
+			if err != nil {
+				return err
+			}
+			err = r.meta.Load()
+			if err != nil {
+				return err
 			}
 		}
 	}
@@ -727,7 +734,8 @@ func (r *Relay) setUpReader(ctx context.Context) (reader.Reader, error) {
 	ctx2, cancel := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 	defer cancel()
 
-	randomServerID, err := utils.ReuseServerID(ctx2, r.cfg.ServerID, r.db.DB)
+	// always use a new random serverID
+	randomServerID, err := utils.GetRandomServerID(ctx2, r.db.DB)
 	if err != nil {
 		// should never happened unless the master has too many slave
 		return nil, terror.Annotate(err, "fail to get random server id for relay reader")
@@ -785,17 +793,12 @@ func (r *Relay) IsClosed() bool {
 
 // SaveMeta save relay meta and update meta in RelayLogInfo
 func (r *Relay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
-	if err := r.meta.Save(pos, gset); err != nil {
-		return err
-	}
-	r.relayMetaHub.SetMeta(r.meta.UUID(), pos, gset)
-	return nil
+	return r.meta.Save(pos, gset)
 }
 
 // ResetMeta reset relay meta
 func (r *Relay) ResetMeta() {
 	r.meta = NewLocalMeta(r.cfg.Flavor, r.cfg.RelayDir)
-	r.relayMetaHub.ClearMeta()
 }
 
 // FlushMeta flush relay meta
@@ -996,7 +999,8 @@ func (r *Relay) setSyncConfig() error {
 func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error) {
 	// setup a TCP binlog reader (because no relay can be used when upgrading).
 	syncCfg := r.syncerCfg
-	randomServerID, err := utils.ReuseServerID(ctx, r.cfg.ServerID, r.db.DB)
+	// always use a new random serverID
+	randomServerID, err := utils.GetRandomServerID(ctx, r.db.DB)
 	if err != nil {
 		return nil, terror.Annotate(err, "fail to get random server id when relay adjust gtid")
 	}

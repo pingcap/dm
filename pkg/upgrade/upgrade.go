@@ -16,15 +16,18 @@ package upgrade
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
+	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -34,6 +37,7 @@ var (
 	upgrades = []func(cli *clientv3.Client, uctx Context) error{
 		upgradeToVer1,
 		upgradeToVer2,
+		upgradeToVer3,
 	}
 )
 
@@ -65,11 +69,10 @@ func TryUpgrade(cli *clientv3.Client, uctx Context) error {
 
 	// 2. check if any previous version exists.
 	if preVer.NotSet() {
-		// no initialization operations exist for Ver1 now,
-		// add any operations (may includes `upgrades`) if needed later.
-		// put the current version into etcd.
-		_, err = PutVersion(cli, CurrentVersion)
-		return err
+		if _, err = PutVersion(cli, MinVersion); err != nil {
+			return err
+		}
+		preVer = MinVersion
 	}
 
 	// 3. compare the previous version with the current version.
@@ -144,6 +147,13 @@ func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 			db.Close()
 		}
 	}()
+
+	// 10 seconds for each subtask
+	timeout := time.Duration(len(dbConfigs)) * 10 * time.Second
+	upgradeCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	uctx.Context = upgradeCtx
+	defer cancel()
+
 	for tableName, cfg := range dbConfigs {
 		targetDB, err := conn.DefaultDBProvider.Apply(cfg)
 		if err != nil {
@@ -172,4 +182,51 @@ func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 	}
 
 	return nil
+}
+
+// upgradeToVer3 does upgrade operations from Ver2 (v2.0.0-GA) to Ver3 (v2.0.2) to upgrade etcd key encodings
+func upgradeToVer3(cli *clientv3.Client, uctx Context) error {
+	upgradeCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	uctx.Context = upgradeCtx
+	defer cancel()
+
+	etcdKeyUpgrades := []struct {
+		old common.KeyAdapter
+		new common.KeyAdapter
+	}{
+		{
+			common.UpstreamConfigKeyAdapterV1,
+			common.UpstreamConfigKeyAdapter,
+		},
+		{
+			common.StageRelayKeyAdapterV1,
+			common.StageRelayKeyAdapter,
+		},
+	}
+
+	var ops []clientv3.Op
+	for _, pair := range etcdKeyUpgrades {
+		resp, err := cli.Get(uctx.Context, pair.old.Path(), clientv3.WithPrefix())
+		if err != nil {
+			return err
+		}
+		if len(resp.Kvs) == 0 {
+			log.L().Info("no old KVs, skipping", zap.String("etcd path", pair.old.Path()))
+			continue
+		}
+		for _, kv := range resp.Kvs {
+			keys, err2 := pair.old.Decode(string(kv.Key))
+			if err2 != nil {
+				return err2
+			}
+			newKey := pair.new.Encode(keys...)
+
+			// note that we lost CreateRevision, Lease, ModRevision, Version
+			ops = append(ops, clientv3.OpPut(newKey, string(kv.Value)))
+		}
+		// delete old key to provide idempotence
+		ops = append(ops, clientv3.OpDelete(pair.old.Path(), clientv3.WithPrefix()))
+	}
+	_, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
+	return err
 }

@@ -154,6 +154,7 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 			oldLeaseID := leaseID
 			leaseID, err = grantAndPutKV(k, workerEventJSON, newTTL)
 			if err != nil {
+				log.L().Error("meet error when grantAndPutKV keepalive TTL", zap.Error(err))
 				keepAliveCancel() // make go vet happy
 				return err
 			}
