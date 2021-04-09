@@ -42,7 +42,7 @@ func NewLockKeeper() *LockKeeper {
 func (lk *LockKeeper) RebuildLocksAndTables(
 	cli *clientv3.Client,
 	ifm map[string]map[string]map[string]map[string]Info,
-	colm map[string]map[string]map[string]map[string]map[string]int,
+	colm map[string]map[string]map[string]map[string]map[string]DropColumnStage,
 	lockJoined map[string]schemacmp.Table,
 	lockTTS map[string][]TargetTable,
 	missTable map[string]map[string]map[string]map[string]schemacmp.Table,

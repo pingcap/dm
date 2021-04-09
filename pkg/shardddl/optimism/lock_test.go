@@ -1663,19 +1663,19 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 			},
 		}
 
-		colm1 = map[string]map[string]map[string]map[string]map[string]int{
+		colm1 = map[string]map[string]map[string]map[string]map[string]DropColumnStage{
 			ID: {
 				"b": {source: {db: {tbls[0]: DropNotDone}}},
 				"c": {source: {db: {tbls[0]: DropNotDone}}},
 			},
 		}
-		colm2 = map[string]map[string]map[string]map[string]map[string]int{
+		colm2 = map[string]map[string]map[string]map[string]map[string]DropColumnStage{
 			ID: {
 				"b": {source: {db: {tbls[0]: DropNotDone, tbls[1]: DropDone}}},
 				"c": {source: {db: {tbls[0]: DropNotDone}}},
 			},
 		}
-		colm3 = map[string]map[string]map[string]map[string]map[string]int{
+		colm3 = map[string]map[string]map[string]map[string]map[string]DropColumnStage{
 			ID: {
 				"c": {source: {db: {tbls[0]: DropNotDone}}},
 			},

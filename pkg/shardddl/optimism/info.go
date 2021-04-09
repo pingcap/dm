@@ -103,7 +103,7 @@ func (i Info) String() string {
 }
 
 // ShortString returns short string of Info
-func (i Info) ShortString() string {
+func (i *Info) ShortString() string {
 	logInfo := LogInfo{
 		Task:           i.Task,
 		Source:         i.Source,

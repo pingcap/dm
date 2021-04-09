@@ -932,6 +932,32 @@ func (s *Scheduler) StopRelay(source string, workers []string) error {
 	return nil
 }
 
+// GetRelayWorkers returns all alive worker instances for a relay source
+func (s *Scheduler) GetRelayWorkers(source string) ([]*Worker, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if !s.started {
+		return nil, terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	workers := s.relayWorkers[source]
+	var ret []*Worker
+	for w := range workers {
+		worker, ok := s.workers[w]
+		if !ok {
+			// should not happen
+			s.logger.Error("worker instance for relay worker not found", zap.String("worker", w))
+			continue
+		}
+		ret = append(ret, worker)
+	}
+	sort.Slice(ret, func(i, j int) bool {
+		return ret[i].baseInfo.Name < ret[j].baseInfo.Name
+	})
+	return ret, nil
+}
+
 // UpdateExpectRelayStage updates the current expect relay stage.
 // now, only support updates:
 // - from `Running` to `Paused`.
@@ -1475,10 +1501,17 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 	}
 
 	// try to find its relay source (currently only one relay source)
-	if source == "" {
+	if source != "" {
+		s.logger.Info("found history source when worker bound",
+			zap.String("worker", w.BaseInfo().Name),
+			zap.String("source", source))
+	} else {
 		for source2, workers := range s.relayWorkers {
 			if _, ok2 := workers[w.BaseInfo().Name]; ok2 {
 				source = source2
+				s.logger.Info("found relay source when worker bound",
+					zap.String("worker", w.BaseInfo().Name),
+					zap.String("source", source))
 				break
 			}
 		}
@@ -1498,6 +1531,9 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 	// randomly pick one from unbounds
 	if source == "" {
 		for source = range s.unbounds {
+			s.logger.Info("found unbound source when worker bound",
+				zap.String("worker", w.BaseInfo().Name),
+				zap.String("source", source))
 			break // got a source.
 		}
 	}
@@ -1529,32 +1565,61 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 // returns (true, nil) after bounded.
 // called should update the s.unbounds
 func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
-	// 1. try to find history workers...
 	var worker *Worker
-	for workerName, bound := range s.lastBound {
-		if bound.Source == source {
-			w, ok := s.workers[workerName]
-			if !ok {
-				// a not found worker
-				continue
-			}
-			if w.Stage() == WorkerFree {
-				worker = w
-				break
+	relayWorkers := s.relayWorkers[source]
+	// 1. try to find a history worker in relay workers...
+	if len(relayWorkers) > 0 {
+		for workerName, bound := range s.lastBound {
+			if bound.Source == source {
+				w, ok := s.workers[workerName]
+				if !ok {
+					// a not found worker
+					continue
+				}
+				if _, ok2 := relayWorkers[workerName]; ok2 && w.Stage() == WorkerFree {
+					worker = w
+					s.logger.Info("found history relay worker when source bound",
+						zap.String("worker", workerName),
+						zap.String("source", source))
+					break
+				}
 			}
 		}
 	}
 	// then a relay worker for this source...
 	if worker == nil {
-		for workerName := range s.relayWorkers[source] {
+		for workerName := range relayWorkers {
 			w, ok := s.workers[workerName]
 			if !ok {
 				// a not found worker, should not happened
+				s.logger.Warn("worker instance not found for relay worker", zap.String("worker", workerName))
 				continue
 			}
 			if w.Stage() == WorkerFree {
 				worker = w
+				s.logger.Info("found relay worker when source bound",
+					zap.String("worker", workerName),
+					zap.String("source", source))
 				break
+			}
+		}
+	}
+	// then a history worker for this source...
+	if worker == nil {
+		for workerName, bound := range s.lastBound {
+			if bound.Source == source {
+				w, ok := s.workers[workerName]
+				if !ok {
+					// a not found worker
+					continue
+				}
+				if w.Stage() == WorkerFree {
+					worker = w
+					s.logger.Info("found history worker when source bound",
+						zap.String("worker", workerName),
+						zap.String("source", source))
+					break
+				}
 			}
 		}
 	}
@@ -1563,6 +1628,9 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 		for _, w := range s.workers {
 			if w.Stage() == WorkerFree {
 				worker = w
+				s.logger.Info("found free worker when source bound",
+					zap.String("worker", w.BaseInfo().Name),
+					zap.String("source", source))
 				break
 			}
 		}

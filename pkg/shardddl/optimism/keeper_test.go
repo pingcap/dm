@@ -450,7 +450,7 @@ func (t *testKeeper) TestRebuildLocksAndTables(c *C) {
 				source2: {upSchema: {upTable: i21}},
 			},
 		}
-		colm = map[string]map[string]map[string]map[string]map[string]int{
+		colm = map[string]map[string]map[string]map[string]map[string]DropColumnStage{
 			lockID: {
 				"c3": {
 					source1: {upSchema: {upTable: DropNotDone}},

@@ -28,9 +28,12 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
+// DropColumnStage represents whether drop column done for a sharding table.
+type DropColumnStage int
+
 const (
 	// DropNotDone represents master haven't received done for the col
-	DropNotDone = iota
+	DropNotDone DropColumnStage = iota
 	// DropPartiallyDone represents master receive done for the col
 	DropPartiallyDone
 	// DropDone represents master receive done and ddl for the col(executed in downstream)
@@ -71,7 +74,7 @@ type Lock struct {
 
 	// record the partially dropped columns
 	// column name -> source -> upSchema -> upTable -> int
-	columns map[string]map[string]map[string]map[string]int
+	columns map[string]map[string]map[string]map[string]DropColumnStage
 }
 
 // NewLock creates a new Lock instance.
@@ -88,7 +91,7 @@ func NewLock(cli *clientv3.Client, ID, task, downSchema, downTable string, joine
 		done:       make(map[string]map[string]map[string]bool),
 		synced:     true,
 		versions:   make(map[string]map[string]map[string]int64),
-		columns:    make(map[string]map[string]map[string]map[string]int),
+		columns:    make(map[string]map[string]map[string]map[string]DropColumnStage),
 	}
 	l.addTables(tts)
 	metrics.ReportDDLPending(task, metrics.DDLPendingNone, metrics.DDLPendingSynced)
@@ -595,13 +598,13 @@ func (l *Lock) AddDroppedColumn(info Info, col string) error {
 	}
 
 	if _, ok := l.columns[col]; !ok {
-		l.columns[col] = make(map[string]map[string]map[string]int)
+		l.columns[col] = make(map[string]map[string]map[string]DropColumnStage)
 	}
 	if _, ok := l.columns[col][source]; !ok {
-		l.columns[col][source] = make(map[string]map[string]int)
+		l.columns[col][source] = make(map[string]map[string]DropColumnStage)
 	}
 	if _, ok := l.columns[col][source][upSchema]; !ok {
-		l.columns[col][source][upSchema] = make(map[string]int)
+		l.columns[col][source][upSchema] = make(map[string]DropColumnStage)
 	}
 	l.columns[col][source][upSchema][upTable] = DropNotDone
 	return nil
