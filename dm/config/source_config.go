@@ -177,17 +177,15 @@ func (c *SourceConfig) Verify() error {
 	}
 
 	var err error
-	if c.EnableRelay {
-		if len(c.RelayBinLogName) > 0 {
-			if !binlog.VerifyFilename(c.RelayBinLogName) {
-				return terror.ErrWorkerRelayBinlogName.Generate(c.RelayBinLogName)
-			}
+	if len(c.RelayBinLogName) > 0 {
+		if !binlog.VerifyFilename(c.RelayBinLogName) {
+			return terror.ErrWorkerRelayBinlogName.Generate(c.RelayBinLogName)
 		}
-		if len(c.RelayBinlogGTID) > 0 {
-			_, err = gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
-			if err != nil {
-				return terror.WithClass(terror.Annotatef(err, "relay-binlog-gtid %s", c.RelayBinlogGTID), terror.ClassDMWorker)
-			}
+	}
+	if len(c.RelayBinlogGTID) > 0 {
+		_, err = gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
+		if err != nil {
+			return terror.WithClass(terror.Annotatef(err, "relay-binlog-gtid %s", c.RelayBinlogGTID), terror.ClassDMWorker)
 		}
 	}
 
@@ -254,7 +252,7 @@ func (c *SourceConfig) Adjust(ctx context.Context, db *sql.DB) (err error) {
 		}
 	}
 
-	if c.EnableRelay && len(c.RelayDir) == 0 {
+	if len(c.RelayDir) == 0 {
 		c.RelayDir = defaultRelayDir
 	}
 
