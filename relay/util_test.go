@@ -32,9 +32,10 @@ func (t *testUtilSuite) TestIsNewServer(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
 	defer cancel()
 
-	db, err := openDBForTest()
+	baseDB, err := openDBForTest()
 	c.Assert(err, IsNil)
-	defer db.Close()
+	defer baseDB.Close()
+	db := baseDB.DB
 
 	flavor := gmysql.MySQLFlavor
 
