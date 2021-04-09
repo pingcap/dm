@@ -225,8 +225,15 @@ func GetInfosOperationsByTask(cli *clientv3.Client, task string) ([]Info, []Oper
 func WatchOperationPut(ctx context.Context, cli *clientv3.Client,
 	task, source, upSchema, upTable string, revision int64,
 	outCh chan<- Operation, errCh chan<- error) {
-	ch := cli.Watch(ctx, common.ShardDDLOptimismOperationKeyAdapter.Encode(task, source, upSchema, upTable),
-		clientv3.WithPrefix(), clientv3.WithRev(revision))
+	var ch clientv3.WatchChan
+	// caller may use empty keys to expect a prefix watch
+	if upTable == "" {
+		ch = cli.Watch(ctx, common.ShardDDLOptimismOperationKeyAdapter.Path(), clientv3.WithPrefix(),
+			clientv3.WithRev(revision))
+	} else {
+		ch = cli.Watch(ctx, common.ShardDDLOptimismOperationKeyAdapter.Encode(task, source, upSchema, upTable),
+			clientv3.WithRev(revision))
+	}
 
 	for {
 		select {
