@@ -113,8 +113,7 @@ func DeleteSourceBound(cli *clientv3.Client, workers ...string) (int64, error) {
 
 // ReplaceSourceBound deletes an old bound and puts a new bound in one transaction, so a bound source will not become
 // unbound because of failing halfway
-// TODO: remove replace relay parameter because we didn't plan it in future
-func ReplaceSourceBound(cli *clientv3.Client, source, oldWorker, newWorker string, replaceRelay bool) (int64, error) {
+func ReplaceSourceBound(cli *clientv3.Client, source, oldWorker, newWorker string) (int64, error) {
 	deleteOps := deleteSourceBoundOp(oldWorker)
 	putOps, err := putSourceBoundOp(NewSourceBound(source, newWorker))
 	if err != nil {
@@ -123,9 +122,6 @@ func ReplaceSourceBound(cli *clientv3.Client, source, oldWorker, newWorker strin
 	ops := make([]clientv3.Op, 0, len(deleteOps)+len(putOps))
 	ops = append(ops, deleteOps...)
 	ops = append(ops, putOps...)
-	if replaceRelay {
-		ops = append(ops, putRelayConfigOp(newWorker, source))
-	}
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return rev, err
 }
@@ -357,10 +353,8 @@ func sourceBoundFromResp(worker string, resp *clientv3.GetResponse) (map[string]
 
 // deleteSourceBoundOp returns a DELETE etcd operation for the bound relationship of the specified DM-worker.
 func deleteSourceBoundOp(worker string) []clientv3.Op {
-	// TODO: move this to stop-relay, and wait until worker has disabled relay
 	return []clientv3.Op{
 		clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(worker)),
-		clientv3.OpDelete(common.UpstreamRelayWorkerKeyAdapter.Encode(worker)),
 	}
 }
 

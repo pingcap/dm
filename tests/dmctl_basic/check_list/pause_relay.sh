@@ -6,7 +6,7 @@ function pause_relay_wrong_arg() {
         "pause-relay <-s source ...> \[flags\]" 1
 }
 
-function pause_relay_wihout_worker() {
+function pause_relay_without_worker() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "pause-relay" \
         "must specify at least one source" 1
