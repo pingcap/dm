@@ -78,33 +78,6 @@ func GetAllServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, error
 	return serverIDs, nil
 }
 
-// ReuseServerID reuse given server ID or get a new server ID
-func ReuseServerID(ctx context.Context, serverID uint32, db *sql.DB) (uint32, error) {
-	serverIDs, err := GetAllServerID(ctx, db)
-	if err != nil {
-		return 0, err
-	}
-
-	if _, ok := serverIDs[serverID]; !ok && serverID > 0 {
-		// reuse given server ID
-		return serverID, nil
-	}
-
-	rand.Seed(time.Now().UnixNano())
-	for i := 0; i < 99999; i++ {
-		randomValue := uint32(rand.Intn(100000))
-		randomServerID := uint32(defaultBaseServerID) + randomValue
-		if _, ok := serverIDs[randomServerID]; ok {
-			continue
-		}
-
-		return randomServerID, nil
-	}
-
-	// should never happened unless the master has too many slave.
-	return 0, terror.ErrInvalidServerID.Generatef("can't find a random available server ID")
-}
-
 // GetRandomServerID gets a random server ID which is not used
 func GetRandomServerID(ctx context.Context, db *sql.DB) (uint32, error) {
 	rand.Seed(time.Now().UnixNano())
