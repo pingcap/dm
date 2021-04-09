@@ -123,10 +123,10 @@ func (h *Heartbeat) AddTask(name string) error {
 	if h.primary == nil {
 		// open DB
 		dbCfg := h.cfg.primaryCfg
-		if dbCfg.RawDBCfg != nil {
-			dbCfg.RawDBCfg.SetReadTimeout("1m")
+		if dbCfg.RawDBCfg == nil {
+			dbCfg.RawDBCfg = config.DefaultRawDBConfig()
 		}
-		baseDB, err := conn.DefaultDBProvider.Apply(dbCfg)
+		dbCfg.RawDBCfg.ReadTimeout = "1m"
 		if err != nil {
 			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 		}
