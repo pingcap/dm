@@ -272,8 +272,10 @@ func writeStringColumnValue(buf *bytes.Buffer, value interface{}) error {
 }
 
 // https://dev.mysql.com/doc/internals/en/query-event.html
-// and after Q_COMMIT_TS could be find in
+// and after Q_COMMIT_TS could be found in
 // https://github.com/mysql/mysql-server/blob/124c7ab1d6f914637521fd4463a993aa73403513/libbinlogevents/include/statement_events.h#L500
+// Q_HRNOW (MariaDB) could be found in
+// https://github.com/MariaDB/server/blob/09a1f0075a8d5752dd7b2940a20d86a040af1741/sql/log_event.h#L321
 const (
 	QFlags2Code = iota
 	QSqlModeCode
@@ -296,6 +298,7 @@ const (
 	QDefaultCollationForUtf8mb4
 	QSqlRequirePrimaryKey
 	QDefaultTableEncryption
+	QHrnow = 128
 )
 
 var (
@@ -319,6 +322,8 @@ var (
 		QDefaultCollationForUtf8mb4:   2,
 		QSqlRequirePrimaryKey:         1,
 		QDefaultTableEncryption:       1,
+		// https://github.com/MariaDB/server/blob/94b45787045677c106a25ebb5aaf1273040b2ff6/sql/log_event.cc#L1619
+		QHrnow: 3,
 	}
 )
 
