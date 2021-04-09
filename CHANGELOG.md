@@ -29,6 +29,7 @@ All notable changes to this project will be documented in this file.
 - Add configurations of etcd compaction and disk quota [#1521](https://github.com/pingcap/dm/pull/1521)
 
 ### Bug fixes
+
 - Fix the issue of data loss during the full data migration occurred because DM frequently restarts the task [#1378](https://github.com/pingcap/dm/pull/1378)
 - Fix the issue that an incremental replication task fails to start when the binlog position is not specified together with GTID in the task configuration [#1393](https://github.com/pingcap/dm/pull/1393)
 - Fix the issue that DM-worker’s binding relationships become abnormal when the disk and network environments are poor [#1396](https://github.com/pingcap/dm/pull/1396)
@@ -40,6 +41,7 @@ All notable changes to this project will be documented in this file.
 - Fix the issue that DM might duplicate binlog events when the GTID and the relay log are enabled at the same time [#1525](https://github.com/pingcap/dm/pull/1525)
 
 ### Known issues
+
 https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aaffected-v2.0.2
 
 ## [2.0.1] 2020-12-25
