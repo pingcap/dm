@@ -127,4 +127,5 @@ func (d *testDumplingSuite) TestDefaultConfig(c *C) {
 	ctx := context.Background()
 	c.Assert(dumpling.Init(ctx), IsNil)
 	c.Assert(dumpling.dumpConfig.StatementSize, Not(Equals), export.UnspecifiedSize)
+	c.Assert(dumpling.dumpConfig.Rows, Not(Equals), export.UnspecifiedSize)
 }
