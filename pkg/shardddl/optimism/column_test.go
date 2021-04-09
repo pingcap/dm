@@ -53,7 +53,7 @@ func (t *testColumn) TestColumnETCD(c *C) {
 	c.Assert(putted, IsTrue)
 	c.Assert(rev4, Greater, rev3)
 
-	expectedColm := map[string]map[string]map[string]map[string]map[string]int{
+	expectedColm := map[string]map[string]map[string]map[string]map[string]DropColumnStage{
 		lockID: {
 			"a": {source1: {upSchema1: {upTable1: DropNotDone}}},
 			"b": {source1: {upSchema1: {upTable1: DropNotDone},

@@ -943,14 +943,13 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			}
 		}
 
-		fp := false
 		failpoint.Inject("ExecDDLError", func() {
 			s.tctx.L().Warn("execute ddl error", zap.Strings("DDL", sqlJob.ddls), zap.String("failpoint", "ExecDDLError"))
 			err = errors.Errorf("execute ddl %v error", sqlJob.ddls)
-			fp = true
+			failpoint.Goto("bypass")
 		})
 
-		if !ignore && !fp {
+		if !ignore {
 			var affected int
 			affected, err = db.executeSQLWithIgnore(tctx, ignoreDDLError, sqlJob.ddls)
 			if err != nil {
@@ -958,6 +957,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = terror.WithScope(err, terror.ScopeDownstream)
 			}
 		}
+		failpoint.Label("bypass")
 		// If downstream has error (which may cause by tracker is more compatible than downstream), we should stop handling
 		// this job, set `s.execError` to let caller of `addJob` discover error
 		if err != nil {
