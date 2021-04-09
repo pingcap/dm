@@ -132,7 +132,7 @@ func (r *TCPReader) Close() error {
 			if err != nil {
 				return terror.WithScope(
 					terror.Annotatef(terror.DBErrorAdapt(err, terror.ErrDBDriverError),
-						"fail to register tls config", r.syncerCfg.Host, r.syncerCfg.Port), terror.ScopeUpstream)
+						"fail to register tls config for master %s:%d", r.syncerCfg.Host, r.syncerCfg.Port), terror.ScopeUpstream)
 			}
 			dsn += "&tls=" + tlsName
 			defer mysql.DeregisterTLSConfig(tlsName)
