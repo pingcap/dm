@@ -46,8 +46,8 @@ type trackerSuite struct {
 }
 
 func (s *trackerSuite) SetUpSuite(c *C) {
-	s.backupKeys = sessionVars
-	sessionVars = []string{"sql_mode"}
+	s.backupKeys = downstreamVars
+	downstreamVars = []string{"sql_mode"}
 	db, _, err := sqlmock.New()
 	s.db = db
 	c.Assert(err, IsNil)
@@ -58,7 +58,7 @@ func (s *trackerSuite) SetUpSuite(c *C) {
 
 func (s *trackerSuite) TearDownSuite(c *C) {
 	s.db.Close()
-	sessionVars = s.backupKeys
+	downstreamVars = s.backupKeys
 }
 
 func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
@@ -144,6 +144,23 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	// test alter primary key
 	err = tracker.Exec(ctx, "testdb", "alter table \"foo\" drop primary key")
 	c.Assert(err, IsNil)
+
+	// test user could specify tidb_enable_clustered_index in config
+	sessionCfg = map[string]string{
+		"sql_mode":                    "NO_ZERO_DATE,NO_ZERO_IN_DATE,ANSI_QUOTES",
+		"tidb_enable_clustered_index": "ON",
+	}
+	tracker, err = NewTracker(context.Background(), "test-tracker", sessionCfg, baseConn)
+	c.Assert(err, IsNil)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	err = tracker.Exec(ctx, "", "create database testdb;")
+	c.Assert(err, IsNil)
+	err = tracker.Exec(ctx, "testdb", "create table \"foo\" (a varchar(255) primary key)")
+	c.Assert(err, IsNil)
+	cts, err = tracker.GetCreateTable(context.Background(), "testdb", "foo")
+	c.Assert(err, IsNil)
+	c.Assert(cts, Equals, "CREATE TABLE \"foo\" ( \"a\" varchar(255) NOT NULL, PRIMARY KEY (\"a\") /*T![clustered_index] CLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
 }
 
 func (s *trackerSuite) TestDDL(c *C) {
