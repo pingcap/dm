@@ -187,20 +187,50 @@ func (s *Server) Start() error {
 	// NOTE: don't need to set tls config, because rootLis already use tls
 	s.svr = grpc.NewServer()
 	pb.RegisterWorkerServer(s.svr, s)
+
+	grpcExitCh := make(chan struct{}, 1)
 	s.wg.Add(1)
 	go func() {
-		defer s.wg.Done()
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
 			log.L().Error("gRPC server returned", log.ShortError(err2))
 		}
+		grpcExitCh <- struct{}{}
 	}()
+	go func(ctx context.Context) {
+		defer s.wg.Done()
+		select {
+		case <-ctx.Done():
+			if s.svr != nil {
+				// GracefulStop can not cancel active stream RPCs
+				// and the stream RPC may block on Recv or Send
+				// so we use Stop instead to cancel all active RPCs
+				s.svr.Stop()
+			}
+		case <-grpcExitCh:
+		}
 
+	}(s.ctx)
+
+	httpExitCh := make(chan struct{}, 1)
 	s.wg.Add(1)
 	go func() {
-		defer s.wg.Done()
 		InitStatus(httpL) // serve status
+		httpExitCh <- struct{}{}
 	}()
+	go func(ctx context.Context) {
+		defer s.wg.Done()
+		select {
+		case <-ctx.Done():
+			if s.rootLis != nil {
+				err2 := s.rootLis.Close()
+				if err2 != nil && !common.IsErrNetClosing(err2) {
+					log.L().Error("fail to close net listener", log.ShortError(err2))
+				}
+			}
+		case <-httpExitCh:
+		}
+	}(s.ctx)
 
 	s.closed.Set(false)
 	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.WorkerAddr))
@@ -443,27 +473,16 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 }
 
 func (s *Server) doClose() {
+	s.cancel()
+	// close server in advance, stop receiving source bound and relay bound
+	s.wg.Wait()
+
 	s.Lock()
 	defer s.Unlock()
 	if s.closed.Get() {
 		return
 	}
-
-	if s.rootLis != nil {
-		err := s.rootLis.Close()
-		if err != nil && !common.IsErrNetClosing(err) {
-			log.L().Error("fail to close net listener", log.ShortError(err))
-		}
-	}
-	if s.svr != nil {
-		// GracefulStop can not cancel active stream RPCs
-		// and the stream RPC may block on Recv or Send
-		// so we use Stop instead to cancel all active RPCs
-		s.svr.Stop()
-	}
-
 	// close worker and wait for return
-	s.cancel()
 	if w := s.getWorker(false); w != nil {
 		w.Close()
 	}
@@ -472,9 +491,8 @@ func (s *Server) doClose() {
 
 // Close close the RPC server, this function can be called multiple times
 func (s *Server) Close() {
-	s.doClose()
 	s.stopKeepAlive()
-	s.wg.Wait()
+	s.doClose()
 }
 
 // if needLock is false, we should make sure Server has been locked in caller
@@ -503,6 +521,7 @@ func (s *Server) getSourceStatus(needLock bool) pb.SourceStatus {
 	return s.sourceStatus
 }
 
+// TODO: move some call to setWorker/getOrStartWorker
 func (s *Server) setSourceStatus(source string, err error, needLock bool) {
 	if needLock {
 		s.Lock()
@@ -578,7 +597,7 @@ OUTER:
 			}
 		}
 	}
-	log.L().Info("worker server is closed, handleSourceBound will quit now")
+	log.L().Info("handleSourceBound will quit now")
 	return nil
 }
 
@@ -701,11 +720,11 @@ func (s *Server) enableRelay(sourceCfg *config.SourceConfig, needLock bool) erro
 		// because no re-assigned mechanism exists for keepalived DM-worker yet.
 		return err2
 	}
-	s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
 	if err2 = w.EnableRelay(); err2 != nil {
 		s.setSourceStatus(sourceCfg.SourceID, err2, false)
 		return err2
 	}
+	s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
 	return nil
 }
 
@@ -810,6 +829,7 @@ func (s *Server) getOrStartWorker(cfg *config.SourceConfig, needLock bool) (*Wor
 		return nil, terror.ErrWorkerAlreadyStart.Generate(w.name, w.cfg.SourceID, cfg.SourceID)
 	}
 
+	log.L().Info("will start a new worker", zap.String("sourceID", cfg.SourceID))
 	w, err := NewWorker(cfg, s.etcdClient, s.cfg.Name)
 	if err != nil {
 		return nil, err

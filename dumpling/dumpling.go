@@ -261,6 +261,10 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	if dumpConfig.Consistency == "none" {
 		dumpConfig.PosAfterConnect = true
 	}
+	// set default Rows
+	if dumpConfig.Rows == export.UnspecifiedSize {
+		dumpConfig.Rows = 200000
+	}
 
 	if !cfg.CaseSensitive {
 		dumpConfig.TableFilter = filter.CaseInsensitive(dumpConfig.TableFilter)
