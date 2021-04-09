@@ -293,6 +293,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 					err = l.AddDroppedColumn(info, col)
 					if err != nil {
 						log.L().Error("fail to add dropped column info in etcd", zap.Error(err))
+						return ddls, cols, terror.ErrShardDDLOptimismTrySyncFail.Generate(l.ID, "fail to add dropped column info in etcd")
 					}
 					cols = append(cols, col)
 				}
@@ -337,6 +338,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 				err = l.AddDroppedColumn(info, col)
 				if err != nil {
 					log.L().Error("fail to add dropped column info in etcd", zap.Error(err))
+					return ddls, cols, terror.ErrShardDDLOptimismTrySyncFail.Generate(l.ID, "fail to add dropped column info in etcd")
 				}
 				cols = append(cols, col)
 			}
