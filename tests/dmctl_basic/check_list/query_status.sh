@@ -9,7 +9,7 @@ function query_status_wrong_arg() {
 function query_status_wrong_params() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status -s source-x task-y" \
-        "source-x relevant worker-client not found" 1
+        "sources \[source-x\] haven't been added" 1
 }
 
 function query_status_with_no_tasks() {
