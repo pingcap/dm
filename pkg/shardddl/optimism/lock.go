@@ -242,7 +242,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 		// this often happens when executing `CREATE TABLE` statement
 		var cmp int
 		if cmp, err = nextTable.Compare(oldJoined); err == nil && cmp == 0 {
-			if col, err2 := GetColumnName(l.ID, ddls[idx], ast.AlterTableAddColumns); err != nil {
+			if col, err2 := GetColumnName(l.ID, ddls[idx], ast.AlterTableAddColumns); err2 != nil {
 				return newDDLs, cols, err2
 			} else if len(col) > 0 && l.IsDroppedColumn(info.Source, info.UpSchema, info.UpTable, col) {
 				return newDDLs, cols, terror.ErrShardDDLOptimismTrySyncFail.Generate(
@@ -318,7 +318,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 		cmp, _ = prevTable.Compare(nextTable) // we have checked `err` returned above.
 		if cmp < 0 {
 			// check for add column with a smaller field len
-			if col, err2 := AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined); err != nil {
+			if col, err2 := AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined); err2 != nil {
 				return ddls, cols, err2
 			} else if len(col) > 0 && l.IsDroppedColumn(info.Source, info.UpSchema, info.UpTable, col) {
 				return ddls, cols, terror.ErrShardDDLOptimismTrySyncFail.Generate(
@@ -328,7 +328,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 			newDDLs = append(newDDLs, ddls[idx])
 			continue
 		} else if cmp > 0 {
-			if col, err2 := GetColumnName(l.ID, ddls[idx], ast.AlterTableDropColumn); err != nil {
+			if col, err2 := GetColumnName(l.ID, ddls[idx], ast.AlterTableDropColumn); err2 != nil {
 				return ddls, cols, err2
 			} else if len(col) > 0 {
 				err = l.AddDroppedColumn(info, col)
