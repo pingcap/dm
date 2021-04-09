@@ -1164,6 +1164,12 @@ func (t *testScheduler) TestStartStopSource(c *C) {
 	// test not exist source
 	c.Assert(terror.ErrSchedulerSourceCfgNotExist.Equal(s.StartRelay(sourceID3, []string{workerName1})), IsTrue)
 	c.Assert(terror.ErrSchedulerSourceCfgNotExist.Equal(s.StopRelay(sourceID4, []string{workerName1})), IsTrue)
+	noWorkerSources := []string{sourceID1, sourceID2, sourceID3, sourceID4}
+	for _, source := range noWorkerSources {
+		workers, err := s.GetRelayWorkers(source)
+		c.Assert(err, IsNil)
+		c.Assert(workers, HasLen, 0)
+	}
 
 	// start-relay success on bound-same-source and free worker
 	c.Assert(s.StartRelay(sourceID1, []string{workerName1}), IsNil)
@@ -1175,6 +1181,9 @@ func (t *testScheduler) TestStartStopSource(c *C) {
 	c.Assert(s.relayWorkers[sourceID1], HasLen, 2)
 	c.Assert(s.relayWorkers[sourceID1], HasKey, workerName1)
 	c.Assert(s.relayWorkers[sourceID1], HasKey, workerName3)
+	workers, err := s.GetRelayWorkers(sourceID1)
+	c.Assert(err, IsNil)
+	c.Assert(workers, DeepEquals, []*Worker{worker1, worker3})
 
 	// failed on bound-not-same-source worker and not exist worker
 	c.Assert(terror.ErrSchedulerRelayWorkersWrongBound.Equal(s.StartRelay(sourceID1, []string{workerName2})), IsTrue)
@@ -1189,10 +1198,21 @@ func (t *testScheduler) TestStartStopSource(c *C) {
 	c.Assert(s.expectRelayStages, HasKey, sourceID2)
 	c.Assert(s.relayWorkers[sourceID2], HasLen, 1)
 	c.Assert(s.relayWorkers[sourceID2], HasKey, workerName2)
+	workers, err = s.GetRelayWorkers(sourceID2)
+	c.Assert(err, IsNil)
+	c.Assert(workers, DeepEquals, []*Worker{worker2})
 
 	// failed on not-same-source worker and not exist worker
 	c.Assert(terror.ErrSchedulerRelayWorkersWrongRelay.Equal(s.StopRelay(sourceID1, []string{workerName2})), IsTrue)
 	c.Assert(terror.ErrSchedulerWorkerNotExist.Equal(s.StopRelay(sourceID1, []string{"not-exist"})), IsTrue)
+
+	// nothing changed
+	workers, err = s.GetRelayWorkers(sourceID1)
+	c.Assert(err, IsNil)
+	c.Assert(workers, DeepEquals, []*Worker{worker1, worker3})
+	workers, err = s.GetRelayWorkers(sourceID2)
+	c.Assert(err, IsNil)
+	c.Assert(workers, DeepEquals, []*Worker{worker2})
 
 	// stop-relay success
 	c.Assert(s.StopRelay(sourceID1, []string{workerName1}), IsNil)
@@ -1202,4 +1222,7 @@ func (t *testScheduler) TestStartStopSource(c *C) {
 	c.Assert(s.expectRelayStages, HasKey, sourceID2)
 	c.Assert(s.relayWorkers, HasLen, 1)
 	c.Assert(s.relayWorkers, HasKey, sourceID2)
+	workers, err = s.GetRelayWorkers(sourceID1)
+	c.Assert(err, IsNil)
+	c.Assert(workers, HasLen, 0)
 }

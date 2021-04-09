@@ -21,15 +21,15 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/pingcap/errors"
+	globalLog "github.com/pingcap/log"
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/worker"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-	globalLog "github.com/pingcap/log"
-
-	"github.com/pingcap/errors"
-	"go.uber.org/zap"
 )
 
 func main() {

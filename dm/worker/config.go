@@ -45,6 +45,10 @@ func init() {
 		i := val.(int)
 		defaultKeepAliveTTL = int64(i)
 	})
+	failpoint.Inject("defaultRelayKeepAliveTTL", func(val failpoint.Value) {
+		i := val.(int)
+		defaultRelayKeepAliveTTL = int64(i)
+	})
 }
 
 // NewConfig creates a new base config for worker.
