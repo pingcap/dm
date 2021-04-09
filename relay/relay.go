@@ -919,6 +919,9 @@ func (r *Relay) Reload(newCfg *Config) error {
 	r.cfg.Charset = newCfg.Charset
 
 	r.closeDB()
+	if r.cfg.From.RawDBCfg != nil {
+		r.cfg.From.RawDBCfg = config.DefaultRawDBConfig()
+	}
 	r.cfg.From.RawDBCfg.ReadTimeout = showStatusConnectionTimeout
 	db, err := conn.DefaultDBProvider.Apply(r.cfg.From)
 	if err != nil {
