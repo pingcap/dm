@@ -45,7 +45,7 @@ func clearTestData(c *C) {
 
 type testForEtcd struct{}
 
-var _ = Suite(&testForEtcd{})
+var _ = SerialSuites(&testForEtcd{})
 
 func (t *testForEtcd) TestTryUpgrade(c *C) {
 	defer clearTestData(c)
@@ -69,15 +69,16 @@ func (t *testForEtcd) TestTryUpgrade(c *C) {
 	c.Assert(rev1, Greater, int64(0))
 	c.Assert(ver.NotSet(), IsTrue)
 
-	// try to upgrade, but do nothing except the current version recorded.
+	// try to upgrade, run actual upgrade functions
 	c.Assert(TryUpgrade(etcdTestCli, newUpgradeContext()), IsNil)
 	ver, rev2, err := GetVersion(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
 	c.Assert(ver, DeepEquals, CurrentVersion)
-	c.Assert(mockVerNo, Equals, uint64(0))
+	c.Assert(mockVerNo, Equals, uint64(4))
 
 	// try to upgrade again, do nothing because the version is the same.
+	mockVerNo = 0
 	c.Assert(TryUpgrade(etcdTestCli, newUpgradeContext()), IsNil)
 	ver, rev3, err := GetVersion(etcdTestCli)
 	c.Assert(err, IsNil)
@@ -102,11 +103,40 @@ func (t *testForEtcd) TestTryUpgrade(c *C) {
 	c.Assert(mockVerNo, Equals, currentInternalNo+1)
 
 	// try to upgrade, to an older version, do nothing.
+	mockVerNo = 0
 	CurrentVersion = oldCurrentVer
 	c.Assert(TryUpgrade(etcdTestCli, newUpgradeContext()), IsNil)
 	ver, rev5, err := GetVersion(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(rev5, Equals, rev4)
 	c.Assert(ver, DeepEquals, newerVer) // not changed.
-	c.Assert(mockVerNo, Equals, currentInternalNo+1)
+	c.Assert(mockVerNo, Equals, uint64(0))
+}
+
+func (t *testForEtcd) TestUpgradeToVer3(c *C) {
+	ctx := context.Background()
+	uctx := Context{ctx, nil}
+	source := "source-1"
+	oldKey := common.UpstreamConfigKeyAdapterV1.Encode(source)
+	oldVal := "test"
+
+	_, err := etcdTestCli.Put(ctx, oldKey, oldVal)
+	c.Assert(err, IsNil)
+	c.Assert(upgradeToVer3(etcdTestCli, uctx), IsNil)
+
+	newKey := common.UpstreamConfigKeyAdapter.Encode(source)
+	resp, err := etcdTestCli.Get(ctx, newKey)
+	c.Assert(err, IsNil)
+	c.Assert(resp.Kvs, HasLen, 1)
+	c.Assert(string(resp.Kvs[0].Value), Equals, oldVal)
+
+	// test won't overwrite new value
+	newVal := "test2"
+	_, err = etcdTestCli.Put(ctx, newKey, newVal)
+	c.Assert(err, IsNil)
+	c.Assert(upgradeToVer3(etcdTestCli, uctx), IsNil)
+	resp, err = etcdTestCli.Get(ctx, newKey)
+	c.Assert(err, IsNil)
+	c.Assert(resp.Kvs, HasLen, 1)
+	c.Assert(string(resp.Kvs[0].Value), Equals, newVal)
 }

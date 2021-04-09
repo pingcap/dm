@@ -171,12 +171,15 @@ func (o *Optimist) RemoveMetaData(task string) error {
 		return terror.ErrMasterOptimistNotStarted.Generate()
 	}
 
+	lockIDSet := make(map[string]struct{})
+
 	infos, ops, _, err := optimism.GetInfosOperationsByTask(o.cli, task)
 	if err != nil {
 		return err
 	}
 	for _, info := range infos {
 		o.lk.RemoveLockByInfo(info)
+		lockIDSet[utils.GenDDLLockID(info.Task, info.DownSchema, info.DownTable)] = struct{}{}
 	}
 	for _, op := range ops {
 		o.lk.RemoveLock(op.ID)
@@ -185,7 +188,7 @@ func (o *Optimist) RemoveMetaData(task string) error {
 	o.tk.RemoveTableByTask(task)
 
 	// clear meta data in etcd
-	_, err = optimism.DeleteInfosOperationsTablesSchemasByTask(o.cli, task)
+	_, err = optimism.DeleteInfosOperationsTablesSchemasByTask(o.cli, task, lockIDSet)
 	return err
 }
 

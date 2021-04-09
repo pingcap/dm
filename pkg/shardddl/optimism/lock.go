@@ -204,7 +204,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 		log.L().Warn("table-info-before not equal table saved in master", zap.Stringer("master-table", l.tables[callerSource][callerSchema][callerTable]), zap.Stringer("table-info-before", prevTable))
 		l.tables[callerSource][callerSchema][callerTable] = prevTable
 		prevJoined, err2 := joinTable(prevTable)
-		if err != nil {
+		if err2 != nil {
 			return emptyDDLs, emptyCols, err2
 		}
 		l.joined = prevJoined
@@ -293,6 +293,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 					err = l.AddDroppedColumn(info, col)
 					if err != nil {
 						log.L().Error("fail to add dropped column info in etcd", zap.Error(err))
+						return ddls, cols, terror.ErrShardDDLOptimismTrySyncFail.Generate(l.ID, "fail to add dropped column info in etcd")
 					}
 					cols = append(cols, col)
 				}
@@ -337,6 +338,7 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 				err = l.AddDroppedColumn(info, col)
 				if err != nil {
 					log.L().Error("fail to add dropped column info in etcd", zap.Error(err))
+					return ddls, cols, terror.ErrShardDDLOptimismTrySyncFail.Generate(l.ID, "fail to add dropped column info in etcd")
 				}
 				cols = append(cols, col)
 			}

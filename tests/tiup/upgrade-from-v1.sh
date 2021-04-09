@@ -93,14 +93,13 @@ function migrate_in_v1 {
 function import_to_v2_by_tiup() {
     # install TiUP-DM
     curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-    curl "https://tiup-mirrors.pingcap.com/root.json" > ~/.tiup/bin/root.json
     source /root/.profile
     tiup install dm
 
     # import from v1
     # TODO: update `--cluster-version` to the target version later.
     tiup install dmctl:$DM_V2_VER
-    tiup dm:v1.3.7 import --yes --dir=/home/tidb/dm-ansible --cluster-version $DM_V2_VER
+    tiup dm import --yes --dir=/home/tidb/dm-ansible --cluster-version $DM_V2_VER
     tiup dm start --yes $CLUSTER_NAME
 }
 

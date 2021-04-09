@@ -37,6 +37,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/event"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
@@ -105,11 +106,10 @@ func getDBConfigForTest() config.DBConfig {
 	}
 }
 
-func openDBForTest() (*sql.DB, error) {
+func openDBForTest() (*conn.BaseDB, error) {
 	cfg := getDBConfigForTest()
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
-	return sql.Open("mysql", dsn)
+	return conn.DefaultDBProvider.Apply(cfg)
 }
 
 // mockReader is used only for relay testing.
@@ -512,7 +512,7 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 		r.db.Close()
 		r.db = nil
 	}()
-	uuid, err := utils.GetServerUUID(ctx, r.db, r.cfg.Flavor)
+	uuid, err := utils.GetServerUUID(ctx, r.db.DB, r.cfg.Flavor)
 	c.Assert(err, IsNil)
 
 	// re-setup meta with start pos adjusted
@@ -606,21 +606,22 @@ func (t *testRelaySuite) TestProcess(c *C) {
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel2()
 	var connID uint32
+	db := r.db.DB
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		connID, err = getBinlogDumpConnID(ctx2, r.db)
+		connID, err = getBinlogDumpConnID(ctx2, db)
 		return err == nil
 	}), IsTrue)
-	_, err = r.db.ExecContext(ctx2, fmt.Sprintf(`KILL %d`, connID))
+	_, err = db.ExecContext(ctx2, fmt.Sprintf(`KILL %d`, connID))
 	c.Assert(err, IsNil)
 
 	// execute a DDL again
 	lastDDL := "CREATE DATABASE `test_relay_retry_db`"
-	_, err = r.db.ExecContext(ctx2, lastDDL)
+	_, err = db.ExecContext(ctx2, lastDDL)
 	c.Assert(err, IsNil)
 
 	defer func() {
 		query := "DROP DATABASE IF EXISTS `test_relay_retry_db`"
-		_, err = r.db.ExecContext(ctx2, query)
+		_, err = db.ExecContext(ctx2, query)
 		c.Assert(err, IsNil)
 	}()
 
@@ -644,7 +645,7 @@ func (t *testRelaySuite) TestProcess(c *C) {
 
 	// check whether have binlog file in relay directory
 	// and check for events already done in `TestHandleEvent`
-	uuid, err := utils.GetServerUUID(ctx2, r.db, r.cfg.Flavor)
+	uuid, err := utils.GetServerUUID(ctx2, db, r.cfg.Flavor)
 	c.Assert(err, IsNil)
 	files, err := streamer.CollectAllBinlogFiles(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
 	c.Assert(err, IsNil)
