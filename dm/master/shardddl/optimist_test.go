@@ -1160,9 +1160,10 @@ func (t *testOptimist) TestBuildLockJoinedAndTable(c *C) {
 	ifm, _, err := optimism.GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
 
-	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm, nil)
+	lockJoined, lockTTS, missTable := o.buildLockJoinedAndTTS(ifm, nil)
 	c.Assert(len(lockJoined), Equals, 1)
 	c.Assert(len(lockTTS), Equals, 1)
+	c.Assert(len(missTable), Equals, 0)
 	joined, ok := lockJoined[utils.GenDDLLockID(task, downSchema, downTable)]
 	c.Assert(ok, IsTrue)
 	cmp, err := joined.Compare(schemacmp.Encode(ti2))
@@ -1223,12 +1224,16 @@ func (t *testOptimist) TestBuildLockWithInitSchema(c *C) {
 	c.Assert(err, IsNil)
 
 	initSchemas := map[string]map[string]map[string]optimism.InitSchema{task: {downSchema: {downTable: initSchema}}}
-	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm, initSchemas)
+	lockJoined, lockTTS, missTable := o.buildLockJoinedAndTTS(ifm, initSchemas)
 	c.Assert(len(lockJoined), Equals, 1)
 	c.Assert(len(lockTTS), Equals, 1)
+	c.Assert(len(missTable), Equals, 1)
+	cmp, err := missTable[utils.GenDDLLockID(task, downSchema, downTable)][source2]["foo"]["bar-1"].Compare(schemacmp.Encode(initSchema.TableInfo))
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, 0)
 	joined, ok := lockJoined[utils.GenDDLLockID(task, downSchema, downTable)]
 	c.Assert(ok, IsTrue)
-	cmp, err := joined.Compare(schemacmp.Encode(ti0))
+	cmp, err = joined.Compare(schemacmp.Encode(ti0))
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 0)
 }
