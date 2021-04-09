@@ -42,7 +42,7 @@ All notable changes to this project will be documented in this file.
 
 ### Known issues
 
-https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aaffected-v2.0.2
+[GitHub issues](https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aaffected-v2.0.2)
 
 ## [2.0.1] 2020-12-25
 
