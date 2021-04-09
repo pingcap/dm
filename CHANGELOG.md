@@ -39,6 +39,9 @@ All notable changes to this project will be documented in this file.
 - Fix the issue that the full import fails when the upstream database enables the `ANSI_QUOTES` mode [#1497](https://github.com/pingcap/dm/pull/1497)
 - Fix the issue that DM might duplicate binlog events when the GTID and the relay log are enabled at the same time [#1525](https://github.com/pingcap/dm/pull/1525)
 
+### Known issues
+https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aaffected-v2.0.2
+
 ## [2.0.1] 2020-12-25
 
 ### Improvements
