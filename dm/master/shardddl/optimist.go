@@ -171,7 +171,7 @@ func (o *Optimist) RemoveMetaData(task string) error {
 		return terror.ErrMasterOptimistNotStarted.Generate()
 	}
 
-	lockIDSet := make(map[string]struct{}, 0)
+	lockIDSet := make(map[string]struct{})
 
 	infos, ops, _, err := optimism.GetInfosOperationsByTask(o.cli, task)
 	if err != nil {
