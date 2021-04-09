@@ -105,7 +105,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 			// use new table info as tableInfoBefore, we can also use the origin table from schemaTracker
 			info := s.optimist.ConstructInfo(req.Database, req.Table, downSchema, downTable, []string{""}, ti, []*model.TableInfo{ti})
 			info.IgnoreConflict = true
-			log.L().Info("sync info with operate-schema", zap.Stringer("info", info))
+			log.L().Info("sync info with operate-schema", zap.String("info", info.ShortString()))
 			_, err = s.optimist.PutInfo(info)
 			if err != nil {
 				return "", err
