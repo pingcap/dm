@@ -42,9 +42,11 @@ func NewLockKeeper() *LockKeeper {
 func (lk *LockKeeper) RebuildLocksAndTables(
 	cli *clientv3.Client,
 	ifm map[string]map[string]map[string]map[string]Info,
-	colm map[string]map[string]map[string]map[string]map[string]struct{},
+	colm map[string]map[string]map[string]map[string]map[string]DropColumnStage,
 	lockJoined map[string]schemacmp.Table,
-	lockTTS map[string][]TargetTable) {
+	lockTTS map[string][]TargetTable,
+	missTable map[string]map[string]map[string]map[string]schemacmp.Table,
+) {
 	var (
 		lock *Lock
 		ok   bool
@@ -66,10 +68,21 @@ func (lk *LockKeeper) RebuildLocksAndTables(
 			}
 		}
 	}
+
+	// update missTable's table info for locks
+	for lockID, lockTable := range missTable {
+		for source, sourceTable := range lockTable {
+			for schema, schemaTable := range sourceTable {
+				for table, tableinfo := range schemaTable {
+					lk.locks[lockID].tables[source][schema][table] = tableinfo
+				}
+			}
+		}
+	}
 }
 
 // TrySync tries to sync the lock.
-func (lk *LockKeeper) TrySync(cli *clientv3.Client, info Info, tts []TargetTable) (string, []string, error) {
+func (lk *LockKeeper) TrySync(cli *clientv3.Client, info Info, tts []TargetTable) (string, []string, []string, error) {
 	var (
 		lockID = genDDLLockID(info)
 		l      *Lock
@@ -80,7 +93,7 @@ func (lk *LockKeeper) TrySync(cli *clientv3.Client, info Info, tts []TargetTable
 	defer lk.mu.Unlock()
 
 	if info.TableInfoBefore == nil {
-		return "", nil, terror.ErrMasterOptimisticTableInfoBeforeNotExist.Generate(info.DDLs)
+		return "", nil, nil, terror.ErrMasterOptimisticTableInfoBeforeNotExist.Generate(info.DDLs)
 	}
 
 	if l, ok = lk.locks[lockID]; !ok {
@@ -88,8 +101,8 @@ func (lk *LockKeeper) TrySync(cli *clientv3.Client, info Info, tts []TargetTable
 		l = lk.locks[lockID]
 	}
 
-	newDDLs, err := l.TrySync(info, tts)
-	return lockID, newDDLs, err
+	newDDLs, cols, err := l.TrySync(info, tts)
+	return lockID, newDDLs, cols, err
 }
 
 // RemoveLock removes a lock.

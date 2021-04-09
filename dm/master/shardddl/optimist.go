@@ -171,12 +171,15 @@ func (o *Optimist) RemoveMetaData(task string) error {
 		return terror.ErrMasterOptimistNotStarted.Generate()
 	}
 
+	lockIDSet := make(map[string]struct{})
+
 	infos, ops, _, err := optimism.GetInfosOperationsByTask(o.cli, task)
 	if err != nil {
 		return err
 	}
 	for _, info := range infos {
 		o.lk.RemoveLockByInfo(info)
+		lockIDSet[utils.GenDDLLockID(info.Task, info.DownSchema, info.DownTable)] = struct{}{}
 	}
 	for _, op := range ops {
 		o.lk.RemoveLock(op.ID)
@@ -185,7 +188,7 @@ func (o *Optimist) RemoveMetaData(task string) error {
 	o.tk.RemoveTableByTask(task)
 
 	// clear meta data in etcd
-	_, err = optimism.DeleteInfosOperationsTablesSchemasByTask(o.cli, task)
+	_, err = optimism.DeleteInfosOperationsTablesSchemasByTask(o.cli, task, lockIDSet)
 	return err
 }
 
@@ -296,7 +299,8 @@ func sortInfos(ifm map[string]map[string]map[string]map[string]optimism.Info) []
 func (o *Optimist) buildLockJoinedAndTTS(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
 	initSchemas map[string]map[string]map[string]optimism.InitSchema) (
-	map[string]schemacmp.Table, map[string][]optimism.TargetTable) {
+	map[string]schemacmp.Table, map[string][]optimism.TargetTable,
+	map[string]map[string]map[string]map[string]schemacmp.Table) {
 
 	type infoKey struct {
 		lockID   string
@@ -321,6 +325,7 @@ func (o *Optimist) buildLockJoinedAndTTS(
 	}
 
 	lockJoined := make(map[string]schemacmp.Table)
+	missTable := make(map[string]map[string]map[string]map[string]schemacmp.Table)
 	for lockID, tts := range lockTTS {
 		for _, tt := range tts {
 			for upSchema, tables := range tt.UpTables {
@@ -332,6 +337,16 @@ func (o *Optimist) buildLockJoinedAndTTS(
 						// If there is no optimism.Info for a upstream table, it indicates the table structure
 						// hasn't been changed since last removeLock. So the init schema should be its table info.
 						table = schemacmp.Encode(initSchema.TableInfo)
+						if _, ok := missTable[lockID]; !ok {
+							missTable[lockID] = make(map[string]map[string]map[string]schemacmp.Table)
+						}
+						if _, ok := missTable[lockID][tt.Source]; !ok {
+							missTable[lockID][tt.Source] = make(map[string]map[string]schemacmp.Table)
+						}
+						if _, ok := missTable[lockID][tt.Source][upSchema]; !ok {
+							missTable[lockID][tt.Source][upSchema] = make(map[string]schemacmp.Table)
+						}
+						missTable[lockID][tt.Source][upSchema][upTable] = table
 					} else {
 						o.logger.Error(
 							"can not find table info for upstream table",
@@ -356,21 +371,21 @@ func (o *Optimist) buildLockJoinedAndTTS(
 			}
 		}
 	}
-	return lockJoined, lockTTS
+	return lockJoined, lockTTS, missTable
 }
 
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.
 func (o *Optimist) recoverLocks(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
 	opm map[string]map[string]map[string]map[string]optimism.Operation,
-	colm map[string]map[string]map[string]map[string]map[string]struct{},
+	colm map[string]map[string]map[string]map[string]map[string]optimism.DropColumnStage,
 	initSchemas map[string]map[string]map[string]optimism.InitSchema) error {
 	// construct joined table based on the shard DDL info.
 	o.logger.Info("build lock joined and tts")
-	lockJoined, lockTTS := o.buildLockJoinedAndTTS(ifm, initSchemas)
+	lockJoined, lockTTS, missTable := o.buildLockJoinedAndTTS(ifm, initSchemas)
 	// build lock and restore table info
 	o.logger.Info("rebuild locks and tables")
-	o.lk.RebuildLocksAndTables(o.cli, ifm, colm, lockJoined, lockTTS)
+	o.lk.RebuildLocksAndTables(o.cli, ifm, colm, lockJoined, lockTTS, missTable)
 	// sort infos by revision
 	infos := sortInfos(ifm)
 	var firstErr error
@@ -402,7 +417,7 @@ func (o *Optimist) recoverLocks(
 					}
 					if op.Done {
 						lock.TryMarkDone(op.Source, op.UpSchema, op.UpTable)
-						err := lock.DeleteColumnsByDDLs(op.DDLs)
+						err := lock.DeleteColumnsByOp(op)
 						if err != nil {
 							o.logger.Error("fail to update lock columns", zap.Error(err))
 							continue
@@ -516,16 +531,16 @@ func (o *Optimist) handleInfoPut(ctx context.Context, infoCh <-chan optimism.Inf
 				lock := o.lk.FindLockByInfo(info)
 				if lock == nil {
 					// this often happen after the lock resolved.
-					o.logger.Debug("lock for info not found", zap.Stringer("info", info))
+					o.logger.Debug("lock for info not found", zap.String("info", info.ShortString()))
 					o.mu.Unlock()
 					continue
 				}
 				// handle `DROP TABLE`, need to remove the table schema from the lock,
 				// and remove the table name from table keeper.
 				removed := lock.TryRemoveTable(info.Source, info.UpSchema, info.UpTable)
-				o.logger.Debug("the table name remove from the table keeper", zap.Bool("removed", removed), zap.Stringer("info", info))
+				o.logger.Debug("the table name remove from the table keeper", zap.Bool("removed", removed), zap.String("info", info.ShortString()))
 				removed = o.tk.RemoveTable(info.Task, info.Source, info.UpSchema, info.UpTable, info.DownSchema, info.DownTable)
-				o.logger.Debug("a table removed for info from the lock", zap.Bool("removed", removed), zap.Stringer("info", info))
+				o.logger.Debug("a table removed for info from the lock", zap.Bool("removed", removed), zap.String("info", info.ShortString()))
 				o.mu.Unlock()
 				continue
 			}
@@ -540,7 +555,7 @@ func (o *Optimist) handleInfoPut(ctx context.Context, infoCh <-chan optimism.Inf
 
 func (o *Optimist) handleInfo(info optimism.Info, skipDone bool) error {
 	added := o.tk.AddTable(info.Task, info.Source, info.UpSchema, info.UpTable, info.DownSchema, info.DownTable)
-	o.logger.Debug("a table added for info", zap.Bool("added", added), zap.Stringer("info", info))
+	o.logger.Debug("a table added for info", zap.Bool("added", added), zap.String("info", info.ShortString()))
 
 	tts := o.tk.FindTables(info.Task, info.DownSchema, info.DownTable)
 	if tts == nil {
@@ -556,7 +571,7 @@ func (o *Optimist) handleInfo(info optimism.Info, skipDone bool) error {
 	}
 	err := o.handleLock(info, tts, skipDone)
 	if err != nil {
-		o.logger.Error("fail to handle the shard DDL lock", zap.Stringer("info", info), log.ShortError(err))
+		o.logger.Error("fail to handle the shard DDL lock", zap.String("info", info.ShortString()), log.ShortError(err))
 		metrics.ReportDDLError(info.Task, metrics.InfoErrHandleLock)
 	}
 	return err
@@ -588,7 +603,7 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 				continue
 			}
 
-			err := lock.DeleteColumnsByDDLs(op.DDLs)
+			err := lock.DeleteColumnsByOp(op)
 			if err != nil {
 				o.logger.Error("fail to update lock columns", zap.Error(err))
 			}
@@ -620,20 +635,20 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 
 // handleLock handles a single shard DDL lock.
 func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, skipDone bool) error {
-	lockID, newDDLs, err := o.lk.TrySync(o.cli, info, tts)
+	lockID, newDDLs, cols, err := o.lk.TrySync(o.cli, info, tts)
 	var cfStage = optimism.ConflictNone
 	var cfMsg = ""
 	if info.IgnoreConflict {
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
-			zap.String("lock", lockID), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
+			zap.String("lock", lockID), zap.String("info", info.ShortString()), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
 	} else if err != nil {
 		cfStage = optimism.ConflictDetected // we treat any errors returned from `TrySync` as conflict detected now.
 		cfMsg = err.Error()
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
-			zap.String("lock", lockID), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
+			zap.String("lock", lockID), zap.String("info", info.ShortString()), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
 	} else {
 		o.logger.Info("the shard DDL lock returned some DDLs",
-			zap.String("lock", lockID), zap.Strings("ddls", newDDLs), zap.Stringer("info", info), zap.Bool("is deleted", info.IsDeleted))
+			zap.String("lock", lockID), zap.Strings("ddls", newDDLs), zap.Strings("cols", cols), zap.String("info", info.ShortString()), zap.Bool("is deleted", info.IsDeleted))
 
 		// try to record the init schema before applied the DDL to the downstream.
 		initSchema := optimism.NewInitSchema(info.Task, info.DownSchema, info.DownTable, info.TableInfoBefore)
@@ -641,9 +656,9 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 		if err2 != nil {
 			return err2
 		} else if putted {
-			o.logger.Info("recorded the initial schema", zap.Stringer("info", info), zap.Int64("revision", rev))
+			o.logger.Info("recorded the initial schema", zap.String("info", info.ShortString()))
 		} else {
-			o.logger.Debug("skip to record the initial schema", zap.Stringer("info", info), zap.Int64("revision", rev))
+			o.logger.Debug("skip to record the initial schema", zap.String("info", info.ShortString()), zap.Int64("revision", rev))
 		}
 	}
 
@@ -668,7 +683,7 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 		return nil
 	}
 
-	op := optimism.NewOperation(lockID, lock.Task, info.Source, info.UpSchema, info.UpTable, newDDLs, cfStage, cfMsg, false)
+	op := optimism.NewOperation(lockID, lock.Task, info.Source, info.UpSchema, info.UpTable, newDDLs, cfStage, cfMsg, false, cols)
 	rev, succ, err := optimism.PutOperation(o.cli, skipDone, op, info.Revision)
 	if err != nil {
 		return err
@@ -740,7 +755,7 @@ func (o *Optimist) deleteInfosOps(lock *optimism.Lock) (bool, error) {
 				info := optimism.NewInfo(lock.Task, source, schema, table, lock.DownSchema, lock.DownTable, nil, nil, nil)
 				info.Version = lock.GetVersion(source, schema, table)
 				infos = append(infos, info)
-				ops = append(ops, optimism.NewOperation(lock.ID, lock.Task, source, schema, table, nil, optimism.ConflictNone, "", false))
+				ops = append(ops, optimism.NewOperation(lock.ID, lock.Task, source, schema, table, nil, optimism.ConflictNone, "", false, nil))
 			}
 		}
 	}
