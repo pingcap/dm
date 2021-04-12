@@ -38,15 +38,12 @@ import (
 	"github.com/pingcap/dm/relay/purger"
 )
 
-// Worker manages sub tasks and process units for data migration
+// Worker manages sub tasks and process units for data migration.
 type Worker struct {
 	// ensure no other operation can be done when closing (we can use `WatGroup`/`Context` to archive this)
 	// TODO: check what does it guards. Now it's used to guard relayHolder and relayPurger (maybe subTaskHolder?) since
 	// query-status maybe access them when closing/disable functionalities
 	sync.RWMutex
-
-	wg     sync.WaitGroup
-	closed sync2.AtomicBool
 
 	// context created when Worker created, and canceled when closing
 	ctx    context.Context
@@ -56,30 +53,35 @@ type Worker struct {
 	l   log.Logger
 
 	// subtask functionality
-	subTaskEnabled sync2.AtomicBool
-	subTaskCtx     context.Context
-	subTaskCancel  context.CancelFunc
-	subTaskWg      sync.WaitGroup
-	subTaskHolder  *subTaskHolder
+	subTaskCtx    context.Context
+	subTaskCancel context.CancelFunc
+	subTaskHolder *subTaskHolder
 
-	// relay functionality
-	// during relayEnabled == true, relayHolder and relayPurger should not be nil
-	relayEnabled sync2.AtomicBool
-	relayCtx     context.Context
-	relayCancel  context.CancelFunc
-	relayWg      sync.WaitGroup
-	relayHolder  RelayHolder
-	relayPurger  purger.Purger
+	relayCtx    context.Context
+	relayCancel context.CancelFunc
+	relayHolder RelayHolder
+	relayPurger purger.Purger
 
 	taskStatusChecker TaskStatusChecker
 
 	etcdClient *clientv3.Client
 
 	name string
+
+	relayWg   sync.WaitGroup
+	subTaskWg sync.WaitGroup
+	wg        sync.WaitGroup
+	closed    sync2.AtomicBool
+
+	// relay functionality
+	// during relayEnabled == true, relayHolder and relayPurger should not be nil
+	relayEnabled sync2.AtomicBool
+
+	subTaskEnabled sync2.AtomicBool
 }
 
 // NewWorker creates a new Worker. The functionality of relay and subtask is disabled by default, need call EnableRelay
-// and EnableSubtask later
+// and EnableSubtask later.
 func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name string) (w *Worker, err error) {
 	w = &Worker{
 		cfg:           cfg,
@@ -119,7 +121,7 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name strin
 	return w, nil
 }
 
-// Start starts working
+// Start starts working.
 func (w *Worker) Start() {
 	// start task status checker
 	if w.cfg.Checker.CheckEnable {
@@ -145,7 +147,7 @@ func (w *Worker) Start() {
 	}
 }
 
-// Close stops working and releases resources
+// Close stops working and releases resources.
 func (w *Worker) Close() {
 	if w.closed.Get() {
 		w.l.Warn("already closed")
@@ -181,7 +183,7 @@ func (w *Worker) Close() {
 	w.l.Info("Stop worker")
 }
 
-// EnableRelay enables the functionality of start/watch/handle relay
+// EnableRelay enables the functionality of start/watch/handle relay.
 func (w *Worker) EnableRelay() (err error) {
 	w.l.Info("enter EnableRelay")
 	w.Lock()
@@ -199,7 +201,7 @@ func (w *Worker) EnableRelay() (err error) {
 		return err
 	}
 
-	dctx, dcancel := context.WithTimeout(w.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
+	dctx, dcancel := context.WithTimeout(w.etcdClient.Ctx(), time.Duration(len(subTaskCfgs)*3)*time.Second)
 	defer dcancel()
 	minLoc, err1 := getMinLocInAllSubTasks(dctx, subTaskCfgs)
 	if err1 != nil {
@@ -261,7 +263,7 @@ func (w *Worker) EnableRelay() (err error) {
 	return nil
 }
 
-// DisableRelay disables the functionality of start/watch/handle relay
+// DisableRelay disables the functionality of start/watch/handle relay.
 func (w *Worker) DisableRelay() {
 	w.l.Info("enter DisableRelay")
 	w.Lock()
@@ -297,7 +299,7 @@ func (w *Worker) DisableRelay() {
 	w.l.Info("relay disabled")
 }
 
-// EnableHandleSubtasks enables the functionality of start/watch/handle subtasks
+// EnableHandleSubtasks enables the functionality of start/watch/handle subtasks.
 func (w *Worker) EnableHandleSubtasks() error {
 	w.l.Info("enter EnableHandleSubtasks")
 	w.Lock()
@@ -344,7 +346,7 @@ func (w *Worker) EnableHandleSubtasks() error {
 	return nil
 }
 
-// DisableHandleSubtasks disables the functionality of start/watch/handle subtasks
+// DisableHandleSubtasks disables the functionality of start/watch/handle subtasks.
 func (w *Worker) DisableHandleSubtasks() {
 	w.l.Info("enter DisableHandleSubtasks")
 	if !w.subTaskEnabled.CompareAndSwap(true, false) {
@@ -380,7 +382,7 @@ func (w *Worker) fetchSubTasksAndAdjust() (map[string]ha.Stage, map[string]confi
 	return subTaskStages, subTaskCfgM, revSubTask, nil
 }
 
-// StartSubTask creates a sub task an run it
+// StartSubTask creates a sub task an run it.
 func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, needLock bool) error {
 	if needLock {
 		w.Lock()
@@ -420,7 +422,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, n
 	return nil
 }
 
-// UpdateSubTask update config for a sub task
+// UpdateSubTask update config for a sub task.
 func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
 	w.Lock()
 	defer w.Unlock()
@@ -438,7 +440,7 @@ func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
 	return st.Update(cfg)
 }
 
-// OperateSubTask stop/resume/pause  sub task
+// OperateSubTask stop/resume/pause  sub task.
 func (w *Worker) OperateSubTask(name string, op pb.TaskOp) error {
 	w.Lock()
 	defer w.Unlock()
@@ -476,7 +478,7 @@ func (w *Worker) OperateSubTask(name string, op pb.TaskOp) error {
 
 // QueryStatus query worker's sub tasks' status. If relay enabled, also return source status
 // TODO: `ctx` is used to get upstream master status in every subtasks and source.
-// reduce it to only call once and remove `unifyMasterBinlogPos`, also remove below ctx2
+// reduce it to only call once and remove `unifyMasterBinlogPos`, also remove below ctx2.
 func (w *Worker) QueryStatus(ctx context.Context, name string) ([]*pb.SubTaskStatus, *pb.RelayStatus) {
 	w.RLock()
 	defer w.RUnlock()
@@ -517,7 +519,6 @@ func (w *Worker) resetSubtaskStage() (int64, error) {
 				opErrCounter.WithLabelValues(w.name, opType).Inc()
 				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage),
 					zap.String("task", subtaskCfg.Name), zap.Error(err2))
-
 			}
 			delete(sts, name)
 		}
@@ -618,7 +619,7 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 	}
 }
 
-// operateSubTaskStage returns TaskOp.String() additionally to record metrics
+// operateSubTaskStage returns TaskOp.String() additionally to record metrics.
 func (w *Worker) operateSubTaskStage(stage ha.Stage, subTaskCfg config.SubTaskConfig) (string, error) {
 	var op pb.TaskOp
 	switch {
@@ -640,7 +641,7 @@ func (w *Worker) operateSubTaskStage(stage ha.Stage, subTaskCfg config.SubTaskCo
 	return op.String(), w.OperateSubTask(stage.Task, op)
 }
 
-// operateSubTaskStageWithoutConfig returns TaskOp additionally to record metrics
+// operateSubTaskStageWithoutConfig returns TaskOp additionally to record metrics.
 func (w *Worker) operateSubTaskStageWithoutConfig(stage ha.Stage) (string, error) {
 	var subTaskCfg config.SubTaskConfig
 	if stage.Expect == pb.Stage_Running {
@@ -746,7 +747,7 @@ OUTER:
 }
 
 // operateRelayStage returns RelayOp.String() additionally to record metrics
-// *RelayOp is nil only when error is nil, so record on error will not meet nil-pointer deference
+// *RelayOp is nil only when error is nil, so record on error will not meet nil-pointer deference.
 func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) (string, error) {
 	var op pb.RelayOp
 	switch {
@@ -765,7 +766,7 @@ func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) (string,
 	return op.String(), w.operateRelay(ctx, op)
 }
 
-// OperateRelay operates relay unit
+// OperateRelay operates relay unit.
 func (w *Worker) operateRelay(ctx context.Context, op pb.RelayOp) error {
 	if w.closed.Get() {
 		return terror.ErrWorkerAlreadyClosed.Generate()
@@ -780,7 +781,7 @@ func (w *Worker) operateRelay(ctx context.Context, op pb.RelayOp) error {
 	return nil
 }
 
-// PurgeRelay purges relay log files
+// PurgeRelay purges relay log files.
 func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) error {
 	if w.closed.Get() {
 		return terror.ErrWorkerAlreadyClosed.Generate()
@@ -817,7 +818,7 @@ func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) erro
 	return w.relayPurger.Do(ctx, req)
 }
 
-// ForbidPurge implements PurgeInterceptor.ForbidPurge
+// ForbidPurge implements PurgeInterceptor.ForbidPurge.
 func (w *Worker) ForbidPurge() (bool, string) {
 	if w.closed.Get() {
 		return false, ""
@@ -852,7 +853,7 @@ func (w *Worker) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 	return st.OperateSchema(ctx, req)
 }
 
-// copyConfigFromSource copies config items from source config and worker's relayEnabled to sub task
+// copyConfigFromSource copies config items from source config and worker's relayEnabled to sub task.
 func copyConfigFromSource(cfg *config.SubTaskConfig, sourceCfg *config.SourceConfig, enableRelay bool) error {
 	cfg.From = sourceCfg.From
 
@@ -888,14 +889,15 @@ func copyConfigFromSource(cfg *config.SubTaskConfig, sourceCfg *config.SourceCon
 	return nil
 }
 
-// copyConfigFromSourceForEach do copyConfigFromSource for each value in subTaskCfgM and change subTaskCfgM in-place
+// copyConfigFromSourceForEach do copyConfigFromSource for each value in subTaskCfgM and change subTaskCfgM in-place.
 func copyConfigFromSourceForEach(
 	subTaskCfgM map[string]config.SubTaskConfig,
 	sourceCfg *config.SourceConfig,
 	enableRelay bool,
 ) error {
 	for k, subTaskCfg := range subTaskCfgM {
-		if err2 := copyConfigFromSource(&subTaskCfg, sourceCfg, enableRelay); err2 != nil {
+		sCfg := subTaskCfg
+		if err2 := copyConfigFromSource(&sCfg, sourceCfg, enableRelay); err2 != nil {
 			return err2
 		}
 		subTaskCfgM[k] = subTaskCfg
@@ -904,7 +906,7 @@ func copyConfigFromSourceForEach(
 }
 
 // getAllSubTaskStatus returns all subtask status of this worker, note the field
-// in subtask status is not completed, only includes `Name`, `Stage` and `Result` now
+// in subtask status is not completed, only includes `Name`, `Stage` and `Result` now.
 func (w *Worker) getAllSubTaskStatus() map[string]*pb.SubTaskStatus {
 	sts := w.subTaskHolder.getAllSubTasks()
 	result := make(map[string]*pb.SubTaskStatus, len(sts))
@@ -920,7 +922,7 @@ func (w *Worker) getAllSubTaskStatus() map[string]*pb.SubTaskStatus {
 	return result
 }
 
-// HandleError handle worker error
+// HandleError handle worker error.
 func (w *Worker) HandleError(ctx context.Context, req *pb.HandleWorkerErrorRequest) error {
 	w.Lock()
 	defer w.Unlock()

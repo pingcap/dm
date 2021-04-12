@@ -440,6 +440,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 }
 
 func (t *testServer) testHTTPInterface(c *C, uri string) {
+	// nolint:noctx
 	resp, err := http.Get("http://127.0.0.1:8262/" + uri)
 	c.Assert(err, IsNil)
 	defer resp.Body.Close()
@@ -494,12 +495,13 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 			currentWorker := s.getWorker(true)
 			return currentWorker == nil && w.closed.Get()
 		}), IsTrue)
-		c.Assert(s.getSourceStatus(true).Result, IsNil)
+		c.Assert(s.getSourceStatus(false).Result, IsNil)
 	}
 }
 
-func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, dir string, hostName string) *embed.Etcd {
-	ETCD.Close()
+// nolinter:interfacer
+func (t *testServer) testRetryConnectMaster(c *C, s *Server, etcd *embed.Etcd, dir string, hostName string) *embed.Etcd {
+	etcd.Close()
 	time.Sleep(6 * time.Second)
 	// When worker server fail to keepalive with etcd, server should close its worker
 	c.Assert(s.getWorker(true), IsNil)
@@ -544,8 +546,9 @@ func (t *testServer) testSubTaskRecover(c *C, s *Server, dir string) {
 	c.Assert(status.SubTaskStatus[0].Stage, Equals, pb.Stage_Running)
 }
 
-func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.Etcd) {
-	ETCD.Close()
+// nolinter:interfacer
+func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, etcd *embed.Etcd) {
+	etcd.Close()
 	time.Sleep(retryConnectSleepTime + time.Duration(defaultKeepAliveTTL+3)*time.Second)
 	c.Assert(s.getWorker(true), IsNil)
 }

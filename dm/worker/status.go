@@ -25,7 +25,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// Status returns the status of the current sub task
+// Status returns the status of the current sub task.
 func (st *SubTask) Status(ctx context.Context) interface{} {
 	if cu := st.CurrUnit(); cu != nil {
 		return cu.Status(ctx)
@@ -33,7 +33,7 @@ func (st *SubTask) Status(ctx context.Context) interface{} {
 	return nil
 }
 
-// StatusJSON returns the status of the current sub task as json string
+// StatusJSON returns the status of the current sub task as json string.
 func (st *SubTask) StatusJSON(ctx context.Context) string {
 	status := st.Status(ctx)
 	sj, err := json.Marshal(status)
@@ -45,7 +45,7 @@ func (st *SubTask) StatusJSON(ctx context.Context) string {
 }
 
 // Status returns the status of the worker (and sub tasks)
-// if stName is empty, all sub task's status will be returned
+// if stName is empty, all sub task's status will be returned.
 func (w *Worker) Status(ctx context.Context, stName string) []*pb.SubTaskStatus {
 	sts := w.subTaskHolder.getAllSubTasks()
 
@@ -111,7 +111,7 @@ func (w *Worker) Status(ctx context.Context, stName string) []*pb.SubTaskStatus 
 	return status
 }
 
-// StatusJSON returns the status of the worker as json string
+// StatusJSON returns the status of the worker as json string.
 func (w *Worker) StatusJSON(ctx context.Context, stName string) string {
 	sl := &pb.SubTaskStatusList{Status: w.Status(ctx, stName)}
 	mar := jsonpb.Marshaler{EmitDefaults: true, Indent: "    "}

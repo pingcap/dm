@@ -33,7 +33,7 @@ import (
 
 // SampleConfigFile is sample config file of dm-worker
 // later we can read it from dm/worker/dm-worker.toml
-// and assign it to SampleConfigFile while we build dm-worker
+// and assign it to SampleConfigFile while we build dm-worker.
 var (
 	SampleConfigFile         string
 	defaultKeepAliveTTL      = int64(60)      // 1 minute
@@ -106,7 +106,7 @@ type Config struct {
 	printSampleConfig bool
 }
 
-// Clone clones a config
+// Clone clones a config.
 func (c *Config) Clone() *Config {
 	clone := &Config{}
 	*clone = *c
@@ -121,7 +121,7 @@ func (c *Config) String() string {
 	return string(cfg)
 }
 
-// Toml returns TOML format representation of config
+// Toml returns TOML format representation of config.
 func (c *Config) Toml() (string, error) {
 	var b bytes.Buffer
 

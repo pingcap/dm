@@ -114,7 +114,7 @@ func (t *testConfig) TestConfig(c *C) {
 source-id: haha
 aaa: xxx
 `)
-	err = ioutil.WriteFile(configFile, configContent, 0644)
+	err = ioutil.WriteFile(configFile, configContent, 0o644)
 	c.Assert(err, IsNil)
 	err = cfg.LoadFromFile(configFile)
 	c.Assert(err, NotNil)
