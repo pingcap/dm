@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	// time waiting for etcd to be started
+	// time waiting for etcd to be started.
 	etcdStartTimeout = time.Minute
 	// privateDirMode grants owner to make/remove files inside the directory.
 	privateDirMode os.FileMode = 0o700
@@ -197,7 +197,7 @@ func prepareJoinEtcd(cfg *Config) error {
 	return nil
 }
 
-// isDataExist returns whether the directory is empty (with data)
+// isDataExist returns whether the directory is empty (with data).
 func isDataExist(d string) bool {
 	dir, err := os.Open(d)
 	if err != nil {

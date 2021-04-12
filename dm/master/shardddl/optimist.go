@@ -43,13 +43,13 @@ type Optimist struct {
 
 	logger log.Logger
 
-	closed bool
 	cancel context.CancelFunc
-	wg     sync.WaitGroup
 
-	cli *clientv3.Client
-	lk  *optimism.LockKeeper
-	tk  *optimism.TableKeeper
+	cli    *clientv3.Client
+	lk     *optimism.LockKeeper
+	tk     *optimism.TableKeeper
+	wg     sync.WaitGroup
+	closed bool
 }
 
 // NewOptimist creates a new Optimist instance.
@@ -163,7 +163,7 @@ func (o *Optimist) ShowLocks(task string, sources []string) []*pb.DDLLock {
 }
 
 // RemoveMetaData removes meta data for a specified task
-// NOTE: this function can only be used when the specified task is not running
+// NOTE: this function can only be used when the specified task is not running.
 func (o *Optimist) RemoveMetaData(task string) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -274,7 +274,7 @@ func (o *Optimist) rebuildLocks() (revSource, revInfo, revOperation int64, err e
 	return revSource, revInfo, revOperation, nil
 }
 
-// sortInfos sort all infos by revision
+// sortInfos sort all infos by revision.
 func sortInfos(ifm map[string]map[string]map[string]map[string]optimism.Info) []optimism.Info {
 	infos := make([]optimism.Info, 0, len(ifm))
 
@@ -295,13 +295,12 @@ func sortInfos(ifm map[string]map[string]map[string]map[string]optimism.Info) []
 	return infos
 }
 
-// buildLockJoinedAndTTS build joined table and target table slice for lock by history infos
+// buildLockJoinedAndTTS build joined table and target table slice for lock by history infos.
 func (o *Optimist) buildLockJoinedAndTTS(
 	ifm map[string]map[string]map[string]map[string]optimism.Info,
 	initSchemas map[string]map[string]map[string]optimism.InitSchema) (
 	map[string]schemacmp.Table, map[string][]optimism.TargetTable,
 	map[string]map[string]map[string]map[string]schemacmp.Table) {
-
 	type infoKey struct {
 		lockID   string
 		source   string
@@ -638,26 +637,28 @@ func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, sk
 	lockID, newDDLs, cols, err := o.lk.TrySync(o.cli, info, tts)
 	cfStage := optimism.ConflictNone
 	cfMsg := ""
-	if info.IgnoreConflict {
+	switch {
+	case info.IgnoreConflict:
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
 			zap.String("lock", lockID), zap.String("info", info.ShortString()), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
-	} else if err != nil {
+	case err != nil:
 		cfStage = optimism.ConflictDetected // we treat any errors returned from `TrySync` as conflict detected now.
 		cfMsg = err.Error()
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
 			zap.String("lock", lockID), zap.String("info", info.ShortString()), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))
-	} else {
+	default:
 		o.logger.Info("the shard DDL lock returned some DDLs",
 			zap.String("lock", lockID), zap.Strings("ddls", newDDLs), zap.Strings("cols", cols), zap.String("info", info.ShortString()), zap.Bool("is deleted", info.IsDeleted))
 
 		// try to record the init schema before applied the DDL to the downstream.
 		initSchema := optimism.NewInitSchema(info.Task, info.DownSchema, info.DownTable, info.TableInfoBefore)
 		rev, putted, err2 := optimism.PutInitSchemaIfNotExist(o.cli, initSchema)
-		if err2 != nil {
+		switch {
+		case err2 != nil:
 			return err2
-		} else if putted {
+		case putted:
 			o.logger.Info("recorded the initial schema", zap.String("info", info.ShortString()))
-		} else {
+		default:
 			o.logger.Debug("skip to record the initial schema", zap.String("info", info.ShortString()), zap.Int64("revision", rev))
 		}
 	}

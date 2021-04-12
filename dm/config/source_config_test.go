@@ -33,11 +33,10 @@ const sourceSampleFile = "../worker/source.yaml"
 
 func (t *testConfig) TestConfig(c *C) {
 	cfg := NewSourceConfig()
-	relayDir := "./xx"
-	cfg.RelayDir = relayDir
 
 	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
-	c.Assert(cfg.RelayDir, Equals, relayDir)
+	cfg.RelayDir = "./xx"
+	c.Assert(cfg.RelayDir, Equals, "./xx")
 	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	// test clone
@@ -115,7 +114,7 @@ func (t *testConfig) TestConfig(c *C) {
 source-id: haha
 aaa: xxx
 `)
-	err = ioutil.WriteFile(configFile, configContent, 0o644)
+	err = ioutil.WriteFile(configFile, configContent, 0644)
 	c.Assert(err, IsNil)
 	err = cfg.LoadFromFile(configFile)
 	c.Assert(err, NotNil)
@@ -126,6 +125,7 @@ func (t *testConfig) TestConfigVerify(c *C) {
 	newConfig := func() *SourceConfig {
 		cfg := NewSourceConfig()
 		c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+		cfg.RelayDir = "./xx"
 		return cfg
 	}
 	testCases := []struct {
@@ -249,6 +249,7 @@ func subtestFlavor(c *C, cfg *SourceConfig, sqlInfo, expectedFlavor, expectedErr
 func (t *testConfig) TestAdjustFlavor(c *C) {
 	cfg := NewSourceConfig()
 	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+	cfg.RelayDir = "./xx"
 
 	cfg.Flavor = "mariadb"
 	err := cfg.AdjustFlavor(context.Background(), nil)
@@ -271,6 +272,7 @@ func (t *testConfig) TestAdjustServerID(c *C) {
 
 	cfg := NewSourceConfig()
 	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+	cfg.RelayDir = "./xx"
 
 	c.Assert(cfg.AdjustServerID(context.Background(), nil), IsNil)
 	c.Assert(cfg.ServerID, Equals, uint32(101))
