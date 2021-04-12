@@ -1071,6 +1071,18 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 	return cfgs, nil
 }
 
+func parseSourceConfig(ctx context.Context, contents []string) ([]*config.SourceConfig, error) {
+	cfgs := make([]*config.SourceConfig, len(contents))
+	for i, content := range contents {
+		cfg := config.NewSourceConfig()
+		if err := cfg.ParseYaml(content); err != nil {
+			return cfgs, err
+		}
+		cfgs[i] = cfg
+	}
+	return cfgs, nil
+}
+
 func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
 	cfg := *dbConfig
 	if len(cfg.Password) > 0 {
@@ -1109,7 +1121,17 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		return resp2, err2
 	}
 
-	cfgs, err := parseAndAdjustSourceConfig(ctx, req.Config)
+	var (
+		cfgs []*config.SourceConfig
+		err  error
+	)
+	switch req.Op {
+	case pb.SourceOp_StartSource, pb.SourceOp_UpdateSource:
+		cfgs, err = parseAndAdjustSourceConfig(ctx, req.Config)
+	default:
+		// don't check the upstream connections, because upstream may be inaccessible
+		cfgs, err = parseSourceConfig(ctx, req.Config)
+	}
 	resp := &pb.OperateSourceResponse{
 		Result: false,
 	}

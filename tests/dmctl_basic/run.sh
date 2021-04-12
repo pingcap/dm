@@ -141,8 +141,11 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
+    # test stop source will not check connectivity to upstream
+    cp $cur/conf/source1.yaml $WORK_DIR/source1-wrong.yaml
+    sed '/password/d' $WORK_DIR/source1-wrong.yaml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source stop $cur/conf/source1.yaml $SOURCE_ID2" \
+        "operate-source stop $WORK_DIR/source1-wrong.yaml $SOURCE_ID2" \
         "\"result\": true" 3
 
     # ensure source1 is bound to worker1
