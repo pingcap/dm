@@ -24,7 +24,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// CollectDirFiles gets files in path
+// CollectDirFiles gets files in path.
 func CollectDirFiles(path string) (map[string]struct{}, error) {
 	files := make(map[string]struct{})
 	err := filepath.Walk(path, func(_ string, f os.FileInfo, err error) error {
@@ -70,10 +70,10 @@ func SQLReplace(s, old, new string, ansiquote bool) string {
 	return strings.Replace(s, old, new, 1)
 }
 
-// shortSha1 returns the first 6 characters of sha1 value
+// shortSha1 returns the first 6 characters of sha1 value.
 func shortSha1(s string) string {
 	h := sha1.New()
-	//nolint:errcheck
+
 	h.Write([]byte(s))
 	return fmt.Sprintf("%x", h.Sum(nil))[:6]
 }
@@ -115,7 +115,7 @@ func escapeName(name string) string {
 	return strings.Replace(name, "`", "``", -1)
 }
 
-// input filename is like `all_mode.t1.0.sql` or `all_mode.t1.sql`
+// input filename is like `all_mode.t1.0.sql` or `all_mode.t1.sql`.
 func getDBAndTableFromFilename(filename string) (string, string, error) {
 	idx := strings.LastIndex(filename, ".sql")
 	if idx < 0 {

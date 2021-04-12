@@ -25,7 +25,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewCheckTaskCmd creates a CheckTask command
+// NewCheckTaskCmd creates a CheckTask command.
 func NewCheckTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check-task <config-file>",
@@ -35,17 +35,16 @@ func NewCheckTaskCmd() *cobra.Command {
 	return cmd
 }
 
-// checkTaskFunc does check task request
-func checkTaskFunc(cmd *cobra.Command, _ []string) (err error) {
+// checkTaskFunc does check task request.
+func checkTaskFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		return
+		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -63,11 +62,11 @@ func checkTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		return
+		return err
 	}
 
 	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
 		common.PrettyPrintResponse(resp)
 	}
-	return
+	return nil
 }

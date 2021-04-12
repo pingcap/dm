@@ -25,7 +25,7 @@ import (
 
 var printStatusInterval = time.Second * 5
 
-// Status implements Unit.Status
+// Status implements Unit.Status.
 func (l *Loader) Status(ctx context.Context) interface{} {
 	finishedSize := l.finishedDataSize.Get()
 	totalSize := l.totalDataSize.Get()

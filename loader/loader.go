@@ -57,10 +57,10 @@ const (
 // FilePosSet represents a set in mathematics.
 type FilePosSet map[string][]int64
 
-// DataFiles represent all data files for a single table
+// DataFiles represent all data files for a single table.
 type DataFiles []string
 
-// Tables2DataFiles represent all data files of a table collection as a map
+// Tables2DataFiles represent all data files of a table collection as a map.
 type Tables2DataFiles map[string]DataFiles
 
 type dataJob struct {
@@ -117,7 +117,7 @@ func NewWorker(loader *Loader, id int) *Worker {
 	return w
 }
 
-// Close closes worker
+// Close closes worker.
 func (w *Worker) Close() {
 	// simulate the case that doesn't wait all doJob goroutine exit
 	failpoint.Inject("workerCantClose", func(_ failpoint.Value) {
@@ -368,7 +368,6 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 
 			w.jobQueue <- j
 		}
-
 	}
 
 	return nil
@@ -439,7 +438,7 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 	return loader
 }
 
-// Type implements Unit.Type
+// Type implements Unit.Type.
 func (l *Loader) Type() pb.UnitType {
 	return pb.UnitType_Load
 }
@@ -518,7 +517,7 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 	return nil
 }
 
-// Process implements Unit.Process
+// Process implements Unit.Process.
 func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Add(0)
 
@@ -599,7 +598,7 @@ func (l *Loader) closeFileJobQueue() {
 }
 
 // align with https://github.com/pingcap/dumpling/pull/140
-// if input is malformed, return original string and print log
+// if input is malformed, return original string and print log.
 func unescapePercent(input string, logger log.Logger) string {
 	buf := bytes.Buffer{}
 	buf.Grow(len(input))
@@ -642,7 +641,7 @@ func (l *Loader) isClosed() bool {
 	return l.closed.Get()
 }
 
-// IsFreshTask implements Unit.IsFreshTask
+// IsFreshTask implements Unit.IsFreshTask.
 func (l *Loader) IsFreshTask(ctx context.Context) (bool, error) {
 	count, err := l.checkPoint.Count(tcontext.NewContext(ctx, l.logger))
 	return count == 0, err
@@ -722,7 +721,7 @@ func (l *Loader) loadFinishedSize() {
 	}
 }
 
-// Close does graceful shutdown
+// Close does graceful shutdown.
 func (l *Loader) Close() {
 	l.Lock()
 	defer l.Unlock()
@@ -742,7 +741,7 @@ func (l *Loader) Close() {
 }
 
 // stopLoad stops loading, now it used by Close and Pause
-// maybe we can refine the workflow more clear
+// maybe we can refine the workflow more clear.
 func (l *Loader) stopLoad() {
 	// before re-write workflow, simply close all job queue and job workers
 	// when resuming, re-create them
@@ -757,7 +756,7 @@ func (l *Loader) stopLoad() {
 }
 
 // Pause pauses the process, and it can be resumed later
-// should cancel context from external
+// should cancel context from external.
 func (l *Loader) Pause() {
 	if l.isClosed() {
 		l.logger.Warn("try to pause, but already closed")
@@ -767,7 +766,7 @@ func (l *Loader) Pause() {
 	l.stopLoad()
 }
 
-// Resume resumes the paused process
+// Resume resumes the paused process.
 func (l *Loader) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	if l.isClosed() {
 		l.logger.Warn("try to resume, but already closed")
@@ -810,7 +809,7 @@ func (l *Loader) resetDBs(ctx context.Context) error {
 // Update implements Unit.Update
 // now, only support to update config for routes, filters, column-mappings, block-allow-list
 // now no config diff implemented, so simply re-init use new config
-// no binlog filter for loader need to update
+// no binlog filter for loader need to update.
 func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 	var (
 		err              error
@@ -1069,7 +1068,7 @@ func (l *Loader) prepare() error {
 	return l.prepareDataFiles(files)
 }
 
-// restoreSchema creates schema
+// restoreSchema creates schema.
 func (l *Loader) restoreSchema(ctx context.Context, conn *DBConn, sqlFile, schema string) error {
 	if l.checkPoint.IsTableCreated(schema, "") {
 		l.logger.Info("database already exists in checkpoint, skip creating it", zap.String("schema", schema), zap.String("db schema file", sqlFile))
@@ -1086,7 +1085,7 @@ func (l *Loader) restoreSchema(ctx context.Context, conn *DBConn, sqlFile, schem
 	return nil
 }
 
-// restoreTable creates table
+// restoreTable creates table.
 func (l *Loader) restoreTable(ctx context.Context, conn *DBConn, sqlFile, schema, table string) error {
 	if l.checkPoint.IsTableCreated(schema, table) {
 		l.logger.Info("table already exists in checkpoint, skip creating it", zap.String("schema", schema), zap.String("table", table), zap.String("db schema file", sqlFile))
@@ -1103,7 +1102,7 @@ func (l *Loader) restoreTable(ctx context.Context, conn *DBConn, sqlFile, schema
 	return nil
 }
 
-// restoreStruture creates schema or table
+// restoreStruture creates schema or table.
 func (l *Loader) restoreStructure(ctx context.Context, conn *DBConn, sqlFile string, schema string, table string) error {
 	f, err := os.Open(sqlFile)
 	if err != nil {
@@ -1158,12 +1157,12 @@ func (l *Loader) restoreStructure(ctx context.Context, conn *DBConn, sqlFile str
 	return nil
 }
 
-// renameShardingTable replaces srcTable with dstTable in query
+// renameShardingTable replaces srcTable with dstTable in query.
 func renameShardingTable(query, srcTable, dstTable string, ansiquote bool) string {
 	return SQLReplace(query, srcTable, dstTable, ansiquote)
 }
 
-// renameShardingSchema replaces srcSchema with dstSchema in query
+// renameShardingSchema replaces srcSchema with dstSchema in query.
 func renameShardingSchema(query, srcSchema, dstSchema string, ansiquote bool) string {
 	return SQLReplace(query, srcSchema, dstSchema, ansiquote)
 }
@@ -1190,7 +1189,7 @@ func fetchMatchedLiteral(ctx *tcontext.Context, router *router.Table, schema, ta
 	return targetSchema, targetTable
 }
 
-// `restore Schema Job` present a data structure of schema restoring job
+// `restore Schema Job` present a data structure of schema restoring job.
 type restoreSchemaJob struct {
 	loader   *Loader
 	session  *DBConn
@@ -1199,7 +1198,7 @@ type restoreSchemaJob struct {
 	filepath string // file path of dumpped schema file
 }
 
-// `jobQueue` of schema restoring which (only) support consumptions concurrently
+// `jobQueue` of schema restoring which (only) support consumptions concurrently.
 type jobQueue struct {
 	ctx           context.Context
 	msgq          chan *restoreSchemaJob // job message queue channel
@@ -1207,7 +1206,7 @@ type jobQueue struct {
 	eg            *errgroup.Group        // err wait group of consumer's go-routines
 }
 
-// `newJobQueue` consturct a jobQueue
+// `newJobQueue` consturct a jobQueue.
 func newJobQueue(ctx context.Context, consumerCount, length int) *jobQueue {
 	eg, selfCtx := errgroup.WithContext(ctx)
 	return &jobQueue{
@@ -1218,7 +1217,7 @@ func newJobQueue(ctx context.Context, consumerCount, length int) *jobQueue {
 	}
 }
 
-// `push` will append a job to the queue
+// `push` will append a job to the queue.
 func (q *jobQueue) push(job *restoreSchemaJob) error {
 	var err error
 	select {
@@ -1229,7 +1228,7 @@ func (q *jobQueue) push(job *restoreSchemaJob) error {
 	return terror.WithScope(err, terror.ScopeInternal)
 }
 
-// `close` wait jobs done and close queue forever
+// `close` wait jobs done and close queue forever.
 func (q *jobQueue) close() error {
 	// queue is closing
 	close(q.msgq)
@@ -1237,7 +1236,7 @@ func (q *jobQueue) close() error {
 	return q.eg.Wait()
 }
 
-// `startConsumers` run multiple go-routines of job consumption with user defined handler
+// `startConsumers` run multiple go-routines of job consumption with user defined handler.
 func (q *jobQueue) startConsumers(handler func(ctx context.Context, job *restoreSchemaJob) error) {
 	for i := 0; i < q.consumerCount; i++ {
 		q.eg.Go(func() error {
@@ -1446,7 +1445,7 @@ tblSchemaLoop:
 	return nil
 }
 
-// checkpointID returns ID which used for checkpoint table
+// checkpointID returns ID which used for checkpoint table.
 func (l *Loader) checkpointID() string {
 	if len(l.cfg.SourceID) > 0 {
 		return l.cfg.SourceID
@@ -1481,7 +1480,7 @@ func (l *Loader) getMydumpMetadata() error {
 	return nil
 }
 
-// cleanDumpFiles is called when finish restoring data, to clean useless files
+// cleanDumpFiles is called when finish restoring data, to clean useless files.
 func (l *Loader) cleanDumpFiles() {
 	l.logger.Info("clean dump files")
 	if l.cfg.Mode == config.ModeFull {

@@ -23,7 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewPauseTaskCmd creates a PauseTask command
+// NewPauseTaskCmd creates a PauseTask command.
 func NewPauseTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pause-task [-s source ...] <task-name | task-file>",
@@ -33,7 +33,7 @@ func NewPauseTaskCmd() *cobra.Command {
 	return cmd
 }
 
-// pauseTaskFunc does pause task request
+// pauseTaskFunc does pause task request.
 func pauseTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)

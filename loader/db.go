@@ -35,7 +35,7 @@ import (
 )
 
 // DBConn represents a live DB connection
-// it's not thread-safe
+// it's not thread-safe.
 type DBConn struct {
 	cfg      *config.SubTaskConfig
 	baseConn *conn.BaseConn
@@ -180,7 +180,7 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 	return err
 }
 
-// resetConn reset one worker connection from specify *BaseDB
+// resetConn reset one worker connection from specify *BaseDB.
 func (conn *DBConn) resetConn(tctx *tcontext.Context) error {
 	baseConn, err := conn.resetBaseConnFn(tctx, conn.baseConn)
 	if err != nil {

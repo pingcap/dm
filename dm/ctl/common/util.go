@@ -153,7 +153,7 @@ func GlobalConfig() *Config {
 	return globalConfig
 }
 
-// PrintLines adds a wrap to support `\n` within `chzyer/readline`.
+// PrintLinesf adds a wrap to support `\n` within `chzyer/readline`.
 func PrintLinesf(format string, a ...interface{}) {
 	fmt.Println(fmt.Sprintf(format, a...))
 }

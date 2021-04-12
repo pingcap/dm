@@ -24,7 +24,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewStopRelayCmd creates a StartRelay command
+// NewStartRelayCmd creates a StartRelay command.
+func NewStartRelayCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "start-relay <-s source-id> <worker-name> [...worker-name]",
+		Short: "Starts workers pulling relay log for a source.",
+		RunE:  startRelayFunc,
+	}
+	return cmd
+}
+
+// NewStopRelayCmd creates a StartRelay command.
 func NewStopRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop-relay <-s source-id> <worker-name> [...worker-name]",
@@ -34,7 +44,15 @@ func NewStopRelayCmd() *cobra.Command {
 	return cmd
 }
 
-func stopRelayFunc(cmd *cobra.Command, _ []string) (err error) {
+func startRelayFunc(cmd *cobra.Command, _ []string) error {
+	return startStopRelay(cmd, pb.RelayOpV2_StartRelayV2)
+}
+
+func stopRelayFunc(cmd *cobra.Command, _ []string) error {
+	return startStopRelay(cmd, pb.RelayOpV2_StopRelayV2)
+}
+
+func startStopRelay(cmd *cobra.Command, op pb.RelayOpV2) error {
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		return err
@@ -48,14 +66,12 @@ func stopRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 		} else {
 			common.PrintLinesf("must specify at least one worker")
 		}
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 
 	if len(sources) != 1 {
 		common.PrintLinesf("must specify one source (`-s` / `--source`)")
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 
 	workers := cmd.Flags().Args()
@@ -68,7 +84,7 @@ func stopRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 		ctx,
 		"OperateRelay",
 		&pb.OperateRelayRequest{
-			Op:     pb.RelayOpV2_StopRelayV2,
+			Op:     op,
 			Source: sources[0],
 			Worker: workers,
 		},
@@ -76,9 +92,9 @@ func stopRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		return
+		return err
 	}
 
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }

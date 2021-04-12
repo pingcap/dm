@@ -26,12 +26,12 @@ import (
 
 var listMemberFlags = ListMemberFlags{}
 
-// ListMemberFlags are flags that used in ListMember command
+// ListMemberFlags are flags that used in ListMember command.
 type ListMemberFlags struct {
 	names []string // specify names to list information
 }
 
-// NewListMemberCmd creates an ListMember command
+// NewListMemberCmd creates an ListMember command.
 func NewListMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list-member [--leader] [--master] [--worker] [--name master-name/worker-name ...]",
@@ -61,13 +61,12 @@ func convertListMemberType(cmd *cobra.Command) (bool, bool, bool, error) {
 	return leader, master, worker, nil
 }
 
-// listMemberFunc does list member request
-func listMemberFunc(cmd *cobra.Command, _ []string) (err error) {
+// listMemberFunc does list member request.
+func listMemberFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) != 0 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 
 	leader, master, worker, err := convertListMemberType(cmd)
@@ -91,8 +90,8 @@ func listMemberFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		return
+		return err
 	}
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }

@@ -31,7 +31,7 @@ import (
 // three purge methods supported by dmctl
 // 1. purge inactive relay log files
 // 2. purge before time, like `PURGE BINARY LOGS BEFORE` in MySQL
-// 3. purge before filename, like `PURGE BINARY LOGS TO`
+// 3. purge before filename, like `PURGE BINARY LOGS TO`.
 func NewPurgeRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		// Use:   "purge-relay <-w worker> [--inactive] [--time] [--filename] [--sub-dir]",
@@ -48,37 +48,34 @@ func NewPurgeRelayCmd() *cobra.Command {
 	return cmd
 }
 
-// purgeRelayFunc does purge relay log files
-func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
+// purgeRelayFunc does purge relay log files.
+func purgeRelayFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		return
+		return err
 	}
 	if len(sources) == 0 {
-		err = errors.New("must specify at least one source (`-s` / `--source`)")
-		return
+		return errors.New("must specify at least one source (`-s` / `--source`)")
 	}
 
 	filename, err := cmd.Flags().GetString("filename")
 	if err != nil {
-		return
+		return err
 	}
 
 	if len(filename) == 0 {
-		err = errors.New("must specify the name of the terminal file before which to purge relay log files. (`-f` / `--filename`)")
-		return
+		return errors.New("must specify the name of the terminal file before which to purge relay log files. (`-f` / `--filename`)")
 	}
 
 	subDir, err := cmd.Flags().GetString("sub-dir")
 	if err != nil {
-		return
+		return err
 	}
 
 	if len(filename) > 0 {
@@ -87,8 +84,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	}
 
 	if len(filename) > 0 && len(sources) > 1 {
-		err = errors.New("for --filename, can only specify one source per time")
-		return
+		return errors.New("for --filename, can only specify one source per time")
 	}
 	if len(subDir) > 0 {
 		subDir = utils.TrimQuoteMark(subDir)
@@ -115,9 +111,9 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		return
+		return err
 	}
 
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }

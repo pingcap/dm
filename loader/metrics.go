@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	// should error
+	// should error.
 	tidbExecutionErrorCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
@@ -88,7 +88,7 @@ var (
 			Help:      "the processing progress of loader in percentage",
 		}, []string{"task", "source_id"})
 
-	// should alert
+	// should alert.
 	loaderExitWithErrorCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
@@ -98,7 +98,7 @@ var (
 		}, []string{"task", "source_id"})
 )
 
-// RegisterMetrics registers metrics
+// RegisterMetrics registers metrics.
 func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(tidbExecutionErrorCounter)
 	registry.MustRegister(txnHistogram)

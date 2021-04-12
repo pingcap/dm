@@ -126,7 +126,7 @@ check: tools_setup fmt lint vet terror_check tidy_mod
 
 fmt:
 	@echo "gofumports"
-	tools/bin/gofumports -w -d -format-only -local $(PACKAGE_NAME) $(PACKAGE_DIRECTORIES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
+	tools/bin/gofumports -w -d -local $(PACKAGE_NAME) $(PACKAGE_DIRECTORIES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 
 errcheck: tools_setup
 	@echo "errcheck"
