@@ -62,6 +62,7 @@ import (
 	operator "github.com/pingcap/dm/syncer/err-operator"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/shardddl"
+	"github.com/pingcap/errors"
 )
 
 var (
@@ -495,7 +496,14 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	defer cancel()
 
 	// create new done chan
+	// use lock of Syncer to avoid Close while Process
+	s.Lock()
+	if s.isClosed() {
+		s.Unlock()
+		return
+	}
 	s.done = make(chan struct{})
+	s.Unlock()
 
 	runFatalChan := make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
 	s.runFatalChan = runFatalChan
@@ -863,8 +871,15 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 //
 // we may need to refactor the concurrency model to make the work-flow more clearer later
 func (s *Syncer) flushCheckPoints() error {
-	if s.execError.Get() != nil {
-		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint", zap.Stringer("checkpoint", s.checkpoint))
+	err := s.execError.Get()
+	// TODO: for now, if any error occurred (including user canceled), checkpoint won't be updated. But if we have put
+	// optimistic shard info, DM-master may resolved the optimistic lock and let other worker execute DDL. So after this
+	// worker resume, it can not execute the DML/DDL in old binlog because of downstream table structure mismatching.
+	// We should find a way to (compensating) implement a transaction containing interaction with both etcd and SQL.
+	if err != nil {
+		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint",
+			zap.Stringer("checkpoint", s.checkpoint),
+			zap.Error(err))
 		return nil
 	}
 
@@ -885,7 +900,7 @@ func (s *Syncer) flushCheckPoints() error {
 		s.tctx.L().Info("prepare flush sqls", zap.Strings("shard meta sqls", shardMetaSQLs), zap.Reflect("shard meta arguments", shardMetaArgs))
 	}
 
-	err := s.checkpoint.FlushPointsExcept(s.tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
+	err = s.checkpoint.FlushPointsExcept(s.tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
 	if err != nil {
 		return terror.Annotatef(err, "flush checkpoint %s", s.checkpoint)
 	}
@@ -924,9 +939,16 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		case config.ShardOptimistic:
 			if len(sqlJob.ddls) == 0 {
 				ignore = true
-				tctx.L().Info("ignore shard DDLs in optimistic mode", log.WrapStringerField("info", s.optimist.PendingInfo()))
+				tctx.L().Info("ignore shard DDLs in optimistic mode", zap.Stringer("info", s.optimist.PendingInfo()))
 			}
 		}
+
+		failpoint.Inject("ExecDDLError", func() {
+			s.tctx.L().Warn("execute ddl error", zap.Strings("DDL", sqlJob.ddls), zap.String("failpoint", "ExecDDLError"))
+			err = errors.Errorf("execute ddl %v error", sqlJob.ddls)
+			failpoint.Goto("bypass")
+		})
+
 		if !ignore {
 			var affected int
 			affected, err = db.executeSQLWithIgnore(tctx, ignoreDDLError, sqlJob.ddls)
@@ -935,6 +957,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = terror.WithScope(err, terror.ScopeDownstream)
 			}
 		}
+		failpoint.Label("bypass")
 		// If downstream has error (which may cause by tracker is more compatible than downstream), we should stop handling
 		// this job, set `s.execError` to let caller of `addJob` discover error
 		if err != nil {
@@ -1856,6 +1879,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			case *ast.TruncateTableStmt:
 				ec.tctx.L().Info("ignore truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
 				continue
+			case *ast.RenameTableStmt:
+				return terror.ErrSyncerUnsupportedStmt.Generate("RENAME TABLE", config.ShardOptimistic)
 			}
 		}
 

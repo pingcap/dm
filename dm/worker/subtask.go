@@ -215,6 +215,7 @@ func (st *SubTask) run() {
 		st.fail(err)
 		return
 	} else if ctx.Err() != nil {
+		st.l.Error("exit SubTask.run", log.ShortError(ctx.Err()))
 		return
 	}
 

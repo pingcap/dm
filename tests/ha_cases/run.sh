@@ -19,7 +19,7 @@ function test_running() {
     # make sure task to step in "Sync" stage
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4 \
+        "\"stage\": \"Running\"" 2 \
         "\"unit\": \"Sync\"" 2
 
     echo "use sync_diff_inspector to check full dump loader"
@@ -49,11 +49,11 @@ function test_multi_task_running() {
     # make sure task to step in "Sync" stage
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4 \
+        "\"stage\": \"Running\"" 2 \
         "\"unit\": \"Sync\"" 2
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test2" \
-        "\"stage\": \"Running\"" 4 \
+        "\"stage\": \"Running\"" 2 \
         "\"unit\": \"Sync\"" 2
 
     echo "use sync_diff_inspector to check full dump loader"
@@ -155,11 +155,11 @@ function test_kill_master() {
     echo "check master2,3 are running"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 2
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 2
 
     run_sql_file_withdb $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
     run_sql_file_withdb $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test
@@ -172,17 +172,24 @@ function test_kill_master() {
 
 
 function test_kill_and_isolate_worker() {
+    inject_points=("github.com/pingcap/dm/dm/worker/defaultKeepAliveTTL=return(1)"
+                   "github.com/pingcap/dm/dm/worker/defaultRelayKeepAliveTTL=return(2)"
+                   )
+    export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
     echo "[$(date)] <<<<<< start test_kill_and_isolate_worker >>>>>>"
     test_running
 
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $SOURCE_ID2 worker2" \
+        "\"result\": true" 1
 
     echo "kill dm-worker2"
     ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
     check_port_offline $WORKER2_PORT 20
     rm -rf $WORK_DIR/worker2/relay_log
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
-    "query-status test" \
-    "\"result\": false" 1
+        "query-status test" \
+        "\"result\": false" 1
 
     run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
@@ -192,6 +199,10 @@ function test_kill_and_isolate_worker() {
 
     run_dm_worker $WORK_DIR/worker4 $WORKER4_PORT $cur/conf/dm-worker4.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER4_PORT
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $SOURCE_ID2 worker3 worker4" \
+        "\"result\": true" 1
 
     echo "restart dm-worker3"
     ps aux | grep dm-worker3 |awk '{print $2}'|xargs kill || true
@@ -208,33 +219,33 @@ function test_kill_and_isolate_worker() {
     isolate_worker 4 "isolate"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 3
 
     echo "isolate dm-worker3"
     isolate_worker 3 "isolate"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
-        "\"stage\": \"Running\"" 2 \
+        "\"stage\": \"Running\"" 1 \
         "\"result\": false" 1
     
     echo "disable isolate dm-worker4"
     isolate_worker 4 "disable_isolate"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 3
 
     echo "query-status from all dm-master"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 3
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 3
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 3
     
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "pause-task test"\
@@ -258,6 +269,7 @@ function test_kill_and_isolate_worker() {
     echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     echo "[$(date)] <<<<<< finish test_kill_and_isolate_worker >>>>>>"
+    export GO_FAILPOINTS=""
 }
 
 # usage: test_kill_master_in_sync leader
@@ -278,7 +290,7 @@ function test_kill_master_in_sync() {
     check_http_alive 127.0.0.1:$MASTER_PORT2/apis/${API_VERSION}/status/test '"stage": "Running"' 10
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 2
 
     # waiting for syncing
     wait
@@ -300,11 +312,17 @@ function test_kill_worker_in_sync() {
 
     echo "kill dm-worker1"
     ps aux | grep dm-worker1 |awk '{print $2}'|xargs kill || true
-    echo "kill dm-worker2"
-    ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
     echo "start worker3"
     run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
+
+    # start-relay halfway
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $SOURCE_ID1 worker3" \
+        "\"result\": true" 1
+
+    echo "kill dm-worker2"
+    ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
     echo "start worker4"
     run_dm_worker $WORK_DIR/worker4 $WORKER4_PORT $cur/conf/dm-worker4.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER4_PORT
@@ -316,15 +334,15 @@ function test_kill_worker_in_sync() {
     echo "query-status from all dm-master"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 3
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 3
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 3
 
     # waiting for syncing
     wait
@@ -356,7 +374,6 @@ function test_standalone_running() {
     check_sync_diff $WORK_DIR $cur/conf/diff-standalone-config.toml
 
     cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
-    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
     dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/standalone-task2.yaml" \
@@ -383,7 +400,7 @@ function test_standalone_running() {
     echo "kill $worker_name"
     ps aux | grep dm-worker${worker_idx} |awk '{print $2}'|xargs kill || true
     check_port_offline ${worker_ports[$worker_idx]} 20
-    rm -rf $WORK_DIR/worker${worker_idx}/relay_log
+    rm -rf $WORK_DIR/worker${worker_idx}/relay-dir
 
     # test running, test2 fail
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -401,7 +418,7 @@ function test_standalone_running() {
     # test should still running
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test"\
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 1
 
     echo "[$(date)] <<<<<< finish test_standalone_running >>>>>>"
 }
@@ -410,6 +427,13 @@ function test_standalone_running() {
 function test_pause_task() {
     echo "[$(date)] <<<<<< start test_pause_task >>>>>>"
     test_multi_task_running
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $SOURCE_ID1 worker1" \
+        "\"result\": true" 1
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $SOURCE_ID2 worker2" \
+        "\"result\": true" 1
 
     echo "start dumping SQLs into source"
     load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
@@ -464,6 +488,13 @@ function test_pause_task() {
 function test_stop_task() {
     echo "[$(date)] <<<<<< start test_stop_task >>>>>>"
     test_multi_task_running
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $SOURCE_ID1 worker1" \
+        "\"result\": true" 1
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $SOURCE_ID2 worker2" \
+        "\"result\": true" 1
 
     echo "start dumping SQLs into source"
     load_data $MYSQL_PORT1 $MYSQL_PASSWORD1 "a" &
@@ -557,7 +588,7 @@ function test_multi_task_reduce_and_restart_worker() {
         for name in ${task_name[@]}; do
             run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
                 "query-status $name"\
-                "\"stage\": \"Running\"" 4
+                "\"stage\": \"Running\"" 2
         done
         if [ $i = 0 ]; then
             # waiting for syncing
@@ -694,12 +725,23 @@ function test_last_bound() {
     echo "[$(date)] <<<<<< start test_last_bound >>>>>>"
     test_running
 
+    # now in start_cluster, we ensure source_i is bound to worker_i
     worker1bound=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT1" list-member --name worker1 \
         | grep 'source' | awk -F: '{print $2}')
     echo "worker1bound $worker1bound"
     worker2bound=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT1" list-member --name worker2 \
         | grep 'source' | awk -F: '{print $2}')
     echo "worker2bound $worker2bound"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $SOURCE_ID1 worker1" \
+        "\"result\": true" 1
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $SOURCE_ID2 worker2" \
+        "\"result\": true" 1
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 4
 
     kill_2_worker_ensure_unbound 1 2
 
@@ -723,11 +765,26 @@ function test_last_bound() {
     # kill 12, start 34, kill 34
     kill_2_worker_ensure_unbound 1 2
     start_2_worker_ensure_bound 3 4
+    worker3bound=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT1" list-member --name worker3 \
+        | grep 'source' | awk -F: '{print $2}' | cut -d'"' -f 2)
+    worker4bound=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT1" list-member --name worker4 \
+        | grep 'source' | awk -F: '{print $2}' | cut -d'"' -f 2)
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $worker3bound worker3" \
+        "\"result\": true" 1
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $worker4bound worker4" \
+        "\"result\": true" 1
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 4
+
     # let other workers rather then 1 2 forward the syncer's progress
     run_sql_file_withdb $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
     run_sql "flush logs;" $MYSQL_PORT2 $MYSQL_PASSWORD2
     run_sql_file_withdb $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test
-    sleep 1
+    # wait the checkpoint updated
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     kill_2_worker_ensure_unbound 3 4
 
     # start 1 then 2
@@ -738,7 +795,7 @@ function test_last_bound() {
     # other workers has forwarded the sync progress, if moved to a new binlog file, original relay log could be removed
     num1=`grep "will try purge whole relay dir for new relay log" $WORK_DIR/worker1/log/dm-worker.log | wc -l`
     num2=`grep "will try purge whole relay dir for new relay log" $WORK_DIR/worker2/log/dm-worker.log | wc -l`
-    echo "num1$num1 num2$num2"
+    echo "num1 $num1 num2 $num2"
     [[ $num1+$num2 -eq 3 ]]
 
     echo "[$(date)] <<<<<< finish test_last_bound >>>>>>"

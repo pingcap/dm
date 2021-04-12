@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
 
@@ -62,6 +63,23 @@ type Info struct {
 	IgnoreConflict bool `json:"ignore-conflict"`
 }
 
+// LogInfo replace TableInfo with schema.Table.String() for log.
+type LogInfo struct {
+	Task           string   `json:"task"`
+	Source         string   `json:"source"`
+	UpSchema       string   `json:"up-schema"`
+	UpTable        string   `json:"up-table"`
+	DownSchema     string   `json:"down-schema"`
+	DownTable      string   `json:"down-table"`
+	DDLs           []string `json:"ddls"`
+	TableBefore    string   `json:"table-before"`
+	TableAfter     string   `json:"table-after"`
+	IsDeleted      bool     `json:"is-deleted"`
+	Version        int64    `json:"version"`
+	Revision       int64    `json:"revision"`
+	IgnoreConflict bool     `json:"ignore-conflict"`
+}
+
 // NewInfo creates a new Info instance.
 func NewInfo(task, source, upSchema, upTable, downSchema, downTable string,
 	DDLs []string, tableInfoBefore *model.TableInfo, tableInfosAfter []*model.TableInfo) Info {
@@ -82,6 +100,40 @@ func NewInfo(task, source, upSchema, upTable, downSchema, downTable string,
 func (i Info) String() string {
 	s, _ := i.toJSON()
 	return s
+}
+
+// ShortString returns short string of Info
+func (i *Info) ShortString() string {
+	logInfo := LogInfo{
+		Task:           i.Task,
+		Source:         i.Source,
+		UpSchema:       i.UpSchema,
+		UpTable:        i.UpTable,
+		DownSchema:     i.DownSchema,
+		DownTable:      i.DownTable,
+		DDLs:           i.DDLs,
+		IsDeleted:      i.IsDeleted,
+		Version:        i.Version,
+		Revision:       i.Revision,
+		IgnoreConflict: i.IgnoreConflict,
+	}
+	if i.TableInfoBefore != nil {
+		logInfo.TableBefore = schemacmp.Encode(i.TableInfoBefore).String()
+	}
+	if len(i.TableInfosAfter) != 0 {
+		logInfo.TableAfter = schemacmp.Encode(i.TableInfosAfter[len(i.TableInfosAfter)-1]).String()
+	}
+	s, _ := logInfo.toJSON()
+	return s
+}
+
+// toJSON returns the string of JSON represent.
+func (i LogInfo) toJSON() (string, error) {
+	data, err := json.Marshal(i)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 // toJSON returns the string of JSON represent.
@@ -187,6 +239,7 @@ func WatchInfo(ctx context.Context, cli *clientv3.Client, revision int64,
 				case mvccpb.PUT:
 					info, err = infoFromJSON(string(ev.Kv.Value))
 					info.Version = ev.Kv.Version
+					info.Revision = ev.Kv.ModRevision
 				case mvccpb.DELETE:
 					info, err = infoFromJSON(string(ev.PrevKv.Value))
 					info.IsDeleted = true
@@ -237,6 +290,7 @@ func ClearTestInfoOperationSchema(cli *clientv3.Client) error {
 	clearInfo := clientv3.OpDelete(common.ShardDDLOptimismInfoKeyAdapter.Path(), clientv3.WithPrefix())
 	clearOp := clientv3.OpDelete(common.ShardDDLOptimismOperationKeyAdapter.Path(), clientv3.WithPrefix())
 	clearISOp := clientv3.OpDelete(common.ShardDDLOptimismInitSchemaKeyAdapter.Path(), clientv3.WithPrefix())
-	_, err := cli.Txn(context.Background()).Then(clearSource, clearInfo, clearOp, clearISOp).Commit()
+	clearColumns := clientv3.OpDelete(common.ShardDDLOptimismDroppedColumnsKeyAdapter.Path(), clientv3.WithPrefix())
+	_, err := cli.Txn(context.Background()).Then(clearSource, clearInfo, clearOp, clearISOp, clearColumns).Commit()
 	return err
 }

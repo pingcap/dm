@@ -14,6 +14,7 @@
 package worker
 
 import (
+	"context"
 	"sync"
 )
 
@@ -53,6 +54,8 @@ func (h *subTaskHolder) resetAllSubTasks(useRelay bool) {
 	for _, st := range h.subTasks {
 		stage := st.Stage()
 		st.Close()
+		// TODO: make a st.reset
+		st.ctx, st.cancel = context.WithCancel(context.Background())
 		st.cfg.UseRelay = useRelay
 		st.Run(stage)
 	}

@@ -411,6 +411,7 @@ const (
 	codeSyncerOperatorNotExist
 	codeSyncerReplaceEventNotExist
 	codeSyncerParseDDL
+	codeSyncerUnsupportedStmt
 )
 
 // DM-master error code
@@ -606,6 +607,10 @@ const (
 	codeSchedulerSubTaskOpSourceNotExist
 	codeSchedulerTaskNotExist
 	codeSchedulerRequireNotRunning
+	codeSchedulerRelayWorkersBusy
+	codeSchedulerRelayWorkersBound
+	codeSchedulerRelayWorkersWrongRelay
+	codeSchedulerSourceOpRelayExist
 )
 
 // dmctl error code
@@ -993,12 +998,13 @@ var (
 	ErrSyncerUnitExecWithNoBlockingDDL      = New(codeSyncerUnitExecWithNoBlockingDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "process unit not waiting for sharding DDL to sync", "")
 	ErrSyncerUnitGenBAList                  = New(codeSyncerUnitGenBAList, ClassSyncUnit, ScopeInternal, LevelHigh, "generate block allow list", "Please check the `block-allow-list` config in task configuration file.")
 	ErrSyncerUnitHandleDDLFailed            = New(codeSyncerUnitHandleDDLFailed, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle ddl job for %s", "")
-	ErrSyncerShardDDLConflict               = New(codeSyncerShardDDLConflict, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle shard ddl %v in optimistic mode, because schema conflict detected", "Please use show-ddl-locks command for more details.")
+	ErrSyncerShardDDLConflict               = New(codeSyncerShardDDLConflict, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle shard ddl %v in optimistic mode, because schema conflict detected, conflict error: %s", "Please use show-ddl-locks command for more details.")
 	ErrSyncerFailpoint                      = New(codeSyncerFailpoint, ClassSyncUnit, ScopeInternal, LevelLow, "failpoint specified error", "")
 	ErrSyncerReplaceEvent                   = New(codeSyncerReplaceEvent, ClassSyncUnit, ScopeInternal, LevelHigh, "", "")
 	ErrSyncerOperatorNotExist               = New(codeSyncerOperatorNotExist, ClassSyncUnit, ScopeInternal, LevelLow, "error operator not exist, position: %s", "")
 	ErrSyncerReplaceEventNotExist           = New(codeSyncerReplaceEventNotExist, ClassSyncUnit, ScopeInternal, LevelHigh, "replace event not exist, location: %s", "")
 	ErrSyncerParseDDL                       = New(codeSyncerParseDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "parse DDL: %s", "Please confirm your DDL statement is correct and needed. For TiDB compatible DDL, see https://docs.pingcap.com/tidb/stable/mysql-compatibility#ddl. You can use `handle-error` command to skip or replace the DDL or add a binlog filter rule to ignore it if the DDL is not needed.")
+	ErrSyncerUnsupportedStmt                = New(codeSyncerUnsupportedStmt, ClassSyncUnit, ScopeInternal, LevelHigh, "`%s` statement not supported in %s mode", "")
 
 	// DM-master error
 	ErrMasterSQLOpNilRequest        = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid", "")
@@ -1188,7 +1194,7 @@ var (
 	ErrSchedulerSourceCfgExist            = New(codeSchedulerSourceCfgExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s already exists", "")
 	ErrSchedulerSourceCfgNotExist         = New(codeSchedulerSourceCfgNotExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s not exists", "")
 	ErrSchedulerSourcesUnbound            = New(codeSchedulerSourcesUnbound, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v have not bound", "")
-	ErrSchedulerSourceOpTaskExist         = New(codeSchedulerSourceOpTaskExist, ClassDMMaster, ScopeInternal, LevelMedium, "source with name %s need to operate with tasks %v exist", "")
+	ErrSchedulerSourceOpTaskExist         = New(codeSchedulerSourceOpTaskExist, ClassDMMaster, ScopeInternal, LevelMedium, "source with name %s need to operate has existing tasks %v", "Please `stop-task` first.")
 	ErrSchedulerRelayStageInvalidUpdate   = New(codeSchedulerRelayStageInvalidUpdate, ClassScheduler, ScopeInternal, LevelMedium, "invalid new expectant relay stage %s", "")
 	ErrSchedulerRelayStageSourceNotExist  = New(codeSchedulerRelayStageSourceNotExist, ClassScheduler, ScopeInternal, LevelMedium, "sources %v need to update expectant relay stage not exist", "")
 	ErrSchedulerMultiTask                 = New(codeSchedulerMultiTask, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler cannot perform multiple different tasks %v in one operation", "")
@@ -1197,7 +1203,11 @@ var (
 	ErrSchedulerSubTaskOpTaskNotExist     = New(codeSchedulerSubTaskOpTaskNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "subtasks with name %s need to be operate not exist", "Please use `query-status` command to see tasks.")
 	ErrSchedulerSubTaskOpSourceNotExist   = New(codeSchedulerSubTaskOpSourceNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v need to be operate not exist", "")
 	ErrSchedulerTaskNotExist              = New(codeSchedulerTaskNotExist, ClassScheduler, ScopeInternal, LevelMedium, "task with name %s not exist", "Please use `query-status` command to see tasks.")
-	ErrSchedulerRequireNotRunning         = New(codeSchedulerRequireNotRunning, ClassScheduler, ScopeInternal, LevelHigh, "tasks %v on source %s should not be running", "Please use `pause-task [-s source ...] task` to pause them first")
+	ErrSchedulerRequireNotRunning         = New(codeSchedulerRequireNotRunning, ClassScheduler, ScopeInternal, LevelHigh, "tasks %v on source %s should not be running", "Please use `pause-task [-s source ...] task` to pause them first.")
+	ErrSchedulerRelayWorkersBusy          = New(codeSchedulerRelayWorkersBusy, ClassScheduler, ScopeInternal, LevelHigh, "these workers %s have started relay for sources %s respectively", "Please use `stop-relay` to stop them, or change your topology.")
+	ErrSchedulerRelayWorkersWrongBound    = New(codeSchedulerRelayWorkersBound, ClassScheduler, ScopeInternal, LevelHigh, "these workers %s have bound for another sources %s respectively", "Please `start-relay` on free or same source workers.")
+	ErrSchedulerRelayWorkersWrongRelay    = New(codeSchedulerRelayWorkersWrongRelay, ClassScheduler, ScopeInternal, LevelHigh, "these workers %s have started relay for another sources %s respectively", "Please correct sources in `stop-relay`.")
+	ErrSchedulerSourceOpRelayExist        = New(codeSchedulerSourceOpRelayExist, ClassScheduler, ScopeInternal, LevelHigh, "source with name %s need to operate has existing relay workers %s", "Please `stop-relay` first.")
 
 	// dmctl
 	ErrCtlGRPCCreateConn = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")

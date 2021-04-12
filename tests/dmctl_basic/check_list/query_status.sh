@@ -9,7 +9,7 @@ function query_status_wrong_arg() {
 function query_status_wrong_params() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status -s source-x task-y" \
-        "source-x relevant worker-client not found" 1
+        "sources \[source-x\] haven't been added" 1
 }
 
 function query_status_with_no_tasks() {
@@ -24,7 +24,7 @@ function query_status_with_tasks() {
         "query-status -s $SOURCE_ID1,$SOURCE_ID2" \
         "\"result\": true" 3 \
         "\"unit\": \"Sync\"" 2 \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status" \
         "\"result\": true" 1 \

@@ -38,13 +38,16 @@ func (t *testForEtcd) TestInitSchemaEtcd(c *C) {
 		task             = "test-init-schema-etcd"
 		downSchema       = "foo"
 		downTable        = "bar"
+		downTable2       = "bar2"
 		p                = parser.New()
 		se               = mock.NewContext()
 		tblID      int64 = 111
 		tblI1            = createTableInfo(c, p, se, tblID, "CREATE TABLE bar (id INT PRIMARY KEY)")
 		tblI2            = createTableInfo(c, p, se, tblID, "CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)")
+		tblI3            = createTableInfo(c, p, se, tblID, "CREATE TABLE bar2 (id INT PRIMARY KEY, c INT)")
 		is1              = NewInitSchema(task, downSchema, downTable, tblI1)
 		is2              = NewInitSchema(task, downSchema, downTable, tblI2)
+		is3              = NewInitSchema(task, downSchema, downTable2, tblI3)
 	)
 
 	// try to get, but no one exists.
@@ -75,15 +78,32 @@ func (t *testForEtcd) TestInitSchemaEtcd(c *C) {
 	c.Assert(rev3, Equals, rev1)
 	c.Assert(putted, IsFalse)
 
-	// delete the schema.
-	rev4, deleted, err := DeleteInitSchema(etcdTestCli, is1.Task, is1.DownSchema, is1.DownTable)
+	// put new init schema with different downstream info.
+	rev4, putted, err := PutInitSchemaIfNotExist(etcdTestCli, is3)
 	c.Assert(err, IsNil)
 	c.Assert(rev4, Greater, rev3)
+	c.Assert(putted, IsTrue)
+
+	// get all init schemas.
+	initSchemas, rev5, err := GetAllInitSchemas(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(rev5, Equals, rev4)
+	c.Assert(initSchemas[is1.Task][is1.DownSchema][is1.DownTable], DeepEquals, is1)
+	c.Assert(initSchemas[is3.Task][is3.DownSchema][is3.DownTable], DeepEquals, is3)
+
+	// delete the schema.
+	rev6, deleted, err := DeleteInitSchema(etcdTestCli, is1.Task, is1.DownSchema, is1.DownTable)
+	c.Assert(err, IsNil)
+	c.Assert(rev6, Greater, rev5)
+	c.Assert(deleted, IsTrue)
+	rev7, deleted, err := DeleteInitSchema(etcdTestCli, is3.Task, is3.DownSchema, is3.DownTable)
+	c.Assert(err, IsNil)
+	c.Assert(rev7, Greater, rev6)
 	c.Assert(deleted, IsTrue)
 
 	// not exist now.
-	isc, rev5, err := GetInitSchema(etcdTestCli, task, downSchema, downTable)
+	initSchemas, rev8, err := GetAllInitSchemas(etcdTestCli)
 	c.Assert(err, IsNil)
-	c.Assert(rev5, Equals, rev4)
-	c.Assert(isc.IsEmpty(), IsTrue)
+	c.Assert(rev8, Equals, rev7)
+	c.Assert(initSchemas, HasLen, 0)
 }

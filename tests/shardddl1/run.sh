@@ -465,6 +465,48 @@ function DM_035() {
     run_case 035 "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
+function DM_RENAME_TABLE_CASE() {
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column a int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column a int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb2} add column a int;"
+
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
+
+    run_sql_source1 "rename table ${shardddl1}.${tb1} to ${shardddl1}.${tb3};"
+    run_sql_source2 "rename table ${shardddl1}.${tb1} to ${shardddl1}.${tb3};"
+    run_sql_source2 "rename table ${shardddl1}.${tb2} to ${shardddl1}.${tb4};"
+
+    run_sql_source1 "insert into ${shardddl1}.${tb3} values(7,7)"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(8,8);"
+    run_sql_source2 "insert into ${shardddl1}.${tb4} values(9,9);"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb3} add column b int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb3} add column b int;"
+    run_sql_source2 "alter table ${shardddl1}.${tb4} add column b int;"
+
+    run_sql_source1 "insert into ${shardddl1}.${tb3} values(10,10,10)"
+    run_sql_source2 "insert into ${shardddl1}.${tb3} values(11,11,11);"
+    run_sql_source2 "insert into ${shardddl1}.${tb4} values(12,12,12);"
+
+    if [[ "$1" = "pessimistic" ]]; then
+        check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    else
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "\`RENAME TABLE\` statement not supported in $1 mode" 2
+    fi
+}
+
+function DM_RENAME_TABLE() {
+    run_case RENAME_TABLE "double-source-pessimistic" "init_table 111 211 212" "clean_table" "pessimistic"
+    run_case RENAME_TABLE "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
+}
 
 function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
     run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
@@ -535,8 +577,7 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
         "\"result\": true" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "resume-task test -s mysql-replica-02" \
-        "\"result\": true" 2
+        "resume-task test -s mysql-replica-02"
 
     # source2.table2's ddl fails
     # Unknown column 'a' in 'tb2'
@@ -666,6 +707,7 @@ function run() {
         DM_${i}
         sleep 1
     done
+    DM_RENAME_TABLE
     DM_RENAME_COLUMN_OPTIMISTIC
     DM_RECOVER_LOCK
 }

@@ -118,6 +118,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	)
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1
+	sourceCfg1.EnableRelay = true
 	sourceCfg2 := sourceCfg1
 	sourceCfg2.SourceID = sourceID2
 
@@ -198,7 +199,8 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	}), IsTrue)
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
 	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName1))
-	// expect relay stage become Running after the first bound.
+	c.Assert(s.StartRelay(sourceID1, []string{workerName1}), IsNil)
+	// expect relay stage become Running after the start relay.
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 	rebuildScheduler(ctx)
 
@@ -379,6 +381,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	// source2 should bound to worker2.
 	t.workerBound(c, s, ha.NewSourceBound(sourceID2, workerName2))
 	t.sourceBounds(c, s, []string{sourceID1, sourceID2}, []string{})
+	c.Assert(s.StartRelay(sourceID2, []string{workerName2}), IsNil)
 	t.relayStageMatch(c, s, sourceID2, pb.Stage_Running)
 	rebuildScheduler(ctx)
 
@@ -446,6 +449,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	rebuildScheduler(ctx)
 
 	// CASE 4.7: remove source2.
+	c.Assert(s.StopRelay(sourceID2, []string{workerName2}), IsNil)
 	c.Assert(s.RemoveSourceCfg(sourceID2), IsNil)
 	c.Assert(terror.ErrSchedulerSourceCfgNotExist.Equal(s.RemoveSourceCfg(sourceID2)), IsTrue) // already removed.
 	// source2 removed.
@@ -1113,4 +1117,112 @@ func (t *testScheduler) TestTransferSource(c *C) {
 	c.Assert(s.TransferSource(sourceID1, workerName1), NotNil)
 	c.Assert(s.bounds[sourceID1], DeepEquals, worker4)
 	c.Assert(worker1.Stage(), Equals, WorkerFree)
+}
+
+func (t *testScheduler) TestStartStopSource(c *C) {
+	defer clearTestInfoOperation(c)
+
+	var (
+		logger      = log.L()
+		s           = NewScheduler(&logger, config.Security{})
+		sourceID1   = "mysql-replica-1"
+		sourceID2   = "mysql-replica-2"
+		sourceID3   = "mysql-replica-3"
+		sourceID4   = "mysql-replica-4"
+		workerName1 = "dm-worker-1"
+		workerName2 = "dm-worker-2"
+		workerName3 = "dm-worker-3"
+		workerName4 = "dm-worker-4"
+	)
+
+	worker1 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName1}}
+	worker2 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName2}}
+	worker3 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName3}}
+	worker4 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName4}}
+
+	// step 1: start an empty scheduler
+	s.started = true
+	s.etcdCli = etcdTestCli
+	s.workers[workerName1] = worker1
+	s.workers[workerName2] = worker2
+	s.workers[workerName3] = worker3
+	s.workers[workerName4] = worker4
+	s.sourceCfgs[sourceID1] = config.SourceConfig{}
+	s.sourceCfgs[sourceID2] = config.SourceConfig{}
+
+	worker1.ToFree()
+	c.Assert(s.boundSourceToWorker(sourceID1, worker1), IsNil)
+	worker2.ToFree()
+	c.Assert(s.boundSourceToWorker(sourceID2, worker2), IsNil)
+
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker1)
+	c.Assert(s.bounds[sourceID2], DeepEquals, worker2)
+
+	worker3.ToFree()
+	worker4.ToFree()
+
+	// test not exist source
+	c.Assert(terror.ErrSchedulerSourceCfgNotExist.Equal(s.StartRelay(sourceID3, []string{workerName1})), IsTrue)
+	c.Assert(terror.ErrSchedulerSourceCfgNotExist.Equal(s.StopRelay(sourceID4, []string{workerName1})), IsTrue)
+	noWorkerSources := []string{sourceID1, sourceID2, sourceID3, sourceID4}
+	for _, source := range noWorkerSources {
+		workers, err := s.GetRelayWorkers(source)
+		c.Assert(err, IsNil)
+		c.Assert(workers, HasLen, 0)
+	}
+
+	// start-relay success on bound-same-source and free worker
+	c.Assert(s.StartRelay(sourceID1, []string{workerName1}), IsNil)
+	c.Assert(s.StartRelay(sourceID1, []string{workerName1}), IsNil)
+	c.Assert(s.expectRelayStages, HasLen, 1)
+	c.Assert(s.expectRelayStages, HasKey, sourceID1)
+	c.Assert(s.StartRelay(sourceID1, []string{workerName3}), IsNil)
+	c.Assert(s.relayWorkers, HasLen, 1)
+	c.Assert(s.relayWorkers[sourceID1], HasLen, 2)
+	c.Assert(s.relayWorkers[sourceID1], HasKey, workerName1)
+	c.Assert(s.relayWorkers[sourceID1], HasKey, workerName3)
+	workers, err := s.GetRelayWorkers(sourceID1)
+	c.Assert(err, IsNil)
+	c.Assert(workers, DeepEquals, []*Worker{worker1, worker3})
+
+	// failed on bound-not-same-source worker and not exist worker
+	c.Assert(terror.ErrSchedulerRelayWorkersWrongBound.Equal(s.StartRelay(sourceID1, []string{workerName2})), IsTrue)
+	c.Assert(terror.ErrSchedulerWorkerNotExist.Equal(s.StartRelay(sourceID1, []string{"not-exist"})), IsTrue)
+
+	// failed on one worker multiple relay source
+	c.Assert(terror.ErrSchedulerRelayWorkersBusy.Equal(s.StartRelay(sourceID2, []string{workerName3})), IsTrue)
+
+	// start another relay worker
+	c.Assert(s.StartRelay(sourceID2, []string{workerName2}), IsNil)
+	c.Assert(s.expectRelayStages, HasLen, 2)
+	c.Assert(s.expectRelayStages, HasKey, sourceID2)
+	c.Assert(s.relayWorkers[sourceID2], HasLen, 1)
+	c.Assert(s.relayWorkers[sourceID2], HasKey, workerName2)
+	workers, err = s.GetRelayWorkers(sourceID2)
+	c.Assert(err, IsNil)
+	c.Assert(workers, DeepEquals, []*Worker{worker2})
+
+	// failed on not-same-source worker and not exist worker
+	c.Assert(terror.ErrSchedulerRelayWorkersWrongRelay.Equal(s.StopRelay(sourceID1, []string{workerName2})), IsTrue)
+	c.Assert(terror.ErrSchedulerWorkerNotExist.Equal(s.StopRelay(sourceID1, []string{"not-exist"})), IsTrue)
+
+	// nothing changed
+	workers, err = s.GetRelayWorkers(sourceID1)
+	c.Assert(err, IsNil)
+	c.Assert(workers, DeepEquals, []*Worker{worker1, worker3})
+	workers, err = s.GetRelayWorkers(sourceID2)
+	c.Assert(err, IsNil)
+	c.Assert(workers, DeepEquals, []*Worker{worker2})
+
+	// stop-relay success
+	c.Assert(s.StopRelay(sourceID1, []string{workerName1}), IsNil)
+	c.Assert(s.StopRelay(sourceID1, []string{workerName1}), IsNil)
+	c.Assert(s.StopRelay(sourceID1, []string{workerName3}), IsNil)
+	c.Assert(s.expectRelayStages, HasLen, 1)
+	c.Assert(s.expectRelayStages, HasKey, sourceID2)
+	c.Assert(s.relayWorkers, HasLen, 1)
+	c.Assert(s.relayWorkers, HasKey, sourceID2)
+	workers, err = s.GetRelayWorkers(sourceID1)
+	c.Assert(err, IsNil)
+	c.Assert(workers, HasLen, 0)
 }
