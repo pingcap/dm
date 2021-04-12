@@ -167,6 +167,11 @@ function run() {
         '"worker": "worker1"' 1 \
         '"worker": "worker2"' 1
 
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-source show -s $SOURCE_ID1" \
+        "\"result\": true" 2 \
+        '"worker": "worker1"' 1
+
     transfer_source_valid $SOURCE_ID1 worker1 # transfer to self
     transfer_source_invalid $SOURCE_ID1 worker2
 

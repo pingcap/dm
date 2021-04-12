@@ -1183,8 +1183,18 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 			}
 		}
 	case pb.SourceOp_ShowSource:
-		for _, id := range s.scheduler.GetSourceCfgIDs() {
+		for _, id := range req.SourceID {
 			boundM[id] = s.scheduler.GetWorkerBySource(id)
+		}
+		for _, cfg := range cfgs {
+			id := cfg.SourceID
+			boundM[id] = s.scheduler.GetWorkerBySource(id)
+		}
+
+		if len(boundM) == 0 {
+			for _, id := range s.scheduler.GetSourceCfgIDs() {
+				boundM[id] = s.scheduler.GetWorkerBySource(id)
+			}
 		}
 	default:
 		resp.Msg = terror.ErrMasterInvalidOperateOp.Generate(req.Op.String(), "source").Error()

@@ -98,6 +98,12 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	contents := make([]string, 0, len(cmd.Flags().Args())-1)
 	sourceID := make([]string, 0, len(cmd.Flags().Args())-1)
+	sources, err := common.GetSourceArgs(cmd)
+	if err != nil {
+		return
+	}
+	sourceID = append(sourceID, sources...)
+
 	for i := 1; i < len(cmd.Flags().Args()); i++ {
 		arg := cmd.Flags().Arg(i)
 		var content []byte
