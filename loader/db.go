@@ -83,6 +83,9 @@ func (conn *DBConn) querySQL(ctx *tcontext.Context, query string, args ...interf
 			startTime := time.Now()
 			ret, err := conn.baseConn.QuerySQL(ctx, query, args...)
 			if err == nil {
+				if ret.Err() != nil {
+					return ret, ret.Err()
+				}
 				cost := time.Since(startTime)
 				queryHistogram.WithLabelValues(conn.cfg.Name, conn.cfg.SourceID).Observe(cost.Seconds())
 				if cost.Seconds() > 1 {

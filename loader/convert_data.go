@@ -132,6 +132,7 @@ func parseRowValues(str []byte, table *tableInfo, columnMapping *cm.Mapping) ([]
 
 			sch := ch
 			for j < size {
+				// nolint:gocritic
 				if str[j] == '\\' {
 					// skip escaped character
 					j += 2

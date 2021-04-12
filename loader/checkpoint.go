@@ -382,8 +382,7 @@ func (cp *RemoteCheckPoint) ResetConn(tctx *tcontext.Context) error {
 
 // Close implements CheckPoint.Close.
 func (cp *RemoteCheckPoint) Close() {
-	err := cp.db.Close()
-	if err != nil {
+	if err := cp.db.Close(); err != nil {
 		cp.logger.Error("close checkpoint db", log.ShortError(err))
 	}
 }

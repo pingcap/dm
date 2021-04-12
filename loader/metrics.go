@@ -111,7 +111,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(loaderExitWithErrorCounter)
 }
 
-func (m *Loader) removeLabelValuesWithTaskInMetrics(task string) {
+func (l *Loader) removeLabelValuesWithTaskInMetrics(task string) {
 	tidbExecutionErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	txnHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	queryHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
