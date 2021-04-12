@@ -80,15 +80,7 @@ dm-portal-frontend:
 
 tools_setup:
 	@echo "setup tools"
-	cd tools && $(GOBUILD) -o bin/errcheck github.com/kisielk/errcheck
-	cd tools && $(GOBUILD) -o bin/failpoint-ctl github.com/pingcap/failpoint/failpoint-ctl
-	cd tools && $(GOBUILD) -o bin/gocovmerge github.com/zhouqiang-cl/gocovmerge
-	cd tools && $(GOBUILD) -o bin/golint golang.org/x/lint/golint
-	cd tools && $(GOBUILD) -o bin/goveralls github.com/mattn/goveralls
-	cd tools && $(GOBUILD) -o bin/mockgen github.com/golang/mock/mockgen
-	cd tools && $(GOBUILD) -o bin/protoc-gen-gogofaster github.com/gogo/protobuf/protoc-gen-gogofaster
-	cd tools && $(GOBUILD) -o bin/protoc-gen-grpc-gateway github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-	cd tools && $(GOBUILD) -o bin/statik github.com/rakyll/statik
+	@cd tools && make
 
 generate_proto: tools_setup
 	./generate-dm.sh
@@ -141,6 +133,7 @@ errcheck: tools_setup
 lint: tools_setup
 	@echo "golint"
 	tools/bin/golint -set_exit_status $(PACKAGES)
+	#tools/bin/golangci-lint run --config=$(CURDIR)/.golangci.yml --issues-exit-code=1
 
 vet:
 	$(GO) build -o bin/shadow golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow
@@ -154,7 +147,8 @@ terror_check:
 
 tidy_mod:
 	@echo "tidy go.mod"
-	_utils/mod_check/check.sh
+	$(GO) mod tidy
+	git diff --exit-code go.mod go.sum 
 
 dm_integration_test_build: tools_setup
 	$(FAILPOINT_ENABLE)
@@ -208,14 +202,6 @@ else
 	go tool cover -html "$(TEST_DIR)/all_cov.out" -o "$(TEST_DIR)/all_cov.html"
 	go tool cover -html "$(TEST_DIR)/unit_test.out" -o "$(TEST_DIR)/unit_test_cov.html"
 endif
-
-check-static:
-	@echo "gometalinter"
-	gometalinter --disable-all --deadline 120s \
-	  --enable misspell \
-	  --enable megacheck \
-	  --enable ineffassign \
-	  ./...
 
 failpoint-enable: tools_setup
 	$(FAILPOINT_ENABLE)
