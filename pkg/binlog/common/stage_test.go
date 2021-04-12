@@ -23,12 +23,9 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-var (
-	_ = Suite(&testCommonSuite{})
-)
+var _ = Suite(&testCommonSuite{})
 
-type testCommonSuite struct {
-}
+type testCommonSuite struct{}
 
 func (t *testCommonSuite) TestStageString(c *C) {
 	cases := []struct {

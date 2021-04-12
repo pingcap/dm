@@ -236,7 +236,7 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result Resu
 		return result, terror.ErrRelayWriterExpectRotateEv.Generate(ev.Header)
 	}
 
-	var currFile = w.filename.Get()
+	currFile := w.filename.Get()
 	defer func() {
 		if err == nil {
 			// update binlog filename if needed
@@ -420,7 +420,7 @@ func (w *FileWriter) doRecovering(ctx context.Context) (RecoverResult, error) {
 	}
 
 	// truncate the file
-	f, err := os.OpenFile(filename, os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filename, os.O_WRONLY, 0o644)
 	if err != nil {
 		return RecoverResult{}, terror.Annotatef(terror.ErrRelayWriterFileOperate.New(err.Error()), "open %s", filename)
 	}

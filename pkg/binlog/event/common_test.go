@@ -27,8 +27,7 @@ import (
 
 var _ = Suite(&testCommonSuite{})
 
-type testCommonSuite struct {
-}
+type testCommonSuite struct{}
 
 func (t *testCommonSuite) TestGenCommonFileHeader(c *C) {
 	var (
@@ -56,7 +55,7 @@ func (t *testCommonSuite) TestGenCommonFileHeader(c *C) {
 	_, err = mysqlFile.Write(data)
 	c.Assert(err, IsNil)
 
-	var count = 0
+	count := 0
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		count++
 		if count > 2 {

@@ -34,14 +34,14 @@ import (
 // 3. purge before filename, like `PURGE BINARY LOGS TO`
 func NewPurgeRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		//Use:   "purge-relay <-w worker> [--inactive] [--time] [--filename] [--sub-dir]",
-		//Short: "purge dm-worker's relay log files, choose 1 of 2 methods",
+		// Use:   "purge-relay <-w worker> [--inactive] [--time] [--filename] [--sub-dir]",
+		// Short: "purge dm-worker's relay log files, choose 1 of 2 methods",
 		Use:   "purge-relay <-s source> <-f filename> [--sub-dir directory]",
 		Short: "Purges relay log files of the DM-worker according to the specified filename.",
 		RunE:  purgeRelayFunc,
 	}
-	//cmd.Flags().BoolP("inactive", "i", false, "whether try to purge all inactive relay log files")
-	//cmd.Flags().StringP("time", "t", "", fmt.Sprintf("whether try to purge relay log files before this time, the format is \"%s\"(_ between date and time)", timeFormat))
+	// cmd.Flags().BoolP("inactive", "i", false, "whether try to purge all inactive relay log files")
+	// cmd.Flags().StringP("time", "t", "", fmt.Sprintf("whether try to purge relay log files before this time, the format is \"%s\"(_ between date and time)", timeFormat))
 	cmd.Flags().StringP("filename", "f", "", "name of the terminal file before which to purge relay log files. Sample format: \"mysql-bin.000006\"")
 	cmd.Flags().StringP("sub-dir", "", "", "specify relay sub directory for --filename. If not specified, the latest one will be used. Sample format: \"2ae76434-f79f-11e8-bde2-0242ac130008.000001\"")
 
@@ -82,7 +82,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	}
 
 	if len(filename) > 0 {
-		//count++
+		// count++
 		filename = strings.Trim(filename, "\"")
 	}
 
@@ -106,8 +106,8 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 		"PurgeWorkerRelay",
 		&pb.PurgeWorkerRelayRequest{
 			Sources: sources,
-			//Inactive: inactive,
-			//Time:     time2.Unix(),
+			// Inactive: inactive,
+			// Time:     time2.Unix(),
 			Filename: filename,
 			SubDir:   subDir,
 		},

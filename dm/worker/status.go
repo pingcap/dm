@@ -47,7 +47,6 @@ func (st *SubTask) StatusJSON(ctx context.Context) string {
 // Status returns the status of the worker (and sub tasks)
 // if stName is empty, all sub task's status will be returned
 func (w *Worker) Status(ctx context.Context, stName string) []*pb.SubTaskStatus {
-
 	sts := w.subTaskHolder.getAllSubTasks()
 
 	if len(sts) == 0 {
@@ -76,7 +75,7 @@ func (w *Worker) Status(ctx context.Context, stName string) []*pb.SubTaskStatus 
 				Status: &pb.SubTaskStatus_Msg{Msg: fmt.Sprintf("no sub task with name %s has started", name)},
 			}
 		} else {
-			var lockID = ""
+			lockID := ""
 			op := st.ShardDDLOperation()
 			if op != nil {
 				lockID = op.ID

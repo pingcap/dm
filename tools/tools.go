@@ -31,4 +31,5 @@ import (
 	_ "github.com/rakyll/statik"
 	_ "github.com/zhouqiang-cl/gocovmerge"
 	_ "golang.org/x/lint/golint"
+	_ "mvdan.cc/gofumpt/gofumports"
 )

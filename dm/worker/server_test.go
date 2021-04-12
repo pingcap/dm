@@ -551,7 +551,6 @@ func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.
 }
 
 func (t *testServer) TestGetMinLocInAllSubTasks(c *C) {
-
 	subTaskCfg := map[string]config.SubTaskConfig{
 		"test2": {Name: "test2"},
 		"test3": {Name: "test3"},

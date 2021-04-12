@@ -14,8 +14,9 @@
 package loader
 
 import (
-	tcontext "github.com/pingcap/dm/pkg/context"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
+
+	tcontext "github.com/pingcap/dm/pkg/context"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/table-router"

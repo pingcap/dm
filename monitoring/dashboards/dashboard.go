@@ -18,11 +18,9 @@ const (
 	name           = "dm.json"
 )
 
-var (
-	dashboards = map[string]string{
-		"dm.json": "Test-Cluster-DM",
-	}
-)
+var dashboards = map[string]string{
+	"dm.json": "Test-Cluster-DM",
+}
 
 func readDashboard(dir string, name string) (string, error) {
 	file := filepath.Join(dir, name)

@@ -101,7 +101,6 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 		zap.String("argument", utils.TruncateInterface(args, -1)))
 
 	rows, err := conn.DBConn.QueryContext(tctx.Context(), query, args...)
-
 	if err != nil {
 		tctx.L().ErrorFilterContextCanceled("query statement failed",
 			zap.String("query", utils.TruncateString(query, -1)),
@@ -130,7 +129,8 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *me
 				tctx.L().Info("", zap.String("failpoint", "retryableError"), zap.String("mark", mark))
 				failpoint.Return(0, &mysql.MySQLError{
 					Number:  gmysql.ER_LOCK_DEADLOCK,
-					Message: fmt.Sprintf("failpoint inject retryable error for %s", mark)})
+					Message: fmt.Sprintf("failpoint inject retryable error for %s", mark),
+				})
 			}
 		}
 	})
@@ -144,7 +144,6 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *me
 
 	startTime := time.Now()
 	txn, err := conn.DBConn.BeginTx(tctx.Context(), nil)
-
 	if err != nil {
 		return 0, terror.ErrDBExecuteFailed.Delegate(err, "begin")
 	}

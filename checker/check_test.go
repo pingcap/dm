@@ -20,9 +20,10 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
 
 	tc "github.com/pingcap/check"
 )

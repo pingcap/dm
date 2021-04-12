@@ -27,6 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
@@ -37,7 +39,6 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -61,6 +62,7 @@ type DataFiles []string
 
 // Tables2DataFiles represent all data files of a table collection as a map
 type Tables2DataFiles map[string]DataFiles
+
 type dataJob struct {
 	sql        string
 	schema     string

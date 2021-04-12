@@ -118,9 +118,9 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	c.Assert(replaceWithHeartbeat, Equals, false)
 
 	// empty relay log file, failed, got EOF
-	err = os.MkdirAll(relayDir, 0700)
+	err = os.MkdirAll(relayDir, 0o700)
 	c.Assert(err, IsNil)
-	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0o600)
 	c.Assert(err, IsNil)
 	defer f.Close()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
@@ -156,7 +156,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 
 	// try get events back, firstParse should have fake RotateEvent
 	var fakeRotateEventCount int
-	var i = 0
+	i := 0
 	for {
 		ev, err2 := s.GetEvent(ctx)
 		c.Assert(err2, IsNil)
@@ -276,9 +276,9 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 	)
 
 	// create the current relay log file and write some events
-	err := os.MkdirAll(relayDir, 0700)
+	err := os.MkdirAll(relayDir, 0o700)
 	c.Assert(err, IsNil)
-	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0o600)
 	c.Assert(err, IsNil)
 	defer f.Close()
 	_, err = f.Write(replication.BinLogFileHeader)
@@ -331,7 +331,7 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 	go func() {
 		defer wg.Done()
 		time.Sleep(500 * time.Millisecond) // wait parseFile started
-		err2 := ioutil.WriteFile(nextPath, replication.BinLogFileHeader, 0600)
+		err2 := ioutil.WriteFile(nextPath, replication.BinLogFileHeader, 0o600)
 		c.Assert(err2, IsNil)
 	}()
 	ctx3, cancel3 := context.WithTimeout(context.Background(), parseFileTimeout)
@@ -370,9 +370,9 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 	)
 
 	// create the current relay log file and write some events
-	err := os.MkdirAll(relayDir, 0700)
+	err := os.MkdirAll(relayDir, 0o700)
 	c.Assert(err, IsNil)
-	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0o600)
 	c.Assert(err, IsNil)
 	defer f.Close()
 	_, err = f.Write(replication.BinLogFileHeader)
@@ -401,9 +401,9 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 	// next sub dir exits, need to switch
 	r.uuids = []string{currentUUID, switchedUUID}
 	t.writeUUIDs(c, baseDir, r.uuids)
-	err = os.MkdirAll(nextRelayDir, 0700)
+	err = os.MkdirAll(nextRelayDir, 0o700)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(nextFullPath, replication.BinLogFileHeader, 0600)
+	err = ioutil.WriteFile(nextFullPath, replication.BinLogFileHeader, 0o600)
 	c.Assert(err, IsNil)
 
 	// has relay log file in next sub directory, need to switch
@@ -441,9 +441,9 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	)
 
 	// create the current relay log file and write some events
-	err := os.MkdirAll(relayDir, 0700)
+	err := os.MkdirAll(relayDir, 0o700)
 	c.Assert(err, IsNil)
-	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0o600)
 	c.Assert(err, IsNil)
 	defer f.Close()
 
@@ -502,7 +502,7 @@ func (t *testReaderSuite) TestUpdateUUIDs(c *C) {
 		"b60868af-5a6f-11e9-9ea3-0242ac160007.000002",
 	}
 	uuidBytes := t.uuidListToBytes(c, UUIDs)
-	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0600)
+	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0o600)
 	c.Assert(err, IsNil)
 
 	err = r.updateUUIDs()
@@ -536,13 +536,13 @@ func (t *testReaderSuite) TestStartSyncByPos(c *C) {
 
 	// create the index file
 	uuidBytes := t.uuidListToBytes(c, UUIDs)
-	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0600)
+	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0o600)
 	c.Assert(err, IsNil)
 
 	// create sub directories
 	for _, uuid := range UUIDs {
 		subDir := filepath.Join(baseDir, uuid)
-		err = os.MkdirAll(subDir, 0700)
+		err = os.MkdirAll(subDir, 0o700)
 		c.Assert(err, IsNil)
 	}
 
@@ -552,7 +552,7 @@ func (t *testReaderSuite) TestStartSyncByPos(c *C) {
 	for i := 0; i < 3; i++ {
 		for j := 1; j < i+2; j++ {
 			filename := filepath.Join(baseDir, UUIDs[i], filenamePrefix+strconv.Itoa(j))
-			err = ioutil.WriteFile(filename, eventsBuf.Bytes(), 0600)
+			err = ioutil.WriteFile(filename, eventsBuf.Bytes(), 0o600)
 			c.Assert(err, IsNil)
 		}
 	}
@@ -586,7 +586,7 @@ func (t *testReaderSuite) TestStartSyncByPos(c *C) {
 	// 2. write more events to the last file
 	lastFilename := filepath.Join(baseDir, UUIDs[2], filenamePrefix+strconv.Itoa(3))
 	extraEvents, _, _ := t.genBinlogEvents(c, lastPos, lastGTID)
-	lastF, err := os.OpenFile(lastFilename, os.O_WRONLY|os.O_APPEND, 0600)
+	lastF, err := os.OpenFile(lastFilename, os.O_WRONLY|os.O_APPEND, 0o600)
 	c.Assert(err, IsNil)
 	defer lastF.Close()
 	for _, ev := range extraEvents {
@@ -614,7 +614,7 @@ func (t *testReaderSuite) TestStartSyncByPos(c *C) {
 
 	// 3. create new file in the last directory
 	lastFilename = filepath.Join(baseDir, UUIDs[2], filenamePrefix+strconv.Itoa(4))
-	err = ioutil.WriteFile(lastFilename, eventsBuf.Bytes(), 0600)
+	err = ioutil.WriteFile(lastFilename, eventsBuf.Bytes(), 0o600)
 	c.Assert(err, IsNil)
 
 	obtainExtraEvents2 := make([]*replication.BinlogEvent, 0, len(baseEvents)-1)
@@ -738,7 +738,8 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 					},
 				},
 			},
-		}, {
+		},
+		{
 			"bcbf9d42-1f15-11eb-a41c-0242ac110003",
 			"bcbf9d42-1f15-11eb-a41c-0242ac110003.000003",
 			"bcbf9d42-1f15-11eb-a41c-0242ac110003:30",
@@ -763,7 +764,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 
 	// write index file
 	uuidBytes := t.uuidListToBytes(c, r.uuids)
-	err := ioutil.WriteFile(r.indexPath, uuidBytes, 0600)
+	err := ioutil.WriteFile(r.indexPath, uuidBytes, 0o600)
 	c.Assert(err, IsNil)
 
 	var allEvents []*replication.BinlogEvent
@@ -775,7 +776,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 		lastGTID, err = gtid.ParserGTID(mysql.MySQLFlavor, subDir.gtidStr)
 		c.Assert(err, IsNil)
 		uuidDir := path.Join(baseDir, subDir.uuid)
-		err = os.MkdirAll(uuidDir, 0700)
+		err = os.MkdirAll(uuidDir, 0o700)
 		c.Assert(err, IsNil)
 
 		for _, fileEventResult := range subDir.fileEventResult {
@@ -792,7 +793,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 			allEvents = append(allEvents, events...)
 
 			// write binlog file
-			f, err2 := os.OpenFile(path.Join(uuidDir, fileEventResult.filename), os.O_CREATE|os.O_WRONLY, 0600)
+			f, err2 := os.OpenFile(path.Join(uuidDir, fileEventResult.filename), os.O_CREATE|os.O_WRONLY, 0o600)
 			c.Assert(err2, IsNil)
 			_, err = f.Write(replication.BinLogFileHeader)
 			c.Assert(err, IsNil)
@@ -967,7 +968,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	// write UUIDs into index file
 	r = NewBinlogReader(log.L(), cfg) // create a new reader
 	uuidBytes := t.uuidListToBytes(c, UUIDs)
-	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0600)
+	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0o600)
 	c.Assert(err, IsNil)
 
 	// the startup relay log file not found
@@ -994,11 +995,11 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 
 	// too big startPos
 	uuid := UUIDs[0]
-	err = os.MkdirAll(filepath.Join(baseDir, uuid), 0700)
+	err = os.MkdirAll(filepath.Join(baseDir, uuid), 0o700)
 	c.Assert(err, IsNil)
 	parsedStartPosName := "test-mysql-bin.000001"
 	relayLogFilePath := filepath.Join(baseDir, uuid, parsedStartPosName)
-	err = ioutil.WriteFile(relayLogFilePath, make([]byte, 100), 0600)
+	err = ioutil.WriteFile(relayLogFilePath, make([]byte, 100), 0o600)
 	c.Assert(err, IsNil)
 	startPos.Pos = 10000
 	s, err = r.StartSyncByPos(startPos)
@@ -1057,11 +1058,11 @@ func (t *testReaderSuite) TestReParseUsingGTID(c *C) {
 	c.Assert(err, IsNil)
 
 	// prepare a minimal relay log file
-	c.Assert(ioutil.WriteFile(r.indexPath, []byte(uuid), 0600), IsNil)
+	c.Assert(ioutil.WriteFile(r.indexPath, []byte(uuid), 0o600), IsNil)
 
 	uuidDir := path.Join(baseDir, uuid)
-	c.Assert(os.MkdirAll(uuidDir, 0700), IsNil)
-	f, err := os.OpenFile(path.Join(uuidDir, file), os.O_CREATE|os.O_WRONLY, 0600)
+	c.Assert(os.MkdirAll(uuidDir, 0o700), IsNil)
+	f, err := os.OpenFile(path.Join(uuidDir, file), os.O_CREATE|os.O_WRONLY, 0o600)
 	c.Assert(err, IsNil)
 	_, err = f.Write(replication.BinLogFileHeader)
 	c.Assert(err, IsNil)
@@ -1077,7 +1078,8 @@ func (t *testReaderSuite) TestReParseUsingGTID(c *C) {
 	genType := []replication.EventType{
 		replication.PREVIOUS_GTIDS_EVENT,
 		replication.QUERY_EVENT,
-		replication.XID_EVENT}
+		replication.XID_EVENT,
+	}
 	events, _, _, latestGTIDSet := t.genEvents(c, genType, 4, lastGTID, startGTID)
 	c.Assert(events, HasLen, 1+1+2+5)
 
@@ -1277,7 +1279,7 @@ func (t *testReaderSuite) writeUUIDs(c *C, relayDir string, UUIDs []string) []by
 	}
 
 	// write the index file
-	err := ioutil.WriteFile(indexPath, buf.Bytes(), 0600)
+	err := ioutil.WriteFile(indexPath, buf.Bytes(), 0o600)
 	c.Assert(err, IsNil)
 	return buf.Bytes()
 }

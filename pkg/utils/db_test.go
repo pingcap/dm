@@ -28,8 +28,7 @@ import (
 
 var _ = Suite(&testDBSuite{})
 
-type testDBSuite struct {
-}
+type testDBSuite struct{}
 
 func (t *testDBSuite) TestGetFlavor(c *C) {
 	db, mock, err := sqlmock.New()

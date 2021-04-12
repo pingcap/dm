@@ -25,8 +25,7 @@ import (
 
 var _ = Suite(&testBaseDBSuite{})
 
-type testBaseDBSuite struct {
-}
+type testBaseDBSuite struct{}
 
 func (t *testBaseDBSuite) TestGetBaseConn(c *C) {
 	db, mock, err := sqlmock.New()

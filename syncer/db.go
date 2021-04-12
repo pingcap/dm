@@ -194,7 +194,6 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 			return ret, err
 		},
 	)
-
 	if err != nil {
 		tctx.L().ErrorFilterContextCanceled("query statement failed after retry",
 			zap.String("query", utils.TruncateString(query, -1)),
@@ -269,7 +268,6 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 			}
 			return ret, err
 		})
-
 	if err != nil {
 		tctx.L().ErrorFilterContextCanceled("execute statements failed after retry",
 			zap.String("queries", utils.TruncateInterface(queries, -1)),

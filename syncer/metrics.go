@@ -246,7 +246,6 @@ func RegisterMetrics(registry *prometheus.Registry) {
 
 // InitStatusAndMetrics register prometheus metrics and listen for status port.
 func InitStatusAndMetrics(addr string) {
-
 	go func() {
 		http.HandleFunc("/status", func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Content-Type", "text/plain")
@@ -270,6 +269,7 @@ func InitStatusAndMetrics(addr string) {
 		}
 	}()
 }
+
 func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	binlogReadDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogEventSizeHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})

@@ -58,22 +58,22 @@ import (
 
 var _ = Suite(&testSyncerSuite{})
 
-var (
-	defaultTestSessionCfg = map[string]string{
-		"sql_mode":             "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION",
-		"tidb_skip_utf8_check": "0",
-	}
-)
+var defaultTestSessionCfg = map[string]string{
+	"sql_mode":             "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION",
+	"tidb_skip_utf8_check": "0",
+}
 
 func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type mockBinlogEvents []mockBinlogEvent
-type mockBinlogEvent struct {
-	typ  int
-	args []interface{}
-}
+type (
+	mockBinlogEvents []mockBinlogEvent
+	mockBinlogEvent  struct {
+		typ  int
+		args []interface{}
+	}
+)
 
 const (
 	DBCreate = iota
@@ -204,7 +204,6 @@ func (s *testSyncerSuite) generateEvents(binlogEvents mockBinlogEvents, c *C) []
 			c.Assert(err, IsNil)
 			events = append(events, evs...)
 		}
-
 	}
 	return events
 }
@@ -252,11 +251,13 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		cases = append(cases, Case{
 			schema: schema,
 			query:  append([]byte("create database "), schema...),
-			skip:   skips[i]})
+			skip:   skips[i],
+		})
 		cases = append(cases, Case{
 			schema: schema,
 			query:  append([]byte("drop database "), schema...),
-			skip:   skips[i]})
+			skip:   skips[i],
+		})
 	}
 
 	db, mock, err := sqlmock.New()
@@ -642,7 +643,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 
 	s.resetEventsGenerator(c)
 
-	//create db and tables
+	// create db and tables
 	events := mockBinlogEvents{
 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest_3"}},
 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest_3", "create table stest_3.log(id varchar(45))"}},
@@ -1042,8 +1043,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
-	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
-		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
+	syncer.toDBConns = []*DBConn{
+		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+	}
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 	syncer.schemaTracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.baseConn)
 	c.Assert(err, IsNil)
@@ -1272,8 +1275,10 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
-	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
-		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
+	syncer.toDBConns = []*DBConn{
+		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+	}
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 	syncer.schemaTracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.baseConn)
 	c.Assert(err, IsNil)
@@ -1411,11 +1416,11 @@ func (s *testSyncerSuite) TestRemoveMetadataIsFine(c *C) {
 	c.Assert(fresh, IsTrue)
 
 	filename := filepath.Join(s.cfg.Dir, "metadata")
-	err = ioutil.WriteFile(filename, []byte("SHOW MASTER STATUS:\n\tLog: BAD METADATA"), 0644)
+	err = ioutil.WriteFile(filename, []byte("SHOW MASTER STATUS:\n\tLog: BAD METADATA"), 0o644)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.checkpoint.LoadMeta(), NotNil)
 
-	err = ioutil.WriteFile(filename, []byte("SHOW MASTER STATUS:\n\tLog: mysql-bin.000003\n\tPos: 1234\n\tGTID:\n\n"), 0644)
+	err = ioutil.WriteFile(filename, []byte("SHOW MASTER STATUS:\n\tLog: mysql-bin.000003\n\tPos: 1234\n\tGTID:\n\n"), 0o644)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.checkpoint.LoadMeta(), IsNil)
 
@@ -1445,8 +1450,10 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg, nil)
-	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
-		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
+	syncer.toDBConns = []*DBConn{
+		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+	}
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
 	syncer.schemaTracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.baseConn)

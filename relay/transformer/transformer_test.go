@@ -26,16 +26,13 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
-var (
-	_ = check.Suite(&testTransformerSuite{})
-)
+var _ = check.Suite(&testTransformerSuite{})
 
 func TestSuite(t *testing.T) {
 	check.TestingT(t)
 }
 
-type testTransformerSuite struct {
-}
+type testTransformerSuite struct{}
 
 type Case struct {
 	event  *replication.BinlogEvent

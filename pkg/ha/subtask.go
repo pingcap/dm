@@ -63,7 +63,6 @@ func GetAllSubTaskCfg(cli *clientv3.Client) (map[string]map[string]config.SubTas
 	defer cancel()
 
 	resp, err := cli.Get(ctx, common.UpstreamSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
-
 	if err != nil {
 		return nil, 0, err
 	}

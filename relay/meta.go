@@ -166,7 +166,7 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 		}
 	}
 
-	var gset = lm.emptyGSet.Clone()
+	gset := lm.emptyGSet.Clone()
 	var err error
 
 	if enableGTID {
@@ -242,7 +242,7 @@ func (lm *LocalMeta) doFlush() error {
 	}
 
 	filename := filepath.Join(lm.baseDir, lm.currentUUID, utils.MetaFilename)
-	err = ioutil2.WriteFileAtomic(filename, buf.Bytes(), 0644)
+	err = ioutil2.WriteFileAtomic(filename, buf.Bytes(), 0o644)
 	if err != nil {
 		return terror.ErrRelayFlushLocalMeta.Delegate(err)
 	}
@@ -300,7 +300,7 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 	}
 
 	// make sub dir for UUID
-	err := os.Mkdir(filepath.Join(lm.baseDir, newUUID), 0744)
+	err := os.Mkdir(filepath.Join(lm.baseDir, newUUID), 0o744)
 	if err != nil {
 		return terror.ErrRelayMkdir.Delegate(err)
 	}
@@ -407,7 +407,7 @@ func (lm *LocalMeta) updateIndexFile(uuids []string) error {
 		buf.WriteString("\n")
 	}
 
-	err := ioutil2.WriteFileAtomic(lm.uuidIndexPath, buf.Bytes(), 0644)
+	err := ioutil2.WriteFileAtomic(lm.uuidIndexPath, buf.Bytes(), 0o644)
 	return terror.ErrRelayUpdateIndexFile.Delegate(err, lm.uuidIndexPath)
 }
 

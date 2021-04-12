@@ -930,8 +930,10 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location binl
 	}
 
 	// convert tiBytes to string to get a readable log
-	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSetStr(),
-		exitSafeName, exitSafePos, exitSafeGTIDStr, string(tiBytes), isGlobal}
+	args := []interface{}{
+		cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSetStr(),
+		exitSafeName, exitSafePos, exitSafeGTIDStr, string(tiBytes), isGlobal,
+	}
 	return sql2, args
 }
 

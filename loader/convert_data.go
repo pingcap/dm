@@ -43,8 +43,8 @@ func bytes2str(bs []byte) string {
 // later let it a package
 func parseInsertStmt(sql []byte, table *tableInfo, columnMapping *cm.Mapping) ([][]string, error) {
 	var s, e, size int
-	var rows = make([][]string, 0, 1024)
-	var VALUES = []byte("VALUES")
+	rows := make([][]string, 0, 1024)
+	VALUES := []byte("VALUES")
 
 	// If table has generated column, the dumped SQL file has a different `INSERT INTO` line,
 	// which provides column names except generated column. such as following:

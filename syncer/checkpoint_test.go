@@ -264,7 +264,7 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	filename := filepath.Join(dir, "metadata")
 	err = ioutil.WriteFile(filename, []byte(
 		fmt.Sprintf("SHOW MASTER STATUS:\n\tLog: %s\n\tPos: %d\n\tGTID:\n\nSHOW SLAVE STATUS:\n\tHost: %s\n\tLog: %s\n\tPos: %d\n\tGTID:\n\n", pos1.Name, pos1.Pos, "slave_host", pos1.Name, pos1.Pos+1000)),
-		0644)
+		0o644)
 	c.Assert(err, IsNil)
 	s.cfg.Mode = config.ModeAll
 	s.cfg.Dir = dir
@@ -305,7 +305,7 @@ SHOW MASTER STATUS: /* AFTER CONNECTION POOL ESTABLISHED */
 	Log: %s
 	Pos: %d
 	GTID:
-`, pos1.Name, pos1.Pos, "slave_host", pos1.Name, pos1.Pos+1000, pos2.Name, pos2.Pos)), 0644)
+`, pos1.Name, pos1.Pos, "slave_host", pos1.Name, pos1.Pos+1000, pos2.Name, pos2.Pos)), 0o644)
 	c.Assert(err, IsNil)
 	c.Assert(cp.LoadMeta(), IsNil)
 
@@ -475,5 +475,4 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(rcp.points[schema][table].TableInfo(), NotNil)
 	c.Assert(rcp.points[schema][table].flushedTI, NotNil)
 	c.Assert(*rcp.safeModeExitPoint, DeepEquals, binlog.InitLocation(pos2, gs))
-
 }

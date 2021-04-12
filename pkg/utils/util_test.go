@@ -145,7 +145,6 @@ func (t *testUtilsSuite) TestCompareBinlogPos(c *C) {
 		cmp := CompareBinlogPos(tc.pos1, tc.pos2, tc.deviation)
 		c.Assert(cmp, Equals, tc.cmp)
 	}
-
 }
 
 func (t *testUtilsSuite) TestWaitSomething(c *C) {

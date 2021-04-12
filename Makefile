@@ -8,7 +8,9 @@ CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
+PACKAGE_NAME := github.com/pingcap/dm
 PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pb|pbmock|_tools')
+PACKAGE_DIRECTORIES := $$(echo "$(PACKAGES)" | sed 's/github.com\/pingcap\/dm\/*//')
 PACKAGES_RELAY := $$(go list ./... | grep 'github.com/pingcap/dm/relay')
 PACKAGES_SYNCER := $$(go list ./... | grep 'github.com/pingcap/dm/syncer')
 PACKAGES_PKG_BINLOG := $$(go list ./... | grep 'github.com/pingcap/dm/pkg/binlog')
@@ -123,8 +125,8 @@ unit_test_others: tools_setup
 check: tools_setup fmt lint vet terror_check tidy_mod
 
 fmt:
-	@echo "gofmt (simplify)"
-	@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
+	@echo "gofumports"
+	tools/bin/gofumports -w -d -format-only -local $(PACKAGE_NAME) $(PACKAGE_DIRECTORIES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 
 errcheck: tools_setup
 	@echo "errcheck"

@@ -51,10 +51,8 @@ import (
 	"github.com/pingcap/dm/relay/writer"
 )
 
-var (
-	// used to fill RelayLogInfo
-	fakeTaskName = "relay"
-)
+// used to fill RelayLogInfo
+var fakeTaskName = "relay"
 
 const (
 	flushMetaInterval           = 30 * time.Second
@@ -152,7 +150,7 @@ func (r *Relay) Init(ctx context.Context) (err error) {
 	r.db = db
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DB", Fn: r.closeDB})
 
-	if err2 := os.MkdirAll(r.cfg.RelayDir, 0755); err2 != nil {
+	if err2 := os.MkdirAll(r.cfg.RelayDir, 0o755); err2 != nil {
 		return terror.ErrRelayMkdir.Delegate(err2)
 	}
 
@@ -471,7 +469,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 
 		binlogReadDurationHistogram.Observe(time.Since(readTimer).Seconds())
 		failpoint.Inject("BlackholeReadBinlog", func(_ failpoint.Value) {
-			//r.logger.Info("back hole read binlog takes effects")
+			// r.logger.Info("back hole read binlog takes effects")
 			failpoint.Continue()
 		})
 

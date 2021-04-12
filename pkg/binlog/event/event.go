@@ -369,7 +369,7 @@ func GenTableMapEvent(header *replication.EventHeader, latestPos uint32, tableID
 	// Post-header
 	postHeader := new(bytes.Buffer)
 
-	var tableIDSize = 6 // for binlog V4, this should be 6.
+	tableIDSize := 6 // for binlog V4, this should be 6.
 	if eventTypeHeaderLen[replication.TABLE_MAP_EVENT-1] == 6 {
 		tableIDSize = 4
 	}
@@ -473,7 +473,7 @@ func GenTableMapEvent(header *replication.EventHeader, latestPos uint32, tableID
 	}
 
 	var tableMapEvent *replication.BinlogEvent
-	var count = 0
+	count := 0
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		count++
 		switch count {
@@ -540,7 +540,7 @@ func GenRowsEvent(header *replication.EventHeader, latestPos uint32, eventType r
 
 	postHeader := new(bytes.Buffer)
 
-	var tableIDSize = 6
+	tableIDSize := 6
 	if eventTypeHeaderLen[eventType] == 6 {
 		tableIDSize = 4
 	}
@@ -637,7 +637,7 @@ func GenRowsEvent(header *replication.EventHeader, latestPos uint32, eventType r
 	// in order to Decode RowsEvent, we need to set `tableIDSize` and `tables` first, but they are private fields.
 	// so we should parse a FormatDescriptionEvent and a TableMapEvent first.
 	var rowsEvent *replication.BinlogEvent
-	var count = 0
+	count := 0
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		count++
 		switch count {

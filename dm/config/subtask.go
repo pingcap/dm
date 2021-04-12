@@ -40,9 +40,7 @@ const (
 	ModeIncrement = "incremental"
 )
 
-var (
-	defaultMaxIdleConns = 2
-)
+var defaultMaxIdleConns = 2
 
 // RawDBConfig contains some low level database config
 type RawDBConfig struct {

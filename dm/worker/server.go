@@ -209,7 +209,6 @@ func (s *Server) Start() error {
 			}
 		case <-grpcExitCh:
 		}
-
 	}(s.ctx)
 
 	httpExitCh := make(chan struct{}, 1)

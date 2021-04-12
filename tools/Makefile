@@ -1,5 +1,5 @@
-all: errcheck failpoint-ctl gocovmerge golint goveralls golangci-lint\
-		mockgen protoc-gen-gogofaster protoc-gen-grpc-gateway statik
+all: errcheck failpoint-ctl gocovmerge golint goveralls golangci-lint \
+		mockgen protoc-gen-gogofaster protoc-gen-grpc-gateway statik gofumports
 
 errcheck:
 	go build -o bin/$@ github.com/kisielk/errcheck
@@ -31,3 +31,5 @@ protoc-gen-grpc-gateway:
 statik:
 	go build -o bin/$@ github.com/rakyll/statik
 
+gofumports:
+	go build -o bin/$@ mvdan.cc/gofumpt/gofumports

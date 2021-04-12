@@ -237,5 +237,4 @@ func WatchRelayConfig(ctx context.Context, cli *clientv3.Client,
 			}
 		}
 	}
-
 }

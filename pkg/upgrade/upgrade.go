@@ -32,14 +32,12 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var (
-	// upgrades records all functions used to upgrade from one version to the later version.
-	upgrades = []func(cli *clientv3.Client, uctx Context) error{
-		upgradeToVer1,
-		upgradeToVer2,
-		upgradeToVer3,
-	}
-)
+// upgrades records all functions used to upgrade from one version to the later version.
+var upgrades = []func(cli *clientv3.Client, uctx Context) error{
+	upgradeToVer1,
+	upgradeToVer2,
+	upgradeToVer3,
+}
 
 // Context is used to pass something to TryUpgrade
 // NOTE that zero value of Context is nil, be aware of nil-dereference

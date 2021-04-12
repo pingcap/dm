@@ -203,5 +203,4 @@ func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 	handledErr = syncer.handleSpecialDDLError(tctx, execErr, ddls, 0, conn2)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 	c.Assert(handledErr, Equals, execErr)
-
 }

@@ -79,7 +79,7 @@ func getRelayFilesBeforeFileAndTime(logger log.Logger, relayBaseDir string, uuid
 
 // trimUUIDs trims all newer UUIDs than safeRelay
 func trimUUIDs(uuids []string, safeRelay *streamer.RelayLogInfo) ([]string, error) {
-	var endIdx = -1
+	endIdx := -1
 	for i, uuid := range uuids {
 		if uuid == safeRelay.UUID {
 			endIdx = i

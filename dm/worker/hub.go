@@ -13,9 +13,7 @@
 
 package worker
 
-var (
-	conditionHub *ConditionHub
-)
+var conditionHub *ConditionHub
 
 // ConditionHub holds a DM-worker and it is used for wait condition detection
 type ConditionHub struct {

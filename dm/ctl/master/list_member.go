@@ -24,9 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-var (
-	listMemberFlags = ListMemberFlags{}
-)
+var listMemberFlags = ListMemberFlags{}
 
 // ListMemberFlags are flags that used in ListMember command
 type ListMemberFlags struct {

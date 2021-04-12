@@ -37,9 +37,9 @@ func (s *testSyncerSuite) TestCastUnsigned(c *C) {
 	}{
 		{int8(-math.Exp2(7)), false, mysql.TypeTiny, int8(-math.Exp2(7))}, // TINYINT
 		{int8(-math.Exp2(7)), true, mysql.TypeTiny, uint8(math.Exp2(7))},
-		{int16(-math.Exp2(15)), false, mysql.TypeShort, int16(-math.Exp2(15))}, //SMALLINT
+		{int16(-math.Exp2(15)), false, mysql.TypeShort, int16(-math.Exp2(15))}, // SMALLINT
 		{int16(-math.Exp2(15)), true, mysql.TypeShort, uint16(math.Exp2(15))},
-		{int32(-math.Exp2(23)), false, mysql.TypeInt24, int32(-math.Exp2(23))}, //MEDIUMINT
+		{int32(-math.Exp2(23)), false, mysql.TypeInt24, int32(-math.Exp2(23))}, // MEDIUMINT
 		{int32(-math.Exp2(23)), true, mysql.TypeInt24, uint32(math.Exp2(23))},
 		{int32(-math.Exp2(31)), false, mysql.TypeLong, int32(-math.Exp2(31))}, // INT
 		{int32(-math.Exp2(31)), true, mysql.TypeLong, uint32(math.Exp2(31))},

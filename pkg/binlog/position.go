@@ -40,10 +40,8 @@ const (
 	MinUUIDSuffix = 1
 )
 
-var (
-	// MinPosition is the min binlog position
-	MinPosition = gmysql.Position{Pos: 4}
-)
+// MinPosition is the min binlog position
+var MinPosition = gmysql.Position{Pos: 4}
 
 // PositionFromStr constructs a mysql.Position from a string representation like `mysql-bin.000001:2345`
 func PositionFromStr(s string) (gmysql.Position, error) {

@@ -16,12 +16,13 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"gopkg.in/yaml.v2"
 
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 )
 
 const (
@@ -204,9 +205,7 @@ func (c *SourceConfig) Verify() error {
 // DecryptPassword returns a decrypted config replica in config
 func (c *SourceConfig) DecryptPassword() *SourceConfig {
 	clone := c.Clone()
-	var (
-		pswdFrom string
-	)
+	var pswdFrom string
 	if len(clone.From.Password) > 0 {
 		pswdFrom = utils.DecryptOrPlaintext(clone.From.Password)
 	}

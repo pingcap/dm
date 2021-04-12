@@ -29,8 +29,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testGTIDSuite struct {
-}
+type testGTIDSuite struct{}
 
 func (s *testGTIDSuite) TestGTID(c *C) {
 	matserUUIDs := []string{

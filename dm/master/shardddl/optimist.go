@@ -636,8 +636,8 @@ func (o *Optimist) handleOperationPut(ctx context.Context, opCh <-chan optimism.
 // handleLock handles a single shard DDL lock.
 func (o *Optimist) handleLock(info optimism.Info, tts []optimism.TargetTable, skipDone bool) error {
 	lockID, newDDLs, cols, err := o.lk.TrySync(o.cli, info, tts)
-	var cfStage = optimism.ConflictNone
-	var cfMsg = ""
+	cfStage := optimism.ConflictNone
+	cfMsg := ""
 	if info.IgnoreConflict {
 		o.logger.Warn("error occur when trying to sync for shard DDL info, this often means shard DDL conflict detected",
 			zap.String("lock", lockID), zap.String("info", info.ShortString()), zap.Bool("is deleted", info.IsDeleted), log.ShortError(err))

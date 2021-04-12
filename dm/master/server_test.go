@@ -990,7 +990,7 @@ func (t *testMaster) TestServer(c *check.C) {
 	t.testHTTPInterface(c, fmt.Sprintf("http://%s/status", cfg.MasterAddr), []byte(utils.GetRawInfo()))
 	t.testHTTPInterface(c, fmt.Sprintf("http://%s/debug/pprof/", cfg.MasterAddr), []byte("Types of profiles available"))
 	// HTTP API in this unit test is unstable, but we test it in `http_apis` in integration test.
-	//t.testHTTPInterface(c, fmt.Sprintf("http://%s/apis/v1alpha1/status/test-task", cfg.MasterAddr), []byte("task test-task has no source or not exist"))
+	// t.testHTTPInterface(c, fmt.Sprintf("http://%s/apis/v1alpha1/status/test-task", cfg.MasterAddr), []byte("task test-task has no source or not exist"))
 
 	dupServer := NewServer(cfg)
 	err := dupServer.Start(ctx)
@@ -1810,8 +1810,7 @@ func createTableInfo(c *check.C, p *parser.Parser, se sessionctx.Context, tableI
 	return info
 }
 
-type testEtcd struct {
-}
+type testEtcd struct{}
 
 var _ = check.Suite(&testEtcd{})
 

@@ -335,7 +335,6 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 	schema, table, err := getDBAndTableFromFilename(filename)
 	if err != nil {
 		return terror.ErrCheckpointInvalidTableFile.Generate(filename)
-
 	}
 	sql2 := fmt.Sprintf("INSERT INTO %s (`id`, `filename`, `cp_schema`, `cp_table`, `offset`, `end_pos`) VALUES(?,?,?,?,?,?)", cp.tableName)
 	cp.logger.Info("initial checkpoint record",
@@ -427,7 +426,7 @@ func (cp *RemoteCheckPoint) Count(tctx *tcontext.Context) (int, error) {
 		return 0, terror.WithScope(err, terror.ScopeDownstream)
 	}
 	defer rows.Close()
-	var count = 0
+	count := 0
 	for rows.Next() {
 		err = rows.Scan(&count)
 		if err != nil {

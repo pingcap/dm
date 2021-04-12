@@ -27,9 +27,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-	heartbeatInterval = common.MasterHeartbeatPeriod
-)
+var heartbeatInterval = common.MasterHeartbeatPeriod
 
 // TODO: maybe one day we can make a pull request to go-mysql to support LocalStreamer.
 

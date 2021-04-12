@@ -22,6 +22,8 @@ import (
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/failpoint"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/pb"
@@ -29,7 +31,6 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/failpoint"
 )
 
 var (

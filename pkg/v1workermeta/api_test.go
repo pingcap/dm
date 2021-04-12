@@ -96,7 +96,7 @@ func (t *testAPI) TestAPI(c *C) {
 	// remove an invalid meta path.
 	metaPath = c.MkDir()
 	dbPath = filepath.Join(metaPath, "kv")
-	c.Assert(os.Mkdir(dbPath, 0644), IsNil)
+	c.Assert(os.Mkdir(dbPath, 0o644), IsNil)
 	c.Assert(terror.ErrInvalidV1WorkerMetaPath.Equal(RemoveSubtasksMeta()), IsTrue)
 }
 

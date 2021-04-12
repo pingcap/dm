@@ -31,13 +31,11 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-	// OnlineDDLSchemes is scheme name => online ddl handler
-	OnlineDDLSchemes = map[string]func(*tcontext.Context, *config.SubTaskConfig) (OnlinePlugin, error){
-		config.PT:    NewPT,
-		config.GHOST: NewGhost,
-	}
-)
+// OnlineDDLSchemes is scheme name => online ddl handler
+var OnlineDDLSchemes = map[string]func(*tcontext.Context, *config.SubTaskConfig) (OnlinePlugin, error){
+	config.PT:    NewPT,
+	config.GHOST: NewGhost,
+}
 
 // OnlinePlugin handles online ddl solutions like pt, gh-ost
 type OnlinePlugin interface {

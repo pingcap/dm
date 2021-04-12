@@ -42,6 +42,8 @@ import (
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/errors"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
@@ -62,7 +64,6 @@ import (
 	operator "github.com/pingcap/dm/syncer/err-operator"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/shardddl"
-	"github.com/pingcap/errors"
 )
 
 var (
@@ -741,9 +742,7 @@ func (s *Syncer) saveTablePoint(db, table string, location binlog.Location) {
 }
 
 func (s *Syncer) addJob(job *job) error {
-	var (
-		queueBucket int
-	)
+	var queueBucket int
 	switch job.tp {
 	case xid:
 		s.saveGlobalPoint(job.location)

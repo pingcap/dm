@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	. "github.com/pingcap/check"
+
 	"github.com/pingcap/dm/dm/pb"
 )
 

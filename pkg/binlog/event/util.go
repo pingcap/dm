@@ -69,13 +69,13 @@ func decodeTableMapColumnMeta(data []byte, columnType []byte) ([]uint16, error) 
 	for i, t := range columnType {
 		switch t {
 		case gmysql.MYSQL_TYPE_STRING:
-			var x = uint16(data[pos]) << 8 //real type
-			x += uint16(data[pos+1])       //pack or field length
+			x := uint16(data[pos]) << 8 // real type
+			x += uint16(data[pos+1])    // pack or field length
 			columnMeta[i] = x
 			pos += 2
 		case gmysql.MYSQL_TYPE_NEWDECIMAL:
-			var x = uint16(data[pos]) << 8 //precision
-			x += uint16(data[pos+1])       //decimals
+			x := uint16(data[pos]) << 8 // precision
+			x += uint16(data[pos+1])    // decimals
 			columnMeta[i] = x
 			pos += 2
 		case gmysql.MYSQL_TYPE_VAR_STRING, gmysql.MYSQL_TYPE_VARCHAR, gmysql.MYSQL_TYPE_BIT:
@@ -144,7 +144,7 @@ func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksu
 	}
 
 	// decode event, some implementations of `Decode` also need checksum
-	var endIdx = buf.Len()
+	endIdx := buf.Len()
 	if !decodeWithChecksum {
 		endIdx -= int(crc32Len)
 	}
@@ -301,31 +301,29 @@ const (
 	QHrnow = 128
 )
 
-var (
-	// https://dev.mysql.com/doc/internals/en/query-event.html
-	statusVarsFixedLength = map[byte]int{
-		QFlags2Code:            4,
-		QSqlModeCode:           8,
-		QAutoIncrement:         2 + 2,
-		QCharsetCode:           2 + 2 + 2,
-		QLcTimeNamesCode:       2,
-		QCharsetDatabaseCode:   2,
-		QTableMapForUpdateCode: 8,
-		QMasterDataWrittenCode: 4,
-		QMicroseconds:          3,
-		QCommitTs:              0, // unused now
-		QCommitTs2:             0, // unused now
-		// below variables could be find in
-		// https://github.com/mysql/mysql-server/blob/7d10c82196c8e45554f27c00681474a9fb86d137/libbinlogevents/src/statement_events.cpp#L312
-		QExplicitDefaultsForTimestamp: 1,
-		QDdlLoggedWithXid:             8,
-		QDefaultCollationForUtf8mb4:   2,
-		QSqlRequirePrimaryKey:         1,
-		QDefaultTableEncryption:       1,
-		// https://github.com/MariaDB/server/blob/94b45787045677c106a25ebb5aaf1273040b2ff6/sql/log_event.cc#L1619
-		QHrnow: 3,
-	}
-)
+// https://dev.mysql.com/doc/internals/en/query-event.html
+var statusVarsFixedLength = map[byte]int{
+	QFlags2Code:            4,
+	QSqlModeCode:           8,
+	QAutoIncrement:         2 + 2,
+	QCharsetCode:           2 + 2 + 2,
+	QLcTimeNamesCode:       2,
+	QCharsetDatabaseCode:   2,
+	QTableMapForUpdateCode: 8,
+	QMasterDataWrittenCode: 4,
+	QMicroseconds:          3,
+	QCommitTs:              0, // unused now
+	QCommitTs2:             0, // unused now
+	// below variables could be find in
+	// https://github.com/mysql/mysql-server/blob/7d10c82196c8e45554f27c00681474a9fb86d137/libbinlogevents/src/statement_events.cpp#L312
+	QExplicitDefaultsForTimestamp: 1,
+	QDdlLoggedWithXid:             8,
+	QDefaultCollationForUtf8mb4:   2,
+	QSqlRequirePrimaryKey:         1,
+	QDefaultTableEncryption:       1,
+	// https://github.com/MariaDB/server/blob/94b45787045677c106a25ebb5aaf1273040b2ff6/sql/log_event.cc#L1619
+	QHrnow: 3,
+}
 
 // getSQLMode gets SQL mode from binlog statusVars, still could return a reasonable value if found error
 func getSQLMode(statusVars []byte) (mysql.SQLMode, error) {
@@ -360,9 +358,7 @@ func GetParserForStatusVars(statusVars []byte) (*parser.Parser, error) {
 func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 	r := bytes.NewReader(statusVars)
 	vars := make(map[byte][]byte)
-	var (
-		value []byte
-	)
+	var value []byte
 
 	// NOTE: this closure modifies variable `value`
 	appendLengthThenCharsToValue := func() error {

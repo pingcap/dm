@@ -194,7 +194,6 @@ func GetInfosOperationsByTask(cli *clientv3.Client, task string) ([]Info, []Oper
 	respTxn, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli,
 		clientv3.OpGet(common.ShardDDLOptimismInfoKeyAdapter.Encode(task), clientv3.WithPrefix()),
 		clientv3.OpGet(common.ShardDDLOptimismOperationKeyAdapter.Encode(task), clientv3.WithPrefix()))
-
 	if err != nil {
 		return nil, nil, 0, err
 	}

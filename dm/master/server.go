@@ -1288,7 +1288,6 @@ func setUseTLS(tlsCfg *config.Security) {
 	} else {
 		atomic.StoreInt32(&useTLS, 0)
 	}
-
 }
 
 func enableTLS(tlsCfg *config.Security) bool {
@@ -1588,7 +1587,6 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 }
 
 func (s *Server) listMemberMaster(ctx context.Context, names []string) (*pb.Members_Master, error) {
-
 	resp := &pb.Members_Master{
 		Master: &pb.ListMasterMember{},
 	}

@@ -112,7 +112,6 @@ func DoOpsInOneTxnWithRetry(cli *clientv3.Client, ops ...clientv3.Op) (*clientv3
 		}
 		return resp, nil
 	})
-
 	if err != nil {
 		return nil, 0, err
 	}
@@ -137,7 +136,6 @@ func DoOpsInOneCmpsTxnWithRetry(cli *clientv3.Client, cmps []clientv3.Cmp, opsTh
 		}
 		return resp, nil
 	})
-
 	if err != nil {
 		return nil, 0, err
 	}

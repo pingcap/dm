@@ -34,19 +34,16 @@ func TestSuite(t *testing.T) {
 
 var _ = Suite(&testBaseConnSuite{})
 
-type testBaseConnSuite struct {
-}
+type testBaseConnSuite struct{}
 
-var (
-	testStmtHistogram = metricsproxy.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "dm",
-			Subsystem: "conn",
-			Name:      "stmt_duration_time",
-			Help:      "Bucketed histogram of every statement query time (s).",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
-		}, []string{"type", "task"})
-)
+var testStmtHistogram = metricsproxy.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Namespace: "dm",
+		Subsystem: "conn",
+		Name:      "stmt_duration_time",
+		Help:      "Bucketed histogram of every statement query time (s).",
+		Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+	}, []string{"type", "task"})
 
 func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	baseConn := NewBaseConn(nil, nil)

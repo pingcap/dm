@@ -43,8 +43,7 @@ type DBProvider interface {
 }
 
 // DefaultDBProviderImpl is default DBProvider implement
-type DefaultDBProviderImpl struct {
-}
+type DefaultDBProviderImpl struct{}
 
 // DefaultDBProvider is global instance of DBProvider
 var DefaultDBProvider DBProvider

@@ -26,8 +26,7 @@ func TestCtlMaster(t *testing.T) {
 	check.TestingT(t)
 }
 
-type testCtlMaster struct {
-}
+type testCtlMaster struct{}
 
 var _ = check.Suite(&testCtlMaster{})
 
@@ -97,7 +96,8 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 		Stage: pb.Stage_Paused,
 		Result: &pb.ProcessResult{
 			Errors: []*pb.ProcessError{{}},
-		}}
+		},
+	}
 	expectedResult[0].TaskStatus = stageError + " - Relay status is " + stageError + extraInfo
 	generateAndCheckTaskResult(c, resp, expectedResult)
 	// relay status is Paused
@@ -144,15 +144,16 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 		result.Tasks[0], result.Tasks[1] = result.Tasks[1], result.Tasks[0]
 	}
 	sort.Strings(result.Tasks[0].Sources)
-	expectedResult = []*taskInfo{{
-		TaskName:   "test",
-		TaskStatus: pb.Stage_Running.String(),
-		Sources:    []string{"mysql-replica-01", "mysql-replica-02", "mysql-replica-03"},
-	}, {
-		TaskName:   "test2",
-		TaskStatus: stageError + " - Some error occurred in subtask. Please run `query-status test2` to get more details.",
-		Sources:    []string{"mysql-replica-04"},
-	},
+	expectedResult = []*taskInfo{
+		{
+			TaskName:   "test",
+			TaskStatus: pb.Stage_Running.String(),
+			Sources:    []string{"mysql-replica-01", "mysql-replica-02", "mysql-replica-03"},
+		}, {
+			TaskName:   "test2",
+			TaskStatus: stageError + " - Some error occurred in subtask. Please run `query-status test2` to get more details.",
+			Sources:    []string{"mysql-replica-04"},
+		},
 	}
 	c.Assert(result.Tasks, check.DeepEquals, expectedResult)
 

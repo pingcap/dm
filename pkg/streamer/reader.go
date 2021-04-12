@@ -47,10 +47,8 @@ type Meta struct {
 	UUID       string `toml:"-" json:"-"`
 }
 
-var (
-	// polling interval for watcher
-	watcherInterval = 100 * time.Millisecond
-)
+// polling interval for watcher
+var watcherInterval = 100 * time.Millisecond
 
 // BinlogReaderConfig is the configuration for BinlogReader
 type BinlogReaderConfig struct {
@@ -339,9 +337,9 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 	if err != nil {
 		return false, "", "", terror.Annotatef(err, "parse relay dir with pos %v", pos)
 	}
-	pos = realPos         // use realPos to do syncing
-	var firstParse = true // the first parse time for the relay log file
-	var dir = path.Join(r.cfg.RelayDir, currentUUID)
+	pos = realPos      // use realPos to do syncing
+	firstParse := true // the first parse time for the relay log file
+	dir := path.Join(r.cfg.RelayDir, currentUUID)
 	r.tctx.L().Info("start to parse relay log files in sub directory", zap.String("directory", dir), zap.Stringer("position", pos))
 
 	for {
@@ -398,9 +396,7 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 
 // parseFileAsPossible parses single relay log file as far as possible
 func (r *BinlogReader) parseFileAsPossible(ctx context.Context, s *LocalStreamer, relayLogFile string, offset int64, relayLogDir string, firstParse bool, currentUUID string, possibleLast bool) (needSwitch bool, latestPos int64, nextUUID string, nextBinlogName string, err error) {
-	var (
-		needReParse bool
-	)
+	var needReParse bool
 	latestPos = offset
 	replaceWithHeartbeat := false
 	r.tctx.L().Debug("start to parse relay log file", zap.String("file", relayLogFile), zap.Int64("position", latestPos), zap.String("directory", relayLogDir))

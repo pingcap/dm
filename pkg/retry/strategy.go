@@ -61,8 +61,7 @@ type Strategy interface {
 }
 
 // FiniteRetryStrategy will retry `RetryCount` times when failed to operate DB.
-type FiniteRetryStrategy struct {
-}
+type FiniteRetryStrategy struct{}
 
 // Apply for FiniteRetryStrategy, it wait `FirstRetryDuration` before it starts first retry, and then rest of retries wait time depends on BackoffStrategy.
 func (*FiniteRetryStrategy) Apply(ctx *tcontext.Context, params Params,

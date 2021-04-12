@@ -95,7 +95,7 @@ func getCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 	}
 
 	if resp.Result && len(filename) != 0 {
-		err = ioutil.WriteFile(filename, []byte(resp.Cfg), 0644)
+		err = ioutil.WriteFile(filename, []byte(resp.Cfg), 0o644)
 		if err != nil {
 			common.PrintLines("can not write config to file %s", filename)
 			return

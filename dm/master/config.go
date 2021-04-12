@@ -71,7 +71,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
-	//fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
+	// fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
 
 	fs.StringVar(&cfg.Name, "name", "", "human-readable name for this DM-master member")
 	fs.StringVar(&cfg.DataDir, "data-dir", "", `path to the data directory (default "default.${name}")`)
@@ -428,7 +428,7 @@ func genEmbedEtcdConfigWithLogger(logLevel string) *embed.Config {
 	cfg := embed.NewConfig()
 	// disable grpc gateway because https://github.com/etcd-io/etcd/issues/12713
 	// TODO: wait above issue fixed
-	//cfg.EnableGRPCGateway = true // enable gRPC gateway for the internal etcd.
+	// cfg.EnableGRPCGateway = true // enable gRPC gateway for the internal etcd.
 
 	// use zap as the logger for embed etcd
 	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.

@@ -27,8 +27,7 @@ func TestSuite(t *testing.T) {
 
 var _ = check.Suite(&testValueSuite{})
 
-type testValueSuite struct {
-}
+type testValueSuite struct{}
 
 type fIsNil func()
 
@@ -36,7 +35,7 @@ func fIsNil1() {}
 
 func (t *testValueSuite) TestIsNil(c *check.C) {
 	// nil value
-	var i = 123
+	i := 123
 	c.Assert(IsNil(nil), check.IsTrue)
 	c.Assert(IsNil(i), check.IsFalse)
 
@@ -58,13 +57,13 @@ func (t *testValueSuite) TestIsNil(c *check.C) {
 
 	// pointer
 	var piNil *int
-	var piNotNil = &i
+	piNotNil := &i
 	c.Assert(IsNil(piNil), check.IsTrue)
 	c.Assert(IsNil(piNotNil), check.IsFalse)
 
 	// unsafe pointer
 	var upiNil unsafe.Pointer
-	var upiNotNil = unsafe.Pointer(piNotNil)
+	upiNotNil := unsafe.Pointer(piNotNil)
 	c.Assert(IsNil(upiNil), check.IsTrue)
 	c.Assert(IsNil(upiNotNil), check.IsFalse)
 

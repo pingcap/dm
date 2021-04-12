@@ -170,7 +170,6 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 			}
 			return nil, err
 		})
-
 	if err != nil {
 		ctx.L().ErrorFilterContextCanceled("execute statements failed after retry",
 			zap.String("queries", utils.TruncateInterface(queries, -1)),

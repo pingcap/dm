@@ -54,8 +54,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testRelaySuite struct {
-}
+type testRelaySuite struct{}
 
 func (t *testRelaySuite) SetUpSuite(c *C) {
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)
@@ -213,7 +212,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	g, events, data := genBinlogEventsWithGTIDs(c, relayCfg.Flavor, previousGTIDSet, latestGTID1, latestGTID2)
 
 	// write events into relay log file
-	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0600)
+	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0o600)
 	c.Assert(err, IsNil)
 
 	// all events/transactions are complete, no need to recover
@@ -225,7 +224,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	t.verifyMetadata(c, r, uuidWithSuffix, pos, recoverGTIDSetStr, []string{uuidWithSuffix})
 
 	// write some invalid data into the relay log file
-	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
+	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0o600)
 	c.Assert(err, IsNil)
 	_, err = f.Write([]byte("invalid event data"))
 	c.Assert(err, IsNil)
@@ -286,10 +285,10 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	g, _, data := genBinlogEventsWithGTIDs(c, relayCfg.Flavor, previousGTIDSet, latestGTID1, latestGTID2)
 
 	// write events into relay log file
-	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0600)
+	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0o600)
 	c.Assert(err, IsNil)
 	// write some invalid data into the relay log file to trigger a recover.
-	f, err := os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
+	f, err := os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0o600)
 	c.Assert(err, IsNil)
 	_, err = f.Write([]byte("invalid event data"))
 	c.Assert(err, IsNil)
@@ -303,7 +302,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	c.Assert(latestGTIDs.Equal(recoverGTIDSet), IsTrue)
 
 	// write some invalid data into the relay log file again.
-	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
+	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0o600)
 	c.Assert(err, IsNil)
 	_, err = f.Write([]byte("invalid event data"))
 	c.Assert(err, IsNil)
@@ -465,7 +464,8 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	reader2.err = nil
 	reader2.result.Event = &replication.BinlogEvent{
 		Header: &replication.EventHeader{EventType: replication.HEARTBEAT_EVENT},
-		Event:  &replication.GenericEvent{}}
+		Event:  &replication.GenericEvent{},
+	}
 	ctx4, cancel4 := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel4()
 	err = r.handleEvents(ctx4, reader2, transformer2, writer2)

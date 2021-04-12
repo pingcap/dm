@@ -29,8 +29,7 @@ func TestSuite(t *testing.T) {
 	check.TestingT(t)
 }
 
-type testShardMetaSuite struct {
-}
+type testShardMetaSuite struct{}
 
 func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	var (

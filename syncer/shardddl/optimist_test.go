@@ -30,8 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-type testOptimist struct {
-}
+type testOptimist struct{}
 
 var _ = Suite(&testOptimist{})
 

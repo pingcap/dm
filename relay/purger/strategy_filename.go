@@ -26,9 +26,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var (
-	fakeTaskName = strategyFilename.String()
-)
+var fakeTaskName = strategyFilename.String()
 
 // filenameArgs represents args needed by filenameStrategy
 // NOTE: should handle master-slave switch

@@ -29,8 +29,7 @@ import (
 )
 
 // statusHandler handles process status.
-type statusHandler struct {
-}
+type statusHandler struct{}
 
 func (h *statusHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")

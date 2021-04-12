@@ -60,7 +60,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		values          = make([][]interface{}, 0, len(dataSeq))
 	)
 
-	var insertOrReplace = "INSERT INTO"
+	insertOrReplace := "INSERT INTO"
 	if param.safeMode {
 		insertOrReplace = "REPLACE INTO"
 	}
@@ -72,7 +72,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		}
 
 		value := extractValueFromData(data, columns)
-		var originalValue = value
+		originalValue := value
 		if len(columns) != len(ti.Columns) {
 			originalValue = extractValueFromData(originalDataSeq[dataIdx], ti.Columns)
 		}

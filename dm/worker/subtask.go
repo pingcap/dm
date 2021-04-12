@@ -160,7 +160,7 @@ func (st *SubTask) Init() error {
 	}
 
 	// if the sub task ran before, some units may be skipped
-	var skipIdx = 0
+	skipIdx := 0
 	for i := len(st.units) - 1; i > 0; i-- {
 		u := st.units[i]
 		ctx, cancel := context.WithTimeout(context.Background(), unit.DefaultInitTimeout)

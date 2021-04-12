@@ -248,7 +248,6 @@ func (h *Heartbeat) init() error {
 // run create `heartbeat` table if not exists, and initialize heartbeat record,
 // and then update `ts` every `updateInterval` second.
 func (h *Heartbeat) run(ctx context.Context) {
-
 	updateTicker := time.NewTicker(time.Second * time.Duration(h.cfg.updateInterval))
 	defer updateTicker.Stop()
 

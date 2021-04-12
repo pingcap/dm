@@ -166,11 +166,8 @@ func GetLastSourceBounds(cli *clientv3.Client) (map[string]SourceBound, int64, e
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
-	var (
-		sbm = make(map[string]SourceBound)
-	)
+	sbm := make(map[string]SourceBound)
 	resp, err := cli.Get(ctx, common.UpstreamLastBoundWorkerKeyAdapter.Path(), clientv3.WithPrefix())
-
 	if err != nil {
 		return sbm, 0, err
 	}
