@@ -80,13 +80,13 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		common.PrintLines("can not query %s task's status(in sources %v)", taskName, sources)
+		common.PrintLinesf("can not query %s task's status(in sources %v)", taskName, sources)
 		return
 	}
 
 	more, err := cmd.Flags().GetBool("more")
 	if err != nil {
-		common.PrintLines("error in parse `--more`")
+		common.PrintLinesf("error in parse `--more`")
 		return
 	}
 

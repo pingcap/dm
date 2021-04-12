@@ -64,7 +64,7 @@ func getCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 	cfgType := cmd.Flags().Arg(0)
 	tp := convertCfgType(cfgType)
 	if tp == pb.CfgType_InvalidType {
-		common.PrintLines("invalid config type '%s'", cfgType)
+		common.PrintLinesf("invalid config type '%s'", cfgType)
 		err = errors.New("please check output to see error")
 		return
 	}
@@ -72,7 +72,7 @@ func getCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 	cfgName := cmd.Flags().Arg(1)
 	filename, err := cmd.Flags().GetString("file")
 	if err != nil {
-		common.PrintLines("can not get filename")
+		common.PrintLinesf("can not get filename")
 		return
 	}
 
@@ -90,14 +90,14 @@ func getCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 		&resp,
 	)
 	if err != nil {
-		common.PrintLines("can not get %s config of %s", cfgType, cfgName)
+		common.PrintLinesf("can not get %s config of %s", cfgType, cfgName)
 		return
 	}
 
 	if resp.Result && len(filename) != 0 {
 		err = ioutil.WriteFile(filename, []byte(resp.Cfg), 0o644)
 		if err != nil {
-			common.PrintLines("can not write config to file %s", filename)
+			common.PrintLinesf("can not write config to file %s", filename)
 			return
 		}
 		resp.Msg = fmt.Sprintf("write config to file %s succeed", filename)

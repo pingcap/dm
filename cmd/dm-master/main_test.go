@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-func TestRunMain(t *testing.T) {
+func TestRunMain(_ *testing.T) {
 	fmt.Println("dm-master startup", time.Now())
 	var args []string
 	for _, arg := range os.Args {

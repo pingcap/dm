@@ -58,7 +58,7 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	op := convertOpType(opType)
 	if op == pb.LeaderOp_InvalidLeaderOp {
-		common.PrintLines("invalid operate '%s' on leader", opType)
+		common.PrintLinesf("invalid operate '%s' on leader", opType)
 		err = errors.New("please check output to see error")
 		return
 	}

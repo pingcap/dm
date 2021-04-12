@@ -19,7 +19,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// OperateRelay does operation on relay unit
+// OperateRelay does operation on relay unit.
 func OperateRelay(op pb.RelayOp, workers []string) (*pb.OperateWorkerRelayResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

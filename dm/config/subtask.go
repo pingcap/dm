@@ -33,7 +33,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// task modes
+// task modes.
 const (
 	ModeAll       = "all"
 	ModeFull      = "full"
@@ -42,27 +42,27 @@ const (
 
 var defaultMaxIdleConns = 2
 
-// RawDBConfig contains some low level database config
+// RawDBConfig contains some low level database config.
 type RawDBConfig struct {
 	MaxIdleConns int
 	ReadTimeout  string
 	WriteTimeout string
 }
 
-// DefaultRawDBConfig returns a default raw database config
+// DefaultRawDBConfig returns a default raw database config.
 func DefaultRawDBConfig() *RawDBConfig {
 	return &RawDBConfig{
 		MaxIdleConns: defaultMaxIdleConns,
 	}
 }
 
-// SetReadTimeout set readTimeout for raw database config
+// SetReadTimeout set readTimeout for raw database config.
 func (c *RawDBConfig) SetReadTimeout(readTimeout string) *RawDBConfig {
 	c.ReadTimeout = readTimeout
 	return c
 }
 
-// SetWriteTimeout set writeTimeout for raw database config
+// SetWriteTimeout set writeTimeout for raw database config.
 func (c *RawDBConfig) SetWriteTimeout(writeTimeout string) *RawDBConfig {
 	c.WriteTimeout = writeTimeout
 	return c
@@ -100,18 +100,17 @@ func (db *DBConfig) String() string {
 	return string(cfg)
 }
 
-// Toml returns TOML format representation of config
+// Toml returns TOML format representation of config.
 func (db *DBConfig) Toml() (string, error) {
 	var b bytes.Buffer
 	enc := toml.NewEncoder(&b)
-	err := enc.Encode(db)
-	if err != nil {
+	if err := enc.Encode(db); err != nil {
 		return "", terror.ErrConfigTomlTransform.Delegate(err, "encode db config to toml")
 	}
 	return b.String(), nil
 }
 
-// Decode loads config from file data
+// Decode loads config from file data.
 func (db *DBConfig) Decode(data string) error {
 	_, err := toml.Decode(data, db)
 	return terror.ErrConfigTomlTransform.Delegate(err, "decode db config")
@@ -121,7 +120,7 @@ func (db *DBConfig) Decode(data string) error {
 func (db *DBConfig) Adjust() {
 }
 
-// SubTaskConfig is the configuration for SubTask
+// SubTaskConfig is the configuration for SubTask.
 type SubTaskConfig struct {
 	// BurntSushi/toml seems have a bug for flag "-"
 	// when doing encoding, if we use `toml:"-"`, it still try to encode it
@@ -130,13 +129,26 @@ type SubTaskConfig struct {
 	flagSet *flag.FlagSet
 
 	// when in sharding, multi dm-workers do one task
-	IsSharding      bool   `toml:"is-sharding" json:"is-sharding"`
-	ShardMode       string `toml:"shard-mode" json:"shard-mode"`
-	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
+	IsSharding bool `toml:"is-sharding" json:"is-sharding"`
 
 	// handle schema/table name mode, and only for schema/table name/pattern
 	// if case insensitive, we would convert schema/table name/pattern to lower case
-	CaseSensitive bool `toml:"case-sensitive" json:"case-sensitive"`
+	CaseSensitive   bool `toml:"case-sensitive" json:"case-sensitive"`
+	EnableHeartbeat bool `toml:"enable-heartbeat" json:"enable-heartbeat"`
+
+	CleanDumpFile bool `toml:"clean-dump-file" json:"clean-dump-file"`
+
+	// deprecated, will auto discover SQL mode
+	EnableANSIQuotes bool `toml:"ansi-quotes" json:"ansi-quotes"`
+
+	// still needed by Syncer / Loader bin
+	printVersion bool
+
+	// UseRelay get value from dm-worker's relayEnabled
+	UseRelay bool `toml:"use-relay" json:"use-relay"`
+
+	ShardMode       string `toml:"shard-mode" json:"shard-mode"`
+	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
 	Name string `toml:"name" json:"name"`
 	Mode string `toml:"mode" json:"mode"`
@@ -149,17 +161,11 @@ type SubTaskConfig struct {
 	MetaSchema              string `toml:"meta-schema" json:"meta-schema"`
 	HeartbeatUpdateInterval int    `toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
 	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
-	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
 	Meta                    *Meta  `toml:"meta" json:"meta"`
 	Timezone                string `toml:"timezone" josn:"timezone"`
 
 	// RelayDir get value from dm-worker config
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`
-
-	// UseRelay get value from dm-worker's relayEnabled
-	UseRelay bool     `toml:"use-relay" json:"use-relay"`
-	From     DBConfig `toml:"from" json:"from"`
-	To       DBConfig `toml:"to" json:"to"`
 
 	RouteRules         []*router.TableRule   `toml:"route-rules" json:"route-rules"`
 	FilterRules        []*bf.BinlogEventRule `toml:"filter-rules" json:"filter-rules"`
@@ -169,9 +175,11 @@ type SubTaskConfig struct {
 	BWList *filter.Rules `toml:"black-white-list" json:"black-white-list"`
 	BAList *filter.Rules `toml:"block-allow-list" json:"block-allow-list"`
 
-	MydumperConfig // Mydumper configuration
-	LoaderConfig   // Loader configuration
-	SyncerConfig   // Syncer configuration
+	MydumperConfig          // Mydumper configuration
+	LoaderConfig            // Loader configuration
+	SyncerConfig            // Syncer configuration
+	From           DBConfig `toml:"from" json:"from"`
+	To             DBConfig `toml:"to" json:"to"`
 
 	// compatible with standalone dm unit
 	LogLevel  string `toml:"log-level" json:"log-level"`
@@ -183,17 +191,9 @@ type SubTaskConfig struct {
 	StatusAddr string `toml:"status-addr" json:"status-addr"`
 
 	ConfigFile string `toml:"-" json:"config-file"`
-
-	CleanDumpFile bool `toml:"clean-dump-file" json:"clean-dump-file"`
-
-	// deprecated, will auto discover SQL mode
-	EnableANSIQuotes bool `toml:"ansi-quotes" json:"ansi-quotes"`
-
-	// still needed by Syncer / Loader bin
-	printVersion bool
 }
 
-// NewSubTaskConfig creates a new SubTaskConfig
+// NewSubTaskConfig creates a new SubTaskConfig.
 func NewSubTaskConfig() *SubTaskConfig {
 	cfg := &SubTaskConfig{}
 	return cfg
@@ -209,7 +209,7 @@ func (c *SubTaskConfig) SetFlagSet(flagSet *flag.FlagSet) {
 	c.flagSet = flagSet
 }
 
-// String returns the config's json string
+// String returns the config's json string.
 func (c *SubTaskConfig) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
@@ -218,18 +218,17 @@ func (c *SubTaskConfig) String() string {
 	return string(cfg)
 }
 
-// Toml returns TOML format representation of config
+// Toml returns TOML format representation of config.
 func (c *SubTaskConfig) Toml() (string, error) {
 	var b bytes.Buffer
 	enc := toml.NewEncoder(&b)
-	err := enc.Encode(c)
-	if err != nil {
+	if err := enc.Encode(c); err != nil {
 		return "", terror.ErrConfigTomlTransform.Delegate(err, "encode subtask config")
 	}
 	return b.String(), nil
 }
 
-// DecodeFile loads and decodes config from file
+// DecodeFile loads and decodes config from file.
 func (c *SubTaskConfig) DecodeFile(fpath string, verifyDecryptPassword bool) error {
 	_, err := toml.DecodeFile(fpath, c)
 	if err != nil {
@@ -239,17 +238,16 @@ func (c *SubTaskConfig) DecodeFile(fpath string, verifyDecryptPassword bool) err
 	return c.Adjust(verifyDecryptPassword)
 }
 
-// Decode loads config from file data
+// Decode loads config from file data.
 func (c *SubTaskConfig) Decode(data string, verifyDecryptPassword bool) error {
-	_, err := toml.Decode(data, c)
-	if err != nil {
+	if _, err := toml.Decode(data, c); err != nil {
 		return terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from data")
 	}
 
 	return c.Adjust(verifyDecryptPassword)
 }
 
-// Adjust adjusts configs
+// Adjust adjusts configs.
 func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if c.Name == "" {
 		return terror.ErrConfigTaskNameEmpty.Generate()
@@ -262,9 +260,9 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		return terror.ErrConfigTooLongSourceID.Generate()
 	}
 
-	//if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
+	// if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
 	//	return errors.Errorf("please specify right mysql version, support mysql, mariadb now")
-	//}
+	// }
 
 	if c.ShardMode != "" && c.ShardMode != ShardPessimistic && c.ShardMode != ShardOptimistic {
 		return terror.ErrConfigShardModeNotSupport.Generate(c.ShardMode)
@@ -352,7 +350,7 @@ func (c *SubTaskConfig) Parse(arguments []string, verifyDecryptPassword bool) er
 	return c.Adjust(verifyDecryptPassword)
 }
 
-// DecryptPassword tries to decrypt db password in config
+// DecryptPassword tries to decrypt db password in config.
 func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 	clone, err := c.Clone()
 	if err != nil {
@@ -375,7 +373,7 @@ func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 	return clone, nil
 }
 
-// Clone returns a replica of SubTaskConfig
+// Clone returns a replica of SubTaskConfig.
 func (c *SubTaskConfig) Clone() (*SubTaskConfig, error) {
 	content, err := c.Toml()
 	if err != nil {

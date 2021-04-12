@@ -64,7 +64,7 @@ func showDDLLocksFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		common.PrintLines("can not show DDL locks for task %s and sources %v", taskName, sources)
+		common.PrintLinesf("can not show DDL locks for task %s and sources %v", taskName, sources)
 		return
 	}
 

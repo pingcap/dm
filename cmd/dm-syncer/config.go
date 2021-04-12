@@ -35,27 +35,26 @@ type commonConfig struct {
 	*flag.FlagSet `json:"-"`
 
 	// task name
-	Name         string
-	printVersion bool
-	ConfigFile   string
-	ServerID     int
-	Flavor       string
-	WorkerCount  int
-	Batch        int
-	StatusAddr   string
-	Meta         string
+	Name       string
+	ConfigFile string
+	Flavor     string
+	StatusAddr string
+	Meta       string
 
-	LogLevel  string
-	LogFile   string
-	LogFormat string
-	LogRotate string
-
-	EnableGTID bool
-	SafeMode   bool
-	MaxRetry   int
-
+	LogLevel    string
+	LogFile     string
+	LogFormat   string
+	LogRotate   string
 	TimezoneStr string
 
+	ServerID    int
+	WorkerCount int
+	Batch       int
+	MaxRetry    int
+
+	printVersion       bool
+	EnableGTID         bool
+	SafeMode           bool
 	SyncerConfigFormat bool
 }
 
@@ -93,7 +92,7 @@ func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTask
 	fs.IntVar(&cfg.Batch, "b", 100, "batch commit count")
 	fs.StringVar(&cfg.StatusAddr, "status-addr", ":8271", "status addr")
 	fs.StringVar(&cfg.Meta, "meta", "syncer.meta", "syncer meta info")
-	//fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
+	// fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
@@ -123,8 +122,7 @@ func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTask
 }
 
 func (c *commonConfig) parse(args []string) (*config.SubTaskConfig, error) {
-	err := c.FlagSet.Parse(args)
-	if err != nil {
+	if err := c.FlagSet.Parse(args); err != nil {
 		return nil, errors.Trace(err)
 	}
 	if c.printVersion {
@@ -140,7 +138,6 @@ func (c *commonConfig) parse(args []string) (*config.SubTaskConfig, error) {
 }
 
 func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, error) {
-
 	cfg := &config.SubTaskConfig{}
 	cfg.SetFlagSet(flag.NewFlagSet("dm-syncer", flag.ContinueOnError))
 	fs := cfg.GetFlagSet()
@@ -157,7 +154,7 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 	fs.IntVar(&cfg.WorkerCount, "c", 16, "parallel worker count")
 	fs.IntVar(&cfg.Batch, "b", 100, "batch commit count")
 	fs.StringVar(&cfg.StatusAddr, "status-addr", ":8271", "status addr")
-	//fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
+	// fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
@@ -171,8 +168,7 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 
 	cfg.ServerID = uint32(serverID)
 
-	err := cfg.Parse(args, false)
-	if err != nil {
+	if err := cfg.Parse(args, false); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -197,7 +193,7 @@ func newCommonConfig() *commonConfig {
 	fs.IntVar(&cfg.Batch, "b", 100, "batch commit count")
 	fs.StringVar(&cfg.StatusAddr, "status-addr", ":8271", "status addr")
 	fs.StringVar(&cfg.Meta, "meta", "syncer.meta", "syncer meta info")
-	//fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
+	// fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
@@ -221,13 +217,13 @@ type syncerConfig struct {
 	LogFormat string `toml:"log-format" json:"log-format"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
-	StatusAddr string `toml:"status-addr" json:"status-addr"`
-
-	ServerID int    `toml:"server-id" json:"server-id"`
-	Meta     string `toml:"meta" json:"meta"`
-	// NOTE: This item is deprecated.
+	StatusAddr         string `toml:"status-addr" json:"status-addr"`
+	Meta               string `toml:"meta" json:"meta"`
 	PersistentTableDir string `toml:"persistent-dir" json:"persistent-dir"`
 	Flavor             string `toml:"flavor" json:"flavor"`
+
+	ServerID int `toml:"server-id" json:"server-id"`
+	// NOTE: This item is deprecated.
 
 	WorkerCount int `toml:"worker-count" json:"worker-count"`
 	Batch       int `toml:"batch" json:"batch"`
@@ -254,29 +250,28 @@ type syncerConfig struct {
 	From config.DBConfig `toml:"from" json:"from"`
 	To   config.DBConfig `toml:"to" json:"to"`
 
-	EnableGTID  bool `toml:"enable-gtid" json:"enable-gtid"`
-	AutoFixGTID bool `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
-
-	DisableCausality bool   `toml:"disable-detect" json:"disable-detect"`
-	SafeMode         bool   `toml:"safe-mode" json:"safe-mode"`
-	ConfigFile       string `json:"config-file"`
+	ConfigFile string `json:"config-file"`
 
 	// NOTE: These four configs are all deprecated.
 	// We leave this items as comments to remind others there WERE old config items.
-	//stopOnDDL               bool   `toml:"stop-on-ddl" json:"stop-on-ddl"`
-	//MaxDDLConnectionTimeout string `toml:"execute-ddl-timeout" json:"execute-ddl-timeout"`
-	//MaxDMLConnectionTimeout string `toml:"execute-dml-timeout" json:"execute-dml-timeout"`
-	//ExecutionQueueLength    int    `toml:"execute-queue-length" json:"execute-queue-length"`
+	// stopOnDDL               bool   `toml:"stop-on-ddl" json:"stop-on-ddl"`
+	// MaxDDLConnectionTimeout string `toml:"execute-ddl-timeout" json:"execute-ddl-timeout"`
+	// MaxDMLConnectionTimeout string `toml:"execute-dml-timeout" json:"execute-dml-timeout"`
+	// ExecutionQueueLength    int    `toml:"execute-queue-length" json:"execute-queue-length"`
 
 	TimezoneStr string         `toml:"timezone" json:"timezone"`
 	Timezone    *time.Location `json:"-"`
 
-	printVersion bool
+	EnableGTID       bool `toml:"enable-gtid" json:"enable-gtid"`
+	AutoFixGTID      bool `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
+	DisableCausality bool `toml:"disable-detect" json:"disable-detect"`
+	SafeMode         bool `toml:"safe-mode" json:"safe-mode"`
+	printVersion     bool
 }
 
 // RouteRule is route rule that syncing
 // schema/table to specified schema/table
-// This config has been replaced by `router.TableRule`
+// This config has been replaced by `router.TableRule`.
 type RouteRule struct {
 	PatternSchema string `toml:"pattern-schema" json:"pattern-schema"`
 	PatternTable  string `toml:"pattern-table" json:"pattern-table"`

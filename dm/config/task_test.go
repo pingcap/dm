@@ -851,6 +851,7 @@ func (t *testConfig) TestMetaVerify(c *C) {
 
 func (t *testConfig) TestMySQLInstance(c *C) {
 	var m *MySQLInstance
+	cfgName := "test"
 	err := m.VerifyAndAdjust()
 	c.Assert(terror.ErrConfigMySQLInstNotFound.Equal(err), IsTrue)
 
@@ -860,19 +861,19 @@ func (t *testConfig) TestMySQLInstance(c *C) {
 	m.SourceID = "123"
 
 	m.Mydumper = &MydumperConfig{}
-	m.MydumperConfigName = "test"
+	m.MydumperConfigName = cfgName
 	err = m.VerifyAndAdjust()
 	c.Assert(terror.ErrConfigMydumperCfgConflict.Equal(err), IsTrue)
 	m.MydumperConfigName = ""
 
 	m.Loader = &LoaderConfig{}
-	m.LoaderConfigName = "test"
+	m.LoaderConfigName = cfgName
 	err = m.VerifyAndAdjust()
 	c.Assert(terror.ErrConfigLoaderCfgConflict.Equal(err), IsTrue)
 	m.Loader = nil
 
 	m.Syncer = &SyncerConfig{}
-	m.SyncerConfigName = "test"
+	m.SyncerConfigName = cfgName
 	err = m.VerifyAndAdjust()
 	c.Assert(terror.ErrConfigSyncerCfgConflict.Equal(err), IsTrue)
 	m.SyncerConfigName = ""

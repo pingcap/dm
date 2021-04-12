@@ -50,7 +50,7 @@ func resumeTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	resp, err := common.OperateTask(pb.TaskOp_Resume, name, sources)
 	if err != nil {
-		common.PrintLines("can not resume task %s", name)
+		common.PrintLinesf("can not resume task %s", name)
 		return
 	}
 

@@ -67,12 +67,12 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 	op := convertSchemaOpType(opType)
 	switch op {
 	case pb.SchemaOp_InvalidSchemaOp:
-		common.PrintLines("invalid operate '%s' on schema", opType)
+		common.PrintLinesf("invalid operate '%s' on schema", opType)
 		err = errors.New("please check output to see error")
 		return
 	case pb.SchemaOp_SetSchema:
 		if schemaFile == "" {
-			common.PrintLines("must sepcify schema file for 'set' operation")
+			common.PrintLinesf("must sepcify schema file for 'set' operation")
 			err = errors.New("please check output to see error")
 			return
 		}
@@ -82,7 +82,7 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 		}
 	default:
 		if schemaFile != "" {
-			common.PrintLines("schema file will be ignored for 'get'/'delete' operation")
+			common.PrintLinesf("schema file will be ignored for 'get'/'delete' operation")
 		}
 	}
 
@@ -90,7 +90,7 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 	if err != nil {
 		return
 	} else if len(sources) == 0 {
-		common.PrintLines("must specify at least one source (`-s` / `--source`)")
+		common.PrintLinesf("must specify at least one source (`-s` / `--source`)")
 		err = errors.New("please check output to see error")
 		return
 	}
@@ -98,7 +98,7 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 	if err != nil {
 		return
 	} else if database == "" {
-		common.PrintLines("must specify 'database'")
+		common.PrintLinesf("must specify 'database'")
 		err = errors.New("please check output to see error")
 		return
 	}
@@ -106,7 +106,7 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 	if err != nil {
 		return
 	} else if table == "" {
-		common.PrintLines("must specify 'table'")
+		common.PrintLinesf("must specify 'table'")
 		err = errors.New("please check output to see error")
 		return
 	}

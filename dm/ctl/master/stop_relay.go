@@ -46,14 +46,14 @@ func stopRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 			// all args empty
 			common.PrintCmdUsage(cmd)
 		} else {
-			common.PrintLines("must specify at least one worker")
+			common.PrintLinesf("must specify at least one worker")
 		}
 		err = errors.New("please check output to see error")
 		return
 	}
 
 	if len(sources) != 1 {
-		common.PrintLines("must specify one source (`-s` / `--source`)")
+		common.PrintLinesf("must specify one source (`-s` / `--source`)")
 		err = errors.New("please check output to see error")
 		return
 	}

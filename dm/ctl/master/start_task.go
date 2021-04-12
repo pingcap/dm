@@ -56,7 +56,7 @@ func startTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	removeMeta, err := cmd.Flags().GetBool("remove-meta")
 	if err != nil {
-		common.PrintLines("error in parse `--remove-meta`")
+		common.PrintLinesf("error in parse `--remove-meta`")
 		return
 	}
 

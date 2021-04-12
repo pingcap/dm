@@ -47,7 +47,7 @@ var (
 	ctlClient    = &CtlClient{}
 )
 
-// CtlClient used to get master client for dmctl
+// CtlClient used to get master client for dmctl.
 type CtlClient struct {
 	mu           sync.RWMutex
 	tls          *toolutils.TLS
@@ -98,7 +98,7 @@ func (c *CtlClient) sendRequest(ctx context.Context, reqName string, req interfa
 	return errInterface.(error)
 }
 
-// SendRequest send request to master
+// SendRequest send request to master.
 func SendRequest(ctx context.Context, reqName string, req interface{}, respPointer interface{}) error {
 	err := ctlClient.sendRequest(ctx, reqName, req, respPointer)
 	if err == nil || status.Code(err) != codes.Unavailable {
@@ -115,13 +115,13 @@ func SendRequest(ctx context.Context, reqName string, req interface{}, respPoint
 	return ctlClient.sendRequest(ctx, reqName, req, respPointer)
 }
 
-// InitUtils inits necessary dmctl utils
+// InitUtils inits necessary dmctl utils.
 func InitUtils(cfg *Config) error {
 	globalConfig = cfg
 	return errors.Trace(InitClient(cfg.MasterAddr, cfg.Security))
 }
 
-// InitClient initializes dm-master client
+// InitClient initializes dm-master client.
 func InitClient(addr string, securityCfg config.Security) error {
 	tls, err := toolutils.NewTLS(securityCfg.SSLCA, securityCfg.SSLCert, securityCfg.SSLKey, "", securityCfg.CertAllowedCN)
 	if err != nil {
@@ -148,31 +148,31 @@ func InitClient(addr string, securityCfg config.Security) error {
 	return ctlClient.updateMasterClient()
 }
 
-// GlobalConfig returns global dmctl config
+// GlobalConfig returns global dmctl config.
 func GlobalConfig() *Config {
 	return globalConfig
 }
 
-// PrintLines adds a wrap to support `\n` within `chzyer/readline`
-func PrintLines(format string, a ...interface{}) {
+// PrintLines adds a wrap to support `\n` within `chzyer/readline`.
+func PrintLinesf(format string, a ...interface{}) {
 	fmt.Println(fmt.Sprintf(format, a...))
 }
 
-// PrettyPrintResponse prints a PRC response prettily
+// PrettyPrintResponse prints a PRC response prettily.
 func PrettyPrintResponse(resp proto.Message) {
 	s, err := marshResponseToString(resp)
 	if err != nil {
-		PrintLines("%v", err)
+		PrintLinesf("%v", err)
 	} else {
 		fmt.Println(s)
 	}
 }
 
-// PrettyPrintInterface prints an interface through encoding/json prettily
+// PrettyPrintInterface prints an interface through encoding/json prettily.
 func PrettyPrintInterface(resp interface{}) {
 	s, err := json.MarshalIndent(resp, "", "    ")
 	if err != nil {
-		PrintLines("%v", err)
+		PrintLinesf("%v", err)
 	} else {
 		fmt.Println(string(s))
 	}
@@ -237,7 +237,7 @@ func PrettyPrintResponseWithCheckTask(resp proto.Message, subStr string) bool {
 	}
 
 	if err != nil {
-		PrintLines("%v", err)
+		PrintLinesf("%v", err)
 	} else {
 		// add indent to make it prettily.
 		replacedStr = strings.Replace(replacedStr, "detail: {", "   \tdetail: {", 1)
@@ -246,7 +246,7 @@ func PrettyPrintResponseWithCheckTask(resp proto.Message, subStr string) bool {
 	return found
 }
 
-// GetFileContent reads and returns file's content
+// GetFileContent reads and returns file's content.
 func GetFileContent(fpath string) ([]byte, error) {
 	content, err := ioutil.ReadFile(fpath)
 	if err != nil {
@@ -255,18 +255,18 @@ func GetFileContent(fpath string) ([]byte, error) {
 	return content, nil
 }
 
-// GetSourceArgs extracts sources from cmd
+// GetSourceArgs extracts sources from cmd.
 func GetSourceArgs(cmd *cobra.Command) ([]string, error) {
 	ret, err := cmd.Flags().GetStringSlice("source")
 	if err != nil {
-		PrintLines("error in parse `-s` / `--source`")
+		PrintLinesf("error in parse `-s` / `--source`")
 	}
 	return ret, err
 }
 
 // ExtractSQLsFromArgs extract multiple sql from args.
 func ExtractSQLsFromArgs(args []string) ([]string, error) {
-	if len(args) <= 0 {
+	if len(args) == 0 {
 		return nil, errors.New("args is empty")
 	}
 
@@ -289,7 +289,7 @@ func ExtractSQLsFromArgs(args []string) ([]string, error) {
 	return realSQLs, nil
 }
 
-// GetTaskNameFromArgOrFile tries to retrieve name from the file if arg is yaml-filename-like, otherwise returns arg directly
+// GetTaskNameFromArgOrFile tries to retrieve name from the file if arg is yaml-filename-like, otherwise returns arg directly.
 func GetTaskNameFromArgOrFile(arg string) string {
 	if !(strings.HasSuffix(arg, ".yaml") || strings.HasSuffix(arg, ".yml")) {
 		return arg
@@ -310,13 +310,12 @@ func GetTaskNameFromArgOrFile(arg string) string {
 
 // PrintCmdUsage prints the usage of the command.
 func PrintCmdUsage(cmd *cobra.Command) {
-	err := cmd.Usage()
-	if err != nil {
+	if err := cmd.Usage(); err != nil {
 		fmt.Println("can't output command's usage:", err)
 	}
 }
 
-// SyncMasterEndpoints sync masters' endpoints
+// SyncMasterEndpoints sync masters' endpoints.
 func SyncMasterEndpoints(ctx context.Context) {
 	lastClientUrls := []string{}
 	clientURLs := []string{}

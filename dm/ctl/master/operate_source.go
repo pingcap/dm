@@ -58,7 +58,7 @@ func convertCmdType(t string) pb.SourceOp {
 func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 	printSampleConfig, err := cmd.Flags().GetBool("print-sample-config")
 	if err != nil {
-		common.PrintLines("error in parse `--print-sample-config`")
+		common.PrintLinesf("error in parse `--print-sample-config`")
 		return
 	}
 
@@ -87,12 +87,12 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 	cmdType := cmd.Flags().Arg(0)
 	op := convertCmdType(cmdType)
 	if op == pb.SourceOp_InvalidSourceOp {
-		common.PrintLines("invalid operate '%s' on worker", cmdType)
+		common.PrintLinesf("invalid operate '%s' on worker", cmdType)
 		err = errors.New("please check output to see error")
 		return
 	}
 	if op != pb.SourceOp_ShowSource && len(cmd.Flags().Args()) == 1 {
-		common.PrintLines("operate-source create/update/stop should specify config-file(s)")
+		common.PrintLinesf("operate-source create/update/stop should specify config-file(s)")
 		return
 	}
 

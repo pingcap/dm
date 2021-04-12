@@ -72,7 +72,7 @@ func listMemberFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	leader, master, worker, err := convertListMemberType(cmd)
 	if err != nil {
-		common.PrintLines("%v", err)
+		common.PrintLinesf("%v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
