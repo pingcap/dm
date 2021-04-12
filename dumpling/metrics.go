@@ -22,7 +22,7 @@ import (
 	"github.com/pingcap/dm/pkg/metricsproxy"
 )
 
-// should alert
+// should alert.
 var dumplingExitWithErrorCounter = metricsproxy.NewCounterVec(
 	prometheus.CounterOpts{
 		Namespace: "dm",
