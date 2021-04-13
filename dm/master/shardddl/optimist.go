@@ -43,13 +43,13 @@ type Optimist struct {
 
 	logger log.Logger
 
-	cancel context.CancelFunc
-
-	cli    *clientv3.Client
-	lk     *optimism.LockKeeper
-	tk     *optimism.TableKeeper
-	wg     sync.WaitGroup
 	closed bool
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+
+	cli *clientv3.Client
+	lk  *optimism.LockKeeper
+	tk  *optimism.TableKeeper
 }
 
 // NewOptimist creates a new Optimist instance.

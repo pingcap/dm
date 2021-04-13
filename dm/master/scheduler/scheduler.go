@@ -64,7 +64,9 @@ type Scheduler struct {
 
 	logger log.Logger
 
-	cancel context.CancelFunc
+	started bool // whether the scheduler already started for work.
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
 
 	etcdCli *clientv3.Client
 
@@ -143,9 +145,6 @@ type Scheduler struct {
 	relayWorkers map[string]map[string]struct{}
 
 	securityCfg config.Security
-
-	wg      sync.WaitGroup
-	started bool // whether the scheduler already started for work.
 }
 
 // NewScheduler creates a new scheduler instance.

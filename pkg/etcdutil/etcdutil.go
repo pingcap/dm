@@ -100,7 +100,7 @@ func RemoveMember(client *clientv3.Client, id uint64) (*clientv3.MemberRemoveRes
 }
 
 // DoOpsInOneTxnWithRetry do multiple etcd operations in one txn.
-// TODO: add unit test to test encountered an retryable error first but then recovered
+// TODO: add unit test to test encountered an retryable error first but then recovered.
 func DoOpsInOneTxnWithRetry(cli *clientv3.Client, ops ...clientv3.Op) (*clientv3.TxnResponse, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), DefaultRequestTimeout)
 	defer cancel()
@@ -143,7 +143,7 @@ func DoOpsInOneCmpsTxnWithRetry(cli *clientv3.Client, cmps []clientv3.Cmp, opsTh
 	return resp, resp.Header.Revision, nil
 }
 
-// IsRetryableError check whether error is retryable error for etcd to build again
+// IsRetryableError check whether error is retryable error for etcd to build again.
 func IsRetryableError(err error) bool {
 	switch errors.Cause(err) {
 	case v3rpc.ErrCompacted, v3rpc.ErrNoLeader, v3rpc.ErrNoSpace, context.DeadlineExceeded:
@@ -153,7 +153,7 @@ func IsRetryableError(err error) bool {
 	}
 }
 
-// IsLimitedRetryableError check whether error is retryable error for etcd to build again in a limited number of times
+// IsLimitedRetryableError check whether error is retryable error for etcd to build again in a limited number of times.
 func IsLimitedRetryableError(err error) bool {
 	switch errors.Cause(err) {
 	case v3rpc.ErrNoSpace, context.DeadlineExceeded:

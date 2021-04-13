@@ -18,7 +18,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/siddontang/go-mysql/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
@@ -34,16 +33,16 @@ const (
 	// conversion: originalPos.NamePrefix + posUUIDSuffixSeparator + UUIDSuffix + binlogFilenameSep + originalPos.NameSuffix => convertedPos.Name
 	// UUIDSuffix is the suffix of sub relay directory name, and when new sub directory created, UUIDSuffix is incremented
 	// eg. mysql-bin.000003 in c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002 => mysql-bin|000002.000003
-	// where `000002` in `c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002` is the UUIDSuffix
+	// where `000002` in `c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002` is the UUIDSuffix.
 	posUUIDSuffixSeparator = "|"
-	// MinUUIDSuffix is same as relay.MinUUIDSuffix
+	// MinUUIDSuffix is same as relay.MinUUIDSuffix.
 	MinUUIDSuffix = 1
 )
 
-// MinPosition is the min binlog position
+// MinPosition is the min binlog position.
 var MinPosition = gmysql.Position{Pos: 4}
 
-// PositionFromStr constructs a mysql.Position from a string representation like `mysql-bin.000001:2345`
+// PositionFromStr constructs a mysql.Position from a string representation like `mysql-bin.000001:2345`.
 func PositionFromStr(s string) (gmysql.Position, error) {
 	parsed := strings.Split(s, ":")
 	if len(parsed) != 2 {
@@ -67,7 +66,7 @@ func trimBrackets(s string) string {
 	return s
 }
 
-// PositionFromPosStr constructs a mysql.Position from a string representation like `(mysql-bin.000001, 2345)`
+// PositionFromPosStr constructs a mysql.Position from a string representation like `(mysql-bin.000001, 2345)`.
 func PositionFromPosStr(str string) (gmysql.Position, error) {
 	s := trimBrackets(str)
 	parsed := strings.Split(s, ", ")
@@ -110,7 +109,7 @@ func RealMySQLPos(pos gmysql.Position) (gmysql.Position, error) {
 	return pos, nil
 }
 
-// ExtractSuffix extracts uuidSuffix from input name
+// ExtractSuffix extracts uuidSuffix from input name.
 func ExtractSuffix(name string) (int, error) {
 	if len(name) == 0 {
 		return MinUUIDSuffix, nil
@@ -128,7 +127,8 @@ func ExtractSuffix(name string) (int, error) {
 	return MinUUIDSuffix, nil
 }
 
-// ExtractPos extracts (uuidWithSuffix, uuidSuffix, originalPos) from input pos (originalPos or convertedPos)
+// ExtractPos extracts (uuidWithSuffix, uuidSuffix, originalPos) from input pos (originalPos or convertedPos).
+// nolint:nakedret
 func ExtractPos(pos gmysql.Position, uuids []string) (uuidWithSuffix string, uuidSuffix string, realPos gmysql.Position, err error) {
 	if len(uuids) == 0 {
 		err = terror.ErrBinlogExtractPosition.New("empty UUIDs not valid")
@@ -187,7 +187,7 @@ func verifyUUIDSuffix(suffix string) bool {
 }
 
 // AdjustPosition adjusts the filename with uuid suffix in mysql position
-// for example: mysql-bin|000001.000002 -> mysql-bin.000002
+// for example: mysql-bin|000001.000002 -> mysql-bin.000002.
 func AdjustPosition(pos gmysql.Position) gmysql.Position {
 	realPos, err := RealMySQLPos(pos)
 	if err != nil {
@@ -198,7 +198,7 @@ func AdjustPosition(pos gmysql.Position) gmysql.Position {
 	return realPos
 }
 
-// VerifyBinlogPos verify binlog pos string
+// VerifyBinlogPos verify binlog pos string.
 func VerifyBinlogPos(pos string) (*gmysql.Position, error) {
 	binlogPosStr := utils.TrimQuoteMark(pos)
 	pos2, err := PositionFromStr(binlogPosStr)
@@ -225,7 +225,7 @@ func ComparePosition(pos1, pos2 gmysql.Position) int {
 }
 
 // Location is used for save binlog's position and gtid
-// TODO: encapsulate all attributes in Location
+// TODO: encapsulate all attributes in Location.
 type Location struct {
 	Position gmysql.Position
 
@@ -234,7 +234,7 @@ type Location struct {
 	Suffix int // use for replace event
 }
 
-// NewLocation returns a new Location
+// NewLocation returns a new Location.
 func NewLocation(flavor string) Location {
 	return Location{
 		Position: MinPosition,
@@ -242,7 +242,7 @@ func NewLocation(flavor string) Location {
 	}
 }
 
-// InitLocation init a new Location
+// InitLocation init a new Location.
 func InitLocation(pos gmysql.Position, gset gtid.Set) Location {
 	return Location{
 		Position: pos,
@@ -257,7 +257,7 @@ func (l Location) String() string {
 	return fmt.Sprintf("position: %v, gtid-set: %s, suffix: %d", l.Position, l.GTIDSetStr(), l.Suffix)
 }
 
-// GTIDSetStr returns gtid set's string
+// GTIDSetStr returns gtid set's string.
 func (l Location) GTIDSetStr() string {
 	gsetStr := ""
 	if l.gtidSet != nil {
@@ -267,7 +267,7 @@ func (l Location) GTIDSetStr() string {
 	return gsetStr
 }
 
-// Clone clones a same Location
+// Clone clones a same Location.
 func (l Location) Clone() Location {
 	return l.CloneWithFlavor("")
 }
@@ -320,17 +320,18 @@ func CompareLocation(location1, location2 Location, cmpGTID bool) int {
 //   1, true if gSet1 is bigger than gSet2
 //   0, true if gSet1 is equal to gSet2
 //   -1, true if gSet1 is less than gSet2
-// but if can't compare gSet1 and gSet2, will returns 0, false
+// but if can't compare gSet1 and gSet2, will returns 0, false.
 func CompareGTID(gSet1, gSet2 gtid.Set) (int, bool) {
 	gSetIsEmpty1 := gSet1 == nil || len(gSet1.String()) == 0
 	gSetIsEmpty2 := gSet2 == nil || len(gSet2.String()) == 0
 
-	if gSetIsEmpty1 && gSetIsEmpty2 {
+	switch {
+	case gSetIsEmpty1 && gSetIsEmpty2:
 		// both gSet1 and gSet2 is nil
 		return 0, true
-	} else if gSetIsEmpty1 {
+	case gSetIsEmpty1:
 		return -1, true
-	} else if gSetIsEmpty2 {
+	case gSetIsEmpty2:
 		return 1, true
 	}
 
@@ -352,26 +353,27 @@ func CompareGTID(gSet1, gSet2 gtid.Set) (int, bool) {
 }
 
 func compareIndex(lhs, rhs int) int {
-	if lhs < rhs {
+	switch {
+	case lhs < rhs:
 		return -1
-	} else if lhs > rhs {
+	case lhs > rhs:
 		return 1
-	} else {
+	default:
 		return 0
 	}
 }
 
-// ResetSuffix set suffix to 0
+// ResetSuffix set suffix to 0.
 func (l *Location) ResetSuffix() {
 	l.Suffix = 0
 }
 
 // SetGTID set new gtid for location
-// Use this func instead of GITSet.Set to avoid change other location
-func (l *Location) SetGTID(gset mysql.GTIDSet) error {
-	flavor := mysql.MySQLFlavor
+// Use this func instead of GITSet.Set to avoid change other location.
+func (l *Location) SetGTID(gset gmysql.GTIDSet) error {
+	flavor := gmysql.MySQLFlavor
 	if _, ok := l.gtidSet.(*gtid.MariadbGTIDSet); ok {
-		flavor = mysql.MariaDBFlavor
+		flavor = gmysql.MariaDBFlavor
 	}
 
 	newGTID := gtid.MinGTIDSet(flavor)
@@ -383,7 +385,7 @@ func (l *Location) SetGTID(gset mysql.GTIDSet) error {
 	return nil
 }
 
-// GetGTID return gtidSet of Location
+// GetGTID return gtidSet of Location.
 func (l *Location) GetGTID() gtid.Set {
 	return l.gtidSet
 }

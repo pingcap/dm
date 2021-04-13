@@ -35,26 +35,27 @@ type commonConfig struct {
 	*flag.FlagSet `json:"-"`
 
 	// task name
-	Name       string
-	ConfigFile string
-	Flavor     string
-	StatusAddr string
-	Meta       string
+	Name         string
+	printVersion bool
+	ConfigFile   string
+	ServerID     int
+	Flavor       string
+	WorkerCount  int
+	Batch        int
+	StatusAddr   string
+	Meta         string
 
-	LogLevel    string
-	LogFile     string
-	LogFormat   string
-	LogRotate   string
+	LogLevel  string
+	LogFile   string
+	LogFormat string
+	LogRotate string
+
+	EnableGTID bool
+	SafeMode   bool
+	MaxRetry   int
+
 	TimezoneStr string
 
-	ServerID    int
-	WorkerCount int
-	Batch       int
-	MaxRetry    int
-
-	printVersion       bool
-	EnableGTID         bool
-	SafeMode           bool
 	SyncerConfigFormat bool
 }
 

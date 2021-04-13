@@ -152,6 +152,7 @@ func (s *testGTIDSuite) TestMariaGTIDEqual(c *C) {
 	c.Assert(g1.Equal(g2), IsTrue)
 }
 
+// nolint:dupl
 func (s *testGTIDSuite) TestMySQLGTIDContain(c *C) {
 	var (
 		g1     *MySQLGTIDSet
@@ -183,6 +184,7 @@ func (s *testGTIDSuite) TestMySQLGTIDContain(c *C) {
 	c.Assert(g2.Contain(g1), IsFalse)
 }
 
+// nolint:dupl
 func (s *testGTIDSuite) TestMairaGTIDContain(c *C) {
 	var (
 		g1     *MariadbGTIDSet

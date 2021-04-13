@@ -102,7 +102,6 @@ func (t *testCommonSuite) TestGenCommonGTIDEvent(c *C) {
 	var (
 		flavor           = gmysql.MySQLFlavor
 		serverID  uint32 = 101
-		gSetStr          = ""
 		gSet      gtid.Set
 		latestPos uint32 = 123
 	)
@@ -113,7 +112,7 @@ func (t *testCommonSuite) TestGenCommonGTIDEvent(c *C) {
 	c.Assert(gtidEv, IsNil)
 
 	// multi GTID in set, invalid
-	gSetStr = "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-123,05474d3c-28c7-11e7-8352-203db246dd3d:1-456,10b039fc-c843-11e7-8f6a-1866daf8d810:1-789"
+	gSetStr := "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-123,05474d3c-28c7-11e7-8352-203db246dd3d:1-456,10b039fc-c843-11e7-8f6a-1866daf8d810:1-789"
 	gSet, err = gtid.ParserGTID(flavor, gSetStr)
 	c.Assert(err, IsNil)
 	gtidEv, err = GenCommonGTIDEvent(flavor, serverID, latestPos, gSet)

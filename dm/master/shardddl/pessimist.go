@@ -41,12 +41,13 @@ var (
 
 // Pessimist used to coordinate the shard DDL migration in pessimism mode.
 type Pessimist struct {
-	mu       sync.Mutex
-	infoOpMu sync.Mutex
+	mu sync.Mutex
 
 	logger log.Logger
 
+	closed bool
 	cancel context.CancelFunc
+	wg     sync.WaitGroup
 
 	cli *clientv3.Client
 	lk  *pessimism.LockKeeper
@@ -54,8 +55,7 @@ type Pessimist struct {
 	// taskSources used to get all sources relative to the given task.
 	taskSources func(task string) []string
 
-	wg     sync.WaitGroup
-	closed bool
+	infoOpMu sync.Mutex
 }
 
 // NewPessimist creates a new Pessimist instance.

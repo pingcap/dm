@@ -45,6 +45,9 @@ type Worker struct {
 	// query-status maybe access them when closing/disable functionalities
 	sync.RWMutex
 
+	wg     sync.WaitGroup
+	closed sync2.AtomicBool
+
 	// context created when Worker created, and canceled when closing
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -53,31 +56,26 @@ type Worker struct {
 	l   log.Logger
 
 	// subtask functionality
-	subTaskCtx    context.Context
-	subTaskCancel context.CancelFunc
-	subTaskHolder *subTaskHolder
+	subTaskEnabled sync2.AtomicBool
+	subTaskCtx     context.Context
+	subTaskCancel  context.CancelFunc
+	subTaskWg      sync.WaitGroup
+	subTaskHolder  *subTaskHolder
 
-	relayCtx    context.Context
-	relayCancel context.CancelFunc
-	relayHolder RelayHolder
-	relayPurger purger.Purger
+	// relay functionality
+	// during relayEnabled == true, relayHolder and relayPurger should not be nil
+	relayEnabled sync2.AtomicBool
+	relayCtx     context.Context
+	relayCancel  context.CancelFunc
+	relayWg      sync.WaitGroup
+	relayHolder  RelayHolder
+	relayPurger  purger.Purger
 
 	taskStatusChecker TaskStatusChecker
 
 	etcdClient *clientv3.Client
 
 	name string
-
-	relayWg   sync.WaitGroup
-	subTaskWg sync.WaitGroup
-	wg        sync.WaitGroup
-	closed    sync2.AtomicBool
-
-	// relay functionality
-	// during relayEnabled == true, relayHolder and relayPurger should not be nil
-	relayEnabled sync2.AtomicBool
-
-	subTaskEnabled sync2.AtomicBool
 }
 
 // NewWorker creates a new Worker. The functionality of relay and subtask is disabled by default, need call EnableRelay

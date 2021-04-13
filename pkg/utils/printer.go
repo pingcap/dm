@@ -31,7 +31,7 @@ var (
 	GoVersion      = "None"
 )
 
-// GetRawInfo do what its name tells
+// GetRawInfo do what its name tells.
 func GetRawInfo() string {
 	var info string
 	info += fmt.Sprintf("Release Version: %s\n", ReleaseVersion)
@@ -60,7 +60,7 @@ func printInfo(app string) {
 	)
 }
 
-// PrintInfo2 print app's info to stdout
+// PrintInfo2 print app's info to stdout.
 func PrintInfo2(app string) {
 	fmt.Printf("Welcome to %s\n", app)
 	fmt.Printf("Release Version: %s\n", ReleaseVersion)

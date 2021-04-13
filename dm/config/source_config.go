@@ -46,36 +46,39 @@ type PurgeConfig struct {
 }
 
 // SourceConfig is the configuration for Worker.
+// SourceConfig is the configuration for Worker.
 type SourceConfig struct {
-	From DBConfig `yaml:"from" toml:"from" json:"from"`
-	// config items for task status checker
-	Checker CheckerConfig `yaml:"checker" toml:"checker" json:"checker"`
-	// config items for purger
-	Purge   PurgeConfig           `yaml:"purge" toml:"purge" json:"purge"`
-	Filters []*bf.BinlogEventRule `yaml:"filters" toml:"filters" json:"filters"`
+	EnableGTID  bool   `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
+	AutoFixGTID bool   `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
+	RelayDir    string `yaml:"relay-dir" toml:"relay-dir" json:"relay-dir"`
+	MetaDir     string `yaml:"meta-dir" toml:"meta-dir" json:"meta-dir"`
+	Flavor      string `yaml:"flavor" toml:"flavor" json:"flavor"`
+	Charset     string `yaml:"charset" toml:"charset" json:"charset"`
 
-	RelayDir string `yaml:"relay-dir" toml:"relay-dir" json:"relay-dir"`
-	MetaDir  string `yaml:"meta-dir" toml:"meta-dir" json:"meta-dir"`
-	Flavor   string `yaml:"flavor" toml:"flavor" json:"flavor"`
-	Charset  string `yaml:"charset" toml:"charset" json:"charset"`
-	SourceID string `yaml:"source-id" toml:"source-id" json:"source-id"`
+	EnableRelay bool `yaml:"enable-relay" toml:"enable-relay" json:"enable-relay"`
 	// relay synchronous starting point (if specified)
 	RelayBinLogName string `yaml:"relay-binlog-name" toml:"relay-binlog-name" json:"relay-binlog-name"`
 	RelayBinlogGTID string `yaml:"relay-binlog-gtid" toml:"relay-binlog-gtid" json:"relay-binlog-gtid"`
-
 	// only use when worker bound source, do not marsh it
 	UUIDSuffix int `yaml:"-" toml:"-" json:"-"`
 
-	// deprecated tracer, to keep compatibility with older version
-	Tracer map[string]interface{} `yaml:"tracer" toml:"tracer" json:"-"`
+	SourceID string   `yaml:"source-id" toml:"source-id" json:"source-id"`
+	From     DBConfig `yaml:"from" toml:"from" json:"from"`
+
+	// config items for purger
+	Purge PurgeConfig `yaml:"purge" toml:"purge" json:"purge"`
+
+	// config items for task status checker
+	Checker CheckerConfig `yaml:"checker" toml:"checker" json:"checker"`
 
 	// id of the worker on which this task run
 	ServerID uint32 `yaml:"server-id" toml:"server-id" json:"server-id"`
 
-	EnableGTID    bool `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
-	AutoFixGTID   bool `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
-	EnableRelay   bool `yaml:"enable-relay" toml:"enable-relay" json:"enable-relay"`
-	CaseSensitive bool `yaml:"case-sensitive" toml:"case-sensitive" json:"case-sensitive"`
+	// deprecated tracer, to keep compatibility with older version
+	Tracer map[string]interface{} `yaml:"tracer" toml:"tracer" json:"-"`
+
+	CaseSensitive bool                  `yaml:"case-sensitive" toml:"case-sensitive" json:"case-sensitive"`
+	Filters       []*bf.BinlogEventRule `yaml:"filters" toml:"filters" json:"filters"`
 }
 
 // NewSourceConfig creates a new base config for upstream MySQL/MariaDB source.

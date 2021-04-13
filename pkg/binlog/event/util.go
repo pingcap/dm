@@ -100,12 +100,12 @@ func bitmapByteSize(columnCount int) int {
 	return (columnCount + 7) / 8
 }
 
-// nullBytes returns a n-length null bytes slice
+// nullBytes returns a n-length null bytes slice.
 func nullBytes(n int) []byte {
 	return make([]byte, n)
 }
 
-// fullBytes returns a n-length full bytes slice (all bits are set)
+// fullBytes returns a n-length full bytes slice (all bits are set).
 func fullBytes(n int) []byte {
 	buf := new(bytes.Buffer)
 	for i := 0; i < n; i++ {
@@ -157,6 +157,7 @@ func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksu
 }
 
 // combineHeaderPayload combines header, postHeader and payload together.
+// nolint:interfacer
 func combineHeaderPayload(buf *bytes.Buffer, header, postHeader, payload []byte) error {
 	if len(header) != int(eventHeaderLen) {
 		return terror.ErrBinlogHeaderLengthNotValid.Generate(eventHeaderLen, len(header))
@@ -185,6 +186,7 @@ func combineHeaderPayload(buf *bytes.Buffer, header, postHeader, payload []byte)
 // encodeColumnValue encodes value to bytes
 // ref: https://github.com/siddontang/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L368
 // NOTE: we do not generate meaningful `meta` yet.
+// nolint:unparam
 func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {
 	var (
 		buf = new(bytes.Buffer)
@@ -240,6 +242,7 @@ func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {
 }
 
 // writeIntegerColumnValue writes integer value to bytes buffer.
+// nolint:interfacer
 func writeIntegerColumnValue(buf *bytes.Buffer, value interface{}, valueType reflect.Type) error {
 	if reflect.TypeOf(value) != valueType {
 		return terror.ErrBinlogColumnTypeMisMatch.Generate(value, reflect.TypeOf(value), valueType)
@@ -248,6 +251,7 @@ func writeIntegerColumnValue(buf *bytes.Buffer, value interface{}, valueType ref
 }
 
 // writeStringColumnValue writes string value to bytes buffer.
+// nolint:interfacer
 func writeStringColumnValue(buf *bytes.Buffer, value interface{}) error {
 	str, ok := value.(string)
 	if !ok {
@@ -289,10 +293,10 @@ const (
 	QTableMapForUpdateCode
 	QMasterDataWrittenCode
 	QInvokers
-	QUpdatedDbNames
+	QUpdatedDBNames
 	QMicroseconds
-	QCommitTs
-	QCommitTs2
+	QCommitTS
+	QCommitTS2
 	QExplicitDefaultsForTimestamp
 	QDdlLoggedWithXid
 	QDefaultCollationForUtf8mb4
@@ -312,8 +316,8 @@ var statusVarsFixedLength = map[byte]int{
 	QTableMapForUpdateCode: 8,
 	QMasterDataWrittenCode: 4,
 	QMicroseconds:          3,
-	QCommitTs:              0, // unused now
-	QCommitTs2:             0, // unused now
+	QCommitTS:              0, // unused now
+	QCommitTS2:             0, // unused now
 	// below variables could be find in
 	// https://github.com/mysql/mysql-server/blob/7d10c82196c8e45554f27c00681474a9fb86d137/libbinlogevents/src/statement_events.cpp#L312
 	QExplicitDefaultsForTimestamp: 1,
@@ -325,7 +329,7 @@ var statusVarsFixedLength = map[byte]int{
 	QHrnow: 3,
 }
 
-// getSQLMode gets SQL mode from binlog statusVars, still could return a reasonable value if found error
+// getSQLMode gets SQL mode from binlog statusVars, still could return a reasonable value if found error.
 func getSQLMode(statusVars []byte) (mysql.SQLMode, error) {
 	vars, err := statusVarsToKV(statusVars)
 	b, ok := vars[QSqlModeCode]
@@ -345,7 +349,7 @@ func getSQLMode(statusVars []byte) (mysql.SQLMode, error) {
 	return mysql.SQLMode(v), err
 }
 
-// GetParserForStatusVars gets a parser for binlog which is suitable for its sql_mode in statusVars
+// GetParserForStatusVars gets a parser for binlog which is suitable for its sql_mode in statusVars.
 func GetParserForStatusVars(statusVars []byte) (*parser.Parser, error) {
 	parser2 := parser.New()
 	mode, err := getSQLMode(statusVars)
@@ -354,7 +358,7 @@ func GetParserForStatusVars(statusVars []byte) (*parser.Parser, error) {
 }
 
 // if returned error is `io.EOF`, it means UnexpectedEOF because we handled expected `io.EOF` as success
-// returned map should not be nil for other usage
+// returned map should not be nil for other usage.
 func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 	r := bytes.NewReader(statusVars)
 	vars := make(map[byte][]byte)
@@ -423,6 +427,7 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 			if err2 != nil {
 				return generateError(err)
 			}
+			// nolint:makezero
 			value = append(value, b)
 		// 1-byte length + <length> chars of the timezone/catalog
 		case QTimeZoneCode, QCatalogNzCode:
@@ -438,11 +443,12 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 				return generateError(err)
 			}
 		// 1-byte count + <count> \0 terminated string
-		case QUpdatedDbNames:
+		case QUpdatedDBNames:
 			count, err := r.ReadByte()
 			if err != nil {
 				return generateError(err)
 			}
+			// nolint:makezero
 			value = append(value, count)
 			// if count is 254 (OVER_MAX_DBS_IN_EVENT_MTS), there's no following DB names
 			// https://github.com/mysql/mysql-server/blob/ee4455a33b10f1b1886044322e4893f587b319ed/libbinlogevents/include/binlog_event.h#L107
@@ -463,6 +469,7 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 				}
 				b = byte(1) // reset to any non-zero value
 			}
+			// nolint:makezero
 			value = append(value, buf...)
 		default:
 			return generateError(errors.New("unrecognized key"))

@@ -40,7 +40,7 @@ type RelaySource struct {
 
 // PutRelayConfig puts the relay config for given workers.
 // k/v: worker-name -> source-id.
-// TODO: let caller wait until worker has enabled relay
+// TODO: let caller wait until worker has enabled relay.
 func PutRelayConfig(cli *clientv3.Client, source string, workers ...string) (int64, error) {
 	ops := make([]clientv3.Op, 0, len(workers))
 	for _, worker := range workers {
@@ -96,7 +96,7 @@ func GetAllRelayConfig(cli *clientv3.Client) (map[string]map[string]struct{}, in
 	return ret, resp.Header.Revision, nil
 }
 
-// GetRelayConfig returns the source config which the given worker need to pull relay log from etcd, with revision
+// GetRelayConfig returns the source config which the given worker need to pull relay log from etcd, with revision.
 func GetRelayConfig(cli *clientv3.Client, worker string) (*config.SourceConfig, int64, error) {
 	var (
 		source    string

@@ -467,12 +467,9 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 			"53ea0ed1-9bf8-11e6-8bea-64006a897c72.000002",
 			"53ea0ed1-9bf8-11e6-8bea-64006a897c71.000003",
 		}
-		currentUUID    = UUIDs[len(UUIDs)-1] // no next UUID
-		latestFilePath string
-		latestFileSize int64
-		data           = []byte("binlog file data")
-		switchCh       = make(chan SwitchPath, 1)
-		errCh          = make(chan error, 1)
+		currentUUID = UUIDs[len(UUIDs)-1] // no next UUID
+		switchCh    = make(chan SwitchPath, 1)
+		errCh       = make(chan error, 1)
 	)
 
 	ctx := context.Background()
@@ -480,7 +477,7 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 	// invalid UUID in UUIDs, error
 	UUIDs = append(UUIDs, "invalid.uuid")
 	t.writeUUIDs(c, relayDir, UUIDs)
-	needSwitchSubDir(ctx, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	needSwitchSubDir(ctx, relayDir, currentUUID, switchCh, errCh)
 	c.Assert(len(errCh), Equals, 1)
 	c.Assert(len(switchCh), Equals, 0)
 	err := <-errCh
@@ -492,13 +489,13 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 	// no next UUID, no need switch
 	newCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	needSwitchSubDir(newCtx, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	needSwitchSubDir(newCtx, relayDir, currentUUID, switchCh, errCh)
 	c.Assert(len(errCh), Equals, 0)
 	c.Assert(len(switchCh), Equals, 0)
 
 	// no next sub directory
 	currentUUID = UUIDs[0]
-	needSwitchSubDir(ctx, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	needSwitchSubDir(ctx, relayDir, currentUUID, switchCh, errCh)
 	c.Assert(len(errCh), Equals, 1)
 	c.Assert(len(switchCh), Equals, 0)
 	err = <-errCh
@@ -509,7 +506,7 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 	c.Assert(err, IsNil)
 	newCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel2()
-	needSwitchSubDir(newCtx2, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	needSwitchSubDir(newCtx2, relayDir, currentUUID, switchCh, errCh)
 	c.Assert(len(errCh), Equals, 0)
 	c.Assert(len(switchCh), Equals, 0)
 
@@ -521,8 +518,7 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 	c.Assert(err, IsNil)
 
 	// switch to the next
-	latestFileSize = int64(len(data))
-	needSwitchSubDir(ctx, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	needSwitchSubDir(ctx, relayDir, currentUUID, switchCh, errCh)
 	c.Assert(len(errCh), Equals, 0)
 	c.Assert(len(switchCh), Equals, 1)
 	res := <-switchCh
@@ -530,10 +526,11 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 	c.Assert(res.nextBinlogName, Equals, filepath.Base(nextBinlogPath))
 }
 
-func (t *testFileSuite) writeUUIDs(c *C, relayDir string, UUIDs []string) []byte {
+// nolint:unparam
+func (t *testFileSuite) writeUUIDs(c *C, relayDir string, uuids []string) []byte {
 	indexPath := path.Join(relayDir, utils.UUIDIndexFilename)
 	var buf bytes.Buffer
-	for _, uuid := range UUIDs {
+	for _, uuid := range uuids {
 		_, err := buf.WriteString(uuid)
 		c.Assert(err, IsNil)
 		_, err = buf.WriteString("\n")

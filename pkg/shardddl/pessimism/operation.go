@@ -42,12 +42,12 @@ type Operation struct {
 }
 
 // NewOperation creates a new Operation instance.
-func NewOperation(ID, task, source string, DDLs []string, exec, done bool) Operation {
+func NewOperation(id, task, source string, ddls []string, exec, done bool) Operation {
 	return Operation{
-		ID:     ID,
+		ID:     id,
 		Task:   task,
 		Source: source,
-		DDLs:   DDLs,
+		DDLs:   ddls,
 		Exec:   exec,
 		Done:   done,
 	}

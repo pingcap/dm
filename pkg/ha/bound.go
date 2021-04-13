@@ -33,7 +33,7 @@ import (
 const (
 	// we need two steps to get a name/id and query config using that id.
 	// since above steps can't be put into one etcd transaction, we combine and re-run the first step into the second
-	// step, and check the name/id is still valid. if not valid, retry the second step using new name/id
+	// step, and check the name/id is still valid. if not valid, retry the second step using new name/id.
 	defaultGetSourceBoundConfigRetry = 3
 	defaultGetRelayConfigRetry       = 3
 	retryInterval                    = 50 * time.Millisecond // retry interval when we get two different bounds
@@ -74,7 +74,7 @@ func (b SourceBound) toJSON() (string, error) {
 	return string(data), nil
 }
 
-// IsEmpty returns true when this bound has no value
+// IsEmpty returns true when this bound has no value.
 func (b SourceBound) IsEmpty() bool {
 	var emptyBound SourceBound
 	return b == emptyBound
@@ -112,7 +112,7 @@ func DeleteSourceBound(cli *clientv3.Client, workers ...string) (int64, error) {
 }
 
 // ReplaceSourceBound deletes an old bound and puts a new bound in one transaction, so a bound source will not become
-// unbound because of failing halfway
+// unbound because of failing halfway.
 func ReplaceSourceBound(cli *clientv3.Client, source, oldWorker, newWorker string) (int64, error) {
 	deleteOps := deleteSourceBoundOp(oldWorker)
 	putOps, err := putSourceBoundOp(NewSourceBound(source, newWorker))
@@ -161,7 +161,7 @@ func GetSourceBound(cli *clientv3.Client, worker string) (map[string]SourceBound
 }
 
 // GetLastSourceBounds gets all last source bound relationship. Different with GetSourceBound, "last source bound" will
-// not be deleted when worker offline
+// not be deleted when worker offline.
 func GetLastSourceBounds(cli *clientv3.Client) (map[string]SourceBound, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
@@ -184,7 +184,7 @@ func GetLastSourceBounds(cli *clientv3.Client) (map[string]SourceBound, int64, e
 // for the specified DM-worker. The index worker **must not be empty**:
 // if source bound is empty, will return an empty sourceBound and an empty source config
 // if source bound is not empty but sourceConfig is empty, will return an error
-// if the source bound is different for over retryNum times, will return an error
+// if the source bound is different for over retryNum times, will return an error.
 func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, config.SourceConfig, int64, error) {
 	var (
 		bound    SourceBound
@@ -258,6 +258,7 @@ func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, con
 
 // WatchSourceBound watches PUT & DELETE operations for the bound relationship of the specified DM-worker.
 // For the DELETE operations, it returns an empty bound relationship.
+// nolint:dupl
 func WatchSourceBound(ctx context.Context, cli *clientv3.Client,
 	worker string, revision int64, outCh chan<- SourceBound, errCh chan<- error) {
 	ch := cli.Watch(ctx, common.UpstreamBoundWorkerKeyAdapter.Encode(worker), clientv3.WithRev(revision))

@@ -23,7 +23,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// GetStorageSize gets storage's capacity and available size
+// GetStorageSize gets storage's capacity and available size.
 func GetStorageSize(dir string) (size StorageSize, err error) {
 	var stat unix.Statfs_t
 

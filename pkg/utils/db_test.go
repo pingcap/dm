@@ -285,7 +285,6 @@ func (t *testDBSuite) createMockResult(mock sqlmock.Sqlmock, masterID uint32, se
 			rows.AddRow(serverID, host, port, masterID)
 		}
 		expectQuery.WillReturnRows(rows)
-
 	} else {
 		rows := sqlmock.NewRows([]string{"Server_id", "Host", "Port", "Master_id", "Slave_UUID"})
 		for _, serverID := range serverIDs {

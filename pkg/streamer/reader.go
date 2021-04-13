@@ -39,7 +39,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// Meta represents binlog meta information in relay.meta
+// Meta represents binlog meta information in relay.meta.
 type Meta struct {
 	BinLogName string `toml:"binlog-name" json:"binlog-name"`
 	BinLogPos  uint32 `toml:"binlog-pos" json:"binlog-pos"`
@@ -47,10 +47,10 @@ type Meta struct {
 	UUID       string `toml:"-" json:"-"`
 }
 
-// polling interval for watcher
+// polling interval for watcher.
 var watcherInterval = 100 * time.Millisecond
 
-// BinlogReaderConfig is the configuration for BinlogReader
+// BinlogReaderConfig is the configuration for BinlogReader.
 type BinlogReaderConfig struct {
 	RelayDir string
 	Timezone *time.Location
@@ -77,7 +77,7 @@ type BinlogReader struct {
 	prevGset, currGset mysql.GTIDSet
 }
 
-// NewBinlogReader creates a new BinlogReader
+// NewBinlogReader creates a new BinlogReader.
 func NewBinlogReader(logger log.Logger, cfg *BinlogReaderConfig) *BinlogReader {
 	ctx, cancel := context.WithCancel(context.Background()) // only can be canceled in `Close`
 	parser := replication.NewBinlogParser()
@@ -99,7 +99,7 @@ func NewBinlogReader(logger log.Logger, cfg *BinlogReaderConfig) *BinlogReader {
 	}
 }
 
-// checkRelayPos will check whether the given relay pos is too big
+// checkRelayPos will check whether the given relay pos is too big.
 func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
 	currentUUID, _, realPos, err := binlog.ExtractPos(pos, r.uuids)
 	if err != nil {
@@ -118,7 +118,7 @@ func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
 	return nil
 }
 
-// IsGTIDCoverPreviousFiles check whether gset contains file's previous_gset
+// IsGTIDCoverPreviousFiles check whether gset contains file's previous_gset.
 func (r *BinlogReader) IsGTIDCoverPreviousFiles(ctx context.Context, filePath string, gset mysql.GTIDSet) (bool, error) {
 	fileReader := reader.NewFileReader(&reader.FileReaderConfig{Timezone: r.cfg.Timezone})
 	defer fileReader.Close()
@@ -148,11 +148,12 @@ func (r *BinlogReader) IsGTIDCoverPreviousFiles(ctx context.Context, filePath st
 			return false, err
 		}
 
-		if e.Header.EventType == replication.PREVIOUS_GTIDS_EVENT {
+		switch {
+		case e.Header.EventType == replication.PREVIOUS_GTIDS_EVENT:
 			gs, err = event.GTIDsFromPreviousGTIDsEvent(e)
-		} else if e.Header.EventType == replication.MARIADB_GTID_LIST_EVENT {
+		case e.Header.EventType == replication.MARIADB_GTID_LIST_EVENT:
 			gs, err = event.GTIDsFromMariaDBGTIDListEvent(e)
-		} else {
+		default:
 			continue
 		}
 
@@ -163,7 +164,7 @@ func (r *BinlogReader) IsGTIDCoverPreviousFiles(ctx context.Context, filePath st
 	}
 }
 
-// getPosByGTID gets file position by gtid, result should be (filename, 4)
+// getPosByGTID gets file position by gtid, result should be (filename, 4).
 func (r *BinlogReader) getPosByGTID(gset mysql.GTIDSet) (*mysql.Position, error) {
 	// start from newest uuid dir
 	for i := len(r.uuids) - 1; i >= 0; i-- {
@@ -247,7 +248,7 @@ func (r *BinlogReader) StartSyncByPos(pos mysql.Position) (Streamer, error) {
 	return s, nil
 }
 
-// StartSyncByGTID start sync by gtid
+// StartSyncByGTID start sync by gtid.
 func (r *BinlogReader) StartSyncByGTID(gset mysql.GTIDSet) (Streamer, error) {
 	r.tctx.L().Info("begin to sync binlog", zap.Stringer("GTID Set", gset))
 	r.usingGTID = true
@@ -256,8 +257,7 @@ func (r *BinlogReader) StartSyncByGTID(gset mysql.GTIDSet) (Streamer, error) {
 		return nil, terror.ErrReaderAlreadyRunning.Generate()
 	}
 
-	err := r.updateUUIDs()
-	if err != nil {
+	if err := r.updateUUIDs(); err != nil {
 		return nil, err
 	}
 
@@ -290,7 +290,7 @@ func (r *BinlogReader) StartSyncByGTID(gset mysql.GTIDSet) (Streamer, error) {
 	return s, nil
 }
 
-// parseRelay parses relay root directory, it support master-slave switch (switching to next sub directory)
+// parseRelay parses relay root directory, it support master-slave switch (switching to next sub directory).
 func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mysql.Position) error {
 	var (
 		needSwitch     bool
@@ -331,7 +331,7 @@ func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mys
 	}
 }
 
-// parseDirAsPossible parses relay sub directory as far as possible
+// parseDirAsPossible parses relay sub directory as far as possible.
 func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer, pos mysql.Position) (needSwitch bool, nextUUID string, nextBinlogName string, err error) {
 	currentUUID, _, realPos, err := binlog.ExtractPos(pos, r.uuids)
 	if err != nil {
@@ -394,7 +394,7 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 	}
 }
 
-// parseFileAsPossible parses single relay log file as far as possible
+// parseFileAsPossible parses single relay log file as far as possible.
 func (r *BinlogReader) parseFileAsPossible(ctx context.Context, s *LocalStreamer, relayLogFile string, offset int64, relayLogDir string, firstParse bool, currentUUID string, possibleLast bool) (needSwitch bool, latestPos int64, nextUUID string, nextBinlogName string, err error) {
 	var needReParse bool
 	latestPos = offset
@@ -421,7 +421,7 @@ func (r *BinlogReader) parseFileAsPossible(ctx context.Context, s *LocalStreamer
 }
 
 // parseFile parses single relay log file from specified offset
-// TODO: move all stateful variables into a class, such as r.fileParser
+// TODO: move all stateful variables into a class, such as r.fileParser.
 func (r *BinlogReader) parseFile(
 	ctx context.Context,
 	s *LocalStreamer,
@@ -574,10 +574,10 @@ func (r *BinlogReader) parseFile(
 	}()
 
 	wg.Add(1)
-	go func(latestPos int64) {
+	go func() {
 		defer wg.Done()
-		needSwitchSubDir(newCtx, r.cfg.RelayDir, currentUUID, fullPath, latestPos, switchCh, switchErrCh)
-	}(latestPos)
+		needSwitchSubDir(newCtx, r.cfg.RelayDir, currentUUID, switchCh, switchErrCh)
+	}()
 
 	wg.Add(1)
 	go func(latestPos int64) {
@@ -614,7 +614,7 @@ func (r *BinlogReader) parseFile(
 	}
 }
 
-// updateUUIDs re-parses UUID index file and updates UUID list
+// updateUUIDs re-parses UUID index file and updates UUID list.
 func (r *BinlogReader) updateUUIDs() error {
 	uuids, err := utils.ParseUUIDIndex(r.indexPath)
 	if err != nil {
@@ -636,7 +636,7 @@ func (r *BinlogReader) Close() {
 	r.tctx.L().Info("binlog reader closed")
 }
 
-// GetUUIDs returns binlog reader's uuids
+// GetUUIDs returns binlog reader's uuids.
 func (r *BinlogReader) GetUUIDs() []string {
 	uuids := make([]string, 0, len(r.uuids))
 	uuids = append(uuids, r.uuids...)
@@ -650,7 +650,7 @@ func (r *BinlogReader) getCurrentGtidSet() mysql.GTIDSet {
 	return r.currGset.Clone()
 }
 
-// advanceCurrentGtidSet advance gtid set and return whether currGset not updated
+// advanceCurrentGtidSet advance gtid set and return whether currGset not updated.
 func (r *BinlogReader) advanceCurrentGtidSet(gtid string) (bool, error) {
 	if r.currGset == nil {
 		r.currGset = r.prevGset.Clone()

@@ -45,13 +45,13 @@ func (d *Duration) MarshalJSON() ([]byte, error) {
 
 // CheckerConfig is configuration used for TaskStatusChecker.
 type CheckerConfig struct {
-	BackoffJitter   bool     `yaml:"backoff-jitter" toml:"backoff-jitter" json:"-"`
 	CheckEnable     bool     `yaml:"check-enable" toml:"check-enable" json:"check-enable"`
 	BackoffRollback Duration `yaml:"backoff-rollback" toml:"backoff-rollback" json:"backoff-rollback"`
 	BackoffMax      Duration `yaml:"backoff-max" toml:"backoff-max" json:"backoff-max"`
 	// unexpose config
 	CheckInterval Duration `yaml:"check-interval" toml:"check-interval" json:"-"`
 	BackoffMin    Duration `yaml:"backoff-min" toml:"backoff-min" json:"-"`
+	BackoffJitter bool     `yaml:"backoff-jitter" toml:"backoff-jitter" json:"-"`
 	BackoffFactor float64  `yaml:"backoff-factor" toml:"backoff-factor" json:"-"`
 }
 

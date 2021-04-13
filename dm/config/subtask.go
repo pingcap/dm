@@ -129,26 +129,13 @@ type SubTaskConfig struct {
 	flagSet *flag.FlagSet
 
 	// when in sharding, multi dm-workers do one task
-	IsSharding bool `toml:"is-sharding" json:"is-sharding"`
+	IsSharding      bool   `toml:"is-sharding" json:"is-sharding"`
+	ShardMode       string `toml:"shard-mode" json:"shard-mode"`
+	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
 	// handle schema/table name mode, and only for schema/table name/pattern
 	// if case insensitive, we would convert schema/table name/pattern to lower case
-	CaseSensitive   bool `toml:"case-sensitive" json:"case-sensitive"`
-	EnableHeartbeat bool `toml:"enable-heartbeat" json:"enable-heartbeat"`
-
-	CleanDumpFile bool `toml:"clean-dump-file" json:"clean-dump-file"`
-
-	// deprecated, will auto discover SQL mode
-	EnableANSIQuotes bool `toml:"ansi-quotes" json:"ansi-quotes"`
-
-	// still needed by Syncer / Loader bin
-	printVersion bool
-
-	// UseRelay get value from dm-worker's relayEnabled
-	UseRelay bool `toml:"use-relay" json:"use-relay"`
-
-	ShardMode       string `toml:"shard-mode" json:"shard-mode"`
-	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
+	CaseSensitive bool `toml:"case-sensitive" json:"case-sensitive"`
 
 	Name string `toml:"name" json:"name"`
 	Mode string `toml:"mode" json:"mode"`
@@ -161,11 +148,17 @@ type SubTaskConfig struct {
 	MetaSchema              string `toml:"meta-schema" json:"meta-schema"`
 	HeartbeatUpdateInterval int    `toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
 	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
+	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
 	Meta                    *Meta  `toml:"meta" json:"meta"`
 	Timezone                string `toml:"timezone" josn:"timezone"`
 
 	// RelayDir get value from dm-worker config
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`
+
+	// UseRelay get value from dm-worker's relayEnabled
+	UseRelay bool     `toml:"use-relay" json:"use-relay"`
+	From     DBConfig `toml:"from" json:"from"`
+	To       DBConfig `toml:"to" json:"to"`
 
 	RouteRules         []*router.TableRule   `toml:"route-rules" json:"route-rules"`
 	FilterRules        []*bf.BinlogEventRule `toml:"filter-rules" json:"filter-rules"`
@@ -175,11 +168,9 @@ type SubTaskConfig struct {
 	BWList *filter.Rules `toml:"black-white-list" json:"black-white-list"`
 	BAList *filter.Rules `toml:"block-allow-list" json:"block-allow-list"`
 
-	MydumperConfig          // Mydumper configuration
-	LoaderConfig            // Loader configuration
-	SyncerConfig            // Syncer configuration
-	From           DBConfig `toml:"from" json:"from"`
-	To             DBConfig `toml:"to" json:"to"`
+	MydumperConfig // Mydumper configuration
+	LoaderConfig   // Loader configuration
+	SyncerConfig   // Syncer configuration
 
 	// compatible with standalone dm unit
 	LogLevel  string `toml:"log-level" json:"log-level"`
@@ -191,6 +182,14 @@ type SubTaskConfig struct {
 	StatusAddr string `toml:"status-addr" json:"status-addr"`
 
 	ConfigFile string `toml:"-" json:"config-file"`
+
+	CleanDumpFile bool `toml:"clean-dump-file" json:"clean-dump-file"`
+
+	// deprecated, will auto discover SQL mode
+	EnableANSIQuotes bool `toml:"ansi-quotes" json:"ansi-quotes"`
+
+	// still needed by Syncer / Loader bin
+	printVersion bool
 }
 
 // NewSubTaskConfig creates a new SubTaskConfig.

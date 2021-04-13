@@ -83,9 +83,9 @@ func (t *testEtcdUtilSuite) newConfig(c *C, name string, basePort uint16, portCo
 	return cfg, basePort
 }
 
-func (t *testEtcdUtilSuite) urlsToStrings(URLs []url.URL) []string {
-	ret := make([]string, 0, len(URLs))
-	for _, u := range URLs {
+func (t *testEtcdUtilSuite) urlsToStrings(urls []url.URL) []string {
+	ret := make([]string, 0, len(urls))
+	for _, u := range urls {
 		ret = append(ret, u.String())
 	}
 	return ret

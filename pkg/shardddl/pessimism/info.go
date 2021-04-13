@@ -38,13 +38,13 @@ type Info struct {
 }
 
 // NewInfo creates a new Info instance.
-func NewInfo(task, source, schema, table string, DDLs []string) Info {
+func NewInfo(task, source, schema, table string, ddls []string) Info {
 	return Info{
 		Task:   task,
 		Source: source,
 		Schema: schema,
 		Table:  table,
-		DDLs:   DDLs,
+		DDLs:   ddls,
 	}
 }
 
@@ -118,12 +118,13 @@ func PutInfoIfOpNotDone(cli *clientv3.Client, info Info) (rev int64, putted bool
 
 	opsResp := resp.Responses[0].GetResponseRange()
 	opBefore, err := operationFromJSON(string(opsResp.Kvs[0].Value))
-	if err != nil {
+	switch {
+	case err != nil:
 		return 0, false, err
-	} else if opBefore.Done {
+	case opBefore.Done:
 		// the operation with `done` exist before, abort the PUT.
 		return rev, false, nil
-	} else if utils.CompareShardingDDLs(opBefore.DDLs, info.DDLs) { //nolint:staticcheck
+	case utils.CompareShardingDDLs(opBefore.DDLs, info.DDLs):
 		// TODO: try to handle put the same `done` DDL later.
 	}
 

@@ -32,6 +32,7 @@ type testAPI struct{}
 var _ = Suite(&testAPI{})
 
 func (t *testAPI) TestAPI(c *C) {
+	// nolint:dogsled
 	_, currFile, _, _ := runtime.Caller(0)
 	srcMetaPath := filepath.Join(filepath.Dir(currFile), "v106_data_for_test")
 	srcDBPath := filepath.Join(srcMetaPath, "kv")
