@@ -172,11 +172,11 @@ function test_stop_task_before_checkpoint(){
 function run() {
     run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
 
-#    test_session_config
-#
-#    test_query_timeout
-#
-#    test_stop_task_before_checkpoint
+    test_session_config
+
+    test_query_timeout
+
+    test_stop_task_before_checkpoint
 
     inject_points=(
         "github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
