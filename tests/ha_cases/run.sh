@@ -354,6 +354,74 @@ function test_kill_worker_in_sync() {
     echo "[$(date)] <<<<<< finish test_kill_worker_in_sync >>>>>>"
 }
 
+function test_standalone_running() {
+    echo "[$(date)] <<<<<< start test_standalone_running >>>>>>"
+    cleanup
+    prepare_sql
+    start_standalone_cluster
+
+    echo "use sync_diff_inspector to check full dump loader"
+    check_sync_diff $WORK_DIR $cur/conf/diff-standalone-config.toml
+
+    echo "flush logs to force rotate binlog file"
+    run_sql "flush logs;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+
+    echo "apply increment data before restart dm-worker to ensure entering increment phase"
+    run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
+
+    echo "use sync_diff_inspector to check increment data"
+    check_sync_diff $WORK_DIR $cur/conf/diff-standalone-config.toml
+
+    cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/standalone-task2.yaml" \
+        "\"result\": false" 1
+
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/standalone-task2.yaml" \
+        "\"result\": true" 2 \
+        "\"source\": \"$SOURCE_ID2\"" 1
+
+    worker=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT" query-status test2 \
+        | grep 'worker' | awk -F: '{print $2}')
+    worker_name=${worker:0-9:7}
+    worker_idx=${worker_name:0-1:1}
+    worker_ports=(0 WORKER1_PORT WORKER2_PORT)
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status"\
+        "\"taskStatus\": \"Running\"" 2
+
+    echo "kill $worker_name"
+    ps aux | grep dm-worker${worker_idx} |awk '{print $2}'|xargs kill || true
+    check_port_offline ${worker_ports[$worker_idx]} 20
+    rm -rf $WORK_DIR/worker${worker_idx}/relay-dir
+
+    # test running, test2 fail
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status"\
+        "\"taskStatus\": \"Running\"" 1
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "stop-task test2"\
+        "\"result\": true" 1
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/standalone-task2.yaml"\
+        "\"result\": false" 1
+
+    # test should still running
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test"\
+        "\"stage\": \"Running\"" 1
+
+    echo "[$(date)] <<<<<< finish test_standalone_running >>>>>>"
+}
+
 function test_config_name() {
     echo "[$(date)] <<<<<< start test_config_name >>>>>>"
 
@@ -476,6 +544,7 @@ function run() {
     test_kill_and_isolate_worker               # TICASE-968, 973, 1002, 975, 969, 972, 974, 970, 971, 976, 978, 988
     test_kill_master_in_sync
     test_kill_worker_in_sync
+    test_standalone_running                    # TICASE-929, 959, 960, 967, 977, 980, 983
 }
 
 
