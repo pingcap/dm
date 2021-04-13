@@ -1098,89 +1098,13 @@ function DM_118 {
     "clean_table" "optimistic"
 }
 
-function DM_119_CASE {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1,1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2,2);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3,3,3);"
 
-    run_sql_source1 "alter table ${shardddl1}.${tb1} add index idx(c1,c2);"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4,4);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5,5);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,6,6);"
-
-    run_sql_source2 "alter table ${shardddl1}.${tb1} add index idx(c1,c3);"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7,7);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8,8);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9,9);"
-    
-    # FIXME: DM should detect conflicts and give human readable error messages.
-    # For example:
-    # if [[ "$1" = "pessimistic" ]]; then
-    #     check_log_contain_with_retry "is different with" $WORK_DIR/master/log/dm-master.log
-    # else
-    #     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-    #         "query-status test" \
-    #         "because schema conflict detected" 1
-    # fi
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10 "fail"
-}
-
-# Add index with the same name but with different fields.
-function DM_119 {
-    run_case 119 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int, c3 int);\"" \
-    "clean_table" "pessimistic"
-    run_case 119 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int, c3 int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int, c3 int);\"" \
-    "clean_table" "optimistic"
-}
-
-function DM_120_CASE {
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2,2);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3,3);"
-
-    run_sql_source1 "alter table ${shardddl1}.${tb1} add index idx1(c1), add index idx2(c2);"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,4,4);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5,5);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6,6);"
-
-    run_sql_source2 "alter table ${shardddl1}.${tb1} add index idx1(c1), add index idx2(c2);"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(7,7,7);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(8,8,8);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9,9);"
-
-    run_sql_source2 "alter table ${shardddl1}.${tb2} add index idx1(c1), add index idx2(c2);"
-    run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10,10);"
-    run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11,11);"
-    run_sql_source2 "insert into ${shardddl1}.${tb2} values(12,12,12);"
-
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-}
-
-# Add multiple indexes to a single table.
-function DM_120 {
-    run_case 120 "double-source-pessimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int);\"" \
-    "clean_table" "pessimistic"
-    run_case 120 "double-source-optimistic" \
-    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key, c1 int, c2 int);\"; \
-     run_sql_source2 \"create table ${shardddl1}.${tb2} (a int primary key, c1 int, c2 int);\"" \
-    "clean_table" "optimistic"   
-}
 
 function run() {
     init_cluster
     init_database
     start=71
-    end=120
+    end=118
     except=(072 074 075 083 084 087 088 089 090 091 092 093)
     for i in $(seq -f "%03g" ${start} ${end}); do
         if [[ ${except[@]} =~ $i ]]; then
