@@ -34,7 +34,7 @@ var (
 	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/a/")
 	// UpstreamConfigKeyAdapter stores all config of which MySQL-task has not stopped.
 	// k/v: Encode(source-id) -> config
-	UpstreamConfigKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/upstream/config/")
+	UpstreamConfigKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/v2/upstream/config/")
 	// UpstreamBoundWorkerKeyAdapter is used to store address of worker in which MySQL-tasks which are running.
 	// k/v: Encode(worker-name) -> the bound relationship.
 	UpstreamBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/bound-worker/")
@@ -53,7 +53,7 @@ var (
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
 	// StageRelayKeyAdapter is used to store the running stage of the relay.
 	// k/v: Encode(source-id) -> the running stage of the relay.
-	StageRelayKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/stage/relay/")
+	StageRelayKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/v2/stage/relay/")
 	// StageSubTaskKeyAdapter is used to store the running stage of the subtask.
 	// k/v: Encode(source-id, task-name) -> the running stage of the subtask.
 	StageSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/stage/subtask/")
@@ -80,7 +80,7 @@ var (
 	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name) -> table schema.
 	ShardDDLOptimismInitSchemaKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-optimism/init-schema/")
 	// ShardDDLOptimismDroppedColumnsKeyAdapter is used to store the columns that are not fully dropped
-	// k/v: Encode(task-name, downstream-schema-name, downstream-table-name, column-name, source-id, upstream-schema-name, upstream-table-name) -> empty
+	// k/v: Encode(lock-id, column-name, source-id, upstream-schema-name, upstream-table-name) -> int
 	// If we don't identify different upstream tables, we may report an error for tb2 in the following case.
 	// Time series: (+a/-a means add/drop column a)
 	//	    older ----------------> newer
@@ -105,7 +105,10 @@ func keyAdapterKeysLen(s KeyAdapter) int {
 	case ShardDDLOptimismInfoKeyAdapter, ShardDDLOptimismOperationKeyAdapter:
 		return 4
 	case ShardDDLOptimismDroppedColumnsKeyAdapter:
-		return 7
+		return 5
+	// used in upgrading
+	case UpstreamConfigKeyAdapterV1, StageRelayKeyAdapterV1:
+		return 1
 	}
 	return -1
 }
@@ -120,12 +123,18 @@ func IsErrNetClosing(err error) bool {
 
 // KeyAdapter is used to construct etcd key.
 type KeyAdapter interface {
+	// Encode returns a string encoded by given keys.
+	// If give all keys whose number is the same as specified in keyAdapterKeysLen, it returns a non `/` terminated
+	// string, and it should not be used with WithPrefix.
+	// If give not enough keys, it returns a `/` terminated string that could be used with WithPrefix.
 	Encode(keys ...string) string
 	Decode(key string) ([]string, error)
 	Path() string
 }
 
 type keyEncoderDecoder string
+
+// always use keyHexEncoderDecoder to avoid `/` in keys
 type keyHexEncoderDecoder string
 
 func (s keyEncoderDecoder) Encode(keys ...string) string {
@@ -148,14 +157,21 @@ func (s keyEncoderDecoder) Path() string {
 }
 
 func (s keyHexEncoderDecoder) Encode(keys ...string) string {
-	t := []string{string(s)}
+	hexKeys := []string{string(s)}
 	for _, key := range keys {
-		t = append(t, hex.EncodeToString([]byte(key)))
+		hexKeys = append(hexKeys, hex.EncodeToString([]byte(key)))
 	}
-	return path.Join(t...)
+	ret := path.Join(hexKeys...)
+	if len(keys) < keyAdapterKeysLen(s) {
+		ret += "/"
+	}
+	return ret
 }
 
 func (s keyHexEncoderDecoder) Decode(key string) ([]string, error) {
+	if key[len(key)-1] == '/' {
+		key = key[:len(key)-1]
+	}
 	v := strings.Split(strings.TrimPrefix(key, string(s)), "/")
 	if l := keyAdapterKeysLen(s); l != len(v) {
 		return nil, terror.ErrDecodeEtcdKeyFail.Generate(fmt.Sprintf("decoder is %s, the key is %s", string(s), key))
@@ -173,3 +189,13 @@ func (s keyHexEncoderDecoder) Decode(key string) ([]string, error) {
 func (s keyHexEncoderDecoder) Path() string {
 	return string(s)
 }
+
+// used in upgrade
+var (
+	// UpstreamConfigKeyAdapter stores all config of which MySQL-task has not stopped.
+	// k/v: Encode(source-id) -> config
+	UpstreamConfigKeyAdapterV1 KeyAdapter = keyEncoderDecoder("/dm-master/upstream/config/")
+	// StageRelayKeyAdapter is used to store the running stage of the relay.
+	// k/v: Encode(source-id) -> the running stage of the relay.
+	StageRelayKeyAdapterV1 KeyAdapter = keyEncoderDecoder("/dm-master/stage/relay/")
+)

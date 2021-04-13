@@ -58,11 +58,12 @@ type Operation struct {
 	ConflictStage ConflictStage `json:"conflict-stage"`   // current conflict stage.
 	ConflictMsg   string        `json:"conflict-message"` // current conflict message
 	Done          bool          `json:"done"`             // whether the operation has done
+	Cols          []string      `json:"cols"`             // drop columns' name
 }
 
 // NewOperation creates a new Operation instance.
 func NewOperation(ID, task, source, upSchema, upTable string,
-	DDLs []string, conflictStage ConflictStage, conflictMsg string, done bool) Operation {
+	DDLs []string, conflictStage ConflictStage, conflictMsg string, done bool, cols []string) Operation {
 	return Operation{
 		ID:            ID,
 		Task:          task,
@@ -73,6 +74,7 @@ func NewOperation(ID, task, source, upSchema, upTable string,
 		ConflictStage: conflictStage,
 		ConflictMsg:   conflictMsg,
 		Done:          done,
+		Cols:          cols,
 	}
 }
 
@@ -225,8 +227,15 @@ func GetInfosOperationsByTask(cli *clientv3.Client, task string) ([]Info, []Oper
 func WatchOperationPut(ctx context.Context, cli *clientv3.Client,
 	task, source, upSchema, upTable string, revision int64,
 	outCh chan<- Operation, errCh chan<- error) {
-	ch := cli.Watch(ctx, common.ShardDDLOptimismOperationKeyAdapter.Encode(task, source, upSchema, upTable),
-		clientv3.WithPrefix(), clientv3.WithRev(revision))
+	var ch clientv3.WatchChan
+	// caller may use empty keys to expect a prefix watch
+	if upTable == "" {
+		ch = cli.Watch(ctx, common.ShardDDLOptimismOperationKeyAdapter.Path(), clientv3.WithPrefix(),
+			clientv3.WithRev(revision))
+	} else {
+		ch = cli.Watch(ctx, common.ShardDDLOptimismOperationKeyAdapter.Encode(task, source, upSchema, upTable),
+			clientv3.WithRev(revision))
+	}
 
 	for {
 		select {

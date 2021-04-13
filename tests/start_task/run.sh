@@ -93,7 +93,7 @@ function run() {
         echo "check un-accessible DM-worker exists"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status -s 127.0.0.1:8888" \
-            "127.0.0.1:8888 relevant worker-client not found" 1
+            "sources \[127.0.0.1:8888\] haven't been added" 1
 
         echo "start task and will failed"
         task_conf="$cur/conf/dm-task.yaml"

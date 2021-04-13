@@ -521,6 +521,7 @@ func (s *Server) getSourceStatus(needLock bool) pb.SourceStatus {
 	return s.sourceStatus
 }
 
+// TODO: move some call to setWorker/getOrStartWorker
 func (s *Server) setSourceStatus(source string, err error, needLock bool) {
 	if needLock {
 		s.Lock()
@@ -596,7 +597,7 @@ OUTER:
 			}
 		}
 	}
-	log.L().Info("worker server is closed, handleSourceBound will quit now")
+	log.L().Info("handleSourceBound will quit now")
 	return nil
 }
 
@@ -719,11 +720,11 @@ func (s *Server) enableRelay(sourceCfg *config.SourceConfig, needLock bool) erro
 		// because no re-assigned mechanism exists for keepalived DM-worker yet.
 		return err2
 	}
-	s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
 	if err2 = w.EnableRelay(); err2 != nil {
 		s.setSourceStatus(sourceCfg.SourceID, err2, false)
 		return err2
 	}
+	s.UpdateKeepAliveTTL(s.cfg.RelayKeepAliveTTL)
 	return nil
 }
 
