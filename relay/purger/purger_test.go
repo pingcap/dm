@@ -207,8 +207,8 @@ func (t *testPurgerSuite) TestPurgeAutomaticallyTime(c *C) {
 	}
 
 	// change files' modification time
-	aTime := time.Now().Add(time.Duration(-cfg.Expires) * 3 * time.Hour)
-	mTime := time.Now().Add(time.Duration(-cfg.Expires) * 2 * time.Hour)
+	aTime := time.Now().Add(time.Duration(-cfg.Expires*3) * time.Hour)
+	mTime := time.Now().Add(time.Duration(-cfg.Expires*2) * time.Hour)
 	for _, fps := range relayFilesPath {
 		for _, fp := range fps {
 			err = os.Chtimes(fp, aTime, mTime)

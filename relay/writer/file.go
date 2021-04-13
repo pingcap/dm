@@ -329,7 +329,7 @@ func (w *FileWriter) handlePotentialHoleOrDuplicate(ev *replication.BinlogEvent)
 // handleFileHoleExist tries to handle a potential hole after this event wrote.
 // A hole exists often because some binlog events not sent by the master.
 // If no hole exists, then ev may be a duplicate event.
-// NOTE: handle cases when file size > 4GB
+// NOTE: handle cases when file size > 4GB.
 func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) (bool, error) {
 	// 1. detect whether a hole exists
 	evStartPos := int64(ev.Header.LogPos - ev.Header.EventSize)
@@ -392,7 +392,7 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (Re
 //    b. update the GTID set with the event's GTID if the transaction finished
 // 3. truncate any incomplete events/transactions
 // now, we think a transaction finished if we received a XIDEvent or DDL in QueryEvent
-// NOTE: handle cases when file size > 4GB
+// NOTE: handle cases when file size > 4GB.
 func (w *FileWriter) doRecovering(ctx context.Context) (RecoverResult, error) {
 	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
 	fs, err := os.Stat(filename)

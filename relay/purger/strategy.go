@@ -44,7 +44,7 @@ func (s strategyType) String() string {
 // two purge behaviors
 //   1. purge in the background
 //   2. do one time purge process
-// a strategy can support both or one of them
+// a strategy can support both or one of them.
 type PurgeStrategy interface {
 	// Check checks whether need to do the purge in the background automatically
 	Check(args interface{}) (bool, error)
@@ -59,7 +59,7 @@ type PurgeStrategy interface {
 	Type() strategyType
 }
 
-// StrategyArgs represents args needed by purge strategy
+// StrategyArgs represents args needed by purge strategy.
 type StrategyArgs interface {
 	// SetActiveRelayLog sets active relay log info in args
 	// this should be called before do the purging

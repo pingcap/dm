@@ -74,7 +74,7 @@ func (t *testFileUtilSuite) TestCheckBinlogHeaderExist(c *check.C) {
 	// invalid data
 	invalidData := make([]byte, len(replication.BinLogFileHeader))
 	copy(invalidData, replication.BinLogFileHeader)
-	invalidData[0] = invalidData[0] + 1
+	invalidData[0]++
 	err = ioutil.WriteFile(filename, invalidData, 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkBinlogHeaderExist(filename)
@@ -405,6 +405,7 @@ func (t *testFileUtilSuite) testGetTxnPosGTIDs(c *check.C, filename, flavor, pre
 
 // genBinlogEventsWithGTIDs generates some binlog events used by testFileUtilSuite and testFileWriterSuite.
 // now, its generated events including 3 DDL and 10 DML.
+// nolint:unparam
 func genBinlogEventsWithGTIDs(c *check.C, flavor string, previousGTIDSet, latestGTID1, latestGTID2 gtid.Set) (*event.Generator, []*replication.BinlogEvent, []byte) {
 	var (
 		serverID  uint32 = 11

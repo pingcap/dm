@@ -30,13 +30,13 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// RelayOperator represents an operator for relay log files, like writer, reader
+// RelayOperator represents an operator for relay log files, like writer, reader.
 type RelayOperator interface {
 	// EarliestActiveRelayLog returns the earliest active relay log info in this operator
 	EarliestActiveRelayLog() *streamer.RelayLogInfo
 }
 
-// PurgeInterceptor represents an interceptor may forbid the purge process
+// PurgeInterceptor represents an interceptor may forbid the purge process.
 type PurgeInterceptor interface {
 	// ForbidPurge returns whether forbidding purge currently and an optional message
 	ForbidPurge() (bool, string)
@@ -48,7 +48,7 @@ const (
 	stageClosed
 )
 
-// Purger purges relay log according to some strategies
+// Purger purges relay log according to some strategies.
 type Purger interface {
 	// Start starts strategies by config
 	Start()
@@ -60,10 +60,10 @@ type Purger interface {
 	Do(ctx context.Context, req *pb.PurgeRelayRequest) error
 }
 
-// NewPurger creates a new purger
+// NewPurger creates a new purger.
 var NewPurger = NewRelayPurger
 
-// RelayPurger purges relay log according to some strategies
+// RelayPurger purges relay log according to some strategies.
 type RelayPurger struct {
 	lock            sync.RWMutex
 	wg              sync.WaitGroup
@@ -81,7 +81,7 @@ type RelayPurger struct {
 	logger log.Logger
 }
 
-// NewRelayPurger creates a new purger
+// NewRelayPurger creates a new purger.
 func NewRelayPurger(cfg config.PurgeConfig, baseRelayDir string, operators []RelayOperator, interceptors []PurgeInterceptor) Purger {
 	p := &RelayPurger{
 		cfg:          cfg,
@@ -102,7 +102,7 @@ func NewRelayPurger(cfg config.PurgeConfig, baseRelayDir string, operators []Rel
 	return p
 }
 
-// Start starts strategies by config
+// Start starts strategies by config.
 func (p *RelayPurger) Start() {
 	if !p.running.CompareAndSwap(stageNew, stageRunning) {
 		return
@@ -123,7 +123,7 @@ func (p *RelayPurger) Start() {
 }
 
 // run starts running the process
-// NOTE: ensure run is called at most once of a Purger
+// NOTE: ensure run is called at most once of a Purger.
 func (p *RelayPurger) run() {
 	ticker := time.NewTicker(time.Duration(p.cfg.Interval) * time.Second)
 	defer ticker.Stop()
@@ -142,7 +142,7 @@ func (p *RelayPurger) run() {
 	}
 }
 
-// Close stops the started strategies
+// Close stops the started strategies.
 func (p *RelayPurger) Close() {
 	if !p.running.CompareAndSwap(stageRunning, stageClosed) {
 		return
@@ -158,26 +158,27 @@ func (p *RelayPurger) Close() {
 	p.wg.Wait()
 }
 
-// Purging returns whether the purger is purging
+// Purging returns whether the purger is purging.
 func (p *RelayPurger) Purging() bool {
 	return p.purgingStrategy.Get() != uint32(strategyNone)
 }
 
-// Do does the purge process one time
+// Do does the purge process one time.
 func (p *RelayPurger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 	uuids, err := utils.ParseUUIDIndex(p.indexPath)
 	if err != nil {
 		return terror.Annotatef(err, "parse UUID index file %s", p.indexPath)
 	}
 
-	if req.Inactive {
+	switch {
+	case req.Inactive:
 		ps := p.strategies[strategyInactive]
 		args := &inactiveArgs{
 			relayBaseDir: p.baseRelayDir,
 			uuids:        uuids,
 		}
 		return p.doPurge(ps, args)
-	} else if req.Time > 0 {
+	case req.Time > 0:
 		ps := p.strategies[strategyTime]
 		args := &timeArgs{
 			relayBaseDir: p.baseRelayDir,
@@ -185,7 +186,7 @@ func (p *RelayPurger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 			uuids:        uuids,
 		}
 		return p.doPurge(ps, args)
-	} else if len(req.Filename) > 0 {
+	case len(req.Filename) > 0:
 		ps := p.strategies[strategyFilename]
 		args := &filenameArgs{
 			relayBaseDir: p.baseRelayDir,
@@ -194,11 +195,12 @@ func (p *RelayPurger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 			uuids:        uuids,
 		}
 		return p.doPurge(ps, args)
+	default:
+		return terror.ErrRelayPurgeRequestNotValid.Generate(req)
 	}
-	return terror.ErrRelayPurgeRequestNotValid.Generate(req)
 }
 
-// tryPurge tries to do purge by check condition first
+// tryPurge tries to do purge by check condition first.
 func (p *RelayPurger) tryPurge() {
 	strategy, args, err := p.check()
 	if err != nil {
@@ -214,7 +216,7 @@ func (p *RelayPurger) tryPurge() {
 	}
 }
 
-// doPurge does the purging operation
+// doPurge does the purging operation.
 func (p *RelayPurger) doPurge(ps PurgeStrategy, args StrategyArgs) error {
 	if !p.purgingStrategy.CompareAndSwap(uint32(strategyNone), uint32(ps.Type())) {
 		return terror.ErrRelayOtherStrategyIsPurging.Generate(ps.Type())
@@ -289,7 +291,7 @@ func (p *RelayPurger) check() (PurgeStrategy, StrategyArgs, error) {
 	return nil, nil, nil
 }
 
-// earliestActiveRelayLog returns the current earliest active relay log info
+// earliestActiveRelayLog returns the current earliest active relay log info.
 func (p *RelayPurger) earliestActiveRelayLog() *streamer.RelayLogInfo {
 	var earliest *streamer.RelayLogInfo
 	for _, op := range p.operators {
@@ -303,26 +305,26 @@ func (p *RelayPurger) earliestActiveRelayLog() *streamer.RelayLogInfo {
 	return earliest
 }
 
-/************ dummy purger **************/
+/************ dummy purger *************.*/
 type dummyPurger struct{}
 
-// NewDummyPurger returns a dummy purger
+// NewDummyPurger returns a dummy purger.
 func NewDummyPurger(cfg config.PurgeConfig, baseRelayDir string, operators []RelayOperator, interceptors []PurgeInterceptor) Purger {
 	return &dummyPurger{}
 }
 
-// Start implements interface of Purger
+// Start implements interface of Purger.
 func (d *dummyPurger) Start() {}
 
-// Close implements interface of Purger
+// Close implements interface of Purger.
 func (d *dummyPurger) Close() {}
 
-// Purging implements interface of Purger
+// Purging implements interface of Purger.
 func (d *dummyPurger) Purging() bool {
 	return false
 }
 
-// Do implements interface of Purger
+// Do implements interface of Purger.
 func (d *dummyPurger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 	return nil
 }

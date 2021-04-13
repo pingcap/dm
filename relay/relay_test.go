@@ -30,7 +30,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
-	"github.com/siddontang/go-mysql/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
@@ -175,7 +174,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 		startPos           = gmysql.Position{Name: filename, Pos: 123}
 
 		parser2  = parser.New()
-		relayCfg = newRelayCfg(c, mysql.MySQLFlavor)
+		relayCfg = newRelayCfg(c, gmysql.MySQLFlavor)
 		r        = NewRelay(relayCfg).(*Relay)
 	)
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged", `return("406a3f61-690d-11e7-87c5-6c92bf46f384:1-122")`), IsNil)
@@ -265,7 +264,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 		startPos          = gmysql.Position{Name: filename, Pos: 123}
 
 		parser2  = parser.New()
-		relayCfg = newRelayCfg(c, mysql.MySQLFlavor)
+		relayCfg = newRelayCfg(c, gmysql.MySQLFlavor)
 		r        = NewRelay(relayCfg).(*Relay)
 	)
 	c.Assert(r.Init(context.Background()), IsNil)
@@ -388,7 +387,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 		reader2      = &mockReader{}
 		transformer2 = transformer.NewTransformer(parser.New())
 		writer2      = &mockWriter{}
-		relayCfg     = newRelayCfg(c, mysql.MariaDBFlavor)
+		relayCfg     = newRelayCfg(c, gmysql.MariaDBFlavor)
 		r            = NewRelay(relayCfg).(*Relay)
 
 		eventHeader = &replication.EventHeader{
@@ -495,7 +494,7 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	defer cancel()
 
 	var (
-		relayCfg = newRelayCfg(c, mysql.MySQLFlavor)
+		relayCfg = newRelayCfg(c, gmysql.MySQLFlavor)
 		r        = NewRelay(relayCfg).(*Relay)
 	)
 	c.Assert(r.Init(context.Background()), IsNil)
@@ -550,7 +549,7 @@ func (t *testRelaySuite) verifyMetadata(c *C, r *Relay, uuidExpected string,
 	posExpected gmysql.Position, gsStrExpected string, uuidsExpected []string) {
 	uuid, pos := r.meta.Pos()
 	_, gs := r.meta.GTID()
-	gsExpected, err := gtid.ParserGTID(mysql.MySQLFlavor, gsStrExpected)
+	gsExpected, err := gtid.ParserGTID(gmysql.MySQLFlavor, gsStrExpected)
 	c.Assert(err, IsNil)
 	c.Assert(uuid, Equals, uuidExpected)
 	c.Assert(pos, DeepEquals, posExpected)
@@ -607,6 +606,7 @@ func (t *testRelaySuite) TestProcess(c *C) {
 	defer cancel2()
 	var connID uint32
 	db := r.db.DB
+	// nolint:scopelint
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		connID, err = getBinlogDumpConnID(ctx2, db)
 		return err == nil
@@ -631,7 +631,9 @@ func (t *testRelaySuite) TestProcess(c *C) {
 
 	// should got the last DDL
 	gotLastDDL := false
+	// nolint:scopelint
 	onEventFunc := func(e *replication.BinlogEvent) error {
+		// nolint:gocritic
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			if bytes.Contains(ev.Query, []byte(lastDDL)) {
