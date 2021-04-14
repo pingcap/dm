@@ -85,7 +85,7 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 		if err2 != nil {
 			return nil, err2
 		}
-		conn, err2 := createDBConn(context.Background(), db, schema)
+		conn, err2 := createDBConn(ctx, db, schema)
 		if err2 != nil {
 			return nil, err2
 		}
@@ -98,7 +98,7 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 	if err != nil {
 		return nil, err
 	}
-	targetConn, err := createDBConn(context.Background(), targetDB, schema)
+	targetConn, err := createDBConn(ctx, targetDB, schema)
 	if err != nil {
 		return nil, err
 	}
