@@ -63,7 +63,7 @@ jobs:
     strategy:
         fail-fast: false
         matrix:
-          previous_v2: ["v2.0.0-rc", "v2.0.0-rc.2"]
+          previous_v2: ["v2.0.0", "v2.0.1"]
 
     steps:    
 

@@ -77,13 +77,21 @@ function run_dm_components_and_create_sources() {
         "alive" 1
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $CUR/conf/dm-worker1.toml
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member" \
+        "free" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source create $CUR/conf/source1.yaml" \
         "\"result\": true" 2
+
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $CUR/conf/dm-worker2.toml
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "list-member" \
+        "free" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source create $CUR/conf/source2.yaml" \
         "\"result\": true" 2
+
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "list-member" \
         "alive" 1 \
