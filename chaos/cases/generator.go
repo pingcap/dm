@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"time"
 
 	config2 "github.com/pingcap/dm/dm/config"
 )
@@ -209,7 +208,6 @@ func NewCaseGenerator(shardMode string) *CaseGenerator {
 
 // Start starts to generate sqls case
 func (g *CaseGenerator) Start(ctx context.Context, schema string, tables []string) {
-	rand.Seed(time.Now().UTC().UnixNano())
 	g.schema = schema
 	g.tables = tables
 	go g.genSQLs(ctx)

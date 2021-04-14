@@ -83,17 +83,22 @@ func isNotNullNonDefaultAddCol(sql string) (bool, error) {
 	}
 
 	spec := v.Specs[0]
-	notNull := false
+
+OUTER:
 	for _, newCol := range spec.NewColumns {
+		notNull := false
 		for _, opt := range newCol.Options {
 			if opt.Tp == ast.ColumnOptionDefaultValue {
-				return false, nil
+				continue OUTER
 			}
 			if opt.Tp == ast.ColumnOptionNotNull {
 				notNull = true
 			}
 		}
+		if notNull {
+			return true, nil
+		}
 	}
 
-	return notNull, nil
+	return false, nil
 }
