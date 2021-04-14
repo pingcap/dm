@@ -18,7 +18,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// Config is the dm-portal's config
+// Config is the dm-portal's config.
 type Config struct {
 	*flag.FlagSet `json:"-"`
 
@@ -48,7 +48,7 @@ func NewConfig() *Config {
 	return cfg
 }
 
-// Parse parses the cmd config
+// Parse parses the cmd config.
 func (cfg *Config) Parse(arguments []string) {
 	// Parse first to get config file
 	perr := cfg.FlagSet.Parse(arguments)
@@ -66,7 +66,7 @@ func (cfg *Config) Parse(arguments []string) {
 	}
 }
 
-// Valid checks whether the config is valid
+// Valid checks whether the config is valid.
 func (cfg *Config) Valid() error {
 	if cfg.Port < 1 || cfg.Port > 65535 {
 		return errors.Errorf("port %d is out of range [1, 65535]", cfg.Port)
@@ -94,12 +94,12 @@ func (cfg *Config) Valid() error {
 	return nil
 }
 
-// String return config's string
+// String return config's string.
 func (cfg *Config) String() string {
 	return fmt.Sprintf("dm-portal config: { port: %d, task-file-path: %s }", cfg.Port, cfg.TaskFilePath)
 }
 
-// DMTaskConfig is the dm task's config used for dm-portal
+// DMTaskConfig is the dm task's config used for dm-portal.
 type DMTaskConfig struct {
 	Name string `yaml:"name" json:"name"`
 
@@ -128,7 +128,7 @@ func (d *DMTaskConfig) String() string {
 	return string(cfgBytes)
 }
 
-// Verify does verification on DMTaskConfig
+// Verify does verification on DMTaskConfig.
 func (d *DMTaskConfig) Verify() error {
 	if len(d.Name) == 0 {
 		return errors.New("task name should not be empty")
@@ -151,7 +151,7 @@ func (d *DMTaskConfig) Verify() error {
 	return nil
 }
 
-// MySQLInstance represents a sync config of a MySQL instance
+// MySQLInstance represents a sync config of a MySQL instance.
 type MySQLInstance struct {
 	// it represents a MySQL/MariaDB instance or a replica group
 	SourceID string `yaml:"source-id" json:"source-id"`
@@ -182,7 +182,7 @@ func (m *MySQLInstance) Verify() error {
 	return nil
 }
 
-// DBConfig is the DB's config
+// DBConfig is the DB's config.
 type DBConfig struct {
 	Host string `yaml:"host" json:"host"`
 
@@ -195,13 +195,13 @@ type DBConfig struct {
 
 // Meta represents binlog's meta pos
 // NOTE: refine to put these config structs into pkgs
-// NOTE: now, syncer does not support GTID mode and which is supported by relay
+// NOTE: now, syncer does not support GTID mode and which is supported by relay.
 type Meta struct {
 	BinLogName string `yaml:"binlog-name" json:"binlog-name"`
 	BinLogPos  uint32 `yaml:"binlog-pos" json:"binlog-pos"`
 }
 
-// Verify does verification on configs
+// Verify does verification on configs.
 func (m *Meta) Verify() error {
 	if m != nil && len(m.BinLogName) == 0 {
 		return errors.New("binlog-name must specify")

@@ -606,7 +606,6 @@ func (t *testRelaySuite) TestProcess(c *C) {
 	defer cancel2()
 	var connID uint32
 	db := r.db.DB
-	// nolint:scopelint
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		connID, err = getBinlogDumpConnID(ctx2, db)
 		return err == nil
@@ -631,7 +630,6 @@ func (t *testRelaySuite) TestProcess(c *C) {
 
 	// should got the last DDL
 	gotLastDDL := false
-	// nolint:scopelint
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		// nolint:gocritic
 		switch ev := e.Event.(type) {

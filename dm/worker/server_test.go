@@ -499,7 +499,6 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 	}
 }
 
-// nolinter:interfacer
 func (t *testServer) testRetryConnectMaster(c *C, s *Server, etcd *embed.Etcd, dir string, hostName string) *embed.Etcd {
 	etcd.Close()
 	time.Sleep(6 * time.Second)
@@ -546,7 +545,6 @@ func (t *testServer) testSubTaskRecover(c *C, s *Server, dir string) {
 	c.Assert(status.SubTaskStatus[0].Stage, Equals, pb.Stage_Running)
 }
 
-// nolinter:interfacer
 func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, etcd *embed.Etcd) {
 	etcd.Close()
 	time.Sleep(retryConnectSleepTime + time.Duration(defaultKeepAliveTTL+3)*time.Second)

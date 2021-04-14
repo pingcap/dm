@@ -157,7 +157,6 @@ func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksu
 }
 
 // combineHeaderPayload combines header, postHeader and payload together.
-// nolint:interfacer
 func combineHeaderPayload(buf *bytes.Buffer, header, postHeader, payload []byte) error {
 	if len(header) != int(eventHeaderLen) {
 		return terror.ErrBinlogHeaderLengthNotValid.Generate(eventHeaderLen, len(header))
@@ -242,7 +241,6 @@ func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {
 }
 
 // writeIntegerColumnValue writes integer value to bytes buffer.
-// nolint:interfacer
 func writeIntegerColumnValue(buf *bytes.Buffer, value interface{}, valueType reflect.Type) error {
 	if reflect.TypeOf(value) != valueType {
 		return terror.ErrBinlogColumnTypeMisMatch.Generate(value, reflect.TypeOf(value), valueType)
@@ -251,7 +249,6 @@ func writeIntegerColumnValue(buf *bytes.Buffer, value interface{}, valueType ref
 }
 
 // writeStringColumnValue writes string value to bytes buffer.
-// nolint:interfacer
 func writeStringColumnValue(buf *bytes.Buffer, value interface{}) error {
 	str, ok := value.(string)
 	if !ok {
