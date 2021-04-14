@@ -12,6 +12,20 @@ on:
 
 jobs:
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-18.04
+    steps:
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: GolangCI Lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          version: v1.31
+          args: --config .golangci.yml --timeout 10m0s --skip-dirs ^_tool/
+
   make_build:
     name: Make Build
     runs-on: ${{ matrix.os }}
@@ -44,23 +58,3 @@ jobs:
 
     - name: Build
       run: make build
-
-  lint:
-    name: Lint
-    runs-on: ubuntu-18.04
-    steps:
-
-      - name: Check out code
-        uses: actions/checkout@v2
-
-      - name: GolangCI Lint
-        uses: golangci/golangci-lint-action@v2
-        with:
-          version: v1.31
-          args: --timeout 10m0s --skip-dirs ^_tool/
-
-      - name: Revive Lint
-        uses: morphy2k/revive-action@v1
-        with:
-          config: .revive.toml
-          exclude: _tool/...

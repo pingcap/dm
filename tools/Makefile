@@ -1,17 +1,10 @@
-all: errcheck failpoint-ctl gocovmerge golint goveralls golangci-lint \
-		mockgen protoc-gen-gogofaster protoc-gen-grpc-gateway statik gofumports
-
-errcheck:
-	go build -o bin/$@ github.com/kisielk/errcheck
+all: failpoint-ctl gocovmerge goveralls golangci-lint mockgen protoc-gen-gogofaster protoc-gen-grpc-gateway statik gofumports
 
 failpoint-ctl: 
 	go build -o bin/$@ github.com/pingcap/failpoint/failpoint-ctl
 
 gocovmerge:
 	go build -o bin/$@ github.com/zhouqiang-cl/gocovmerge
-
-golint:
-	go build -o bin/$@ golang.org/x/lint/golint
 
 goveralls:
 	go build -o bin/$@ github.com/mattn/goveralls
