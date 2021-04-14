@@ -329,7 +329,7 @@ func (t *task) genIncrData(pCtx context.Context) (err error) {
 					t.logger.Warn("ignore error when generating data for incremental stage", zap.Error(err))
 					// we don't known which connection was bad, so simply reset all of them for the next round.
 					for _, conn := range t.sourceConns {
-						if err2 := conn.resetConn(context.Background()); err2 != nil {
+						if err2 := conn.resetConn(t.ctx); err2 != nil {
 							t.logger.Warn("fail to reset connection", zap.Error(err2))
 						}
 						err = nil
