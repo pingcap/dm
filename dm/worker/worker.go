@@ -894,8 +894,7 @@ func copyConfigFromSourceForEach(
 	enableRelay bool,
 ) error {
 	for k, subTaskCfg := range subTaskCfgM {
-		sCfg := subTaskCfg
-		if err2 := copyConfigFromSource(&sCfg, sourceCfg, enableRelay); err2 != nil {
+		if err2 := copyConfigFromSource(&subTaskCfg, sourceCfg, enableRelay); err2 != nil {
 			return err2
 		}
 		subTaskCfgM[k] = subTaskCfg
