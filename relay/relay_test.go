@@ -625,12 +625,9 @@ func (t *testRelaySuite) TestProcess(c *C) {
 		c.Assert(err, IsNil)
 	}()
 
-	time.Sleep(2 * time.Second) // waiting for events
-	cancel()                    // stop processing
-	wg.Wait()
-
 	// should got the last DDL
 	gotLastDDL := false
+	binlogFileCount := 0
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
@@ -640,26 +637,33 @@ func (t *testRelaySuite) TestProcess(c *C) {
 		}
 		return nil
 	}
-	parser2 := replication.NewBinlogParser()
-	parser2.SetVerifyChecksum(true)
-
-	// check whether have binlog file in relay directory
-	// and check for events already done in `TestHandleEvent`
 	uuid, err := utils.GetServerUUID(ctx2, db, r.cfg.Flavor)
 	c.Assert(err, IsNil)
-	files, err := streamer.CollectAllBinlogFiles(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
-	c.Assert(err, IsNil)
-	var binlogFileCount int
-	for _, f := range files {
-		if binlog.VerifyFilename(f) {
-			binlogFileCount++
 
-			if !gotLastDDL {
-				err = parser2.ParseFile(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid), f), 0, onEventFunc)
-				c.Assert(err, IsNil)
+	utils.WaitSomething(6, 500*time.Millisecond, func() bool {
+		parser2 := replication.NewBinlogParser()
+		parser2.SetVerifyChecksum(true)
+
+		// check whether have binlog file in relay directory
+		// and check for events already done in `TestHandleEvent`
+		files, err2 := streamer.CollectAllBinlogFiles(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
+		c.Assert(err2, IsNil)
+		binlogFileCount = 0
+		for _, f := range files {
+			if binlog.VerifyFilename(f) {
+				binlogFileCount++
+				if !gotLastDDL {
+					err2 = parser2.ParseFile(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid), f), 0, onEventFunc)
+					c.Assert(err2, IsNil)
+				}
 			}
 		}
-	}
+		return gotLastDDL
+	})
+
+	cancel() // stop processing
+	wg.Wait()
+
 	c.Assert(binlogFileCount, Greater, 0)
 	c.Assert(gotLastDDL, IsTrue)
 }
