@@ -20,6 +20,19 @@ function cleanup_process() {
     wait_process_exit dm-syncer.test
 }
 
+function wait_pattern_exit() {
+    pattern=$1
+    while true
+    do
+        if [ "pgrep -f $pattern" != "0" ]; then
+            echo "pattern $pattern already exit"
+            return 0
+        fi
+        sleep 0.2
+        echo "wait pattern $pattern exit..."
+    done
+}
+
 if [ "$RESET_MASTER" = true ]; then
     run_sql "RESET MASTER" $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql "RESET MASTER" $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -136,7 +149,12 @@ function run_case() {
             "\"unit\": \"Sync\"" 2
     fi
 
-    DM_${case}_CASE $5
+    args=""
+    for((i=5;i<=$#;i++)); do
+        j=${!i}
+        args="${args} $j "
+    done
+    DM_${case}_CASE $args
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "stop-task test"
@@ -203,7 +221,7 @@ function check_log_contain_with_retry() {
             echo "check log contain failed $k-th time (file not exist), retry later"
             continue
         fi
-        got=`grep "$text" $log1 | wc -l`
+        got=`grep -a "$text" $log1 | wc -l`
         if [[ $got -ne 0 ]]; then
             rc=1
             break
@@ -214,7 +232,7 @@ function check_log_contain_with_retry() {
                 echo "check log contain failed $k-th time (file not exist), retry later"
                 continue
             fi
-            got=`grep "$text" $log2 | wc -l`
+            got=`grep -a "$text" $log2 | wc -l`
             if [[ $got -ne 0 ]]; then
                 rc=1
                 break

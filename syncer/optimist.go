@@ -91,6 +91,12 @@ func (s *Syncer) handleQueryEventOptimistic(
 		err      error
 	)
 
+	err = s.execError.Get()
+	if err != nil {
+		ec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+		return nil
+	}
+
 	switch needTrackDDLs[0].stmt.(type) {
 	case *ast.CreateDatabaseStmt, *ast.DropDatabaseStmt, *ast.AlterDatabaseStmt:
 		isDBDDL = true
@@ -177,7 +183,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	}
 
 	if op.ConflictStage == optimism.ConflictDetected {
-		return terror.ErrSyncerShardDDLConflict.Generate(needHandleDDLs)
+		return terror.ErrSyncerShardDDLConflict.Generate(needHandleDDLs, op.ConflictMsg)
 	}
 
 	// updated needHandleDDLs to DDLs received from DM-master.

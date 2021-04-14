@@ -43,8 +43,19 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
-    # relay should be started after source bounded
-    sleep 1
+    worker1bound=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT1" list-member --name worker1 \
+        | grep 'source' | awk -F: '{print $2}' | cut -d'"' -f 2)
+    worker2bound=$($PWD/bin/dmctl.test DEVEL --master-addr "127.0.0.1:$MASTER_PORT1" list-member --name worker2 \
+        | grep 'source' | awk -F: '{print $2}' | cut -d'"' -f 2)
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $worker1bound worker1" \
+        "\"result\": true" 1
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $worker2bound worker2" \
+        "\"result\": true" 1
+
+    # relay should be started after start-relay
+    sleep 2
     # and now default keepalive TTL is 30 minutes
     killall -9 dm-worker.test
     sleep 3
@@ -112,10 +123,25 @@ function run() {
         "operate-source update $WORK_DIR/source2.yaml" \
         "Update worker config is not supported by dm-ha now" 1
     # update mysql config is not supported by dm-ha now, so we stop and start source again to update source config
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "stop-relay -s $worker1bound worker1" \
+        "\"result\": true" 1
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "stop-relay -s $worker2bound worker2" \
+        "\"result\": true" 1
+
     dmctl_operate_source stop $WORK_DIR/source1.yaml $SOURCE_ID1
     dmctl_operate_source stop $WORK_DIR/source2.yaml $SOURCE_ID2
     dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $worker1bound worker1" \
+        "\"result\": true" 1
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-relay -s $worker2bound worker2" \
+        "\"result\": true" 1
 
     echo "start task in incremental mode"
     cat $cur/conf/dm-task.yaml > $WORK_DIR/dm-task.yaml

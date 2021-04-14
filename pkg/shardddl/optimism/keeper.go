@@ -17,9 +17,11 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/pingcap/tidb-tools/pkg/schemacmp"
+	"go.etcd.io/etcd/clientv3"
+
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 )
 
 // LockKeeper used to keep and handle DDL lock conveniently.
@@ -38,9 +40,13 @@ func NewLockKeeper() *LockKeeper {
 
 // RebuildLocksAndTables rebuild the locks and tables
 func (lk *LockKeeper) RebuildLocksAndTables(
+	cli *clientv3.Client,
 	ifm map[string]map[string]map[string]map[string]Info,
+	colm map[string]map[string]map[string]map[string]map[string]DropColumnStage,
 	lockJoined map[string]schemacmp.Table,
-	lockTTS map[string][]TargetTable) {
+	lockTTS map[string][]TargetTable,
+	missTable map[string]map[string]map[string]map[string]schemacmp.Table,
+) {
 	var (
 		lock *Lock
 		ok   bool
@@ -51,10 +57,24 @@ func (lk *LockKeeper) RebuildLocksAndTables(
 				for _, info := range schemaInfos {
 					lockID := utils.GenDDLLockID(info.Task, info.DownSchema, info.DownTable)
 					if lock, ok = lk.locks[lockID]; !ok {
-						lk.locks[lockID] = NewLock(lockID, info.Task, info.DownSchema, info.DownTable, lockJoined[lockID], lockTTS[lockID])
+						lk.locks[lockID] = NewLock(cli, lockID, info.Task, info.DownSchema, info.DownTable, lockJoined[lockID], lockTTS[lockID])
 						lock = lk.locks[lockID]
 					}
 					lock.tables[info.Source][info.UpSchema][info.UpTable] = schemacmp.Encode(info.TableInfoBefore)
+					if columns, ok := colm[lockID]; ok {
+						lock.columns = columns
+					}
+				}
+			}
+		}
+	}
+
+	// update missTable's table info for locks
+	for lockID, lockTable := range missTable {
+		for source, sourceTable := range lockTable {
+			for schema, schemaTable := range sourceTable {
+				for table, tableinfo := range schemaTable {
+					lk.locks[lockID].tables[source][schema][table] = tableinfo
 				}
 			}
 		}
@@ -62,7 +82,7 @@ func (lk *LockKeeper) RebuildLocksAndTables(
 }
 
 // TrySync tries to sync the lock.
-func (lk *LockKeeper) TrySync(info Info, tts []TargetTable) (string, []string, error) {
+func (lk *LockKeeper) TrySync(cli *clientv3.Client, info Info, tts []TargetTable) (string, []string, []string, error) {
 	var (
 		lockID = genDDLLockID(info)
 		l      *Lock
@@ -73,16 +93,16 @@ func (lk *LockKeeper) TrySync(info Info, tts []TargetTable) (string, []string, e
 	defer lk.mu.Unlock()
 
 	if info.TableInfoBefore == nil {
-		return "", nil, terror.ErrMasterOptimisticTableInfoBeforeNotExist.Generate(info.DDLs)
+		return "", nil, nil, terror.ErrMasterOptimisticTableInfoBeforeNotExist.Generate(info.DDLs)
 	}
 
 	if l, ok = lk.locks[lockID]; !ok {
-		lk.locks[lockID] = NewLock(lockID, info.Task, info.DownSchema, info.DownTable, schemacmp.Encode(info.TableInfoBefore), tts)
+		lk.locks[lockID] = NewLock(cli, lockID, info.Task, info.DownSchema, info.DownTable, schemacmp.Encode(info.TableInfoBefore), tts)
 		l = lk.locks[lockID]
 	}
 
-	newDDLs, err := l.TrySync(info, tts)
-	return lockID, newDDLs, err
+	newDDLs, cols, err := l.TrySync(info, tts)
+	return lockID, newDDLs, cols, err
 }
 
 // RemoveLock removes a lock.

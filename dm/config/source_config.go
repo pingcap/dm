@@ -8,7 +8,9 @@ import (
 	"io/ioutil"
 	"math"
 	"math/rand"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/siddontang/go-mysql/mysql"
@@ -177,17 +179,15 @@ func (c *SourceConfig) Verify() error {
 	}
 
 	var err error
-	if c.EnableRelay {
-		if len(c.RelayBinLogName) > 0 {
-			if !binlog.VerifyFilename(c.RelayBinLogName) {
-				return terror.ErrWorkerRelayBinlogName.Generate(c.RelayBinLogName)
-			}
+	if len(c.RelayBinLogName) > 0 {
+		if !binlog.VerifyFilename(c.RelayBinLogName) {
+			return terror.ErrWorkerRelayBinlogName.Generate(c.RelayBinLogName)
 		}
-		if len(c.RelayBinlogGTID) > 0 {
-			_, err = gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
-			if err != nil {
-				return terror.WithClass(terror.Annotatef(err, "relay-binlog-gtid %s", c.RelayBinlogGTID), terror.ClassDMWorker)
-			}
+	}
+	if len(c.RelayBinlogGTID) > 0 {
+		_, err = gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
+		if err != nil {
+			return terror.WithClass(terror.Annotatef(err, "relay-binlog-gtid %s", c.RelayBinlogGTID), terror.ClassDMWorker)
 		}
 	}
 
@@ -254,8 +254,11 @@ func (c *SourceConfig) Adjust(ctx context.Context, db *sql.DB) (err error) {
 		}
 	}
 
-	if c.EnableRelay && len(c.RelayDir) == 0 {
+	if len(c.RelayDir) == 0 {
 		c.RelayDir = defaultRelayDir
+	}
+	if filepath.IsAbs(c.RelayDir) {
+		log.L().Warn("using an absolute relay path, relay log can't work when starting multiple relay worker")
 	}
 
 	return nil
@@ -293,6 +296,7 @@ func (c *SourceConfig) AdjustServerID(ctx context.Context, db *sql.DB) error {
 		return terror.WithScope(err, terror.ScopeUpstream)
 	}
 
+	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 5; i++ {
 		randomValue := uint32(rand.Intn(100000))
 		randomServerID := defaultBaseServerID + randomValue

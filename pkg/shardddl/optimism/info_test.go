@@ -79,6 +79,8 @@ func (t *testForEtcd) TestInfoJSON(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(j, Equals, `{"task":"test","source":"mysql-replica-1","up-schema":"db-1","up-table":"tbl-1","down-schema":"db","down-table":"tbl","ddls":["ALTER TABLE tbl ADD COLUMN c1 INT","ALTER TABLE tbl ADD COLUMN c2 INT"],"table-info-before":null,"table-info-after":null,"ignore-conflict":false}`)
 	c.Assert(j, Equals, i1.String())
+	j = i1.ShortString()
+	c.Assert(j, Equals, `{"task":"test","source":"mysql-replica-1","up-schema":"db-1","up-table":"tbl-1","down-schema":"db","down-table":"tbl","ddls":["ALTER TABLE tbl ADD COLUMN c1 INT","ALTER TABLE tbl ADD COLUMN c2 INT"],"table-before":"","table-after":"","is-deleted":false,"version":0,"revision":0,"ignore-conflict":false}`)
 
 	i2, err := infoFromJSON(j)
 	c.Assert(err, IsNil)
@@ -128,7 +130,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1][source1][upSchema], HasLen, 1)
 	i11WithVer := i11
 	i11WithVer.Version = 2
-	i11WithVer.Revision = ifm[task1][source1][upSchema][upTable].Revision
+	i11WithVer.Revision = rev2
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 
 	// put another key and get again with 2 info.
@@ -142,7 +144,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(ifm[task1][source1][upSchema][upTable], DeepEquals, i11WithVer)
 	i12WithVer := i12
 	i12WithVer.Version = 1
-	i12WithVer.Revision = ifm[task1][source2][upSchema][upTable].Revision
+	i12WithVer.Revision = rev4
 	c.Assert(ifm[task1][source2][upSchema][upTable], DeepEquals, i12WithVer)
 
 	// start the watcher.
@@ -159,20 +161,22 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 
 	// put another key for a different task.
 	// version start from 1
-	_, err = PutInfo(etcdTestCli, i21)
+	rev5, err := PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
 	infoWithVer := <-wch
 	i21WithVer := i21
 	i21WithVer.Version = 1
+	i21WithVer.Revision = rev5
 	c.Assert(infoWithVer, DeepEquals, i21WithVer)
 	c.Assert(len(ech), Equals, 0)
 
 	// put again
 	// version increase
-	_, err = PutInfo(etcdTestCli, i21)
+	rev6, err := PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
 	infoWithVer = <-wch
 	i21WithVer.Version++
+	i21WithVer.Revision = rev6
 	c.Assert(infoWithVer, DeepEquals, i21WithVer)
 	c.Assert(len(ech), Equals, 0)
 
@@ -189,10 +193,11 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 
 	// put again
 	// version reset to 1
-	_, err = PutInfo(etcdTestCli, i21)
+	rev7, err := PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
 	infoWithVer = <-wch
 	i21WithVer.Version = 1
+	i21WithVer.Revision = rev7
 	c.Assert(infoWithVer, DeepEquals, i21WithVer)
 	c.Assert(len(ech), Equals, 0)
 

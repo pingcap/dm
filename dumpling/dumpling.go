@@ -15,7 +15,6 @@ package dumpling
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"strings"
 	"time"
@@ -31,6 +30,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -261,6 +261,10 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	if dumpConfig.Consistency == "none" {
 		dumpConfig.PosAfterConnect = true
 	}
+	// set default Rows
+	if dumpConfig.Rows == export.UnspecifiedSize {
+		dumpConfig.Rows = 200000
+	}
 
 	if !cfg.CaseSensitive {
 		dumpConfig.TableFilter = filter.CaseInsensitive(dumpConfig.TableFilter)
@@ -274,11 +278,12 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 // detectSQLMode tries to detect SQL mode from upstream. If success, write it to LoaderConfig.
 // Because loader will use this SQL mode, we need to treat disable `EscapeBackslash` when NO_BACKSLASH_ESCAPES
 func (m *Dumpling) detectSQLMode(ctx context.Context) {
-	db, err := sql.Open("mysql", m.dumpConfig.GetDSN(""))
+	baseDB, err := conn.DefaultDBProvider.Apply(m.cfg.From)
 	if err != nil {
 		return
 	}
-	defer db.Close()
+	defer baseDB.Close()
+	db := baseDB.DB
 
 	sqlMode, err := utils.GetGlobalVariable(ctx, db, "sql_mode")
 	if err != nil {

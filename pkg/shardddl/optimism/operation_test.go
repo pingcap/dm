@@ -23,11 +23,11 @@ import (
 func (t *testForEtcd) TestOperationJSON(c *C) {
 	o1 := NewOperation("test-ID", "test", "mysql-replica-1", "db-1", "tbl-1", []string{
 		"ALTER TABLE tbl ADD COLUMN c1 INT",
-	}, ConflictDetected, true)
+	}, ConflictDetected, "conflict", true, []string{})
 
 	j, err := o1.toJSON()
 	c.Assert(err, IsNil)
-	c.Assert(j, Equals, `{"id":"test-ID","task":"test","source":"mysql-replica-1","up-schema":"db-1","up-table":"tbl-1","ddls":["ALTER TABLE tbl ADD COLUMN c1 INT"],"conflict-stage":"detected","done":true}`)
+	c.Assert(j, Equals, `{"id":"test-ID","task":"test","source":"mysql-replica-1","up-schema":"db-1","up-table":"tbl-1","ddls":["ALTER TABLE tbl ADD COLUMN c1 INT"],"conflict-stage":"detected","conflict-message":"conflict","done":true,"cols":[]}`)
 	c.Assert(j, Equals, o1.String())
 
 	o2, err := operationFromJSON(j)
@@ -48,15 +48,15 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 		ID2          = "test2-`foo`.`bar`"
 		source1      = "mysql-replica-1"
 		DDLs         = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		op11         = NewOperation(ID1, task1, source1, upSchema, upTable, DDLs, ConflictNone, false)
-		op21         = NewOperation(ID2, task2, source1, upSchema, upTable, DDLs, ConflictResolved, true)
+		op11         = NewOperation(ID1, task1, source1, upSchema, upTable, DDLs, ConflictNone, "", false, []string{})
+		op21         = NewOperation(ID2, task2, source1, upSchema, upTable, DDLs, ConflictResolved, "", true, []string{})
 	)
 
 	// put the same keys twice.
-	rev1, succ, err := PutOperation(etcdTestCli, false, op11)
+	rev1, succ, err := PutOperation(etcdTestCli, false, op11, 0)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsTrue)
-	rev2, succ, err := PutOperation(etcdTestCli, false, op11)
+	rev2, succ, err := PutOperation(etcdTestCli, false, op11, 0)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsTrue)
 	c.Assert(rev2, Greater, rev1)
@@ -76,7 +76,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	c.Assert(<-wch, DeepEquals, op11)
 
 	// put for another task.
-	rev3, succ, err := PutOperation(etcdTestCli, false, op21)
+	rev3, succ, err := PutOperation(etcdTestCli, false, op21, 0)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsTrue)
 
@@ -109,7 +109,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 
 	// put for `skipDone` with `done` in etcd, the operations should not be skipped.
 	// case: kv's "the `done` field is not `true`".
-	rev5, succ, err := PutOperation(etcdTestCli, true, op11)
+	rev5, succ, err := PutOperation(etcdTestCli, true, op11, 0)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsTrue)
 	c.Assert(rev5, Greater, rev4)
@@ -126,7 +126,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 
 	// put for `skipDone` with `done` in etcd, the operations should not be skipped.
 	// case: kv "not exist".
-	rev6, succ, err := PutOperation(etcdTestCli, true, op11)
+	rev6, succ, err := PutOperation(etcdTestCli, true, op11, 0)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsTrue)
 
@@ -139,15 +139,22 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	// update op11 to `done`.
 	op11c := op11
 	op11c.Done = true
-	rev7, succ, err := PutOperation(etcdTestCli, true, op11c)
+	rev7, succ, err := PutOperation(etcdTestCli, true, op11c, 0)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsTrue)
 	c.Assert(rev7, Greater, rev6)
 
+	// put for `skipDone` with `done` in etcd, the operations should not be skipped.
+	// case: operation modRevision < info's modRevision
+	rev8, succ, err := PutOperation(etcdTestCli, true, op11c, rev7+10)
+	c.Assert(err, IsNil)
+	c.Assert(succ, IsTrue)
+	c.Assert(rev8, Greater, rev7)
+
 	// put for `skipDone` with `done` in etcd, the operations should be skipped.
 	// case: kv's ("exist" and "the `done` field is `true`").
-	rev8, succ, err := PutOperation(etcdTestCli, true, op11)
+	rev9, succ, err := PutOperation(etcdTestCli, true, op11, rev6)
 	c.Assert(err, IsNil)
 	c.Assert(succ, IsFalse)
-	c.Assert(rev8, Equals, rev7)
+	c.Assert(rev9, Equals, rev8)
 }

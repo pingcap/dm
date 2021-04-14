@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.2] 2021-04-09
+
+### Improvements
+
+- Relay log GA
+  - The relay log feature is no longer enabled by setting the source configuration file. Now, the feature is enabled by running commands in dmctl for specified DM-workers [#1499](https://github.com/pingcap/dm/pull/1499)
+  - DM sends the commands `query-status -s` and `purge-relay` to all DM-workers that pull relay logs [#1533](https://github.com/pingcap/dm/pull/1533)
+  - Align the relay unit‘s behavior of pulling and sending binlogs with that of the secondary MySQL database [#1390](https://github.com/pingcap/dm/pull/1390)
+  - Reduce the scenarios where relay logs need to be purged [#1400](https://github.com/pingcap/dm/pull/1400)
+  - Support sending heartbeat events when the relay log feature is enabled to display task progress with regular updates [#1404](https://github.com/pingcap/dm/pull/1404)
+- Optimistic sharding DDL mode
+  - Optimize operations for resolving DDL conflicts [#1496](https://github.com/pingcap/dm/pull/1496) [#1506](https://github.com/pingcap/dm/pull/1506) [#1518](https://github.com/pingcap/dm/pull/1518) [#1551](https://github.com/pingcap/dm/pull/1551)
+  - Adjust the DDL coordination behavior in the optimistic mode to avoid data inconsistency in advance [#1510](https://github.com/pingcap/dm/pull/1510) [#1512](https://github.com/pingcap/dm/pull/1512)
+- Support automatically recognizing the switching of upstream data sources when the source configuration needs no update, for example, when the IP address does not change [#1364](https://github.com/pingcap/dm/pull/1364)
+- Precheck the privileges of the upstream MySQL instance at a finer granularity [#1336](https://github.com/pingcap/dm/pull/1366) 
+- Support configuring binlog event filtering rules in the source configuration file [#1370](https://github.com/pingcap/dm/pull/1370) 
+- When binding an idle upstream data source to an idle DM-worker node, DM-master nodes firstly choose the most recent binding of that DM-worker node [#1373](https://github.com/pingcap/dm/pull/1373)
+- Improve the stability of DM automatically getting the SQL mode from the binlog file [#1382](https://github.com/pingcap/dm/pull/1382) [#1552](https://github.com/pingcap/dm/pull/1552)
+- Support automatically parsing GTIDs of different formats in the source configuration file [#1385](https://github.com/pingcap/dm/pull/1385)
+- Extend DM-worker’s TTL for keepalive to reduce scheduling caused by poor network [#1405](https://github.com/pingcap/dm/pull/1405)
+- Support reporting an error when the configuration file contains configuration items that are not referenced [#1410](https://github.com/pingcap/dm/pull/1410)
+- Improve the display of a GTID set by sorting it in dictionary order [#1424](https://github.com/pingcap/dm/pull/1424)
+- Optimize monitoring and alerting rules [#1438](https://github.com/pingcap/dm/pull/1438)
+- Support manually transferring an upstream data source to a specified DM-worker [#1492](https://github.com/pingcap/dm/pull/1492)
+- Add configurations of etcd compaction and disk quota [#1521](https://github.com/pingcap/dm/pull/1521)
+
+### Bug fixes
+
+- Fix the issue of data loss during the full data migration occurred because DM frequently restarts the task [#1378](https://github.com/pingcap/dm/pull/1378)
+- Fix the issue that an incremental replication task fails to start when the binlog position is not specified together with GTID in the task configuration [#1393](https://github.com/pingcap/dm/pull/1393)
+- Fix the issue that DM-worker’s binding relationships become abnormal when the disk and network environments are poor [#1396](https://github.com/pingcap/dm/pull/1396)
+- Fix the issue that enabling the relay log feature might cause data loss when the GTIDs specified in upstream binlog `previous_gtids` events are not consecutive [#1390](https://github.com/pingcap/dm/pull/1390) [#1430](https://github.com/pingcap/dm/pull/1430)
+- Disable the heartbeat feature of DM v1.0 to avoid the failure of high availability scheduling [#1467](https://github.com/pingcap/dm/pull/1467)
+- Fix the issue that the migration fails if the upstream binlog sequence number is larger than 999999 [#1476](https://github.com/pingcap/dm/pull/1476)
+- Fix the issue that DM commands hang when DM gets stuck in pinging the upstream and downstream databases [#1477](https://github.com/pingcap/dm/pull/1477)
+- Fix the issue that the full import fails when the upstream database enables the `ANSI_QUOTES` mode [#1497](https://github.com/pingcap/dm/pull/1497)
+- Fix the issue that DM might duplicate binlog events when the GTID and the relay log are enabled at the same time [#1525](https://github.com/pingcap/dm/pull/1525)
+
+### Known issues
+
+[GitHub issues](https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aaffected-v2.0.2)
+
 ## [2.0.1] 2020-12-25
 
 ### Improvements

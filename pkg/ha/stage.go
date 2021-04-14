@@ -38,7 +38,7 @@ type Stage struct {
 	// only used to report to the caller of the watcher, do not marsh it.
 	// if it's true, it means the stage has been deleted in etcd.
 	IsDeleted bool `json:"-"`
-	// record the etcd ModRevision of this Stage
+	// record the etcd Revision of this Stage
 	Revision int64 `json:"-"`
 }
 
@@ -96,6 +96,12 @@ func PutRelayStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 		return 0, err
 	}
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
+	return rev, err
+}
+
+// DeleteRelayStage deleted the relay stage of this source
+func DeleteRelayStage(cli *clientv3.Client, source string) (int64, error) {
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, deleteRelayStageOp(source))
 	return rev, err
 }
 
