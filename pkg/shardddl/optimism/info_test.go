@@ -152,11 +152,11 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	ech := make(chan error, 10)
 	var wg sync.WaitGroup
 	wg.Add(1)
+	watchCtx, watchCancel := context.WithCancel(context.Background())
+	defer watchCancel()
 	go func() {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
-		defer cancel()
-		WatchInfo(ctx, etcdTestCli, rev4+1, wch, ech) // revision+1
+		WatchInfo(watchCtx, etcdTestCli, rev4+1, wch, ech) // revision+1
 	}()
 
 	// put another key for a different task.
@@ -201,9 +201,10 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(infoWithVer, DeepEquals, i21WithVer)
 	c.Assert(len(ech), Equals, 0)
 
+	watchCancel()
+	wg.Wait()
 	close(wch) // close the chan
 	close(ech)
-	wg.Wait()
 
 	// delete i12.
 	deleteOp = deleteInfoOp(i12)
