@@ -117,3 +117,7 @@ issues:
 
   # Fix found issues (if it's supported by the linter)
   fix: true
+
+run:
+  # timeout for analysis, e.g. 30s, 5m, default is 1m
+  timeout: 5m
