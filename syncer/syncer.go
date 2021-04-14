@@ -73,7 +73,7 @@ var (
 	waitTime     = 10 * time.Millisecond
 	statusTime   = 30 * time.Second
 
-	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
+	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL.
 	MaxDDLConnectionTimeoutMinute = 5
 
 	maxDMLConnectionTimeout = "5m"
@@ -85,10 +85,10 @@ var (
 	defaultBucketCount = 8
 )
 
-// BinlogType represents binlog sync type
+// BinlogType represents binlog sync type.
 type BinlogType uint8
 
-// binlog sync type
+// binlog sync type.
 const (
 	RemoteBinlog BinlogType = iota + 1
 	LocalBinlog
@@ -246,7 +246,7 @@ func (s *Syncer) closeJobChans() {
 	s.jobsClosed.Set(true)
 }
 
-// Type implements Unit.Type
+// Type implements Unit.Type.
 func (s *Syncer) Type() pb.UnitType {
 	return pb.UnitType_Sync
 }
@@ -374,7 +374,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 }
 
 // initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
-// NOTE: now we don't support modify router rules after task has started
+// NOTE: now we don't support modify router rules after task has started.
 func (s *Syncer) initShardingGroups(ctx context.Context) error {
 	// fetch tables from source and filter them
 	sourceTables, err := s.fromDB.fetchAllDoTables(ctx, s.baList)
@@ -424,7 +424,7 @@ func (s *Syncer) initShardingGroups(ctx context.Context) error {
 	return nil
 }
 
-// IsFreshTask implements Unit.IsFreshTask
+// IsFreshTask implements Unit.IsFreshTask.
 func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
 	tablePoint := s.checkpoint.TablePoint()
@@ -778,6 +778,7 @@ func (s *Syncer) addJob(job *job) error {
 		addJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	}
 
+	// nolint:ifshort
 	wait := s.checkWait(job)
 	if wait {
 		s.jobWg.Wait()
@@ -785,6 +786,7 @@ func (s *Syncer) addJob(job *job) error {
 	}
 
 	if s.execError.Get() != nil {
+		// nolint:nilerr
 		return nil
 	}
 
@@ -868,7 +870,7 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 // and except rejecting to flush the checkpoint, we also need to rollback the checkpoint saved before
 //   this should be handled when `s.Run` returned
 //
-// we may need to refactor the concurrency model to make the work-flow more clearer later
+// we may need to refactor the concurrency model to make the work-flow more clearer later.
 func (s *Syncer) flushCheckPoints() error {
 	err := s.execError.Get()
 	// TODO: for now, if any error occurred (including user canceled), checkpoint won't be updated. But if we have put
@@ -913,7 +915,7 @@ func (s *Syncer) flushCheckPoints() error {
 	return nil
 }
 
-// DDL synced one by one, so we only need to process one DDL at a time
+// DDL synced one by one, so we only need to process one DDL at a time.
 func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn, ddlJobChan chan *job) {
 	defer s.wg.Done()
 
@@ -973,25 +975,27 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		case config.ShardPessimistic:
 			// for sharding DDL syncing, send result back
 			shardInfo := s.pessimist.PendingInfo()
-			if shardInfo == nil {
+			switch {
+			case shardInfo == nil:
 				// no need to do the shard DDL handle for `CREATE DATABASE/TABLE` now.
 				tctx.L().Warn("skip shard DDL handle in pessimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
-			} else if shardPessimistOp == nil {
+			case shardPessimistOp == nil:
 				err = terror.ErrWorkerDDLLockOpNotFound.Generate(shardInfo)
-			} else {
+			default:
 				err = s.pessimist.DoneOperationDeleteInfo(*shardPessimistOp, *shardInfo)
 			}
 		case config.ShardOptimistic:
 			shardInfo := s.optimist.PendingInfo()
-			if shardInfo == nil {
+			switch {
+			case shardInfo == nil:
 				// no need to do the shard DDL handle for `DROP DATABASE/TABLE` now.
 				// but for `CREATE DATABASE` and `ALTER DATABASE` we execute it to the downstream directly without `shardInfo`.
 				if ignore { // actually ignored.
 					tctx.L().Warn("skip shard DDL handle in optimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
 				}
-			} else if s.optimist.PendingOperation() == nil {
+			case s.optimist.PendingOperation() == nil:
 				err = terror.ErrWorkerDDLLockOpNotFound.Generate(shardInfo)
-			} else {
+			default:
 				err = s.optimist.DoneOperation(*(s.optimist.PendingOperation()))
 			}
 		}
@@ -1300,13 +1304,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		startTime := time.Now()
 		e, err = s.getEvent(tctx, currentLocation)
 
-		if err == context.Canceled {
+		switch {
+		case err == context.Canceled:
 			tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last location", lastLocation))
 			return nil
-		} else if err == context.DeadlineExceeded {
+		case err == context.DeadlineExceeded:
 			tctx.L().Info("deadline exceeded when fetching binlog event")
 			continue
-		} else if isDuplicateServerIDError(err) {
+		case isDuplicateServerIDError(err):
 			// if the server id is already used, need to use a new server id
 			tctx.L().Info("server id is already used by another slave, will change to a new server id and get event again")
 			err1 := s.streamerController.UpdateServerIDAndResetReplication(tctx, lastLocation)
@@ -1369,8 +1374,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		// we calculate startLocation and endLocation(currentLocation) for Query event here
 		// set startLocation empty for other events to avoid misuse
 		startLocation = binlog.Location{}
-		switch e.Event.(type) {
-		case *replication.QueryEvent:
+		if _, ok := e.Event.(*replication.QueryEvent); ok {
 			startLocation = binlog.InitLocation(
 				mysql.Position{
 					Name: lastLocation.Position.Name,
@@ -1422,7 +1426,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					return err
 				}
 			}
-		default:
 		}
 
 		// check pass SafeModeExitLoc and try disable safe mode, but not in sharding or replacing error
@@ -1499,8 +1502,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			job := newXIDJob(currentLocation, startLocation, currentLocation)
 			err2 = s.addJobFunc(job)
 		case *replication.GenericEvent:
-			switch e.Header.EventType {
-			case replication.HEARTBEAT_EVENT:
+			if e.Header.EventType == replication.HEARTBEAT_EVENT {
 				// flush checkpoint even if there are no real binlog events
 				if s.checkpoint.CheckGlobalPoint() {
 					tctx.L().Info("meet heartbeat event and then flush jobs")
@@ -1619,7 +1621,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	ec.tctx.L().Debug("", zap.String("event", "row"), zap.String("origin schema", originSchema), zap.String("origin table", originTable), zap.String("target schema", schemaName), zap.String("target table", tableName), log.WrapStringerField("location", ec.currentLocation), zap.Reflect("raw event data", ev.Rows))
 
 	if s.cfg.EnableHeartbeat {
-		s.heartbeat.TryUpdateTaskTs(s.cfg.Name, originSchema, originTable, ev.Rows)
+		s.heartbeat.TryUpdateTaskTS(s.cfg.Name, originSchema, originTable, ev.Rows)
 	}
 
 	ignore, err := s.skipDMLEvent(originSchema, originTable, ec.header.EventType)
@@ -1813,8 +1815,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	*/
 	var (
 		ddlInfo        *shardingDDLInfo
-		needHandleDDLs []string
-		needTrackDDLs  []trackedDDL
+		needHandleDDLs = make([]string, 0, len(sqls))
+		needTrackDDLs  = make([]trackedDDL, 0, len(sqls))
 		sourceTbls     = make(map[string]map[string]struct{}) // db name -> tb name
 	)
 	for _, sql := range sqls {
@@ -1868,10 +1870,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 					tableNames: tableNames,
 					stmt:       stmt,
 				}
-			} else {
-				if ddlInfo.name != tableNames[0][0].String() {
-					return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
-				}
+			} else if ddlInfo.name != tableNames[0][0].String() {
+				return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
 			}
 		} else if s.cfg.ShardMode == config.ShardOptimistic {
 			switch stmt.(type) {
@@ -1948,6 +1948,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		err = s.execError.Get()
 		if err != nil {
 			ec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+			// nolint:nilerr
 			return nil
 		}
 
@@ -2134,6 +2135,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	err = s.execError.Get()
 	if err != nil {
 		ec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+		// nolint:nilerr
 		return nil
 	}
 
@@ -2149,7 +2151,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 }
 
 // input `sql` should be a single DDL, which came from parserpkg.SplitDDL
-// tableNames[0] is source (upstream) tableNames, tableNames[1] is target (downstream) tableNames
+// tableNames[0] is source (upstream) tableNames, tableNames[1] is target (downstream) tableNames.
 func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.Table, stmt ast.StmtNode, ec *eventContext) error {
 	srcTables, targetTables := tableNames[0], tableNames[1]
 	srcTable := srcTables[0]
@@ -2194,13 +2196,14 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	case *ast.AlterTableStmt:
 		shouldSchemaExist = true
 		// for DDL that adds FK, since TiDB doesn't fully support it yet, we simply ignore execution of this DDL.
-		if len(node.Specs) == 1 && node.Specs[0].Constraint != nil && node.Specs[0].Constraint.Tp == ast.ConstraintForeignKey {
+		switch {
+		case len(node.Specs) == 1 && node.Specs[0].Constraint != nil && node.Specs[0].Constraint.Tp == ast.ConstraintForeignKey:
 			shouldTableExistNum = 1
 			shouldExecDDLOnSchemaTracker = false
-		} else if node.Specs[0].Tp == ast.AlterTableRenameTable {
+		case node.Specs[0].Tp == ast.AlterTableRenameTable:
 			shouldTableExistNum = 1
 			shouldExecDDLOnSchemaTracker = true
-		} else {
+		default:
 			shouldTableExistNum = len(srcTables)
 			shouldExecDDLOnSchemaTracker = true
 		}
@@ -2221,6 +2224,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		}
 	}
 	// skip getTable before in above loop
+	// nolint:ifshort
 	start := 1
 	if shouldTableExistNum > start {
 		start = shouldTableExistNum
@@ -2448,7 +2452,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 	return nil
 }
 
-// closeBaseDB closes all opened DBs, rollback for createConns
+// closeBaseDB closes all opened DBs, rollback for createConns.
 func (s *Syncer) closeDBs() {
 	closeUpstreamConn(s.tctx, s.fromDB)
 	closeBaseDB(s.tctx, s.toDB)
@@ -2456,7 +2460,7 @@ func (s *Syncer) closeDBs() {
 }
 
 // record skip ddl/dml sqls' position
-// make newJob's sql argument empty to distinguish normal sql and skips sql
+// make newJob's sql argument empty to distinguish normal sql and skips sql.
 func (s *Syncer) recordSkipSQLsLocation(location binlog.Location) error {
 	job := newSkipJob(location)
 	return s.addJobFunc(job)
@@ -2469,8 +2473,7 @@ func (s *Syncer) flushJobs() error {
 }
 
 func (s *Syncer) reSyncBinlog(tctx tcontext.Context, location binlog.Location) error {
-	err := s.retrySyncGTIDs()
-	if err != nil {
+	if err := s.retrySyncGTIDs(); err != nil {
 		return err
 	}
 	// close still running sync
@@ -2535,7 +2538,7 @@ func (s *Syncer) Close() {
 }
 
 // stopSync stops syncing, now it used by Close and Pause
-// maybe we can refine the workflow more clear
+// maybe we can refine the workflow more clear.
 func (s *Syncer) stopSync() {
 	if s.done != nil {
 		<-s.done // wait Run to return
@@ -2579,7 +2582,7 @@ func (s *Syncer) Pause() {
 	s.stopSync()
 }
 
-// Resume resumes the paused process
+// Resume resumes the paused process.
 func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	if s.isClosed() {
 		s.tctx.L().Warn("try to resume, but already closed")
@@ -2604,7 +2607,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 
 // Update implements Unit.Update
 // now, only support to update config for routes, filters, column-mappings, block-allow-list
-// now no config diff implemented, so simply re-init use new config
+// now no config diff implemented, so simply re-init use new config.
 func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	if s.cfg.ShardMode == config.ShardPessimistic {
 		_, tables := s.sgk.UnresolvedTables()
@@ -2700,7 +2703,7 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 }
 
 // assume that reset master before switching to new master, and only the new master would write
-// it's a weak function to try best to fix gtid set while switching master/slave
+// it's a weak function to try best to fix gtid set while switching master/slave.
 func (s *Syncer) retrySyncGTIDs() error {
 	// NOTE: our (per-table based) checkpoint does not support GTID yet, implement it if needed
 	// TODO: support GTID
@@ -2708,7 +2711,7 @@ func (s *Syncer) retrySyncGTIDs() error {
 	return nil
 }
 
-// checkpointID returns ID which used for checkpoint table
+// checkpointID returns ID which used for checkpoint table.
 func (s *Syncer) checkpointID() string {
 	if len(s.cfg.SourceID) > 0 {
 		return s.cfg.SourceID
@@ -2716,7 +2719,7 @@ func (s *Syncer) checkpointID() string {
 	return strconv.FormatUint(uint64(s.cfg.ServerID), 10)
 }
 
-// UpdateFromConfig updates config for `From`
+// UpdateFromConfig updates config for `From`.
 func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	s.Lock()
 	defer s.Unlock()
@@ -2829,7 +2832,7 @@ func (s *Syncer) handleEventError(err error, startLocation, endLocation binlog.L
 	return terror.Annotatef(err, "startLocation: [%s], endLocation: [%s]", startLocation, endLocation)
 }
 
-// getEvent gets an event from streamerController or errOperatorHolder
+// getEvent gets an event from streamerController or errOperatorHolder.
 func (s *Syncer) getEvent(tctx *tcontext.Context, startLocation binlog.Location) (*replication.BinlogEvent, error) {
 	// next event is a replace event
 	if s.isReplacingErr {

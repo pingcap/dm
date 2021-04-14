@@ -29,7 +29,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// genDMLParam stores pruned columns, data as well as the original columns, data, index
+// genDMLParam stores pruned columns, data as well as the original columns, data, index.
 type genDMLParam struct {
 	schema            string
 	table             string
@@ -352,7 +352,7 @@ func columnValue(value interface{}, ft *types.FieldType) string {
 	case float32:
 		data = strconv.FormatFloat(float64(v), 'f', -1, 32)
 	case float64:
-		data = strconv.FormatFloat(float64(v), 'f', -1, 64)
+		data = strconv.FormatFloat(v, 'f', -1, 64)
 	case string:
 		data = v
 	case []byte:

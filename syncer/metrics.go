@@ -167,7 +167,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"type", "task"})
 
-	// should alert
+	// should alert.
 	syncerExitWithErrorCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
@@ -176,7 +176,7 @@ var (
 			Help:      "counter for syncer exits with error",
 		}, []string{"task", "source_id"})
 
-	// some problems with it
+	// some problems with it.
 	replicationLagGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
@@ -218,7 +218,7 @@ var (
 		}, []string{"server_id"})
 )
 
-// RegisterMetrics registers metrics
+// RegisterMetrics registers metrics.
 func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(binlogReadDurationHistogram)
 	registry.MustRegister(binlogEventSizeHistogram)

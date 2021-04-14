@@ -180,7 +180,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.GetActiveDDLItem(table2), check.IsNil)
 	c.Assert(meta.GetActiveDDLItem(table3), check.IsNil)
 	c.Assert(meta.InSequenceSharding(), check.IsFalse)
-	location, err = meta.ActiveDDLFirstLocation()
+	_, err = meta.ActiveDDLFirstLocation()
 	c.Assert(err, check.ErrorMatches, fmt.Sprintf("\\[.*\\], Message: activeIdx %d larger than length of global DDLItems: .*", meta.ActiveIdx()))
 
 	sqls, args = meta.FlushData(sourceID, tableID)

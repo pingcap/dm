@@ -1504,7 +1504,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 		}},
 
 		// 'CREATE TABLE ... SELECT' is not implemented yet
-		//{fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s AS SELECT * FROM %s, %s.%s WHERE %s.n=%s.%s.n", testDB, testTbl, testTbl2, testDB2, testTbl3, testTbl2, testDB2, testTbl3), func() {
+		// {fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s AS SELECT * FROM %s, %s.%s WHERE %s.n=%s.%s.n", testDB, testTbl, testTbl2, testDB2, testTbl3, testTbl2, testDB2, testTbl3), func() {
 		//	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
 		//		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
 		//	mock.ExpectQuery(fmt.Sprintf("SHOW CREATE TABLE \\`%s\\`.\\`%s\\`.*", testDB, testTbl2)).WillReturnRows(
@@ -1515,7 +1515,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 		//	mock.ExpectQuery(fmt.Sprintf("SHOW CREATE TABLE \\`%s\\`.\\`%s\\`.*", testDB2, testTbl3)).WillReturnRows(
 		//		sqlmock.NewRows([]string{"Table", "Create Table"}).
 		//			AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
-		//}},
+		// }},
 
 		// test RENAME TABLE
 		{fmt.Sprintf("RENAME TABLE %s.%s TO %s.%s", testDB, testTbl, testDB, testTbl2), func() {

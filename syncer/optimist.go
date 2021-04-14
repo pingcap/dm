@@ -94,6 +94,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	err = s.execError.Get()
 	if err != nil {
 		ec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+		// nolint:nilerr
 		return nil
 	}
 
@@ -214,6 +215,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	err = s.execError.Get()
 	if err != nil {
 		s.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+		// nolint:nilerr
 		return nil
 	}
 

@@ -216,7 +216,7 @@ func (s *testDBSuite) TestTimezone(c *C) {
 			"America/Phoenix",
 		},
 	}
-	queryTs := "select unix_timestamp(a) from `tztest_1`.`t_1` where id = ?"
+	queryTS := "select unix_timestamp(a) from `tztest_1`.`t_1` where id = ?"
 
 	dropSQLs := []string{
 		"drop table tztest_1.t_1",
@@ -280,7 +280,7 @@ func (s *testDBSuite) TestTimezone(c *C) {
 
 				rowid := ev.Rows[0][0].(int32)
 				var ts sql.NullInt64
-				err2 := s.db.QueryRow(queryTs, rowid).Scan(&ts)
+				err2 := s.db.QueryRow(queryTS, rowid).Scan(&ts)
 				c.Assert(err2, IsNil)
 				c.Assert(ts.Valid, IsTrue)
 

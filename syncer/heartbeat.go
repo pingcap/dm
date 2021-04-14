@@ -58,7 +58,7 @@ type HeartbeatConfig struct {
 	primaryCfg config.DBConfig // primary server's DBConfig
 }
 
-// Equal tests whether config equals to other
+// Equal tests whether config equals to other.
 func (cfg *HeartbeatConfig) Equal(other *HeartbeatConfig) error {
 	if other.updateInterval != 0 && other.updateInterval != cfg.updateInterval {
 		return terror.ErrSyncerUnitHeartbeatCheckConfig.Generatef("updateInterval not equal, self: %d, other: %d", cfg.updateInterval, other.updateInterval)
@@ -85,7 +85,7 @@ type Heartbeat struct {
 	table  string // for which table the heartbeat table belongs to
 
 	primary     *conn.BaseDB
-	secondaryTs map[string]float64 // task-name => secondary (syncer) ts
+	secondaryTS map[string]float64 // task-name => secondary (syncer) ts
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -93,7 +93,7 @@ type Heartbeat struct {
 	logger log.Logger
 }
 
-// GetHeartbeat gets singleton instance of Heartbeat
+// GetHeartbeat gets singleton instance of Heartbeat.
 func GetHeartbeat(cfg *HeartbeatConfig) (*Heartbeat, error) {
 	once.Do(func() {
 		heartbeat = &Heartbeat{
@@ -101,7 +101,7 @@ func GetHeartbeat(cfg *HeartbeatConfig) (*Heartbeat, error) {
 			cfg:         cfg,
 			schema:      strings.ToUpper(filter.DMHeartbeatSchema),
 			table:       strings.ToUpper(filter.DMHeartbeatTable),
-			secondaryTs: make(map[string]float64),
+			secondaryTS: make(map[string]float64),
 			logger:      log.With(zap.String("component", "heartbeat")),
 		}
 	})
@@ -111,13 +111,13 @@ func GetHeartbeat(cfg *HeartbeatConfig) (*Heartbeat, error) {
 	return heartbeat, nil
 }
 
-// AddTask adds a new task
+// AddTask adds a new task.
 func (h *Heartbeat) AddTask(name string) error {
 	h.lock <- struct{}{} // send to chan, acquire the lock
 	defer func() {
 		<-h.lock // read from the chan, release the lock
 	}()
-	if _, ok := h.secondaryTs[name]; ok {
+	if _, ok := h.secondaryTS[name]; ok {
 		return terror.ErrSyncerUnitHeartbeatRecordExists.Generate(name)
 	}
 	if h.primary == nil {
@@ -157,22 +157,22 @@ func (h *Heartbeat) AddTask(name string) error {
 			h.run(ctx)
 		}()
 	}
-	h.secondaryTs[name] = 0 // init to 0
+	h.secondaryTS[name] = 0 // init to 0
 	return nil
 }
 
-// RemoveTask removes a previous added task
+// RemoveTask removes a previous added task.
 func (h *Heartbeat) RemoveTask(name string) error {
 	h.lock <- struct{}{}
 	defer func() {
 		<-h.lock
 	}()
-	if _, ok := h.secondaryTs[name]; !ok {
+	if _, ok := h.secondaryTS[name]; !ok {
 		return terror.ErrSyncerUnitHeartbeatRecordNotFound.Generate(name)
 	}
-	delete(h.secondaryTs, name)
+	delete(h.secondaryTS, name)
 
-	if len(h.secondaryTs) == 0 {
+	if len(h.secondaryTS) == 0 {
 		// cancel work
 		h.cancel()
 		h.cancel = nil
@@ -186,8 +186,8 @@ func (h *Heartbeat) RemoveTask(name string) error {
 	return nil
 }
 
-// TryUpdateTaskTs tries to update task's ts
-func (h *Heartbeat) TryUpdateTaskTs(taskName, schema, table string, data [][]interface{}) {
+// TryUpdateTaskTS tries to update task's ts.
+func (h *Heartbeat) TryUpdateTaskTS(taskName, schema, table string, data [][]interface{}) {
 	if strings.ToUpper(schema) != h.schema || strings.ToUpper(table) != h.table {
 		h.logger.Debug("don't need to handle non-heartbeat table", zap.String("schema", schema), zap.String("table", table))
 		return // not heartbeat table
@@ -222,8 +222,8 @@ func (h *Heartbeat) TryUpdateTaskTs(taskName, schema, table string, data [][]int
 
 	select {
 	case h.lock <- struct{}{}:
-		if _, ok := h.secondaryTs[taskName]; ok {
-			h.secondaryTs[taskName] = h.timeToSeconds(t)
+		if _, ok := h.secondaryTS[taskName]; ok {
+			h.secondaryTS[taskName] = h.timeToSeconds(t)
 		}
 		<-h.lock
 	default:
@@ -275,7 +275,7 @@ func (h *Heartbeat) run(ctx context.Context) {
 	}
 }
 
-// createTable creates heartbeat database if not exists in primary
+// createTable creates heartbeat database if not exists in primary.
 func (h *Heartbeat) createDatabase() error {
 	createDatabase := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", h.schema)
 	_, err := h.primary.DB.Exec(createDatabase)
@@ -283,7 +283,7 @@ func (h *Heartbeat) createDatabase() error {
 	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 }
 
-// createTable creates heartbeat table if not exists in primary
+// createTable creates heartbeat table if not exists in primary.
 func (h *Heartbeat) createTable() error {
 	tableName := fmt.Sprintf("`%s`.`%s`", h.schema, h.table)
 	createTableStmt := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
@@ -297,7 +297,7 @@ func (h *Heartbeat) createTable() error {
 	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 }
 
-// updateTS use `REPLACE` statement to insert or update ts
+// updateTS use `REPLACE` statement to insert or update ts.
 func (h *Heartbeat) updateTS() error {
 	query := fmt.Sprintf("REPLACE INTO `%s`.`%s` (`ts`, `server_id`) VALUES(UTC_TIMESTAMP(6), ?)", h.schema, h.table)
 	_, err := h.primary.DB.Exec(query, h.cfg.serverID)
@@ -313,7 +313,7 @@ func (h *Heartbeat) calculateLag(ctx context.Context) error {
 
 	select {
 	case h.lock <- struct{}{}:
-		for taskName, ts := range h.secondaryTs {
+		for taskName, ts := range h.secondaryTS {
 			if ts == 0 {
 				continue // do not update metrics if no valid secondary TS exists.
 			}
@@ -329,7 +329,7 @@ func (h *Heartbeat) calculateLag(ctx context.Context) error {
 }
 
 func reportLag(taskName string, lag float64) {
-	replicationLagGauge.WithLabelValues(taskName).Set(float64(lag))
+	replicationLagGauge.WithLabelValues(taskName).Set(lag)
 }
 
 func (h *Heartbeat) getPrimaryTS() (float64, error) {
@@ -362,6 +362,6 @@ func (h *Heartbeat) tsToSeconds(ts string) (float64, error) {
 func (h *Heartbeat) timeToSeconds(t time.Time) float64 {
 	nsec := t.UnixNano()
 	sec := nsec / 1e9
-	nsec = nsec % 1e9
+	nsec %= 1e9
 	return float64(sec) + float64(nsec)/1e9
 }

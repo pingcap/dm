@@ -75,7 +75,7 @@ func (t *testOptimist) TestOptimist(c *C) {
 
 		p              = parser.New()
 		se             = mock.NewContext()
-		tblID    int64 = 111
+		tblID    int64 = 222
 		DDLs1          = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
 		DDLs2          = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME"}
 		tiBefore       = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)

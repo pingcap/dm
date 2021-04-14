@@ -211,8 +211,9 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 	}
 
 	for i, tc := range testCases {
+		schema := tc.schema
 		assert := func(obtained interface{}, checker Checker, args ...interface{}) {
-			c.Assert(obtained, checker, append(args, Commentf("test case schema: %s", tc.schema))...)
+			c.Assert(obtained, checker, append(args, Commentf("test case schema: %s", schema))...)
 		}
 
 		ti, err := createTableInfo(p, se, int64(i+1), tc.schema)

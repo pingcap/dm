@@ -95,7 +95,7 @@ func (s *testCheckpointSuite) prepareCheckPointSQL() {
 	deleteSchemaPointSQL = fmt.Sprintf("DELETE FROM %s WHERE id = \\? AND cp_schema = \\?", dbutil.TableName(s.cfg.MetaSchema, cputil.SyncerCheckpoint(s.cfg.Name)))
 }
 
-// this test case uses sqlmock to simulate all SQL operations in tests
+// this test case uses sqlmock to simulate all SQL operations in tests.
 func (s *testCheckpointSuite) TestCheckPoint(c *C) {
 	tctx := tcontext.Background()
 
