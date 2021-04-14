@@ -79,28 +79,38 @@ function run() {
     insert_data &
     pid=$!
     echo "PID of insert_data is $pid"
-    sleep 3
 
     # check twice, make sure update active relay log could work for first time and later
     for i in {1..2}; do
-        sleep 3
-        server_uuid1=$(tail -n 1 $WORK_DIR/worker1/relay-dir/server-uuid.index)
-        run_sql_source1 "show binary logs\G"
-        max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
-        earliest_relay_log1=`ls $WORK_DIR/worker1/relay-dir/$server_uuid1 | grep -v 'relay.meta' | sort | head -n 1`
-        purge_relay_success $max_binlog_name $SOURCE_ID1
-        earliest_relay_log2=`ls $WORK_DIR/worker1/relay-dir/$server_uuid1 | grep -v 'relay.meta' | sort | head -n 1`
-        echo "earliest_relay_log1: $earliest_relay_log1 earliest_relay_log2: $earliest_relay_log2"
-        [ "$earliest_relay_log1" != "$earliest_relay_log2" ]
+        for ((k=1;k<10;k++)); do
+            server_uuid1=$(tail -n 1 $WORK_DIR/worker1/relay-dir/server-uuid.index)
+            run_sql_source1 "show binary logs\G"
+            max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
+            earliest_relay_log1=`ls $WORK_DIR/worker1/relay-dir/$server_uuid1 | grep -v 'relay.meta' | sort | head -n 1`
+            purge_relay_success $max_binlog_name $SOURCE_ID1
+            earliest_relay_log2=`ls $WORK_DIR/worker1/relay-dir/$server_uuid1 | grep -v 'relay.meta' | sort | head -n 1`
+            echo "earliest_relay_log1: $earliest_relay_log1 earliest_relay_log2: $earliest_relay_log2"
+            if [ "$earliest_relay_log1" != "$earliest_relay_log2" ]; then
+                break
+            fi
+            echo "purge relay log failed $k-th time, retry later"
+            sleep 1
+        done
 
-        server_uuid1=$(tail -n 1 $WORK_DIR/worker2/relay-dir/server-uuid.index)
-        run_sql_source2 "show binary logs\G"
-        max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
-        earliest_relay_log1=`ls $WORK_DIR/worker2/relay-dir/$server_uuid1 | grep -v 'relay.meta' | sort | head -n 1`
-        purge_relay_success $max_binlog_name $SOURCE_ID2
-        earliest_relay_log2=`ls $WORK_DIR/worker2/relay-dir/$server_uuid1 | grep -v 'relay.meta' | sort | head -n 1`
-        echo "earliest_relay_log1: $earliest_relay_log1 earliest_relay_log2: $earliest_relay_log2"
-        [ "$earliest_relay_log1" != "$earliest_relay_log2" ]
+        for ((k=1;k<10;k++)); do
+            server_uuid2=$(tail -n 1 $WORK_DIR/worker2/relay-dir/server-uuid.index)
+            run_sql_source2 "show binary logs\G"
+            max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
+            earliest_relay_log1=`ls $WORK_DIR/worker2/relay-dir/$server_uuid2 | grep -v 'relay.meta' | sort | head -n 1`
+            purge_relay_success $max_binlog_name $SOURCE_ID2
+            earliest_relay_log2=`ls $WORK_DIR/worker2/relay-dir/$server_uuid2 | grep -v 'relay.meta' | sort | head -n 1`
+            echo "earliest_relay_log1: $earliest_relay_log1 earliest_relay_log2: $earliest_relay_log2"
+            if [ "$earliest_relay_log1" != "$earliest_relay_log2" ]; then
+                break
+            fi
+            echo "purge relay log failed $k-th time, retry later"
+            sleep 1
+        done
     done
 
     kill $pid
