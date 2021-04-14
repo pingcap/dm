@@ -122,26 +122,15 @@ unit_test_pkg_binlog: tools_setup
 unit_test_others: tools_setup
 	$(call run_unit_test,$(PACKAGES_OTHERS),unit_test_others)
 
-check: tools_setup fmt lint vet terror_check tidy_mod
+check: tools_setup fmt lint terror_check tidy_mod
 
 fmt:
 	@echo "gofumports"
 	tools/bin/gofumports -w -d -local $(PACKAGE_NAME) $(PACKAGE_DIRECTORIES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 
-errcheck: tools_setup
-	@echo "errcheck"
-	tools/bin/errcheck -blank $(PACKAGES) | grep -v "_test\.go" | awk '{print} END{if(NR>0) {exit 1}}'
-
 lint: tools_setup
-	@echo "golint"
-	tools/bin/golint -set_exit_status $(PACKAGES)
-	#tools/bin/golangci-lint run --config=$(CURDIR)/.golangci.yml --issues-exit-code=1
-
-vet:
-	$(GO) build -o bin/shadow golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow
-	@echo "vet"
-	@$(GO) vet -composites=false $(PACKAGES)
-	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) || true
+	@echo "golangci-lint"
+	tools/bin/golangci-lint run --config=$(CURDIR)/.golangci.yml --issues-exit-code=1 $(PACKAGE_DIRECTORIES)
 
 terror_check:
 	@echo "check terror conflict"
