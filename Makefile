@@ -129,8 +129,10 @@ fmt:
 	tools/bin/gofumports -w -d -local $(PACKAGE_NAME) $(PACKAGE_DIRECTORIES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 
 lint: tools_setup
-	@echo "golangci-lint"
-	tools/bin/golangci-lint run --config=$(CURDIR)/.golangci.yml --issues-exit-code=1 $(PACKAGE_DIRECTORIES)
+	@if [[ "${nolint}" != "true" ]]; then\
+		echo "golangci-lint"; \
+		tools/bin/golangci-lint run --config=$(CURDIR)/.golangci.yml --issues-exit-code=1 $(PACKAGE_DIRECTORIES); \
+    fi
 
 terror_check:
 	@echo "check terror conflict"

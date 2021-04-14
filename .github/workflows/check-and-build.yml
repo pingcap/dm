@@ -43,7 +43,7 @@ jobs:
         key: ${{ runner.os }}-dm-tools-${{ hashFiles('**/tools/go.sum') }}
 
     - name: Build
-      run: make build
+      run: make build nolint=true
 
   lint:
     name: Lint
