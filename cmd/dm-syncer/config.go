@@ -218,13 +218,13 @@ type syncerConfig struct {
 	LogFormat string `toml:"log-format" json:"log-format"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
-	StatusAddr         string `toml:"status-addr" json:"status-addr"`
-	Meta               string `toml:"meta" json:"meta"`
+	StatusAddr string `toml:"status-addr" json:"status-addr"`
+
+	ServerID int    `toml:"server-id" json:"server-id"`
+	Meta     string `toml:"meta" json:"meta"`
+	// NOTE: This item is deprecated.
 	PersistentTableDir string `toml:"persistent-dir" json:"persistent-dir"`
 	Flavor             string `toml:"flavor" json:"flavor"`
-
-	ServerID int `toml:"server-id" json:"server-id"`
-	// NOTE: This item is deprecated.
 
 	WorkerCount int `toml:"worker-count" json:"worker-count"`
 	Batch       int `toml:"batch" json:"batch"`
@@ -251,7 +251,12 @@ type syncerConfig struct {
 	From config.DBConfig `toml:"from" json:"from"`
 	To   config.DBConfig `toml:"to" json:"to"`
 
-	ConfigFile string `json:"config-file"`
+	EnableGTID  bool `toml:"enable-gtid" json:"enable-gtid"`
+	AutoFixGTID bool `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
+
+	DisableCausality bool   `toml:"disable-detect" json:"disable-detect"`
+	SafeMode         bool   `toml:"safe-mode" json:"safe-mode"`
+	ConfigFile       string `json:"config-file"`
 
 	// NOTE: These four configs are all deprecated.
 	// We leave this items as comments to remind others there WERE old config items.
@@ -263,11 +268,7 @@ type syncerConfig struct {
 	TimezoneStr string         `toml:"timezone" json:"timezone"`
 	Timezone    *time.Location `json:"-"`
 
-	EnableGTID       bool `toml:"enable-gtid" json:"enable-gtid"`
-	AutoFixGTID      bool `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
-	DisableCausality bool `toml:"disable-detect" json:"disable-detect"`
-	SafeMode         bool `toml:"safe-mode" json:"safe-mode"`
-	printVersion     bool
+	printVersion bool
 }
 
 // RouteRule is route rule that syncing
