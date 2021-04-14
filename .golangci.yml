@@ -117,3 +117,6 @@ issues:
 
   # Fix found issues (if it's supported by the linter)
   fix: true
+
+run:
+  modules-download-mode: readonly
