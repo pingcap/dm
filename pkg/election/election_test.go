@@ -33,7 +33,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var _ = Suite(&testElectionSuite{})
+var _ = SerialSuites(&testElectionSuite{})
 
 func TestSuite(t *testing.T) {
 	TestingT(t)
