@@ -627,6 +627,7 @@ func (t *testRelaySuite) TestProcess(c *C) {
 	// should got the last DDL
 	gotLastDDL := false
 	binlogFileCount := 0
+	// nolint:unparam
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		// nolint:gocritic
 		switch ev := e.Event.(type) {
