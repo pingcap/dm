@@ -24,7 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewResumeRelayCmd creates a ResumeRelay command
+// NewResumeRelayCmd creates a ResumeRelay command.
 func NewResumeRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "resume-relay <-s source ...>",
@@ -34,7 +34,7 @@ func NewResumeRelayCmd() *cobra.Command {
 	return cmd
 }
 
-// resumeRelayFunc does resume relay request
+// resumeRelayFunc does resume relay request.
 func resumeRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)

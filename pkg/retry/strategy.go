@@ -19,18 +19,18 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
-// backoffStrategy represents enum of retry wait interval
+// backoffStrategy represents enum of retry wait interval.
 type backoffStrategy uint8
 
 const (
-	// Stable represents fixed time wait retry policy, every retry should wait a fixed time
+	// Stable represents fixed time wait retry policy, every retry should wait a fixed time.
 	Stable backoffStrategy = iota + 1
-	// LinearIncrease represents increase time wait retry policy, every retry should wait more time depends on increasing retry times
+	// LinearIncrease represents increase time wait retry policy, every retry should wait more time depends on increasing retry times.
 	LinearIncrease
 )
 
 // Params define parameters for Apply
-// it's a parameters union set of all implements which implement Apply
+// it's a parameters union set of all implements which implement Apply.
 type Params struct {
 	RetryCount         int
 	FirstRetryDuration time.Duration
@@ -45,7 +45,7 @@ type Params struct {
 	IsRetryableFn func(int, error) bool
 }
 
-// Strategy define different kind of retry strategy
+// Strategy define different kind of retry strategy.
 type Strategy interface {
 
 	// Apply define retry strategy
@@ -61,8 +61,7 @@ type Strategy interface {
 }
 
 // FiniteRetryStrategy will retry `RetryCount` times when failed to operate DB.
-type FiniteRetryStrategy struct {
-}
+type FiniteRetryStrategy struct{}
 
 // Apply for FiniteRetryStrategy, it wait `FirstRetryDuration` before it starts first retry, and then rest of retries wait time depends on BackoffStrategy.
 func (*FiniteRetryStrategy) Apply(ctx *tcontext.Context, params Params,

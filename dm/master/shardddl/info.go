@@ -40,7 +40,7 @@ func (p PessimismInfoSlice) Swap(i, j int) {
 
 // pessimismInfoMapToSlice converts a `map[string]pessimism.Info` to `[]pessimism.Info` in increasing order according to `Source` field.
 func pessimismInfoMapToSlice(ifm map[string]pessimism.Info) []pessimism.Info {
-	var ret PessimismInfoSlice
+	ret := make(PessimismInfoSlice, 0, len(ifm))
 	for _, info := range ifm {
 		ret = append(ret, info)
 	}

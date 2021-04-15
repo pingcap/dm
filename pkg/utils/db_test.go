@@ -28,8 +28,7 @@ import (
 
 var _ = Suite(&testDBSuite{})
 
-type testDBSuite struct {
-}
+type testDBSuite struct{}
 
 func (t *testDBSuite) TestGetFlavor(c *C) {
 	db, mock, err := sqlmock.New()
@@ -286,7 +285,6 @@ func (t *testDBSuite) createMockResult(mock sqlmock.Sqlmock, masterID uint32, se
 			rows.AddRow(serverID, host, port, masterID)
 		}
 		expectQuery.WillReturnRows(rows)
-
 	} else {
 		rows := sqlmock.NewRows([]string{"Server_id", "Host", "Port", "Master_id", "Slave_UUID"})
 		for _, serverID := range serverIDs {

@@ -34,19 +34,16 @@ func TestSuite(t *testing.T) {
 
 var _ = Suite(&testBaseConnSuite{})
 
-type testBaseConnSuite struct {
-}
+type testBaseConnSuite struct{}
 
-var (
-	testStmtHistogram = metricsproxy.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "dm",
-			Subsystem: "conn",
-			Name:      "stmt_duration_time",
-			Help:      "Bucketed histogram of every statement query time (s).",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
-		}, []string{"type", "task"})
-)
+var testStmtHistogram = metricsproxy.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Namespace: "dm",
+		Subsystem: "conn",
+		Name:      "stmt_duration_time",
+		Help:      "Bucketed histogram of every statement query time (s).",
+		Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+	}, []string{"type", "task"})
 
 func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	baseConn := NewBaseConn(nil, nil)
@@ -55,6 +52,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	err := baseConn.SetRetryStrategy(nil)
 	c.Assert(err, IsNil)
 
+	// nolint:sqlclosecheck
 	_, err = baseConn.QuerySQL(tctx, "select 1")
 	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
 
@@ -72,6 +70,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	c.Assert(err, IsNil)
 
 	mock.ExpectQuery("select 1").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	// nolint:sqlclosecheck
 	rows, err := baseConn.QuerySQL(tctx, "select 1")
 	c.Assert(err, IsNil)
 	ids := make([]int, 0, 1)
@@ -85,6 +84,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	c.Assert(ids[0], Equals, 1)
 
 	mock.ExpectQuery("select 1").WillReturnError(errors.New("invalid connection"))
+	// nolint:sqlclosecheck
 	_, err = baseConn.QuerySQL(tctx, "select 1")
 	c.Assert(terror.ErrDBQueryFailed.Equal(err), IsTrue)
 

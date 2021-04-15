@@ -24,21 +24,21 @@ import (
 )
 
 // SafeMode controls whether enable safe-mode through a mechanism similar to reference-count
-// indicates enabled excepting the count is 0
+// indicates enabled excepting the count is 0.
 type SafeMode struct {
 	mu     sync.RWMutex
 	count  int32
 	tables map[string]struct{}
 }
 
-// NewSafeMode creates a new SafeMode instance
+// NewSafeMode creates a new SafeMode instance.
 func NewSafeMode() *SafeMode {
 	return &SafeMode{
 		tables: make(map[string]struct{}),
 	}
 }
 
-// Add adds n to the count, n can be negative
+// Add adds n to the count, n can be negative.
 func (m *SafeMode) Add(tctx *tcontext.Context, n int32) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -46,7 +46,7 @@ func (m *SafeMode) Add(tctx *tcontext.Context, n int32) error {
 }
 
 // IncrForTable tries to add 1 on the count if the table not added before
-// can only be desc with DescForTable
+// can only be desc with DescForTable.
 func (m *SafeMode) IncrForTable(tctx *tcontext.Context, schema, table string) error {
 	key := key(schema, table)
 
@@ -59,7 +59,7 @@ func (m *SafeMode) IncrForTable(tctx *tcontext.Context, schema, table string) er
 	return nil
 }
 
-// DescForTable tries to add -1 on the count if the table added before
+// DescForTable tries to add -1 on the count if the table added before.
 func (m *SafeMode) DescForTable(tctx *tcontext.Context, schema, table string) error {
 	key := key(schema, table)
 
@@ -72,7 +72,7 @@ func (m *SafeMode) DescForTable(tctx *tcontext.Context, schema, table string) er
 	return nil
 }
 
-// Reset resets to the state of not-enable
+// Reset resets to the state of not-enable.
 func (m *SafeMode) Reset(tctx *tcontext.Context) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -82,14 +82,14 @@ func (m *SafeMode) Reset(tctx *tcontext.Context) {
 	m.tables = make(map[string]struct{})
 }
 
-// Enable returns whether is enabled currently
+// Enable returns whether is enabled currently.
 func (m *SafeMode) Enable() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.count != 0
 }
 
-// setCount sets the count, called internal
+// setCount sets the count, called internal.
 func (m *SafeMode) setCount(tctx *tcontext.Context, n int32) error {
 	if n < 0 {
 		return terror.ErrSyncUnitSafeModeSetCount.Generatef("set negative count (%d) for safe-mode not valid", m.count)

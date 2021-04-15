@@ -109,8 +109,8 @@ END`, true},
 		{"revoke reload on *.* from 't2'@'%'", true},
 	}
 
-	//filter, err := bf.NewBinlogEvent(nil)
-	//c.Assert(err, IsNil)
+	// filter, err := bf.NewBinlogEvent(nil)
+	// c.Assert(err, IsNil)
 	syncer := &Syncer{}
 	for _, t := range cases {
 		skipped, err := syncer.skipQuery(nil, nil, t.sql)

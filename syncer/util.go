@@ -44,7 +44,7 @@ func binlogTypeToString(binlogType BinlogType) string {
 	}
 }
 
-// tableNameForDML gets table name from INSERT/UPDATE/DELETE statement
+// tableNameForDML gets table name from INSERT/UPDATE/DELETE statement.
 func tableNameForDML(dml ast.DMLNode) (schema, table string, err error) {
 	switch stmt := dml.(type) {
 	case *ast.InsertStmt:
@@ -103,7 +103,7 @@ func getDBConfigFromEnv() config.DBConfig {
 	}
 }
 
-// record source tbls record the tables that need to flush checkpoints
+// record source tbls record the tables that need to flush checkpoints.
 func recordSourceTbls(sourceTbls map[string]map[string]struct{}, stmt ast.StmtNode, table *filter.Table) {
 	schema, name := table.Schema, table.Name
 	switch stmt.(type) {

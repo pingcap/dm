@@ -31,8 +31,7 @@ func TestSuite(t *testing.T) {
 
 var _ = Suite(&testStrategySuite{})
 
-type testStrategySuite struct {
-}
+type testStrategySuite struct{}
 
 func (t *testStrategySuite) TestFiniteRetryStrategy(c *C) {
 	strategy := &FiniteRetryStrategy{}
@@ -95,5 +94,4 @@ func (t *testStrategySuite) TestFiniteRetryStrategy(c *C) {
 	c.Assert(ret.(string), Equals, retValue)
 	c.Assert(opCount, Equals, 0)
 	c.Assert(err, IsNil)
-
 }

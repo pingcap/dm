@@ -27,8 +27,7 @@ import (
 
 var _ = Suite(&testGeneratorSuite{})
 
-type testGeneratorSuite struct {
-}
+type testGeneratorSuite struct{}
 
 func (t *testGeneratorSuite) TestGenerateForMySQL(c *C) {
 	var (
@@ -291,7 +290,7 @@ func (t *testGeneratorSuite) testGenerate(c *C, flavor string, serverID uint32, 
 	allEventTypes = append(allEventTypes, t.gtidEventType(c, flavor), replication.QUERY_EVENT)
 
 	// parse the file
-	var count = 0
+	count := 0
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		c.Assert(e.Header.EventType, Equals, allEventTypes[count])
 		c.Assert(e.RawData, DeepEquals, allEvents[count].RawData)

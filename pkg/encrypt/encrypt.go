@@ -28,7 +28,7 @@ var (
 	ivSep        = []byte("@") // ciphertext format: iv + ivSep + encrypted-plaintext
 )
 
-// SetSecretKey sets the secret key which used to encrypt
+// SetSecretKey sets the secret key which used to encrypt.
 func SetSecretKey(key []byte) error {
 	switch len(key) {
 	case 16, 24, 32:
@@ -40,7 +40,7 @@ func SetSecretKey(key []byte) error {
 	return nil
 }
 
-// Encrypt encrypts plaintext to ciphertext
+// Encrypt encrypts plaintext to ciphertext.
 func Encrypt(plaintext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(secretKey)
 	if err != nil {
@@ -63,7 +63,7 @@ func Encrypt(plaintext []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// Decrypt decrypts ciphertext to plaintext
+// Decrypt decrypts ciphertext to plaintext.
 func Decrypt(ciphertext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(secretKey)
 	if err != nil {

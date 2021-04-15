@@ -79,7 +79,7 @@ func (w *FileWriter) Start() error {
 		return terror.ErrBinlogWriterNotStateNew.Generate(w.stage, common.StageNew)
 	}
 
-	f, err := os.OpenFile(w.cfg.Filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	f, err := os.OpenFile(w.cfg.Filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o644)
 	if err != nil {
 		return terror.ErrBinlogWriterOpenFile.Delegate(err)
 	}

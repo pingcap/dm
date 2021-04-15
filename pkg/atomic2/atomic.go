@@ -18,40 +18,38 @@ import (
 	"unsafe"
 )
 
-// AtomicError implements atomic error method
+// AtomicError implements atomic error method.
 type AtomicError struct {
 	p unsafe.Pointer
 }
 
-// Get returns error
+// Get returns error.
 func (e *AtomicError) Get() error {
-	p := atomic.LoadPointer(&e.p)
-	if p == nil {
-		return nil
+	if p := atomic.LoadPointer(&e.p); p != nil {
+		return *(*error)(p)
 	}
-	return *(*error)(p)
+	return nil
 }
 
-// Set sets error to AtomicError
+// Set sets error to AtomicError.
 func (e *AtomicError) Set(err error) {
 	atomic.StorePointer(&e.p, unsafe.Pointer(&err))
 }
 
-// AtomicString implements atomic string method
+// AtomicString implements atomic string method.
 type AtomicString struct {
 	p unsafe.Pointer
 }
 
-// Get returns string
+// Get returns string.
 func (s *AtomicString) Get() string {
-	p := atomic.LoadPointer(&s.p)
-	if p == nil {
-		return ""
+	if p := atomic.LoadPointer(&s.p); p != nil {
+		return *(*string)(p)
 	}
-	return *(*string)(p)
+	return ""
 }
 
-// Set sets string to AtomicString
+// Set sets string to AtomicString.
 func (s *AtomicString) Set(str string) {
 	atomic.StorePointer(&s.p, unsafe.Pointer(&str))
 }

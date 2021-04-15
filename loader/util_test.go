@@ -32,8 +32,7 @@ var _ = Suite(&testUtilSuite{})
 type testUtilSuite struct{}
 
 func (t *testUtilSuite) TestSQLReplace(c *C) {
-
-	var replaceTests = []struct {
+	replaceTests := []struct {
 		in       string
 		old, new string
 		out      string

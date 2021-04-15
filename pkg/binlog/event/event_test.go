@@ -36,8 +36,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testEventSuite struct {
-}
+type testEventSuite struct{}
 
 func (t *testEventSuite) TestGenEventHeader(c *C) {
 	var (
@@ -192,7 +191,7 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 	_, err = f1.Write(previousGTIDsEv.RawData)
 	c.Assert(err, IsNil)
 
-	var count = 0
+	count := 0
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		count++
 		switch count {
@@ -310,7 +309,7 @@ func (t *testEventSuite) TestGenGTIDEvent(c *C) {
 	_, err = f.Write(gtidEv.RawData)
 	c.Assert(err, IsNil)
 
-	var count = 0
+	count := 0
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		count++
 		switch count {
@@ -565,10 +564,14 @@ func (t *testEventSuite) TestGenRowsEvent(c *C) {
 
 	// more column types
 	rows = make([][]interface{}, 0, 1)
-	rows = append(rows, []interface{}{int32(1), int8(2), int16(3), int32(4), int64(5),
-		float32(1.23), float64(4.56), "string with type STRING"})
-	columnType = []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_TINY, gmysql.MYSQL_TYPE_SHORT, gmysql.MYSQL_TYPE_INT24, gmysql.MYSQL_TYPE_LONGLONG,
-		gmysql.MYSQL_TYPE_FLOAT, gmysql.MYSQL_TYPE_DOUBLE, gmysql.MYSQL_TYPE_STRING}
+	rows = append(rows, []interface{}{
+		int32(1), int8(2), int16(3), int32(4), int64(5),
+		float32(1.23), float64(4.56), "string with type STRING",
+	})
+	columnType = []byte{
+		gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_TINY, gmysql.MYSQL_TYPE_SHORT, gmysql.MYSQL_TYPE_INT24, gmysql.MYSQL_TYPE_LONGLONG,
+		gmysql.MYSQL_TYPE_FLOAT, gmysql.MYSQL_TYPE_DOUBLE, gmysql.MYSQL_TYPE_STRING,
+	}
 	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType, nil)
 	c.Assert(err, IsNil)
 	c.Assert(rowsEv, NotNil)
@@ -588,13 +591,15 @@ func (t *testEventSuite) TestGenRowsEvent(c *C) {
 	// NotSupported column type
 	rows = make([][]interface{}, 0, 1)
 	rows = append(rows, []interface{}{int32(1)})
-	unsupportedTypes := []byte{gmysql.MYSQL_TYPE_VARCHAR, gmysql.MYSQL_TYPE_VAR_STRING,
+	unsupportedTypes := []byte{
+		gmysql.MYSQL_TYPE_VARCHAR, gmysql.MYSQL_TYPE_VAR_STRING,
 		gmysql.MYSQL_TYPE_NEWDECIMAL, gmysql.MYSQL_TYPE_BIT,
 		gmysql.MYSQL_TYPE_TIMESTAMP, gmysql.MYSQL_TYPE_TIMESTAMP2,
 		gmysql.MYSQL_TYPE_DATETIME, gmysql.MYSQL_TYPE_DATETIME2,
 		gmysql.MYSQL_TYPE_TIME, gmysql.MYSQL_TYPE_TIME2,
 		gmysql.MYSQL_TYPE_YEAR, gmysql.MYSQL_TYPE_ENUM, gmysql.MYSQL_TYPE_SET,
-		gmysql.MYSQL_TYPE_BLOB, gmysql.MYSQL_TYPE_JSON, gmysql.MYSQL_TYPE_GEOMETRY}
+		gmysql.MYSQL_TYPE_BLOB, gmysql.MYSQL_TYPE_JSON, gmysql.MYSQL_TYPE_GEOMETRY,
+	}
 	for i := range unsupportedTypes {
 		columnType = unsupportedTypes[i : i+1]
 		rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType, nil)
@@ -748,7 +753,7 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 	verifyHeader(c, userVarEv.Header, expectedHeader, replication.USER_VAR_EVENT, latestPos, uint32(len(userVarEv.RawData)))
 	// verify the body
 	nameStart := uint32(eventHeaderLen + 4)
-	nameEnd := uint32(eventSize-1) - crc32Len
+	nameEnd := eventSize - 1 - crc32Len
 	nameLen := nameEnd - nameStart
 	c.Assert(nameLen, Equals, uint32(1)) // name-length==1
 	c.Assert(userVarEv.RawData[nameStart:nameEnd], DeepEquals, dummyUserVarName[:nameLen])
@@ -756,8 +761,10 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 
 	// minimum, .., equal dummy query, longer, ...
 	dummyQueryLen := uint32(len(dummyQuery))
-	eventSizeList := []uint32{MinQueryEventLen, MinQueryEventLen + 5,
-		MinQueryEventLen + dummyQueryLen - 1, MinQueryEventLen + dummyQueryLen, MinQueryEventLen + dummyQueryLen + 10}
+	eventSizeList := []uint32{
+		MinQueryEventLen, MinQueryEventLen + 5,
+		MinQueryEventLen + dummyQueryLen - 1, MinQueryEventLen + dummyQueryLen, MinQueryEventLen + dummyQueryLen + 10,
+	}
 	for _, eventSize = range eventSizeList {
 		queryEv, err := GenDummyEvent(header, latestPos, eventSize)
 		c.Assert(err, IsNil)
@@ -774,7 +781,7 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 		c.Assert(queryEvBody.StatusVars, DeepEquals, []byte{})
 		c.Assert(queryEvBody.Schema, DeepEquals, []byte{})
 		queryStart := uint32(eventHeaderLen + 4 + 4 + 1 + 2 + 2 + 1)
-		queryEnd := uint32(eventSize) - crc32Len
+		queryEnd := eventSize - crc32Len
 		queryLen := queryEnd - queryStart
 		c.Assert(queryEvBody.Query, HasLen, int(queryLen))
 		if queryLen <= dummyQueryLen {

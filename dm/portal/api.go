@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	// for database
+	// for database.
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -39,7 +39,7 @@ const (
 	failed  = "failed"
 )
 
-// Handler used for deal with http request
+// Handler used for deal with http request.
 type Handler struct {
 	r *render.Render
 
@@ -50,7 +50,7 @@ type Handler struct {
 	timeout int
 }
 
-// NewHandler returns a new Handler
+// NewHandler returns a new Handler.
 func NewHandler(path string, timeout int) *Handler {
 	rd := render.New(render.Options{
 		IndentJSON: true,
@@ -63,42 +63,42 @@ func NewHandler(path string, timeout int) *Handler {
 	}
 }
 
-// CommonResult is the common result
+// CommonResult is the common result.
 type CommonResult struct {
 	Result string `json:"result"`
 	Error  string `json:"error"`
 }
 
-// CheckResult is the result of Check
+// CheckResult is the result of Check.
 type CheckResult struct {
 	CommonResult
 }
 
-// SchemaInfoResult is the result of GetSchemaInfo
+// SchemaInfoResult is the result of GetSchemaInfo.
 type SchemaInfoResult struct {
 	CommonResult
 	Tables []TablesInSchema `json:"tables"`
 }
 
-// TablesInSchema saves all the tables in one schema
+// TablesInSchema saves all the tables in one schema.
 type TablesInSchema struct {
 	Schema string   `json:"schema"`
 	Tables []string `json:"tables"`
 }
 
-// GenerateConfigResult is the result of GenerateConfig
+// GenerateConfigResult is the result of GenerateConfig.
 type GenerateConfigResult struct {
 	CommonResult
 	Filepath string `json:"filepath"`
 }
 
-// AnalyzeResult is the result of AnalyzeConfig
+// AnalyzeResult is the result of AnalyzeConfig.
 type AnalyzeResult struct {
 	CommonResult
 	Config DMTaskConfig `json:"config"`
 }
 
-// Check checks database can be connected
+// Check checks database can be connected.
 func (p *Handler) Check(w http.ResponseWriter, req *http.Request) {
 	log.L().Info("receive Check request")
 
@@ -124,7 +124,7 @@ func (p *Handler) Check(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
-// GetSchemaInfo gets all schemas and tables information from a database
+// GetSchemaInfo gets all schemas and tables information from a database.
 func (p *Handler) GetSchemaInfo(w http.ResponseWriter, req *http.Request) {
 	log.L().Info("receive GetSchemaInfo request")
 
@@ -185,7 +185,7 @@ func (p *Handler) GetSchemaInfo(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
-// GenerateConfig generates config file used for dm
+// GenerateConfig generates config file used for dm.
 func (p *Handler) GenerateConfig(w http.ResponseWriter, req *http.Request) {
 	log.L().Info("receive GenerateConfig request")
 
@@ -277,7 +277,7 @@ func (p *Handler) GenerateConfig(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
-// AnalyzeConfig analyzes dm task config from front-end
+// AnalyzeConfig analyzes dm task config from front-end.
 func (p *Handler) AnalyzeConfig(w http.ResponseWriter, req *http.Request) {
 	log.L().Info("receive AnalyzeConfig request")
 
@@ -355,7 +355,7 @@ func (p *Handler) AnalyzeConfig(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
-// Download returns dm task config data for generate config file
+// Download returns dm task config data for generate config file.
 func (p *Handler) Download(w http.ResponseWriter, req *http.Request) {
 	log.L().Info("receive Download request")
 
@@ -402,8 +402,7 @@ func (p *Handler) Download(w http.ResponseWriter, req *http.Request) {
 
 // fileValid judge the download file path is valid or not.
 func (p *Handler) fileValid(filepath string) bool {
-	dir := path.Dir(filepath)
-	if dir != p.path {
+	if dir := path.Dir(filepath); dir != p.path {
 		return false
 	}
 
@@ -531,7 +530,7 @@ func adjustConfig(cfg *DMTaskConfig) error {
 	return nil
 }
 
-// rule name looks like "instance1.route_rules.1"
+// rule name looks like "instance1.route_rules.1".
 func analyzeRuleName(name string) (sourceID string, tp string, err error) {
 	items := strings.Split(name, ".")
 	if len(items) != 3 {
@@ -576,7 +575,7 @@ func generateTaskFileName(taskName string) string {
 	return fmt.Sprintf("%s-task.yaml", taskName)
 }
 
-// openDB opens a mysql connection FD
+// openDB opens a mysql connection FD.
 func openDB(cfg DBConfig, timeout int) (*sql.DB, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&timeout=%ds", cfg.User, cfg.Password, cfg.Host, cfg.Port, timeout)
 

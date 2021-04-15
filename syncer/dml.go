@@ -29,7 +29,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// genDMLParam stores pruned columns, data as well as the original columns, data, index
+// genDMLParam stores pruned columns, data as well as the original columns, data, index.
 type genDMLParam struct {
 	schema            string
 	table             string
@@ -60,7 +60,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		values          = make([][]interface{}, 0, len(dataSeq))
 	)
 
-	var insertOrReplace = "INSERT INTO"
+	insertOrReplace := "INSERT INTO"
 	if param.safeMode {
 		insertOrReplace = "REPLACE INTO"
 	}
@@ -72,7 +72,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		}
 
 		value := extractValueFromData(data, columns)
-		var originalValue = value
+		originalValue := value
 		if len(columns) != len(ti.Columns) {
 			originalValue = extractValueFromData(originalDataSeq[dataIdx], ti.Columns)
 		}
@@ -340,7 +340,7 @@ func columnValue(value interface{}, ft *types.FieldType) string {
 	case int32:
 		data = strconv.FormatInt(int64(v), 10)
 	case int64:
-		data = strconv.FormatInt(int64(v), 10)
+		data = strconv.FormatInt(v, 10)
 	case uint8:
 		data = strconv.FormatUint(uint64(v), 10)
 	case uint16:
@@ -348,11 +348,11 @@ func columnValue(value interface{}, ft *types.FieldType) string {
 	case uint32:
 		data = strconv.FormatUint(uint64(v), 10)
 	case uint64:
-		data = strconv.FormatUint(uint64(v), 10)
+		data = strconv.FormatUint(v, 10)
 	case float32:
 		data = strconv.FormatFloat(float64(v), 'f', -1, 32)
 	case float64:
-		data = strconv.FormatFloat(float64(v), 'f', -1, 64)
+		data = strconv.FormatFloat(v, 'f', -1, 64)
 	case string:
 		data = v
 	case []byte:

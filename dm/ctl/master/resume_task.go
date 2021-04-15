@@ -23,7 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewResumeTaskCmd creates a ResumeTask command
+// NewResumeTaskCmd creates a ResumeTask command.
 func NewResumeTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "resume-task [-s source ...] <task-name | task-file>",
@@ -33,7 +33,7 @@ func NewResumeTaskCmd() *cobra.Command {
 	return cmd
 }
 
-// resumeTaskFunc does resume task request
+// resumeTaskFunc does resume task request.
 func resumeTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
@@ -50,7 +50,7 @@ func resumeTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	resp, err := common.OperateTask(pb.TaskOp_Resume, name, sources)
 	if err != nil {
-		common.PrintLines("can not resume task %s", name)
+		common.PrintLinesf("can not resume task %s", name)
 		return
 	}
 

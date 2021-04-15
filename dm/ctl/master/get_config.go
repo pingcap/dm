@@ -26,7 +26,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewGetCfgCmd creates a getCfg command
+// NewGetCfgCmd creates a getCfg command.
 func NewGetCfgCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get-config <task | master | worker | source> <name> [--file filename]",
@@ -52,28 +52,26 @@ func convertCfgType(t string) pb.CfgType {
 	}
 }
 
-// getCfgFunc gets config
-func getCfgFunc(cmd *cobra.Command, _ []string) (err error) {
+// getCfgFunc gets config.
+func getCfgFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) != 2 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 
 	cfgType := cmd.Flags().Arg(0)
 	tp := convertCfgType(cfgType)
 	if tp == pb.CfgType_InvalidType {
-		common.PrintLines("invalid config type '%s'", cfgType)
-		err = errors.New("please check output to see error")
-		return
+		common.PrintLinesf("invalid config type '%s'", cfgType)
+		return errors.New("please check output to see error")
 	}
 
 	cfgName := cmd.Flags().Arg(1)
 	filename, err := cmd.Flags().GetString("file")
 	if err != nil {
-		common.PrintLines("can not get filename")
-		return
+		common.PrintLinesf("can not get filename")
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
@@ -90,19 +88,19 @@ func getCfgFunc(cmd *cobra.Command, _ []string) (err error) {
 		&resp,
 	)
 	if err != nil {
-		common.PrintLines("can not get %s config of %s", cfgType, cfgName)
-		return
+		common.PrintLinesf("can not get %s config of %s", cfgType, cfgName)
+		return err
 	}
 
 	if resp.Result && len(filename) != 0 {
-		err = ioutil.WriteFile(filename, []byte(resp.Cfg), 0644)
+		err = ioutil.WriteFile(filename, []byte(resp.Cfg), 0o644)
 		if err != nil {
-			common.PrintLines("can not write config to file %s", filename)
-			return
+			common.PrintLinesf("can not write config to file %s", filename)
+			return err
 		}
 		resp.Msg = fmt.Sprintf("write config to file %s succeed", filename)
 		resp.Cfg = ""
 	}
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }

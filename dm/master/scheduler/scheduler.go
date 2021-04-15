@@ -346,7 +346,7 @@ func (s *Scheduler) RemoveSourceCfg(source string) error {
 	return nil
 }
 
-// GetSourceCfgIDs gets all added source ID
+// GetSourceCfgIDs gets all added source ID.
 func (s *Scheduler) GetSourceCfgIDs() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -370,7 +370,7 @@ func (s *Scheduler) GetSourceCfgByID(source string) *config.SourceConfig {
 	return &clone
 }
 
-// TransferSource unbinds the source and binds it to a free worker. If fails halfway, the old worker should try recover
+// TransferSource unbinds the source and binds it to a free worker. If fails halfway, the old worker should try recover.
 func (s *Scheduler) TransferSource(source, worker string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -393,8 +393,7 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 	}
 
 	// 2. check new worker is free and not started relay for another source
-	stage := w.Stage()
-	if stage != WorkerFree {
+	if stage := w.Stage(); stage != WorkerFree {
 		return terror.ErrSchedulerWorkerInvalidTrans.Generate(worker, stage, WorkerBound)
 	}
 	for source2, workers := range s.relayWorkers {
@@ -485,13 +484,14 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 	}
 	taskNames := strMapToSlice(taskNamesM)
 	existSources := strMapToSlice(existSourcesM)
-	if len(taskNames) > 1 {
+	switch {
+	case len(taskNames) > 1:
 		// only subtasks from one task supported now.
 		return terror.ErrSchedulerMultiTask.Generate(taskNames)
-	} else if len(existSources) == len(cfgs) {
+	case len(existSources) == len(cfgs):
 		// all subtasks already exist, return an error.
 		return terror.ErrSchedulerSubTaskExist.Generate(taskNames[0], existSources)
-	} else if len(existSources) > 0 {
+	case len(existSources) > 0:
 		// some subtasks already exists, log a warn.
 		s.logger.Warn("some subtasks already exist", zap.String("task", taskNames[0]), zap.Strings("sources", existSources))
 	}
@@ -635,7 +635,7 @@ func (s *Scheduler) GetSubTaskCfgsByTask(task string) map[string]*config.SubTask
 	return cloneM
 }
 
-// GetSubTaskCfgs gets all subconfig, return nil when error happens
+// GetSubTaskCfgs gets all subconfig, return nil when error happens.
 func (s *Scheduler) GetSubTaskCfgs() map[string]map[string]config.SubTaskConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -772,7 +772,7 @@ func (s *Scheduler) UnboundSources() []string {
 	return IDs
 }
 
-// StartRelay puts etcd key-value pairs to start relay on some workers
+// StartRelay puts etcd key-value pairs to start relay on some workers.
 func (s *Scheduler) StartRelay(source string, workers []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -867,7 +867,7 @@ func (s *Scheduler) StartRelay(source string, workers []string) error {
 	return nil
 }
 
-// StopRelay deletes etcd key-value pairs to stop relay on some workers
+// StopRelay deletes etcd key-value pairs to stop relay on some workers.
 func (s *Scheduler) StopRelay(source string, workers []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -932,7 +932,7 @@ func (s *Scheduler) StopRelay(source string, workers []string) error {
 	return nil
 }
 
-// GetRelayWorkers returns all alive worker instances for a relay source
+// GetRelayWorkers returns all alive worker instances for a relay source.
 func (s *Scheduler) GetRelayWorkers(source string) ([]*Worker, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -942,7 +942,7 @@ func (s *Scheduler) GetRelayWorkers(source string) ([]*Worker, error) {
 	}
 
 	workers := s.relayWorkers[source]
-	var ret []*Worker
+	ret := make([]*Worker, 0, len(workers))
 	for w := range workers {
 		worker, ok := s.workers[w]
 		if !ok {
@@ -1162,7 +1162,7 @@ func (s *Scheduler) recoverSubTasks(cli *clientv3.Client) error {
 	// get all subtask stages.
 	stageMM, _, err := ha.GetAllSubTaskStage(cli)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	// recover in-memory data.
@@ -1265,7 +1265,7 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 	if len(boundsToTrigger) > 0 {
 		_, err = ha.PutSourceBound(cli, boundsToTrigger...)
 		if err != nil {
-			return 0, nil
+			return 0, err
 		}
 	}
 
@@ -1563,7 +1563,7 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 
 // tryBoundForSource tries to bound a source to a random Free worker.
 // returns (true, nil) after bounded.
-// called should update the s.unbounds
+// called should update the s.unbounds.
 func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 	var worker *Worker
 	relayWorkers := s.relayWorkers[source]
@@ -1702,10 +1702,9 @@ func (s *Scheduler) deleteWorker(name string) {
 // - update the stage of worker to `Bound`.
 // - record the bound relationship and last bound relationship in the scheduler.
 // this func is called after the bound relationship existed in etcd.
-// TODO: we could only let updateStatusForBound and updateStatusForUnbound to update s.unbounds/bounds/lastBound
+// TODO: we could only let updateStatusForBound and updateStatusForUnbound to update s.unbounds/bounds/lastBound.
 func (s *Scheduler) updateStatusForBound(w *Worker, b ha.SourceBound) error {
-	err := w.ToBound(b)
-	if err != nil {
+	if err := w.ToBound(b); err != nil {
 		return err
 	}
 	s.bounds[b.Source] = w
@@ -1747,7 +1746,7 @@ func strMapToSlice(m map[string]struct{}) []string {
 	return ret
 }
 
-// SetWorkerClientForTest sets mockWorkerClient for specified worker, only used for test
+// SetWorkerClientForTest sets mockWorkerClient for specified worker, only used for test.
 func (s *Scheduler) SetWorkerClientForTest(name string, mockCli workerrpc.Client) {
 	if _, ok := s.workers[name]; ok {
 		s.workers[name].cli = mockCli

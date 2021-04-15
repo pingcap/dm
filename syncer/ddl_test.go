@@ -451,8 +451,10 @@ func (s *testSyncerSuite) TestDropSchemaInSharding(c *C) {
 	clone, _ := s.cfg.Clone()
 	clone.ShardMode = config.ShardPessimistic
 	syncer := NewSyncer(clone, nil)
+	// nolint:dogsled
 	_, _, _, _, err := syncer.sgk.AddGroup(targetDB, targetTbl, []string{source1}, nil, true)
 	c.Assert(err, IsNil)
+	// nolint:dogsled
 	_, _, _, _, err = syncer.sgk.AddGroup(targetDB, targetTbl, []string{source2}, nil, true)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.sgk.Groups(), HasLen, 2)
@@ -514,8 +516,10 @@ func (s *testSyncerSuite) TestClearOnlineDDL(c *C) {
 	}
 	syncer.onlineDDL = mock
 
+	// nolint:dogsled
 	_, _, _, _, err := syncer.sgk.AddGroup(targetDB, targetTbl, []string{source1}, nil, true)
 	c.Assert(err, IsNil)
+	// nolint:dogsled
 	_, _, _, _, err = syncer.sgk.AddGroup(targetDB, targetTbl, []string{source2}, nil, true)
 	c.Assert(err, IsNil)
 

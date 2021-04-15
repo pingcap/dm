@@ -23,7 +23,7 @@ import (
 )
 
 // GetAllDroppedColumns gets the all partially dropped columns.
-// return lockID -> column-name -> source-id -> upstream-schema-name -> upstream-table-name
+// return lockID -> column-name -> source-id -> upstream-schema-name -> upstream-table-name.
 func GetAllDroppedColumns(cli *clientv3.Client) (map[string]map[string]map[string]map[string]map[string]DropColumnStage, int64, error) {
 	var done DropColumnStage
 	colm := make(map[string]map[string]map[string]map[string]map[string]DropColumnStage)

@@ -26,7 +26,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// timeArgs represents args needed by timeStrategy
+// timeArgs represents args needed by timeStrategy.
 type timeArgs struct {
 	relayBaseDir   string
 	safeTime       time.Time // if file's modified time is older than this, then it can be purged
@@ -44,7 +44,7 @@ func (ta *timeArgs) String() string {
 }
 
 // timeStrategy represents a relay purge strategy by time
-// similar to `PURGE BINARY LOGS BEFORE` in MySQL
+// similar to `PURGE BINARY LOGS BEFORE` in MySQL.
 type timeStrategy struct {
 	purging sync2.AtomicInt32
 

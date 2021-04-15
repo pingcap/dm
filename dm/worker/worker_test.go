@@ -229,9 +229,7 @@ var _ = Suite(&testWorkerFunctionalities{})
 
 func (t *testWorkerFunctionalities) SetUpSuite(c *C) {
 	NewRelayHolder = NewDummyRelayHolder
-	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
-		return NewRealSubTask(cfg, etcdClient)
-	}
+	NewSubTask = NewRealSubTask
 	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
 		atomic.AddInt32(&t.createUnitCount, 1)
 		mockDumper := NewMockUnit(pb.UnitType_Dump)
