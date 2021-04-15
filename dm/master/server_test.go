@@ -1252,13 +1252,12 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	for _, m := range listResp.Members {
 		names[m.Name] = struct{}{}
 	}
-	_, ok := names[cfg1.Name]
-	c.Assert(ok, check.IsTrue)
-	_, ok = names[cfg2.Name]
-	c.Assert(ok, check.IsTrue)
+	c.Assert(names, check.HasKey, cfg1.Name)
+	c.Assert(names, check.HasKey, cfg2.Name)
 
 	// s1 is still the leader
 	_, leaderID, _, err := s2.election.LeaderInfo(ctx)
+
 	c.Assert(err, check.IsNil)
 	c.Assert(leaderID, check.Equals, cfg1.Name)
 

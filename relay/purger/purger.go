@@ -237,7 +237,7 @@ func (p *RelayPurger) doPurge(ps PurgeStrategy, args StrategyArgs) error {
 	}
 	args.SetActiveRelayLog(earliest)
 
-	p.logger.Info("start purging relay log files", zap.Stringer("type", ps.Type()), zap.Reflect("args", args))
+	p.logger.Info("start purging relay log files", zap.Stringer("type", ps.Type()), zap.Any("args", args))
 	return ps.Do(args)
 }
 
