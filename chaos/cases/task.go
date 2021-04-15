@@ -153,7 +153,11 @@ func (t *task) run() error {
 		return err
 	}
 
-	return t.incrLoop()
+	if err := t.incrLoop(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // stopPreviousTask stops the previous task with the same name if exists.
