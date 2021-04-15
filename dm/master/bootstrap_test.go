@@ -86,10 +86,10 @@ func (t *testMaster) TestCollectSourceConfigFilesV1Import(c *C) {
 	// write into source files.
 	data1, err := cfg1.Yaml()
 	c.Assert(err, IsNil)
-	c.Assert(ioutil.WriteFile(filepath.Join(s.cfg.V1SourcesPath, "source1.yaml"), []byte(data1), 0644), IsNil)
+	c.Assert(ioutil.WriteFile(filepath.Join(s.cfg.V1SourcesPath, "source1.yaml"), []byte(data1), 0o644), IsNil)
 	data2, err := cfg2.Yaml()
 	c.Assert(err, IsNil)
-	c.Assert(ioutil.WriteFile(filepath.Join(s.cfg.V1SourcesPath, "source2.yaml"), []byte(data2), 0644), IsNil)
+	c.Assert(ioutil.WriteFile(filepath.Join(s.cfg.V1SourcesPath, "source2.yaml"), []byte(data2), 0o644), IsNil)
 
 	// collect again, two configs exist.
 	cfgs, err = s.collectSourceConfigFilesV1Import(tctx)
@@ -99,7 +99,7 @@ func (t *testMaster) TestCollectSourceConfigFilesV1Import(c *C) {
 	c.Assert(cfgs[cfg2.SourceID], DeepEquals, *cfg2)
 
 	// put a invalid source file.
-	c.Assert(ioutil.WriteFile(filepath.Join(s.cfg.V1SourcesPath, "invalid.yaml"), []byte("invalid-source-data"), 0644), IsNil)
+	c.Assert(ioutil.WriteFile(filepath.Join(s.cfg.V1SourcesPath, "invalid.yaml"), []byte("invalid-source-data"), 0o644), IsNil)
 	cfgs, err = s.collectSourceConfigFilesV1Import(tctx)
 	c.Assert(terror.ErrConfigYamlTransform.Equal(err), IsTrue)
 	c.Assert(cfgs, HasLen, 0)

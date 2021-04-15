@@ -29,12 +29,12 @@ import (
 // PT handles pt online schema changes
 // (_*).*_new ghost table
 // (_*).*_old ghost trash table
-// we don't support `--new-table-name` flag
+// we don't support `--new-table-name` flag.
 type PT struct {
 	storge *OnlineDDLStorage
 }
 
-// NewPT returns pt online schema changes plugin
+// NewPT returns pt online schema changes plugin.
 func NewPT(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
 	g := &PT{
 		storge: NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", "pt-ost"))), cfg), // create a context for logger
@@ -44,7 +44,8 @@ func NewPT(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, err
 }
 
 // Apply implements interface.
-// returns ddls, real schema, real table, error
+// returns ddls, real schema, real table, error.
+// nolint:dupl
 func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
 	if len(tables) < 1 {
 		return nil, "", "", terror.ErrSyncerUnitPTApplyEmptyTable.Generate()
@@ -56,8 +57,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 
 	switch tp {
 	case realTable:
-		switch stmt.(type) {
-		case *ast.RenameTableStmt:
+		if _, ok := stmt.(*ast.RenameTableStmt); ok {
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
 				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
@@ -72,8 +72,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 		return []string{statement}, schema, table, nil
 	case trashTable:
 		// ignore trashTable
-		switch stmt.(type) {
-		case *ast.RenameTableStmt:
+		if _, ok := stmt.(*ast.RenameTableStmt); ok {
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
 				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
@@ -129,7 +128,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 	return nil, schema, table, nil
 }
 
-// Finish implements interface
+// Finish implements interface.
 func (p *PT) Finish(tcxt *tcontext.Context, schema, table string) error {
 	if p == nil {
 		return nil
@@ -138,7 +137,7 @@ func (p *PT) Finish(tcxt *tcontext.Context, schema, table string) error {
 	return p.storge.Delete(tcxt, schema, table)
 }
 
-// TableType implements interface
+// TableType implements interface.
 func (p *PT) TableType(table string) TableType {
 	// 5 is _ _old/new
 	if len(table) > 5 {
@@ -154,7 +153,7 @@ func (p *PT) TableType(table string) TableType {
 	return realTable
 }
 
-// RealName implements interface
+// RealName implements interface.
 func (p *PT) RealName(schema, table string) (string, string) {
 	tp := p.TableType(table)
 	if tp == trashTable || tp == ghostTable {
@@ -165,17 +164,17 @@ func (p *PT) RealName(schema, table string) (string, string) {
 	return schema, table
 }
 
-// Clear clears online ddl information
+// Clear clears online ddl information.
 func (p *PT) Clear(tctx *tcontext.Context) error {
 	return p.storge.Clear(tctx)
 }
 
-// Close implements interface
+// Close implements interface.
 func (p *PT) Close() {
 	p.storge.Close()
 }
 
-// ResetConn implements interface
+// ResetConn implements interface.
 func (p *PT) ResetConn(tctx *tcontext.Context) error {
 	return p.storge.ResetConn(tctx)
 }

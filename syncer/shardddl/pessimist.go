@@ -60,8 +60,8 @@ func (p *Pessimist) Reset() {
 }
 
 // ConstructInfo constructs a shard DDL info.
-func (p *Pessimist) ConstructInfo(schema, table string, DDLs []string) pessimism.Info {
-	return pessimism.NewInfo(p.task, p.source, schema, table, DDLs)
+func (p *Pessimist) ConstructInfo(schema, table string, ddls []string) pessimism.Info {
+	return pessimism.NewInfo(p.task, p.source, schema, table, ddls)
 }
 
 // PutInfo puts the shard DDL info into etcd and returns the revision.

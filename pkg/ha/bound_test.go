@@ -144,6 +144,7 @@ func (t *testForEtcd) TestGetSourceBoundConfigEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
 	// get source bound and config, but config is empty
+	// nolint:dogsled
 	_, _, _, err = GetSourceBoundConfig(etcdTestCli, worker)
 	c.Assert(err, ErrorMatches, ".*doesn't have related source config in etcd.*")
 

@@ -19,7 +19,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// Proxy Interface
+// Proxy Interface.
 type Proxy interface {
 	GetLabelNamesIndex() map[string]int
 	GetLabels() map[string][]string
@@ -27,13 +27,13 @@ type Proxy interface {
 	vecDelete(prometheus.Labels) bool
 }
 
-// noteLabelsInMetricsProxy common function in Proxy
+// noteLabelsInMetricsProxy common function in Proxy.
 func noteLabelsInMetricsProxy(proxy Proxy, values []string) {
 	key := strings.Join(values, ",")
 	proxy.SetLabel(key, values)
 }
 
-// findAndDeleteLabelsInMetricsProxy common function in Proxy
+// findAndDeleteLabelsInMetricsProxy common function in Proxy.
 func findAndDeleteLabelsInMetricsProxy(proxy Proxy, labels prometheus.Labels) bool {
 	var (
 		deleteLabelsList = make([]map[string]string, 0)

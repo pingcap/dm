@@ -31,12 +31,12 @@ var (
 	rootCmd            *cobra.Command
 )
 
-// CommandMasterFlags are flags that used in all commands for dm-master
+// CommandMasterFlags are flags that used in all commands for dm-master.
 type CommandMasterFlags struct {
 	workers []string // specify workers to control on these dm-workers
 }
 
-// Reset clears cache of CommandMasterFlags
+// Reset clears cache of CommandMasterFlags.
 func (c CommandMasterFlags) Reset() {
 	c.workers = c.workers[:0]
 }
@@ -45,7 +45,7 @@ func init() {
 	rootCmd = NewRootCmd()
 }
 
-// NewRootCmd generates a new rootCmd
+// NewRootCmd generates a new rootCmd.
 func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "dmctl",
@@ -100,7 +100,7 @@ Simply type ` + cmd.Name() + ` help [path to command] for full details.`,
 	return cmd
 }
 
-// Init initializes dm-control
+// Init initializes dm-control.
 func Init(cfg *common.Config) error {
 	// set the log level temporarily
 	log.SetLevel(zapcore.InfoLevel)
@@ -108,7 +108,7 @@ func Init(cfg *common.Config) error {
 	return errors.Trace(common.InitUtils(cfg))
 }
 
-// PrintUsage prints usage
+// PrintUsage prints usage.
 func PrintUsage() {
 	maxCmdLen := 0
 	for _, cmd := range rootCmd.Commands() {
@@ -123,7 +123,7 @@ func PrintUsage() {
 	}
 }
 
-// HasCommand represent whether rootCmd has this command
+// HasCommand represent whether rootCmd has this command.
 func HasCommand(name string) bool {
 	for _, cmd := range rootCmd.Commands() {
 		if name == cmd.Name() {
@@ -133,7 +133,7 @@ func HasCommand(name string) bool {
 	return false
 }
 
-// PrintHelp print help message for special subCommand
+// PrintHelp print help message for special subCommand.
 func PrintHelp(args []string) {
 	cmd, _, err := rootCmd.Find(args)
 	if err != nil {
@@ -146,7 +146,7 @@ func PrintHelp(args []string) {
 	common.PrintCmdUsage(cmd)
 }
 
-// Start starts running a command
+// Start starts running a command.
 func Start(args []string) (err error) {
 	commandMasterFlags.Reset()
 	rootCmd = NewRootCmd()

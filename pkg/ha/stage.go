@@ -76,7 +76,7 @@ func (s Stage) toJSON() (string, error) {
 	return string(data), nil
 }
 
-// IsEmpty returns true when this Stage has no value
+// IsEmpty returns true when this Stage has no value.
 func (s Stage) IsEmpty() bool {
 	var emptyStage Stage
 	return s == emptyStage
@@ -99,7 +99,7 @@ func PutRelayStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	return rev, err
 }
 
-// DeleteRelayStage deleted the relay stage of this source
+// DeleteRelayStage deleted the relay stage of this source.
 func DeleteRelayStage(cli *clientv3.Client, source string) (int64, error) {
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, deleteRelayStageOp(source))
 	return rev, err
@@ -322,6 +322,7 @@ func subTaskStageFromResp(source, task string, resp *clientv3.GetResponse) (map[
 }
 
 // watchStage watches PUT & DELETE operations for the stage.
+// nolint:dupl
 func watchStage(ctx context.Context, watchCh clientv3.WatchChan,
 	stageFromKey func(key string) (Stage, error), outCh chan<- Stage, errCh chan<- error) {
 	for {

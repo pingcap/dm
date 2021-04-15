@@ -29,8 +29,7 @@ func TestT(t *testing.T) {
 
 var _ = check.Suite(&testTErrorSuite{})
 
-type testTErrorSuite struct {
-}
+type testTErrorSuite struct{}
 
 func (t *testTErrorSuite) TestTError(c *check.C) {
 	var (

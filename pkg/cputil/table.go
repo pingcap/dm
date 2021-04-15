@@ -13,22 +13,22 @@
 
 package cputil
 
-// LoaderCheckpoint returns loader's checkpoint table name
+// LoaderCheckpoint returns loader's checkpoint table name.
 func LoaderCheckpoint(task string) string {
 	return task + "_loader_checkpoint"
 }
 
-// SyncerCheckpoint returns syncer's checkpoint table name
+// SyncerCheckpoint returns syncer's checkpoint table name.
 func SyncerCheckpoint(task string) string {
 	return task + "_syncer_checkpoint"
 }
 
-// SyncerShardMeta returns syncer's sharding meta table name for pessimistic
+// SyncerShardMeta returns syncer's sharding meta table name for pessimistic.
 func SyncerShardMeta(task string) string {
 	return task + "_syncer_sharding_meta"
 }
 
-// SyncerOnlineDDL returns syncer's onlineddl checkpoint table name
+// SyncerOnlineDDL returns syncer's onlineddl checkpoint table name.
 func SyncerOnlineDDL(task string) string {
 	return task + "_onlineddl"
 }

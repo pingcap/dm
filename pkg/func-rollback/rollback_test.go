@@ -26,8 +26,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testRollbackSuite struct {
-}
+type testRollbackSuite struct{}
 
 func (t *testRollbackSuite) TestRollback(c *C) {
 	var (

@@ -25,7 +25,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewUnlockDDLLockCmd creates a UnlockDDLLock command
+// NewUnlockDDLLockCmd creates a UnlockDDLLock command.
 func NewUnlockDDLLockCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unlock-ddl-lock <lock-ID>",
@@ -37,18 +37,17 @@ func NewUnlockDDLLockCmd() *cobra.Command {
 	return cmd
 }
 
-// unlockDDLLockFunc does unlock DDL lock
-func unlockDDLLockFunc(cmd *cobra.Command, _ []string) (err error) {
+// unlockDDLLockFunc does unlock DDL lock.
+func unlockDDLLockFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 	owner, err := cmd.Flags().GetString("owner")
 	if err != nil {
-		common.PrintLines("error in parse `--owner`")
-		return
+		common.PrintLinesf("error in parse `--owner`")
+		return err
 	}
 
 	lockID := cmd.Flags().Arg(0)
@@ -56,13 +55,12 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) (err error) {
 	sources, _ := common.GetSourceArgs(cmd)
 	if len(sources) > 0 {
 		fmt.Println("shoud not specify any sources")
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 
 	forceRemove, err := cmd.Flags().GetBool("force-remove")
 	if err != nil {
-		return
+		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -81,10 +79,10 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		common.PrintLines("can not unlock DDL lock %s", lockID)
-		return
+		common.PrintLinesf("can not unlock DDL lock %s", lockID)
+		return err
 	}
 
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }

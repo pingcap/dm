@@ -24,10 +24,10 @@ import (
 )
 
 // getNextUUID gets (the nextUUID and its suffix) after the current UUID.
-func getNextUUID(currUUID string, UUIDs []string) (string, string, error) {
-	for i := len(UUIDs) - 2; i >= 0; i-- {
-		if UUIDs[i] == currUUID {
-			nextUUID := UUIDs[i+1]
+func getNextUUID(currUUID string, uuids []string) (string, string, error) {
+	for i := len(uuids) - 2; i >= 0; i-- {
+		if uuids[i] == currUUID {
+			nextUUID := uuids[i+1]
 			_, suffixInt, err := utils.ParseSuffixForUUID(nextUUID)
 			if err != nil {
 				return "", "", terror.Annotatef(err, "UUID %s", nextUUID)

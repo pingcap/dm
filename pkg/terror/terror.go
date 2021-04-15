@@ -27,10 +27,10 @@ const (
 // ErrCode is used as the unique identifier of a specific error type.
 type ErrCode int
 
-// ErrClass represents a class of errors
+// ErrClass represents a class of errors.
 type ErrClass int
 
-// Error classes
+// Error classes.
 const (
 	ClassDatabase ErrClass = iota + 1
 	ClassFunctional
@@ -75,7 +75,7 @@ var errClass2Str = map[ErrClass]string{
 	ClassNotSet:        "not-set",
 }
 
-// String implements fmt.Stringer interface
+// String implements fmt.Stringer interface.
 func (ec ErrClass) String() string {
 	if s, ok := errClass2Str[ec]; ok {
 		return s
@@ -87,7 +87,7 @@ func (ec ErrClass) String() string {
 // downstream DB error, DM internal error etc.
 type ErrScope int
 
-// Error scopes
+// Error scopes.
 const (
 	ScopeNotSet ErrScope = iota
 	ScopeUpstream
@@ -102,7 +102,7 @@ var errScope2Str = map[ErrScope]string{
 	ScopeInternal:   "internal",
 }
 
-// String implements fmt.Stringer interface
+// String implements fmt.Stringer interface.
 func (es ErrScope) String() string {
 	if s, ok := errScope2Str[es]; ok {
 		return s
@@ -110,10 +110,10 @@ func (es ErrScope) String() string {
 	return fmt.Sprintf("unknown error scope: %d", es)
 }
 
-// ErrLevel represents the emergency level of a specific error type
+// ErrLevel represents the emergency level of a specific error type.
 type ErrLevel int
 
-// Error levels
+// Error levels.
 const (
 	LevelLow ErrLevel = iota + 1
 	LevelMedium
@@ -126,7 +126,7 @@ var errLevel2Str = map[ErrLevel]string{
 	LevelHigh:   "high",
 }
 
-// String implements fmt.Stringer interface
+// String implements fmt.Stringer interface.
 func (el ErrLevel) String() string {
 	if s, ok := errLevel2Str[el]; ok {
 		return s
@@ -134,7 +134,7 @@ func (el ErrLevel) String() string {
 	return fmt.Sprintf("unknown error level: %d", el)
 }
 
-// Error implements error interface and add more useful fields
+// Error implements error interface and add more useful fields.
 type Error struct {
 	code       ErrCode
 	class      ErrClass
@@ -147,7 +147,7 @@ type Error struct {
 	stack      errors.StackTracer
 }
 
-// New creates a new *Error instance
+// New creates a new *Error instance.
 func New(code ErrCode, class ErrClass, scope ErrScope, level ErrLevel, message string, workaround string) *Error {
 	return &Error{
 		code:       code,
@@ -159,22 +159,22 @@ func New(code ErrCode, class ErrClass, scope ErrScope, level ErrLevel, message s
 	}
 }
 
-// Code returns ErrCode
+// Code returns ErrCode.
 func (e *Error) Code() ErrCode {
 	return e.code
 }
 
-// Class returns ErrClass
+// Class returns ErrClass.
 func (e *Error) Class() ErrClass {
 	return e.class
 }
 
-// Scope returns ErrScope
+// Scope returns ErrScope.
 func (e *Error) Scope() ErrScope {
 	return e.scope
 }
 
-// Level returns ErrLevel
+// Level returns ErrLevel.
 func (e *Error) Level() ErrLevel {
 	return e.level
 }
@@ -184,7 +184,7 @@ func (e *Error) Message() string {
 	return e.getMsg()
 }
 
-// Workaround returns ErrWorkaround
+// Workaround returns ErrWorkaround.
 func (e *Error) Workaround() string {
 	return e.workaround
 }
@@ -204,7 +204,7 @@ func (e *Error) Error() string {
 	return str
 }
 
-// Format accepts flags that alter the printing of some verbs
+// Format accepts flags that alter the printing of some verbs.
 func (e *Error) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':
@@ -226,7 +226,7 @@ func (e *Error) Format(s fmt.State, verb rune) {
 }
 
 // Cause implements causer.Cause defined in pingcap/errors
-// and returns the raw cause of an *Error
+// and returns the raw cause of an *Error.
 func (e *Error) Cause() error {
 	return e.rawCause
 }
@@ -247,7 +247,7 @@ func (e *Error) Equal(err error) bool {
 	return ok && e.code == inErr.code
 }
 
-// SetMessage clones an Error and resets its message
+// SetMessage clones an Error and resets its message.
 func (e *Error) SetMessage(message string) *Error {
 	err := *e
 	err.message = message
@@ -255,7 +255,7 @@ func (e *Error) SetMessage(message string) *Error {
 	return &err
 }
 
-// New generates a new *Error with the same class and code, and replace message with new message
+// New generates a new *Error with the same class and code, and replace message with new message.
 func (e *Error) New(message string) error {
 	return e.stackLevelGeneratef(1, message)
 }
@@ -270,7 +270,7 @@ func (e *Error) Generatef(format string, args ...interface{}) error {
 	return e.stackLevelGeneratef(1, format, args...)
 }
 
-// stackLevelGeneratef is an inner interface to generate new *Error
+// stackLevelGeneratef is an inner interface to generate new *Error.
 func (e *Error) stackLevelGeneratef(stackSkipLevel int, format string, args ...interface{}) error {
 	return &Error{
 		code:       e.code,
@@ -285,7 +285,7 @@ func (e *Error) stackLevelGeneratef(stackSkipLevel int, format string, args ...i
 }
 
 // Delegate creates a new *Error with the same fields of the give *Error,
-// except for new arguments, it also sets the err as raw cause of *Error
+// except for new arguments, it also sets the err as raw cause of *Error.
 func (e *Error) Delegate(err error, args ...interface{}) error {
 	if err == nil {
 		return nil
@@ -310,7 +310,7 @@ func (e *Error) Delegate(err error, args ...interface{}) error {
 	}
 }
 
-// AnnotateDelegate resets the message of *Error and Delegate with error and new args
+// AnnotateDelegate resets the message of *Error and Delegate with error and new args.
 func (e *Error) AnnotateDelegate(err error, message string, args ...interface{}) error {
 	if err == nil {
 		return nil
@@ -319,7 +319,7 @@ func (e *Error) AnnotateDelegate(err error, message string, args ...interface{})
 }
 
 // Annotate tries to convert err to *Error and adds a message to it.
-// This API is designed to reset Error message but keeps its original trace stack
+// This API is designed to reset Error message but keeps its original trace stack.
 func Annotate(err error, message string) error {
 	if err == nil {
 		return nil
@@ -347,7 +347,7 @@ func Annotatef(err error, format string, args ...interface{}) error {
 	return e
 }
 
-// Message returns `getMsg()` value if err is an *Error instance, else returns `Error()` value
+// Message returns `getMsg()` value if err is an *Error instance, else returns `Error()` value.
 func Message(err error) string {
 	if err == nil {
 		return ""
@@ -360,7 +360,7 @@ func Message(err error) string {
 }
 
 // WithScope tries to set given scope to *Error, if err is not an *Error instance,
-// wrap it with error scope instead
+// wrap it with error scope instead.
 func WithScope(err error, scope ErrScope) error {
 	if err == nil {
 		return nil
@@ -374,7 +374,7 @@ func WithScope(err error, scope ErrScope) error {
 }
 
 // WithClass tries to set given class to *Error, if err is not an *Error instance,
-// wrap it with error class instead
+// wrap it with error class instead.
 func WithClass(err error, class ErrClass) error {
 	if err == nil {
 		return nil

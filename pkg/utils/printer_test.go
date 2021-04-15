@@ -22,8 +22,7 @@ import (
 
 var _ = Suite(&testPrinterSuite{})
 
-type testPrinterSuite struct {
-}
+type testPrinterSuite struct{}
 
 func (t *testPrinterSuite) SetUpTest(c *C) {
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)

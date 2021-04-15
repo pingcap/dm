@@ -20,12 +20,9 @@ import (
 	"github.com/pingcap/errors"
 )
 
-var (
-	_ = check.Suite(&testErrorSuite{})
-)
+var _ = check.Suite(&testErrorSuite{})
 
-type testErrorSuite struct {
-}
+type testErrorSuite struct{}
 
 func (t *testErrorSuite) TestRetryable(c *check.C) {
 	err := errors.New("custom error")

@@ -28,9 +28,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-var (
-	etcdTestCli *clientv3.Client
-)
+var etcdTestCli *clientv3.Client
 
 type testPessimist struct{}
 

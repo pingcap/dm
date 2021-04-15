@@ -285,7 +285,6 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
 	c.Assert(e2.IsLeader(), IsFalse)
-
 }
 
 func (t *testElectionSuite) TestElectionEvictLeader(c *C) {

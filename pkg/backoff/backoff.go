@@ -23,7 +23,7 @@ import (
 
 // Backoff is an exponential counter, it starts from `Min` duration, and after
 // every call to `Duration` method the duration will be multiplied by `Factor`,
-// but it never exceeds `Max`. Backoff is not thread-safe
+// but it never exceeds `Max`. Backoff is not thread-safe.
 type Backoff struct {
 	// cwnd is the congestion window
 	cwnd int
@@ -38,7 +38,7 @@ type Backoff struct {
 	Min, Max time.Duration
 }
 
-// NewBackoff creates a new backoff instance
+// NewBackoff creates a new backoff instance.
 func NewBackoff(factor float64, jitter bool, min, max time.Duration) (*Backoff, error) {
 	if factor <= 0 {
 		return nil, terror.ErrBackoffArgsNotValid.Generate("factor", factor)
@@ -57,7 +57,7 @@ func NewBackoff(factor float64, jitter bool, min, max time.Duration) (*Backoff, 
 	}, nil
 }
 
-// Duration returns the duration for the current cwnd and increases the cwnd counter
+// Duration returns the duration for the current cwnd and increases the cwnd counter.
 func (b *Backoff) Duration() time.Duration {
 	d := b.Current()
 	b.Forward()
@@ -65,7 +65,7 @@ func (b *Backoff) Duration() time.Duration {
 }
 
 // Current returns the duration for the current cwnd, but doesn't increase the
-// cwnd counter
+// cwnd counter.
 func (b *Backoff) Current() time.Duration {
 	return b.durationcwnd(b.cwnd)
 }
@@ -78,13 +78,13 @@ func (b *Backoff) BoundaryForward() {
 	}
 }
 
-// Forward increases the cwnd counter
+// Forward increases the cwnd counter.
 func (b *Backoff) Forward() {
 	b.cwnd++
 }
 
 // Rollback try to decrease cwnd by one if it is greater or equal than one.
-// This is used for we have a long enough duration without backoff try
+// This is used for we have a long enough duration without backoff try.
 func (b *Backoff) Rollback() {
 	if b.cwnd > 0 {
 		b.cwnd--

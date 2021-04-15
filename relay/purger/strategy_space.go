@@ -26,7 +26,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// spaceArgs represents args needed by spaceStrategy
+// spaceArgs represents args needed by spaceStrategy.
 type spaceArgs struct {
 	relayBaseDir   string
 	remainSpace    int64 // if remain space (GB) in @RelayBaseDir less than this, then it can be purged
@@ -43,7 +43,7 @@ func (sa *spaceArgs) String() string {
 		sa.relayBaseDir, sa.remainSpace, strings.Join(sa.uuids, ";"), sa.activeRelayLog)
 }
 
-// spaceStrategy represents a relay purge strategy by remain space in dm-worker node
+// spaceStrategy represents a relay purge strategy by remain space in dm-worker node.
 type spaceStrategy struct {
 	purging sync2.AtomicInt32
 

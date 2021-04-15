@@ -663,7 +663,7 @@ func (t *testOptimist) TestOptimistLockConflict(c *C) {
 		st1                = optimism.NewSourceTables(task, source1)
 		p                  = parser.New()
 		se                 = mock.NewContext()
-		tblID        int64 = 111
+		tblID        int64 = 222
 		DDLs1              = []string{"ALTER TABLE bar ADD COLUMN c1 TEXT"}
 		DDLs2              = []string{"ALTER TABLE bar ADD COLUMN c1 DATETIME"}
 		ti0                = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)

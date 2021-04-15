@@ -32,8 +32,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testOperatorSuite struct {
-}
+type testOperatorSuite struct{}
 
 func (o *testOperatorSuite) TestOperator(c *C) {
 	logger := log.L()
@@ -43,7 +42,8 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 		Position: mysql.Position{
 			Name: "mysql-bin.000001",
 			Pos:  233,
-		}}
+		},
+	}
 	endLocation := binlog.Location{
 		Position: mysql.Position{
 			Name: "mysql-bin.000001",

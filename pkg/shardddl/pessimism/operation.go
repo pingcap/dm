@@ -42,12 +42,12 @@ type Operation struct {
 }
 
 // NewOperation creates a new Operation instance.
-func NewOperation(ID, task, source string, DDLs []string, exec, done bool) Operation {
+func NewOperation(id, task, source string, ddls []string, exec, done bool) Operation {
 	return Operation{
-		ID:     ID,
+		ID:     id,
 		Task:   task,
 		Source: source,
-		DDLs:   DDLs,
+		DDLs:   ddls,
 		Exec:   exec,
 		Done:   done,
 	}
@@ -174,7 +174,6 @@ func GetInfosOperationsByTask(cli *clientv3.Client, task string) ([]Info, []Oper
 	respTxn, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli,
 		clientv3.OpGet(common.ShardDDLPessimismInfoKeyAdapter.Encode(task), clientv3.WithPrefix()),
 		clientv3.OpGet(common.ShardDDLPessimismOperationKeyAdapter.Encode(task), clientv3.WithPrefix()))
-
 	if err != nil {
 		return nil, nil, 0, err
 	}

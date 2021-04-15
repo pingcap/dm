@@ -33,17 +33,17 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-//// Backoff related constants
-//var (
-//	DefaultCheckInterval           = 5 * time.Second
-//	DefaultBackoffRollback         = 5 * time.Minute
-//	DefaultBackoffMin              = 1 * time.Second
-//	DefaultBackoffMax              = 5 * time.Minute
-//	DefaultBackoffJitter           = true
-//	DefaultBackoffFactor   float64 = 2
-//)
+// Backoff related constants
+// var (
+// 	DefaultCheckInterval           = 5 * time.Second
+// 	DefaultBackoffRollback         = 5 * time.Minute
+// 	DefaultBackoffMin              = 1 * time.Second
+// 	DefaultBackoffMax              = 5 * time.Minute
+// 	DefaultBackoffJitter           = true
+// 	DefaultBackoffFactor   float64 = 2
+// )
 
-// ResumeStrategy represents what we can do when we meet a paused task in task status checker
+// ResumeStrategy represents what we can do when we meet a paused task in task status checker.
 type ResumeStrategy int
 
 // resume strategies, in each round of `check`, the checker will apply one of the following strategies
@@ -71,9 +71,9 @@ const (
 	// for this task in this check round.
 	ResumeSkip
 	// When checker detects a task is paused because of some un-resumable error, such as paused because of
-	// executing incompatible DDL to downstream, we will apply ResumeNoSense strategy
+	// executing incompatible DDL to downstream, we will apply ResumeNoSense strategy.
 	ResumeNoSense
-	// ResumeDispatch means we will dispatch an auto resume operation in this check round for the paused task
+	// ResumeDispatch means we will dispatch an auto resume operation in this check round for the paused task.
 	ResumeDispatch
 )
 
@@ -84,7 +84,7 @@ var resumeStrategy2Str = map[ResumeStrategy]string{
 	ResumeDispatch: "dispatch auto resume",
 }
 
-// String implements fmt.Stringer interface
+// String implements fmt.Stringer interface.
 func (bs ResumeStrategy) String() string {
 	if s, ok := resumeStrategy2Str[bs]; ok {
 		return s
@@ -92,7 +92,7 @@ func (bs ResumeStrategy) String() string {
 	return fmt.Sprintf("unsupported resume strategy: %d", bs)
 }
 
-// TaskStatusChecker is an interface that defines how we manage task status
+// TaskStatusChecker is an interface that defines how we manage task status.
 type TaskStatusChecker interface {
 	// Init initializes the checker
 	Init() error
@@ -102,7 +102,7 @@ type TaskStatusChecker interface {
 	Close()
 }
 
-// NewTaskStatusChecker is a TaskStatusChecker initializer
+// NewTaskStatusChecker is a TaskStatusChecker initializer.
 var NewTaskStatusChecker = NewRealTaskStatusChecker
 
 type backoffController struct {
@@ -124,7 +124,7 @@ type backoffController struct {
 	relayBackoff          *backoff.Backoff
 }
 
-// newBackoffController returns a new backoffController instance
+// newBackoffController returns a new backoffController instance.
 func newBackoffController() *backoffController {
 	return &backoffController{
 		backoffs:         make(map[string]*backoff.Backoff),
@@ -149,7 +149,7 @@ type realTaskStatusChecker struct {
 	bc  *backoffController
 }
 
-// NewRealTaskStatusChecker creates a new realTaskStatusChecker instance
+// NewRealTaskStatusChecker creates a new realTaskStatusChecker instance.
 func NewRealTaskStatusChecker(cfg config.CheckerConfig, w *Worker) TaskStatusChecker {
 	tsc := &realTaskStatusChecker{
 		cfg: cfg,
@@ -161,7 +161,7 @@ func NewRealTaskStatusChecker(cfg config.CheckerConfig, w *Worker) TaskStatusChe
 	return tsc
 }
 
-// Init implements TaskStatusChecker.Init
+// Init implements TaskStatusChecker.Init.
 func (tsc *realTaskStatusChecker) Init() error {
 	// just check configuration of backoff here, lazy creates backoff counter,
 	// as we can't get task information before dm-worker starts
@@ -169,7 +169,7 @@ func (tsc *realTaskStatusChecker) Init() error {
 	return terror.WithClass(err, terror.ClassDMWorker)
 }
 
-// Start implements TaskStatusChecker.Start
+// Start implements TaskStatusChecker.Start.
 func (tsc *realTaskStatusChecker) Start() {
 	tsc.wg.Add(1)
 	go func() {
@@ -178,7 +178,7 @@ func (tsc *realTaskStatusChecker) Start() {
 	}()
 }
 
-// Close implements TaskStatusChecker.Close
+// Close implements TaskStatusChecker.Close.
 func (tsc *realTaskStatusChecker) Close() {
 	if !tsc.closed.CompareAndSwap(false, true) {
 		return
@@ -219,7 +219,7 @@ func (tsc *realTaskStatusChecker) run() {
 }
 
 // isResumableError checks the error message and returns whether we need to
-// resume the task and retry
+// resume the task and retry.
 func isResumableError(err *pb.ProcessError) bool {
 	if err == nil {
 		return true
@@ -263,9 +263,10 @@ func (tsc *realTaskStatusChecker) getResumeStrategy(stStatus *pb.SubTaskStatus, 
 
 	// TODO: use different strategies based on the error detail
 	for _, processErr := range stStatus.Result.Errors {
+		pErr := processErr
 		if !isResumableError(processErr) {
 			failpoint.Inject("TaskCheckInterval", func(_ failpoint.Value) {
-				tsc.l.Info("error is not resumable", zap.Stringer("error", processErr))
+				tsc.l.Info("error is not resumable", zap.Stringer("error", pErr))
 			})
 			return ResumeNoSense
 		}

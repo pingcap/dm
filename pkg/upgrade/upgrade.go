@@ -32,17 +32,15 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var (
-	// upgrades records all functions used to upgrade from one version to the later version.
-	upgrades = []func(cli *clientv3.Client, uctx Context) error{
-		upgradeToVer1,
-		upgradeToVer2,
-		upgradeToVer3,
-	}
-)
+// upgrades records all functions used to upgrade from one version to the later version.
+var upgrades = []func(cli *clientv3.Client, uctx Context) error{
+	upgradeToVer1,
+	upgradeToVer2,
+	upgradeToVer3,
+}
 
 // Context is used to pass something to TryUpgrade
-// NOTE that zero value of Context is nil, be aware of nil-dereference
+// NOTE that zero value of Context is nil, be aware of nil-dereference.
 type Context struct {
 	context.Context
 	SubTaskConfigs map[string]map[string]config.SubTaskConfig
@@ -99,7 +97,7 @@ func TryUpgrade(cli *clientv3.Client, uctx Context) error {
 }
 
 // UntouchVersionUpgrade runs all upgrade functions but doesn't change cluster version. This function is called when
-// upgrade from v1.0, with a later PutVersion in caller after success
+// upgrade from v1.0, with a later PutVersion in caller after success.
 func UntouchVersionUpgrade(cli *clientv3.Client, uctx Context) error {
 	for _, upgrade := range upgrades {
 		err := upgrade(cli, uctx)
@@ -116,7 +114,7 @@ func upgradeToVer1(cli *clientv3.Client, uctx Context) error {
 	return nil
 }
 
-// upgradeToVer2 does upgrade operations from Ver1 to Ver2 (v2.0.0-GA) to upgrade syncer checkpoint schema
+// upgradeToVer2 does upgrade operations from Ver1 to Ver2 (v2.0.0-GA) to upgrade syncer checkpoint schema.
 func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 	upgradeTaskName := "upgradeToVer2"
 	logger := log.L().WithFields(zap.String("task", upgradeTaskName))
@@ -149,7 +147,7 @@ func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 	}()
 
 	// 10 seconds for each subtask
-	timeout := time.Duration(len(dbConfigs)) * 10 * time.Second
+	timeout := time.Duration(len(dbConfigs)*10) * time.Second
 	upgradeCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	uctx.Context = upgradeCtx
 	defer cancel()
@@ -184,7 +182,7 @@ func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 	return nil
 }
 
-// upgradeToVer3 does upgrade operations from Ver2 (v2.0.0-GA) to Ver3 (v2.0.2) to upgrade etcd key encodings
+// upgradeToVer3 does upgrade operations from Ver2 (v2.0.0-GA) to Ver3 (v2.0.2) to upgrade etcd key encodings.
 func upgradeToVer3(cli *clientv3.Client, uctx Context) error {
 	upgradeCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	uctx.Context = upgradeCtx
@@ -204,7 +202,7 @@ func upgradeToVer3(cli *clientv3.Client, uctx Context) error {
 		},
 	}
 
-	var ops []clientv3.Op
+	ops := make([]clientv3.Op, 0, len(etcdKeyUpgrades))
 	for _, pair := range etcdKeyUpgrades {
 		resp, err := cli.Get(uctx.Context, pair.old.Path(), clientv3.WithPrefix())
 		if err != nil {

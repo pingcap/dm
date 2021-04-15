@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	// MaxBinlogSyncerReconnect is the max reconnection times for binlog syncer in go-mysql
+	// MaxBinlogSyncerReconnect is the max reconnection times for binlog syncer in go-mysql.
 	MaxBinlogSyncerReconnect = 60
 	// SlaveReadTimeout is slave read binlog data timeout, ref: https://dev.mysql.com/doc/refman/8.0/en/replication-options-slave.html#sysvar_slave_net_timeout
 	SlaveReadTimeout = 1 * time.Minute
@@ -29,7 +29,7 @@ var (
 )
 
 // SetDefaultReplicationCfg sets some default value for BinlogSyncerConfig
-// Note: retryCount should be greater than 0, set retryCount = 1 if you want to disable retry sync
+// Note: retryCount should be greater than 0, set retryCount = 1 if you want to disable retry sync.
 func SetDefaultReplicationCfg(cfg *replication.BinlogSyncerConfig, retryCount int) {
 	cfg.UseDecimal = true // must set true. ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
 	cfg.VerifyChecksum = true

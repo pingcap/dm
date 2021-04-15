@@ -25,8 +25,7 @@ import (
 
 var _ = Suite(&testBaseDBSuite{})
 
-type testBaseDBSuite struct {
-}
+type testBaseDBSuite struct{}
 
 func (t *testBaseDBSuite) TestGetBaseConn(c *C) {
 	db, mock, err := sqlmock.New()
@@ -41,6 +40,7 @@ func (t *testBaseDBSuite) TestGetBaseConn(c *C) {
 	c.Assert(err, IsNil)
 
 	mock.ExpectQuery("select 1").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("1"))
+	// nolint:sqlclosecheck
 	rows, err := dbConn.QuerySQL(tctx, "select 1")
 	c.Assert(err, IsNil)
 	ids := make([]int, 0, 1)

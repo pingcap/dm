@@ -35,9 +35,7 @@ func Test(t *testing.T) {
 
 var _ = Suite(&trackerSuite{})
 
-var (
-	defaultTestSessionCfg = map[string]string{"sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"}
-)
+var defaultTestSessionCfg = map[string]string{"sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"}
 
 type trackerSuite struct {
 	baseConn   *conn.BaseConn
@@ -227,7 +225,6 @@ func (s *trackerSuite) TestDDL(c *C) {
 	cts, err = tracker.GetCreateTable(context.Background(), "testdb", "foo")
 	c.Assert(err, IsNil)
 	c.Assert(cts, Equals, "CREATE TABLE `foo` ( `a` varchar(255) NOT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
-
 }
 
 func (s *trackerSuite) TestGetSingleColumnIndices(c *C) {

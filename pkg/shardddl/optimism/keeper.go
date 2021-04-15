@@ -38,7 +38,7 @@ func NewLockKeeper() *LockKeeper {
 	}
 }
 
-// RebuildLocksAndTables rebuild the locks and tables
+// RebuildLocksAndTables rebuild the locks and tables.
 func (lk *LockKeeper) RebuildLocksAndTables(
 	cli *clientv3.Client,
 	ifm map[string]map[string]map[string]map[string]Info,

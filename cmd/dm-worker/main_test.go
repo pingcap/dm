@@ -28,7 +28,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func TestRunMain(t *testing.T) {
+func TestRunMain(_ *testing.T) {
 	fmt.Println("dm-worker startup", time.Now())
 	var (
 		args   []string
