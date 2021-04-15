@@ -512,6 +512,7 @@ func (s *Server) setWorker(worker *Worker, needLock bool) {
 	s.worker = worker
 }
 
+// nolint:unparam
 func (s *Server) getSourceStatus(needLock bool) pb.SourceStatus {
 	if needLock {
 		s.Lock()
