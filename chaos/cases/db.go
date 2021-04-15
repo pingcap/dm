@@ -29,6 +29,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // dbConn holds a connection to a database and supports to reset the connection.
@@ -74,7 +75,7 @@ func (c *dbConn) resetConn(ctx context.Context) error {
 	return nil
 }
 
-// execSQLs executes DDL or DML queries.
+// execSQLs executes SQL queries.
 func (c *dbConn) execSQLs(ctx context.Context, queries ...string) error {
 	params := retry.Params{
 		RetryCount:         3,
@@ -96,6 +97,13 @@ func (c *dbConn) execSQLs(ctx context.Context, queries ...string) error {
 			return ret, err2
 		})
 	return err
+}
+
+// execSQLs executes DDL queries.
+func (c *dbConn) execDDLs(queries ...string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
+	defer cancel()
+	return c.execSQLs(ctx, queries...)
 }
 
 // dropDatabase drops the database if exists.
@@ -123,6 +131,8 @@ func ignoreExecSQLError(err error) bool {
 	case errno.ErrDupEntry: // HACK: we tolerate `invalid connection`, then `Duplicate entry` may be reported.
 		return true
 	case errno.ErrTooBigRowsize: // HACK: we tolerate `Error 1118: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535`
+		return true
+	case errno.ErrCantDropFieldOrKey: // HACK: ignore error `Can't DROP '.*'; check that column/key exists`
 		return true
 	default:
 		return false
