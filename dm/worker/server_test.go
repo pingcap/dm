@@ -495,7 +495,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 			currentWorker := s.getWorker(true)
 			return currentWorker == nil && w.closed.Get()
 		}), IsTrue)
-		c.Assert(s.getSourceStatus(false).Result, IsNil)
+		c.Assert(s.getSourceStatus(true).Result, IsNil)
 	}
 }
 
