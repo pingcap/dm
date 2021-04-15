@@ -46,7 +46,6 @@ type PurgeConfig struct {
 }
 
 // SourceConfig is the configuration for Worker.
-// SourceConfig is the configuration for Worker.
 type SourceConfig struct {
 	EnableGTID  bool   `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
 	AutoFixGTID bool   `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
