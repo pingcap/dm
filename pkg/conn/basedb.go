@@ -37,26 +37,25 @@ import (
 
 var customID int64
 
-// DBProvider providers BaseDB instance
+// DBProvider providers BaseDB instance.
 type DBProvider interface {
 	Apply(config config.DBConfig) (*BaseDB, error)
 }
 
-// DefaultDBProviderImpl is default DBProvider implement
-type DefaultDBProviderImpl struct {
-}
+// DefaultDBProviderImpl is default DBProvider implement.
+type DefaultDBProviderImpl struct{}
 
-// DefaultDBProvider is global instance of DBProvider
+// DefaultDBProvider is global instance of DBProvider.
 var DefaultDBProvider DBProvider
 
 func init() {
 	DefaultDBProvider = &DefaultDBProviderImpl{}
 }
 
-// mockDB is used in unit test
+// mockDB is used in unit test.
 var mockDB sqlmock.Sqlmock
 
-// Apply will build BaseDB with DBConfig
+// Apply will build BaseDB with DBConfig.
 func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 	// maxAllowedPacket=0 can be used to automatically fetch the max_allowed_packet variable from server on every connection.
 	// https://github.com/go-sql-driver/mysql#maxallowedpacket
@@ -129,7 +128,7 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 	return NewBaseDB(db, doFuncInClose), nil
 }
 
-// BaseDB wraps *sql.DB, control the BaseConn
+// BaseDB wraps *sql.DB, control the BaseConn.
 type BaseDB struct {
 	DB *sql.DB
 
@@ -143,13 +142,13 @@ type BaseDB struct {
 	doFuncInClose func()
 }
 
-// NewBaseDB returns *BaseDB object
+// NewBaseDB returns *BaseDB object.
 func NewBaseDB(db *sql.DB, doFuncInClose func()) *BaseDB {
 	conns := make(map[*BaseConn]struct{})
 	return &BaseDB{DB: db, conns: conns, Retry: &retry.FiniteRetryStrategy{}, doFuncInClose: doFuncInClose}
 }
 
-// GetBaseConn retrieves *BaseConn which has own retryStrategy
+// GetBaseConn retrieves *BaseConn which has own retryStrategy.
 func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
 	conn, err := d.DB.Conn(ctx)
 	if err != nil {
@@ -166,7 +165,7 @@ func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
 	return baseConn, nil
 }
 
-// CloseBaseConn release BaseConn resource from BaseDB, and close BaseConn
+// CloseBaseConn release BaseConn resource from BaseDB, and close BaseConn.
 func (d *BaseDB) CloseBaseConn(conn *BaseConn) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -174,7 +173,7 @@ func (d *BaseDB) CloseBaseConn(conn *BaseConn) error {
 	return conn.close()
 }
 
-// Close release *BaseDB resource
+// Close release *BaseDB resource.
 func (d *BaseDB) Close() error {
 	if d == nil || d.DB == nil {
 		return nil

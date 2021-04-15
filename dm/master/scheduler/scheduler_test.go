@@ -74,9 +74,7 @@ type testScheduler struct{}
 
 var _ = Suite(&testScheduler{})
 
-var (
-	stageEmpty ha.Stage
-)
+var stageEmpty ha.Stage
 
 func (t *testScheduler) TestScheduler(c *C) {
 	t.testSchedulerProgress(c, noRestart)

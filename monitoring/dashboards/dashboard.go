@@ -18,11 +18,9 @@ const (
 	name           = "dm.json"
 )
 
-var (
-	dashboards = map[string]string{
-		"dm.json": "Test-Cluster-DM",
-	}
-)
+var dashboards = map[string]string{
+	"dm.json": "Test-Cluster-DM",
+}
 
 func readDashboard(dir string, name string) (string, error) {
 	file := filepath.Join(dir, name)
@@ -39,7 +37,7 @@ func writeDashboard(dir string, name string, body string) error {
 		return errors.Errorf("%s dashboard is not found in operator", name)
 	}
 
-	writeFile(dir, name, filterDashboard(body, name, title))
+	writeFile(dir, name, filterDashboard(body, title))
 	return nil
 }
 
@@ -64,7 +62,7 @@ func checkErr(err error, msg string) {
 	}
 }
 
-func filterDashboard(str string, dashboard string, title string) string {
+func filterDashboard(str string, title string) string {
 	// replace grafana item
 	var err error
 	r := gjson.Get(str, "__requires.0.type")

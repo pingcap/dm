@@ -50,7 +50,7 @@ type Config struct {
 	FileMaxBackups int `toml:"max-backups" json:"max-backups"`
 }
 
-// Adjust adjusts config
+// Adjust adjusts config.
 func (cfg *Config) Adjust() {
 	if len(cfg.Level) == 0 {
 		cfg.Level = defaultLogLevel
@@ -72,12 +72,12 @@ type Logger struct {
 	*zap.Logger
 }
 
-// WithFields return new Logger with specified fields
+// WithFields return new Logger with specified fields.
 func (l Logger) WithFields(fields ...zap.Field) Logger {
 	return Logger{l.With(fields...)}
 }
 
-// ErrorFilterContextCanceled wraps Logger.Error() and will filter error log when error is context.Canceled
+// ErrorFilterContextCanceled wraps Logger.Error() and will filter error log when error is context.Canceled.
 func (l Logger) ErrorFilterContextCanceled(msg string, fields ...zap.Field) {
 	for _, field := range fields {
 		switch field.Type {
@@ -95,7 +95,7 @@ func (l Logger) ErrorFilterContextCanceled(msg string, fields ...zap.Field) {
 	l.Logger.WithOptions(zap.AddCallerSkip(1)).Error(msg, fields...)
 }
 
-// logger for DM
+// logger for DM.
 var (
 	appLogger = Logger{zap.NewNop()}
 	appLevel  zap.AtomicLevel
@@ -170,7 +170,7 @@ func Props() *pclog.ZapProperties {
 	return appProps
 }
 
-// WrapStringerField returns a wrap stringer field
+// WrapStringerField returns a wrap stringer field.
 func WrapStringerField(message string, object fmt.Stringer) zap.Field {
 	if helper.IsNil(object) {
 		return zap.String(message, "NULL")

@@ -20,9 +20,10 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
 
 	tc "github.com/pingcap/check"
 )
@@ -39,7 +40,7 @@ type mockDBProvider struct {
 	db *sql.DB
 }
 
-// Apply will build BaseDB with DBConfig
+// Apply will build BaseDB with DBConfig.
 func (d *mockDBProvider) Apply(config config.DBConfig) (*conn.BaseDB, error) {
 	return conn.NewBaseDB(d.db, func() {}), nil
 }
@@ -227,15 +228,17 @@ func (s *testCheckerSuite) TestBinlogRowImageChecking(c *tc.C) {
 }
 
 func (s *testCheckerSuite) TestTableSchemaChecking(c *tc.C) {
+	var (
+		schema = "db_1"
+		tb1    = "t_1"
+		tb2    = "t_2"
+	)
 	cfgs := []*config.SubTaskConfig{
 		{
 			IgnoreCheckingItems: ignoreExcept(map[string]struct{}{config.TableSchemaChecking: {}}),
 		},
 	}
 
-	schema := "db_1"
-	tb1 := "t_1"
-	tb2 := "t_2"
 	createTable1 := `CREATE TABLE %s (
   					id int(11) DEFAULT NULL,
   					b int(11) DEFAULT NULL
@@ -266,11 +269,16 @@ func (s *testCheckerSuite) TestTableSchemaChecking(c *tc.C) {
 }
 
 func (s *testCheckerSuite) TestShardTableSchemaChecking(c *tc.C) {
+	var (
+		schema = "db_1"
+		tb1    = "t_1"
+		tb2    = "t_2"
+	)
 	cfgs := []*config.SubTaskConfig{
 		{
 			RouteRules: []*router.TableRule{
 				{
-					SchemaPattern: "db_1",
+					SchemaPattern: schema,
 					TargetSchema:  "db",
 					TablePattern:  "t_*",
 					TargetTable:   "t",
@@ -280,9 +288,6 @@ func (s *testCheckerSuite) TestShardTableSchemaChecking(c *tc.C) {
 		},
 	}
 
-	schema := "db_1"
-	tb1 := "t_1"
-	tb2 := "t_2"
 	createTable1 := `CREATE TABLE %s (
 				  	id int(11) DEFAULT NULL,
   					b int(11) DEFAULT NULL
@@ -310,11 +315,16 @@ func (s *testCheckerSuite) TestShardTableSchemaChecking(c *tc.C) {
 }
 
 func (s *testCheckerSuite) TestShardAutoIncrementIDChecking(c *tc.C) {
+	var (
+		schema = "db_1"
+		tb1    = "t_1"
+		tb2    = "t_2"
+	)
 	cfgs := []*config.SubTaskConfig{
 		{
 			RouteRules: []*router.TableRule{
 				{
-					SchemaPattern: "db_1",
+					SchemaPattern: schema,
 					TargetSchema:  "db",
 					TablePattern:  "t_*",
 					TargetTable:   "t",
@@ -324,9 +334,6 @@ func (s *testCheckerSuite) TestShardAutoIncrementIDChecking(c *tc.C) {
 		},
 	}
 
-	schema := "db_1"
-	tb1 := "t_1"
-	tb2 := "t_2"
 	createTable1 := `CREATE TABLE %s (
 				  	id int(11) NOT NULL AUTO_INCREMENT,
   					b int(11) DEFAULT NULL,
@@ -359,18 +366,23 @@ func (s *testCheckerSuite) TestShardAutoIncrementIDChecking(c *tc.C) {
 }
 
 func (s *testCheckerSuite) TestSameTargetTableDetection(c *tc.C) {
+	var (
+		schema = "db_1"
+		tb1    = "t_1"
+		tb2    = "t_2"
+	)
 	cfgs := []*config.SubTaskConfig{
 		{
 			RouteRules: []*router.TableRule{
 				{
-					SchemaPattern: "db_1",
+					SchemaPattern: schema,
 					TargetSchema:  "db",
-					TablePattern:  "t_1",
+					TablePattern:  tb1,
 					TargetTable:   "t",
 				}, {
-					SchemaPattern: "db_1",
+					SchemaPattern: schema,
 					TargetSchema:  "db",
-					TablePattern:  "t_2",
+					TablePattern:  tb2,
 					TargetTable:   "T",
 				},
 			},
@@ -378,9 +390,6 @@ func (s *testCheckerSuite) TestSameTargetTableDetection(c *tc.C) {
 		},
 	}
 
-	schema := "db_1"
-	tb1 := "t_1"
-	tb2 := "t_2"
 	createTable1 := `CREATE TABLE %s (
 				  	id int(11) NOT NULL AUTO_INCREMENT,
   					b int(11) DEFAULT NULL,

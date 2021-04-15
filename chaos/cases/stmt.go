@@ -17,6 +17,8 @@ import (
 	"math/rand"
 
 	"github.com/chaos-mesh/go-sqlsmith"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 )
 
 type dmlType int
@@ -28,24 +30,75 @@ const (
 )
 
 // randDML generates DML (INSERT, UPDATE or DELETE).
-// NOTE: 3 DML types have the same weight now.
+// insert:update:delete=2:1:1
 func randDML(ss *sqlsmith.SQLSmith) (dml string, t dmlType, err error) {
-	t = dmlType(rand.Intn(3) + 1)
+	t = dmlType(rand.Intn(4) + 1)
 	switch t {
-	case insertDML:
-		dml, _, err = ss.InsertStmt(false)
 	case updateDML:
 		dml, _, err = ss.UpdateStmt()
 	case deleteDML:
 		dml, _, err = ss.DeleteStmt()
+	default:
+		t = insertDML
+		dml, _, err = ss.InsertStmt(false)
 	}
 	return
 }
 
 // randDDL generates `ALTER TABLE` DDL.
 func randDDL(ss *sqlsmith.SQLSmith) (string, error) {
-	return ss.AlterTableStmt(&sqlsmith.DDLOptions{
-		OnlineDDL: false,
-		Tables:    make([]string, 0),
-	})
+	for {
+		sql, err := ss.AlterTableStmt(&sqlsmith.DDLOptions{
+			OnlineDDL: false,
+			Tables:    make([]string, 0),
+		})
+
+		if err != nil {
+			return sql, err
+		} else if !isValidSQL(sql) {
+			continue
+		}
+
+		return sql, nil
+	}
+}
+
+func isValidSQL(sql string) bool {
+	_, err := parser.New().ParseOneStmt(sql, "", "")
+	return err == nil
+}
+
+func isNotNullNonDefaultAddCol(sql string) (bool, error) {
+	stmt, err := parser.New().ParseOneStmt(sql, "", "")
+	if err != nil {
+		return false, err
+	}
+	v, ok := stmt.(*ast.AlterTableStmt)
+	if !ok {
+		return false, nil
+	}
+
+	if len(v.Specs) == 0 || v.Specs[0].Tp != ast.AlterTableAddColumns || len(v.Specs[0].NewColumns) == 0 {
+		return false, nil
+	}
+
+	spec := v.Specs[0]
+
+OUTER:
+	for _, newCol := range spec.NewColumns {
+		notNull := false
+		for _, opt := range newCol.Options {
+			if opt.Tp == ast.ColumnOptionDefaultValue {
+				continue OUTER
+			}
+			if opt.Tp == ast.ColumnOptionNotNull {
+				notNull = true
+			}
+		}
+		if notNull {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

@@ -89,7 +89,7 @@ type Client interface {
 	Close() error
 }
 
-// IsStreamAPI checks whether a request is streaming API based on CmdType
+// IsStreamAPI checks whether a request is streaming API based on CmdType.
 func (req *Request) IsStreamAPI() bool {
 	return req.Type == CmdFetchDDLInfo
 }

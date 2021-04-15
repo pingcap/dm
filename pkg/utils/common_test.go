@@ -27,8 +27,7 @@ import (
 
 var _ = Suite(&testCommonSuite{})
 
-type testCommonSuite struct {
-}
+type testCommonSuite struct{}
 
 func (s *testCommonSuite) TestTrimCtrlChars(c *C) {
 	ddl := "create table if not exists foo.bar(id int)"

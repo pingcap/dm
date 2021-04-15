@@ -25,15 +25,15 @@ import (
 var (
 	useOfClosedErrMsg = "use of closed network connection"
 	// ClusterVersionKey is used to store the version of the cluster.
-	ClusterVersionKey string = "/dm-cluster/version"
+	ClusterVersionKey = "/dm-cluster/version"
 	// WorkerRegisterKeyAdapter is used to encode and decode register key.
 	// k/v: Encode(worker-name) -> the information of the DM-worker node.
 	WorkerRegisterKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/r/")
 	// WorkerKeepAliveKeyAdapter is used to encode and decode keepalive key.
-	// k/v: Encode(worker-name) -> time
+	// k/v: Encode(worker-name) -> time.
 	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/a/")
 	// UpstreamConfigKeyAdapter stores all config of which MySQL-task has not stopped.
-	// k/v: Encode(source-id) -> config
+	// k/v: Encode(source-id) -> config.
 	UpstreamConfigKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/v2/upstream/config/")
 	// UpstreamBoundWorkerKeyAdapter is used to store address of worker in which MySQL-tasks which are running.
 	// k/v: Encode(worker-name) -> the bound relationship.
@@ -43,13 +43,13 @@ var (
 	// k/v: Encode(worker-name) -> the bound relationship.
 	UpstreamLastBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/last-bound-worker/")
 	// UpstreamRelayWorkerKeyAdapter is used to store the upstream which this worker needs to pull relay log
-	// k/v: Encode(worker-name) -> source-id
+	// k/v: Encode(worker-name) -> source-id.
 	UpstreamRelayWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/relay-worker/")
 	// TaskConfigKeyAdapter is used to store task config string.
-	// k/v: Encode(task-name) -> task-config-string
+	// k/v: Encode(task-name) -> task-config-string.
 	TaskConfigKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/task/")
 	// UpstreamSubTaskKeyAdapter is used to store SubTask which are subscribing data from MySQL source.
-	// k/v: Encode(source-id, task-name) -> SubTaskConfig
+	// k/v: Encode(source-id, task-name) -> SubTaskConfig.
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
 	// StageRelayKeyAdapter is used to store the running stage of the relay.
 	// k/v: Encode(source-id) -> the running stage of the relay.
@@ -59,10 +59,10 @@ var (
 	StageSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/stage/subtask/")
 
 	// ShardDDLPessimismInfoKeyAdapter is used to store shard DDL info in pessimistic model.
-	// k/v: Encode(task-name, source-id) -> shard DDL info
+	// k/v: Encode(task-name, source-id) -> shard DDL info.
 	ShardDDLPessimismInfoKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/info/")
 	// ShardDDLPessimismOperationKeyAdapter is used to store shard DDL operation in pessimistic model.
-	// k/v: Encode(task-name, source-id) -> shard DDL operation
+	// k/v: Encode(task-name, source-id) -> shard DDL operation.
 	ShardDDLPessimismOperationKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/operation/")
 
 	// ShardDDLOptimismSourceTablesKeyAdapter is used to store INITIAL upstream schema & table names when starting the subtask.
@@ -113,7 +113,7 @@ func keyAdapterKeysLen(s KeyAdapter) int {
 	return -1
 }
 
-// IsErrNetClosing checks whether is an ErrNetClosing error
+// IsErrNetClosing checks whether is an ErrNetClosing error.
 func IsErrNetClosing(err error) bool {
 	if err == nil {
 		return false
@@ -134,7 +134,7 @@ type KeyAdapter interface {
 
 type keyEncoderDecoder string
 
-// always use keyHexEncoderDecoder to avoid `/` in keys
+// always use keyHexEncoderDecoder to avoid `/` in keys.
 type keyHexEncoderDecoder string
 
 func (s keyEncoderDecoder) Encode(keys ...string) string {
@@ -190,10 +190,10 @@ func (s keyHexEncoderDecoder) Path() string {
 	return string(s)
 }
 
-// used in upgrade
+// used in upgrade.
 var (
 	// UpstreamConfigKeyAdapter stores all config of which MySQL-task has not stopped.
-	// k/v: Encode(source-id) -> config
+	// k/v: Encode(source-id) -> config.
 	UpstreamConfigKeyAdapterV1 KeyAdapter = keyEncoderDecoder("/dm-master/upstream/config/")
 	// StageRelayKeyAdapter is used to store the running stage of the relay.
 	// k/v: Encode(source-id) -> the running stage of the relay.

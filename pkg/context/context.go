@@ -22,13 +22,13 @@ import (
 
 // Context is used to in dm to record some context field like
 // * go context
-// * logger
+// * logger.
 type Context struct {
 	Ctx    context.Context
 	Logger log.Logger
 }
 
-// Background return a nop context
+// Background return a nop context.
 func Background() *Context {
 	return &Context{
 		Ctx:    context.Background(),
@@ -36,7 +36,7 @@ func Background() *Context {
 	}
 }
 
-// NewContext return a new Context
+// NewContext return a new Context.
 func NewContext(ctx context.Context, logger log.Logger) *Context {
 	return &Context{
 		Ctx:    ctx,
@@ -44,7 +44,7 @@ func NewContext(ctx context.Context, logger log.Logger) *Context {
 	}
 }
 
-// WithContext set go context
+// WithContext set go context.
 func (c *Context) WithContext(ctx context.Context) *Context {
 	return &Context{
 		Ctx:    ctx,
@@ -61,12 +61,12 @@ func (c *Context) WithTimeout(timeout time.Duration) (*Context, context.CancelFu
 	}, cancel
 }
 
-// Context returns real context
+// Context returns real context.
 func (c *Context) Context() context.Context {
 	return c.Ctx
 }
 
-// WithLogger set logger
+// WithLogger set logger.
 func (c *Context) WithLogger(logger log.Logger) *Context {
 	return &Context{
 		Ctx:    c.Ctx,
@@ -74,7 +74,7 @@ func (c *Context) WithLogger(logger log.Logger) *Context {
 	}
 }
 
-// L returns real logger
+// L returns real logger.
 func (c *Context) L() log.Logger {
 	return c.Logger
 }

@@ -32,8 +32,7 @@ import (
 
 var _ = check.Suite(&testEtcdSuite{})
 
-type testEtcdSuite struct {
-}
+type testEtcdSuite struct{}
 
 func (t *testEtcdSuite) SetUpSuite(c *check.C) {
 	// initialized the logger to make genEmbedEtcdConfig working.

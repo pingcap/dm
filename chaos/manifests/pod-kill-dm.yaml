@@ -7,6 +7,7 @@ metadata:
 spec:
   action: pod-kill
   mode: one
+  gracePeriod: 30
   selector:
     pods:
       default: # default namespace
@@ -16,5 +17,6 @@ spec:
         - dm-worker-0
         - dm-worker-1
         - dm-worker-2
+        - dm-worker-3
   scheduler:
     cron: "@every 1m"

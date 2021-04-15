@@ -59,7 +59,7 @@ type Unit interface {
 }
 
 // NewProcessError creates a new ProcessError
-// we can refine to add error scope field if needed
+// we can refine to add error scope field if needed.
 func NewProcessError(err error) *pb.ProcessError {
 	if e, ok := err.(*terror.Error); ok {
 		return &pb.ProcessError{
@@ -84,12 +84,12 @@ func NewProcessError(err error) *pb.ProcessError {
 	}
 }
 
-// IsCtxCanceledProcessErr returns true if the err's context canceled
+// IsCtxCanceledProcessErr returns true if the err's context canceled.
 func IsCtxCanceledProcessErr(err *pb.ProcessError) bool {
 	return strings.Contains(err.Message, "context canceled")
 }
 
-// JoinProcessErrors return the string of pb.ProcessErrors joined by ", "
+// JoinProcessErrors return the string of pb.ProcessErrors joined by ", ".
 func JoinProcessErrors(errors []*pb.ProcessError) string {
 	serrs := make([]string, 0, len(errors))
 	for _, serr := range errors {

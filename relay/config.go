@@ -49,7 +49,7 @@ func (c *Config) String() string {
 	return string(cfg)
 }
 
-// FromSourceCfg gen relay config from source config
+// FromSourceCfg gen relay config from source config.
 func FromSourceCfg(sourceCfg *config.SourceConfig) *Config {
 	clone := sourceCfg.DecryptPassword()
 	cfg := &Config{

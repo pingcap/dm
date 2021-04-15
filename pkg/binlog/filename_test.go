@@ -19,8 +19,7 @@ import (
 
 var _ = Suite(&testFilenameSuite{})
 
-type testFilenameSuite struct {
-}
+type testFilenameSuite struct{}
 
 func (t *testFilenameSuite) TestFilenameCmp(c *C) {
 	f1 := Filename{

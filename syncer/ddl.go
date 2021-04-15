@@ -26,7 +26,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// parseDDLResult represents the result of parseDDLSQL
+// parseDDLResult represents the result of parseDDLSQL.
 type parseDDLResult struct {
 	stmt   ast.StmtNode
 	ignore bool
@@ -113,10 +113,10 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 	}
 }
 
-/// resolveDDLSQL do two things
+// resolveDDLSQL do two things
 // * it splits multiple operations in one DDL statement into multiple DDL statements
 // * try to apply online ddl by given online
-// return @spilt sqls, @online ddl table names, @error
+// return @spilt sqls, @online ddl table names, @error.
 func (s *Syncer) resolveDDLSQL(tctx *tcontext.Context, p *parser.Parser, stmt ast.StmtNode, schema string) (sqls []string, tables map[string]*filter.Table, err error) {
 	sqls, err = parserpkg.SplitDDL(stmt, schema)
 	if err != nil {
@@ -178,7 +178,7 @@ func (s *Syncer) handleDDL(p *parser.Parser, schema, sql string) (string, [][]*f
 }
 
 // handle online ddls
-// if sql is online ddls, we would find it's ghost table, and ghost ddls, then replay its table name by real table name
+// if sql is online ddls, we would find it's ghost table, and ghost ddls, then replay its table name by real table name.
 func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schema, sql string) ([]string, *filter.Table, error) {
 	if s.onlineDDL == nil {
 		return []string{sql}, nil, nil

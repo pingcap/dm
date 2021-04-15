@@ -24,7 +24,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewOfflineMemberCmd creates an OfflineWorker command
+// NewOfflineMemberCmd creates an OfflineWorker command.
 func NewOfflineMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "offline-member <--master/--worker> <--name master-name/worker-name>",
@@ -55,28 +55,26 @@ func convertOfflineMemberType(cmd *cobra.Command) (string, error) {
 	return common.Worker, nil
 }
 
-// offlineMemberFunc does offline member request
-func offlineMemberFunc(cmd *cobra.Command, _ []string) (err error) {
+// offlineMemberFunc does offline member request.
+func offlineMemberFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 
 	offlineType, err := convertOfflineMemberType(cmd)
 	if err != nil {
-		common.PrintLines("get offline type failed")
-		return
+		common.PrintLinesf("get offline type failed")
+		return err
 	}
 	name, err := cmd.Flags().GetString("name")
 	if err != nil {
-		common.PrintLines("get offline name failed")
-		return
+		common.PrintLinesf("get offline name failed")
+		return err
 	} else if name == "" {
-		common.PrintLines("a member name must be specified")
-		err = errors.New("please check output to see error")
-		return
+		common.PrintLinesf("a member name must be specified")
+		return errors.New("please check output to see error")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -93,13 +91,12 @@ func offlineMemberFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		return
+		return err
 	}
 	if !resp.Result {
-		common.PrintLines("offline member failed:\n%v", resp.Msg)
-		err = errors.New("please check output to see error")
-		return
+		common.PrintLinesf("offline member failed:\n%v", resp.Msg)
+		return errors.New("please check output to see error")
 	}
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }

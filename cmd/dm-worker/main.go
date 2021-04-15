@@ -40,7 +40,7 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		common.PrintLines("parse cmd flags err: %s", terror.Message(err))
+		common.PrintLinesf("parse cmd flags err: %s", terror.Message(err))
 		os.Exit(2)
 	}
 
@@ -50,7 +50,7 @@ func main() {
 		Level:  strings.ToLower(cfg.LogLevel),
 	})
 	if err != nil {
-		common.PrintLines("init logger error %s", terror.Message(err))
+		common.PrintLinesf("init logger error %s", terror.Message(err))
 		os.Exit(2)
 	}
 

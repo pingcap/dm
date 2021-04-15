@@ -32,6 +32,7 @@ type testAPI struct{}
 var _ = Suite(&testAPI{})
 
 func (t *testAPI) TestAPI(c *C) {
+	// nolint:dogsled
 	_, currFile, _, _ := runtime.Caller(0)
 	srcMetaPath := filepath.Join(filepath.Dir(currFile), "v106_data_for_test")
 	srcDBPath := filepath.Join(srcMetaPath, "kv")
@@ -96,7 +97,7 @@ func (t *testAPI) TestAPI(c *C) {
 	// remove an invalid meta path.
 	metaPath = c.MkDir()
 	dbPath = filepath.Join(metaPath, "kv")
-	c.Assert(os.Mkdir(dbPath, 0644), IsNil)
+	c.Assert(os.Mkdir(dbPath, 0o644), IsNil)
 	c.Assert(terror.ErrInvalidV1WorkerMetaPath.Equal(RemoveSubtasksMeta()), IsTrue)
 }
 

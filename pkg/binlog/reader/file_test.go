@@ -32,12 +32,9 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-var (
-	_ = Suite(&testFileReaderSuite{})
-)
+var _ = Suite(&testFileReaderSuite{})
 
-type testFileReaderSuite struct {
-}
+type testFileReaderSuite struct{}
 
 func (t *testFileReaderSuite) TestInterfaceMethods(c *C) {
 	var (

@@ -26,8 +26,7 @@ import (
 
 var _ = Suite(&testUtilSuite{})
 
-type testUtilSuite struct {
-}
+type testUtilSuite struct{}
 
 type testCase struct {
 	input  []byte

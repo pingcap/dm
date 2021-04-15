@@ -28,8 +28,7 @@ import (
 
 var _ = Suite(&testStreamerSuite{})
 
-type testStreamerSuite struct {
-}
+type testStreamerSuite struct{}
 
 func (t *testStreamerSuite) TestStreamer(c *C) {
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/SetHeartbeatInterval", "return(10000)"), IsNil)

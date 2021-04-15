@@ -45,7 +45,7 @@ func TrimCtrlChars(s string) string {
 }
 
 // TrimQuoteMark tries to trim leading and tailing quote(") mark if exists
-// only trim if leading and tailing quote matched as a pair
+// only trim if leading and tailing quote matched as a pair.
 func TrimQuoteMark(s string) string {
 	if len(s) > 2 && s[0] == '"' && s[len(s)-1] == '"' {
 		return s[1 : len(s)-1]
@@ -53,7 +53,7 @@ func TrimQuoteMark(s string) string {
 	return s
 }
 
-// FetchAllDoTables returns all need to do tables after filtered (fetches from upstream MySQL)
+// FetchAllDoTables returns all need to do tables after filtered (fetches from upstream MySQL).
 func FetchAllDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter) (map[string][]string, error) {
 	schemas, err := dbutil.GetSchemas(ctx, db)
 
@@ -112,7 +112,7 @@ func FetchAllDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter) (map[s
 	return schemaToTables, nil
 }
 
-// FetchTargetDoTables returns all need to do tables after filtered and routed (fetches from upstream MySQL)
+// FetchTargetDoTables returns all need to do tables after filtered and routed (fetches from upstream MySQL).
 func FetchTargetDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter, router *router.Table) (map[string][]*filter.Table, error) {
 	// fetch tables from source and filter them
 	sourceTables, err := FetchAllDoTables(ctx, db, bw)
@@ -146,7 +146,7 @@ func FetchTargetDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter, rou
 }
 
 // CompareShardingDDLs compares s and t ddls
-// only concern in content, ignore order of ddl
+// only concern in content, ignore order of ddl.
 func CompareShardingDDLs(s, t []string) bool {
 	if len(s) != len(t) {
 		return false
@@ -166,12 +166,12 @@ func CompareShardingDDLs(s, t []string) bool {
 	return true
 }
 
-// GenDDLLockID returns lock ID used in shard-DDL
+// GenDDLLockID returns lock ID used in shard-DDL.
 func GenDDLLockID(task, schema, table string) string {
 	return fmt.Sprintf("%s-%s", task, dbutil.TableName(schema, table))
 }
 
-// ExtractTaskFromLockID extract task from lockID
+// ExtractTaskFromLockID extract task from lockID.
 func ExtractTaskFromLockID(lockID string) string {
 	pattern := regexp.MustCompile("(.*)\\-\\`(.*)\\`.\\`(.*)\\`")
 	strs := pattern.FindStringSubmatch(lockID)
@@ -182,7 +182,7 @@ func ExtractTaskFromLockID(lockID string) string {
 	return strs[1]
 }
 
-// NonRepeatStringsEqual is used to compare two un-ordered, non-repeat-element string slice is equal
+// NonRepeatStringsEqual is used to compare two un-ordered, non-repeat-element string slice is equal.
 func NonRepeatStringsEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

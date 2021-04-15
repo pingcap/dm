@@ -24,12 +24,9 @@ func TestSuite(t *testing.T) {
 	check.TestingT(t)
 }
 
-var (
-	_ = check.Suite(&testUtilSuite{})
-)
+var _ = check.Suite(&testUtilSuite{})
 
-type testUtilSuite struct {
-}
+type testUtilSuite struct{}
 
 func (t *testUtilSuite) TestCheckIsDDL(c *check.C) {
 	var (

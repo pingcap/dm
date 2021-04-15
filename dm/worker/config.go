@@ -33,7 +33,7 @@ import (
 
 // SampleConfigFile is sample config file of dm-worker
 // later we can read it from dm/worker/dm-worker.toml
-// and assign it to SampleConfigFile while we build dm-worker
+// and assign it to SampleConfigFile while we build dm-worker.
 var (
 	SampleConfigFile         string
 	defaultKeepAliveTTL      = int64(60)      // 1 minute
@@ -65,7 +65,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
-	//fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
+	// fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
 	// NOTE: add `advertise-addr` for dm-master if needed.
 	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: dm-master cluster's "${master-addr}")`)
 	fs.StringVar(&cfg.Name, "name", "", "human-readable name for DM-worker member")
@@ -106,7 +106,7 @@ type Config struct {
 	printSampleConfig bool
 }
 
-// Clone clones a config
+// Clone clones a config.
 func (c *Config) Clone() *Config {
 	clone := &Config{}
 	*clone = *c
@@ -121,7 +121,7 @@ func (c *Config) String() string {
 	return string(cfg)
 }
 
-// Toml returns TOML format representation of config
+// Toml returns TOML format representation of config.
 func (c *Config) Toml() (string, error) {
 	var b bytes.Buffer
 

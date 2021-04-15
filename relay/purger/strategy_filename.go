@@ -26,12 +26,10 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var (
-	fakeTaskName = strategyFilename.String()
-)
+var fakeTaskName = strategyFilename.String()
 
 // filenameArgs represents args needed by filenameStrategy
-// NOTE: should handle master-slave switch
+// NOTE: should handle master-slave switch.
 type filenameArgs struct {
 	relayBaseDir string
 	filename     string // specified end safe filename
@@ -79,7 +77,7 @@ func (fa *filenameArgs) String() string {
 }
 
 // filenameStrategy represents a relay purge strategy by filename
-// similar to `PURGE BINARY LOGS TO`
+// similar to `PURGE BINARY LOGS TO`.
 type filenameStrategy struct {
 	purging sync2.AtomicInt32
 

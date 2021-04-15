@@ -25,7 +25,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog"
 )
 
-// NewHandleErrorCmd creates a HandleError command
+// NewHandleErrorCmd creates a HandleError command.
 func NewHandleErrorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "handle-error <task-name | task-file> [-s source ...] [-b binlog-pos] <skip/replace/revert> [replace-sql1;replace-sql2;]",
@@ -49,58 +49,55 @@ func convertOp(t string) pb.ErrorOp {
 	}
 }
 
-// handleErrorFunc does handle error request
-func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
+// handleErrorFunc does handle error request.
+func handleErrorFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) < 2 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 
 	taskName := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0))
 	operation := cmd.Flags().Arg(1)
 	var sqls []string
+	var err error
 
 	op := convertOp(operation)
 	switch op {
 	case pb.ErrorOp_Skip, pb.ErrorOp_Revert:
 		if len(cmd.Flags().Args()) > 2 {
-			common.PrintLines("replace-sqls can not be used for 'skip/revert' operation")
-			err = errors.New("please check output to see error")
-			return
+			common.PrintLinesf("replace-sqls can not be used for 'skip/revert' operation")
+			return errors.New("please check output to see error")
 		}
 	case pb.ErrorOp_Replace:
 		if len(cmd.Flags().Args()) <= 2 {
-			common.PrintLines("must specify the replace-sqls for replace operation")
-			err = errors.New("please check output to see error")
-			return
+			common.PrintLinesf("must specify the replace-sqls for replace operation")
+			return errors.New("please check output to see error")
 		}
 
 		sqls, err = common.ExtractSQLsFromArgs(cmd.Flags().Args()[2:])
 		if err != nil {
-			return
+			return err
 		}
 	default:
-		common.PrintLines("invalid operation '%s', please use `skip`, `replace` or `revert`", operation)
-		err = errors.New("please check output to see error")
-		return
+		common.PrintLinesf("invalid operation '%s', please use `skip`, `replace` or `revert`", operation)
+		return errors.New("please check output to see error")
 	}
 
 	binlogPos, err := cmd.Flags().GetString("binlog-pos")
 	if err != nil {
-		return
+		return err
 	}
 	if len(binlogPos) != 0 {
 		_, err = binlog.VerifyBinlogPos(binlogPos)
 		if err != nil {
-			return
+			return err
 		}
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		return
+		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -121,9 +118,9 @@ func handleErrorFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		return
+		return err
 	}
 
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }
