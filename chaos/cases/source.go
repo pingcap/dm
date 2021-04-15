@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"strings"
+	"time"
 
 	config2 "github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -61,6 +62,12 @@ func createSources(ctx context.Context, cli pb.MasterClient, cfg *config) error 
 	cfg1.From = cfg.Source1
 	cfg2.From = cfg.Source2
 	cfg3.From = cfg.Source3
+
+	// reduce backoffmax for autoresume
+	cfg1.Checker.BackoffMax = config2.Duration{Duration: 5 * time.Second}
+	cfg2.Checker.BackoffMax = config2.Duration{Duration: 5 * time.Second}
+	cfg3.Checker.BackoffMax = config2.Duration{Duration: 5 * time.Second}
+
 	s1Content2, err := cfg1.Yaml()
 	if err != nil {
 		return err

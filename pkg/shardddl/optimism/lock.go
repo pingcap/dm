@@ -203,9 +203,9 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 	if cmp, err2 := prevTable.Compare(l.tables[callerSource][callerSchema][callerTable]); err2 != nil || cmp != 0 {
 		log.L().Warn("table-info-before not equal table saved in master", zap.Stringer("master-table", l.tables[callerSource][callerSchema][callerTable]), zap.Stringer("table-info-before", prevTable))
 		l.tables[callerSource][callerSchema][callerTable] = prevTable
-		prevJoined, err := joinTable(prevTable)
-		if err != nil {
-			return emptyDDLs, emptyCols, err
+		prevJoined, err2 := joinTable(prevTable)
+		if err2 != nil {
+			return emptyDDLs, emptyCols, err2
 		}
 		l.joined = prevJoined
 	}
@@ -245,8 +245,8 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 		// this often happens when executing `CREATE TABLE` statement
 		var cmp int
 		if cmp, err = nextTable.Compare(oldJoined); err == nil && cmp == 0 {
-			if col, err := GetColumnName(l.ID, ddls[idx], ast.AlterTableAddColumns); err != nil {
-				return newDDLs, cols, err
+			if col, err2 := GetColumnName(l.ID, ddls[idx], ast.AlterTableAddColumns); err2 != nil {
+				return newDDLs, cols, err2
 			} else if len(col) > 0 && l.IsDroppedColumn(info.Source, info.UpSchema, info.UpTable, col) {
 				return newDDLs, cols, terror.ErrShardDDLOptimismTrySyncFail.Generate(
 					l.ID, fmt.Sprintf("add column %s that wasn't fully dropped in downstream. ddl: %s", col, ddls[idx]))
@@ -322,8 +322,8 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 		cmp, _ = prevTable.Compare(nextTable) // we have checked `err` returned above.
 		if cmp < 0 {
 			// check for add column with a smaller field len
-			if col, err := AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined); err != nil {
-				return ddls, cols, err
+			if col, err2 := AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined); err2 != nil {
+				return ddls, cols, err2
 			} else if len(col) > 0 && l.IsDroppedColumn(info.Source, info.UpSchema, info.UpTable, col) {
 				return ddls, cols, terror.ErrShardDDLOptimismTrySyncFail.Generate(
 					l.ID, fmt.Sprintf("add column %s that wasn't fully dropped in downstream. ddl: %s", col, ddls[idx]))
@@ -332,8 +332,8 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 			newDDLs = append(newDDLs, ddls[idx])
 			continue
 		} else if cmp > 0 {
-			if col, err := GetColumnName(l.ID, ddls[idx], ast.AlterTableDropColumn); err != nil {
-				return ddls, cols, err
+			if col, err2 := GetColumnName(l.ID, ddls[idx], ast.AlterTableDropColumn); err2 != nil {
+				return ddls, cols, err2
 			} else if len(col) > 0 {
 				err = l.AddDroppedColumn(info, col)
 				if err != nil {
