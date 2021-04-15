@@ -259,10 +259,6 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		return terror.ErrConfigTooLongSourceID.Generate()
 	}
 
-	// if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
-	//	return errors.Errorf("please specify right mysql version, support mysql, mariadb now")
-	// }
-
 	if c.ShardMode != "" && c.ShardMode != ShardPessimistic && c.ShardMode != ShardOptimistic {
 		return terror.ErrConfigShardModeNotSupport.Generate(c.ShardMode)
 	} else if c.ShardMode == "" && c.IsSharding {
