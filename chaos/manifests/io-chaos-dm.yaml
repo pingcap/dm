@@ -16,6 +16,7 @@ spec:
         - dm-worker-0
         - dm-worker-1
         - dm-worker-2
+        - dm-worker-3
   volumePath: /data
   path: "/data/**/*"
   delay: "100ms"

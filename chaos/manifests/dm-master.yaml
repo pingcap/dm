@@ -40,6 +40,8 @@ spec:
           volumeMounts:
             - mountPath: /data
               name: dm-master
+            - mountPath: /log
+              name: dm-master-log
           env:
             - name: MY_POD_NAME
               valueFrom:
@@ -63,9 +65,18 @@ spec:
             - "--peer-urls=:8291"
             - "--advertise-peer-urls=http://$(MY_POD_NAME).dm-master.$(MY_POD_NAMESPACE):8291"
             - "--initial-cluster=dm-master-0=http://dm-master-0.dm-master.$(MY_POD_NAMESPACE):8291,dm-master-1=http://dm-master-1.dm-master.$(MY_POD_NAMESPACE):8291,dm-master-2=http://dm-master-2.dm-master.$(MY_POD_NAMESPACE):8291"
+            - "--log-file=/log/$(MY_POD_NAME).log"
   volumeClaimTemplates:
     - metadata:
         name: dm-master
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+    - metadata:
+        name: dm-master-log
       spec:
         accessModes:
           - ReadWriteOnce

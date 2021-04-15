@@ -18,6 +18,7 @@ spec:
         - dm-worker-0
         - dm-worker-1
         - dm-worker-2
+        - dm-worker-3
   loss:
     loss: "25"
     correlation: "25"
