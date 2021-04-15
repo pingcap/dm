@@ -132,7 +132,7 @@ lint: tools_setup
 	@if [[ "${nolint}" != "true" ]]; then\
 		echo "golangci-lint"; \
 		tools/bin/golangci-lint run --config=$(CURDIR)/.golangci.yml --issues-exit-code=1 $(PACKAGE_DIRECTORIES); \
-    fi
+	fi
 
 terror_check:
 	@echo "check terror conflict"
