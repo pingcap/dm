@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package metricsproxy
+package metricsproxy // nolint:dupl
 
 import (
 	"sync"
@@ -19,7 +19,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// SummaryVecProxy to proxy prometheus.SummaryVec
+// SummaryVecProxy to proxy prometheus.SummaryVec.
 type SummaryVecProxy struct {
 	mu sync.Mutex
 
@@ -73,7 +73,7 @@ func (c *SummaryVecProxy) With(labels prometheus.Labels) prometheus.Observer {
 	return c.SummaryVec.With(labels)
 }
 
-// DeleteAllAboutLabels Remove all labelsValue with these labels
+// DeleteAllAboutLabels Remove all labelsValue with these labels.
 func (c *SummaryVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	if len(labels) == 0 {
 		return false
@@ -83,24 +83,24 @@ func (c *SummaryVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	return findAndDeleteLabelsInMetricsProxy(c, labels)
 }
 
-// GetLabelNamesIndex to support get SummaryVecProxy's LabelNames when you use Proxy object
+// GetLabelNamesIndex to support get SummaryVecProxy's LabelNames when you use Proxy object.
 func (c *SummaryVecProxy) GetLabelNamesIndex() map[string]int {
 	return c.LabelNamesIndex
 }
 
-// GetLabels to support get SummaryVecProxy's Labels when you use Proxy object
+// GetLabels to support get SummaryVecProxy's Labels when you use Proxy object.
 func (c *SummaryVecProxy) GetLabels() map[string][]string {
 	return c.Labels
 }
 
-// SetLabel to support set SummaryVecProxy's Label when you use Proxy object
+// SetLabel to support set SummaryVecProxy's Label when you use Proxy object.
 func (c *SummaryVecProxy) SetLabel(key string, vals []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Labels[key] = vals
 }
 
-// vecDelete to support delete SummaryVecProxy's Labels when you use Proxy object
+// vecDelete to support delete SummaryVecProxy's Labels when you use Proxy object.
 func (c *SummaryVecProxy) vecDelete(labels prometheus.Labels) bool {
 	return c.SummaryVec.Delete(labels)
 }

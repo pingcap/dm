@@ -30,7 +30,7 @@ import (
 	"github.com/pingcap/dm/relay/purger"
 )
 
-// RelayHolder for relay unit
+// RelayHolder for relay unit.
 type RelayHolder interface {
 	// Init initializes the holder
 	Init(ctx context.Context, interceptors []purger.PurgeInterceptor) (purger.Purger, error)
@@ -53,10 +53,10 @@ type RelayHolder interface {
 }
 
 // NewRelayHolder is relay holder initializer
-// it can be used for testing
+// it can be used for testing.
 var NewRelayHolder = NewRealRelayHolder
 
-// realRelayHolder used to hold the relay unit
+// realRelayHolder used to hold the relay unit.
 type realRelayHolder struct {
 	sync.RWMutex
 	wg sync.WaitGroup
@@ -74,7 +74,7 @@ type realRelayHolder struct {
 	result *pb.ProcessResult // the process result, nil when is processing
 }
 
-// NewRealRelayHolder creates a new RelayHolder
+// NewRealRelayHolder creates a new RelayHolder.
 func NewRealRelayHolder(sourceCfg *config.SourceConfig) RelayHolder {
 	cfg := relay.FromSourceCfg(sourceCfg)
 
@@ -88,7 +88,7 @@ func NewRealRelayHolder(sourceCfg *config.SourceConfig) RelayHolder {
 	return h
 }
 
-// Init initializes the holder
+// Init initializes the holder.
 func (h *realRelayHolder) Init(ctx context.Context, interceptors []purger.PurgeInterceptor) (purger.Purger, error) {
 	h.closed.Set(false)
 
@@ -105,7 +105,7 @@ func (h *realRelayHolder) Init(ctx context.Context, interceptors []purger.PurgeI
 	return purger.NewPurger(h.cfg.Purge, h.cfg.RelayDir, operators, interceptors), nil
 }
 
-// Start starts run the relay
+// Start starts run the relay.
 func (h *realRelayHolder) Start() {
 	h.wg.Add(1)
 	go func() {
@@ -114,7 +114,7 @@ func (h *realRelayHolder) Start() {
 	}()
 }
 
-// Close closes the holder
+// Close closes the holder.
 func (h *realRelayHolder) Close() {
 	if !h.closed.CompareAndSwap(false, true) {
 		return
@@ -147,7 +147,7 @@ func (h *realRelayHolder) run() {
 	h.setStageIfNot(pb.Stage_Stopped, pb.Stage_Paused)
 }
 
-// Status returns relay unit's status
+// Status returns relay unit's status.
 func (h *realRelayHolder) Status(ctx context.Context) *pb.RelayStatus {
 	if h.closed.Get() || h.relay.IsClosed() {
 		return &pb.RelayStatus{
@@ -162,7 +162,7 @@ func (h *realRelayHolder) Status(ctx context.Context) *pb.RelayStatus {
 	return s
 }
 
-// Error returns relay unit's status
+// Error returns relay unit's status.
 func (h *realRelayHolder) Error() *pb.RelayError {
 	if h.closed.Get() || h.relay.IsClosed() {
 		return &pb.RelayError{
@@ -174,7 +174,7 @@ func (h *realRelayHolder) Error() *pb.RelayError {
 	return s
 }
 
-// Operate operates relay unit
+// Operate operates relay unit.
 func (h *realRelayHolder) Operate(ctx context.Context, op pb.RelayOp) error {
 	switch op {
 	case pb.RelayOp_PauseRelay:
@@ -235,7 +235,7 @@ func (h *realRelayHolder) stopRelay(_ context.Context, op pb.RelayOp) error {
 	return nil
 }
 
-// Stage returns the stage of the relay
+// Stage returns the stage of the relay.
 func (h *realRelayHolder) Stage() pb.Stage {
 	h.RLock()
 	defer h.RUnlock()
@@ -248,7 +248,7 @@ func (h *realRelayHolder) setStage(stage pb.Stage) {
 	h.stage = stage
 }
 
-// setStageIfNot sets stage to newStage if its current value is not oldStage, similar to CAS
+// setStageIfNot sets stage to newStage if its current value is not oldStage, similar to CAS.
 func (h *realRelayHolder) setStageIfNot(oldStage, newStage pb.Stage) bool {
 	h.Lock()
 	defer h.Unlock()
@@ -280,13 +280,11 @@ func (h *realRelayHolder) Result() *pb.ProcessResult {
 	return h.result
 }
 
-// Update update relay config online
+// Update update relay config online.
 func (h *realRelayHolder) Update(ctx context.Context, sourceCfg *config.SourceConfig) error {
 	relayCfg := relay.FromSourceCfg(sourceCfg)
 
-	stage := h.Stage()
-
-	if stage == pb.Stage_Paused {
+	if stage := h.Stage(); stage == pb.Stage_Paused {
 		err := h.relay.Reload(relayCfg)
 		if err != nil {
 			return err
@@ -311,7 +309,7 @@ func (h *realRelayHolder) Update(ctx context.Context, sourceCfg *config.SourceCo
 	return nil
 }
 
-// EarliestActiveRelayLog implements RelayOperator.EarliestActiveRelayLog
+// EarliestActiveRelayLog implements RelayOperator.EarliestActiveRelayLog.
 func (h *realRelayHolder) EarliestActiveRelayLog() *streamer.RelayLogInfo {
 	return h.relay.ActiveRelayLog()
 }
@@ -327,7 +325,7 @@ type dummyRelayHolder struct {
 	cfg *config.SourceConfig
 }
 
-// NewDummyRelayHolder creates a new RelayHolder
+// NewDummyRelayHolder creates a new RelayHolder.
 func NewDummyRelayHolder(cfg *config.SourceConfig) RelayHolder {
 	return &dummyRelayHolder{
 		cfg:   cfg,
@@ -335,7 +333,7 @@ func NewDummyRelayHolder(cfg *config.SourceConfig) RelayHolder {
 	}
 }
 
-// NewDummyRelayHolderWithRelayBinlog creates a new RelayHolder with relayBinlog in relayStatus
+// NewDummyRelayHolderWithRelayBinlog creates a new RelayHolder with relayBinlog in relayStatus.
 func NewDummyRelayHolderWithRelayBinlog(cfg *config.SourceConfig, relayBinlog string) RelayHolder {
 	return &dummyRelayHolder{
 		cfg:         cfg,
@@ -343,7 +341,7 @@ func NewDummyRelayHolderWithRelayBinlog(cfg *config.SourceConfig, relayBinlog st
 	}
 }
 
-// NewDummyRelayHolderWithInitError creates a new RelayHolder with init error
+// NewDummyRelayHolderWithInitError creates a new RelayHolder with init error.
 func NewDummyRelayHolderWithInitError(cfg *config.SourceConfig) RelayHolder {
 	return &dummyRelayHolder{
 		initError: errors.New("init error"),
@@ -351,7 +349,7 @@ func NewDummyRelayHolderWithInitError(cfg *config.SourceConfig) RelayHolder {
 	}
 }
 
-// Init implements interface of RelayHolder
+// Init implements interface of RelayHolder.
 func (d *dummyRelayHolder) Init(ctx context.Context, interceptors []purger.PurgeInterceptor) (purger.Purger, error) {
 	// initial relay purger
 	operators := []purger.RelayOperator{
@@ -361,21 +359,21 @@ func (d *dummyRelayHolder) Init(ctx context.Context, interceptors []purger.Purge
 	return purger.NewDummyPurger(d.cfg.Purge, d.cfg.RelayDir, operators, interceptors), d.initError
 }
 
-// Start implements interface of RelayHolder
+// Start implements interface of RelayHolder.
 func (d *dummyRelayHolder) Start() {
 	d.Lock()
 	defer d.Unlock()
 	d.stage = pb.Stage_Running
 }
 
-// Close implements interface of RelayHolder
+// Close implements interface of RelayHolder.
 func (d *dummyRelayHolder) Close() {
 	d.Lock()
 	defer d.Unlock()
 	d.stage = pb.Stage_Stopped
 }
 
-// Status implements interface of RelayHolder
+// Status implements interface of RelayHolder.
 func (d *dummyRelayHolder) Status(ctx context.Context) *pb.RelayStatus {
 	d.Lock()
 	defer d.Unlock()
@@ -385,12 +383,12 @@ func (d *dummyRelayHolder) Status(ctx context.Context) *pb.RelayStatus {
 	}
 }
 
-// Error implements interface of RelayHolder
+// Error implements interface of RelayHolder.
 func (d *dummyRelayHolder) Error() *pb.RelayError {
 	return nil
 }
 
-// Operate implements interface of RelayHolder
+// Operate implements interface of RelayHolder.
 func (d *dummyRelayHolder) Operate(ctx context.Context, op pb.RelayOp) error {
 	d.Lock()
 	defer d.Unlock()
@@ -414,12 +412,12 @@ func (d *dummyRelayHolder) Operate(ctx context.Context, op pb.RelayOp) error {
 	return nil
 }
 
-// Result implements interface of RelayHolder
+// Result implements interface of RelayHolder.
 func (d *dummyRelayHolder) Result() *pb.ProcessResult {
 	return nil
 }
 
-// Update implements interface of RelayHolder
+// Update implements interface of RelayHolder.
 func (d *dummyRelayHolder) Update(ctx context.Context, cfg *config.SourceConfig) error {
 	return nil
 }

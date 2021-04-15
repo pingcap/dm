@@ -410,8 +410,9 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 		c.Assert(s.observeSourceBound(ctx1, startRev), IsNil)
 	}()
 	// step 4.1: should stop the running worker, source bound has been deleted, should stop this worker
-	time.Sleep(time.Second)
-	c.Assert(s.getWorker(true), IsNil)
+	c.Assert(utils.WaitSomething(20, 100*time.Millisecond, func() bool {
+		return s.getWorker(true) == nil
+	}), IsTrue)
 	// step 4.2: put a new source bound, source should be started
 	_, err = ha.PutSourceBound(etcdCli, sourceBound)
 	c.Assert(err, IsNil)
@@ -440,6 +441,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 }
 
 func (t *testServer) testHTTPInterface(c *C, uri string) {
+	// nolint:noctx
 	resp, err := http.Get("http://127.0.0.1:8262/" + uri)
 	c.Assert(err, IsNil)
 	defer resp.Body.Close()
@@ -498,8 +500,8 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 	}
 }
 
-func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, dir string, hostName string) *embed.Etcd {
-	ETCD.Close()
+func (t *testServer) testRetryConnectMaster(c *C, s *Server, etcd *embed.Etcd, dir string, hostName string) *embed.Etcd {
+	etcd.Close()
 	time.Sleep(6 * time.Second)
 	// When worker server fail to keepalive with etcd, server should close its worker
 	c.Assert(s.getWorker(true), IsNil)
@@ -544,14 +546,13 @@ func (t *testServer) testSubTaskRecover(c *C, s *Server, dir string) {
 	c.Assert(status.SubTaskStatus[0].Stage, Equals, pb.Stage_Running)
 }
 
-func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.Etcd) {
-	ETCD.Close()
+func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, etcd *embed.Etcd) {
+	etcd.Close()
 	time.Sleep(retryConnectSleepTime + time.Duration(defaultKeepAliveTTL+3)*time.Second)
 	c.Assert(s.getWorker(true), IsNil)
 }
 
 func (t *testServer) TestGetMinLocInAllSubTasks(c *C) {
-
 	subTaskCfg := map[string]config.SubTaskConfig{
 		"test2": {Name: "test2"},
 		"test3": {Name: "test3"},

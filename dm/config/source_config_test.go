@@ -114,7 +114,7 @@ func (t *testConfig) TestConfig(c *C) {
 source-id: haha
 aaa: xxx
 `)
-	err = ioutil.WriteFile(configFile, configContent, 0644)
+	err = ioutil.WriteFile(configFile, configContent, 0o644)
 	c.Assert(err, IsNil)
 	err = cfg.LoadFromFile(configFile)
 	c.Assert(err, NotNil)
@@ -226,7 +226,6 @@ func (t *testConfig) TestConfigVerify(c *C) {
 			c.Assert(err, IsNil)
 		}
 	}
-
 }
 
 func subtestFlavor(c *C, cfg *SourceConfig, sqlInfo, expectedFlavor, expectedError string) {
@@ -265,7 +264,7 @@ func (t *testConfig) TestAdjustFlavor(c *C) {
 }
 
 func (t *testConfig) TestAdjustServerID(c *C) {
-	var originGetAllServerIDFunc = getAllServerIDFunc
+	originGetAllServerIDFunc := getAllServerIDFunc
 	defer func() {
 		getAllServerIDFunc = originGetAllServerIDFunc
 	}()

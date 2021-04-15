@@ -37,8 +37,7 @@ var _ = Suite(&testEtcdUtilSuite{})
 
 var tt *testing.T
 
-type testEtcdUtilSuite struct {
-}
+type testEtcdUtilSuite struct{}
 
 func (t *testEtcdUtilSuite) SetUpSuite(c *C) {
 	// initialized the logger to make genEmbedEtcdConfig working.
@@ -84,9 +83,9 @@ func (t *testEtcdUtilSuite) newConfig(c *C, name string, basePort uint16, portCo
 	return cfg, basePort
 }
 
-func (t *testEtcdUtilSuite) urlsToStrings(URLs []url.URL) []string {
-	ret := make([]string, 0, len(URLs))
-	for _, u := range URLs {
+func (t *testEtcdUtilSuite) urlsToStrings(urls []url.URL) []string {
+	ret := make([]string, 0, len(urls))
+	for _, u := range urls {
 		ret = append(ret, u.String())
 	}
 	return ret
@@ -223,7 +222,8 @@ func (t *testEtcdUtilSuite) testDoOpsInOneTxnWithRetry(c *C) {
 	cmp1 := clientv3.Compare(clientv3.Value(key1), "=", val1)
 	cmp2 := clientv3.Compare(clientv3.Value(key2), "=", val2)
 	resp, rev2, err := DoOpsInOneCmpsTxnWithRetry(cli, []clientv3.Cmp{cmp1, cmp2}, []clientv3.Op{
-		clientv3.OpPut(key1, val), clientv3.OpPut(key2, val)}, []clientv3.Op{})
+		clientv3.OpPut(key1, val), clientv3.OpPut(key2, val),
+	}, []clientv3.Op{})
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
 	c.Assert(resp.Responses, HasLen, 2)
@@ -232,7 +232,8 @@ func (t *testEtcdUtilSuite) testDoOpsInOneTxnWithRetry(c *C) {
 	cmp1 = clientv3.Compare(clientv3.Value(key1), "=", val)
 	cmp2 = clientv3.Compare(clientv3.Value(key2), "=", val2)
 	resp, rev3, err := DoOpsInOneCmpsTxnWithRetry(cli, []clientv3.Cmp{cmp1, cmp2}, []clientv3.Op{}, []clientv3.Op{
-		clientv3.OpDelete(key1), clientv3.OpDelete(key2)})
+		clientv3.OpDelete(key1), clientv3.OpDelete(key2),
+	})
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Greater, rev2)
 	c.Assert(resp.Responses, HasLen, 2)
@@ -244,7 +245,8 @@ func (t *testEtcdUtilSuite) testDoOpsInOneTxnWithRetry(c *C) {
 
 	// put again
 	resp, rev2, err = DoOpsInOneCmpsTxnWithRetry(cli, []clientv3.Cmp{clientv3util.KeyMissing(key1), clientv3util.KeyMissing(key2)}, []clientv3.Op{
-		clientv3.OpPut(key1, val), clientv3.OpPut(key2, val)}, []clientv3.Op{})
+		clientv3.OpPut(key1, val), clientv3.OpPut(key2, val),
+	}, []clientv3.Op{})
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
 	c.Assert(resp.Responses, HasLen, 2)

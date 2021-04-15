@@ -281,8 +281,8 @@ function run() {
 
     # relay should continue pulling from syncer's checkpoint, so only pull the latest binlog
     server_uuid=$(tail -n 1 $WORK_DIR/worker1/relay_log/server-uuid.index)
-    relay_log_num=`ls $WORK_DIR/worker1/relay_log/$server_uuid | grep -v 'relay.meta' | wc -l`
     echo "relay logs `ls $WORK_DIR/worker1/relay_log/$server_uuid`"
+    relay_log_num=`ls $WORK_DIR/worker1/relay_log/$server_uuid | grep -v 'relay.meta' | wc -l`
     [ $relay_log_num -eq 1 ]
 
     # use sync_diff_inspector to check data now!

@@ -23,12 +23,9 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 )
 
-var (
-	_ = Suite(&testMockReaderSuite{})
-)
+var _ = Suite(&testMockReaderSuite{})
 
-type testMockReaderSuite struct {
-}
+type testMockReaderSuite struct{}
 
 type testMockCase struct {
 	ev  *replication.BinlogEvent

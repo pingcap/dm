@@ -25,7 +25,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewStartTaskCmd creates a StartTask command
+// NewStartTaskCmd creates a StartTask command.
 func NewStartTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start-task [-s source ...] [--remove-meta] <config-file>",
@@ -36,28 +36,27 @@ func NewStartTaskCmd() *cobra.Command {
 	return cmd
 }
 
-// startTaskFunc does start task request
-func startTaskFunc(cmd *cobra.Command, _ []string) (err error) {
+// startTaskFunc does start task request.
+func startTaskFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		return
+		return err
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		return
+		return err
 	}
 
 	removeMeta, err := cmd.Flags().GetBool("remove-meta")
 	if err != nil {
-		common.PrintLines("error in parse `--remove-meta`")
-		return
+		common.PrintLinesf("error in parse `--remove-meta`")
+		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -77,11 +76,11 @@ func startTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		return
+		return err
 	}
 
 	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
 		common.PrettyPrintResponse(resp)
 	}
-	return
+	return nil
 }

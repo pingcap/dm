@@ -20,7 +20,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// kvConfig is the configuration of goleveldb
+// kvConfig is the configuration of goleveldb.
 type kvConfig struct {
 	BlockCacheCapacity            int     `toml:"block-cache-capacity" json:"block-cache-capacity"`
 	BlockRestartInterval          int     `toml:"block-restart-interval" json:"block-restart-interval"`
@@ -34,7 +34,7 @@ type kvConfig struct {
 	WriteL0SlowdownTrigger        int     `toml:"write-L0-slowdown-trigger" json:"write-L0-slowdown-trigger"`
 }
 
-// default leveldb config
+// default leveldb config.
 var defaultKVConfig = &kvConfig{
 	BlockCacheCapacity:            8388608,
 	BlockRestartInterval:          16,

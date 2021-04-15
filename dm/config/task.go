@@ -36,7 +36,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-// Online DDL Scheme
+// Online DDL Scheme.
 const (
 	GHOST = "gh-ost"
 	PT    = "pt"
@@ -50,29 +50,29 @@ const (
 	tidbTxnOptimistic = "optimistic"
 )
 
-// default config item values
+// default config item values.
 var (
-	// TaskConfig
+	// TaskConfig.
 	defaultMetaSchema      = "dm_meta"
 	defaultEnableHeartbeat = false
 	defaultIsSharding      = false
 	defaultUpdateInterval  = 1
 	defaultReportInterval  = 10
-	// MydumperConfig
+	// MydumperConfig.
 	defaultMydumperPath  = "./bin/mydumper"
 	defaultThreads       = 4
 	defaultChunkFilesize = "64"
 	defaultSkipTzUTC     = true
-	// LoaderConfig
+	// LoaderConfig.
 	defaultPoolSize = 16
 	defaultDir      = "./dumped_data"
-	// SyncerConfig
+	// SyncerConfig.
 	defaultWorkerCount             = 16
 	defaultBatch                   = 100
 	defaultQueueSize               = 1024 // do not give too large default value to avoid OOM
 	defaultCheckpointFlushInterval = 30   // in seconds
 
-	// TargetDBConfig
+	// TargetDBConfig.
 	defaultSessionCfg = []struct {
 		key        string
 		val        string
@@ -84,7 +84,7 @@ var (
 
 // Meta represents binlog's meta pos
 // NOTE: refine to put these config structs into pkgs
-// NOTE: now, syncer does not support GTID mode and which is supported by relay
+// NOTE: now, syncer does not support GTID mode and which is supported by relay.
 type Meta struct {
 	BinLogName string `toml:"binlog-name" yaml:"binlog-name"`
 	BinLogPos  uint32 `toml:"binlog-pos" yaml:"binlog-pos"`
@@ -101,7 +101,7 @@ func (m *Meta) Verify() error {
 	return nil
 }
 
-// MySQLInstance represents a sync config of a MySQL instance
+// MySQLInstance represents a sync config of a MySQL instance.
 type MySQLInstance struct {
 	// it represents a MySQL/MariaDB instance or a replica group
 	SourceID           string   `yaml:"source-id"`
@@ -130,7 +130,7 @@ type MySQLInstance struct {
 	SyncerThread int `yaml:"syncer-thread"`
 }
 
-// VerifyAndAdjust does verification on configs, and adjust some configs
+// VerifyAndAdjust does verification on configs, and adjust some configs.
 func (m *MySQLInstance) VerifyAndAdjust() error {
 	if m == nil {
 		return terror.ErrConfigMySQLInstNotFound.Generate()
@@ -161,7 +161,7 @@ func (m *MySQLInstance) VerifyAndAdjust() error {
 	return nil
 }
 
-// MydumperConfig represents mydumper process unit's specific config
+// MydumperConfig represents mydumper process unit's specific config.
 type MydumperConfig struct {
 	MydumperPath  string `yaml:"mydumper-path" toml:"mydumper-path" json:"mydumper-path"`    // mydumper binary path
 	Threads       int    `yaml:"threads" toml:"threads" json:"threads"`                      // -t, --threads
@@ -185,10 +185,10 @@ func defaultMydumperConfig() MydumperConfig {
 	}
 }
 
-// alias to avoid infinite recursion for UnmarshalYAML
+// alias to avoid infinite recursion for UnmarshalYAML.
 type rawMydumperConfig MydumperConfig
 
-// UnmarshalYAML implements Unmarshaler.UnmarshalYAML
+// UnmarshalYAML implements Unmarshaler.UnmarshalYAML.
 func (m *MydumperConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	raw := rawMydumperConfig(defaultMydumperConfig())
 	if err := unmarshal(&raw); err != nil {
@@ -198,7 +198,7 @@ func (m *MydumperConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 	return nil
 }
 
-// LoaderConfig represents loader process unit's specific config
+// LoaderConfig represents loader process unit's specific config.
 type LoaderConfig struct {
 	PoolSize int    `yaml:"pool-size" toml:"pool-size" json:"pool-size"`
 	Dir      string `yaml:"dir" toml:"dir" json:"dir"`
@@ -212,10 +212,10 @@ func defaultLoaderConfig() LoaderConfig {
 	}
 }
 
-// alias to avoid infinite recursion for UnmarshalYAML
+// alias to avoid infinite recursion for UnmarshalYAML.
 type rawLoaderConfig LoaderConfig
 
-// UnmarshalYAML implements Unmarshaler.UnmarshalYAML
+// UnmarshalYAML implements Unmarshaler.UnmarshalYAML.
 func (m *LoaderConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	raw := rawLoaderConfig(defaultLoaderConfig())
 	if err := unmarshal(&raw); err != nil {
@@ -225,7 +225,7 @@ func (m *LoaderConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-// SyncerConfig represents syncer process unit's specific config
+// SyncerConfig represents syncer process unit's specific config.
 type SyncerConfig struct {
 	MetaFile    string `yaml:"meta-file" toml:"meta-file" json:"meta-file"` // meta filename, used only when load SubConfig directly
 	WorkerCount int    `yaml:"worker-count" toml:"worker-count" json:"worker-count"`
@@ -255,10 +255,10 @@ func defaultSyncerConfig() SyncerConfig {
 	}
 }
 
-// alias to avoid infinite recursion for UnmarshalYAML
+// alias to avoid infinite recursion for UnmarshalYAML.
 type rawSyncerConfig SyncerConfig
 
-// UnmarshalYAML implements Unmarshaler.UnmarshalYAML
+// UnmarshalYAML implements Unmarshaler.UnmarshalYAML.
 func (m *SyncerConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	raw := rawSyncerConfig(defaultSyncerConfig())
 	if err := unmarshal(&raw); err != nil {
@@ -268,7 +268,7 @@ func (m *SyncerConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-// TaskConfig is the configuration for Task
+// TaskConfig is the configuration for Task.
 type TaskConfig struct {
 	*flag.FlagSet `yaml:"-" toml:"-" json:"-"`
 
@@ -317,7 +317,7 @@ type TaskConfig struct {
 	RemoveMeta bool `yaml:"remove-meta"`
 }
 
-// NewTaskConfig creates a TaskConfig
+// NewTaskConfig creates a TaskConfig.
 func NewTaskConfig() *TaskConfig {
 	cfg := &TaskConfig{
 		// explicitly set default value
@@ -341,7 +341,7 @@ func NewTaskConfig() *TaskConfig {
 	return cfg
 }
 
-// String returns the config's yaml string
+// String returns the config's yaml string.
 func (c *TaskConfig) String() string {
 	cfg, err := yaml.Marshal(c)
 	if err != nil {
@@ -350,7 +350,7 @@ func (c *TaskConfig) String() string {
 	return string(cfg)
 }
 
-// JSON returns the config's json string
+// JSON returns the config's json string.
 func (c *TaskConfig) JSON() string {
 	//nolint:staticcheck
 	cfg, err := json.Marshal(c)
@@ -360,7 +360,7 @@ func (c *TaskConfig) JSON() string {
 	return string(cfg)
 }
 
-// DecodeFile loads and decodes config from file
+// DecodeFile loads and decodes config from file.
 func (c *TaskConfig) DecodeFile(fpath string) error {
 	bs, err := ioutil.ReadFile(fpath)
 	if err != nil {
@@ -375,7 +375,7 @@ func (c *TaskConfig) DecodeFile(fpath string) error {
 	return c.adjust()
 }
 
-// Decode loads config from file data
+// Decode loads config from file data.
 func (c *TaskConfig) Decode(data string) error {
 	err := yaml.UnmarshalStrict([]byte(data), c)
 	if err != nil {
@@ -385,7 +385,7 @@ func (c *TaskConfig) Decode(data string) error {
 	return c.adjust()
 }
 
-// adjust adjusts configs
+// adjust adjusts configs.
 func (c *TaskConfig) adjust() error {
 	if len(c.Name) == 0 {
 		return terror.ErrConfigNeedUniqueTaskName.Generate()
@@ -608,7 +608,7 @@ func (c *TaskConfig) adjust() error {
 	return nil
 }
 
-// SubTaskConfigs generates sub task configs
+// SubTaskConfigs generates sub task configs.
 func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConfig, error) {
 	cfgs := make([]*SubTaskConfig, len(c.MySQLInstances))
 	for i, inst := range c.MySQLInstances {
@@ -680,7 +680,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 
 // getGenerateName generates name by rule or gets name from nameMap
 // if it's a new name, increase nameIdx
-// otherwise return current nameIdx
+// otherwise return current nameIdx.
 func getGenerateName(rule interface{}, nameIdx int, namePrefix string, nameMap map[string]string) (string, int) {
 	// use json as key since no DeepEqual for rules now.
 	ruleByte, err := json.Marshal(rule)
@@ -786,7 +786,7 @@ func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
 }
 
 // checkDuplicateString checks whether the given string array has duplicate string item
-// if there is duplicate, it will return **all** the duplicate strings
+// if there is duplicate, it will return **all** the duplicate strings.
 func checkDuplicateString(ruleNames []string) []string {
 	mp := make(map[string]bool, len(ruleNames))
 	dupeArray := make([]string, 0)
@@ -803,7 +803,7 @@ func checkDuplicateString(ruleNames []string) []string {
 	return dupeArray
 }
 
-// AdjustTargetDBSessionCfg adjust session cfg of TiDB
+// AdjustTargetDBSessionCfg adjust session cfg of TiDB.
 func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version *semver.Version) {
 	lowerMap := make(map[string]string, len(dbConfig.Session))
 	for k, v := range dbConfig.Session {

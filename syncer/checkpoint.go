@@ -136,14 +136,14 @@ func (b *binlogPoint) outOfDate() bool {
 	return binlog.CompareLocation(b.location, b.flushedLocation, b.enableGTID) > 0
 }
 
-// MySQLLocation returns point as binlog.Location
+// MySQLLocation returns point as binlog.Location.
 func (b *binlogPoint) MySQLLocation() binlog.Location {
 	b.RLock()
 	defer b.RUnlock()
 	return b.location
 }
 
-// FlushedMySQLLocation returns flushed point as binlog.Location
+// FlushedMySQLLocation returns flushed point as binlog.Location.
 func (b *binlogPoint) FlushedMySQLLocation() binlog.Location {
 	b.RLock()
 	defer b.RUnlock()
@@ -169,7 +169,7 @@ func (b *binlogPoint) String() string {
 // when save checkpoint, we must differ saving in memory from saving (flushing) to DB (or file) permanently
 // for sharding merging, we must save checkpoint in memory to support skip when re-syncing for the special streamer
 // but before all DDLs for a sharding group to be synced and executed, we should not save checkpoint permanently
-// because, when restarting to continue the sync, all sharding DDLs must try-sync again
+// because, when restarting to continue the sync, all sharding DDLs must try-sync again.
 type CheckPoint interface {
 	// Init initializes the CheckPoint
 	Init(tctx *tcontext.Context) error
@@ -251,7 +251,7 @@ type CheckPoint interface {
 // RemoteCheckPoint implements CheckPoint
 // which using target database to store info
 // NOTE: now we sync from relay log, so not add GTID support yet
-// it's not thread-safe
+// it's not thread-safe.
 type RemoteCheckPoint struct {
 	sync.RWMutex
 
@@ -286,7 +286,7 @@ type RemoteCheckPoint struct {
 	logCtx *tcontext.Context
 }
 
-// NewRemoteCheckPoint creates a new RemoteCheckPoint
+// NewRemoteCheckPoint creates a new RemoteCheckPoint.
 func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) CheckPoint {
 	cp := &RemoteCheckPoint{
 		cfg:         cfg,
@@ -300,7 +300,7 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 	return cp
 }
 
-// Init implements CheckPoint.Init
+// Init implements CheckPoint.Init.
 func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context) error {
 	checkPointDB := cp.cfg.To
 	checkPointDB.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxCheckPointTimeout)
@@ -314,17 +314,17 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context) error {
 	return cp.prepare(tctx)
 }
 
-// Close implements CheckPoint.Close
+// Close implements CheckPoint.Close.
 func (cp *RemoteCheckPoint) Close() {
 	closeBaseDB(cp.logCtx, cp.db)
 }
 
-// ResetConn implements CheckPoint.ResetConn
+// ResetConn implements CheckPoint.ResetConn.
 func (cp *RemoteCheckPoint) ResetConn(tctx *tcontext.Context) error {
 	return cp.dbConn.resetConn(tctx)
 }
 
-// Clear implements CheckPoint.Clear
+// Clear implements CheckPoint.Clear.
 func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 	cp.Lock()
 	defer cp.Unlock()
@@ -350,14 +350,14 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 	return nil
 }
 
-// SaveTablePoint implements CheckPoint.SaveTablePoint
+// SaveTablePoint implements CheckPoint.SaveTablePoint.
 func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, point binlog.Location, ti *model.TableInfo) {
 	cp.Lock()
 	defer cp.Unlock()
 	cp.saveTablePoint(sourceSchema, sourceTable, point, ti)
 }
 
-// saveTablePoint saves single table's checkpoint without mutex.Lock
+// saveTablePoint saves single table's checkpoint without mutex.Lock.
 func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, location binlog.Location, ti *model.TableInfo) {
 	if binlog.CompareLocation(cp.globalPoint.location, location, cp.cfg.EnableGTID) > 0 {
 		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
@@ -379,17 +379,17 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, loc
 }
 
 // SaveSafeModeExitPoint implements CheckPoint.SaveSafeModeExitPoint
-// shouldn't call concurrently (only called before loop in Syncer.Run and in loop to reset)
+// shouldn't call concurrently (only called before loop in Syncer.Run and in loop to reset).
 func (cp *RemoteCheckPoint) SaveSafeModeExitPoint(point *binlog.Location) {
 	cp.safeModeExitPoint = point
 }
 
-// SafeModeExitPoint implements CheckPoint.SafeModeExitPoint
+// SafeModeExitPoint implements CheckPoint.SafeModeExitPoint.
 func (cp *RemoteCheckPoint) SafeModeExitPoint() *binlog.Location {
 	return cp.safeModeExitPoint
 }
 
-// DeleteTablePoint implements CheckPoint.DeleteTablePoint
+// DeleteTablePoint implements CheckPoint.DeleteTablePoint.
 func (cp *RemoteCheckPoint) DeleteTablePoint(tctx *tcontext.Context, sourceSchema, sourceTable string) error {
 	cp.Lock()
 	defer cp.Unlock()
@@ -418,7 +418,7 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(tctx *tcontext.Context, sourceSchem
 	return nil
 }
 
-// DeleteSchemaPoint implements CheckPoint.DeleteSchemaPoint
+// DeleteSchemaPoint implements CheckPoint.DeleteSchemaPoint.
 func (cp *RemoteCheckPoint) DeleteSchemaPoint(tctx *tcontext.Context, sourceSchema string) error {
 	cp.Lock()
 	defer cp.Unlock()
@@ -473,7 +473,7 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 	return binlog.CompareLocation(location, oldLocation, cp.cfg.EnableGTID) > 0
 }
 
-// SaveGlobalPoint implements CheckPoint.SaveGlobalPoint
+// SaveGlobalPoint implements CheckPoint.SaveGlobalPoint.
 func (cp *RemoteCheckPoint) SaveGlobalPoint(location binlog.Location) {
 	cp.Lock()
 	defer cp.Unlock()
@@ -484,7 +484,7 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(location binlog.Location) {
 	}
 }
 
-// FlushPointsExcept implements CheckPoint.FlushPointsExcept
+// FlushPointsExcept implements CheckPoint.FlushPointsExcept.
 func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error {
 	cp.RLock()
 	defer cp.RUnlock()
@@ -557,7 +557,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 	return nil
 }
 
-// FlushPointWithTableInfo implements CheckPoint.FlushPointWithTableInfo
+// FlushPointWithTableInfo implements CheckPoint.FlushPointWithTableInfo.
 func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, sourceSchema string, sourceTable string, ti *model.TableInfo) error {
 	cp.Lock()
 	defer cp.Unlock()
@@ -594,7 +594,7 @@ func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, sour
 	return nil
 }
 
-// GlobalPoint implements CheckPoint.GlobalPoint
+// GlobalPoint implements CheckPoint.GlobalPoint.
 func (cp *RemoteCheckPoint) GlobalPoint() binlog.Location {
 	cp.RLock()
 	defer cp.RUnlock()
@@ -602,7 +602,7 @@ func (cp *RemoteCheckPoint) GlobalPoint() binlog.Location {
 	return cp.globalPoint.MySQLLocation()
 }
 
-// TablePoint implements CheckPoint.TablePoint
+// TablePoint implements CheckPoint.TablePoint.
 func (cp *RemoteCheckPoint) TablePoint() map[string]map[string]binlog.Location {
 	cp.RLock()
 	defer cp.RUnlock()
@@ -617,7 +617,7 @@ func (cp *RemoteCheckPoint) TablePoint() map[string]map[string]binlog.Location {
 	return tablePoint
 }
 
-// FlushedGlobalPoint implements CheckPoint.FlushedGlobalPoint
+// FlushedGlobalPoint implements CheckPoint.FlushedGlobalPoint.
 func (cp *RemoteCheckPoint) FlushedGlobalPoint() binlog.Location {
 	cp.RLock()
 	defer cp.RUnlock()
@@ -625,7 +625,7 @@ func (cp *RemoteCheckPoint) FlushedGlobalPoint() binlog.Location {
 	return cp.globalPoint.FlushedMySQLLocation()
 }
 
-// String implements CheckPoint.String
+// String implements CheckPoint.String.
 func (cp *RemoteCheckPoint) String() string {
 	cp.RLock()
 	defer cp.RUnlock()
@@ -633,14 +633,14 @@ func (cp *RemoteCheckPoint) String() string {
 	return cp.globalPoint.String()
 }
 
-// CheckGlobalPoint implements CheckPoint.CheckGlobalPoint
+// CheckGlobalPoint implements CheckPoint.CheckGlobalPoint.
 func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 	cp.RLock()
 	defer cp.RUnlock()
 	return time.Since(cp.globalPointSaveTime) >= time.Duration(cp.cfg.CheckpointFlushInterval)*time.Second
 }
 
-// Rollback implements CheckPoint.Rollback
+// Rollback implements CheckPoint.Rollback.
 func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
@@ -726,7 +726,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 	return err
 }
 
-// Load implements CheckPoint.Load
+// Load implements CheckPoint.Load.
 func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 	cp.Lock()
 	defer cp.Unlock()
@@ -835,7 +835,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
 }
 
-// LoadMeta implements CheckPoint.LoadMeta
+// LoadMeta implements CheckPoint.LoadMeta.
 func (cp *RemoteCheckPoint) LoadMeta() error {
 	cp.Lock()
 	defer cp.Unlock()
@@ -891,7 +891,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 	return nil
 }
 
-// genUpdateSQL generates SQL and arguments for update checkpoint
+// genUpdateSQL generates SQL and arguments for update checkpoint.
 func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location binlog.Location, safeModeExitLoc *binlog.Location, tiBytes []byte, isGlobal bool) (string, []interface{}) {
 	// use `INSERT INTO ... ON DUPLICATE KEY UPDATE` rather than `REPLACE INTO`
 	// to keep `create_time`, `update_time` correctly
@@ -930,8 +930,10 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, location binl
 	}
 
 	// convert tiBytes to string to get a readable log
-	args := []interface{}{cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSetStr(),
-		exitSafeName, exitSafePos, exitSafeGTIDStr, string(tiBytes), isGlobal}
+	args := []interface{}{
+		cp.id, cpSchema, cpTable, location.Position.Name, location.Position.Pos, location.GTIDSetStr(),
+		exitSafeName, exitSafePos, exitSafeGTIDStr, string(tiBytes), isGlobal,
+	}
 	return sql2, args
 }
 
@@ -951,7 +953,7 @@ func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, *binlog.Location,
 	return loc, loc2, err
 }
 
-// GetFlushedTableInfo implements CheckPoint.GetFlushedTableInfo
+// GetFlushedTableInfo implements CheckPoint.GetFlushedTableInfo.
 func (cp *RemoteCheckPoint) GetFlushedTableInfo(schema string, table string) *model.TableInfo {
 	cp.Lock()
 	defer cp.Unlock()

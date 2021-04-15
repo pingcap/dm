@@ -96,7 +96,7 @@ func main() {
 	case 2:
 		eventCount, byteCount, duration, err = readEventsWithoutGoMySQL(ctx, conn)
 	case 3:
-		eventCount, byteCount, duration, err = readDataOnly(ctx, conn)
+		byteCount, duration, err = readDataOnly(ctx, conn)
 	default:
 		log.L().Error("invalid mode specified`", zap.Int("mode", cfg.mode))
 	}

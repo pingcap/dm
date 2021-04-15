@@ -36,7 +36,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// Dumpling dumps full data from a MySQL-compatible database
+// Dumpling dumps full data from a MySQL-compatible database.
 type Dumpling struct {
 	cfg *config.SubTaskConfig
 
@@ -46,7 +46,7 @@ type Dumpling struct {
 	closed     sync2.AtomicBool
 }
 
-// NewDumpling creates a new Dumpling
+// NewDumpling creates a new Dumpling.
 func NewDumpling(cfg *config.SubTaskConfig) *Dumpling {
 	m := &Dumpling{
 		cfg:    cfg,
@@ -55,7 +55,7 @@ func NewDumpling(cfg *config.SubTaskConfig) *Dumpling {
 	return m
 }
 
-// Init implements Unit.Init
+// Init implements Unit.Init.
 func (m *Dumpling) Init(ctx context.Context) error {
 	var err error
 	m.dumpConfig, err = m.constructArgs()
@@ -64,7 +64,7 @@ func (m *Dumpling) Init(ctx context.Context) error {
 	return err
 }
 
-// Process implements Unit.Process
+// Process implements Unit.Process.
 func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	dumplingExitWithErrorCounter.WithLabelValues(m.cfg.Name, m.cfg.SourceID).Add(0)
 
@@ -145,7 +145,7 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 }
 
-// Close implements Unit.Close
+// Close implements Unit.Close.
 func (m *Dumpling) Close() {
 	if m.closed.Get() {
 		return
@@ -156,7 +156,7 @@ func (m *Dumpling) Close() {
 	m.closed.Set(true)
 }
 
-// Pause implements Unit.Pause
+// Pause implements Unit.Pause.
 func (m *Dumpling) Pause() {
 	if m.closed.Get() {
 		m.logger.Warn("try to pause, but already closed")
@@ -165,7 +165,7 @@ func (m *Dumpling) Pause() {
 	// do nothing, external will cancel the command (if running)
 }
 
-// Resume implements Unit.Resume
+// Resume implements Unit.Resume.
 func (m *Dumpling) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	if m.closed.Get() {
 		m.logger.Warn("try to resume, but already closed")
@@ -175,29 +175,29 @@ func (m *Dumpling) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	m.Process(ctx, pr)
 }
 
-// Update implements Unit.Update
+// Update implements Unit.Update.
 func (m *Dumpling) Update(cfg *config.SubTaskConfig) error {
 	// not support update configuration now
 	return nil
 }
 
-// Status implements Unit.Status
+// Status implements Unit.Status.
 func (m *Dumpling) Status(ctx context.Context) interface{} {
 	// NOTE: try to add some status, like dumped file count
 	return &pb.DumpStatus{}
 }
 
-// Type implements Unit.Type
+// Type implements Unit.Type.
 func (m *Dumpling) Type() pb.UnitType {
 	return pb.UnitType_Dump
 }
 
-// IsFreshTask implements Unit.IsFreshTask
+// IsFreshTask implements Unit.IsFreshTask.
 func (m *Dumpling) IsFreshTask(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-// constructArgs constructs arguments for exec.Command
+// constructArgs constructs arguments for exec.Command.
 func (m *Dumpling) constructArgs() (*export.Config, error) {
 	cfg := m.cfg
 	db := cfg.From
@@ -276,7 +276,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 }
 
 // detectSQLMode tries to detect SQL mode from upstream. If success, write it to LoaderConfig.
-// Because loader will use this SQL mode, we need to treat disable `EscapeBackslash` when NO_BACKSLASH_ESCAPES
+// Because loader will use this SQL mode, we need to treat disable `EscapeBackslash` when NO_BACKSLASH_ESCAPES.
 func (m *Dumpling) detectSQLMode(ctx context.Context) {
 	baseDB, err := conn.DefaultDBProvider.Apply(m.cfg.From)
 	if err != nil {

@@ -32,6 +32,7 @@ func (s *Server) OperateV1Meta(ctx context.Context, req *pb.OperateV1MetaRequest
 	case pb.V1MetaOp_GetV1Meta:
 		meta, err := v1workermeta.GetSubtasksMeta()
 		if err != nil {
+			// nolint:nilerr
 			return &pb.OperateV1MetaResponse{
 				Result: false,
 				Msg:    err.Error(),
@@ -44,6 +45,7 @@ func (s *Server) OperateV1Meta(ctx context.Context, req *pb.OperateV1MetaRequest
 	case pb.V1MetaOp_RemoveV1Meta:
 		err := v1workermeta.RemoveSubtasksMeta()
 		if err != nil {
+			// nolint:nilerr
 			return &pb.OperateV1MetaResponse{
 				Result: false,
 				Msg:    err.Error(),

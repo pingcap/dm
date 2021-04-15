@@ -15,7 +15,7 @@ package config
 
 import "fmt"
 
-// Security config
+// Security config.
 type Security struct {
 	SSLCA         string   `toml:"ssl-ca" json:"ssl-ca" yaml:"ssl-ca"`
 	SSLCert       string   `toml:"ssl-cert" json:"ssl-cert" yaml:"ssl-cert"`
@@ -23,7 +23,7 @@ type Security struct {
 	CertAllowedCN strArray `toml:"cert-allowed-cn" json:"cert-allowed-cn" yaml:"cert-allowed-cn"`
 }
 
-// used for parse string slice in flag
+// used for parse string slice in flag.
 type strArray []string
 
 func (i *strArray) String() string {

@@ -27,8 +27,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testModeSuite struct {
-}
+type testModeSuite struct{}
 
 func (t *testModeSuite) TestMode(c *C) {
 	m := NewSafeMode()
