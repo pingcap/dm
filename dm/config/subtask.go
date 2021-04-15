@@ -33,38 +33,36 @@ import (
 	"go.uber.org/zap"
 )
 
-// task modes
+// task modes.
 const (
 	ModeAll       = "all"
 	ModeFull      = "full"
 	ModeIncrement = "incremental"
 )
 
-var (
-	defaultMaxIdleConns = 2
-)
+var defaultMaxIdleConns = 2
 
-// RawDBConfig contains some low level database config
+// RawDBConfig contains some low level database config.
 type RawDBConfig struct {
 	MaxIdleConns int
 	ReadTimeout  string
 	WriteTimeout string
 }
 
-// DefaultRawDBConfig returns a default raw database config
+// DefaultRawDBConfig returns a default raw database config.
 func DefaultRawDBConfig() *RawDBConfig {
 	return &RawDBConfig{
 		MaxIdleConns: defaultMaxIdleConns,
 	}
 }
 
-// SetReadTimeout set readTimeout for raw database config
+// SetReadTimeout set readTimeout for raw database config.
 func (c *RawDBConfig) SetReadTimeout(readTimeout string) *RawDBConfig {
 	c.ReadTimeout = readTimeout
 	return c
 }
 
-// SetWriteTimeout set writeTimeout for raw database config
+// SetWriteTimeout set writeTimeout for raw database config.
 func (c *RawDBConfig) SetWriteTimeout(writeTimeout string) *RawDBConfig {
 	c.WriteTimeout = writeTimeout
 	return c
@@ -102,18 +100,17 @@ func (db *DBConfig) String() string {
 	return string(cfg)
 }
 
-// Toml returns TOML format representation of config
+// Toml returns TOML format representation of config.
 func (db *DBConfig) Toml() (string, error) {
 	var b bytes.Buffer
 	enc := toml.NewEncoder(&b)
-	err := enc.Encode(db)
-	if err != nil {
+	if err := enc.Encode(db); err != nil {
 		return "", terror.ErrConfigTomlTransform.Delegate(err, "encode db config to toml")
 	}
 	return b.String(), nil
 }
 
-// Decode loads config from file data
+// Decode loads config from file data.
 func (db *DBConfig) Decode(data string) error {
 	_, err := toml.Decode(data, db)
 	return terror.ErrConfigTomlTransform.Delegate(err, "decode db config")
@@ -123,7 +120,7 @@ func (db *DBConfig) Decode(data string) error {
 func (db *DBConfig) Adjust() {
 }
 
-// SubTaskConfig is the configuration for SubTask
+// SubTaskConfig is the configuration for SubTask.
 type SubTaskConfig struct {
 	// BurntSushi/toml seems have a bug for flag "-"
 	// when doing encoding, if we use `toml:"-"`, it still try to encode it
@@ -195,7 +192,7 @@ type SubTaskConfig struct {
 	printVersion bool
 }
 
-// NewSubTaskConfig creates a new SubTaskConfig
+// NewSubTaskConfig creates a new SubTaskConfig.
 func NewSubTaskConfig() *SubTaskConfig {
 	cfg := &SubTaskConfig{}
 	return cfg
@@ -211,7 +208,7 @@ func (c *SubTaskConfig) SetFlagSet(flagSet *flag.FlagSet) {
 	c.flagSet = flagSet
 }
 
-// String returns the config's json string
+// String returns the config's json string.
 func (c *SubTaskConfig) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
@@ -220,18 +217,17 @@ func (c *SubTaskConfig) String() string {
 	return string(cfg)
 }
 
-// Toml returns TOML format representation of config
+// Toml returns TOML format representation of config.
 func (c *SubTaskConfig) Toml() (string, error) {
 	var b bytes.Buffer
 	enc := toml.NewEncoder(&b)
-	err := enc.Encode(c)
-	if err != nil {
+	if err := enc.Encode(c); err != nil {
 		return "", terror.ErrConfigTomlTransform.Delegate(err, "encode subtask config")
 	}
 	return b.String(), nil
 }
 
-// DecodeFile loads and decodes config from file
+// DecodeFile loads and decodes config from file.
 func (c *SubTaskConfig) DecodeFile(fpath string, verifyDecryptPassword bool) error {
 	_, err := toml.DecodeFile(fpath, c)
 	if err != nil {
@@ -241,17 +237,16 @@ func (c *SubTaskConfig) DecodeFile(fpath string, verifyDecryptPassword bool) err
 	return c.Adjust(verifyDecryptPassword)
 }
 
-// Decode loads config from file data
+// Decode loads config from file data.
 func (c *SubTaskConfig) Decode(data string, verifyDecryptPassword bool) error {
-	_, err := toml.Decode(data, c)
-	if err != nil {
+	if _, err := toml.Decode(data, c); err != nil {
 		return terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from data")
 	}
 
 	return c.Adjust(verifyDecryptPassword)
 }
 
-// Adjust adjusts configs
+// Adjust adjusts configs.
 func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if c.Name == "" {
 		return terror.ErrConfigTaskNameEmpty.Generate()
@@ -263,10 +258,6 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if len(c.SourceID) > MaxSourceIDLength {
 		return terror.ErrConfigTooLongSourceID.Generate()
 	}
-
-	//if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
-	//	return errors.Errorf("please specify right mysql version, support mysql, mariadb now")
-	//}
 
 	if c.ShardMode != "" && c.ShardMode != ShardPessimistic && c.ShardMode != ShardOptimistic {
 		return terror.ErrConfigShardModeNotSupport.Generate(c.ShardMode)
@@ -354,7 +345,7 @@ func (c *SubTaskConfig) Parse(arguments []string, verifyDecryptPassword bool) er
 	return c.Adjust(verifyDecryptPassword)
 }
 
-// DecryptPassword tries to decrypt db password in config
+// DecryptPassword tries to decrypt db password in config.
 func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 	clone, err := c.Clone()
 	if err != nil {
@@ -377,7 +368,7 @@ func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 	return clone, nil
 }
 
-// Clone returns a replica of SubTaskConfig
+// Clone returns a replica of SubTaskConfig.
 func (c *SubTaskConfig) Clone() (*SubTaskConfig, error) {
 	content, err := c.Toml()
 	if err != nil {

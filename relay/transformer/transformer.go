@@ -89,8 +89,7 @@ func (t *transformer) Transform(e *replication.BinlogEvent) Result {
 		result.CanSaveGTID = true // need save GTID for XID
 	case *replication.GenericEvent:
 		// handle some un-parsed events
-		switch e.Header.EventType {
-		case replication.HEARTBEAT_EVENT:
+		if e.Header.EventType == replication.HEARTBEAT_EVENT {
 			// ignore artificial heartbeat event
 			// ref: https://dev.mysql.com/doc/internals/en/heartbeat-event.html
 			result.Ignore = true

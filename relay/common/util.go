@@ -21,7 +21,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// CheckIsDDL checks input SQL whether is a valid DDL statement
+// CheckIsDDL checks input SQL whether is a valid DDL statement.
 func CheckIsDDL(sql string, p *parser.Parser) bool {
 	sql = utils.TrimCtrlChars(sql)
 

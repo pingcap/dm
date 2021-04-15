@@ -25,8 +25,7 @@ import (
 
 var _ = Suite(&testUtilSuite{})
 
-type testUtilSuite struct {
-}
+type testUtilSuite struct{}
 
 func (t *testUtilSuite) TestIsNewServer(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)

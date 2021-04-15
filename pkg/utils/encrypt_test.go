@@ -23,8 +23,7 @@ import (
 
 var _ = Suite(&testEncryptSuite{})
 
-type testEncryptSuite struct {
-}
+type testEncryptSuite struct{}
 
 func (t *testEncryptSuite) TestEncrypt(c *C) {
 	plaintext := "abc@123"

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package metricsproxy
+package metricsproxy // nolint:dupl
 
 import (
 	"sync"
@@ -19,7 +19,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// GaugeVecProxy to proxy prometheus.GaugeVec
+// GaugeVecProxy to proxy prometheus.GaugeVec.
 type GaugeVecProxy struct {
 	mu sync.Mutex
 
@@ -69,7 +69,7 @@ func (c *GaugeVecProxy) With(labels prometheus.Labels) prometheus.Gauge {
 	return c.GaugeVec.With(labels)
 }
 
-// DeleteAllAboutLabels Remove all labelsValue with these labels
+// DeleteAllAboutLabels Remove all labelsValue with these labels.
 func (c *GaugeVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	if len(labels) == 0 {
 		return false
@@ -79,24 +79,24 @@ func (c *GaugeVecProxy) DeleteAllAboutLabels(labels prometheus.Labels) bool {
 	return findAndDeleteLabelsInMetricsProxy(c, labels)
 }
 
-// GetLabelNamesIndex to support get GaugeVecProxy's LabelNames when you use Proxy object
+// GetLabelNamesIndex to support get GaugeVecProxy's LabelNames when you use Proxy object.
 func (c *GaugeVecProxy) GetLabelNamesIndex() map[string]int {
 	return c.LabelNamesIndex
 }
 
-// GetLabels to support get GaugeVecProxy's Labels when you use Proxy object
+// GetLabels to support get GaugeVecProxy's Labels when you use Proxy object.
 func (c *GaugeVecProxy) GetLabels() map[string][]string {
 	return c.Labels
 }
 
-// SetLabel to support set GaugeVecProxy's Label when you use Proxy object
+// SetLabel to support set GaugeVecProxy's Label when you use Proxy object.
 func (c *GaugeVecProxy) SetLabel(key string, vals []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Labels[key] = vals
 }
 
-// vecDelete to support delete GaugeVecProxy's Labels when you use Proxy object
+// vecDelete to support delete GaugeVecProxy's Labels when you use Proxy object.
 func (c *GaugeVecProxy) vecDelete(labels prometheus.Labels) bool {
 	return c.GaugeVec.Delete(labels)
 }

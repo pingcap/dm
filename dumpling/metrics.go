@@ -22,16 +22,14 @@ import (
 	"github.com/pingcap/dm/pkg/metricsproxy"
 )
 
-var (
-	// should alert
-	dumplingExitWithErrorCounter = metricsproxy.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: "dm",
-			Subsystem: "dumpling",
-			Name:      "exit_with_error_count",
-			Help:      "counter for dumpling exit with error",
-		}, []string{"task", "source_id"})
-)
+// should alert.
+var dumplingExitWithErrorCounter = metricsproxy.NewCounterVec(
+	prometheus.CounterOpts{
+		Namespace: "dm",
+		Subsystem: "dumpling",
+		Name:      "exit_with_error_count",
+		Help:      "counter for dumpling exit with error",
+	}, []string{"task", "source_id"})
 
 // RegisterMetrics registers metrics and saves the given registry for later use.
 func RegisterMetrics(registry *prometheus.Registry) {

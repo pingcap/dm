@@ -207,8 +207,8 @@ func (t *testPurgerSuite) TestPurgeAutomaticallyTime(c *C) {
 	}
 
 	// change files' modification time
-	aTime := time.Now().Add(time.Duration(-cfg.Expires) * 3 * time.Hour)
-	mTime := time.Now().Add(time.Duration(-cfg.Expires) * 2 * time.Hour)
+	aTime := time.Now().Add(time.Duration(-cfg.Expires*3) * time.Hour)
+	mTime := time.Now().Add(time.Duration(-cfg.Expires*2) * time.Hour)
 	for _, fps := range relayFilesPath {
 		for _, fp := range fps {
 			err = os.Chtimes(fp, aTime, mTime)
@@ -282,7 +282,7 @@ func (t *testPurgerSuite) genRelayLogFiles(c *C, baseDir string, safeTimeIdxI, s
 
 	for _, uuid := range t.uuids {
 		dir := filepath.Join(baseDir, uuid)
-		err := os.Mkdir(dir, 0700)
+		err := os.Mkdir(dir, 0o700)
 		c.Assert(err, IsNil)
 		relayDirsPath = append(relayDirsPath, dir)
 	}
@@ -293,7 +293,7 @@ func (t *testPurgerSuite) genRelayLogFiles(c *C, baseDir string, safeTimeIdxI, s
 		relayFilesPath = append(relayFilesPath, []string{})
 		for j, fn := range t.relayFiles[i] {
 			fp := filepath.Join(dir, fn)
-			err2 := ioutil.WriteFile(fp, []byte("meaningless file content"), 0644)
+			err2 := ioutil.WriteFile(fp, []byte("meaningless file content"), 0o644)
 			c.Assert(err2, IsNil)
 			relayFilesPath[i] = append(relayFilesPath[i], fp)
 
@@ -317,7 +317,7 @@ func (t *testPurgerSuite) genUUIDIndexFile(baseDir string) error {
 		buf.WriteString("\n")
 	}
 
-	return ioutil2.WriteFileAtomic(fp, buf.Bytes(), 0644)
+	return ioutil2.WriteFileAtomic(fp, buf.Bytes(), 0o644)
 }
 
 type fakeInterceptor struct {

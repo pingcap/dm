@@ -31,7 +31,7 @@ import (
 )
 
 // Status implements Unit.Status
-// it returns status, but does not calc status
+// it returns status, but does not calc status.
 func (s *Syncer) Status(ctx context.Context) interface{} {
 	var (
 		masterPos     mysql.Position

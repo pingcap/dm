@@ -24,9 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/common"
 )
 
-var (
-	etcdTestCli *clientv3.Client
-)
+var etcdTestCli *clientv3.Client
 
 func TestUpgrade(t *testing.T) {
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})

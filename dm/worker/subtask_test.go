@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	// mocked loadMetaBinlog must be greater than relayHolderBinlog
+	// mocked loadMetaBinlog must be greater than relayHolderBinlog.
 	loadMetaBinlog    = "(mysql-bin.00001,154)"
 	relayHolderBinlog = "(mysql-bin.00001,150)"
 )
@@ -76,10 +76,10 @@ type MockUnit struct {
 	errInit        error
 	errUpdate      error
 
-	isFresh  bool
 	errFresh error
 
-	typ pb.UnitType
+	typ     pb.UnitType
+	isFresh bool
 }
 
 func NewMockUnit(typ pb.UnitType) *MockUnit {

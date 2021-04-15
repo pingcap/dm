@@ -61,7 +61,7 @@ type mysqlInstance struct {
 	targetDBInfo *dbutil.DBConfig
 }
 
-// Checker performs pre-check of data synchronization
+// Checker performs pre-check of data synchronization.
 type Checker struct {
 	closed sync2.AtomicBool
 
@@ -77,7 +77,7 @@ type Checker struct {
 	}
 }
 
-// NewChecker returns a checker
+// NewChecker returns a checker.
 func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *Checker {
 	c := &Checker{
 		instances:     make([]*mysqlInstance, 0, len(cfgs)),
@@ -96,7 +96,7 @@ func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *
 	return c
 }
 
-// Init implements Unit interface
+// Init implements Unit interface.
 func (c *Checker) Init(ctx context.Context) (err error) {
 	rollbackHolder := fr.NewRollbackHolder("checker")
 	defer func() {
@@ -246,7 +246,7 @@ func (c *Checker) displayCheckingItems() string {
 	return buf.String()
 }
 
-// Process implements Unit interface
+// Process implements Unit interface.
 func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	cctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
@@ -293,7 +293,7 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 }
 
-// updateInstruction updates the check result's Instruction
+// updateInstruction updates the check result's Instruction.
 func (c *Checker) updateInstruction(result *check.Results) {
 	for _, r := range result.Results {
 		if r.State == check.StateSuccess {
@@ -301,8 +301,7 @@ func (c *Checker) updateInstruction(result *check.Results) {
 		}
 
 		// can't judge by other field, maybe update it later
-		switch r.Extra {
-		case check.AutoIncrementKeyChecking:
+		if r.Extra == check.AutoIncrementKeyChecking {
 			if strings.HasPrefix(r.Instruction, "please handle it by yourself") {
 				r.Instruction += ",  refer to https://docs.pingcap.com/tidb-data-migration/stable/shard-merge-best-practices#handle-conflicts-of-auto-increment-primary-key) for details."
 			}
@@ -310,7 +309,7 @@ func (c *Checker) updateInstruction(result *check.Results) {
 	}
 }
 
-// Close implements Unit interface
+// Close implements Unit interface.
 func (c *Checker) Close() {
 	if c.closed.Get() {
 		return
@@ -339,7 +338,7 @@ func (c *Checker) closeDBs() {
 	}
 }
 
-// Pause implements Unit interface
+// Pause implements Unit interface.
 func (c *Checker) Pause() {
 	if c.closed.Get() {
 		c.logger.Warn("try to pause, but already closed")
@@ -347,7 +346,7 @@ func (c *Checker) Pause() {
 	}
 }
 
-// Resume resumes the paused process
+// Resume resumes the paused process.
 func (c *Checker) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	if c.closed.Get() {
 		c.logger.Warn("try to resume, but already closed")
@@ -357,23 +356,23 @@ func (c *Checker) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	c.Process(ctx, pr)
 }
 
-// Update implements Unit.Update
+// Update implements Unit.Update.
 func (c *Checker) Update(cfg *config.SubTaskConfig) error {
 	// not support update configuration now
 	return nil
 }
 
-// Type implements Unit interface
+// Type implements Unit interface.
 func (c *Checker) Type() pb.UnitType {
 	return pb.UnitType_Check
 }
 
-// IsFreshTask implements Unit.IsFreshTask
+// IsFreshTask implements Unit.IsFreshTask.
 func (c *Checker) IsFreshTask() (bool, error) {
 	return true, nil
 }
 
-// Status implements Unit interface
+// Status implements Unit interface.
 func (c *Checker) Status() interface{} {
 	c.result.RLock()
 	res := c.result.detail
@@ -394,7 +393,7 @@ func (c *Checker) Status() interface{} {
 	}
 }
 
-// Error implements Unit interface
+// Error implements Unit interface.
 func (c *Checker) Error() interface{} {
 	return &pb.CheckError{}
 }

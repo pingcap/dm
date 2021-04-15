@@ -24,7 +24,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewShowDDLLocksCmd creates a ShowDDlLocks command
+// NewShowDDLLocksCmd creates a ShowDDlLocks command.
 func NewShowDDLLocksCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show-ddl-locks [-s source ...] [task-name | task-file]",
@@ -34,19 +34,18 @@ func NewShowDDLLocksCmd() *cobra.Command {
 	return cmd
 }
 
-// showDDLLocksFunc does show DDL locks
-func showDDLLocksFunc(cmd *cobra.Command, _ []string) (err error) {
+// showDDLLocksFunc does show DDL locks.
+func showDDLLocksFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) > 1 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 	taskName := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0)) // maybe empty
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		return
+		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -64,10 +63,10 @@ func showDDLLocksFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		common.PrintLines("can not show DDL locks for task %s and sources %v", taskName, sources)
-		return
+		common.PrintLinesf("can not show DDL locks for task %s and sources %v", taskName, sources)
+		return err
 	}
 
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }

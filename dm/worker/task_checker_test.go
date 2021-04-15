@@ -142,10 +142,8 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 		IsCanceled: false,
 		Errors:     []*pb.ProcessError{unsupporteModifyColumnError},
 	}
-	latestPausedTime = rtsc.bc.latestPausedTime[taskName]
 	rtsc.check()
 	c.Assert(latestPausedTime.Before(rtsc.bc.latestPausedTime[taskName]), check.IsTrue)
-	latestPausedTime = rtsc.bc.latestPausedTime[taskName]
 	latestBlockTime = rtsc.bc.latestBlockTime[taskName]
 	time.Sleep(200 * time.Millisecond)
 	rtsc.check()

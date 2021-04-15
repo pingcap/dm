@@ -26,14 +26,14 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// subRelayFiles represents relay log files in one sub directory
+// subRelayFiles represents relay log files in one sub directory.
 type subRelayFiles struct {
 	dir    string   // sub directory path
 	files  []string // path of relay log files
 	hasAll bool     // whether all relay log files in @dir are included in @files
 }
 
-// purgeRelayFilesBeforeFile purge relay log files which are older than safeRelay
+// purgeRelayFilesBeforeFile purge relay log files which are older than safeRelay.
 func purgeRelayFilesBeforeFile(logger log.Logger, relayBaseDir string, uuids []string, safeRelay *streamer.RelayLogInfo) error {
 	files, err := getRelayFilesBeforeFile(logger, relayBaseDir, uuids, safeRelay)
 	if err != nil {
@@ -43,7 +43,7 @@ func purgeRelayFilesBeforeFile(logger log.Logger, relayBaseDir string, uuids []s
 	return purgeRelayFiles(logger, files)
 }
 
-// purgeRelayFilesBeforeFileAndTime purge relay log files which are older than safeRelay and safeTime
+// purgeRelayFilesBeforeFileAndTime purge relay log files which are older than safeRelay and safeTime.
 func purgeRelayFilesBeforeFileAndTime(logger log.Logger, relayBaseDir string, uuids []string, safeRelay *streamer.RelayLogInfo, safeTime time.Time) error {
 	files, err := getRelayFilesBeforeFileAndTime(logger, relayBaseDir, uuids, safeRelay, safeTime)
 	if err != nil {
@@ -53,7 +53,7 @@ func purgeRelayFilesBeforeFileAndTime(logger log.Logger, relayBaseDir string, uu
 	return purgeRelayFiles(logger, files)
 }
 
-// getRelayFilesBeforeFile gets a list of relay log files which are older than safeRelay
+// getRelayFilesBeforeFile gets a list of relay log files which are older than safeRelay.
 func getRelayFilesBeforeFile(logger log.Logger, relayBaseDir string, uuids []string, safeRelay *streamer.RelayLogInfo) ([]*subRelayFiles, error) {
 	// discard all newer UUIDs
 	uuids, err := trimUUIDs(uuids, safeRelay)
@@ -66,7 +66,7 @@ func getRelayFilesBeforeFile(logger log.Logger, relayBaseDir string, uuids []str
 	return files, err
 }
 
-// getRelayFilesBeforeTime gets a list of relay log files which have modified time earlier than safeTime
+// getRelayFilesBeforeTime gets a list of relay log files which have modified time earlier than safeTime.
 func getRelayFilesBeforeFileAndTime(logger log.Logger, relayBaseDir string, uuids []string, safeRelay *streamer.RelayLogInfo, safeTime time.Time) ([]*subRelayFiles, error) {
 	// discard all newer UUIDs
 	uuids, err := trimUUIDs(uuids, safeRelay)
@@ -77,9 +77,9 @@ func getRelayFilesBeforeFileAndTime(logger log.Logger, relayBaseDir string, uuid
 	return collectRelayFilesBeforeFileAndTime(logger, relayBaseDir, uuids, safeRelay.Filename, safeTime)
 }
 
-// trimUUIDs trims all newer UUIDs than safeRelay
+// trimUUIDs trims all newer UUIDs than safeRelay.
 func trimUUIDs(uuids []string, safeRelay *streamer.RelayLogInfo) ([]string, error) {
-	var endIdx = -1
+	endIdx := -1
 	for i, uuid := range uuids {
 		if uuid == safeRelay.UUID {
 			endIdx = i
@@ -93,7 +93,7 @@ func trimUUIDs(uuids []string, safeRelay *streamer.RelayLogInfo) ([]string, erro
 	return uuids[:endIdx+1], nil
 }
 
-// collectRelayFilesBeforeFileAndTime collects relay log files before safeFilename (and before safeTime)
+// collectRelayFilesBeforeFileAndTime collects relay log files before safeFilename (and before safeTime).
 func collectRelayFilesBeforeFileAndTime(logger log.Logger, relayBaseDir string, uuids []string, safeFilename string, safeTime time.Time) ([]*subRelayFiles, error) {
 	// NOTE: test performance when removing a large number of relay log files and decide whether need to limit files removed every time
 	files := make([]*subRelayFiles, 0, 1)
@@ -158,7 +158,7 @@ func collectRelayFilesBeforeFileAndTime(logger log.Logger, relayBaseDir string, 
 	return files, nil
 }
 
-// purgeRelayFiles purges relay log files and directories if them become empty
+// purgeRelayFiles purges relay log files and directories if them become empty.
 func purgeRelayFiles(logger log.Logger, files []*subRelayFiles) error {
 	startTime := time.Now()
 	defer func() {

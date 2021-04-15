@@ -25,7 +25,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewUpdateTaskCmd creates a UpdateTask command
+// NewUpdateTaskCmd creates a UpdateTask command.
 func NewUpdateTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-task [-s source ...] <config-file>",
@@ -35,22 +35,21 @@ func NewUpdateTaskCmd() *cobra.Command {
 	return cmd
 }
 
-// updateTaskFunc does update task request
-func updateTaskFunc(cmd *cobra.Command, _ []string) (err error) {
+// updateTaskFunc does update task request.
+func updateTaskFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		return
+		return err
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		return
+		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -69,11 +68,11 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		return
+		return err
 	}
 
 	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
 		common.PrettyPrintResponse(resp)
 	}
-	return
+	return nil
 }

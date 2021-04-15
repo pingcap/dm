@@ -27,8 +27,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testEncryptSuite struct {
-}
+type testEncryptSuite struct{}
 
 func (t *testEncryptSuite) TestSetSecretKey(c *C) {
 	// 16 bit

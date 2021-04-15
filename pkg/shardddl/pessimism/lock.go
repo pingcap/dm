@@ -42,12 +42,12 @@ type Lock struct {
 }
 
 // NewLock creates a new Lock instance.
-func NewLock(ID, task, owner string, DDLs, sources []string) *Lock {
+func NewLock(id, task, owner string, ddls, sources []string) *Lock {
 	l := &Lock{
-		ID:     ID,
+		ID:     id,
 		Task:   task,
 		Owner:  owner,
-		DDLs:   DDLs,
+		DDLs:   ddls,
 		remain: len(sources),
 		ready:  make(map[string]bool),
 		done:   make(map[string]bool),
@@ -64,13 +64,13 @@ func NewLock(ID, task, owner string, DDLs, sources []string) *Lock {
 // TrySync tries to sync the lock, does decrease on remain, re-entrant.
 // new upstream sources may join when the DDL lock is in syncing,
 // so we need to merge these new sources.
-func (l *Lock) TrySync(caller string, DDLs, sources []string) (bool, int, error) {
+func (l *Lock) TrySync(caller string, ddls, sources []string) (bool, int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	// check DDL statement first.
-	if !utils.CompareShardingDDLs(DDLs, l.DDLs) {
-		return l.remain <= 0, l.remain, terror.ErrMasterShardingDDLDiff.Generate(l.DDLs, DDLs)
+	if !utils.CompareShardingDDLs(ddls, l.DDLs) {
+		return l.remain <= 0, l.remain, terror.ErrMasterShardingDDLDiff.Generate(l.DDLs, ddls)
 	}
 
 	// try to merge any newly joined sources.

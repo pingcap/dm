@@ -30,9 +30,7 @@ import (
 	"go.etcd.io/etcd/integration"
 )
 
-var (
-	etcdTestCli *clientv3.Client
-)
+var etcdTestCli *clientv3.Client
 
 func TestInfo(t *testing.T) {
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
@@ -102,7 +100,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 		downTable          = "bar"
 		p                  = parser.New()
 		se                 = mock.NewContext()
-		tblID        int64 = 111
+		tblID        int64 = 222
 		tblI1              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY)`)
 		tblI2              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`)
 		tblI3              = createTableInfo(c, p, se, tblID, `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT, c2 INT)`)

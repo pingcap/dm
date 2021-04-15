@@ -31,15 +31,13 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-	// OnlineDDLSchemes is scheme name => online ddl handler
-	OnlineDDLSchemes = map[string]func(*tcontext.Context, *config.SubTaskConfig) (OnlinePlugin, error){
-		config.PT:    NewPT,
-		config.GHOST: NewGhost,
-	}
-)
+// OnlineDDLSchemes is scheme name => online ddl handler.
+var OnlineDDLSchemes = map[string]func(*tcontext.Context, *config.SubTaskConfig) (OnlinePlugin, error){
+	config.PT:    NewPT,
+	config.GHOST: NewGhost,
+}
 
-// OnlinePlugin handles online ddl solutions like pt, gh-ost
+// OnlinePlugin handles online ddl solutions like pt, gh-ost.
 type OnlinePlugin interface {
 	// Applys does:
 	// * detect online ddl
@@ -61,7 +59,7 @@ type OnlinePlugin interface {
 	Close()
 }
 
-// TableType is type of table
+// TableType is type of table.
 type TableType string
 
 const (
@@ -70,7 +68,7 @@ const (
 	trashTable TableType = "trash table" // means we should ignore these tables
 )
 
-// GhostDDLInfo stores ghost information and ddls
+// GhostDDLInfo stores ghost information and ddls.
 type GhostDDLInfo struct {
 	Schema string `json:"schema"`
 	Table  string `json:"table"`
@@ -78,7 +76,7 @@ type GhostDDLInfo struct {
 	DDLs []string `json:"ddls"`
 }
 
-// OnlineDDLStorage stores sharding group online ddls information
+// OnlineDDLStorage stores sharding group online ddls information.
 type OnlineDDLStorage struct {
 	sync.RWMutex
 
@@ -96,7 +94,7 @@ type OnlineDDLStorage struct {
 	logCtx *tcontext.Context
 }
 
-// NewOnlineDDLStorage creates a new online ddl storager
+// NewOnlineDDLStorage creates a new online ddl storager.
 func NewOnlineDDLStorage(logCtx *tcontext.Context, cfg *config.SubTaskConfig) *OnlineDDLStorage {
 	s := &OnlineDDLStorage{
 		cfg:       cfg,
@@ -110,7 +108,7 @@ func NewOnlineDDLStorage(logCtx *tcontext.Context, cfg *config.SubTaskConfig) *O
 	return s
 }
 
-// Init initials online handler
+// Init initials online handler.
 func (s *OnlineDDLStorage) Init(tctx *tcontext.Context) error {
 	onlineDB := s.cfg.To
 	onlineDB.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxCheckPointTimeout)
@@ -129,7 +127,7 @@ func (s *OnlineDDLStorage) Init(tctx *tcontext.Context) error {
 	return s.Load(tctx)
 }
 
-// Load loads information from storage
+// Load loads information from storage.
 func (s *OnlineDDLStorage) Load(tctx *tcontext.Context) error {
 	s.Lock()
 	defer s.Unlock()
@@ -168,7 +166,7 @@ func (s *OnlineDDLStorage) Load(tctx *tcontext.Context) error {
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
 }
 
-// Get returns ddls by given schema/table
+// Get returns ddls by given schema/table.
 func (s *OnlineDDLStorage) Get(ghostSchema, ghostTable string) *GhostDDLInfo {
 	s.RLock()
 	defer s.RUnlock()
@@ -188,7 +186,7 @@ func (s *OnlineDDLStorage) Get(ghostSchema, ghostTable string) *GhostDDLInfo {
 	return clone
 }
 
-// Save saves online ddl information
+// Save saves online ddl information.
 func (s *OnlineDDLStorage) Save(tctx *tcontext.Context, ghostSchema, ghostTable, realSchema, realTable, ddl string) error {
 	s.Lock()
 	defer s.Unlock()
@@ -225,7 +223,7 @@ func (s *OnlineDDLStorage) Save(tctx *tcontext.Context, ghostSchema, ghostTable,
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
-// Delete deletes online ddl informations
+// Delete deletes online ddl informations.
 func (s *OnlineDDLStorage) Delete(tctx *tcontext.Context, ghostSchema, ghostTable string) error {
 	s.Lock()
 	defer s.Unlock()
@@ -246,7 +244,7 @@ func (s *OnlineDDLStorage) Delete(tctx *tcontext.Context, ghostSchema, ghostTabl
 	return nil
 }
 
-// Clear clears online ddl information from storage
+// Clear clears online ddl information from storage.
 func (s *OnlineDDLStorage) Clear(tctx *tcontext.Context) error {
 	s.Lock()
 	defer s.Unlock()
@@ -262,12 +260,12 @@ func (s *OnlineDDLStorage) Clear(tctx *tcontext.Context) error {
 	return nil
 }
 
-// ResetConn implements OnlinePlugin.ResetConn
+// ResetConn implements OnlinePlugin.ResetConn.
 func (s *OnlineDDLStorage) ResetConn(tctx *tcontext.Context) error {
 	return s.dbConn.resetConn(tctx)
 }
 
-// Close closes database connection
+// Close closes database connection.
 func (s *OnlineDDLStorage) Close() {
 	s.Lock()
 	defer s.Unlock()
@@ -303,5 +301,5 @@ func (s *OnlineDDLStorage) createTable(tctx *tcontext.Context) error {
 }
 
 func escapeSingleQuote(str string) string {
-	return strings.Replace(str, "'", "''", -1)
+	return strings.ReplaceAll(str, "'", "''")
 }

@@ -23,7 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewStopTaskCmd creates a StopTask command
+// NewStopTaskCmd creates a StopTask command.
 func NewStopTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop-task [-s source ...] <task-name | task-file>",
@@ -33,7 +33,7 @@ func NewStopTaskCmd() *cobra.Command {
 	return cmd
 }
 
-// stopTaskFunc does stop task request
+// stopTaskFunc does stop task request.
 func stopTaskFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)

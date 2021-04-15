@@ -19,8 +19,7 @@ import (
 
 var _ = Suite(&testStorageSuite{})
 
-type testStorageSuite struct {
-}
+type testStorageSuite struct{}
 
 func (t *testStorageSuite) TestGetStorageSize(c *C) {
 	// only ensure we can get storage size.

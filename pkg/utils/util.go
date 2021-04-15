@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	// OsExit is function placeholder for os.Exit
+	// OsExit is function placeholder for os.Exit.
 	OsExit func(int)
 	/*
 		CREATE [TEMPORARY] TABLE [IF NOT EXISTS] tbl_name
@@ -107,7 +107,7 @@ func init() {
 	pb.HidePwdFunc = HidePassword
 }
 
-// DecodeBinlogPosition parses a mysql.Position from string format
+// DecodeBinlogPosition parses a mysql.Position from string format.
 func DecodeBinlogPosition(pos string) (*mysql.Position, error) {
 	if len(pos) < 3 {
 		return nil, terror.ErrInvalidBinlogPosStr.Generate(pos)
@@ -164,12 +164,12 @@ func WaitSomething(backoff int, waitTime time.Duration, fn func() bool) bool {
 	return false
 }
 
-// IsContextCanceledError checks whether err is context.Canceled
+// IsContextCanceledError checks whether err is context.Canceled.
 func IsContextCanceledError(err error) bool {
 	return errors.Cause(err) == context.Canceled
 }
 
-// IgnoreErrorCheckpoint is used in checkpoint update
+// IgnoreErrorCheckpoint is used in checkpoint update.
 func IgnoreErrorCheckpoint(err error) bool {
 	err = errors.Cause(err) // check the original error
 	mysqlErr, ok := err.(*gmysql.MySQLError)
@@ -185,18 +185,18 @@ func IgnoreErrorCheckpoint(err error) bool {
 	}
 }
 
-// IsBuildInSkipDDL return true when checked sql that will be skipped for syncer
+// IsBuildInSkipDDL return true when checked sql that will be skipped for syncer.
 func IsBuildInSkipDDL(sql string) bool {
 	return builtInSkipDDLPatterns.FindStringIndex(sql) != nil
 }
 
-// HidePassword replace password with ******
+// HidePassword replace password with ******.
 func HidePassword(input string) string {
 	output := passwordRegexp.ReplaceAllString(input, "$1******$4")
 	return output
 }
 
-// UnwrapScheme removes http or https scheme from input
+// UnwrapScheme removes http or https scheme from input.
 func UnwrapScheme(s string) string {
 	if strings.HasPrefix(s, "http://") {
 		return s[len("http://"):]
@@ -227,7 +227,7 @@ func WrapSchemes(s string, https bool) string {
 	return strings.Join(output, ",")
 }
 
-// WrapSchemesForInitialCluster acts like WrapSchemes, except input is "name=URL,..."
+// WrapSchemesForInitialCluster acts like WrapSchemes, except input is "name=URL,...".
 func WrapSchemesForInitialCluster(s string, https bool) string {
 	items := strings.Split(s, ",")
 	output := make([]string, 0, len(items))

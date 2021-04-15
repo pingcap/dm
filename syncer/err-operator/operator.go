@@ -30,14 +30,14 @@ import (
 )
 
 // Operator contains an operation for specified binlog pos
-// used by `handle-error`
+// used by `handle-error`.
 type Operator struct {
 	uuid   string // add a UUID, make it more friendly to be traced in log
 	op     pb.ErrorOp
 	events []*replication.BinlogEvent // startLocation -> events
 }
 
-// newOperator creates a new operator with a random UUID
+// newOperator creates a new operator with a random UUID.
 func newOperator(op pb.ErrorOp, events []*replication.BinlogEvent) *Operator {
 	return &Operator{
 		uuid:   uuid.New().String(),
@@ -56,14 +56,14 @@ func (o *Operator) String() string {
 	return fmt.Sprintf("uuid: %s, op: %s, events: %s", o.uuid, o.op, strings.Join(events, "\n"))
 }
 
-// Holder holds error operator
+// Holder holds error operator.
 type Holder struct {
 	mu        sync.Mutex
 	operators map[string]*Operator
 	logger    log.Logger
 }
 
-// NewHolder creates a new Holder
+// NewHolder creates a new Holder.
 func NewHolder(pLogger *log.Logger) *Holder {
 	return &Holder{
 		operators: make(map[string]*Operator),
@@ -71,7 +71,7 @@ func NewHolder(pLogger *log.Logger) *Holder {
 	}
 }
 
-// Set sets an Operator
+// Set sets an Operator.
 func (h *Holder) Set(pos string, op pb.ErrorOp, events []*replication.BinlogEvent) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -102,7 +102,7 @@ func (h *Holder) Set(pos string, op pb.ErrorOp, events []*replication.BinlogEven
 // replace event a	1010, 0			1010, 1
 // replace event b	1010, 1			1010, 2
 // replace event c	1010, 2			1020, 0
-// event 3		1020, 0			1030, 0
+// event 3		1020, 0			1030, 0.
 func (h *Holder) GetEvent(startLocation binlog.Location) (*replication.BinlogEvent, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -125,7 +125,7 @@ func (h *Holder) GetEvent(startLocation binlog.Location) (*replication.BinlogEve
 	return e, nil
 }
 
-// MatchAndApply tries to match operation for event by location and apply it on replace events
+// MatchAndApply tries to match operation for event by location and apply it on replace events.
 func (h *Holder) MatchAndApply(startLocation, endLocation binlog.Location) (bool, pb.ErrorOp) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -168,7 +168,7 @@ func (h *Holder) MatchAndApply(startLocation, endLocation binlog.Location) (bool
 	return true, operator.op
 }
 
-// RemoveOutdated remove outdated operator
+// RemoveOutdated remove outdated operator.
 func (h *Holder) RemoveOutdated(flushLocation binlog.Location) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()

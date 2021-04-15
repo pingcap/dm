@@ -24,14 +24,14 @@ import (
 )
 
 // used for ddlPendingCounter, no "Resolved" lock because they will be
-// remove quickly and not pending anymore
+// remove quickly and not pending anymore.
 const (
 	DDLPendingNone     = "None"
 	DDLPendingUnSynced = "Un-synced"
 	DDLPendingSynced   = "Synced"
 )
 
-// used to show error type when handle DDLs
+// used to show error type when handle DDLs.
 const (
 	InfoErrSyncLock    = "InfoPut - SyncLockError"
 	InfoErrHandleLock  = "InfoPut - HandleLockError"
@@ -40,7 +40,7 @@ const (
 	OpErrPutNonOwnerOp = "OperationPut - PutNonOwnerOpError"
 )
 
-// used to represent worker event error type
+// used to represent worker event error type.
 const (
 	WorkerEventHandle = "handle"
 	WorkerEventWatch  = "watch"
@@ -101,7 +101,7 @@ func collectMetrics() {
 	cpuUsageGauge.Set(cpuUsage)
 }
 
-// RunBackgroundJob do periodic job
+// RunBackgroundJob do periodic job.
 func RunBackgroundJob(ctx context.Context) {
 	ticker := time.NewTicker(time.Second * 10)
 	defer ticker.Stop()
@@ -117,7 +117,7 @@ func RunBackgroundJob(ctx context.Context) {
 	}
 }
 
-// RegistryMetrics registries metrics for worker
+// RegistryMetrics registries metrics for worker.
 func RegistryMetrics() {
 	registry := prometheus.DefaultRegisterer
 
@@ -129,42 +129,42 @@ func RegistryMetrics() {
 	registry.MustRegister(startLeaderCounter)
 }
 
-// ReportWorkerStage is a setter for workerState
+// ReportWorkerStage is a setter for workerState.
 func ReportWorkerStage(name string, state float64) {
 	workerState.WithLabelValues(name).Set(state)
 }
 
-// RemoveWorkerState cleans state of deleted worker
+// RemoveWorkerState cleans state of deleted worker.
 func RemoveWorkerState(name string) {
 	workerState.DeleteAllAboutLabels(prometheus.Labels{"worker": name})
 }
 
-// ReportDDLPending inc/dec by 1 to ddlPendingCounter
-func ReportDDLPending(task, old, new string) {
-	if old != DDLPendingNone {
-		ddlPendingCounter.WithLabelValues(task, old).Dec()
+// ReportDDLPending inc/dec by 1 to ddlPendingCounter.
+func ReportDDLPending(task, oldStatus, newStatus string) {
+	if oldStatus != DDLPendingNone {
+		ddlPendingCounter.WithLabelValues(task, oldStatus).Dec()
 	}
-	if new != DDLPendingNone {
-		ddlPendingCounter.WithLabelValues(task, new).Inc()
+	if newStatus != DDLPendingNone {
+		ddlPendingCounter.WithLabelValues(task, newStatus).Inc()
 	}
 }
 
-// ReportDDLError is a setter for ddlErrCounter
+// ReportDDLError is a setter for ddlErrCounter.
 func ReportDDLError(task, errType string) {
 	ddlErrCounter.WithLabelValues(task, errType).Inc()
 }
 
-// ReportWorkerEventErr is a setter for workerEventErrCounter
+// ReportWorkerEventErr is a setter for workerEventErrCounter.
 func ReportWorkerEventErr(errType string) {
 	workerEventErrCounter.WithLabelValues(errType).Inc()
 }
 
-// ReportStartLeader increases startLeaderCounter by one
+// ReportStartLeader increases startLeaderCounter by one.
 func ReportStartLeader() {
 	startLeaderCounter.Inc()
 }
 
-// OnRetireLeader cleans some metrics when retires
+// OnRetireLeader cleans some metrics when retires.
 func OnRetireLeader() {
 	workerState.Reset()
 	ddlErrCounter.Reset()

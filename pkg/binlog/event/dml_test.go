@@ -25,8 +25,7 @@ import (
 
 var _ = Suite(&testDMLSuite{})
 
-type testDMLSuite struct {
-}
+type testDMLSuite struct{}
 
 func (t *testDMLSuite) TestGenDMLEvent(c *C) {
 	var (

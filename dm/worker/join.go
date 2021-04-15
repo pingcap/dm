@@ -119,7 +119,7 @@ func (s *Server) KeepAlive() {
 	}
 }
 
-// UpdateKeepAliveTTL updates keepalive key with new lease TTL in place, to avoid watcher observe a DELETE event
+// UpdateKeepAliveTTL updates keepalive key with new lease TTL in place, to avoid watcher observe a DELETE event.
 func (s *Server) UpdateKeepAliveTTL(newTTL int64) {
 	ha.KeepAliveUpdateCh <- newTTL
 	log.L().Debug("received update keepalive TTL request, should be updated soon", zap.Int64("new ttl", newTTL))

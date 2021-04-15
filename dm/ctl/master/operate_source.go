@@ -28,7 +28,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewOperateSourceCmd creates a OperateSource command
+// NewOperateSourceCmd creates a OperateSource command.
 func NewOperateSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operate-source <operate-type> [config-file ...] [--print-sample-config]",
@@ -54,12 +54,12 @@ func convertCmdType(t string) pb.SourceOp {
 	}
 }
 
-// operateMysqlFunc does migrate relay request
-func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
+// operateMysqlFunc does migrate relay request.
+func operateSourceFunc(cmd *cobra.Command, _ []string) error {
 	printSampleConfig, err := cmd.Flags().GetBool("print-sample-config")
 	if err != nil {
-		common.PrintLines("error in parse `--print-sample-config`")
-		return
+		common.PrintLinesf("error in parse `--print-sample-config`")
+		return err
 	}
 
 	if printSampleConfig {
@@ -74,26 +74,24 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 				fmt.Println(string(rawConfig))
 			}
 		}
-		return
+		return nil
 	}
 
 	if len(cmd.Flags().Args()) < 1 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 
 	cmdType := cmd.Flags().Arg(0)
 	op := convertCmdType(cmdType)
 	if op == pb.SourceOp_InvalidSourceOp {
-		common.PrintLines("invalid operate '%s' on worker", cmdType)
-		err = errors.New("please check output to see error")
-		return
+		common.PrintLinesf("invalid operate '%s' on worker", cmdType)
+		return errors.New("please check output to see error")
 	}
 	if op != pb.SourceOp_ShowSource && len(cmd.Flags().Args()) == 1 {
-		common.PrintLines("operate-source create/update/stop should specify config-file(s)")
-		return
+		common.PrintLinesf("operate-source create/update/stop should specify config-file(s)")
+		return errors.New("please check output to see error")
 	}
 
 	contents := make([]string, 0, len(cmd.Flags().Args())-1)
@@ -107,7 +105,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 				sourceID = append(sourceID, arg)
 				continue
 			}
-			return
+			return err
 		}
 		contents = append(contents, string(content))
 	}
@@ -128,9 +126,9 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		return
+		return err
 	}
 
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }

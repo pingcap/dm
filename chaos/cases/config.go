@@ -75,8 +75,7 @@ func newConfig() *config {
 
 // parse parses flag definitions from the argument list.
 func (c *config) parse(args []string) error {
-	err := c.FlagSet.Parse(args)
-	if err != nil {
+	if err := c.FlagSet.Parse(args); err != nil {
 		return err
 	}
 

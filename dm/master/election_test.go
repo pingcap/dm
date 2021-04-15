@@ -29,8 +29,7 @@ import (
 
 var _ = check.Suite(&testElectionSuite{})
 
-type testElectionSuite struct {
-}
+type testElectionSuite struct{}
 
 func (t *testMaster) TestFailToStartLeader(c *check.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

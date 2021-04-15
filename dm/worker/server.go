@@ -56,7 +56,7 @@ var (
 
 // Server accepts RPC requests
 // dispatches requests to worker
-// sends responses to RPC client
+// sends responses to RPC client.
 type Server struct {
 	sync.Mutex
 	wg     sync.WaitGroup
@@ -79,7 +79,7 @@ type Server struct {
 	sourceStatus pb.SourceStatus
 }
 
-// NewServer creates a new Server
+// NewServer creates a new Server.
 func NewServer(cfg *Config) *Server {
 	s := Server{
 		cfg: cfg,
@@ -88,7 +88,7 @@ func NewServer(cfg *Config) *Server {
 	return &s
 }
 
-// Start starts to serving
+// Start starts to serving.
 func (s *Server) Start() error {
 	log.L().Info("starting dm-worker server")
 	RegistryMetrics()
@@ -209,7 +209,6 @@ func (s *Server) Start() error {
 			}
 		case <-grpcExitCh:
 		}
-
 	}(s.ctx)
 
 	httpExitCh := make(chan struct{}, 1)
@@ -489,13 +488,13 @@ func (s *Server) doClose() {
 	s.closed.Set(true)
 }
 
-// Close close the RPC server, this function can be called multiple times
+// Close close the RPC server, this function can be called multiple times.
 func (s *Server) Close() {
 	s.stopKeepAlive()
 	s.doClose()
 }
 
-// if needLock is false, we should make sure Server has been locked in caller
+// if needLock is false, we should make sure Server has been locked in caller.
 func (s *Server) getWorker(needLock bool) *Worker {
 	if needLock {
 		s.Lock()
@@ -504,7 +503,7 @@ func (s *Server) getWorker(needLock bool) *Worker {
 	return s.worker
 }
 
-// if needLock is false, we should make sure Server has been locked in caller
+// if needLock is false, we should make sure Server has been locked in caller.
 func (s *Server) setWorker(worker *Worker, needLock bool) {
 	if needLock {
 		s.Lock()
@@ -513,6 +512,7 @@ func (s *Server) setWorker(worker *Worker, needLock bool) {
 	s.worker = worker
 }
 
+// nolint:unparam
 func (s *Server) getSourceStatus(needLock bool) pb.SourceStatus {
 	if needLock {
 		s.Lock()
@@ -521,7 +521,7 @@ func (s *Server) getSourceStatus(needLock bool) pb.SourceStatus {
 	return s.sourceStatus
 }
 
-// TODO: move some call to setWorker/getOrStartWorker
+// TODO: move some call to setWorker/getOrStartWorker.
 func (s *Server) setSourceStatus(source string, err error, needLock bool) {
 	if needLock {
 		s.Lock()
@@ -545,7 +545,7 @@ func (s *Server) setSourceStatus(source string, err error, needLock bool) {
 }
 
 // if sourceID is set to "", worker will be closed directly
-// if sourceID is not "", we will check sourceID with w.cfg.SourceID
+// if sourceID is not "", we will check sourceID with w.cfg.SourceID.
 func (s *Server) stopWorker(sourceID string, needLock bool) error {
 	if needLock {
 		s.Lock()
@@ -746,7 +746,7 @@ func (s *Server) disableRelay(source string) error {
 	return err
 }
 
-// QueryStatus implements WorkerServer.QueryStatus
+// QueryStatus implements WorkerServer.QueryStatus.
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*pb.QueryStatusResponse, error) {
 	log.L().Info("", zap.String("request", "QueryStatus"), zap.Stringer("payload", req))
 
@@ -774,7 +774,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	return resp, nil
 }
 
-// PurgeRelay implements WorkerServer.PurgeRelay
+// PurgeRelay implements WorkerServer.PurgeRelay.
 func (s *Server) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "PurgeRelay"), zap.Stringer("payload", req))
 	w := s.getWorker(true)
@@ -860,7 +860,7 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 }
 
 // all subTask in subTaskCfgs should have same source
-// this function return the min location in all subtasks, used for relay's location
+// this function return the min location in all subtasks, used for relay's location.
 func getMinLocInAllSubTasks(ctx context.Context, subTaskCfgs map[string]config.SubTaskConfig) (minLoc *binlog.Location, err error) {
 	for _, subTaskCfg := range subTaskCfgs {
 		loc, err := getMinLocForSubTaskFunc(ctx, subTaskCfg)
@@ -874,10 +874,8 @@ func getMinLocInAllSubTasks(ctx context.Context, subTaskCfgs map[string]config.S
 
 		if minLoc == nil {
 			minLoc = loc
-		} else {
-			if binlog.CompareLocation(*minLoc, *loc, subTaskCfg.EnableGTID) >= 1 {
-				minLoc = loc
-			}
+		} else if binlog.CompareLocation(*minLoc, *loc, subTaskCfg.EnableGTID) >= 1 {
+			minLoc = loc
 		}
 	}
 
@@ -951,7 +949,6 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 	// re-check relay
 	if resp.SourceStatus.RelayStatus != nil && resp.SourceStatus.RelayStatus.Stage != pb.Stage_Stopped &&
 		latestMasterBinlog.Compare(*relayMasterBinlog) != 0 {
-
 		resp.SourceStatus.RelayStatus.MasterBinlog = latestMasterBinlog.String()
 
 		// if enableGTID, modify output binlog position doesn't affect RelayCatchUpMaster, skip check
@@ -982,7 +979,7 @@ func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
 	}
 }
 
-// HandleError handle error
+// HandleError handle error.
 func (s *Server) HandleError(ctx context.Context, req *pb.HandleWorkerErrorRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "HandleError"), zap.Stringer("payload", req))
 
@@ -992,8 +989,7 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
 	}
 
-	err := w.HandleError(ctx, req)
-	if err != nil {
+	if err := w.HandleError(ctx, req); err != nil {
 		return makeCommonWorkerResponse(err), nil
 	}
 	return &pb.CommonWorkerResponse{
@@ -1002,7 +998,7 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 	}, nil
 }
 
-// GetWorkerCfg get worker config
+// GetWorkerCfg get worker config.
 func (s *Server) GetWorkerCfg(ctx context.Context, req *pb.GetWorkerCfgRequest) (*pb.GetWorkerCfgResponse, error) {
 	log.L().Info("", zap.String("request", "GetWorkerCfg"), zap.Stringer("payload", req))
 	var err error

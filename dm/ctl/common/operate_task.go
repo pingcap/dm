@@ -19,7 +19,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// OperateTask does operation on task
+// OperateTask does operation on task.
 func OperateTask(op pb.TaskOp, name string, sources []string) (*pb.OperateTaskResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

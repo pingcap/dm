@@ -26,8 +26,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-type testWorker struct {
-}
+type testWorker struct{}
 
 var _ = Suite(&testWorker{})
 

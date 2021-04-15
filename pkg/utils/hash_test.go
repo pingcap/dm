@@ -19,8 +19,7 @@ import (
 
 var _ = Suite(&testHashSuite{})
 
-type testHashSuite struct {
-}
+type testHashSuite struct{}
 
 func (t *testHashSuite) TestHash(c *C) {
 	// we only ensure hash multiple times for the same key got the same hash now.

@@ -52,78 +52,73 @@ func convertSchemaOpType(t string) pb.SchemaOp {
 }
 
 // operateSchemaCmd does the operate schema request.
-func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
+func operateSchemaCmd(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) < 2 || len(cmd.Flags().Args()) > 3 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 
 	opType := cmd.Flags().Arg(0)
 	taskName := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(1))
 	schemaFile := cmd.Flags().Arg(2)
+	var err error
 	var schemaContent []byte
 	op := convertSchemaOpType(opType)
 	switch op {
 	case pb.SchemaOp_InvalidSchemaOp:
-		common.PrintLines("invalid operate '%s' on schema", opType)
-		err = errors.New("please check output to see error")
-		return
+		common.PrintLinesf("invalid operate '%s' on schema", opType)
+		return errors.New("please check output to see error")
 	case pb.SchemaOp_SetSchema:
 		if schemaFile == "" {
-			common.PrintLines("must sepcify schema file for 'set' operation")
-			err = errors.New("please check output to see error")
-			return
+			common.PrintLinesf("must sepcify schema file for 'set' operation")
+			return errors.New("please check output to see error")
 		}
 		schemaContent, err = common.GetFileContent(schemaFile)
 		if err != nil {
-			return
+			return err
 		}
 	default:
 		if schemaFile != "" {
-			common.PrintLines("schema file will be ignored for 'get'/'delete' operation")
+			common.PrintLinesf("schema file will be ignored for 'get'/'delete' operation")
 		}
 	}
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		return
+		return err
 	} else if len(sources) == 0 {
-		common.PrintLines("must specify at least one source (`-s` / `--source`)")
-		err = errors.New("please check output to see error")
-		return
+		common.PrintLinesf("must specify at least one source (`-s` / `--source`)")
+		return errors.New("please check output to see error")
 	}
 	database, err := cmd.Flags().GetString("database")
 	if err != nil {
-		return
+		return err
 	} else if database == "" {
-		common.PrintLines("must specify 'database'")
-		err = errors.New("please check output to see error")
-		return
+		common.PrintLinesf("must specify 'database'")
+		return errors.New("please check output to see error")
 	}
 	table, err := cmd.Flags().GetString("table")
 	if err != nil {
-		return
+		return err
 	} else if table == "" {
-		common.PrintLines("must specify 'table'")
-		err = errors.New("please check output to see error")
-		return
+		common.PrintLinesf("must specify 'table'")
+		return errors.New("please check output to see error")
 	}
 
 	flush, err := cmd.Flags().GetBool("flush")
 	if err != nil {
-		return
+		return err
 	}
 	if flush && op != pb.SchemaOp_SetSchema {
-		err = errors.New("--flush flag is only used to set schema")
+		return errors.New("--flush flag is only used to set schema")
 	}
 	sync, err := cmd.Flags().GetBool("sync")
 	if err != nil {
-		return
+		return err
 	}
 	if sync && op != pb.SchemaOp_SetSchema {
-		err = errors.New("--sync flag is only used to set schema")
+		return errors.New("--sync flag is only used to set schema")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -147,8 +142,8 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		return
+		return err
 	}
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }
