@@ -40,7 +40,7 @@ type SQLs []SQL
 type Case []SQLs
 
 var (
-	// add some flags column, so we can make sure the order of new column in optimsitic
+	// add some flags column, so we can make sure the order of new column in optimsitic.
 	preSQLs1 = SQLs{
 		{"ALTER TABLE %s.%s ADD COLUMN case3_flag1 INT, ADD COLUMN case3_flag2 INT, ADD COLUMN case3_flag3 INT", source1},
 		{"ALTER TABLE %s.%s ADD COLUMN case3_flag1 INT, ADD COLUMN case3_flag2 INT, ADD COLUMN case3_flag3 INT", source2},
@@ -56,7 +56,7 @@ var (
 		{"ALTER TABLE %s.%s ADD COLUMN case9_flag INT;", source3},
 	}
 
-	// ALL ADD COLUMN, ALL DROP COLUMN
+	// ALL ADD COLUMN, ALL DROP COLUMN.
 	case1 = Case{
 		{{"ALTER TABLE %s.%s ADD COLUMN case1 INT;", source1}},
 		{{"ALTER TABLE %s.%s ADD COLUMN case1 INT;", source2}},
@@ -65,12 +65,12 @@ var (
 		{{"ALTER TABLE %s.%s DROP COLUMN case1;", source2}},
 		{{"ALTER TABLE %s.%s DROP COLUMN case1;", source3}},
 	}
-	// ADD COLUMN, DROP COLUMN for one source
+	// ADD COLUMN, DROP COLUMN for one source.
 	case2 = Case{
 		{{"ALTER TABLE %s.%s ADD COLUMN case2 INT;", source1}},
 		{{"ALTER TABLE %s.%s DROP COLUMN case2;", source1}},
 	}
-	// ADD columns out of order
+	// ADD columns out of order.
 	case3 = Case{
 		{
 			{"ALTER TABLE %s.%s DROP COLUMN case3_1;", source1},
@@ -93,7 +93,7 @@ var (
 		{{"ALTER TABLE %s.%s ADD COLUMN case3_1 INT AFTER case3_flag1;", source2}},
 		{{"ALTER TABLE %s.%s ADD COLUMN case3_2 INT AFTER case3_flag2;", source3}},
 	}
-	// MULTIPLE ADD COLUMN out of order
+	// MULTIPLE ADD COLUMN out of order.
 	case4 = Case{
 		{
 			{"ALTER TABLE %s.%s DROP COLUMN case4_1, DROP COLUMN case4_2, DROP COLUMN case4_3;", source1},
@@ -104,7 +104,7 @@ var (
 		{{"ALTER TABLE %s.%s ADD COLUMN case4_2 INT AFTER case4_flag2, ADD COLUMN case4_3 INT AFTER case4_flag3, ADD COLUMN case4_1 INT AFTER case4_flag1;", source2}},
 		{{"ALTER TABLE %s.%s ADD COLUMN case4_3 INT AFTER case4_flag3, ADD COLUMN case4_1 INT AFTER case4_flag1, ADD COLUMN case4_2 INT AFTER case4_flag2;", source3}},
 	}
-	// MULTIPLE ADD COLUMN vs ADD columns
+	// MULTIPLE ADD COLUMN vs ADD columns.
 	case5 = Case{
 		{
 			{"ALTER TABLE %s.%s DROP COLUMN case5_1;", source1},
@@ -123,7 +123,7 @@ var (
 		{{"ALTER TABLE %s.%s ADD COLUMN case5_3 INT AFTER case5_flag3;", source2}},
 		{{"ALTER TABLE %s.%s ADD COLUMN case5_2 INT AFTER case5_flag2, ADD COLUMN case5_3 INT AFTER case5_flag3;", source1}},
 	}
-	// ALL ADD INDEX, ALL DROP INDEX
+	// ALL ADD INDEX, ALL DROP INDEX.
 	case6 = Case{
 		{{"ALTER TABLE %s.%s ADD INDEX case6_idx(case3_flag1);", source1}},
 		{{"ALTER TABLE %s.%s ADD INDEX case6_idx(case3_flag1);", source2}},
@@ -132,12 +132,12 @@ var (
 		{{"ALTER TABLE %s.%s DROP INDEX case6_idx;", source2}},
 		{{"ALTER TABLE %s.%s DROP INDEX case6_idx;", source3}},
 	}
-	// ADD INDEX, DROP INDEX for one source
+	// ADD INDEX, DROP INDEX for one source.
 	case7 = Case{
 		{{"ALTER TABLE %s.%s ADD INDEX case7_idx(uuid);", source1}},
 		{{"ALTER TABLE %s.%s DROP INDEX case7_idx;", source1}},
 	}
-	// ADD MULTI-COLUMN INDEX
+	// ADD MULTI-COLUMN INDEX.
 	case8 = Case{
 		{
 			{"ALTER TABLE %s.%s DROP INDEX case8_idx;", source1},
@@ -148,7 +148,7 @@ var (
 		{{"ALTER TABLE %s.%s ADD INDEX case8_idx(case4_flag1, case4_flag2, case4_flag3);", source2}},
 		{{"ALTER TABLE %s.%s ADD INDEX case8_idx(case4_flag1, case4_flag2, case4_flag3);", source3}},
 	}
-	// ADD COLUMN AND INDEX
+	// ADD COLUMN AND INDEX.
 	case9 = Case{
 		{
 			{"ALTER TABLE %s.%s DROP INDEX case9_idx;", source1},
@@ -206,7 +206,7 @@ func NewCaseGenerator(shardMode string) *CaseGenerator {
 	return g
 }
 
-// Start starts to generate sqls case
+// Start starts to generate sqls case.
 func (g *CaseGenerator) Start(ctx context.Context, schema string, tables []string) {
 	g.schema = schema
 	g.tables = tables
@@ -238,12 +238,12 @@ func (g *CaseGenerator) genSQLs(ctx context.Context) {
 	}
 }
 
-// GetSQLs gets sql from CaseGenerator
+// GetSQLs gets sql from CaseGenerator.
 func (g *CaseGenerator) GetSQLs() SQLs {
 	return <-g.sqlsChan
 }
 
-// GetPreSQLs gets preSQLs from CaseGenerator
+// GetPreSQLs gets preSQLs from CaseGenerator.
 func (g *CaseGenerator) GetPreSQLs() SQLs {
 	testPreSQLs := make(SQLs, 0, len(g.testPreSQLs)*len(g.tables))
 	for _, table := range g.tables {
