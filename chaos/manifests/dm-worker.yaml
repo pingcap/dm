@@ -37,6 +37,8 @@ spec:
           volumeMounts:
             - mountPath: /data
               name: dm-worker
+            - mountPath: /log
+              name: dm-worker-log
           env:
             - name: MY_POD_NAME
               valueFrom:
@@ -55,6 +57,7 @@ spec:
             - "--worker-addr=0.0.0.0:8262"
             - "--advertise-addr=$(MY_POD_NAME).dm-worker.$(MY_POD_NAMESPACE):8262"
             - "--join=dm-master-0.dm-master.$(MY_POD_NAMESPACE):8261,dm-master-1.dm-master.$(MY_POD_NAMESPACE):8261,dm-master-2.dm-master.$(MY_POD_NAMESPACE):8261"
+            - "--log-file=/log/$(MY_POD_NAME).log"
           readinessProbe:
             httpGet:
               port: 8262
@@ -66,6 +69,14 @@ spec:
   volumeClaimTemplates:
     - metadata:
         name: dm-worker
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+    - metadata:
+        name: dm-worker-log
       spec:
         accessModes:
           - ReadWriteOnce

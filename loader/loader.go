@@ -1237,14 +1237,13 @@ func (q *jobQueue) close() error {
 func (q *jobQueue) startConsumers(handler func(ctx context.Context, job *restoreSchemaJob) error) {
 	for i := 0; i < q.consumerCount; i++ {
 		q.eg.Go(func() error {
-			var err error
 			var session *DBConn
 		consumeLoop:
 			for {
 				select {
 				case <-q.ctx.Done():
-					err = q.ctx.Err()
-					break consumeLoop
+					err := q.ctx.Err()
+					return err
 				case job, active := <-q.msgq:
 					if !active {
 						break consumeLoop
@@ -1273,13 +1272,13 @@ func (q *jobQueue) startConsumers(handler func(ctx context.Context, job *restore
 					if job.session == nil {
 						job.session = session
 					}
-					err = handler(q.ctx, job)
+					err := handler(q.ctx, job)
 					if err != nil {
-						break consumeLoop
+						return err
 					}
 				}
 			}
-			return err
+			return nil
 		})
 	}
 }

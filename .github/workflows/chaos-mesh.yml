@@ -16,17 +16,17 @@ jobs:
     runs-on: ubuntu-18.04
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
-      steps:
-        - id: skip_check
-          uses: fkirc/skip-duplicate-actions@master
-          with:
-            # All of these options are optional, so you can remove them if you are happy with the defaults
-            # https://github.com/marketplace/actions/skip-duplicate-actions
-            concurrent_skipping: 'never'
-            skip_after_successful_duplicate: 'true'
-            paths_ignore: '["**/README.md"]'
-            cancel_others: 'true'
-            do_not_skip: '["workflow_dispatch", "schedule"]' # only skip pull_request
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@master
+        with:
+          # All of these options are optional, so you can remove them if you are happy with the defaults
+          # https://github.com/marketplace/actions/skip-duplicate-actions
+          concurrent_skipping: 'never'
+          skip_after_successful_duplicate: 'true'
+          paths_ignore: '["**/README.md"]'
+          cancel_others: 'true'
+          do_not_skip: '["workflow_dispatch", "schedule"]' # only skip pull_request
   # This workflow contains a single job called "base"
   base:
     needs: pre_job
@@ -279,6 +279,7 @@ jobs:
       run: |
         mkdir ./logs
         sudo cp -r -L /var/log/containers/. ./logs
+        sudo find /var/ -type f -regex '.*/dm-[^/]*.log$' | sudo xargs -i cp {} ./logs || true
         sudo chown -R runner ./logs
     # Update logs as artifact seems not stable, so we set `continue-on-error: true` here.
     - name: Upload logs
