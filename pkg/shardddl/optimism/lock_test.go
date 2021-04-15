@@ -361,6 +361,7 @@ func (t *testLock) TestLockTrySyncNormal(c *C) {
 }
 
 func (t *testLock) TestLockTrySyncIndex(c *C) {
+	// nolint:dupl
 	var (
 		ID               = "test_lock_try_sync_index-`foo`.`bar`"
 		task             = "test_lock_try_sync_index"
@@ -443,6 +444,7 @@ func (t *testLock) TestLockTrySyncIndex(c *C) {
 }
 
 func (t *testLock) TestLockTrySyncNullNotNull(c *C) {
+	// nolint:dupl
 	var (
 		ID               = "test_lock_try_sync_null_not_null-`foo`.`bar`"
 		task             = "test_lock_try_sync_null_not_null"
@@ -1778,15 +1780,15 @@ func (t *testLock) TestAddNotFullyDroppedColumns(c *C) {
 }
 
 func (t *testLock) trySyncForAllTablesLarger(c *C, l *Lock,
-	DDLs []string, tableInfoBefore *model.TableInfo, tis []*model.TableInfo, tts []TargetTable, vers map[string]map[string]map[string]int64) {
+	ddls []string, tableInfoBefore *model.TableInfo, tis []*model.TableInfo, tts []TargetTable, vers map[string]map[string]map[string]int64) {
 	for source, schemaTables := range l.Ready() {
 		for schema, tables := range schemaTables {
 			for table := range tables {
-				info := newInfoWithVersion(l.Task, source, schema, table, l.DownSchema, l.DownTable, DDLs, tableInfoBefore, tis, vers)
+				info := newInfoWithVersion(l.Task, source, schema, table, l.DownSchema, l.DownTable, ddls, tableInfoBefore, tis, vers)
 				DDLs2, cols, err := l.TrySync(info, tts)
 				c.Assert(err, IsNil)
 				c.Assert(cols, DeepEquals, []string{})
-				c.Assert(DDLs2, DeepEquals, DDLs)
+				c.Assert(DDLs2, DeepEquals, ddls)
 			}
 		}
 	}
@@ -1819,9 +1821,9 @@ func (t *testLock) checkLockNoDone(c *C, l *Lock) {
 	}
 }
 
-func newInfoWithVersion(task, source, upSchema, upTable, downSchema, downTable string, DDLs []string, tableInfoBefore *model.TableInfo,
+func newInfoWithVersion(task, source, upSchema, upTable, downSchema, downTable string, ddls []string, tableInfoBefore *model.TableInfo,
 	tableInfosAfter []*model.TableInfo, vers map[string]map[string]map[string]int64) Info {
-	info := NewInfo(task, source, upSchema, upTable, downSchema, downTable, DDLs, tableInfoBefore, tableInfosAfter)
+	info := NewInfo(task, source, upSchema, upTable, downSchema, downTable, ddls, tableInfoBefore, tableInfosAfter)
 	vers[source][upSchema][upTable]++
 	info.Version = vers[source][upSchema][upTable]
 	return info

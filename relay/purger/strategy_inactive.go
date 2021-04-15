@@ -25,7 +25,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// inactiveArgs represents args needed by inactiveStrategy
+// inactiveArgs represents args needed by inactiveStrategy.
 type inactiveArgs struct {
 	relayBaseDir   string
 	uuids          []string

@@ -26,8 +26,7 @@ import (
 
 var _ = Suite(&testHelperSuite{})
 
-type testHelperSuite struct {
-}
+type testHelperSuite struct{}
 
 func (t *testHelperSuite) TestGTIDsFromPreviousGTIDsEvent(c *C) {
 	var (

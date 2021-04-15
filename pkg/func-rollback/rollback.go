@@ -50,7 +50,7 @@ func (h *FuncRollbackHolder) Add(fn FuncRollback) {
 	h.fns = append(h.fns, fn)
 }
 
-// RollbackReverseOrder executes rollback functions in reverse order
+// RollbackReverseOrder executes rollback functions in reverse order.
 func (h *FuncRollbackHolder) RollbackReverseOrder() {
 	h.mu.Lock()
 	defer h.mu.Unlock()

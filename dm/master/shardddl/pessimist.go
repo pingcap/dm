@@ -22,6 +22,8 @@ import (
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/failpoint"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/pb"
@@ -29,7 +31,6 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/failpoint"
 )
 
 var (
@@ -276,16 +277,16 @@ func (p *Pessimist) ShowLocks(task string, sources []string) []*pb.DDLLock {
 //   if specified forceRemove and then fail to unlock, we may need to use `BreakLock` later.
 // NOTE: this function has side effects, if it failed, some status can't revert anymore.
 // NOTE: this function should not be called if the lock is still in automatic resolving.
-func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, forceRemove bool) error {
+func (p *Pessimist) UnlockLock(ctx context.Context, id, replaceOwner string, forceRemove bool) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
 		return terror.ErrMasterPessimistNotStarted.Generate()
 	}
 	// 1. find the lock.
-	lock := p.lk.FindLock(ID)
+	lock := p.lk.FindLock(id)
 	if lock == nil {
-		return terror.ErrMasterLockNotFound.Generate(ID)
+		return terror.ErrMasterLockNotFound.Generate(id)
 	}
 
 	// 2. check whether has resolved before (this often should not happen).
@@ -294,7 +295,7 @@ func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, for
 		if err != nil {
 			return err
 		}
-		return terror.ErrMasterLockIsResolving.Generatef("the lock %s has been resolved before", ID)
+		return terror.ErrMasterLockIsResolving.Generatef("the lock %s has been resolved before", id)
 	}
 
 	// 3. find out synced & un-synced sources.
@@ -317,7 +318,7 @@ func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, for
 	// if no source synced yet, we should choose to use `BreakLock` instead.
 	owner := lock.Owner
 	if replaceOwner != "" {
-		p.logger.Warn("replace the owner of the lock", zap.String("lock", ID),
+		p.logger.Warn("replace the owner of the lock", zap.String("lock", id),
 			zap.String("original owner", owner), zap.String("new owner", replaceOwner))
 		owner = replaceOwner
 	}
@@ -344,7 +345,7 @@ func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, for
 	} else if !done && !forceRemove { // if `forceRemove==true`, we still try to complete following steps.
 		revertLockSync = true
 		return terror.ErrMasterOwnerExecDDL.Generatef(
-			"the owner %s of the lock %s has not done the operation", owner, ID)
+			"the owner %s of the lock %s has not done the operation", owner, id)
 	}
 
 	// 7. put `skip` operations for other sources, and wait for them to be done.
@@ -353,31 +354,32 @@ func (p *Pessimist) UnlockLock(ctx context.Context, ID, replaceOwner string, for
 	done, err = p.waitNonOwnerToBeDone(ctx, lock, owner, synced)
 	if err != nil {
 		p.logger.Error("the owner has done the exec operation, but fail to wait for some other sources done the skip operation, the lock is still removed",
-			zap.String("lock", ID), zap.Bool("force remove", forceRemove), zap.String("owner", owner),
+			zap.String("lock", id), zap.Bool("force remove", forceRemove), zap.String("owner", owner),
 			zap.Strings("un-synced", unsynced), zap.Strings("synced", synced), zap.Error(err))
 	} else if !done {
 		p.logger.Error("the owner has done the exec operation, but some other sources have not done the skip operation, the lock is still removed",
-			zap.String("lock", ID), zap.Bool("force remove", forceRemove), zap.String("owner", owner),
+			zap.String("lock", id), zap.Bool("force remove", forceRemove), zap.String("owner", owner),
 			zap.Strings("un-synced", unsynced), zap.Strings("synced", synced))
 	}
 
 	// 8. remove or clear shard DDL lock and info.
-	p.lk.RemoveLock(ID)
+	p.lk.RemoveLock(id)
 	err2 := p.deleteInfosOps(lock)
 
-	if err != nil && err2 != nil {
+	switch {
+	case err != nil && err2 != nil:
 		return terror.ErrMasterPartWorkerExecDDLFail.AnnotateDelegate(
 			err, "fail to wait for non-owner sources %v to skip the shard DDL and delete shard DDL infos and operations, %s", unsynced, err2.Error())
-	} else if err != nil {
+	case err != nil:
 		return terror.ErrMasterPartWorkerExecDDLFail.Delegate(err, "fail to wait for non-owner sources to skip the shard DDL")
-	} else if err2 != nil {
+	case err2 != nil:
 		return terror.ErrMasterPartWorkerExecDDLFail.Delegate(err2, "fail to delete shard DDL infos and operations")
 	}
 	return nil
 }
 
 // RemoveMetaData removes meta data for a specified task
-// NOTE: this function can only be used when the specified task is not running
+// NOTE: this function can only be used when the specified task is not running.
 func (p *Pessimist) RemoveMetaData(task string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -637,8 +639,7 @@ func (p *Pessimist) putOpsForNonOwner(lock *pessimism.Lock, onlySource string, s
 // removeLock removes the lock in memory and its information in etcd.
 func (p *Pessimist) removeLock(lock *pessimism.Lock) error {
 	// remove all operations for this shard DDL lock.
-	err := p.deleteOps(lock)
-	if err != nil {
+	if err := p.deleteOps(lock); err != nil {
 		return err
 	}
 
@@ -741,7 +742,6 @@ func (p *Pessimist) waitOwnerToBeDone(ctx context.Context, lock *pessimism.Lock,
 		}
 		p.logger.Info("retry to wait for the owner done the operation",
 			zap.String("owner", owner), zap.String("lock", lock.ID), zap.Int("retry", retryNum))
-
 	}
 
 	return lock.IsDone(owner), nil
@@ -807,7 +807,6 @@ func (p *Pessimist) waitNonOwnerToBeDone(ctx context.Context, lock *pessimism.Lo
 		}
 		p.logger.Info("retry to wait for non-owner sources done the operation",
 			zap.String("lock", lock.ID), zap.Strings("sources", waitSources), zap.Int("retry", retryNum))
-
 	}
 
 	return allDone(), nil

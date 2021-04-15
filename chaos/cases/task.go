@@ -27,12 +27,13 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
+
 	config2 "github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
 const (

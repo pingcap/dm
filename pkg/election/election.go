@@ -41,15 +41,15 @@ const (
 	// newSessionRetryInterval is the interval time when retrying to create a new session.
 	newSessionRetryInterval = 200 * time.Millisecond
 
-	// IsLeader means current compaigner become leader
+	// IsLeader means current compaigner become leader.
 	IsLeader = "isLeader"
-	// RetireFromLeader means current compaigner is old leader, and retired
+	// RetireFromLeader means current compaigner is old leader, and retired.
 	RetireFromLeader = "retireFromLeader"
-	// IsNotLeader means current compaigner is not old leader and current leader
+	// IsNotLeader means current compaigner is not old leader and current leader.
 	IsNotLeader = "isNotLeader"
 )
 
-// CampaignerInfo is the campaigner's information
+// CampaignerInfo is the campaigner's information.
 type CampaignerInfo struct {
 	ID string `json:"id"`
 	// addr is the campaigner's advertise address
@@ -206,7 +206,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 	}
 	failpoint.Inject("mockCampaignLoopExitedAbnormally", func(_ failpoint.Value) {
-		closeSession = func(se *concurrency.Session) {
+		closeSession = func(_ *concurrency.Session) {
 			e.l.Info("skip closeSession", zap.String("failpoint", "mockCampaignLoopExitedAbnormally"))
 		}
 	})
@@ -405,7 +405,7 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 	}
 }
 
-// EvictLeader set evictLeader to true, and this member can't be leader
+// EvictLeader set evictLeader to true, and this member can't be leader.
 func (e *Election) EvictLeader() {
 	if !e.evictLeader.CompareAndSwap(0, 1) {
 		return
@@ -414,7 +414,7 @@ func (e *Election) EvictLeader() {
 	e.Resign()
 }
 
-// Resign resign the leader
+// Resign resign the leader.
 func (e *Election) Resign() {
 	// cancel campaign or current member is leader and then resign
 	e.campaignMu.Lock()
@@ -429,7 +429,7 @@ func (e *Election) Resign() {
 	e.campaignMu.Unlock()
 }
 
-// CancelEvictLeader set evictLeader to false, and this member can campaign leader again
+// CancelEvictLeader set evictLeader to false, and this member can campaign leader again.
 func (e *Election) CancelEvictLeader() {
 	if !e.evictLeader.CompareAndSwap(1, 0) {
 		return
@@ -476,7 +476,7 @@ forLoop:
 }
 
 // ClearSessionIfNeeded will clear session when deleted master quited abnormally
-// returns (triggered deleting session, error)
+// returns (triggered deleting session, error).
 func (e *Election) ClearSessionIfNeeded(ctx context.Context, id string) (bool, error) {
 	resp, err := e.cli.Get(ctx, e.key, clientv3.WithPrefix())
 	if err != nil {

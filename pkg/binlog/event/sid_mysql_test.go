@@ -22,8 +22,7 @@ import (
 
 var _ = Suite(&testSIDMySQLSuite{})
 
-type testSIDMySQLSuite struct {
-}
+type testSIDMySQLSuite struct{}
 
 func (t *testSIDMySQLSuite) TestParseSID(c *C) {
 	s := "9f61c5f9-1eef-11e9-b6cf-0242ac140003"

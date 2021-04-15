@@ -43,7 +43,7 @@ var (
 		}, []string{"node"})
 
 	// split sub directory info from relayLogPosGauge / relayLogFileGauge
-	// to make compare relayLogFileGauge for master / relay more easier
+	// to make compare relayLogFileGauge for master / relay more easier.
 	relaySubDirIndex = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
@@ -52,7 +52,7 @@ var (
 			Help:      "current relay sub directory index",
 		}, []string{"node", "uuid"})
 
-	// should alert if available space < 10G
+	// should alert if available space < 10G.
 	relayLogSpaceGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
@@ -61,7 +61,7 @@ var (
 			Help:      "the space of storage for relay component",
 		}, []string{"type"}) // type can be 'capacity' and 'available'.
 
-	// should alert
+	// should alert.
 	relayLogDataCorruptionCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: "dm",
@@ -88,7 +88,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		})
 
-	// should alert
+	// should alert.
 	relayLogWriteErrorCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: "dm",
@@ -97,7 +97,7 @@ var (
 			Help:      "write relay log error count",
 		})
 
-	// should alert
+	// should alert.
 	binlogReadErrorCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: "dm",
@@ -124,7 +124,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		})
 
-	// should alert
+	// should alert.
 	relayExitWithErrorCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: "dm",

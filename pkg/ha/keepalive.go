@@ -29,9 +29,9 @@ import (
 )
 
 var (
-	// currentKeepAliveTTL may be assigned to KeepAliveTTL or RelayKeepAliveTTL
+	// currentKeepAliveTTL may be assigned to KeepAliveTTL or RelayKeepAliveTTL.
 	currentKeepAliveTTL int64
-	// KeepAliveUpdateCh is used to notify keepalive TTL changing, in order to let watcher not see a DELETE of old key
+	// KeepAliveUpdateCh is used to notify keepalive TTL changing, in order to let watcher not see a DELETE of old key.
 	KeepAliveUpdateCh = make(chan int64, 10)
 )
 
@@ -181,7 +181,8 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 }
 
 // ATTENTION!!! we must ensure cli.Ctx() not done when we are exiting worker
-// Do not set cfg.Context when creating cli or do not cancel this Context or it's parent context
+// Do not set cfg.Context when creating cli or do not cancel this Context or it's parent context.
+// nolint:unparam
 func revokeLease(cli *clientv3.Client, id clientv3.LeaseID) (*clientv3.LeaseRevokeResponse, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRevokeLeaseTimeout)
 	defer cancel()
@@ -189,7 +190,7 @@ func revokeLease(cli *clientv3.Client, id clientv3.LeaseID) (*clientv3.LeaseRevo
 }
 
 // WatchWorkerEvent watches the online and offline of workers from etcd.
-// this function will output the worker event to evCh, output the error to errCh
+// this function will output the worker event to evCh, output the error to errCh.
 func WatchWorkerEvent(ctx context.Context, cli *clientv3.Client, rev int64, outCh chan<- WorkerEvent, errCh chan<- error) {
 	watcher := clientv3.NewWatcher(cli)
 	ch := watcher.Watch(ctx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix(), clientv3.WithRev(rev))
@@ -247,7 +248,7 @@ func WatchWorkerEvent(ctx context.Context, cli *clientv3.Client, rev int64, outC
 }
 
 // GetKeepAliveWorkers gets current alive workers,
-// and returns a map{workerName: WorkerEvent}, revision and error
+// and returns a map{workerName: WorkerEvent}, revision and error.
 func GetKeepAliveWorkers(cli *clientv3.Client) (map[string]WorkerEvent, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()

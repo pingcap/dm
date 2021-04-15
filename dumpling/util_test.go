@@ -25,13 +25,13 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 )
 
-func (m *testDumplingSuite) TestParseArgs(c *C) {
+func (d *testDumplingSuite) TestParseArgs(c *C) {
 	logger := log.L()
 
 	cfg := &config.SubTaskConfig{}
 	cfg.ExtraArgs = `--statement-size=100 --where "t>10" --threads 8 -F 50B`
-	d := NewDumpling(cfg)
-	exportCfg, err := d.constructArgs()
+	dumpling := NewDumpling(cfg)
+	exportCfg, err := dumpling.constructArgs()
 	c.Assert(err, IsNil)
 	c.Assert(exportCfg.StatementSize, Equals, uint64(100))
 	c.Assert(exportCfg.Where, Equals, "t>10")
@@ -90,7 +90,7 @@ func (m *testDumplingSuite) TestParseArgs(c *C) {
 	c.Assert(err.Error(), Equals, "cannot both specify `--no-locks` and `--consistency` other than `none`")
 }
 
-func (m *testDumplingSuite) TestParseArgsWontOverwrite(c *C) {
+func (d *testDumplingSuite) TestParseArgsWontOverwrite(c *C) {
 	cfg := &config.SubTaskConfig{}
 	cfg.ChunkFilesize = "1"
 	rules := &filter.Rules{
@@ -100,8 +100,8 @@ func (m *testDumplingSuite) TestParseArgsWontOverwrite(c *C) {
 	// make sure we enter `parseExtraArgs`
 	cfg.ExtraArgs = "-s=4000 --consistency lock"
 
-	d := NewDumpling(cfg)
-	exportCfg, err := d.constructArgs()
+	dumpling := NewDumpling(cfg)
+	exportCfg, err := dumpling.constructArgs()
 	c.Assert(err, IsNil)
 
 	c.Assert(exportCfg.StatementSize, Equals, uint64(4000))

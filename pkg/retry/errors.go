@@ -25,7 +25,7 @@ import (
 
 // some error reference: https://docs.pingcap.com/tidb/stable/tidb-limitations#limitations-on-a-single-table
 var (
-	// UnsupportedDDLMsgs list the error messages of some unsupported DDL in TiDB
+	// UnsupportedDDLMsgs list the error messages of some unsupported DDL in TiDB.
 	UnsupportedDDLMsgs = []string{
 		"can't drop column with index",
 		"unsupported add column",
@@ -41,7 +41,7 @@ var (
 		"Error 1069: Too many keys specified",
 	}
 
-	// UnsupportedDMLMsgs list the error messages of some un-recoverable DML, which is used in task auto recovery
+	// UnsupportedDMLMsgs list the error messages of some un-recoverable DML, which is used in task auto recovery.
 	UnsupportedDMLMsgs = []string{
 		"Error 1062: Duplicate",
 		"Error 1406: Data too long for column",
@@ -49,7 +49,7 @@ var (
 		"Error 8025: entry too large",
 	}
 
-	// ReplicationErrMsgs list the error message of un-recoverable replication error
+	// ReplicationErrMsgs list the error message of un-recoverable replication error.
 	ReplicationErrMsgs = []string{
 		"Could not find first log file name in binary log index file",
 	}
@@ -78,7 +78,7 @@ var (
 	}
 )
 
-// IsConnectionError tells whether this error should reconnect to Database
+// IsConnectionError tells whether this error should reconnect to Database.
 func IsConnectionError(err error) bool {
 	err = errors.Cause(err)
 	switch err {

@@ -25,16 +25,13 @@ import (
 	br "github.com/pingcap/dm/pkg/binlog/reader"
 )
 
-var (
-	_ = check.Suite(&testReaderSuite{})
-)
+var _ = check.Suite(&testReaderSuite{})
 
 func TestSuite(t *testing.T) {
 	check.TestingT(t)
 }
 
-type testReaderSuite struct {
-}
+type testReaderSuite struct{}
 
 func (t *testReaderSuite) TestInterface(c *check.C) {
 	cases := []*replication.BinlogEvent{

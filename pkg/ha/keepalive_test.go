@@ -26,7 +26,7 @@ import (
 )
 
 // keepAliveTTL is set to 0 because the actual ttl is set to minLeaseTTL of etcd
-// minLeaseTTL is 1 in etcd cluster
+// minLeaseTTL is 1 in etcd cluster.
 var keepAliveTTL = int64(0)
 
 func (t *testForEtcd) TestWorkerKeepAlive(c *C) {

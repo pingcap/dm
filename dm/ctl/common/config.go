@@ -31,14 +31,14 @@ import (
 const (
 	defaultRPCTimeout = "10m"
 
-	// EncryptCmdName is special command
+	// EncryptCmdName is special command.
 	EncryptCmdName = "encrypt"
-	// DecryptCmdName is special command
+	// DecryptCmdName is special command.
 	DecryptCmdName = "decrypt"
 
-	// Master specifies member master type
+	// Master specifies member master type.
 	Master = "master"
-	// Worker specifies member worker type
+	// Worker specifies member worker type.
 	Worker = "worker"
 
 	dialTimeout             = 3 * time.Second
@@ -151,7 +151,7 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 	return false, errors.Trace(c.adjust())
 }
 
-// Validate check config is ready to execute command
+// Validate check config is ready to execute command.
 func (c *Config) Validate() error {
 	if c.MasterAddr == "" {
 		return errors.New("--master-addr not provided")
@@ -168,7 +168,7 @@ func (c *Config) configFromFile(path string) error {
 	return errors.Trace(err)
 }
 
-// adjust adjusts configs
+// adjust adjusts configs.
 func (c *Config) adjust() error {
 	if c.RPCTimeoutStr == "" {
 		c.RPCTimeoutStr = defaultRPCTimeout
@@ -184,7 +184,7 @@ func (c *Config) adjust() error {
 	return nil
 }
 
-// validate host:port format address
+// validate host:port format address.
 func validateAddr(addr string) error {
 	endpoints := strings.Split(addr, ",")
 	for _, endpoint := range endpoints {

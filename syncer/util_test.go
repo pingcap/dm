@@ -24,8 +24,7 @@ import (
 
 var _ = Suite(&testUtilSuite{})
 
-type testUtilSuite struct {
-}
+type testUtilSuite struct{}
 
 func (t *testUtilSuite) TestTableNameForDML(c *C) {
 	cases := []struct {

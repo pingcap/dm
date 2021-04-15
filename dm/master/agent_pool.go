@@ -23,7 +23,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// rate limit related constant value
+// rate limit related constant value.
 const (
 	DefaultRate      = float64(10)
 	DefaultBurst     = 40
@@ -35,7 +35,7 @@ type emitFunc func(args ...interface{})
 // AgentPool is a pool to control communication with dm-workers
 // It provides rate limit control for agent acquire, including dispatch rate r
 // and permits bursts of at most b tokens.
-// caller shouldn't to hold agent to avoid deadlock
+// caller shouldn't to hold agent to avoid deadlock.
 type AgentPool struct {
 	requests chan int
 	agents   chan *Agent
@@ -43,18 +43,18 @@ type AgentPool struct {
 	limiter  *rate.Limiter
 }
 
-// RateLimitConfig holds rate limit config
+// RateLimitConfig holds rate limit config.
 type RateLimitConfig struct {
 	rate  float64 // dispatch rate
 	burst int     // max permits bursts
 }
 
-// Agent communicate with dm-workers
+// Agent communicate with dm-workers.
 type Agent struct {
 	ID int
 }
 
-// NewAgentPool returns a agent pool
+// NewAgentPool returns a agent pool.
 func NewAgentPool(cfg *RateLimitConfig) *AgentPool {
 	requests := make(chan int, int(math.Ceil(1/cfg.rate))+cfg.burst)
 	agents := make(chan *Agent, cfg.burst)
@@ -69,7 +69,7 @@ func NewAgentPool(cfg *RateLimitConfig) *AgentPool {
 }
 
 // Apply applies for a agent
-// if ctx is canceled before we get an agent, returns nil
+// if ctx is canceled before we get an agent, returns nil.
 func (ap *AgentPool) Apply(ctx context.Context, id int) *Agent {
 	select {
 	case <-ctx.Done():
@@ -85,7 +85,7 @@ func (ap *AgentPool) Apply(ctx context.Context, id int) *Agent {
 	}
 }
 
-// Start starts AgentPool background dispatcher
+// Start starts AgentPool background dispatcher.
 func (ap *AgentPool) Start(ctx context.Context) {
 	for {
 		select {
@@ -108,10 +108,9 @@ func (ap *AgentPool) Start(ctx context.Context) {
 	}
 }
 
-// Emit applies for an agent to communicates with dm-worker
+// Emit applies for an agent to communicates with dm-worker.
 func (ap *AgentPool) Emit(ctx context.Context, id int, fn emitFunc, errFn emitFunc, args ...interface{}) {
-	agent := ap.Apply(ctx, id)
-	if agent == nil {
+	if agent := ap.Apply(ctx, id); agent == nil {
 		errFn(args...)
 	} else {
 		fn(args...)

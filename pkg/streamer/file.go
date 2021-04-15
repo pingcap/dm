@@ -31,10 +31,10 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// FileCmp is a compare condition used when collecting binlog files
+// FileCmp is a compare condition used when collecting binlog files.
 type FileCmp uint8
 
-// FileCmpLess represents a < FileCmp condition, others are similar
+// FileCmpLess represents a < FileCmp condition, others are similar.
 const (
 	FileCmpLess FileCmp = iota + 1
 	FileCmpLessEqual
@@ -43,13 +43,13 @@ const (
 	FileCmpBigger
 )
 
-// SwitchPath represents next binlog file path which should be switched
+// SwitchPath represents next binlog file path which should be switched.
 type SwitchPath struct {
 	nextUUID       string
 	nextBinlogName string
 }
 
-// CollectAllBinlogFiles collects all valid binlog files in dir
+// CollectAllBinlogFiles collects all valid binlog files in dir.
 func CollectAllBinlogFiles(dir string) ([]string, error) {
 	if dir == "" {
 		return nil, terror.ErrEmptyRelayDir.Generate()
@@ -75,7 +75,7 @@ func CollectAllBinlogFiles(dir string) ([]string, error) {
 	return ret, nil
 }
 
-// CollectBinlogFilesCmp collects valid binlog files with a compare condition
+// CollectBinlogFilesCmp collects valid binlog files with a compare condition.
 func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) {
 	if dir == "" {
 		return nil, terror.ErrEmptyRelayDir.Generate()
@@ -129,7 +129,7 @@ func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) 
 	return results, nil
 }
 
-// getFirstBinlogName gets the first binlog file in relay sub directory
+// getFirstBinlogName gets the first binlog file in relay sub directory.
 func getFirstBinlogName(baseDir, uuid string) (string, error) {
 	subDir := filepath.Join(baseDir, uuid)
 	files, err := readDir(subDir)
@@ -152,7 +152,7 @@ func getFirstBinlogName(baseDir, uuid string) (string, error) {
 	return "", terror.ErrBinlogFilesNotFound.Generate(subDir)
 }
 
-// readDir reads and returns all file(sorted asc) and dir names from directory f
+// readDir reads and returns all file(sorted asc) and dir names from directory f.
 func readDir(dirpath string) ([]string, error) {
 	dir, err := os.Open(dirpath)
 	if err != nil {
@@ -182,12 +182,13 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 		return 0, terror.ErrGetRelayLogStat.Delegate(err, path)
 	}
 	currSize := fi.Size()
-	if currSize == latestSize {
+	switch {
+	case currSize == latestSize:
 		return 0, nil
-	} else if currSize > latestSize {
+	case currSize > latestSize:
 		log.L().Debug("size of relay log file has been changed", zap.String("file", path), zap.Int64("old size", latestSize), zap.Int64("size", currSize))
 		return 1, nil
-	} else {
+	default:
 		log.L().Error("size of relay log file has been changed", zap.String("file", path), zap.Int64("old size", latestSize), zap.Int64("size", currSize))
 		return -1, nil
 	}
@@ -291,15 +292,16 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 
 	// check the latest relay log file whether updated when adding watching and collecting newer
 	cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
-	if err != nil {
+	switch {
+	case err != nil:
 		return
-	} else if cmp < 0 {
+	case cmp < 0:
 		err = terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
 		return
-	} else if cmp > 0 {
+	case cmp > 0:
 		updatePathCh <- latestFilePath
 		return
-	} else if len(newerFiles) > 0 {
+	case len(newerFiles) > 0:
 		// check whether newer relay log file exists
 		nextFilePath := filepath.Join(dir, newerFiles[0])
 		log.L().Info("newer relay log file is already generated, start parse from it", zap.String("new file", nextFilePath))
@@ -316,8 +318,8 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 	updatePathCh <- res.updatePath
 }
 
-// needSwitchSubDir checks whether the reader need to switch to next relay sub directory
-func needSwitchSubDir(ctx context.Context, relayDir, currentUUID, latestFilePath string, latestFileSize int64, switchCh chan SwitchPath, errCh chan error) {
+// needSwitchSubDir checks whether the reader need to switch to next relay sub directory.
+func needSwitchSubDir(ctx context.Context, relayDir, currentUUID string, switchCh chan SwitchPath, errCh chan error) {
 	var (
 		err            error
 		nextUUID       string

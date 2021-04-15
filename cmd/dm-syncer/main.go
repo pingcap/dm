@@ -44,7 +44,7 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		common.PrintLines("parse cmd flags err: %s", terror.Message(err))
+		common.PrintLinesf("parse cmd flags err: %s", terror.Message(err))
 		os.Exit(2)
 	}
 
@@ -58,7 +58,7 @@ func main() {
 		Level:  strings.ToLower(conf.LogLevel),
 	})
 	if err != nil {
-		common.PrintLines("init logger error %s", terror.Message(err))
+		common.PrintLinesf("init logger error %s", terror.Message(err))
 		os.Exit(2)
 	}
 
@@ -106,8 +106,7 @@ func main() {
 	log.L().Info("dm-syncer exit")
 
 	// 6. flush log
-	syncErr := log.L().Sync()
-	if syncErr != nil {
+	if syncErr := log.L().Sync(); syncErr != nil {
 		fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
 		os.Exit(1)
 	}

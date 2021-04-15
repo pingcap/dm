@@ -88,7 +88,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// ShardingGroup represents a sharding DDL sync group
+// ShardingGroup represents a sharding DDL sync group.
 type ShardingGroup struct {
 	sync.RWMutex
 	// remain count waiting for syncing
@@ -111,7 +111,7 @@ type ShardingGroup struct {
 	enableGTID bool
 }
 
-// NewShardingGroup creates a new ShardingGroup
+// NewShardingGroup creates a new ShardingGroup.
 func NewShardingGroup(sourceID, shardMetaSchema, shardMetaTable string, sources []string, meta *shardmeta.ShardingMeta, isSchemaOnly bool, flavor string, enableGTID bool) *ShardingGroup {
 	sg := &ShardingGroup{
 		remain:           len(sources),
@@ -185,7 +185,7 @@ func (sg *ShardingGroup) Leave(sources []string) error {
 }
 
 // Reset resets all sources to un-synced state
-// when the previous sharding DDL synced and resolved, we need reset it
+// when the previous sharding DDL synced and resolved, we need reset it.
 func (sg *ShardingGroup) Reset() {
 	sg.Lock()
 	defer sg.Unlock()
@@ -239,7 +239,7 @@ func (sg *ShardingGroup) CheckSyncing(source string, location binlog.Location) (
 	return binlog.CompareLocation(activeDDLItem.FirstLocation, location, sg.enableGTID) > 0
 }
 
-// UnresolvedGroupInfo returns pb.ShardingGroup if is unresolved, else returns nil
+// UnresolvedGroupInfo returns pb.ShardingGroup if is unresolved, else returns nil.
 func (sg *ShardingGroup) UnresolvedGroupInfo() *pb.ShardingGroup {
 	sg.RLock()
 	defer sg.RUnlock()
@@ -264,7 +264,7 @@ func (sg *ShardingGroup) UnresolvedGroupInfo() *pb.ShardingGroup {
 	return group
 }
 
-// Sources returns all sources (and whether synced)
+// Sources returns all sources (and whether synced).
 func (sg *ShardingGroup) Sources() map[string]bool {
 	sg.RLock()
 	defer sg.RUnlock()
@@ -275,7 +275,7 @@ func (sg *ShardingGroup) Sources() map[string]bool {
 	return ret
 }
 
-// Tables returns all source tables' <schema, table> pair
+// Tables returns all source tables' <schema, table> pair.
 func (sg *ShardingGroup) Tables() [][]string {
 	sources := sg.Sources()
 	tables := make([][]string, 0, len(sources))
@@ -286,7 +286,7 @@ func (sg *ShardingGroup) Tables() [][]string {
 	return tables
 }
 
-// UnresolvedTables returns all source tables' <schema, table> pair if is unresolved, else returns nil
+// UnresolvedTables returns all source tables' <schema, table> pair if is unresolved, else returns nil.
 func (sg *ShardingGroup) UnresolvedTables() [][]string {
 	sg.RLock()
 	defer sg.RUnlock()
@@ -305,7 +305,7 @@ func (sg *ShardingGroup) UnresolvedTables() [][]string {
 	return tables
 }
 
-// FirstLocationUnresolved returns the first DDL pos if un-resolved, else nil
+// FirstLocationUnresolved returns the first DDL pos if un-resolved, else nil.
 func (sg *ShardingGroup) FirstLocationUnresolved() *binlog.Location {
 	sg.RLock()
 	defer sg.RUnlock()
@@ -323,7 +323,7 @@ func (sg *ShardingGroup) FirstLocationUnresolved() *binlog.Location {
 	return nil
 }
 
-// FirstEndPosUnresolved returns the first DDL End_log_pos if un-resolved, else nil
+// FirstEndPosUnresolved returns the first DDL End_log_pos if un-resolved, else nil.
 func (sg *ShardingGroup) FirstEndPosUnresolved() *binlog.Location {
 	sg.RLock()
 	defer sg.RUnlock()
@@ -335,12 +335,12 @@ func (sg *ShardingGroup) FirstEndPosUnresolved() *binlog.Location {
 	return nil
 }
 
-// String implements Stringer.String
+// String implements Stringer.String.
 func (sg *ShardingGroup) String() string {
 	return fmt.Sprintf("IsSchemaOnly:%v remain:%d, sources:%+v", sg.IsSchemaOnly, sg.remain, sg.sources)
 }
 
-// ResolveShardingDDL resolves sharding DDL in sharding group
+// ResolveShardingDDL resolves sharding DDL in sharding group.
 func (sg *ShardingGroup) ResolveShardingDDL() bool {
 	sg.Lock()
 	defer sg.Unlock()
@@ -349,7 +349,7 @@ func (sg *ShardingGroup) ResolveShardingDDL() bool {
 	return reset
 }
 
-// ActiveDDLFirstLocation returns the first binlog position of active DDL
+// ActiveDDLFirstLocation returns the first binlog position of active DDL.
 func (sg *ShardingGroup) ActiveDDLFirstLocation() (binlog.Location, error) {
 	sg.RLock()
 	defer sg.RUnlock()
@@ -357,22 +357,22 @@ func (sg *ShardingGroup) ActiveDDLFirstLocation() (binlog.Location, error) {
 	return location, err
 }
 
-// FlushData returns sharding meta flush SQLs and args
+// FlushData returns sharding meta flush SQLs and args.
 func (sg *ShardingGroup) FlushData(targetTableID string) ([]string, [][]interface{}) {
 	sg.RLock()
 	defer sg.RUnlock()
 	return sg.meta.FlushData(sg.sourceID, targetTableID)
 }
 
-// GenTableID generates table ID
-func GenTableID(schema, table string) (ID string, isSchemaOnly bool) {
+// GenTableID generates table ID.
+func GenTableID(schema, table string) (id string, isSchemaOnly bool) {
 	if len(table) == 0 {
 		return fmt.Sprintf("`%s`", schema), true
 	}
 	return fmt.Sprintf("`%s`.`%s`", schema, table), false
 }
 
-// UnpackTableID unpacks table ID to <schema, table> pair
+// UnpackTableID unpacks table ID to <schema, table> pair.
 func UnpackTableID(id string) (string, string) {
 	parts := strings.Split(id, "`.`")
 	schema := strings.TrimLeft(parts[0], "`")
@@ -380,7 +380,7 @@ func UnpackTableID(id string) (string, string) {
 	return schema, table
 }
 
-// ShardingGroupKeeper used to keep ShardingGroup
+// ShardingGroupKeeper used to keep ShardingGroup.
 type ShardingGroupKeeper struct {
 	sync.RWMutex
 	groups map[string]*ShardingGroup // target table ID -> ShardingGroup
@@ -396,7 +396,7 @@ type ShardingGroupKeeper struct {
 	tctx *tcontext.Context
 }
 
-// NewShardingGroupKeeper creates a new ShardingGroupKeeper
+// NewShardingGroupKeeper creates a new ShardingGroupKeeper.
 func NewShardingGroupKeeper(tctx *tcontext.Context, cfg *config.SubTaskConfig) *ShardingGroupKeeper {
 	k := &ShardingGroupKeeper{
 		groups: make(map[string]*ShardingGroup),
@@ -409,7 +409,7 @@ func NewShardingGroupKeeper(tctx *tcontext.Context, cfg *config.SubTaskConfig) *
 	return k
 }
 
-// AddGroup adds new group(s) according to target schema, table and source IDs
+// AddGroup adds new group(s) according to target schema, table and source IDs.
 func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceIDs []string, meta *shardmeta.ShardingMeta, merge bool) (needShardingHandle bool, group *ShardingGroup, synced bool, remain int, err error) {
 	// if need to support target table-level sharding DDL
 	// we also need to support target schema-level sharding DDL
@@ -428,20 +428,21 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 		}
 	}
 
-	var ok bool
-	if group, ok = k.groups[targetTableID]; !ok {
+	group, ok := k.groups[targetTableID]
+	switch {
+	case !ok:
 		group = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, false, k.cfg.Flavor, k.cfg.EnableGTID)
 		k.groups[targetTableID] = group
-	} else if merge {
+	case merge:
 		needShardingHandle, synced, remain, err = k.groups[targetTableID].Merge(sourceIDs)
-	} else {
+	default:
 		err = terror.ErrSyncUnitDupTableGroup.Generate(targetTableID)
 	}
 
 	return
 }
 
-// Init does initialization staff
+// Init does initialization staff.
 func (k *ShardingGroupKeeper) Init() error {
 	k.clear()
 	sgkDB := k.cfg.To
@@ -455,14 +456,14 @@ func (k *ShardingGroupKeeper) Init() error {
 	return k.prepare()
 }
 
-// clear clears all sharding groups
+// clear clears all sharding groups.
 func (k *ShardingGroupKeeper) clear() {
 	k.Lock()
 	defer k.Unlock()
 	k.groups = make(map[string]*ShardingGroup)
 }
 
-// ResetGroups resets group's sync status
+// ResetGroups resets group's sync status.
 func (k *ShardingGroupKeeper) ResetGroups() {
 	k.RLock()
 	defer k.RUnlock()
@@ -475,7 +476,7 @@ func (k *ShardingGroupKeeper) ResetGroups() {
 }
 
 // LeaveGroup leaves group according to target schema, table and source IDs
-// LeaveGroup doesn't affect in syncing process
+// LeaveGroup doesn't affect in syncing process.
 func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sources []string) error {
 	schemaID, _ := GenTableID(targetSchema, "")
 	targetTableID, _ := GenTableID(targetSchema, targetTable)
@@ -510,7 +511,6 @@ func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sourc
 func (k *ShardingGroupKeeper) TrySync(
 	targetSchema, targetTable, source string, location, endLocation binlog.Location, ddls []string) (
 	needShardingHandle bool, group *ShardingGroup, synced, active bool, remain int, err error) {
-
 	targetTableID, schemaOnly := GenTableID(targetSchema, targetTable)
 	if schemaOnly {
 		// NOTE: now we don't support syncing for schema only sharding DDL
@@ -528,7 +528,7 @@ func (k *ShardingGroupKeeper) TrySync(
 	return true, group, synced, active, remain, err
 }
 
-// InSyncing checks whether the source is in sharding syncing, that is to say not before active DDL
+// InSyncing checks whether the source is in sharding syncing, that is to say not before active DDL.
 func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string, location binlog.Location) bool {
 	group := k.Group(targetSchema, targetTable)
 	if group == nil {
@@ -542,7 +542,7 @@ func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string
 //   all source tables which with DDLs are un-resolved
 // NOTE: this func only ensure the returned tables are current un-resolved
 // if passing the returned tables to other func (like checkpoint),
-// must ensure their sync state not changed in this progress
+// must ensure their sync state not changed in this progress.
 func (k *ShardingGroupKeeper) UnresolvedTables() (map[string]bool, [][]string) {
 	ids := make(map[string]bool)
 	tables := make([][]string, 0, 10)
@@ -559,7 +559,7 @@ func (k *ShardingGroupKeeper) UnresolvedTables() (map[string]bool, [][]string) {
 	return ids, tables
 }
 
-// Group returns target table's group, nil if not exist
+// Group returns target table's group, nil if not exist.
 func (k *ShardingGroupKeeper) Group(targetSchema, targetTable string) *ShardingGroup {
 	targetTableID, _ := GenTableID(targetSchema, targetTable)
 	k.RLock()
@@ -567,7 +567,7 @@ func (k *ShardingGroupKeeper) Group(targetSchema, targetTable string) *ShardingG
 	return k.groups[targetTableID]
 }
 
-// lowestFirstLocationInGroups returns the lowest pos in all groups which are unresolved
+// lowestFirstLocationInGroups returns the lowest pos in all groups which are unresolved.
 func (k *ShardingGroupKeeper) lowestFirstLocationInGroups() *binlog.Location {
 	k.RLock()
 	defer k.RUnlock()
@@ -586,7 +586,7 @@ func (k *ShardingGroupKeeper) lowestFirstLocationInGroups() *binlog.Location {
 	return lowest
 }
 
-// AdjustGlobalLocation adjusts globalLocation with sharding groups' lowest first point
+// AdjustGlobalLocation adjusts globalLocation with sharding groups' lowest first point.
 func (k *ShardingGroupKeeper) AdjustGlobalLocation(globalLocation binlog.Location) binlog.Location {
 	lowestFirstLocation := k.lowestFirstLocationInGroups()
 	if lowestFirstLocation != nil && binlog.CompareLocation(*lowestFirstLocation, globalLocation, k.cfg.EnableGTID) < 0 {
@@ -625,7 +625,7 @@ func (k *ShardingGroupKeeper) UnresolvedGroups() []*pb.ShardingGroup {
 	return groups
 }
 
-// ResolveShardingDDL resolves one sharding DDL in specific group
+// ResolveShardingDDL resolves one sharding DDL in specific group.
 func (k *ShardingGroupKeeper) ResolveShardingDDL(targetSchema, targetTable string) (bool, error) {
 	group := k.Group(targetSchema, targetTable)
 	if group != nil {
@@ -634,7 +634,7 @@ func (k *ShardingGroupKeeper) ResolveShardingDDL(targetSchema, targetTable strin
 	return false, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetSchema, targetTable)
 }
 
-// ActiveDDLFirstLocation returns the binlog position of active DDL
+// ActiveDDLFirstLocation returns the binlog position of active DDL.
 func (k *ShardingGroupKeeper) ActiveDDLFirstLocation(targetSchema, targetTable string) (binlog.Location, error) {
 	group := k.Group(targetSchema, targetTable)
 	k.Lock()
@@ -646,7 +646,7 @@ func (k *ShardingGroupKeeper) ActiveDDLFirstLocation(targetSchema, targetTable s
 	return binlog.Location{}, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetSchema, targetTable)
 }
 
-// PrepareFlushSQLs returns all sharding meta flushed SQLs except for given table IDs
+// PrepareFlushSQLs returns all sharding meta flushed SQLs except for given table IDs.
 func (k *ShardingGroupKeeper) PrepareFlushSQLs(exceptTableIDs map[string]bool) ([]string, [][]interface{}) {
 	k.RLock()
 	defer k.RUnlock()
@@ -669,7 +669,7 @@ func (k *ShardingGroupKeeper) PrepareFlushSQLs(exceptTableIDs map[string]bool) (
 	return sqls, args
 }
 
-// Prepare inits sharding meta schema and tables if not exists
+// Prepare inits sharding meta schema and tables if not exists.
 func (k *ShardingGroupKeeper) prepare() error {
 	if err := k.createSchema(); err != nil {
 		return err
@@ -678,7 +678,7 @@ func (k *ShardingGroupKeeper) prepare() error {
 	return k.createTable()
 }
 
-// Close closes sharding group keeper
+// Close closes sharding group keeper.
 func (k *ShardingGroupKeeper) Close() {
 	closeBaseDB(k.tctx, k.db)
 }
@@ -707,7 +707,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
-// LoadShardMeta implements CheckPoint.LoadShardMeta
+// LoadShardMeta implements CheckPoint.LoadShardMeta.
 func (k *ShardingGroupKeeper) LoadShardMeta(flavor string, enableGTID bool) (map[string]*shardmeta.ShardingMeta, error) {
 	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM %s WHERE `source_id`='%s'", k.shardMetaTableName, k.cfg.SourceID)
 	rows, err := k.dbConn.querySQL(k.tctx, query)
@@ -740,7 +740,7 @@ func (k *ShardingGroupKeeper) LoadShardMeta(flavor string, enableGTID bool) (map
 	return meta, terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
 }
 
-// ShardingReSync represents re-sync info for a sharding DDL group
+// ShardingReSync represents re-sync info for a sharding DDL group.
 type ShardingReSync struct {
 	currLocation   binlog.Location // current DDL's binlog location, initialize to first DDL's location
 	latestLocation binlog.Location // latest DDL's binlog location
@@ -749,7 +749,7 @@ type ShardingReSync struct {
 	allResolved    bool
 }
 
-// String implements stringer.String
+// String implements stringer.String.
 func (s *ShardingReSync) String() string {
 	return fmt.Sprintf("{schema: %s, table: %s, current location: %v, latest location: %v, all resolved: %v}", s.targetSchema, s.targetTable, s.currLocation, s.latestLocation, s.allResolved)
 }

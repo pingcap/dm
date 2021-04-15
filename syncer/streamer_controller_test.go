@@ -14,5 +14,4 @@ func (s *testSyncerSuite) TestIsConnectionRefusedError(c *C) {
 
 	isConnRefusedErr = isConnectionRefusedError(errors.New("connect: connection refused"))
 	c.Assert(isConnRefusedErr, Equals, true)
-
 }

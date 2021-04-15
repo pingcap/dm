@@ -31,7 +31,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// CheckPoint represents checkpoint status
+// CheckPoint represents checkpoint status.
 type CheckPoint interface {
 	// Load loads all checkpoints recorded before.
 	// because of no checkpoints updated in memory when error occurred
@@ -80,7 +80,7 @@ type CheckPoint interface {
 }
 
 // RemoteCheckPoint implements CheckPoint by saving status in remote database system, mostly in TiDB.
-// it's not thread-safe
+// it's not thread-safe.
 type RemoteCheckPoint struct {
 	// used to protect database operation with `conn`.
 	// if more operations need to be protected, add another mutex or rename this one.
@@ -161,7 +161,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
-// Load implements CheckPoint.Load
+// Load implements CheckPoint.Load.
 func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 	begin := time.Now()
 	defer func() {
@@ -208,7 +208,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
 }
 
-// GetRestoringFileInfo implements CheckPoint.GetRestoringFileInfo
+// GetRestoringFileInfo implements CheckPoint.GetRestoringFileInfo.
 func (cp *RemoteCheckPoint) GetRestoringFileInfo(db, table string) map[string][]int64 {
 	cp.restoringFiles.RLock()
 	defer cp.restoringFiles.RUnlock()
@@ -226,7 +226,7 @@ func (cp *RemoteCheckPoint) GetRestoringFileInfo(db, table string) map[string][]
 	return results
 }
 
-// GetAllRestoringFileInfo implements CheckPoint.GetAllRestoringFileInfo
+// GetAllRestoringFileInfo implements CheckPoint.GetAllRestoringFileInfo.
 func (cp *RemoteCheckPoint) GetAllRestoringFileInfo() map[string][]int64 {
 	cp.restoringFiles.RLock()
 	defer cp.restoringFiles.RUnlock()
@@ -242,7 +242,7 @@ func (cp *RemoteCheckPoint) GetAllRestoringFileInfo() map[string][]int64 {
 	return results
 }
 
-// IsTableCreated implements CheckPoint.IsTableCreated
+// IsTableCreated implements CheckPoint.IsTableCreated.
 func (cp *RemoteCheckPoint) IsTableCreated(db, table string) bool {
 	cp.restoringFiles.RLock()
 	defer cp.restoringFiles.RUnlock()
@@ -257,7 +257,7 @@ func (cp *RemoteCheckPoint) IsTableCreated(db, table string) bool {
 	return ok
 }
 
-// IsTableFinished implements CheckPoint.IsTableFinished
+// IsTableFinished implements CheckPoint.IsTableFinished.
 func (cp *RemoteCheckPoint) IsTableFinished(db, table string) bool {
 	key := strings.Join([]string{db, table}, ".")
 	if _, ok := cp.finishedTables[key]; ok {
@@ -266,7 +266,7 @@ func (cp *RemoteCheckPoint) IsTableFinished(db, table string) bool {
 	return false
 }
 
-// CalcProgress implements CheckPoint.CalcProgress
+// CalcProgress implements CheckPoint.CalcProgress.
 func (cp *RemoteCheckPoint) CalcProgress(allFiles map[string]Tables2DataFiles) error {
 	cp.restoringFiles.RLock()
 	defer cp.restoringFiles.RUnlock()
@@ -315,7 +315,7 @@ func (cp *RemoteCheckPoint) allFilesFinished(files map[string][]int64) bool {
 	return true
 }
 
-// AllFinished implements CheckPoint.AllFinished
+// AllFinished implements CheckPoint.AllFinished.
 func (cp *RemoteCheckPoint) AllFinished() bool {
 	cp.restoringFiles.RLock()
 	defer cp.restoringFiles.RUnlock()
@@ -329,13 +329,12 @@ func (cp *RemoteCheckPoint) AllFinished() bool {
 	return true
 }
 
-// Init implements CheckPoint.Init
+// Init implements CheckPoint.Init.
 func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos int64) error {
 	// fields[0] -> db name, fields[1] -> table name
 	schema, table, err := getDBAndTableFromFilename(filename)
 	if err != nil {
 		return terror.ErrCheckpointInvalidTableFile.Generate(filename)
-
 	}
 	sql2 := fmt.Sprintf("INSERT INTO %s (`id`, `filename`, `cp_schema`, `cp_table`, `offset`, `end_pos`) VALUES(?,?,?,?,?,?)", cp.tableName)
 	cp.logger.Info("initial checkpoint record",
@@ -374,29 +373,28 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 	return nil
 }
 
-// ResetConn implements CheckPoint.ResetConn
+// ResetConn implements CheckPoint.ResetConn.
 func (cp *RemoteCheckPoint) ResetConn(tctx *tcontext.Context) error {
 	cp.connMutex.Lock()
 	defer cp.connMutex.Unlock()
 	return cp.conn.resetConn(tctx)
 }
 
-// Close implements CheckPoint.Close
+// Close implements CheckPoint.Close.
 func (cp *RemoteCheckPoint) Close() {
-	err := cp.db.Close()
-	if err != nil {
+	if err := cp.db.Close(); err != nil {
 		cp.logger.Error("close checkpoint db", log.ShortError(err))
 	}
 }
 
-// GenSQL implements CheckPoint.GenSQL
+// GenSQL implements CheckPoint.GenSQL.
 func (cp *RemoteCheckPoint) GenSQL(filename string, offset int64) string {
 	sql := fmt.Sprintf("UPDATE %s SET `offset`=%d WHERE `id` ='%s' AND `filename`='%s';",
 		cp.tableName, offset, cp.id, filename)
 	return sql
 }
 
-// UpdateOffset implements CheckPoint.UpdateOffset
+// UpdateOffset implements CheckPoint.UpdateOffset.
 func (cp *RemoteCheckPoint) UpdateOffset(filename string, offset int64) {
 	cp.restoringFiles.Lock()
 	defer cp.restoringFiles.Unlock()
@@ -408,7 +406,7 @@ func (cp *RemoteCheckPoint) UpdateOffset(filename string, offset int64) {
 	cp.restoringFiles.pos[db][table][filename][0] = offset
 }
 
-// Clear implements CheckPoint.Clear
+// Clear implements CheckPoint.Clear.
 func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 	sql2 := fmt.Sprintf("DELETE FROM %s WHERE `id` = '%s'", cp.tableName, cp.id)
 	cp.connMutex.Lock()
@@ -417,7 +415,7 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
-// Count implements CheckPoint.Count
+// Count implements CheckPoint.Count.
 func (cp *RemoteCheckPoint) Count(tctx *tcontext.Context) (int, error) {
 	query := fmt.Sprintf("SELECT COUNT(id) FROM %s WHERE `id` = ?", cp.tableName)
 	cp.connMutex.Lock()
@@ -427,7 +425,7 @@ func (cp *RemoteCheckPoint) Count(tctx *tcontext.Context) (int, error) {
 		return 0, terror.WithScope(err, terror.ScopeDownstream)
 	}
 	defer rows.Close()
-	var count = 0
+	count := 0
 	for rows.Next() {
 		err = rows.Scan(&count)
 		if err != nil {

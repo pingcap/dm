@@ -63,7 +63,8 @@ func (t *testAtomicSuite) TestAtomicString(c *C) {
 	c.Assert(str2, Equals, str)
 
 	originStr := str
-	str = "test2" //nolint:ineffassign
+	// nolint
+	str = "test2"
 	str2 = s.Get()
 	c.Assert(str2, Equals, originStr)
 
