@@ -24,7 +24,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewTransferSourceCmd creates a TransferSource command
+// NewTransferSourceCmd creates a TransferSource command.
 func NewTransferSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "transfer-source <source-id> <worker-id>",
@@ -34,16 +34,16 @@ func NewTransferSourceCmd() *cobra.Command {
 	return cmd
 }
 
-func transferSourceFunc(cmd *cobra.Command, _ []string) (err error) {
+func transferSourceFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) != 2 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 
 	sourceID := cmd.Flags().Arg(0)
 	workerID := cmd.Flags().Arg(1)
+	var err error
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -60,9 +60,9 @@ func transferSourceFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		return
+		return err
 	}
 
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }

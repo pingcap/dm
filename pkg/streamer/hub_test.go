@@ -21,8 +21,7 @@ import (
 
 var _ = Suite(&testHubSuite{})
 
-type testHubSuite struct {
-}
+type testHubSuite struct{}
 
 func (t *testHubSuite) TestRelayLogInfo(c *C) {
 	rli1 := RelayLogInfo{}
@@ -55,7 +54,7 @@ func (t *testHubSuite) TestRelayLogInfo(c *C) {
 }
 
 func (t *testHubSuite) TestRelayLogInfoHub(c *C) {
-	var rlih = newRelayLogInfoHub()
+	rlih := newRelayLogInfoHub()
 	taskName, earliest := rlih.earliest()
 	c.Assert(taskName, Equals, "")
 	c.Assert(earliest, IsNil)

@@ -39,7 +39,7 @@ type taskInfo struct {
 	Sources    []string `json:"sources,omitempty"`
 }
 
-// NewQueryStatusCmd creates a QueryStatus command
+// NewQueryStatusCmd creates a QueryStatus command.
 func NewQueryStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query-status [-s source ...] [task-name | task-file] [--more]",
@@ -50,19 +50,18 @@ func NewQueryStatusCmd() *cobra.Command {
 	return cmd
 }
 
-// queryStatusFunc does query task's status
-func queryStatusFunc(cmd *cobra.Command, _ []string) (err error) {
+// queryStatusFunc does query task's status.
+func queryStatusFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) > 1 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 	taskName := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0)) // maybe empty
 
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		return
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
@@ -80,33 +79,33 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) (err error) {
 	)
 
 	if err != nil {
-		common.PrintLines("can not query %s task's status(in sources %v)", taskName, sources)
-		return
+		common.PrintLinesf("can not query %s task's status(in sources %v)", taskName, sources)
+		return err
 	}
 
 	more, err := cmd.Flags().GetBool("more")
 	if err != nil {
-		common.PrintLines("error in parse `--more`")
-		return
+		common.PrintLinesf("error in parse `--more`")
+		return err
 	}
 
 	if resp.Result && taskName == "" && len(sources) == 0 && !more {
 		result, hasFalseResult := wrapTaskResult(resp)
 		if !hasFalseResult { // if any result is false, we still print the full status.
 			common.PrettyPrintInterface(result)
-			return
+			return nil
 		}
 	}
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }
 
-// errorOccurred checks ProcessResult and return true if some error occurred
+// errorOccurred checks ProcessResult and return true if some error occurred.
 func errorOccurred(result *pb.ProcessResult) bool {
 	return result != nil && len(result.Errors) > 0
 }
 
-// getRelayStage returns current relay stage (including stageError)
+// getRelayStage returns current relay stage (including stageError).
 func getRelayStage(relayStatus *pb.RelayStatus) string {
 	if errorOccurred(relayStatus.Result) {
 		return stageError
@@ -114,7 +113,7 @@ func getRelayStage(relayStatus *pb.RelayStatus) string {
 	return relayStatus.Stage.String()
 }
 
-// wrapTaskResult picks task info and generate tasks' status and relative workers
+// wrapTaskResult picks task info and generate tasks' status and relative workers.
 func wrapTaskResult(resp *pb.QueryStatusListResponse) (result *taskResult, hasFalseResult bool) {
 	taskStatusMap := make(map[string]string)
 	taskCorrespondingSources := make(map[string][]string)

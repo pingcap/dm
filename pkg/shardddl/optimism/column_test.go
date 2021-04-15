@@ -56,9 +56,13 @@ func (t *testColumn) TestColumnETCD(c *C) {
 	expectedColm := map[string]map[string]map[string]map[string]map[string]DropColumnStage{
 		lockID: {
 			"a": {source1: {upSchema1: {upTable1: DropNotDone}}},
-			"b": {source1: {upSchema1: {upTable1: DropNotDone},
-				upSchema2: {upTable2: DropNotDone}},
-				source2: {upSchema1: {upTable1: DropNotDone}}},
+			"b": {
+				source1: {
+					upSchema1: {upTable1: DropNotDone},
+					upSchema2: {upTable2: DropNotDone},
+				},
+				source2: {upSchema1: {upTable1: DropNotDone}},
+			},
 		},
 	}
 	colm, rev5, err := GetAllDroppedColumns(etcdTestCli)

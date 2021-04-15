@@ -82,7 +82,7 @@ type LogInfo struct {
 
 // NewInfo creates a new Info instance.
 func NewInfo(task, source, upSchema, upTable, downSchema, downTable string,
-	DDLs []string, tableInfoBefore *model.TableInfo, tableInfosAfter []*model.TableInfo) Info {
+	ddls []string, tableInfoBefore *model.TableInfo, tableInfosAfter []*model.TableInfo) Info {
 	return Info{
 		Task:            task,
 		Source:          source,
@@ -90,7 +90,7 @@ func NewInfo(task, source, upSchema, upTable, downSchema, downTable string,
 		UpTable:         upTable,
 		DownSchema:      downSchema,
 		DownTable:       downTable,
-		DDLs:            DDLs,
+		DDLs:            ddls,
 		TableInfoBefore: tableInfoBefore,
 		TableInfosAfter: tableInfosAfter,
 	}
@@ -102,7 +102,7 @@ func (i Info) String() string {
 	return s
 }
 
-// ShortString returns short string of Info
+// ShortString returns short string of Info.
 func (i *Info) ShortString() string {
 	logInfo := LogInfo{
 		Task:           i.Task,

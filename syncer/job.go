@@ -101,7 +101,6 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 // when cfg.ShardMode == ShardOptimistic || ShardPessimistic, ddlInfo != nil, sourceTbls == nil.
 func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation, cmdLocation binlog.Location,
 	sourceTbls map[string]map[string]struct{}, originSQL string) *job {
-
 	j := &job{
 		tp:              ddl,
 		ddls:            ddls,
@@ -153,7 +152,7 @@ func newSkipJob(location binlog.Location) *job {
 	}
 }
 
-// put queues into bucket to monitor them
+// put queues into bucket to monitor them.
 func queueBucketName(queueID int) string {
 	return fmt.Sprintf("q_%d", queueID%defaultBucketCount)
 }

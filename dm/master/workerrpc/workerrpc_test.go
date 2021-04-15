@@ -31,8 +31,7 @@ import (
 
 var _ = Suite(&testWorkerRPCSuite{})
 
-type testWorkerRPCSuite struct {
-}
+type testWorkerRPCSuite struct{}
 
 func TestWorkerRPC(t *testing.T) {
 	TestingT(t)

@@ -60,7 +60,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// use task config from integration test `sharding`
+// use task config from integration test `sharding`.
 var taskConfig = `---
 name: test
 task-mode: all
@@ -275,8 +275,9 @@ func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sour
 			defer wg.Done()
 			c.Assert(ha.KeepAlive(ctx, etcdTestCli, workerName, keepAliveTTL), check.IsNil)
 		}(ctx1, name)
+		idx := i
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-			w := scheduler2.GetWorkerBySource(sources[i])
+			w := scheduler2.GetWorkerBySource(sources[idx])
 			return w != nil && w.BaseInfo().Name == name
 		}), check.IsTrue)
 	}
@@ -308,8 +309,9 @@ func testMockSchedulerForRelay(ctx context.Context, wg *sync.WaitGroup, c *check
 			c.Assert(ha.KeepAlive(ctx, etcdTestCli, workerName, keepAliveTTL), check.IsNil)
 		}(ctx1, name)
 		c.Assert(scheduler2.StartRelay(sources[i], []string{workers[i]}), check.IsNil)
+		idx := i
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-			relayWorkers, err2 := scheduler2.GetRelayWorkers(sources[i])
+			relayWorkers, err2 := scheduler2.GetRelayWorkers(sources[idx])
 			c.Assert(err2, check.IsNil)
 			return len(relayWorkers) == 1 && relayWorkers[0].BaseInfo().Name == name
 		}), check.IsTrue)
@@ -323,6 +325,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 
 	server := testDefaultMasterServer(c)
 	sources, workers := defaultWorkerSource()
+	var cancels []context.CancelFunc
 
 	// test query all workers
 	for _, worker := range workers {
@@ -338,7 +341,10 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	}
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
-	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
+	server.scheduler, cancels = testMockScheduler(ctx, &wg, c, sources, workers, "", t.workerClients)
+	for _, cancelFunc := range cancels {
+		defer cancelFunc()
+	}
 	resp, err := server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -357,7 +363,10 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 		t.workerClients[worker] = newMockRPCClient(mockWorkerClient)
 	}
 	ctx, cancel = context.WithCancel(context.Background())
-	server.scheduler, _ = testMockSchedulerForRelay(ctx, &wg, c, sources, workers, "", t.workerClients)
+	server.scheduler, cancels = testMockSchedulerForRelay(ctx, &wg, c, sources, workers, "passwd", t.workerClients)
+	for _, cancelFunc := range cancels {
+		defer cancelFunc()
+	}
 	resp, err = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
 		Sources: sources,
 	})
@@ -508,15 +517,16 @@ func (t *testMaster) TestStartTask(c *check.C) {
 }
 
 // db use for remove data
-// verDB user for show version
+// verDB user for show version.
 type mockDBProvider struct {
 	verDB *sql.DB
 	db    *sql.DB
 }
 
-// return db if verDB was closed
+// return db if verDB was closed.
 func (d *mockDBProvider) Apply(config config.DBConfig) (*conn.BaseDB, error) {
 	if err := d.verDB.Ping(); err != nil {
+		// nolint:nilerr
 		return conn.NewBaseDB(d.db, func() {}), nil
 	}
 	return conn.NewBaseDB(d.verDB, func() {}), nil
@@ -990,7 +1000,7 @@ func (t *testMaster) TestServer(c *check.C) {
 	t.testHTTPInterface(c, fmt.Sprintf("http://%s/status", cfg.MasterAddr), []byte(utils.GetRawInfo()))
 	t.testHTTPInterface(c, fmt.Sprintf("http://%s/debug/pprof/", cfg.MasterAddr), []byte("Types of profiles available"))
 	// HTTP API in this unit test is unstable, but we test it in `http_apis` in integration test.
-	//t.testHTTPInterface(c, fmt.Sprintf("http://%s/apis/v1alpha1/status/test-task", cfg.MasterAddr), []byte("task test-task has no source or not exist"))
+	// t.testHTTPInterface(c, fmt.Sprintf("http://%s/apis/v1alpha1/status/test-task", cfg.MasterAddr), []byte("task test-task has no source or not exist"))
 
 	dupServer := NewServer(cfg)
 	err := dupServer.Start(ctx)
@@ -1183,6 +1193,7 @@ func (t *testMaster) testHTTPInterface(c *check.C, url string, contain []byte) {
 	c.Assert(err, check.IsNil)
 	cli := toolutils.ClientWithTLS(tls.TLSConfig())
 
+	// nolint:noctx
 	resp, err := cli.Get(url)
 	c.Assert(err, check.IsNil)
 	defer resp.Body.Close()
@@ -1810,8 +1821,7 @@ func createTableInfo(c *check.C, p *parser.Parser, se sessionctx.Context, tableI
 	return info
 }
 
-type testEtcd struct {
-}
+type testEtcd struct{}
 
 var _ = check.Suite(&testEtcd{})
 

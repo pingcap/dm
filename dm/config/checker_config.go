@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Backoff related constants
+// Backoff related constants.
 var (
 	DefaultCheckInterval           = 5 * time.Second
 	DefaultBackoffRollback         = 5 * time.Minute
@@ -15,26 +15,26 @@ var (
 	DefaultBackoffFactor   float64 = 2
 )
 
-// Duration is used to hold a time.Duration field
+// Duration is used to hold a time.Duration field.
 type Duration struct {
 	time.Duration
 }
 
 // MarshalText hacks to satisfy the encoding.TextMarshaler interface
-// For MarshalText, we should use (d Duration) which can be used by both pointer and instance
+// For MarshalText, we should use (d Duration) which can be used by both pointer and instance.
 func (d Duration) MarshalText() ([]byte, error) {
 	return []byte(d.Duration.String()), nil
 }
 
 // UnmarshalText hacks to satisfy the encoding.TextUnmarshaler interface
-// For UnmarshalText, we should use (d *Duration) to change the value of this instance instead of the copy
+// For UnmarshalText, we should use (d *Duration) to change the value of this instance instead of the copy.
 func (d *Duration) UnmarshalText(text []byte) error {
 	var err error
 	d.Duration, err = time.ParseDuration(string(text))
 	return err
 }
 
-// MarshalJSON hacks to satisfy the json.Marshaler interface
+// MarshalJSON hacks to satisfy the json.Marshaler interface.
 func (d *Duration) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		Duration string `json:"Duration"`
@@ -43,7 +43,7 @@ func (d *Duration) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// CheckerConfig is configuration used for TaskStatusChecker
+// CheckerConfig is configuration used for TaskStatusChecker.
 type CheckerConfig struct {
 	CheckEnable     bool     `yaml:"check-enable" toml:"check-enable" json:"check-enable"`
 	BackoffRollback Duration `yaml:"backoff-rollback" toml:"backoff-rollback" json:"backoff-rollback"`
@@ -55,7 +55,7 @@ type CheckerConfig struct {
 	BackoffFactor float64  `yaml:"backoff-factor" toml:"backoff-factor" json:"-"`
 }
 
-// Adjust sets default value for field: CheckInterval/BackoffMin/BackoffJitter/BackoffFactor
+// Adjust sets default value for field: CheckInterval/BackoffMin/BackoffJitter/BackoffFactor.
 func (cc *CheckerConfig) Adjust() {
 	cc.CheckInterval = Duration{Duration: DefaultCheckInterval}
 	cc.BackoffMin = Duration{Duration: DefaultBackoffMin}

@@ -59,7 +59,7 @@ func (t *testCheckPointSuite) SetUpSuite(c *C) {
 func (t *testCheckPointSuite) TearDownSuite(c *C) {
 }
 
-// test checkpoint's db operation
+// test checkpoint's db operation.
 func (t *testCheckPointSuite) TestForDB(c *C) {
 	cases := []struct {
 		filename string

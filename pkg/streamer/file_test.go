@@ -33,8 +33,7 @@ import (
 
 var _ = Suite(&testFileSuite{})
 
-type testFileSuite struct {
-}
+type testFileSuite struct{}
 
 func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 	var (
@@ -62,7 +61,7 @@ func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 
 	// create all valid binlog files
 	for _, fn := range valid {
-		err = ioutil.WriteFile(filepath.Join(dir, fn), nil, 0600)
+		err = ioutil.WriteFile(filepath.Join(dir, fn), nil, 0o600)
 		c.Assert(err, IsNil)
 	}
 	files, err = CollectAllBinlogFiles(dir)
@@ -71,7 +70,7 @@ func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 
 	// create some invalid binlog files
 	for _, fn := range invalid {
-		err = ioutil.WriteFile(filepath.Join(dir, fn), nil, 0600)
+		err = ioutil.WriteFile(filepath.Join(dir, fn), nil, 0o600)
 		c.Assert(err, IsNil)
 	}
 	files, err = CollectAllBinlogFiles(dir)
@@ -80,7 +79,7 @@ func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 
 	// create some invalid meta files
 	for _, fn := range meta {
-		err = ioutil.WriteFile(filepath.Join(dir, fn), nil, 0600)
+		err = ioutil.WriteFile(filepath.Join(dir, fn), nil, 0o600)
 		c.Assert(err, IsNil)
 	}
 	files, err = CollectAllBinlogFiles(dir)
@@ -150,7 +149,7 @@ func (t *testFileSuite) TestCollectBinlogFilesCmp(c *C) {
 
 	// create a meta file
 	filename := filepath.Join(dir, utils.MetaFilename)
-	err = ioutil.WriteFile(filename, nil, 0600)
+	err = ioutil.WriteFile(filename, nil, 0o600)
 	c.Assert(err, IsNil)
 
 	// invalid base filename, is a meta filename
@@ -161,7 +160,7 @@ func (t *testFileSuite) TestCollectBinlogFilesCmp(c *C) {
 	// create some binlog files
 	for _, f := range binlogFiles {
 		filename = filepath.Join(dir, f)
-		err = ioutil.WriteFile(filename, nil, 0600)
+		err = ioutil.WriteFile(filename, nil, 0o600)
 		c.Assert(err, IsNil)
 	}
 
@@ -192,7 +191,7 @@ func (t *testFileSuite) TestCollectBinlogFilesCmp(c *C) {
 
 	// add a basename mismatch binlog file
 	filename = filepath.Join(dir, "bin-mysql.100000")
-	err = ioutil.WriteFile(filename, nil, 0600)
+	err = ioutil.WriteFile(filename, nil, 0o600)
 	c.Assert(err, IsNil)
 
 	// test again, should ignore it
@@ -224,7 +223,7 @@ func (t *testFileSuite) TestGetFirstBinlogName(c *C) {
 	c.Assert(name, Equals, "")
 
 	// empty directory
-	err = os.MkdirAll(subDir, 0700)
+	err = os.MkdirAll(subDir, 0o700)
 	c.Assert(err, IsNil)
 	name, err = getFirstBinlogName(baseDir, uuid)
 	c.Assert(err, ErrorMatches, ".*not found.*")
@@ -232,7 +231,7 @@ func (t *testFileSuite) TestGetFirstBinlogName(c *C) {
 
 	// has file, but not a valid binlog file
 	filename := "invalid.bin"
-	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0600)
+	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0o600)
 	c.Assert(err, IsNil)
 	_, err = getFirstBinlogName(baseDir, uuid)
 	c.Assert(err, ErrorMatches, ".*not valid.*")
@@ -241,7 +240,7 @@ func (t *testFileSuite) TestGetFirstBinlogName(c *C) {
 
 	// has a valid binlog file
 	filename = "z-mysql-bin.000002" // z prefix, make it become not the _first_ if possible.
-	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0600)
+	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0o600)
 	c.Assert(err, IsNil)
 	name, err = getFirstBinlogName(baseDir, uuid)
 	c.Assert(err, IsNil)
@@ -249,14 +248,14 @@ func (t *testFileSuite) TestGetFirstBinlogName(c *C) {
 
 	// has one more earlier binlog file
 	filename = "z-mysql-bin.000001"
-	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0600)
+	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0o600)
 	c.Assert(err, IsNil)
 	name, err = getFirstBinlogName(baseDir, uuid)
 	c.Assert(err, IsNil)
 	c.Assert(name, Equals, filename)
 
 	// has a meta file
-	err = ioutil.WriteFile(filepath.Join(subDir, utils.MetaFilename), nil, 0600)
+	err = ioutil.WriteFile(filepath.Join(subDir, utils.MetaFilename), nil, 0o600)
 	c.Assert(err, IsNil)
 	name, err = getFirstBinlogName(baseDir, uuid)
 	c.Assert(err, IsNil)
@@ -277,7 +276,7 @@ func (t *testFileSuite) TestFileSizeUpdated(c *C) {
 	c.Assert(cmp, Equals, 0)
 
 	// create and write the file
-	err = ioutil.WriteFile(filePath, data, 0600)
+	err = ioutil.WriteFile(filePath, data, 0o600)
 	c.Assert(err, IsNil)
 
 	// equal
@@ -337,7 +336,7 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	c.Assert(err, ErrorMatches, ".*not found.*")
 
 	// create the first relay file
-	err = ioutil.WriteFile(relayPaths[0], nil, 0600)
+	err = ioutil.WriteFile(relayPaths[0], nil, 0o600)
 	c.Assert(err, IsNil)
 
 	// c. latest file path not exist
@@ -348,7 +347,7 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	c.Assert(err, ErrorMatches, ".*(no such file or directory|The system cannot find the file specified).*")
 
 	// 1. file increased when adding watching
-	err = ioutil.WriteFile(relayPaths[0], data, 0600)
+	err = ioutil.WriteFile(relayPaths[0], data, 0o600)
 	c.Assert(err, IsNil)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -363,7 +362,7 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	wg.Wait()
 
 	// 2. file decreased when adding watching
-	err = ioutil.WriteFile(relayPaths[0], nil, 0600)
+	err = ioutil.WriteFile(relayPaths[0], nil, 0o600)
 	c.Assert(err, IsNil)
 	wg.Add(1)
 	go func() {
@@ -377,7 +376,7 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	wg.Wait()
 
 	// 3. new file created when adding watching
-	err = ioutil.WriteFile(relayPaths[1], nil, 0600)
+	err = ioutil.WriteFile(relayPaths[1], nil, 0o600)
 	c.Assert(err, IsNil)
 	wg.Add(1)
 	go func() {
@@ -403,7 +402,7 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 
 	// wait watcher started, update the file
 	time.Sleep(2 * watcherInterval)
-	err = ioutil.WriteFile(relayPaths[1], data, 0600)
+	err = ioutil.WriteFile(relayPaths[1], data, 0o600)
 	c.Assert(err, IsNil)
 	wg.Wait()
 
@@ -420,7 +419,7 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 
 	// wait watcher started, create a new file
 	time.Sleep(2 * watcherInterval)
-	err = ioutil.WriteFile(relayPaths[2], data, 0600)
+	err = ioutil.WriteFile(relayPaths[2], data, 0o600)
 	c.Assert(err, IsNil)
 	wg.Wait()
 
@@ -440,22 +439,22 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 
 	// wait watcher started, create new directory
 	time.Sleep(2 * watcherInterval)
-	err = os.MkdirAll(filepath.Join(subDir, "new-directory"), 0700)
+	err = os.MkdirAll(filepath.Join(subDir, "new-directory"), 0o700)
 	c.Assert(err, IsNil)
 
 	// wait again, create an invalid binlog file
 	time.Sleep(2 * watcherInterval)
-	err = ioutil.WriteFile(filepath.Join(subDir, "invalid-binlog-filename"), data, 0600)
+	err = ioutil.WriteFile(filepath.Join(subDir, "invalid-binlog-filename"), data, 0o600)
 	c.Assert(err, IsNil)
 
 	// wait again, rename an older filename, seems watch can not handle `RENAME` operation well
-	//time.Sleep(2 * watcherInterval)
-	//err = os.Rename(relayPaths[0], relayPaths[3])
-	//c.Assert(err, IsNil)
+	// time.Sleep(2 * watcherInterval)
+	// err = os.Rename(relayPaths[0], relayPaths[3])
+	// c.Assert(err, IsNil)
 
 	// wait again, update the file
 	time.Sleep(2 * watcherInterval)
-	err = ioutil.WriteFile(relayPaths[2], data, 0600)
+	err = ioutil.WriteFile(relayPaths[2], data, 0o600)
 	c.Assert(err, IsNil)
 	wg.Wait()
 }
@@ -468,12 +467,9 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 			"53ea0ed1-9bf8-11e6-8bea-64006a897c72.000002",
 			"53ea0ed1-9bf8-11e6-8bea-64006a897c71.000003",
 		}
-		currentUUID    = UUIDs[len(UUIDs)-1] // no next UUID
-		latestFilePath string
-		latestFileSize int64
-		data           = []byte("binlog file data")
-		switchCh       = make(chan SwitchPath, 1)
-		errCh          = make(chan error, 1)
+		currentUUID = UUIDs[len(UUIDs)-1] // no next UUID
+		switchCh    = make(chan SwitchPath, 1)
+		errCh       = make(chan error, 1)
 	)
 
 	ctx := context.Background()
@@ -481,7 +477,7 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 	// invalid UUID in UUIDs, error
 	UUIDs = append(UUIDs, "invalid.uuid")
 	t.writeUUIDs(c, relayDir, UUIDs)
-	needSwitchSubDir(ctx, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	needSwitchSubDir(ctx, relayDir, currentUUID, switchCh, errCh)
 	c.Assert(len(errCh), Equals, 1)
 	c.Assert(len(switchCh), Equals, 0)
 	err := <-errCh
@@ -493,37 +489,36 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 	// no next UUID, no need switch
 	newCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	needSwitchSubDir(newCtx, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	needSwitchSubDir(newCtx, relayDir, currentUUID, switchCh, errCh)
 	c.Assert(len(errCh), Equals, 0)
 	c.Assert(len(switchCh), Equals, 0)
 
 	// no next sub directory
 	currentUUID = UUIDs[0]
-	needSwitchSubDir(ctx, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	needSwitchSubDir(ctx, relayDir, currentUUID, switchCh, errCh)
 	c.Assert(len(errCh), Equals, 1)
 	c.Assert(len(switchCh), Equals, 0)
 	err = <-errCh
 	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*(no such file or directory|The system cannot find the file specified).*", UUIDs[1]))
 
 	// create next sub directory, block
-	err = os.Mkdir(filepath.Join(relayDir, UUIDs[1]), 0700)
+	err = os.Mkdir(filepath.Join(relayDir, UUIDs[1]), 0o700)
 	c.Assert(err, IsNil)
 	newCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel2()
-	needSwitchSubDir(newCtx2, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	needSwitchSubDir(newCtx2, relayDir, currentUUID, switchCh, errCh)
 	c.Assert(len(errCh), Equals, 0)
 	c.Assert(len(switchCh), Equals, 0)
 
 	// create a relay log file in the next sub directory
 	nextBinlogPath := filepath.Join(relayDir, UUIDs[1], "mysql-bin.000001")
-	err = os.MkdirAll(filepath.Dir(nextBinlogPath), 0700)
+	err = os.MkdirAll(filepath.Dir(nextBinlogPath), 0o700)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(nextBinlogPath, nil, 0600)
+	err = ioutil.WriteFile(nextBinlogPath, nil, 0o600)
 	c.Assert(err, IsNil)
 
 	// switch to the next
-	latestFileSize = int64(len(data))
-	needSwitchSubDir(ctx, relayDir, currentUUID, latestFilePath, latestFileSize, switchCh, errCh)
+	needSwitchSubDir(ctx, relayDir, currentUUID, switchCh, errCh)
 	c.Assert(len(errCh), Equals, 0)
 	c.Assert(len(switchCh), Equals, 1)
 	res := <-switchCh
@@ -531,10 +526,11 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 	c.Assert(res.nextBinlogName, Equals, filepath.Base(nextBinlogPath))
 }
 
-func (t *testFileSuite) writeUUIDs(c *C, relayDir string, UUIDs []string) []byte {
+// nolint:unparam
+func (t *testFileSuite) writeUUIDs(c *C, relayDir string, uuids []string) []byte {
 	indexPath := path.Join(relayDir, utils.UUIDIndexFilename)
 	var buf bytes.Buffer
-	for _, uuid := range UUIDs {
+	for _, uuid := range uuids {
 		_, err := buf.WriteString(uuid)
 		c.Assert(err, IsNil)
 		_, err = buf.WriteString("\n")
@@ -542,7 +538,7 @@ func (t *testFileSuite) writeUUIDs(c *C, relayDir string, UUIDs []string) []byte
 	}
 
 	// write the index file
-	err := ioutil.WriteFile(indexPath, buf.Bytes(), 0600)
+	err := ioutil.WriteFile(indexPath, buf.Bytes(), 0o600)
 	c.Assert(err, IsNil)
 	return buf.Bytes()
 }

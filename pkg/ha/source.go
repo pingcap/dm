@@ -98,7 +98,7 @@ func sourceCfgFromResp(source string, resp *clientv3.GetResponse) (map[string]co
 }
 
 // ClearTestInfoOperation is used to clear all DM-HA relative etcd keys' information
-// this function shouldn't be used in development environment
+// this function shouldn't be used in development environment.
 func ClearTestInfoOperation(cli *clientv3.Client) error {
 	clearSource := clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Path(), clientv3.WithPrefix())
 	clearTask := clientv3.OpDelete(common.TaskConfigKeyAdapter.Path(), clientv3.WithPrefix())

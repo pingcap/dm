@@ -29,9 +29,7 @@ const (
 	sourceSampleFile = "../../dm/worker/source.yaml"
 )
 
-var (
-	etcdTestCli *clientv3.Client
-)
+var etcdTestCli *clientv3.Client
 
 func TestHA(t *testing.T) {
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})

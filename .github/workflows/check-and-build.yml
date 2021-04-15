@@ -43,7 +43,7 @@ jobs:
         key: ${{ runner.os }}-dm-tools-${{ hashFiles('**/tools/go.sum') }}
 
     - name: Build
-      run: make build
+      run: make build nolint=true
 
   lint:
     name: Lint
@@ -56,11 +56,5 @@ jobs:
       - name: GolangCI Lint
         uses: golangci/golangci-lint-action@v2
         with:
-          version: v1.31
-          args: --timeout 10m0s --skip-dirs ^_tool/
-
-      - name: Revive Lint
-        uses: morphy2k/revive-action@v1
-        with:
-          config: .revive.toml
-          exclude: _tool/...
+          version: latest
+          args: --config .golangci.yml --timeout 10m0s --skip-dirs ^_tool/

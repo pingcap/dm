@@ -24,8 +24,7 @@ var (
 	_                 = check.Suite(&testConfigSuite{})
 )
 
-type testConfigSuite struct {
-}
+type testConfigSuite struct{}
 
 func (t *testConfigSuite) TestAdjustAddr(c *check.C) {
 	cfg := NewConfig()

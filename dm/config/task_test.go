@@ -20,16 +20,17 @@ import (
 	"strings"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/dm/pkg/terror"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+
+	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/coreos/go-semver/semver"
 )
 
 func (t *testConfig) TestUnusedTaskConfig(c *C) {
-	var correctTaskConfig = `---
+	correctTaskConfig := `---
 name: test
 task-mode: all
 shard-mode: "pessimistic"       
@@ -131,7 +132,7 @@ mysql-instances:
 	taskConfig := NewTaskConfig()
 	err := taskConfig.Decode(correctTaskConfig)
 	c.Assert(err, IsNil)
-	var errorTaskConfig = `---
+	errorTaskConfig := `---
 name: test
 task-mode: all
 shard-mode: "pessimistic"       
@@ -238,7 +239,7 @@ mysql-instances:
 }
 
 func (t *testConfig) TestInvalidTaskConfig(c *C) {
-	var errorTaskConfig1 = `---
+	errorTaskConfig1 := `---
 name: test
 task-mode: all
 is-sharding: true
@@ -263,7 +264,7 @@ mysql-instances:
     loader-config-name: "global"
     syncer-config-name: "global"
 `
-	var errorTaskConfig2 = `---
+	errorTaskConfig2 := `---
 name: test
 name: test1
 task-mode: all
@@ -310,7 +311,7 @@ enable-heartbeat: true
 timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 `)
-	err = ioutil.WriteFile(filepath, configContent, 0644)
+	err = ioutil.WriteFile(filepath, configContent, 0o644)
 	c.Assert(err, IsNil)
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
@@ -327,7 +328,7 @@ enable-heartbeat: true
 timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 `)
-	err = ioutil.WriteFile(filepath, configContent, 0644)
+	err = ioutil.WriteFile(filepath, configContent, 0o644)
 	c.Assert(err, IsNil)
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
@@ -342,7 +343,7 @@ enable-heartbeat: true
 timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 `)
-	err = ioutil.WriteFile(filepath, configContent, 0644)
+	err = ioutil.WriteFile(filepath, configContent, 0o644)
 	c.Assert(err, IsNil)
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
@@ -409,7 +410,7 @@ syncers:
     batch: 100
 `)
 
-	err = ioutil.WriteFile(filepath, configContent, 0644)
+	err = ioutil.WriteFile(filepath, configContent, 0o644)
 	c.Assert(err, IsNil)
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
@@ -465,7 +466,7 @@ filters:
   filter-rule-4:
 `)
 
-	err = ioutil.WriteFile(filepath, configContent, 0644)
+	err = ioutil.WriteFile(filepath, configContent, 0o644)
 	c.Assert(err, IsNil)
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
@@ -478,7 +479,6 @@ filters:
 	c.Assert(terror.ErrConfigDuplicateCfgItem.Equal(err), IsTrue)
 	c.Assert(err, ErrorMatches, `[\s\S]*mysql-instance\(0\)'s route-rules: route-rule-1, route-rule-2[\s\S]*`)
 	c.Assert(err, ErrorMatches, `[\s\S]*mysql-instance\(1\)'s filter-rules: filter-rule-2[\s\S]*`)
-
 }
 
 func (t *testConfig) TestCheckDuplicateString(c *C) {
@@ -851,6 +851,7 @@ func (t *testConfig) TestMetaVerify(c *C) {
 
 func (t *testConfig) TestMySQLInstance(c *C) {
 	var m *MySQLInstance
+	cfgName := "test"
 	err := m.VerifyAndAdjust()
 	c.Assert(terror.ErrConfigMySQLInstNotFound.Equal(err), IsTrue)
 
@@ -860,25 +861,24 @@ func (t *testConfig) TestMySQLInstance(c *C) {
 	m.SourceID = "123"
 
 	m.Mydumper = &MydumperConfig{}
-	m.MydumperConfigName = "test"
+	m.MydumperConfigName = cfgName
 	err = m.VerifyAndAdjust()
 	c.Assert(terror.ErrConfigMydumperCfgConflict.Equal(err), IsTrue)
 	m.MydumperConfigName = ""
 
 	m.Loader = &LoaderConfig{}
-	m.LoaderConfigName = "test"
+	m.LoaderConfigName = cfgName
 	err = m.VerifyAndAdjust()
 	c.Assert(terror.ErrConfigLoaderCfgConflict.Equal(err), IsTrue)
 	m.Loader = nil
 
 	m.Syncer = &SyncerConfig{}
-	m.SyncerConfigName = "test"
+	m.SyncerConfigName = cfgName
 	err = m.VerifyAndAdjust()
 	c.Assert(terror.ErrConfigSyncerCfgConflict.Equal(err), IsTrue)
 	m.SyncerConfigName = ""
 
 	c.Assert(m.VerifyAndAdjust(), IsNil)
-
 }
 
 func (t *testConfig) TestAdjustTargetDBConfig(c *C) {

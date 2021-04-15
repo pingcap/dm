@@ -338,8 +338,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testParserSuite struct {
-}
+type testParserSuite struct{}
 
 func (t *testParserSuite) TestParser(c *C) {
 	p := parser.New()
