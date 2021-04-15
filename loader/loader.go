@@ -61,6 +61,7 @@ type DataFiles []string
 
 // Tables2DataFiles represent all data files of a table collection as a map
 type Tables2DataFiles map[string]DataFiles
+
 type dataJob struct {
 	sql        string
 	schema     string
@@ -1239,14 +1240,13 @@ func (q *jobQueue) close() error {
 func (q *jobQueue) startConsumers(handler func(ctx context.Context, job *restoreSchemaJob) error) {
 	for i := 0; i < q.consumerCount; i++ {
 		q.eg.Go(func() error {
-			var err error
 			var session *DBConn
 		consumeLoop:
 			for {
 				select {
 				case <-q.ctx.Done():
-					err = q.ctx.Err()
-					break consumeLoop
+					err := q.ctx.Err()
+					return err
 				case job, active := <-q.msgq:
 					if !active {
 						break consumeLoop
@@ -1275,13 +1275,13 @@ func (q *jobQueue) startConsumers(handler func(ctx context.Context, job *restore
 					if job.session == nil {
 						job.session = session
 					}
-					err = handler(q.ctx, job)
+					err := handler(q.ctx, job)
 					if err != nil {
-						break consumeLoop
+						return err
 					}
 				}
 			}
-			return err
+			return nil
 		})
 	}
 }
@@ -1304,9 +1304,9 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	dbRestoreQueue.startConsumers(func(ctx context.Context, job *restoreSchemaJob) error {
 		// restore database schema
 		job.loader.logger.Info("start to create schema", zap.String("schema file", job.filepath))
-		err := job.loader.restoreSchema(ctx, job.session, job.filepath, job.database)
-		if err != nil {
-			return err
+		err2 := job.loader.restoreSchema(ctx, job.session, job.filepath, job.database)
+		if err2 != nil {
+			return err2
 		}
 		job.loader.logger.Info("finish to create schema", zap.String("schema file", job.filepath))
 		return nil
@@ -1344,9 +1344,9 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	tblRestoreQueue := newJobQueue(ctx, concurrency, concurrency /** length of queue */)
 	tblRestoreQueue.startConsumers(func(ctx context.Context, job *restoreSchemaJob) error {
 		job.loader.logger.Info("start to create table", zap.String("table file", job.filepath))
-		err := job.loader.restoreTable(ctx, job.session, job.filepath, job.database, job.table)
-		if err != nil {
-			return err
+		err2 := job.loader.restoreTable(ctx, job.session, job.filepath, job.database, job.table)
+		if err2 != nil {
+			return err2
 		}
 		job.loader.logger.Info("finish to create table", zap.String("table file", job.filepath))
 		return nil
