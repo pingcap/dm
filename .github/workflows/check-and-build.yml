@@ -56,5 +56,5 @@ jobs:
       - name: GolangCI Lint
         uses: golangci/golangci-lint-action@v2
         with:
-          version: v1.39
+          version: latest
           args: --config .golangci.yml --timeout 10m0s --skip-dirs ^_tool/
