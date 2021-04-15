@@ -71,7 +71,7 @@ function run() {
         "failpoint error for FlushCheckpointStage before flush old checkpoint" 1
 
     # resume-task to next stage
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task test"\
         "\"result\": true" 3
 
@@ -80,7 +80,7 @@ function run() {
         "failpoint error for FlushCheckpointStage before track DDL" 1
 
     # resume-task to next stage
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task test"\
         "\"result\": true" 3
 
@@ -89,7 +89,7 @@ function run() {
         "failpoint error for FlushCheckpointStage before execute DDL" 1
 
     # resume-task to next stage
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task test"\
         "\"result\": true" 3
 
@@ -130,7 +130,7 @@ function run() {
         "query-status test" \
         "detect inconsistent DDL sequence" 1
 
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task test"\
         "\"result\": true" 3
 
@@ -140,7 +140,7 @@ function run() {
         "detect inconsistent DDL sequence" 1
 
     # stop twice, just used to test stop by the way
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "stop-task test"\
         "\"result\": true" 3
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \

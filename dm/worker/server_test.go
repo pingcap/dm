@@ -410,8 +410,9 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 		c.Assert(s.observeSourceBound(ctx1, startRev), IsNil)
 	}()
 	// step 4.1: should stop the running worker, source bound has been deleted, should stop this worker
-	time.Sleep(time.Second)
-	c.Assert(s.getWorker(true), IsNil)
+	c.Assert(utils.WaitSomething(20, 100*time.Millisecond, func() bool {
+		return s.getWorker(true) == nil
+	}), IsTrue)
 	// step 4.2: put a new source bound, source should be started
 	_, err = ha.PutSourceBound(etcdCli, sourceBound)
 	c.Assert(err, IsNil)
