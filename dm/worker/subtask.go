@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/pingcap/failpoint"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
@@ -119,7 +120,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 		cancel:     cancel,
 		etcdClient: etcdClient,
 	}
-	taskState.WithLabelValues(st.cfg.Name, st.cfg.SourceID).Set(float64(st.stage))
+	updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 	return &st
 }
 
@@ -385,7 +386,7 @@ func (st *SubTask) setStage(stage pb.Stage) {
 	st.Lock()
 	defer st.Unlock()
 	st.stage = stage
-	taskState.WithLabelValues(st.cfg.Name, st.cfg.SourceID).Set(float64(st.stage))
+	updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 }
 
 // stageCAS sets stage to newStage if its current value is oldStage.
@@ -395,7 +396,7 @@ func (st *SubTask) stageCAS(oldStage, newStage pb.Stage) bool {
 
 	if st.stage == oldStage {
 		st.stage = newStage
-		taskState.WithLabelValues(st.cfg.Name, st.cfg.SourceID).Set(float64(st.stage))
+		updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 		return true
 	}
 	return false
@@ -407,7 +408,7 @@ func (st *SubTask) setStageIfNot(oldStage, newStage pb.Stage) bool {
 	defer st.Unlock()
 	if st.stage != oldStage {
 		st.stage = newStage
-		taskState.WithLabelValues(st.cfg.Name, st.cfg.SourceID).Set(float64(st.stage))
+		updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 		return true
 	}
 	return false
@@ -443,9 +444,9 @@ func (st *SubTask) Close() {
 
 	st.cancel()
 	st.closeUnits() // close all un-closed units
-	st.removeLabelValuesWithTaskInMetrics(st.cfg.Name, st.cfg.SourceID)
 	st.wg.Wait()
 	st.setStageIfNot(pb.Stage_Finished, pb.Stage_Stopped)
+	updateTaskState(st.cfg.Name, st.cfg.SourceID, pb.Stage_Stopped)
 }
 
 // Pause pauses the running sub task.
@@ -691,4 +692,12 @@ func (st *SubTask) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReq
 		err = st.Resume()
 	}
 	return err
+}
+
+func updateTaskState(task, sourceID string, stage pb.Stage) {
+	if stage == pb.Stage_Stopped || stage == pb.Stage_Finished {
+		taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": sourceID})
+	} else {
+		taskState.WithLabelValues(task, sourceID).Set(float64(stage))
+	}
 }
