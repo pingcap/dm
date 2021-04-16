@@ -556,10 +556,9 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
         "operate-schema set -s mysql-replica-02 test -d ${shardddl1} -t ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
         "\"result\": true" 2
 
-    # fourth, resume-task
+    # fourth, resume-task. don't check "result: true" here, because worker may run quickly and meet the error from tb2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "resume-task test" \
-        "\"result\": true" 3
+        "resume-task test"
     
     # WARN: if it's sequence_sharding, the other tables will not be fixed
     # source2.table2's dml fails
