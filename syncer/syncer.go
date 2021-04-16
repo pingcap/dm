@@ -1644,7 +1644,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 	}
 
-	// TODO(csuzhangxc): check performance of `getTabel` from schema tracker.
+	// TODO(csuzhangxc): check performance of `getTable` from schema tracker.
 	ti, err := s.getTable(ec.tctx, originSchema, originTable, schemaName, tableName)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
