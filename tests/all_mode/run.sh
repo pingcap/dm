@@ -134,9 +134,13 @@ function test_stop_task_before_checkpoint(){
     dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
     check_log_contain_with_retry 'wait loader stop after init checkpoint' $WORK_DIR/worker1/log/dm-worker.log
     check_log_contain_with_retry 'wait loader stop after init checkpoint' $WORK_DIR/worker2/log/dm-worker.log
+    check_metric $WORKER1_PORT 'dm_worker_task_state{source_id="mysql-replica-01",task="test"}' 3 0 2
+    check_metric $WORKER2_PORT 'dm_worker_task_state{source_id="mysql-replica-02",task="test"}' 3 0 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "stop-task test"\
             "\"result\": true" 3
+    check_metric $WORKER1_PORT 'dm_worker_task_state{source_id="mysql-replica-01",task="test"}' 3 -1 1
+    check_metric $WORKER2_PORT 'dm_worker_task_state{source_id="mysql-replica-02",task="test"}' 3 -1 1
 
     # restart dm-worker
     pkill -9 dm-worker.test 2>/dev/null || true
@@ -153,9 +157,13 @@ function test_stop_task_before_checkpoint(){
     dmctl_start_task "$cur/conf/dm-task.yaml"
     check_log_contain_with_retry 'wait loader stop before load checkpoint' $WORK_DIR/worker1/log/dm-worker.log
     check_log_contain_with_retry 'wait loader stop before load checkpoint' $WORK_DIR/worker2/log/dm-worker.log
+    check_metric $WORKER1_PORT 'dm_worker_task_state{source_id="mysql-replica-01",task="test"}' 3 0 2
+    check_metric $WORKER2_PORT 'dm_worker_task_state{source_id="mysql-replica-02",task="test"}' 3 0 2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "stop-task test"\
             "\"result\": true" 3
+    check_metric $WORKER1_PORT 'dm_worker_task_state{source_id="mysql-replica-01",task="test"}' 3 -1 1
+    check_metric $WORKER2_PORT 'dm_worker_task_state{source_id="mysql-replica-02",task="test"}' 3 -1 1
 
     dmctl_start_task "$cur/conf/dm-task.yaml"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
