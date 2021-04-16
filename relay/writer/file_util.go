@@ -21,10 +21,10 @@ import (
 	"os"
 	"time"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/google/uuid"
 	"github.com/pingcap/parser"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/binlog/reader"
@@ -220,14 +220,14 @@ func getTxnPosGTIDs(ctx context.Context, filename string, p *parser.Parser) (int
 			if latestGSet == nil {
 				return 0, nil, terror.ErrRelayNeedPrevGTIDEvBeforeGTIDEv.Generate(e.Header)
 			}
-			// learn from: https://github.com/siddontang/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L736
+			// learn from: https://github.com/go-mysql-org/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L736
 			u, _ := uuid.FromBytes(ev.SID)
 			nextGTIDStr = fmt.Sprintf("%s:%d", u.String(), ev.GNO)
 		case *replication.MariadbGTIDEvent:
 			if latestGSet == nil {
 				return 0, nil, terror.ErrRelayNeedMaGTIDListEvBeforeGTIDEv.Generate(e.Header)
 			}
-			// learn from: https://github.com/siddontang/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L745
+			// learn from: https://github.com/go-mysql-org/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L745
 			GTID := ev.GTID
 			nextGTIDStr = fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber)
 		case *replication.PreviousGTIDsEvent:
