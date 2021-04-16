@@ -890,10 +890,21 @@ function DM_143_CASE {
     run_sql_source2 "insert into ${shardddl1}.${tb2} values(30),(31),(32),(33),(34),(35),(130),(131),(132),(133),(134),(135);"
 
     run_sql_source1 "delete from ${shardddl1}.${tb1} where id >= 100;"
-    run_sql_source2 "delete from ${shardddl1}.${tb1} where id >= 100;"
-    run_sql_source2 "delete from ${shardddl1}.${tb2} where id >= 100;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(16),(17);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(26),(27),(126),(127);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(36),(37),(136),(137);"
     run_sql_source1 "alter table ${shardddl1}.${tb1} drop partition p1;"
+
+    run_sql_source2 "delete from ${shardddl1}.${tb1} where id >= 100;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(18),(19);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(28),(29);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(38),(39),(138),(139);"
     run_sql_source2 "alter table ${shardddl1}.${tb1} drop partition p1;"
+
+    run_sql_source2 "delete from ${shardddl1}.${tb2} where id >= 100;"
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(40),(41);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(50),(51);"
+    run_sql_source2 "insert into ${shardddl1}.${tb2} values(60),(61);"
     run_sql_source2 "alter table ${shardddl1}.${tb2} drop partition p1;"
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

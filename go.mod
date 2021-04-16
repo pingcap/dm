@@ -52,3 +52,5 @@ go 1.13
 replace github.com/siddontang/go-mysql v1.1.1-0.20200824131207-0c5789dd0bd3 => github.com/lance6716/go-mysql v1.1.1-0.20210303100354-b0e44c2c5623
 
 replace github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726 => github.com/lance6716/go v0.0.0-20210312094856-8a1d496ae7d4
+
+replace github.com/pingcap/tidb-tools v5.0.0-rc.0.20210318094904-51a9e0c86386+incompatible => github.com/gozssky/tidb-tools v5.0.0-rc.0.20210416081403-5e7bcacac139+incompatible
