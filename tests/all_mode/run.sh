@@ -316,6 +316,14 @@ function run() {
     check_log_not_contains $WORK_DIR/worker1/log/dm-worker.log "Error .* Table .* doesn't exist"
     check_log_not_contains $WORK_DIR/worker2/log/dm-worker.log "Error .* Table .* doesn't exist"
 
+    # test Db not exists should be reported
+
+    run_sql_tidb "drop database all_mode"
+    run_sql_source1 "create table all_mode.db_error (c int primary key);"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status $ILLEGAL_CHAR_NAME" \
+        "Error 1049: Unknown database" 1
+
     export GO_FAILPOINTS=''
 
     run_sql_both_source "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
