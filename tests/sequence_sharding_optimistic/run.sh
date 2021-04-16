@@ -94,7 +94,7 @@ run() {
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "unlock-ddl-lock non-exist-task-\`test_db\`.\`test_table\`" \
-        "task (non-exist-task) which extracted from lock-ID is not found in DM" 1
+        "lock with ID non-exist-task-\`test_db\`.\`test_table\` not found" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "unlock-ddl-lock $task_name-\`shard_db\`.\`shard_table\`" \
