@@ -28,10 +28,12 @@ import (
 // NewCheckTaskCmd creates a CheckTask command.
 func NewCheckTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "check-task <config-file>",
+		Use:   "check-task <config-file> [--errors] [--warns]",
 		Short: "Checks the configuration file of the task.",
 		RunE:  checkTaskFunc,
 	}
+	cmd.Flags().Int64P("error", "e", common.DefaultErrorCnt, "max count of errors to display")
+	cmd.Flags().Int64P("warn", "w", common.DefaultWarnCnt, "max count of warns to display")
 	return cmd
 }
 
@@ -47,6 +49,15 @@ func checkTaskFunc(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	errCnt, err := cmd.Flags().GetInt64("error")
+	if err != nil {
+		return err
+	}
+	warnCnt, err := cmd.Flags().GetInt64("warn")
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -56,7 +67,9 @@ func checkTaskFunc(cmd *cobra.Command, _ []string) error {
 		ctx,
 		"CheckTask",
 		&pb.CheckTaskRequest{
-			Task: string(content),
+			Task:    string(content),
+			ErrCnt:  errCnt,
+			WarnCnt: warnCnt,
 		},
 		&resp,
 	)

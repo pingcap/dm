@@ -409,7 +409,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	}
 
 	resp := &pb.StartTaskResponse{}
-	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
+	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task, common.DefaultErrorCnt, common.DefaultWarnCnt)
 	if err != nil {
 		resp.Msg = err.Error()
 		// nolint:nilerr
@@ -581,7 +581,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		return resp2, err2
 	}
 
-	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
+	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task, common.DefaultErrorCnt, common.DefaultWarnCnt)
 	if err != nil {
 		// nolint:nilerr
 		return &pb.UpdateTaskResponse{
@@ -1036,7 +1036,7 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 		return resp2, err2
 	}
 
-	_, _, err := s.generateSubTask(ctx, req.Task)
+	_, _, err := s.generateSubTask(ctx, req.Task, req.ErrCnt, req.WarnCnt)
 	if err != nil {
 		// nolint:nilerr
 		return &pb.CheckTaskResponse{
@@ -1267,7 +1267,7 @@ func (s *Server) OperateLeader(ctx context.Context, req *pb.OperateLeaderRequest
 	}, nil
 }
 
-func (s *Server) generateSubTask(ctx context.Context, task string) (*config.TaskConfig, []*config.SubTaskConfig, error) {
+func (s *Server) generateSubTask(ctx context.Context, task string, errCnt, warnCnt int64) (*config.TaskConfig, []*config.SubTaskConfig, error) {
 	cfg := config.NewTaskConfig()
 	err := cfg.Decode(task)
 	if err != nil {
@@ -1286,7 +1286,7 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 
-	err = checker.CheckSyncConfigFunc(ctx, stCfgs)
+	err = checker.CheckSyncConfigFunc(ctx, stCfgs, errCnt, warnCnt)
 	if err != nil {
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
