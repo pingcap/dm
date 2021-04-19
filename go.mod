@@ -8,7 +8,7 @@ require (
 	github.com/coreos/go-semver v0.3.0
 	github.com/docker/go-units v0.4.0
 	github.com/dustin/go-humanize v1.0.0
-	github.com/go-mysql-org/go-mysql v1.1.2-0.20210416072330-2a68c0ee612a
+	github.com/go-mysql-org/go-mysql v1.1.2-0.20210419035833-609df4e7b974
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gogo/gateway v1.1.0
 	github.com/gogo/protobuf v1.3.2
