@@ -22,5 +22,5 @@ while [ $counter -lt $retry_count ]; do
     sleep 1
 done
 
-echo "metric $metric_name has invalid value $metric"
+echo "metric $metric_name has invalid count $metric"
 exit 1
