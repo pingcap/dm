@@ -179,8 +179,9 @@ function run() {
 
     # start DM task only
     dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
-    check_metric $WORKER1_PORT 'dm_worker_task_state{source_id="mysql-replica-01",task="test"}' 3 1 3
-    check_metric $WORKER2_PORT 'dm_worker_task_state{source_id="mysql-replica-02",task="test"}' 3 1 3
+    # Don't check task state here. The task may be finished very soon so that we can't get task state here.
+    # check_metric $WORKER1_PORT 'dm_worker_task_state{source_id="mysql-replica-01",task="test"}' 3 1 3
+    # check_metric $WORKER2_PORT 'dm_worker_task_state{source_id="mysql-replica-02",task="test"}' 3 1 3
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
