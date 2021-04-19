@@ -345,7 +345,9 @@ func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e2.ID())
 	c.Assert(leaderAddr, Equals, addr2)
-	c.Assert(e2.IsLeader(), IsTrue)
+	utils.WaitSomething(10, 10*time.Millisecond, func() bool {
+		return e2.IsLeader()
+	})
 
 	// cancel evict of e1, and then evict e2, e1 will be the leader
 	e1.CancelEvictLeader()
@@ -358,7 +360,9 @@ func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
-	c.Assert(e1.IsLeader(), IsTrue)
+	utils.WaitSomething(10, 10*time.Millisecond, func() bool {
+		return e1.IsLeader()
+	})
 }
 
 func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
