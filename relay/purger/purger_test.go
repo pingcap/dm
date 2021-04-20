@@ -24,8 +24,6 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go/ioutil2"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/streamer"
@@ -317,7 +315,7 @@ func (t *testPurgerSuite) genUUIDIndexFile(baseDir string) error {
 		buf.WriteString("\n")
 	}
 
-	return ioutil2.WriteFileAtomic(fp, buf.Bytes(), 0o644)
+	return utils.WriteFileAtomic(fp, buf.Bytes(), 0o644)
 }
 
 type fakeInterceptor struct {

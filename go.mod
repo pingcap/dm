@@ -27,7 +27,6 @@ require (
 	github.com/pingcap/tidb-tools v5.0.0-rc.0.20210318094904-51a9e0c86386+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
-	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
