@@ -138,7 +138,3 @@ func InitStatus(lis net.Listener) {
 		log.L().Error("status server returned", log.ShortError(err))
 	}
 }
-
-func (st *SubTask) removeLabelValuesWithTaskInMetrics(task string, source string) {
-	taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": source})
-}
