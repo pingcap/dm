@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 
 	. "github.com/pingcap/check"
@@ -329,7 +330,7 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 		c.Fatalf("result %+v is not right after closing", st.Result())
 	}
 
-	//  resume
+	// resume
 	c.Assert(st.Resume(), IsNil)
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
@@ -351,13 +352,9 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 	// fail dumper
 	c.Assert(mockDumper.InjectProcessError(context.Background(), errors.New("dumper process error")), IsNil)
 	// InjectProcessError need 1 second, here we wait 1.5 second
-	for i := 0; i < 15; i++ {
-		res := st.Result()
-		if res != nil {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	utils.WaitSomething(15, 100*time.Millisecond, func() bool {
+		return st.Result() != nil
+	})
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
 	c.Assert(st.Result(), NotNil)
 	c.Assert(st.Result().Errors, HasLen, 1)
@@ -384,24 +381,18 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 	c.Assert(st.Result(), IsNil)
 	// finish dump
 	c.Assert(mockDumper.InjectProcessError(context.Background(), nil), IsNil)
-	for i := 0; i < 1000; i++ {
-		if st.CurrUnit().Type() == pb.UnitType_Load {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
+	utils.WaitSomething(20, 50*time.Millisecond, func() bool {
+		return st.CurrUnit().Type() == pb.UnitType_Load
+	})
 	c.Assert(st.CurrUnit(), Equals, mockLoader)
 	c.Assert(st.Result(), IsNil)
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
 
 	// finish loader
 	c.Assert(mockLoader.InjectProcessError(context.Background(), nil), IsNil)
-	for i := 0; i < 1000; i++ {
-		if st.Stage() == pb.Stage_Finished {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
+	utils.WaitSomething(20, 50*time.Millisecond, func() bool {
+		return st.Stage() == pb.Stage_Finished
+	})
 	c.Assert(st.CurrUnit(), Equals, mockLoader)
 	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
 	c.Assert(st.Result().Errors, HasLen, 0)
