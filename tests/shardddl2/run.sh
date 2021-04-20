@@ -905,7 +905,7 @@ function restart_worker() {
         run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
         check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     else
-        run_dm_worker $WORK_DIR/worker2 $WORKER1_PORT $cur/conf/dm-worker2.toml
+        run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
         check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     fi
 }
