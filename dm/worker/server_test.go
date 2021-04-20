@@ -22,9 +22,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/failpoint"
-	"github.com/siddontang/go-mysql/mysql"
 	"github.com/tikv/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"

@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	gmysql "github.com/siddontang/go-mysql/mysql"
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/gtid"

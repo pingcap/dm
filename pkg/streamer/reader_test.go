@@ -30,12 +30,12 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/google/uuid"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/gtid"

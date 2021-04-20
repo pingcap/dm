@@ -32,11 +32,11 @@ import (
 	"github.com/pingcap/dm/pkg/schema"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap/zapcore"
 )
 

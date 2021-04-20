@@ -19,8 +19,8 @@ import (
 
 	"github.com/pingcap/parser"
 
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/parser/ast"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
