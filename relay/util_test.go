@@ -17,8 +17,8 @@ import (
 	"context"
 	"fmt"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/utils"
 )

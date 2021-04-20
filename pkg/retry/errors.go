@@ -16,9 +16,9 @@ package retry
 import (
 	"database/sql/driver"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/terror"
 )

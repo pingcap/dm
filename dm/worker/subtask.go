@@ -18,9 +18,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/failpoint"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
@@ -206,7 +206,7 @@ func (st *SubTask) Run(expectStage pb.Stage) {
 }
 
 func (st *SubTask) run() {
-	st.setStage(pb.Stage_Running)
+	st.setStageAndResult(pb.Stage_Running, nil) // clear previous result
 	ctx, cancel := context.WithCancel(st.ctx)
 	st.setCurrCtx(ctx, cancel)
 	err := st.unitTransWaitCondition(ctx)
@@ -219,7 +219,6 @@ func (st *SubTask) run() {
 		return
 	}
 
-	st.setResult(nil) // clear previous result
 	cu := st.CurrUnit()
 	st.l.Info("start to run", zap.Stringer("unit", cu.Type()))
 	pr := make(chan pb.ProcessResult, 1)
@@ -265,11 +264,11 @@ func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 		}
 		result.Errors = errs
 
-		st.setResult(&result) // save result
-		st.callCurrCancel()   // dm-unit finished, canceled or error occurred, always cancel processing
+		st.callCurrCancel() // dm-unit finished, canceled or error occurred, always cancel processing
 
 		if len(result.Errors) == 0 && st.Stage() == pb.Stage_Pausing {
-			return // paused by external request
+			st.setResult(&result) // save result
+			return                // paused by external request
 		}
 
 		var (
@@ -285,7 +284,7 @@ func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 		} else {
 			stage = pb.Stage_Paused // error occurred, paused
 		}
-		st.setStage(stage)
+		st.setStageAndResult(stage, &result)
 
 		ctx, cancel := context.WithTimeout(st.ctx, utils.DefaultDBTimeout)
 		defer cancel()
@@ -389,6 +388,14 @@ func (st *SubTask) setStage(stage pb.Stage) {
 	updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 }
 
+func (st *SubTask) setStageAndResult(stage pb.Stage, result *pb.ProcessResult) {
+	st.Lock()
+	defer st.Unlock()
+	st.stage = stage
+	taskState.WithLabelValues(st.cfg.Name, st.cfg.SourceID).Set(float64(st.stage))
+	st.result = result
+}
+
 // stageCAS sets stage to newStage if its current value is oldStage.
 func (st *SubTask) stageCAS(oldStage, newStage pb.Stage) bool {
 	st.Lock()
@@ -484,7 +491,7 @@ func (st *SubTask) Resume() error {
 	err := st.unitTransWaitCondition(ctx)
 	if err != nil {
 		st.l.Error("wait condition", log.ShortError(err))
-		st.setStage(pb.Stage_Paused)
+		st.fail(err)
 		return err
 	} else if ctx.Err() != nil {
 		// ctx.Err() != nil means this context is canceled in other go routine,
@@ -493,7 +500,6 @@ func (st *SubTask) Resume() error {
 		return nil
 	}
 
-	st.setResult(nil) // clear previous result
 	cu := st.CurrUnit()
 	st.l.Info("resume with unit", zap.Stringer("unit", cu.Type()))
 
@@ -502,7 +508,7 @@ func (st *SubTask) Resume() error {
 	go st.fetchResult(pr)
 	go cu.Resume(ctx, pr)
 
-	st.setStage(pb.Stage_Running)
+	st.setStageAndResult(pb.Stage_Running, nil) // clear previous result
 	return nil
 }
 
@@ -668,8 +674,7 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 }
 
 func (st *SubTask) fail(err error) {
-	st.setStage(pb.Stage_Paused)
-	st.setResult(&pb.ProcessResult{
+	st.setStageAndResult(pb.Stage_Paused, &pb.ProcessResult{
 		Errors: []*pb.ProcessError{
 			unit.NewProcessError(err),
 		},

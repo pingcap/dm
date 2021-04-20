@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	"github.com/BurntSushi/toml"
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/siddontang/go/ioutil2"
 
 	"github.com/pingcap/dm/pkg/binlog"

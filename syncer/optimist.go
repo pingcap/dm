@@ -16,11 +16,11 @@ package syncer
 import (
 	"context"
 
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
