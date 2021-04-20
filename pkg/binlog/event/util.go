@@ -26,10 +26,10 @@ import (
 	"math"
 	"reflect"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/mysql"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -37,7 +37,7 @@ import (
 // encodeTableMapColumnMeta generates the column_meta_def according to the column_type_def.
 // NOTE: we should pass more arguments for some type def later, now simply hard-code them.
 // ref: https://dev.mysql.com/doc/internals/en/table-map-event.html
-// ref: https://github.com/siddontang/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L100
+// ref: https://github.com/go-mysql-org/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L100
 func encodeTableMapColumnMeta(columnType []byte) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	for _, t := range columnType {
@@ -62,7 +62,7 @@ func encodeTableMapColumnMeta(columnType []byte) ([]byte, error) {
 }
 
 // decodeTableMapColumnMeta generates the column_meta_def to uint16 slices.
-// ref: https://github.com/siddontang/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L100
+// ref: https://github.com/go-mysql-org/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L100
 func decodeTableMapColumnMeta(data []byte, columnType []byte) ([]uint16, error) {
 	pos := 0
 	columnMeta := make([]uint16, len(columnType))
@@ -183,7 +183,7 @@ func combineHeaderPayload(buf *bytes.Buffer, header, postHeader, payload []byte)
 }
 
 // encodeColumnValue encodes value to bytes
-// ref: https://github.com/siddontang/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L368
+// ref: https://github.com/go-mysql-org/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L368
 // NOTE: we do not generate meaningful `meta` yet.
 // nolint:unparam
 func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {

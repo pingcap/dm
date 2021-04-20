@@ -19,7 +19,7 @@ package event
 import (
 	"encoding/hex"
 
-	"github.com/siddontang/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/terror"
 )

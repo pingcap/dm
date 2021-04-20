@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
@@ -657,7 +657,7 @@ func (r *BinlogReader) advanceCurrentGtidSet(gtid string) (bool, error) {
 	}
 	// Special treatment for Maridb
 	// MaridbGTIDSet.Update(gtid) will replace gset with given gtid
-	// ref https://github.com/siddontang/go-mysql/blob/0c5789dd0bd378b4b84f99b320a2d35a80d8858f/mysql/mariadb_gtid.go#L96
+	// ref https://github.com/go-mysql-org/go-mysql/blob/0c5789dd0bd378b4b84f99b320a2d35a80d8858f/mysql/mariadb_gtid.go#L96
 	if r.cfg.Flavor == mysql.MariaDBFlavor {
 		gset, err := mysql.ParseMariadbGTIDSet(gtid)
 		if err != nil {
