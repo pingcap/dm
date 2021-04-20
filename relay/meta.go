@@ -22,6 +22,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/go-mysql-org/go-mysql/mysql"
+
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/terror"
