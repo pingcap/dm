@@ -219,6 +219,10 @@ function run() {
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    # check task has started
+    check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
+    check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
+
     # check default session config
     check_log_contain_with_retry '\\"tidb_txn_mode\\":\\"optimistic\\"' $WORK_DIR/worker1/log/dm-worker.log
     check_log_contain_with_retry '\\"tidb_txn_mode\\":\\"optimistic\\"' $WORK_DIR/worker2/log/dm-worker.log
@@ -323,6 +327,14 @@ function run() {
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status $ILLEGAL_CHAR_NAME" \
         "Error 1049: Unknown database" 1
+
+    # stop task, task state should be cleaned
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "stop-task $ILLEGAL_CHAR_NAME"\
+            "\"result\": true" 3
+    check_metric_not_contains $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3
+    check_metric_not_contains $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$ILLEGAL_CHAR_NAME\"}" 3
+
 
     export GO_FAILPOINTS=''
 
