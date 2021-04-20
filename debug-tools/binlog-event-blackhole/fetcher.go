@@ -17,8 +17,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 

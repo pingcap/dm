@@ -18,9 +18,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb/errno"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 func (t *testUtilsSuite) TestDecodeBinlogPosition(c *C) {

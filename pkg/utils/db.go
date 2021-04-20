@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-semver/semver"
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -31,7 +32,6 @@ import (
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/gtid"
