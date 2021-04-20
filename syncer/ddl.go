@@ -14,10 +14,10 @@
 package syncer
 
 import (
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"

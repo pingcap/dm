@@ -19,8 +19,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go-mysql/replication"
 )
 
 var _ = Suite(&testUtilsSuite{})

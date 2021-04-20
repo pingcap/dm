@@ -538,7 +538,6 @@ function test_last_bound() {
 
 function run() {
     test_last_bound
-    read v1
     test_config_name                           # TICASE-915, 916, 954, 955
     test_join_masters_and_worker               # TICASE-928, 930, 931, 961, 932, 957
     test_kill_master                           # TICASE-996, 958

@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 // do not forget to update this path if the file removed/renamed.

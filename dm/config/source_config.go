@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"gopkg.in/yaml.v2"
 
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"

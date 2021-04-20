@@ -17,10 +17,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/terror"
