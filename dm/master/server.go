@@ -758,17 +758,18 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 		return resp, nil
 	}
 	subtasks := s.scheduler.GetSubTaskCfgsByTask(task)
-	if len(subtasks) == 0 {
-		resp.Msg = "task (" + task + ") which extracted from lock-ID is not found in DM"
-		return resp, nil
-	}
-
-	for _, subtask := range subtasks {
-		if subtask.ShardMode != config.ShardPessimistic {
-			resp.Msg = "`unlock-ddl-lock` is only supported in pessimistic shard mode currently"
-			return resp, nil
+	if len(subtasks) > 0 {
+		// subtasks should have same ShardMode
+		for _, subtask := range subtasks {
+			if subtask.ShardMode == config.ShardOptimistic {
+				resp.Msg = "`unlock-ddl-lock` is only supported in pessimistic shard mode currently"
+				return resp, nil
+			}
+			break
 		}
-		break
+	} else {
+		// task is deleted so worker is not watching etcd, automatically set --force-remove
+		req.ForceRemove = true
 	}
 
 	// TODO: add `unlock-ddl-lock` support for Optimist later.
@@ -1084,6 +1085,18 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 	return cfgs, nil
 }
 
+func parseSourceConfig(contents []string) ([]*config.SourceConfig, error) {
+	cfgs := make([]*config.SourceConfig, len(contents))
+	for i, content := range contents {
+		cfg := config.NewSourceConfig()
+		if err := cfg.ParseYaml(content); err != nil {
+			return cfgs, err
+		}
+		cfgs[i] = cfg
+	}
+	return cfgs, nil
+}
+
 func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
 	cfg := *dbConfig
 	if len(cfg.Password) > 0 {
@@ -1122,7 +1135,17 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		return resp2, err2
 	}
 
-	cfgs, err := parseAndAdjustSourceConfig(ctx, req.Config)
+	var (
+		cfgs []*config.SourceConfig
+		err  error
+	)
+	switch req.Op {
+	case pb.SourceOp_StartSource, pb.SourceOp_UpdateSource:
+		cfgs, err = parseAndAdjustSourceConfig(ctx, req.Config)
+	default:
+		// don't check the upstream connections, because upstream may be inaccessible
+		cfgs, err = parseSourceConfig(req.Config)
+	}
 	resp := &pb.OperateSourceResponse{
 		Result: false,
 	}
@@ -1198,8 +1221,18 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 			}
 		}
 	case pb.SourceOp_ShowSource:
-		for _, id := range s.scheduler.GetSourceCfgIDs() {
+		for _, id := range req.SourceID {
 			boundM[id] = s.scheduler.GetWorkerBySource(id)
+		}
+		for _, cfg := range cfgs {
+			id := cfg.SourceID
+			boundM[id] = s.scheduler.GetWorkerBySource(id)
+		}
+
+		if len(boundM) == 0 {
+			for _, id := range s.scheduler.GetSourceCfgIDs() {
+				boundM[id] = s.scheduler.GetWorkerBySource(id)
+			}
 		}
 	default:
 		resp.Msg = terror.ErrMasterInvalidOperateOp.Generate(req.Op.String(), "source").Error()
