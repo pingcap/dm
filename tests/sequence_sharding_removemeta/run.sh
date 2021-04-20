@@ -56,6 +56,23 @@ function run() {
         "no DDL lock exists" 1
     # use sync_diff_inspector to check full data
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+
+    # test unlock-ddl-lock could work after stop-task
+    ddl="ALTER TABLE \`sharding_target3\`.\`t_target\` ADD COLUMN \`f\` INT"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "\"ID\": \"$lock_id\"" 1 \
+        "$ddl" 1
+    dmctl_stop_task $task_name
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "unlock-ddl-lock $lock_id" \
+        "\"result\": true" 1
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "show-ddl-locks" \
+        "no DDL lock exists" 1
 }
 
 cleanup_data sharding_target3
