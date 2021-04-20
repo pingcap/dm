@@ -20,9 +20,9 @@ import (
 	"strings"
 	"time"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/failpoint"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"

@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
 func TestSuite(t *testing.T) {

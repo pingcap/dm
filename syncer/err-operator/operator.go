@@ -19,8 +19,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/google/uuid"
-	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"

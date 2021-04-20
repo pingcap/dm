@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/errors"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
