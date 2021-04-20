@@ -98,7 +98,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) error {
 	sourceID := make([]string, 0, len(cmd.Flags().Args())-1)
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		return
+		return err
 	}
 	sourceID = append(sourceID, sources...)
 

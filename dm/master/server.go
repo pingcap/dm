@@ -1084,7 +1084,7 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 	return cfgs, nil
 }
 
-func parseSourceConfig(ctx context.Context, contents []string) ([]*config.SourceConfig, error) {
+func parseSourceConfig(contents []string) ([]*config.SourceConfig, error) {
 	cfgs := make([]*config.SourceConfig, len(contents))
 	for i, content := range contents {
 		cfg := config.NewSourceConfig()
@@ -1143,7 +1143,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		cfgs, err = parseAndAdjustSourceConfig(ctx, req.Config)
 	default:
 		// don't check the upstream connections, because upstream may be inaccessible
-		cfgs, err = parseSourceConfig(ctx, req.Config)
+		cfgs, err = parseSourceConfig(req.Config)
 	}
 	resp := &pb.OperateSourceResponse{
 		Result: false,
