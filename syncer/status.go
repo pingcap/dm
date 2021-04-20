@@ -37,9 +37,9 @@ func (s *Syncer) Status(ctx context.Context) interface{} {
 		masterPos     mysql.Position
 		masterGTIDSet gtid.Set
 	)
-	total := s.count.Get()
-	totalTps := s.totalTps.Get()
-	tps := s.tps.Get()
+	total := s.count.Load()
+	totalTps := s.totalTps.Load()
+	tps := s.tps.Load()
 	masterPos, masterGTIDSet, err := s.getMasterStatus(ctx)
 	if err != nil {
 		s.tctx.L().Warn("fail to get master status", zap.Error(err))

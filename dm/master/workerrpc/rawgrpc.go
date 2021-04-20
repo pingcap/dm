@@ -15,10 +15,10 @@ package workerrpc
 
 import (
 	"context"
-	"sync/atomic"
 	"time"
 
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
+	"go.uber.org/atomic"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 
@@ -31,7 +31,7 @@ import (
 type GRPCClient struct {
 	conn   *grpc.ClientConn
 	client pb.WorkerClient
-	closed int32
+	closed *atomic.Bool
 }
 
 // NewGRPCClientWrap initializes a new grpc client from given grpc connection and worker client.
@@ -39,7 +39,7 @@ func NewGRPCClientWrap(conn *grpc.ClientConn, client pb.WorkerClient) (*GRPCClie
 	return &GRPCClient{
 		conn:   conn,
 		client: client,
-		closed: 0,
+		closed: atomic.NewBool(false),
 	}, nil
 }
 
@@ -69,7 +69,7 @@ func NewGRPCClient(addr string, securityCfg config.Security) (*GRPCClient, error
 
 // SendRequest implements Client.SendRequest.
 func (c *GRPCClient) SendRequest(ctx context.Context, req *Request, timeout time.Duration) (*Response, error) {
-	if atomic.LoadInt32(&c.closed) != 0 {
+	if c.closed.Load() {
 		return nil, terror.ErrMasterGRPCSendOnCloseConn.Generate()
 	}
 	if req.IsStreamAPI() {
@@ -85,7 +85,7 @@ func (c *GRPCClient) SendRequest(ctx context.Context, req *Request, timeout time
 // Close implements Client.Close.
 func (c *GRPCClient) Close() error {
 	defer func() {
-		atomic.CompareAndSwapInt32(&c.closed, 0, 1)
+		c.closed.CAS(false, true)
 		c.conn = nil
 	}()
 	if c.conn == nil {
