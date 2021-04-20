@@ -1147,7 +1147,7 @@ var (
 	ErrWorkerFailToGetSourceConfigFromEtcd  = New(codeWorkerFailToGetSourceConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative source config for source %s in etcd", "")
 	ErrWorkerDDLLockOpNotFound              = New(codeWorkerDDLLockOpNotFound, ClassDMWorker, ScopeInternal, LevelHigh, "missing shard DDL lock operation for shard DDL info (%s)", "")
 	ErrWorkerTLSConfigNotValid              = New(codeWorkerTLSConfigNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "TLS config not valid", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in worker configuration file.")
-	ErrWorkerFailConnectMaster              = New(codeWorkerFailConnectMaster, ClassDMWorker, ScopeInternal, LevelHigh, "cannot connect with master endpoints: %v", "Please check network connection of worker")
+	ErrWorkerFailConnectMaster              = New(codeWorkerFailConnectMaster, ClassDMWorker, ScopeInternal, LevelHigh, "cannot join with master endpoints: %v, error: %v", "Please check network connection of worker and check worker name is unique.")
 	ErrWorkerRelayConfigChanging            = New(codeWorkerRelayConfigChanging, ClassDMWorker, ScopeInternal, LevelLow, "relay config of worker %s is changed too frequently, last relay source %s:, new relay source %s", "Please try again later")
 
 	// DM-tracer error.
