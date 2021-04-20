@@ -31,12 +31,9 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-var (
-	_ = Suite(&testFileWriterSuite{})
-)
+var _ = Suite(&testFileWriterSuite{})
 
-type testFileWriterSuite struct {
-}
+type testFileWriterSuite struct{}
 
 func (t *testFileWriterSuite) TestWrite(c *C) {
 	dir := c.MkDir()

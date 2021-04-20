@@ -17,10 +17,10 @@ import (
 	"context"
 	"fmt"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
@@ -92,14 +92,14 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 			if latestGSet == nil {
 				return nil, errors.Errorf("should have a PreviousGTIDsEvent before the GTIDEvent %+v", e.Header)
 			}
-			// learn from: https://github.com/siddontang/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L736
+			// learn from: https://github.com/go-mysql-org/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L736
 			u, _ := uuid.FromBytes(ev.SID)
 			nextGTIDStr = fmt.Sprintf("%s:%d", u.String(), ev.GNO)
 		case *replication.MariadbGTIDEvent:
 			if latestGSet == nil {
 				return nil, errors.Errorf("should have a MariadbGTIDListEvent before the MariadbGTIDEvent %+v", e.Header)
 			}
-			// learn from: https://github.com/siddontang/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L745
+			// learn from: https://github.com/go-mysql-org/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L745
 			GTID := ev.GTID
 			nextGTIDStr = fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber)
 		case *replication.PreviousGTIDsEvent:
@@ -142,7 +142,7 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 }
 
 // GetPreviousGTIDFromGTIDSet tries to get previous GTID sets from Previous_GTID_EVENT GTID for the specified GITD Set.
-// events should be [fake_rotate_event,format_description_event,previous_gtids_event/mariadb_gtid_list_event]
+// events should be [fake_rotate_event,format_description_event,previous_gtids_event/mariadb_gtid_list_event].
 func GetPreviousGTIDFromGTIDSet(ctx context.Context, r Reader, gset gtid.Set) (gtid.Set, error) {
 	err := r.StartSyncByGTID(gset)
 	if err != nil {

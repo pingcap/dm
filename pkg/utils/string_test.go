@@ -19,8 +19,7 @@ import (
 
 var _ = Suite(&testStringSuite{})
 
-type testStringSuite struct {
-}
+type testStringSuite struct{}
 
 func (t *testStringSuite) TestTruncateString(c *C) {
 	cases := []struct {

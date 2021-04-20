@@ -21,10 +21,10 @@ import (
 	"os"
 	"time"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/google/uuid"
 	"github.com/pingcap/parser"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/binlog/reader"
@@ -112,11 +112,12 @@ func checkFormatDescriptionEventExist(filename string) (bool, error) {
 
 	// only parse single event
 	eof, err := replication.NewBinlogParser().ParseSingleEvent(f, onEventFunc)
-	if found {
+	switch {
+	case found:
 		return found, nil // if found is true, we return `true` even meet an error, because FormatDescriptionEvent exists.
-	} else if err != nil {
+	case err != nil:
 		return false, terror.ErrRelayCheckFormatDescEventParseEv.Delegate(err, filename)
-	} else if eof {
+	case eof:
 		return false, terror.ErrRelayCheckFormatDescEventParseEv.Delegate(io.EOF, filename)
 	}
 	return found, nil
@@ -124,7 +125,7 @@ func checkFormatDescriptionEventExist(filename string) (bool, error) {
 
 // checkIsDuplicateEvent checks if the event is a duplicate event in the file.
 // It is not safe if there other routine is writing the file.
-// NOTE: handle cases when file size > 4GB
+// NOTE: handle cases when file size > 4GB.
 func checkIsDuplicateEvent(filename string, ev *replication.BinlogEvent) (bool, error) {
 	// 1. check event start/end pos with the file size, and it's enough for most cases
 	fs, err := os.Stat(filename)
@@ -219,14 +220,14 @@ func getTxnPosGTIDs(ctx context.Context, filename string, p *parser.Parser) (int
 			if latestGSet == nil {
 				return 0, nil, terror.ErrRelayNeedPrevGTIDEvBeforeGTIDEv.Generate(e.Header)
 			}
-			// learn from: https://github.com/siddontang/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L736
+			// learn from: https://github.com/go-mysql-org/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L736
 			u, _ := uuid.FromBytes(ev.SID)
 			nextGTIDStr = fmt.Sprintf("%s:%d", u.String(), ev.GNO)
 		case *replication.MariadbGTIDEvent:
 			if latestGSet == nil {
 				return 0, nil, terror.ErrRelayNeedMaGTIDListEvBeforeGTIDEv.Generate(e.Header)
 			}
-			// learn from: https://github.com/siddontang/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L745
+			// learn from: https://github.com/go-mysql-org/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L745
 			GTID := ev.GTID
 			nextGTIDStr = fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber)
 		case *replication.PreviousGTIDsEvent:

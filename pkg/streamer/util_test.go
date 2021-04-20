@@ -27,8 +27,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testUtilSuite struct {
-}
+type testUtilSuite struct{}
 
 func (t *testUtilSuite) TestGetNextUUID(c *C) {
 	UUIDs := []string{

@@ -36,16 +36,16 @@ import (
 // output:
 // Usage: dmctl [global options] command [command options] [arguments...]
 //
-//Available Commands:
+// Available Commands:
 //  ...
 //  query-status          query-status [-s source ...] [task-name]
 //  ...
 //
-//Special Commands:
+// Special Commands:
 //  --encrypt encrypt plaintext to ciphertext
 //  ...
 //
-//Global Options:
+// Global Options:
 //  --V prints version and exit
 //  ...
 func helpUsage(cfg *common.Config) {
@@ -87,7 +87,7 @@ func main() {
 		Level: "info",
 	})
 	if err != nil {
-		common.PrintLines("init logger error %s", terror.Message(err))
+		common.PrintLinesf("init logger error %s", terror.Message(err))
 		os.Exit(2)
 	}
 
@@ -99,7 +99,7 @@ func main() {
 	lenArgs := len(args)
 	lenCmdArgs := len(cmdArgs)
 	if lenCmdArgs > 0 {
-		lenArgs = lenArgs - lenCmdArgs
+		lenArgs -= lenCmdArgs
 	}
 
 	finished, err := cfg.Parse(args[:lenArgs])
@@ -119,19 +119,19 @@ func main() {
 		}
 		os.Exit(0)
 	default:
-		common.PrintLines("parse cmd flags err: %s", terror.Message(err))
+		common.PrintLinesf("parse cmd flags err: %s", terror.Message(err))
 		os.Exit(2)
 	}
 
 	err = cfg.Validate()
 	if err != nil {
-		common.PrintLines("flags are not validate: %s", terror.Message(err))
+		common.PrintLinesf("flags are not validate: %s", terror.Message(err))
 		os.Exit(2)
 	}
 
 	err = ctl.Init(cfg)
 	if err != nil {
-		common.PrintLines("%v", terror.Message(err))
+		common.PrintLinesf("%v", terror.Message(err))
 		os.Exit(2)
 	}
 	if lenCmdArgs > 0 {
@@ -215,7 +215,6 @@ func loop() {
 	if err != nil {
 		panic(err)
 	}
-	defer l.Close()
 
 	for {
 		line, err := l.Readline()
@@ -230,6 +229,7 @@ func loop() {
 
 		line = strings.TrimSpace(line)
 		if line == "exit" {
+			l.Close()
 			os.Exit(0)
 		} else if line == "" {
 			continue
@@ -247,6 +247,7 @@ func loop() {
 			fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
 		}
 	}
+	l.Close()
 }
 
 func aliasArgs(args []string) []string {

@@ -18,9 +18,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb/errno"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 func (t *testUtilsSuite) TestDecodeBinlogPosition(c *C) {
@@ -145,7 +145,6 @@ func (t *testUtilsSuite) TestCompareBinlogPos(c *C) {
 		cmp := CompareBinlogPos(tc.pos1, tc.pos2, tc.deviation)
 		c.Assert(cmp, Equals, tc.cmp)
 	}
-
 }
 
 func (t *testUtilsSuite) TestWaitSomething(c *C) {

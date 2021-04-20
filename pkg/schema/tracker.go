@@ -44,7 +44,7 @@ const (
 
 var (
 	// don't read clustered index variable from downstream because it may changed during syncing
-	// we always using OFF tidb_enable_clustered_index unless user set it in config
+	// we always using OFF tidb_enable_clustered_index unless user set it in config.
 	downstreamVars    = []string{"sql_mode", "tidb_skip_utf8_check"}
 	defaultGlobalVars = map[string]string{"tidb_enable_clustered_index": "OFF"}
 )
@@ -58,7 +58,7 @@ type Tracker struct {
 
 // NewTracker creates a new tracker. `sessionCfg` will be set as tracker's session variables if specified, or retrieve
 // some variable from downstream TiDB using `tidbConn`.
-// NOTE **sessionCfg is a reference to caller**
+// NOTE **sessionCfg is a reference to caller**.
 func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, tidbConn *conn.BaseConn) (*Tracker, error) {
 	// NOTE: tidb uses a **global** config so can't isolate tracker's config from each other. If that isolation is needed,
 	// we might SetGlobalConfig before every call to tracker, or use some patch like https://github.com/bouk/monkey
@@ -89,6 +89,7 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 				}
 				sessionCfg[k] = value
 			}
+			// nolint:sqlclosecheck
 			if err2 = rows.Close(); err2 != nil {
 				return nil, err2
 			}
@@ -177,6 +178,7 @@ func (tr *Tracker) GetCreateTable(ctx context.Context, db, table string) (string
 	} else if len(rs) != 1 {
 		return "", nil // this should not happen.
 	}
+	// nolint:errcheck
 	defer rs[0].Close()
 
 	req := rs[0].NewChunk()
@@ -256,7 +258,7 @@ func (tr *Tracker) Reset() error {
 	return nil
 }
 
-// Close close a tracker
+// Close close a tracker.
 func (tr *Tracker) Close() error {
 	tr.se.Close()
 	tr.dom.Close()

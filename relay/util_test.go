@@ -17,16 +17,15 @@ import (
 	"context"
 	"fmt"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/utils"
 )
 
 var _ = Suite(&testUtilSuite{})
 
-type testUtilSuite struct {
-}
+type testUtilSuite struct{}
 
 func (t *testUtilSuite) TestIsNewServer(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)

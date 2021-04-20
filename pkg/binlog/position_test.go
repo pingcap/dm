@@ -16,8 +16,8 @@ package binlog
 import (
 	"testing"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/gtid"
 )
@@ -28,8 +28,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testPositionSuite struct {
-}
+type testPositionSuite struct{}
 
 func (t *testPositionSuite) TestPositionFromStr(c *C) {
 	emptyPos := gmysql.Position{}
@@ -774,14 +773,16 @@ func (t *testPositionSuite) TestExtractSuffix(c *C) {
 		{
 			"",
 			MinUUIDSuffix,
-		}, {
+		},
+		{
 			"mysql-bin.00005",
 			MinUUIDSuffix,
 		},
 		{
 			"mysql-bin|000001.000001",
 			1,
-		}, {
+		},
+		{
 			"mysql-bin|000005.000004",
 			5,
 		},

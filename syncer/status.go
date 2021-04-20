@@ -17,7 +17,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/failpoint"
@@ -31,7 +31,7 @@ import (
 )
 
 // Status implements Unit.Status
-// it returns status, but does not calc status
+// it returns status, but does not calc status.
 func (s *Syncer) Status(ctx context.Context) interface{} {
 	var (
 		masterPos     mysql.Position

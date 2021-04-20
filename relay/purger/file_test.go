@@ -106,7 +106,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFile(c *C) {
 
 	// write a fake meta file to first sub dir
 	fakeMeta := filepath.Join(relayDirsPath[0], utils.MetaFilename)
-	c.Assert(ioutil.WriteFile(fakeMeta, []byte{}, 0666), IsNil)
+	c.Assert(ioutil.WriteFile(fakeMeta, []byte{}, 0o666), IsNil)
 
 	// purge all relay log files in first and second sub dir, and some in third sub dir
 	err = purgeRelayFilesBeforeFile(log.L(), baseDir, t.uuids, safeRelay)
@@ -165,7 +165,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFileAndTime(c *C) {
 
 	// write a fake meta file to first sub dir
 	fakeMeta := filepath.Join(relayDirsPath[0], utils.MetaFilename)
-	c.Assert(ioutil.WriteFile(fakeMeta, []byte{}, 0666), IsNil)
+	c.Assert(ioutil.WriteFile(fakeMeta, []byte{}, 0o666), IsNil)
 
 	// purge all relay log files in first and second sub dir, and some in third sub dir
 	err = purgeRelayFilesBeforeFileAndTime(log.L(), baseDir, t.uuids, safeRelay, safeTime)

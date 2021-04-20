@@ -18,7 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -49,17 +49,18 @@ func (s *Syncer) setInitActiveRelayLog(ctx context.Context) error {
 	}
 
 	checkLocation := s.checkpoint.GlobalPoint()
-	if binlog.ComparePosition(checkLocation.Position, binlog.MinPosition) > 0 {
+	switch {
+	case binlog.ComparePosition(checkLocation.Position, binlog.MinPosition) > 0:
 		// continue from previous checkpoint
 		pos = checkLocation.Position
 		extractPos = true
-	} else if s.cfg.Mode == config.ModeIncrement {
+	case s.cfg.Mode == config.ModeIncrement:
 		// fresh start for task-mode increment
 		pos = mysql.Position{
 			Name: s.cfg.Meta.BinLogName,
 			Pos:  s.cfg.Meta.BinLogPos,
 		}
-	} else {
+	default:
 		// start from dumper or loader, get current pos from master
 		pos, _, err = s.fromDB.getMasterStatus(ctx, s.cfg.Flavor)
 		if err != nil {

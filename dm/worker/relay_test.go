@@ -17,9 +17,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -37,7 +37,7 @@ var _ = Suite(&testRelay{})
 
 /*********** dummy relay log process unit, used only for testing *************/
 
-// DummyRelay is a dummy relay
+// DummyRelay is a dummy relay.
 type DummyRelay struct {
 	initErr error
 
@@ -51,80 +51,80 @@ func NewDummyRelay(cfg *relay.Config) relay.Process {
 	return &DummyRelay{}
 }
 
-// Init implements Process interface
+// Init implements Process interface.
 func (d *DummyRelay) Init(ctx context.Context) error {
 	return d.initErr
 }
 
-// InjectInitError injects init error
+// InjectInitError injects init error.
 func (d *DummyRelay) InjectInitError(err error) {
 	d.initErr = err
 }
 
-// Process implements Process interface
+// Process implements Process interface.
 func (d *DummyRelay) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	<-ctx.Done()
 	pr <- d.processResult
 }
 
-// InjectProcessResult injects process result
+// InjectProcessResult injects process result.
 func (d *DummyRelay) InjectProcessResult(result pb.ProcessResult) {
 	d.processResult = result
 }
 
-// ActiveRelayLog implements Process interface
+// ActiveRelayLog implements Process interface.
 func (d *DummyRelay) ActiveRelayLog() *pkgstreamer.RelayLogInfo {
 	return nil
 }
 
-// Reload implements Process interface
+// Reload implements Process interface.
 func (d *DummyRelay) Reload(newCfg *relay.Config) error {
 	return d.reloadErr
 }
 
-// InjectReloadError injects reload error
+// InjectReloadError injects reload error.
 func (d *DummyRelay) InjectReloadError(err error) {
 	d.reloadErr = err
 }
 
-// Update implements Process interface
+// Update implements Process interface.
 func (d *DummyRelay) Update(cfg *config.SubTaskConfig) error {
 	return nil
 }
 
-// Resume implements Process interface
+// Resume implements Process interface.
 func (d *DummyRelay) Resume(ctx context.Context, pr chan pb.ProcessResult) {}
 
-// Pause implements Process interface
+// Pause implements Process interface.
 func (d *DummyRelay) Pause() {}
 
-// Error implements Process interface
+// Error implements Process interface.
 func (d *DummyRelay) Error() interface{} {
 	return d.errorInfo
 }
 
-// Status implements Process interface
+// Status implements Process interface.
 func (d *DummyRelay) Status(ctx context.Context) interface{} {
 	return &pb.RelayStatus{
 		Stage: pb.Stage_New,
 	}
 }
 
-// Close implements Process interface
+// Close implements Process interface.
 func (d *DummyRelay) Close() {}
 
-// IsClosed implements Process interface
+// IsClosed implements Process interface.
 func (d *DummyRelay) IsClosed() bool { return false }
 
-// SaveMeta implements Process interface
+// SaveMeta implements Process interface.
 func (d *DummyRelay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
 	return nil
 }
 
-// ResetMeta implements Process interface
+// ResetMeta implements Process interface.
 func (d *DummyRelay) ResetMeta() {}
 
-// PurgeRelayDir implements Process interface
+// PurgeRelayDir implements Process interface.
 func (d *DummyRelay) PurgeRelayDir() error {
 	return nil
 }
@@ -180,7 +180,7 @@ func (t *testRelay) testStart(c *C, holder *realRelayHolder) {
 	c.Assert(holder.Result(), IsNil)
 
 	holder.Start()
-	c.Assert(waitRelayStage(holder, pb.Stage_Running, 10), IsTrue)
+	c.Assert(waitRelayStage(holder, pb.Stage_Running, 5), IsTrue)
 	c.Assert(holder.Result(), IsNil)
 	c.Assert(holder.closed.Get(), IsFalse)
 

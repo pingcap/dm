@@ -17,8 +17,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
@@ -105,7 +105,7 @@ func readEventsWithGoMySQL(ctx context.Context, conn *client.Conn) (uint64, uint
 			log.L().Warn("receive EOF packet, retrying")
 			continue
 		default:
-			log.L().Warn("invalid stream header, retrying", zap.Uint8("header", uint8(data[0])))
+			log.L().Warn("invalid stream header, retrying", zap.Uint8("header", data[0]))
 			continue
 		}
 	}
@@ -149,7 +149,7 @@ func readEventsWithoutGoMySQL(ctx context.Context, conn *client.Conn) (uint64, u
 }
 
 // readDataOnly reads the binary data only and does not parse packet or binlog event.
-func readDataOnly(ctx context.Context, conn *client.Conn) (uint64, uint64, time.Duration, error) {
+func readDataOnly(ctx context.Context, conn *client.Conn) (uint64, time.Duration, error) {
 	var (
 		buf       = make([]byte, 10240)
 		byteCount sync2.AtomicUint64
@@ -158,13 +158,13 @@ func readDataOnly(ctx context.Context, conn *client.Conn) (uint64, uint64, time.
 	for {
 		select {
 		case <-ctx.Done():
-			return 0, byteCount.Get(), time.Since(startTime), nil
+			return byteCount.Get(), time.Since(startTime), nil
 		default:
 		}
 
 		n, err := conn.Conn.Conn.Read(buf)
 		if err != nil {
-			return 0, byteCount.Get(), time.Since(startTime), errors.Annotatef(err, "read binary data")
+			return byteCount.Get(), time.Since(startTime), errors.Annotatef(err, "read binary data")
 		}
 		byteCount.Add(uint64(n))
 	}

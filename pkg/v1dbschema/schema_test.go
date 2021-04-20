@@ -24,10 +24,10 @@ import (
 	"strings"
 	"testing"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
@@ -179,7 +179,7 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	c.Assert(rows.Scan(&count), IsNil)
 	c.Assert(rows.Next(), IsFalse)
 	c.Assert(rows.Err(), IsNil)
-	rows.Close()
+	defer rows.Close()
 	c.Assert(count, Equals, 2)
 
 	// verify the column data of checkpoint not updated.
@@ -191,7 +191,7 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 		c.Assert(gs.Valid, IsFalse)
 	}
 	c.Assert(rows.Err(), IsNil)
-	rows.Close()
+	defer rows.Close()
 
 	// update schema with GTID enabled.
 	cfg.EnableGTID = true
@@ -205,7 +205,7 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	c.Assert(rows.Scan(&gs), IsNil)
 	c.Assert(rows.Next(), IsFalse)
 	c.Assert(rows.Err(), IsNil)
-	rows.Close()
+	defer rows.Close()
 	c.Assert(gs.String, Equals, endGS.String())
 
 	rows, err = dbConn.QuerySQL(tctx, fmt.Sprintf(`SELECT binlog_gtid FROM %s WHERE is_global!=1`, dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))))
@@ -216,5 +216,5 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 		c.Assert(gs.Valid, IsFalse)
 	}
 	c.Assert(rows.Err(), IsNil)
-	rows.Close()
+	defer rows.Close()
 }

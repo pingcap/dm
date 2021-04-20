@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -177,6 +177,7 @@ func readFollowingGTIDs(br *bufio.Reader, flavor string) (string, error) {
 		// try parse to verify it
 		_, err = gtid.ParserGTID(flavor, line[:end])
 		if err != nil {
+			// nolint:nilerr
 			return following.String(), nil // return the previous, not including this non-GTID line.
 		}
 

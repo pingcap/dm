@@ -26,10 +26,10 @@ import (
 	"math"
 	"reflect"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/mysql"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -37,7 +37,7 @@ import (
 // encodeTableMapColumnMeta generates the column_meta_def according to the column_type_def.
 // NOTE: we should pass more arguments for some type def later, now simply hard-code them.
 // ref: https://dev.mysql.com/doc/internals/en/table-map-event.html
-// ref: https://github.com/siddontang/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L100
+// ref: https://github.com/go-mysql-org/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L100
 func encodeTableMapColumnMeta(columnType []byte) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	for _, t := range columnType {
@@ -62,20 +62,20 @@ func encodeTableMapColumnMeta(columnType []byte) ([]byte, error) {
 }
 
 // decodeTableMapColumnMeta generates the column_meta_def to uint16 slices.
-// ref: https://github.com/siddontang/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L100
+// ref: https://github.com/go-mysql-org/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L100
 func decodeTableMapColumnMeta(data []byte, columnType []byte) ([]uint16, error) {
 	pos := 0
 	columnMeta := make([]uint16, len(columnType))
 	for i, t := range columnType {
 		switch t {
 		case gmysql.MYSQL_TYPE_STRING:
-			var x = uint16(data[pos]) << 8 //real type
-			x += uint16(data[pos+1])       //pack or field length
+			x := uint16(data[pos]) << 8 // real type
+			x += uint16(data[pos+1])    // pack or field length
 			columnMeta[i] = x
 			pos += 2
 		case gmysql.MYSQL_TYPE_NEWDECIMAL:
-			var x = uint16(data[pos]) << 8 //precision
-			x += uint16(data[pos+1])       //decimals
+			x := uint16(data[pos]) << 8 // precision
+			x += uint16(data[pos+1])    // decimals
 			columnMeta[i] = x
 			pos += 2
 		case gmysql.MYSQL_TYPE_VAR_STRING, gmysql.MYSQL_TYPE_VARCHAR, gmysql.MYSQL_TYPE_BIT:
@@ -100,12 +100,12 @@ func bitmapByteSize(columnCount int) int {
 	return (columnCount + 7) / 8
 }
 
-// nullBytes returns a n-length null bytes slice
+// nullBytes returns a n-length null bytes slice.
 func nullBytes(n int) []byte {
 	return make([]byte, n)
 }
 
-// fullBytes returns a n-length full bytes slice (all bits are set)
+// fullBytes returns a n-length full bytes slice (all bits are set).
 func fullBytes(n int) []byte {
 	buf := new(bytes.Buffer)
 	for i := 0; i < n; i++ {
@@ -144,7 +144,7 @@ func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksu
 	}
 
 	// decode event, some implementations of `Decode` also need checksum
-	var endIdx = buf.Len()
+	endIdx := buf.Len()
 	if !decodeWithChecksum {
 		endIdx -= int(crc32Len)
 	}
@@ -183,8 +183,9 @@ func combineHeaderPayload(buf *bytes.Buffer, header, postHeader, payload []byte)
 }
 
 // encodeColumnValue encodes value to bytes
-// ref: https://github.com/siddontang/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L368
+// ref: https://github.com/go-mysql-org/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L368
 // NOTE: we do not generate meaningful `meta` yet.
+// nolint:unparam
 func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {
 	var (
 		buf = new(bytes.Buffer)
@@ -289,10 +290,10 @@ const (
 	QTableMapForUpdateCode
 	QMasterDataWrittenCode
 	QInvokers
-	QUpdatedDbNames
+	QUpdatedDBNames
 	QMicroseconds
-	QCommitTs
-	QCommitTs2
+	QCommitTS
+	QCommitTS2
 	QExplicitDefaultsForTimestamp
 	QDdlLoggedWithXid
 	QDefaultCollationForUtf8mb4
@@ -301,33 +302,31 @@ const (
 	QHrnow = 128
 )
 
-var (
-	// https://dev.mysql.com/doc/internals/en/query-event.html
-	statusVarsFixedLength = map[byte]int{
-		QFlags2Code:            4,
-		QSqlModeCode:           8,
-		QAutoIncrement:         2 + 2,
-		QCharsetCode:           2 + 2 + 2,
-		QLcTimeNamesCode:       2,
-		QCharsetDatabaseCode:   2,
-		QTableMapForUpdateCode: 8,
-		QMasterDataWrittenCode: 4,
-		QMicroseconds:          3,
-		QCommitTs:              0, // unused now
-		QCommitTs2:             0, // unused now
-		// below variables could be find in
-		// https://github.com/mysql/mysql-server/blob/7d10c82196c8e45554f27c00681474a9fb86d137/libbinlogevents/src/statement_events.cpp#L312
-		QExplicitDefaultsForTimestamp: 1,
-		QDdlLoggedWithXid:             8,
-		QDefaultCollationForUtf8mb4:   2,
-		QSqlRequirePrimaryKey:         1,
-		QDefaultTableEncryption:       1,
-		// https://github.com/MariaDB/server/blob/94b45787045677c106a25ebb5aaf1273040b2ff6/sql/log_event.cc#L1619
-		QHrnow: 3,
-	}
-)
+// https://dev.mysql.com/doc/internals/en/query-event.html
+var statusVarsFixedLength = map[byte]int{
+	QFlags2Code:            4,
+	QSqlModeCode:           8,
+	QAutoIncrement:         2 + 2,
+	QCharsetCode:           2 + 2 + 2,
+	QLcTimeNamesCode:       2,
+	QCharsetDatabaseCode:   2,
+	QTableMapForUpdateCode: 8,
+	QMasterDataWrittenCode: 4,
+	QMicroseconds:          3,
+	QCommitTS:              0, // unused now
+	QCommitTS2:             0, // unused now
+	// below variables could be find in
+	// https://github.com/mysql/mysql-server/blob/7d10c82196c8e45554f27c00681474a9fb86d137/libbinlogevents/src/statement_events.cpp#L312
+	QExplicitDefaultsForTimestamp: 1,
+	QDdlLoggedWithXid:             8,
+	QDefaultCollationForUtf8mb4:   2,
+	QSqlRequirePrimaryKey:         1,
+	QDefaultTableEncryption:       1,
+	// https://github.com/MariaDB/server/blob/94b45787045677c106a25ebb5aaf1273040b2ff6/sql/log_event.cc#L1619
+	QHrnow: 3,
+}
 
-// getSQLMode gets SQL mode from binlog statusVars, still could return a reasonable value if found error
+// getSQLMode gets SQL mode from binlog statusVars, still could return a reasonable value if found error.
 func getSQLMode(statusVars []byte) (mysql.SQLMode, error) {
 	vars, err := statusVarsToKV(statusVars)
 	b, ok := vars[QSqlModeCode]
@@ -347,7 +346,7 @@ func getSQLMode(statusVars []byte) (mysql.SQLMode, error) {
 	return mysql.SQLMode(v), err
 }
 
-// GetParserForStatusVars gets a parser for binlog which is suitable for its sql_mode in statusVars
+// GetParserForStatusVars gets a parser for binlog which is suitable for its sql_mode in statusVars.
 func GetParserForStatusVars(statusVars []byte) (*parser.Parser, error) {
 	parser2 := parser.New()
 	mode, err := getSQLMode(statusVars)
@@ -356,13 +355,11 @@ func GetParserForStatusVars(statusVars []byte) (*parser.Parser, error) {
 }
 
 // if returned error is `io.EOF`, it means UnexpectedEOF because we handled expected `io.EOF` as success
-// returned map should not be nil for other usage
+// returned map should not be nil for other usage.
 func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 	r := bytes.NewReader(statusVars)
 	vars := make(map[byte][]byte)
-	var (
-		value []byte
-	)
+	var value []byte
 
 	// NOTE: this closure modifies variable `value`
 	appendLengthThenCharsToValue := func() error {
@@ -427,6 +424,7 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 			if err2 != nil {
 				return generateError(err)
 			}
+			// nolint:makezero
 			value = append(value, b)
 		// 1-byte length + <length> chars of the timezone/catalog
 		case QTimeZoneCode, QCatalogNzCode:
@@ -442,11 +440,12 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 				return generateError(err)
 			}
 		// 1-byte count + <count> \0 terminated string
-		case QUpdatedDbNames:
+		case QUpdatedDBNames:
 			count, err := r.ReadByte()
 			if err != nil {
 				return generateError(err)
 			}
+			// nolint:makezero
 			value = append(value, count)
 			// if count is 254 (OVER_MAX_DBS_IN_EVENT_MTS), there's no following DB names
 			// https://github.com/mysql/mysql-server/blob/ee4455a33b10f1b1886044322e4893f587b319ed/libbinlogevents/include/binlog_event.h#L107
@@ -467,6 +466,7 @@ func statusVarsToKV(statusVars []byte) (map[byte][]byte, error) {
 				}
 				b = byte(1) // reset to any non-zero value
 			}
+			// nolint:makezero
 			value = append(value, buf...)
 		default:
 			return generateError(errors.New("unrecognized key"))

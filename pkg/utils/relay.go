@@ -22,19 +22,19 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/siddontang/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// not support to config yet
+// not support to config yet.
 var (
 	UUIDIndexFilename  = "server-uuid.index"
 	MetaFilename       = "relay.meta"
 	uuidIndexSeparator = "."
 )
 
-// ParseUUIDIndex parses server-uuid.index
+// ParseUUIDIndex parses server-uuid.index.
 func ParseUUIDIndex(indexPath string) ([]string, error) {
 	fd, err := os.Open(indexPath)
 	if os.IsNotExist(err) {
@@ -67,17 +67,17 @@ func ParseUUIDIndex(indexPath string) ([]string, error) {
 	return uuids, nil
 }
 
-// AddSuffixForUUID adds a suffix for UUID
-func AddSuffixForUUID(uuid string, ID int) string {
-	return fmt.Sprintf("%s%s%06d", uuid, uuidIndexSeparator, ID) // eg. 53ea0ed1-9bf8-11e6-8bea-64006a897c73.000001
+// AddSuffixForUUID adds a suffix for UUID.
+func AddSuffixForUUID(uuid string, id int) string {
+	return fmt.Sprintf("%s%s%06d", uuid, uuidIndexSeparator, id) // eg. 53ea0ed1-9bf8-11e6-8bea-64006a897c73.000001
 }
 
-// SuffixIntToStr convert int-represented suffix to string-represented
-func SuffixIntToStr(ID int) string {
-	return fmt.Sprintf("%06d", ID)
+// SuffixIntToStr convert int-represented suffix to string-represented.
+func SuffixIntToStr(id int) string {
+	return fmt.Sprintf("%06d", id)
 }
 
-// ParseSuffixForUUID parses UUID (with suffix) to (UUID without suffix, suffix) pair
+// ParseSuffixForUUID parses UUID (with suffix) to (UUID without suffix, suffix) pair.
 func ParseSuffixForUUID(uuid string) (string, int, error) {
 	parts := strings.Split(uuid, uuidIndexSeparator)
 	if len(parts) != 2 || len(parts[1]) != 6 {
@@ -91,7 +91,7 @@ func ParseSuffixForUUID(uuid string) (string, int, error) {
 }
 
 // GetSuffixUUID gets UUID (with suffix) by UUID (without suffix)
-// when multi UUIDs (without suffix) are the same, the newest will be return
+// when multi UUIDs (without suffix) are the same, the newest will be return.
 func GetSuffixUUID(indexPath, uuid string) (string, error) {
 	uuids, err := ParseUUIDIndex(indexPath)
 	if err != nil {
@@ -112,7 +112,7 @@ func GetSuffixUUID(indexPath, uuid string) (string, error) {
 	return "", terror.ErrRelayUUIDWithSuffixNotFound.Generate(uuid, indexPath, uuids)
 }
 
-// GetUUIDBySuffix gets UUID from uuids by suffix
+// GetUUIDBySuffix gets UUID from uuids by suffix.
 func GetUUIDBySuffix(uuids []string, suffix string) string {
 	suffix2 := fmt.Sprintf("%s%s", uuidIndexSeparator, suffix)
 	for _, uuid := range uuids {

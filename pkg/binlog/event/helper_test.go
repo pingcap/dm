@@ -16,9 +16,9 @@ package event
 import (
 	"time"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/terror"
@@ -26,8 +26,7 @@ import (
 
 var _ = Suite(&testHelperSuite{})
 
-type testHelperSuite struct {
-}
+type testHelperSuite struct{}
 
 func (t *testHelperSuite) TestGTIDsFromPreviousGTIDsEvent(c *C) {
 	var (

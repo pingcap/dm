@@ -53,6 +53,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 		Address: s.cfg.AdvertiseAddr,
 	}
 
+	var errorStr string
 	for _, endpoint := range endpoints {
 		ctx1, cancel1 := context.WithTimeout(ctx, 3*time.Second)
 		//nolint:staticcheck
@@ -63,6 +64,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 				conn.Close()
 			}
 			log.L().Error("fail to dial dm-master", zap.String("endpoint", endpoint), zap.Error(err))
+			errorStr = err.Error()
 			continue
 		}
 		client := pb.NewMasterClient(conn)
@@ -72,15 +74,17 @@ func (s *Server) JoinMaster(endpoints []string) error {
 		conn.Close()
 		if err != nil {
 			log.L().Error("fail to register worker", zap.String("endpoint", endpoint), zap.Error(err))
+			errorStr = err.Error()
 			continue
 		}
 		if !resp.GetResult() {
 			log.L().Error("fail to register worker", zap.String("endpoint", endpoint), zap.String("error", resp.Msg))
+			errorStr = resp.Msg
 			continue
 		}
 		return nil
 	}
-	return terror.ErrWorkerFailConnectMaster.Generate(endpoints)
+	return terror.ErrWorkerFailConnectMaster.Generate(endpoints, errorStr)
 }
 
 // KeepAlive attempts to keep the lease of the server alive forever.
@@ -119,7 +123,7 @@ func (s *Server) KeepAlive() {
 	}
 }
 
-// UpdateKeepAliveTTL updates keepalive key with new lease TTL in place, to avoid watcher observe a DELETE event
+// UpdateKeepAliveTTL updates keepalive key with new lease TTL in place, to avoid watcher observe a DELETE event.
 func (s *Server) UpdateKeepAliveTTL(newTTL int64) {
 	ha.KeepAliveUpdateCh <- newTTL
 	log.L().Debug("received update keepalive TTL request, should be updated soon", zap.Int64("new ttl", newTTL))

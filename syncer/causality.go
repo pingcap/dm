@@ -64,7 +64,7 @@ func (c *causality) reset() {
 	c.relations = make(map[string]string)
 }
 
-// detectConflict detects whether there is a conflict
+// detectConflict detects whether there is a conflict.
 func (c *causality) detectConflict(keys []string) bool {
 	if len(keys) == 0 {
 		return false

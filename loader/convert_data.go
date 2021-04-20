@@ -40,11 +40,11 @@ func bytes2str(bs []byte) string {
 // poor man's parse insert stmtement code
 // learn from tidb-lightning and refactor it as format of mydumper file
 // https://github.com/maxbube/mydumper/blob/master/mydumper.c#L2853
-// later let it a package
+// later let it a package.
 func parseInsertStmt(sql []byte, table *tableInfo, columnMapping *cm.Mapping) ([][]string, error) {
 	var s, e, size int
-	var rows = make([][]string, 0, 1024)
-	var VALUES = []byte("VALUES")
+	rows := make([][]string, 0, 1024)
+	VALUES := []byte("VALUES")
 
 	// If table has generated column, the dumped SQL file has a different `INSERT INTO` line,
 	// which provides column names except generated column. such as following:
@@ -132,6 +132,7 @@ func parseRowValues(str []byte, table *tableInfo, columnMapping *cm.Mapping) ([]
 
 			sch := ch
 			for j < size {
+				// nolint:gocritic
 				if str[j] == '\\' {
 					// skip escaped character
 					j += 2
@@ -178,13 +179,12 @@ func parseRowValues(str []byte, table *tableInfo, columnMapping *cm.Mapping) ([]
 		} else {
 			row = append(row, val)
 		}
-
 	}
 
 	return row, nil
 }
 
-// exportStatement returns schema structure in sqlFile
+// exportStatement returns schema structure in sqlFile.
 func exportStatement(sqlFile string) ([]byte, error) {
 	fd, err := os.Open(sqlFile)
 	if err != nil {
@@ -297,7 +297,7 @@ func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file stri
 	}, nil
 }
 
-// refine it later
+// refine it later.
 func reassemble(data []byte, table *tableInfo, columnMapping *cm.Mapping) (string, error) {
 	rows, err := parseInsertStmt(data, table, columnMapping)
 	if err != nil {

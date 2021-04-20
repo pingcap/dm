@@ -27,6 +27,8 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
+
 	config2 "github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
@@ -37,7 +39,7 @@ import (
 const (
 	tableCount      = 10               // tables count in schema.
 	fullInsertCount = 100              // `INSERT INTO` count (not rows count) for each table in full stage.
-	diffCount       = 10               // diff data check count
+	diffCount       = 20               // diff data check count
 	diffInterval    = 20 * time.Second // diff data check interval
 	incrRoundTime   = 10 * time.Second // time to generate incremental data in one round
 )
@@ -48,7 +50,7 @@ type task struct {
 	ctx    context.Context
 
 	cli pb.MasterClient
-	ss  *sqlsmith.SQLSmith
+	ss  []*sqlsmith.SQLSmith
 
 	sourceDBs   []*conn.BaseDB
 	sourceConns []*dbConn
@@ -59,6 +61,8 @@ type task struct {
 	tables  []string
 	taskCfg config2.TaskConfig
 	results results
+
+	caseGenerator *CaseGenerator
 }
 
 // newTask creates a new task instance.
@@ -101,20 +105,24 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 	}
 
 	t := &task{
-		logger:      log.L().WithFields(zap.String("case", taskCfg.Name)),
-		ctx:         ctx,
-		cli:         cli,
-		ss:          sqlsmith.New(),
-		sourceDBs:   sourceDBs,
-		sourceConns: sourceConns,
-		targetDB:    targetDB,
-		targetConn:  targetConn,
-		schema:      schema,
-		tables:      make([]string, 0),
-		taskCfg:     taskCfg,
-		results:     res,
+		logger:        log.L().WithFields(zap.String("case", taskCfg.Name)),
+		ctx:           ctx,
+		cli:           cli,
+		ss:            make([]*sqlsmith.SQLSmith, len(taskCfg.MySQLInstances)),
+		sourceDBs:     sourceDBs,
+		sourceConns:   sourceConns,
+		targetDB:      targetDB,
+		targetConn:    targetConn,
+		schema:        schema,
+		tables:        make([]string, 0),
+		taskCfg:       taskCfg,
+		results:       res,
+		caseGenerator: NewCaseGenerator(taskCfg.ShardMode),
 	}
-	t.ss.SetDB(schema)
+	for i := 0; i < len(t.ss); i++ {
+		t.ss[i] = sqlsmith.New()
+		t.ss[i].SetDB(schema)
+	}
 	return t, nil
 }
 
@@ -202,7 +210,7 @@ func (t *task) genFullData() error {
 
 	// generate `CREATE TABLE` statements.
 	for i := 0; i < tableCount; i++ {
-		query, name, err := t.ss.CreateTableStmt()
+		query, name, err := t.ss[0].CreateTableStmt()
 		if err != nil {
 			return err
 		}
@@ -226,15 +234,17 @@ func (t *task) genFullData() error {
 		indexes[name] = idx2
 	}
 
-	// go-sqlsmith needs to load schema before generating DML and `ALTER TABLE` statements.
-	t.ss.LoadSchema(columns, indexes)
+	for i := 0; i < len(t.ss); i++ {
+		// go-sqlsmith needs to load schema before generating DML and `ALTER TABLE` statements.
+		t.ss[i].LoadSchema(columns, indexes)
+	}
 
 	var eg errgroup.Group
 	for _, conn := range t.sourceConns {
 		conn2 := conn
 		eg.Go(func() error {
 			for i := 0; i < fullInsertCount; i++ {
-				query, _, err2 := t.ss.InsertStmt(false)
+				query, _, err2 := t.ss[0].InsertStmt(false)
 				if err2 != nil {
 					return err2
 				}
@@ -264,6 +274,18 @@ func (t *task) createTask() error {
 
 // incrLoop enters the loop of generating incremental data and diff them.
 func (t *task) incrLoop() error {
+	t.caseGenerator.Start(t.ctx, t.schema, t.tables)
+
+	// execute preSQLs in upstream
+	for _, sql := range t.caseGenerator.GetPreSQLs() {
+		if err := t.sourceConns[sql.source].execDDLs(sql.statement); err != nil {
+			return err
+		}
+	}
+	if err := t.updateSchema(); err != nil {
+		return err
+	}
+
 	for {
 		select {
 		case <-t.ctx.Done():
@@ -290,15 +312,17 @@ func (t *task) incrLoop() error {
 
 // genIncrData generates data for the incremental stage in one round.
 // NOTE: it return nil for context done.
-func (t *task) genIncrData(ctx context.Context) (err error) {
+func (t *task) genIncrData(pCtx context.Context) (err error) {
 	t.logger.Info("generating data for incremental stage")
+	getNewCase := true
 
 	defer func() {
 		if errors.Cause(err) == context.Canceled || errors.Cause(err) == context.DeadlineExceeded {
+			log.L().Info("context done.", log.ShortError(err))
 			err = nil // clear error for context done.
 		} else if err != nil {
 			select {
-			case <-ctx.Done():
+			case <-pCtx.Done():
 				t.logger.Warn("ignore error when generating data for incremental stage", zap.Error(err))
 				err = nil // some other errors like `connection is already closed` may also be reported for context done.
 			default:
@@ -306,7 +330,7 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 					t.logger.Warn("ignore error when generating data for incremental stage", zap.Error(err))
 					// we don't known which connection was bad, so simply reset all of them for the next round.
 					for _, conn := range t.sourceConns {
-						if err2 := conn.resetConn(ctx); err2 != nil {
+						if err2 := conn.resetConn(t.ctx); err2 != nil {
 							t.logger.Warn("fail to reset connection", zap.Error(err2))
 						}
 						err = nil
@@ -316,20 +340,53 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 		}
 	}()
 
+	runCaseSQLs := func() error {
+		testSQLs := t.caseGenerator.GetSQLs()
+		if testSQLs == nil {
+			getNewCase = false
+			return nil
+		}
+		for _, testSQL := range testSQLs {
+			log.L().Info("execute test case sql", zap.String("ddl", testSQL.statement), zap.Int("source", testSQL.source))
+			if err2 := t.sourceConns[testSQL.source].execDDLs(testSQL.statement); err2 != nil {
+				return err2
+			}
+		}
+		return nil
+	}
+
+	defer func() {
+		log.L().Info("complete test case sql")
+		for {
+			if !getNewCase {
+				return
+			}
+
+			if err2 := runCaseSQLs(); err2 != nil {
+				err = err2
+				return
+			}
+			if err2 := t.updateSchema(); err2 != nil {
+				err = err2
+				return
+			}
+		}
+	}()
+
 	for {
 		select {
-		case <-ctx.Done():
+		case <-pCtx.Done():
 			return nil
 		default:
-		}
-		query, typ, err := randDML(t.ss)
-		if err != nil {
-			return err
 		}
 
 		// for DML, we rand choose an upstream source to execute the statement.
 		idx := rand.Intn(len(t.sourceConns))
-		if err = t.sourceConns[idx].execSQLs(ctx, query); err != nil {
+		query, typ, err := randDML(t.ss[idx])
+		if err != nil {
+			return err
+		}
+		if err = t.sourceConns[idx].execDDLs(query); err != nil {
 			return err
 		}
 
@@ -343,11 +400,22 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 		default:
 		}
 
+		schemaChanged := false
 		if rand.Intn(3000) < 10 {
-			query, err = randDDL(t.ss)
+			query, err = randDDL(t.ss[0])
 			if err != nil {
 				return err
 			}
+
+			// Unsupported ddl in optimistic mode. e.g. ALTER TABLE table_name ADD column column_name INT NOT NULL;
+			if t.taskCfg.ShardMode == config2.ShardOptimistic {
+				if yes, err2 := isNotNullNonDefaultAddCol(query); err != nil {
+					return err2
+				} else if yes {
+					continue
+				}
+			}
+
 			t.logger.Info("executing DDL", zap.String("query", query))
 			// for DDL, we execute the statement for all upstream sources.
 			// NOTE: no re-order inject even for optimistic shard DDL now.
@@ -357,7 +425,7 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 				conn2 := conn
 				i2 := i
 				eg.Go(func() error {
-					if err2 := conn2.execSQLs(ctx, query); err2 != nil {
+					if err2 := conn2.execDDLs(query); err2 != nil {
 						if utils.IsMySQLError(err2, mysql.ErrDupFieldName) {
 							t.logger.Warn("ignore duplicate field name for ddl", log.ShortError(err))
 							return nil
@@ -369,6 +437,23 @@ func (t *task) genIncrData(ctx context.Context) (err error) {
 				})
 			}
 			if err = eg.Wait(); err != nil {
+				return err
+			}
+
+			schemaChanged = true
+		}
+
+		if getNewCase && rand.Intn(100) < 10 {
+			// execute sql of test cases
+			if err = runCaseSQLs(); err != nil {
+				return err
+			}
+
+			schemaChanged = true
+		}
+
+		if schemaChanged {
+			if err = t.updateSchema(); err != nil {
 				return err
 			}
 		}
@@ -398,4 +483,30 @@ func (t *task) diffIncrData(ctx context.Context) (err error) {
 		sourceDBs = append(sourceDBs, db.DB)
 	}
 	return diffDataLoop(ctx, diffCount, diffInterval, t.schema, t.tables, t.targetDB.DB, sourceDBs...)
+}
+
+func (t *task) updateSchema() error {
+	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
+	defer cancel()
+
+	for i, db := range t.sourceDBs {
+		columns := make([][5]string, 0)
+		indexes := make(map[string][]string)
+		for _, table := range t.tables {
+			createTable, err := dbutil.GetCreateTableSQL(ctx, db.DB, t.schema, table)
+			if err != nil {
+				return err
+			}
+			col, idx, err := createTableToSmithSchema(t.schema, createTable)
+			if err != nil {
+				return err
+			}
+			columns = append(columns, col...)
+			indexes[table] = idx
+		}
+		t.ss[i] = sqlsmith.New()
+		t.ss[i].SetDB(t.schema)
+		t.ss[i].LoadSchema(columns, indexes)
+	}
+	return nil
 }

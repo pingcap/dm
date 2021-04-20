@@ -22,14 +22,12 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/failpoint"
-	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 )
 
-var (
-	heartbeatInterval = common.MasterHeartbeatPeriod
-)
+var heartbeatInterval = common.MasterHeartbeatPeriod
 
 // TODO: maybe one day we can make a pull request to go-mysql to support LocalStreamer.
 

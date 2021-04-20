@@ -18,8 +18,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/terror"
@@ -31,8 +31,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testSuite struct {
-}
+type testSuite struct{}
 
 func (t *testSuite) TestParseMetaData(c *C) {
 	f, err := ioutil.TempFile("", "metadata")
@@ -233,7 +232,7 @@ Finished dump at: 2020-09-30 12:16:49
 	}
 
 	for _, tc := range testCases {
-		err2 := ioutil.WriteFile(f.Name(), []byte(tc.source), 0644)
+		err2 := ioutil.WriteFile(f.Name(), []byte(tc.source), 0o644)
 		c.Assert(err2, IsNil)
 		loc, loc2, err2 := ParseMetaData(f.Name(), "mysql")
 		c.Assert(err2, IsNil)
@@ -252,7 +251,7 @@ Finished dump at: 2020-09-30 12:16:49
 	noBinlogLoc := `Started dump at: 2020-12-02 17:13:56
 Finished dump at: 2020-12-02 17:13:56
 `
-	err = ioutil.WriteFile(f.Name(), []byte(noBinlogLoc), 0644)
+	err = ioutil.WriteFile(f.Name(), []byte(noBinlogLoc), 0o644)
 	c.Assert(err, IsNil)
 	_, _, err = ParseMetaData(f.Name(), "mysql")
 	c.Assert(terror.ErrMetadataNoBinlogLoc.Equal(err), IsTrue)

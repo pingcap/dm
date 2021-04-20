@@ -42,12 +42,11 @@ func ignoreDDLError(err error) bool {
 
 	errCode := errors.ErrCode(mysqlErr.Number)
 	switch errCode {
-	case infoschema.ErrDatabaseExists.Code(), infoschema.ErrDatabaseNotExists.Code(), infoschema.ErrDatabaseDropExists.Code(),
-		infoschema.ErrTableExists.Code(), infoschema.ErrTableNotExists.Code(), infoschema.ErrTableDropExists.Code(),
-		infoschema.ErrColumnExists.Code(), infoschema.ErrColumnNotExists.Code(),
-		infoschema.ErrIndexExists.Code(), tddl.ErrCantDropFieldOrKey.Code():
-		return true
-	case tmysql.ErrDupKeyName:
+	case infoschema.ErrDatabaseExists.Code(), infoschema.ErrDatabaseDropExists.Code(),
+		infoschema.ErrTableExists.Code(), infoschema.ErrTableDropExists.Code(),
+		infoschema.ErrColumnExists.Code(),
+		infoschema.ErrIndexExists.Code(),
+		infoschema.ErrKeyNameDuplicate.Code(), tddl.ErrCantDropFieldOrKey.Code():
 		return true
 	default:
 		return false
@@ -136,14 +135,15 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 			table  string
 			col    string
 		)
-		if n, ok := stmt.(*ast.AlterTableStmt); !ok {
+		n, ok := stmt.(*ast.AlterTableStmt)
+		switch {
+		case !ok:
 			return originErr
-			// support ALTER TABLE tbl_name DROP
-		} else if len(n.Specs) != 1 {
+		case len(n.Specs) != 1:
 			return originErr
-		} else if n.Specs[0].Tp != ast.AlterTableDropColumn {
+		case n.Specs[0].Tp != ast.AlterTableDropColumn:
 			return originErr
-		} else {
+		default:
 			schema = n.Table.Schema.O
 			table = n.Table.Name.O
 			col = n.Specs[0].OldColumnName.Name.O
@@ -165,10 +165,14 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		)
 		for rows.Next() {
 			if err2 = rows.Scan(&idx); err2 != nil {
+				// nolint:sqlclosecheck
 				rows.Close()
 				return originErr
 			}
 			idx2Check = append(idx2Check, idx)
+		}
+		if rows.Err() != nil {
+			return rows.Err()
 		}
 		// Close is idempotent, we could close in advance to reuse conn
 		rows.Close()
@@ -179,9 +183,13 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 			if err2 != nil || !rows.Next() || rows.Scan(&count) != nil || count != 1 {
 				tctx.L().Warn("can't auto drop index", zap.String("index", idx))
 				if rows != nil {
+					// nolint: sqlclosecheck
 					rows.Close()
 				}
 				return originErr
+			}
+			if rows.Err() != nil {
+				return rows.Err()
 			}
 			idx2Drop = append(idx2Drop, idx)
 			rows.Close()

@@ -20,9 +20,9 @@ import (
 	"strings"
 	"time"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/failpoint"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -67,14 +67,14 @@ import (
 //			it ignore already exists error and it should be removed after use, one unit has one connection
 //
 // each connection should have ability to retry on some common errors (e.g. tmysql.ErrTiKVServerTimeout) or maybe some specify errors in the future
-// and each connection also should have ability to reset itself during some specify connection error (e.g. driver.ErrBadConn)
+// and each connection also should have ability to reset itself during some specify connection error (e.g. driver.ErrBadConn).
 type BaseConn struct {
 	DBConn *sql.Conn
 
 	RetryStrategy retry.Strategy
 }
 
-// NewBaseConn builds BaseConn to connect real DB
+// NewBaseConn builds BaseConn to connect real DB.
 func NewBaseConn(conn *sql.Conn, strategy retry.Strategy) *BaseConn {
 	if strategy == nil {
 		strategy = &retry.FiniteRetryStrategy{}
@@ -82,7 +82,7 @@ func NewBaseConn(conn *sql.Conn, strategy retry.Strategy) *BaseConn {
 	return &BaseConn{conn, strategy}
 }
 
-// SetRetryStrategy set retry strategy for baseConn
+// SetRetryStrategy set retry strategy for baseConn.
 func (conn *BaseConn) SetRetryStrategy(strategy retry.Strategy) error {
 	if conn == nil {
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
@@ -91,7 +91,7 @@ func (conn *BaseConn) SetRetryStrategy(strategy retry.Strategy) error {
 	return nil
 }
 
-// QuerySQL defines query statement, and connect to real DB
+// QuerySQL defines query statement, and connect to real DB.
 func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	if conn == nil || conn.DBConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
@@ -101,7 +101,6 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 		zap.String("argument", utils.TruncateInterface(args, -1)))
 
 	rows, err := conn.DBConn.QueryContext(tctx.Context(), query, args...)
-
 	if err != nil {
 		tctx.L().ErrorFilterContextCanceled("query statement failed",
 			zap.String("query", utils.TruncateString(query, -1)),
@@ -115,7 +114,7 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 // ExecuteSQLWithIgnoreError executes sql on real DB, and will ignore some error and continue execute the next query.
 // return
 // 1. failed: (the index of sqls executed error, error)
-// 2. succeed: (len(sqls), nil)
+// 2. succeed: (len(sqls), nil).
 func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *metricsproxy.HistogramVecProxy, task string, ignoreErr func(error) bool, queries []string, args ...[]interface{}) (int, error) {
 	// inject an error to trigger retry, this should be placed before the real execution of the SQL statement.
 	failpoint.Inject("retryableError", func(val failpoint.Value) {
@@ -130,7 +129,8 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *me
 				tctx.L().Info("", zap.String("failpoint", "retryableError"), zap.String("mark", mark))
 				failpoint.Return(0, &mysql.MySQLError{
 					Number:  gmysql.ER_LOCK_DEADLOCK,
-					Message: fmt.Sprintf("failpoint inject retryable error for %s", mark)})
+					Message: fmt.Sprintf("failpoint inject retryable error for %s", mark),
+				})
 			}
 		}
 	})
@@ -144,7 +144,6 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *me
 
 	startTime := time.Now()
 	txn, err := conn.DBConn.BeginTx(tctx.Context(), nil)
-
 	if err != nil {
 		return 0, terror.ErrDBExecuteFailed.Delegate(err, "begin")
 	}
@@ -214,12 +213,12 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, hVec *me
 // ExecuteSQL executes sql on real DB,
 // return
 // 1. failed: (the index of sqls executed error, error)
-// 2. succeed: (len(sqls), nil)
+// 2. succeed: (len(sqls), nil).
 func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, hVec *metricsproxy.HistogramVecProxy, task string, queries []string, args ...[]interface{}) (int, error) {
 	return conn.ExecuteSQLWithIgnoreError(tctx, hVec, task, nil, queries, args...)
 }
 
-// ApplyRetryStrategy apply specify strategy for BaseConn
+// ApplyRetryStrategy apply specify strategy for BaseConn.
 func (conn *BaseConn) ApplyRetryStrategy(tctx *tcontext.Context, params retry.Params,
 	operateFn func(*tcontext.Context) (interface{}, error)) (interface{}, int, error) {
 	return conn.RetryStrategy.Apply(tctx, params, operateFn)

@@ -23,12 +23,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
@@ -51,10 +51,8 @@ import (
 	"github.com/pingcap/dm/relay/writer"
 )
 
-var (
-	// used to fill RelayLogInfo
-	fakeTaskName = "relay"
-)
+// used to fill RelayLogInfo.
+var fakeTaskName = "relay"
 
 const (
 	flushMetaInterval           = 30 * time.Second
@@ -71,7 +69,7 @@ var NewRelay = NewRealRelay
 
 var _ Process = &Relay{}
 
-// Process defines mysql-like relay log process unit
+// Process defines mysql-like relay log process unit.
 type Process interface {
 	// Init initial relat log unit
 	Init(ctx context.Context) (err error)
@@ -152,7 +150,7 @@ func (r *Relay) Init(ctx context.Context) (err error) {
 	r.db = db
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DB", Fn: r.closeDB})
 
-	if err2 := os.MkdirAll(r.cfg.RelayDir, 0755); err2 != nil {
+	if err2 := os.MkdirAll(r.cfg.RelayDir, 0o755); err2 != nil {
 		return terror.ErrRelayMkdir.Delegate(err2)
 	}
 
@@ -324,7 +322,7 @@ func (r *Relay) process(ctx context.Context) error {
 	}
 }
 
-// PurgeRelayDir implements the dm.Unit interface
+// PurgeRelayDir implements the dm.Unit interface.
 func (r *Relay) PurgeRelayDir() error {
 	dir := r.cfg.RelayDir
 	d, err := os.Open(dir)
@@ -471,7 +469,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 
 		binlogReadDurationHistogram.Observe(time.Since(readTimer).Seconds())
 		failpoint.Inject("BlackholeReadBinlog", func(_ failpoint.Value) {
-			//r.logger.Info("back hole read binlog takes effects")
+			// r.logger.Info("back hole read binlog takes effects")
 			failpoint.Continue()
 		})
 
@@ -773,8 +771,7 @@ func (r *Relay) setUpWriter(parser2 *parser.Parser) (writer.Writer, error) {
 		Filename: pos.Name,
 	}
 	writer2 := writer.NewFileWriter(r.logger, cfg, parser2)
-	err := writer2.Start()
-	if err != nil {
+	if err := writer2.Start(); err != nil {
 		return nil, terror.Annotatef(err, "start writer for UUID %s with config %+v", uuid, cfg)
 	}
 
@@ -791,22 +788,22 @@ func (r *Relay) IsClosed() bool {
 	return r.closed.Get()
 }
 
-// SaveMeta save relay meta and update meta in RelayLogInfo
+// SaveMeta save relay meta and update meta in RelayLogInfo.
 func (r *Relay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
 	return r.meta.Save(pos, gset)
 }
 
-// ResetMeta reset relay meta
+// ResetMeta reset relay meta.
 func (r *Relay) ResetMeta() {
 	r.meta = NewLocalMeta(r.cfg.Flavor, r.cfg.RelayDir)
 }
 
-// FlushMeta flush relay meta
+// FlushMeta flush relay meta.
 func (r *Relay) FlushMeta() error {
 	return r.meta.Flush()
 }
 
-// stopSync stops syncing, now it used by Close and Pause
+// stopSync stops syncing, now it used by Close and Pause.
 func (r *Relay) stopSync() {
 	if err := r.FlushMeta(); err != nil {
 		r.logger.Error("flush checkpoint", zap.Error(err))
@@ -877,12 +874,12 @@ func (r *Relay) Type() pb.UnitType {
 	return pb.UnitType_Relay
 }
 
-// IsFreshTask implements Unit.IsFreshTask
+// IsFreshTask implements Unit.IsFreshTask.
 func (r *Relay) IsFreshTask() (bool, error) {
 	return true, nil
 }
 
-// Pause pauses the process, it can be resumed later
+// Pause pauses the process, it can be resumed later.
 func (r *Relay) Pause() {
 	if r.IsClosed() {
 		r.logger.Warn("try to pause, but already closed")
@@ -892,18 +889,18 @@ func (r *Relay) Pause() {
 	r.stopSync()
 }
 
-// Resume resumes the paused process
+// Resume resumes the paused process.
 func (r *Relay) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	// do nothing now, re-process called `Process` from outer directly
 }
 
-// Update implements Unit.Update
+// Update implements Unit.Update.
 func (r *Relay) Update(cfg *config.SubTaskConfig) error {
 	// not support update configuration now
 	return nil
 }
 
-// Reload updates config
+// Reload updates config.
 func (r *Relay) Reload(newCfg *Config) error {
 	r.Lock()
 	defer r.Unlock()
@@ -938,7 +935,7 @@ func (r *Relay) Reload(newCfg *Config) error {
 	return nil
 }
 
-// setActiveRelayLog sets or updates the current active relay log to file
+// setActiveRelayLog sets or updates the current active relay log to file.
 func (r *Relay) setActiveRelayLog(filename string) {
 	uuid := r.meta.UUID()
 	_, suffix, _ := utils.ParseSuffixForUUID(uuid)
@@ -953,7 +950,7 @@ func (r *Relay) setActiveRelayLog(filename string) {
 	r.activeRelayLog.Unlock()
 }
 
-// ActiveRelayLog returns the current active RelayLogInfo
+// ActiveRelayLog returns the current active RelayLogInfo.
 func (r *Relay) ActiveRelayLog() *pkgstreamer.RelayLogInfo {
 	r.activeRelayLog.RLock()
 	defer r.activeRelayLog.RUnlock()

@@ -25,8 +25,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testMetricsProxySuite struct {
-}
+type testMetricsProxySuite struct{}
 
 type testCase struct {
 	LabelsNames   []string

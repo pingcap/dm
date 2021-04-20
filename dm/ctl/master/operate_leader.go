@@ -24,7 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewOperateLeaderCmd creates a OperateLeader command
+// NewOperateLeaderCmd creates a OperateLeader command.
 func NewOperateLeaderCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operate-leader <operate-type>",
@@ -45,22 +45,20 @@ func convertOpType(op string) pb.LeaderOp {
 	}
 }
 
-// operateLeaderFunc does operate leader request
-func operateLeaderFunc(cmd *cobra.Command, _ []string) (err error) {
+// operateLeaderFunc does operate leader request.
+func operateLeaderFunc(cmd *cobra.Command, _ []string) error {
 	if len(cmd.Flags().Args()) != 1 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
+		return errors.New("please check output to see error")
 	}
 
 	opType := cmd.Flags().Arg(0)
 
 	op := convertOpType(opType)
 	if op == pb.LeaderOp_InvalidLeaderOp {
-		common.PrintLines("invalid operate '%s' on leader", opType)
-		err = errors.New("please check output to see error")
-		return
+		common.PrintLinesf("invalid operate '%s' on leader", opType)
+		return errors.New("please check output to see error")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -68,7 +66,7 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) (err error) {
 
 	// operate leader
 	resp := &pb.OperateLeaderResponse{}
-	err = common.SendRequest(
+	err := common.SendRequest(
 		ctx,
 		"OperateLeader",
 		&pb.OperateLeaderRequest{
@@ -76,11 +74,10 @@ func operateLeaderFunc(cmd *cobra.Command, _ []string) (err error) {
 		},
 		&resp,
 	)
-
 	if err != nil {
-		return
+		return err
 	}
 
 	common.PrettyPrintResponse(resp)
-	return
+	return nil
 }

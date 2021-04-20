@@ -19,16 +19,15 @@ import (
 	"path"
 	"strings"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
 var _ = Suite(&testMetaSuite{})
 
-type testMetaSuite struct {
-}
+type testMetaSuite struct{}
 
 type MetaTestCase struct {
 	uuid           string
@@ -99,7 +98,7 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 
 	// set currentUUID because lm.doFlush need it
 	currentUUID := "uuid.000001"
-	c.Assert(os.MkdirAll(path.Join(dir, currentUUID), 0777), IsNil)
+	c.Assert(os.MkdirAll(path.Join(dir, currentUUID), 0o777), IsNil)
 	setLocalMetaWithCurrentUUID := func() {
 		lm = NewLocalMeta("mysql", dir)
 		lm.(*LocalMeta).currentUUID = currentUUID

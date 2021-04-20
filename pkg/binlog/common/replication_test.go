@@ -14,8 +14,8 @@
 package common
 
 import (
+	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go-mysql/replication"
 )
 
 func (t *testCommonSuite) TestSetDefaultReplicationCfg(c *C) {
@@ -30,5 +30,4 @@ func (t *testCommonSuite) TestSetDefaultReplicationCfg(c *C) {
 	SetDefaultReplicationCfg(&syncCfg, retryCnt)
 	c.Assert(syncCfg.MaxReconnectAttempts, Equals, retryCnt)
 	c.Assert(syncCfg.DisableRetrySync, IsTrue)
-
 }

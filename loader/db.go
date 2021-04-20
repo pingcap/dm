@@ -35,7 +35,7 @@ import (
 )
 
 // DBConn represents a live DB connection
-// it's not thread-safe
+// it's not thread-safe.
 type DBConn struct {
 	cfg      *config.SubTaskConfig
 	baseConn *conn.BaseConn
@@ -83,6 +83,9 @@ func (conn *DBConn) querySQL(ctx *tcontext.Context, query string, args ...interf
 			startTime := time.Now()
 			ret, err := conn.baseConn.QuerySQL(ctx, query, args...)
 			if err == nil {
+				if ret.Err() != nil {
+					return ret, ret.Err()
+				}
 				cost := time.Since(startTime)
 				queryHistogram.WithLabelValues(conn.cfg.Name, conn.cfg.SourceID).Observe(cost.Seconds())
 				if cost.Seconds() > 1 {
@@ -170,7 +173,6 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 			}
 			return nil, err
 		})
-
 	if err != nil {
 		ctx.L().ErrorFilterContextCanceled("execute statements failed after retry",
 			zap.String("queries", utils.TruncateInterface(queries, -1)),
@@ -181,7 +183,7 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 	return err
 }
 
-// resetConn reset one worker connection from specify *BaseDB
+// resetConn reset one worker connection from specify *BaseDB.
 func (conn *DBConn) resetConn(tctx *tcontext.Context) error {
 	baseConn, err := conn.resetBaseConnFn(tctx, conn.baseConn)
 	if err != nil {

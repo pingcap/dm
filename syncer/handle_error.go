@@ -19,8 +19,8 @@ import (
 
 	"github.com/pingcap/parser"
 
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/parser/ast"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -28,7 +28,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// HandleError handle error for syncer
+// HandleError handle error for syncer.
 func (s *Syncer) HandleError(ctx context.Context, req *pb.HandleWorkerErrorRequest) error {
 	pos := req.BinlogPos
 
@@ -107,7 +107,7 @@ func (s *Syncer) genEvents(ctx context.Context, sqls []string) ([]*replication.B
 	return events, nil
 }
 
-// genQueryEvent generate QueryEvent with empty EventSize and LogPos
+// genQueryEvent generate QueryEvent with empty EventSize and LogPos.
 func genQueryEvent(schema, query []byte) *replication.BinlogEvent {
 	header := &replication.EventHeader{
 		EventType: replication.QUERY_EVENT,

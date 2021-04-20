@@ -21,10 +21,10 @@ import (
 	"path/filepath"
 	"time"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
@@ -32,12 +32,9 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-var (
-	_ = Suite(&testFileReaderSuite{})
-)
+var _ = Suite(&testFileReaderSuite{})
 
-type testFileReaderSuite struct {
-}
+type testFileReaderSuite struct{}
 
 func (t *testFileReaderSuite) TestInterfaceMethods(c *C) {
 	var (

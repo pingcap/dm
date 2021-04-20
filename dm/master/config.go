@@ -53,11 +53,11 @@ var (
 	EnableZap = false
 	// SampleConfigFile is sample config file of dm-master
 	// later we can read it from dm/master/dm-master.toml
-	// and assign it to SampleConfigFile while we build dm-master
+	// and assign it to SampleConfigFile while we build dm-master.
 	SampleConfigFile string
 )
 
-// NewConfig creates a config for dm-master
+// NewConfig creates a config for dm-master.
 func NewConfig() *Config {
 	cfg := &Config{}
 	cfg.flagSet = flag.NewFlagSet("dm-master", flag.ContinueOnError)
@@ -71,7 +71,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
-	//fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
+	// fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
 
 	fs.StringVar(&cfg.Name, "name", "", "human-readable name for this DM-master member")
 	fs.StringVar(&cfg.DataDir, "data-dir", "", `path to the data directory (default "default.${name}")`)
@@ -93,7 +93,7 @@ func NewConfig() *Config {
 	return cfg
 }
 
-// Config is the configuration for dm-master
+// Config is the configuration for dm-master.
 type Config struct {
 	flagSet *flag.FlagSet
 
@@ -138,7 +138,6 @@ type Config struct {
 }
 
 func (c *Config) String() string {
-	//nolint:staticcheck
 	cfg, err := json.Marshal(c)
 	if err != nil {
 		log.L().Error("marshal to json", zap.Reflect("master config", c), log.ShortError(err))
@@ -146,7 +145,7 @@ func (c *Config) String() string {
 	return string(cfg)
 }
 
-// Toml returns TOML format representation of config
+// Toml returns TOML format representation of config.
 func (c *Config) Toml() (string, error) {
 	var b bytes.Buffer
 
@@ -223,7 +222,7 @@ func (c *Config) configFromFile(path string) error {
 	return nil
 }
 
-// adjust adjusts configs
+// adjust adjusts configs.
 func (c *Config) adjust() error {
 	c.MasterAddr = utils.UnwrapScheme(c.MasterAddr)
 	// MasterAddr's format may be "host:port" or ":port"
@@ -321,7 +320,7 @@ func (c *Config) adjust() error {
 	return err
 }
 
-// Reload load config from local file
+// Reload load config from local file.
 func (c *Config) Reload() error {
 	if c.ConfigFile != "" {
 		err := c.configFromFile(c.ConfigFile)
@@ -428,7 +427,7 @@ func genEmbedEtcdConfigWithLogger(logLevel string) *embed.Config {
 	cfg := embed.NewConfig()
 	// disable grpc gateway because https://github.com/etcd-io/etcd/issues/12713
 	// TODO: wait above issue fixed
-	//cfg.EnableGRPCGateway = true // enable gRPC gateway for the internal etcd.
+	// cfg.EnableGRPCGateway = true // enable gRPC gateway for the internal etcd.
 
 	// use zap as the logger for embed etcd
 	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.

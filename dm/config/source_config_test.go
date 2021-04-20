@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 // do not forget to update this path if the file removed/renamed.
@@ -114,7 +114,7 @@ func (t *testConfig) TestConfig(c *C) {
 source-id: haha
 aaa: xxx
 `)
-	err = ioutil.WriteFile(configFile, configContent, 0644)
+	err = ioutil.WriteFile(configFile, configContent, 0o644)
 	c.Assert(err, IsNil)
 	err = cfg.LoadFromFile(configFile)
 	c.Assert(err, NotNil)
@@ -226,7 +226,6 @@ func (t *testConfig) TestConfigVerify(c *C) {
 			c.Assert(err, IsNil)
 		}
 	}
-
 }
 
 func subtestFlavor(c *C, cfg *SourceConfig, sqlInfo, expectedFlavor, expectedError string) {
@@ -265,7 +264,7 @@ func (t *testConfig) TestAdjustFlavor(c *C) {
 }
 
 func (t *testConfig) TestAdjustServerID(c *C) {
-	var originGetAllServerIDFunc = getAllServerIDFunc
+	originGetAllServerIDFunc := getAllServerIDFunc
 	defer func() {
 		getAllServerIDFunc = originGetAllServerIDFunc
 	}()

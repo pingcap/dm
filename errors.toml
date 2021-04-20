@@ -2711,9 +2711,9 @@ workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in work
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40077]
-message = "cannot connect with master endpoints: %v"
+message = "cannot join with master endpoints: %v, error: %v"
 description = ""
-workaround = "Please check network connection of worker"
+workaround = "Please check network connection of worker and check worker name is unique."
 tags = ["internal", "high"]
 
 [error.DM-dm-worker-40078]

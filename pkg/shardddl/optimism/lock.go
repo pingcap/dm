@@ -32,11 +32,11 @@ import (
 type DropColumnStage int
 
 const (
-	// DropNotDone represents master haven't received done for the col
+	// DropNotDone represents master haven't received done for the col.
 	DropNotDone DropColumnStage = iota
-	// DropPartiallyDone represents master receive done for the col
+	// DropPartiallyDone represents master receive done for the col.
 	DropPartiallyDone
-	// DropDone represents master receive done and ddl for the col(executed in downstream)
+	// DropDone represents master receive done and ddl for the col(executed in downstream).
 	DropDone
 )
 
@@ -79,10 +79,10 @@ type Lock struct {
 
 // NewLock creates a new Lock instance.
 // NOTE: we MUST give the initial table info when creating the lock now.
-func NewLock(cli *clientv3.Client, ID, task, downSchema, downTable string, joined schemacmp.Table, tts []TargetTable) *Lock {
+func NewLock(cli *clientv3.Client, id, task, downSchema, downTable string, joined schemacmp.Table, tts []TargetTable) *Lock {
 	l := &Lock{
 		cli:        cli,
-		ID:         ID,
+		ID:         id,
 		Task:       task,
 		DownSchema: downSchema,
 		DownTable:  downTable,
@@ -203,9 +203,9 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 	if cmp, err2 := prevTable.Compare(l.tables[callerSource][callerSchema][callerTable]); err2 != nil || cmp != 0 {
 		log.L().Warn("table-info-before not equal table saved in master", zap.Stringer("master-table", l.tables[callerSource][callerSchema][callerTable]), zap.Stringer("table-info-before", prevTable))
 		l.tables[callerSource][callerSchema][callerTable] = prevTable
-		prevJoined, err := joinTable(prevTable)
-		if err != nil {
-			return emptyDDLs, emptyCols, err
+		prevJoined, err2 := joinTable(prevTable)
+		if err2 != nil {
+			return emptyDDLs, emptyCols, err2
 		}
 		l.joined = prevJoined
 	}
@@ -245,8 +245,8 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 		// this often happens when executing `CREATE TABLE` statement
 		var cmp int
 		if cmp, err = nextTable.Compare(oldJoined); err == nil && cmp == 0 {
-			if col, err := GetColumnName(l.ID, ddls[idx], ast.AlterTableAddColumns); err != nil {
-				return newDDLs, cols, err
+			if col, err2 := GetColumnName(l.ID, ddls[idx], ast.AlterTableAddColumns); err2 != nil {
+				return newDDLs, cols, err2
 			} else if len(col) > 0 && l.IsDroppedColumn(info.Source, info.UpSchema, info.UpTable, col) {
 				return newDDLs, cols, terror.ErrShardDDLOptimismTrySyncFail.Generate(
 					l.ID, fmt.Sprintf("add column %s that wasn't fully dropped in downstream. ddl: %s", col, ddls[idx]))
@@ -322,8 +322,8 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 		cmp, _ = prevTable.Compare(nextTable) // we have checked `err` returned above.
 		if cmp < 0 {
 			// check for add column with a smaller field len
-			if col, err := AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined); err != nil {
-				return ddls, cols, err
+			if col, err2 := AddDifferentFieldLenColumns(l.ID, ddls[idx], nextTable, newJoined); err2 != nil {
+				return ddls, cols, err2
 			} else if len(col) > 0 && l.IsDroppedColumn(info.Source, info.UpSchema, info.UpTable, col) {
 				return ddls, cols, terror.ErrShardDDLOptimismTrySyncFail.Generate(
 					l.ID, fmt.Sprintf("add column %s that wasn't fully dropped in downstream. ddl: %s", col, ddls[idx]))
@@ -332,8 +332,8 @@ func (l *Lock) TrySync(info Info, tts []TargetTable) (newDDLs []string, cols []s
 			newDDLs = append(newDDLs, ddls[idx])
 			continue
 		} else if cmp > 0 {
-			if col, err := GetColumnName(l.ID, ddls[idx], ast.AlterTableDropColumn); err != nil {
-				return ddls, cols, err
+			if col, err2 := GetColumnName(l.ID, ddls[idx], ast.AlterTableDropColumn); err2 != nil {
+				return ddls, cols, err2
 			} else if len(col) > 0 {
 				err = l.AddDroppedColumn(info, col)
 				if err != nil {
@@ -476,8 +476,7 @@ func (l *Lock) IsResolved() bool {
 	defer l.mu.RUnlock()
 
 	// whether all tables have the same schema.
-	_, remain := l.syncStatus()
-	if remain != 0 {
+	if _, remain := l.syncStatus(); remain != 0 {
 		return false
 	}
 
@@ -569,7 +568,7 @@ func (l *Lock) GetVersion(source string, schema string, table string) int64 {
 	return l.versions[source][schema][table]
 }
 
-// IsDroppedColumn checks whether this column is a partially dropped column for this lock
+// IsDroppedColumn checks whether this column is a partially dropped column for this lock.
 func (l *Lock) IsDroppedColumn(source, upSchema, upTable, col string) bool {
 	if _, ok := l.columns[col]; !ok {
 		return false
@@ -586,7 +585,7 @@ func (l *Lock) IsDroppedColumn(source, upSchema, upTable, col string) bool {
 	return true
 }
 
-// AddDroppedColumn adds a dropped column name in both etcd and lock's column map
+// AddDroppedColumn adds a dropped column name in both etcd and lock's column map.
 func (l *Lock) AddDroppedColumn(info Info, col string) error {
 	source, upSchema, upTable := info.Source, info.UpSchema, info.UpTable
 	if l.IsDroppedColumn(source, upSchema, upTable, col) {
@@ -686,7 +685,7 @@ func (l *Lock) DeleteColumnsByOp(op Operation) error {
 	return nil
 }
 
-// AddDifferentFieldLenColumns checks whether dm adds columns with different field lengths
+// AddDifferentFieldLenColumns checks whether dm adds columns with different field lengths.
 func AddDifferentFieldLenColumns(lockID, ddl string, oldJoined, newJoined schemacmp.Table) (string, error) {
 	col, err := GetColumnName(lockID, ddl, ast.AlterTableAddColumns)
 	if err != nil {
@@ -706,7 +705,7 @@ func AddDifferentFieldLenColumns(lockID, ddl string, oldJoined, newJoined schema
 	return col, nil
 }
 
-// GetColumnName checks whether dm adds/drops a column, and return this column's name
+// GetColumnName checks whether dm adds/drops a column, and return this column's name.
 func GetColumnName(lockID, ddl string, tp ast.AlterTableType) (string, error) {
 	if stmt, err := parser.New().ParseOneStmt(ddl, "", ""); err != nil {
 		return "", terror.ErrShardDDLOptimismTrySyncFail.Delegate(

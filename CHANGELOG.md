@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Improvements
 
 - Relay log GA
-  - The relay log feature is no longer enabled by setting the source configuration file.Now, the feature is enabled by running commands in dmctl for specified DM-workers [#1499](https://github.com/pingcap/dm/pull/1499)
+  - The relay log feature is no longer enabled by setting the source configuration file. Now, the feature is enabled by running commands in dmctl for specified DM-workers [#1499](https://github.com/pingcap/dm/pull/1499)
   - DM sends the commands `query-status -s` and `purge-relay` to all DM-workers that pull relay logs [#1533](https://github.com/pingcap/dm/pull/1533)
   - Align the relay unit‘s behavior of pulling and sending binlogs with that of the secondary MySQL database [#1390](https://github.com/pingcap/dm/pull/1390)
   - Reduce the scenarios where relay logs need to be purged [#1400](https://github.com/pingcap/dm/pull/1400)

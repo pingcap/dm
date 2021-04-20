@@ -17,25 +17,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/check"
 	"github.com/pingcap/parser"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
-var (
-	_ = check.Suite(&testTransformerSuite{})
-)
+var _ = check.Suite(&testTransformerSuite{})
 
 func TestSuite(t *testing.T) {
 	check.TestingT(t)
 }
 
-type testTransformerSuite struct {
-}
+type testTransformerSuite struct{}
 
 type Case struct {
 	event  *replication.BinlogEvent
@@ -84,8 +81,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	header.Timestamp = uint32(time.Now().Unix()) // set to non-zero
 
 	// fake RotateEvent with zero logPos
-	fakeRotateHeader := replication.EventHeader{}
-	fakeRotateHeader = *header
+	fakeRotateHeader := *header
 	ev, err = event.GenRotateEvent(&fakeRotateHeader, latestPos, []byte(nextLogName), position)
 	c.Assert(err, check.IsNil)
 	ev.Header.LogPos = 0 // set to zero
@@ -146,8 +142,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	})
 
 	// GenericEvent, HEARTBEAT_EVENT
-	genericHeader := replication.EventHeader{}
-	genericHeader = *header
+	genericHeader := *header
 	ev = &replication.BinlogEvent{Header: &genericHeader, Event: &replication.GenericEvent{}}
 	ev.Header.EventType = replication.HEARTBEAT_EVENT
 	cases = append(cases, Case{

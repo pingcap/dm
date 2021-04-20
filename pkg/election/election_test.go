@@ -30,9 +30,10 @@ import (
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
-var _ = Suite(&testElectionSuite{})
+var _ = SerialSuites(&testElectionSuite{})
 
 func TestSuite(t *testing.T) {
 	TestingT(t)
@@ -285,7 +286,6 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
 	c.Assert(e2.IsLeader(), IsFalse)
-
 }
 
 func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
@@ -337,22 +337,32 @@ func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 
 	// e1 evict leader, and e2 will be the leader
 	e1.EvictLeader()
-	time.Sleep(time.Second)
+	utils.WaitSomething(8, 250*time.Millisecond, func() bool {
+		_, leaderID, _, _ = e2.LeaderInfo(ctx2)
+		return leaderID == e2.ID()
+	})
 	_, leaderID, leaderAddr, err = e2.LeaderInfo(ctx2)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e2.ID())
 	c.Assert(leaderAddr, Equals, addr2)
-	c.Assert(e2.IsLeader(), IsTrue)
+	utils.WaitSomething(10, 10*time.Millisecond, func() bool {
+		return e2.IsLeader()
+	})
 
 	// cancel evict of e1, and then evict e2, e1 will be the leader
 	e1.CancelEvictLeader()
 	e2.EvictLeader()
-	time.Sleep(time.Second)
+	utils.WaitSomething(8, 250*time.Millisecond, func() bool {
+		_, leaderID, _, _ = e1.LeaderInfo(ctx1)
+		return leaderID == e1.ID()
+	})
 	_, leaderID, leaderAddr, err = e1.LeaderInfo(ctx1)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
-	c.Assert(e1.IsLeader(), IsTrue)
+	utils.WaitSomething(10, 10*time.Millisecond, func() bool {
+		return e1.IsLeader()
+	})
 }
 
 func (t *testElectionSuite) TestElectionDeleteKey(c *C) {

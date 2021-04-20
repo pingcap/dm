@@ -18,23 +18,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/replication"
 
 	br "github.com/pingcap/dm/pkg/binlog/reader"
 )
 
-var (
-	_ = check.Suite(&testReaderSuite{})
-)
+var _ = check.Suite(&testReaderSuite{})
 
 func TestSuite(t *testing.T) {
 	check.TestingT(t)
 }
 
-type testReaderSuite struct {
-}
+type testReaderSuite struct{}
 
 func (t *testReaderSuite) TestInterface(c *check.C) {
 	cases := []*replication.BinlogEvent{

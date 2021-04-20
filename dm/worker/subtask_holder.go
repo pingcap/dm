@@ -47,7 +47,7 @@ func (h *subTaskHolder) removeSubTask(name string) {
 	delete(h.subTasks, name)
 }
 
-// resetAllSubTasks does Close, change cfg.UseRelay then Init the subtasks
+// resetAllSubTasks does Close, change cfg.UseRelay then Init the subtasks.
 func (h *subTaskHolder) resetAllSubTasks(useRelay bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

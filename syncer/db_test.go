@@ -20,12 +20,12 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	gouuid "github.com/google/uuid"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/infoschema"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -216,7 +216,7 @@ func (s *testDBSuite) TestTimezone(c *C) {
 			"America/Phoenix",
 		},
 	}
-	queryTs := "select unix_timestamp(a) from `tztest_1`.`t_1` where id = ?"
+	queryTS := "select unix_timestamp(a) from `tztest_1`.`t_1` where id = ?"
 
 	dropSQLs := []string{
 		"drop table tztest_1.t_1",
@@ -280,7 +280,7 @@ func (s *testDBSuite) TestTimezone(c *C) {
 
 				rowid := ev.Rows[0][0].(int32)
 				var ts sql.NullInt64
-				err2 := s.db.QueryRow(queryTs, rowid).Scan(&ts)
+				err2 := s.db.QueryRow(queryTS, rowid).Scan(&ts)
 				c.Assert(err2, IsNil)
 				c.Assert(ts.Valid, IsTrue)
 

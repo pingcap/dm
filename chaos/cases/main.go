@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -36,21 +35,28 @@ import (
 // main starts to run the test case logic after MySQL, TiDB and DM have been set up.
 // NOTE: run this in the same K8s namespace as DM-master.
 func main() {
+	code := 0
+	defer func() {
+		os.Exit(code)
+	}()
+
 	cfg := newConfig()
 	err := cfg.parse(os.Args[1:])
 	switch errors.Cause(err) {
 	case nil:
 	case flag.ErrHelp:
-		os.Exit(0)
+		return
 	default:
 		fmt.Println("parse cmd flags err:", err.Error())
-		os.Exit(2)
+		code = 2
+		return
 	}
 
 	err = log.InitLogger(&log.Config{Level: "info"})
 	if err != nil {
 		fmt.Println("init logger error:", err.Error())
-		os.Exit(2)
+		code = 2
+		return
 	}
 
 	go func() {
@@ -80,7 +86,8 @@ func main() {
 	masterConn, err := grpc.DialContext(ctx2, cfg.MasterAddr, grpc.WithBlock(), grpc.WithInsecure()) // no TLS support in chaos cases now.
 	if err != nil {
 		log.L().Error("fail to dail DM-master", zap.String("address", cfg.MasterAddr), zap.Error(err))
-		os.Exit(2)
+		code = 2
+		return
 	}
 	masterCli := pb.NewMasterClient(masterConn)
 
@@ -94,14 +101,16 @@ func main() {
 	err = createSources(ctx, masterCli, cfg)
 	if err != nil {
 		log.L().Error("fail to create source", zap.Error(err))
-		os.Exit(2)
+		code = 2
+		return
 	}
 
 	// set upstream and downstream instances state.
 	err = setInstancesState(ctx, cfg.Target, cfg.Source1, cfg.Source2, cfg.Source3)
 	if err != nil {
 		log.L().Error("fail to set instances state", zap.Error(err))
-		os.Exit(2)
+		code = 2
+		return
 	}
 
 	// context for the duration of running.
@@ -112,6 +121,7 @@ func main() {
 	err = runCases(ctx3, masterCli, cfg.ConfigDir, cfg.Target, cfg.Source1, cfg.Source2, cfg.Source3)
 	if err != nil {
 		log.L().Error("run cases failed", zap.Error(err))
-		os.Exit(2)
+		code = 2
+		return
 	}
 }

@@ -13,7 +13,7 @@
 
 package terror
 
-// Database operation error code list
+// Database operation error code list.
 const (
 	codeDBDriverError ErrCode = iota + 10001
 	codeDBBadConn
@@ -23,7 +23,7 @@ const (
 	codeDBExecuteFailed
 )
 
-// Functional error code list
+// Functional error code list.
 const (
 	codeParseMydumperMeta ErrCode = iota + 11001
 	codeGetFileSize
@@ -47,7 +47,7 @@ const (
 	codeReaderAlreadyStarted
 	codeReaderStateCannotClose
 	codeReaderShouldStartSync
-	// pkg/streamer
+	// pkg/streamer.
 	codeEmptyRelayDir
 	codeReadDir
 	codeBaseFileNotFound
@@ -67,7 +67,7 @@ const (
 	codeNoSubdirToSwitch
 	codeNeedSyncAgain
 	codeSyncClosed
-	// pkg/utils
+	// pkg/utils.
 	codeSchemaTableNameNotValid
 	codeGenTableRouter
 	codeEncryptSecretKeyNotValid
@@ -77,7 +77,7 @@ const (
 	codeCiphertextContextNotValid
 	codeInvalidBinlogPosStr
 	codeEncCipherTextBase64Decode
-	// pkg/binlog
+	// pkg/binlog.
 	codeBinlogWriteBinaryData
 	codeBinlogWriteDataToBuffer
 	codeBinlogHeaderLengthNotValid
@@ -125,69 +125,69 @@ const (
 	codeBinlogParseMariaDBGTIDSet
 	codeBinlogMariaDBAddGTIDSet
 
-	// pkg/tracing
+	// pkg/tracing.
 	codeTracingEventDataNotValid
 	codeTracingUploadData
 	codeTracingEventTypeNotValid
 	codeTracingGetTraceCode
 	codeTracingDataChecksum
 	codeTracingGetTSO
-	// pkg/backoff
+	// pkg/backoff.
 	codeBackoffArgsNotValid
 
 	codeInitLoggerFail
 
-	// pkg/gtid
+	// pkg/gtid.
 	codeGTIDTruncateInvalid
-	// pkg/streamer
+	// pkg/streamer.
 	codeRelayLogGivenPosTooBig
-	// pkg/election
+	// pkg/election.
 	codeElectionCampaignFail
 	codeElectionGetLeaderIDFail
 
-	// pkg/binlog
+	// pkg/binlog.
 	codeBinlogInvalidFilenameWithUUIDSuffix
-	// dm/common
+	// dm/common.
 	codeDecodeEtcdKeyFail
 
-	// pkg/shardddl/optimism
+	// pkg/shardddl/optimism.
 	codeShardDDLOptimismTrySyncFail
 
-	// pkg/conn
+	// pkg/conn.
 	codeConnInvalidTLSConfig
 	codeConnRegistryTLSConfig
 
-	// pkg/upgrade
+	// pkg/upgrade.
 	codeUpgradeVersionEtcdFail
 
-	// pkg/v1workermeta
+	// pkg/v1workermeta.
 	codeInvalidV1WorkerMetaPath
 
-	// pkg/v1dbschema
+	// pkg/v1dbschema.
 	codeFailUpdateV1DBSchema
 
-	// pkg/binlog
+	// pkg/binlog.
 	codeBinlogStatusVarsParse
 
-	// dm/command
+	// dm/command.
 	codeVerifyHandleErrorArgs
 
-	// pkg/parser
+	// pkg/parser.
 	codeRewriteSQL
 
-	// pkg/streamer
+	// pkg/streamer.
 	codeNoUUIDDirMatchGTID
 	codeNoRelayPosMatchGTID
 	codeReaderReachEndOfFile
 
-	// pkg/dumpling
+	// pkg/dumpling.
 	codeMetadataNoBinlogLoc
 
-	// pkg/streamer
+	// pkg/streamer.
 	codePreviousGTIDNotExist
 )
 
-// Config related error code list
+// Config related error code list.
 const (
 	codeConfigCheckItemNotSupport ErrCode = iota + 20001
 	codeConfigTomlTransform
@@ -229,14 +229,14 @@ const (
 	codeConfigGlobalConfigsUnused
 )
 
-// Binlog operation error code list
+// Binlog operation error code list.
 const (
 	codeBinlogExtractPosition ErrCode = iota + 22001
 	codeBinlogInvalidFilename
 	codeBinlogParsePosFromStr
 )
 
-// Checkpoint error code
+// Checkpoint error code.
 const (
 	codeCheckpointInvalidTaskMode ErrCode = iota + 24001
 	codeCheckpointSaveInvalidPos
@@ -246,7 +246,7 @@ const (
 	codeCheckpointRestoreCountGreater
 )
 
-// Task check error code
+// Task check error code.
 const (
 	codeTaskCheckSameTableName ErrCode = iota + 26001
 	codeTaskCheckFailedOpenDB
@@ -257,7 +257,7 @@ const (
 	codeSourceCheckGTID
 )
 
-// Relay log utils error code
+// Relay log utils error code.
 const (
 	codeRelayParseUUIDIndex ErrCode = iota + 28001
 	codeRelayParseUUIDSuffix
@@ -266,7 +266,7 @@ const (
 	codeRelayNoValidRelaySubDir
 )
 
-// Relay unit error code
+// Relay unit error code.
 const (
 	codeRelayUUIDSuffixNotValid ErrCode = iota + 30001
 	codeRelayUUIDSuffixLessThanPrev
@@ -314,7 +314,7 @@ const (
 	codeRotateEventWithDifferentServerID
 )
 
-// Dump unit error code
+// Dump unit error code.
 const (
 	codeDumpUnitRuntime ErrCode = iota + 32001
 	codeDumpUnitGenTableRouter
@@ -322,7 +322,7 @@ const (
 	codeDumpUnitGlobalLock
 )
 
-// Load unit error code
+// Load unit error code.
 const (
 	codeLoadUnitCreateSchemaFile ErrCode = iota + 34001
 	codeLoadUnitInvalidFileEnding
@@ -342,7 +342,7 @@ const (
 	codeLoadUnitGenBAList
 )
 
-// Sync unit error code
+// Sync unit error code.
 const (
 	codeSyncerUnitPanic ErrCode = iota + 36001
 	codeSyncUnitInvalidTableName
@@ -414,7 +414,7 @@ const (
 	codeSyncerUnsupportedStmt
 )
 
-// DM-master error code
+// DM-master error code.
 const (
 	codeMasterSQLOpNilRequest ErrCode = iota + 38001
 	codeMasterSQLOpNotSupport
@@ -473,7 +473,7 @@ const (
 	codeMasterOptimisticTableInfobeforeNotExist
 )
 
-// DM-worker error code
+// DM-worker error code.
 const (
 	codeWorkerParseFlagSet ErrCode = iota + 40001
 	codeWorkerInvalidFlag
@@ -556,7 +556,7 @@ const (
 	codeWorkerRelayConfigChanging
 )
 
-// DM-tracer error code
+// DM-tracer error code.
 const (
 	codeTracerParseFlagSet ErrCode = iota + 42001
 	codeTracerConfigTomlTransform
@@ -570,7 +570,7 @@ const (
 	codeTracerStartService
 )
 
-// Schema-tracker error code
+// Schema-tracker error code.
 const (
 	codeSchemaTrackerInvalidJSON ErrCode = iota + 44001
 	codeSchemaTrackerCannotCreateSchema
@@ -613,20 +613,20 @@ const (
 	codeSchedulerSourceOpRelayExist
 )
 
-// dmctl error code
+// dmctl error code.
 const (
 	codeCtlGRPCCreateConn ErrCode = iota + 48001
 	codeCtlInvalidTLSCfg
 )
 
-// default error code
+// default error code.
 const (
 	codeNotSet ErrCode = iota + 50000
 )
 
-// Error instances
+// Error instances.
 var (
-	// Database operation related error
+	// Database operation related error.
 	ErrDBDriverError = New(codeDBDriverError, ClassDatabase, ScopeNotSet, LevelHigh, "database driver error", "Please check the database connection and the database config in configuration file.")
 	ErrDBBadConn     = New(codeDBBadConn, ClassDatabase, ScopeNotSet, LevelHigh, "database driver", "Please check the database connection, then use `pause-task` to pause the task and then use `resume-task` to resume the task.")
 	ErrDBInvalidConn = New(codeDBInvalidConn, ClassDatabase, ScopeNotSet, LevelHigh, "database driver", "Please check the database connection, then use `pause-task` to stop the task and then use `resume-task` to resume the task.")
@@ -635,7 +635,7 @@ var (
 	ErrDBQueryFailed   = New(codeDBQueryFailed, ClassDatabase, ScopeNotSet, LevelHigh, "query statement failed: %s", "")
 	ErrDBExecuteFailed = New(codeDBExecuteFailed, ClassDatabase, ScopeNotSet, LevelHigh, "execute statement failed: %s", "")
 
-	// Functional error
+	// Functional error.
 	ErrParseMydumperMeta      = New(codeParseMydumperMeta, ClassFunctional, ScopeInternal, LevelHigh, "parse mydumper metadata error: %s, metadata: %s", "")
 	ErrGetFileSize            = New(codeGetFileSize, ClassFunctional, ScopeInternal, LevelHigh, "get file %s size", "")
 	ErrDropMultipleTables     = New(codeDropMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allowed operation: drop multiple tables in one statement", "It is recommended to include only one DDL operation in a statement executed upstream. Please manually handle it using dmctl (skipping the DDL statement or replacing the DDL statement with a specified DDL statement). For details, see https://docs.pingcap.com/tidb-data-migration/stable/handle-failed-sql-statements")
@@ -658,7 +658,7 @@ var (
 	ErrReaderAlreadyStarted   = New(codeReaderAlreadyStarted, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, already started", "")
 	ErrReaderStateCannotClose = New(codeReaderStateCannotClose, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close", "")
 	ErrReaderShouldStartSync  = New(codeReaderShouldStartSync, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s", "")
-	// pkg/streamer
+	// pkg/streamer.
 	ErrEmptyRelayDir            = New(codeEmptyRelayDir, ClassFunctional, ScopeInternal, LevelHigh, "empty relay dir", "Please check `relay-dir` config in task configuration file.")
 	ErrReadDir                  = New(codeReadDir, ClassFunctional, ScopeInternal, LevelHigh, "read dir: %s", "")
 	ErrBaseFileNotFound         = New(codeBaseFileNotFound, ClassFunctional, ScopeInternal, LevelHigh, "base file %s in directory %s not found", "")
@@ -678,7 +678,7 @@ var (
 	ErrNoSubdirToSwitch         = New(codeNoSubdirToSwitch, ClassFunctional, ScopeInternal, LevelHigh, "parse for previous sub relay directory finished, but no next sub directory need to switch", "")
 	ErrNeedSyncAgain            = New(codeNeedSyncAgain, ClassFunctional, ScopeInternal, LevelHigh, "Last sync error or closed, try sync and get event again", "")
 	ErrSyncClosed               = New(codeSyncClosed, ClassFunctional, ScopeInternal, LevelHigh, "Sync was closed", "")
-	// pkg/utils
+	// pkg/utils.
 	ErrSchemaTableNameNotValid   = New(codeSchemaTableNameNotValid, ClassFunctional, ScopeInternal, LevelHigh, "table name %s not valid", "")
 	ErrGenTableRouter            = New(codeGenTableRouter, ClassFunctional, ScopeInternal, LevelHigh, "generate table router", "Please check `routes` config in task configuration file.")
 	ErrEncryptSecretKeyNotValid  = New(codeEncryptSecretKeyNotValid, ClassFunctional, ScopeInternal, LevelHigh, "key size should be 16, 24 or 32, but input key's size is %d", "")
@@ -688,7 +688,7 @@ var (
 	ErrCiphertextContextNotValid = New(codeCiphertextContextNotValid, ClassFunctional, ScopeInternal, LevelHigh, "ciphertext's content not valid", "")
 	ErrInvalidBinlogPosStr       = New(codeInvalidBinlogPosStr, ClassFunctional, ScopeInternal, LevelHigh, "invalid mysql position string: %s", "")
 	ErrEncCipherTextBase64Decode = New(codeEncCipherTextBase64Decode, ClassFunctional, ScopeInternal, LevelHigh, "decode base64 encoded password %s", "")
-	// pkg/binlog
+	// pkg/binlog.
 	ErrBinlogWriteBinaryData         = New(codeBinlogWriteBinaryData, ClassFunctional, ScopeInternal, LevelHigh, "", "")
 	ErrBinlogWriteDataToBuffer       = New(codeBinlogWriteDataToBuffer, ClassFunctional, ScopeInternal, LevelHigh, "", "")
 	ErrBinlogHeaderLengthNotValid    = New(codeBinlogHeaderLengthNotValid, ClassFunctional, ScopeInternal, LevelHigh, "header length should be %d, but got %d not valid", "")
@@ -736,67 +736,67 @@ var (
 	ErrBinlogParseMariaDBGTIDSet     = New(codeBinlogParseMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "parse MariaDB GTID set", "")
 	ErrBinlogMariaDBAddGTIDSet       = New(codeBinlogMariaDBAddGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "add set %v to GTID set", "")
 
-	// pkg/tracing
+	// pkg/tracing.
 	ErrTracingEventDataNotValid = New(codeTracingEventDataNotValid, ClassFunctional, ScopeInternal, LevelHigh, "invalid event data for type: %s", "")
 	ErrTracingUploadData        = New(codeTracingUploadData, ClassFunctional, ScopeInternal, LevelHigh, "upload event", "")
 	ErrTracingEventTypeNotValid = New(codeTracingEventTypeNotValid, ClassFunctional, ScopeInternal, LevelHigh, "invalid event type %s, will not process", "")
 	ErrTracingGetTraceCode      = New(codeTracingGetTraceCode, ClassFunctional, ScopeInternal, LevelHigh, "failed to get code information from runtime.Caller", "")
 	ErrTracingDataChecksum      = New(codeTracingDataChecksum, ClassFunctional, ScopeInternal, LevelHigh, "calc data checksum", "")
 	ErrTracingGetTSO            = New(codeTracingGetTSO, ClassFunctional, ScopeInternal, LevelHigh, "get tso", "")
-	// pkg/backoff
+	// pkg/backoff.
 	ErrBackoffArgsNotValid = New(codeBackoffArgsNotValid, ClassFunctional, ScopeInternal, LevelMedium, "backoff argument %s value %v not valid", "")
-	// pkg
+	// pkg.
 	ErrInitLoggerFail = New(codeInitLoggerFail, ClassFunctional, ScopeInternal, LevelMedium, "init logger failed", "")
-	// pkg/gtid
+	// pkg/gtid.
 	ErrGTIDTruncateInvalid = New(codeGTIDTruncateInvalid, ClassFunctional, ScopeInternal, LevelHigh, "truncate GTID sets %v to %v not valid", "")
-	// pkg/streamer
+	// pkg/streamer.
 	ErrRelayLogGivenPosTooBig = New(codeRelayLogGivenPosTooBig, ClassFunctional, ScopeInternal, LevelHigh, "the given relay log pos %s of meta config is too big, please check it again", "If the size of the corresponding binlog file has exceeded 4GB, please follow the solution in https://docs.pingcap.com/tidb-data-migration/stable/error-handling#the-relay-unit-throws-error-event-from--in--diff-from-passed-in-event--or-a-replication-task-is-interrupted-with-failing-to-get-or-parse-binlog-errors-like-get-binlog-error-error-1236-hy000-and-binlog-checksum-mismatch-data-may-be-corrupted-returned")
-	// pkg/election
+	// pkg/election.
 	ErrElectionCampaignFail    = New(codeElectionCampaignFail, ClassFunctional, ScopeInternal, LevelHigh, "fail to campaign leader: %s", "")
 	ErrElectionGetLeaderIDFail = New(codeElectionGetLeaderIDFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to get leader ID", "")
 
-	// pkg/binlog
+	// pkg/binlog.
 	ErrBinlogInvalidFilenameWithUUIDSuffix = New(codeBinlogInvalidFilenameWithUUIDSuffix, ClassFunctional, ScopeInternal, LevelHigh, "invalid binlog filename with uuid suffix %s", "")
 
-	// dm/common
+	// dm/common.
 	ErrDecodeEtcdKeyFail = New(codeDecodeEtcdKeyFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to decode etcd key: %s", "")
 
-	// pkg/shardddl/optimism
+	// pkg/shardddl/optimism.
 	ErrShardDDLOptimismTrySyncFail = New(codeShardDDLOptimismTrySyncFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to try sync the optimistic shard ddl lock %s: %s", "Please use `show-ddl-locks` command for more details.")
 
-	// pkg/conn
+	// pkg/conn.
 	ErrConnInvalidTLSConfig  = New(codeConnInvalidTLSConfig, ClassFunctional, ScopeInternal, LevelMedium, "invalid TLS config", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config.")
 	ErrConnRegistryTLSConfig = New(codeConnRegistryTLSConfig, ClassFunctional, ScopeInternal, LevelMedium, "fail to registry TLS config", "")
 
-	// pkg/upgrade
+	// pkg/upgrade.
 	ErrUpgradeVersionEtcdFail = New(codeUpgradeVersionEtcdFail, ClassFunctional, ScopeInternal, LevelHigh, "fail to operate DM cluster version in etcd", "Please use `list-member --master` to confirm whether the DM-master cluster is healthy")
 
-	// pkg/v1workermeta
+	// pkg/v1workermeta.
 	ErrInvalidV1WorkerMetaPath = New(codeInvalidV1WorkerMetaPath, ClassFunctional, ScopeInternal, LevelMedium, "%s is an invalid v1.0.x DM-worker meta path", "Please check no `meta-dir` set for v1.0.x DM-worker.")
 
-	// pkg/v1dbschema
+	// pkg/v1dbschema.
 	ErrFailUpdateV1DBSchema = New(codeFailUpdateV1DBSchema, ClassFunctional, ScopeInternal, LevelMedium, "fail to upgrade v1.0.x DB schema", "Please confirm that you have not violated any restrictions in the upgrade documentation.")
 
-	// pkg/binlog
+	// pkg/binlog.
 	ErrBinlogStatusVarsParse = New(codeBinlogStatusVarsParse, ClassFunctional, ScopeInternal, LevelMedium, "fail to parse binglog status_vars: %v, offset: %d", "")
 
-	// Functional error
+	// Functional error.
 	ErrVerifyHandleErrorArgs = New(codeVerifyHandleErrorArgs, ClassFunctional, ScopeInternal, LevelLow, "", "Please make sure the args are correct.")
 
-	// pkg/parser
+	// pkg/parser.
 	ErrRewriteSQL = New(codeRewriteSQL, ClassFunctional, ScopeInternal, LevelHigh, "failed to rewrite SQL for target DB, stmt: %+v, targetTableNames: %+v", "")
 
-	// pkg/streamer
+	// pkg/streamer.
 	ErrNoUUIDDirMatchGTID   = New(codeNoUUIDDirMatchGTID, ClassFunctional, ScopeInternal, LevelHigh, "no relay subdir match gtid %s", "")
 	ErrNoRelayPosMatchGTID  = New(codeNoRelayPosMatchGTID, ClassFunctional, ScopeInternal, LevelHigh, "no relay pos match gtid %s", "")
 	ErrReaderReachEndOfFile = New(codeReaderReachEndOfFile, ClassFunctional, ScopeInternal, LevelLow, "", "")
 
-	// pkg/dumplling
+	// pkg/dumplling.
 	ErrMetadataNoBinlogLoc = New(codeMetadataNoBinlogLoc, ClassFunctional, ScopeUpstream, LevelLow, "didn't found binlog location in dumped metadata file %s", "Please check log of dump unit, there maybe errors when read upstream binlog status")
 
 	ErrPreviousGTIDNotExist = New(codePreviousGTIDNotExist, ClassFunctional, ScopeInternal, LevelHigh, "no previous gtid event from binlog %s", "")
 
-	// Config related error
+	// Config related error.
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s", "Please check `ignore-checking-items` config in task configuration file, which can be set including `all`/`dump_privilege`/`replication_privilege`/`version`/`binlog_enable`/`binlog_format`/`binlog_row_image`/`table_schema`/`schema_of_shard_tables`/`auto_increment_ID`.")
 	ErrConfigTomlTransform          = New(codeConfigTomlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s", "Please check the configuration file has correct TOML format.")
 	ErrConfigYamlTransform          = New(codeConfigYamlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s", "Please check the configuration file has correct YAML format.")
@@ -836,12 +836,12 @@ var (
 	ErrConfigBinlogEventFilter      = New(codeConfigBinlogEventFilter, ClassConfig, ScopeInternal, LevelHigh, "generate binlog event filter", "Please check the `filters` config in source and task configuration files.")
 	ErrConfigGlobalConfigsUnused    = New(codeConfigGlobalConfigsUnused, ClassConfig, ScopeInternal, LevelHigh, "The configurations as following %v are set in global configuration but instances don't use them", "Please check the configuration files.")
 
-	// Binlog operation error
+	// Binlog operation error.
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
 	ErrBinlogInvalidFilename = New(codeBinlogInvalidFilename, ClassBinlogOp, ScopeInternal, LevelHigh, "invalid binlog filename", "")
 	ErrBinlogParsePosFromStr = New(codeBinlogParsePosFromStr, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
 
-	// Checkpoint error
+	// Checkpoint error.
 	ErrCheckpointInvalidTaskMode     = New(codeCheckpointInvalidTaskMode, ClassCheckpoint, ScopeInternal, LevelMedium, "invalid task mode: %s", "")
 	ErrCheckpointSaveInvalidPos      = New(codeCheckpointSaveInvalidPos, ClassCheckpoint, ScopeInternal, LevelHigh, "save point %s is older than current location %s", "")
 	ErrCheckpointInvalidTableFile    = New(codeCheckpointInvalidTableFile, ClassCheckpoint, ScopeInternal, LevelMedium, "invalid db table sql file - %s", "")
@@ -849,7 +849,7 @@ var (
 	ErrCheckpointTableNotExistInFile = New(codeCheckpointTableNotExistInFile, ClassCheckpoint, ScopeInternal, LevelMedium, "table (%s) not exist in db (%s) data files, but in checkpoint", "")
 	ErrCheckpointRestoreCountGreater = New(codeCheckpointRestoreCountGreater, ClassCheckpoint, ScopeInternal, LevelMedium, "restoring count greater than total count for table[%v]", "")
 
-	// Task check error
+	// Task check error.
 	ErrTaskCheckSameTableName    = New(codeTaskCheckSameTableName, ClassTaskCheck, ScopeInternal, LevelMedium, "same table name in case-insensitive %v", "Please check `target-table` config in task configuration file.")
 	ErrTaskCheckFailedOpenDB     = New(codeTaskCheckFailedOpenDB, ClassTaskCheck, ScopeInternal, LevelHigh, "failed to open DSN %s:***@%s:%d", "Please check the database config in configuration file.")
 	ErrTaskCheckGenTableRouter   = New(codeTaskCheckGenTableRouter, ClassTaskCheck, ScopeInternal, LevelMedium, "generate table router error", "Please check the `routes` config in task configuration file.")
@@ -858,14 +858,14 @@ var (
 	ErrTaskCheckGenBAList        = New(codeTaskCheckGenBAList, ClassTaskCheck, ScopeInternal, LevelMedium, "generate block allow list error", "Please check the `block-allow-list` config in task configuration file.")
 	ErrSourceCheckGTID           = New(codeSourceCheckGTID, ClassTaskCheck, ScopeInternal, LevelMedium, "%s has GTID_MODE = %s instead of ON", "Please check the `enable-gtid` config in source configuration file.")
 
-	// Relay log basic API error
+	// Relay log basic API error.
 	ErrRelayParseUUIDIndex         = New(codeRelayParseUUIDIndex, ClassRelayEventLib, ScopeInternal, LevelHigh, "parse server-uuid.index", "")
 	ErrRelayParseUUIDSuffix        = New(codeRelayParseUUIDSuffix, ClassRelayEventLib, ScopeInternal, LevelHigh, "UUID (with suffix) %s not valid", "")
 	ErrRelayUUIDWithSuffixNotFound = New(codeRelayUUIDWithSuffixNotFound, ClassRelayEventLib, ScopeInternal, LevelHigh, "no UUID (with suffix) matched %s found in %s, all UUIDs are %v", "")
 	ErrRelayGenFakeRotateEvent     = New(codeRelayGenFakeRotateEvent, ClassRelayEventLib, ScopeInternal, LevelHigh, "generate fake rotate event", "")
 	ErrRelayNoValidRelaySubDir     = New(codeRelayNoValidRelaySubDir, ClassRelayEventLib, ScopeInternal, LevelHigh, "there aren't any data under relay log directory %s.", "Please check relay log using query-status.")
 
-	// Relay unit error
+	// Relay unit error.
 	ErrRelayUUIDSuffixNotValid           = New(codeRelayUUIDSuffixNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "UUID %s suffix %d should be 1 larger than previous suffix %d", "")
 	ErrRelayUUIDSuffixLessThanPrev       = New(codeRelayUUIDSuffixLessThanPrev, ClassRelayUnit, ScopeInternal, LevelHigh, "previous UUID %s has suffix larger than %s", "")
 	ErrRelayLoadMetaData                 = New(codeRelayLoadMetaData, ClassRelayUnit, ScopeInternal, LevelHigh, "load meta data", "")
@@ -911,13 +911,13 @@ var (
 	ErrPreviousGTIDsNotValid             = New(codePreviousGTIDsNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "previousGTIDs %s not valid", "")
 	ErrRotateEventWithDifferentServerID  = New(codeRotateEventWithDifferentServerID, ClassRelayUnit, ScopeInternal, LevelHigh, "receive fake rotate event with different server_id", "Please use `resume-relay` command if upstream database has changed")
 
-	// Dump unit error
+	// Dump unit error.
 	ErrDumpUnitRuntime        = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper/dumpling runs with error, with output (may empty): %s", "")
 	ErrDumpUnitGenTableRouter = New(codeDumpUnitGenTableRouter, ClassDumpUnit, ScopeInternal, LevelHigh, "generate table router", "Please check `routes` config in task configuration file.")
 	ErrDumpUnitGenBAList      = New(codeDumpUnitGenBAList, ClassDumpUnit, ScopeInternal, LevelHigh, "generate block allow list", "Please check the `block-allow-list` config in task configuration file.")
 	ErrDumpUnitGlobalLock     = New(codeDumpUnitGlobalLock, ClassDumpUnit, ScopeInternal, LevelHigh, "Couldn't acquire global lock", "Please check upstream privilege about FTWRL, or add `--no-locks` or `--consistency none` to extra-args of mydumpers")
 
-	// Load unit error
+	// Load unit error.
 	ErrLoadUnitCreateSchemaFile    = New(codeLoadUnitCreateSchemaFile, ClassLoadUnit, ScopeInternal, LevelMedium, "generate schema file", "Please check the `loaders` config in task configuration file.")
 	ErrLoadUnitInvalidFileEnding   = New(codeLoadUnitInvalidFileEnding, ClassLoadUnit, ScopeInternal, LevelHigh, "corresponding ending of sql: ')' not found", "")
 	ErrLoadUnitParseQuoteValues    = New(codeLoadUnitParseQuoteValues, ClassLoadUnit, ScopeInternal, LevelHigh, "parse quote values error", "")
@@ -935,7 +935,7 @@ var (
 	ErrLoadUnitDuplicateTableFile  = New(codeLoadUnitDuplicateTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid table schema file, duplicated item - %s", "")
 	ErrLoadUnitGenBAList           = New(codeLoadUnitGenBAList, ClassLoadUnit, ScopeInternal, LevelHigh, "generate block allow list", "Please check the `block-allow-list` config in task configuration file.")
 
-	// Sync unit error
+	// Sync unit error.
 	ErrSyncerUnitPanic                   = New(codeSyncerUnitPanic, ClassSyncUnit, ScopeInternal, LevelHigh, "panic error: %v", "")
 	ErrSyncUnitInvalidTableName          = New(codeSyncUnitInvalidTableName, ClassSyncUnit, ScopeInternal, LevelHigh, "extract table name for DML error: %s", "")
 	ErrSyncUnitTableNameQuery            = New(codeSyncUnitTableNameQuery, ClassSyncUnit, ScopeInternal, LevelHigh, "table name parse error: %s", "")
@@ -949,7 +949,7 @@ var (
 	ErrSyncUnitShardingGroupNotFound     = New(codeSyncUnitShardingGroupNotFound, ClassSyncUnit, ScopeInternal, LevelHigh, "sharding group for `%s`.`%s` not found", "")
 	ErrSyncUnitSafeModeSetCount          = New(codeSyncUnitSafeModeSetCount, ClassSyncUnit, ScopeInternal, LevelHigh, "", "")
 	ErrSyncUnitCausalityConflict         = New(codeSyncUnitCausalityConflict, ClassSyncUnit, ScopeInternal, LevelHigh, "some conflicts in causality, must be resolved", "")
-	// ErrSyncUnitDMLStatementFound defines an error which means we found unexpected dml statement found in query event
+	// ErrSyncUnitDMLStatementFound defines an error which means we found unexpected dml statement found in query event.
 	ErrSyncUnitDMLStatementFound            = New(codeSyncUnitDMLStatementFound, ClassSyncUnit, ScopeInternal, LevelHigh, "only support ROW format binlog, unexpected DML statement found in query event", "")
 	ErrSyncerUnitBinlogEventFilter          = New(codeSyncerUnitBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "", "")
 	ErrSyncerUnitInvalidReplicaEvent        = New(codeSyncerUnitInvalidReplicaEvent, ClassSyncUnit, ScopeInternal, LevelHigh, "invalid replication event type %v", "")
@@ -1006,7 +1006,7 @@ var (
 	ErrSyncerParseDDL                       = New(codeSyncerParseDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "parse DDL: %s", "Please confirm your DDL statement is correct and needed. For TiDB compatible DDL, see https://docs.pingcap.com/tidb/stable/mysql-compatibility#ddl. You can use `handle-error` command to skip or replace the DDL or add a binlog filter rule to ignore it if the DDL is not needed.")
 	ErrSyncerUnsupportedStmt                = New(codeSyncerUnsupportedStmt, ClassSyncUnit, ScopeInternal, LevelHigh, "`%s` statement not supported in %s mode", "")
 
-	// DM-master error
+	// DM-master error.
 	ErrMasterSQLOpNilRequest        = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid", "")
 	ErrMasterSQLOpNotSupport        = New(codeMasterSQLOpNotSupport, ClassDMMaster, ScopeInternal, LevelMedium, "op %s not supported", "")
 	ErrMasterSQLOpWithoutSharding   = New(codeMasterSQLOpWithoutSharding, ClassDMMaster, ScopeInternal, LevelMedium, "operate request without --sharding specified not valid", "")
@@ -1068,7 +1068,7 @@ var (
 	ErrMasterInconsistentOptimisticDDLsAndInfo = New(codeMasterInconsistentOptimistDDLsAndInfo, ClassDMMaster, ScopeInternal, LevelHigh, "inconsistent count of optimistic ddls and table infos, ddls: %d, table info: %d", "")
 	ErrMasterOptimisticTableInfoBeforeNotExist = New(codeMasterOptimisticTableInfobeforeNotExist, ClassDMMaster, ScopeInternal, LevelHigh, "table-info-before not exist in optimistic ddls: %v", "")
 
-	// DM-worker error
+	// DM-worker error.
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set", "")
 	ErrWorkerInvalidFlag             = New(codeWorkerInvalidFlag, ClassDMWorker, ScopeInternal, LevelMedium, "'%s' is an invalid flag", "")
 	ErrWorkerDecodeConfigFromFile    = New(codeWorkerDecodeConfigFromFile, ClassDMWorker, ScopeInternal, LevelMedium, "toml decode file", "Please check the configuration file has correct TOML format.")
@@ -1147,10 +1147,10 @@ var (
 	ErrWorkerFailToGetSourceConfigFromEtcd  = New(codeWorkerFailToGetSourceConfigFromEtcd, ClassDMWorker, ScopeInternal, LevelMedium, "there is no relative source config for source %s in etcd", "")
 	ErrWorkerDDLLockOpNotFound              = New(codeWorkerDDLLockOpNotFound, ClassDMWorker, ScopeInternal, LevelHigh, "missing shard DDL lock operation for shard DDL info (%s)", "")
 	ErrWorkerTLSConfigNotValid              = New(codeWorkerTLSConfigNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "TLS config not valid", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in worker configuration file.")
-	ErrWorkerFailConnectMaster              = New(codeWorkerFailConnectMaster, ClassDMWorker, ScopeInternal, LevelHigh, "cannot connect with master endpoints: %v", "Please check network connection of worker")
+	ErrWorkerFailConnectMaster              = New(codeWorkerFailConnectMaster, ClassDMWorker, ScopeInternal, LevelHigh, "cannot join with master endpoints: %v, error: %v", "Please check network connection of worker and check worker name is unique.")
 	ErrWorkerRelayConfigChanging            = New(codeWorkerRelayConfigChanging, ClassDMWorker, ScopeInternal, LevelLow, "relay config of worker %s is changed too frequently, last relay source %s:, new relay source %s", "Please try again later")
 
-	// DM-tracer error
+	// DM-tracer error.
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set", "")
 	ErrTracerConfigTomlTransform = New(codeTracerConfigTomlTransform, ClassDMTracer, ScopeInternal, LevelMedium, "config toml transform", "Please check the configuration file has correct TOML format.")
 	ErrTracerConfigInvalidFlag   = New(codeTracerConfigInvalidFlag, ClassDMTracer, ScopeInternal, LevelMedium, "'%s' is an invalid flag", "")
@@ -1162,7 +1162,7 @@ var (
 	ErrTracerEventTypeNotValid   = New(codeTracerEventTypeNotValid, ClassDMTracer, ScopeInternal, LevelHigh, "trace event type %d not valid", "")
 	ErrTracerStartService        = New(codeTracerStartService, ClassDMTracer, ScopeInternal, LevelHigh, "start server", "")
 
-	// Schema-tracker error
+	// Schema-tracker error.
 	ErrSchemaTrackerInvalidJSON        = New(codeSchemaTrackerInvalidJSON, ClassSchemaTracker, ScopeDownstream, LevelHigh, "saved schema of `%s`.`%s` is not proper JSON", "")
 	ErrSchemaTrackerCannotCreateSchema = New(codeSchemaTrackerCannotCreateSchema, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create database for `%s` in schema tracker", "")
 	ErrSchemaTrackerCannotCreateTable  = New(codeSchemaTrackerCannotCreateTable, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create table for `%s`.`%s` in schema tracker", "")
@@ -1184,7 +1184,7 @@ var (
 		"failed to drop table for `%s`.`%s` in schema tracker", "")
 	ErrSchemaTrackerInit = New(codeSchemaTrackerInit, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create schema tracker", "")
 
-	// HA scheduler
+	// HA scheduler.
 	ErrSchedulerNotStarted                = New(codeSchedulerNotStarted, ClassScheduler, ScopeInternal, LevelHigh, "the scheduler has not started", "")
 	ErrSchedulerStarted                   = New(codeSchedulerStarted, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler has already started", "")
 	ErrSchedulerWorkerExist               = New(codeSchedulerWorkerExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s already exists", "")
@@ -1209,10 +1209,10 @@ var (
 	ErrSchedulerRelayWorkersWrongRelay    = New(codeSchedulerRelayWorkersWrongRelay, ClassScheduler, ScopeInternal, LevelHigh, "these workers %s have started relay for another sources %s respectively", "Please correct sources in `stop-relay`.")
 	ErrSchedulerSourceOpRelayExist        = New(codeSchedulerSourceOpRelayExist, ClassScheduler, ScopeInternal, LevelHigh, "source with name %s need to operate has existing relay workers %s", "Please `stop-relay` first.")
 
-	// dmctl
+	// dmctl.
 	ErrCtlGRPCCreateConn = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")
 	ErrCtlInvalidTLSCfg  = New(codeCtlInvalidTLSCfg, ClassDMCtl, ScopeInternal, LevelMedium, "invalid TLS config", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line.")
 
-	// default error
+	// default error.
 	ErrNotSet = New(codeNotSet, ClassNotSet, ScopeNotSet, LevelHigh, "", "")
 )

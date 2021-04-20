@@ -16,17 +16,16 @@ package event
 import (
 	"fmt"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
 var _ = Suite(&testDMLSuite{})
 
-type testDMLSuite struct {
-}
+type testDMLSuite struct{}
 
 func (t *testDMLSuite) TestGenDMLEvent(c *C) {
 	var (

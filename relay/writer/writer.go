@@ -16,8 +16,8 @@ package writer
 import (
 	"context"
 
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/gtid"
 )

@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	"github.com/BurntSushi/toml"
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/siddontang/go/ioutil2"
 
 	"github.com/pingcap/dm/pkg/binlog"
@@ -38,7 +38,7 @@ var (
 // Meta represents binlog meta information for sync source
 // when re-syncing, we should reload meta info to guarantee continuous transmission
 // in order to support master-slave switching, Meta should support switching binlog meta info to newer master
-// should support the case, where switching from A to B, then switching from B back to A
+// should support the case, where switching from A to B, then switching from B back to A.
 type Meta interface {
 	// Load loads meta information for the recently active server
 	Load() error
@@ -86,7 +86,7 @@ type Meta interface {
 	String() string
 }
 
-// LocalMeta implements Meta by save info in local
+// LocalMeta implements Meta by save info in local.
 type LocalMeta struct {
 	sync.RWMutex
 	flavor        string
@@ -103,7 +103,7 @@ type LocalMeta struct {
 	BinlogGTID string `toml:"binlog-gtid" json:"binlog-gtid"`
 }
 
-// NewLocalMeta creates a new LocalMeta
+// NewLocalMeta creates a new LocalMeta.
 func NewLocalMeta(flavor, baseDir string) Meta {
 	lm := &LocalMeta{
 		flavor:        flavor,
@@ -120,7 +120,7 @@ func NewLocalMeta(flavor, baseDir string) Meta {
 	return lm
 }
 
-// Load implements Meta.Load
+// Load implements Meta.Load.
 func (lm *LocalMeta) Load() error {
 	lm.Lock()
 	defer lm.Unlock()
@@ -152,7 +152,7 @@ func (lm *LocalMeta) Load() error {
 	return nil
 }
 
-// AdjustWithStartPos implements Meta.AdjustWithStartPos, return whether adjusted
+// AdjustWithStartPos implements Meta.AdjustWithStartPos, return whether adjusted.
 func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool, latestBinlogName string, latestBinlogGTID string) (bool, error) {
 	lm.Lock()
 	defer lm.Unlock()
@@ -166,7 +166,7 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 		}
 	}
 
-	var gset = lm.emptyGSet.Clone()
+	gset := lm.emptyGSet.Clone()
 	var err error
 
 	if enableGTID {
@@ -182,10 +182,8 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 		if len(binlogName) == 0 { // no meaningful start pos specified
 			binlogGTID = latestBinlogGTID
 			binlogName = latestBinlogName
-		} else {
-			if !binlog.VerifyFilename(binlogName) {
-				return false, terror.ErrRelayBinlogNameNotValid.Generate(binlogName)
-			}
+		} else if !binlog.VerifyFilename(binlogName) {
+			return false, terror.ErrRelayBinlogNameNotValid.Generate(binlogName)
 		}
 	}
 
@@ -197,7 +195,7 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 	return true, lm.doFlush()
 }
 
-// Save implements Meta.Save
+// Save implements Meta.Save.
 func (lm *LocalMeta) Save(pos mysql.Position, gset gtid.Set) error {
 	lm.Lock()
 	defer lm.Unlock()
@@ -220,7 +218,7 @@ func (lm *LocalMeta) Save(pos mysql.Position, gset gtid.Set) error {
 	return nil
 }
 
-// Flush implements Meta.Flush
+// Flush implements Meta.Flush.
 func (lm *LocalMeta) Flush() error {
 	lm.Lock()
 	defer lm.Unlock()
@@ -228,7 +226,7 @@ func (lm *LocalMeta) Flush() error {
 	return lm.doFlush()
 }
 
-// doFlush does the real flushing
+// doFlush does the real flushing.
 func (lm *LocalMeta) doFlush() error {
 	if len(lm.currentUUID) == 0 {
 		return terror.ErrRelayNoCurrentUUID.Generate()
@@ -242,7 +240,7 @@ func (lm *LocalMeta) doFlush() error {
 	}
 
 	filename := filepath.Join(lm.baseDir, lm.currentUUID, utils.MetaFilename)
-	err = ioutil2.WriteFileAtomic(filename, buf.Bytes(), 0644)
+	err = ioutil2.WriteFileAtomic(filename, buf.Bytes(), 0o644)
 	if err != nil {
 		return terror.ErrRelayFlushLocalMeta.Delegate(err)
 	}
@@ -252,7 +250,7 @@ func (lm *LocalMeta) doFlush() error {
 	return nil
 }
 
-// Dirty implements Meta.Dirty
+// Dirty implements Meta.Dirty.
 func (lm *LocalMeta) Dirty() bool {
 	lm.RLock()
 	defer lm.RUnlock()
@@ -260,7 +258,7 @@ func (lm *LocalMeta) Dirty() bool {
 	return lm.dirty
 }
 
-// Dir implements Meta.Dir
+// Dir implements Meta.Dir.
 func (lm *LocalMeta) Dir() string {
 	lm.RLock()
 	defer lm.RUnlock()
@@ -268,7 +266,7 @@ func (lm *LocalMeta) Dir() string {
 	return filepath.Join(lm.baseDir, lm.currentUUID)
 }
 
-// AddDir implements Meta.AddDir
+// AddDir implements Meta.AddDir.
 func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID gtid.Set, uuidSuffix int) error {
 	lm.Lock()
 	defer lm.Unlock()
@@ -300,7 +298,7 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 	}
 
 	// make sub dir for UUID
-	err := os.Mkdir(filepath.Join(lm.baseDir, newUUID), 0744)
+	err := os.Mkdir(filepath.Join(lm.baseDir, newUUID), 0o744)
 	if err != nil {
 		return terror.ErrRelayMkdir.Delegate(err)
 	}
@@ -335,7 +333,7 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 	return lm.doFlush()
 }
 
-// Pos implements Meta.Pos
+// Pos implements Meta.Pos.
 func (lm *LocalMeta) Pos() (string, mysql.Position) {
 	lm.RLock()
 	defer lm.RUnlock()
@@ -343,7 +341,7 @@ func (lm *LocalMeta) Pos() (string, mysql.Position) {
 	return lm.currentUUID, mysql.Position{Name: lm.BinLogName, Pos: lm.BinLogPos}
 }
 
-// GTID implements Meta.GTID
+// GTID implements Meta.GTID.
 func (lm *LocalMeta) GTID() (string, gtid.Set) {
 	lm.RLock()
 	defer lm.RUnlock()
@@ -354,14 +352,14 @@ func (lm *LocalMeta) GTID() (string, gtid.Set) {
 	return lm.currentUUID, nil
 }
 
-// UUID implements Meta.UUID
+// UUID implements Meta.UUID.
 func (lm *LocalMeta) UUID() string {
 	lm.RLock()
 	defer lm.RUnlock()
 	return lm.currentUUID
 }
 
-// TrimUUIDs implements Meta.TrimUUIDs
+// TrimUUIDs implements Meta.TrimUUIDs.
 func (lm *LocalMeta) TrimUUIDs() ([]string, error) {
 	lm.Lock()
 	defer lm.Unlock()
@@ -392,14 +390,14 @@ func (lm *LocalMeta) TrimUUIDs() ([]string, error) {
 	return trimmed, nil
 }
 
-// String implements Meta.String
+// String implements Meta.String.
 func (lm *LocalMeta) String() string {
 	uuid, pos := lm.Pos()
 	_, gs := lm.GTID()
 	return fmt.Sprintf("master-uuid = %s, relay-binlog = %v, relay-binlog-gtid = %v", uuid, pos, gs)
 }
 
-// updateIndexFile updates the content of server-uuid.index file
+// updateIndexFile updates the content of server-uuid.index file.
 func (lm *LocalMeta) updateIndexFile(uuids []string) error {
 	var buf bytes.Buffer
 	for _, uuid := range uuids {
@@ -407,7 +405,7 @@ func (lm *LocalMeta) updateIndexFile(uuids []string) error {
 		buf.WriteString("\n")
 	}
 
-	err := ioutil2.WriteFileAtomic(lm.uuidIndexPath, buf.Bytes(), 0644)
+	err := ioutil2.WriteFileAtomic(lm.uuidIndexPath, buf.Bytes(), 0o644)
 	return terror.ErrRelayUpdateIndexFile.Delegate(err, lm.uuidIndexPath)
 }
 
@@ -429,7 +427,7 @@ func (lm *LocalMeta) verifyUUIDs(uuids []string) error {
 	return nil
 }
 
-// updateCurrentUUID updates current UUID
+// updateCurrentUUID updates current UUID.
 func (lm *LocalMeta) updateCurrentUUID(uuid string) error {
 	_, suffix, err := utils.ParseSuffixForUUID(uuid)
 	if err != nil {
@@ -450,7 +448,7 @@ func (lm *LocalMeta) updateCurrentUUID(uuid string) error {
 	return nil
 }
 
-// loadMetaData loads meta information from meta data file
+// loadMetaData loads meta information from meta data file.
 func (lm *LocalMeta) loadMetaData() error {
 	lm.gset = lm.emptyGSet.Clone()
 

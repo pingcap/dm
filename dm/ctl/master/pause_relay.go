@@ -24,7 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewPauseRelayCmd creates a PauseRelay command
+// NewPauseRelayCmd creates a PauseRelay command.
 func NewPauseRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pause-relay <-s source ...>",
@@ -34,7 +34,7 @@ func NewPauseRelayCmd() *cobra.Command {
 	return cmd
 }
 
-// pauseRelayFunc does pause relay request
+// pauseRelayFunc does pause relay request.
 func pauseRelayFunc(cmd *cobra.Command, _ []string) (err error) {
 	if len(cmd.Flags().Args()) > 0 {
 		cmd.SetOut(os.Stdout)

@@ -23,10 +23,10 @@ import (
 	"testing"
 	"time"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/check"
 	"github.com/pingcap/parser"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
@@ -34,9 +34,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 )
 
-var (
-	_ = check.Suite(&testFileWriterSuite{})
-)
+var _ = check.Suite(&testFileWriterSuite{})
 
 func TestSuite(t *testing.T) {
 	check.TestingT(t)
@@ -209,7 +207,7 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 
 	// check events by reading them back
 	events := make([]*replication.BinlogEvent, 0, 2)
-	var count = 0
+	count := 0
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		count++
 		if count > 2 {
@@ -420,7 +418,8 @@ func (t *testFileWriterSuite) TestWriteMultiEvents(c *check.C) {
 	)
 	insertRows[0] = []interface{}{int32(1)}
 	events, data, err = g.GenDMLEvents(replication.WRITE_ROWS_EVENTv2, []*event.DMLData{
-		{TableID: tableID, Schema: "db", Table: "tbl", ColumnType: columnType, Rows: insertRows}})
+		{TableID: tableID, Schema: "db", Table: "tbl", ColumnType: columnType, Rows: insertRows},
+	})
 	c.Assert(err, check.IsNil)
 	allEvents = append(allEvents, events...)
 	allData.Write(data)
@@ -487,7 +486,7 @@ func (t *testFileWriterSuite) TestHandleFileHoleExist(c *check.C) {
 
 	// read events back from the file to check the dummy event
 	events := make([]*replication.BinlogEvent, 0, 3)
-	var count = 0
+	count := 0
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		count++
 		if count > 3 {
@@ -593,7 +592,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 
 	// write the events to a file
 	filename := filepath.Join(cfg.RelayDir, cfg.Filename)
-	err = ioutil.WriteFile(filename, baseData, 0644)
+	err = ioutil.WriteFile(filename, baseData, 0o644)
 	c.Assert(err, check.IsNil)
 
 	// try recover, but in fact do nothing
@@ -615,7 +614,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 
 	// write an incomplete event to the file
 	corruptData := extraEvents[0].RawData[:len(extraEvents[0].RawData)-2]
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0o644)
 	c.Assert(err, check.IsNil)
 	_, err = f.Write(corruptData)
 	c.Assert(err, check.IsNil)
@@ -639,7 +638,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(fs.Size(), check.Equals, int64(len(baseData)))
 
 	// write an incomplete transaction
-	f, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
+	f, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0o644)
 	c.Assert(err, check.IsNil)
 	var extraLen int64
 	for i := 0; i < len(extraEvents)-1; i++ {
@@ -667,7 +666,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(fs.Size(), check.Equals, int64(len(baseData)))
 
 	// write an completed transaction
-	f, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
+	f, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0o644)
 	c.Assert(err, check.IsNil)
 	for i := 0; i < len(extraEvents); i++ {
 		_, err = f.Write(extraEvents[i].RawData)
@@ -702,11 +701,9 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 }
 
 func (t *testFileWriterSuite) TestRecoverMySQLNone(c *check.C) {
-	var (
-		cfg = &FileConfig{
-			RelayDir: c.MkDir(),
-		}
-	)
+	cfg := &FileConfig{
+		RelayDir: c.MkDir(),
+	}
 
 	w1 := NewFileWriter(log.L(), cfg, t.parser)
 	defer w1.Close()

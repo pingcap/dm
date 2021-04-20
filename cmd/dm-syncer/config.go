@@ -20,11 +20,11 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/utils"
@@ -93,7 +93,7 @@ func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTask
 	fs.IntVar(&cfg.Batch, "b", 100, "batch commit count")
 	fs.StringVar(&cfg.StatusAddr, "status-addr", ":8271", "status addr")
 	fs.StringVar(&cfg.Meta, "meta", "syncer.meta", "syncer meta info")
-	//fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
+	// fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
@@ -123,8 +123,7 @@ func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTask
 }
 
 func (c *commonConfig) parse(args []string) (*config.SubTaskConfig, error) {
-	err := c.FlagSet.Parse(args)
-	if err != nil {
+	if err := c.FlagSet.Parse(args); err != nil {
 		return nil, errors.Trace(err)
 	}
 	if c.printVersion {
@@ -140,7 +139,6 @@ func (c *commonConfig) parse(args []string) (*config.SubTaskConfig, error) {
 }
 
 func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, error) {
-
 	cfg := &config.SubTaskConfig{}
 	cfg.SetFlagSet(flag.NewFlagSet("dm-syncer", flag.ContinueOnError))
 	fs := cfg.GetFlagSet()
@@ -157,7 +155,7 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 	fs.IntVar(&cfg.WorkerCount, "c", 16, "parallel worker count")
 	fs.IntVar(&cfg.Batch, "b", 100, "batch commit count")
 	fs.StringVar(&cfg.StatusAddr, "status-addr", ":8271", "status addr")
-	//fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
+	// fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
@@ -171,8 +169,7 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 
 	cfg.ServerID = uint32(serverID)
 
-	err := cfg.Parse(args, false)
-	if err != nil {
+	if err := cfg.Parse(args, false); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -197,7 +194,7 @@ func newCommonConfig() *commonConfig {
 	fs.IntVar(&cfg.Batch, "b", 100, "batch commit count")
 	fs.StringVar(&cfg.StatusAddr, "status-addr", ":8271", "status addr")
 	fs.StringVar(&cfg.Meta, "meta", "syncer.meta", "syncer meta info")
-	//fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
+	// fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogFormat, "log-format", "text", `the format of the log, "text" or "json"`)
@@ -263,10 +260,10 @@ type syncerConfig struct {
 
 	// NOTE: These four configs are all deprecated.
 	// We leave this items as comments to remind others there WERE old config items.
-	//stopOnDDL               bool   `toml:"stop-on-ddl" json:"stop-on-ddl"`
-	//MaxDDLConnectionTimeout string `toml:"execute-ddl-timeout" json:"execute-ddl-timeout"`
-	//MaxDMLConnectionTimeout string `toml:"execute-dml-timeout" json:"execute-dml-timeout"`
-	//ExecutionQueueLength    int    `toml:"execute-queue-length" json:"execute-queue-length"`
+	// stopOnDDL               bool   `toml:"stop-on-ddl" json:"stop-on-ddl"`
+	// MaxDDLConnectionTimeout string `toml:"execute-ddl-timeout" json:"execute-ddl-timeout"`
+	// MaxDMLConnectionTimeout string `toml:"execute-dml-timeout" json:"execute-dml-timeout"`
+	// ExecutionQueueLength    int    `toml:"execute-queue-length" json:"execute-queue-length"`
 
 	TimezoneStr string         `toml:"timezone" json:"timezone"`
 	Timezone    *time.Location `json:"-"`
@@ -276,7 +273,7 @@ type syncerConfig struct {
 
 // RouteRule is route rule that syncing
 // schema/table to specified schema/table
-// This config has been replaced by `router.TableRule`
+// This config has been replaced by `router.TableRule`.
 type RouteRule struct {
 	PatternSchema string `toml:"pattern-schema" json:"pattern-schema"`
 	PatternTable  string `toml:"pattern-table" json:"pattern-table"`

@@ -19,9 +19,9 @@ import (
 	"sort"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -76,15 +76,18 @@ func (t *testShardingGroupSuite) TestLowestFirstPosInGroups(c *C) {
 	k := NewShardingGroupKeeper(tcontext.Background(), t.cfg)
 
 	g1 := NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, []string{"db1.tbl1", "db1.tbl2"}, nil, false, "", false)
+	// nolint:dogsled
 	_, _, _, err := g1.TrySync("db1.tbl1", pos11, endPos11, ddls1)
 	c.Assert(err, IsNil)
 
 	// lowest
 	g2 := NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, []string{"db2.tbl1", "db2.tbl2"}, nil, false, "", false)
+	// nolint:dogsled
 	_, _, _, err = g2.TrySync("db2.tbl1", pos21, endPos21, ddls1)
 	c.Assert(err, IsNil)
 
 	g3 := NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, []string{"db3.tbl1", "db3.tbl2"}, nil, false, "", false)
+	// nolint:dogsled
 	_, _, _, err = g3.TrySync("db3.tbl1", pos3, endPos3, ddls1)
 	c.Assert(err, IsNil)
 
@@ -125,9 +128,11 @@ func (t *testShardingGroupSuite) TestMergeAndLeave(c *C) {
 	ddls := []string{"DUMMY DDL"}
 	pos1 := mysql.Position{Name: "mysql-bin.000002", Pos: 123}
 	endPos1 := mysql.Position{Name: "mysql-bin.000002", Pos: 456}
+	// nolint:dogsled
 	_, _, _, err = g1.TrySync(source1, binlog.Location{Position: pos1}, binlog.Location{Position: endPos1}, ddls)
 	c.Assert(err, IsNil)
 
+	// nolint:dogsled
 	_, _, _, err = g1.Merge([]string{source1})
 	c.Assert(terror.ErrSyncUnitAddTableInSharding.Equal(err), IsTrue)
 	err = g1.Leave([]string{source2})
@@ -275,9 +280,11 @@ func (t *testShardingGroupSuite) TestKeeper(c *C) {
 	c.Assert(remain, Equals, 2)
 
 	// test LeaveGroup
+	// nolint:dogsled
 	_, _, _, remain, err = k.AddGroup(targetDB, targetTbl, []string{source3}, nil, true)
 	c.Assert(err, IsNil)
 	c.Assert(remain, Equals, 3)
+	// nolint:dogsled
 	_, _, _, remain, err = k.AddGroup(targetDB, targetTbl, []string{source4}, nil, true)
 	c.Assert(err, IsNil)
 	c.Assert(remain, Equals, 4)

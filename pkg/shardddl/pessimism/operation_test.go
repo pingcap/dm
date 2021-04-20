@@ -18,6 +18,7 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+
 	"github.com/pingcap/dm/pkg/utils"
 )
 

@@ -26,13 +26,12 @@ import (
 	"testing"
 	"time"
 
+	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
-	"github.com/siddontang/go-mysql/mysql"
-	gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -54,8 +53,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testRelaySuite struct {
-}
+type testRelaySuite struct{}
 
 func (t *testRelaySuite) SetUpSuite(c *C) {
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)
@@ -176,7 +174,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 		startPos           = gmysql.Position{Name: filename, Pos: 123}
 
 		parser2  = parser.New()
-		relayCfg = newRelayCfg(c, mysql.MySQLFlavor)
+		relayCfg = newRelayCfg(c, gmysql.MySQLFlavor)
 		r        = NewRelay(relayCfg).(*Relay)
 	)
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged", `return("406a3f61-690d-11e7-87c5-6c92bf46f384:1-122")`), IsNil)
@@ -213,7 +211,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	g, events, data := genBinlogEventsWithGTIDs(c, relayCfg.Flavor, previousGTIDSet, latestGTID1, latestGTID2)
 
 	// write events into relay log file
-	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0600)
+	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0o600)
 	c.Assert(err, IsNil)
 
 	// all events/transactions are complete, no need to recover
@@ -225,7 +223,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	t.verifyMetadata(c, r, uuidWithSuffix, pos, recoverGTIDSetStr, []string{uuidWithSuffix})
 
 	// write some invalid data into the relay log file
-	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
+	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0o600)
 	c.Assert(err, IsNil)
 	_, err = f.Write([]byte("invalid event data"))
 	c.Assert(err, IsNil)
@@ -266,7 +264,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 		startPos          = gmysql.Position{Name: filename, Pos: 123}
 
 		parser2  = parser.New()
-		relayCfg = newRelayCfg(c, mysql.MySQLFlavor)
+		relayCfg = newRelayCfg(c, gmysql.MySQLFlavor)
 		r        = NewRelay(relayCfg).(*Relay)
 	)
 	c.Assert(r.Init(context.Background()), IsNil)
@@ -286,10 +284,10 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	g, _, data := genBinlogEventsWithGTIDs(c, relayCfg.Flavor, previousGTIDSet, latestGTID1, latestGTID2)
 
 	// write events into relay log file
-	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0600)
+	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0o600)
 	c.Assert(err, IsNil)
 	// write some invalid data into the relay log file to trigger a recover.
-	f, err := os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
+	f, err := os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0o600)
 	c.Assert(err, IsNil)
 	_, err = f.Write([]byte("invalid event data"))
 	c.Assert(err, IsNil)
@@ -303,7 +301,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	c.Assert(latestGTIDs.Equal(recoverGTIDSet), IsTrue)
 
 	// write some invalid data into the relay log file again.
-	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
+	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0o600)
 	c.Assert(err, IsNil)
 	_, err = f.Write([]byte("invalid event data"))
 	c.Assert(err, IsNil)
@@ -389,7 +387,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 		reader2      = &mockReader{}
 		transformer2 = transformer.NewTransformer(parser.New())
 		writer2      = &mockWriter{}
-		relayCfg     = newRelayCfg(c, mysql.MariaDBFlavor)
+		relayCfg     = newRelayCfg(c, gmysql.MariaDBFlavor)
 		r            = NewRelay(relayCfg).(*Relay)
 
 		eventHeader = &replication.EventHeader{
@@ -465,7 +463,8 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	reader2.err = nil
 	reader2.result.Event = &replication.BinlogEvent{
 		Header: &replication.EventHeader{EventType: replication.HEARTBEAT_EVENT},
-		Event:  &replication.GenericEvent{}}
+		Event:  &replication.GenericEvent{},
+	}
 	ctx4, cancel4 := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel4()
 	err = r.handleEvents(ctx4, reader2, transformer2, writer2)
@@ -495,7 +494,7 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	defer cancel()
 
 	var (
-		relayCfg = newRelayCfg(c, mysql.MySQLFlavor)
+		relayCfg = newRelayCfg(c, gmysql.MySQLFlavor)
 		r        = NewRelay(relayCfg).(*Relay)
 	)
 	c.Assert(r.Init(context.Background()), IsNil)
@@ -550,7 +549,7 @@ func (t *testRelaySuite) verifyMetadata(c *C, r *Relay, uuidExpected string,
 	posExpected gmysql.Position, gsStrExpected string, uuidsExpected []string) {
 	uuid, pos := r.meta.Pos()
 	_, gs := r.meta.GTID()
-	gsExpected, err := gtid.ParserGTID(mysql.MySQLFlavor, gsStrExpected)
+	gsExpected, err := gtid.ParserGTID(gmysql.MySQLFlavor, gsStrExpected)
 	c.Assert(err, IsNil)
 	c.Assert(uuid, Equals, uuidExpected)
 	c.Assert(pos, DeepEquals, posExpected)
@@ -625,13 +624,12 @@ func (t *testRelaySuite) TestProcess(c *C) {
 		c.Assert(err, IsNil)
 	}()
 
-	time.Sleep(2 * time.Second) // waiting for events
-	cancel()                    // stop processing
-	wg.Wait()
-
 	// should got the last DDL
 	gotLastDDL := false
+	binlogFileCount := 0
+	// nolint:unparam
 	onEventFunc := func(e *replication.BinlogEvent) error {
+		// nolint:gocritic
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			if bytes.Contains(ev.Query, []byte(lastDDL)) {
@@ -640,26 +638,33 @@ func (t *testRelaySuite) TestProcess(c *C) {
 		}
 		return nil
 	}
-	parser2 := replication.NewBinlogParser()
-	parser2.SetVerifyChecksum(true)
-
-	// check whether have binlog file in relay directory
-	// and check for events already done in `TestHandleEvent`
 	uuid, err := utils.GetServerUUID(ctx2, db, r.cfg.Flavor)
 	c.Assert(err, IsNil)
-	files, err := streamer.CollectAllBinlogFiles(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
-	c.Assert(err, IsNil)
-	var binlogFileCount int
-	for _, f := range files {
-		if binlog.VerifyFilename(f) {
-			binlogFileCount++
 
-			if !gotLastDDL {
-				err = parser2.ParseFile(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid), f), 0, onEventFunc)
-				c.Assert(err, IsNil)
+	utils.WaitSomething(6, 500*time.Millisecond, func() bool {
+		parser2 := replication.NewBinlogParser()
+		parser2.SetVerifyChecksum(true)
+
+		// check whether have binlog file in relay directory
+		// and check for events already done in `TestHandleEvent`
+		files, err2 := streamer.CollectAllBinlogFiles(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
+		c.Assert(err2, IsNil)
+		binlogFileCount = 0
+		for _, f := range files {
+			if binlog.VerifyFilename(f) {
+				binlogFileCount++
+				if !gotLastDDL {
+					err2 = parser2.ParseFile(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid), f), 0, onEventFunc)
+					c.Assert(err2, IsNil)
+				}
 			}
 		}
-	}
+		return gotLastDDL
+	})
+
+	cancel() // stop processing
+	wg.Wait()
+
 	c.Assert(binlogFileCount, Greater, 0)
 	c.Assert(gotLastDDL, IsTrue)
 }

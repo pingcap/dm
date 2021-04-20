@@ -16,9 +16,9 @@ package operator
 import (
 	"testing"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -32,8 +32,7 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testOperatorSuite struct {
-}
+type testOperatorSuite struct{}
 
 func (o *testOperatorSuite) TestOperator(c *C) {
 	logger := log.L()
@@ -43,7 +42,8 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 		Position: mysql.Position{
 			Name: "mysql-bin.000001",
 			Pos:  233,
-		}}
+		},
+	}
 	endLocation := binlog.Location{
 		Position: mysql.Position{
 			Name: "mysql-bin.000001",
