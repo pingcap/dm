@@ -392,7 +392,7 @@ func (st *SubTask) setStageAndResult(stage pb.Stage, result *pb.ProcessResult) {
 	st.Lock()
 	defer st.Unlock()
 	st.stage = stage
-	taskState.WithLabelValues(st.cfg.Name, st.cfg.SourceID).Set(float64(st.stage))
+	updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 	st.result = result
 }
 
