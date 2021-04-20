@@ -758,17 +758,18 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 		return resp, nil
 	}
 	subtasks := s.scheduler.GetSubTaskCfgsByTask(task)
-	if len(subtasks) == 0 {
-		resp.Msg = "task (" + task + ") which extracted from lock-ID is not found in DM"
-		return resp, nil
-	}
-
-	for _, subtask := range subtasks {
-		if subtask.ShardMode != config.ShardPessimistic {
-			resp.Msg = "`unlock-ddl-lock` is only supported in pessimistic shard mode currently"
-			return resp, nil
+	if len(subtasks) > 0 {
+		// subtasks should have same ShardMode
+		for _, subtask := range subtasks {
+			if subtask.ShardMode == config.ShardOptimistic {
+				resp.Msg = "`unlock-ddl-lock` is only supported in pessimistic shard mode currently"
+				return resp, nil
+			}
+			break
 		}
-		break
+	} else {
+		// task is deleted so worker is not watching etcd, automatically set --force-remove
+		req.ForceRemove = true
 	}
 
 	// TODO: add `unlock-ddl-lock` support for Optimist later.
