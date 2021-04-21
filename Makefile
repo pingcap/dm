@@ -141,7 +141,7 @@ terror_check:
 tidy_mod:
 	@echo "tidy go.mod"
 	$(GO) mod tidy
-	git diff --exit-code go.mod go.sum 
+	git diff --exit-code go.mod go.sum
 
 dm_integration_test_build: tools_setup
 	$(FAILPOINT_ENABLE)
