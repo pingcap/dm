@@ -270,7 +270,7 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		for _, r := range result.Results {
 			switch r.State {
 			case check.StateFailure:
-				if c.errCnt >= 0 && errCnt < c.errCnt {
+				if errCnt < c.errCnt {
 					errCnt++
 					results = append(results, r)
 				}
