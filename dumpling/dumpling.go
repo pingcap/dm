@@ -182,7 +182,7 @@ func (m *Dumpling) Update(cfg *config.SubTaskConfig) error {
 }
 
 // Status implements Unit.Status.
-func (m *Dumpling) Status(ctx context.Context) interface{} {
+func (m *Dumpling) Status() interface{} {
 	// NOTE: try to add some status, like dumped file count
 	return &pb.DumpStatus{}
 }

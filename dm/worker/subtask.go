@@ -286,9 +286,7 @@ func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 		}
 		st.setStageAndResult(stage, &result)
 
-		ctx, cancel := context.WithTimeout(st.ctx, utils.DefaultDBTimeout)
-		defer cancel()
-		st.l.Info("unit process returned", zap.Stringer("unit", cu.Type()), zap.Stringer("stage", stage), zap.String("status", st.StatusJSON(ctx)))
+		st.l.Info("unit process returned", zap.Stringer("unit", cu.Type()), zap.Stringer("stage", stage), zap.String("status", st.StatusJSON()))
 
 		switch stage {
 		case pb.Stage_Finished:
@@ -612,9 +610,7 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 		ctxWait, cancelWait := context.WithTimeout(hub.w.ctx, waitRelayCatchupTimeout)
 		defer cancelWait()
 
-		ctxStatus, cancelStatus := context.WithTimeout(ctxWait, utils.DefaultDBTimeout)
-		loadStatus := pu.Status(ctxStatus).(*pb.LoadStatus)
-		cancelStatus()
+		loadStatus := pu.Status().(*pb.LoadStatus)
 
 		if st.cfg.EnableGTID {
 			gset1, err = gtid.ParserGTID(st.cfg.Flavor, loadStatus.MetaBinlogGTID)
@@ -629,7 +625,7 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 		}
 
 		for {
-			ctxStatus, cancelStatus = context.WithTimeout(ctxWait, utils.DefaultDBTimeout)
+			ctxStatus, cancelStatus := context.WithTimeout(ctxWait, utils.DefaultDBTimeout)
 			relayStatus := hub.w.relayHolder.Status(ctxStatus)
 			cancelStatus()
 

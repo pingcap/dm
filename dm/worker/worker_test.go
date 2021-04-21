@@ -188,7 +188,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 
 	// check task in paused state
 	c.Assert(utils.WaitSomething(100, 100*time.Millisecond, func() bool {
-		subtaskStatus, _ := s.getWorker(true).QueryStatus(context.Background(), taskName)
+		subtaskStatus, _, _ := s.getWorker(true).QueryStatus(context.Background(), taskName)
 		for _, st := range subtaskStatus {
 			if st.Name == taskName && st.Stage == pb.Stage_Paused {
 				return true
@@ -209,7 +209,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 
 	// check task will be auto resumed
 	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
-		sts, _ := s.getWorker(true).QueryStatus(context.Background(), taskName)
+		sts, _, _ := s.getWorker(true).QueryStatus(context.Background(), taskName)
 		for _, st := range sts {
 			if st.Name == taskName && st.Stage == pb.Stage_Running {
 				return true
@@ -502,7 +502,8 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return w.subTaskHolder.findSubTask(subtaskCfg.Name) != nil
 	}), IsTrue)
-	status, _ := w.QueryStatus(ctx1, subtaskCfg.Name)
+	status, _, err := w.QueryStatus(ctx1, subtaskCfg.Name)
+	c.Assert(err, IsNil)
 	c.Assert(status, HasLen, 1)
 	c.Assert(status[0].Name, Equals, subtaskCfg.Name)
 	c.Assert(status[0].Stage, Equals, pb.Stage_Running)
@@ -520,7 +521,8 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return w.subTaskHolder.findSubTask(subtaskCfg.Name) != nil
 	}), IsTrue)
-	status, _ = w.QueryStatus(ctx2, subtaskCfg.Name)
+	status, _, err = w.QueryStatus(ctx2, subtaskCfg.Name)
+	c.Assert(err, IsNil)
 	c.Assert(status, HasLen, 1)
 	c.Assert(status[0].Name, Equals, subtaskCfg.Name)
 	c.Assert(status[0].Stage, Equals, pb.Stage_Running)
