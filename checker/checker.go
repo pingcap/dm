@@ -275,7 +275,7 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 					results = append(results, r)
 				}
 			case check.StateWarning:
-				if c.warnCnt >= 0 && warnCnt < c.warnCnt {
+				if warnCnt < c.warnCnt {
 					warnCnt++
 					results = append(results, r)
 				}
