@@ -124,7 +124,7 @@ func (w *Worker) Close() {
 		failpoint.Return()
 	})
 
-	if w.closed.CAS(false, true) {
+	if !w.closed.CAS(false, true) {
 		w.wg.Wait()
 		w.logger.Info("already closed...")
 		return
