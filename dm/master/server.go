@@ -1408,6 +1408,9 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 		dbutil.TableName(cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name))))
 
 	_, err = dbConn.ExecuteSQL(ctctx, nil, cfg.Name, sqls)
+	if err == nil {
+		metrics.RemoveDDLPending(cfg.Name)
+	}
 	return err
 }
 
