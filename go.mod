@@ -8,7 +8,7 @@ require (
 	github.com/coreos/go-semver v0.3.0
 	github.com/docker/go-units v0.4.0
 	github.com/dustin/go-humanize v1.0.0
-	github.com/go-mysql-org/go-mysql v1.1.2-0.20210419035833-609df4e7b974
+	github.com/go-mysql-org/go-mysql v1.1.3-0.20210420093540-a51d9dec4f96
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gogo/gateway v1.1.0
 	github.com/gogo/protobuf v1.3.2
@@ -21,8 +21,8 @@ require (
 	github.com/pingcap/dumpling v0.0.0-20210407092432-e1cfe4ce0a53
 	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3
 	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
-	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
-	github.com/pingcap/parser v0.0.0-20210324190955-ab6d0f2c18ee
+	github.com/pingcap/log v0.0.0-20210317133921-96f4fcab92a4
+	github.com/pingcap/parser v0.0.0-20210415081931-48e7f467fd74
 	github.com/pingcap/tidb v1.1.0-beta.0.20210330094614-60111e1c4b6f
 	github.com/pingcap/tidb-tools v5.0.0-rc.0.20210318094904-51a9e0c86386+incompatible
 	github.com/prometheus/client_golang v1.5.1
