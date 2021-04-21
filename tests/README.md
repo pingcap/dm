@@ -97,3 +97,4 @@ Several convenient commands are provided:
 * `check_metric <PORT> <METRIC_NAME> <RETRY_COUNT> <LOWER BOUND> <UPPER BOUND>` - check metric value from prometheus.
 * `truncate_trace_events <PORT>` - truncate trace server events records.
 
+
