@@ -20,12 +20,13 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/conn"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
