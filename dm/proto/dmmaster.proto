@@ -249,6 +249,8 @@ message PurgeWorkerRelayResponse {
 
 message CheckTaskRequest {
     string task = 1; // task's configuration, yaml format
+    int64 errCnt = 2; // max error count to display
+    int64 warnCnt = 3; // max warn count to display
 }
 
 message CheckTaskResponse {
