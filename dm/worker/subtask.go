@@ -21,8 +21,8 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/failpoint"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -77,7 +77,7 @@ func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []u
 type SubTask struct {
 	cfg *config.SubTaskConfig
 
-	initialized sync2.AtomicBool
+	initialized atomic.Bool
 
 	l log.Logger
 
@@ -140,7 +140,7 @@ func (st *SubTask) Init() error {
 			u.Close()
 		}
 
-		st.initialized.Set(initializeUnitSuccess)
+		st.initialized.Store(initializeUnitSuccess)
 	}()
 
 	// every unit does base initialization in `Init`, and this must pass before start running the sub task
@@ -474,7 +474,7 @@ func (st *SubTask) Pause() error {
 // Resume resumes the paused sub task
 // similar to Run.
 func (st *SubTask) Resume() error {
-	if !st.initialized.Get() {
+	if !st.initialized.Load() {
 		st.Run(pb.Stage_Running)
 		return nil
 	}
@@ -603,7 +603,7 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 		st.l.Info("wait condition between two units", zap.Stringer("previous unit", pu.Type()), zap.Stringer("unit", cu.Type()))
 		hub := GetConditionHub()
 
-		if !hub.w.relayEnabled.Get() {
+		if !hub.w.relayEnabled.Load() {
 			return nil
 		}
 

@@ -80,12 +80,12 @@ func (t *testServer) testWorker(c *C) {
 
 	// close twice
 	w.Close()
-	c.Assert(w.closed.Get(), IsTrue)
+	c.Assert(w.closed.Load(), IsTrue)
 	c.Assert(w.subTaskHolder.getAllSubTasks(), HasLen, 0)
 	w.Close()
-	c.Assert(w.closed.Get(), IsTrue)
+	c.Assert(w.closed.Load(), IsTrue)
 	c.Assert(w.subTaskHolder.getAllSubTasks(), HasLen, 0)
-	c.Assert(w.closed.Get(), IsTrue)
+	c.Assert(w.closed.Load(), IsTrue)
 
 	c.Assert(w.StartSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",
@@ -170,7 +170,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 		c.Assert(s.Start(), IsNil)
 	}()
 	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
-		if s.closed.Get() {
+		if s.closed.Load() {
 			return false
 		}
 		w, err2 := s.getOrStartWorker(&sourceConfig, true)
@@ -284,24 +284,24 @@ func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
 		w.Start()
 	}()
 	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
-		return !w.closed.Get()
+		return !w.closed.Load()
 	}), IsTrue)
 
 	// test 1: when subTaskEnabled is false, switch on relay
-	c.Assert(w.subTaskEnabled.Get(), IsFalse)
+	c.Assert(w.subTaskEnabled.Load(), IsFalse)
 	t.testEnableRelay(c, w, etcdCli, sourceCfg, cfg)
 
 	// test2: when subTaskEnabled is false, switch off relay
-	c.Assert(w.subTaskEnabled.Get(), IsFalse)
+	c.Assert(w.subTaskEnabled.Load(), IsFalse)
 	t.testDisableRelay(c, w)
 
 	// test3: when relayEnabled is false, switch on subtask
-	c.Assert(w.relayEnabled.Get(), IsFalse)
+	c.Assert(w.relayEnabled.Load(), IsFalse)
 
 	t.testEnableHandleSubtasks(c, w, etcdCli, subtaskCfg, sourceCfg)
 
 	// test4: when subTaskEnabled is true, switch on relay
-	c.Assert(w.subTaskEnabled.Get(), IsTrue)
+	c.Assert(w.subTaskEnabled.Load(), IsTrue)
 
 	t.testEnableRelay(c, w, etcdCli, sourceCfg, cfg)
 	c.Assert(w.subTaskHolder.findSubTask(subtaskCfg.Name).cfg.UseRelay, IsTrue)
@@ -311,7 +311,7 @@ func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
 	}), IsTrue)
 
 	// test5: when subTaskEnabled is true, switch off relay
-	c.Assert(w.subTaskEnabled.Get(), IsTrue)
+	c.Assert(w.subTaskEnabled.Load(), IsTrue)
 	t.testDisableRelay(c, w)
 
 	c.Assert(w.subTaskHolder.findSubTask(subtaskCfg.Name).cfg.UseRelay, IsFalse)
@@ -321,15 +321,15 @@ func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
 	}), IsTrue)
 
 	// test6: when relayEnabled is false, switch off subtask
-	c.Assert(w.relayEnabled.Get(), IsFalse)
+	c.Assert(w.relayEnabled.Load(), IsFalse)
 
 	w.DisableHandleSubtasks()
-	c.Assert(w.subTaskEnabled.Get(), IsFalse)
+	c.Assert(w.subTaskEnabled.Load(), IsFalse)
 
 	// prepare for test7 & 8
 	t.testEnableRelay(c, w, etcdCli, sourceCfg, cfg)
 	// test7: when relayEnabled is true, switch on subtask
-	c.Assert(w.relayEnabled.Get(), IsTrue)
+	c.Assert(w.relayEnabled.Load(), IsTrue)
 
 	subtaskCfg2 := subtaskCfg
 	subtaskCfg2.Name = "sub-task-name-2"
@@ -340,17 +340,17 @@ func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
 	c.Assert(w.subTaskHolder.findSubTask(subtaskCfg2.Name).cfg.UseRelay, IsTrue)
 
 	// test8: when relayEnabled is true, switch off subtask
-	c.Assert(w.relayEnabled.Get(), IsTrue)
+	c.Assert(w.relayEnabled.Load(), IsTrue)
 
 	w.DisableHandleSubtasks()
-	c.Assert(w.subTaskEnabled.Get(), IsFalse)
+	c.Assert(w.subTaskEnabled.Load(), IsFalse)
 }
 
 func (t *testWorkerFunctionalities) testEnableRelay(c *C, w *Worker, etcdCli *clientv3.Client,
 	sourceCfg config.SourceConfig, cfg *Config) {
 	c.Assert(w.EnableRelay(), IsNil)
 
-	c.Assert(w.relayEnabled.Get(), IsTrue)
+	c.Assert(w.relayEnabled.Load(), IsTrue)
 	c.Assert(w.relayHolder.Stage(), Equals, pb.Stage_New)
 
 	_, err := ha.PutSourceCfg(etcdCli, sourceCfg)
@@ -372,14 +372,14 @@ func (t *testWorkerFunctionalities) testEnableRelay(c *C, w *Worker, etcdCli *cl
 func (t *testWorkerFunctionalities) testDisableRelay(c *C, w *Worker) {
 	w.DisableRelay()
 
-	c.Assert(w.relayEnabled.Get(), IsFalse)
+	c.Assert(w.relayEnabled.Load(), IsFalse)
 	c.Assert(w.relayHolder, IsNil)
 }
 
 func (t *testWorkerFunctionalities) testEnableHandleSubtasks(c *C, w *Worker, etcdCli *clientv3.Client,
 	subtaskCfg config.SubTaskConfig, sourceCfg config.SourceConfig) {
 	c.Assert(w.EnableHandleSubtasks(), IsNil)
-	c.Assert(w.subTaskEnabled.Get(), IsTrue)
+	c.Assert(w.subTaskEnabled.Load(), IsTrue)
 
 	_, err := ha.PutSubTaskCfgStage(etcdCli, []config.SubTaskConfig{subtaskCfg},
 		[]ha.Stage{ha.NewSubTaskStage(pb.Stage_Running, sourceCfg.SourceID, subtaskCfg.Name)})
@@ -453,7 +453,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 		w.Start()
 	}()
 	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
-		return !w.closed.Get()
+		return !w.closed.Load()
 	}), IsTrue)
 	// step 2: Put a subtask config and subtask stage to this source, then delete it
 	subtaskCfg := config.SubTaskConfig{}
@@ -570,7 +570,7 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 		w.Start()
 	}()
 	c.Assert(utils.WaitSomething(50, 100*time.Millisecond, func() bool {
-		return !w.closed.Get()
+		return !w.closed.Load()
 	}), IsTrue)
 	// step 2: Put a relay stage to this source, then delete it
 	// put mysql config into relative etcd key adapter to trigger operation event

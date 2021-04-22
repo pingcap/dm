@@ -27,9 +27,9 @@ import (
 // Status implements Unit.Status
 // it returns status, but does not calc status.
 func (s *Syncer) Status() interface{} {
-	total := s.count.Get()
-	totalTps := s.totalTps.Get()
-	tps := s.tps.Get()
+	total := s.count.Load()
+	totalTps := s.totalTps.Load()
+	tps := s.tps.Load()
 
 	syncerLocation := s.checkpoint.FlushedGlobalPoint()
 	st := &pb.SyncStatus{

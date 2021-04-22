@@ -23,16 +23,15 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
@@ -45,7 +44,6 @@ import (
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
-	"github.com/pingcap/dm/pkg/atomic2"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
@@ -74,9 +72,7 @@ var (
 	// the retry interval for dm-master to confirm the dm-workers status is expected.
 	retryInterval = time.Second
 
-	// 0 means not use tls
-	// 1 means use tls.
-	useTLS = int32(0)
+	useTLS atomic.Bool
 
 	// typically there's only one server running in one process, but testMaster.TestOfflineMember starts 3 servers,
 	// so we need sync.Once to prevent data race.
@@ -98,7 +94,7 @@ type Server struct {
 
 	// below three leader related variables should be protected by a lock (currently Server's lock) to provide integrity
 	// except for leader == oneselfStartingLeader which is a intermedia state, which means caller may retry sometime later
-	leader         atomic2.AtomicString
+	leader         atomic.String
 	leaderClient   pb.MasterClient
 	leaderGrpcConn *grpc.ClientConn
 
@@ -119,7 +115,7 @@ type Server struct {
 	// WaitGroup for background functions.
 	bgFunWg sync.WaitGroup
 
-	closed sync2.AtomicBool
+	closed atomic.Bool
 }
 
 // NewServer creates a new Server.
@@ -132,7 +128,7 @@ func NewServer(cfg *Config) *Server {
 	}
 	server.pessimist = shardddl.NewPessimist(&logger, server.getTaskResources)
 	server.optimist = shardddl.NewOptimist(&logger)
-	server.closed.Set(true)
+	server.closed.Store(true)
 
 	setUseTLS(&cfg.Security)
 
@@ -215,7 +211,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
-	s.closed.Set(false) // the server started now.
+	s.closed.Store(false) // the server started now.
 
 	s.bgFunWg.Add(1)
 	go func() {
@@ -251,7 +247,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 // Close close the RPC server, this function can be called multiple times.
 func (s *Server) Close() {
-	if s.closed.Get() {
+	if s.closed.Load() {
 		return
 	}
 	log.L().Info("closing server")
@@ -277,7 +273,7 @@ func (s *Server) Close() {
 	if s.etcd != nil {
 		s.etcd.Close()
 	}
-	s.closed.Set(true)
+	s.closed.Store(true)
 }
 
 func errorCommonWorkerResponse(msg string, source, worker string) *pb.CommonWorkerResponse {
@@ -409,7 +405,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	}
 
 	resp := &pb.StartTaskResponse{}
-	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
+	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task, common.DefaultErrorCnt, common.DefaultWarnCnt)
 	if err != nil {
 		resp.Msg = err.Error()
 		// nolint:nilerr
@@ -581,7 +577,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		return resp2, err2
 	}
 
-	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
+	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task, common.DefaultErrorCnt, common.DefaultWarnCnt)
 	if err != nil {
 		// nolint:nilerr
 		return &pb.UpdateTaskResponse{
@@ -1037,7 +1033,7 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 		return resp2, err2
 	}
 
-	_, _, err := s.generateSubTask(ctx, req.Task)
+	_, _, err := s.generateSubTask(ctx, req.Task, req.ErrCnt, req.WarnCnt)
 	if err != nil {
 		// nolint:nilerr
 		return &pb.CheckTaskResponse{
@@ -1300,7 +1296,7 @@ func (s *Server) OperateLeader(ctx context.Context, req *pb.OperateLeaderRequest
 	}, nil
 }
 
-func (s *Server) generateSubTask(ctx context.Context, task string) (*config.TaskConfig, []*config.SubTaskConfig, error) {
+func (s *Server) generateSubTask(ctx context.Context, task string, errCnt, warnCnt int64) (*config.TaskConfig, []*config.SubTaskConfig, error) {
 	cfg := config.NewTaskConfig()
 	err := cfg.Decode(task)
 	if err != nil {
@@ -1319,7 +1315,7 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 
-	err = checker.CheckSyncConfigFunc(ctx, stCfgs)
+	err = checker.CheckSyncConfigFunc(ctx, stCfgs, errCnt, warnCnt)
 	if err != nil {
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
@@ -1329,9 +1325,9 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 
 func setUseTLS(tlsCfg *config.Security) {
 	if enableTLS(tlsCfg) {
-		atomic.StoreInt32(&useTLS, 1)
+		useTLS.Store(true)
 	} else {
-		atomic.StoreInt32(&useTLS, 0)
+		useTLS.Store(false)
 	}
 }
 
@@ -2174,7 +2170,7 @@ func (s *Server) sharedLogic(ctx context.Context, req interface{}, respPointer i
 		return false
 	}
 	if needForward {
-		log.L().Info("will forward after a short interval", zap.String("from", s.cfg.Name), zap.String("to", s.leader.Get()), zap.String("request", methodName))
+		log.L().Info("will forward after a short interval", zap.String("from", s.cfg.Name), zap.String("to", s.leader.Load()), zap.String("request", methodName))
 		time.Sleep(100 * time.Millisecond)
 		params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(req)}
 		results := reflect.ValueOf(s.leaderClient).MethodByName(methodName).Call(params)

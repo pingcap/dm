@@ -22,8 +22,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
-	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/conn"
@@ -48,7 +48,7 @@ type Worker struct {
 	sync.RWMutex
 
 	wg     sync.WaitGroup
-	closed sync2.AtomicBool
+	closed atomic.Bool
 
 	// context created when Worker created, and canceled when closing
 	ctx    context.Context
@@ -60,7 +60,7 @@ type Worker struct {
 	l       log.Logger
 
 	// subtask functionality
-	subTaskEnabled sync2.AtomicBool
+	subTaskEnabled atomic.Bool
 	subTaskCtx     context.Context
 	subTaskCancel  context.CancelFunc
 	subTaskWg      sync.WaitGroup
@@ -68,7 +68,7 @@ type Worker struct {
 
 	// relay functionality
 	// during relayEnabled == true, relayHolder and relayPurger should not be nil
-	relayEnabled sync2.AtomicBool
+	relayEnabled atomic.Bool
 	relayCtx     context.Context
 	relayCancel  context.CancelFunc
 	relayWg      sync.WaitGroup
@@ -94,9 +94,9 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name strin
 	}
 	// keep running until canceled in `Close`.
 	w.ctx, w.cancel = context.WithCancel(context.Background())
-	w.closed.Set(true)
-	w.subTaskEnabled.Set(false)
-	w.relayEnabled.Set(false)
+	w.closed.Store(true)
+	w.subTaskEnabled.Store(false)
+	w.relayEnabled.Store(false)
 
 	defer func(w2 *Worker) {
 		if err != nil { // when err != nil, `w` will become nil in this func, so we pass `w` in defer.
@@ -136,7 +136,7 @@ func (w *Worker) Start() {
 	w.l.Info("start running")
 
 	ticker := time.NewTicker(5 * time.Second)
-	w.closed.Set(false)
+	w.closed.Store(false)
 	defer ticker.Stop()
 	for {
 		select {
@@ -151,7 +151,7 @@ func (w *Worker) Start() {
 
 // Close stops working and releases resources.
 func (w *Worker) Close() {
-	if w.closed.Get() {
+	if w.closed.Load() {
 		w.l.Warn("already closed")
 		return
 	}
@@ -186,7 +186,7 @@ func (w *Worker) Close() {
 		w.taskStatusChecker.Close()
 	}
 
-	w.closed.Set(true)
+	w.closed.Store(true)
 	w.l.Info("Stop worker")
 }
 
@@ -195,7 +195,7 @@ func (w *Worker) EnableRelay() (err error) {
 	w.l.Info("enter EnableRelay")
 	w.Lock()
 	defer w.Unlock()
-	if w.relayEnabled.Get() {
+	if w.relayEnabled.Load() {
 		w.l.Warn("already enabled relay")
 		return nil
 	}
@@ -264,7 +264,7 @@ func (w *Worker) EnableRelay() (err error) {
 		w.observeRelayStage(w.relayCtx, w.etcdClient, revRelay)
 	}()
 
-	w.relayEnabled.Set(true)
+	w.relayEnabled.Store(true)
 	w.l.Info("relay enabled")
 	w.subTaskHolder.resetAllSubTasks(true)
 	return nil
@@ -275,7 +275,7 @@ func (w *Worker) DisableRelay() {
 	w.l.Info("enter DisableRelay")
 	w.Lock()
 	defer w.Unlock()
-	if !w.relayEnabled.CompareAndSwap(true, false) {
+	if !w.relayEnabled.CAS(true, false) {
 		w.l.Warn("already disabled relay")
 		return
 	}
@@ -311,7 +311,7 @@ func (w *Worker) EnableHandleSubtasks() error {
 	w.l.Info("enter EnableHandleSubtasks")
 	w.Lock()
 	defer w.Unlock()
-	if w.subTaskEnabled.Get() {
+	if w.subTaskEnabled.Load() {
 		w.l.Warn("already enabled handling subtasks")
 		return nil
 	}
@@ -348,7 +348,7 @@ func (w *Worker) EnableHandleSubtasks() error {
 		w.observeSubtaskStage(w.subTaskCtx, w.etcdClient, revSubTask)
 	}()
 
-	w.subTaskEnabled.Set(true)
+	w.subTaskEnabled.Store(true)
 	w.l.Info("handling subtask enabled")
 	return nil
 }
@@ -356,7 +356,7 @@ func (w *Worker) EnableHandleSubtasks() error {
 // DisableHandleSubtasks disables the functionality of start/watch/handle subtasks.
 func (w *Worker) DisableHandleSubtasks() {
 	w.l.Info("enter DisableHandleSubtasks")
-	if !w.subTaskEnabled.CompareAndSwap(true, false) {
+	if !w.subTaskEnabled.CAS(true, false) {
 		w.l.Warn("already disabled handling subtasks")
 		return
 	}
@@ -383,7 +383,7 @@ func (w *Worker) fetchSubTasksAndAdjust() (map[string]ha.Stage, map[string]confi
 		return nil, nil, 0, err
 	}
 
-	if err = copyConfigFromSourceForEach(subTaskCfgM, w.cfg, w.relayEnabled.Get()); err != nil {
+	if err = copyConfigFromSourceForEach(subTaskCfgM, w.cfg, w.relayEnabled.Load()); err != nil {
 		return nil, nil, 0, err
 	}
 	return subTaskStages, subTaskCfgM, revSubTask, nil
@@ -397,7 +397,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, n
 	}
 
 	// copy some config item from dm-worker's source config
-	err := copyConfigFromSource(cfg, w.cfg, w.relayEnabled.Get())
+	err := copyConfigFromSource(cfg, w.cfg, w.relayEnabled.Load())
 	if err != nil {
 		return err
 	}
@@ -406,7 +406,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, n
 	// the unique of subtask should be assured by etcd
 	st := NewSubTask(cfg, w.etcdClient)
 	w.subTaskHolder.recordSubTask(st)
-	if w.closed.Get() {
+	if w.closed.Load() {
 		st.fail(terror.ErrWorkerAlreadyClosed.Generate())
 		return nil
 	}
@@ -418,7 +418,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, n
 	}
 	st.cfg = cfg2
 
-	if w.relayEnabled.Get() && w.relayPurger.Purging() {
+	if w.relayEnabled.Load() && w.relayPurger.Purging() {
 		// TODO: retry until purged finished
 		st.fail(terror.ErrWorkerRelayIsPurging.Generate(cfg.Name))
 		return nil
@@ -434,7 +434,7 @@ func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
 	w.Lock()
 	defer w.Unlock()
 
-	if w.closed.Get() {
+	if w.closed.Load() {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
@@ -452,7 +452,7 @@ func (w *Worker) OperateSubTask(name string, op pb.TaskOp) error {
 	w.Lock()
 	defer w.Unlock()
 
-	if w.closed.Get() {
+	if w.closed.Load() {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
@@ -488,7 +488,7 @@ func (w *Worker) QueryStatus(ctx context.Context, name string) ([]*pb.SubTaskSta
 	w.RLock()
 	defer w.RUnlock()
 
-	if w.closed.Get() {
+	if w.closed.Load() {
 		w.l.Warn("querying status from a closed worker")
 		return nil, nil, nil
 	}
@@ -499,7 +499,7 @@ func (w *Worker) QueryStatus(ctx context.Context, name string) ([]*pb.SubTaskSta
 		subtaskStatus = w.Status(name)
 		relayStatus   *pb.RelayStatus
 	)
-	if w.relayEnabled.Get() {
+	if w.relayEnabled.Load() {
 		relayStatus = w.relayHolder.Status(ctx2)
 		w.postProcessStatus(subtaskStatus, relayStatus.MasterBinlog, relayStatus.MasterBinlogGtid)
 	} else {
@@ -832,11 +832,11 @@ func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) (string,
 
 // OperateRelay operates relay unit.
 func (w *Worker) operateRelay(ctx context.Context, op pb.RelayOp) error {
-	if w.closed.Get() {
+	if w.closed.Load() {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	if w.relayEnabled.Get() {
+	if w.relayEnabled.Load() {
 		// TODO: lock the worker?
 		return w.relayHolder.Operate(ctx, op)
 	}
@@ -847,16 +847,16 @@ func (w *Worker) operateRelay(ctx context.Context, op pb.RelayOp) error {
 
 // PurgeRelay purges relay log files.
 func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) error {
-	if w.closed.Get() {
+	if w.closed.Load() {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	if !w.relayEnabled.Get() {
+	if !w.relayEnabled.Load() {
 		w.l.Warn("enable-relay is false, ignore purge relay")
 		return nil
 	}
 
-	if !w.subTaskEnabled.Get() {
+	if !w.subTaskEnabled.Load() {
 		w.l.Info("worker received purge-relay but didn't handling subtasks, read global checkpoint to decided active relay log")
 
 		uuid := w.relayHolder.Status(ctx).RelaySubDir
@@ -884,7 +884,7 @@ func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) erro
 
 // ForbidPurge implements PurgeInterceptor.ForbidPurge.
 func (w *Worker) ForbidPurge() (bool, string) {
-	if w.closed.Get() {
+	if w.closed.Load() {
 		return false, ""
 	}
 
@@ -905,7 +905,7 @@ func (w *Worker) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 	w.Lock()
 	defer w.Unlock()
 
-	if w.closed.Get() {
+	if w.closed.Load() {
 		return "", terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
@@ -990,7 +990,7 @@ func (w *Worker) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReque
 	w.Lock()
 	defer w.Unlock()
 
-	if w.closed.Get() {
+	if w.closed.Load() {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 

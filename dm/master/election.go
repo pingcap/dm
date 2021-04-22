@@ -41,7 +41,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 		case leaderInfo := <-s.election.LeaderNotify():
 			// retire from leader
 			if leaderInfo == nil {
-				if s.leader.Get() == oneselfLeader {
+				if s.leader.Load() == oneselfLeader {
 					s.retireLeader()
 					log.L().Info("current member retire from the leader", zap.String("current member", s.cfg.Name))
 				} else {
@@ -55,7 +55,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 			if leaderInfo.ID == s.cfg.Name {
 				// this member become leader
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
-				s.leader.Set(oneselfStartingLeader)
+				s.leader.Store(oneselfStartingLeader)
 
 				// NOTE: for logic errors, we should return with `true`, so that the cluster can serve requests and the user can fix these errors.
 				// otherwise no member of DM-master can become the leader and the user can't fix them (the cluster may need to be fixed offline with some other tools like etcdctl).
@@ -68,7 +68,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 				}
 
 				s.Lock()
-				s.leader.Set(oneselfLeader)
+				s.leader.Store(oneselfLeader)
 				s.closeLeaderClient()
 				s.Unlock()
 
@@ -88,7 +88,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 				log.L().Info("get new leader", zap.String("leader", leaderInfo.ID), zap.String("current member", s.cfg.Name))
 
 				s.Lock()
-				s.leader.Set(leaderInfo.ID)
+				s.leader.Store(leaderInfo.ID)
 				s.createLeaderClient(leaderInfo.Addr)
 				s.Unlock()
 			}
@@ -131,12 +131,12 @@ func (s *Server) closeLeaderClient() {
 
 func (s *Server) isLeaderAndNeedForward(ctx context.Context) (isLeader bool, needForward bool) {
 	// maybe in `startLeaderComponent`, will wait for a short time
-	if s.leader.Get() == oneselfStartingLeader {
+	if s.leader.Load() == oneselfStartingLeader {
 		retry := 10
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 
-		for s.leader.Get() == oneselfStartingLeader {
+		for s.leader.Load() == oneselfStartingLeader {
 			if retry == 0 {
 				log.L().Error("leader didn't finish starting after retry, please manually retry later")
 				return false, false
@@ -153,7 +153,7 @@ func (s *Server) isLeaderAndNeedForward(ctx context.Context) (isLeader bool, nee
 	s.RLock()
 	defer s.RUnlock()
 
-	isLeader = s.leader.Get() == oneselfLeader
+	isLeader = s.leader.Load() == oneselfLeader
 	needForward = s.leaderGrpcConn != nil
 	return
 }
@@ -196,7 +196,7 @@ func (s *Server) retireLeader() {
 	s.scheduler.Close()
 
 	s.Lock()
-	s.leader.Set("")
+	s.leader.Store("")
 	s.closeLeaderClient()
 	s.Unlock()
 

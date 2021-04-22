@@ -138,7 +138,7 @@ func (t *testServer) TestServer(c *C) {
 	}()
 
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return !s.closed.Get()
+		return !s.closed.Load()
 	}), IsTrue)
 	dir := c.MkDir()
 
@@ -219,7 +219,7 @@ func (t *testServer) TestServer(c *C) {
 	s.Close()
 
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
-		return s.closed.Get()
+		return s.closed.Load()
 	}), IsTrue)
 
 	// test worker, just make sure testing sort
@@ -276,7 +276,7 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 		c.Assert(err1, IsNil)
 	}()
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return !s.closed.Get()
+		return !s.closed.Load()
 	}), IsTrue)
 
 	// check if the worker is online
@@ -369,7 +369,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 		DialKeepAliveTimeout: keepaliveTimeout,
 	})
 	s.etcdClient = etcdCli
-	s.closed.Set(false)
+	s.closed.Store(false)
 	c.Assert(err, IsNil)
 	sourceCfg := loadSourceConfigWithoutPassword(c)
 	sourceCfg.EnableRelay = false
@@ -479,14 +479,14 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		// worker should be started and without error
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 			w := s.getWorker(true)
-			return w != nil && !w.closed.Get()
+			return w != nil && !w.closed.Load()
 		}), IsTrue)
 		c.Assert(s.getSourceStatus(true).Result, IsNil)
 	} else {
 		// worker should be started before stopped
 		w := s.getWorker(true)
 		c.Assert(w, NotNil)
-		c.Assert(w.closed.Get(), IsFalse)
+		c.Assert(w.closed.Load(), IsFalse)
 		_, err := ha.DeleteRelayConfig(s.etcdClient, w.name)
 		c.Assert(err, IsNil)
 		_, err = ha.DeleteSourceCfgRelayStageSourceBound(s.etcdClient, sourceCfg.SourceID, s.cfg.Name)
@@ -494,7 +494,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		// worker should be closed and without error
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 			currentWorker := s.getWorker(true)
-			return currentWorker == nil && w.closed.Get()
+			return currentWorker == nil && w.closed.Load()
 		}), IsTrue)
 		c.Assert(s.getSourceStatus(true).Result, IsNil)
 	}
