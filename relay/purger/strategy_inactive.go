@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -47,7 +47,7 @@ func (ia *inactiveArgs) String() string {
 //   * not reading by sync unit and will not be read by any running tasks
 //     TODO zxc: judge tasks are running dumper / loader
 type inactiveStrategy struct {
-	purging sync2.AtomicInt32
+	purging atomic.Bool
 
 	logger log.Logger
 }
@@ -64,10 +64,10 @@ func (s *inactiveStrategy) Check(args interface{}) (bool, error) {
 }
 
 func (s *inactiveStrategy) Do(args interface{}) error {
-	if !s.purging.CompareAndSwap(0, 1) {
+	if !s.purging.CAS(false, true) {
 		return terror.ErrRelayThisStrategyIsPurging.Generate()
 	}
-	defer s.purging.Set(0)
+	defer s.purging.Store(false)
 
 	ia, ok := args.(*inactiveArgs)
 	if !ok {
@@ -78,7 +78,7 @@ func (s *inactiveStrategy) Do(args interface{}) error {
 }
 
 func (s *inactiveStrategy) Purging() bool {
-	return s.purging.Get() > 0
+	return s.purging.Load()
 }
 
 func (s *inactiveStrategy) Type() strategyType {

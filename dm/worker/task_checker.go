@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/pingcap/failpoint"
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -141,7 +141,7 @@ type realTaskStatusChecker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
-	closed sync2.AtomicBool
+	closed atomic.Bool
 
 	cfg config.CheckerConfig
 	l   log.Logger
@@ -157,7 +157,7 @@ func NewRealTaskStatusChecker(cfg config.CheckerConfig, w *Worker) TaskStatusChe
 		w:   w,
 		bc:  newBackoffController(),
 	}
-	tsc.closed.Set(true)
+	tsc.closed.Store(true)
 	return tsc
 }
 
@@ -180,7 +180,7 @@ func (tsc *realTaskStatusChecker) Start() {
 
 // Close implements TaskStatusChecker.Close.
 func (tsc *realTaskStatusChecker) Close() {
-	if !tsc.closed.CompareAndSwap(false, true) {
+	if !tsc.closed.CAS(false, true) {
 		return
 	}
 
@@ -193,7 +193,7 @@ func (tsc *realTaskStatusChecker) Close() {
 func (tsc *realTaskStatusChecker) run() {
 	// keep running until canceled in `Close`.
 	tsc.ctx, tsc.cancel = context.WithCancel(context.Background())
-	tsc.closed.Set(false)
+	tsc.closed.Store(false)
 
 	failpoint.Inject("TaskCheckInterval", func(val failpoint.Value) {
 		interval, err := time.ParseDuration(val.(string))
@@ -407,7 +407,7 @@ func (tsc *realTaskStatusChecker) checkTaskStatus() {
 }
 
 func (tsc *realTaskStatusChecker) check() {
-	if tsc.w.relayEnabled.Get() {
+	if tsc.w.relayEnabled.Load() {
 		tsc.checkRelayStatus()
 	}
 	tsc.checkTaskStatus()

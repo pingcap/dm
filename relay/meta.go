@@ -22,7 +22,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/siddontang/go/ioutil2"
 
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -240,7 +239,7 @@ func (lm *LocalMeta) doFlush() error {
 	}
 
 	filename := filepath.Join(lm.baseDir, lm.currentUUID, utils.MetaFilename)
-	err = ioutil2.WriteFileAtomic(filename, buf.Bytes(), 0o644)
+	err = utils.WriteFileAtomic(filename, buf.Bytes(), 0o644)
 	if err != nil {
 		return terror.ErrRelayFlushLocalMeta.Delegate(err)
 	}
@@ -405,7 +404,7 @@ func (lm *LocalMeta) updateIndexFile(uuids []string) error {
 		buf.WriteString("\n")
 	}
 
-	err := ioutil2.WriteFileAtomic(lm.uuidIndexPath, buf.Bytes(), 0o644)
+	err := utils.WriteFileAtomic(lm.uuidIndexPath, buf.Bytes(), 0o644)
 	return terror.ErrRelayUpdateIndexFile.Delegate(err, lm.uuidIndexPath)
 }
 

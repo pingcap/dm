@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -46,7 +46,7 @@ func (ta *timeArgs) String() string {
 // timeStrategy represents a relay purge strategy by time
 // similar to `PURGE BINARY LOGS BEFORE` in MySQL.
 type timeStrategy struct {
-	purging sync2.AtomicInt32
+	purging atomic.Bool
 
 	logger log.Logger
 }
@@ -66,10 +66,10 @@ func (s *timeStrategy) Stop() {
 }
 
 func (s *timeStrategy) Do(args interface{}) error {
-	if !s.purging.CompareAndSwap(0, 1) {
+	if !s.purging.CAS(false, true) {
 		return terror.ErrRelayThisStrategyIsPurging.Generate()
 	}
-	defer s.purging.Set(0)
+	defer s.purging.Store(false)
 
 	ta, ok := args.(*timeArgs)
 	if !ok {
@@ -80,7 +80,7 @@ func (s *timeStrategy) Do(args interface{}) error {
 }
 
 func (s *timeStrategy) Purging() bool {
-	return s.purging.Get() > 0
+	return s.purging.Load()
 }
 
 func (s *timeStrategy) Type() strategyType {

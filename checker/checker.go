@@ -39,7 +39,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -63,7 +63,7 @@ type mysqlInstance struct {
 
 // Checker performs pre-check of data synchronization.
 type Checker struct {
-	closed sync2.AtomicBool
+	closed atomic.Bool
 
 	logger log.Logger
 
@@ -327,13 +327,13 @@ func (c *Checker) updateInstruction(result *check.Results) {
 
 // Close implements Unit interface.
 func (c *Checker) Close() {
-	if c.closed.Get() {
+	if c.closed.Load() {
 		return
 	}
 
 	c.closeDBs()
 
-	c.closed.Set(true)
+	c.closed.Store(true)
 }
 
 func (c *Checker) closeDBs() {
@@ -356,7 +356,7 @@ func (c *Checker) closeDBs() {
 
 // Pause implements Unit interface.
 func (c *Checker) Pause() {
-	if c.closed.Get() {
+	if c.closed.Load() {
 		c.logger.Warn("try to pause, but already closed")
 		return
 	}
@@ -364,7 +364,7 @@ func (c *Checker) Pause() {
 
 // Resume resumes the paused process.
 func (c *Checker) Resume(ctx context.Context, pr chan pb.ProcessResult) {
-	if c.closed.Get() {
+	if c.closed.Load() {
 		c.logger.Warn("try to resume, but already closed")
 		return
 	}

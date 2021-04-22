@@ -24,7 +24,7 @@ import (
 	"github.com/pingcap/failpoint"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -43,7 +43,7 @@ type Dumpling struct {
 	logger log.Logger
 
 	dumpConfig *export.Config
-	closed     sync2.AtomicBool
+	closed     atomic.Bool
 }
 
 // NewDumpling creates a new Dumpling.
@@ -147,18 +147,18 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 // Close implements Unit.Close.
 func (m *Dumpling) Close() {
-	if m.closed.Get() {
+	if m.closed.Load() {
 		return
 	}
 
 	m.removeLabelValuesWithTaskInMetrics(m.cfg.Name, m.cfg.SourceID)
 	// do nothing, external will cancel the command (if running)
-	m.closed.Set(true)
+	m.closed.Store(true)
 }
 
 // Pause implements Unit.Pause.
 func (m *Dumpling) Pause() {
-	if m.closed.Get() {
+	if m.closed.Load() {
 		m.logger.Warn("try to pause, but already closed")
 		return
 	}
@@ -167,7 +167,7 @@ func (m *Dumpling) Pause() {
 
 // Resume implements Unit.Resume.
 func (m *Dumpling) Resume(ctx context.Context, pr chan pb.ProcessResult) {
-	if m.closed.Get() {
+	if m.closed.Load() {
 		m.logger.Warn("try to resume, but already closed")
 		return
 	}
