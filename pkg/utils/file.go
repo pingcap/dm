@@ -19,9 +19,10 @@ import (
 	"os"
 	"path"
 
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-	"go.uber.org/zap"
 )
 
 // IsFileExists checks if file exists.
