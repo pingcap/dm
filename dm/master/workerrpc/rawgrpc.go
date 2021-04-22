@@ -31,7 +31,7 @@ import (
 type GRPCClient struct {
 	conn   *grpc.ClientConn
 	client pb.WorkerClient
-	closed *atomic.Bool
+	closed atomic.Bool
 }
 
 // NewGRPCClientWrap initializes a new grpc client from given grpc connection and worker client.
@@ -39,7 +39,6 @@ func NewGRPCClientWrap(conn *grpc.ClientConn, client pb.WorkerClient) (*GRPCClie
 	return &GRPCClient{
 		conn:   conn,
 		client: client,
-		closed: atomic.NewBool(false),
 	}, nil
 }
 

@@ -19,7 +19,9 @@ import (
 	"os"
 	"path"
 
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"go.uber.org/zap"
 )
 
 // IsFileExists checks if file exists.
@@ -83,7 +85,10 @@ func WriteFileAtomic(filename string, data []byte, perm os.FileMode) error {
 		err = os.Chmod(f.Name(), perm)
 	}
 	if err != nil {
-		os.Remove(f.Name())
+		err2 := os.Remove(f.Name())
+		log.L().Warn("failed to remove the temporary file",
+			zap.String("filename", f.Name()),
+			zap.Error(err2))
 		return err
 	}
 	return os.Rename(f.Name(), filename)
