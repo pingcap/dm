@@ -35,9 +35,9 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
 	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -61,7 +61,7 @@ type Server struct {
 	sync.Mutex
 	wg     sync.WaitGroup
 	kaWg   sync.WaitGroup
-	closed sync2.AtomicBool
+	closed atomic.Bool
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -84,7 +84,7 @@ func NewServer(cfg *Config) *Server {
 	s := Server{
 		cfg: cfg,
 	}
-	s.closed.Set(true) // not start yet
+	s.closed.Store(true) // not start yet
 	return &s
 }
 
@@ -231,7 +231,7 @@ func (s *Server) Start() error {
 		}
 	}(s.ctx)
 
-	s.closed.Set(false)
+	s.closed.Store(false)
 	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.WorkerAddr))
 	err = m.Serve()
 	if err != nil && common.IsErrNetClosing(err) {
@@ -352,7 +352,7 @@ func (s *Server) observeRelayConfig(ctx context.Context, rev int64) error {
 								// we may face both relay config and subtask bound changed in a compaction error, so here
 								// we check if observeSourceBound has started a worker
 								// TODO: add a test for this situation
-								if !w.relayEnabled.Get() {
+								if !w.relayEnabled.Load() {
 									if err2 := w.EnableRelay(); err2 != nil {
 										return err2
 									}
@@ -438,7 +438,7 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 								// we may face both relay config and subtask bound changed in a compaction error, so here
 								// we check if observeRelayConfig has started a worker
 								// TODO: add a test for this situation
-								if !w.subTaskEnabled.Get() {
+								if !w.subTaskEnabled.Load() {
 									if err2 := w.EnableHandleSubtasks(); err2 != nil {
 										return err2
 									}
@@ -478,14 +478,14 @@ func (s *Server) doClose() {
 
 	s.Lock()
 	defer s.Unlock()
-	if s.closed.Get() {
+	if s.closed.Load() {
 		return
 	}
 	// close worker and wait for return
 	if w := s.getWorker(false); w != nil {
 		w.Close()
 	}
-	s.closed.Set(true)
+	s.closed.Store(true)
 }
 
 // Close close the RPC server, this function can be called multiple times.
@@ -684,7 +684,7 @@ func (s *Server) disableHandleSubtasks(source string) error {
 	}
 	w.DisableHandleSubtasks()
 	var err error
-	if !w.relayEnabled.Get() {
+	if !w.relayEnabled.Load() {
 		log.L().Info("relay is not enabled after disabling subtask, so stop worker")
 		err = s.stopWorker(source, false)
 	}
@@ -739,7 +739,7 @@ func (s *Server) disableRelay(source string) error {
 	s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
 	w.DisableRelay()
 	var err error
-	if !w.subTaskEnabled.Get() {
+	if !w.subTaskEnabled.Load() {
 		log.L().Info("subtask is not enabled after disabling relay, so stop worker")
 		err = s.stopWorker(source, false)
 	}
@@ -839,7 +839,7 @@ func (s *Server) getOrStartWorker(cfg *config.SourceConfig, needLock bool) (*Wor
 	go w.Start()
 
 	isStarted := utils.WaitSomething(50, 100*time.Millisecond, func() bool {
-		return !w.closed.Get()
+		return !w.closed.Load()
 	})
 	if !isStarted {
 		// TODO: add more mechanism to wait or un-bound the source

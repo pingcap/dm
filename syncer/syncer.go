@@ -27,6 +27,7 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -38,16 +39,13 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
-
-	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
-	"github.com/pingcap/dm/pkg/atomic2"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
@@ -124,7 +122,7 @@ type Syncer struct {
 	ddlDBConn *DBConn
 
 	jobs               []chan *job
-	jobsClosed         sync2.AtomicBool
+	jobsClosed         atomic.Bool
 	jobsChanLock       sync.Mutex
 	queueBucketMapping []string
 
@@ -135,7 +133,7 @@ type Syncer struct {
 	columnMapping *cm.Mapping
 	baList        *filter.Filter
 
-	closed sync2.AtomicBool
+	closed atomic.Bool
 
 	start    time.Time
 	lastTime struct {
@@ -145,13 +143,13 @@ type Syncer struct {
 
 	timezone *time.Location
 
-	binlogSizeCount     sync2.AtomicInt64
-	lastBinlogSizeCount sync2.AtomicInt64
+	binlogSizeCount     atomic.Int64
+	lastBinlogSizeCount atomic.Int64
 
-	lastCount sync2.AtomicInt64
-	count     sync2.AtomicInt64
-	totalTps  sync2.AtomicInt64
-	tps       sync2.AtomicInt64
+	lastCount atomic.Int64
+	count     atomic.Int64
+	totalTps  atomic.Int64
+	tps       atomic.Int64
 
 	done chan struct{}
 
@@ -161,7 +159,7 @@ type Syncer struct {
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
 	// record whether error occurred when execute SQLs
-	execError atomic2.AtomicError
+	execError atomic.Error
 
 	heartbeat *Heartbeat
 
@@ -198,12 +196,12 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	}
 	syncer.cfg = cfg
 	syncer.tctx = tcontext.Background().WithLogger(logger)
-	syncer.jobsClosed.Set(true) // not open yet
-	syncer.closed.Set(false)
-	syncer.lastBinlogSizeCount.Set(0)
-	syncer.binlogSizeCount.Set(0)
-	syncer.lastCount.Set(0)
-	syncer.count.Set(0)
+	syncer.jobsClosed.Store(true) // not open yet
+	syncer.closed.Store(false)
+	syncer.lastBinlogSizeCount.Store(0)
+	syncer.binlogSizeCount.Store(0)
+	syncer.lastCount.Store(0)
+	syncer.count.Store(0)
 	syncer.c = newCausality()
 	syncer.done = nil
 	syncer.setTimezone()
@@ -231,19 +229,19 @@ func (s *Syncer) newJobChans(count int) {
 	for i := 0; i < count; i++ {
 		s.jobs = append(s.jobs, make(chan *job, s.cfg.QueueSize))
 	}
-	s.jobsClosed.Set(false)
+	s.jobsClosed.Store(false)
 }
 
 func (s *Syncer) closeJobChans() {
 	s.jobsChanLock.Lock()
 	defer s.jobsChanLock.Unlock()
-	if s.jobsClosed.Get() {
+	if s.jobsClosed.Load() {
 		return
 	}
 	for _, ch := range s.jobs {
 		close(ch)
 	}
-	s.jobsClosed.Set(true)
+	s.jobsClosed.Store(true)
 }
 
 // Type implements Unit.Type.
@@ -438,7 +436,7 @@ func (s *Syncer) reset() {
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
 
-	s.execError.Set(nil)
+	s.execError.Store(nil)
 	s.setErrLocation(nil, nil, false)
 	s.isReplacingErr = false
 
@@ -785,7 +783,7 @@ func (s *Syncer) addJob(job *job) error {
 		s.c.reset()
 	}
 
-	if s.execError.Get() != nil {
+	if s.execError.Load() != nil {
 		// nolint:nilerr
 		return nil
 	}
@@ -872,7 +870,7 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 //
 // we may need to refactor the concurrency model to make the work-flow more clearer later.
 func (s *Syncer) flushCheckPoints() error {
-	err := s.execError.Get()
+	err := s.execError.Load()
 	// TODO: for now, if any error occurred (including user canceled), checkpoint won't be updated. But if we have put
 	// optimistic shard info, DM-master may resolved the optimistic lock and let other worker execute DDL. So after this
 	// worker resume, it can not execute the DML/DDL in old binlog because of downstream table structure mismatching.
@@ -962,7 +960,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		// If downstream has error (which may cause by tracker is more compatible than downstream), we should stop handling
 		// this job, set `s.execError` to let caller of `addJob` discover error
 		if err != nil {
-			s.execError.Set(err)
+			s.execError.Store(err)
 			if !utils.IsContextCanceledError(err) {
 				err = s.handleEventError(err, sqlJob.startLocation, sqlJob.currentLocation, true, sqlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
@@ -1000,7 +998,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			}
 		}
 		if err != nil {
-			s.execError.Set(err)
+			s.execError.Store(err)
 			if !utils.IsContextCanceledError(err) {
 				err = s.handleEventError(err, sqlJob.startLocation, sqlJob.currentLocation, true, sqlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
@@ -1035,7 +1033,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	}
 
 	fatalF := func(affected int, err error) {
-		s.execError.Set(err)
+		s.execError.Store(err)
 		if !utils.IsContextCanceledError(err) {
 			err = s.handleEventError(err, jobs[affected].startLocation, jobs[affected].currentLocation, false, "")
 			s.runFatalChan <- unit.NewProcessError(err)
@@ -1945,7 +1943,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		// when add ddl job, will execute ddl and then flush checkpoint.
 		// if execute ddl failed, the execError will be set to that error.
 		// return nil here to avoid duplicate error message
-		err = s.execError.Get()
+		err = s.execError.Load()
 		if err != nil {
 			ec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
 			// nolint:nilerr
@@ -2132,7 +2130,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		return err
 	}
 
-	err = s.execError.Get()
+	err = s.execError.Load()
 	if err != nil {
 		ec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
 		// nolint:nilerr
@@ -2327,11 +2325,11 @@ func (s *Syncer) printStatus(ctx context.Context) {
 			seconds := now.Unix() - s.lastTime.t.Unix()
 			s.lastTime.RUnlock()
 			totalSeconds := now.Unix() - s.start.Unix()
-			last := s.lastCount.Get()
-			total := s.count.Get()
+			last := s.lastCount.Load()
+			total := s.count.Load()
 
-			totalBinlogSize := s.binlogSizeCount.Get()
-			lastBinlogSize := s.lastBinlogSizeCount.Get()
+			totalBinlogSize := s.binlogSizeCount.Load()
+			lastBinlogSize := s.lastBinlogSizeCount.Load()
 
 			tps, totalTps := int64(0), int64(0)
 			if seconds > 0 {
@@ -2385,13 +2383,13 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				log.WrapStringerField("master_gtid", latestmasterGTIDSet),
 				zap.Stringer("checkpoint", s.checkpoint))
 
-			s.lastCount.Set(total)
-			s.lastBinlogSizeCount.Set(totalBinlogSize)
+			s.lastCount.Store(total)
+			s.lastBinlogSizeCount.Store(totalBinlogSize)
 			s.lastTime.Lock()
 			s.lastTime.t = time.Now()
 			s.lastTime.Unlock()
-			s.totalTps.Set(totalTps)
-			s.tps.Set(tps)
+			s.totalTps.Store(totalTps)
+			s.tps.Store(tps)
 		}
 	}
 }
@@ -2499,7 +2497,7 @@ func (s *Syncer) renameShardingSchema(schema, table string) (string, string) {
 }
 
 func (s *Syncer) isClosed() bool {
-	return s.closed.Get()
+	return s.closed.Load()
 }
 
 // Close closes syncer.
@@ -2534,7 +2532,7 @@ func (s *Syncer) Close() {
 
 	s.removeLabelValuesWithTaskInMetrics(s.cfg.Name)
 
-	s.closed.Set(true)
+	s.closed.Store(true)
 }
 
 // stopSync stops syncing, now it used by Close and Pause

@@ -23,7 +23,7 @@ import (
 	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/parser"
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
@@ -54,7 +54,7 @@ type FileWriter struct {
 	// the parser often used to verify events's statement through parsing them.
 	parser *parser.Parser
 
-	filename sync2.AtomicString // current binlog filename
+	filename atomic.String // current binlog filename
 
 	logger log.Logger
 }
@@ -66,7 +66,7 @@ func NewFileWriter(logger log.Logger, cfg *FileConfig, parser2 *parser.Parser) W
 		parser: parser2,
 		logger: logger.WithFields(zap.String("sub component", "relay writer")),
 	}
-	w.filename.Set(cfg.Filename) // set the startup filename
+	w.filename.Store(cfg.Filename) // set the startup filename
 	return w
 }
 
@@ -173,12 +173,12 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 	}
 
 	// verify filename
-	if !binlog.VerifyFilename(w.filename.Get()) {
-		return Result{}, terror.ErrRelayBinlogNameNotValid.Generatef("binlog filename %s not valid", w.filename.Get())
+	if !binlog.VerifyFilename(w.filename.Load()) {
+		return Result{}, terror.ErrRelayBinlogNameNotValid.Generatef("binlog filename %s not valid", w.filename.Load())
 	}
 
 	// open/create a new binlog file
-	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
+	filename := filepath.Join(w.cfg.RelayDir, w.filename.Load())
 	outCfg := &bw.FileWriterConfig{
 		Filename: filename,
 	}
@@ -236,7 +236,7 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result Resu
 		return result, terror.ErrRelayWriterExpectRotateEv.Generate(ev.Header)
 	}
 
-	currFile := w.filename.Get()
+	currFile := w.filename.Load()
 	defer func() {
 		if err == nil {
 			// update binlog filename if needed
@@ -246,7 +246,7 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result Resu
 				// even it's a fake RotateEvent, we still need to record it,
 				// because if we do not specify the filename when creating the writer (like Auto-Position),
 				// we can only receive a fake RotateEvent before the FormatDescriptionEvent.
-				w.filename.Set(nextFile)
+				w.filename.Store(nextFile)
 			}
 		}
 	}()
@@ -305,7 +305,7 @@ func (w *FileWriter) handlePotentialHoleOrDuplicate(ev *replication.BinlogEvent)
 	mayDuplicate, err := w.handleFileHoleExist(ev)
 	if err != nil {
 		return Result{}, terror.Annotatef(err, "handle a potential hole in %s before %+v",
-			w.filename.Get(), ev.Header)
+			w.filename.Load(), ev.Header)
 	}
 
 	if mayDuplicate {
@@ -313,7 +313,7 @@ func (w *FileWriter) handlePotentialHoleOrDuplicate(ev *replication.BinlogEvent)
 		result, err2 := w.handleDuplicateEventsExist(ev)
 		if err2 != nil {
 			return Result{}, terror.Annotatef(err2, "handle a potential duplicate event %+v in %s",
-				ev.Header, w.filename.Get())
+				ev.Header, w.filename.Load())
 		}
 		if result.Ignore {
 			// duplicate, and can ignore it. now, we assume duplicate events can all be ignored
@@ -343,7 +343,7 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) (bool, err
 		// no hole exists, but duplicate events may exists, this should be handled in another place.
 		return holeSize < 0, nil
 	}
-	w.logger.Info("hole exist from pos1 to pos2", zap.Int64("pos1", fileOffset), zap.Int64("pos2", evStartPos), zap.String("file", w.filename.Get()))
+	w.logger.Info("hole exist from pos1 to pos2", zap.Int64("pos1", fileOffset), zap.Int64("pos2", evStartPos), zap.String("file", w.filename.Load()))
 
 	// 2. generate dummy event
 	var (
@@ -366,12 +366,12 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) (bool, err
 
 // handleDuplicateEventsExist tries to handle a potential duplicate event in the binlog file.
 func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (Result, error) {
-	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
+	filename := filepath.Join(w.cfg.RelayDir, w.filename.Load())
 	duplicate, err := checkIsDuplicateEvent(filename, ev)
 	if err != nil {
 		return Result{}, terror.Annotatef(err, "check event %+v whether duplicate in %s", ev.Header, filename)
 	} else if duplicate {
-		w.logger.Info("event is duplicate", zap.Reflect("header", ev.Header), zap.String("file", w.filename.Get()))
+		w.logger.Info("event is duplicate", zap.Reflect("header", ev.Header), zap.String("file", w.filename.Load()))
 	}
 
 	var reason string
@@ -394,9 +394,9 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (Re
 // now, we think a transaction finished if we received a XIDEvent or DDL in QueryEvent
 // NOTE: handle cases when file size > 4GB.
 func (w *FileWriter) doRecovering(ctx context.Context) (RecoverResult, error) {
-	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
+	filename := filepath.Join(w.cfg.RelayDir, w.filename.Load())
 	fs, err := os.Stat(filename)
-	if (err != nil && os.IsNotExist(err)) || (err == nil && len(w.filename.Get()) == 0) {
+	if (err != nil && os.IsNotExist(err)) || (err == nil && len(w.filename.Load()) == 0) {
 		return RecoverResult{}, nil // no file need to recover
 	} else if err != nil {
 		return RecoverResult{}, terror.ErrRelayWriterGetFileStat.Delegate(err, filename)
@@ -412,7 +412,7 @@ func (w *FileWriter) doRecovering(ctx context.Context) (RecoverResult, error) {
 	if fs.Size() == latestPos {
 		return RecoverResult{
 			Truncated:   false,
-			LatestPos:   gmysql.Position{Name: w.filename.Get(), Pos: uint32(latestPos)},
+			LatestPos:   gmysql.Position{Name: w.filename.Load(), Pos: uint32(latestPos)},
 			LatestGTIDs: latestGTIDs,
 		}, nil
 	} else if fs.Size() < latestPos {
@@ -432,7 +432,7 @@ func (w *FileWriter) doRecovering(ctx context.Context) (RecoverResult, error) {
 
 	return RecoverResult{
 		Truncated:   true,
-		LatestPos:   gmysql.Position{Name: w.filename.Get(), Pos: uint32(latestPos)},
+		LatestPos:   gmysql.Position{Name: w.filename.Load(), Pos: uint32(latestPos)},
 		LatestGTIDs: latestGTIDs,
 	}, nil
 }
