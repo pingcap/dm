@@ -104,6 +104,7 @@ func SendRequest(ctx context.Context, reqName string, req interface{}, respPoint
 	if err == nil || status.Code(err) != codes.Unavailable {
 		return err
 	}
+	// TODO: handle status.Code(err) == codes.ResourceExhausted
 
 	// update master client
 	err = ctlClient.updateMasterClient()
