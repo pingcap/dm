@@ -271,6 +271,25 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 				continue
 			}
 
+			// handle results without r.Errors
+			if len(r.Errors) == 0 {
+				switch r.State {
+				case check.StateWarning:
+					if warnLeft == 0 {
+						continue
+					}
+					warnLeft--
+					results = append(results, r)
+				case check.StateFailure:
+					if errLeft == 0 {
+						continue
+					}
+					errLeft--
+					results = append(results, r)
+				}
+				continue
+			}
+
 			subErrors := make([]*check.Error, 0, len(r.Errors))
 			for _, e := range r.Errors {
 				switch e.Severity {
@@ -288,9 +307,11 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 					subErrors = append(subErrors, e)
 				}
 			}
-			r.Errors = subErrors
-
-			results = append(results, r)
+			// skip display an empty Result
+			if len(subErrors) > 0 {
+				r.Errors = subErrors
+				results = append(results, r)
+			}
 		}
 		result.Results = results
 	}
