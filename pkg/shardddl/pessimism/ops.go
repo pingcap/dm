@@ -62,12 +62,12 @@ func DeleteInfosOperations(cli *clientv3.Client, infos []Info, ops []Operation) 
 
 // DeleteInfosOperationsDDLsByTask deletes the shard DDL infos and operations of a specified task in etcd.
 // This function should often be called by DM-master when deleting ddl meta data.
-func DeleteInfosOperationsDDLsByTask(cli *clientv3.Client, task string, lockIDSet map[string]struct{}) (int64, error) {
+func DeleteInfosOperationsDDLsByTask(cli *clientv3.Client, task string, lockIDs []string) (int64, error) {
 	opsDel := make([]clientv3.Op, 0, 2)
 	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismInfoKeyAdapter.Encode(task), clientv3.WithPrefix()))
 	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismOperationKeyAdapter.Encode(task), clientv3.WithPrefix()))
 	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismDDLsKeyAdapter.Encode(task), clientv3.WithPrefix()))
-	for lockID := range lockIDSet {
+	for _, lockID := range lockIDs {
 		opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismDDLsKeyAdapter.Encode(lockID), clientv3.WithPrefix()))
 	}
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, opsDel...)

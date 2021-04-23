@@ -405,8 +405,9 @@ func (p *Pessimist) RemoveMetaData(task string) error {
 		lockIDSet[op.ID] = struct{}{}
 	}
 
+	lockIDs := p.lk.RemoveLatestDoneDDLsByTask(task)
 	// clear meta data in etcd
-	_, err = pessimism.DeleteInfosOperationsDDLsByTask(p.cli, task, lockIDSet)
+	_, err = pessimism.DeleteInfosOperationsDDLsByTask(p.cli, task, lockIDs)
 	return err
 }
 

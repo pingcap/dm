@@ -71,6 +71,20 @@ func (lk *LockKeeper) AddLatestDoneDDLs(lockID string, ddls []string) {
 	lk.latestDoneDDLs[lockID] = ddls
 }
 
+// RemoveLatestDoneDDLsByTask remove last done ddls by task.
+func (lk *LockKeeper) RemoveLatestDoneDDLsByTask(task string) []string {
+	lk.mu.Lock()
+	defer lk.mu.Unlock()
+	lockIDs := make([]string, 0, len(lk.latestDoneDDLs))
+	for lockID := range lk.latestDoneDDLs {
+		if t := utils.ExtractTaskFromLockID(lockID); t == task {
+			lockIDs = append(lockIDs, lockID)
+		}
+		delete(lk.latestDoneDDLs, lockID)
+	}
+	return lockIDs
+}
+
 // GetLatestDoneDDLs gets last done ddls by lockID.
 func (lk *LockKeeper) GetLatestDoneDDLs(lockID string) []string {
 	latestDoneDDLs, ok := lk.latestDoneDDLs[lockID]
