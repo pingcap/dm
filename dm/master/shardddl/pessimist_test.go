@@ -305,7 +305,7 @@ func (t *testPessimist) testPessimistProgress(c *C, restart int) {
 	c.Assert(p.Locks()[ID2].IsDone(source2), IsFalse)
 
 	// mark exec operation for one non-owner as `done` (and delete the info).
-	op22c := pessimism.NewOperation(ID2, task2, source2, DDLs, false, true)
+	op22c := pessimism.NewOperation(ID2, task2, source2, DDLs, false, true, false)
 	done, _, err = pessimism.PutOperationDeleteExistInfo(etcdTestCli, op22c, i22)
 	c.Assert(err, IsNil)
 	c.Assert(done, IsTrue)
@@ -325,7 +325,7 @@ func (t *testPessimist) testPessimistProgress(c *C, restart int) {
 
 	// mark skip operation for the non-owner as `done` (and delete the info).
 	// the lock should become resolved and deleted.
-	op23c := pessimism.NewOperation(ID2, task2, source3, DDLs, false, true)
+	op23c := pessimism.NewOperation(ID2, task2, source3, DDLs, false, true, false)
 	done, _, err = pessimism.PutOperationDeleteExistInfo(etcdTestCli, op23c, i23)
 	c.Assert(err, IsNil)
 	c.Assert(done, IsTrue)
@@ -844,7 +844,7 @@ func (t *testPessimist) TestMeetEtcdCompactError(c *C) {
 		ID1           = fmt.Sprintf("%s-`%s`.`%s`", task1, schema, table)
 		i11           = pessimism.NewInfo(task1, source1, schema, table, DDLs)
 		i12           = pessimism.NewInfo(task1, source2, schema, table, DDLs)
-		op            = pessimism.NewOperation(ID1, task1, source1, DDLs, true, false)
+		op            = pessimism.NewOperation(ID1, task1, source1, DDLs, true, false, false)
 		revCompacted  int64
 
 		infoCh chan pessimism.Info

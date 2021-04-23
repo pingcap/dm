@@ -37,19 +37,19 @@ func (t *testLockKeeper) TestLockKeeper(c *C) {
 	)
 
 	// lock with 2 sources.
-	lockID1, synced, remain, err := lk.TrySync(info11, []string{source1, source2})
+	lockID1, synced, remain, err := lk.TrySync(etcdTestCli, info11, []string{source1, source2})
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
-	lockID1, synced, remain, err = lk.TrySync(info12, []string{source1, source2})
+	lockID1, synced, remain, err = lk.TrySync(etcdTestCli, info12, []string{source1, source2})
 	c.Assert(err, IsNil)
 	c.Assert(lockID1, Equals, "task1-`foo`.`bar`")
 	c.Assert(synced, IsTrue)
 	c.Assert(remain, Equals, 0)
 
 	// lock with only 1 source.
-	lockID2, synced, remain, err := lk.TrySync(info21, []string{source1})
+	lockID2, synced, remain, err := lk.TrySync(etcdTestCli, info21, []string{source1})
 	c.Assert(err, IsNil)
 	c.Assert(lockID2, Equals, "task2-`foo`.`bar`")
 	c.Assert(synced, IsTrue)

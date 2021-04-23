@@ -129,6 +129,12 @@ func (p *Pessimist) GetOperation(ctx context.Context, info pessimism.Info, rev i
 	}
 }
 
+// DeleteInfosOperations deletes the shard DDL infos and operations in etcd.
+// This function should often be called by DM-worker when skip operation.
+func (p *Pessimist) DeleteInfosOperations(infos []pessimism.Info, ops []pessimism.Operation) (int64, error) {
+	return pessimism.DeleteInfosOperations(p.cli, infos, ops)
+}
+
 // DoneOperationDeleteInfo marks the shard DDL lock operation as done and delete the shard DDL info.
 func (p *Pessimist) DoneOperationDeleteInfo(op pessimism.Operation, info pessimism.Info) error {
 	op.Done = true // mark the operation as `done`.

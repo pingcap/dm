@@ -1032,6 +1032,78 @@ function DM_DROP_COLUMN_ALL_DONE() {
     "clean_table" "optimistic"
 }
 
+function DM_PESSIMISTIC_LAST_DONE_CASE() {
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b varchar(10);"
+    run_sql_source2 "alter table ${shardddl1}.${tb1} add column b varchar(10);"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    # get worker of source1
+    w="1"
+    got=`grep "mysql-replica-01" $WORK_DIR/worker1/log/dm-worker.log | wc -l`
+    if [[ "$got" = "0" ]]; then
+        w="2"
+    fi
+
+    restart_worker $w "github.com/pingcap/dm/syncer/ErrorAfterOpDone=return()"
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
+    # make sure source1 put info
+    check_log_contain_with_retry "putted shard DDL info" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+    run_sql_source2 "alter table ${shardddl1}.${tb1} drop column b;"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "error after operation done" 1
+
+    # case1: source2 put info, source1 reput last done ddl.
+    if [[ "$2" == "1" ]]; then
+        run_sql_source2 "alter table ${shardddl1}.${tb1} add column b varchar(10);"
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "ALTER TABLE .* ADD COLUMN" 2
+    fi
+
+    restart_master
+    restart_worker $w ""
+
+    # case2: source1 reput last done ddl, source2 put info.
+    if [[ "$2" == "2" ]]; then
+        run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "ALTER TABLE .* DROP COLUMN" 2
+        run_sql_source2 "alter table ${shardddl1}.${tb1} add column b varchar(10);"
+    fi
+
+    # conflict happen, skip source1's drop column statement
+    check_log_contain_with_retry "ddls equals last done ddls, skip" $WORK_DIR/master/log/dm-master.log
+    check_log_contain_with_retry "skip shard DDL operation in pessimistic shard mode" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+
+    restart_master
+
+    run_sql_source1 "alter table ${shardddl1}.${tb1} add column b varchar(10);"
+
+    run_sql_source1 "insert into ${shardddl1}.${tb1} values(3,'ccc');"
+    run_sql_source2 "insert into ${shardddl1}.${tb1} values(4,'ddd');"
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"result\": true" 3
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_PESSIMISTIC_LAST_DONE() {
+    run_case PESSIMISTIC_LAST_DONE "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key);\"" \
+    "clean_table" "pessimistic" 1
+
+    run_case PESSIMISTIC_LAST_DONE "double-source-pessimistic" \
+    "run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key);\"; \
+     run_sql_source2 \"create table ${shardddl1}.${tb1} (a int primary key);\"" \
+    "clean_table" "pessimistic" 2
+}
+
 function run() {
     init_cluster
     init_database
@@ -1050,6 +1122,7 @@ function run() {
     DM_INIT_SCHEMA
     DM_DROP_COLUMN_EXEC_ERROR
     DM_DROP_COLUMN_ALL_DONE
+    DM_PESSIMISTIC_LAST_DONE
 }
 
 cleanup_data $shardddl

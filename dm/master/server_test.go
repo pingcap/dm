@@ -589,7 +589,7 @@ func (t *testMaster) TestStartTaskWithRemoveMeta(c *check.C) {
 		schema, table = "foo", "bar"
 		ID            = fmt.Sprintf("%s-`%s`.`%s`", taskName, schema, table)
 		i11           = pessimism.NewInfo(taskName, sources[0], schema, table, DDLs)
-		op2           = pessimism.NewOperation(ID, taskName, sources[0], DDLs, true, false)
+		op2           = pessimism.NewOperation(ID, taskName, sources[0], DDLs, true, false, false)
 	)
 	_, err = pessimism.PutInfo(etcdTestCli, i11)
 	c.Assert(err, check.IsNil)

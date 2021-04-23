@@ -25,11 +25,11 @@ import (
 func (t *testForEtcd) TestOperationJSON(c *C) {
 	o1 := NewOperation("test-ID", "test", "mysql-replica-1", []string{
 		"ALTER TABLE bar ADD COLUMN c1 INT",
-	}, true, false)
+	}, true, false, false)
 
 	j, err := o1.toJSON()
 	c.Assert(err, IsNil)
-	c.Assert(j, Equals, `{"id":"test-ID","task":"test","source":"mysql-replica-1","ddls":["ALTER TABLE bar ADD COLUMN c1 INT"],"exec":true,"done":false}`)
+	c.Assert(j, Equals, `{"id":"test-ID","task":"test","source":"mysql-replica-1","ddls":["ALTER TABLE bar ADD COLUMN c1 INT"],"exec":true,"done":false,"skip":false}`)
 	c.Assert(j, Equals, o1.String())
 
 	o2, err := operationFromJSON(j)
@@ -49,10 +49,10 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 		source2 = "mysql-replica-2"
 		source3 = "mysql-replica-3"
 		DDLs    = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		op11    = NewOperation(ID1, task1, source1, DDLs, true, false)
-		op12    = NewOperation(ID1, task1, source2, DDLs, true, false)
-		op13    = NewOperation(ID1, task1, source3, DDLs, true, false)
-		op21    = NewOperation(ID2, task2, source1, DDLs, false, true)
+		op11    = NewOperation(ID1, task1, source1, DDLs, true, false, false)
+		op12    = NewOperation(ID1, task1, source2, DDLs, true, false, false)
+		op13    = NewOperation(ID1, task1, source3, DDLs, true, false, false)
+		op21    = NewOperation(ID2, task2, source1, DDLs, false, true, false)
 	)
 
 	// put the same keys twice.
