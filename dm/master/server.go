@@ -399,6 +399,17 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		resp2 *pb.StartTaskResponse
 		err2  error
 	)
+	failpoint.Inject("LongRPCResponse", func() {
+		var b strings.Builder
+		size := 5 * 1024 * 1024
+		b.Grow(size)
+		for i := 0; i < size; i++ {
+			b.WriteByte(0)
+		}
+		resp2 = &pb.StartTaskResponse{Msg: b.String()}
+		failpoint.Return(resp2, nil)
+	})
+
 	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2

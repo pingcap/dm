@@ -19,11 +19,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/pingcap/failpoint"
 	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/log"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -44,7 +50,10 @@ import (
 
 var (
 	globalConfig = &Config{}
-	ctlClient    = &CtlClient{}
+	// GlobalCtlClient is the globally used CtlClient in this package. Exposed to be used in test
+	GlobalCtlClient = &CtlClient{}
+
+	re = regexp.MustCompile(`grpc: received message larger than max \((\d+) vs. (\d+)\)`)
 )
 
 // CtlClient used to get master client for dmctl.
@@ -53,7 +62,7 @@ type CtlClient struct {
 	tls          *toolutils.TLS
 	etcdClient   *clientv3.Client
 	conn         *grpc.ClientConn
-	masterClient pb.MasterClient
+	MasterClient pb.MasterClient // exposed to be used in test
 }
 
 func (c *CtlClient) updateMasterClient() error {
@@ -75,19 +84,27 @@ func (c *CtlClient) updateMasterClient() error {
 		conn, err = grpc.Dial(utils.UnwrapScheme(endpoint), c.tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
 		if err == nil {
 			c.conn = conn
-			c.masterClient = pb.NewMasterClient(conn)
+			c.MasterClient = pb.NewMasterClient(conn)
 			return nil
 		}
 	}
 	return terror.ErrCtlGRPCCreateConn.AnnotateDelegate(err, "can't connect to %s", strings.Join(endpoints, ","))
 }
 
-func (c *CtlClient) sendRequest(ctx context.Context, reqName string, req interface{}, respPointer interface{}) error {
+func (c *CtlClient) sendRequest(
+	ctx context.Context,
+	reqName string,
+	req interface{},
+	respPointer interface{},
+	opts ...interface{}) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(req)}
-	results := reflect.ValueOf(c.masterClient).MethodByName(reqName).Call(params)
+	for _, o := range opts {
+		params = append(params, reflect.ValueOf(o))
+	}
+	results := reflect.ValueOf(c.MasterClient).MethodByName(reqName).Call(params)
 
 	reflect.ValueOf(respPointer).Elem().Set(results[0])
 	errInterface := results[1].Interface()
@@ -100,20 +117,38 @@ func (c *CtlClient) sendRequest(ctx context.Context, reqName string, req interfa
 
 // SendRequest send request to master.
 func SendRequest(ctx context.Context, reqName string, req interface{}, respPointer interface{}) error {
-	err := ctlClient.sendRequest(ctx, reqName, req, respPointer)
-	if err == nil || status.Code(err) != codes.Unavailable {
+	err := GlobalCtlClient.sendRequest(ctx, reqName, req, respPointer)
+	if err == nil {
+		return nil
+	}
+	var opts []interface{}
+	switch status.Code(err) {
+	case codes.ResourceExhausted:
+		matches := re.FindStringSubmatch(err.Error())
+		if len(matches) == 3 {
+			msgSize, err2 := strconv.Atoi(matches[1])
+			if err2 == nil {
+				log.L().Info("increase gRPC maximum message size", zap.Int("size", msgSize))
+				opts = append(opts, grpc.MaxCallRecvMsgSize(msgSize))
+			}
+		}
+	case codes.Unavailable:
+	default:
 		return err
 	}
-	// TODO: handle status.Code(err) == codes.ResourceExhausted
 
+	failpoint.Inject("SkipUpdateMasterClient", func() {
+		failpoint.Goto("bypass")
+	})
 	// update master client
-	err = ctlClient.updateMasterClient()
+	err = GlobalCtlClient.updateMasterClient()
 	if err != nil {
 		return err
 	}
+	failpoint.Label("bypass")
 
 	// sendRequest again
-	return ctlClient.sendRequest(ctx, reqName, req, respPointer)
+	return GlobalCtlClient.sendRequest(ctx, reqName, req, respPointer, opts...)
 }
 
 // InitUtils inits necessary dmctl utils.
@@ -141,12 +176,12 @@ func InitClient(addr string, securityCfg config.Security) error {
 		return err
 	}
 
-	ctlClient = &CtlClient{
+	GlobalCtlClient = &CtlClient{
 		tls:        tls,
 		etcdClient: etcdClient,
 	}
 
-	return ctlClient.updateMasterClient()
+	return GlobalCtlClient.updateMasterClient()
 }
 
 // GlobalConfig returns global dmctl config.
@@ -322,7 +357,7 @@ func SyncMasterEndpoints(ctx context.Context) {
 	clientURLs := []string{}
 	updateF := func() {
 		clientURLs = clientURLs[:0]
-		resp, err := ctlClient.etcdClient.MemberList(ctx)
+		resp, err := GlobalCtlClient.etcdClient.MemberList(ctx)
 		if err != nil {
 			return
 		}
@@ -333,7 +368,7 @@ func SyncMasterEndpoints(ctx context.Context) {
 		if utils.NonRepeatStringsEqual(clientURLs, lastClientUrls) {
 			return
 		}
-		ctlClient.etcdClient.SetEndpoints(clientURLs...)
+		GlobalCtlClient.etcdClient.SetEndpoints(clientURLs...)
 		lastClientUrls = make([]string, len(clientURLs))
 		copy(lastClientUrls, clientURLs)
 	}
