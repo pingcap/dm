@@ -24,8 +24,9 @@ jobs:
           os: ubuntu-latest
 
         - runtime: linux-arm
-          os: ubuntu20.04
+          os: ubuntu-latest
           arch: armv7
+          distro: ubuntu20.04
 
         - runtime: macOS
           os: macOS-latest
@@ -58,7 +59,7 @@ jobs:
       if: matrix.arch != ''
       with:
         arch: ${{ matrix.arch }}
-        distro: ${{ matrix.os }}
+        distro: ${{ matrix.distro }}
         # Not required, but speeds up builds
         githubToken: ${{ github.token }}
         run: make build nolint=true
