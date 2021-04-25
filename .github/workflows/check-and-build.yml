@@ -24,7 +24,7 @@ jobs:
           os: ubuntu-latest
 
         - runtime: linux-arm
-          os: ubuntu-latest
+          os: ubuntu20.04
           arch: armv7
 
         - runtime: macOS
