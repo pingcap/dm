@@ -23,6 +23,18 @@ import (
 	"github.com/pingcap/dm/pkg/etcdutil"
 )
 
+// putLatestDoneDDLsOp returns a PUT etcd operation for latest done ddls.
+// This operation should often be sent by DM-master.
+func putLatestDoneDDLsOp(lockID string, ddls []string) (clientv3.Op, error) {
+	data, err := json.Marshal(ddls)
+	if err != nil {
+		return clientv3.Op{}, err
+	}
+	key := common.ShardDDLPessimismDDLsKeyAdapter.Encode(lockID)
+
+	return clientv3.OpPut(key, string(data)), nil
+}
+
 // PutLatestDoneDDLs puts the last done shard DDL ddls into etcd.
 func PutLatestDoneDDLs(cli *clientv3.Client, lockID string, ddls []string) (int64, error) {
 	data, err := json.Marshal(ddls)

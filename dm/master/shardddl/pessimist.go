@@ -296,7 +296,7 @@ func (p *Pessimist) UnlockLock(ctx context.Context, id, replaceOwner string, for
 
 	// 2. check whether has resolved before (this often should not happen).
 	if lock.IsResolved() {
-		err := p.removeLock(lock)
+		err := p.removeLockPutDDLs(lock)
 		if err != nil {
 			return err
 		}
@@ -542,15 +542,12 @@ func (p *Pessimist) handleOperationPut(ctx context.Context, opCh <-chan pessimis
 			if lock.IsResolved() {
 				p.logger.Info("the lock for the shard DDL lock operation has been resolved", zap.Stringer("operation", op))
 				// remove all operations for this shard DDL lock.
-				err := p.removeLock(lock)
+				err := p.removeLockPutDDLs(lock)
 				if err != nil {
 					p.logger.Error("fail to delete the shard DDL lock operations", zap.String("lock", lock.ID), log.ShortError(err))
 					metrics.ReportDDLError(op.Task, metrics.OpErrRemoveLock)
 				}
 				p.logger.Info("the lock info for the shard DDL lock operation has been cleared", zap.Stringer("operation", op))
-				if err := p.addLatestDoneDDLs(lock.ID, lock.DDLs); err != nil {
-					p.logger.Info("fail to record last done ddls", zap.String("lock", lock.ID), log.ShortError(err))
-				}
 				p.infoOpMu.Unlock()
 				continue
 			}
@@ -591,10 +588,9 @@ func (p *Pessimist) handleLock(lockID, source string) error {
 	if lock.IsResolved() {
 		// remove all operations for this shard DDL lock.
 		// this is to handle the case where dm-master exit before deleting operations for them.
-		if err := p.removeLock(lock); err != nil {
+		if err := p.removeLockPutDDLs(lock); err != nil {
 			return err
 		}
-		return p.addLatestDoneDDLs(lock.ID, lock.DDLs)
 	}
 
 	// check whether the owner has done.
@@ -651,9 +647,9 @@ func (p *Pessimist) putOpsForNonOwner(lock *pessimism.Lock, onlySource string, s
 }
 
 // removeLock removes the lock in memory and its information in etcd.
-func (p *Pessimist) removeLock(lock *pessimism.Lock) error {
+func (p *Pessimist) removeLockPutDDLs(lock *pessimism.Lock) error {
 	// remove all operations for this shard DDL lock.
-	if err := p.deleteOps(lock); err != nil {
+	if err := p.deleteOpsPutDDLs(lock); err != nil {
 		return err
 	}
 
@@ -686,21 +682,13 @@ func (p *Pessimist) removeLock(lock *pessimism.Lock) error {
 		}
 	})
 	p.lk.RemoveLock(lock.ID)
+	p.lk.AddLatestDoneDDLs(lock.ID, lock.DDLs)
 	metrics.ReportDDLPending(lock.Task, metrics.DDLPendingSynced, metrics.DDLPendingNone)
 	return nil
 }
 
-// addLatestDoneDDLs add last done ddls into etcd and LockKeeper.
-func (p *Pessimist) addLatestDoneDDLs(lockID string, ddls []string) error {
-	if _, err := pessimism.PutLatestDoneDDLs(p.cli, lockID, ddls); err != nil {
-		return err
-	}
-	p.lk.AddLatestDoneDDLs(lockID, ddls)
-	return nil
-}
-
 // deleteOps DELETEs shard DDL lock operations relative to the lock.
-func (p *Pessimist) deleteOps(lock *pessimism.Lock) error {
+func (p *Pessimist) deleteOpsPutDDLs(lock *pessimism.Lock) error {
 	ready := lock.Ready()
 	ops := make([]pessimism.Operation, 0, len(ready))
 	for source := range ready {
@@ -708,11 +696,11 @@ func (p *Pessimist) deleteOps(lock *pessimism.Lock) error {
 		// so simply set `exec=false` and `done=true`.
 		ops = append(ops, pessimism.NewOperation(lock.ID, lock.Task, source, lock.DDLs, false, true, false))
 	}
-	rev, err := pessimism.DeleteOperations(p.cli, ops...)
+	rev, err := pessimism.DeleteOperationsPutDDLs(p.cli, lock.ID, ops, lock.DDLs)
 	if err != nil {
 		return err
 	}
-	p.logger.Info("delete shard DDL lock operations", zap.String("lock", lock.ID), zap.Int64("revision", rev))
+	p.logger.Info("delete shard DDL lock operations and put latest done ddls", zap.String("lock", lock.ID), zap.Int64("revision", rev), zap.Strings("ddls", lock.DDLs))
 	return err
 }
 
