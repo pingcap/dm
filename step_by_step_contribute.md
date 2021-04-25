@@ -63,7 +63,7 @@ label in the DM repository. These issues are well suited for new contributors.
 
 1. Get your local master up-to-date with upstream/master.
 
-    ```
+    ```bash
     cd $working_dir/dm
     git fetch upstream
     git checkout master
@@ -72,7 +72,7 @@ label in the DM repository. These issues are well suited for new contributors.
 
 2. Create a new branch based on the master branch.
 
-    ```
+    ```bash
     git checkout -b new-branch-name
     ```
 
@@ -82,21 +82,21 @@ Edit some code on the `new-branch-name` branch and save your changes to fix the 
 
 1. Update the [proto code](dm/proto/dmmaster.proto) for grpc
 
-    ```
+    ```protobuf
     // GetTaskCfg implements a rpc method to get task config
     rpc GetTaskCfg(GetTaskCfgRequest) returns(GetTaskCfgResponse) {
         ...
     }
-    
+
     // GetTaskCfgRequest is a rpc request for GetTaskCfg
     message GetTaskCfgRequest {
         ...
     }
-    
+
     // GetTaskCfgRequest is a rpc response for GetTaskCfg
     message GetTaskCfgResponse {
         ...
-    } 
+    }
     ```
 
 2. Generate proto code
@@ -113,18 +113,18 @@ Edit some code on the `new-branch-name` branch and save your changes to fix the 
 
 4. Add new command for dmctl in [root commnd](dm/ctl/ctl.go)
 
-    ```
+    ```go
     master.NewGetTaskCfgCmd()
     ```
 
 5. Implement new command for [dmctl](dm/ctl/master/get_task_config.go)
 
-    ```golang
+    ```go
     // NewGetTaskCfgCmd creates a getTaskCfg command
     func NewGetTaskCfgCmd() *cobra.Command {
         ...
         cmd := &cobra.Command{
-    		Run:   getTaskCfgFunc,
+            Run:   getTaskCfgFunc,
         }
         return cmd
     }
@@ -134,7 +134,7 @@ Edit some code on the `new-branch-name` branch and save your changes to fix the 
         ...
         cli := common.MasterClient()
         resp, err := cli.GetTaskCfg(ctx, &pb.GetTaskCfgRequest{
-    		Name: taskName,
+            Name: taskName,
         })
         common.PrettyPrintResponse(resp)
     }
@@ -142,22 +142,22 @@ Edit some code on the `new-branch-name` branch and save your changes to fix the 
 
 6. Implement new command for [dm-master](dm/master/server.go)
 
-    ```golang
+    ```go
     // GetTaskCfg implements MasterServer.GetSubTaskCfg
     func (s *Server) GetTaskCfg(ctx context.Context, req *pb.GetTaskCfgRequest) (*pb.GetTaskCfgResponse, error) {
         ...
-    	cfg := s.scheduler.GetTaskCfg(req.Name)
-    	return &pb.GetTaskCfgResponse{
-    		Result: true,
-    		Cfg:    cfg,
-    	}, nil
+        cfg := s.scheduler.GetTaskCfg(req.Name)
+        return &pb.GetTaskCfgResponse{
+            Result: true,
+            Cfg:    cfg,
+        }, nil
     }
     ```
 
 7. Add some error instance for your new command in [error_list](pkg/terror/error_list.go)
 
-    ```golang
-	ErrSchedulerTaskNotExist = New(codeSchedulerTaskNotExist, ClassScheduler, ScopeInternal, LevelMedium, "task with name %s not exist", "Please use `query-status` command to see tasks.")
+    ```go
+    ErrSchedulerTaskNotExist = New(codeSchedulerTaskNotExist, ClassScheduler, ScopeInternal, LevelMedium, "task with name %s not exist", "Please use `query-status` command to see tasks.")
     ```
 
 8. Generate new [errors.toml](errors.toml)
@@ -176,7 +176,7 @@ Edit some code on the `new-branch-name` branch and save your changes to fix the 
 
 1. Add unit test for [dm-master server](dm/master/server_test.go)
 
-    ```golang
+    ```go
     func (t *testMaster) TestGetTaskCfg(c *check.C) {
         ...
     }
