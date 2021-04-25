@@ -15,6 +15,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -32,7 +33,6 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/soheilhy/cmux"
@@ -765,10 +765,12 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		return resp, nil
 	}
 
-	resp.SubTaskStatus, sourceStatus.RelayStatus = w.QueryStatus(ctx, req.Name)
-	unifyMasterBinlogPos(resp, w.cfg.EnableGTID)
+	var err error
+	resp.SubTaskStatus, sourceStatus.RelayStatus, err = w.QueryStatus(ctx, req.Name)
 
-	if len(resp.SubTaskStatus) == 0 {
+	if err != nil {
+		resp.Msg = fmt.Sprintf("error when get master status: %v", err)
+	} else if len(resp.SubTaskStatus) == 0 {
 		resp.Msg = "no sub task started"
 	}
 	return resp, nil
@@ -906,77 +908,6 @@ func getMinLocForSubTask(ctx context.Context, subTaskCfg config.SubTaskConfig) (
 
 	location := checkpoint.GlobalPoint()
 	return &location, nil
-}
-
-// unifyMasterBinlogPos eliminates different masterBinlog in one response
-// see https://github.com/pingcap/dm/issues/727
-func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
-	var (
-		syncStatus         []*pb.SubTaskStatus_Sync
-		syncMasterBinlog   []*mysql.Position
-		latestMasterBinlog mysql.Position // not pointer, to make use of zero value and avoid nil check
-		relayMasterBinlog  *mysql.Position
-	)
-
-	// uninitialized mysql.Position is less than any initialized mysql.Position
-	if resp.SourceStatus.RelayStatus != nil && resp.SourceStatus.RelayStatus.Stage != pb.Stage_Stopped {
-		var err error
-		relayMasterBinlog, err = utils.DecodeBinlogPosition(resp.SourceStatus.RelayStatus.MasterBinlog)
-		if err != nil {
-			log.L().Warn("failed to decode relay's master binlog position", zap.Stringer("response", resp), zap.Error(err))
-			return
-		}
-		latestMasterBinlog = *relayMasterBinlog
-	}
-
-	for _, stStatus := range resp.SubTaskStatus {
-		if stStatus.Unit == pb.UnitType_Sync {
-			s := stStatus.Status.(*pb.SubTaskStatus_Sync)
-			syncStatus = append(syncStatus, s)
-
-			position, err := utils.DecodeBinlogPosition(s.Sync.MasterBinlog)
-			if err != nil {
-				log.L().Warn("failed to decode sync's master binlog position", zap.Stringer("response", resp), zap.Error(err))
-				return
-			}
-			if latestMasterBinlog.Compare(*position) < 0 {
-				latestMasterBinlog = *position
-			}
-			syncMasterBinlog = append(syncMasterBinlog, position)
-		}
-	}
-
-	// re-check relay
-	if resp.SourceStatus.RelayStatus != nil && resp.SourceStatus.RelayStatus.Stage != pb.Stage_Stopped &&
-		latestMasterBinlog.Compare(*relayMasterBinlog) != 0 {
-		resp.SourceStatus.RelayStatus.MasterBinlog = latestMasterBinlog.String()
-
-		// if enableGTID, modify output binlog position doesn't affect RelayCatchUpMaster, skip check
-		if !enableGTID {
-			relayPos, err := utils.DecodeBinlogPosition(resp.SourceStatus.RelayStatus.RelayBinlog)
-			if err != nil {
-				log.L().Warn("failed to decode relay binlog position", zap.Stringer("response", resp), zap.Error(err))
-				return
-			}
-			catchUp := latestMasterBinlog.Compare(*relayPos) == 0
-
-			resp.SourceStatus.RelayStatus.RelayCatchUpMaster = catchUp
-		}
-	}
-	// re-check syncer
-	for i, sStatus := range syncStatus {
-		if latestMasterBinlog.Compare(*syncMasterBinlog[i]) != 0 {
-			syncerPos, err := utils.DecodeBinlogPosition(sStatus.Sync.SyncerBinlog)
-			if err != nil {
-				log.L().Warn("failed to decode syncer binlog position", zap.Stringer("response", resp), zap.Error(err))
-				return
-			}
-			synced := latestMasterBinlog.Compare(*syncerPos) == 0
-
-			sStatus.Sync.MasterBinlog = latestMasterBinlog.String()
-			sStatus.Sync.Synced = synced
-		}
-	}
 }
 
 // HandleError handle error.
