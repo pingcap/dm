@@ -18,22 +18,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runtime: [ linux-x64, linux-arm64, linux-arm, win-x64, osx-x64 ]
+        runtime: [ linux, linux-arm, macOS ]
         include:
         - runtime: linux-x64
           os: ubuntu-latest
-
-        - runtime: linux-arm64
-          os: ubuntu-latest
+          arch:
 
         - runtime: linux-arm
           os: ubuntu-latest
+          arch: armv7
 
-        - runtime: osx-x64
+        - runtime: macOS
           os: macOS-latest
-
-        - runtime: win-x64
-          os: windows-latest
+          arch:
 
     steps:
 
@@ -44,6 +41,21 @@ jobs:
 
     - name: Check out code
       uses: actions/checkout@v2
+
+    - uses: uraimo/run-on-arch-action@v2
+      if: ${{ matrix.arch != '' }}
+      name: Run on ${{ matrix.arch }}
+      id: build
+      with:
+        arch: ${{ matrix.arch }}
+        distro: ${{ matrix.os }}
+
+        # Not required, but speeds up builds
+        githubToken: ${{ github.token }}
+
+        run: |
+          uname -a
+          echo ::set-output name=uname::$(uname -a)
 
     - name: Cache go modules
       uses: actions/cache@v2
