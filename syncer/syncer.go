@@ -761,6 +761,7 @@ func (s *Syncer) addJob(job *job) error {
 	switch job.tp {
 	case xid:
 		s.saveGlobalPoint(job.location)
+		return nil
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		s.jobWg.Add(s.cfg.WorkerCount)
@@ -772,6 +773,7 @@ func (s *Syncer) addJob(job *job) error {
 			addJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, s.queueBucketMapping[queueBucket], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		}
 		s.tctx.L().Debug("job enqueued", zap.String("type", job.tp.String()))
+		return nil
 	case ddl:
 		s.jobWg.Wait()
 		addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
