@@ -43,7 +43,7 @@ jobs:
       uses: actions/checkout@v2
 
     - uses: uraimo/run-on-arch-action@v2
-      if: ${{ matrix.arch }}
+      if: ${{ matrix.arch == "armv7" }}
       name: Run on ${{ matrix.arch }}
       id: build
       with:
