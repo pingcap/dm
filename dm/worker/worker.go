@@ -26,11 +26,10 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
-	"github.com/pingcap/dm/pkg/conn"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
