@@ -225,7 +225,7 @@ func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Pos
 		return binlogPos, gs, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
 	}
 
-	if flavor == gmysql.MariaDBFlavor && (gs == nil || gs.String() == "") {
+	if flavor != gmysql.MySQLFlavor && (gs == nil || gs.String() == "") {
 		gs, err = GetMariaDBGTID(ctx, db)
 		if err != nil {
 			return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
