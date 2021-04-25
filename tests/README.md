@@ -35,12 +35,12 @@
 
 1. Run `make dm_integration_test_build` to generate DM related binary for integration test
 
-2. Setup two MySQL servers (the first one: 5.6 ~ 5.7; the second one: 8.0) with [binlog enabled first](https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html) and [set `GTID_MODE=ON`](https://dev.mysql.com/doc/refman/5.7/en/replication-mode-change-online-enable-gtids.html), export proper environment variables. Variables and their default values are showed in following table.
+2. Setup two MySQL servers (the first one: 5.6 ~ 5.7; the second one: 8.0) with [binlog enabled first](https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html) and [set `GTID_MODE=ON`](https://dev.mysql.com/doc/refman/5.7/en/replication-mode-change-online-enable-gtids.html), You need set the mysql port and root password according to the following table.
 
     | MySQL | Host | Port| PASSWORD |
     | :------------ | :---------- | :------ | :---- |
-    | MySQL1 | `MYSQL_HOST1` / `127.0.0.1` | `MYSQL_PORT1` / `3306` | `MYSQL_PASSWORD1` / `123456` |
-    | MySQL2 | `MYSQL_HOST2` / `127.0.0.1` | `MYSQL_PORT2` / `3307` | `MYSQL_PASSWORD2` / `123456` |
+    | MySQL1 | `127.0.0.1` | `3306` | `123456` |
+    | MySQL2 | `127.0.0.1` | `3307` | `123456` |
 
     > For the second MySQL server (with 8.0 version), you should setup it with `--default-authentication-plugin=mysql_native_password`.
 
@@ -51,7 +51,7 @@
 
     > If want to run one integration test case only, just pass the CASE parameter, such as `make integration_test CASE=sharding`.
 
-    > There exists some environment variables that you can set by yourself, including `MYSQL_HOST1`, `MYSQL_PORT1`, `MYSQL_HOST2`, `MYSQL_PORT2`, `RESET_MASTER`. If `RESET_MASTER` is not set or set to true, `RESET MASTER` will be executed at upstream MySQL before each case.
+    > There exists some environment variables that you can set by yourself, including `RESET_MASTER`,`ONLINE_DDL_ENABLE`. If `RESET_MASTER` is not set or set to true, `RESET MASTER` will be executed at upstream MySQL before each case.
 
     > The online DDL test using pt-osc doesn't work if the upstream MySQL has different connect port and bind port (often caused by port forwarding via NAT). In this case, you must specify the real IP and port of MySQL. Otherwise you can skip online DDL test by `export ONLINE_DDL_ENABLE=false`.
 
