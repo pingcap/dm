@@ -20,7 +20,7 @@ jobs:
       matrix:
         runtime: [ linux, linux-arm, macOS ]
         include:
-        - runtime: linux-x64
+        - runtime: linux
           os: ubuntu-latest
 
         - runtime: linux-arm
@@ -40,10 +40,9 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
-    - uses: uraimo/run-on-arch-action@v2
-      if: ${{ matrix.arch }}
-      name: Run on ${{ matrix.arch }}
-      id: build
+    - name: Run on ${{ matrix.arch }}
+      uses: uraimo/run-on-arch-action@v2
+      if: matrix.arch != ''
       with:
         arch: ${{ matrix.arch }}
         distro: ${{ matrix.os }}
