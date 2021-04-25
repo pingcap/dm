@@ -18,7 +18,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        runtime: [ linux-x64, linux-arm64, linux-arm, win-x64, osx-x64 ]
+        include:
+        - runtime: linux-x64
+          os: ubuntu-latest
+
+        - runtime: linux-arm64
+          os: ubuntu-latest
+
+        - runtime: linux-arm
+          os: ubuntu-latest
+
+        - runtime: osx-x64
+          os: macOS-latest
+
+        - runtime: win-x64
+          os: windows-latest
+
     steps:
 
     - name: Set up Go 1.13
@@ -33,14 +49,14 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ~/go/pkg/mod
-        key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
+        key: ${{ matrix.os }}-dm-${{ hashFiles('**/go.sum') }}
 
     - name: Cache tools
       uses: actions/cache@v2
       with:
         path: |
           **/tools
-        key: ${{ runner.os }}-dm-tools-${{ hashFiles('**/tools/go.sum') }}
+        key: ${{ matrix.os }}-dm-tools-${{ hashFiles('**/tools/go.sum') }}
 
     - name: Build
       run: make build nolint=true
