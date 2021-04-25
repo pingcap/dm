@@ -22,7 +22,6 @@ jobs:
         include:
         - runtime: linux-x64
           os: ubuntu-latest
-          arch:
 
         - runtime: linux-arm
           os: ubuntu-latest
@@ -30,7 +29,6 @@ jobs:
 
         - runtime: macOS
           os: macOS-latest
-          arch:
 
     steps:
 
@@ -43,7 +41,7 @@ jobs:
       uses: actions/checkout@v2
 
     - uses: uraimo/run-on-arch-action@v2
-      if: ${{ matrix.arch == 'armv7' }}
+      if: ${{ matrix.arch }}
       name: Run on ${{ matrix.arch }}
       id: build
       with:
