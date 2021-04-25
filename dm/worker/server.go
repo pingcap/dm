@@ -768,10 +768,10 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	var err error
 	resp.SubTaskStatus, sourceStatus.RelayStatus, err = w.QueryStatus(ctx, req.Name)
 
-	if len(resp.SubTaskStatus) == 0 {
-		resp.Msg = "no sub task started"
-	} else if err != nil {
+	if err != nil {
 		resp.Msg = fmt.Sprintf("error when get master status: %v", err)
+	} else if len(resp.SubTaskStatus) == 0 {
+		resp.Msg = "no sub task started"
 	}
 	return resp, nil
 }
