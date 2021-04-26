@@ -26,16 +26,16 @@ import (
 var printStatusInterval = time.Second * 5
 
 // Status implements Unit.Status.
-func (l *Loader) Status(ctx context.Context) interface{} {
-	finishedSize := l.finishedDataSize.Get()
-	totalSize := l.totalDataSize.Get()
-	progress := percent(finishedSize, totalSize, l.finish.Get())
+func (l *Loader) Status() interface{} {
+	finishedSize := l.finishedDataSize.Load()
+	totalSize := l.totalDataSize.Load()
+	progress := percent(finishedSize, totalSize, l.finish.Load())
 	s := &pb.LoadStatus{
 		FinishedBytes:  finishedSize,
 		TotalBytes:     totalSize,
 		Progress:       progress,
-		MetaBinlog:     l.metaBinlog.Get(),
-		MetaBinlogGTID: l.metaBinlogGTID.Get(),
+		MetaBinlog:     l.metaBinlog.Load(),
+		MetaBinlogGTID: l.metaBinlogGTID.Load(),
 	}
 	return s
 }
@@ -63,15 +63,15 @@ func (l *Loader) PrintStatus(ctx context.Context) {
 		case <-ticker.C:
 		}
 
-		finishedSize := l.finishedDataSize.Get()
-		totalSize := l.totalDataSize.Get()
-		totalFileCount := l.totalFileCount.Get()
+		finishedSize := l.finishedDataSize.Load()
+		totalSize := l.totalDataSize.Load()
+		totalFileCount := l.totalFileCount.Load()
 		l.logger.Info("progress status of load",
 			zap.Int64("finished_bytes", finishedSize),
 			zap.Int64("total_bytes", totalSize),
 			zap.Int64("total_file_count", totalFileCount),
-			zap.String("progress", percent(finishedSize, totalSize, l.finish.Get())))
-		progressGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(progress(finishedSize, totalSize, l.finish.Get()))
+			zap.String("progress", percent(finishedSize, totalSize, l.finish.Load())))
+		progressGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(progress(finishedSize, totalSize, l.finish.Load()))
 		if done {
 			return
 		}

@@ -29,7 +29,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -108,7 +108,7 @@ type Relay struct {
 	syncerCfg replication.BinlogSyncerConfig
 
 	meta   Meta
-	closed sync2.AtomicBool
+	closed atomic.Bool
 	sync.RWMutex
 
 	logger log.Logger
@@ -672,7 +672,7 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 		select {
 		case <-flushTicker.C:
 			r.RLock()
-			if r.closed.Get() {
+			if r.closed.Load() {
 				r.RUnlock()
 				return
 			}
@@ -687,7 +687,7 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 			r.RUnlock()
 		case <-masterStatusTicker.C:
 			r.RLock()
-			if r.closed.Get() {
+			if r.closed.Load() {
 				r.RUnlock()
 				return
 			}
@@ -710,7 +710,7 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 			r.RUnlock()
 		case <-trimUUIDsTicker.C:
 			r.RLock()
-			if r.closed.Get() {
+			if r.closed.Load() {
 				r.RUnlock()
 				return
 			}
@@ -785,7 +785,7 @@ func (r *Relay) masterNode() string {
 
 // IsClosed tells whether Relay unit is closed or not.
 func (r *Relay) IsClosed() bool {
-	return r.closed.Get()
+	return r.closed.Load()
 }
 
 // SaveMeta save relay meta and update meta in RelayLogInfo.
@@ -821,7 +821,7 @@ func (r *Relay) closeDB() {
 func (r *Relay) Close() {
 	r.Lock()
 	defer r.Unlock()
-	if r.closed.Get() {
+	if r.closed.Load() {
 		return
 	}
 	r.logger.Info("relay unit is closing")
@@ -830,7 +830,7 @@ func (r *Relay) Close() {
 
 	r.closeDB()
 
-	r.closed.Set(true)
+	r.closed.Store(true)
 	r.logger.Info("relay unit closed")
 }
 

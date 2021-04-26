@@ -23,10 +23,10 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
-	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/clientv3/concurrency"
 	"go.etcd.io/etcd/mvcc/mvccpb"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -88,9 +88,9 @@ type Election struct {
 
 	ech      chan error
 	leaderCh chan *CampaignerInfo
-	isLeader sync2.AtomicBool
+	isLeader atomic.Bool
 
-	closed sync2.AtomicInt32
+	closed atomic.Bool
 	cancel context.CancelFunc
 
 	bgWg sync.WaitGroup
@@ -102,8 +102,8 @@ type Election struct {
 	// notifyBlockTime is the max block time for notify leader
 	notifyBlockTime time.Duration
 
-	// set evictLeader to 1 if don't hope this member be leader
-	evictLeader sync2.AtomicInt32
+	// set evictLeader to true if don't hope this member be leader
+	evictLeader atomic.Bool
 
 	resignCh chan struct{}
 
@@ -147,7 +147,7 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 
 // IsLeader returns whether this member is the leader.
 func (e *Election) IsLeader() bool {
-	return e.isLeader.Get()
+	return e.isLeader.Load()
 }
 
 // ID returns the current member's ID.
@@ -188,7 +188,7 @@ func (e *Election) ErrorNotify() <-chan error {
 // Close closes the election instance and release the resources.
 func (e *Election) Close() {
 	e.l.Info("election is closing", zap.Stringer("current member", e.info))
-	if !e.closed.CompareAndSwap(0, 1) {
+	if !e.closed.CAS(false, true) {
 		e.l.Info("election was already closed", zap.Stringer("current member", e.info))
 		return
 	}
@@ -257,7 +257,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		go func() {
 			defer campaignWg.Done()
 
-			if e.evictLeader.Get() == 1 {
+			if e.evictLeader.Load() {
 				// skip campaign
 				return
 			}
@@ -336,9 +336,9 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 // leader info can be nil, and this is used when retire from leader.
 func (e *Election) notifyLeader(ctx context.Context, leaderInfo *CampaignerInfo) {
 	if leaderInfo != nil && leaderInfo.ID == e.info.ID {
-		e.isLeader.Set(true)
+		e.isLeader.Store(true)
 	} else {
-		e.isLeader.Set(false)
+		e.isLeader.Store(false)
 	}
 
 	select {
@@ -367,7 +367,7 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 	wch := e.cli.Watch(ctx, key)
 
 	for {
-		if e.evictLeader.Get() == 1 {
+		if e.evictLeader.Load() {
 			if err := elec.Resign(ctx); err != nil {
 				e.l.Info("fail to resign leader", zap.Stringer("current member", e.info), zap.Error(err))
 			}
@@ -407,7 +407,7 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 
 // EvictLeader set evictLeader to true, and this member can't be leader.
 func (e *Election) EvictLeader() {
-	if !e.evictLeader.CompareAndSwap(0, 1) {
+	if !e.evictLeader.CAS(false, true) {
 		return
 	}
 
@@ -431,7 +431,7 @@ func (e *Election) Resign() {
 
 // CancelEvictLeader set evictLeader to false, and this member can campaign leader again.
 func (e *Election) CancelEvictLeader() {
-	if !e.evictLeader.CompareAndSwap(1, 0) {
+	if !e.evictLeader.CAS(true, false) {
 		return
 	}
 

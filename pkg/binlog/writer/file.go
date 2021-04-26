@@ -19,7 +19,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
@@ -33,7 +33,7 @@ type FileWriter struct {
 
 	mu     sync.RWMutex
 	stage  common.Stage
-	offset sync2.AtomicInt64
+	offset atomic.Int64
 
 	file *os.File
 
@@ -92,7 +92,7 @@ func (w *FileWriter) Start() error {
 		return terror.ErrBinlogWriterGetFileStat.Delegate(err, f.Name())
 	}
 
-	w.offset.Set(fs.Size())
+	w.offset.Store(fs.Size())
 	w.file = f
 	w.stage = common.StagePrepared
 	return nil
@@ -157,7 +157,7 @@ func (w *FileWriter) Status() interface{} {
 	return &FileWriterStatus{
 		Stage:    stage.String(),
 		Filename: w.cfg.Filename,
-		Offset:   w.offset.Get(),
+		Offset:   w.offset.Load(),
 	}
 }
 

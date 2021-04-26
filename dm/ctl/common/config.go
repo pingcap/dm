@@ -45,6 +45,11 @@ const (
 	keepaliveTimeout        = 3 * time.Second
 	keepaliveTime           = 3 * time.Second
 	syncMasterEndpointsTime = 3 * time.Second
+
+	// DefaultErrorCnt represents default count of errors to display for check-task.
+	DefaultErrorCnt = 10
+	// DefaultWarnCnt represents count of warns to display for check-task.
+	DefaultWarnCnt = 10
 )
 
 // NewConfig creates a new base config for dmctl.

@@ -27,7 +27,6 @@ require (
 	github.com/pingcap/tidb-tools v5.0.0-rc.0.20210318094904-51a9e0c86386+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
-	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
@@ -37,6 +36,7 @@ require (
 	github.com/tikv/pd v1.1.0-beta.0.20210323121136-78679e5e209d
 	github.com/unrolled/render v1.0.1
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200824191128-ae9734ed278b
+	go.uber.org/atomic v1.7.0
 	go.uber.org/zap v1.16.0
 	golang.org/x/exp v0.0.0-20200513190911-00229845015e // indirect
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
@@ -48,5 +48,3 @@ require (
 )
 
 go 1.13
-
-replace github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726 => github.com/lance6716/go v0.0.0-20210312094856-8a1d496ae7d4

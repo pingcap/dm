@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -45,7 +45,7 @@ func (sa *spaceArgs) String() string {
 
 // spaceStrategy represents a relay purge strategy by remain space in dm-worker node.
 type spaceStrategy struct {
-	purging sync2.AtomicInt32
+	purging atomic.Bool
 
 	logger log.Logger
 }
@@ -72,10 +72,10 @@ func (s *spaceStrategy) Check(args interface{}) (bool, error) {
 }
 
 func (s *spaceStrategy) Do(args interface{}) error {
-	if !s.purging.CompareAndSwap(0, 1) {
+	if !s.purging.CAS(false, true) {
 		return terror.ErrRelayThisStrategyIsPurging.Generate()
 	}
-	defer s.purging.Set(0)
+	defer s.purging.Store(false)
 
 	sa, ok := args.(*spaceArgs)
 	if !ok {
@@ -88,7 +88,7 @@ func (s *spaceStrategy) Do(args interface{}) error {
 }
 
 func (s *spaceStrategy) Purging() bool {
-	return s.purging.Get() > 0
+	return s.purging.Load()
 }
 
 func (s *spaceStrategy) Type() strategyType {

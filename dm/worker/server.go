@@ -15,6 +15,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -32,12 +33,11 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
 	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -61,7 +61,7 @@ type Server struct {
 	sync.Mutex
 	wg     sync.WaitGroup
 	kaWg   sync.WaitGroup
-	closed sync2.AtomicBool
+	closed atomic.Bool
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -84,7 +84,7 @@ func NewServer(cfg *Config) *Server {
 	s := Server{
 		cfg: cfg,
 	}
-	s.closed.Set(true) // not start yet
+	s.closed.Store(true) // not start yet
 	return &s
 }
 
@@ -231,7 +231,7 @@ func (s *Server) Start() error {
 		}
 	}(s.ctx)
 
-	s.closed.Set(false)
+	s.closed.Store(false)
 	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.WorkerAddr))
 	err = m.Serve()
 	if err != nil && common.IsErrNetClosing(err) {
@@ -352,7 +352,7 @@ func (s *Server) observeRelayConfig(ctx context.Context, rev int64) error {
 								// we may face both relay config and subtask bound changed in a compaction error, so here
 								// we check if observeSourceBound has started a worker
 								// TODO: add a test for this situation
-								if !w.relayEnabled.Get() {
+								if !w.relayEnabled.Load() {
 									if err2 := w.EnableRelay(); err2 != nil {
 										return err2
 									}
@@ -438,7 +438,7 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 								// we may face both relay config and subtask bound changed in a compaction error, so here
 								// we check if observeRelayConfig has started a worker
 								// TODO: add a test for this situation
-								if !w.subTaskEnabled.Get() {
+								if !w.subTaskEnabled.Load() {
 									if err2 := w.EnableHandleSubtasks(); err2 != nil {
 										return err2
 									}
@@ -478,14 +478,14 @@ func (s *Server) doClose() {
 
 	s.Lock()
 	defer s.Unlock()
-	if s.closed.Get() {
+	if s.closed.Load() {
 		return
 	}
 	// close worker and wait for return
 	if w := s.getWorker(false); w != nil {
 		w.Close()
 	}
-	s.closed.Set(true)
+	s.closed.Store(true)
 }
 
 // Close close the RPC server, this function can be called multiple times.
@@ -684,7 +684,7 @@ func (s *Server) disableHandleSubtasks(source string) error {
 	}
 	w.DisableHandleSubtasks()
 	var err error
-	if !w.relayEnabled.Get() {
+	if !w.relayEnabled.Load() {
 		log.L().Info("relay is not enabled after disabling subtask, so stop worker")
 		err = s.stopWorker(source, false)
 	}
@@ -739,7 +739,7 @@ func (s *Server) disableRelay(source string) error {
 	s.UpdateKeepAliveTTL(s.cfg.KeepAliveTTL)
 	w.DisableRelay()
 	var err error
-	if !w.subTaskEnabled.Get() {
+	if !w.subTaskEnabled.Load() {
 		log.L().Info("subtask is not enabled after disabling relay, so stop worker")
 		err = s.stopWorker(source, false)
 	}
@@ -765,10 +765,12 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		return resp, nil
 	}
 
-	resp.SubTaskStatus, sourceStatus.RelayStatus = w.QueryStatus(ctx, req.Name)
-	unifyMasterBinlogPos(resp, w.cfg.EnableGTID)
+	var err error
+	resp.SubTaskStatus, sourceStatus.RelayStatus, err = w.QueryStatus(ctx, req.Name)
 
-	if len(resp.SubTaskStatus) == 0 {
+	if err != nil {
+		resp.Msg = fmt.Sprintf("error when get master status: %v", err)
+	} else if len(resp.SubTaskStatus) == 0 {
 		resp.Msg = "no sub task started"
 	}
 	return resp, nil
@@ -839,7 +841,7 @@ func (s *Server) getOrStartWorker(cfg *config.SourceConfig, needLock bool) (*Wor
 	go w.Start()
 
 	isStarted := utils.WaitSomething(50, 100*time.Millisecond, func() bool {
-		return !w.closed.Get()
+		return !w.closed.Load()
 	})
 	if !isStarted {
 		// TODO: add more mechanism to wait or un-bound the source
@@ -906,77 +908,6 @@ func getMinLocForSubTask(ctx context.Context, subTaskCfg config.SubTaskConfig) (
 
 	location := checkpoint.GlobalPoint()
 	return &location, nil
-}
-
-// unifyMasterBinlogPos eliminates different masterBinlog in one response
-// see https://github.com/pingcap/dm/issues/727
-func unifyMasterBinlogPos(resp *pb.QueryStatusResponse, enableGTID bool) {
-	var (
-		syncStatus         []*pb.SubTaskStatus_Sync
-		syncMasterBinlog   []*mysql.Position
-		latestMasterBinlog mysql.Position // not pointer, to make use of zero value and avoid nil check
-		relayMasterBinlog  *mysql.Position
-	)
-
-	// uninitialized mysql.Position is less than any initialized mysql.Position
-	if resp.SourceStatus.RelayStatus != nil && resp.SourceStatus.RelayStatus.Stage != pb.Stage_Stopped {
-		var err error
-		relayMasterBinlog, err = utils.DecodeBinlogPosition(resp.SourceStatus.RelayStatus.MasterBinlog)
-		if err != nil {
-			log.L().Warn("failed to decode relay's master binlog position", zap.Stringer("response", resp), zap.Error(err))
-			return
-		}
-		latestMasterBinlog = *relayMasterBinlog
-	}
-
-	for _, stStatus := range resp.SubTaskStatus {
-		if stStatus.Unit == pb.UnitType_Sync {
-			s := stStatus.Status.(*pb.SubTaskStatus_Sync)
-			syncStatus = append(syncStatus, s)
-
-			position, err := utils.DecodeBinlogPosition(s.Sync.MasterBinlog)
-			if err != nil {
-				log.L().Warn("failed to decode sync's master binlog position", zap.Stringer("response", resp), zap.Error(err))
-				return
-			}
-			if latestMasterBinlog.Compare(*position) < 0 {
-				latestMasterBinlog = *position
-			}
-			syncMasterBinlog = append(syncMasterBinlog, position)
-		}
-	}
-
-	// re-check relay
-	if resp.SourceStatus.RelayStatus != nil && resp.SourceStatus.RelayStatus.Stage != pb.Stage_Stopped &&
-		latestMasterBinlog.Compare(*relayMasterBinlog) != 0 {
-		resp.SourceStatus.RelayStatus.MasterBinlog = latestMasterBinlog.String()
-
-		// if enableGTID, modify output binlog position doesn't affect RelayCatchUpMaster, skip check
-		if !enableGTID {
-			relayPos, err := utils.DecodeBinlogPosition(resp.SourceStatus.RelayStatus.RelayBinlog)
-			if err != nil {
-				log.L().Warn("failed to decode relay binlog position", zap.Stringer("response", resp), zap.Error(err))
-				return
-			}
-			catchUp := latestMasterBinlog.Compare(*relayPos) == 0
-
-			resp.SourceStatus.RelayStatus.RelayCatchUpMaster = catchUp
-		}
-	}
-	// re-check syncer
-	for i, sStatus := range syncStatus {
-		if latestMasterBinlog.Compare(*syncMasterBinlog[i]) != 0 {
-			syncerPos, err := utils.DecodeBinlogPosition(sStatus.Sync.SyncerBinlog)
-			if err != nil {
-				log.L().Warn("failed to decode syncer binlog position", zap.Stringer("response", resp), zap.Error(err))
-				return
-			}
-			synced := latestMasterBinlog.Compare(*syncerPos) == 0
-
-			sStatus.Sync.MasterBinlog = latestMasterBinlog.String()
-			sStatus.Sync.Synced = synced
-		}
-	}
 }
 
 // HandleError handle error.
