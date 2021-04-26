@@ -127,13 +127,14 @@ func main() {
 				break
 			}
 		}
+		exitCode := 2
 		if needPrintHelp {
+			exitCode = 0
 			ctl.PrintHelp(cmdArgs)
-			os.Exit(0)
 		} else {
 			common.PrintLinesf("parse cmd flags err: %s", terror.Message(err))
 		}
-		os.Exit(2)
+		os.Exit(exitCode)
 	}
 
 	err = cfg.Validate()
