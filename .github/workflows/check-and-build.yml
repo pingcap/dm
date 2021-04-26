@@ -18,19 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runtime: [ linux, linux-arm, macOS ]
-        include:
-        - runtime: linux
-          os: ubuntu-latest
-
-        - runtime: linux-arm
-          os: ubuntu-latest
-          arch: armv7
-          distro: ubuntu20.04
-
-        - runtime: macOS
-          os: macOS-latest
-
+        os: [ubuntu-latest, macos-latest]
     steps:
 
     - name: Set up Go 1.13
@@ -45,32 +33,47 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ~/go/pkg/mod
-        key: ${{ matrix.os }}-dm-${{ hashFiles('**/go.sum') }}
+        key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
 
     - name: Cache tools
       uses: actions/cache@v2
       with:
         path: |
           **/tools
-        key: ${{ matrix.os }}-dm-tools-${{ hashFiles('**/tools/go.sum') }}
-
-    - name: Run on ${{ matrix.arch }}
-      uses: uraimo/run-on-arch-action@v2.0.5
-      if: matrix.arch != ''
-      with:
-        arch: ${{ matrix.arch }}
-        distro: ${{ matrix.distro }}
-        # Not required, but speeds up builds
-        githubToken: ${{ github.token }}
-        run: make build nolint=true
+        key: ${{ runner.os }}-dm-tools-${{ hashFiles('**/tools/go.sum') }}
 
     - name: Build
-      if: matrix.arch == ''
       run: make build nolint=true
+
+  arm_build:
+    runs-on: ubuntu-latest
+    name: Make Build
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ aarch64 ]
+    steps:
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: build on ${{ matrix.arch }}
+      uses: uraimo/run-on-arch-action@v2.0.5
+      with:
+        arch: ${{ matrix.arch }}
+        distro: ubuntu20.04
+        # Not required, but speeds up builds
+        githubToken: ${{ github.token }}
+        run: |
+          apt update -y && apt install -y make gnupg ca-certificates gcc git
+          echo 'deb http://ppa.launchpad.net/longsleep/golang-backports/ubuntu focal main' > /etc/apt/sources.list
+          apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys F6BC817356A3D45E
+          apt update -y && apt install -y golang-go
+          make build nolint=true
 
   lint:
     name: Lint
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
 
       - name: Check out code
