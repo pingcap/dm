@@ -31,6 +31,7 @@ function migrate_in_previous_v2() {
     tiup dmctl:$PRE_VER --master-addr=master1:8261 operate-source create $CUR/conf/source2.yaml
 
     tiup dmctl:$PRE_VER --master-addr=master1:8261 start-task $CUR/conf/task.yaml
+    tiup dmctl:$PRE_VER --master-addr=master1:8261 start-task $CUR/conf/task-optimistic.yaml
 
     exec_incremental_stage1
 
@@ -46,6 +47,7 @@ function migrate_in_v2 {
     exec_incremental_stage2
 
     check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
+    check_sync_diff $WORK_DIR $CUR/conf/diff_config_optimistic.toml
 
     tiup dmctl:$CUR_VER --master-addr=master1:8261 stop-task $TASK_NAME
 }

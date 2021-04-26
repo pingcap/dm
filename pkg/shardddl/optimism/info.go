@@ -151,8 +151,8 @@ func infoFromJSON(s string) (i Info, err error) {
 	if err != nil {
 		// For compatibility.
 		// In v2.0.2, we changed struct of table-info-after but forgot to upgrade etcd value.
-		// To keep the ModRevision of info, we change them after get info Instead of change all the value in etcd when upgrade
-		// All the Info will be upgrade after new info put or lock resolved.
+		// To keep the ModRevision of info, we change them after getting info instead of change all the value in etcd when upgrade
+		// All the Info will be upgraded after new info putted or lock resolved.
 		oldInfo, newErr := oldInfoFromJSON(s)
 		if newErr != nil {
 			return
