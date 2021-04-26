@@ -482,7 +482,7 @@ func (w *Worker) OperateSubTask(name string, op pb.TaskOp) error {
 	return err
 }
 
-// QueryStatus query worker's sub tasks' status. If relay enabled, also return source status
+// QueryStatus query worker's sub tasks' status. If relay enabled, also return source status.
 func (w *Worker) QueryStatus(ctx context.Context, name string) ([]*pb.SubTaskStatus, *pb.RelayStatus, error) {
 	w.RLock()
 	defer w.RUnlock()
@@ -522,7 +522,7 @@ func (w *Worker) QueryStatus(ctx context.Context, name string) ([]*pb.SubTaskSta
 	return subtaskStatus, relayStatus, nil
 }
 
-// postProcessStatus fills the status of sync unit with master binlog location and other related fields
+// postProcessStatus fills the status of sync unit with master binlog location and other related fields.
 func (w *Worker) postProcessStatus(
 	subtaskStatus []*pb.SubTaskStatus,
 	masterBinlogPos string,
