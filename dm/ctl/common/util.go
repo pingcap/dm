@@ -25,27 +25,25 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/failpoint"
-	"go.etcd.io/etcd/clientv3"
-	"go.uber.org/zap"
-
-	"github.com/pingcap/dm/pkg/log"
-
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/pb"
-	parserpkg "github.com/pingcap/dm/pkg/parser"
-	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
-
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/spf13/cobra"
+	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
+	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (
