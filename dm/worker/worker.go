@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
@@ -52,8 +53,10 @@ type Worker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cfg *config.SourceConfig
-	l   log.Logger
+	cfg     *config.SourceConfig
+	db      *conn.BaseDB
+	dbMutex sync.Mutex
+	l       log.Logger
 
 	// subtask functionality
 	subTaskEnabled atomic.Bool
@@ -140,7 +143,7 @@ func (w *Worker) Start() {
 			w.l.Info("status print process exits!")
 			return
 		case <-ticker.C:
-			w.l.Debug("runtime status", zap.String("status", w.StatusJSON(w.ctx, "")))
+			w.l.Debug("runtime status", zap.String("status", w.StatusJSON("")))
 		}
 	}
 }
@@ -160,6 +163,11 @@ func (w *Worker) Close() {
 
 	w.Lock()
 	defer w.Unlock()
+
+	w.dbMutex.Lock()
+	w.db.Close()
+	w.db = nil
+	w.dbMutex.Unlock()
 
 	// close all sub tasks
 	w.subTaskHolder.closeAllSubTasks()
@@ -475,28 +483,85 @@ func (w *Worker) OperateSubTask(name string, op pb.TaskOp) error {
 }
 
 // QueryStatus query worker's sub tasks' status. If relay enabled, also return source status
-// TODO: `ctx` is used to get upstream master status in every subtasks and source.
-// reduce it to only call once and remove `unifyMasterBinlogPos`, also remove below ctx2.
-func (w *Worker) QueryStatus(ctx context.Context, name string) ([]*pb.SubTaskStatus, *pb.RelayStatus) {
+func (w *Worker) QueryStatus(ctx context.Context, name string) ([]*pb.SubTaskStatus, *pb.RelayStatus, error) {
 	w.RLock()
 	defer w.RUnlock()
 
 	if w.closed.Load() {
 		w.l.Warn("querying status from a closed worker")
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	// use one timeout for all tasks. increase this value if it's too short.
 	ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 	defer cancel2()
 	var (
-		subtaskStatus = w.Status(ctx2, name)
+		subtaskStatus = w.Status(name)
 		relayStatus   *pb.RelayStatus
 	)
 	if w.relayEnabled.Load() {
 		relayStatus = w.relayHolder.Status(ctx2)
+		w.postProcessStatus(subtaskStatus, relayStatus.MasterBinlog, relayStatus.MasterBinlogGtid)
+	} else {
+		// fetch master status if relay is not enabled
+		w.dbMutex.Lock()
+		if w.db == nil {
+			var err error
+			w.db, err = conn.DefaultDBProvider.Apply(w.cfg.From)
+			if err != nil {
+				w.dbMutex.Unlock()
+				return subtaskStatus, relayStatus, err
+			}
+		}
+		pos, gset, err := utils.GetMasterStatus(ctx2, w.db.DB, w.cfg.Flavor)
+		w.dbMutex.Unlock()
+		if err != nil {
+			return subtaskStatus, relayStatus, err
+		}
+		w.postProcessStatus(subtaskStatus, pos.String(), gset.String())
 	}
-	return subtaskStatus, relayStatus
+	return subtaskStatus, relayStatus, nil
+}
+
+// postProcessStatus fills the status of sync unit with master binlog location and other related fields
+func (w *Worker) postProcessStatus(
+	subtaskStatus []*pb.SubTaskStatus,
+	masterBinlogPos string,
+	masterBinlogGtid string,
+) {
+	for _, status := range subtaskStatus {
+		syncStatus := status.GetSync()
+		if syncStatus == nil {
+			// not a Sync unit
+			continue
+		}
+
+		syncStatus.MasterBinlog = masterBinlogPos
+		syncStatus.MasterBinlogGtid = masterBinlogGtid
+		if w.cfg.EnableGTID {
+			// rely on sorted GTID set when String()
+			if masterBinlogGtid == syncStatus.SyncerBinlogGtid {
+				syncStatus.Synced = true
+			}
+		} else {
+			syncPos, err := binlog.PositionFromStr(syncStatus.SyncerBinlog)
+			if err != nil {
+				w.l.Debug("fail to parse mysql position", zap.String("position", syncStatus.SyncerBinlog), log.ShortError(err))
+				continue
+			}
+			masterPos, err := binlog.PositionFromStr(masterBinlogPos)
+			if err != nil {
+				w.l.Debug("fail to parse mysql position", zap.String("position", syncStatus.SyncerBinlog), log.ShortError(err))
+				continue
+			}
+
+			syncRealPos, err := binlog.RealMySQLPos(syncPos)
+			if err != nil {
+				w.l.Debug("fail to parse real mysql position", zap.String("position", syncStatus.SyncerBinlog), log.ShortError(err))
+				continue
+			}
+			syncStatus.Synced = syncRealPos.Compare(masterPos) == 0
+		}
+	}
 }
 
 func (w *Worker) resetSubtaskStage() (int64, error) {
