@@ -38,7 +38,7 @@ you also need to install:
 * [protoc 3.6+](https://github.com/protocolbuffers/protobuf/releases)
 * [protoc-gen-gogofaster 1.2+](https://github.com/gogo/protobuf#more-speed-and-more-generated-code)
 
-Run `./generate-dm.sh` to regenerate go code files.
+Run `make generate_proto` to regenerate go code files.
 
 ### Updating dependencies
 

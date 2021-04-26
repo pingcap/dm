@@ -1,6 +1,6 @@
 all: failpoint-ctl gocovmerge goveralls golangci-lint mockgen protoc-gen-gogofaster protoc-gen-grpc-gateway statik gofumports
 
-failpoint-ctl: 
+failpoint-ctl:
 	go build -o bin/$@ github.com/pingcap/failpoint/failpoint-ctl
 
 gocovmerge:

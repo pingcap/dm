@@ -26,7 +26,7 @@ import (
 var printStatusInterval = time.Second * 5
 
 // Status implements Unit.Status.
-func (l *Loader) Status(ctx context.Context) interface{} {
+func (l *Loader) Status() interface{} {
 	finishedSize := l.finishedDataSize.Load()
 	totalSize := l.totalDataSize.Load()
 	progress := percent(finishedSize, totalSize, l.finish.Load())

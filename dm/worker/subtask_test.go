@@ -123,7 +123,7 @@ func (m *MockUnit) Update(_ *config.SubTaskConfig) error {
 	return m.errUpdate
 }
 
-func (m *MockUnit) Status(ctx context.Context) interface{} {
+func (m *MockUnit) Status() interface{} {
 	switch m.typ {
 	case pb.UnitType_Check:
 		return &pb.CheckStatus{}
