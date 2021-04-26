@@ -124,10 +124,12 @@ func main() {
 		for _, cmd := range cmdArgs {
 			if cmd == "--help" {
 				needPrintHelp = true
+				break
 			}
 		}
 		if needPrintHelp {
 			ctl.PrintHelp(cmdArgs)
+			os.Exit(0)
 		} else {
 			common.PrintLinesf("parse cmd flags err: %s", terror.Message(err))
 		}
