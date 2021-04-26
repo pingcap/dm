@@ -24,6 +24,8 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
+    check_metric_not_contains $MASTER_PORT 'dm_master_ddl_state_number' 3
+
     # start DM task only
     dmctl_start_task
 
@@ -42,6 +44,8 @@ function run() {
         "show-ddl-locks" \
         "\"ID\": \"$lock_id\"" 1 \
         "$ddl" 1
+    check_metric $MASTER_PORT 'dm_master_ddl_state_number{task="sequence_sharding_removemeta",type="Un-synced"}' 3 0 2
+
     dmctl_stop_task $task_name
 
     # clean downstream data
@@ -54,6 +58,7 @@ function run() {
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "show-ddl-locks" \
         "no DDL lock exists" 1
+    check_metric_not_contains $MASTER_PORT 'dm_master_ddl_state_number' 3
     # use sync_diff_inspector to check full data
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
@@ -65,6 +70,8 @@ function run() {
         "show-ddl-locks" \
         "\"ID\": \"$lock_id\"" 1 \
         "$ddl" 1
+
+    check_metric $MASTER_PORT 'dm_master_ddl_state_number{task="sequence_sharding_removemeta",type="Un-synced"}' 3 0 2
     dmctl_stop_task $task_name
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -73,6 +80,7 @@ function run() {
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "show-ddl-locks" \
         "no DDL lock exists" 1
+    check_metric_not_contains $MASTER_PORT 'dm_master_ddl_state_number' 3
 }
 
 cleanup_data sharding_target3

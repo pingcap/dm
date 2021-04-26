@@ -16,6 +16,7 @@ package pessimism
 import (
 	"sync"
 
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -60,6 +61,7 @@ func (lk *LockKeeper) RemoveLock(lockID string) bool {
 
 	_, ok := lk.locks[lockID]
 	delete(lk.locks, lockID)
+	metrics.RemoveDDLPending(utils.ExtractTaskFromLockID(lockID))
 	return ok
 }
 
