@@ -1263,6 +1263,10 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 		}
 	}
 
+	failpoint.Inject("failToRecoverWorkersBounds", func(_ failpoint.Value) {
+		log.L().Info("mock failure", zap.String("failpoint", "failToRecoverWorkersBounds"))
+		failpoint.Return(0, errors.New("failToRecoverWorkersBounds"))
+	})
 	// 5. delete invalid source bound info in etcd
 	if len(sbm) > 0 {
 		invalidSourceBounds := make([]string, 0, len(sbm))
