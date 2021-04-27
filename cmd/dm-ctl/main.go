@@ -119,22 +119,15 @@ func main() {
 		}
 		os.Exit(0)
 	default:
-		// NOTE:  when `--help` in cmdArgs we need to print out the help msg.)
-		var needPrintHelp bool
+		// NOTE: when `--help` in cmdArgs we need to print out the help msg.
 		for _, cmd := range cmdArgs {
 			if cmd == "--help" {
-				needPrintHelp = true
-				break
+				ctl.PrintHelp(cmdArgs)
+				os.Exit(0)
 			}
 		}
-		exitCode := 2
-		if needPrintHelp {
-			exitCode = 0
-			ctl.PrintHelp(cmdArgs)
-		} else {
-			common.PrintLinesf("parse cmd flags err: %s", terror.Message(err))
-		}
-		os.Exit(exitCode)
+		common.PrintLinesf("parse cmd flags err: %s", terror.Message(err))
+		os.Exit(2)
 	}
 
 	err = cfg.Validate()

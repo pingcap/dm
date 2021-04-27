@@ -52,13 +52,8 @@ function run() {
     # it should print the usage for start-task
     $PWD/bin/dmctl.test DEVEL start-task --help > $WORK_DIR/help.log
     help_msg=$(cat $WORK_DIR/help.log)
-    help_msg_cnt=$(echo "${help_msg}" | grep  "Usage:" | wc -l |xargs)
-    if [ "$help_msg_cnt" != 1 ]; then
-        echo "dmctl case 4 help failed: $help_msg"
-        exit 1
-    fi
-    echo $help_msg | grep -q "Usage:"
-    if [ $? -ne 0 ]; then
+    help_msg_cnt=$(echo "${help_msg}" | grep  "Usage:" | wc -l)
+    if [ "$help_msg_cnt" -ne 1 ]; then
         echo "dmctl case 4 help failed: $help_msg"
         exit 1
     fi
