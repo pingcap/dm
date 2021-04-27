@@ -70,6 +70,9 @@ function run() {
         "show-ddl-locks" \
         "\"ID\": \"$lock_id\"" 1 \
         "$ddl" 1
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status $TEST_NAME" \
+        "this DM-worker doesn't receive any shard DDL of this group" 1
 
     check_metric $MASTER_PORT 'dm_master_ddl_state_number{task="sequence_sharding_removemeta",type="Un-synced"}' 3 0 2
     dmctl_stop_task $task_name
