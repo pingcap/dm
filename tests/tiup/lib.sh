@@ -81,8 +81,8 @@ function exec_incremental_stage1() {
     # optimistic shard ddls
     exec_sql mysql1 3306 "ALTER TABLE $DB3.$TBL1 ADD COLUMN c3 INT;"
     exec_sql mysql1 3306 "ALTER TABLE $DB3.$TBL2 ADD COLUMN c4 INT;"
-    exec_sql mysql2 3306 "ALTER TABLE $DB3.$TBL2 ADD COLUMN c3 INT;"
-    exec_sql mysql2 3306 "ALTER TABLE $DB3.$TBL3 ADD COLUMN c4 INT;"
+    exec_sql mysql2 3306 "ALTER TABLE $DB4.$TBL2 ADD COLUMN c3 INT;"
+    exec_sql mysql2 3306 "ALTER TABLE $DB4.$TBL3 ADD COLUMN c4 INT;"
 
     # prepare optimistic incremental data
     exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL1 (c1, c2, c3) VALUES (103, '103', 103);"
@@ -107,8 +107,8 @@ function exec_incremental_stage2() {
     # optimistic shard ddls
     exec_sql mysql1 3306 "ALTER TABLE $DB3.$TBL1 ADD COLUMN c4 INT;"
     exec_sql mysql1 3306 "ALTER TABLE $DB3.$TBL2 ADD COLUMN c3 INT AFTER c2;"
-    exec_sql mysql2 3306 "ALTER TABLE $DB3.$TBL2 ADD COLUMN c4 INT;"
-    exec_sql mysql2 3306 "ALTER TABLE $DB3.$TBL3 ADD COLUMN c3 INT AFTER c2;"
+    exec_sql mysql2 3306 "ALTER TABLE $DB4.$TBL2 ADD COLUMN c4 INT;"
+    exec_sql mysql2 3306 "ALTER TABLE $DB4.$TBL3 ADD COLUMN c3 INT AFTER c2;"
 
     # prepare optimistic incremental data
     exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL1 (c1, c2, c3, c4) VALUES (203, '203', 203, 203);"
