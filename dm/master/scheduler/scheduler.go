@@ -166,11 +166,16 @@ func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 
 // Start starts the scheduler for work.
 // NOTE: for logic errors, it should start without returning errors (but report via metrics or log) so that the user can fix them.
-func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error {
+func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) (err error) {
 	s.logger.Info("the scheduler is starting")
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	defer func() {
+		if err != nil {
+			s.CloseAllWorkers()
+		}
+		s.mu.Unlock()
+	}()
 
 	if s.started {
 		return terror.ErrSchedulerStarted.Generate()
@@ -180,7 +185,7 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	s.reset()           // reset previous status.
 
 	// recover previous status from etcd.
-	err := s.recoverSources(etcdCli)
+	err = s.recoverSources(etcdCli)
 	if err != nil {
 		return err
 	}
@@ -192,7 +197,8 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	if err != nil {
 		return err
 	}
-	rev, err := s.recoverWorkersBounds(etcdCli)
+	var rev int64
+	rev, err = s.recoverWorkersBounds(etcdCli)
 	if err != nil {
 		return err
 	}
@@ -228,6 +234,7 @@ func (s *Scheduler) Close() {
 		s.cancel()
 		s.cancel = nil
 	}
+	s.CloseAllWorkers()
 	s.mu.Unlock()
 
 	// need to wait for goroutines to return which may hold the mutex.
@@ -237,6 +244,13 @@ func (s *Scheduler) Close() {
 	defer s.mu.Unlock()
 	s.started = false // closed now.
 	s.logger.Info("the scheduler has closed")
+}
+
+// CloseAllWorkers closes all the scheduler's workers.
+func (s *Scheduler) CloseAllWorkers() {
+	for _, worker := range s.workers {
+		worker.Close()
+	}
 }
 
 // AddSourceCfg adds the upstream source config to the cluster.
