@@ -506,8 +506,10 @@ func (w *Worker) QueryStatus(ctx context.Context, name string) ([]*pb.SubTaskSta
 		w.dbMutex.Lock()
 		if w.db == nil {
 			var err error
-			w.db, err = conn.DefaultDBProvider.Apply(w.cfg.From)
+			w.l.Info("will open a connection to get master status", zap.Any("upstream config", w.cfg.From))
+			w.db, err = conn.DefaultDBProvider.Apply(w.cfg.DecryptPassword().From)
 			if err != nil {
+				w.l.Error("can't open a connection to get master status", zap.Error(err))
 				w.dbMutex.Unlock()
 				return subtaskStatus, relayStatus, err
 			}

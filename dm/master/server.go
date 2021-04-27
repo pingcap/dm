@@ -691,6 +691,45 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 
 	resps := s.getStatusFromWorkers(ctx, sources, req.Name, queryRelayWorker)
 
+	// adjust unsynced field in sync status, task-name -> set(target-table)
+	// because if a DM-worker doesn't receive any shard DDL, it doesn't even know it's unsynced for itself
+	unsyncedMap := make(map[string]map[string]struct{})
+	for _, resp := range resps {
+		for _, subtaskStatus := range resp.SubTaskStatus {
+			syncStatus := subtaskStatus.GetSync()
+			if syncStatus == nil {
+				continue
+			}
+			for _, group := range syncStatus.UnresolvedGroups {
+				if _, ok := unsyncedMap[subtaskStatus.Name]; !ok {
+					unsyncedMap[subtaskStatus.Name] = make(map[string]struct{})
+				}
+				unsyncedMap[subtaskStatus.Name][group.Target] = struct{}{}
+			}
+		}
+	}
+	for _, resp := range resps {
+		for _, subtaskStatus := range resp.SubTaskStatus {
+			syncStatus := subtaskStatus.GetSync()
+			if syncStatus == nil {
+				continue
+			}
+			found := make(map[string]struct{}, len(syncStatus.UnresolvedGroups))
+			for _, group := range syncStatus.UnresolvedGroups {
+				found[group.Target] = struct{}{}
+			}
+			for target := range unsyncedMap[subtaskStatus.Name] {
+				if _, ok := found[target]; ok {
+					continue
+				}
+				syncStatus.UnresolvedGroups = append(syncStatus.UnresolvedGroups, &pb.ShardingGroup{
+					Target:   target,
+					Unsynced: []string{"this DM-worker doesn't receive any shard DDL of this group"},
+				})
+			}
+		}
+	}
+
 	workerRespMap := make(map[string][]*pb.QueryStatusResponse, len(sources))
 	for _, workerResp := range resps {
 		workerRespMap[workerResp.SourceStatus.Source] = append(workerRespMap[workerResp.SourceStatus.Source], workerResp)
