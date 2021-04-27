@@ -149,7 +149,7 @@ func ReportDDLPending(task, oldStatus, newStatus string) {
 	}
 }
 
-// RemoveDDLPending removes all counter of this task
+// RemoveDDLPending removes all counter of this task.
 func RemoveDDLPending(task string) {
 	ddlPendingCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }
