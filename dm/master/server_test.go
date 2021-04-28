@@ -1762,6 +1762,8 @@ func (t *testMaster) TestGRPCLongResponse(c *check.C) {
 		grpc.WithInsecure(),
 		grpc.WithBlock())
 	c.Assert(err, check.IsNil)
+	defer conn.Close()
+
 	common.GlobalCtlClient.MasterClient = pb.NewMasterClient(conn)
 	ctx := context.Background()
 	resp := &pb.StartTaskResponse{}
