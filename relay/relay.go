@@ -167,7 +167,7 @@ func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	errs := make([]*pb.ProcessError, 0, 1)
 	err := r.process(ctx)
 	if err != nil && errors.Cause(err) != replication.ErrSyncClosed {
-		relayExitWithErrorCounter.Inc()
+		IncrRelayExitWithErrorCounter()
 		r.logger.Error("process exit", zap.Error(err))
 		// TODO: add specified error type instead of pb.ErrorType_UnknownError
 		errs = append(errs, unit.NewProcessError(err))
@@ -447,7 +447,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			case context.Canceled:
 				return nil
 			case replication.ErrChecksumMismatch:
-				relayLogDataCorruptionCounter.Inc()
+				IncrRelayLogDataCorruptionCounter()
 			case replication.ErrSyncClosed, replication.ErrNeedSyncAgain:
 				// do nothing, but the error will be returned
 			default:
@@ -462,12 +462,12 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 						r.logger.Info("current master status", zap.Stringer("position", pos), log.WrapStringerField("GTID sets", gs))
 					}
 				}
-				binlogReadErrorCounter.Inc()
+				IncrBinlogReadErrorCounter()
 			}
 			return err
 		}
 
-		binlogReadDurationHistogram.Observe(time.Since(readTimer).Seconds())
+		SetBinlogReadDurationHistogram(time.Since(readTimer).Seconds())
 		failpoint.Inject("BlackholeReadBinlog", func(_ failpoint.Value) {
 			// r.logger.Info("back hole read binlog takes effects")
 			failpoint.Continue()
@@ -479,7 +479,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		// 2. transform events
 		transformTimer := time.Now()
 		tResult := transformer2.Transform(e)
-		binlogTransformDurationHistogram.Observe(time.Since(transformTimer).Seconds())
+		SetBinlogTransformDurationHistogram(time.Since(transformTimer).Seconds())
 		if len(tResult.NextLogName) > 0 && tResult.NextLogName > lastPos.Name {
 			lastPos = mysql.Position{
 				Name: tResult.NextLogName,
@@ -512,7 +512,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		r.logger.Debug("writing binlog event", zap.Reflect("header", e.Header))
 		wResult, err := writer2.WriteEvent(e)
 		if err != nil {
-			relayLogWriteErrorCounter.Inc()
+			IncrRelayLogWriteErrorCounter()
 			return err
 		} else if wResult.Ignore {
 			r.logger.Info("ignore event by writer",
@@ -521,7 +521,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			r.tryUpdateActiveRelayLog(e, lastPos.Name) // even the event ignored we still need to try this update.
 			continue
 		}
-		relayLogWriteDurationHistogram.Observe(time.Since(writeTimer).Seconds())
+		SetRelayLogWriteDurationHistogram(time.Since(writeTimer).Seconds())
 		r.tryUpdateActiveRelayLog(e, lastPos.Name) // wrote a event, try update the current active relay log.
 
 		// 4. update meta and metrics
@@ -543,12 +543,12 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			needSavePos = true
 		}
 
-		relayLogWriteSizeHistogram.Observe(float64(e.Header.EventSize))
-		relayLogPosGauge.WithLabelValues("relay").Set(float64(lastPos.Pos))
+		SetRelayLogWriteSizeHistogram(float64(e.Header.EventSize))
+		SetRelayLogPosGauge("relay", float64(lastPos.Pos))
 		if index, err2 := binlog.GetFilenameIndex(lastPos.Name); err2 != nil {
 			r.logger.Error("parse binlog file name", zap.String("file name", lastPos.Name), log.ShortError(err2))
 		} else {
-			relayLogFileGauge.WithLabelValues("relay").Set(float64(index))
+			SetRelayLogFileGauge("relay", float64(index))
 		}
 
 		if needSavePos {
@@ -657,7 +657,7 @@ func (r *Relay) updateMetricsRelaySubDirIndex() {
 		r.logger.Error("parse suffix for UUID", zap.String("UUID", uuidWithSuffix), zap.Error(err))
 		return
 	}
-	relaySubDirIndex.WithLabelValues(node, uuidWithSuffix).Set(float64(suffix))
+	SetRelaySubDirIndex(float64(suffix), node, uuidWithSuffix)
 }
 
 func (r *Relay) doIntervalOps(ctx context.Context) {
@@ -705,8 +705,8 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 				r.RUnlock()
 				continue
 			}
-			relayLogFileGauge.WithLabelValues("master").Set(float64(index))
-			relayLogPosGauge.WithLabelValues("master").Set(float64(pos.Pos))
+			SetRelayLogFileGauge("master", float64(index))
+			SetRelayLogPosGauge("master", float64(pos.Pos))
 			r.RUnlock()
 		case <-trimUUIDsTicker.C:
 			r.RLock()

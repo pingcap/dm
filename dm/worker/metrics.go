@@ -25,6 +25,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
 	"github.com/pingcap/dm/pkg/log"
@@ -136,5 +137,13 @@ func InitStatus(lis net.Listener) {
 	err := httpS.Serve(lis)
 	if err != nil && !common.IsErrNetClosing(err) && err != http.ErrServerClosed {
 		log.L().Error("status server returned", log.ShortError(err))
+	}
+}
+
+func updateTaskState(task, sourceID string, stage pb.Stage) {
+	if stage == pb.Stage_Stopped || stage == pb.Stage_Finished {
+		taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": sourceID})
+	} else {
+		taskState.WithLabelValues(task, sourceID).Set(float64(stage))
 	}
 }

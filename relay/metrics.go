@@ -167,11 +167,71 @@ func reportRelayLogSpaceInBackground(ctx context.Context, dirpath string) error 
 			if err != nil {
 				log.L().Error("fail to update relay log storage size", log.ShortError(err))
 			} else {
-				relayLogSpaceGauge.WithLabelValues("capacity").Set(float64(size.Capacity))
-				relayLogSpaceGauge.WithLabelValues("available").Set(float64(size.Available))
+				SetRelayLogSpaceGauge(float64(size.Capacity), "capacity")
+				SetRelayLogSpaceGauge(float64(size.Available), "available")
 			}
 		}
 	}()
 
 	return nil
+}
+
+// SetRelayLogPosGauge is a setter for relayLogPosGauge.
+func SetRelayLogPosGauge(name string, pos float64) {
+	relayLogPosGauge.WithLabelValues(name).Set(pos)
+}
+
+// SetRelayLogFileGauge is a setter for relayLogFileGauge.
+func SetRelayLogFileGauge(name string, index float64) {
+	relayLogFileGauge.WithLabelValues(name).Set(index)
+}
+
+// SetRelaySubDirIndex is a setter for relaySubDirIndex.
+func SetRelaySubDirIndex(suffix float64, labels ...string) {
+	relaySubDirIndex.WithLabelValues(labels...).Set(suffix)
+}
+
+// SetRelayLogSpaceGauge is a setter for relayLogSpaceGauge.
+func SetRelayLogSpaceGauge(space float64, labels ...string) {
+	relayLogSpaceGauge.WithLabelValues(labels...).Set(space)
+}
+
+// IncrRelayLogDataCorruptionCounter is a warpper for relayLogDataCorruptionCounter.
+func IncrRelayLogDataCorruptionCounter() {
+	relayLogDataCorruptionCounter.Inc()
+}
+
+// SetRelayLogWriteSizeHistogram is a setter for relayLogWriteSizeHistogram.
+func SetRelayLogWriteSizeHistogram(size float64) {
+	relayLogWriteSizeHistogram.Observe(size)
+}
+
+// SetRelayLogWriteDurationHistogram is a setter for relayLogWriteDurationHistogram.
+func SetRelayLogWriteDurationHistogram(duration float64) {
+	relayLogWriteDurationHistogram.Observe(duration)
+}
+
+// IncrRelayLogWriteErrorCounter is a warpper for relayLogWriteErrorCounter.
+func IncrRelayLogWriteErrorCounter() {
+	relayLogWriteErrorCounter.Inc()
+}
+
+// IncrBinlogReadErrorCounter is a warpper for binlogReadErrorCounter.
+func IncrBinlogReadErrorCounter() {
+	binlogReadErrorCounter.Inc()
+}
+
+// SetBinlogReadDurationHistogram is a setter for binlogReadDurationHistogram.
+func SetBinlogReadDurationHistogram(duration float64) {
+	binlogReadDurationHistogram.Observe(duration)
+}
+
+// SetBinlogTransformDurationHistogram is a setter for binlogTransformDurationHistogram.
+func SetBinlogTransformDurationHistogram(duration float64) {
+	binlogTransformDurationHistogram.Observe(duration)
+}
+
+// IncrRelayExitWithErrorCounter is a warpper for relayExitWithErrorCounter.
+func IncrRelayExitWithErrorCounter() {
+	relayExitWithErrorCounter.Inc()
 }

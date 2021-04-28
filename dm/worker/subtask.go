@@ -20,7 +20,6 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/failpoint"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -693,12 +692,4 @@ func (st *SubTask) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReq
 		err = st.Resume()
 	}
 	return err
-}
-
-func updateTaskState(task, sourceID string, stage pb.Stage) {
-	if stage == pb.Stage_Stopped || stage == pb.Stage_Finished {
-		taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": sourceID})
-	} else {
-		taskState.WithLabelValues(task, sourceID).Set(float64(stage))
-	}
 }
