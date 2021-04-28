@@ -79,6 +79,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
 
@@ -380,6 +381,13 @@ func (sg *ShardingGroup) FlushData(targetTableID string) ([]string, [][]interfac
 
 // GenTableID generates table ID
 func GenTableID(schema, table string) (ID string, isSchemaOnly bool) {
+	log.L().Warn("hotfix, will change schema and table name to lower",
+		zap.String("old schema", schema),
+		zap.String("old table", table))
+	schema, table = strings.ToLower(schema), strings.ToLower(table)
+	log.L().Warn("hotfix, after changing schema and table name to lower",
+		zap.String("old schema", schema),
+		zap.String("old table", table))
 	if len(table) == 0 {
 		return fmt.Sprintf("`%s`", schema), true
 	}
