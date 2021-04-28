@@ -263,6 +263,9 @@ type TaskConfig struct {
 	Mydumpers map[string]*MydumperConfig `yaml:"mydumpers"`
 	Loaders   map[string]*LoaderConfig   `yaml:"loaders"`
 	Syncers   map[string]*SyncerConfig   `yaml:"syncers"`
+
+	UpperSchema []string `yaml:"upper-schema"`
+	UpperTable  []string `yaml:"upper-table"`
 }
 
 // NewTaskConfig creates a TaskConfig
@@ -519,6 +522,9 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.MydumperConfig = *inst.Mydumper
 		cfg.LoaderConfig = *inst.Loader
 		cfg.SyncerConfig = *inst.Syncer
+
+		cfg.UpperSchema = c.UpperSchema
+		cfg.UpperTable = c.UpperTable
 
 		err := cfg.Adjust(true)
 		if err != nil {

@@ -6,6 +6,7 @@ meta-schema: "dm_meta"
 remove-meta: false
 enable-heartbeat: true
 timezone: "Asia/Shanghai"
+upper-table: ["T1"]
 
 target-database:
   host: "127.0.0.1"

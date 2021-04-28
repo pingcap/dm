@@ -440,7 +440,7 @@ func (s *Syncer) initShardingGroups() error {
 			if !ok {
 				mSchema[targetTable] = make([]string, 0, len(tables))
 			}
-			ID, _ := GenTableID(schema, table)
+			ID, _ := GenTableID(schema, table, s.cfg.UpperSchema, s.cfg.UpperTable)
 			mSchema[targetTable] = append(mSchema[targetTable], ID)
 		}
 	}
@@ -453,7 +453,7 @@ func (s *Syncer) initShardingGroups() error {
 	// add sharding group
 	for targetSchema, mSchema := range mapper {
 		for targetTable, sourceIDs := range mSchema {
-			tableID, _ := GenTableID(targetSchema, targetTable)
+			tableID, _ := GenTableID(targetSchema, targetTable, s.cfg.UpperSchema, s.cfg.UpperTable)
 			_, _, _, _, err := s.sgk.AddGroup(targetSchema, targetTable, sourceIDs, loadMeta[tableID], false)
 			if err != nil {
 				return err
@@ -1447,7 +1447,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	if s.cfg.IsSharding {
-		source, _ := GenTableID(originSchema, originTable)
+		source, _ := GenTableID(originSchema, originTable, s.cfg.UpperSchema, s.cfg.UpperTable)
 		if s.sgk.InSyncing(schemaName, tableName, source, *ec.currentPos) {
 			// if in unsync stage and not before active DDL, ignore it
 			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), ignore it
@@ -1666,7 +1666,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 				}
 				continue
 			case *ast.DropTableStmt:
-				sourceID, _ := GenTableID(tableNames[0][0].Schema, tableNames[0][0].Name)
+				sourceID, _ := GenTableID(tableNames[0][0].Schema, tableNames[0][0].Name, s.cfg.UpperSchema, s.cfg.UpperTable)
 				err = s.sgk.LeaveGroup(tableNames[1][0].Schema, tableNames[1][0].Name, []string{sourceID})
 				if err != nil {
 					return err
@@ -1772,7 +1772,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		Name: ec.currentPos.Name,
 		Pos:  ec.currentPos.Pos - ec.header.EventSize,
 	}
-	source, _ = GenTableID(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name)
+
+	source, _ = GenTableID(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name, s.cfg.UpperSchema, s.cfg.UpperTable)
 
 	var annotate string
 	switch ddlInfo.stmt.(type) {
@@ -1801,7 +1802,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	s.tctx.L().Info(annotate, zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Bool("in-sharding", needShardingHandle), zap.Stringer("start position", startPos), zap.Bool("is-synced", synced), zap.Int("unsynced", remain))
 
 	if needShardingHandle {
-		target, _ := GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+		target, _ := GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, s.cfg.UpperSchema, s.cfg.UpperTable)
 		unsyncedTableGauge.WithLabelValues(s.cfg.Name, target).Set(float64(remain))
 		err = ec.safeMode.IncrForTable(s.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
 		if err != nil {
