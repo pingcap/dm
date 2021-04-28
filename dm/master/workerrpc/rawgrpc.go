@@ -96,7 +96,7 @@ func (c *GRPCClient) Close() error {
 	return nil
 }
 
-// Close returns whether this grpc conn is closed. only used for test now
+// Closed returns whether this grpc conn is closed. only used for test now
 func (c *GRPCClient) Closed() bool {
 	return c.closed.Load()
 }
