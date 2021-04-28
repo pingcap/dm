@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -68,8 +68,8 @@ type RelayPurger struct {
 	lock            sync.RWMutex
 	wg              sync.WaitGroup
 	cancel          context.CancelFunc
-	running         sync2.AtomicInt32
-	purgingStrategy sync2.AtomicUint32
+	running         atomic.Int32
+	purgingStrategy atomic.Uint32
 
 	cfg          config.PurgeConfig
 	baseRelayDir string
@@ -104,7 +104,7 @@ func NewRelayPurger(cfg config.PurgeConfig, baseRelayDir string, operators []Rel
 
 // Start starts strategies by config.
 func (p *RelayPurger) Start() {
-	if !p.running.CompareAndSwap(stageNew, stageRunning) {
+	if !p.running.CAS(stageNew, stageRunning) {
 		return
 	}
 
@@ -144,7 +144,7 @@ func (p *RelayPurger) run() {
 
 // Close stops the started strategies.
 func (p *RelayPurger) Close() {
-	if !p.running.CompareAndSwap(stageRunning, stageClosed) {
+	if !p.running.CAS(stageRunning, stageClosed) {
 		return
 	}
 
@@ -160,7 +160,7 @@ func (p *RelayPurger) Close() {
 
 // Purging returns whether the purger is purging.
 func (p *RelayPurger) Purging() bool {
-	return p.purgingStrategy.Get() != uint32(strategyNone)
+	return p.purgingStrategy.Load() != uint32(strategyNone)
 }
 
 // Do does the purge process one time.
@@ -218,10 +218,10 @@ func (p *RelayPurger) tryPurge() {
 
 // doPurge does the purging operation.
 func (p *RelayPurger) doPurge(ps PurgeStrategy, args StrategyArgs) error {
-	if !p.purgingStrategy.CompareAndSwap(uint32(strategyNone), uint32(ps.Type())) {
+	if !p.purgingStrategy.CAS(uint32(strategyNone), uint32(ps.Type())) {
 		return terror.ErrRelayOtherStrategyIsPurging.Generate(ps.Type())
 	}
-	defer p.purgingStrategy.Set(uint32(strategyNone))
+	defer p.purgingStrategy.Store(uint32(strategyNone))
 
 	for _, inter := range p.interceptors {
 		forbidden, msg := inter.ForbidPurge()

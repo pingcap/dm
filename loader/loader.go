@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -45,7 +44,7 @@ import (
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -93,7 +92,7 @@ type Worker struct {
 
 	logger log.Logger
 
-	closed int64
+	closed atomic.Bool
 }
 
 // NewWorker returns a Worker.
@@ -125,7 +124,7 @@ func (w *Worker) Close() {
 		failpoint.Return()
 	})
 
-	if !atomic.CompareAndSwapInt64(&w.closed, 0, 1) {
+	if !w.closed.CAS(false, true) {
 		w.wg.Wait()
 		w.logger.Info("already closed...")
 		return
@@ -138,7 +137,7 @@ func (w *Worker) Close() {
 }
 
 func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalChan chan *pb.ProcessError) {
-	atomic.StoreInt64(&w.closed, 0)
+	w.closed.Store(false)
 
 	newCtx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -405,11 +404,11 @@ type Loader struct {
 	toDB      *conn.BaseDB
 	toDBConns []*DBConn
 
-	totalDataSize    sync2.AtomicInt64
-	totalFileCount   sync2.AtomicInt64 // schema + table + data
-	finishedDataSize sync2.AtomicInt64
-	metaBinlog       sync2.AtomicString
-	metaBinlogGTID   sync2.AtomicString
+	totalDataSize    atomic.Int64
+	totalFileCount   atomic.Int64 // schema + table + data
+	finishedDataSize atomic.Int64
+	metaBinlog       atomic.String
+	metaBinlogGTID   atomic.String
 
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
@@ -419,9 +418,9 @@ type Loader struct {
 	// for other goroutines
 	wg sync.WaitGroup
 
-	fileJobQueueClosed sync2.AtomicBool
-	finish             sync2.AtomicBool
-	closed             sync2.AtomicBool
+	fileJobQueueClosed atomic.Bool
+	finish             atomic.Bool
+	closed             atomic.Bool
 }
 
 // NewLoader creates a new Loader.
@@ -433,7 +432,7 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 		workerWg:   new(sync.WaitGroup),
 		logger:     log.With(zap.String("task", cfg.Name), zap.String("unit", "load")),
 	}
-	loader.fileJobQueueClosed.Set(true) // not open yet
+	loader.fileJobQueueClosed.Store(true) // not open yet
 	return loader
 }
 
@@ -585,15 +584,15 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 func (l *Loader) newFileJobQueue() {
 	l.closeFileJobQueue()
 	l.fileJobQueue = make(chan *fileJob, jobCount)
-	l.fileJobQueueClosed.Set(false)
+	l.fileJobQueueClosed.Store(false)
 }
 
 func (l *Loader) closeFileJobQueue() {
-	if l.fileJobQueueClosed.Get() {
+	if l.fileJobQueueClosed.Load() {
 		return
 	}
 	close(l.fileJobQueue)
-	l.fileJobQueueClosed.Set(true)
+	l.fileJobQueueClosed.Store(true)
 }
 
 // align with https://github.com/pingcap/dumpling/pull/140
@@ -637,7 +636,7 @@ func (l *Loader) skipSchemaAndTable(table *filter.Table) bool {
 }
 
 func (l *Loader) isClosed() bool {
-	return l.closed.Get()
+	return l.closed.Load()
 }
 
 // IsFreshTask implements Unit.IsFreshTask.
@@ -649,8 +648,8 @@ func (l *Loader) IsFreshTask(ctx context.Context) (bool, error) {
 // Restore begins the restore process.
 func (l *Loader) Restore(ctx context.Context) error {
 	// reset some counter used to calculate progress
-	l.totalDataSize.Set(0)
-	l.finishedDataSize.Set(0) // reset before load from checkpoint
+	l.totalDataSize.Store(0)
+	l.finishedDataSize.Store(0) // reset before load from checkpoint
 
 	if err := l.prepare(); err != nil {
 		l.logger.Error("scan directory failed", zap.String("directory", l.cfg.Dir), log.ShortError(err))
@@ -701,7 +700,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 	l.workerWg.Wait()
 
 	if err == nil {
-		l.finish.Set(true)
+		l.finish.Store(true)
 		l.logger.Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
 		if l.cfg.CleanDumpFile && l.checkPoint.AllFinished() {
 			l.cleanDumpFiles()
@@ -735,7 +734,7 @@ func (l *Loader) Close() {
 	}
 	l.checkPoint.Close()
 	l.removeLabelValuesWithTaskInMetrics(l.cfg.Name)
-	l.closed.Set(true)
+	l.closed.Store(true)
 }
 
 // stopLoad stops loading, now it used by Close and Pause
@@ -886,7 +885,7 @@ func (l *Loader) initAndStartWorkerPool(ctx context.Context) error {
 func (l *Loader) prepareDBFiles(files map[string]struct{}) error {
 	// reset some variables
 	l.db2Tables = make(map[string]Tables2DataFiles)
-	l.totalFileCount.Set(0) // reset
+	l.totalFileCount.Store(0) // reset
 	schemaFileCount := 0
 	for file := range files {
 		if !strings.HasSuffix(file, "-schema-create.sql") {
@@ -1009,7 +1008,7 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 	}
 
 	dataFileGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(dataFilesNumber)
-	dataSizeGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(float64(l.totalDataSize.Get()))
+	dataSizeGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(float64(l.totalDataSize.Load()))
 	return nil
 }
 
@@ -1471,8 +1470,8 @@ func (l *Loader) getMydumpMetadata() error {
 		return terror.ErrParseMydumperMeta.Generate(err, toPrint)
 	}
 
-	l.metaBinlog.Set(loc.Position.String())
-	l.metaBinlogGTID.Set(loc.GTIDSetStr())
+	l.metaBinlog.Store(loc.Position.String())
+	l.metaBinlogGTID.Store(loc.GTIDSetStr())
 	return nil
 }
 

@@ -138,7 +138,7 @@ func (t *testServer) TestServer(c *C) {
 	}()
 
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return !s.closed.Get()
+		return !s.closed.Load()
 	}), IsTrue)
 	dir := c.MkDir()
 
@@ -219,7 +219,7 @@ func (t *testServer) TestServer(c *C) {
 	s.Close()
 
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
-		return s.closed.Get()
+		return s.closed.Load()
 	}), IsTrue)
 
 	// test worker, just make sure testing sort
@@ -276,7 +276,7 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 		c.Assert(err1, IsNil)
 	}()
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return !s.closed.Get()
+		return !s.closed.Load()
 	}), IsTrue)
 
 	// check if the worker is online
@@ -369,7 +369,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 		DialKeepAliveTimeout: keepaliveTimeout,
 	})
 	s.etcdClient = etcdCli
-	s.closed.Set(false)
+	s.closed.Store(false)
 	c.Assert(err, IsNil)
 	sourceCfg := loadSourceConfigWithoutPassword(c)
 	sourceCfg.EnableRelay = false
@@ -479,14 +479,14 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		// worker should be started and without error
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 			w := s.getWorker(true)
-			return w != nil && !w.closed.Get()
+			return w != nil && !w.closed.Load()
 		}), IsTrue)
 		c.Assert(s.getSourceStatus(true).Result, IsNil)
 	} else {
 		// worker should be started before stopped
 		w := s.getWorker(true)
 		c.Assert(w, NotNil)
-		c.Assert(w.closed.Get(), IsFalse)
+		c.Assert(w.closed.Load(), IsFalse)
 		_, err := ha.DeleteRelayConfig(s.etcdClient, w.name)
 		c.Assert(err, IsNil)
 		_, err = ha.DeleteSourceCfgRelayStageSourceBound(s.etcdClient, sourceCfg.SourceID, s.cfg.Name)
@@ -494,7 +494,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		// worker should be closed and without error
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 			currentWorker := s.getWorker(true)
-			return currentWorker == nil && w.closed.Get()
+			return currentWorker == nil && w.closed.Load()
 		}), IsTrue)
 		c.Assert(s.getSourceStatus(true).Result, IsNil)
 	}
@@ -572,116 +572,6 @@ func (t *testServer) TestGetMinLocInAllSubTasks(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(minLoc.Position.Name, Equals, "mysql-binlog.00001")
 	c.Assert(minLoc.Position.Pos, Equals, uint32(123))
-}
-
-func (t *testServer) TestUnifyMasterBinlogPos(c *C) {
-	var (
-		pos1 = "(bin.000001, 3134)"
-		pos2 = "(bin.000001, 3234)"
-		pos3 = "(bin.000001, 3334)"
-		pos4 = "(bin.000001, 3434)"
-	)
-
-	// 1. should modify nothing
-	resp := &pb.QueryStatusResponse{
-		SubTaskStatus: []*pb.SubTaskStatus{{
-			Name:   "test",
-			Status: &pb.SubTaskStatus_Msg{Msg: "sub task not started"},
-		}},
-		SourceStatus: &pb.SourceStatus{},
-	}
-	resp2 := &pb.QueryStatusResponse{
-		SubTaskStatus: []*pb.SubTaskStatus{{
-			Name:   "test",
-			Status: &pb.SubTaskStatus_Msg{Msg: "sub task not started"},
-		}},
-		SourceStatus: &pb.SourceStatus{RelayStatus: &pb.RelayStatus{
-			Stage: pb.Stage_Stopped,
-		}},
-	}
-	resp3 := &pb.QueryStatusResponse{
-		SubTaskStatus: []*pb.SubTaskStatus{{
-			Name:   "test",
-			Status: &pb.SubTaskStatus_Msg{Msg: "sub task not started"},
-		}},
-		SourceStatus: &pb.SourceStatus{RelayStatus: &pb.RelayStatus{
-			MasterBinlog: pos1, RelayBinlog: pos1, RelayCatchUpMaster: true,
-		}},
-	}
-	resp4 := &pb.QueryStatusResponse{
-		SubTaskStatus: []*pb.SubTaskStatus{{
-			Unit: pb.UnitType_Load,
-		}, {
-			Unit:   pb.UnitType_Sync,
-			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos2, SyncerBinlog: pos2, Synced: true}},
-		}},
-		SourceStatus: &pb.SourceStatus{},
-	}
-
-	for _, r := range []*pb.QueryStatusResponse{resp, resp2, resp3, resp4} {
-		// clone resp
-		bytes, _ := r.Marshal()
-		originReps := &pb.QueryStatusResponse{}
-		err := originReps.Unmarshal(bytes)
-		c.Assert(err, IsNil)
-
-		unifyMasterBinlogPos(r, false)
-		c.Assert(r, DeepEquals, originReps)
-	}
-
-	// 2. could work on multiple status
-	resp = &pb.QueryStatusResponse{
-		SubTaskStatus: []*pb.SubTaskStatus{{
-			Unit: pb.UnitType_Load,
-		}, {
-			Unit:   pb.UnitType_Sync,
-			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos2, SyncerBinlog: pos2, Synced: true}},
-		}, {
-			Unit:   pb.UnitType_Sync,
-			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos4, SyncerBinlog: pos3, Synced: false}},
-		}},
-		SourceStatus: &pb.SourceStatus{RelayStatus: &pb.RelayStatus{
-			MasterBinlog: pos1, RelayBinlog: pos1, RelayCatchUpMaster: true,
-		}},
-	}
-	unifyMasterBinlogPos(resp, false)
-
-	sync1 := resp.SubTaskStatus[1].Status.(*pb.SubTaskStatus_Sync).Sync
-	c.Assert(sync1.MasterBinlog, Equals, pos4)
-	c.Assert(sync1.Synced, IsFalse)
-	sync2 := resp.SubTaskStatus[2].Status.(*pb.SubTaskStatus_Sync).Sync
-	c.Assert(sync2.MasterBinlog, Equals, pos4)
-	c.Assert(sync2.Synced, IsFalse)
-	relay := resp.SourceStatus.RelayStatus
-	c.Assert(relay.MasterBinlog, Equals, pos4)
-	c.Assert(relay.RelayCatchUpMaster, IsFalse)
-
-	// 3. test unifyMasterBinlogPos(..., enableGTID = true)
-	resp = &pb.QueryStatusResponse{
-		SubTaskStatus: []*pb.SubTaskStatus{{
-			Unit: pb.UnitType_Load,
-		}, {
-			Unit:   pb.UnitType_Sync,
-			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos2, SyncerBinlog: pos2, Synced: true}},
-		}, {
-			Unit:   pb.UnitType_Sync,
-			Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{MasterBinlog: pos4, SyncerBinlog: pos3, Synced: false}},
-		}},
-		SourceStatus: &pb.SourceStatus{RelayStatus: &pb.RelayStatus{
-			MasterBinlog: pos1, RelayBinlog: pos1, RelayCatchUpMaster: true,
-		}},
-	}
-	unifyMasterBinlogPos(resp, true)
-
-	sync1 = resp.SubTaskStatus[1].Status.(*pb.SubTaskStatus_Sync).Sync
-	c.Assert(sync1.MasterBinlog, Equals, pos4)
-	c.Assert(sync1.Synced, IsFalse)
-	sync2 = resp.SubTaskStatus[2].Status.(*pb.SubTaskStatus_Sync).Sync
-	c.Assert(sync2.MasterBinlog, Equals, pos4)
-	c.Assert(sync2.Synced, IsFalse)
-	relay = resp.SourceStatus.RelayStatus
-	c.Assert(relay.MasterBinlog, Equals, pos4)
-	c.Assert(relay.RelayCatchUpMaster, IsTrue)
 }
 
 func getFakeLocForSubTask(ctx context.Context, subTaskCfg config.SubTaskConfig) (minLoc *binlog.Location, err error) {

@@ -25,7 +25,7 @@ import (
 	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
@@ -40,8 +40,8 @@ type FileReader struct {
 	wg sync.WaitGroup
 
 	stage      common.Stage
-	readOffset sync2.AtomicUint32
-	sendOffset sync2.AtomicUint32
+	readOffset atomic.Uint32
+	sendOffset atomic.Uint32
 
 	parser *replication.BinlogParser
 	ch     chan *replication.BinlogEvent
@@ -121,7 +121,7 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 			case <-r.ctx.Done():
 			}
 		} else {
-			r.logger.Info("parse end of binlog file", zap.Uint32("pos", r.readOffset.Get()))
+			r.logger.Info("parse end of binlog file", zap.Uint32("pos", r.readOffset.Load()))
 			close(r.endCh)
 		}
 	}()
@@ -163,7 +163,7 @@ func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, er
 
 	select {
 	case ev := <-r.ch:
-		r.sendOffset.Set(ev.Header.LogPos)
+		r.sendOffset.Store(ev.Header.LogPos)
 		return ev, nil
 	case err := <-r.ech:
 		return nil, err
@@ -182,15 +182,15 @@ func (r *FileReader) Status() interface{} {
 
 	return &FileReaderStatus{
 		Stage:      stage.String(),
-		ReadOffset: r.readOffset.Get(),
-		SendOffset: r.sendOffset.Get(),
+		ReadOffset: r.readOffset.Load(),
+		SendOffset: r.sendOffset.Load(),
 	}
 }
 
 func (r *FileReader) onEvent(ev *replication.BinlogEvent) error {
 	select {
 	case r.ch <- ev:
-		r.readOffset.Set(ev.Header.LogPos)
+		r.readOffset.Store(ev.Header.LogPos)
 		return nil
 	case <-r.ctx.Done():
 		return r.ctx.Err()

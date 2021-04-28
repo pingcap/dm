@@ -227,7 +227,7 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 func (t *testFileWriterSuite) verifyFilenameOffset(c *check.C, w Writer, filename string, offset int64) {
 	wf, ok := w.(*FileWriter)
 	c.Assert(ok, check.IsTrue)
-	c.Assert(wf.filename.Get(), check.Equals, filename)
+	c.Assert(wf.filename.Load(), check.Equals, filename)
 	c.Assert(wf.offset(), check.Equals, offset)
 }
 

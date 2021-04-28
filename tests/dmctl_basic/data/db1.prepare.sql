@@ -22,3 +22,6 @@ INSERT INTO `dmctl`.`t_2` (`b`,`c`,`d`,`id`) VALUES (1758036092,'CxSfGQNebY','OY
 INSERT INTO `dmctl`.`t_1` (`b`,`c`,`d`,`id`) VALUES (1649664004,'eIXDUjODpLjRkXu','NWlGjQq',7);
 INSERT INTO `dmctl`.`t_1` (`b`,`c`,`d`,`id`) VALUES (1402446429,'xQMCGsfckXpoe','R',8);
 INSERT INTO `dmctl`.`t_1` (`b`,`c`,`d`,`id`) VALUES (800180420,'JuUIxUacksp','sX',9);
+
+create table tb_1(a INT, b INT);
+create table tb_2(a INT, c INT);

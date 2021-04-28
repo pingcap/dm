@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -406,7 +405,7 @@ func parseURLs(s string) ([]url.URL, error) {
 		// tolerate valid `master-addr`, but invalid URL format. mainly caused by no protocol scheme
 		if !(strings.HasPrefix(item, "http://") || strings.HasPrefix(item, "https://")) {
 			prefix := "http://"
-			if atomic.LoadInt32(&useTLS) == 1 {
+			if useTLS.Load() {
 				prefix = "https://"
 			}
 			item = prefix + item

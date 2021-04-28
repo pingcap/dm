@@ -17,8 +17,8 @@ enable PR
 
 ## Documentation
 
-* [Detailed documentation](https://pingcap.com/docs/tidb-data-migration/stable/)
-* [简体中文文档](https://pingcap.com/docs-cn/tidb-data-migration/stable/)
+* [Detailed documentation](https://docs.pingcap.com/tidb-data-migration/stable/)
+* [简体中文文档](https://docs.pingcap.com/zh/tidb-data-migration/stable/)
 
 ## Building
 
@@ -38,13 +38,15 @@ make dm-worker  # build DM-worker
 make dm-master  # build DM-master
 
 make dmctl      # build dmctl
-``` 
+```
 
 When DM is built successfully, you can find binaries in the `bin` directory.
 
 ## Run tests
 
 Run all tests, including unit tests and integration tests:
+
+See [test/README.md](./test/README.md) for a more detailed guidance.
 
 ```bash
 make test
