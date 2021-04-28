@@ -385,9 +385,11 @@ func GenTableID(schema, table string, upperSchema, upperTable []string) (ID stri
 		if s == schema {
 			oldSchema := schema
 			schema = strings.ToLower(schema)
-			log.L().Warn("hotfix, changing schema to lowercase",
-				zap.String("old schema", oldSchema),
-				zap.String("schema", schema))
+			if oldSchema != schema {
+				log.L().Warn("hotfix, changing schema to lowercase",
+					zap.String("old schema", oldSchema),
+					zap.String("schema", schema))
+			}
 			break
 		}
 	}
@@ -395,9 +397,11 @@ func GenTableID(schema, table string, upperSchema, upperTable []string) (ID stri
 		if t == table {
 			oldTable := table
 			table = strings.ToLower(table)
-			log.L().Warn("hotfix, changing table to lowercase",
-				zap.String("old table", oldTable),
-				zap.String("table", table))
+			if oldTable != table {
+				log.L().Warn("hotfix, changing table to lowercase",
+					zap.String("old table", oldTable),
+					zap.String("table", table))
+			}
 			break
 		}
 	}
