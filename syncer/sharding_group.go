@@ -381,13 +381,19 @@ func (sg *ShardingGroup) FlushData(targetTableID string) ([]string, [][]interfac
 
 // GenTableID generates table ID
 func GenTableID(schema, table string) (ID string, isSchemaOnly bool) {
-	log.L().Warn("hotfix, will change schema and table name to lower",
-		zap.String("old schema", schema),
-		zap.String("old table", table))
+	oldSchema, oldTable := schema, table
 	schema, table = strings.ToLower(schema), strings.ToLower(table)
-	log.L().Warn("hotfix, after changing schema and table name to lower",
-		zap.String("old schema", schema),
-		zap.String("old table", table))
+	if schema != oldSchema {
+		log.L().Warn("hotfix, changing schema to lowercase",
+			zap.String("old schema", oldSchema),
+			zap.String("schema", schema))
+	}
+	if table != oldTable {
+		log.L().Warn("hotfix, changing table to lowercase",
+			zap.String("old table", oldTable),
+			zap.String("table", table))
+	}
+
 	if len(table) == 0 {
 		return fmt.Sprintf("`%s`", schema), true
 	}
