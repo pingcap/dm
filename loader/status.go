@@ -71,7 +71,7 @@ func (l *Loader) PrintStatus(ctx context.Context) {
 			zap.Int64("total_bytes", totalSize),
 			zap.Int64("total_file_count", totalFileCount),
 			zap.String("progress", percent(finishedSize, totalSize, l.finish.Load())))
-		progressGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(progress(finishedSize, totalSize, l.finish.Load()))
+		SetProgressGauge(progress(finishedSize, totalSize, l.finish.Load()), l.cfg.Name, l.cfg.SourceID)
 		if done {
 			return
 		}

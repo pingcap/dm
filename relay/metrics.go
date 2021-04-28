@@ -196,7 +196,7 @@ func SetRelayLogSpaceGauge(space float64, labels ...string) {
 	relayLogSpaceGauge.WithLabelValues(labels...).Set(space)
 }
 
-// IncrRelayLogDataCorruptionCounter is a warpper for relayLogDataCorruptionCounter.
+// IncrRelayLogDataCorruptionCounter is a wrapper for relayLogDataCorruptionCounter.
 func IncrRelayLogDataCorruptionCounter() {
 	relayLogDataCorruptionCounter.Inc()
 }
@@ -211,12 +211,12 @@ func SetRelayLogWriteDurationHistogram(duration float64) {
 	relayLogWriteDurationHistogram.Observe(duration)
 }
 
-// IncrRelayLogWriteErrorCounter is a warpper for relayLogWriteErrorCounter.
+// IncrRelayLogWriteErrorCounter is a wrapper for relayLogWriteErrorCounter.
 func IncrRelayLogWriteErrorCounter() {
 	relayLogWriteErrorCounter.Inc()
 }
 
-// IncrBinlogReadErrorCounter is a warpper for binlogReadErrorCounter.
+// IncrBinlogReadErrorCounter is a wrapper for binlogReadErrorCounter.
 func IncrBinlogReadErrorCounter() {
 	binlogReadErrorCounter.Inc()
 }
@@ -231,7 +231,7 @@ func SetBinlogTransformDurationHistogram(duration float64) {
 	binlogTransformDurationHistogram.Observe(duration)
 }
 
-// IncrRelayExitWithErrorCounter is a warpper for relayExitWithErrorCounter.
+// IncrRelayExitWithErrorCounter is a wrapper for relayExitWithErrorCounter.
 func IncrRelayExitWithErrorCounter() {
 	relayExitWithErrorCounter.Inc()
 }

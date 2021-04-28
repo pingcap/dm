@@ -122,3 +122,43 @@ func (l *Loader) removeLabelValuesWithTaskInMetrics(task string) {
 	progressGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	loaderExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }
+
+// IncrTidbExecutionErrorCounter is a wrapper for tidbExecutionErrorCounter.
+func IncrTidbExecutionErrorCounter(labels ...string) {
+	tidbExecutionErrorCounter.WithLabelValues(labels...).Inc()
+}
+
+// SetQueryHistogram is a setter for queryHistogram.
+func SetQueryHistogram(duration float64, labels ...string) {
+	queryHistogram.WithLabelValues(labels...).Observe(duration)
+}
+
+// SetTxnHistogram is a setter for stmtHistogram.
+func SetTxnHistogram(duration float64, labels ...string) {
+	stmtHistogram.WithLabelValues(labels...).Observe(duration)
+}
+
+// SetDataFileGauge is a setter for dataFileGauge.
+func SetDataFileGauge(val float64, labels ...string) {
+	dataFileGauge.WithLabelValues(labels...).Set(val)
+}
+
+// SetTableGauge is a setter for tableGauge.
+func SetTableGauge(val float64, labels ...string) {
+	tableGauge.WithLabelValues(labels...).Set(val)
+}
+
+// SetDataSizeGauge is a setter for dataSizeGauge.
+func SetDataSizeGauge(val float64, labels ...string) {
+	dataSizeGauge.WithLabelValues(labels...).Set(val)
+}
+
+// SetProgressGauge is a setter for progressGauge.
+func SetProgressGauge(val float64, labels ...string) {
+	progressGauge.WithLabelValues(labels...).Set(val)
+}
+
+// AddLoaderExitWithErrorCounter is adder for loaderExitWithErrorCounter.
+func AddLoaderExitWithErrorCounter(num float64, labels ...string) {
+	loaderExitWithErrorCounter.WithLabelValues(labels...).Add(num)
+}

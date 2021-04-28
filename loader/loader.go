@@ -517,14 +517,14 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 
 // Process implements Unit.Process.
 func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
-	loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Add(0)
+	AddLoaderExitWithErrorCounter(float64(0), l.cfg.Name, l.cfg.SourceID)
 
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	l.newFileJobQueue()
 	if err := l.getMydumpMetadata(); err != nil {
-		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Inc()
+		AddLoaderExitWithErrorCounter(float64(1), l.cfg.Name, l.cfg.SourceID)
 		pr <- pb.ProcessResult{
 			Errors: []*pb.ProcessError{unit.NewProcessError(err)},
 		}
@@ -559,7 +559,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		if utils.IsContextCanceledError(err) {
 			l.logger.Info("filter out error caused by user cancel")
 		} else {
-			loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Inc()
+			AddLoaderExitWithErrorCounter(float64(1), l.cfg.Name, l.cfg.SourceID)
 			errs = append(errs, unit.NewProcessError(err))
 		}
 	}
@@ -956,7 +956,7 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		l.totalFileCount.Add(1) // for table
 	}
 
-	tableGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(tablesNumber)
+	SetTableGauge(tablesNumber, l.cfg.Name, l.cfg.SourceID)
 	return nil
 }
 
@@ -1007,8 +1007,8 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 		tables[table] = dataFiles
 	}
 
-	dataFileGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(dataFilesNumber)
-	dataSizeGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(float64(l.totalDataSize.Load()))
+	SetDataFileGauge(dataFilesNumber, l.cfg.Name, l.cfg.SourceID)
+	SetDataSizeGauge(float64(l.totalDataSize.Load()), l.cfg.Name, l.cfg.SourceID)
 	return nil
 }
 
