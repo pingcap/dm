@@ -21,10 +21,10 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.16
       uses: actions/setup-go@v2
       with:
-        go-version: 1.13
+        go-version: 1.16
 
     - name: Check out code
       uses: actions/checkout@v2
@@ -45,9 +45,35 @@ jobs:
     - name: Build
       run: make build nolint=true
 
+  arm_build:
+    runs-on: ubuntu-latest
+    name: Make Build
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ aarch64 ]
+    steps:
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: build on ${{ matrix.arch }}
+      uses: uraimo/run-on-arch-action@v2.0.5
+      with:
+        arch: ${{ matrix.arch }}
+        distro: ubuntu20.04
+        # Not required, but speeds up builds
+        githubToken: ${{ github.token }}
+        run: |
+          apt update -y && apt install -y make gnupg ca-certificates gcc git
+          echo 'deb http://ppa.launchpad.net/longsleep/golang-backports/ubuntu focal main' > /etc/apt/sources.list
+          apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys F6BC817356A3D45E
+          apt update -y && apt install -y golang-go
+          make build nolint=true
+
   lint:
     name: Lint
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
 
       - name: Check out code
