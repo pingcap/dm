@@ -1240,7 +1240,6 @@ func (t *testScheduler) TestCloseAllWorkers(c *C) {
 		logger = log.L()
 		s      = NewScheduler(&logger, config.Security{})
 		names  []string
-		infos  []ha.WorkerInfo
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1250,7 +1249,6 @@ func (t *testScheduler) TestCloseAllWorkers(c *C) {
 
 	for i, name := range names {
 		info := ha.NewWorkerInfo(name, fmt.Sprintf("127.0.0.1:%d", 50801+i))
-		infos = append(infos, info)
 		_, err := ha.PutWorkerInfo(etcdTestCli, info)
 		c.Assert(err, IsNil)
 	}
