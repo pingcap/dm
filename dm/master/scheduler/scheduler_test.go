@@ -1256,11 +1256,14 @@ func (t *testScheduler) TestCloseAllWorkers(c *C) {
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/scheduler/failToRecoverWorkersBounds", "return"), IsNil)
 	// Test closed when fail to start
 	c.Assert(s.Start(ctx, etcdTestCli), ErrorMatches, "failToRecoverWorkersBounds")
+	c.Assert(s.workers, HasLen, 3)
 	checkAllWorkersClosed(c, s, true)
 	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/master/scheduler/failToRecoverWorkersBounds"), IsNil)
 
+	s.workers = map[string]*Worker{}
 	c.Assert(s.Start(ctx, etcdTestCli), IsNil)
 	checkAllWorkersClosed(c, s, false)
 	s.Close()
+	c.Assert(s.workers, HasLen, 3)
 	checkAllWorkersClosed(c, s, true)
 }
