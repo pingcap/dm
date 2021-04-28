@@ -47,3 +47,8 @@ func (m *Dumpling) removeLabelValuesWithTaskInMetrics(task, source string) {
 	})
 	export.RemoveLabelValuesWithTaskInMetrics(labels)
 }
+
+// AddDumplingExitWithErrorCounter is adder for loaderExitWithErrorCounter.
+func AddDumplingExitWithErrorCounter(num float64, labels ...string) {
+	dumplingExitWithErrorCounter.WithLabelValues(labels...).Add(num)
+}

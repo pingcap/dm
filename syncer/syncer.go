@@ -1349,7 +1349,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		// time duration for reading an event from relay log or upstream master.
-		binlogReadDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
+		SetBinlogReadDurationHistogram(time.Since(startTime).Seconds(), s.cfg.Name, s.cfg.SourceID)
 		startTime = time.Now() // reset start time for the next metric.
 
 		// get binlog event, reset tryReSync, so we can re-sync binlog while syncer meets errors next time
@@ -1362,7 +1362,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name, s.cfg.SourceID).Set(float64(index))
 		}
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
-		binlogEventSizeHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(float64(e.Header.EventSize))
+		SetBinlogEventSizeHistogram(float64(e.Header.EventSize), s.cfg.Name, s.cfg.SourceID)
 
 		failpoint.Inject("ProcessBinlogSlowDown", nil)
 
@@ -1682,7 +1682,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 				return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
 			}
 		}
-		binlogEvent.WithLabelValues("write_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+		SetBinlogEventHistogram(time.Since(ec.startTime).Seconds(), "write_rows", s.cfg.Name, s.cfg.SourceID)
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
@@ -1693,7 +1693,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 				return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
 			}
 		}
-		binlogEvent.WithLabelValues("update_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+		SetBinlogEventHistogram(time.Since(ec.startTime).Seconds(), "update_rows", s.cfg.Name, s.cfg.SourceID)
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
@@ -1703,7 +1703,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 				return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
 			}
 		}
-		binlogEvent.WithLabelValues("delete_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+		SetBinlogEventHistogram(time.Since(ec.startTime).Seconds(), "delete_rows", s.cfg.Name, s.cfg.SourceID)
 		jobType = del
 
 	default:
@@ -1797,7 +1797,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		return terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(string(ev.Query))
 	}
 
-	binlogEvent.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+	SetBinlogEventHistogram(time.Since(ec.startTime).Seconds(), "query", s.cfg.Name, s.cfg.SourceID)
 
 	/*
 		we construct a application transaction for ddl. we save checkpoint after we execute all ddls
@@ -2253,7 +2253,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 		return terror.ErrSyncerUnitResolveCasualityFail.Generate(err)
 	}
 	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
-	conflictDetectDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
+	SetConflictDetectDurationHistogram(time.Since(startTime).Seconds(), s.cfg.Name, s.cfg.SourceID)
 
 	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, location, startLocation, cmdLocation)
 	return s.addJobFunc(job)

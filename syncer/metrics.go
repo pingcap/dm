@@ -45,7 +45,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(16, 2, 20),
 		}, []string{"task", "source_id"})
 
-	binlogEvent = metricsproxy.NewHistogramVec(
+	binlogEventCostHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -222,7 +222,7 @@ var (
 func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(binlogReadDurationHistogram)
 	registry.MustRegister(binlogEventSizeHistogram)
-	registry.MustRegister(binlogEvent)
+	registry.MustRegister(binlogEventCostHistogram)
 	registry.MustRegister(conflictDetectDurationHistogram)
 	registry.MustRegister(addJobDurationHistogram)
 	registry.MustRegister(dispatchBinlogDurationHistogram)
@@ -273,7 +273,7 @@ func InitStatusAndMetrics(addr string) {
 func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	binlogReadDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogEventSizeHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	binlogEvent.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogEventCostHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	conflictDetectDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	addJobDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	dispatchBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
@@ -292,4 +292,24 @@ func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	remainingTimeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	unsyncedTableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	shardLockResolving.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+}
+
+// SetBinlogReadDurationHistogram is a setter for binlogReadDurationHistogram.
+func SetBinlogReadDurationHistogram(duration float64, labels ...string) {
+	binlogReadDurationHistogram.WithLabelValues(labels...).Observe(duration)
+}
+
+// SetBinlogEventSizeHistogram is a setter for binlogEventSizeHistogram.
+func SetBinlogEventSizeHistogram(size float64, labels ...string) {
+	binlogEventSizeHistogram.WithLabelValues(labels...).Observe(size)
+}
+
+// SetBinlogEventHistogram is a setter for binlogEventCostHistogram.
+func SetBinlogEventHistogram(size float64, labels ...string) {
+	binlogEventCostHistogram.WithLabelValues(labels...).Observe(size)
+}
+
+// SetConflictDetectDurationHistogram is a setter for conflictDetectDurationHistogram.
+func SetConflictDetectDurationHistogram(size float64, labels ...string) {
+	conflictDetectDurationHistogram.WithLabelValues(labels...).Observe(size)
 }

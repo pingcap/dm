@@ -66,7 +66,7 @@ func (m *Dumpling) Init(ctx context.Context) error {
 
 // Process implements Unit.Process.
 func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
-	dumplingExitWithErrorCounter.WithLabelValues(m.cfg.Name, m.cfg.SourceID).Add(0)
+	AddDumplingExitWithErrorCounter(float64(0), m.cfg.Name, m.cfg.SourceID)
 
 	failpoint.Inject("dumpUnitProcessWithError", func(val failpoint.Value) {
 		m.logger.Info("dump unit runs with injected error", zap.String("failpoint", "dumpUnitProcessWithError"), zap.Reflect("error", val))
@@ -120,7 +120,7 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		if utils.IsContextCanceledError(err) {
 			m.logger.Info("filter out error caused by user cancel")
 		} else {
-			dumplingExitWithErrorCounter.WithLabelValues(m.cfg.Name, m.cfg.SourceID).Inc()
+			AddDumplingExitWithErrorCounter(float64(1), m.cfg.Name, m.cfg.SourceID)
 			errs = append(errs, unit.NewProcessError(terror.ErrDumpUnitRuntime.Delegate(err, "")))
 		}
 	}
