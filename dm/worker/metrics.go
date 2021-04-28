@@ -140,7 +140,8 @@ func InitStatus(lis net.Listener) {
 	}
 }
 
-func updateTaskState(task, sourceID string, stage pb.Stage) {
+// UpdateTaskState update worker task stage.
+func UpdateTaskState(task, sourceID string, stage pb.Stage) {
 	if stage == pb.Stage_Stopped || stage == pb.Stage_Finished {
 		taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": sourceID})
 	} else {

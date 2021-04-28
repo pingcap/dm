@@ -119,7 +119,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 		cancel:     cancel,
 		etcdClient: etcdClient,
 	}
-	updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
+	UpdateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 	return &st
 }
 
@@ -382,14 +382,14 @@ func (st *SubTask) setStage(stage pb.Stage) {
 	st.Lock()
 	defer st.Unlock()
 	st.stage = stage
-	updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
+	UpdateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 }
 
 func (st *SubTask) setStageAndResult(stage pb.Stage, result *pb.ProcessResult) {
 	st.Lock()
 	defer st.Unlock()
 	st.stage = stage
-	updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
+	UpdateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 	st.result = result
 }
 
@@ -400,7 +400,7 @@ func (st *SubTask) stageCAS(oldStage, newStage pb.Stage) bool {
 
 	if st.stage == oldStage {
 		st.stage = newStage
-		updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
+		UpdateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 		return true
 	}
 	return false
@@ -412,7 +412,7 @@ func (st *SubTask) setStageIfNot(oldStage, newStage pb.Stage) bool {
 	defer st.Unlock()
 	if st.stage != oldStage {
 		st.stage = newStage
-		updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
+		UpdateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 		return true
 	}
 	return false
@@ -450,7 +450,7 @@ func (st *SubTask) Close() {
 	st.closeUnits() // close all un-closed units
 	st.wg.Wait()
 	st.setStageIfNot(pb.Stage_Finished, pb.Stage_Stopped)
-	updateTaskState(st.cfg.Name, st.cfg.SourceID, pb.Stage_Stopped)
+	UpdateTaskState(st.cfg.Name, st.cfg.SourceID, pb.Stage_Stopped)
 }
 
 // Pause pauses the running sub task.
