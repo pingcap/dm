@@ -329,13 +329,13 @@ func SetSkipBinlogDurationHistogram(size float64, labels ...string) {
 	skipBinlogDurationHistogram.WithLabelValues(labels...).Observe(size)
 }
 
-// IncrAddedJobsTotal is a wrapper for addedJobsTotalCounter.
-func IncrAddedJobsTotal(labels ...string) {
+// IncrAddedJobsTotalCounter is a wrapper for addedJobsTotalCounter.
+func IncrAddedJobsTotalCounter(labels ...string) {
 	addedJobsTotalCounter.WithLabelValues(labels...).Inc()
 }
 
-// IncrFinishedJobsTotal is a wrapper for finishedJobsTotalCounter.
-func IncrFinishedJobsTotal(labels ...string) {
+// IncrFinishedJobsTotalCounter is a wrapper for finishedJobsTotalCounter.
+func IncrFinishedJobsTotalCounter(labels ...string) {
 	finishedJobsTotalCounter.WithLabelValues(labels...).Inc()
 }
 
@@ -354,8 +354,8 @@ func SetBinlogFileGauge(size float64, labels ...string) {
 	binlogPosGauge.WithLabelValues(labels...).Set(size)
 }
 
-// AddSQLRetriesTotal is adder for sqlRetriesTotalCounter.
-func AddSQLRetriesTotal(num float64, labels ...string) {
+// AddSQLRetriesTotalCounter is adder for sqlRetriesTotalCounter.
+func AddSQLRetriesTotalCounter(num float64, labels ...string) {
 	sqlRetriesTotalCounter.WithLabelValues(labels...).Add(num)
 }
 
@@ -389,12 +389,12 @@ func SetUnsyncedTableGauge(lag float64, labels ...string) {
 	unsyncedTableGauge.WithLabelValues(labels...).Set(lag)
 }
 
-// SetShardLockResolving is a setter for shardLockResolvingGauge.
-func SetShardLockResolving(lag float64, labels ...string) {
+// SetShardLockResolvingGauge is a setter for shardLockResolvingGauge.
+func SetShardLockResolvingGauge(lag float64, labels ...string) {
 	shardLockResolvingGauge.WithLabelValues(labels...).Set(lag)
 }
 
-// AddHeartbeatUpdateErr is adder for heartbeatUpdateErrCounter.
-func AddHeartbeatUpdateErr(num float64, labels ...string) {
+// AddHeartbeatUpdateErrCounter is adder for heartbeatUpdateErrCounter.
+func AddHeartbeatUpdateErrCounter(num float64, labels ...string) {
 	heartbeatUpdateErrCounter.WithLabelValues(labels...).Add(num)
 }

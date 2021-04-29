@@ -489,7 +489,7 @@ func (s *Syncer) resetDBs(tctx *tcontext.Context) error {
 
 // Process implements the dm.Unit interface.
 func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
-	AddSyncerExitWithErrorCounter(0, s.cfg.Name, s.cfg.SourceID)
+	AddSyncerExitWithErrorCounter(float64(0), s.cfg.Name, s.cfg.SourceID)
 
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -521,7 +521,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 				return
 			}
 			cancel() // cancel s.Run
-			AddSyncerExitWithErrorCounter(1, s.cfg.Name, s.cfg.SourceID)
+			AddSyncerExitWithErrorCounter(float64(1), s.cfg.Name, s.cfg.SourceID)
 			errsMu.Lock()
 			errs = append(errs, err)
 			errsMu.Unlock()
@@ -549,7 +549,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		if utils.IsContextCanceledError(err) {
 			s.tctx.L().Info("filter out error caused by user cancel")
 		} else {
-			AddSyncerExitWithErrorCounter(1, s.cfg.Name, s.cfg.SourceID)
+			AddSyncerExitWithErrorCounter(float64(1), s.cfg.Name, s.cfg.SourceID)
 			errsMu.Lock()
 			errs = append(errs, unit.NewProcessError(err))
 			errsMu.Unlock()
@@ -747,7 +747,7 @@ func (s *Syncer) addJob(job *job) error {
 		s.saveGlobalPoint(job.location)
 		return nil
 	case flush:
-		IncrAddedJobsTotal("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID)
+		IncrAddedJobsTotalCounter("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID)
 		// ugly code addJob and sync, refine it later
 		s.jobWg.Add(s.cfg.WorkerCount)
 		for i := 0; i < s.cfg.WorkerCount; i++ {
@@ -757,11 +757,11 @@ func (s *Syncer) addJob(job *job) error {
 			SetAddJobDurationHistogram(time.Since(startTime).Seconds(), "flush", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID)
 		}
 		s.jobWg.Wait()
-		IncrFinishedJobsTotal("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID)
+		IncrFinishedJobsTotalCounter("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID)
 		return s.flushCheckPoints()
 	case ddl:
 		s.jobWg.Wait()
-		IncrAddedJobsTotal("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID)
+		IncrAddedJobsTotalCounter("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID)
 		s.jobWg.Add(1)
 		queueBucket = s.cfg.WorkerCount
 		startTime := time.Now()
@@ -2080,11 +2080,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		if err2 != nil {
 			return err2
 		}
-		SetShardLockResolving(1, s.cfg.Name, s.cfg.SourceID) // block and wait DDL lock to be synced
+		SetShardLockResolvingGauge(float64(1), s.cfg.Name, s.cfg.SourceID) // block and wait DDL lock to be synced
 		ec.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo), zap.Int64("revision", rev))
 
 		shardOp, err2 := s.pessimist.GetOperation(ec.tctx.Ctx, shardInfo, rev+1)
-		SetShardLockResolving(0, s.cfg.Name, s.cfg.SourceID)
+		SetShardLockResolvingGauge(float64(0), s.cfg.Name, s.cfg.SourceID)
 		if err2 != nil {
 			return err2
 		}
