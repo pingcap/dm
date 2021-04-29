@@ -47,6 +47,17 @@ function run() {
         exit 1
     fi
 
+
+    # check dmctl command start-task --help
+    # it should print the usage for start-task
+    $PWD/bin/dmctl.test DEVEL start-task --help > $WORK_DIR/help.log
+    help_msg=$(cat $WORK_DIR/help.log)
+    help_msg_cnt=$(echo "${help_msg}" | grep  "Usage:" | wc -l)
+    if [ "$help_msg_cnt" -ne 1 ]; then
+        echo "dmctl case 4 help failed: $help_msg"
+        exit 1
+    fi
+
     # run normal task with command
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
