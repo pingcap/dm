@@ -256,7 +256,7 @@ func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema strin
 		targetSchema, targetTable := UnpackTableID(name)
 		sourceIDs := make([]string, 0, len(tables))
 		for _, table := range tables {
-			sourceID, _ := GenTableID(table[0], table[1])
+			sourceID, _ := GenTableID(table[0], table[1], s.cfg.UpperSchema, s.cfg.UpperTable)
 			sourceIDs = append(sourceIDs, sourceID)
 		}
 		err := s.sgk.LeaveGroup(targetSchema, targetTable, sourceIDs)

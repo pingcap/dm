@@ -181,6 +181,9 @@ type SubTaskConfig struct {
 
 	ConfigFile string `toml:"-" json:"config-file"`
 
+	UpperSchema []string `toml:"upper-schema" json:"upper-schema"`
+	UpperTable  []string `toml:"upper-table" json:"upper-table"`
+
 	// still needed by Syncer / Loader bin
 	printVersion bool
 }

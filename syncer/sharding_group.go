@@ -79,6 +79,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
 
@@ -379,7 +380,32 @@ func (sg *ShardingGroup) FlushData(targetTableID string) ([]string, [][]interfac
 }
 
 // GenTableID generates table ID
-func GenTableID(schema, table string) (ID string, isSchemaOnly bool) {
+func GenTableID(schema, table string, upperSchema, upperTable []string) (ID string, isSchemaOnly bool) {
+	for _, s := range upperSchema {
+		if s == schema {
+			oldSchema := schema
+			schema = strings.ToLower(schema)
+			if oldSchema != schema {
+				log.L().Warn("hotfix, changing schema to lowercase",
+					zap.String("old schema", oldSchema),
+					zap.String("schema", schema))
+			}
+			break
+		}
+	}
+	for _, t := range upperTable {
+		if t == table {
+			oldTable := table
+			table = strings.ToLower(table)
+			if oldTable != table {
+				log.L().Warn("hotfix, changing table to lowercase",
+					zap.String("old table", oldTable),
+					zap.String("table", table))
+			}
+			break
+		}
+	}
+
 	if len(table) == 0 {
 		return fmt.Sprintf("`%s`", schema), true
 	}
@@ -425,8 +451,8 @@ func NewShardingGroupKeeper(tctx *tcontext.Context, cfg *config.SubTaskConfig) *
 func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceIDs []string, meta *shardmeta.ShardingMeta, merge bool) (needShardingHandle bool, group *ShardingGroup, synced bool, remain int, err error) {
 	// if need to support target table-level sharding DDL
 	// we also need to support target schema-level sharding DDL
-	schemaID, _ := GenTableID(targetSchema, "")
-	targetTableID, _ := GenTableID(targetSchema, targetTable)
+	schemaID, _ := GenTableID(targetSchema, "", k.cfg.UpperSchema, k.cfg.UpperTable)
+	targetTableID, _ := GenTableID(targetSchema, targetTable, k.cfg.UpperSchema, k.cfg.UpperTable)
 
 	k.Lock()
 	defer k.Unlock()
@@ -486,8 +512,8 @@ func (k *ShardingGroupKeeper) ResetGroups() {
 // LeaveGroup leaves group according to target schema, table and source IDs
 // LeaveGroup doesn't affect in syncing process
 func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sources []string) error {
-	schemaID, _ := GenTableID(targetSchema, "")
-	targetTableID, _ := GenTableID(targetSchema, targetTable)
+	schemaID, _ := GenTableID(targetSchema, "", k.cfg.UpperSchema, k.cfg.UpperTable)
+	targetTableID, _ := GenTableID(targetSchema, targetTable, k.cfg.UpperSchema, k.cfg.UpperTable)
 	k.Lock()
 	defer k.Unlock()
 	if group, ok := k.groups[targetTableID]; ok {
@@ -514,7 +540,7 @@ func (k *ShardingGroupKeeper) TrySync(
 	targetSchema, targetTable, source string, pos, endPos mysql.Position, ddls []string) (
 	needShardingHandle bool, group *ShardingGroup, synced, active bool, remain int, err error) {
 
-	targetTableID, schemaOnly := GenTableID(targetSchema, targetTable)
+	targetTableID, schemaOnly := GenTableID(targetSchema, targetTable, k.cfg.UpperSchema, k.cfg.UpperTable)
 	if schemaOnly {
 		// NOTE: now we don't support syncing for schema only sharding DDL
 		return false, nil, true, false, 0, nil
@@ -563,7 +589,7 @@ func (k *ShardingGroupKeeper) UnresolvedTables() (map[string]bool, [][]string) {
 
 // Group returns target table's group, nil if not exist
 func (k *ShardingGroupKeeper) Group(targetSchema, targetTable string) *ShardingGroup {
-	targetTableID, _ := GenTableID(targetSchema, targetTable)
+	targetTableID, _ := GenTableID(targetSchema, targetTable, k.cfg.UpperSchema, k.cfg.UpperTable)
 	k.RLock()
 	defer k.RUnlock()
 	return k.groups[targetTableID]
