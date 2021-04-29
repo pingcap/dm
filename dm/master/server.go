@@ -1845,11 +1845,18 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
+<<<<<<< HEAD
 func (s *Server) generateSubTask(ctx context.Context, task string) (*config.TaskConfig, []*config.SubTaskConfig, error) {
 	cfg := config.NewTaskConfig()
 	err := cfg.Decode(task)
 	if err != nil {
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
+=======
+func (s *Server) createMasterClientByName(ctx context.Context, name string) (pb.MasterClient, *grpc.ClientConn, error) {
+	listResp, err := s.etcdClient.MemberList(ctx)
+	if err != nil {
+		return nil, nil, err
+>>>>>>> c88ea874 (scheduler: close workers grpc connections timely (#1639))
 	}
 
 	// get workerID from deploy map by sourceID, refactor this when dynamic add/remove worker supported.
@@ -1861,16 +1868,39 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 		}
 		workerIDs = append(workerIDs, workerID)
 	}
+<<<<<<< HEAD
 
 	sourceCfgs, err := s.getWorkerConfigs(ctx, workerIDs)
+=======
+	if len(clientURLs) == 0 {
+		return nil, nil, errors.New("master not found")
+	}
+	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
+>>>>>>> c88ea874 (scheduler: close workers grpc connections timely (#1639))
 	if err != nil {
 		return nil, nil, err
 	}
 
+<<<<<<< HEAD
 	stCfgs, err := cfg.SubTaskConfigs(sourceCfgs)
 	if err != nil {
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
+=======
+	var conn *grpc.ClientConn
+	for _, clientURL := range clientURLs {
+		//nolint:staticcheck
+		conn, err = grpc.Dial(clientURL, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second))
+		if err == nil {
+			masterClient := pb.NewMasterClient(conn)
+			return masterClient, conn, nil
+		}
+		log.L().Error("can not dial to master", zap.String("name", name), zap.String("client url", clientURL), log.ShortError(err))
+	}
+	// return last err
+	return nil, nil, err
+}
+>>>>>>> c88ea874 (scheduler: close workers grpc connections timely (#1639))
 
 	err = checker.CheckSyncConfigFunc(ctx, stCfgs)
 	if err != nil {
@@ -1912,10 +1942,42 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, task
 			log.L().Info("wait op log result", zap.String("task", taskName), zap.String("worker", workerID), zap.Int64("operation log ID", opLogID), zap.Stringer("result", resp.QueryTaskOperation))
 		}
 
+<<<<<<< HEAD
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(retryInterval):
+=======
+		masterClient, grpcConn, err := s.createMasterClientByName(ctx, req.Name)
+		if err != nil {
+			resp2.Msg = err.Error()
+			// nolint:nilerr
+			return resp2, nil
+		}
+		defer grpcConn.Close()
+		masterResp, err := masterClient.GetMasterCfg(ctx, &pb.GetMasterCfgRequest{})
+		if err != nil {
+			resp2.Msg = err.Error()
+			// nolint:nilerr
+			return resp2, nil
+		}
+		cfg = masterResp.Cfg
+	case pb.CfgType_WorkerType:
+		worker := s.scheduler.GetWorkerByName(req.Name)
+		if worker == nil {
+			resp2.Msg = "worker not found"
+			return resp2, nil
+		}
+		workerReq := workerrpc.Request{
+			Type:         workerrpc.CmdGetWorkerCfg,
+			GetWorkerCfg: &pb.GetWorkerCfgRequest{},
+		}
+		workerResp, err := worker.SendRequest(ctx, &workerReq, s.cfg.RPCTimeout)
+		if err != nil {
+			resp2.Msg = err.Error()
+			// nolint:nilerr
+			return resp2, nil
+>>>>>>> c88ea874 (scheduler: close workers grpc connections timely (#1639))
 		}
 	}
 
