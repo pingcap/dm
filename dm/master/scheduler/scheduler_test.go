@@ -15,6 +15,7 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
@@ -1223,4 +1225,45 @@ func (t *testScheduler) TestStartStopSource(c *C) {
 	workers, err = s.GetRelayWorkers(sourceID1)
 	c.Assert(err, IsNil)
 	c.Assert(workers, HasLen, 0)
+}
+
+func checkAllWorkersClosed(c *C, s *Scheduler, closed bool) {
+	for _, worker := range s.workers {
+		cli, ok := worker.cli.(*workerrpc.GRPCClient)
+		c.Assert(ok, IsTrue)
+		c.Assert(cli.Closed(), Equals, closed)
+	}
+}
+
+func (t *testScheduler) TestCloseAllWorkers(c *C) {
+	var (
+		logger = log.L()
+		s      = NewScheduler(&logger, config.Security{})
+		names  []string
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for i := 1; i < 4; i++ {
+		names = append(names, fmt.Sprintf("worker%d", i))
+	}
+
+	for i, name := range names {
+		info := ha.NewWorkerInfo(name, fmt.Sprintf("127.0.0.1:%d", 50801+i))
+		_, err := ha.PutWorkerInfo(etcdTestCli, info)
+		c.Assert(err, IsNil)
+	}
+
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/scheduler/failToRecoverWorkersBounds", "return"), IsNil)
+	// Test closed when fail to start
+	c.Assert(s.Start(ctx, etcdTestCli), ErrorMatches, "failToRecoverWorkersBounds")
+	c.Assert(s.workers, HasLen, 3)
+	checkAllWorkersClosed(c, s, true)
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/master/scheduler/failToRecoverWorkersBounds"), IsNil)
+
+	s.workers = map[string]*Worker{}
+	c.Assert(s.Start(ctx, etcdTestCli), IsNil)
+	checkAllWorkersClosed(c, s, false)
+	s.Close()
+	c.Assert(s.workers, HasLen, 3)
+	checkAllWorkersClosed(c, s, true)
 }
