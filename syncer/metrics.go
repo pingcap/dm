@@ -398,3 +398,31 @@ func SetShardLockResolvingGauge(lag float64, labels ...string) {
 func AddHeartbeatUpdateErrCounter(num float64, labels ...string) {
 	heartbeatUpdateErrCounter.WithLabelValues(labels...).Add(num)
 }
+
+// AddJobCountMetric update addedJobsTotalCounter/finishedJobsTotalCounter metric.
+func AddJobCountMetric(s *Syncer, isFinished bool, queueBucket string, tp opType, n int64) {
+	m := addedJobsTotalCounter
+	if isFinished {
+		s.count.Add(n)
+		m = finishedJobsTotalCounter
+	}
+
+	switch tp {
+	case insert:
+		m.WithLabelValues("insert", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
+	case update:
+		m.WithLabelValues("update", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
+	case del:
+		m.WithLabelValues("del", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
+	case ddl:
+		m.WithLabelValues("ddl", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
+	case xid:
+		// ignore xid jobs
+	case flush:
+		m.WithLabelValues("flush", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
+	case skip:
+		// ignore skip jobs
+	default:
+		s.tctx.L().Warn("unknown job operation type", zap.Stringer("type", tp))
+	}
+}

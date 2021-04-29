@@ -688,34 +688,6 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origSchema
 	return nil
 }
 
-func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64) {
-	// TODO(ehco) mv this func to syncer/metrics.go
-	m := addedJobsTotalCounter
-	if isFinished {
-		s.count.Add(n)
-		m = finishedJobsTotalCounter
-	}
-
-	switch tp {
-	case insert:
-		m.WithLabelValues("insert", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
-	case update:
-		m.WithLabelValues("update", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
-	case del:
-		m.WithLabelValues("del", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
-	case ddl:
-		m.WithLabelValues("ddl", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
-	case xid:
-		// ignore xid jobs
-	case flush:
-		m.WithLabelValues("flush", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
-	case skip:
-		// ignore skip jobs
-	default:
-		s.tctx.L().Warn("unknown job operation type", zap.Stringer("type", tp))
-	}
-}
-
 func (s *Syncer) checkWait(job *job) bool {
 	if job.tp == ddl {
 		return true
@@ -770,7 +742,7 @@ func (s *Syncer) addJob(job *job) error {
 	case insert, update, del:
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
-		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
+		AddJobCountMetric(s, false, s.queueBucketMapping[queueBucket], job.tp, 1)
 		startTime := time.Now()
 		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
@@ -1008,7 +980,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			continue
 		}
 		s.jobWg.Done()
-		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
+		AddJobCountMetric(s, true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
 	}
 }
 
@@ -1028,7 +1000,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		idx = 0
 		jobs = jobs[0:0]
 		for tpName, v := range tpCnt {
-			s.addCount(true, queueBucket, tpName, v)
+			AddJobCountMetric(s, true, queueBucket, tpName, v)
 			tpCnt[tpName] = 0
 		}
 	}
