@@ -579,7 +579,7 @@ func (w *Worker) resetSubtaskStage() (int64, error) {
 			// we get an etcd compact error at the first running. If we try to "resume" it now, we will get an error
 			opType, err2 := w.operateSubTaskStage(stage, subtaskCfg)
 			if err2 != nil {
-				opErrCounter.WithLabelValues(w.name, opType).Inc()
+				IncrOpErrCounter(w.name, opType)
 				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage),
 					zap.String("task", subtaskCfg.Name), zap.Error(err2))
 			}
@@ -590,7 +590,7 @@ func (w *Worker) resetSubtaskStage() (int64, error) {
 	for name := range sts {
 		err = w.OperateSubTask(name, pb.TaskOp_Stop)
 		if err != nil {
-			opErrCounter.WithLabelValues(w.name, pb.TaskOp_Stop.String()).Inc()
+			IncrOpErrCounter(w.name, pb.TaskOp_Stop.String())
 			log.L().Error("fail to stop subtask", zap.String("task", name), zap.Error(err))
 		}
 	}
@@ -658,7 +658,7 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 			log.L().Info("receive subtask stage change", zap.Stringer("stage", stage), zap.Bool("is deleted", stage.IsDeleted))
 			opType, err := w.operateSubTaskStageWithoutConfig(stage)
 			if err != nil {
-				opErrCounter.WithLabelValues(w.name, opType).Inc()
+				IncrOpErrCounter(w.name, opType)
 				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage), zap.Bool("is deleted", stage.IsDeleted), zap.Error(err))
 				if etcdutil.IsRetryableError(err) {
 					return err
@@ -762,7 +762,7 @@ func (w *Worker) observeRelayStage(ctx context.Context, etcdCli *clientv3.Client
 					}
 					opType, err1 := w.operateRelayStage(ctx, stage)
 					if err1 != nil {
-						opErrCounter.WithLabelValues(w.name, opType).Inc()
+						IncrOpErrCounter(w.name, opType)
 						log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Bool("is deleted", stage.IsDeleted), zap.Error(err1))
 					}
 				}
@@ -792,7 +792,7 @@ OUTER:
 			log.L().Info("receive relay stage change", zap.Stringer("stage", stage), zap.Bool("is deleted", stage.IsDeleted))
 			opType, err := w.operateRelayStage(ctx, stage)
 			if err != nil {
-				opErrCounter.WithLabelValues(w.name, opType).Inc()
+				IncrOpErrCounter(w.name, opType)
 				log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Bool("is deleted", stage.IsDeleted), zap.Error(err))
 			}
 		case err, ok := <-errCh:

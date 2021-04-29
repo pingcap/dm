@@ -580,7 +580,7 @@ OUTER:
 			err := s.operateSourceBound(bound)
 			s.setSourceStatus(bound.Source, err, true)
 			if err != nil {
-				opErrCounter.WithLabelValues(s.cfg.Name, opErrTypeSourceBound).Inc()
+				IncrOpErrCounter(s.cfg.Name, opErrTypeSourceBound)
 				log.L().Error("fail to operate sourceBound on worker", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted), zap.Error(err))
 				if etcdutil.IsRetryableError(err) {
 					return err
@@ -615,7 +615,7 @@ OUTER:
 			err := s.operateRelaySource(relaySource)
 			s.setSourceStatus(relaySource.Source, err, true)
 			if err != nil {
-				opErrCounter.WithLabelValues(s.cfg.Name, opErrTypeRelaySource).Inc()
+				IncrOpErrCounter(s.cfg.Name, opErrTypeRelaySource)
 				log.L().Error("fail to operate relay source on worker",
 					zap.String("relay source", relaySource.Source),
 					zap.Bool("is deleted", relaySource.IsDeleted),

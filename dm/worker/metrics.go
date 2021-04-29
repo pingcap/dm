@@ -42,7 +42,7 @@ const (
 )
 
 var (
-	taskState = metricsproxy.NewGaugeVec(
+	taskStateGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "worker",
@@ -109,7 +109,7 @@ func RegistryMetrics() {
 
 	registry.MustRegister(cpuUsageGauge)
 
-	registry.MustRegister(taskState)
+	registry.MustRegister(taskStateGauge)
 	registry.MustRegister(opErrCounter)
 
 	relay.RegisterMetrics(registry)
@@ -140,11 +140,16 @@ func InitStatus(lis net.Listener) {
 	}
 }
 
-// UpdateTaskState update worker task stage.
-func UpdateTaskState(task, sourceID string, stage pb.Stage) {
+// UpdatetaskStateGauge update worker task stage.
+func UpdatetaskStateGauge(task, sourceID string, stage pb.Stage) {
 	if stage == pb.Stage_Stopped || stage == pb.Stage_Finished {
-		taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": sourceID})
+		taskStateGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": sourceID})
 	} else {
-		taskState.WithLabelValues(task, sourceID).Set(float64(stage))
+		taskStateGauge.WithLabelValues(task, sourceID).Set(float64(stage))
 	}
+}
+
+// IncrOpErrCounter is a wrapper for opErrCounter.
+func IncrOpErrCounter(labels ...string) {
+	opErrCounter.WithLabelValues(labels...).Inc()
 }
