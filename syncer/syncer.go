@@ -489,7 +489,7 @@ func (s *Syncer) resetDBs(tctx *tcontext.Context) error {
 
 // Process implements the dm.Unit interface.
 func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
-	syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Add(0)
+	AddSyncerExitWithErrorCounter(0, s.cfg.Name, s.cfg.SourceID)
 
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -521,7 +521,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 				return
 			}
 			cancel() // cancel s.Run
-			syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Inc()
+			AddSyncerExitWithErrorCounter(1, s.cfg.Name, s.cfg.SourceID)
 			errsMu.Lock()
 			errs = append(errs, err)
 			errsMu.Unlock()
@@ -549,7 +549,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		if utils.IsContextCanceledError(err) {
 			s.tctx.L().Info("filter out error caused by user cancel")
 		} else {
-			syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Inc()
+			AddSyncerExitWithErrorCounter(1, s.cfg.Name, s.cfg.SourceID)
 			errsMu.Lock()
 			errs = append(errs, unit.NewProcessError(err))
 			errsMu.Unlock()
@@ -689,10 +689,11 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origSchema
 }
 
 func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64) {
-	m := addedJobsTotal
+	// TODO(ehco) mv this func to syncer/metrics.go
+	m := addedJobsTotalCounter
 	if isFinished {
 		s.count.Add(n)
-		m = finishedJobsTotal
+		m = finishedJobsTotalCounter
 	}
 
 	switch tp {
@@ -746,26 +747,26 @@ func (s *Syncer) addJob(job *job) error {
 		s.saveGlobalPoint(job.location)
 		return nil
 	case flush:
-		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
+		IncrAddedJobsTotal("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID)
 		// ugly code addJob and sync, refine it later
 		s.jobWg.Add(s.cfg.WorkerCount)
 		for i := 0; i < s.cfg.WorkerCount; i++ {
 			startTime := time.Now()
 			s.jobs[i] <- job
 			// flush for every DML queue
-			addJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
+			SetAddJobDurationHistogram(time.Since(startTime).Seconds(), "flush", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID)
 		}
 		s.jobWg.Wait()
-		finishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
+		IncrFinishedJobsTotal("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID)
 		return s.flushCheckPoints()
 	case ddl:
 		s.jobWg.Wait()
-		addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
+		IncrAddedJobsTotal("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID)
 		s.jobWg.Add(1)
 		queueBucket = s.cfg.WorkerCount
 		startTime := time.Now()
 		s.jobs[queueBucket] <- job
-		addJobDurationHistogram.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
+		SetAddJobDurationHistogram(time.Since(startTime).Seconds(), "ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID)
 	case insert, update, del:
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
@@ -773,7 +774,7 @@ func (s *Syncer) addJob(job *job) error {
 		startTime := time.Now()
 		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
-		addJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
+		SetAddJobDurationHistogram(time.Since(startTime).Seconds(), job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket], s.cfg.SourceID)
 	}
 
 	// nolint:ifshort
@@ -1075,7 +1076,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	for {
 		select {
 		case sqlJob, ok := <-jobChan:
-			queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
+			SetQueueSizeGauge(float64(len(jobChan)), s.cfg.Name, queueBucket, s.cfg.SourceID)
 			if !ok {
 				return
 			}
@@ -1354,12 +1355,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		// get binlog event, reset tryReSync, so we can re-sync binlog while syncer meets errors next time
 		tryReSync = true
-		binlogPosGauge.WithLabelValues("syncer", s.cfg.Name, s.cfg.SourceID).Set(float64(e.Header.LogPos))
+		SetBinlogPosGauge(float64(e.Header.LogPos), "syncer", s.cfg.Name, s.cfg.SourceID)
 		index, err := binlog.GetFilenameIndex(lastLocation.Position.Name)
 		if err != nil {
 			tctx.L().Warn("fail to get index number of binlog file, may because only specify GTID and hasn't saved according binlog position", log.ShortError(err))
 		} else {
-			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name, s.cfg.SourceID).Set(float64(index))
+			SetBinlogFileGauge(float64(index), "syncer", s.cfg.Name, s.cfg.SourceID)
 		}
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
 		SetBinlogEventSizeHistogram(float64(e.Header.EventSize), s.cfg.Name, s.cfg.SourceID)
@@ -1627,7 +1628,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return err
 	}
 	if ignore {
-		skipBinlogDurationHistogram.WithLabelValues("rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+		SetSkipBinlogDurationHistogram(time.Since(ec.startTime).Seconds(), "rows", s.cfg.Name, s.cfg.SourceID)
 		// for RowsEvent, we should record lastLocation rather than currentLocation
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
 	}
@@ -1726,7 +1727,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err
 		}
 	}
-	dispatchBinlogDurationHistogram.WithLabelValues(jobType.String(), s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
+	SetDispatchBinlogDurationHistogram(time.Since(startTime).Seconds(), jobType.String(), s.cfg.Name, s.cfg.SourceID)
 	return nil
 }
 
@@ -1748,7 +1749,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	}
 
 	if parseResult.ignore {
-		skipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+		SetSkipBinlogDurationHistogram(time.Since(ec.startTime).Seconds(), "query", s.cfg.Name, s.cfg.SourceID)
 		ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema))
 		*ec.lastLocation = *ec.currentLocation // before record skip location, update lastLocation
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
@@ -1824,7 +1825,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			return handleErr
 		}
 		if len(sqlDDL) == 0 {
-			skipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+			SetSkipBinlogDurationHistogram(time.Since(ec.startTime).Seconds(), "query", s.cfg.Name, s.cfg.SourceID)
 			ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema))
 			continue
 		}
@@ -2025,7 +2026,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 	if needShardingHandle {
 		target, _ := GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
-		unsyncedTableGauge.WithLabelValues(s.cfg.Name, target, s.cfg.SourceID).Set(float64(remain))
+		SetUnsyncedTableGauge(float64(remain), s.cfg.Name, target, s.cfg.SourceID)
 		err = ec.safeMode.IncrForTable(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
 		if err != nil {
 			return err
@@ -2079,11 +2080,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		if err2 != nil {
 			return err2
 		}
-		shardLockResolving.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Set(1) // block and wait DDL lock to be synced
+		SetShardLockResolving(1, s.cfg.Name, s.cfg.SourceID) // block and wait DDL lock to be synced
 		ec.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo), zap.Int64("revision", rev))
 
 		shardOp, err2 := s.pessimist.GetOperation(ec.tctx.Ctx, shardInfo, rev+1)
-		shardLockResolving.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Set(0)
+		SetShardLockResolving(0, s.cfg.Name, s.cfg.SourceID)
 		if err2 != nil {
 			return err2
 		}
@@ -2355,7 +2356,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 							zap.Int64("bytes/Second", bytesPerSec),
 							zap.Int64("unsynced binlog size", remainingSize),
 							zap.Int64("estimate time to catch up", remainingSeconds))
-						remainingTimeGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Set(float64(remainingSeconds))
+						SetRemainingTimeGauge(float64(remainingSeconds), s.cfg.Name, s.cfg.SourceID)
 					}
 				}
 			}
@@ -2366,12 +2367,12 @@ func (s *Syncer) printStatus(ctx context.Context) {
 			if err != nil {
 				s.tctx.L().Error("fail to get master status", log.ShortError(err))
 			} else {
-				binlogPosGauge.WithLabelValues("master", s.cfg.Name, s.cfg.SourceID).Set(float64(latestMasterPos.Pos))
+				SetBinlogPosGauge(float64(latestMasterPos.Pos), "master", s.cfg.Name, s.cfg.SourceID)
 				index, err := binlog.GetFilenameIndex(latestMasterPos.Name)
 				if err != nil {
 					s.tctx.L().Error("fail to parse binlog file", log.ShortError(err))
 				} else {
-					binlogFileGauge.WithLabelValues("master", s.cfg.Name, s.cfg.SourceID).Set(float64(index))
+					SetBinlogFileGauge(float64(index), "master", s.cfg.Name, s.cfg.SourceID)
 				}
 			}
 

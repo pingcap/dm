@@ -259,7 +259,7 @@ func (h *Heartbeat) run(ctx context.Context) {
 		case <-updateTicker.C:
 			err := h.updateTS()
 			if err != nil {
-				heartbeatUpdateErr.WithLabelValues(strconv.Itoa(int(h.cfg.serverID))).Inc()
+				AddHeartbeatUpdateErr(1, strconv.Itoa(int(h.cfg.serverID)))
 				h.logger.Error("update heartbeat ts", zap.Error(err))
 			}
 
@@ -329,7 +329,7 @@ func (h *Heartbeat) calculateLag(ctx context.Context) error {
 }
 
 func reportLag(taskName string, lag float64) {
-	replicationLagGauge.WithLabelValues(taskName).Set(lag)
+	SetReplicationLagGauge(lag, taskName)
 }
 
 func (h *Heartbeat) getPrimaryTS() (float64, error) {

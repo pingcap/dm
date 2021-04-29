@@ -16,13 +16,12 @@ package syncer
 import (
 	"net/http"
 
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/metricsproxy"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/metricsproxy"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -92,7 +91,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0000005, 2, 25), // this should be very fast.
 		}, []string{"type", "task", "source_id"})
 
-	addedJobsTotal = metricsproxy.NewCounterVec(
+	addedJobsTotalCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -100,7 +99,7 @@ var (
 			Help:      "total number of added jobs",
 		}, []string{"type", "task", "queueNo", "source_id"})
 
-	finishedJobsTotal = metricsproxy.NewCounterVec(
+	finishedJobsTotalCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -132,7 +131,7 @@ var (
 			Help:      "current binlog file index",
 		}, []string{"node", "task", "source_id"})
 
-	sqlRetriesTotal = metricsproxy.NewCounterVec(
+	sqlRetriesTotalCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -158,6 +157,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
 		}, []string{"task"})
 
+	// TODO(ehco): refine this metrics in baseConn.ExecuteSQL.
 	stmtHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
@@ -201,7 +201,7 @@ var (
 			Help:      "number of unsynced tables in the subtask",
 		}, []string{"task", "table", "source_id"})
 
-	shardLockResolving = metricsproxy.NewGaugeVec(
+	shardLockResolvingGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -209,7 +209,7 @@ var (
 			Help:      "waiting shard DDL lock to be resolved",
 		}, []string{"task", "source_id"})
 
-	heartbeatUpdateErr = metricsproxy.NewCounterVec(
+	heartbeatUpdateErrCounter = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -227,21 +227,21 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(addJobDurationHistogram)
 	registry.MustRegister(dispatchBinlogDurationHistogram)
 	registry.MustRegister(skipBinlogDurationHistogram)
-	registry.MustRegister(addedJobsTotal)
-	registry.MustRegister(finishedJobsTotal)
+	registry.MustRegister(addedJobsTotalCounter)
+	registry.MustRegister(finishedJobsTotalCounter)
 	registry.MustRegister(queueSizeGauge)
-	registry.MustRegister(sqlRetriesTotal)
 	registry.MustRegister(binlogPosGauge)
 	registry.MustRegister(binlogFileGauge)
+	registry.MustRegister(sqlRetriesTotalCounter)
 	registry.MustRegister(txnHistogram)
-	registry.MustRegister(stmtHistogram)
 	registry.MustRegister(queryHistogram)
+	registry.MustRegister(stmtHistogram)
 	registry.MustRegister(syncerExitWithErrorCounter)
 	registry.MustRegister(replicationLagGauge)
 	registry.MustRegister(remainingTimeGauge)
 	registry.MustRegister(unsyncedTableGauge)
-	registry.MustRegister(shardLockResolving)
-	registry.MustRegister(heartbeatUpdateErr)
+	registry.MustRegister(shardLockResolvingGauge)
+	registry.MustRegister(heartbeatUpdateErrCounter)
 }
 
 // InitStatusAndMetrics register prometheus metrics and listen for status port.
@@ -278,20 +278,20 @@ func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	addJobDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	dispatchBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	skipBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	addedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	finishedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	addedJobsTotalCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	finishedJobsTotalCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	queueSizeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	sqlRetriesTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogPosGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogFileGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	sqlRetriesTotalCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	txnHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	stmtHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	queryHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	stmtHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	syncerExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	replicationLagGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	remainingTimeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	unsyncedTableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	shardLockResolving.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	shardLockResolvingGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }
 
 // SetBinlogReadDurationHistogram is a setter for binlogReadDurationHistogram.
@@ -312,4 +312,89 @@ func SetBinlogEventHistogram(size float64, labels ...string) {
 // SetConflictDetectDurationHistogram is a setter for conflictDetectDurationHistogram.
 func SetConflictDetectDurationHistogram(size float64, labels ...string) {
 	conflictDetectDurationHistogram.WithLabelValues(labels...).Observe(size)
+}
+
+// SetAddJobDurationHistogram is a setter for addJobDurationHistogram.
+func SetAddJobDurationHistogram(size float64, labels ...string) {
+	addJobDurationHistogram.WithLabelValues(labels...).Observe(size)
+}
+
+// SetDispatchBinlogDurationHistogram is a setter for dispatchBinlogDurationHistogram.
+func SetDispatchBinlogDurationHistogram(size float64, labels ...string) {
+	dispatchBinlogDurationHistogram.WithLabelValues(labels...).Observe(size)
+}
+
+// SetSkipBinlogDurationHistogram is a setter for skipBinlogDurationHistogram.
+func SetSkipBinlogDurationHistogram(size float64, labels ...string) {
+	skipBinlogDurationHistogram.WithLabelValues(labels...).Observe(size)
+}
+
+// IncrAddedJobsTotal is a wrapper for addedJobsTotalCounter.
+func IncrAddedJobsTotal(labels ...string) {
+	addedJobsTotalCounter.WithLabelValues(labels...).Inc()
+}
+
+// IncrFinishedJobsTotal is a wrapper for finishedJobsTotalCounter.
+func IncrFinishedJobsTotal(labels ...string) {
+	finishedJobsTotalCounter.WithLabelValues(labels...).Inc()
+}
+
+// SetQueueSizeGauge is a setter for queueSizeGauge.
+func SetQueueSizeGauge(size float64, labels ...string) {
+	queueSizeGauge.WithLabelValues(labels...).Set(size)
+}
+
+// SetBinlogPosGauge is a setter for binlogPosGauge.
+func SetBinlogPosGauge(size float64, labels ...string) {
+	binlogPosGauge.WithLabelValues(labels...).Set(size)
+}
+
+// SetBinlogFileGauge is a setter for binlogFileGauge.
+func SetBinlogFileGauge(size float64, labels ...string) {
+	binlogPosGauge.WithLabelValues(labels...).Set(size)
+}
+
+// AddSQLRetriesTotal is adder for sqlRetriesTotalCounter.
+func AddSQLRetriesTotal(num float64, labels ...string) {
+	sqlRetriesTotalCounter.WithLabelValues(labels...).Add(num)
+}
+
+// SetTxnHistogram is a setter for txnHistogram.
+func SetTxnHistogram(size float64, labels ...string) {
+	txnHistogram.WithLabelValues(labels...).Observe(size)
+}
+
+// SetQueryHistogram is a setter for queryHistogram.
+func SetQueryHistogram(size float64, labels ...string) {
+	queryHistogram.WithLabelValues(labels...).Observe(size)
+}
+
+// AddSyncerExitWithErrorCounter is adder for syncerExitWithErrorCounter.
+func AddSyncerExitWithErrorCounter(num float64, labels ...string) {
+	syncerExitWithErrorCounter.WithLabelValues(labels...).Add(num)
+}
+
+// SetReplicationLagGauge is a setter for replicationLagGauge.
+func SetReplicationLagGauge(lag float64, labels ...string) {
+	replicationLagGauge.WithLabelValues(labels...).Set(lag)
+}
+
+// SetRemainingTimeGauge is a setter for remainingTimeGauge.
+func SetRemainingTimeGauge(val float64, labels ...string) {
+	remainingTimeGauge.WithLabelValues(labels...).Set(val)
+}
+
+// SetUnsyncedTableGauge is a setter for unsyncedTableGauge.
+func SetUnsyncedTableGauge(lag float64, labels ...string) {
+	unsyncedTableGauge.WithLabelValues(labels...).Set(lag)
+}
+
+// SetShardLockResolving is a setter for shardLockResolvingGauge.
+func SetShardLockResolving(lag float64, labels ...string) {
+	shardLockResolvingGauge.WithLabelValues(labels...).Set(lag)
+}
+
+// AddHeartbeatUpdateErr is adder for heartbeatUpdateErrCounter.
+func AddHeartbeatUpdateErr(num float64, labels ...string) {
+	heartbeatUpdateErrCounter.WithLabelValues(labels...).Add(num)
 }

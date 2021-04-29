@@ -161,7 +161,7 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 						log.ShortError(err))
 					return false
 				}
-				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
+				AddSQLRetriesTotal(1, "query", conn.cfg.Name)
 				return true
 			}
 			if dbutil.IsRetryableError(err) {
@@ -169,7 +169,7 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 					zap.String("query", utils.TruncateString(query, -1)),
 					zap.String("argument", utils.TruncateInterface(args, -1)),
 					log.ShortError(err))
-				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
+				AddSQLRetriesTotal(1, "query", conn.cfg.Name)
 				return true
 			}
 			return false
@@ -187,7 +187,7 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 					return err, ret.Err()
 				}
 				cost := time.Since(startTime)
-				queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+				SetQueryHistogram(cost.Seconds(), conn.cfg.Name)
 				if cost.Seconds() > 1 {
 					ctx.L().Warn("query statement",
 						zap.String("query", utils.TruncateString(query, -1)),
@@ -240,7 +240,7 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 						log.ShortError(err))
 					return false
 				}
-				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
+				AddSQLRetriesTotal(1, "stmt_exec", conn.cfg.Name)
 				return true
 			}
 			if dbutil.IsRetryableError(err) {
@@ -248,7 +248,7 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 					zap.String("queries", utils.TruncateInterface(queries, -1)),
 					zap.String("arguments", utils.TruncateInterface(args, -1)),
 					log.ShortError(err))
-				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
+				AddSQLRetriesTotal(1, "stmt_exec", conn.cfg.Name)
 				return true
 			}
 			return false
@@ -263,7 +263,7 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 			ret, err := conn.baseConn.ExecuteSQLWithIgnoreError(ctx, stmtHistogram, conn.cfg.Name, ignoreError, queries, args...)
 			if err == nil {
 				cost := time.Since(startTime)
-				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+				SetTxnHistogram(cost.Seconds(), conn.cfg.Name)
 				if cost.Seconds() > 1 {
 					ctx.L().Warn("execute transaction",
 						zap.String("query", utils.TruncateInterface(queries, -1)),
