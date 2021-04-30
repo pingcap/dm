@@ -243,16 +243,7 @@ func upgradeToVer3(ctx context.Context, cli *clientv3.Client) error {
 
 	ops := make([]clientv3.Op, 0, len(etcdKeyUpgrades))
 	for _, pair := range etcdKeyUpgrades {
-		resp, err := cli.Get(ctx, pair.new.Path(), clientv3.WithPrefix())
-		if err != nil {
-			return err
-		}
-		if len(resp.Kvs) > 0 {
-			log.L().Info("alreay have new KVs, skipping", zap.String("etcd path", pair.new.Path()))
-			continue
-		}
-
-		resp, err = cli.Get(ctx, pair.old.Path(), clientv3.WithPrefix())
+		resp, err := cli.Get(ctx, pair.old.Path(), clientv3.WithPrefix())
 		if err != nil {
 			return err
 		}
@@ -270,6 +261,8 @@ func upgradeToVer3(ctx context.Context, cli *clientv3.Client) error {
 			// note that we lost CreateRevision, Lease, ModRevision, Version
 			ops = append(ops, clientv3.OpPut(newKey, string(kv.Value)))
 		}
+		// delete old key to provide idempotence
+		ops = append(ops, clientv3.OpDelete(pair.old.Path(), clientv3.WithPrefix()))
 	}
 	_, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return err
