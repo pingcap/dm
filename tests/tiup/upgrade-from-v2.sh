@@ -59,7 +59,7 @@ function migrate_in_v2 {
     echo "check workers"
     run_dmctl_with_retry $CUR_VER "list-member --worker" "\"stage\": \"bound\"" 2
     echo "check locks"
-    run_dmctl_with_retry $CUR_VER "show-ddl-locks" "upgrade_via_tiup_optimistic" 0
+    run_dmctl_with_retry $CUR_VER "show-ddl-locks" "no DDL locks exists" 1
 
     check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
     check_sync_diff $WORK_DIR $CUR/conf/diff_config_optimistic.toml
