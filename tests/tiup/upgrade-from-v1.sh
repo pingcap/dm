@@ -106,7 +106,9 @@ function import_to_v2_by_tiup() {
 function migrate_in_v2 {
     exec_incremental_stage2
 
+    echo "check sources"
     run_dmctl_with_retry "operate-source show" "mysql-replica-01" 1 "mysql-replica-02" 1
+    echo "check workers"
     run_dmctl_with_retry "list-member --worker" "\"stage\": \"bound\"" 2
 
     check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
