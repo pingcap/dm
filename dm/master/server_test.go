@@ -392,6 +392,166 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	// TODO: test query with correct task name, this needs to add task first
 }
 
+func (t *testMaster) TestFillUnsyncedStatus(c *check.C) {
+	s := &Server{}
+	cases := []struct {
+		input    []*pb.QueryStatusResponse
+		expected []*pb.QueryStatusResponse
+	}{
+		{
+			nil,
+			nil,
+		},
+		// test it could work
+		{
+			[]*pb.QueryStatusResponse{
+				{
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name: "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+							UnresolvedGroups: []*pb.ShardingGroup{{Target: "target1", Unsynced: []string{"table1"}}},
+						}},
+					}},
+				}, {
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name:   "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+					}},
+				}, {
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name:   "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+					}},
+				}},
+			[]*pb.QueryStatusResponse{
+				{
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name: "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+							UnresolvedGroups: []*pb.ShardingGroup{{Target: "target1", Unsynced: []string{"table1"}}},
+						}},
+					}},
+				}, {
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name: "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+							UnresolvedGroups: []*pb.ShardingGroup{{Target: "target1", Unsynced: []string{"this DM-worker doesn't receive any shard DDL of this group"}}},
+						}},
+					}},
+				}, {
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name: "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+							UnresolvedGroups: []*pb.ShardingGroup{{Target: "target1", Unsynced: []string{"this DM-worker doesn't receive any shard DDL of this group"}}},
+						}},
+					}},
+				}},
+		},
+		// test multiple task
+		{
+			[]*pb.QueryStatusResponse{
+				{
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name: "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+							UnresolvedGroups: []*pb.ShardingGroup{{Target: "target1", Unsynced: []string{"table1"}}},
+						}},
+					}},
+				}, {
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name:   "task2",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+					}},
+				}},
+			[]*pb.QueryStatusResponse{
+				{
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name: "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+							UnresolvedGroups: []*pb.ShardingGroup{{Target: "target1", Unsynced: []string{"table1"}}},
+						}},
+					}},
+				}, {
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name:   "task2",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+					}},
+				}},
+		},
+		// test not sync stage
+		{
+			[]*pb.QueryStatusResponse{
+				{
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name:   "task1",
+						Status: &pb.SubTaskStatus_Load{},
+					}},
+				}, {
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name: "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+							UnresolvedGroups: []*pb.ShardingGroup{{Target: "target1", Unsynced: []string{"table1"}}},
+						}},
+					}},
+				}},
+			[]*pb.QueryStatusResponse{
+				{
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name:   "task1",
+						Status: &pb.SubTaskStatus_Load{},
+					}},
+				}, {
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name: "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+							UnresolvedGroups: []*pb.ShardingGroup{{Target: "target1", Unsynced: []string{"table1"}}},
+						}},
+					}},
+				}},
+		},
+		// test won't overwrite existing unsynced
+		{
+			[]*pb.QueryStatusResponse{
+				{
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name: "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+							UnresolvedGroups: []*pb.ShardingGroup{{Target: "target1", Unsynced: []string{"table1"}}},
+						}},
+					}},
+				}, {
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name: "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+							UnresolvedGroups: []*pb.ShardingGroup{{Target: "target1", Unsynced: []string{"table2"}}},
+						}},
+					}},
+				}},
+			[]*pb.QueryStatusResponse{
+				{
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name: "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+							UnresolvedGroups: []*pb.ShardingGroup{{Target: "target1", Unsynced: []string{"table1"}}},
+						}},
+					}},
+				}, {
+					SubTaskStatus: []*pb.SubTaskStatus{{
+						Name: "task1",
+						Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+							UnresolvedGroups: []*pb.ShardingGroup{{Target: "target1", Unsynced: []string{"table2"}}},
+						}},
+					}},
+				}},
+		},
+	}
+
+	for _, ca := range cases {
+		s.fillUnsyncedStatus(ca.input)
+		c.Assert(ca.input, check.DeepEquals, ca.expected)
+	}
+}
+
 func (t *testMaster) TestCheckTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
