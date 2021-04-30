@@ -67,7 +67,7 @@ jobs:
     strategy:
         fail-fast: false
         matrix:
-          previous_v2: ["v2.0.0", "v2.0.1"]
+          previous_v2: ["v2.0.0", "v2.0.1", "v2.0.2"]
 
     steps:    
 
@@ -82,10 +82,12 @@ jobs:
         path: go/src/github.com/pingcap/dm
 
     - name: Build
+      if: ${{ github.ref != 'refs/heads/main' }}
       working-directory: ${{ env.working-directory }}
       run: make build nolint=true
     
     - name: Package files
+      if: ${{ github.ref != 'refs/heads/main' }}
       run: |
           mkdir ${{ github.workspace }}/package
           cd ${{ github.workspace }}/package
@@ -118,6 +120,7 @@ jobs:
           GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
 
     - name: Copy package files
+      if: ${{ github.ref != 'refs/heads/main' }}
       run: |
           cd ${{ github.workspace }}/package
           docker cp dm-master-nightly-linux-amd64.tar.gz control:/tmp

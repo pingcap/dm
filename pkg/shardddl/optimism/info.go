@@ -25,6 +25,7 @@ import (
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // TODO: much of the code in optimistic mode is very similar to pessimistic mode, we can try to combine them together.
@@ -155,6 +156,7 @@ func infoFromJSON(s string) (i Info, err error) {
 		// All the Info will be upgraded after new info putted or lock resolved.
 		oldInfo, newErr := oldInfoFromJSON(s)
 		if newErr != nil {
+			log.L().Error("unmarshal old info", log.ShortError(newErr))
 			return
 		}
 		return oldInfo.toInfo(), nil
