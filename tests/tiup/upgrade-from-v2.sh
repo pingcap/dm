@@ -45,6 +45,9 @@ function upgrade_to_current_v2() {
 function migrate_in_v2 {
     exec_incremental_stage2
 
+    run_dmctl_with_retry "operate-source show" "mysql-replica-01" 1 "mysql-replica-02" 1
+    run_dmctl_with_retry "list-member --worker" "\"stage\": \"bound\"" 2
+
     check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
 
     tiup dmctl:$CUR_VER --master-addr=master1:8261 stop-task $TASK_NAME
