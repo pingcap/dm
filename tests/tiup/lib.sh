@@ -72,7 +72,7 @@ function run_dmctl_with_retry() {
             j=$((i+1))
             value=${!i}
             expected=${!j}
-            got=$(sed "s/$value/$value\n/g" $dmctl_log | grep -c "$value")
+            got=$(sed "s/$value/$value\n/g" $dmctl_log | grep -c "$value" || true)
             if [ "$got" != "$expected" ]; then
                 all_matched=false
                 break
