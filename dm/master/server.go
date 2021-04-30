@@ -1894,10 +1894,10 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest
 	}, nil
 }
 
-func (s *Server) createMasterClientByName(ctx context.Context, name string) (pb.MasterClient, error) {
+func (s *Server) createMasterClientByName(ctx context.Context, name string) (pb.MasterClient, *grpc.ClientConn, error) {
 	listResp, err := s.etcdClient.MemberList(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	clientURLs := []string{}
 	for _, m := range listResp.Members {
@@ -1909,11 +1909,11 @@ func (s *Server) createMasterClientByName(ctx context.Context, name string) (pb.
 		}
 	}
 	if len(clientURLs) == 0 {
-		return nil, errors.New("master not found")
+		return nil, nil, errors.New("master not found")
 	}
 	tls, err := toolutils.NewTLS(s.cfg.SSLCA, s.cfg.SSLCert, s.cfg.SSLKey, s.cfg.AdvertiseAddr, s.cfg.CertAllowedCN)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var conn *grpc.ClientConn
@@ -1922,12 +1922,12 @@ func (s *Server) createMasterClientByName(ctx context.Context, name string) (pb.
 		conn, err = grpc.Dial(clientURL, tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second))
 		if err == nil {
 			masterClient := pb.NewMasterClient(conn)
-			return masterClient, nil
+			return masterClient, conn, nil
 		}
 		log.L().Error("can not dial to master", zap.String("name", name), zap.String("client url", clientURL), log.ShortError(err))
 	}
 	// return last err
-	return nil, err
+	return nil, nil, err
 }
 
 // GetMasterCfg implements MasterServer.GetMasterCfg.
@@ -1982,12 +1982,13 @@ func (s *Server) GetCfg(ctx context.Context, req *pb.GetCfgRequest) (*pb.GetCfgR
 			return resp2, nil
 		}
 
-		masterClient, err := s.createMasterClientByName(ctx, req.Name)
+		masterClient, grpcConn, err := s.createMasterClientByName(ctx, req.Name)
 		if err != nil {
 			resp2.Msg = err.Error()
 			// nolint:nilerr
 			return resp2, nil
 		}
+		defer grpcConn.Close()
 		masterResp, err := masterClient.GetMasterCfg(ctx, &pb.GetMasterCfgRequest{})
 		if err != nil {
 			resp2.Msg = err.Error()
