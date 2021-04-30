@@ -71,7 +71,7 @@ func (s *Server) bootstrap(ctx context.Context) error {
 }
 
 func (s *Server) bootstrapBeforeSchedulerStart(ctx context.Context) error {
-	log.L().Info("start before scheduler start")
+	log.L().Info("bootstrap before scheduler start")
 	// no need for v1.0.x
 	if s.cfg.V1SourcesPath != "" {
 		return nil
