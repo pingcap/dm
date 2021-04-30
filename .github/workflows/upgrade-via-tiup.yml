@@ -9,6 +9,10 @@ on:
         dmVer: 'v1.0.6'
       toVer:
         dmVer: 'nightly'  
+  pull_request:
+    branches:
+    - master
+    - release-2.0
 
 jobs:
   from_v1:
