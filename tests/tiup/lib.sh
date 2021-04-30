@@ -66,9 +66,9 @@ function exec_incremental_stage2() {
 function run_dmctl_with_retry() {
     dmctl_log="dmctl.log"
     for ((k=0; k<10; k++)); do
-        tiup dmctl:$CUR_VER --master-addr=master1:8261 $1 > $dmctl_log 2>&1
+        tiup dmctl:$1 --master-addr=master1:8261 $2 > $dmctl_log 2>&1
         all_matched=true
-        for ((i=2; i<$#; i+=2)); do
+        for ((i=3; i<$#; i+=2)); do
             j=$((i+1))
             value=${!i}
             expected=${!j}
