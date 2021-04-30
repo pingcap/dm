@@ -155,7 +155,7 @@ function run_dmctl_with_retry() {
         done
 
         if $all_matched; then
-            return
+            return 0
         fi
 
         sleep 2
