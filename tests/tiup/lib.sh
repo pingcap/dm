@@ -74,16 +74,16 @@ function run_dmctl_with_retry() {
             expected=${!j}
             got=$(sed "s/$value/$value\n/g" $dmctl_log | grep -c "$value")
             if [ "$got" != "$expected" ]; then
-                echo "command: $1 $value count: $got != expected: $expected, failed the $k-th time, will retry again"
                 all_matched=false
                 break
             fi
         done
 
         if $all_matched; then
-            exit 0
+            return
         fi
 
         sleep 2
     done
+    exit 1
 }
