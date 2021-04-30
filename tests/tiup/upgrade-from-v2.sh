@@ -54,7 +54,12 @@ function upgrade_to_current_v2() {
 function migrate_in_v2 {
     exec_incremental_stage2
 
-    run_dmctl_with_retry "show-ddl-locks" "upgrade_via_tiup_optimistic" 0
+    echo "check sources"
+    run_dmctl_with_retry $CUR_VER "operate-source show" "mysql-replica-01" 1 "mysql-replica-02" 1
+    echo "check workers"
+    run_dmctl_with_retry $CUR_VER "list-member --worker" "\"stage\": \"bound\"" 2
+    echo "check locks"
+    run_dmctl_with_retry $CUR_VER "show-ddl-locks" "upgrade_via_tiup_optimistic" 0
 
     check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
     check_sync_diff $WORK_DIR $CUR/conf/diff_config_optimistic.toml

@@ -70,6 +70,20 @@ func (s *Server) bootstrap(ctx context.Context) error {
 	return nil
 }
 
+func (s *Server) bootstrapBeforeSchedulerStart(ctx context.Context) error {
+	log.L().Info("start before scheduler start")
+	// no need for v1.0.x
+	if s.cfg.V1SourcesPath != "" {
+		return nil
+	}
+
+	err := upgrade.TryUpgradeBeforeSchedulerStart(ctx, s.etcdClient)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // importFromV10x tries to import/upgrade the cluster from v1.0.x.
 func (s *Server) importFromV10x(ctx context.Context) error {
 	// 1. check whether need to upgrade based on the cluster version.

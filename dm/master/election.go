@@ -57,6 +57,15 @@ func (s *Server) electionNotify(ctx context.Context) {
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
 				s.leader.Store(oneselfStartingLeader)
 
+				// try to upgrade the cluster before scheduler start
+				err := s.bootstrapBeforeSchedulerStart(ctx)
+				if err != nil {
+					log.L().Error("fail to bootstrap the cluster before scheduler start", zap.Error(err))
+					s.retireLeader()
+					s.election.Resign()
+					continue
+				}
+
 				// NOTE: for logic errors, we should return with `true`, so that the cluster can serve requests and the user can fix these errors.
 				// otherwise no member of DM-master can become the leader and the user can't fix them (the cluster may need to be fixed offline with some other tools like etcdctl).
 				ok := s.startLeaderComponent(ctx)
@@ -76,7 +85,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 				// so if the old leader failed when upgrading, the new leader can try again.
 				// NOTE: if the cluster has been upgraded, calling this method again should have no side effects.
 				// NOTE: now, bootstrap relies on scheduler to handle DM-worker instances, sources, tasks, etcd.
-				err := s.bootstrap(ctx)
+				err = s.bootstrap(ctx)
 				if err != nil {
 					log.L().Error("fail to bootstrap the cluster", zap.Error(err))
 					s.retireLeader()

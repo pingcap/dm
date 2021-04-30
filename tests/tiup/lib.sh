@@ -141,22 +141,21 @@ function patch_nightly_with_tiup_mirror() {
 function run_dmctl_with_retry() {
     dmctl_log="dmctl.log"
     for ((k=0; k<10; k++)); do
-        tiup dmctl:$CUR_VER --master-addr=master1:8261 $1 > $dmctl_log 2>&1
+        tiup dmctl:$1 --master-addr=master1:8261 $2 > $dmctl_log 2>&1
         all_matched=true
-        for ((i=2; i<$#; i+=2)); do
+        for ((i=3; i<$#; i+=2)); do
             j=$((i+1))
             value=${!i}
             expected=${!j}
             got=$(sed "s/$value/$value\n/g" $dmctl_log | grep -c "$value")
             if [ "$got" != "$expected" ]; then
-                echo "command: $1 $value count: $got != expected: $expected, failed the $k-th time, will retry again"
                 all_matched=false
                 break
             fi
         done
 
         if $all_matched; then
-            exit 0
+            return
         fi
 
         sleep 2
