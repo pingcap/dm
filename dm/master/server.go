@@ -710,40 +710,24 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 	return resp, nil
 }
 
-// adjust unsynced field in sync status, task-name -> set(target-table)
+// adjust unsynced field in sync status by looking at DDL locks.
 // because if a DM-worker doesn't receive any shard DDL, it doesn't even know it's unsynced for itself
-func (*Server) fillUnsyncedStatus(resps []*pb.QueryStatusResponse) {
-	unsyncedMap := make(map[string]map[string]struct{})
+func (s *Server) fillUnsyncedStatus(resps []*pb.QueryStatusResponse) {
 	for _, resp := range resps {
 		for _, subtaskStatus := range resp.SubTaskStatus {
 			syncStatus := subtaskStatus.GetSync()
-			if syncStatus == nil {
+			if syncStatus == nil || len(syncStatus.UnresolvedGroups) != 0 {
 				continue
 			}
-			for _, group := range syncStatus.UnresolvedGroups {
-				if _, ok := unsyncedMap[subtaskStatus.Name]; !ok {
-					unsyncedMap[subtaskStatus.Name] = make(map[string]struct{})
-				}
-				unsyncedMap[subtaskStatus.Name][group.Target] = struct{}{}
-			}
-		}
-	}
-	for _, resp := range resps {
-		for _, subtaskStatus := range resp.SubTaskStatus {
-			syncStatus := subtaskStatus.GetSync()
-			if syncStatus == nil {
+			locks := s.pessimist.ShowLocks(subtaskStatus.Name, []string{resp.SourceStatus.Source})
+			if len(locks) == 0 {
 				continue
 			}
-			found := make(map[string]struct{}, len(syncStatus.UnresolvedGroups))
-			for _, group := range syncStatus.UnresolvedGroups {
-				found[group.Target] = struct{}{}
-			}
-			for target := range unsyncedMap[subtaskStatus.Name] {
-				if _, ok := found[target]; ok {
-					continue
-				}
+
+			for _, l := range locks {
+				db, table := utils.ExtractDBAndTableFromLockID(l.ID)
 				syncStatus.UnresolvedGroups = append(syncStatus.UnresolvedGroups, &pb.ShardingGroup{
-					Target:   target,
+					Target:   dbutil.TableName(db, table),
 					Unsynced: []string{"this DM-worker doesn't receive any shard DDL of this group"},
 				})
 			}
