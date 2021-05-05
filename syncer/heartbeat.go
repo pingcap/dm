@@ -259,7 +259,7 @@ func (h *Heartbeat) run(ctx context.Context) {
 		case <-updateTicker.C:
 			err := h.updateTS()
 			if err != nil {
-				AddHeartbeatUpdateErrCounter(float64(1), strconv.Itoa(int(h.cfg.serverID)))
+				AddHeartbeatUpdateErrCounter(1, strconv.Itoa(int(h.cfg.serverID)))
 				h.logger.Error("update heartbeat ts", zap.Error(err))
 			}
 

@@ -218,7 +218,7 @@ func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {
 	case gmysql.MYSQL_TYPE_DOUBLE:
 		value, ok := v.(float64)
 		if !ok {
-			err = terror.ErrBinlogColumnTypeMisMatch.Generate(v, reflect.TypeOf(v), reflect.TypeOf(float64(0)))
+			err = terror.ErrBinlogColumnTypeMisMatch.Generate(v, reflect.TypeOf(v), reflect.TypeOf(0))
 		} else {
 			bits := math.Float64bits(value)
 			err = writeIntegerColumnValue(buf, bits, reflect.TypeOf(uint64(0)))

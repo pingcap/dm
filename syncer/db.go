@@ -161,7 +161,7 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 						log.ShortError(err))
 					return false
 				}
-				AddSQLRetriesTotalCounter(float64(1), "query", conn.cfg.Name)
+				AddSQLRetriesTotalCounter(1, "query", conn.cfg.Name)
 				return true
 			}
 			if dbutil.IsRetryableError(err) {
@@ -169,7 +169,7 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 					zap.String("query", utils.TruncateString(query, -1)),
 					zap.String("argument", utils.TruncateInterface(args, -1)),
 					log.ShortError(err))
-				AddSQLRetriesTotalCounter(float64(1), "query", conn.cfg.Name)
+				AddSQLRetriesTotalCounter(1, "query", conn.cfg.Name)
 				return true
 			}
 			return false
@@ -240,7 +240,7 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 						log.ShortError(err))
 					return false
 				}
-				AddSQLRetriesTotalCounter(float64(1), "stmt_exec", conn.cfg.Name)
+				AddSQLRetriesTotalCounter(1, "stmt_exec", conn.cfg.Name)
 				return true
 			}
 			if dbutil.IsRetryableError(err) {
@@ -248,7 +248,7 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 					zap.String("queries", utils.TruncateInterface(queries, -1)),
 					zap.String("arguments", utils.TruncateInterface(args, -1)),
 					log.ShortError(err))
-				AddSQLRetriesTotalCounter(float64(1), "stmt_exec", conn.cfg.Name)
+				AddSQLRetriesTotalCounter(1, "stmt_exec", conn.cfg.Name)
 				return true
 			}
 			return false

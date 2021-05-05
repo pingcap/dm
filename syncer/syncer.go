@@ -489,7 +489,7 @@ func (s *Syncer) resetDBs(tctx *tcontext.Context) error {
 
 // Process implements the dm.Unit interface.
 func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
-	AddSyncerExitWithErrorCounter(float64(0), s.cfg.Name, s.cfg.SourceID)
+	AddSyncerExitWithErrorCounter(0, s.cfg.Name, s.cfg.SourceID)
 
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -521,7 +521,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 				return
 			}
 			cancel() // cancel s.Run
-			AddSyncerExitWithErrorCounter(float64(1), s.cfg.Name, s.cfg.SourceID)
+			AddSyncerExitWithErrorCounter(1, s.cfg.Name, s.cfg.SourceID)
 			errsMu.Lock()
 			errs = append(errs, err)
 			errsMu.Unlock()
@@ -549,7 +549,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		if utils.IsContextCanceledError(err) {
 			s.tctx.L().Info("filter out error caused by user cancel")
 		} else {
-			AddSyncerExitWithErrorCounter(float64(1), s.cfg.Name, s.cfg.SourceID)
+			AddSyncerExitWithErrorCounter(1, s.cfg.Name, s.cfg.SourceID)
 			errsMu.Lock()
 			errs = append(errs, unit.NewProcessError(err))
 			errsMu.Unlock()
@@ -2052,11 +2052,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		if err2 != nil {
 			return err2
 		}
-		SetShardLockResolvingGauge(float64(1), s.cfg.Name, s.cfg.SourceID) // block and wait DDL lock to be synced
+		SetShardLockResolvingGauge(1, s.cfg.Name, s.cfg.SourceID) // block and wait DDL lock to be synced
 		ec.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo), zap.Int64("revision", rev))
 
 		shardOp, err2 := s.pessimist.GetOperation(ec.tctx.Ctx, shardInfo, rev+1)
-		SetShardLockResolvingGauge(float64(0), s.cfg.Name, s.cfg.SourceID)
+		SetShardLockResolvingGauge(0, s.cfg.Name, s.cfg.SourceID)
 		if err2 != nil {
 			return err2
 		}

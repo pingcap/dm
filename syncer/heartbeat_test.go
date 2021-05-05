@@ -85,7 +85,7 @@ func (t *testHeartbeatSuite) TestHeartbeat(c *C) {
 	err = heartbeat.calculateLag(context.Background())
 	c.Assert(err, IsNil)
 
-	c.Assert(t.lag, Not(Equals), float64(0))
+	c.Assert(t.lag, Not(Equals), 0)
 	oldlag1 := t.lag["heartbeat_test_1"]
 	oldlag2 := t.lag["heartbeat_test_2"]
 
