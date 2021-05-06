@@ -63,7 +63,7 @@ func NewConfig() *Config {
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "Prints version and exit.")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "Path to config file.")
-	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "Master API server address.")
+	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "Master API server address, this parameter is required when interacting with the dm-master")
 	fs.StringVar(&cfg.RPCTimeoutStr, "rpc-timeout", defaultRPCTimeout, fmt.Sprintf("RPC timeout, default is %s.", defaultRPCTimeout))
 	fs.StringVar(&cfg.encrypt, EncryptCmdName, "", "Encrypts plaintext to ciphertext.")
 	fs.StringVar(&cfg.SSLCA, "ssl-ca", "", "Path of file that contains list of trusted SSL CAs for connection.")
@@ -150,7 +150,7 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 	}
 
 	if c.MasterAddr == "" {
-		return false, errors.Errorf("--master-addr not provided, use --help to see help messages")
+		return false, errors.Errorf("--master-addr not provided, use `dmtcl --help` to see help messages")
 	}
 
 	return false, errors.Trace(c.adjust())

@@ -683,7 +683,6 @@ func (p *Pessimist) removeLockPutDDLs(lock *pessimism.Lock) error {
 	})
 	p.lk.RemoveLock(lock.ID)
 	p.lk.AddLatestDoneDDLs(lock.ID, lock.DDLs)
-	metrics.ReportDDLPending(lock.Task, metrics.DDLPendingSynced, metrics.DDLPendingNone)
 	return nil
 }
 

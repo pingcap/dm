@@ -149,6 +149,11 @@ func ReportDDLPending(task, oldStatus, newStatus string) {
 	}
 }
 
+// RemoveDDLPending removes all counter of this task.
+func RemoveDDLPending(task string) {
+	ddlPendingCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+}
+
 // ReportDDLError is a setter for ddlErrCounter.
 func ReportDDLError(task, errType string) {
 	ddlErrCounter.WithLabelValues(task, errType).Inc()

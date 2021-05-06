@@ -18,6 +18,7 @@ import (
 
 	"go.etcd.io/etcd/clientv3"
 
+	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -101,6 +102,7 @@ func (lk *LockKeeper) RemoveLock(lockID string) bool {
 
 	_, ok := lk.locks[lockID]
 	delete(lk.locks, lockID)
+	metrics.RemoveDDLPending(utils.ExtractTaskFromLockID(lockID))
 	return ok
 }
 
