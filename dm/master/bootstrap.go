@@ -77,11 +77,7 @@ func (s *Server) bootstrapBeforeSchedulerStart(ctx context.Context) error {
 		return nil
 	}
 
-	err := upgrade.TryUpgradeBeforeSchedulerStart(ctx, s.etcdClient)
-	if err != nil {
-		return err
-	}
-	return nil
+	return upgrade.TryUpgradeBeforeSchedulerStart(ctx, s.etcdClient)
 }
 
 // importFromV10x tries to import/upgrade the cluster from v1.0.x.
