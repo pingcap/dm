@@ -155,6 +155,8 @@ var (
 	testEtcdCluster       *integration.ClusterV3
 	keepAliveTTL          = int64(10)
 	etcdTestCli           *clientv3.Client
+	testEtcdCluster2      *integration.ClusterV3
+	etcdTestCli2          *clientv3.Client
 )
 
 func TestMaster(t *testing.T) {
@@ -165,8 +167,11 @@ func TestMaster(t *testing.T) {
 
 	testEtcdCluster = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer testEtcdCluster.Terminate(t)
-
 	etcdTestCli = testEtcdCluster.RandClient()
+
+	testEtcdCluster2 = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
+	defer testEtcdCluster2.Terminate(t)
+	etcdTestCli2 = testEtcdCluster2.RandClient()
 
 	check.TestingT(t)
 }
@@ -390,6 +395,184 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	c.Assert(resp.Msg, check.Matches, "task .* has no source or not exist")
 	clearSchedulerEnv(c, cancel, &wg)
 	// TODO: test query with correct task name, this needs to add task first
+}
+
+func (t *testMaster) TestFillUnsyncedStatus(c *check.C) {
+	var (
+		logger  = log.L()
+		task1   = "task1"
+		task2   = "task2"
+		source1 = "source1"
+		source2 = "source2"
+		sources = []string{source1, source2}
+	)
+	cases := []struct {
+		infos    []pessimism.Info
+		input    []*pb.QueryStatusResponse
+		expected []*pb.QueryStatusResponse
+	}{
+		// test it could work
+		{
+			[]pessimism.Info{
+				{
+					Task:   task1,
+					Source: source1,
+					Schema: "db",
+					Table:  "tbl",
+				},
+			},
+			[]*pb.QueryStatusResponse{
+				{
+					SourceStatus: &pb.SourceStatus{
+						Source: source1,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name: task1,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+								UnresolvedGroups: []*pb.ShardingGroup{{Target: "`db`.`tbl`", Unsynced: []string{"table1"}}},
+							}},
+						},
+						{
+							Name:   task2,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+						},
+					},
+				}, {
+					SourceStatus: &pb.SourceStatus{
+						Source: source2,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name:   task1,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+						},
+						{
+							Name:   task2,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+						},
+					},
+				},
+			},
+			[]*pb.QueryStatusResponse{
+				{
+					SourceStatus: &pb.SourceStatus{
+						Source: source1,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name: task1,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+								UnresolvedGroups: []*pb.ShardingGroup{{Target: "`db`.`tbl`", Unsynced: []string{"table1"}}},
+							}},
+						},
+						{
+							Name:   task2,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+						},
+					},
+				}, {
+					SourceStatus: &pb.SourceStatus{
+						Source: source2,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name: task1,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+								UnresolvedGroups: []*pb.ShardingGroup{{Target: "`db`.`tbl`", Unsynced: []string{"this DM-worker doesn't receive any shard DDL of this group"}}},
+							}},
+						},
+						{
+							Name:   task2,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+						},
+					},
+				},
+			},
+		},
+		// test won't interfere not sync status
+		{
+			[]pessimism.Info{
+				{
+					Task:   task1,
+					Source: source1,
+					Schema: "db",
+					Table:  "tbl",
+				},
+			},
+			[]*pb.QueryStatusResponse{
+				{
+					SourceStatus: &pb.SourceStatus{
+						Source: source1,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name: task1,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+								UnresolvedGroups: []*pb.ShardingGroup{{Target: "`db`.`tbl`", Unsynced: []string{"table1"}}},
+							}},
+						},
+					},
+				}, {
+					SourceStatus: &pb.SourceStatus{
+						Source: source2,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name:   task1,
+							Status: &pb.SubTaskStatus_Load{Load: &pb.LoadStatus{}},
+						},
+					},
+				},
+			},
+			[]*pb.QueryStatusResponse{
+				{
+					SourceStatus: &pb.SourceStatus{
+						Source: source1,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name: task1,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+								UnresolvedGroups: []*pb.ShardingGroup{{Target: "`db`.`tbl`", Unsynced: []string{"table1"}}},
+							}},
+						},
+					},
+				}, {
+					SourceStatus: &pb.SourceStatus{
+						Source: source2,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name:   task1,
+							Status: &pb.SubTaskStatus_Load{Load: &pb.LoadStatus{}},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// test pessimistic mode
+	for _, ca := range cases {
+		s := &Server{}
+		s.pessimist = shardddl.NewPessimist(&logger, func(task string) []string { return sources })
+		c.Assert(s.pessimist.Start(context.Background(), etcdTestCli2), check.IsNil)
+		for _, i := range ca.infos {
+			_, err := pessimism.PutInfo(etcdTestCli2, i)
+			c.Assert(err, check.IsNil)
+		}
+		if len(ca.infos) > 0 {
+			utils.WaitSomething(20, 100*time.Millisecond, func() bool {
+				return len(s.pessimist.ShowLocks("", nil)) > 0
+			})
+		}
+
+		s.fillUnsyncedStatus(ca.input)
+		c.Assert(ca.input, check.DeepEquals, ca.expected)
+		_, err := pessimism.DeleteInfosOperations(etcdTestCli2, ca.infos, nil)
+		c.Assert(err, check.IsNil)
+	}
 }
 
 func (t *testMaster) TestCheckTask(c *check.C) {
