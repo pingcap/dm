@@ -25,6 +25,7 @@ import (
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // TODO: much of the code in optimistic mode is very similar to pessimistic mode, we can try to combine them together.
@@ -148,6 +149,18 @@ func (i Info) toJSON() (string, error) {
 // infoFromJSON constructs Info from its JSON represent.
 func infoFromJSON(s string) (i Info, err error) {
 	err = json.Unmarshal([]byte(s), &i)
+	if err != nil {
+		// For compatibility.
+		// In v2.0.2, we changed struct of table-info-after but forgot to upgrade etcd value.
+		// To keep the ModRevision of info, we change them after getting info instead of change all the value in etcd when upgrade
+		// All the Info will be upgraded after new info putted or lock resolved.
+		oldInfo, newErr := oldInfoFromJSON(s)
+		if newErr != nil {
+			log.L().Error("unmarshal old info", log.ShortError(newErr))
+			return
+		}
+		return oldInfo.toInfo(), nil
+	}
 	return
 }
 
@@ -293,4 +306,39 @@ func ClearTestInfoOperationSchema(cli *clientv3.Client) error {
 	clearColumns := clientv3.OpDelete(common.ShardDDLOptimismDroppedColumnsKeyAdapter.Path(), clientv3.WithPrefix())
 	_, err := cli.Txn(context.Background()).Then(clearSource, clearInfo, clearOp, clearISOp, clearColumns).Commit()
 	return err
+}
+
+// OldInfo represents info in etcd before v2.0.2.
+type OldInfo struct {
+	Task       string   `json:"task"`
+	Source     string   `json:"source"`
+	UpSchema   string   `json:"up-schema"`
+	UpTable    string   `json:"up-table"`
+	DownSchema string   `json:"down-schema"`
+	DownTable  string   `json:"down-table"`
+	DDLs       []string `json:"ddls"`
+
+	TableInfoBefore *model.TableInfo `json:"table-info-before"` // the tracked table schema before applying the DDLs
+	TableInfoAfter  *model.TableInfo `json:"table-info-after"`  // the tracked table schema after applying the DDLs
+}
+
+// oldInfoFromJSON constructs OldInfo from its JSON represent.
+func oldInfoFromJSON(s string) (oldInfo OldInfo, err error) {
+	err = json.Unmarshal([]byte(s), &oldInfo)
+	return
+}
+
+// toInfo converts OldInfo to Info.
+func (oldInfo *OldInfo) toInfo() Info {
+	return Info{
+		Task:            oldInfo.Task,
+		Source:          oldInfo.Source,
+		UpSchema:        oldInfo.UpSchema,
+		UpTable:         oldInfo.UpTable,
+		DownSchema:      oldInfo.DownSchema,
+		DownTable:       oldInfo.DownTable,
+		DDLs:            oldInfo.DDLs,
+		TableInfoBefore: oldInfo.TableInfoBefore,
+		TableInfosAfter: []*model.TableInfo{oldInfo.TableInfoAfter},
+	}
 }
