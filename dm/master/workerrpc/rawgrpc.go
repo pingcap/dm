@@ -96,6 +96,11 @@ func (c *GRPCClient) Close() error {
 	return nil
 }
 
+// Closed returns whether this grpc conn is closed. only used for test now.
+func (c *GRPCClient) Closed() bool {
+	return c.closed.Load()
+}
+
 func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Response, error) {
 	resp := &Response{}
 	resp.Type = req.Type
