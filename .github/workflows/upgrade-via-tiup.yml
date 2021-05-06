@@ -1,6 +1,10 @@
 name: Upgrade via TiUP
 
 on:
+  pull_request:
+    branches:
+    - master
+    - release-2.0
   schedule:
     - cron: '3 22 * * *' # run at minute 06:03 UTC+8
   workflow_dispatch:
@@ -35,7 +39,7 @@ jobs:
           GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
 
     - name: Run test cases
-      working-directory: ${{ env.working-directoryr }}
+      working-directory: ${{ env.working-directory }}
       run: |
         cd ${{ env.working-directory }}/tests/tiup/docker
         docker-compose exec -T control bash -c "cd /go/src/github.com/pingcap/dm && ./tests/tiup/upgrade-from-v1.sh"
@@ -63,7 +67,7 @@ jobs:
     strategy:
         fail-fast: false
         matrix:
-          previous_v2: ["v2.0.0", "v2.0.1"]
+          previous_v2: ["v2.0.0", "v2.0.1", "v2.0.2"]
 
     steps:    
 
@@ -76,19 +80,59 @@ jobs:
       uses: actions/checkout@v2
       with:
         path: go/src/github.com/pingcap/dm
+
+    - name: Build
+      if: ${{ github.ref != 'refs/heads/main' }}
+      working-directory: ${{ env.working-directory }}
+      run: make build nolint=true
     
+    - name: Package files
+      if: ${{ github.ref != 'refs/heads/main' }}
+      run: |
+          mkdir ${{ github.workspace }}/package
+          cd ${{ github.workspace }}/package
+
+          echo "package dm-master"
+          mkdir dm-master
+          cp ${{ env.working-directory }}/bin/dm-master dm-master
+          cp -r ${{ env.working-directory }}/dm/dm-ansible/conf dm-master
+          cp -r ${{ env.working-directory }}/dm/dm-ansible/scripts dm-master
+          tar -czvf dm-master-nightly-linux-amd64.tar.gz dm-master
+
+          echo "package dm-worker"
+          mkdir dm-worker
+          cp ${{ env.working-directory }}/bin/dm-worker dm-worker
+          cp -r ${{ env.working-directory }}/dm/dm-ansible/conf dm-worker/conf
+          cp -r ${{ env.working-directory }}/dm/dm-ansible/scripts dm-worker/scripts
+          tar -czvf dm-worker-nightly-linux-amd64.tar.gz dm-worker
+
+          echo "package dmctl"
+          mkdir dmctl
+          cp ${{ env.working-directory }}/bin/dmctl dmctl
+          cp -r ${{ env.working-directory }}/dm/dm-ansible/conf dmctl/conf
+          cp -r ${{ env.working-directory }}/dm/dm-ansible/scripts dmctl/scripts
+          tar -czvf dmctl-nightly-linux-amd64.tar.gz dmctl
+
     - name: Setup containers
       working-directory: ${{ env.working-directory }}
       run: |
           cd ${{ env.working-directory }}/tests/tiup/docker
           GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
 
+    - name: Copy package files
+      if: ${{ github.ref != 'refs/heads/main' }}
+      run: |
+          cd ${{ github.workspace }}/package
+          docker cp dm-master-nightly-linux-amd64.tar.gz control:/tmp
+          docker cp dm-worker-nightly-linux-amd64.tar.gz control:/tmp
+          docker cp dmctl-nightly-linux-amd64.tar.gz control:/tmp
+
     # TODO: support more CUR_VER
     - name: Run test cases
-      working-directory: ${{ env.working-directoryr }}
+      working-directory: ${{ env.working-directory }}
       run: |
         cd ${{ env.working-directory }}/tests/tiup/docker
-        docker-compose exec -T control bash -c "cd /go/src/github.com/pingcap/dm && ./tests/tiup/upgrade-from-v2.sh ${{ matrix.previous_v2 }} nightly"
+        docker-compose exec -e ref=${{ github.ref }} -T control bash -c "cd /go/src/github.com/pingcap/dm && ./tests/tiup/upgrade-from-v2.sh ${{ matrix.previous_v2 }} nightly"
 
     # send Slack notify if failed.
     # NOTE: With the exception of `GITHUB_TOKEN`, secrets are not passed to the runner when a workflow is triggered from a forked repository.
@@ -131,7 +175,7 @@ jobs:
           GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
 
     - name: Run test cases before upgrade
-      working-directory: ${{ env.working-directoryr }}
+      working-directory: ${{ env.working-directory }}
       run: |
         cd ${{ env.working-directory }}/tests/tiup/docker
         docker-compose exec -T control bash -c "cd /go/src/github.com/pingcap/dm && ./tests/tiup/upgrade-tidb.sh before_upgrade nightly"
