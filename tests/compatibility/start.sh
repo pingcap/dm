@@ -7,6 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function run() {
+    run_sql_both_source "SET @@GLOBAL.SQL_MODE='NO_AUTO_VALUE_ON_ZERO'"
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -16,7 +17,7 @@ function run() {
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml previous
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml previous
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT 
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml previous
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     dmctl_operate_source create $cur/conf/source1.yaml $SOURCE_ID1
@@ -34,7 +35,6 @@ function run() {
     wait_process_exit dm-master.test.previous
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml current
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-
     run_sql_file $cur/data/db1.increment.1.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment.1.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
@@ -48,7 +48,7 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml previous
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    
+
     echo "pause task and check status"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "pause-task test" \
