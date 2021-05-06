@@ -719,6 +719,7 @@ func (s *Server) fillUnsyncedStatus(resps []*pb.QueryStatusResponse) {
 			if syncStatus == nil || len(syncStatus.UnresolvedGroups) != 0 {
 				continue
 			}
+			// TODO: look at s.optimist when `query-status` support show `UnresolvedGroups` in optimistic mode.
 			locks := s.pessimist.ShowLocks(subtaskStatus.Name, []string{resp.SourceStatus.Source})
 			if len(locks) == 0 {
 				continue
