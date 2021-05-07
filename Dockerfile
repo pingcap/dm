@@ -19,6 +19,8 @@ RUN GO111MODULE=on go mod download
 
 COPY . .
 
+RUN apk update && apk add bash
+
 RUN make dm-worker dm-master dmctl
 
 FROM alpine:3.10

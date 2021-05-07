@@ -16,3 +16,4 @@ vendor
 tidb-slow.log
 /monitoring/dashboards/dm.json
 /monitoring/rules/dm_worker.rules.yml
+mysql.*.log
