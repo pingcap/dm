@@ -16,6 +16,7 @@ function run() {
 
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -38,6 +39,11 @@ function run() {
         "\"result\": true" 3 \
         "\"worker\": \"worker1\"" 1 \
         "\"worker\": \"worker2\"" 1
+
+    # worker1 and worker2 has one realy job and worker3 have none.
+    check_metric $WORKER1_PORT "dm_relay_binlog_file{node=\"relay\"}" 3 0 2
+    check_metric $WORKER2_PORT "dm_relay_binlog_file{node=\"relay\"}" 3 0 2
+    check_metric_not_contains $WORKER3_PORT "dm_relay_binlog_file" 3
 
     dmctl_start_task_standalone $cur/conf/dm-task.yaml "--remove-meta"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
