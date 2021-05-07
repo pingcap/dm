@@ -27,6 +27,7 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
@@ -1751,6 +1752,21 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		skipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema))
 		*ec.lastLocation = *ec.currentLocation // before record skip location, update lastLocation
+		// we try to insert an empty SQL to s.onlineDDL, because ignoring it will cause a "not found" error
+		stmts, err2 := parserpkg.Parse(parser2, originSQL, "", "")
+		if err2 != nil {
+			ec.tctx.L().Info("failed to parse a filtered SQL for online DDL", zap.String("SQL", originSQL))
+		}
+		for _, stmt := range stmts {
+			if _, ok := stmt.(ast.DDLNode); ok {
+				tableNames, err3 := parserpkg.FetchDDLTableNames(usedSchema, stmt)
+				if err3 != nil {
+					continue
+				}
+				// nolint:errcheck
+				s.onlineDDL.Apply(ec.tctx, tableNames, "", stmt)
+			}
+		}
 		return s.recordSkipSQLsLocation(*ec.lastLocation)
 	}
 	if !parseResult.isDDL {
