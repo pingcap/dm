@@ -2,13 +2,13 @@
 
 set -eu
 
-cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
 ILLEGAL_CHAR_NAME='t-Ë!s`t'
 
-function test_session_config(){
+function test_session_config() {
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -17,6 +17,7 @@ function test_session_config(){
     # start DM worker and master
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -35,24 +36,24 @@ function test_session_config(){
     # error config
     # there should be a error message like "Incorrect argument type to variable 'tidb_retry_limit'"
     # but different TiDB version output different message. so we only roughly match here
-    sed -i 's/tidb_retry_limit: "10"/tidb_retry_limit: "fjs"/g'  $WORK_DIR/dm-task.yaml
+    sed -i 's/tidb_retry_limit: "10"/tidb_retry_limit: "fjs"/g' $WORK_DIR/dm-task.yaml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $WORK_DIR/dm-task.yaml --remove-meta" \
         "tidb_retry_limit" 1
 
-    sed -i 's/tidb_retry_limit: "fjs"/tidb_retry_limit: "10"/g'  $WORK_DIR/dm-task.yaml
+    sed -i 's/tidb_retry_limit: "fjs"/tidb_retry_limit: "10"/g' $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "stop-task $ILLEGAL_CHAR_NAME"\
-            "\"result\": true" 3
+        "stop-task $ILLEGAL_CHAR_NAME" \
+        "\"result\": true" 3
 
     cleanup_data all_mode
     cleanup_process $*
 }
 
-function test_query_timeout(){
+function test_query_timeout() {
     export GO_FAILPOINTS="github.com/pingcap/dm/syncer/BlockSyncStatus=return(\"5s\")"
 
     cp $cur/conf/dm-master.toml $WORK_DIR/dm-master.toml
@@ -66,6 +67,7 @@ function test_query_timeout(){
     # start DM worker and master
     run_dm_master $WORK_DIR/master $MASTER_PORT $WORK_DIR/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     # operate mysql config to worker
@@ -83,13 +85,14 @@ function test_query_timeout(){
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
     sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
+    check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 31
 
     # `query-status` timeout
     start_time=$(date +%s)
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status $ILLEGAL_CHAR_NAME" \
         "context deadline exceeded" 2
-    duration=$(( $(date +%s)-$start_time ))
+    duration=$(($(date +%s) - $start_time))
     if [[ $duration -gt 10 ]]; then
         echo "query-stauts takes too much time $duration"
         exit 1
@@ -97,8 +100,8 @@ function test_query_timeout(){
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "stop-task $ILLEGAL_CHAR_NAME"\
-            "\"result\": true" 3
+        "stop-task $ILLEGAL_CHAR_NAME" \
+        "\"result\": true" 3
 
     cleanup_data all_mode
     cleanup_process $*
@@ -106,7 +109,7 @@ function test_query_timeout(){
     export GO_FAILPOINTS=''
 }
 
-function test_stop_task_before_checkpoint(){
+function test_stop_task_before_checkpoint() {
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -115,6 +118,7 @@ function test_stop_task_before_checkpoint(){
     # start DM worker and master
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
 
     export GO_FAILPOINTS='github.com/pingcap/dm/loader/WaitLoaderStopAfterInitCheckpoint=return(5)'
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
@@ -135,8 +139,8 @@ function test_stop_task_before_checkpoint(){
     check_log_contain_with_retry 'wait loader stop after init checkpoint' $WORK_DIR/worker1/log/dm-worker.log
     check_log_contain_with_retry 'wait loader stop after init checkpoint' $WORK_DIR/worker2/log/dm-worker.log
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "stop-task test"\
-            "\"result\": true" 3
+        "stop-task test" \
+        "\"result\": true" 3
 
     # restart dm-worker
     pkill -9 dm-worker.test 2>/dev/null || true
@@ -154,14 +158,14 @@ function test_stop_task_before_checkpoint(){
     check_log_contain_with_retry 'wait loader stop before load checkpoint' $WORK_DIR/worker1/log/dm-worker.log
     check_log_contain_with_retry 'wait loader stop before load checkpoint' $WORK_DIR/worker2/log/dm-worker.log
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "stop-task test"\
-            "\"result\": true" 3
+        "stop-task test" \
+        "\"result\": true" 3
 
     dmctl_start_task "$cur/conf/dm-task.yaml"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "stop-task test"\
-            "\"result\": true" 3
+        "stop-task test" \
+        "\"result\": true" 3
 
     cleanup_data all_mode
     cleanup_process $*
@@ -192,6 +196,7 @@ function run() {
     # start DM worker and master
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
@@ -215,13 +220,12 @@ function run() {
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
     sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
-
-    # use sync_diff_inspector to check full dump loader
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-
     # check task has started
     check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
     check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
+
+    # use sync_diff_inspector to check full dump loader
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # check default session config
     check_log_contain_with_retry '\\"tidb_txn_mode\\":\\"optimistic\\"' $WORK_DIR/worker1/log/dm-worker.log
@@ -242,6 +246,8 @@ function run() {
     wait_pattern_exit dm-worker2.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+    check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
+    check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
 
     sleep 10
     echo "after restart dm-worker, task should resume automatically"
@@ -285,13 +291,14 @@ function run() {
 
     # relay should continue pulling from syncer's checkpoint, so only pull the latest binlog
     server_uuid=$(tail -n 1 $WORK_DIR/worker1/relay_log/server-uuid.index)
-    echo "relay logs `ls $WORK_DIR/worker1/relay_log/$server_uuid`"
-    relay_log_num=`ls $WORK_DIR/worker1/relay_log/$server_uuid | grep -v 'relay.meta' | wc -l`
+    echo "relay logs $(ls $WORK_DIR/worker1/relay_log/$server_uuid)"
+    relay_log_num=$(ls $WORK_DIR/worker1/relay_log/$server_uuid | grep -v 'relay.meta' | wc -l)
     [ $relay_log_num -eq 1 ]
 
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    # TODO(ehco): now this metrics hava some problem need to fix.
     # check_metric $WORKER1_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
     # check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
 
@@ -330,11 +337,10 @@ function run() {
 
     # stop task, task state should be cleaned
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "stop-task $ILLEGAL_CHAR_NAME"\
-            "\"result\": true" 3
+        "stop-task $ILLEGAL_CHAR_NAME" \
+        "\"result\": true" 3
     check_metric_not_contains $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3
     check_metric_not_contains $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$ILLEGAL_CHAR_NAME\"}" 3
-
 
     export GO_FAILPOINTS=''
 

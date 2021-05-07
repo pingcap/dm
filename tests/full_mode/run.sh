@@ -2,7 +2,7 @@
 
 set -eu
 
-cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
@@ -126,14 +126,14 @@ function empty_data() {
     init_cluster
 
     dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml    
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
         "\"stage\": \"Finished\"" 2 \
         "\"totalBytes\": \"0\"" 2 \
         "\"progress\": \"100.00 %\"" 2
-    
+
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "progress=\"100.00 %\""
     check_log_contains $WORK_DIR/worker2/log/dm-worker.log "progress=\"100.00 %\""
 
@@ -165,6 +165,10 @@ function run() {
 
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    # check dm-master metrics
+    check_metric $MASTER_PORT 'start_leader_counter' 3 0 2 
+    echo "check master metric: [start_leader_counter] done"
+
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml

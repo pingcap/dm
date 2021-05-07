@@ -52,10 +52,7 @@ function run() {
     # run dm master
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-
-    # check dm-master metrics
-    check_metric $MASTER_PORT 'start_leader_counter' 3 0 2 # 1 etcd leader
-    echo "check master metric: [start_leader_counter] done"
+    check_metric $MASTER_PORT 'start_leader_counter' 3 0 2 
 
     # copy config file
     cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
@@ -83,7 +80,6 @@ function run() {
     # check dm-workers metrics unit: relay file index must be 1.
     check_metric $WORKER1_PORT "dm_relay_binlog_file" 3 0 2
     check_metric $WORKER2_PORT "dm_relay_binlog_file" 3 0 2
-    echo "check worker metric: [dm_relay_binlog_file] done"
 
     # start a task in all mode, and when enter incremental mode, we only execute DML
     dmctl_start_task $cur/conf/dm-task.yaml
@@ -91,7 +87,6 @@ function run() {
     # check task has started state=2 running
     check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$TASK_NAME\"}" 3 1 31
     check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$TASK_NAME\"}" 3 1 31
-    echo "check wokrer metric: [dm_worker_task_stater] done"
 
     # check diff
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
