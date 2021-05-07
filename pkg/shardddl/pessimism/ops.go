@@ -20,6 +20,7 @@ import (
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // TODO(csuzhangxc): assign terror code before merged into the master branch.
@@ -68,7 +69,8 @@ func DeleteOperationsPutDDLs(cli *clientv3.Client, lockID string, ops []Operatio
 		etcdOps = append(etcdOps, deleteOperationOp(op))
 	}
 
-	putOp, err := putLatestDoneDDLsOp(lockID, ddls)
+	task, downSchema, downTable := utils.ExtractAllFromLockID(lockID)
+	putOp, err := putLatestDoneDDLsOp(task, downSchema, downTable, ddls)
 	if err != nil {
 		return 0, err
 	}
@@ -80,14 +82,11 @@ func DeleteOperationsPutDDLs(cli *clientv3.Client, lockID string, ops []Operatio
 
 // DeleteInfosOperationsDDLsByTask deletes the shard DDL infos and operations of a specified task in etcd.
 // This function should often be called by DM-master when deleting ddl meta data.
-func DeleteInfosOperationsDDLsByTask(cli *clientv3.Client, task string, lockIDs []string) (int64, error) {
+func DeleteInfosOperationsDDLsByTask(cli *clientv3.Client, task string) (int64, error) {
 	opsDel := make([]clientv3.Op, 0, 2)
 	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismInfoKeyAdapter.Encode(task), clientv3.WithPrefix()))
 	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismOperationKeyAdapter.Encode(task), clientv3.WithPrefix()))
 	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismDDLsKeyAdapter.Encode(task), clientv3.WithPrefix()))
-	for _, lockID := range lockIDs {
-		opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismDDLsKeyAdapter.Encode(lockID), clientv3.WithPrefix()))
-	}
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, opsDel...)
 	return rev, err
 }

@@ -399,21 +399,19 @@ func (p *Pessimist) RemoveMetaData(task string) error {
 	for _, info := range infos {
 		p.lk.RemoveLockByInfo(info)
 	}
-	lockIDSet := make(map[string]struct{}, len(ops))
 	for _, op := range ops {
 		p.lk.RemoveLock(op.ID)
-		lockIDSet[op.ID] = struct{}{}
 	}
 
-	lockIDs := p.lk.RemoveLatestDoneDDLsByTask(task)
+	p.lk.RemoveLatestDoneDDLsByTask(task)
 	// clear meta data in etcd
-	_, err = pessimism.DeleteInfosOperationsDDLsByTask(p.cli, task, lockIDs)
+	_, err = pessimism.DeleteInfosOperationsDDLsByTask(p.cli, task)
 	return err
 }
 
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.
 func (p *Pessimist) recoverLocks(ifm map[string]map[string]pessimism.Info,
-	opm map[string]map[string]pessimism.Operation, latestDoneDDLsMap map[string][]string) error {
+	opm map[string]map[string]pessimism.Operation, latestDoneDDLsMap map[string]map[string]map[string][]string) error {
 	// add all last done ddls.
 	p.lk.AddAllLatestDoneDDLs(latestDoneDDLsMap)
 

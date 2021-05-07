@@ -183,7 +183,7 @@ func ExtractTaskFromLockID(lockID string) string {
 	return strs[1]
 }
 
-// ExtractDBAndTableFromLockID extract schema and table from lockID
+// ExtractDBAndTableFromLockID extract schema and table from lockID.
 func ExtractDBAndTableFromLockID(lockID string) (string, string) {
 	strs := lockIDPattern.FindStringSubmatch(lockID)
 	// strs should be [full-lock-ID, task, db, table] if successful matched
@@ -191,6 +191,16 @@ func ExtractDBAndTableFromLockID(lockID string) (string, string) {
 		return "", ""
 	}
 	return strs[2], strs[3]
+}
+
+// ExtractAllFromLockID extract task, downSchema, downTable from lockID.
+func ExtractAllFromLockID(lockID string) (string, string, string) {
+	strs := lockIDPattern.FindStringSubmatch(lockID)
+	// strs should be [full-lock-ID, task, db, table] if successful matched
+	if len(strs) < 4 {
+		return "", "", ""
+	}
+	return strs[1], strs[2], strs[3]
 }
 
 // NonRepeatStringsEqual is used to compare two un-ordered, non-repeat-element string slice is equal.

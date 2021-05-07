@@ -68,19 +68,20 @@ func NewLock(id, task, owner string, ddls, sources []string) *Lock {
 // TrySync tries to sync the lock, does decrease on remain, re-entrant.
 // new upstream sources may join when the DDL lock is in syncing,
 // so we need to merge these new sources.
-func (l *Lock) TrySync(cli *clientv3.Client, caller string, ddls, sources []string, latestDoneDDLs []string) (bool, int, error) {
+func (l *Lock) TrySync(cli *clientv3.Client, caller string, ddls, sources, latestDoneDDLs []string) (bool, int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	// check DDL statement first.
 	if !utils.CompareShardingDDLs(ddls, l.DDLs) {
+		curIdempotent := utils.CompareShardingDDLs(latestDoneDDLs, ddls)
 		// handle conflict
-		if !utils.CompareShardingDDLs(latestDoneDDLs, ddls) && !utils.CompareShardingDDLs(latestDoneDDLs, l.DDLs) {
+		if !curIdempotent && !utils.CompareShardingDDLs(latestDoneDDLs, l.DDLs) {
 			return l.remain <= 0, l.remain, terror.ErrMasterShardingDDLDiff.Generate(l.DDLs, ddls)
 		}
 
 		// current ddls idempotent, skip it.
-		if utils.CompareShardingDDLs(latestDoneDDLs, ddls) {
+		if curIdempotent {
 			log.L().Warn("conflict ddls equals last done ddls, skip it", zap.Strings("ddls", ddls), zap.String("source", caller))
 			_, _, err := PutOperations(cli, true, NewOperation(l.ID, l.Task, caller, latestDoneDDLs, false, false, true))
 			return l.remain <= 0, l.remain, err

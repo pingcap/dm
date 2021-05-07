@@ -25,39 +25,30 @@ import (
 
 // putLatestDoneDDLsOp returns a PUT etcd operation for latest done ddls.
 // This operation should often be sent by DM-master.
-func putLatestDoneDDLsOp(lockID string, ddls []string) (clientv3.Op, error) {
+func putLatestDoneDDLsOp(task, downSchema, downTable string, ddls []string) (clientv3.Op, error) {
 	data, err := json.Marshal(ddls)
 	if err != nil {
 		return clientv3.Op{}, err
 	}
-	key := common.ShardDDLPessimismDDLsKeyAdapter.Encode(lockID)
+	key := common.ShardDDLPessimismDDLsKeyAdapter.Encode(task, downSchema, downTable)
 
 	return clientv3.OpPut(key, string(data)), nil
 }
 
 // PutLatestDoneDDLs puts the last done shard DDL ddls into etcd.
-func PutLatestDoneDDLs(cli *clientv3.Client, lockID string, ddls []string) (int64, error) {
-	data, err := json.Marshal(ddls)
+func PutLatestDoneDDLs(cli *clientv3.Client, task, downSchema, downTable string, ddls []string) (int64, error) {
+	putOp, err := putLatestDoneDDLsOp(task, downSchema, downTable, ddls)
 	if err != nil {
 		return 0, err
 	}
-	value := string(data)
-	key := common.ShardDDLPessimismDDLsKeyAdapter.Encode(lockID)
-
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
-	resp, err := cli.Put(ctx, key, value)
-	if err != nil {
-		return 0, err
-	}
-	return resp.Header.Revision, nil
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, putOp)
+	return rev, err
 }
 
 // GetAllLatestDoneDDLs gets all last done shard DDL ddls in etcd currently.
-// k/v: lockID -> DDLs
+// k/v: task -> downSchema -> downTable -> DDLs
 // This function should often be called by DM-master.
-func GetAllLatestDoneDDLs(cli *clientv3.Client) (map[string][]string, int64, error) {
+func GetAllLatestDoneDDLs(cli *clientv3.Client) (map[string]map[string]map[string][]string, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
@@ -66,7 +57,7 @@ func GetAllLatestDoneDDLs(cli *clientv3.Client) (map[string][]string, int64, err
 		return nil, 0, err
 	}
 
-	ddlsMap := make(map[string][]string, len(resp.Kvs))
+	ddlsMap := make(map[string]map[string]map[string][]string, len(resp.Kvs))
 	for _, kv := range resp.Kvs {
 		var ddls []string
 		if err2 := json.Unmarshal(kv.Value, &ddls); err2 != nil {
@@ -76,9 +67,17 @@ func GetAllLatestDoneDDLs(cli *clientv3.Client) (map[string][]string, int64, err
 		if err2 != nil {
 			return nil, 0, err2
 		}
-		lockID := keys[0]
+		task := keys[0]
+		downSchema := keys[1]
+		downTable := keys[2]
 
-		ddlsMap[lockID] = ddls
+		if _, ok := ddlsMap[task]; !ok {
+			ddlsMap[task] = make(map[string]map[string][]string)
+		}
+		if _, ok := ddlsMap[task][downSchema]; !ok {
+			ddlsMap[task][downSchema] = make(map[string][]string)
+		}
+		ddlsMap[task][downSchema][downTable] = ddls
 	}
 
 	return ddlsMap, resp.Header.Revision, nil
