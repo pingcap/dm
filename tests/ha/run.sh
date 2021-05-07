@@ -2,7 +2,7 @@
 
 set -eu
 
-cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
@@ -19,6 +19,9 @@ function run() {
     run_dm_master $WORK_DIR/master2 $MASTER_PORT2 $cur/conf/dm-master2.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
+    check_metric $MASTER_PORT1 'start_leader_counter' 3 0 2
+    check_metric $MASTER_PORT2 'start_leader_counter' 3 -1 1 # master2 is not leader
+
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
@@ -40,6 +43,7 @@ function run() {
     # join master3
     run_dm_master $WORK_DIR/master3 $MASTER_PORT3 $cur/conf/dm-master3.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3
+    check_metric $MASTER_PORT3 'start_leader_counter' 3 -1 1 # master3 is not leader
 
     echo "start DM task"
     dmctl_start_task
@@ -65,7 +69,7 @@ function run() {
         "\"result\": true" 3
 
     echo "start dm-worker3 and kill dm-worker2"
-    ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
+    ps aux | grep dm-worker2 | awk '{print $2}' | xargs kill || true
     check_port_offline $WORKER2_PORT 20
     rm -rf $WORK_DIR/worker2/relay_log
 
@@ -86,7 +90,7 @@ function run() {
         "\"result\": true" 3
 
     echo "start dm-worker2 and kill dm-worker3"
-    ps aux | grep dm-worker3 |awk '{print $2}'|xargs kill || true
+    ps aux | grep dm-worker3 | awk '{print $2}' | xargs kill || true
     check_port_offline $WORKER3_PORT 20
     rm -rf $WORK_DIR/worker3/relay_log
 
@@ -157,10 +161,10 @@ function run() {
     sleep 5
 
     echo "kill dm-master1"
-    ps aux | grep dm-master1 |awk '{print $2}'|xargs kill || true
+    ps aux | grep dm-master1 | awk '{print $2}' | xargs kill || true
     check_port_offline $MASTER_PORT1 20
     echo "kill dm-master2"
-    ps aux | grep dm-master2 |awk '{print $2}'|xargs kill || true
+    ps aux | grep dm-master2 | awk '{print $2}' | xargs kill || true
     check_port_offline $MASTER_PORT2 20
 
     echo "initial cluster of dm-masters have been killed"

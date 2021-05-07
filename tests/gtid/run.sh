@@ -2,7 +2,7 @@
 
 set -eu
 
-cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
@@ -20,6 +20,7 @@ function run() {
     # start DM worker and source one-by-one, make sure the source1 bound to worker1
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
@@ -32,6 +33,9 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
+    check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\"}" 3 1 3
+    check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\"}" 3 1 3
+
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # TODO: when there's a purged gap, if starting gtid set covers gap, there should be no data lost
@@ -40,8 +44,8 @@ function run() {
 
     # when there's a not purged gap, there should be no data lost
     # we manually `set gtid_next = 'uuid:gtid'`to reproduce
-    gtid1=$(grep "GTID:" $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2,":",$3}'|tr -d ' ')
-    gtid2=$(grep "GTID:" $WORK_DIR/worker2/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2,":",$3}'|tr -d ' ')
+    gtid1=$(grep "GTID:" $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata | awk -F: '{print $2,":",$3}' | tr -d ' ')
+    gtid2=$(grep "GTID:" $WORK_DIR/worker2/dumped_data.$TASK_NAME/metadata | awk -F: '{print $2,":",$3}' | tr -d ' ')
     uuid1=$(echo $gtid1 | awk -F: '{print $1}')
     uuid2=$(echo $gtid2 | awk -F: '{print $1}')
     end_gtid_num1=$(echo $gtid1 | awk -F: '{print $2}' | awk -F- '{print $2}')
@@ -59,7 +63,7 @@ function run() {
 
     sleep 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "stop-task test"\
+        "stop-task test" \
         "\"result\": true" 3
 
     run_sql_source1 "insert into gtid.t1 values (5)"
@@ -80,12 +84,12 @@ function run() {
 
     # we didn't lost 09bec856-ba95-11ea-850a-58f2b4af5188:5, which is insert into gtid.tx values (5)
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "start-task $cur/conf/dm-task.yaml"\
+        "start-task $cur/conf/dm-task.yaml" \
         "\"result\": true" 3
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "stop-task test"\
+        "stop-task test" \
         "\"result\": true" 3
 
     run_sql_source1 "insert into gtid.t1 values (7)"
@@ -94,7 +98,7 @@ function run() {
     run_sql_source1 "insert into gtid.t1 values (8)"
     run_sql_source2 "insert into gtid.t2 values (8)"
     sleep 2
-    run_sql_both_source "purge binary logs before '`date '+%Y-%m-%d %H:%M:%S'`'"
+    run_sql_both_source "purge binary logs before '$(date '+%Y-%m-%d %H:%M:%S')'"
 
     # remove relay-dir, now relay starting point(syncer checkpoint) should be 09bec856-ba95-11ea-850a-58f2b4af5188:1-6
     # which is already purged
@@ -107,9 +111,10 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/dm-task.yaml"
+    check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\"}" 3 1 3
+    check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\"}" 3 1 3
 
     # both with and without relay should error
     # (different version of MySQL has different error message, only compare error code here)
