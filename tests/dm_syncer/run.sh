@@ -31,9 +31,6 @@ function run() {
     # start a task in `full` mode
     cat $cur/conf/dm-task.yaml > $WORK_DIR/dm-task.yaml
     dmctl_start_task $WORK_DIR/dm-task.yaml "--remove-meta"
-    check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\"}" 3 1 3
-    check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\"}" 3 1 3
-
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     dmctl_stop_task $TASK_NAME
@@ -84,7 +81,7 @@ function run() {
     check_not_contains "dm_syncer_ignore_db"
 }
 
-cleanup_data $TEST_NAME
+cleanup_data $TEST_NAME "dm_syncer_do_db"
 # also cleanup dm processes in case of last run failed
 cleanup_process $*
 run $*
