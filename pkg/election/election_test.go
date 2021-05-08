@@ -102,7 +102,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 	cli, err := etcdutil.CreateClient([]string{t.endPoint}, nil)
 	c.Assert(err, IsNil)
 	defer cli.Close()
-	ctx0, cancel0 := context.WithTimeout(context.Background(), time.Second)
+	ctx0, cancel0 := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel0()
 	_, err = cli.Delete(ctx0, key, clientv3.WithPrefix())
 	c.Assert(err, IsNil)
