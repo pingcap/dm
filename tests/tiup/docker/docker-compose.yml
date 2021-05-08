@@ -37,7 +37,7 @@ services:
       MYSQL_ROOT_PASSWORD: ""
       MYSQL_ALLOW_EMPTY_PASSWORD: 1
 
-  mariadb2: # upstream MySQL-2
+  mariadb2: # upstream MariaDB
     container_name: mariadb2
     hostname: mariadb2
     networks:
