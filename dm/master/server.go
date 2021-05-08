@@ -711,7 +711,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 }
 
 // adjust unsynced field in sync status by looking at DDL locks.
-// because if a DM-worker doesn't receive any shard DDL, it doesn't even know it's unsynced for itself
+// because if a DM-worker doesn't receive any shard DDL, it doesn't even know it's unsynced for itself.
 func (s *Server) fillUnsyncedStatus(resps []*pb.QueryStatusResponse) {
 	for _, resp := range resps {
 		for _, subtaskStatus := range resp.SubTaskStatus {
