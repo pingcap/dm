@@ -1752,11 +1752,17 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		skipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema))
 		*ec.lastLocation = *ec.currentLocation // before record skip location, update lastLocation
+
 		// we try to insert an empty SQL to s.onlineDDL, because ignoring it will cause a "not found" error
+		if s.onlineDDL == nil {
+			return s.recordSkipSQLsLocation(*ec.lastLocation)
+		}
+
 		stmts, err2 := parserpkg.Parse(parser2, originSQL, "", "")
 		if err2 != nil {
 			ec.tctx.L().Info("failed to parse a filtered SQL for online DDL", zap.String("SQL", originSQL))
 		}
+		// if err2 != nil, stmts should be nil so below for-loop is skipped
 		for _, stmt := range stmts {
 			if _, ok := stmt.(ast.DDLNode); ok {
 				tableNames, err3 := parserpkg.FetchDDLTableNames(usedSchema, stmt)
