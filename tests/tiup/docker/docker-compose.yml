@@ -37,14 +37,14 @@ services:
       MYSQL_ROOT_PASSWORD: ""
       MYSQL_ALLOW_EMPTY_PASSWORD: 1
 
-  mysql2: # upstream MySQL-2
-    container_name: mysql2
-    hostname: mysql2
+  mariadb2: # upstream MySQL-2
+    container_name: mariadb2
+    hostname: mariadb2
     networks:
       dm-tiup:
         ipv4_address: 172.28.0.202
-    image: mysql:5.7.32
-    command: --default-authentication-plugin=mysql_native_password --log-bin=/var/lib/mysql/mysql-bin --server-id=1 --binlog-format=ROW --gtid_mode=ON --enforce-gtid-consistency=true
+    image: mariadb:10.5.8
+    command: --log-bin=/var/lib/mariadb/mysql-bin --server-id=1 --binlog-format=ROW
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ""
