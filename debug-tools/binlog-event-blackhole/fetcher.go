@@ -19,7 +19,7 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go/sync2"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -77,20 +77,20 @@ func closeConn(conn *client.Conn) error {
 // readEventsWithGoMySQL reads binlog events from the master server with `go-mysql` pkg.
 func readEventsWithGoMySQL(ctx context.Context, conn *client.Conn) (uint64, uint64, time.Duration, error) {
 	var (
-		eventCount sync2.AtomicUint64
-		byteCount  sync2.AtomicUint64
+		eventCount atomic.Uint64
+		byteCount  atomic.Uint64
 		startTime  = time.Now()
 	)
 	for {
 		select {
 		case <-ctx.Done():
-			return eventCount.Get(), byteCount.Get(), time.Since(startTime), nil
+			return eventCount.Load(), byteCount.Load(), time.Since(startTime), nil
 		default:
 		}
 
 		data, err := conn.ReadPacket()
 		if err != nil {
-			return eventCount.Get(), byteCount.Get(), time.Since(startTime), errors.Annotate(err, "read event packet")
+			return eventCount.Load(), byteCount.Load(), time.Since(startTime), errors.Annotate(err, "read event packet")
 		}
 
 		switch data[0] {
@@ -99,7 +99,7 @@ func readEventsWithGoMySQL(ctx context.Context, conn *client.Conn) (uint64, uint
 			byteCount.Add(4 + uint64(len(data))) // with 4 bytes packet header
 			continue
 		case 0xff: // ERR_HEADER
-			return eventCount.Get(), byteCount.Get(), time.Since(startTime), errors.New("read event fail with 0xFF header")
+			return eventCount.Load(), byteCount.Load(), time.Since(startTime), errors.New("read event fail with 0xFF header")
 		case 0xfe: // EOF_HEADER
 			// Refer http://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
 			log.L().Warn("receive EOF packet, retrying")
@@ -114,20 +114,20 @@ func readEventsWithGoMySQL(ctx context.Context, conn *client.Conn) (uint64, uint
 // readEventsWithoutGoMySQL reads binlog events from master server without `go-mysql` pkg.
 func readEventsWithoutGoMySQL(ctx context.Context, conn *client.Conn) (uint64, uint64, time.Duration, error) {
 	var (
-		eventCount sync2.AtomicUint64
-		byteCount  sync2.AtomicUint64
+		eventCount atomic.Uint64
+		byteCount  atomic.Uint64
 		startTime  = time.Now()
 	)
 	for {
 		select {
 		case <-ctx.Done():
-			return eventCount.Get(), byteCount.Get(), time.Since(startTime), nil
+			return eventCount.Load(), byteCount.Load(), time.Since(startTime), nil
 		default:
 		}
 
 		_, data, err := readPacket(conn)
 		if err != nil {
-			return eventCount.Get(), byteCount.Get(), time.Since(startTime), errors.Annotate(err, "read event packet")
+			return eventCount.Load(), byteCount.Load(), time.Since(startTime), errors.Annotate(err, "read event packet")
 		}
 
 		switch data[0] {
@@ -136,7 +136,7 @@ func readEventsWithoutGoMySQL(ctx context.Context, conn *client.Conn) (uint64, u
 			byteCount.Add(4 + uint64(len(data))) // with 4 bytes packet header
 			continue
 		case 0xff: // ERR_HEADER
-			return eventCount.Get(), byteCount.Get(), time.Since(startTime), errors.New("read event fail with 0xFF header")
+			return eventCount.Load(), byteCount.Load(), time.Since(startTime), errors.New("read event fail with 0xFF header")
 		case 0xfe: // EOF_HEADER
 			// Refer http://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
 			log.L().Warn("receive EOF packet, retrying")
@@ -152,19 +152,19 @@ func readEventsWithoutGoMySQL(ctx context.Context, conn *client.Conn) (uint64, u
 func readDataOnly(ctx context.Context, conn *client.Conn) (uint64, time.Duration, error) {
 	var (
 		buf       = make([]byte, 10240)
-		byteCount sync2.AtomicUint64
+		byteCount atomic.Uint64
 		startTime = time.Now()
 	)
 	for {
 		select {
 		case <-ctx.Done():
-			return byteCount.Get(), time.Since(startTime), nil
+			return byteCount.Load(), time.Since(startTime), nil
 		default:
 		}
 
 		n, err := conn.Conn.Conn.Read(buf)
 		if err != nil {
-			return byteCount.Get(), time.Since(startTime), errors.Annotatef(err, "read binary data")
+			return byteCount.Load(), time.Since(startTime), errors.Annotatef(err, "read binary data")
 		}
 		byteCount.Add(uint64(n))
 	}

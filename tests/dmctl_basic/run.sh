@@ -192,6 +192,7 @@ function run() {
     echo "dmctl_check_task"
     check_task_pass $TASK_CONF
     check_task_not_pass $cur/conf/dm-task2.yaml
+    check_task_error_count $cur/conf/dm-task3.yaml
 
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task-error-database-config.yaml
     sed -i "s/password: \"\"/password: \"wrond password\"/g" $WORK_DIR/dm-task-error-database-config.yaml

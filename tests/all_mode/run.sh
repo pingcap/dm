@@ -83,7 +83,7 @@ function test_query_timeout(){
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
     sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
-    
+
     # `query-status` timeout
     start_time=$(date +%s)
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \

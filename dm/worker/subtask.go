@@ -21,8 +21,8 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/failpoint"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -77,7 +77,7 @@ func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []u
 type SubTask struct {
 	cfg *config.SubTaskConfig
 
-	initialized sync2.AtomicBool
+	initialized atomic.Bool
 
 	l log.Logger
 
@@ -140,7 +140,7 @@ func (st *SubTask) Init() error {
 			u.Close()
 		}
 
-		st.initialized.Set(initializeUnitSuccess)
+		st.initialized.Store(initializeUnitSuccess)
 	}()
 
 	// every unit does base initialization in `Init`, and this must pass before start running the sub task
@@ -286,9 +286,7 @@ func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 		}
 		st.setStageAndResult(stage, &result)
 
-		ctx, cancel := context.WithTimeout(st.ctx, utils.DefaultDBTimeout)
-		defer cancel()
-		st.l.Info("unit process returned", zap.Stringer("unit", cu.Type()), zap.Stringer("stage", stage), zap.String("status", st.StatusJSON(ctx)))
+		st.l.Info("unit process returned", zap.Stringer("unit", cu.Type()), zap.Stringer("stage", stage), zap.String("status", st.StatusJSON()))
 
 		switch stage {
 		case pb.Stage_Finished:
@@ -476,7 +474,7 @@ func (st *SubTask) Pause() error {
 // Resume resumes the paused sub task
 // similar to Run.
 func (st *SubTask) Resume() error {
-	if !st.initialized.Get() {
+	if !st.initialized.Load() {
 		st.Run(pb.Stage_Running)
 		return nil
 	}
@@ -605,16 +603,14 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 		st.l.Info("wait condition between two units", zap.Stringer("previous unit", pu.Type()), zap.Stringer("unit", cu.Type()))
 		hub := GetConditionHub()
 
-		if !hub.w.relayEnabled.Get() {
+		if !hub.w.relayEnabled.Load() {
 			return nil
 		}
 
 		ctxWait, cancelWait := context.WithTimeout(hub.w.ctx, waitRelayCatchupTimeout)
 		defer cancelWait()
 
-		ctxStatus, cancelStatus := context.WithTimeout(ctxWait, utils.DefaultDBTimeout)
-		loadStatus := pu.Status(ctxStatus).(*pb.LoadStatus)
-		cancelStatus()
+		loadStatus := pu.Status().(*pb.LoadStatus)
 
 		if st.cfg.EnableGTID {
 			gset1, err = gtid.ParserGTID(st.cfg.Flavor, loadStatus.MetaBinlogGTID)
@@ -629,7 +625,7 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 		}
 
 		for {
-			ctxStatus, cancelStatus = context.WithTimeout(ctxWait, utils.DefaultDBTimeout)
+			ctxStatus, cancelStatus := context.WithTimeout(ctxWait, utils.DefaultDBTimeout)
 			relayStatus := hub.w.relayHolder.Status(ctxStatus)
 			cancelStatus()
 
