@@ -545,12 +545,12 @@ func (w *Worker) postProcessStatus(
 				syncStatus.Synced = true
 			}
 		} else {
-			syncPos, err := binlog.PositionFromStr(syncStatus.SyncerBinlog)
+			syncPos, err := binlog.PositionFromPosStr(syncStatus.SyncerBinlog)
 			if err != nil {
 				w.l.Debug("fail to parse mysql position", zap.String("position", syncStatus.SyncerBinlog), log.ShortError(err))
 				continue
 			}
-			masterPos, err := binlog.PositionFromStr(masterBinlogPos)
+			masterPos, err := binlog.PositionFromPosStr(masterBinlogPos)
 			if err != nil {
 				w.l.Debug("fail to parse mysql position", zap.String("position", syncStatus.SyncerBinlog), log.ShortError(err))
 				continue
