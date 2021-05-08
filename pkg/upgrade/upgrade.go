@@ -36,6 +36,10 @@ import (
 var upgrades = []func(cli *clientv3.Client, uctx Context) error{
 	upgradeToVer1,
 	upgradeToVer2,
+}
+
+// upgradesBeforeScheduler records all upgrade functions before scheduler start. e.g. etcd key changed.
+var upgradesBeforeScheduler = []func(ctx context.Context, cli *clientv3.Client) error{
 	upgradeToVer3,
 }
 
@@ -94,6 +98,44 @@ func TryUpgrade(cli *clientv3.Client, uctx Context) error {
 	// 5. put the current version into etcd.
 	_, err = PutVersion(cli, CurrentVersion)
 	return err
+}
+
+// TryUpgradeBeforeSchedulerStart tries to upgrade the cluster before scheduler start.
+// This methods should have no side effects even calling multiple times.
+func TryUpgradeBeforeSchedulerStart(ctx context.Context, cli *clientv3.Client) error {
+	// 1. get previous version from etcd.
+	preVer, _, err := GetVersion(cli)
+	log.L().Info("fetch previous version", zap.Any("preVer", preVer))
+	if err != nil {
+		return err
+	}
+
+	// 2. check if any previous version exists.
+	if preVer.NotSet() {
+		if _, err = PutVersion(cli, MinVersion); err != nil {
+			return err
+		}
+		preVer = MinVersion
+	}
+
+	// 3. compare the previous version with the current version.
+	if cmp := preVer.Compare(CurrentVersion); cmp == 0 {
+		// previous == current version, no need to upgrade.
+		return nil
+	} else if cmp > 0 {
+		// previous >= current version, this often means a older version of DM-master become the leader after started,
+		// do nothing for this now.
+		return nil
+	}
+
+	// 4. do upgrade operations.
+	for _, upgrade := range upgradesBeforeScheduler {
+		err = upgrade(ctx, cli)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // UntouchVersionUpgrade runs all upgrade functions but doesn't change cluster version. This function is called when
@@ -183,11 +225,8 @@ func upgradeToVer2(cli *clientv3.Client, uctx Context) error {
 }
 
 // upgradeToVer3 does upgrade operations from Ver2 (v2.0.0-GA) to Ver3 (v2.0.2) to upgrade etcd key encodings.
-func upgradeToVer3(cli *clientv3.Client, uctx Context) error {
-	upgradeCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	uctx.Context = upgradeCtx
-	defer cancel()
-
+// This func should be called before scheduler start.
+func upgradeToVer3(ctx context.Context, cli *clientv3.Client) error {
 	etcdKeyUpgrades := []struct {
 		old common.KeyAdapter
 		new common.KeyAdapter
@@ -204,7 +243,7 @@ func upgradeToVer3(cli *clientv3.Client, uctx Context) error {
 
 	ops := make([]clientv3.Op, 0, len(etcdKeyUpgrades))
 	for _, pair := range etcdKeyUpgrades {
-		resp, err := cli.Get(uctx.Context, pair.old.Path(), clientv3.WithPrefix())
+		resp, err := cli.Get(ctx, pair.old.Path(), clientv3.WithPrefix())
 		if err != nil {
 			return err
 		}
