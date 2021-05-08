@@ -97,6 +97,7 @@ func TryUpgrade(cli *clientv3.Client, uctx Context) error {
 
 	// 5. put the current version into etcd.
 	_, err = PutVersion(cli, CurrentVersion)
+	log.L().Info("upgrade cluster version", zap.Any("version", CurrentVersion), zap.Error(err))
 	return err
 }
 
