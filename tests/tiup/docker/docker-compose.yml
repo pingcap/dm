@@ -44,7 +44,7 @@ services:
       dm-tiup:
         ipv4_address: 172.28.0.202
     image: mariadb:10.5.8
-    command: --log-bin=/var/lib/mariadb/mysql-bin --server-id=1 --binlog-format=ROW
+    command: --log-bin --server-id=1 --binlog-format=ROW
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ""
