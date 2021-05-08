@@ -167,11 +167,7 @@ function run() {
     echo "now we will check whether joined masters can work normally"
 
     # we need some time for cluster to re-elect new available leader
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
-        "stop-task test" \
-        "\"result\": true" 3 \
-        "\"source\": \"$SOURCE_ID1\"" 1 \
-        "\"source\": \"$SOURCE_ID2\"" 1
+    dmctl_stop_task_with_retry "test" $MASTER_PORT5
 
     run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
