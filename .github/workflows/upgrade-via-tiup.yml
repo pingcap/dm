@@ -134,8 +134,9 @@ jobs:
         cd ${{ env.working-directory }}/tests/tiup/docker
         docker-compose exec -e ref=${{ github.ref }} -T control bash -c "cd /go/src/github.com/pingcap/dm && ./tests/tiup/upgrade-from-v2.sh ${{ matrix.previous_v2 }} nightly"
 
+    # if above step is passed, logs will be removed by tiup dm destroy
     - name: Copy logs to hack permission
-      if: ${{ always() }}
+      if: ${{ failure() }}
       run: |
         mkdir ./logs
         docker cp -L master1:/home/tidb/dm/deploy/dm-master-8261/log ./logs/master
@@ -147,7 +148,7 @@ jobs:
     - name: Upload logs
       continue-on-error: true
       uses: actions/upload-artifact@v2
-      if: ${{ always() }}
+      if: ${{ failure() }}
       with:
         name: upgrade-via-tiup-${{ matrix.previous_v2 }}
         path: |
