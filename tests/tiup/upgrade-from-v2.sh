@@ -27,9 +27,10 @@ function deploy_previous_v2() {
 function migrate_in_previous_v2() {
     exec_full_stage
 
-    # v2.0.0 doesn't support relay log
+    # v2.0.0 doesn't support relay log and enable GTID for MariaDB
     if [[ "$PRE_VER" == "v2.0.0" ]]; then
         sed -i "s/enable-relay: true/enable-relay: false/g" $CUR/conf/source2.yaml
+        sed -i "s/enable-gtid: true/enable-gtid: false/g" $CUR/conf/source2.yaml
     fi
 
     tiup dmctl:$PRE_VER --master-addr=master1:8261 operate-source create $CUR/conf/source1.yaml
@@ -55,7 +56,7 @@ function migrate_in_v2 {
     exec_incremental_stage2
 
     echo "check sources"
-    run_dmctl_with_retry $CUR_VER "operate-source show" "mysql-replica-01" 1 "mysql-replica-02" 1
+    run_dmctl_with_retry $CUR_VER "operate-source show" "mysql-replica-01" 1 "mariadb-replica-02" 1
     echo "check workers"
     run_dmctl_with_retry $CUR_VER "list-member --worker" "\"stage\": \"bound\"" 2
 
