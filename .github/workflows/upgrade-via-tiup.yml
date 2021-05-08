@@ -149,7 +149,7 @@ jobs:
       uses: actions/upload-artifact@v2
       if: ${{ always() }}
       with:
-        name: upstream-switch-logs
+        name: upgrade-via-tiup-${{ matrix.previous_v2 }}
         path: |
           ./logs
 
