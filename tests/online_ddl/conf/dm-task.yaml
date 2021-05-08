@@ -75,7 +75,7 @@ filters:
     schema-pattern: "*"
     table-pattern: "*"
     events: ["create index","drop index"]
-    sql-pattern: ["ALTER\\s.*TABLE[\\s\\S]*ADD\\s+KEY", "ALTER\\s.*TABLE[\\s\\S]*DROP\\s+KEY"]
+    sql-pattern: ["ALTER\\s.*TABLE[\\s\\S]*ADD\\s+KEY\\s+NAME", "ALTER\\s.*TABLE[\\s\\S]*DROP\\s+KEY"]
     action: Ignore
 
 mydumpers:
