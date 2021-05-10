@@ -301,7 +301,7 @@ ErrSyncerUnitPTApplyEmptyTable,[code=36047:class=sync-unit:scope=internal:level=
 ErrSyncerUnitPTRenameTableNotValid,[code=36048:class=sync-unit:scope=internal:level=high], "Message: tables should contain old and new table name"
 ErrSyncerUnitPTRenameToPTTable,[code=36049:class=sync-unit:scope=internal:level=high], "Message: rename table to pt temporary table %s not supported"
 ErrSyncerUnitPTRenamePTTblToOther,[code=36050:class=sync-unit:scope=internal:level=high], "Message: rename pt temporary table to other temporary table %s not supported"
-ErrSyncerUnitPTOnlineDDLOnPTTbl,[code=36051:class=sync-unit:scope=internal:level=high], "Message: online ddl metadata for pt temporary table `%s`.`%s` not found"
+ErrSyncerUnitPTOnlineDDLOnPTTbl,[code=36051:class=sync-unit:scope=internal:level=high], "Message: online ddl metadata for pt temporary table `%s`.`%s` not found, Workaround: This error may caused when the online DDL is filtered by binlog event filter, if so, please use `handle-error skip` sometimes to skip related DDLs."
 ErrSyncerUnitRemoteSteamerWithGTID,[code=36052:class=sync-unit:scope=internal:level=high], "Message: open remote streamer with GTID mode not supported"
 ErrSyncerUnitRemoteSteamerStartSync,[code=36053:class=sync-unit:scope=internal:level=high], "Message: start syncing binlog from remote streamer"
 ErrSyncerUnitGetTableFromDB,[code=36054:class=sync-unit:scope=internal:level=high], "Message: invalid table `%s`.`%s`"

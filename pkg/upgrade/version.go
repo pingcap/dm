@@ -28,7 +28,7 @@ const (
 	// The current internal version number of the DM cluster used when upgrading from an older version.
 	// NOTE: +1 when a new incompatible version is introduced, so it's different from the release version.
 	// NOTE: it's the version of the cluster (= the version of DM-master leader now), other component versions are not recorded yet.
-	currentInternalNo uint64 = 3
+	currentInternalNo uint64 = 4
 	// The minimum internal version number of the DM cluster used when importing from v1.0.x.
 	minInternalNo uint64 = 0
 )
