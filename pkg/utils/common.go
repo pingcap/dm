@@ -183,7 +183,7 @@ func ExtractTaskFromLockID(lockID string) string {
 	return strs[1]
 }
 
-// ExtractDBAndTableFromLockID extract schema and table from lockID
+// ExtractDBAndTableFromLockID extract schema and table from lockID.
 func ExtractDBAndTableFromLockID(lockID string) (string, string) {
 	strs := lockIDPattern.FindStringSubmatch(lockID)
 	// strs should be [full-lock-ID, task, db, table] if successful matched

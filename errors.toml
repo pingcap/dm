@@ -1819,7 +1819,7 @@ tags = ["internal", "high"]
 [error.DM-sync-unit-36051]
 message = "online ddl metadata for pt temporary table `%s`.`%s` not found"
 description = ""
-workaround = ""
+workaround = "This error may caused when the online DDL is filtered by binlog event filter, if so, please use `handle-error skip` sometimes to skip related DDLs."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36052]
