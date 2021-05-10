@@ -73,7 +73,7 @@ func (t *testForEtcd) TestTryUpgrade(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
 	c.Assert(ver, DeepEquals, CurrentVersion)
-	c.Assert(mockVerNo, Equals, uint64(4))
+	c.Assert(mockVerNo, Equals, uint64(5))
 
 	// try to upgrade again, do nothing because the version is the same.
 	mockVerNo = 0

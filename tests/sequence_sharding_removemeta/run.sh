@@ -44,6 +44,7 @@ function run() {
         "show-ddl-locks" \
         "\"ID\": \"$lock_id\"" 1 \
         "$ddl" 1
+    # check after we changed the behaviour that DM-worker queries master status only once, masterBinlog is not empty
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status $TEST_NAME" \
         "this DM-worker doesn't receive any shard DDL of this group" 0 \
