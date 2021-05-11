@@ -546,10 +546,12 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		timezone            = "Asia/Shanghai"
 		maxAllowedPacket    = 10244201
 		fromSession         = map[string]string{
-			"sql_mode": " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
+			"sql_mode":  " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
+			"time_zone": "+00:00",
 		}
 		toSession = map[string]string{
-			"sql_mode": " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
+			"sql_mode":  " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
+			"time_zone": "+00:00",
 		}
 		security = Security{
 			SSLCA:         "/path/to/ca",
@@ -810,6 +812,8 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	c.Assert(stCfg2.EnableHeartbeat, IsTrue)
 	stCfg1.EnableHeartbeat = false
 	stCfg2.EnableHeartbeat = false
+	stCfg1.Timezone = defaultTimeZone
+	stCfg2.Timezone = defaultTimeZone
 	c.Assert(stCfgs[0].String(), Equals, stCfg1.String())
 	c.Assert(stCfgs[1].String(), Equals, stCfg2.String())
 }
@@ -889,22 +893,22 @@ func (t *testConfig) TestAdjustTargetDBConfig(c *C) {
 	}{
 		{
 			DBConfig{},
-			DBConfig{Session: map[string]string{}},
+			DBConfig{Session: map[string]string{"time_zone": "+00:00"}},
 			semver.New("0.0.0"),
 		},
 		{
 			DBConfig{Session: map[string]string{"SQL_MODE": "ANSI_QUOTES"}},
-			DBConfig{Session: map[string]string{"sql_mode": "ANSI_QUOTES"}},
+			DBConfig{Session: map[string]string{"sql_mode": "ANSI_QUOTES", "time_zone": "+00:00"}},
 			semver.New("2.0.7"),
 		},
 		{
 			DBConfig{},
-			DBConfig{Session: map[string]string{tidbTxnMode: tidbTxnOptimistic}},
+			DBConfig{Session: map[string]string{tidbTxnMode: tidbTxnOptimistic, "time_zone": "+00:00"}},
 			semver.New("3.0.1"),
 		},
 		{
 			DBConfig{Session: map[string]string{"SQL_MODE": "", tidbTxnMode: "pessimistic"}},
-			DBConfig{Session: map[string]string{"sql_mode": "", tidbTxnMode: "pessimistic"}},
+			DBConfig{Session: map[string]string{"sql_mode": "", tidbTxnMode: "pessimistic", "time_zone": "+00:00"}},
 			semver.New("4.0.0-beta.2"),
 		},
 	}

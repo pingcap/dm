@@ -19,11 +19,6 @@ import (
 	"flag"
 	"fmt"
 	"strings"
-	"time"
-
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/BurntSushi/toml"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
@@ -31,6 +26,10 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // task modes.
@@ -277,7 +276,7 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	}
 
 	if c.Timezone != "" {
-		_, err := time.LoadLocation(c.Timezone)
+		_, err := utils.ParseTimeZone(c.Timezone)
 		if err != nil {
 			return terror.ErrConfigInvalidTimezone.Delegate(err, c.Timezone)
 		}

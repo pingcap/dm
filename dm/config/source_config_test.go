@@ -63,18 +63,24 @@ func (t *testConfig) TestConfig(c *C) {
 	// test update config file and reload
 	c.Assert(cfg.Parse(tomlStr), IsNil)
 	c.Assert(cfg.ServerID, Equals, uint32(100))
-	c.Assert(cfg.ParseYaml(yamlStr), IsNil)
-	c.Assert(cfg.ServerID, Equals, uint32(100))
-	c.Assert(cfg.Parse(originCfgStr), IsNil)
-	c.Assert(cfg.ServerID, Equals, uint32(101))
-	c.Assert(cfg.ParseYaml(originCfgYamlStr), IsNil)
-	c.Assert(cfg.ServerID, Equals, uint32(101))
+	var cfg1 SourceConfig
+	c.Assert(cfg1.ParseYaml(yamlStr), IsNil)
+	c.Assert(cfg1.ServerID, Equals, uint32(100))
+	cfg.Filters = []*bf.BinlogEventRule{}
+	cfg.Tracer = map[string]interface{}{}
+
+	var cfg2 SourceConfig
+	c.Assert(cfg2.Parse(originCfgStr), IsNil)
+	c.Assert(cfg2.ServerID, Equals, uint32(101))
+
+	var cfg3 SourceConfig
+	c.Assert(cfg3.ParseYaml(originCfgYamlStr), IsNil)
+	c.Assert(cfg3.ServerID, Equals, uint32(101))
 
 	// test decrypt password
 	clone1.From.Password = "1234"
-	clone1.ServerID = 101
 	// fix empty map after marshal/unmarshal becomes nil
-	clone1.From.Session = map[string]string{}
+	clone1.From.Session = cfg.From.Session
 	clone1.Tracer = map[string]interface{}{}
 	clone1.Filters = []*bf.BinlogEventRule{}
 	clone2 := cfg.DecryptPassword()
@@ -96,6 +102,7 @@ func (t *testConfig) TestConfig(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(clone4toml, Matches, "(.|\n)*backoff-rollback = \"5m(.|\n)*")
 	c.Assert(clone4toml, Matches, "(.|\n)*backoff-max = \"5m(.|\n)*")
+
 	var clone5 SourceConfig
 	c.Assert(clone5.Parse(clone4toml), IsNil)
 	c.Assert(clone5, DeepEquals, *clone4)
@@ -103,6 +110,7 @@ func (t *testConfig) TestConfig(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(clone4yaml, Matches, "(.|\n)*backoff-rollback: 5m(.|\n)*")
 	c.Assert(clone4yaml, Matches, "(.|\n)*backoff-max: 5m(.|\n)*")
+
 	var clone6 SourceConfig
 	c.Assert(clone6.ParseYaml(clone4yaml), IsNil)
 	c.Assert(clone6, DeepEquals, *clone4)

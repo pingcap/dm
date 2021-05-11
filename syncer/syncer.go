@@ -2770,7 +2770,7 @@ func (s *Syncer) setTimezone() {
 	var loc *time.Location
 
 	if s.cfg.Timezone != "" {
-		loc, _ = time.LoadLocation(s.cfg.Timezone)
+		loc, _ = utils.ParseTimeZone(s.cfg.Timezone)
 	}
 	if loc == nil {
 		loc = time.Now().Location()

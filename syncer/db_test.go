@@ -83,7 +83,7 @@ func (s *testDBSuite) resetBinlogSyncer(c *C) {
 		VerifyChecksum: true,
 	}
 	if s.cfg.Timezone != "" {
-		timezone, err2 := time.LoadLocation(s.cfg.Timezone)
+		timezone, err2 := utils.ParseTimeZone(s.cfg.Timezone)
 		c.Assert(err2, IsNil)
 		cfg.TimestampStringLocation = timezone
 	}
@@ -260,7 +260,7 @@ func (s *testDBSuite) TestTimezone(c *C) {
 		err = txn.Commit()
 		c.Assert(err, IsNil)
 
-		location, err := time.LoadLocation(testCase.timezone)
+		location, err := utils.ParseTimeZone(testCase.timezone)
 		c.Assert(err, IsNil)
 
 		idx := 0

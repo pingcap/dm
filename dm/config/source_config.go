@@ -141,7 +141,7 @@ func (c *SourceConfig) Parse(content string) error {
 
 // ParseYaml parses flag definitions from the argument list, content should be yaml format.
 func (c *SourceConfig) ParseYaml(content string) error {
-	if err := yaml.UnmarshalStrict([]byte(content), c); err != nil {
+	if err := yaml.Unmarshal([]byte(content), c); err != nil {
 		return terror.ErrConfigYamlTransform.Delegate(err, "decode source config")
 	}
 	c.adjust()
