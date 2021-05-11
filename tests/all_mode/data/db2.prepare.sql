@@ -7,7 +7,7 @@ create table t2 (
     ts timestamp,
     PRIMARY KEY (id));;
 insert into t2 (name, ts) values ('Arya', now()), ('Bran', '2021-05-11 10:01:05');
-insert into ts (name) values ('Sansa');
+insert into t2 (name) values ('Sansa');
 
 -- test block-allow-list
 drop database if exists `ignore_db`;
