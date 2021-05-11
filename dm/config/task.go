@@ -827,5 +827,8 @@ func AdjustTargetDBTimeZone(config *DBConfig) {
 			return
 		}
 	}
+	if config.Session == nil {
+		config.Session = make(map[string]string, 1)
+	}
 	config.Session["time_zone"] = defaultTimeZone
 }
