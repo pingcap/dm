@@ -106,7 +106,8 @@ func prepareJoinEtcd(cfg *Config) error {
 	}
 
 	// restart with previous data, no `InitialCluster` need to set
-	if isDataExist(filepath.Join(cfg.DataDir, "member")) {
+	// ref: https://github.com/etcd-io/etcd/blob/ae9734ed278b7a1a7dfc82e800471ebbf9fce56f/etcdserver/server.go#L313
+	if isDataExist(filepath.Join(cfg.DataDir, "member", "wal")) {
 		cfg.InitialCluster = ""
 		cfg.InitialClusterState = embed.ClusterStateFlagExisting
 		return nil

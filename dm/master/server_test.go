@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -1388,7 +1389,7 @@ func (t *testMaster) testHTTPInterface(c *check.C, url string, contain []byte) {
 }
 
 func (t *testMaster) TestJoinMember(c *check.C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 
 	// create a new cluster
 	cfg1 := NewConfig()
@@ -1443,6 +1444,24 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 
 	c.Assert(err, check.IsNil)
 	c.Assert(leaderID, check.Equals, cfg1.Name)
+
+	s2.Close()
+
+	// mock restart master without wal dir
+	os.RemoveAll(filepath.Join(cfg2.DataDir, "member", "wal"))
+	s2 = NewServer(cfg2)
+	c.Assert(s2.Start(ctx), check.IsNil)
+	defer s2.Close()
+	// verify members
+	listResp, err = etcdutil.ListMembers(client)
+	c.Assert(err, check.IsNil)
+	c.Assert(listResp.Members, check.HasLen, 2)
+	names = make(map[string]struct{}, len(listResp.Members))
+	for _, m := range listResp.Members {
+		names[m.Name] = struct{}{}
+	}
+	c.Assert(names, check.HasKey, cfg1.Name)
+	c.Assert(names, check.HasKey, cfg2.Name)
 
 	cancel()
 	clearEtcdEnv(c)
