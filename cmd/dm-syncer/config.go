@@ -16,18 +16,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
-	"time"
-
 	"github.com/BurntSushi/toml"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"os"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -55,8 +52,6 @@ type commonConfig struct {
 	SafeMode   bool
 	MaxRetry   int
 
-	TimezoneStr string
-
 	SyncerConfigFormat bool
 }
 
@@ -77,7 +72,6 @@ func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTask
 		EnableGTID:   c.EnableGTID,
 		SafeMode:     c.SafeMode,
 		MaxRetry:     c.MaxRetry,
-		TimezoneStr:  c.TimezoneStr,
 	}
 
 	cfg.FlagSet = flag.NewFlagSet("dm-syncer", flag.ContinueOnError)
@@ -102,7 +96,6 @@ func (c *commonConfig) newConfigFromSyncerConfig(args []string) (*config.SubTask
 	fs.BoolVar(&cfg.EnableGTID, "enable-gtid", false, "enable gtid mode")
 	fs.BoolVar(&cfg.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
 	fs.IntVar(&cfg.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
-	fs.StringVar(&cfg.TimezoneStr, "timezone", "", "target database timezone location string")
 	fs.BoolVar(&SyncerConfigFormat, "syncer-config-format", false, "read syncer config format")
 
 	if err := fs.Parse(args); err != nil {
@@ -164,7 +157,6 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 	fs.BoolVar(&cfg.EnableGTID, "enable-gtid", false, "enable gtid mode")
 	fs.BoolVar(&cfg.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
 	fs.IntVar(&cfg.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
-	fs.StringVar(&cfg.Timezone, "timezone", "", "target database timezone location string")
 	fs.StringVar(&cfg.Name, "cp-table-prefix", "dm-syncer", "the prefix of the checkpoint table name")
 	fs.BoolVar(&syncerConfigFormat, "syncer-config-format", false, "read syncer config format")
 
@@ -176,11 +168,6 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 
 	if serverID != 101 {
 		cfg.ServerID = uint32(serverID)
-	}
-
-	if cfg.Timezone != "" {
-		log.L().Warn("timezone is deprecated, will auto use UTC instead.")
-		cfg.Timezone = "+00:00"
 	}
 
 	return cfg, nil
@@ -208,15 +195,7 @@ func newCommonConfig() *commonConfig {
 	fs.BoolVar(&cfg.EnableGTID, "enable-gtid", false, "enable gtid mode")
 	fs.BoolVar(&cfg.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
 	fs.IntVar(&cfg.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
-	fs.StringVar(&cfg.TimezoneStr, "timezone", "", "target database timezone location string")
-
-	if cfg.TimezoneStr != "" {
-		log.L().Warn("timezone is deprecated, will auto use UTC instead.")
-		cfg.TimezoneStr = "+00:00"
-	}
-
 	fs.BoolVar(&cfg.SyncerConfigFormat, "syncer-config-format", false, "read syncer config format")
-
 
 	return cfg
 }
@@ -277,9 +256,6 @@ type syncerConfig struct {
 	// MaxDDLConnectionTimeout string `toml:"execute-ddl-timeout" json:"execute-ddl-timeout"`
 	// MaxDMLConnectionTimeout string `toml:"execute-dml-timeout" json:"execute-dml-timeout"`
 	// ExecutionQueueLength    int    `toml:"execute-queue-length" json:"execute-queue-length"`
-
-	TimezoneStr string         `toml:"timezone" json:"timezone"`
-	Timezone    *time.Location `json:"-"`
 
 	printVersion bool
 }
@@ -356,7 +332,6 @@ func (oc *syncerConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 		},
 
 		ConfigFile: oc.ConfigFile,
-		Timezone:   oc.TimezoneStr,
 		From:       oc.From,
 		To:         oc.To,
 	}

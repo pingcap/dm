@@ -35,7 +35,6 @@ name: test
 task-mode: all
 shard-mode: "pessimistic"       
 meta-schema: "dm_meta"         
-timezone: "Asia/Shanghai"     
 case-sensitive: false        
 online-ddl-scheme: "gh-ost" 
 clean-dump-file: true     
@@ -137,7 +136,6 @@ name: test
 task-mode: all
 shard-mode: "pessimistic"       
 meta-schema: "dm_meta"         
-timezone: "Asia/Shanghai"     
 case-sensitive: false        
 online-ddl-scheme: "gh-ost" 
 clean-dump-file: true     
@@ -245,7 +243,6 @@ task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
 enable-heartbeat: true
-timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 
 target-database:
@@ -271,7 +268,6 @@ task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
 enable-heartbeat: true
-timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 
 target-database:
@@ -308,7 +304,6 @@ task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
 enable-heartbeat: true
-timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 `)
 	err = ioutil.WriteFile(filepath, configContent, 0o644)
@@ -325,7 +320,6 @@ task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
 enable-heartbeat: true
-timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 `)
 	err = ioutil.WriteFile(filepath, configContent, 0o644)
@@ -340,7 +334,6 @@ name: test
 is-sharding: true
 meta-schema: "dm_meta"
 enable-heartbeat: true
-timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 `)
 	err = ioutil.WriteFile(filepath, configContent, 0o644)
@@ -358,7 +351,6 @@ meta-schema: "dm_meta"
 enable-heartbeat: true
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1
-timezone: "Asia/Shanghai"
 
 target-database:
   host: "127.0.0.1"
@@ -436,7 +428,6 @@ meta-schema: "dm_meta"
 enable-heartbeat: true
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1
-timezone: "Asia/Shanghai"
 
 target-database:
   host: "127.0.0.1"
@@ -543,7 +534,6 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		metaSchema          = "meta-sub-tasks"
 		heartbeatUI         = 12
 		heartbeatRI         = 21
-		timezone            = "Asia/Shanghai"
 		maxAllowedPacket    = 10244201
 		fromSession         = map[string]string{
 			"sql_mode":  " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
@@ -650,7 +640,6 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				BinLogPos:  456,
 				BinLogGTID: "1-1-12,4-4-4",
 			},
-			Timezone: timezone,
 			From:     source1DBCfg,
 			To: DBConfig{
 				Host:             "127.0.0.1",
@@ -719,7 +708,6 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		EnableHeartbeat:         stCfg1.EnableHeartbeat,
 		HeartbeatUpdateInterval: heartbeatUI,
 		HeartbeatReportInterval: heartbeatRI,
-		Timezone:                timezone,
 		CaseSensitive:           stCfg1.CaseSensitive,
 		TargetDB:                &stCfg1.To,
 		MySQLInstances: []*MySQLInstance{
@@ -812,8 +800,6 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	c.Assert(stCfg2.EnableHeartbeat, IsTrue)
 	stCfg1.EnableHeartbeat = false
 	stCfg2.EnableHeartbeat = false
-	stCfg1.Timezone = defaultTimeZone
-	stCfg2.Timezone = defaultTimeZone
 	c.Assert(stCfgs[0].String(), Equals, stCfg1.String())
 	c.Assert(stCfgs[1].String(), Equals, stCfg2.String())
 }

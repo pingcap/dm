@@ -495,9 +495,7 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 	if lcfg.To.Session == nil {
 		lcfg.To.Session = make(map[string]string)
 	}
-	if lcfg.Timezone != "" {
-		lcfg.To.Session["time_zone"] = lcfg.Timezone
-	}
+	lcfg.To.Session["time_zone"] = "+00:00"
 
 	hasSQLMode := false
 	for k := range l.cfg.To.Session {

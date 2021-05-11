@@ -68,7 +68,6 @@ is-sharding: true
 shard-mode: ""
 meta-schema: "dm_meta"
 enable-heartbeat: true
-timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 
 target-database:

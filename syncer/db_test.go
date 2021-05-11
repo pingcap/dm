@@ -82,11 +82,7 @@ func (s *testDBSuite) resetBinlogSyncer(c *C) {
 		UseDecimal:     true,
 		VerifyChecksum: true,
 	}
-	if s.cfg.Timezone != "" {
-		timezone, err2 := utils.ParseTimeZone(s.cfg.Timezone)
-		c.Assert(err2, IsNil)
-		cfg.TimestampStringLocation = timezone
-	}
+	cfg.TimestampStringLocation = time.UTC
 
 	if s.syncer != nil {
 		s.syncer.Close()
@@ -236,7 +232,6 @@ func (s *testDBSuite) TestTimezone(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		s.cfg.Timezone = testCase.timezone
 		syncer := NewSyncer(s.cfg, nil)
 		c.Assert(syncer.genRouter(), IsNil)
 		s.resetBinlogSyncer(c)

@@ -151,9 +151,6 @@ type SubTaskConfig struct {
 	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
 	Meta                    *Meta  `toml:"meta" json:"meta"`
-	// deprecated, will auto adjust source and target time_zone
-	Timezone string `toml:"timezone" json:"timezone"`
-
 	// RelayDir get value from dm-worker config
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`
 
@@ -273,13 +270,6 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 
 	if c.MetaSchema == "" {
 		c.MetaSchema = defaultMetaSchema
-	}
-
-	if c.Timezone != "" {
-		_, err := utils.ParseTimeZone(c.Timezone)
-		if err != nil {
-			return terror.ErrConfigInvalidTimezone.Delegate(err, c.Timezone)
-		}
 	}
 
 	dirSuffix := "." + c.Name

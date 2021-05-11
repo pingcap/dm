@@ -53,10 +53,6 @@ meta-file = "./syncer.subTaskA.meta"
 worker-count = 16
 batch = 1000
 
-
-# target database timezone, all timestamp event in binlog will translate to format time based on this timezone, default use local timezone
-# timezone = "Asia/Shanghai"
-
 # filter
 
 # block allow list provides a library to filter replicate on schema/table by given rules

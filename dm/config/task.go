@@ -285,8 +285,6 @@ type TaskConfig struct {
 	EnableHeartbeat         bool `yaml:"enable-heartbeat" toml:"enable-heartbeat" json:"enable-heartbeat"`
 	HeartbeatUpdateInterval int  `yaml:"heartbeat-update-interval" toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
 	HeartbeatReportInterval int  `yaml:"heartbeat-report-interval" toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
-	// deprecated, needn't set anymore, will always use UTC instead
-	Timezone string `yaml:"timezone" toml:"timezone" json:"timezone"`
 
 	// handle schema/table name mode, and only for schema/table name
 	// if case insensitive, we would convert schema/table name to lower case
@@ -595,11 +593,6 @@ func (c *TaskConfig) adjust() error {
 		return terror.ErrConfigGlobalConfigsUnused.Generate(unusedConfigs)
 	}
 
-	if c.Timezone != "" {
-		log.L().Warn("timezone config is deprecated, will automatically use UTC instead")
-	}
-	c.Timezone = defaultTimeZone
-
 	if c.RemoveMeta {
 		log.L().Warn("`remove-meta` in task config is deprecated, please use `start-task ... --remove-meta` instead")
 	}
@@ -631,7 +624,6 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		}
 		cfg.HeartbeatUpdateInterval = c.HeartbeatUpdateInterval
 		cfg.HeartbeatReportInterval = c.HeartbeatReportInterval
-		cfg.Timezone = c.Timezone
 		cfg.Meta = inst.Meta
 
 		cfg.From = dbCfg
@@ -709,7 +701,6 @@ func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
 	c.EnableHeartbeat = stCfg0.EnableHeartbeat
 	c.HeartbeatUpdateInterval = stCfg0.HeartbeatUpdateInterval
 	c.HeartbeatReportInterval = stCfg0.HeartbeatReportInterval
-	c.Timezone = stCfg0.Timezone
 	c.CaseSensitive = stCfg0.CaseSensitive
 	c.TargetDB = &stCfg0.To // just ref
 	c.OnlineDDLScheme = stCfg0.OnlineDDLScheme
