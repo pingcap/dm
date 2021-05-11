@@ -18,12 +18,14 @@ if ("${ghprbTargetBranch}" == 'release-1.0') {
 
 MYSQL_HOST = '127.0.0.1'
 MYSQL_PORT = 3306
+MYSQL2_PORT = 3307
 MYSQL_PSWD = 123456
 
 def print_all_vars() {
     println '================= ALL TEST VARS ================='
     println "[MYSQL_HOST]: ${MYSQL_HOST}"
     println "[MYSQL_PORT]: ${MYSQL_PORT}"
+    println "[MYSQL2_PORT]: ${MYSQL2_PORT}"
     println "[MYSQL_PSWD]: ${MYSQL_PSWD}"
     println "[MYSQL_ARGS]: ${MYSQL_ARGS}"
 }
@@ -60,38 +62,43 @@ def build_dm_bin() {
         container('golang') {
             deleteDir()
             unstash 'dm'
-
+            ws = pwd()
             dir('go/src/github.com/pingcap/dm') {
-                def tidb_sha1 = sh(returnStdout: true, script: "curl ${FILE_SERVER_URL}/download/refs/pingcap/tidb/master/sha1").trim()
-                sh "curl ${FILE_SERVER_URL}/download/builds/pingcap/tidb/${tidb_sha1}/centos7/tidb-server.tar.gz | tar xz"
+                // build it test bin
+                sh 'make dm_integration_test_build'
 
-                // binlogctl
-                sh 'curl https://download.pingcap.org/tidb-enterprise-tools-nightly-linux-amd64.tar.gz | tar xz'
+                // tidb
+                tidb_sha1 = sh(returnStdout: true, script: "curl ${FILE_SERVER_URL}/download/refs/pingcap/tidb/master/sha1").trim()
+                sh "curl -o tidb-server.tar.gz ${FILE_SERVER_URL}/download/builds/pingcap/tidb/${tidb_sha1}/centos7/tidb-server.tar.gz"
+                sh 'mkdir -p tidb-server'
+                sh 'tar -zxf tidb-server.tar.gz -C tidb-server'
+                sh 'mv tidb-server/bin/tidb-server bin/'
+                sh 'rm -r tidb-server'
+                sh 'rm -r tidb-server.tar.gz'
+
+                sh 'curl -L https://download.pingcap.org/tidb-enterprise-tools-nightly-linux-amd64.tar.gz | tar xz'
                 sh 'mv tidb-enterprise-tools-nightly-linux-amd64/bin/sync_diff_inspector bin/'
                 sh 'mv tidb-enterprise-tools-nightly-linux-amd64/bin/mydumper bin/'
                 sh 'rm -r tidb-enterprise-tools-nightly-linux-amd64 || true'
 
                 // use a new version of gh-ost to overwrite the one in container("golang") (1.0.47 --> 1.1.0)
                 sh 'curl -L https://github.com/github/gh-ost/releases/download/v1.1.0/gh-ost-binary-linux-20200828140552.tar.gz | tar xz'
-
-                // add gh-ost
                 sh 'mv gh-ost bin/'
 
-                // build in test bin
-                sh 'make dm_integration_test_build'
-
-                // stash all bin
-                stash includes: 'bin/**', name: 'binaries'
                 println "debug command:\nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash"
+            }
+            dir("${ws}") {
+                stash includes: 'go/src/github.com/pingcap/dm/**', name: 'dm-with-bin', useDefaultExcludes: false
             }
         }
     }
 }
 
 def run_single_unit_test(String case_name) {
-    label = "dm-unit-test-${case_name}-${UUID.randomUUID()}"
+    label = "test-${UUID.randomUUID()}"
     podTemplate(label: label,
                 nodeSelector: 'role_type=slave',
+                namespace: 'jenkins-ci',
                 containers: [
                         containerTemplate(
                             name: 'golang', alwaysPullImage: true,
@@ -101,7 +108,7 @@ def run_single_unit_test(String case_name) {
                         containerTemplate(
                             name: 'mysql', alwaysPullImage: false,
                             image: 'hub.pingcap.net/jenkins/mysql:5.7',ttyEnabled: true,
-                            resourceRequestCpu: '2000m', resourceRequestMemory: '4Gi',
+                            resourceRequestCpu: '1000m', resourceRequestMemory: '1Gi',
                             envVars: [
                                 envVar(key: 'MYSQL_ROOT_PASSWORD', value: "${MYSQL_PSWD}"),
                             ],
@@ -113,8 +120,8 @@ def run_single_unit_test(String case_name) {
                 container('golang') {
                     def ws = pwd()
                     deleteDir()
-                    unstash 'dm'
                     dir('go/src/github.com/pingcap/dm') {
+                        unstash 'dm'
                         sh """
                             rm -rf /tmp/dm_test
                             mkdir -p /tmp/dm_test
@@ -138,9 +145,10 @@ def run_single_unit_test(String case_name) {
 }
 
 def run_single_it_test(String case_name) {
-    label = "dm-it-test-${case_name}-${UUID.randomUUID()}"
+    label = "test-${UUID.randomUUID()}"
     podTemplate(label: label,
                 nodeSelector: 'role_type=slave',
+                namespace: 'jenkins-ci',
                 containers: [
                         containerTemplate(
                             name: 'golang', alwaysPullImage: true,
@@ -148,41 +156,62 @@ def run_single_it_test(String case_name) {
                             resourceRequestCpu: '2000m', resourceRequestMemory: '4Gi',
                             command: 'cat'),
                         containerTemplate(
-                            name: 'mysql', alwaysPullImage: false,
+                            name: 'mysql1', alwaysPullImage: false,
                             image: 'hub.pingcap.net/jenkins/mysql:5.7',ttyEnabled: true,
-                            resourceRequestCpu: '2000m', resourceRequestMemory: '4Gi',
+                            resourceRequestCpu: '1000m', resourceRequestMemory: '1Gi',
                             envVars: [
                                 envVar(key: 'MYSQL_ROOT_PASSWORD', value: "${MYSQL_PSWD}"),
                             ],
+                            args: "${MYSQL_ARGS}"),
+                        // mysql 8.0
+                        containerTemplate(
+                            name: 'mysql2', alwaysPullImage: false,
+                            image: 'hub.pingcap.net/zhangxuecheng/mysql:8.0.21',ttyEnabled: true,
+                            resourceRequestCpu: '1000m', resourceRequestMemory: '1Gi',
+                            envVars: [
+                                envVar(key: 'MYSQL_ROOT_PASSWORD', value: "${MYSQL_PSWD}"),
+                                envVar(key: 'MYSQL_TCP_PORT', value: "${MYSQL2_PORT}")
+                            ],
                             args: "${MYSQL_ARGS}")
-                        ]
-                ) {
+                        ],
+                volumes:[emptyDirVolume(mountPath: '/tmp', memory: true),
+                            emptyDirVolume(mountPath: '/home/jenkins', memory: true)]) {
                 node(label) {
-                println "${NODE_NAME}"
-                container('golang') {
-                    def ws = pwd()
-                    deleteDir()
-                    unstash 'dm'
-                    unstash 'binaries'
-                    dir('go/src/github.com/pingcap/dm') {
-                    sh """
-                        rm -rf /tmp/dm_test
-                        mkdir -p /tmp/dm_test
-                        export MYSQL_HOST=${MYSQL_HOST}
-                        export MYSQL_PORT=${MYSQL_PORT}
-                        export MYSQL_PSWD=${MYSQL_PSWD}
+                    println "${NODE_NAME}"
+                    println "debug command:\nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash"
+                    container('golang') {
+                        def ws = pwd()
+                        deleteDir()
+                        // unstash 'dm'
+                        unstash 'dm-with-bin'
+                        dir('go/src/github.com/pingcap/dm') {
+                            sh """
+                            rm -rf /tmp/dm_test
+                            mkdir -p /tmp/dm_test
 
-                        GOPATH=\$GOPATH:${ws}/go make integration_test CASE="${case_name}"
-                        rm -rf cov_dir
-                        mkdir -p cov_dir
-                        ls /tmp/dm_test
-                    """
+                            export MYSQL_HOST1=${MYSQL_HOST}
+                            export MYSQL_PORT1=${MYSQL_PORT}
+                            export MYSQL_HOST2=${MYSQL_HOST}
+                            export MYSQL_PORT2=${MYSQL2_PORT}
+
+                            # wait for mysql container ready.
+                            set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
+                            set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3307 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
+                            # run test
+                            export GOPATH=\$GOPATH:${ws}/go
+                            make integration_test CASE="${case_name}"
+                            # upload coverage
+                            rm -rf cov_dir
+                            mkdir -p cov_dir
+                            ls /tmp/dm_test
+                            cp /tmp/dm_test/cov*out cov_dir
+                        """
+                        }
+                    stash includes: 'go/src/github.com/pingcap/dm/cov_dir/**', name: "integration-cov-${case_name}"
+                    println "debug command:\nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash"
                     }
-                stash includes: 'go/src/github.com/pingcap/dm/cov_dir/**', name: "unit-cov-${case_name}"
-                println "debug command:\nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash"
                 }
-                }
-                }
+                            }
 }
 
 def run_make_check() {
@@ -469,7 +498,7 @@ pipeline {
                         }
                     }
                 }
-                // END Integration Test
+            // END Integration Test
             }
         }
 
