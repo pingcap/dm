@@ -267,7 +267,6 @@ func (s *testCommonSuite) TestParseTimeZone(c *C) {
 		"+12:59":        12*time.Hour + 59*time.Minute,
 		"Asia/Shanghai": 8 * time.Hour,
 		"UTC":           time.Duration(0),
-		"CST":           -1 * 6 * time.Hour,
 	}
 	for k, v := range cases {
 		dur, err := ParseTimeZone(k)

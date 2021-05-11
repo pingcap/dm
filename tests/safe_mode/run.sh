@@ -27,7 +27,7 @@ function consistency_none() {
     dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
-    sed -i "/timezone/i\clean-dump-file: false" $WORK_DIR/dm-task.yaml
+    sed -i "/enable-heartbeat/i\clean-dump-file: false" $WORK_DIR/dm-task.yaml
     sed -i "s/extra-args: \"\"/extra-args: \"--consistency none\"/g" $WORK_DIR/dm-task.yaml
     dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

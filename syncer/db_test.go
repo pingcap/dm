@@ -255,9 +255,6 @@ func (s *testDBSuite) TestTimezone(c *C) {
 		err = txn.Commit()
 		c.Assert(err, IsNil)
 
-		location, err := utils.ParseTimeZone(testCase.timezone)
-		c.Assert(err, IsNil)
-
 		idx := 0
 		for {
 			if idx >= len(testCase.sqls) {
@@ -280,7 +277,7 @@ func (s *testDBSuite) TestTimezone(c *C) {
 				c.Assert(ts.Valid, IsTrue)
 
 				raw := ev.Rows[0][1].(string)
-				data, err := time.ParseInLocation("2006-01-02 15:04:05", raw, location)
+				data, err := time.ParseInLocation("2006-01-02 15:04:05", raw, time.UTC)
 				c.Assert(err, IsNil)
 				c.Assert(data.Unix(), DeepEquals, ts.Int64)
 				idx++

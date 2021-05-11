@@ -289,7 +289,7 @@ mysql-instances:
 	err := taskConfig.Decode(errorTaskConfig1)
 	// field server-id is not a member of TaskConfig
 	c.Check(err, NotNil)
-	c.Assert(err, ErrorMatches, "*line 18: field server-id not found in type config.MySQLInstance.*")
+	c.Assert(err, ErrorMatches, "*line 17: field server-id not found in type config.MySQLInstance.*")
 
 	err = taskConfig.Decode(errorTaskConfig2)
 	// field name duplicate
@@ -640,7 +640,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				BinLogPos:  456,
 				BinLogGTID: "1-1-12,4-4-4",
 			},
-			From:     source1DBCfg,
+			From: source1DBCfg,
 			To: DBConfig{
 				Host:             "127.0.0.1",
 				Port:             4000,

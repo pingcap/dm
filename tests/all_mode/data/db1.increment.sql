@@ -45,4 +45,4 @@ insert into t1 (id, name, info, lat, big1, big2) values (12, 'gentest', '{"id":1
 
 -- test with different session time_zone
 SET @@session.time_zone = '+07:00';
-insert into t1 (id, name, info) values (13, 'tztest', '{"id": 122}');
+insert into t1 (id, name, info) values (13, 'tztest', '{"id": 132}');
