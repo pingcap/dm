@@ -69,7 +69,7 @@ var (
 	defaultBatch                   = 100
 	defaultQueueSize               = 1024 // do not give too large default value to avoid OOM
 	defaultCheckpointFlushInterval = 30   // in seconds
-	// force use UTC time_zone
+	// force use UTC time_zone.
 	defaultTimeZone = "+00:00"
 
 	// TargetDBConfig.
@@ -282,11 +282,11 @@ type TaskConfig struct {
 	// don't save configuration into it
 	MetaSchema string `yaml:"meta-schema" toml:"meta-schema" json:"meta-schema"`
 
-	EnableHeartbeat         bool   `yaml:"enable-heartbeat" toml:"enable-heartbeat" json:"enable-heartbeat"`
-	HeartbeatUpdateInterval int    `yaml:"heartbeat-update-interval" toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
-	HeartbeatReportInterval int    `yaml:"heartbeat-report-interval" toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
+	EnableHeartbeat         bool `yaml:"enable-heartbeat" toml:"enable-heartbeat" json:"enable-heartbeat"`
+	HeartbeatUpdateInterval int  `yaml:"heartbeat-update-interval" toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
+	HeartbeatReportInterval int  `yaml:"heartbeat-report-interval" toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	// deprecated, needn't set anymore, will always use UTC instead
-	Timezone                string `yaml:"timezone" toml:"timezone" json:"timezone"`
+	Timezone string `yaml:"timezone" toml:"timezone" json:"timezone"`
 
 	// handle schema/table name mode, and only for schema/table name
 	// if case insensitive, we would convert schema/table name to lower case
@@ -819,7 +819,7 @@ func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version *semver.Version) {
 	dbConfig.Session = lowerMap
 }
 
-// force adjust session `time_zone` to UTC
+// AdjustTargetDBTimeZone force adjust session `time_zone` to UTC.
 func AdjustTargetDBTimeZone(config *DBConfig) {
 	for k := range config.Session {
 		if strings.ToLower(k) == "time_zone" {

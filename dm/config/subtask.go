@@ -153,7 +153,7 @@ type SubTaskConfig struct {
 	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
 	Meta                    *Meta  `toml:"meta" json:"meta"`
 	// deprecated, will auto adjust source and target time_zone
-	Timezone                string `toml:"timezone" json:"timezone"`
+	Timezone string `toml:"timezone" json:"timezone"`
 
 	// RelayDir get value from dm-worker config
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`
