@@ -1079,10 +1079,11 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*config.SourceConfig, error) {
 	cfgs := make([]*config.SourceConfig, len(contents))
 	for i, content := range contents {
-		cfg := config.NewSourceConfig()
-		if err := cfg.ParseYaml(content); err != nil {
+		cfg, err := config.ParseYaml(content)
+		if err != nil {
 			return cfgs, err
 		}
+		cfg.From.Adjust()
 
 		dbConfig := cfg.GenerateDBConfig()
 
@@ -1112,8 +1113,8 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 func parseSourceConfig(contents []string) ([]*config.SourceConfig, error) {
 	cfgs := make([]*config.SourceConfig, len(contents))
 	for i, content := range contents {
-		cfg := config.NewSourceConfig()
-		if err := cfg.ParseYaml(content); err != nil {
+		cfg, err := config.ParseYaml(content)
+		if err != nil {
 			return cfgs, err
 		}
 		cfgs[i] = cfg

@@ -52,9 +52,8 @@ var _ = Suite(&testForEtcd{})
 func (t *testForEtcd) TestSourceEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
-	var cfg config.SourceConfig
-
-	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+	cfg, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
 	source := cfg.SourceID
 	cfgExtra := cfg
 	cfgExtra.SourceID = "mysql-replica-2"

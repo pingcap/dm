@@ -32,9 +32,8 @@ import (
 const sourceSampleFile = "../worker/source.yaml"
 
 func (t *testConfig) TestConfig(c *C) {
-	cfg := NewSourceConfig()
-
-	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+	cfg, err := LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
 	cfg.RelayDir = "./xx"
 	c.Assert(cfg.RelayDir, Equals, "./xx")
 	c.Assert(cfg.ServerID, Equals, uint32(101))
@@ -63,8 +62,8 @@ func (t *testConfig) TestConfig(c *C) {
 	// test update config file and reload
 	c.Assert(cfg.Parse(tomlStr), IsNil)
 	c.Assert(cfg.ServerID, Equals, uint32(100))
-	var cfg1 SourceConfig
-	c.Assert(cfg1.ParseYaml(yamlStr), IsNil)
+	cfg1, err := ParseYaml(yamlStr)
+	c.Assert(err, IsNil)
 	c.Assert(cfg1.ServerID, Equals, uint32(100))
 	cfg.Filters = []*bf.BinlogEventRule{}
 	cfg.Tracer = map[string]interface{}{}
@@ -73,8 +72,8 @@ func (t *testConfig) TestConfig(c *C) {
 	c.Assert(cfg2.Parse(originCfgStr), IsNil)
 	c.Assert(cfg2.ServerID, Equals, uint32(101))
 
-	var cfg3 SourceConfig
-	c.Assert(cfg3.ParseYaml(originCfgYamlStr), IsNil)
+	cfg3, err := ParseYaml(originCfgYamlStr)
+	c.Assert(err, IsNil)
 	c.Assert(cfg3.ServerID, Equals, uint32(101))
 
 	// test decrypt password
@@ -111,8 +110,8 @@ func (t *testConfig) TestConfig(c *C) {
 	c.Assert(clone4yaml, Matches, "(.|\n)*backoff-rollback: 5m(.|\n)*")
 	c.Assert(clone4yaml, Matches, "(.|\n)*backoff-max: 5m(.|\n)*")
 
-	var clone6 SourceConfig
-	c.Assert(clone6.ParseYaml(clone4yaml), IsNil)
+	clone6, err := ParseYaml(clone4yaml)
+	c.Assert(err, IsNil)
 	c.Assert(clone6, DeepEquals, *clone4)
 
 	// test invalid config
@@ -124,15 +123,15 @@ aaa: xxx
 `)
 	err = ioutil.WriteFile(configFile, configContent, 0o644)
 	c.Assert(err, IsNil)
-	err = cfg.LoadFromFile(configFile)
+	_, err = LoadFromFile(configFile)
 	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, "(.|\n)*field aaa not found in type config.SourceConfig(.|\n)*")
 }
 
 func (t *testConfig) TestConfigVerify(c *C) {
 	newConfig := func() *SourceConfig {
-		cfg := NewSourceConfig()
-		c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+		cfg, err := LoadFromFile(sourceSampleFile)
+		c.Assert(err, IsNil)
 		cfg.RelayDir = "./xx"
 		return cfg
 	}
@@ -255,12 +254,12 @@ func subtestFlavor(c *C, cfg *SourceConfig, sqlInfo, expectedFlavor, expectedErr
 }
 
 func (t *testConfig) TestAdjustFlavor(c *C) {
-	cfg := NewSourceConfig()
-	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+	cfg, err := LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
 	cfg.RelayDir = "./xx"
 
 	cfg.Flavor = "mariadb"
-	err := cfg.AdjustFlavor(context.Background(), nil)
+	err = cfg.AdjustFlavor(context.Background(), nil)
 	c.Assert(err, IsNil)
 	c.Assert(cfg.Flavor, Equals, mysql.MariaDBFlavor)
 	cfg.Flavor = "MongoDB"
@@ -278,8 +277,8 @@ func (t *testConfig) TestAdjustServerID(c *C) {
 	}()
 	getAllServerIDFunc = getMockServerIDs
 
-	cfg := NewSourceConfig()
-	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+	cfg, err := LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
 	cfg.RelayDir = "./xx"
 
 	c.Assert(cfg.AdjustServerID(context.Background(), nil), IsNil)

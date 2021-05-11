@@ -386,7 +386,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	rev, err := ha.DeleteSourceBound(etcdCli, cfg.Name)
 	c.Assert(err, IsNil)
 	// step 2: start source at this worker
-	w, err := s.getOrStartWorker(&sourceCfg, true)
+	w, err := s.getOrStartWorker(sourceCfg, true)
 	c.Assert(err, IsNil)
 	c.Assert(w.EnableHandleSubtasks(), IsNil)
 	// step 3: trigger etcd compaction and check whether we can receive it through watcher
@@ -633,9 +633,8 @@ func checkRelayStatus(cli pb.WorkerClient, expect pb.Stage) bool {
 	return status.SourceStatus.RelayStatus.Stage == expect
 }
 
-func loadSourceConfigWithoutPassword(c *C) config.SourceConfig {
-	var sourceCfg config.SourceConfig
-	err := sourceCfg.LoadFromFile(sourceSampleFile)
+func loadSourceConfigWithoutPassword(c *C) *config.SourceConfig {
+	sourceCfg, err := config.LoadFromFile(sourceSampleFile)
 	c.Assert(err, IsNil)
 	sourceCfg.From.Password = "" // no password set
 	return sourceCfg
