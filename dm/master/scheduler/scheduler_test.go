@@ -868,8 +868,8 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName2, keepAliveTTL), IsNil)
 	}()
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
-		return err == nil && len(kam) == 2
+		kam, _, e := ha.GetKeepAliveWorkers(etcdTestCli)
+		return e == nil && len(kam) == 2
 	}), IsTrue)
 	cancel1()
 	wg.Wait()
@@ -877,9 +877,9 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 	time.Sleep(time.Duration(keepAliveTTL) * time.Second)
 	var rev int64
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		kam, rev1, err := ha.GetKeepAliveWorkers(etcdTestCli)
+		kam, rev1, e := ha.GetKeepAliveWorkers(etcdTestCli)
 		rev = rev1
-		return err == nil && len(kam) == 0
+		return e == nil && len(kam) == 0
 	}), IsTrue)
 
 	// step 4: trigger etcd compaction and check whether we can receive it through watcher

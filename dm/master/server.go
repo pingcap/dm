@@ -1192,7 +1192,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 			err      error
 		)
 		for _, cfg := range cfgs {
-			err = s.scheduler.AddSourceCfg(*cfg)
+			err = s.scheduler.AddSourceCfg(cfg)
 			// return first error and try to revert, so user could copy-paste same start command after error
 			if err != nil {
 				resp.Msg = err.Error()

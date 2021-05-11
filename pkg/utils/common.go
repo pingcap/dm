@@ -19,21 +19,16 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
-
-	"github.com/pingcap/errors"
-
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/pingcap/tidb/types"
-	"github.com/pingcap/tidb/util/timeutil"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // TrimCtrlChars returns a slice of the string s with all leading
@@ -213,41 +208,4 @@ func NonRepeatStringsEqual(a, b []string) bool {
 		}
 	}
 	return true
-}
-
-// ParseTimeZone parse location info from time offset("+08:00") or location string ("Asia/Shanghai")
-//
-// Copy from https://github.com/pingcap/tidb/blob/263a47e85ce04f74ec80d1d35b426618bc89b5a3/sessionctx/variable/varsutil.go#L411
-func ParseTimeZone(s string) (*time.Location, error) {
-	if strings.EqualFold(s, "SYSTEM") {
-		return timeutil.SystemLocation(), nil
-	}
-	loc, err := time.LoadLocation(s)
-	if err == nil {
-		return loc, nil
-	}
-	// The value can be given as a string indicating an offset from UTC, such as '+10:00' or '-6:00'.
-	// The time zone's value should in [-12:59,+14:00].
-	if strings.HasPrefix(s, "+") || strings.HasPrefix(s, "-") {
-		d, err := types.ParseDuration(nil, s[1:], 0)
-		if err == nil {
-			if s[0] == '-' {
-				if d.Duration > 12*time.Hour+59*time.Minute {
-					return nil, errors.Errorf("invalid time zone '%s'", s)
-				}
-			} else {
-				if d.Duration > 14*time.Hour {
-					return nil, errors.Errorf("invalid time zone '%s'", s)
-				}
-			}
-
-			ofst := int(d.Duration / time.Second)
-			if s[0] == '-' {
-				ofst = -ofst
-			}
-			return time.FixedZone("", ofst), nil
-		}
-	}
-
-	return nil, errors.Errorf("invalid time zone '%s'", s)
 }

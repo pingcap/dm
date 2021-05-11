@@ -16,13 +16,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+
 	"github.com/BurntSushi/toml"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"os"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/utils"

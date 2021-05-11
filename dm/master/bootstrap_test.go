@@ -94,8 +94,8 @@ func (t *testMaster) TestCollectSourceConfigFilesV1Import(c *C) {
 	cfgs, err = s.collectSourceConfigFilesV1Import(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(cfgs, HasLen, 2)
-	c.Assert(cfgs[cfg1.SourceID], DeepEquals, *cfg1)
-	c.Assert(cfgs[cfg2.SourceID], DeepEquals, *cfg2)
+	c.Assert(cfgs[cfg1.SourceID], DeepEquals, cfg1)
+	c.Assert(cfgs[cfg2.SourceID], DeepEquals, cfg2)
 
 	// put a invalid source file.
 	c.Assert(ioutil.WriteFile(filepath.Join(s.cfg.V1SourcesPath, "invalid.yaml"), []byte("invalid-source-data"), 0o644), IsNil)
@@ -125,9 +125,9 @@ func (t *testMaster) TestWaitWorkersReadyV1Import(c *C) {
 	c.Assert(err, IsNil)
 	cfg2 := cfg1.Clone()
 	cfg2.SourceID = "mysql-replica-02"
-	cfgs := map[string]config.SourceConfig{
-		cfg1.SourceID: *cfg1,
-		cfg2.SourceID: *cfg2,
+	cfgs := map[string]*config.SourceConfig{
+		cfg1.SourceID: cfg1,
+		cfg2.SourceID: cfg2,
 	}
 
 	// no worker registered, timeout.

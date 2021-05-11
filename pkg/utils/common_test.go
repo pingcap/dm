@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
@@ -256,32 +255,4 @@ func (s *testCommonSuite) TestNonRepeatStringsEqual(c *C) {
 	c.Assert(NonRepeatStringsEqual([]string{"1", "2"}, []string{"2", "1"}), IsTrue)
 	c.Assert(NonRepeatStringsEqual([]string{}, []string{"1"}), IsFalse)
 	c.Assert(NonRepeatStringsEqual([]string{"1", "2"}, []string{"2", "3"}), IsFalse)
-}
-
-func (s *testCommonSuite) TestParseTimeZone(c *C) {
-	cases := map[string]time.Duration{
-		"+00:00":        time.Duration(0),
-		"+01:00":        time.Hour,
-		"-08:03":        -1 * (8*time.Hour + 3*time.Minute),
-		"-12:59":        -1 * (12*time.Hour + 59*time.Minute),
-		"+12:59":        12*time.Hour + 59*time.Minute,
-		"Asia/Shanghai": 8 * time.Hour,
-		"UTC":           time.Duration(0),
-	}
-	for k, v := range cases {
-		dur, err := ParseTimeZone(k)
-		c.Assert(err, IsNil)
-		c.Assert(dur, Equals, v)
-	}
-
-	badCases := []string{
-		"test",
-		"-13:00",
-		"+14:05",
-	}
-
-	for _, s := range badCases {
-		_, err := ParseTimeZone(s)
-		c.Assert(err, ErrorMatches, "invalid time zone.*")
-	}
 }

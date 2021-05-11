@@ -324,7 +324,7 @@ func LoadFromFile(path string) (*SourceConfig, error) {
 	if err != nil {
 		return nil, terror.ErrConfigReadCfgFromFile.Delegate(err, path)
 	}
-	if err := yaml.UnmarshalStrict(content, c); err != nil {
+	if err = yaml.UnmarshalStrict(content, c); err != nil {
 		return nil, terror.ErrConfigYamlTransform.Delegate(err, "decode source config")
 	}
 	c.adjust()
