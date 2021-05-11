@@ -118,6 +118,8 @@ func (db *DBConfig) Decode(data string) error {
 
 // Adjust adjusts the config.
 func (db *DBConfig) Adjust() {
+	// force set session time zone to UTC here.
+	AdjustTargetDBTimeZone(db)
 }
 
 // SubTaskConfig is the configuration for SubTask.
@@ -150,7 +152,8 @@ type SubTaskConfig struct {
 	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
 	Meta                    *Meta  `toml:"meta" json:"meta"`
-	Timezone                string `toml:"timezone" josn:"timezone"`
+	// deprecated, will auto adjust source and target time_zone
+	Timezone                string `toml:"timezone" json:"timezone"`
 
 	// RelayDir get value from dm-worker config
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`

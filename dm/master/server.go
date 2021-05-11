@@ -1144,6 +1144,7 @@ func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
 		config.AdjustTargetDBSessionCfg(dbConfig, version)
 	} else {
 		log.L().Warn("get tidb version", log.ShortError(err))
+		config.AdjustTargetDBTimeZone(dbConfig)
 	}
 	return nil
 }

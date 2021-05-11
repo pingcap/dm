@@ -27,6 +27,7 @@ import (
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -177,6 +178,11 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 		cfg.ServerID = uint32(serverID)
 	}
 
+	if cfg.Timezone != "" {
+		log.L().Warn("timezone is deprecated, will auto use UTC instead.")
+		cfg.Timezone = "+00:00"
+	}
+
 	return cfg, nil
 }
 
@@ -203,7 +209,14 @@ func newCommonConfig() *commonConfig {
 	fs.BoolVar(&cfg.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
 	fs.IntVar(&cfg.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
 	fs.StringVar(&cfg.TimezoneStr, "timezone", "", "target database timezone location string")
+
+	if cfg.TimezoneStr != "" {
+		log.L().Warn("timezone is deprecated, will auto use UTC instead.")
+		cfg.TimezoneStr = "+00:00"
+	}
+
 	fs.BoolVar(&cfg.SyncerConfigFormat, "syncer-config-format", false, "read syncer config format")
+
 
 	return cfg
 }

@@ -60,6 +60,9 @@ func (m *Dumpling) Init(ctx context.Context) error {
 	var err error
 	m.dumpConfig, err = m.constructArgs()
 	m.detectSQLMode(ctx)
+	if m.cfg.Timezone != "" {
+		m.dumpConfig.SessionParams["time_zone"] = m.cfg.Timezone
+	}
 	m.logger.Info("create dumpling", zap.Stringer("config", m.dumpConfig))
 	return err
 }
@@ -219,6 +222,10 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	dumpConfig.TableFilter = tableFilter
 	dumpConfig.CompleteInsert = true // always keep column name in `INSERT INTO` statements.
 	dumpConfig.Logger = m.logger.Logger
+	// force using UTC timezone
+	dumpConfig.SessionParams = map[string]interface{}{
+		"time_zone": "+00:00",
+	}
 
 	if cfg.Threads > 0 {
 		dumpConfig.Threads = cfg.Threads

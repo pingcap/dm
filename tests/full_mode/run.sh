@@ -147,6 +147,8 @@ function run() {
     empty_data
 
     run_sql_both_source "SET @@GLOBAL.SQL_MODE='NO_BACKSLASH_ESCAPES'"
+    run_sql_source1 "SET @@global.time_zone = '+01:00';"
+    run_sql_source2 "SET @@global.time_zone = '+02:00';"
 
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
@@ -193,6 +195,7 @@ function run() {
     check_metric_not_contains $WORKER1_PORT 'dm_worker_task_state{source_id="mysql-replica-01",task="test"}' 3
     check_metric_not_contains $WORKER2_PORT 'dm_worker_task_state{source_id="mysql-replica-02",task="test"}' 3
     run_sql_both_source "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
+    run_sql_both_source "SET @@GLOBAL.TIME_ZONE='SYSTEM';"
 }
 
 cleanup_data full_mode
