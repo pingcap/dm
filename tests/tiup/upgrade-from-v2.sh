@@ -59,7 +59,7 @@ function upgrade_to_current_v2() {
 function migrate_in_v2 {
     run_dmctl_with_retry $CUR_VER "query-status" "Running" 2 "Paused" 1
 
-    tiup dmctl:$PRE_VER --master-addr=master1:8261 resume-task $TASK_NAME
+    tiup dmctl:$CUR_VER --master-addr=master1:8261 resume-task $TASK_NAME
 
     run_dmctl_with_retry $CUR_VER "query-status" "Running" 3
 
