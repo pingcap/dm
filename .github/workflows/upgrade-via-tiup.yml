@@ -82,7 +82,7 @@ jobs:
         path: go/src/github.com/pingcap/dm
 
     - name: Build
-      if: ${{ github.ref != 'refs/heads/main' }}
+      if: ${{ github.ref != 'refs/heads/master' }}
       working-directory: ${{ env.working-directory }}
       run: make build nolint=true
     
@@ -227,3 +227,5 @@ jobs:
     - name: Set up tmate session
       if: ${{ failure() }}
       uses: mxschmitt/action-tmate@v2
+      with:
+        timeout-minutes: 60
