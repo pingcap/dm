@@ -37,6 +37,7 @@ function migrate_in_previous_v2() {
 
     tiup dmctl:$PRE_VER --master-addr=master1:8261 start-task $CUR/conf/task.yaml
     tiup dmctl:$PRE_VER --master-addr=master1:8261 start-task $CUR/conf/task_optimistic.yaml
+    tiup dmctl:$PRE_VER --master-addr=master1:8261 start-task $CUR/conf/task_pessimistic.yaml
 
     exec_incremental_stage1
 
@@ -61,6 +62,7 @@ function migrate_in_v2 {
 
     check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
     check_sync_diff $WORK_DIR $CUR/conf/diff_config_optimistic.toml
+    check_sync_diff $WORK_DIR $CUR/conf/diff_config_pessimistic.toml
 
     echo "check locks"
     run_dmctl_with_retry $CUR_VER "show-ddl-locks" "no DDL lock exists" 1
