@@ -98,11 +98,8 @@ func prepareJoinEtcd(cfg *Config) error {
 	}
 
 	// try to join self, invalid
-	clientURLs := strings.Split(cfg.Join, ",")
-	for _, clientURL := range clientURLs {
-		if clientURL == cfg.MasterAddr {
-			return terror.ErrMasterJoinEmbedEtcdFail.Generate(fmt.Sprintf("join self %s is forbidden", cfg.Join))
-		}
+	if cfg.Join == cfg.MasterAddr {
+		return terror.ErrMasterJoinEmbedEtcdFail.Generate(fmt.Sprintf("join self %s is forbidden", cfg.Join))
 	}
 
 	// restart with previous data, no `InitialCluster` need to set
