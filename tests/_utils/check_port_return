@@ -4,10 +4,10 @@
 
 port=$1
 
-check_port 127.0.0.1 $port > /dev/null 2>&1
+check_port 127.0.0.1 $port >/dev/null 2>&1
 ret=$?
 if [ "$ret" == "0" ]; then
-    echo "1"
+	echo "1"
 else
-    echo "0"
+	echo "0"
 fi
