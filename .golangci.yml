@@ -109,14 +109,14 @@ linters-settings:
       - name: superfluous-else
       - name: modifies-parameter
       - name: unreachable-code
-  
+
 issues:
   include:
     - EXC0002 # golint
     - EXC0003
 
   # Fix found issues (if it's supported by the linter)
-  fix: true
+  fix: false
 
 run:
   # timeout for analysis, e.g. 30s, 5m, default is 1m
