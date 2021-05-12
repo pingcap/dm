@@ -21,8 +21,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-
-	//"path/filepath".
 	"sort"
 	"strings"
 	"sync"
