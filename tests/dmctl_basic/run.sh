@@ -206,7 +206,8 @@ function run() {
         "\"result\": true" 3 \
         "\"source\": \"$SOURCE_ID1\"" 1 \
         "\"source\": \"$SOURCE_ID2\"" 1 \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 4 \
+        "\"synced\": true" 2
     # update_task_not_paused $TASK_CONF
 
     # stop relay because get_config_to_file will stop source

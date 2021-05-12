@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.3] 2021-05-10
+
+### Improvements
+
+- Support deleting residual DDL locks using the command `unlock-ddl-lock` after the migration task is stopped [#1612](https://github.com/pingcap/dm/pull/1612)
+- Support limiting the number of errors and warnings that DM reports during the precheck process [#1621](https://github.com/pingcap/dm/pull/1621)
+- Optimize the behavior of the command `query-status` to get the status of upstream binlogs [#1630](https://github.com/pingcap/dm/pull/1630)
+- Optimize the format of sharded tables’ migration status output by the command `query-status` in the pessimistic mode [#1650](https://github.com/pingcap/dm/pull/1650)
+- Print help message first when dmtcl processes commands with the `--help` input [#1637](https://github.com/pingcap/dm/pull/1637)
+- Automatically remove the related information from monitoring panels after a DDL lock is deleted [#1631](https://github.com/pingcap/dm/pull/1631)
+- Automatically remove the related task status from monitoring panels after a task is stopped or completed [#1614](https://github.com/pingcap/dm/pull/1614)
+
+### Bug fixes
+
+- Fix the issue that DM-master becomes out of memory after DM is updated to v2.0.2 in the process of shard DDL coordination using the optimistic mode [#1643](https://github.com/pingcap/dm/pull/1643) [#1649](https://github.com/pingcap/dm/pull/1649)
+- Fix the issue that the source binding information is lost when DM is started for the first time after updated to v2.0.2 [#1649](https://github.com/pingcap/dm/pull/1649)
+- Fix the issue that the flag in the command `operate-source show -s` does not take effect [#1587](https://github.com/pingcap/dm/pull/1587)
+- Fix the issue that the command `operate-source stop <config-file>` fails because DM cannot connect to the source [#1587](https://github.com/pingcap/dm/pull/1587)
+- Fix the finer-grained issue that some migration errors might be wrongly ignored [#1599](https://github.com/pingcap/dm/pull/1599)
+- Fix the issue that the migration is interrupted when DM filters online DDL statements according to binlog event filtering rules that are configured [#1668](https://github.com/pingcap/dm/pull/1668)
+
+### Known issues
+
+[GitHub issues](https://github.com/pingcap/dm/issues?q=is%3Aissue+label%3Aaffected-v2.0.3)
+
 ## [2.0.2] 2021-04-09
 
 ### Improvements
@@ -42,7 +67,7 @@ All notable changes to this project will be documented in this file.
 
 ### Known issues
 
-[GitHub issues](https://github.com/pingcap/dm/issues?q=is%3Aissue+is%3Aopen+label%3Aaffected-v2.0.2)
+[GitHub issues](https://github.com/pingcap/dm/issues?q=is%3Aissue+label%3Aaffected-v2.0.2)
 
 ## [2.0.1] 2020-12-25
 
