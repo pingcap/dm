@@ -1497,7 +1497,7 @@ func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent, toLock bool) error {
 	bounded, err := s.tryBoundForSource(bound.Source)
 	if err != nil {
 		return err
-	} else if !bounded {
+	} else if _, ok := s.sourceCfgs[bound.Source]; ok && !bounded {
 		// 8. record the source as unbounded.
 		s.unbounds[bound.Source] = struct{}{}
 	}
@@ -1515,6 +1515,8 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 	// unbounds
 	source := s.lastBound[w.baseInfo.Name].Source
 	if _, ok := s.unbounds[source]; !ok {
+		source = ""
+	} else if _, ok := s.sourceCfgs[source]; !ok {
 		source = ""
 	}
 
