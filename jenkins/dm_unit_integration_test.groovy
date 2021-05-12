@@ -1,5 +1,5 @@
 /*
-    Run dm unit test in Jenkins with String paramaters
+    Run dm unit/intergation test in Jenkins with String paramaters
 
     * ghprbActualCommit (by bot)
     * ghprbPullId (by bot)
@@ -53,6 +53,24 @@ def checkout_and_stash_dm_code() {
                     """
             }
             stash includes: 'go/src/github.com/pingcap/dm/**', name: 'dm', useDefaultExcludes: false
+        }
+    }
+}
+
+def run_make_check() {
+    node("${GO_TEST_SLAVE}") {
+        container('golang') {
+            sh 'rm -rf /tmp/dm_test & mkdir -p /tmp/dm_test'
+            def ws = pwd()
+            deleteDir()
+            unstash 'dm'
+            dir('go/src/github.com/pingcap/dm') {
+                container('golang') {
+                    timeout(30) {
+                        sh "GOPATH=\$GOPATH:${ws}/go PATH=\$GOPATH/bin:${ws}/go/bin:\$PATH make check"
+                    }
+                }
+            }
         }
     }
 }
@@ -116,30 +134,34 @@ def run_single_unit_test(String case_name) {
                         ]
                 ) {
                 node(label) {
-                println "${NODE_NAME}"
-                container('golang') {
-                    def ws = pwd()
-                    deleteDir()
-                    dir('go/src/github.com/pingcap/dm') {
-                        unstash 'dm'
-                        sh """
-                            rm -rf /tmp/dm_test
-                            mkdir -p /tmp/dm_test
-                            export MYSQL_HOST=${MYSQL_HOST}
-                            export MYSQL_PORT=${MYSQL_PORT}
-                            export MYSQL_PSWD=${MYSQL_PSWD}
-
-                            GOPATH=\$GOPATH:${ws}/go make unit_test_${case_name}
-                            rm -rf cov_dir
-                            mkdir -p cov_dir
-                            ls /tmp/dm_test
-                            cp /tmp/dm_test/cov*out cov_dir
-                            """
-                    }
-                    // stash this test coverage file
-                    stash includes: 'go/src/github.com/pingcap/dm/cov_dir/**', name: "unit-cov-${case_name}"
+                    println "${NODE_NAME}"
                     println "debug command:\nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash"
-                }
+                    container('golang') {
+                        ws = pwd()
+                        deleteDir()
+                        unstash 'dm-with-bin'
+                        dir('go/src/github.com/pingcap/dm') {
+                            sh """
+                                rm -rf /tmp/dm_test
+                                mkdir -p /tmp/dm_test
+                                export MYSQL_HOST=${MYSQL_HOST}
+                                export MYSQL_PORT=${MYSQL_PORT}
+                                export MYSQL_PSWD=${MYSQL_PSWD}
+                                export GOPATH=\$GOPATH:${ws}/go
+                                # wait for mysql
+                                set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
+
+                                make unit_test_${case_name}
+                                rm -rf cov_dir
+                                mkdir -p cov_dir
+                                ls /tmp/dm_test
+                                cp /tmp/dm_test/cov*out cov_dir
+                                """
+                        }
+                        // stash this test coverage file
+                        stash includes: 'go/src/github.com/pingcap/dm/cov_dir/**', name: "unit-cov-${case_name}"
+                        println "debug command:\nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash"
+                    }
                 }
                 }
 }
@@ -182,74 +204,77 @@ def run_single_it_test(String case_name) {
                     container('golang') {
                         def ws = pwd()
                         deleteDir()
-                        // unstash 'dm'
                         unstash 'dm-with-bin'
                         dir('go/src/github.com/pingcap/dm') {
-                            sh """
-                            rm -rf /tmp/dm_test
-                            mkdir -p /tmp/dm_test
+                            try {
+                        sh"""
+                                # use a new version of gh-ost to overwrite the one in container("golang") (1.0.47 --> 1.1.0)
+                                export PATH=bin:$PATH
 
-                            export MYSQL_HOST1=${MYSQL_HOST}
-                            export MYSQL_PORT1=${MYSQL_PORT}
-                            export MYSQL_HOST2=${MYSQL_HOST}
-                            export MYSQL_PORT2=${MYSQL2_PORT}
+                                rm -rf /tmp/dm_test
+                                mkdir -p /tmp/dm_test
 
-                            # wait for mysql container ready.
-                            set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
-                            set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3307 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
-                            # run test
-                            export GOPATH=\$GOPATH:${ws}/go
-                            make integration_test CASE="${case_name}"
-                            # upload coverage
-                            rm -rf cov_dir
-                            mkdir -p cov_dir
-                            ls /tmp/dm_test
-                            cp /tmp/dm_test/cov*out cov_dir
-                        """
+                                export MYSQL_HOST1=${MYSQL_HOST}
+                                export MYSQL_PORT1=${MYSQL_PORT}
+                                export MYSQL_HOST2=${MYSQL_HOST}
+                                export MYSQL_PORT2=${MYSQL2_PORT}
+
+                                # wait for mysql container ready.
+                                set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
+                                set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3307 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
+                                # run test
+                                export GOPATH=\$GOPATH:${ws}/go
+                                make integration_test CASE="${case_name}"
+                                # upload coverage
+                                rm -rf cov_dir
+                                mkdir -p cov_dir
+                                ls /tmp/dm_test
+                                cp /tmp/dm_test/cov*out cov_dir
+                                """
+                            }catch (Exception e) {
+                        sh """
+                                    echo "${case_name} test faild print all log..."
+                                    for log in `ls /tmp/dm_test/*/*/log/*.log`; do
+                                        echo "____________________________________"
+                                        echo "\$log"
+                                        cat "\$log"
+                                        echo "____________________________________"
+                                    done
+                                    for log in `ls /tmp/dm_test/*/*/*/log/*.log`; do
+                                        echo "____________________________________"
+                                        echo "\$log"
+                                        cat "\$log"
+                                        echo "____________________________________"
+                                    done
+                                    """
+                        throw e
+                            }
                         }
                     stash includes: 'go/src/github.com/pingcap/dm/cov_dir/**', name: "integration-cov-${case_name}"
-                    println "debug command:\nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash"
                     }
                 }
                             }
 }
 
-def run_make_check() {
-    node("${GO_TEST_SLAVE}") {
-        container('golang') {
-            sh 'rm -rf /tmp/dm_test & mkdir -p /tmp/dm_test'
-            def ws = pwd()
-            deleteDir()
-            unstash 'dm'
-            dir('go/src/github.com/pingcap/dm') {
-                container('golang') {
-                    timeout(30) {
-                        sh "GOPATH=\$GOPATH:${ws}/go PATH=\$GOPATH/bin:${ws}/go/bin:\$PATH make check"
-                    }
-                }
-            }
-        }
-    }
-}
-
 def run_make_coverage() {
     node("${GO_TEST_SLAVE}") {
+        println "debug command:\nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash"
         ws = pwd()
         deleteDir()
-        unstash 'dm'
+        unstash 'dm-with-bin'
         unstash 'unit-cov-relay'
         unstash 'unit-cov-syncer'
         unstash 'unit-cov-pkg_binlog'
         unstash 'unit-cov-others'
-        unstash 'integration-cov-others'
-        unstash 'integration-cov-all_mode'
-        unstash 'integration-cov-dmctl_advance dmctl_basic dmctl_command'
         try {
+            unstash 'integration-cov-others'
+            unstash 'integration-cov-all_mode'
+            unstash 'integration-cov-dmctl_advance dmctl_basic dmctl_command'
             unstash 'integration-cov-ha_cases'
             unstash 'integration-cov-ha_cases2'
             unstash 'integration-cov-ha_master'
             unstash 'integration-cov-handle_error'
-            unstash 'integration-cov-http_apis print_status'
+            unstash 'integration-cov-print_status http_apis'
             unstash 'integration-cov-import_goroutine_leak incremental_mode initial_unit'
             unstash 'integration-cov-load_interrupt'
             unstash 'integration-cov-many_tables'
@@ -273,10 +298,9 @@ def run_make_coverage() {
                     mkdir -p /tmp/dm_test
                     cp cov_dir/* /tmp/dm_test
                     set +x
-                    BUILD_NUMBER=${BUILD_NUMBER} COVERALLS_TOKEN="${COVERALLS_TOKEN}" CODECOV_TOKEN="${CODECOV_TOKEN}" GOPATH=${ws}/go:\$GOPATH PATH=${ws}/go/bin:/go/bin:\$PATH JenkinsCI=1 make coverage
+                    BUILD_NUMBER=${BUILD_NUMBER} COVERALLS_TOKEN="${COVERALLS_TOKEN}" CODECOV_TOKEN="${CODECOV_TOKEN}" PATH=${ws}/go/bin:/go/bin:\$PATH JenkinsCI=1 make coverage || true
                     set -x
                     """
-                    println "debug command:\nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash"
                 }
             }
         }
@@ -302,6 +326,7 @@ pipeline {
         }
 
         stage('Parallel Run Tests') {
+            options { retry(count: 3) }
             failFast true
             parallel {
                 // Unit Test
@@ -366,7 +391,7 @@ pipeline {
                 stage('IT-ha_cases2') {
                     steps {
                         script {
-                            run_single_it_test('all_mode')
+                            run_single_it_test('ha_cases2')
                         }
                     }
                 }
@@ -430,7 +455,7 @@ pipeline {
                 stage('IT-safe_mode group') {
                     steps {
                         script {
-                            run_single_it_test('sequence_safe_mode')
+                            run_single_it_test('safe_mode sequence_safe_mode')
                         }
                     }
                 }
@@ -470,7 +495,7 @@ pipeline {
                 stage('IT-sharding group') {
                     steps {
                         script {
-                            run_single_it_test('sequence_sharding')
+                            run_single_it_test('sharding sequence_sharding')
                         }
                     }
                 }

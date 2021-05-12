@@ -20,4 +20,4 @@ mysql.*.log
 
 # jenkins
 .groovylintrc.json
-jenkins/orgin.groovy
+
