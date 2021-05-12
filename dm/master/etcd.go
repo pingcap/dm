@@ -107,7 +107,7 @@ func prepareJoinEtcd(cfg *Config) error {
 
 	// restart with previous data, no `InitialCluster` need to set
 	// ref: https://github.com/etcd-io/etcd/blob/ae9734ed278b7a1a7dfc82e800471ebbf9fce56f/etcdserver/server.go#L313
-	if isDataExist(filepath.Join(cfg.DataDir, "member", "wal")) {
+	if isDirExist(filepath.Join(cfg.DataDir, "member", "wal")) {
 		cfg.InitialCluster = ""
 		cfg.InitialClusterState = embed.ClusterStateFlagExisting
 		return nil
@@ -198,17 +198,10 @@ func prepareJoinEtcd(cfg *Config) error {
 	return nil
 }
 
-// isDataExist returns whether the directory is empty (with data).
-func isDataExist(d string) bool {
-	dir, err := os.Open(d)
-	if err != nil {
-		return false
+// isDirExist returns whether the directory is exist.
+func isDirExist(d string) bool {
+	if stat, err := os.Stat(d); err == nil && stat.IsDir() {
+		return true
 	}
-	defer dir.Close()
-
-	names, err := dir.Readdirnames(1) // read only one is enough
-	if err != nil {
-		return false
-	}
-	return len(names) != 0
+	return false
 }
