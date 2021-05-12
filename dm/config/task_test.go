@@ -242,6 +242,7 @@ name: test
 task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
+timezone: "Asia/Shanghai"
 enable-heartbeat: true
 ignore-checking-items: ["all"]
 
