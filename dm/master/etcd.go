@@ -98,15 +98,13 @@ func prepareJoinEtcd(cfg *Config) error {
 	}
 
 	// try to join self, invalid
-	clientURLs := strings.Split(cfg.Join, ",")
-	for _, clientURL := range clientURLs {
-		if clientURL == cfg.MasterAddr {
-			return terror.ErrMasterJoinEmbedEtcdFail.Generate(fmt.Sprintf("join self %s is forbidden", cfg.Join))
-		}
+	if cfg.Join == cfg.MasterAddr {
+		return terror.ErrMasterJoinEmbedEtcdFail.Generate(fmt.Sprintf("join self %s is forbidden", cfg.Join))
 	}
 
 	// restart with previous data, no `InitialCluster` need to set
-	if isDataExist(filepath.Join(cfg.DataDir, "member")) {
+	// ref: https://github.com/etcd-io/etcd/blob/ae9734ed278b7a1a7dfc82e800471ebbf9fce56f/etcdserver/server.go#L313
+	if isDirExist(filepath.Join(cfg.DataDir, "member", "wal")) {
 		cfg.InitialCluster = ""
 		cfg.InitialClusterState = embed.ClusterStateFlagExisting
 		return nil
@@ -197,17 +195,10 @@ func prepareJoinEtcd(cfg *Config) error {
 	return nil
 }
 
-// isDataExist returns whether the directory is empty (with data).
-func isDataExist(d string) bool {
-	dir, err := os.Open(d)
-	if err != nil {
-		return false
+// isDirExist returns whether the directory is exist.
+func isDirExist(d string) bool {
+	if stat, err := os.Stat(d); err == nil && stat.IsDir() {
+		return true
 	}
-	defer dir.Close()
-
-	names, err := dir.Readdirnames(1) // read only one is enough
-	if err != nil {
-		return false
-	}
-	return len(names) != 0
+	return false
 }
