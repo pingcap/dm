@@ -63,6 +63,32 @@ services:
       - ./data:/data
     restart: always
 
+  maria1: # upstream Maria-1
+    container_name: maria1
+    hostname: maria1
+    networks:
+      dm-tiup:
+        ipv4_address: 172.28.0.204
+    image: mariadb:10.1.26
+    command: --default-authentication-plugin=mysql_native_password --log-bin=/var/lib/mysql/mysql-bin --server-id=3 --binlog-format=ROW --enforce-gtid-consistency=true
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ""
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+
+  maria2: # upstream Maria-2
+    container_name: maria2
+    hostname: maria2
+    networks:
+      dm-tiup:
+        ipv4_address: 172.28.0.205
+    image: mariadb:10.1.26
+    command: --default-authentication-plugin=mysql_native_password --log-bin=/var/lib/mysql/mysql-bin --server-id=4 --binlog-format=ROW --enforce-gtid-consistency=true
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ""
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+
   control:
     <<: *default-node
     container_name: control

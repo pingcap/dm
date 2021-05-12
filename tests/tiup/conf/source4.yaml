@@ -1,0 +1,9 @@
+source-id: maria-replica-02
+enable-gtid: true
+enable-relay: true
+from:
+  host: maria2
+  user: root
+  port: 3306
+checker:
+  check-enable: false
