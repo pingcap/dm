@@ -42,6 +42,10 @@ function migrate_in_previous_v2() {
     exec_incremental_stage1
 
     check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
+
+    tiup dmctl:$PRE_VER --master-addr=master1:8261 pause-task $TASK_NAME
+
+    run_dmctl_with_retry $CUR_VER "query-status" "Running" 2 "Paused" 1
 }
 
 function upgrade_to_current_v2() {
@@ -53,6 +57,12 @@ function upgrade_to_current_v2() {
 }
 
 function migrate_in_v2 {
+    run_dmctl_with_retry $CUR_VER "query-status" "Running" 2 "Paused" 1
+
+    tiup dmctl:$PRE_VER --master-addr=master1:8261 resume-task $TASK_NAME
+
+    run_dmctl_with_retry $CUR_VER "query-status" "Running" 3
+
     exec_incremental_stage2
 
     echo "check sources"

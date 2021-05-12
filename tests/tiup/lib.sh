@@ -109,20 +109,20 @@ function exec_incremental_stage1() {
     exec_sql mysql2 3306 "INSERT INTO $DB4.$TBL3 (c1, c2, c4) VALUES (114, '114', 114);"
 
     # prepare pessimistic incremental data
-    exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL1 (c1, c2) VALUES (101, '101');"
-    exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL2 (c1, c2) VALUES (102, '102');"
-    exec_sql mysql2 3306 "INSERT INTO $DB4.$TBL2 (c1, c2) VALUES (111, '111');"
-    exec_sql mysql2 3306 "INSERT INTO $DB4.$TBL3 (c1, c2) VALUES (112, '112');"
+    exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL1 (c1, c2) VALUES (101, '101');"
+    exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL2 (c1, c2) VALUES (102, '102');"
+    exec_sql mysql2 3306 "INSERT INTO $DB6.$TBL2 (c1, c2) VALUES (111, '111');"
+    exec_sql mysql2 3306 "INSERT INTO $DB6.$TBL3 (c1, c2) VALUES (112, '112');"
 
     # pessimistic shard ddls
-    exec_sql mysql1 3306 "ALTER TABLE $DB3.$TBL1 ADD COLUMN c3 INT;"
-    exec_sql mysql2 3306 "ALTER TABLE $DB4.$TBL3 ADD COLUMN c3 INT;"
+    exec_sql mysql1 3306 "ALTER TABLE $DB5.$TBL1 ADD COLUMN c3 INT;"
+    exec_sql mysql2 3306 "ALTER TABLE $DB6.$TBL3 ADD COLUMN c3 INT;"
 
     # prepare pessimistic incremental data
-    exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL1 (c1, c2, c3) VALUES (103, '103', 103);"
-    exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL2 (c1, c2) VALUES (104, '104');"
-    exec_sql mysql2 3306 "INSERT INTO $DB4.$TBL2 (c1, c2) VALUES (113, '113');"
-    exec_sql mysql2 3306 "INSERT INTO $DB4.$TBL3 (c1, c2, c3) VALUES (114, '114', 114);"
+    exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL1 (c1, c2, c3) VALUES (103, '103', 103);"
+    exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL2 (c1, c2) VALUES (104, '104');"
+    exec_sql mysql2 3306 "INSERT INTO $DB6.$TBL2 (c1, c2) VALUES (113, '113');"
+    exec_sql mysql2 3306 "INSERT INTO $DB6.$TBL3 (c1, c2, c3) VALUES (114, '114', 114);"
 }
 
 function exec_incremental_stage2() {
@@ -151,20 +151,20 @@ function exec_incremental_stage2() {
     exec_sql mysql2 3306 "INSERT INTO $DB4.$TBL3 (c1, c2, c3, c4) VALUES (214, '214', 214, 214);"
 
     # prepare pessimistic incremental data
-    exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL1 (c1, c2, c3) VALUES (201, '201', 201);"
-    exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL2 (c1, c2) VALUES (202, '202');"
-    exec_sql mysql2 3306 "INSERT INTO $DB4.$TBL2 (c1, c2) VALUES (211, '211');"
-    exec_sql mysql2 3306 "INSERT INTO $DB4.$TBL3 (c1, c2, c3) VALUES (212, '212', 212);"
+    exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL1 (c1, c2, c3) VALUES (201, '201', 201);"
+    exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL2 (c1, c2) VALUES (202, '202');"
+    exec_sql mysql2 3306 "INSERT INTO $DB6.$TBL2 (c1, c2) VALUES (211, '211');"
+    exec_sql mysql2 3306 "INSERT INTO $DB6.$TBL3 (c1, c2, c3) VALUES (212, '212', 212);"
 
     # pessimistic shard ddls
-    exec_sql mysql1 3306 "ALTER TABLE $DB3.$TBL2 ADD COLUMN c3 INT;"
-    exec_sql mysql2 3306 "ALTER TABLE $DB4.$TBL2 ADD COLUMN c3 INT;"
+    exec_sql mysql1 3306 "ALTER TABLE $DB5.$TBL2 ADD COLUMN c3 INT;"
+    exec_sql mysql2 3306 "ALTER TABLE $DB6.$TBL2 ADD COLUMN c3 INT;"
 
     # prepare pessimistic incremental data
-    exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL1 (c1, c2, c3) VALUES (203, '203', 203);"
-    exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL2 (c1, c2, c3) VALUES (204, '204', 204);"
-    exec_sql mysql2 3306 "INSERT INTO $DB4.$TBL2 (c1, c2, c3) VALUES (213, '213', 213);"
-    exec_sql mysql2 3306 "INSERT INTO $DB4.$TBL3 (c1, c2, c3) VALUES (214, '214', 214);"
+    exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL1 (c1, c2, c3) VALUES (203, '203', 203);"
+    exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL2 (c1, c2, c3) VALUES (204, '204', 204);"
+    exec_sql mysql2 3306 "INSERT INTO $DB6.$TBL2 (c1, c2, c3) VALUES (213, '213', 213);"
+    exec_sql mysql2 3306 "INSERT INTO $DB6.$TBL3 (c1, c2, c3) VALUES (214, '214', 214);"
 }
 
 function patch_nightly_with_tiup_mirror() {
