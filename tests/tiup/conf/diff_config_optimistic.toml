@@ -21,14 +21,14 @@ schema = "opt_sharding2"
 table  = "~t.*"
 
 [[source-db]]
-host = "maria1"
+host = "mysql1"
 port = 3306
 user = "root"
 password = ""
 instance-id = "source-1"
 
 [[source-db]]
-host = "maria2"
+host = "mysql2"
 port = 3306
 user = "root"
 password = ""
