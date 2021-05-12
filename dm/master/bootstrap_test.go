@@ -71,7 +71,7 @@ func (t *testMaster) TestCollectSourceConfigFilesV1Import(c *C) {
 	cfg1, err := config.LoadFromFile("./source.yaml")
 	c.Assert(err, IsNil)
 	// fix empty map after marshal/unmarshal becomes nil
-	cfg1.From.Session = map[string]string{}
+	cfg1.From.Adjust()
 	cfg1.Tracer = map[string]interface{}{}
 	cfg1.Filters = []*filter.BinlogEventRule{}
 	cfg1.From.Host = host

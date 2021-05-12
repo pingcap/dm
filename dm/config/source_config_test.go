@@ -112,7 +112,7 @@ func (t *testConfig) TestConfig(c *C) {
 
 	clone6, err := ParseYaml(clone4yaml)
 	c.Assert(err, IsNil)
-	c.Assert(clone6, DeepEquals, *clone4)
+	c.Assert(clone6, DeepEquals, clone4)
 
 	// test invalid config
 	dir2 := c.MkDir()

@@ -1083,7 +1083,6 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 		if err != nil {
 			return cfgs, err
 		}
-		cfg.From.Adjust()
 
 		dbConfig := cfg.GenerateDBConfig()
 

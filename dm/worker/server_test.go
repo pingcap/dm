@@ -420,7 +420,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 		return s.getWorker(true) != nil
 	}), IsTrue)
 	cfg2 := s.getWorker(true).cfg
-	c.Assert(*cfg2, DeepEquals, sourceCfg)
+	c.Assert(cfg2, DeepEquals, sourceCfg)
 	cancel1()
 	wg.Wait()
 	c.Assert(s.stopWorker(sourceCfg.SourceID, true), IsNil)
@@ -435,7 +435,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 		return s.getWorker(true) != nil
 	}), IsTrue)
 	cfg2 = s.getWorker(true).cfg
-	c.Assert(*cfg2, DeepEquals, sourceCfg)
+	c.Assert(cfg2, DeepEquals, sourceCfg)
 	cancel2()
 	wg.Wait()
 }

@@ -552,7 +552,7 @@ func (t *testScheduler) sourceCfgNotExist(c *C, s *Scheduler, source string) {
 
 func (t *testScheduler) sourceCfgExist(c *C, s *Scheduler, expectCfg *config.SourceConfig) {
 	cfgP := s.GetSourceCfgByID(expectCfg.SourceID)
-	c.Assert(cfgP, DeepEquals, &expectCfg)
+	c.Assert(cfgP, DeepEquals, expectCfg)
 	scm, _, err := ha.GetSourceCfg(etcdTestCli, expectCfg.SourceID, 0)
 	c.Assert(err, IsNil)
 	cfgV := scm[expectCfg.SourceID]
@@ -827,7 +827,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
 	c.Assert(err, IsNil)
 	sourceCfg1.SourceID = sourceID1
-	sourceCfg2 := sourceCfg1
+	sourceCfg2 := *sourceCfg1
 	sourceCfg2.SourceID = sourceID2
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -839,7 +839,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 
 	// step 2: add two sources and register four workers
 	c.Assert(s.AddSourceCfg(sourceCfg1), IsNil)
-	c.Assert(s.AddSourceCfg(sourceCfg2), IsNil)
+	c.Assert(s.AddSourceCfg(&sourceCfg2), IsNil)
 	c.Assert(s.unbounds, HasLen, 2)
 	c.Assert(s.unbounds, HasKey, sourceID1)
 	c.Assert(s.unbounds, HasKey, sourceID2)
