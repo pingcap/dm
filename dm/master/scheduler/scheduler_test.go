@@ -119,7 +119,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	c.Assert(err, IsNil)
 	sourceCfg1.SourceID = sourceID1
 	sourceCfg1.EnableRelay = true
-	sourceCfg2 := sourceCfg1
+	sourceCfg2 := *sourceCfg1
 	sourceCfg2.SourceID = sourceID2
 
 	c.Assert(subtaskCfg1.DecodeFile(subTaskSampleFile, true), IsNil)
@@ -375,9 +375,9 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	// source2 not exists before.
 	t.sourceCfgNotExist(c, s, sourceID2)
 	// add source2.
-	c.Assert(s.AddSourceCfg(sourceCfg2), IsNil)
+	c.Assert(s.AddSourceCfg(&sourceCfg2), IsNil)
 	// source2 added.
-	t.sourceCfgExist(c, s, sourceCfg2)
+	t.sourceCfgExist(c, s, &sourceCfg2)
 	// source2 should bound to worker2.
 	t.workerBound(c, s, ha.NewSourceBound(sourceID2, workerName2))
 	t.sourceBounds(c, s, []string{sourceID1, sourceID2}, []string{})
@@ -433,7 +433,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	}), IsTrue)
 	c.Assert(terror.ErrSchedulerSourceOpTaskExist.Equal(s.RemoveSourceCfg(sourceID2)), IsTrue)
 	// source2 keep there.
-	t.sourceCfgExist(c, s, sourceCfg2)
+	t.sourceCfgExist(c, s, &sourceCfg2)
 	// source2 still bound to worker2.
 	t.workerBound(c, s, ha.NewSourceBound(sourceID2, workerName2))
 	t.sourceBounds(c, s, []string{sourceID1, sourceID2}, []string{})
