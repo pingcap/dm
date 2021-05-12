@@ -302,7 +302,7 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 		return terror.ErrRelayMkdir.Delegate(err)
 	}
 
-	// nolint:gocritic
+	// update UUID index file
 	uuids := append(lm.uuids, newUUID)
 	err = lm.updateIndexFile(uuids)
 	if err != nil {
