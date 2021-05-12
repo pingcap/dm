@@ -320,6 +320,7 @@ pipeline {
         }
 
         stage('Build Bin') {
+            options { retry(count: 3) }
             steps {
                 build_dm_bin()
             }

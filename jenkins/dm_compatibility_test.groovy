@@ -3,10 +3,6 @@
 
     * ghprbActualCommit (by bot)
     * ghprbPullId (by bot)
-
-    * COVERALLS_TOKEN (set default in jenkins admin)
-    * CODECOV_TOKEN (set default in jenkins admin)
-
 */
 
 // prepare all vars
@@ -17,7 +13,7 @@ MYSQL_PSWD = 123456
 TEST_CASE = ''
 TIDB_BRANCH = 'master'
 BUILD_NUMBER = "${env.BUILD_NUMBER}"
-PRE_COMMIT = 'tags/v2.0.0'
+PRE_COMMIT = 'tags/v2.0.3'
 BREAK_COMPATIBILITY = 'false'
 
 // disable SSL for MySQL (especial for MySQL 8.0) in release-1.0
@@ -59,7 +55,7 @@ def print_all_vars() {
 
 def checkout_and_stash() {
     node("${GO_BUILD_SLAVE}") {
-        println "debug command:\nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash -c golang"
+        println "debug command: \nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash -c golang"
         container('golang') {
             ws = pwd()
             deleteDir()
@@ -82,28 +78,34 @@ def checkout_and_stash() {
             }
 
             dir('go/src/github.com/pingcap/dm') {
-                sh """export GOPROXY=https://goproxy.cn
-                archive=dm-go-mod-cache_latest_\$(go version | awk '{ print \$3; }').tar.gz
-                archive_url=${FILE_SERVER_URL}/download/builds/pingcap/dm/cache/\$archive
-                if [ ! -f /tmp/\$archive ]; then
-                    curl -sL \$archive_url -o /tmp/\$archive
-                    tar --skip-old-files -xf /tmp/\$archive -C / || true
-                fi
-                cp -R /home/jenkins/agent/git/dm/. ./
+                environment {
+                    PATH = "/nfs/cache/gopath/bin:$PATH"
+                }
+                try {
+                    sh """export GOPROXY=https://goproxy.cn
+                    archive=dm-go-mod-cache_latest_\$(go version | awk '{ print \$3; }').tar.gz
+                    archive_url=${FILE_SERVER_URL}/download/builds/pingcap/dm/cache/\$archive
+                    if [ ! -f /tmp/\$archive ]; then
+                        curl -sL \$archive_url -o /tmp/\$archive
+                        tar --skip-old-files -xf /tmp/\$archive -C / || true
+                    fi
+                    cp -R /home/jenkins/agent/git/dm/. ./
 
-                echo "build binary with previous version"
-                git checkout -f ${PRE_COMMIT}
-                export GOPATH=\$GOPATH:${ws}/go
-                make dm_integration_test_build
-                mv bin/dm-master.test bin/dm-master.test.previous
-                mv bin/dm-worker.test bin/dm-worker.test.previous
+                    echo "build binary with previous version"
+                    git checkout -f ${PRE_COMMIT}
+                    PATH=$PATH:/nfs/cache/gopath/bin:/usr/local/go/bin make dm_integration_test_build
+                    mv bin/dm-master.test bin/dm-master.test.previous
+                    mv bin/dm-worker.test bin/dm-worker.test.previous
 
-                echo "build binary with current version"
-                git checkout -f ${ghprbActualCommit}
-                make dm_integration_test_build
-                mv bin/dm-master.test bin/dm-master.test.current
-                mv bin/dm-worker.test bin/dm-worker.test.current
-                """
+                    echo "build binary with current version"
+                    git checkout -f ${ghprbActualCommit}
+                    PATH=$PATH:/nfs/cache/gopath/bin:/usr/local/go/bin make dm_integration_test_build
+                    mv bin/dm-master.test bin/dm-master.test.current
+                    mv bin/dm-worker.test bin/dm-worker.test.current
+                    """
+                }catch (Exception e) {
+                    sleep 10000000
+                }
             }
 
             stash includes: 'go/src/github.com/pingcap/dm/**', name: 'dm', useDefaultExcludes: false
@@ -127,9 +129,7 @@ def checkout_and_stash() {
     }
 }
 
-
-
-def run_single_covegage_test(String case_name) {
+def run_single_compatibility_test(String case_name) {
     label = "test-${UUID.randomUUID()}"
     podTemplate(label: label,
                 nodeSelector: 'role_type=slave',
@@ -163,12 +163,12 @@ def run_single_covegage_test(String case_name) {
                             emptyDirVolume(mountPath: '/home/jenkins', memory: true)]) {
                 node(label) {
                     println "${NODE_NAME}"
-                    println "debug command:\nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash"
+                    println "debug command: \nkubectl -n jenkins-ci exec -ti ${env.NODE_NAME} bash -c golang"
                     container('golang') {
                         ws = pwd()
                         deleteDir()
-                        unstash "dm"
-                        unstash "binaries"
+                        unstash 'dm'
+                        unstash 'binaries'
                         dir('go/src/github.com/pingcap/dm') {
                             try {
                         sh"""
@@ -177,6 +177,8 @@ def run_single_covegage_test(String case_name) {
 
                                 rm -rf /tmp/dm_test
                                 mkdir -p /tmp/dm_test
+                                mkdir -p bin
+                                mv ${ws}/bin/* bin
 
                                 export MYSQL_HOST1=${MYSQL_HOST}
                                 export MYSQL_PORT1=${MYSQL_PORT}
@@ -187,26 +189,20 @@ def run_single_covegage_test(String case_name) {
                                 set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3306 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
                                 set +e && for i in {1..90}; do mysqladmin ping -h127.0.0.1 -P 3307 -p123456 -uroot --silent; if [ \$? -eq 0 ]; then set -e; break; else if [ \$i -eq 90 ]; then set -e; exit 2; fi; sleep 2; fi; done
                                 # run test
-                                export GOPATH=\$GOPATH:${ws}/go
+                                # export GOPATH=\$GOPATH:${ws}/go
                                 make compatibility_test CASE="${case_name}"
                                 """
                             }catch (Exception e) {
-                        sh """
+                                sh """
                                     echo "${case_name} test faild print all log..."
                                     for log in `ls /tmp/dm_test/*/*/log/*.log`; do
-                                        echo "____________________________________"
-                                        echo "\$log"
+                                        echo "-----------------\$log begin-----------------"
                                         cat "\$log"
-                                        echo "____________________________________"
-                                    done
-                                    for log in `ls /tmp/dm_test/*/*/*/log/*.log`; do
-                                        echo "____________________________________"
-                                        echo "\$log"
-                                        cat "\$log"
-                                        echo "____________________________________"
+                                        echo "-----------------\$log end-----------------"
                                     done
                                     """
-                        throw e
+                                sleep 1000000
+                                throw e
                             }
                         }
                     stash includes: 'go/src/github.com/pingcap/dm/cov_dir/**', name: "integration-cov-${case_name}"
@@ -234,15 +230,13 @@ pipeline {
             }
         }
 
-
-        stage('Run Coverage test') {
+        stage('Run Compatibility test') {
             steps {
                 script {
-                    run_single_covegage_test("${TEST_CASE}")
+                    run_single_compatibility_test("${TEST_CASE}")
                 }
             }
         }
-
 
         stage('Print Summary') {
             steps {
