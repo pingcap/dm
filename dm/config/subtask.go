@@ -151,6 +151,8 @@ type SubTaskConfig struct {
 	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
 	Meta                    *Meta  `toml:"meta" json:"meta"`
+	// deprecated
+	Timezone string `toml:"timezone" json:"timezone"`
 	// RelayDir get value from dm-worker config
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`
 
@@ -270,6 +272,11 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 
 	if c.MetaSchema == "" {
 		c.MetaSchema = defaultMetaSchema
+	}
+
+	if c.Timezone != "" {
+		log.L().Warn("'timezone' is deprecated, please remove this field.")
+		c.Timezone = ""
 	}
 
 	dirSuffix := "." + c.Name

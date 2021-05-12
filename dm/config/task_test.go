@@ -268,6 +268,7 @@ task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
 enable-heartbeat: true
+timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 
 target-database:
@@ -289,7 +290,7 @@ mysql-instances:
 	err := taskConfig.Decode(errorTaskConfig1)
 	// field server-id is not a member of TaskConfig
 	c.Check(err, NotNil)
-	c.Assert(err, ErrorMatches, "*line 17: field server-id not found in type config.MySQLInstance.*")
+	c.Assert(err, ErrorMatches, "*line 18: field server-id not found in type config.MySQLInstance.*")
 
 	err = taskConfig.Decode(errorTaskConfig2)
 	// field name duplicate
