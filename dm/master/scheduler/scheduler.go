@@ -1262,6 +1262,8 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 						return 0, err2
 					}
 					delete(sbm, name)
+				} else {
+					s.logger.Warn("find source bound without config", zap.Stringer("bound", bound))
 				}
 			}
 		}
