@@ -13,14 +13,14 @@ shift 3
 
 counter=0
 while [ $counter -lt $retry_count ]; do
-    got=$(curl -s $url | grep "$contain" | wc -l)
-    if [[ $got -gt 0 ]]; then
-        echo "HTTP $url is alive"
-        exit 0
-    fi
-    ((counter+=1))
-    echo "wait for HTTP alive for $counter-th time"
-    sleep 1
+	got=$(curl -s $url | grep "$contain" | wc -l)
+	if [[ $got -gt 0 ]]; then
+		echo "HTTP $url is alive"
+		exit 0
+	fi
+	((counter += 1))
+	echo "wait for HTTP alive for $counter-th time"
+	sleep 1
 done
 
 echo "HTTP $url is not alive"
