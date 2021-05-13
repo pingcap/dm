@@ -12,4 +12,5 @@ require (
 	github.com/rakyll/statik v0.1.7
 	github.com/zhouqiang-cl/gocovmerge v0.0.0-20190125174600-5256314471af
 	mvdan.cc/gofumpt v0.1.1
+	mvdan.cc/sh/v3 v3.2.4 // indirect
 )

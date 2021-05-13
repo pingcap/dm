@@ -9,28 +9,26 @@ ssl_ca=""
 ssl_cert=""
 ssl_key=""
 
-
-if [ $# == 5 ] ; then
-    ssl_ca=$3
-    ssl_cert=$4
-    ssl_key=$5
+if [ $# == 5 ]; then
+	ssl_ca=$3
+	ssl_cert=$4
+	ssl_key=$5
 fi
 
 i=0
-while [ $i -lt 10 ]
-do
-    bash -c "$check_tool $addr $ssl_ca $ssl_cert $ssl_key"
-    ret=$?
-    if [ "$ret" == 0 ]; then
-        echo "rpc addr $addr is alive"
-        break
-    fi
-    ((i++))
-    echo "wait for rpc addr $addr alive the $i-th time"
-    sleep 1
+while [ $i -lt 10 ]; do
+	bash -c "$check_tool $addr $ssl_ca $ssl_cert $ssl_key"
+	ret=$?
+	if [ "$ret" == 0 ]; then
+		echo "rpc addr $addr is alive"
+		break
+	fi
+	((i++))
+	echo "wait for rpc addr $addr alive the $i-th time"
+	sleep 1
 done
 
 if [ $i -ge 10 ]; then
-    echo "rpc addr $addr check alive timeout"
-    exit 1
+	echo "rpc addr $addr check alive timeout"
+	exit 1
 fi
