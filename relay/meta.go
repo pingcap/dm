@@ -303,7 +303,6 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 	}
 
 	// update UUID index file
-	// nolint:gocritic
 	uuids := append(lm.uuids, newUUID)
 	err = lm.updateIndexFile(uuids)
 	if err != nil {

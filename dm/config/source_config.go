@@ -87,7 +87,7 @@ func NewSourceConfig() *SourceConfig {
 	return c
 }
 
-// NewSourceConfig creates a new base config without adjust
+// NewSourceConfig creates a new base config without adjust.
 func newSourceConfig() *SourceConfig {
 	c := &SourceConfig{
 		Purge: PurgeConfig{
