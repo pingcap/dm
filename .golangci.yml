@@ -19,7 +19,6 @@ linters:
     - misspell
     - nakedret
     - noctx
-    - nolintlint
     - prealloc
     - revive
     - rowserrcheck
