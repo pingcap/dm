@@ -1280,3 +1280,69 @@ func (t *testScheduler) TestCloseAllWorkers(c *C) {
 	c.Assert(s.workers, HasLen, 3)
 	checkAllWorkersClosed(c, s, true)
 }
+
+func (t *testScheduler) TestStartSourcesWithoutSourceBounds(c *C) {
+	defer clearTestInfoOperation(c)
+
+	var (
+		logger       = log.L()
+		s            = NewScheduler(&logger, config.Security{})
+		sourceID1    = "mysql-replica-1"
+		sourceID2    = "mysql-replica-2"
+		workerName1  = "dm-worker-1"
+		workerName2  = "dm-worker-2"
+		workerAddr1  = "127.0.0.1:28362"
+		workerAddr2  = "127.0.0.1:28363"
+		wg           sync.WaitGroup
+		keepaliveTTL = int64(60)
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	s.started = true
+	s.etcdCli = etcdTestCli
+	s.sourceCfgs[sourceID1] = config.SourceConfig{}
+	s.sourceCfgs[sourceID2] = config.SourceConfig{}
+	s.unbounds[sourceID1] = struct{}{}
+	s.unbounds[sourceID2] = struct{}{}
+	c.Assert(s.AddWorker(workerName1, workerAddr1), IsNil)
+	c.Assert(s.AddWorker(workerName2, workerAddr2), IsNil)
+
+	wg.Add(2)
+	go func() {
+		c.Assert(ha.KeepAlive(ctx, etcdTestCli, workerName1, keepaliveTTL), IsNil)
+		wg.Done()
+	}()
+	go func() {
+		c.Assert(ha.KeepAlive(ctx, etcdTestCli, workerName2, keepaliveTTL), IsNil)
+		wg.Done()
+	}()
+
+	s.workers[workerName1].stage = WorkerFree
+	s.workers[workerName2].stage = WorkerFree
+	bounded, err := s.tryBoundForSource(sourceID1)
+	c.Assert(err, IsNil)
+	c.Assert(bounded, IsTrue)
+	bounded, err = s.tryBoundForSource(sourceID2)
+	c.Assert(err, IsNil)
+	c.Assert(bounded, IsTrue)
+
+	s.started = false
+	sbm, _, err := ha.GetSourceBound(etcdTestCli, "")
+	c.Assert(err, IsNil)
+	c.Assert(sbm, HasLen, 2)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
+		if err != nil {
+			return false
+		}
+		return len(kam) == 2
+	}), IsTrue)
+
+	c.Assert(s.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(s.bounds, HasLen, 0)
+	sbm, _, err = ha.GetSourceBound(etcdTestCli, "")
+	c.Assert(err, IsNil)
+	c.Assert(sbm, HasLen, 0)
+}
