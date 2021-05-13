@@ -6,19 +6,18 @@ port=$1
 retry=$2
 
 i=0
-while [ $i -lt $retry ]
-do
-    check_port 127.0.0.1 $port > /dev/null 2>&1
-    ret=$?
-    if [ "$ret" != "0" ]; then
-        break
-    fi
-    ((i++))
-    echo "wait for port $port offline the $i-th time"
-    sleep 1
+while [ $i -lt $retry ]; do
+	check_port 127.0.0.1 $port >/dev/null 2>&1
+	ret=$?
+	if [ "$ret" != "0" ]; then
+		break
+	fi
+	((i++))
+	echo "wait for port $port offline the $i-th time"
+	sleep 1
 done
 
 if [ $i -ge $retry ]; then
-    echo "port $port check offline timeout"
-    exit 1
+	echo "port $port check offline timeout"
+	exit 1
 fi
