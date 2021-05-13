@@ -162,13 +162,13 @@ func (s *Server) importFromV10x(ctx context.Context) error {
 }
 
 // collectSourceConfigFilesV1Import tries to collect source config files for v1.0.x importing.
-func (s *Server) collectSourceConfigFilesV1Import(tctx *tcontext.Context) (map[string]config.SourceConfig, error) {
+func (s *Server) collectSourceConfigFilesV1Import(tctx *tcontext.Context) (map[string]*config.SourceConfig, error) {
 	files, err := ioutil.ReadDir(s.cfg.V1SourcesPath)
 	if err != nil {
 		return nil, err
 	}
 
-	cfgs := make(map[string]config.SourceConfig)
+	cfgs := make(map[string]*config.SourceConfig)
 	for _, f := range files {
 		if f.IsDir() {
 			continue // ignore sub directories.
@@ -186,7 +186,7 @@ func (s *Server) collectSourceConfigFilesV1Import(tctx *tcontext.Context) (map[s
 			return nil, err
 		}
 
-		cfgs[cfgs2[0].SourceID] = *cfgs2[0]
+		cfgs[cfgs2[0].SourceID] = cfgs2[0]
 		tctx.Logger.Info("collected source config", zap.Stringer("config", cfgs2[0]))
 	}
 
@@ -195,7 +195,7 @@ func (s *Server) collectSourceConfigFilesV1Import(tctx *tcontext.Context) (map[s
 
 // waitWorkersReadyV1Import waits for DM-worker instances ready for v1.0.x importing.
 // NOTE: in v1.0.x, `count of DM-worker instances` equals `count of source config files`.
-func (s *Server) waitWorkersReadyV1Import(tctx *tcontext.Context, sourceCfgs map[string]config.SourceConfig) error {
+func (s *Server) waitWorkersReadyV1Import(tctx *tcontext.Context, sourceCfgs map[string]*config.SourceConfig) error {
 	// now, we simply check count repeatedly.
 	count := len(sourceCfgs)
 	ctx2, cancel2 := context.WithTimeout(context.Background(), waitWorkerV1Timeout)
@@ -291,7 +291,7 @@ func (s *Server) getSubtaskCfgsStagesV1Import(tctx *tcontext.Context) (
 }
 
 // addSourcesV1Import tries to add source config into the cluster for v1.0.x importing.
-func (s *Server) addSourcesV1Import(tctx *tcontext.Context, cfgs map[string]config.SourceConfig) error {
+func (s *Server) addSourcesV1Import(tctx *tcontext.Context, cfgs map[string]*config.SourceConfig) error {
 	var (
 		added []string
 		err   error

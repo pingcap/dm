@@ -6,7 +6,6 @@ meta-schema: "dm_meta"
 # enable-heartbeat: true
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1
-timezone: "Asia/Shanghai"
 
 target-database:
   host: "127.0.0.1"
