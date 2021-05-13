@@ -273,7 +273,7 @@ type syncerConfig struct {
 	// MaxDMLConnectionTimeout string `toml:"execute-dml-timeout" json:"execute-dml-timeout"`
 	// ExecutionQueueLength    int    `toml:"execute-queue-length" json:"execute-queue-length"`
 
-	TimezoneStr string         `toml:"timezone" json:"timezone"`
+	TimezoneStr string `toml:"timezone" json:"timezone"`
 
 	printVersion bool
 }

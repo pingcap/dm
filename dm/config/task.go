@@ -811,6 +811,10 @@ func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version *semver.Version) {
 		}
 	}
 	// force set time zone to UTC
+	if tz, ok := lowerMap["time_zone"]; ok {
+		log.L().Warn("session variable 'time_zone' is overwritten with UTC timezone.",
+			zap.String("time_zone", tz))
+	}
 	lowerMap["time_zone"] = defaultTimeZone
 	dbConfig.Session = lowerMap
 }
@@ -819,6 +823,8 @@ func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version *semver.Version) {
 func AdjustTargetDBTimeZone(config *DBConfig) {
 	for k := range config.Session {
 		if strings.ToLower(k) == "time_zone" {
+			log.L().Warn("session variable 'time_zone' is overwritten by default UTC timezone.",
+				zap.String("time_zone", config.Session[k]))
 			config.Session[k] = defaultTimeZone
 			return
 		}
