@@ -2,7 +2,7 @@
 
 set -eu
 
-cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 TASK_NAME="test"
@@ -11,94 +11,94 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 API_VERSION="v1alpha1"
 
 function run() {
-    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    check_contains 'Query OK, 2 rows affected'
+	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	check_contains 'Query OK, 2 rows affected'
 
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
-    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
+	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+	run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
 
-    cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
-    dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "start-relay -s $SOURCE_ID1 worker1 worker2" \
-        "\"result\": true" 1
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "transfer-source $SOURCE_ID1 worker1" \
-        "\"result\": true" 1
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"start-relay -s $SOURCE_ID1 worker1 worker2" \
+		"\"result\": true" 1
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"transfer-source $SOURCE_ID1 worker1" \
+		"\"result\": true" 1
 
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status -s $SOURCE_ID1" \
-        "\"result\": true" 3 \
-        "\"worker\": \"worker1\"" 1 \
-        "\"worker\": \"worker2\"" 1
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s $SOURCE_ID1" \
+		"\"result\": true" 3 \
+		"\"worker\": \"worker1\"" 1 \
+		"\"worker\": \"worker2\"" 1
 
-    dmctl_start_task_standalone $cur/conf/dm-task.yaml "--remove-meta"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+	dmctl_start_task_standalone $cur/conf/dm-task.yaml "--remove-meta"
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
-    # subtask is preferred to scheduled to another relay worker
-    pkill -hup -f dm-worker1.toml 2>/dev/null || true
-    wait_pattern_exit dm-worker1.toml
-    # worker1 is down, worker2 has running relay and sync unit
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status -s $SOURCE_ID1" \
-        "connect: connection refused" 1 \
-        "\"stage\": \"Running\"" 2
+	# subtask is preferred to scheduled to another relay worker
+	pkill -hup -f dm-worker1.toml 2>/dev/null || true
+	wait_pattern_exit dm-worker1.toml
+	# worker1 is down, worker2 has running relay and sync unit
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s $SOURCE_ID1" \
+		"connect: connection refused" 1 \
+		"\"stage\": \"Running\"" 2
 
-    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+	run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    # after restarting, worker will purge relay log directory because checkpoint is newer than relay.meta
-    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+	# after restarting, worker will purge relay log directory because checkpoint is newer than relay.meta
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
-    run_sql_file $cur/data/db1.increment3.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+	run_sql_file $cur/data/db1.increment3.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status -s $SOURCE_ID1" \
-        "\"result\": true" 3 \
-        "\"worker\": \"worker1\"" 1 \
-        "\"worker\": \"worker2\"" 1
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s $SOURCE_ID1" \
+		"\"result\": true" 3 \
+		"\"worker\": \"worker1\"" 1 \
+		"\"worker\": \"worker2\"" 1
 
-    # test purge-relay for all relay workers
-    run_sql_source1 "show binary logs\G"
-    max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
-    server_uuid_1=$(tail -n 1 $WORK_DIR/worker1/relay-dir/server-uuid.index)
-    relay_log_count_1=$(($(ls $WORK_DIR/worker1/relay-dir/$server_uuid_1 | wc -l) - 1))
-    server_uuid_2=$(tail -n 1 $WORK_DIR/worker2/relay-dir/server-uuid.index)
-    relay_log_count_2=$(($(ls $WORK_DIR/worker2/relay-dir/$server_uuid_2 | wc -l) - 1))
-    [ "$relay_log_count_1" -ne 1 ]
-    [ "$relay_log_count_2" -ne 1 ]
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "purge-relay --filename $max_binlog_name -s $SOURCE_ID1" \
-        "\"result\": true" 3
-    new_relay_log_count_1=$(($(ls $WORK_DIR/worker1/relay-dir/$server_uuid_1 | wc -l) - 1))
-    new_relay_log_count_2=$(($(ls $WORK_DIR/worker2/relay-dir/$server_uuid_2 | wc -l) - 1))
-    [ "$new_relay_log_count_1" -eq 1 ]
-    [ "$new_relay_log_count_2" -eq 1 ]
+	# test purge-relay for all relay workers
+	run_sql_source1 "show binary logs\G"
+	max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE" | tail -n 1 | awk -F":" '{print $NF}')
+	server_uuid_1=$(tail -n 1 $WORK_DIR/worker1/relay-dir/server-uuid.index)
+	relay_log_count_1=$(($(ls $WORK_DIR/worker1/relay-dir/$server_uuid_1 | wc -l) - 1))
+	server_uuid_2=$(tail -n 1 $WORK_DIR/worker2/relay-dir/server-uuid.index)
+	relay_log_count_2=$(($(ls $WORK_DIR/worker2/relay-dir/$server_uuid_2 | wc -l) - 1))
+	[ "$relay_log_count_1" -ne 1 ]
+	[ "$relay_log_count_2" -ne 1 ]
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"purge-relay --filename $max_binlog_name -s $SOURCE_ID1" \
+		"\"result\": true" 3
+	new_relay_log_count_1=$(($(ls $WORK_DIR/worker1/relay-dir/$server_uuid_1 | wc -l) - 1))
+	new_relay_log_count_2=$(($(ls $WORK_DIR/worker2/relay-dir/$server_uuid_2 | wc -l) - 1))
+	[ "$new_relay_log_count_1" -eq 1 ]
+	[ "$new_relay_log_count_2" -eq 1 ]
 
-    pkill -hup -f dm-worker1.toml 2>/dev/null || true
-    wait_pattern_exit dm-worker1.toml
-    pkill -hup -f dm-worker2.toml 2>/dev/null || true
-    wait_pattern_exit dm-worker2.toml
+	pkill -hup -f dm-worker1.toml 2>/dev/null || true
+	wait_pattern_exit dm-worker1.toml
+	pkill -hup -f dm-worker2.toml 2>/dev/null || true
+	wait_pattern_exit dm-worker2.toml
 
-    # if all relay workers are offline, relay-not-enabled worker should continue to sync
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status -s $SOURCE_ID1" \
-        "\"result\": true" 2 \
-        "\"worker\": \"worker3\"" 1
+	# if all relay workers are offline, relay-not-enabled worker should continue to sync
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s $SOURCE_ID1" \
+		"\"result\": true" 2 \
+		"\"worker\": \"worker3\"" 1
 
-    run_sql_file $cur/data/db1.increment4.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+	run_sql_file $cur/data/db1.increment4.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 cleanup_data $TEST_NAME

@@ -73,7 +73,7 @@ func (t *testForEtcd) TestTryUpgrade(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
 	c.Assert(ver, DeepEquals, CurrentVersion)
-	c.Assert(mockVerNo, Equals, uint64(4))
+	c.Assert(mockVerNo, Equals, uint64(5))
 
 	// try to upgrade again, do nothing because the version is the same.
 	mockVerNo = 0
@@ -113,14 +113,13 @@ func (t *testForEtcd) TestTryUpgrade(c *C) {
 
 func (t *testForEtcd) TestUpgradeToVer3(c *C) {
 	ctx := context.Background()
-	uctx := Context{ctx, nil}
 	source := "source-1"
 	oldKey := common.UpstreamConfigKeyAdapterV1.Encode(source)
 	oldVal := "test"
 
 	_, err := etcdTestCli.Put(ctx, oldKey, oldVal)
 	c.Assert(err, IsNil)
-	c.Assert(upgradeToVer3(etcdTestCli, uctx), IsNil)
+	c.Assert(upgradeToVer3(ctx, etcdTestCli), IsNil)
 
 	newKey := common.UpstreamConfigKeyAdapter.Encode(source)
 	resp, err := etcdTestCli.Get(ctx, newKey)
@@ -132,7 +131,7 @@ func (t *testForEtcd) TestUpgradeToVer3(c *C) {
 	newVal := "test2"
 	_, err = etcdTestCli.Put(ctx, newKey, newVal)
 	c.Assert(err, IsNil)
-	c.Assert(upgradeToVer3(etcdTestCli, uctx), IsNil)
+	c.Assert(upgradeToVer3(ctx, etcdTestCli), IsNil)
 	resp, err = etcdTestCli.Get(ctx, newKey)
 	c.Assert(err, IsNil)
 	c.Assert(resp.Kvs, HasLen, 1)

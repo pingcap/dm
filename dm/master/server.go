@@ -702,6 +702,8 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 
 	resps := s.getStatusFromWorkers(ctx, sources, req.Name, queryRelayWorker)
 
+	s.fillUnsyncedStatus(resps)
+
 	workerRespMap := make(map[string][]*pb.QueryStatusResponse, len(sources))
 	for _, workerResp := range resps {
 		workerRespMap[workerResp.SourceStatus.Source] = append(workerRespMap[workerResp.SourceStatus.Source], workerResp)
@@ -717,6 +719,32 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 		Sources: workerResps,
 	}
 	return resp, nil
+}
+
+// adjust unsynced field in sync status by looking at DDL locks.
+// because if a DM-worker doesn't receive any shard DDL, it doesn't even know it's unsynced for itself.
+func (s *Server) fillUnsyncedStatus(resps []*pb.QueryStatusResponse) {
+	for _, resp := range resps {
+		for _, subtaskStatus := range resp.SubTaskStatus {
+			syncStatus := subtaskStatus.GetSync()
+			if syncStatus == nil || len(syncStatus.UnresolvedGroups) != 0 {
+				continue
+			}
+			// TODO: look at s.optimist when `query-status` support show `UnresolvedGroups` in optimistic mode.
+			locks := s.pessimist.ShowLocks(subtaskStatus.Name, []string{resp.SourceStatus.Source})
+			if len(locks) == 0 {
+				continue
+			}
+
+			for _, l := range locks {
+				db, table := utils.ExtractDBAndTableFromLockID(l.ID)
+				syncStatus.UnresolvedGroups = append(syncStatus.UnresolvedGroups, &pb.ShardingGroup{
+					Target:   dbutil.TableName(db, table),
+					Unsynced: []string{"this DM-worker doesn't receive any shard DDL of this group"},
+				})
+			}
+		}
+	}
 }
 
 // ShowDDLLocks implements MasterServer.ShowDDLLocks.

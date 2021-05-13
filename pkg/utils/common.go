@@ -171,15 +171,26 @@ func GenDDLLockID(task, schema, table string) string {
 	return fmt.Sprintf("%s-%s", task, dbutil.TableName(schema, table))
 }
 
+var lockIDPattern = regexp.MustCompile("(.*)\\-\\`(.*)\\`.\\`(.*)\\`")
+
 // ExtractTaskFromLockID extract task from lockID.
 func ExtractTaskFromLockID(lockID string) string {
-	pattern := regexp.MustCompile("(.*)\\-\\`(.*)\\`.\\`(.*)\\`")
-	strs := pattern.FindStringSubmatch(lockID)
+	strs := lockIDPattern.FindStringSubmatch(lockID)
 	// strs should be [full-lock-ID, task, db, table] if successful matched
 	if len(strs) < 4 {
 		return ""
 	}
 	return strs[1]
+}
+
+// ExtractDBAndTableFromLockID extract schema and table from lockID.
+func ExtractDBAndTableFromLockID(lockID string) (string, string) {
+	strs := lockIDPattern.FindStringSubmatch(lockID)
+	// strs should be [full-lock-ID, task, db, table] if successful matched
+	if len(strs) < 4 {
+		return "", ""
+	}
+	return strs[2], strs[3]
 }
 
 // NonRepeatStringsEqual is used to compare two un-ordered, non-repeat-element string slice is equal.

@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -158,6 +159,8 @@ var (
 	testEtcdCluster       *integration.ClusterV3
 	keepAliveTTL          = int64(10)
 	etcdTestCli           *clientv3.Client
+	testEtcdCluster2      *integration.ClusterV3
+	etcdTestCli2          *clientv3.Client
 )
 
 func TestMaster(t *testing.T) {
@@ -168,8 +171,11 @@ func TestMaster(t *testing.T) {
 
 	testEtcdCluster = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer testEtcdCluster.Terminate(t)
-
 	etcdTestCli = testEtcdCluster.RandClient()
+
+	testEtcdCluster2 = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
+	defer testEtcdCluster2.Terminate(t)
+	etcdTestCli2 = testEtcdCluster2.RandClient()
 
 	check.TestingT(t)
 }
@@ -393,6 +399,184 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	c.Assert(resp.Msg, check.Matches, "task .* has no source or not exist")
 	clearSchedulerEnv(c, cancel, &wg)
 	// TODO: test query with correct task name, this needs to add task first
+}
+
+func (t *testMaster) TestFillUnsyncedStatus(c *check.C) {
+	var (
+		logger  = log.L()
+		task1   = "task1"
+		task2   = "task2"
+		source1 = "source1"
+		source2 = "source2"
+		sources = []string{source1, source2}
+	)
+	cases := []struct {
+		infos    []pessimism.Info
+		input    []*pb.QueryStatusResponse
+		expected []*pb.QueryStatusResponse
+	}{
+		// test it could work
+		{
+			[]pessimism.Info{
+				{
+					Task:   task1,
+					Source: source1,
+					Schema: "db",
+					Table:  "tbl",
+				},
+			},
+			[]*pb.QueryStatusResponse{
+				{
+					SourceStatus: &pb.SourceStatus{
+						Source: source1,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name: task1,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+								UnresolvedGroups: []*pb.ShardingGroup{{Target: "`db`.`tbl`", Unsynced: []string{"table1"}}},
+							}},
+						},
+						{
+							Name:   task2,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+						},
+					},
+				}, {
+					SourceStatus: &pb.SourceStatus{
+						Source: source2,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name:   task1,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+						},
+						{
+							Name:   task2,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+						},
+					},
+				},
+			},
+			[]*pb.QueryStatusResponse{
+				{
+					SourceStatus: &pb.SourceStatus{
+						Source: source1,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name: task1,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+								UnresolvedGroups: []*pb.ShardingGroup{{Target: "`db`.`tbl`", Unsynced: []string{"table1"}}},
+							}},
+						},
+						{
+							Name:   task2,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+						},
+					},
+				}, {
+					SourceStatus: &pb.SourceStatus{
+						Source: source2,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name: task1,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+								UnresolvedGroups: []*pb.ShardingGroup{{Target: "`db`.`tbl`", Unsynced: []string{"this DM-worker doesn't receive any shard DDL of this group"}}},
+							}},
+						},
+						{
+							Name:   task2,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{}},
+						},
+					},
+				},
+			},
+		},
+		// test won't interfere not sync status
+		{
+			[]pessimism.Info{
+				{
+					Task:   task1,
+					Source: source1,
+					Schema: "db",
+					Table:  "tbl",
+				},
+			},
+			[]*pb.QueryStatusResponse{
+				{
+					SourceStatus: &pb.SourceStatus{
+						Source: source1,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name: task1,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+								UnresolvedGroups: []*pb.ShardingGroup{{Target: "`db`.`tbl`", Unsynced: []string{"table1"}}},
+							}},
+						},
+					},
+				}, {
+					SourceStatus: &pb.SourceStatus{
+						Source: source2,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name:   task1,
+							Status: &pb.SubTaskStatus_Load{Load: &pb.LoadStatus{}},
+						},
+					},
+				},
+			},
+			[]*pb.QueryStatusResponse{
+				{
+					SourceStatus: &pb.SourceStatus{
+						Source: source1,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name: task1,
+							Status: &pb.SubTaskStatus_Sync{Sync: &pb.SyncStatus{
+								UnresolvedGroups: []*pb.ShardingGroup{{Target: "`db`.`tbl`", Unsynced: []string{"table1"}}},
+							}},
+						},
+					},
+				}, {
+					SourceStatus: &pb.SourceStatus{
+						Source: source2,
+					},
+					SubTaskStatus: []*pb.SubTaskStatus{
+						{
+							Name:   task1,
+							Status: &pb.SubTaskStatus_Load{Load: &pb.LoadStatus{}},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// test pessimistic mode
+	for _, ca := range cases {
+		s := &Server{}
+		s.pessimist = shardddl.NewPessimist(&logger, func(task string) []string { return sources })
+		c.Assert(s.pessimist.Start(context.Background(), etcdTestCli2), check.IsNil)
+		for _, i := range ca.infos {
+			_, err := pessimism.PutInfo(etcdTestCli2, i)
+			c.Assert(err, check.IsNil)
+		}
+		if len(ca.infos) > 0 {
+			utils.WaitSomething(20, 100*time.Millisecond, func() bool {
+				return len(s.pessimist.ShowLocks("", nil)) > 0
+			})
+		}
+
+		s.fillUnsyncedStatus(ca.input)
+		c.Assert(ca.input, check.DeepEquals, ca.expected)
+		_, err := pessimism.DeleteInfosOperations(etcdTestCli2, ca.infos, nil)
+		c.Assert(err, check.IsNil)
+	}
 }
 
 func (t *testMaster) TestCheckTask(c *check.C) {
@@ -1208,7 +1392,7 @@ func (t *testMaster) testHTTPInterface(c *check.C, url string, contain []byte) {
 }
 
 func (t *testMaster) TestJoinMember(c *check.C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
 	// create a new cluster
 	cfg1 := NewConfig()
@@ -1263,6 +1447,37 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 
 	c.Assert(err, check.IsNil)
 	c.Assert(leaderID, check.Equals, cfg1.Name)
+
+	cfg3 := NewConfig()
+	c.Assert(cfg3.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg3.Name = "dm-master-3"
+	cfg3.DataDir = c.MkDir()
+	cfg3.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg3.PeerUrls = tempurl.Alloc()
+	cfg3.AdvertisePeerUrls = cfg3.PeerUrls
+	cfg3.Join = cfg1.MasterAddr // join to an existing cluster
+
+	// mock join master without wal dir
+	c.Assert(os.Mkdir(filepath.Join(cfg3.DataDir, "member"), privateDirMode), check.IsNil)
+	c.Assert(os.Mkdir(filepath.Join(cfg3.DataDir, "member", "join"), privateDirMode), check.IsNil)
+	s3 := NewServer(cfg3)
+	// avoid join a unhealthy cluster
+	c.Assert(utils.WaitSomething(30, 1000*time.Millisecond, func() bool {
+		return s3.Start(ctx) == nil
+	}), check.IsTrue)
+	defer s3.Close()
+
+	// verify members
+	listResp, err = etcdutil.ListMembers(client)
+	c.Assert(err, check.IsNil)
+	c.Assert(listResp.Members, check.HasLen, 3)
+	names = make(map[string]struct{}, len(listResp.Members))
+	for _, m := range listResp.Members {
+		names[m.Name] = struct{}{}
+	}
+	c.Assert(names, check.HasKey, cfg1.Name)
+	c.Assert(names, check.HasKey, cfg2.Name)
+	c.Assert(names, check.HasKey, cfg3.Name)
 
 	cancel()
 	clearEtcdEnv(c)
