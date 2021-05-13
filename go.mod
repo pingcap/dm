@@ -24,7 +24,7 @@ require (
 	github.com/pingcap/log v0.0.0-20210317133921-96f4fcab92a4
 	github.com/pingcap/parser v0.0.0-20210415081931-48e7f467fd74
 	github.com/pingcap/tidb v1.1.0-beta.0.20210330094614-60111e1c4b6f
-	github.com/pingcap/tidb-tools v5.0.0-rc.0.20210318094904-51a9e0c86386+incompatible
+	github.com/pingcap/tidb-tools v5.0.1-0.20210420102153-beed8ddc59e9+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
 	github.com/soheilhy/cmux v0.1.4
