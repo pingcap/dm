@@ -987,7 +987,7 @@ func (t *testScheduler) TestLastBound(c *C) {
 	s.unbounds[sourceID1] = struct{}{}
 	s.unbounds[sourceID2] = struct{}{}
 
-	// without source configurations,
+	// without source configuration, we don't bind this source here
 	worker1.ToFree()
 	bounded, err := s.tryBoundForWorker(worker1)
 	c.Assert(err, IsNil)
