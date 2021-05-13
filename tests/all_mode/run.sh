@@ -85,7 +85,7 @@ function test_query_timeout() {
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 	sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
 	dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
-	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 31
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
 
 	# `query-status` timeout
 	start_time=$(date +%s)

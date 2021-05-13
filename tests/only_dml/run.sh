@@ -85,8 +85,8 @@ function run() {
 	dmctl_start_task $cur/conf/dm-task.yaml
 
 	# check task has started state=2 running
-	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$TASK_NAME\"}" 3 1 31
-	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$TASK_NAME\"}" 3 1 31
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$TASK_NAME\"}" 3 1 3
+	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$TASK_NAME\"}" 3 1 3
 
 	# check diff
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
