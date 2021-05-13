@@ -72,7 +72,6 @@ is-sharding: true
 shard-mode: ""
 meta-schema: "dm_meta"
 enable-heartbeat: true
-timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 
 target-database:
@@ -276,7 +275,7 @@ func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sour
 		cfg := config.NewSourceConfig()
 		cfg.SourceID = sources[i]
 		cfg.From.Password = password
-		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil, check.Commentf("all sources: %v", sources))
+		c.Assert(scheduler2.AddSourceCfg(cfg), check.IsNil, check.Commentf("all sources: %v", sources))
 		wg.Add(1)
 		ctx1, cancel1 := context.WithCancel(ctx)
 		cancels = append(cancels, cancel1)
@@ -308,7 +307,7 @@ func testMockSchedulerForRelay(ctx context.Context, wg *sync.WaitGroup, c *check
 		cfg := config.NewSourceConfig()
 		cfg.SourceID = sources[i]
 		cfg.From.Password = password
-		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil, check.Commentf("all sources: %v", sources))
+		c.Assert(scheduler2.AddSourceCfg(cfg), check.IsNil, check.Commentf("all sources: %v", sources))
 		wg.Add(1)
 		ctx1, cancel1 := context.WithCancel(ctx)
 		cancels = append(cancels, cancel1)
@@ -1504,8 +1503,8 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	s1.leader.Store(oneselfLeader)
 	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
-	mysqlCfg := config.NewSourceConfig()
-	c.Assert(mysqlCfg.LoadFromFile("./source.yaml"), check.IsNil)
+	mysqlCfg, err := config.LoadFromFile("./source.yaml")
+	c.Assert(err, check.IsNil)
 	mysqlCfg.From.Password = os.Getenv("MYSQL_PSWD")
 	task, err := mysqlCfg.Yaml()
 	c.Assert(err, check.IsNil)
