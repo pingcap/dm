@@ -16,7 +16,6 @@ package syncer
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/pingcap/dm/dm/config"
@@ -39,11 +38,11 @@ var OnlineDDLSchemes = map[string]func(*tcontext.Context, *config.SubTaskConfig)
 
 // OnlinePlugin handles online ddl solutions like pt, gh-ost.
 type OnlinePlugin interface {
-	// Applys does:
+	// Apply does:
 	// * detect online ddl
 	// * record changes
 	// * apply online ddl on real table
-	// returns sqls, replaced/self schema, repliaced/slef table, error
+	// returns sqls, replaced/self schema, replaced/self table, error
 	Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error)
 	// Finish would delete online ddl from memory and storage
 	Finish(tctx *tcontext.Context, schema, table string) error
@@ -54,6 +53,7 @@ type OnlinePlugin interface {
 	// ResetConn reset db connection
 	ResetConn(tctx *tcontext.Context) error
 	// Clear clears all online information
+	// TODO: not used now, check if we could remove it later
 	Clear(tctx *tcontext.Context) error
 	// Close closes online ddl plugin
 	Close()
@@ -132,8 +132,8 @@ func (s *OnlineDDLStorage) Load(tctx *tcontext.Context) error {
 	s.Lock()
 	defer s.Unlock()
 
-	query := fmt.Sprintf("SELECT `ghost_schema`, `ghost_table`, `ddls` FROM %s WHERE `id`='%s'", s.tableName, s.id)
-	rows, err := s.dbConn.querySQL(tctx, query)
+	query := fmt.Sprintf("SELECT `ghost_schema`, `ghost_table`, `ddls` FROM %s WHERE `id`= ?", s.tableName)
+	rows, err := s.dbConn.querySQL(tctx, query, s.id)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -218,8 +218,8 @@ func (s *OnlineDDLStorage) Save(tctx *tcontext.Context, ghostSchema, ghostTable,
 		return terror.ErrSyncerUnitOnlineDDLInvalidMeta.Delegate(err)
 	}
 
-	query := fmt.Sprintf("REPLACE INTO %s(`id`,`ghost_schema`, `ghost_table`, `ddls`) VALUES ('%s', '%s', '%s', '%s')", s.tableName, s.id, ghostSchema, ghostTable, escapeSingleQuote(string(ddlsBytes)))
-	_, err = s.dbConn.executeSQL(tctx, []string{query})
+	query := fmt.Sprintf("REPLACE INTO %s(`id`,`ghost_schema`, `ghost_table`, `ddls`) VALUES (?, ?, ?, ?)", s.tableName)
+	_, err = s.dbConn.executeSQL(tctx, []string{query}, []interface{}{s.id, ghostSchema, ghostTable, string(ddlsBytes)})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
@@ -234,8 +234,8 @@ func (s *OnlineDDLStorage) Delete(tctx *tcontext.Context, ghostSchema, ghostTabl
 	}
 
 	// delete all checkpoints
-	sql := fmt.Sprintf("DELETE FROM %s WHERE `id` = '%s' and `ghost_schema` = '%s' and `ghost_table` = '%s'", s.tableName, s.id, ghostSchema, ghostTable)
-	_, err := s.dbConn.executeSQL(tctx, []string{sql})
+	sql := fmt.Sprintf("DELETE FROM %s WHERE `id` = ? and `ghost_schema` = ? and `ghost_table` = ?", s.tableName)
+	_, err := s.dbConn.executeSQL(tctx, []string{sql}, []interface{}{s.id, ghostSchema, ghostTable})
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -250,8 +250,8 @@ func (s *OnlineDDLStorage) Clear(tctx *tcontext.Context) error {
 	defer s.Unlock()
 
 	// delete all checkpoints
-	sql := fmt.Sprintf("DELETE FROM %s WHERE `id` = '%s'", s.tableName, s.id)
-	_, err := s.dbConn.executeSQL(tctx, []string{sql})
+	sql := fmt.Sprintf("DELETE FROM %s WHERE `id` = ?", s.tableName)
+	_, err := s.dbConn.executeSQL(tctx, []string{sql}, []interface{}{s.id})
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -298,8 +298,4 @@ func (s *OnlineDDLStorage) createTable(tctx *tcontext.Context) error {
 		)`, s.tableName)
 	_, err := s.dbConn.executeSQL(tctx, []string{sql})
 	return terror.WithScope(err, terror.ScopeDownstream)
-}
-
-func escapeSingleQuote(str string) string {
-	return strings.ReplaceAll(str, "'", "''")
 }

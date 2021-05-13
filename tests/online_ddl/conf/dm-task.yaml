@@ -21,6 +21,7 @@ mysql-instances:
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
+    filter-rules: ["filter-rule-index"]
 
   - source-id: "mysql-replica-02"
     meta:
@@ -32,6 +33,7 @@ mysql-instances:
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
+    filter-rules: ["filter-rule-index"]
 
 block-allow-list:
   instance:
@@ -67,6 +69,14 @@ column-mappings:
     source-column: "id"
     target-column: "id"
     arguments: ["2", "", "t"]
+
+filters:
+  filter-rule-index:
+    schema-pattern: "*"
+    table-pattern: "*"
+    events: ["create index","drop index"]
+    sql-pattern: ["ALTER\\s.*TABLE[\\s\\S]*ADD\\s+KEY\\s+NAME", "ALTER\\s.*TABLE[\\s\\S]*DROP\\s+KEY"]
+    action: Ignore
 
 mydumpers:
   global:

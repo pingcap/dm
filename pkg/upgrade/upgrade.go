@@ -36,6 +36,7 @@ import (
 var upgrades = []func(cli *clientv3.Client, uctx Context) error{
 	upgradeToVer1,
 	upgradeToVer2,
+	upgradeToVer4,
 }
 
 // upgradesBeforeScheduler records all upgrade functions before scheduler start. e.g. etcd key changed.
@@ -267,4 +268,10 @@ func upgradeToVer3(ctx context.Context, cli *clientv3.Client) error {
 	}
 	_, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli, ops...)
 	return err
+}
+
+// upgradeToVer4 does nothing, version 4 is just to make sure cluster from version 3 could re-run bootstrap, because
+// version 3 (v2.0.2) has some bugs and user may downgrade.
+func upgradeToVer4(cli *clientv3.Client, uctx Context) error {
+	return nil
 }
