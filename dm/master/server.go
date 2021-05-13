@@ -1090,8 +1090,8 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*config.SourceConfig, error) {
 	cfgs := make([]*config.SourceConfig, len(contents))
 	for i, content := range contents {
-		cfg := config.NewSourceConfig()
-		if err := cfg.ParseYaml(content); err != nil {
+		cfg, err := config.ParseYaml(content)
+		if err != nil {
 			return cfgs, err
 		}
 
@@ -1123,8 +1123,8 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 func parseSourceConfig(contents []string) ([]*config.SourceConfig, error) {
 	cfgs := make([]*config.SourceConfig, len(contents))
 	for i, content := range contents {
-		cfg := config.NewSourceConfig()
-		if err := cfg.ParseYaml(content); err != nil {
+		cfg, err := config.ParseYaml(content)
+		if err != nil {
 			return cfgs, err
 		}
 		cfgs[i] = cfg
@@ -1155,6 +1155,7 @@ func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
 		config.AdjustTargetDBSessionCfg(dbConfig, version)
 	} else {
 		log.L().Warn("get tidb version", log.ShortError(err))
+		config.AdjustTargetDBTimeZone(dbConfig)
 	}
 	return nil
 }
@@ -1201,7 +1202,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 			err      error
 		)
 		for _, cfg := range cfgs {
-			err = s.scheduler.AddSourceCfg(*cfg)
+			err = s.scheduler.AddSourceCfg(cfg)
 			// return first error and try to revert, so user could copy-paste same start command after error
 			if err != nil {
 				resp.Msg = err.Error()

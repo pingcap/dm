@@ -1,8 +1,12 @@
 drop database if exists `full_mode`;
 create database `full_mode`;
 use `full_mode`;
-create table t1 (id int, name varchar(20), primary key(`id`));
-insert into t1 (id, name) values (1, 'arya'), (2, 'catelyn');
+create table t1 (
+    id int,
+    name varchar(20),
+    ts timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    primary key(`id`));
+insert into t1 (id, name, ts) values (1, 'arya', now()), (2, 'catelyn', '2021-05-11 10:01:03');
 insert into t1 (id, name) values (3, 'Eddard
 Stark');
 update t1 set name = 'Arya S\\\\tark' where id = 1;

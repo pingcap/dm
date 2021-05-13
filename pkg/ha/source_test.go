@@ -52,11 +52,10 @@ var _ = Suite(&testForEtcd{})
 func (t *testForEtcd) TestSourceEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
-	var cfg config.SourceConfig
-
-	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+	cfg, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
 	source := cfg.SourceID
-	cfgExtra := cfg
+	cfgExtra := *cfg
 	cfgExtra.SourceID = "mysql-replica-2"
 
 	// no source config exist.
@@ -81,7 +80,7 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	c.Assert(cfg2, DeepEquals, cfg)
 
 	// put another source config.
-	rev2, err = PutSourceCfg(etcdTestCli, cfgExtra)
+	rev2, err = PutSourceCfg(etcdTestCli, &cfgExtra)
 	c.Assert(err, IsNil)
 
 	// get all two config.
@@ -90,7 +89,7 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	c.Assert(rev3, Equals, rev2)
 	c.Assert(cfgM, HasLen, 2)
 	c.Assert(cfgM[source], DeepEquals, cfg)
-	c.Assert(cfgM[cfgExtra.SourceID], DeepEquals, cfgExtra)
+	c.Assert(cfgM[cfgExtra.SourceID], DeepEquals, &cfgExtra)
 
 	// delete the config.
 	deleteOp := deleteSourceCfgOp(source)
