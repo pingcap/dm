@@ -21,13 +21,13 @@ TBL2=t2
 TBL3=t3
 
 function exec_sql() {
-    echo $3 | mysql -h $1 -P $2
+	echo $3 | mysql -h $1 -P $2
 }
 
 function install_sync_diff() {
-    curl http://download.pingcap.org/tidb-enterprise-tools-latest-linux-amd64.tar.gz | tar xz
-    mkdir -p bin
-    mv tidb-enterprise-tools-latest-linux-amd64/bin/sync_diff_inspector bin/
+	curl http://download.pingcap.org/tidb-enterprise-tools-latest-linux-amd64.tar.gz | tar xz
+	mkdir -p bin
+	mv tidb-enterprise-tools-latest-linux-amd64/bin/sync_diff_inspector bin/
 }
 
 function exec_full_stage() {
@@ -168,49 +168,49 @@ function exec_incremental_stage2() {
 }
 
 function patch_nightly_with_tiup_mirror() {
-    # clone packages for upgrade.
-    # FIXME: use nightly version of grafana and prometheus after https://github.com/pingcap/tiup/issues/1334 fixed.
-    tiup mirror clone tidb-dm-nightly-linux-amd64 --os=linux --arch=amd64 \
-    --alertmanager=v0.17.0 --grafana=v5.0.1 --prometheus=v5.0.1 \
-    --tiup=v$(tiup --version|grep 'tiup'|awk -F ' ' '{print $1}') --dm=v$(tiup --version|grep 'tiup'|awk -F ' ' '{print $1}')    
+	# clone packages for upgrade.
+	# FIXME: use nightly version of grafana and prometheus after https://github.com/pingcap/tiup/issues/1334 fixed.
+	tiup mirror clone tidb-dm-nightly-linux-amd64 --os=linux --arch=amd64 \
+		--alertmanager=v0.17.0 --grafana=v5.0.1 --prometheus=v5.0.1 \
+		--tiup=v$(tiup --version | grep 'tiup' | awk -F ' ' '{print $1}') --dm=v$(tiup --version | grep 'tiup' | awk -F ' ' '{print $1}')
 
-    # change tiup mirror
-    tidb-dm-nightly-linux-amd64/local_install.sh
+	# change tiup mirror
+	tidb-dm-nightly-linux-amd64/local_install.sh
 
-    # publish nightly version
-    # binary files have already been built and packaged.
-    tiup mirror genkey
-    tiup mirror grant gmhdbjd --name gmhdbjd
-    tiup mirror publish dm-master nightly /tmp/dm-master-nightly-linux-amd64.tar.gz dm-master/dm-master --arch amd64 --os linux --desc="dm-master component of Data Migration Platform"
-    tiup mirror publish dm-worker nightly /tmp/dm-worker-nightly-linux-amd64.tar.gz dm-worker/dm-worker --arch amd64 --os linux --desc="dm-worker component of Data Migration Platform"
-    tiup mirror publish dmctl nightly /tmp/dmctl-nightly-linux-amd64.tar.gz dmctl/dmctl --arch amd64 --os linux --desc="dmctl component of Data Migration Platform"
+	# publish nightly version
+	# binary files have already been built and packaged.
+	tiup mirror genkey
+	tiup mirror grant gmhdbjd --name gmhdbjd
+	tiup mirror publish dm-master nightly /tmp/dm-master-nightly-linux-amd64.tar.gz dm-master/dm-master --arch amd64 --os linux --desc="dm-master component of Data Migration Platform"
+	tiup mirror publish dm-worker nightly /tmp/dm-worker-nightly-linux-amd64.tar.gz dm-worker/dm-worker --arch amd64 --os linux --desc="dm-worker component of Data Migration Platform"
+	tiup mirror publish dmctl nightly /tmp/dmctl-nightly-linux-amd64.tar.gz dmctl/dmctl --arch amd64 --os linux --desc="dmctl component of Data Migration Platform"
 
-    tiup list
+	tiup list
 }
 
 function run_dmctl_with_retry() {
-    dmctl_log="dmctl.log"
-    for ((k=0; k<10; k++)); do
-        tiup dmctl:$1 --master-addr=master1:8261 $2 > $dmctl_log 2>&1
-        all_matched=true
-        for ((i=3; i<$#; i+=2)); do
-            j=$((i+1))
-            value=${!i}
-            expected=${!j}
-            got=$(sed "s/$value/$value\n/g" $dmctl_log | grep -c "$value" || true)
-            if [ "$got" != "$expected" ]; then
-                all_matched=false
-                break
-            fi
-        done
+	dmctl_log="dmctl.log"
+	for ((k = 0; k < 10; k++)); do
+		tiup dmctl:$1 --master-addr=master1:8261 $2 >$dmctl_log 2>&1
+		all_matched=true
+		for ((i = 3; i < $#; i += 2)); do
+			j=$((i + 1))
+			value=${!i}
+			expected=${!j}
+			got=$(sed "s/$value/$value\n/g" $dmctl_log | grep -c "$value" || true)
+			if [ "$got" != "$expected" ]; then
+				all_matched=false
+				break
+			fi
+		done
 
-        if $all_matched; then
-            return 0
-        fi
+		if $all_matched; then
+			return 0
+		fi
 
-        sleep 2
-    done
+		sleep 2
+	done
 
-    cat $dmctl_log
-    exit 1
+	cat $dmctl_log
+	exit 1
 }

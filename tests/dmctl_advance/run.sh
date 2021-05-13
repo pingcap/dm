@@ -2,7 +2,7 @@
 
 set -eu
 
-cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 TASK_CONF=$cur/conf/dm-task.yaml
@@ -12,33 +12,33 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 # used to coverage wrong usage of dmctl command
 function usage_and_arg_test() {
-#    migrate_relay_wrong_arg
-#    migrate_relay_without_worker
+	#    migrate_relay_wrong_arg
+	#    migrate_relay_without_worker
 
-#    switch_relay_master_wrong_arg
-#    switch_relay_master_without_worker
+	#    switch_relay_master_wrong_arg
+	#    switch_relay_master_without_worker
 
-    unlock_ddl_lock_wrong_arg
-    unlock_ddl_lock_invalid_force_remove
+	unlock_ddl_lock_wrong_arg
+	unlock_ddl_lock_invalid_force_remove
 
-    handle_error_wrong_arg
-    handle_error_invalid_binlogpos
-    handle_error_invalid_sqls
-    handle_error_invalid_op
+	handle_error_wrong_arg
+	handle_error_invalid_binlogpos
+	handle_error_invalid_sqls
+	handle_error_invalid_op
 
-    # TODO: check SQLs error test
+	# TODO: check SQLs error test
 }
 
 function run() {
-    cd $cur
-    for file in "check_list"/*; do
-        source $file
-    done
-    cd -
+	cd $cur
+	for file in "check_list"/*; do
+		source $file
+	done
+	cd -
 
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-    usage_and_arg_test
+	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	usage_and_arg_test
 }
 
 cleanup_data dmctl_advance
