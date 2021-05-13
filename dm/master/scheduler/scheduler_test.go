@@ -993,6 +993,11 @@ func (t *testScheduler) TestLastBound(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(bounded, IsFalse)
 	c.Assert(s.bounds, HasLen, 0)
+	// without source configuration, we return bounded true here, but no bound is added
+	bounded, err = s.tryBoundForSource(sourceID1)
+	c.Assert(err, IsNil)
+	c.Assert(bounded, IsTrue)
+	c.Assert(s.bounds, HasLen, 0)
 
 	// worker1 goes to last bounded source
 	s.sourceCfgs[sourceID1] = sourceCfg1

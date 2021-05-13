@@ -1240,6 +1240,7 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 		return 0, err
 	}
 
+	scm := s.sourceCfgs
 	boundsToTrigger := make([]ha.SourceBound, 0)
 	// 4. recover DM-worker info and status.
 	for name, info := range wim {
@@ -1253,12 +1254,15 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 			w.ToFree()
 			// set the stage as Bound and record the bound relationship if exists.
 			if bound, ok := sbm[name]; ok {
-				boundsToTrigger = append(boundsToTrigger, bound)
-				err2 = s.updateStatusForBound(w, bound)
-				if err2 != nil {
-					return 0, err2
+				// source bounds without source configuration should be deleted later
+				if _, ok := scm[bound.Source]; ok {
+					boundsToTrigger = append(boundsToTrigger, bound)
+					err2 = s.updateStatusForBound(w, bound)
+					if err2 != nil {
+						return 0, err2
+					}
+					delete(sbm, name)
 				}
-				delete(sbm, name)
 			}
 		}
 	}
@@ -1591,10 +1595,10 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 	var worker *Worker
 	// 0. check whether this source has source configuration. If not, we shouldn't bound this but just abandon it
 	// This usually happens when dm didn't handle the source compatibility correctly. For example, downgrade from a higher dm version
-	// We don't delete this source directly here, because we may bound it again after we fix the compatibility problem
+	// We can just mark this source bounded to abandon this source. After we fix the compatibility problem dm-master will restart the scheduler or manually add this source
 	if _, ok := s.sourceCfgs[source]; !ok {
 		s.logger.Warn("source configuration not found for the source to bound, add this source to unbounded", zap.String("source", source))
-		return false, nil
+		return true, nil
 	}
 	relayWorkers := s.relayWorkers[source]
 	// 1. try to find a history worker in relay workers...
