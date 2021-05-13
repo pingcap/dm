@@ -228,7 +228,7 @@ func (c *Checker) Init(ctx context.Context) (err error) {
 				continue
 			}
 
-			c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID))
+			c.checkList = append(c.checkList, check.NewShardingTablesChecker(name, dbs, shardingSet, columnMapping, checkingShardID))
 		}
 	}
 
@@ -262,24 +262,55 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		errs = append(errs, unit.NewProcessError(err))
 	} else if !result.Summary.Passed {
 		errs = append(errs, unit.NewProcessError(errors.New("check was failed, please see detail")))
+		warnLeft, errLeft := c.warnCnt, c.errCnt
 
 		// remove success result if not pass
 		results := result.Results[:0]
-		var warnCnt int64 = 0
-		var errCnt int64 = 0
 		for _, r := range result.Results {
-			switch r.State {
-			case check.StateFailure:
-				if errCnt < c.errCnt {
-					errCnt++
+			if r.State == check.StateSuccess {
+				continue
+			}
+
+			// handle results without r.Errors
+			if len(r.Errors) == 0 {
+				switch r.State {
+				case check.StateWarning:
+					if warnLeft == 0 {
+						continue
+					}
+					warnLeft--
+					results = append(results, r)
+				case check.StateFailure:
+					if errLeft == 0 {
+						continue
+					}
+					errLeft--
 					results = append(results, r)
 				}
-			case check.StateWarning:
-				if warnCnt < c.warnCnt {
-					warnCnt++
-					results = append(results, r)
+				continue
+			}
+
+			subErrors := make([]*check.Error, 0, len(r.Errors))
+			for _, e := range r.Errors {
+				switch e.Severity {
+				case check.StateWarning:
+					if warnLeft == 0 {
+						continue
+					}
+					warnLeft--
+					subErrors = append(subErrors, e)
+				case check.StateFailure:
+					if errLeft == 0 {
+						continue
+					}
+					errLeft--
+					subErrors = append(subErrors, e)
 				}
-			default:
+			}
+			// skip display an empty Result
+			if len(subErrors) > 0 {
+				r.Errors = subErrors
+				results = append(results, r)
 			}
 		}
 		result.Results = results
