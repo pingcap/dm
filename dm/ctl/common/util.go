@@ -48,7 +48,7 @@ import (
 
 var (
 	globalConfig = &Config{}
-	// GlobalCtlClient is the globally used CtlClient in this package. Exposed to be used in test
+	// GlobalCtlClient is the globally used CtlClient in this package. Exposed to be used in test.
 	GlobalCtlClient = &CtlClient{}
 
 	re = regexp.MustCompile(`grpc: received message larger than max \((\d+) vs. (\d+)\)`)
