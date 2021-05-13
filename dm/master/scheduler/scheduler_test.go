@@ -987,9 +987,17 @@ func (t *testScheduler) TestLastBound(c *C) {
 	s.unbounds[sourceID1] = struct{}{}
 	s.unbounds[sourceID2] = struct{}{}
 
-	// worker1 goes to last bounded source
+	// without source configurations,
 	worker1.ToFree()
 	bounded, err := s.tryBoundForWorker(worker1)
+	c.Assert(err, IsNil)
+	c.Assert(bounded, IsFalse)
+	c.Assert(s.bounds, HasLen, 0)
+
+	// worker1 goes to last bounded source
+	s.sourceCfgs[sourceID1] = sourceCfg1
+	s.sourceCfgs[sourceID2] = sourceCfg2
+	bounded, err = s.tryBoundForWorker(worker1)
 	c.Assert(err, IsNil)
 	c.Assert(bounded, IsTrue)
 	c.Assert(s.bounds[sourceID1], DeepEquals, worker1)

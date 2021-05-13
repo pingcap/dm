@@ -1497,7 +1497,7 @@ func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent, toLock bool) error {
 	bounded, err := s.tryBoundForSource(bound.Source)
 	if err != nil {
 		return err
-	} else if _, ok := s.sourceCfgs[bound.Source]; ok && !bounded {
+	} else if !bounded {
 		// 8. record the source as unbounded.
 		s.unbounds[bound.Source] = struct{}{}
 	}
@@ -1550,11 +1550,14 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 
 	// randomly pick one from unbounds
 	if source == "" {
-		for source = range s.unbounds {
-			s.logger.Info("found unbound source when worker bound",
-				zap.String("worker", w.BaseInfo().Name),
-				zap.String("source", source))
-			break // got a source.
+		for unboundedSource := range s.unbounds {
+			if _, ok := s.sourceCfgs[unboundedSource]; ok {
+				source = unboundedSource
+				s.logger.Info("found unbound source when worker bound",
+					zap.String("worker", w.BaseInfo().Name),
+					zap.String("source", source))
+				break // got a source.
+			}
 		}
 	}
 
@@ -1586,6 +1589,13 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 // called should update the s.unbounds.
 func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 	var worker *Worker
+	// 0. check whether this source has source configuration. If not, we shouldn't bound this but just abandon it
+	// This usually happens when dm didn't handle the source compatibility correctly. For example, downgrade from a higher dm version
+	// We don't delete this source directly here, because we may bound it again after we fix the compatibility problem
+	if _, ok := s.sourceCfgs[source]; !ok {
+		s.logger.Warn("source configuration not found for the source to bound, add this source to unbounded", zap.String("source", source))
+		return false, nil
+	}
 	relayWorkers := s.relayWorkers[source]
 	// 1. try to find a history worker in relay workers...
 	if len(relayWorkers) > 0 {
