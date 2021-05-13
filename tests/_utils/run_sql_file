@@ -9,8 +9,8 @@ set -eu
 TIDB_PORT=4000
 user="root"
 if [[ "$3" = $TIDB_PORT ]]; then
-    user="test"
+	user="test"
 fi
 
-echo "[$(date)] Executing SQL: $1" > "$TEST_DIR/sql_res.$TEST_NAME.txt"
-mysql -u$user -h$2 -P$3 -p$4 --default-character-set utf8 -vv < "$1" >> "$TEST_DIR/sql_res.$TEST_NAME.txt"
+echo "[$(date)] Executing SQL: $1" >"$TEST_DIR/sql_res.$TEST_NAME.txt"
+mysql -u$user -h$2 -P$3 -p$4 --default-character-set utf8 -vv <"$1" >>"$TEST_DIR/sql_res.$TEST_NAME.txt"

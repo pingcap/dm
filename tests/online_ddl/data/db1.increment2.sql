@@ -3,6 +3,8 @@ insert into t1 (uid, name, info) values (10006, 'name of 10006', '{"age": 10006}
 insert into t2 (uid, name, info) values (20008, 'name of 20008', '{"age": 20008}');
 alter table t1 add column address varchar(255);
 alter table t2 add column address varchar(255);
+alter table t1 add key address (address);
+alter table t2 add key address (address);
 insert into t2 (uid, name, info, address) values (20009, 'name of 20009', '{"age": 20009}', 'address of 20009');
 insert into t1 (uid, name, info, address) values (10007, 'name of 10007', '{"age": 10007}', 'address of 10007');
 alter table t2 drop column age;

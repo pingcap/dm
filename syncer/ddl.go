@@ -204,6 +204,16 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schem
 		return sqls, nil, nil
 	}
 
+	// remove empty sqls which inserted because online DDL is filtered
+	end := 0
+	for _, sql2 := range sqls {
+		if sql2 != "" {
+			sqls[end] = sql2
+			end++
+		}
+	}
+	sqls = sqls[:end]
+
 	// replace ghost table name by real table name
 	targetTables := []*filter.Table{
 		{Schema: realSchema, Name: realTable},
