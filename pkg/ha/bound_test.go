@@ -125,20 +125,19 @@ func (t *testForEtcd) TestGetSourceBoundConfigEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		worker   = "dm-worker-1"
-		source   = "mysql-replica-1"
-		bound    = NewSourceBound(source, worker)
-		cfg      config.SourceConfig
-		emptyCfg config.SourceConfig
+		worker = "dm-worker-1"
+		source = "mysql-replica-1"
+		bound  = NewSourceBound(source, worker)
 	)
-	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+	cfg, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
 	cfg.SourceID = source
 	// no source bound and config
 	bound1, cfg1, rev1, err := GetSourceBoundConfig(etcdTestCli, worker)
 	c.Assert(err, IsNil)
 	c.Assert(rev1, Greater, int64(0))
 	c.Assert(bound1.IsEmpty(), IsTrue)
-	c.Assert(cfg1, DeepEquals, emptyCfg)
+	c.Assert(cfg1, IsNil)
 
 	rev2, err := PutSourceBound(etcdTestCli, bound)
 	c.Assert(err, IsNil)
