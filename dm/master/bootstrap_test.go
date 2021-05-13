@@ -68,13 +68,12 @@ func (t *testMaster) TestCollectSourceConfigFilesV1Import(c *C) {
 	}
 	password := os.Getenv("MYSQL_PSWD")
 
-	// load a valid source file.
-	cfg1 := config.NewSourceConfig()
+	cfg1, err := config.LoadFromFile("./source.yaml")
+	c.Assert(err, IsNil)
 	// fix empty map after marshal/unmarshal becomes nil
-	cfg1.From.Session = map[string]string{}
+	cfg1.From.Adjust()
 	cfg1.Tracer = map[string]interface{}{}
 	cfg1.Filters = []*filter.BinlogEventRule{}
-	c.Assert(cfg1.LoadFromFile("./source.yaml"), IsNil)
 	cfg1.From.Host = host
 	cfg1.From.Port = port
 	cfg1.From.User = user
@@ -95,8 +94,8 @@ func (t *testMaster) TestCollectSourceConfigFilesV1Import(c *C) {
 	cfgs, err = s.collectSourceConfigFilesV1Import(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(cfgs, HasLen, 2)
-	c.Assert(cfgs[cfg1.SourceID], DeepEquals, *cfg1)
-	c.Assert(cfgs[cfg2.SourceID], DeepEquals, *cfg2)
+	c.Assert(cfgs[cfg1.SourceID], DeepEquals, cfg1)
+	c.Assert(cfgs[cfg2.SourceID], DeepEquals, cfg2)
 
 	// put a invalid source file.
 	c.Assert(ioutil.WriteFile(filepath.Join(s.cfg.V1SourcesPath, "invalid.yaml"), []byte("invalid-source-data"), 0o644), IsNil)
@@ -122,17 +121,17 @@ func (t *testMaster) TestWaitWorkersReadyV1Import(c *C) {
 	s.cfg.V1SourcesPath = c.MkDir()
 	c.Assert(s.scheduler.Start(ctx, etcdTestCli), IsNil)
 
-	cfg1 := config.NewSourceConfig()
-	c.Assert(cfg1.LoadFromFile("./source.yaml"), IsNil)
+	cfg1, err := config.LoadFromFile("./source.yaml")
+	c.Assert(err, IsNil)
 	cfg2 := cfg1.Clone()
 	cfg2.SourceID = "mysql-replica-02"
-	cfgs := map[string]config.SourceConfig{
-		cfg1.SourceID: *cfg1,
-		cfg2.SourceID: *cfg2,
+	cfgs := map[string]*config.SourceConfig{
+		cfg1.SourceID: cfg1,
+		cfg2.SourceID: cfg2,
 	}
 
 	// no worker registered, timeout.
-	err := s.waitWorkersReadyV1Import(tctx, cfgs)
+	err = s.waitWorkersReadyV1Import(tctx, cfgs)
 	c.Assert(err, ErrorMatches, ".*wait for DM-worker instances timeout.*")
 
 	// register one worker.

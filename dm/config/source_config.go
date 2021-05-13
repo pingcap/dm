@@ -82,6 +82,13 @@ type SourceConfig struct {
 
 // NewSourceConfig creates a new base config for upstream MySQL/MariaDB source.
 func NewSourceConfig() *SourceConfig {
+	c := newSourceConfig()
+	c.adjust()
+	return c
+}
+
+// NewSourceConfig creates a new base config without adjust.
+func newSourceConfig() *SourceConfig {
 	c := &SourceConfig{
 		Purge: PurgeConfig{
 			Interval:    60 * 60,
@@ -94,7 +101,6 @@ func NewSourceConfig() *SourceConfig {
 			BackoffMax:      Duration{DefaultBackoffMax},
 		},
 	}
-	c.adjust()
 	return c
 }
 
@@ -140,12 +146,13 @@ func (c *SourceConfig) Parse(content string) error {
 }
 
 // ParseYaml parses flag definitions from the argument list, content should be yaml format.
-func (c *SourceConfig) ParseYaml(content string) error {
+func ParseYaml(content string) (*SourceConfig, error) {
+	c := newSourceConfig()
 	if err := yaml.UnmarshalStrict([]byte(content), c); err != nil {
-		return terror.ErrConfigYamlTransform.Delegate(err, "decode source config")
+		return nil, terror.ErrConfigYamlTransform.Delegate(err, "decode source config")
 	}
 	c.adjust()
-	return nil
+	return c, nil
 }
 
 // EncodeToml encodes config.
@@ -311,16 +318,20 @@ func (c *SourceConfig) AdjustServerID(ctx context.Context, db *sql.DB) error {
 }
 
 // LoadFromFile loads config from file.
-func (c *SourceConfig) LoadFromFile(path string) error {
+func LoadFromFile(path string) (*SourceConfig, error) {
+	c := newSourceConfig()
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
-		return terror.ErrConfigReadCfgFromFile.Delegate(err, path)
+		return nil, terror.ErrConfigReadCfgFromFile.Delegate(err, path)
 	}
-	if err := yaml.UnmarshalStrict(content, c); err != nil {
-		return terror.ErrConfigYamlTransform.Delegate(err, "decode source config")
+	if err = yaml.UnmarshalStrict(content, c); err != nil {
+		return nil, terror.ErrConfigYamlTransform.Delegate(err, "decode source config")
 	}
 	c.adjust()
-	return c.Verify()
+	if err = c.Verify(); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 func (c *SourceConfig) check(metaData *toml.MetaData, err error) error {
