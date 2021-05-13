@@ -122,16 +122,24 @@ unit_test_pkg_binlog: tools_setup
 unit_test_others: tools_setup
 	$(call run_unit_test,$(PACKAGES_OTHERS),unit_test_others)
 
-check: tools_setup fmt lint terror_check tidy_mod
+check: tools_setup lint fmt terror_check tidy_mod
 
-fmt:
-	@echo "gofumports"
-	tools/bin/gofumports -w -d -local $(PACKAGE_NAME) $(PACKAGE_DIRECTORIES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
+fmt: tools_setup
+	@if [[ "${nolint}" != "true" ]]; then\
+		echo "shfmt"; \
+		tools/bin/shfmt -l -w -d "tests/" ; \
+		echo "gofumports"; \
+		tools/bin/gofumports -w -d -local $(PACKAGE_NAME) $(PACKAGE_DIRECTORIES) 2>&1 | awk "{print} END{if(NR>0) {exit 1}}" ;\
+		echo "golangci-lint"; \
+		tools/bin/golangci-lint run --config=$(CURDIR)/.golangci.yml --fix --issues-exit-code=1 $(PACKAGE_DIRECTORIES) ;\
+	fi
 
 lint: tools_setup
 	@if [[ "${nolint}" != "true" ]]; then\
 		echo "golangci-lint"; \
 		tools/bin/golangci-lint run --config=$(CURDIR)/.golangci.yml --issues-exit-code=1 $(PACKAGE_DIRECTORIES); \
+		echo "run shfmt"; \
+		tools/bin/shfmt -d "tests/"; \
 	fi
 
 terror_check:
