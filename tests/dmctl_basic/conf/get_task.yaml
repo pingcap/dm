@@ -7,7 +7,7 @@ meta-schema: dm_meta
 enable-heartbeat: false
 heartbeat-update-interval: 1
 heartbeat-report-interval: 10
-timezone: Asia/Shanghai
+timezone: ""
 case-sensitive: false
 target-database:
   host: 127.0.0.1
@@ -17,6 +17,7 @@ target-database:
   max-allowed-packet: null
   session:
     tidb_txn_mode: optimistic
+    time_zone: "+00:00"
   security: null
 mysql-instances:
 - source-id: mysql-replica-01

@@ -19,11 +19,6 @@ import (
 	"flag"
 	"fmt"
 	"strings"
-	"time"
-
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/BurntSushi/toml"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
@@ -31,6 +26,10 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // task modes.
@@ -118,6 +117,8 @@ func (db *DBConfig) Decode(data string) error {
 
 // Adjust adjusts the config.
 func (db *DBConfig) Adjust() {
+	// force set session time zone to UTC here.
+	AdjustTargetDBTimeZone(db)
 }
 
 // SubTaskConfig is the configuration for SubTask.
@@ -150,8 +151,8 @@ type SubTaskConfig struct {
 	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
 	Meta                    *Meta  `toml:"meta" json:"meta"`
-	Timezone                string `toml:"timezone" josn:"timezone"`
-
+	// deprecated
+	Timezone string `toml:"timezone" json:"timezone"`
 	// RelayDir get value from dm-worker config
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`
 
@@ -274,10 +275,8 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	}
 
 	if c.Timezone != "" {
-		_, err := time.LoadLocation(c.Timezone)
-		if err != nil {
-			return terror.ErrConfigInvalidTimezone.Delegate(err, c.Timezone)
-		}
+		log.L().Warn("'timezone' is deprecated, please remove this field.")
+		c.Timezone = ""
 	}
 
 	dirSuffix := "." + c.Name

@@ -1,7 +1,6 @@
 ---
 name: "task_single"
 task-mode: all
-timezone: "UTC"
 
 target-database:
   host: "tidb-0.tidb"
