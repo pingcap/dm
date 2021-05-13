@@ -1,4 +1,4 @@
-all: failpoint-ctl gocovmerge goveralls golangci-lint mockgen protoc-gen-gogofaster protoc-gen-grpc-gateway statik gofumports
+all: failpoint-ctl gocovmerge goveralls golangci-lint mockgen protoc-gen-gogofaster protoc-gen-grpc-gateway statik gofumports shfmt
 
 failpoint-ctl:
 	go build -o bin/$@ github.com/pingcap/failpoint/failpoint-ctl
@@ -26,3 +26,6 @@ statik:
 
 gofumports:
 	go build -o bin/$@ mvdan.cc/gofumpt/gofumports
+
+shfmt:
+	go build -o bin/$@ mvdan.cc/sh/v3/cmd/shfmt
