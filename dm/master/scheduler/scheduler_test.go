@@ -1333,8 +1333,8 @@ func (t *testScheduler) TestStartSourcesWithoutSourceBounds(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(sbm, HasLen, 2)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
-		if err != nil {
+		kam, _, err2 := ha.GetKeepAliveWorkers(etcdTestCli)
+		if err2 != nil {
 			return false
 		}
 		return len(kam) == 2
