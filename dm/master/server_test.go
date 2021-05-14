@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"sort"
 	"strings"
@@ -26,10 +27,11 @@ import (
 	"testing"
 	"time"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/golang/mock/gomock"
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
@@ -40,6 +42,7 @@ import (
 	"github.com/tikv/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
+	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
@@ -1919,6 +1922,36 @@ func (t *testMaster) subTaskStageMatch(c *check.C, s *scheduler.Scheduler, task,
 	default:
 		c.Assert(eStageM, check.HasLen, 0)
 	}
+}
+
+func (t *testMaster) TestGRPCLongResponse(c *check.C) {
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/LongRPCResponse", `return()`), check.IsNil)
+	//nolint:errcheck
+	defer failpoint.Disable("github.com/pingcap/dm/dm/master/LongRPCResponse")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/ctl/common/SkipUpdateMasterClient", `return()`), check.IsNil)
+	//nolint:errcheck
+	defer failpoint.Disable("github.com/pingcap/dm/dm/ctl/common/SkipUpdateMasterClient")
+
+	masterAddr := tempurl.Alloc()[len("http://"):]
+	lis, err := net.Listen("tcp", masterAddr)
+	c.Assert(err, check.IsNil)
+	defer lis.Close()
+	server := grpc.NewServer()
+	pb.RegisterMasterServer(server, &Server{})
+	//nolint:errcheck
+	go server.Serve(lis)
+
+	conn, err := grpc.Dial(utils.UnwrapScheme(masterAddr),
+		grpc.WithInsecure(),
+		grpc.WithBlock())
+	c.Assert(err, check.IsNil)
+	defer conn.Close()
+
+	common.GlobalCtlClient.MasterClient = pb.NewMasterClient(conn)
+	ctx := context.Background()
+	resp := &pb.StartTaskResponse{}
+	err = common.SendRequest(ctx, "StartTask", &pb.StartTaskRequest{}, &resp)
+	c.Assert(err, check.IsNil)
 }
 
 func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskName, sourceID string, masterReq interface{}) {
