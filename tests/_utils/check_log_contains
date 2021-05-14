@@ -7,19 +7,19 @@ text=$2
 
 num=0
 if [ "$#" -ge 3 ]; then
-    num=$3
+	num=$3
 fi
 
-got=`grep "$text" $log | wc -l`
+got=$(grep "$text" $log | wc -l)
 
 if [ $num -eq 0 ]; then
-    if [ $got -eq 0 ]; then
-        cat $log
-        echo "$log dosen't contain $text"
-        exit 1
-    fi
+	if [ $got -eq 0 ]; then
+		cat $log
+		echo "$log dosen't contain $text"
+		exit 1
+	fi
 elif [ $got -ne $num ]; then
-    cat $log
-    echo "$log dosen't contain $num $text"
-    exit 1
+	cat $log
+	echo "$log dosen't contain $num $text"
+	exit 1
 fi
