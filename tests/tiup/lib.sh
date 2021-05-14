@@ -164,8 +164,7 @@ function exec_incremental_stage2() {
 	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL1 (c1, c2, c3) VALUES (203, '203', 203);"
 	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL2 (c1, c2, c3) VALUES (204, '204', 204);"
 	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL2 (c1, c2, c3) VALUES (213, '213', 213);"
-	exec_sql mariadb2
-  3306 "INSERT INTO $DB6.$TBL3 (c1, c2, c3) VALUES (214, '214', 214);"
+	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL3 (c1, c2, c3) VALUES (214, '214', 214);"
 }
 
 function patch_nightly_with_tiup_mirror() {
