@@ -107,7 +107,7 @@ function migrate_in_v2 {
 	exec_incremental_stage2
 
 	echo "check sources"
-	run_dmctl_with_retry $DM_V2_VER "operate-source show" "mysql-replica-01" 1 "mysql-replica-02" 1
+	run_dmctl_with_retry $DM_V2_VER "operate-source show" "mysql-replica-01" 1 "mariadb-replica-02" 1
 	echo "check workers"
 	run_dmctl_with_retry $DM_V2_VER "list-member --worker" "\"stage\": \"bound\"" 2
 
