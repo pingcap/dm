@@ -1302,8 +1302,8 @@ func (t *testScheduler) TestStartSourcesWithoutSourceBounds(c *C) {
 
 	s.started = true
 	s.etcdCli = etcdTestCli
-	s.sourceCfgs[sourceID1] = config.SourceConfig{}
-	s.sourceCfgs[sourceID2] = config.SourceConfig{}
+	s.sourceCfgs[sourceID1] = &config.SourceConfig{}
+	s.sourceCfgs[sourceID2] = &config.SourceConfig{}
 	s.unbounds[sourceID1] = struct{}{}
 	s.unbounds[sourceID2] = struct{}{}
 	c.Assert(s.AddWorker(workerName1, workerAddr1), IsNil)
