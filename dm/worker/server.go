@@ -156,7 +156,7 @@ func (s *Server) Start() error {
 	}
 	if !bound.IsEmpty() {
 		log.L().Warn("worker has been assigned source before keepalive", zap.Stringer("bound", bound), zap.Bool("is deleted", bound.IsDeleted))
-		if err2 := s.enableHandleSubtasks(&sourceCfg, true); err2 != nil {
+		if err2 := s.enableHandleSubtasks(sourceCfg, true); err2 != nil {
 			return err2
 		}
 		log.L().Info("started to handle mysql source", zap.String("sourceCfg", sourceCfg.String()))
@@ -452,7 +452,7 @@ func (s *Server) observeSourceBound(ctx context.Context, rev int64) error {
 							}
 							log.L().Info("will recover observeSourceBound",
 								zap.String("relay source", cfg.SourceID))
-							return s.enableHandleSubtasks(&cfg, false)
+							return s.enableHandleSubtasks(cfg, false)
 						}()
 						if err2 != nil {
 							return err2
@@ -653,7 +653,7 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 	if !ok {
 		return terror.ErrWorkerFailToGetSourceConfigFromEtcd.Generate(bound.Source)
 	}
-	return s.enableHandleSubtasks(&sourceCfg, true)
+	return s.enableHandleSubtasks(sourceCfg, true)
 }
 
 func (s *Server) enableHandleSubtasks(sourceCfg *config.SourceConfig, needLock bool) error {
@@ -704,7 +704,7 @@ func (s *Server) operateRelaySource(relaySource ha.RelaySource) error {
 	if !ok {
 		return terror.ErrWorkerFailToGetSourceConfigFromEtcd.Generate(relaySource.Source)
 	}
-	return s.enableRelay(&sourceCfg, true)
+	return s.enableRelay(sourceCfg, true)
 }
 
 func (s *Server) enableRelay(sourceCfg *config.SourceConfig, needLock bool) error {

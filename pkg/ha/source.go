@@ -27,7 +27,7 @@ import (
 
 // PutSourceCfg puts the config of the upstream source into etcd.
 // k/v: sourceID -> source config.
-func PutSourceCfg(cli *clientv3.Client, cfg config.SourceConfig) (int64, error) {
+func PutSourceCfg(cli *clientv3.Client, cfg *config.SourceConfig) (int64, error) {
 	value, err := cfg.Toml()
 	if err != nil {
 		return 0, err
@@ -42,12 +42,12 @@ func PutSourceCfg(cli *clientv3.Client, cfg config.SourceConfig) (int64, error) 
 // if the source config for the sourceID not exist, return with `err == nil`.
 // if the source name is "", it will return all source configs as a map{sourceID: config}.
 // if the source name is given, it will return a map{sourceID: config} whose length is 1.
-func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (map[string]config.SourceConfig, int64, error) {
+func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (map[string]*config.SourceConfig, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
 	var (
-		scm  = make(map[string]config.SourceConfig)
+		scm  = make(map[string]*config.SourceConfig)
 		resp *clientv3.GetResponse
 		err  error
 	)
@@ -77,8 +77,8 @@ func deleteSourceCfgOp(source string) clientv3.Op {
 	return clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(source))
 }
 
-func sourceCfgFromResp(source string, resp *clientv3.GetResponse) (map[string]config.SourceConfig, error) {
-	scm := make(map[string]config.SourceConfig)
+func sourceCfgFromResp(source string, resp *clientv3.GetResponse) (map[string]*config.SourceConfig, error) {
+	scm := make(map[string]*config.SourceConfig)
 	if resp.Count == 0 {
 		return scm, nil
 	} else if source != "" && resp.Count > 1 {
@@ -92,7 +92,7 @@ func sourceCfgFromResp(source string, resp *clientv3.GetResponse) (map[string]co
 		if err != nil {
 			return scm, terror.ErrConfigEtcdParse.Delegate(err, kv.Key)
 		}
-		scm[cfg.SourceID] = cfg
+		scm[cfg.SourceID] = &cfg
 	}
 	return scm, nil
 }
