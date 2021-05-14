@@ -100,7 +100,6 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 		taskName2    = "task-2"
 		workerInfo1  = ha.NewWorkerInfo(workerName1, workerAddr1)
 		workerInfo2  = ha.NewWorkerInfo(workerName2, workerAddr2)
-		sourceCfg1   config.SourceConfig
 		subtaskCfg1  config.SubTaskConfig
 		keepAliveTTL = int64(5) // NOTE: this should be >= minLeaseTTL, in second.
 
@@ -116,10 +115,11 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 			}
 		}
 	)
-	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
+	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
 	sourceCfg1.SourceID = sourceID1
 	sourceCfg1.EnableRelay = true
-	sourceCfg2 := sourceCfg1
+	sourceCfg2 := *sourceCfg1
 	sourceCfg2.SourceID = sourceID2
 
 	c.Assert(subtaskCfg1.DecodeFile(subTaskSampleFile, true), IsNil)
@@ -375,9 +375,9 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	// source2 not exists before.
 	t.sourceCfgNotExist(c, s, sourceID2)
 	// add source2.
-	c.Assert(s.AddSourceCfg(sourceCfg2), IsNil)
+	c.Assert(s.AddSourceCfg(&sourceCfg2), IsNil)
 	// source2 added.
-	t.sourceCfgExist(c, s, sourceCfg2)
+	t.sourceCfgExist(c, s, &sourceCfg2)
 	// source2 should bound to worker2.
 	t.workerBound(c, s, ha.NewSourceBound(sourceID2, workerName2))
 	t.sourceBounds(c, s, []string{sourceID1, sourceID2}, []string{})
@@ -433,7 +433,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	}), IsTrue)
 	c.Assert(terror.ErrSchedulerSourceOpTaskExist.Equal(s.RemoveSourceCfg(sourceID2)), IsTrue)
 	// source2 keep there.
-	t.sourceCfgExist(c, s, sourceCfg2)
+	t.sourceCfgExist(c, s, &sourceCfg2)
 	// source2 still bound to worker2.
 	t.workerBound(c, s, ha.NewSourceBound(sourceID2, workerName2))
 	t.sourceBounds(c, s, []string{sourceID1, sourceID2}, []string{})
@@ -550,9 +550,9 @@ func (t *testScheduler) sourceCfgNotExist(c *C, s *Scheduler, source string) {
 	c.Assert(scm, HasLen, 0)
 }
 
-func (t *testScheduler) sourceCfgExist(c *C, s *Scheduler, expectCfg config.SourceConfig) {
+func (t *testScheduler) sourceCfgExist(c *C, s *Scheduler, expectCfg *config.SourceConfig) {
 	cfgP := s.GetSourceCfgByID(expectCfg.SourceID)
-	c.Assert(cfgP, DeepEquals, &expectCfg)
+	c.Assert(cfgP, DeepEquals, expectCfg)
 	scm, _, err := ha.GetSourceCfg(etcdTestCli, expectCfg.SourceID, 0)
 	c.Assert(err, IsNil)
 	cfgV := scm[expectCfg.SourceID]
@@ -708,11 +708,11 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 		workerAddr1  = "127.0.0.1:8262"
 		workerInfo1  = ha.NewWorkerInfo(workerName1, workerAddr1)
 		sourceBound1 = ha.NewSourceBound(sourceID1, workerName1)
-		sourceCfg1   config.SourceConfig
 		wg           sync.WaitGroup
 		keepAliveTTL = int64(2) // NOTE: this should be >= minLeaseTTL, in second.
 	)
-	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
+	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
 	sourceCfg1.SourceID = sourceID1
 
 	s := NewScheduler(&logger, config.Security{})
@@ -822,12 +822,12 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 		workerAddr2  = "127.0.0.1:18262"
 		workerAddr3  = "127.0.0.1:18362"
 		workerAddr4  = "127.0.0.1:18462"
-		sourceCfg1   config.SourceConfig
 		keepAliveTTL = int64(2) // NOTE: this should be >= minLeaseTTL, in second.
 	)
-	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
+	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
 	sourceCfg1.SourceID = sourceID1
-	sourceCfg2 := sourceCfg1
+	sourceCfg2 := *sourceCfg1
 	sourceCfg2.SourceID = sourceID2
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -839,7 +839,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 
 	// step 2: add two sources and register four workers
 	c.Assert(s.AddSourceCfg(sourceCfg1), IsNil)
-	c.Assert(s.AddSourceCfg(sourceCfg2), IsNil)
+	c.Assert(s.AddSourceCfg(&sourceCfg2), IsNil)
 	c.Assert(s.unbounds, HasLen, 2)
 	c.Assert(s.unbounds, HasKey, sourceID1)
 	c.Assert(s.unbounds, HasKey, sourceID2)
@@ -868,8 +868,8 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName2, keepAliveTTL), IsNil)
 	}()
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
-		return err == nil && len(kam) == 2
+		kam, _, e := ha.GetKeepAliveWorkers(etcdTestCli)
+		return e == nil && len(kam) == 2
 	}), IsTrue)
 	cancel1()
 	wg.Wait()
@@ -877,14 +877,14 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 	time.Sleep(time.Duration(keepAliveTTL) * time.Second)
 	var rev int64
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		kam, rev1, err := ha.GetKeepAliveWorkers(etcdTestCli)
+		kam, rev1, e := ha.GetKeepAliveWorkers(etcdTestCli)
 		rev = rev1
-		return err == nil && len(kam) == 0
+		return e == nil && len(kam) == 0
 	}), IsTrue)
 
 	// step 4: trigger etcd compaction and check whether we can receive it through watcher
 	var startRev int64 = 1
-	_, err := etcdTestCli.Compact(ctx, rev)
+	_, err = etcdTestCli.Compact(ctx, rev)
 	c.Assert(err, IsNil)
 	workerEvCh := make(chan ha.WorkerEvent, 10)
 	workerErrCh := make(chan error, 10)
@@ -962,10 +962,10 @@ func (t *testScheduler) TestLastBound(c *C) {
 		workerName2 = "dm-worker-2"
 		workerName3 = "dm-worker-3"
 		workerName4 = "dm-worker-4"
-		sourceCfg1  config.SourceConfig
 	)
 
-	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
+	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
 	sourceCfg1.SourceID = sourceID1
 	sourceCfg2 := sourceCfg1
 	sourceCfg2.SourceID = sourceID2
@@ -1052,8 +1052,8 @@ func (t *testScheduler) TestTransferSource(c *C) {
 	s.workers[workerName2] = worker2
 	s.workers[workerName3] = worker3
 	s.workers[workerName4] = worker4
-	s.sourceCfgs[sourceID1] = config.SourceConfig{}
-	s.sourceCfgs[sourceID2] = config.SourceConfig{}
+	s.sourceCfgs[sourceID1] = &config.SourceConfig{}
+	s.sourceCfgs[sourceID2] = &config.SourceConfig{}
 
 	worker1.ToFree()
 	c.Assert(s.boundSourceToWorker(sourceID1, worker1), IsNil)
@@ -1075,7 +1075,7 @@ func (t *testScheduler) TestTransferSource(c *C) {
 	c.Assert(worker1.Stage(), Equals, WorkerFree)
 
 	// test valid transfer: source -> worker = unbound -> free
-	s.sourceCfgs[sourceID3] = config.SourceConfig{}
+	s.sourceCfgs[sourceID3] = &config.SourceConfig{}
 	s.unbounds[sourceID3] = struct{}{}
 	c.Assert(s.TransferSource(sourceID3, workerName3), IsNil)
 	c.Assert(s.bounds[sourceID3], DeepEquals, worker3)
@@ -1095,7 +1095,7 @@ func (t *testScheduler) TestTransferSource(c *C) {
 	c.Assert(s.bounds[sourceID1], DeepEquals, worker4)
 
 	// test invalid transfer: source -> worker = unbound -> bound
-	s.sourceCfgs[sourceID4] = config.SourceConfig{}
+	s.sourceCfgs[sourceID4] = &config.SourceConfig{}
 	s.unbounds[sourceID4] = struct{}{}
 	c.Assert(s.TransferSource(sourceID4, workerName3), NotNil)
 	c.Assert(s.bounds[sourceID3], DeepEquals, worker3)
@@ -1147,8 +1147,8 @@ func (t *testScheduler) TestStartStopSource(c *C) {
 	s.workers[workerName2] = worker2
 	s.workers[workerName3] = worker3
 	s.workers[workerName4] = worker4
-	s.sourceCfgs[sourceID1] = config.SourceConfig{}
-	s.sourceCfgs[sourceID2] = config.SourceConfig{}
+	s.sourceCfgs[sourceID1] = &config.SourceConfig{}
+	s.sourceCfgs[sourceID2] = &config.SourceConfig{}
 
 	worker1.ToFree()
 	c.Assert(s.boundSourceToWorker(sourceID1, worker1), IsNil)
