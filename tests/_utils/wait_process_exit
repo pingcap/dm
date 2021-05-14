@@ -2,7 +2,6 @@
 # parameter 1: process name
 process=$1
 
-
 # Number of time to wait before using "kill -9"
 WAIT_COUNT=3
 
@@ -15,22 +14,21 @@ if [ -z "$PID" ]; then
 	exit
 fi
 
-while kill $PID > /dev/null
-do
-    sleep 0.2
-    # Increment the second counter
-    ((count++))
+while kill $PID >/dev/null; do
+	sleep 0.2
+	# Increment the second counter
+	((count++))
 
-    # Has the process been killed? If so, exit the loop.
-    if ! ps -p $PID > /dev/null ; then
+	# Has the process been killed? If so, exit the loop.
+	if ! ps -p $PID >/dev/null; then
 		echo "process $process already exit"
-        break
-    fi
+		break
+	fi
 
-    # Have we exceeded $WAIT_SECONDS? If so, kill the process with "kill -9"
-    # and exit the loop
-    if [ $count -gt $WAIT_SECONDS ]; then
-        kill -9 $PID
-        break
-    fi
+	# Have we exceeded $WAIT_COUNT? If so, kill the process with "kill -9"
+	# and exit the loop
+	if [ $count -gt $WAIT_COUNT ]; then
+		kill -9 $PID
+		break
+	fi
 done
