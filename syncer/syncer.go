@@ -2181,7 +2181,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		shouldSchemaExist            bool
 		shouldTableExistNum          int // tableNames[:shouldTableExistNum] should exist
 		shouldRefTableExistNum       int // tableNames[1:shouldTableExistNum] should exist, since first one is "caller table"
-		tryFetchDownstreamTable		 bool // to make sure if not exists will execute correctly
+		tryFetchDownstreamTable	     bool // to make sure if not exists will execute correctly
 	)
 	
 	switch node := stmt.(type) {
@@ -2251,6 +2251,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		}
 	}
 	// skip getTable before in above loop
+	// nolint:ifshort
 	start := 1
 	if shouldTableExistNum > start {
 		start = shouldTableExistNum
