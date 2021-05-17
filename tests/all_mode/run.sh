@@ -175,7 +175,8 @@ function test_stop_task_before_checkpoint() {
 
 function run() {
 	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
-
+	run_sql_source1 "SET @@global.time_zone = '+01:00';"
+	run_sql_source2 "SET @@global.time_zone = '+02:00';"
 	test_session_config
 
 	test_query_timeout
@@ -353,6 +354,7 @@ function run() {
 	export GO_FAILPOINTS=''
 
 	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
+	run_sql_both_source "SET @@global.time_zone = 'SYSTEM';"
 }
 
 cleanup_data all_mode
