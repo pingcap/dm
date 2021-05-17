@@ -46,6 +46,11 @@ function real_run() {
 	run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl $online_ddl_scheme
 	run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl $online_ddl_scheme
 
+	# manually create index to pass check_sync_diff
+	run_sql_tidb "show create table online_ddl.t_target"
+	check_not_contains "KEY \`name\`"
+	run_sql_tidb "alter table online_ddl.t_target add key name (name)"
+
 	echo "use sync_diff_inspector to check increment data"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 

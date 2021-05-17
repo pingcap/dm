@@ -298,7 +298,7 @@ function run() {
 	# use sync_diff_inspector to check data now!
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	# TODO(ehco): now this metrics hava some problem need to fix.
+	# TODO(ehco): now this metrics(syncer) hava some problem need to fix.
 	# check_metric $WORKER1_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
 	# check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
 
@@ -342,6 +342,14 @@ function run() {
 	check_metric_not_contains $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3
 	check_metric_not_contains $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$ILLEGAL_CHAR_NAME\"}" 3
 
+	# all unit without error.
+	check_metric_not_contains $WORKER1_PORT "dm_mydumper_exit_with_error_count" 3
+	check_metric_not_contains $WORKER1_PORT "dm_loader_exit_with_error_count" 3
+	check_metric_not_contains $WORKER1_PORT "dm_syncer_exit_with_error_count" 3
+
+	# check syncer metrics
+	check_two_metric_equal $WORKER1_PORT 'dm_syncer_binlog_file{node="master"' 'dm_syncer_binlog_file{node="syncer"' 3
+	check_two_metric_equal $WORKER2_PORT 'dm_syncer_binlog_file{node="master"' 'dm_syncer_binlog_file{node="syncer"' 3
 	export GO_FAILPOINTS=''
 
 	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
