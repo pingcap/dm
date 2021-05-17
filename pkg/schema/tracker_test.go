@@ -17,8 +17,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
@@ -399,6 +401,14 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	clearVolatileInfo(ti3)
 	ti3.Name = ti1.Name
 	c.Assert(ti3, DeepEquals, ti1, Commentf("ti3 = %s\nti1 = %s", asJSON{ti3}, asJSON{ti1}))
+
+	start := time.Now()
+	for n := 0; n < 100; n++ {
+		err = tracker.CreateTableIfNotExists("testdb", fmt.Sprintf("foo-%d", n), ti1)
+		c.Assert(err, IsNil)
+	}
+	duration := time.Since(start)
+	c.Assert(duration.Seconds(), Less, float64(15))
 }
 
 func (s *trackerSuite) TestAllSchemas(c *C) {
