@@ -1691,3 +1691,39 @@ func (s *Syncer) setupMockCheckpoint(c *C, checkPointDBConn *sql.Conn, checkPoin
 	s.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
 	c.Assert(s.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background()), IsNil)
 }
+
+func (s *testSyncerSuite) TestTrackDownstreamTableWontOverwrite(c *C) {
+	syncer := Syncer{}
+	ctx := context.Background()
+	tctx := tcontext.Background()
+
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(ctx)
+	c.Assert(err, IsNil)
+	baseConn := conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})
+	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: baseConn}
+	syncer.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, defaultTestSessionCfg, baseConn)
+	c.Assert(err, IsNil)
+
+	upTable, downTable := "up", "down"
+	schema := "test"
+	createTableSQL := "CREATE TABLE up (c1 int, c2 int);"
+
+	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow(downTable, " CREATE TABLE `"+downTable+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+
+	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(schema), IsNil)
+	c.Assert(syncer.schemaTracker.Exec(ctx, "test", createTableSQL), IsNil)
+	ti, err := syncer.getTable(tctx, schema, upTable, schema, downTable)
+	c.Assert(err, IsNil)
+	c.Assert(ti.Columns, HasLen, 2)
+	c.Assert(syncer.trackTableInfoFromDownstream(tctx, schema, upTable, schema, downTable), IsNil)
+	newTi, err := syncer.getTable(tctx, schema, upTable, schema, downTable)
+	c.Assert(err, IsNil)
+	c.Assert(newTi, DeepEquals, ti)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}

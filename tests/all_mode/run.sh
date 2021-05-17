@@ -42,6 +42,7 @@ function test_session_config() {
 
 	sed -i 's/tidb_retry_limit: "fjs"/tidb_retry_limit: "10"/g' $WORK_DIR/dm-task.yaml
 	dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
+	run_sql_source1 "create table if not exists all_mode.t1 (c int); insert into all_mode.t1 (id, name) values (9, 'haha');"
 
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \

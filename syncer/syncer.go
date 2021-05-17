@@ -632,10 +632,9 @@ func (s *Syncer) getTable(tctx *tcontext.Context, origSchema, origTable, renamed
 	return ti, nil
 }
 
-// trackTableInfoFromDownstream tries to track the table info from the downstream.
+// trackTableInfoFromDownstream tries to track the table info from the downstream. It will not overwrite existing table.
 func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origSchema, origTable, renamedSchema, renamedTable string) error {
-	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly
-	// (and get rid of ddlDBConn).
+	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly if HTTP port is available
 	// use parser for downstream.
 	parser2, err := utils.GetParserForConn(tctx.Ctx, s.ddlDBConn.baseConn.DBConn)
 	if err != nil {
@@ -2176,13 +2175,15 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	srcTables, targetTables := tableNames[0], tableNames[1]
 	srcTable := srcTables[0]
 
-	// Make sure the tables are all loaded into the schema tracker.
+	// Make sure the needed tables are all loaded into the schema tracker.
 	var (
 		shouldExecDDLOnSchemaTracker bool
 		shouldSchemaExist            bool
 		shouldTableExistNum          int // tableNames[:shouldTableExistNum] should exist
 		shouldRefTableExistNum       int // tableNames[1:shouldTableExistNum] should exist, since first one is "caller table"
+		tryFetchDownstreamTable		 bool // to make sure if not exists will execute correctly
 	)
+	
 	switch node := stmt.(type) {
 	case *ast.CreateDatabaseStmt:
 		shouldExecDDLOnSchemaTracker = true
@@ -2199,10 +2200,16 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	case *ast.RecoverTableStmt:
 		shouldExecDDLOnSchemaTracker = true
 		shouldSchemaExist = true
-	case *ast.CreateTableStmt, *ast.CreateViewStmt:
+	case *ast.CreateTableStmt:
 		shouldExecDDLOnSchemaTracker = true
 		shouldSchemaExist = true
-		// for CREATE TABLE LIKE/AS, there should be reference tables which should exist
+		// for CREATE TABLE LIKE/AS, the reference tables should exist
+		shouldRefTableExistNum = len(srcTables)
+		tryFetchDownstreamTable = node.IfNotExists
+	case *ast.CreateViewStmt:
+		shouldExecDDLOnSchemaTracker = true
+		shouldSchemaExist = true
+		// for CREATE VIEW LIKE/AS, the reference tables should exist
 		shouldRefTableExistNum = len(srcTables)
 	case *ast.DropTableStmt:
 		shouldExecDDLOnSchemaTracker = true
@@ -2244,7 +2251,6 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		}
 	}
 	// skip getTable before in above loop
-	// nolint:ifshort
 	start := 1
 	if shouldTableExistNum > start {
 		start = shouldTableExistNum
@@ -2254,6 +2260,12 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 			return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, srcTables[i].Schema)
 		}
 		if _, err := s.getTable(ec.tctx, srcTables[i].Schema, srcTables[i].Name, targetTables[i].Schema, targetTables[i].Name); err != nil {
+			return err
+		}
+	}
+
+	if tryFetchDownstreamTable {
+		if err := s.trackTableInfoFromDownstream(ec.tctx, srcTable.Schema, srcTable.Name, targetTables[0].Schema, targetTables[0].Name); err != nil {
 			return err
 		}
 	}
