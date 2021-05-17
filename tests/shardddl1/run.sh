@@ -702,6 +702,7 @@ function DM_RemoveLock_CASE() {
 	run_sql_source2 "alter table ${shardddl1}.${tb1} add column c double;"
 	run_sql_source2 "alter table ${shardddl1}.${tb2} add column c double;"
 	check_log_contain_with_retry "wait new ddl info putted into etcd" $WORK_DIR/master/log/dm-master.log
+	check_metric_not_contains $MASTER_PORT "dm_master_shard_ddl_error" 3
 	run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
 
 	if [[ "$1" = "pessimistic" ]]; then
@@ -868,7 +869,6 @@ function DM_DropAddColumn_CASE() {
 		"query-status test" \
 		"\"stage\": \"Running\"" 2 \
 		"\"unit\": \"Sync\"" 2
-
 	run_sql_source1 "alter table ${shardddl1}.${tb1} add column b int after a;"
 
 	restart_master_on_pos $reset "5"
@@ -879,7 +879,9 @@ function DM_DropAddColumn_CASE() {
 		"add column b that wasn't fully dropped in downstream" 1
 
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3 'fail'
-
+	# no ddl error but have un-synced ddl
+	check_metric_not_contains $MASTER_PORT "dm_master_shard_ddl_error" 3
+	check_metric_gt_zero $MASTER_PORT 'dm_master_ddl_state_number{task="test",type="Un-synced"}' 3
 	# try to fix data
 	echo 'CREATE TABLE `tb1` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' >${WORK_DIR}/schema.sql
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
