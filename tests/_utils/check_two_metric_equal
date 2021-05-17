@@ -11,15 +11,10 @@ metric1_name=$2
 metric2_name=$3
 retry_count=$4
 
-shift 3
 counter=0
 while [ $counter -lt $retry_count ]; do
 	metric1=$(curl -s http://127.0.0.1:$port/metrics | grep $metric1_name | grep -v "#" | awk '{print $2}')
 	metric2=$(curl -s http://127.0.0.1:$port/metrics | grep $metric2_name | grep -v "#" | awk '{print $2}')
-
-	echo "metric1 $metric1_name $metric1"
-	echo "metric2 $metric2_name $metric2"
-
 	if [ $metric1 -eq $metric2 ]; then
 		echo "matched"
 		exit 0
