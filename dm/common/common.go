@@ -32,6 +32,9 @@ var (
 	// WorkerKeepAliveKeyAdapter is used to encode and decode keepalive key.
 	// k/v: Encode(worker-name) -> time.
 	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/a/")
+	// WorkerSourceLoadCountKeyAdapter is used to store the tasks that in load stage for the source.
+	// k/v: Encode(worker-name, wource-id) -> count.
+	WorkerSourceLoadCountKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/worker-source-load-count/")
 	// UpstreamConfigKeyAdapter stores all config of which MySQL-task has not stopped.
 	// k/v: Encode(source-id) -> config.
 	UpstreamConfigKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/v2/upstream/config/")
@@ -98,7 +101,7 @@ func keyAdapterKeysLen(s KeyAdapter) int {
 		return 1
 	case UpstreamSubTaskKeyAdapter, StageSubTaskKeyAdapter,
 		ShardDDLPessimismInfoKeyAdapter, ShardDDLPessimismOperationKeyAdapter,
-		ShardDDLOptimismSourceTablesKeyAdapter:
+		ShardDDLOptimismSourceTablesKeyAdapter, WorkerSourceLoadCountKeyAdapter:
 		return 2
 	case ShardDDLOptimismInitSchemaKeyAdapter:
 		return 3

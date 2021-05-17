@@ -778,6 +778,12 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+[error.DM-functional-11125]
+message = "cannot update worker-source-load-count in etcd, op %s"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""
