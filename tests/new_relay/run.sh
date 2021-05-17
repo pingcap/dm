@@ -53,7 +53,7 @@ function run() {
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
 	# relay task tranfer to worker1 with no error.
-	check_metric_gt_zero $WORKER1_PORT "dm_relay_space{type=\"available\"}" 3
+	check_metric $WORKER1_PORT "dm_relay_space{type=\"available\"}" 3 0 INF
 	check_metric $WORKER1_PORT "dm_relay_data_corruption" 3 -1 1
 	check_metric $WORKER1_PORT "dm_relay_read_error_count" 3 -1 1
 	check_metric $WORKER1_PORT "dm_relay_write_error_count" 3 -1 1

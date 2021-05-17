@@ -881,7 +881,7 @@ function DM_DropAddColumn_CASE() {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3 'fail'
 	# no ddl error but have un-synced ddl
 	check_metric_not_contains $MASTER_PORT "dm_master_shard_ddl_error" 3
-	check_metric_gt_zero $MASTER_PORT 'dm_master_ddl_state_number{task="test",type="Un-synced"}' 3
+	check_metric $MASTER_PORT 'dm_master_ddl_state_number{task="test",type="Un-synced"}' 3 0 INF
 	# try to fix data
 	echo 'CREATE TABLE `tb1` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' >${WORK_DIR}/schema.sql
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \

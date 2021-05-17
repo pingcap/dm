@@ -21,7 +21,7 @@ while [ $counter -lt $retry_count ]; do
 	fi
 	((counter += 1))
 	echo "wait for valid metric for $counter-th time"
-	sleep 3
+	sleep 1
 done
 
 echo "metric1 and metric2 not equal"
