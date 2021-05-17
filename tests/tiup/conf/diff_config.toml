@@ -28,7 +28,7 @@ password = ""
 instance-id = "source-1"
 
 [[source-db]]
-host = "mysql2"
+host = "mariadb2"
 port = 3306
 user = "root"
 password = ""
