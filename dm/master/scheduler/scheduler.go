@@ -1556,9 +1556,8 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 
 	// randomly pick one from unbounds
 	if source == "" {
-		for unboundedSource := range s.unbounds {
-			if _, ok := s.sourceCfgs[unboundedSource]; ok {
-				source = unboundedSource
+		for source = range s.unbounds {
+			if _, ok := s.sourceCfgs[source]; ok {
 				s.logger.Info("found unbound source when worker bound",
 					zap.String("worker", w.BaseInfo().Name),
 					zap.String("source", source))
@@ -1592,16 +1591,10 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 
 // tryBoundForSource tries to bound a source to a random Free worker.
 // returns (true, nil) after bounded.
-// called should update the s.unbounds.
+// caller should update the s.unbounds.
+// caller should make sure this source has source config tryBoundForSource
 func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 	var worker *Worker
-	// 0. check whether this source has source configuration. If not, we shouldn't bound this but just abandon it
-	// This usually happens when dm didn't handle the source compatibility correctly. For example, downgrade from a higher dm version
-	// We can just mark this source bounded to abandon this source. After we fix the compatibility problem dm-master will restart the scheduler or manually add this source
-	if _, ok := s.sourceCfgs[source]; !ok {
-		s.logger.Warn("source configuration not found for the source to bound, add this source to unbounded", zap.String("source", source))
-		return true, nil
-	}
 	relayWorkers := s.relayWorkers[source]
 	// 1. try to find a history worker in relay workers...
 	if len(relayWorkers) > 0 {

@@ -981,28 +981,17 @@ func (t *testScheduler) TestLastBound(c *C) {
 	s.workers[workerName2] = worker2
 	s.workers[workerName3] = worker3
 	s.workers[workerName4] = worker4
+	s.sourceCfgs[sourceID1] = sourceCfg1
+	s.sourceCfgs[sourceID2] = sourceCfg2
 
 	s.lastBound[workerName1] = ha.SourceBound{Source: sourceID1}
 	s.lastBound[workerName2] = ha.SourceBound{Source: sourceID2}
 	s.unbounds[sourceID1] = struct{}{}
 	s.unbounds[sourceID2] = struct{}{}
 
-	// without source configuration, we don't bind this source here
+	// worker1 goes to last bounded source
 	worker1.ToFree()
 	bounded, err := s.tryBoundForWorker(worker1)
-	c.Assert(err, IsNil)
-	c.Assert(bounded, IsFalse)
-	c.Assert(s.bounds, HasLen, 0)
-	// without source configuration, we return bounded true here, but no bound is added
-	bounded, err = s.tryBoundForSource(sourceID1)
-	c.Assert(err, IsNil)
-	c.Assert(bounded, IsTrue)
-	c.Assert(s.bounds, HasLen, 0)
-
-	// worker1 goes to last bounded source
-	s.sourceCfgs[sourceID1] = sourceCfg1
-	s.sourceCfgs[sourceID2] = sourceCfg2
-	bounded, err = s.tryBoundForWorker(worker1)
 	c.Assert(err, IsNil)
 	c.Assert(bounded, IsTrue)
 	c.Assert(s.bounds[sourceID1], DeepEquals, worker1)
@@ -1035,6 +1024,40 @@ func (t *testScheduler) TestLastBound(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(bounded, IsTrue)
 	c.Assert(s.bounds[sourceID2], DeepEquals, worker2)
+}
+
+func (t *testScheduler) TestInvalidLastBound(c *C) {
+	defer clearTestInfoOperation(c)
+
+	var (
+		logger      = log.L()
+		s           = NewScheduler(&logger, config.Security{})
+		sourceID1   = "mysql-replica-1"
+		sourceID2   = "invalid-replica-1"
+		workerName1 = "dm-worker-1"
+	)
+
+	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
+	sourceCfg1.SourceID = sourceID1
+	sourceCfg2 := sourceCfg1
+	sourceCfg2.SourceID = sourceID2
+	worker1 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName1}}
+
+	// step 1: start an empty scheduler without listening the worker event
+	s.started = true
+	s.etcdCli = etcdTestCli
+	s.workers[workerName1] = worker1
+	// sourceID2 doesn't have a source config and not in unbound
+	s.sourceCfgs[sourceID1] = sourceCfg1
+	s.lastBound[workerName1] = ha.SourceBound{Source: sourceID2}
+	s.unbounds[sourceID1] = struct{}{}
+	// step2: worker1 doesn't go to last bounded source, because last source doesn't have a source config (might be removed)
+	worker1.ToFree()
+	bounded, err := s.tryBoundForWorker(worker1)
+	c.Assert(err, IsNil)
+	c.Assert(bounded, IsTrue)
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker1)
 }
 
 func (t *testScheduler) TestTransferSource(c *C) {
@@ -1281,7 +1304,7 @@ func (t *testScheduler) TestCloseAllWorkers(c *C) {
 	checkAllWorkersClosed(c, s, true)
 }
 
-func (t *testScheduler) TestStartSourcesWithoutSourceBounds(c *C) {
+func (t *testScheduler) TestStartSourcesWithoutSourceConfigsInEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
@@ -1302,6 +1325,7 @@ func (t *testScheduler) TestStartSourcesWithoutSourceBounds(c *C) {
 
 	s.started = true
 	s.etcdCli = etcdTestCli
+	// found source configs before bound
 	s.sourceCfgs[sourceID1] = &config.SourceConfig{}
 	s.sourceCfgs[sourceID2] = &config.SourceConfig{}
 	s.unbounds[sourceID1] = struct{}{}
@@ -1339,7 +1363,7 @@ func (t *testScheduler) TestStartSourcesWithoutSourceBounds(c *C) {
 		}
 		return len(kam) == 2
 	}), IsTrue)
-
+	// there isn't any source config in etcd
 	c.Assert(s.Start(ctx, etcdTestCli), IsNil)
 	c.Assert(s.bounds, HasLen, 0)
 	sbm, _, err = ha.GetSourceBound(etcdTestCli, "")
