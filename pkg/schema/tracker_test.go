@@ -395,6 +395,10 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	err = tracker.CreateTableIfNotExists("testdb", "foo", ti1)
 	c.Assert(err, IsNil)
 
+	// error if db not exist
+	err = tracker.CreateTableIfNotExists("test-another-db", "foo", ti1)
+	c.Assert(err, ErrorMatches, ".*Unknown database.*")
+
 	// Can use the table info to recover a table using a different name.
 	err = tracker.CreateTableIfNotExists("testdb", "bar", ti1)
 	c.Assert(err, IsNil)

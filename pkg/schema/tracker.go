@@ -294,19 +294,9 @@ func cloneTableInfo(ti *model.TableInfo) *model.TableInfo {
 
 // CreateTableIfNotExists creates a TABLE of the given name if it did not exist.
 func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo) error {
-	infoSchema := tr.dom.InfoSchema()
 	dbName := model.NewCIStr(db)
 	tableName := model.NewCIStr(table)
-	if infoSchema.TableExists(dbName, tableName) {
-		return nil
-	}
-
-	dbInfo, exists := infoSchema.SchemaByName(dbName)
-	if !exists || dbInfo == nil {
-		return infoschema.ErrDatabaseNotExists.GenWithStackByArgs(dbName)
-	}
-
 	ti = cloneTableInfo(ti)
 	ti.Name = tableName
-	return tr.dom.DDL().CreateTableWithInfo(tr.se, dbName, ti, ddl.OnExistError, false)
+	return tr.dom.DDL().CreateTableWithInfo(tr.se, dbName, ti, ddl.OnExistIgnore, false)
 }
