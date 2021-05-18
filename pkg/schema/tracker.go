@@ -306,8 +306,7 @@ func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo)
 		return infoschema.ErrDatabaseNotExists.GenWithStackByArgs(dbName)
 	}
 
-	d := domain.GetDomain(tr.se).DDL()
 	ti = cloneTableInfo(ti)
 	ti.Name = tableName
-	return d.CreateTableWithInfo(tr.se, dbName, ti, ddl.OnExistError, false)
+	return tr.dom.DDL().CreateTableWithInfo(tr.se, dbName, ti, ddl.OnExistError, false)
 }
