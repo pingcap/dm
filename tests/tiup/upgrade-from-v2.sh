@@ -59,6 +59,7 @@ function upgrade_to_current_v2() {
 
 function migrate_in_v2 {
 	run_dmctl_with_retry $CUR_VER "query-status" "Running" 2 "Paused" 1
+	run_dmctl_with_retry $CUR_VER "show-ddl-locks" "\"result\": true" 1 "\"task\": \"$TASK_PESS_NAME\"" 1 "\"task\": \"$TASK_OPTI_NAME\"" 1
 
 	tiup dmctl:$CUR_VER --master-addr=master1:8261 resume-task $TASK_NAME
 

@@ -9,6 +9,8 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 mkdir -p $WORK_DIR
 
 TASK_NAME="upgrade_via_tiup"
+TASK_PESS_NAME="upgrade_via_tiup_pessimistic"
+TASK_OPTI_NAME="upgrade_via_tiup_optimistic"
 
 DB1=sharding1
 DB2=sharding2
