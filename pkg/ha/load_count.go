@@ -132,8 +132,11 @@ func WatchLoadCount(ctx context.Context, cli *clientv3.Client, revision int64,
 					if err == nil {
 						wlsc.Worker = keys[0]
 						wlsc.Source = keys[1]
-						wlsc.IsDelete = (ev.Type == mvccpb.DELETE)
-						err = json.Unmarshal(ev.Kv.Value, &wlsc.Count)
+						if ev.Type == mvccpb.PUT {
+							err = json.Unmarshal(ev.Kv.Value, &wlsc.Count)
+						} else {
+							wlsc.IsDelete = true
+						}
 					}
 				default:
 					// this should not happen.

@@ -14,14 +14,18 @@
 package ha
 
 import (
+	"context"
+	"time"
+
 	. "github.com/pingcap/check"
 )
 
 func (t *testForEtcd) TestLoadCountEtcd(c *C) {
 	var (
-		worker1 = "worker1"
-		source1 = "source1"
-		source2 = "source2"
+		worker1      = "worker1"
+		source1      = "source1"
+		source2      = "source2"
+		watchTimeout = 2 * time.Second
 	)
 	defer clearTestInfoOperation(c)
 
@@ -129,4 +133,31 @@ func (t *testForEtcd) TestLoadCountEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev11, Equals, rev10)
 	c.Assert(wslcm, HasLen, 0)
+
+	rev12, err := IncWorkerSourceLoadCount(etcdTestCli, worker1, source2)
+	c.Assert(err, IsNil)
+	c.Assert(rev12, Greater, rev11)
+
+	// watch operations for the load count.
+	loadCountCh := make(chan WorkerSourceLoadCount, 10)
+	errCh := make(chan error, 10)
+	ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
+	WatchLoadCount(ctx, etcdTestCli, rev8+1, loadCountCh, errCh)
+	cancel()
+	close(loadCountCh)
+	close(errCh)
+	c.Assert(len(loadCountCh), Equals, 3)
+	delLoadCount1 := <-loadCountCh
+	c.Assert(delLoadCount1.Worker, Equals, worker1)
+	c.Assert(delLoadCount1.Source, Equals, source1)
+	c.Assert(delLoadCount1.IsDelete, IsTrue)
+	delLoadCount2 := <-loadCountCh
+	c.Assert(delLoadCount2.Worker, Equals, worker1)
+	c.Assert(delLoadCount2.Source, Equals, source2)
+	c.Assert(delLoadCount2.IsDelete, IsTrue)
+	putLoadCount3 := <-loadCountCh
+	c.Assert(putLoadCount3.Worker, Equals, worker1)
+	c.Assert(putLoadCount3.Source, Equals, source2)
+	c.Assert(putLoadCount3.IsDelete, IsFalse)
+	c.Assert(putLoadCount3.Count, Equals, 1)
 }
