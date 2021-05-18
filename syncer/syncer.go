@@ -2475,6 +2475,8 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 		return err
 	}
 	s.ddlDBConn = ddlDBConns[0]
+	printServerVersion(s.tctx, s.fromDB.BaseDB, "upstream")
+	printServerVersion(s.tctx, s.toDB, "downstream")
 
 	return nil
 }
@@ -2721,7 +2723,6 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	s.cfg.RouteRules = cfg.RouteRules
 	s.cfg.FilterRules = cfg.FilterRules
 	s.cfg.ColumnMappingRules = cfg.ColumnMappingRules
-	s.cfg.Timezone = cfg.Timezone
 
 	// update timezone
 	s.setTimezone()
@@ -2774,17 +2775,8 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 }
 
 func (s *Syncer) setTimezone() {
-	var loc *time.Location
-
-	if s.cfg.Timezone != "" {
-		loc, _ = time.LoadLocation(s.cfg.Timezone)
-	}
-	if loc == nil {
-		loc = time.Now().Location()
-		s.tctx.L().Warn("use system default time location")
-	}
-	s.tctx.L().Info("use timezone", log.WrapStringerField("location", loc))
-	s.timezone = loc
+	s.tctx.L().Info("use timezone", log.WrapStringerField("location", time.UTC))
+	s.timezone = time.UTC
 }
 
 func (s *Syncer) setSyncCfg() error {

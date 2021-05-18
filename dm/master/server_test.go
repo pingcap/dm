@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -27,10 +28,11 @@ import (
 	"testing"
 	"time"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/golang/mock/gomock"
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
@@ -41,6 +43,7 @@ import (
 	"github.com/tikv/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
+	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
@@ -69,7 +72,6 @@ is-sharding: true
 shard-mode: ""
 meta-schema: "dm_meta"
 enable-heartbeat: true
-timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 
 target-database:
@@ -273,7 +275,7 @@ func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sour
 		cfg := config.NewSourceConfig()
 		cfg.SourceID = sources[i]
 		cfg.From.Password = password
-		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil, check.Commentf("all sources: %v", sources))
+		c.Assert(scheduler2.AddSourceCfg(cfg), check.IsNil, check.Commentf("all sources: %v", sources))
 		wg.Add(1)
 		ctx1, cancel1 := context.WithCancel(ctx)
 		cancels = append(cancels, cancel1)
@@ -305,7 +307,7 @@ func testMockSchedulerForRelay(ctx context.Context, wg *sync.WaitGroup, c *check
 		cfg := config.NewSourceConfig()
 		cfg.SourceID = sources[i]
 		cfg.From.Password = password
-		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil, check.Commentf("all sources: %v", sources))
+		c.Assert(scheduler2.AddSourceCfg(cfg), check.IsNil, check.Commentf("all sources: %v", sources))
 		wg.Add(1)
 		ctx1, cancel1 := context.WithCancel(ctx)
 		cancels = append(cancels, cancel1)
@@ -1501,8 +1503,8 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	s1.leader.Store(oneselfLeader)
 	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
-	mysqlCfg := config.NewSourceConfig()
-	c.Assert(mysqlCfg.LoadFromFile("./source.yaml"), check.IsNil)
+	mysqlCfg, err := config.LoadFromFile("./source.yaml")
+	c.Assert(err, check.IsNil)
 	mysqlCfg.From.Password = os.Getenv("MYSQL_PSWD")
 	task, err := mysqlCfg.Yaml()
 	c.Assert(err, check.IsNil)
@@ -1951,6 +1953,36 @@ func (t *testMaster) subTaskStageMatch(c *check.C, s *scheduler.Scheduler, task,
 	default:
 		c.Assert(eStageM, check.HasLen, 0)
 	}
+}
+
+func (t *testMaster) TestGRPCLongResponse(c *check.C) {
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/LongRPCResponse", `return()`), check.IsNil)
+	//nolint:errcheck
+	defer failpoint.Disable("github.com/pingcap/dm/dm/master/LongRPCResponse")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/ctl/common/SkipUpdateMasterClient", `return()`), check.IsNil)
+	//nolint:errcheck
+	defer failpoint.Disable("github.com/pingcap/dm/dm/ctl/common/SkipUpdateMasterClient")
+
+	masterAddr := tempurl.Alloc()[len("http://"):]
+	lis, err := net.Listen("tcp", masterAddr)
+	c.Assert(err, check.IsNil)
+	defer lis.Close()
+	server := grpc.NewServer()
+	pb.RegisterMasterServer(server, &Server{})
+	//nolint:errcheck
+	go server.Serve(lis)
+
+	conn, err := grpc.Dial(utils.UnwrapScheme(masterAddr),
+		grpc.WithInsecure(),
+		grpc.WithBlock())
+	c.Assert(err, check.IsNil)
+	defer conn.Close()
+
+	common.GlobalCtlClient.MasterClient = pb.NewMasterClient(conn)
+	ctx := context.Background()
+	resp := &pb.StartTaskResponse{}
+	err = common.SendRequest(ctx, "StartTask", &pb.StartTaskRequest{}, &resp)
+	c.Assert(err, check.IsNil)
 }
 
 func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskName, sourceID string, masterReq interface{}) {
