@@ -553,7 +553,7 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 	return nil
 }
 
-// RemoveSubTasks removes the information of one or more subtaks for one task.
+// RemoveSubTasks removes the information of one or more subtasks for one task.
 func (s *Scheduler) RemoveSubTasks(task string, sources ...string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -2468,6 +2468,8 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 		return err
 	}
 	s.ddlDBConn = ddlDBConns[0]
+	printServerVersion(s.tctx, s.fromDB.BaseDB, "upstream")
+	printServerVersion(s.tctx, s.toDB, "downstream")
 
 	return nil
 }
