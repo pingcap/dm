@@ -1592,7 +1592,7 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 // tryBoundForSource tries to bound a source to a random Free worker.
 // returns (true, nil) after bounded.
 // caller should update the s.unbounds.
-// caller should make sure this source has source config tryBoundForSource
+// caller should make sure this source has source config.
 func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 	var worker *Worker
 	relayWorkers := s.relayWorkers[source]
