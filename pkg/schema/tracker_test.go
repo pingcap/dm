@@ -391,6 +391,10 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	clearVolatileInfo(ti2)
 	c.Assert(ti2, DeepEquals, ti1, Commentf("ti2 = %s\nti1 = %s", asJSON{ti2}, asJSON{ti1}))
 
+	// no error if table already exist
+	err = tracker.CreateTableIfNotExists("testdb", "foo", ti1)
+	c.Assert(err, IsNil)
+
 	// Can use the table info to recover a table using a different name.
 	err = tracker.CreateTableIfNotExists("testdb", "bar", ti1)
 	c.Assert(err, IsNil)
