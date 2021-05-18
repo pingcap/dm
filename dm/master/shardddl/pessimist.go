@@ -403,10 +403,12 @@ func (p *Pessimist) RemoveMetaData(task string) error {
 		p.lk.RemoveLock(op.ID)
 	}
 
-	p.lk.RemoveLatestDoneDDLsByTask(task)
 	// clear meta data in etcd
-	_, err = pessimism.DeleteInfosOperationsDDLsByTask(p.cli, task)
-	return err
+	if _, err = pessimism.DeleteInfosOperationsDDLsByTask(p.cli, task); err != nil {
+		return err
+	}
+	p.lk.RemoveLatestDoneDDLsByTask(task)
+	return nil
 }
 
 // recoverLocks recovers shard DDL locks based on shard DDL info and shard DDL lock operation.
@@ -586,9 +588,7 @@ func (p *Pessimist) handleLock(lockID, source string) error {
 	if lock.IsResolved() {
 		// remove all operations for this shard DDL lock.
 		// this is to handle the case where dm-master exit before deleting operations for them.
-		if err := p.removeLockPutDDLs(lock); err != nil {
-			return err
-		}
+		return p.removeLockPutDDLs(lock)
 	}
 
 	// check whether the owner has done.
@@ -644,7 +644,7 @@ func (p *Pessimist) putOpsForNonOwner(lock *pessimism.Lock, onlySource string, s
 	return nil
 }
 
-// removeLock removes the lock in memory and its information in etcd.
+// removeLockPutDDLs removes the lock in memory and its information and put ddls in etcd.
 func (p *Pessimist) removeLockPutDDLs(lock *pessimism.Lock) error {
 	// remove all operations for this shard DDL lock.
 	if err := p.deleteOpsPutDDLs(lock); err != nil {

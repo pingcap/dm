@@ -62,7 +62,7 @@ func DeleteInfosOperations(cli *clientv3.Client, infos []Info, ops []Operation) 
 }
 
 // DeleteOperationsPutDDLs deletes the shard DDL operations and add latest done DDLs in etcd.
-// This function should often be called by DM-master when calling UnlockDDL.
+// This function should often be called by DM-master when calling UnlockDDL and the lock is resolved.
 func DeleteOperationsPutDDLs(cli *clientv3.Client, lockID string, ops []Operation, ddls []string) (int64, error) {
 	etcdOps := make([]clientv3.Op, 0, len(ops))
 	for _, op := range ops {
