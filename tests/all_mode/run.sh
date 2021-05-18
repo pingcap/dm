@@ -17,6 +17,7 @@ function test_session_config() {
 	# start DM worker and master
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -66,6 +67,7 @@ function test_query_timeout() {
 	# start DM worker and master
 	run_dm_master $WORK_DIR/master $MASTER_PORT $WORK_DIR/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	# operate mysql config to worker
@@ -83,6 +85,7 @@ function test_query_timeout() {
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 	sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
 	dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
 
 	# `query-status` timeout
 	start_time=$(date +%s)
@@ -115,6 +118,7 @@ function test_stop_task_before_checkpoint() {
 	# start DM worker and master
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
 
 	export GO_FAILPOINTS='github.com/pingcap/dm/loader/WaitLoaderStopAfterInitCheckpoint=return(5)'
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
@@ -193,6 +197,7 @@ function run() {
 	# start DM worker and master
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
@@ -216,13 +221,12 @@ function run() {
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 	sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
 	dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
-
-	# use sync_diff_inspector to check full dump loader
-	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-
 	# check task has started
 	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
 	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
+
+	# use sync_diff_inspector to check full dump loader
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	# check default session config
 	check_log_contain_with_retry '\\"tidb_txn_mode\\":\\"optimistic\\"' $WORK_DIR/worker1/log/dm-worker.log
@@ -243,6 +247,8 @@ function run() {
 	wait_pattern_exit dm-worker2.toml
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
+	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
 
 	sleep 10
 	echo "after restart dm-worker, task should resume automatically"
@@ -293,6 +299,7 @@ function run() {
 	# use sync_diff_inspector to check data now!
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+	# TODO(ehco): now this metrics(syncer) hava some problem need to fix.
 	# check_metric $WORKER1_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
 	# check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
 
@@ -336,6 +343,14 @@ function run() {
 	check_metric_not_contains $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3
 	check_metric_not_contains $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$ILLEGAL_CHAR_NAME\"}" 3
 
+	# all unit without error.
+	check_metric_not_contains $WORKER1_PORT "dm_mydumper_exit_with_error_count" 3
+	check_metric_not_contains $WORKER1_PORT "dm_loader_exit_with_error_count" 3
+	check_metric_not_contains $WORKER1_PORT "dm_syncer_exit_with_error_count" 3
+
+	# check syncer metrics
+	check_two_metric_equal $WORKER1_PORT 'dm_syncer_binlog_file{node="master"' 'dm_syncer_binlog_file{node="syncer"' 3
+	check_two_metric_equal $WORKER2_PORT 'dm_syncer_binlog_file{node="master"' 'dm_syncer_binlog_file{node="syncer"' 3
 	export GO_FAILPOINTS=''
 
 	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
