@@ -1522,8 +1522,6 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 	source := s.lastBound[w.baseInfo.Name].Source
 	if _, ok := s.unbounds[source]; !ok {
 		source = ""
-	} else if _, ok := s.sourceCfgs[source]; !ok {
-		source = ""
 	}
 
 	// try to find its relay source (currently only one relay source)
@@ -1557,12 +1555,10 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 	// randomly pick one from unbounds
 	if source == "" {
 		for source = range s.unbounds {
-			if _, ok := s.sourceCfgs[source]; ok {
-				s.logger.Info("found unbound source when worker bound",
-					zap.String("worker", w.BaseInfo().Name),
-					zap.String("source", source))
-				break // got a source.
-			}
+			s.logger.Info("found unbound source when worker bound",
+				zap.String("worker", w.BaseInfo().Name),
+				zap.String("source", source))
+			break // got a source.
 		}
 	}
 
