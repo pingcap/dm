@@ -416,7 +416,7 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 		c.Assert(err, IsNil)
 	}
 	duration := time.Since(start)
-	c.Assert(duration.Seconds(), Less, float64(15))
+	c.Assert(duration.Seconds(), Less, float64(20))
 }
 
 func (s *trackerSuite) TestAllSchemas(c *C) {
