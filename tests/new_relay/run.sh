@@ -11,6 +11,8 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 API_VERSION="v1alpha1"
 
 function run() {
+	export GO_FAILPOINTS="github.com/pingcap/dm/relay/ReportRelayLogSpaceInBackground=return(1)"
+
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_contains 'Query OK, 2 rows affected'
 
@@ -57,7 +59,6 @@ function run() {
 	check_metric $WORKER1_PORT "dm_relay_read_error_count" 3 -1 1
 	check_metric $WORKER1_PORT "dm_relay_write_error_count" 3 -1 1
 	# check worker relay space great than 0 9223372036854775807 is 2**63 -1
-	sleep 5
 	check_metric $WORKER1_PORT 'dm_relay_space{type="available"}' 5 0 9223372036854775807
 
 	# subtask is preferred to scheduled to another relay worker
