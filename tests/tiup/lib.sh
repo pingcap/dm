@@ -118,13 +118,13 @@ function exec_incremental_stage1() {
 
 	# pessimistic shard ddls
 	exec_sql mysql1 3306 "ALTER TABLE $DB5.$TBL1 ADD COLUMN c3 INT;"
-	exec_sql mariadb2 3306 "ALTER TABLE $DB6.$TBL3 ADD COLUMN c3 INT;"
+	exec_sql mariadb2 3306 "ALTER TABLE $DB5.$TBL2 ADD COLUMN c3 INT;"
 
 	# prepare pessimistic incremental data
 	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL1 (c1, c2, c3) VALUES (103, '103', 103);"
-	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL2 (c1, c2) VALUES (104, '104');"
+	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL2 (c1, c2, c3) VALUES (104, '104', 104);"
 	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL2 (c1, c2) VALUES (113, '113');"
-	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL3 (c1, c2, c3) VALUES (114, '114', 114);"
+	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL3 (c1, c2) VALUES (114, '114');"
 }
 
 function exec_incremental_stage2() {
@@ -154,13 +154,13 @@ function exec_incremental_stage2() {
 
 	# prepare pessimistic incremental data
 	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL1 (c1, c2, c3) VALUES (201, '201', 201);"
-	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL2 (c1, c2) VALUES (202, '202');"
+	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL2 (c1, c2, c3) VALUES (202, '202', 202);"
 	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL2 (c1, c2) VALUES (211, '211');"
-	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL3 (c1, c2, c3) VALUES (212, '212', 212);"
+	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL3 (c1, c2) VALUES (212, '212');"
 
 	# pessimistic shard ddls
-	exec_sql mysql1 3306 "ALTER TABLE $DB5.$TBL2 ADD COLUMN c3 INT;"
-	exec_sql mariadb2 3306 "ALTER TABLE $DB6.$TBL2 ADD COLUMN c3 INT;"
+	exec_sql mysql1 3306 "ALTER TABLE $DB6.$TBL2 ADD COLUMN c3 INT;"
+	exec_sql mariadb2 3306 "ALTER TABLE $DB6.$TBL3 ADD COLUMN c3 INT;"
 
 	# prepare pessimistic incremental data
 	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL1 (c1, c2, c3) VALUES (203, '203', 203);"
