@@ -204,19 +204,19 @@ func (t *testEtcdSuite) cloneConfig(cfg *Config) *Config {
 	return clone
 }
 
-func (t *testEtcdSuite) TestIsDataExist(c *check.C) {
+func (t *testEtcdSuite) TestIsDirExist(c *check.C) {
 	d := "./directory-not-exists"
-	c.Assert(isDataExist(d), check.IsFalse)
+	c.Assert(isDirExist(d), check.IsFalse)
 
 	// empty directory
 	d = c.MkDir()
-	c.Assert(isDataExist(d), check.IsFalse)
+	c.Assert(isDirExist(d), check.IsTrue)
 
 	// data exists in the directory
 	for i := 1; i <= 3; i++ {
 		fp := filepath.Join(d, fmt.Sprintf("file.%d", i))
 		c.Assert(ioutil.WriteFile(fp, nil, privateDirMode), check.IsNil)
-		c.Assert(isDataExist(d), check.IsTrue)
-		c.Assert(isDataExist(fp), check.IsFalse) // not a directory
+		c.Assert(isDirExist(d), check.IsTrue)
+		c.Assert(isDirExist(fp), check.IsFalse) // not a directory
 	}
 }
