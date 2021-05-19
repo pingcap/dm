@@ -638,7 +638,7 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origSchema
 	// use parser for downstream.
 	parser2, err := utils.GetParserForConn(tctx.Ctx, s.ddlDBConn.baseConn.DBConn)
 	if err != nil {
-		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+		return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 	}
 
 	rows, err := s.ddlDBConn.querySQL(tctx, "SHOW CREATE TABLE "+dbutil.TableName(renamedSchema, renamedTable))
@@ -2266,7 +2266,8 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	}
 
 	if tryFetchDownstreamTable {
-		if err := s.trackTableInfoFromDownstream(ec.tctx, srcTable.Schema, srcTable.Name, targetTables[0].Schema, targetTables[0].Name); err != nil {
+		err := s.trackTableInfoFromDownstream(ec.tctx, srcTable.Schema, srcTable.Name, targetTables[0].Schema, targetTables[0].Name)
+		if err != nil && !terror.ErrSchemaTrackerCannotFetchDownstreamTable.Equal(err) {
 			return err
 		}
 	}
