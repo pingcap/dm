@@ -113,15 +113,14 @@ function run() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"start-task $cur/conf/dm-task.yaml"
-	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\"}" 3 1 3
-	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\"}" 3 1 3
-
 	# both with and without relay should error
 	# (different version of MySQL has different error message, only compare error code here)
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status $TASK_NAME" \
 		"no relay pos match gtid" 1 \
 		"ERROR 1236 (HY000)" 1
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\"}" 3 2 4
+	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\"}" 3 2 4
 }
 
 cleanup_data gtid
