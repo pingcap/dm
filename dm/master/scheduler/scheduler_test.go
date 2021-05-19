@@ -1369,4 +1369,6 @@ func (t *testScheduler) TestStartSourcesWithoutSourceConfigsInEtcd(c *C) {
 	sbm, _, err = ha.GetSourceBound(etcdTestCli, "")
 	c.Assert(err, IsNil)
 	c.Assert(sbm, HasLen, 0)
+	cancel()
+	wg.Wait()
 }
