@@ -19,11 +19,8 @@ function run() {
 	run_dm_master $WORK_DIR/master2 $MASTER_PORT2 $cur/conf/dm-master2.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
-	# let master1 became leader.
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
-		"operate-leader evict" \
-		"\"result\": true" 1
 
+	sleep 3 # wait for master1 become leader.
 	check_metric $MASTER_PORT1 'start_leader_counter' 3 0 2
 	check_metric $MASTER_PORT2 'start_leader_counter' 3 -1 1 # master2 is not need to campagin leader
 
