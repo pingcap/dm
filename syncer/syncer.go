@@ -1347,7 +1347,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				continue
 			}
 
-			return err
+			return terror.ErrSyncerGetEvent.Generate(err)
 		}
 
 		// time duration for reading an event from relay log or upstream master.
