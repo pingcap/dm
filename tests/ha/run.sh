@@ -21,8 +21,7 @@ function run() {
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
 
 	# master1 or master2 join campaign
-	check_metric $MASTER_PORT1 'start_leader_counter' 3 -1 2
-	check_metric $MASTER_PORT2 'start_leader_counter' 3 -1 2
+	check_metric $MASTER_PORT1 'start_leader_counter' 3 -1 2 || check_metric $MASTER_PORT1 'start_leader_counter' 3 -1 2
 
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
