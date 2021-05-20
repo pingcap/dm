@@ -132,6 +132,8 @@ message SyncStatus {
     int64 recentTps = 3;
     string masterBinlog = 4;
     string masterBinlogGtid = 5;
+    string readerBinlog = 12;
+    string readerBinlogGtid = 13;
     string syncerBinlog = 6;
     string syncerBinlogGtid = 7;
     repeated string blockingDDLs = 8; // sharding DDL which current is blocking

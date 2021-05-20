@@ -31,16 +31,24 @@ func (s *Syncer) Status() interface{} {
 	totalTps := s.totalTps.Load()
 	tps := s.tps.Load()
 
+	s.currentLocationMu.RLock()
+	curLocation := s.currentLocationMu.currentLocation
+	s.currentLocationMu.RUnlock()
 	syncerLocation := s.checkpoint.FlushedGlobalPoint()
 	st := &pb.SyncStatus{
 		TotalEvents:  total,
 		TotalTps:     totalTps,
 		RecentTps:    tps,
 		SyncerBinlog: syncerLocation.Position.String(),
+		ReaderBinlog: curLocation.Position.String(),
 	}
 
 	if syncerLocation.GetGTID() != nil {
 		st.SyncerBinlogGtid = syncerLocation.GetGTID().String()
+	}
+
+	if curLocation.GetGTID() != nil {
+		st.ReaderBinlogGtid = curLocation.GetGTID().String()
 	}
 
 	st.BinlogType = "unknown"
