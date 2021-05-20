@@ -355,8 +355,8 @@ func GetServerUUID(ctx context.Context, db *sql.DB, flavor string) (string, erro
 	return serverUUID, err
 }
 
-// GetServerTS gets server's `UNIX_TIMESTAMP()`.
-func GetServerUnixTs(ctx context.Context, db *sql.DB) (int64, error) {
+// GetServerUnixTS gets server's `UNIX_TIMESTAMP()`.
+func GetServerUnixTS(ctx context.Context, db *sql.DB) (int64, error) {
 	var ts int64
 	conn, err := db.Conn(ctx)
 	if err != nil {

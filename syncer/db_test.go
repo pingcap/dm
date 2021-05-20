@@ -109,8 +109,8 @@ func (s *testDBSuite) TestGetServerID(c *C) {
 	c.Assert(id, Greater, uint32(0))
 }
 
-func (s *testDBSuite) TestGetServerUnixTs(c *C) {
-	id, err := utils.GetServerUnixTs(context.Background(), s.db)
+func (s *testDBSuite) TestGetServerUnixTS(c *C) {
+	id, err := utils.GetServerUnixTS(context.Background(), s.db)
 	c.Assert(err, IsNil)
 	c.Assert(id, Greater, uint32(0))
 }

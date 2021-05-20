@@ -363,20 +363,11 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		rollbackHolder.Add(fr.FuncRollback{Name: "remove-heartbeat", Fn: s.removeHeartbeat})
 	}
 	// when init syncer, get current ts offset between dm and upstream
-	ts, err := s.fromDB.getServerUnixTs(ctx)
+	ts, err := s.fromDB.getServerUnixTS(ctx)
 	if err != nil {
 		return err
 	}
 	s.tsOffset = time.Now().Unix() - ts
-	println("========================================")
-	println("========================================")
-	println("========================================")
-	println(ts)
-	println(time.Now().Unix())
-	println(s.tsOffset)
-	println("========================================")
-	println("========================================")
-	println("========================================")
 
 	// when Init syncer, set active relay log info
 	err = s.setInitActiveRelayLog(ctx)
@@ -1029,7 +1020,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	}
 }
 
-// sync ddl/dml job one by one/
+// sync ddl/dml job one by one/.
 func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
 	defer s.wg.Done()
 

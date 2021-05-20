@@ -169,17 +169,18 @@ func (t *testDBSuite) TestGetServerUUID(c *C) {
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
-func (t *testDBSuite) TestGetServerUnixTs(c *C) {
+func (t *testDBSuite) TestGetServerUnixTS(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultDBTimeout)
 	defer cancel()
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	ts := fmt.Sprint(time.Now().Unix())
-	rows := mock.NewRows([]string{"UNIX_TIMESTAMP()", "Value"}).AddRow("UNIX_TIMESTAMP()", ts)
-	mock.ExpectQuery(`SELECT UNIX_TIMESTAMP()`).WillReturnRows(rows)
-	ts2, err := GetServerUnixTs(ctx, db)
+	ts := time.Now().Unix()
+	rows := sqlmock.NewRows([]string{"UNIX_TIMESTAMP()"}).FromCSVString(fmt.Sprint(ts))
+	mock.ExpectQuery("SELECT UNIX_TIMESTAMP()").WillReturnRows(rows)
+
+	ts2, err := GetServerUnixTS(ctx, db)
 	c.Assert(err, IsNil)
 	c.Assert(ts, Equals, ts2)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
