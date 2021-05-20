@@ -1675,7 +1675,7 @@ tags = ["internal", "medium"]
 [error.DM-sync-unit-36027]
 message = "Column count doesn't match value count: %d (columns) vs %d (values)"
 description = ""
-workaround = "You could use `operate-schema` to get and set the table structure, and please check the log files to see if a related DDL has been skipped."
+workaround = "Please check the log files to see if a related DDL has been skipped, and you could use `operate-schema` to get and set the table structure."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36028]

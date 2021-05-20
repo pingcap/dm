@@ -277,7 +277,7 @@ ErrSyncerUnitInjectDDLOnly,[code=36023:class=sync-unit:scope=internal:level=low]
 ErrSyncerUnitInjectDDLWithoutSchema,[code=36024:class=sync-unit:scope=internal:level=low], "Message: injected DDL %s without schema name not valid"
 ErrSyncerUnitNotSupportedOperate,[code=36025:class=sync-unit:scope=internal:level=medium], "Message: op %s not supported"
 ErrSyncerUnitNilOperatorReq,[code=36026:class=sync-unit:scope=internal:level=medium], "Message: nil request not valid"
-ErrSyncerUnitDMLColumnNotMatch,[code=36027:class=sync-unit:scope=internal:level=high], "Message: Column count doesn't match value count: %d (columns) vs %d (values), Workaround: You could use `operate-schema` to get and set the table structure, and please check the log files to see if a related DDL has been skipped."
+ErrSyncerUnitDMLColumnNotMatch,[code=36027:class=sync-unit:scope=internal:level=high], "Message: Column count doesn't match value count: %d (columns) vs %d (values), Workaround: Please check the log files to see if a related DDL has been skipped, and you could use `operate-schema` to get and set the table structure."
 ErrSyncerUnitDMLOldNewValueMismatch,[code=36028:class=sync-unit:scope=internal:level=high], "Message: Old value count doesn't match new value count: %d (old) vs %d (new)"
 ErrSyncerUnitDMLPruneColumnMismatch,[code=36029:class=sync-unit:scope=internal:level=high], "Message: prune DML columns and data mismatch in length: %d (columns) %d (data)"
 ErrSyncerUnitGenBinlogEventFilter,[code=36030:class=sync-unit:scope=internal:level=high], "Message: generate binlog event filter, Workaround: Please check the `filters` config in source and task configuration files."
