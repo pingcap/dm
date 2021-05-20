@@ -16,6 +16,7 @@ fi
 
 while kill $PID >/dev/null; do
 	sleep 0.2
+	echo "wait process $process exit..."
 	# Increment the second counter
 	((count++))
 
