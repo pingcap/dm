@@ -92,6 +92,10 @@ func (conn *UpStreamConn) getServerUUID(ctx context.Context, flavor string) (str
 	return utils.GetServerUUID(ctx, conn.BaseDB.DB, flavor)
 }
 
+func (conn *UpStreamConn) getServerUnixTs(ctx context.Context) (int64, error) {
+	return utils.GetServerUnixTs(ctx, conn.BaseDB.DB)
+}
+
 func (conn *UpStreamConn) getParser(ctx context.Context) (*parser.Parser, error) {
 	return utils.GetParser(ctx, conn.BaseDB.DB)
 }
