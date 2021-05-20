@@ -249,6 +249,7 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 
 	event, err = streamer.GetEvent(ctx)
 	cancel()
+	// TODO: add a failpoint
 	if err != nil {
 		if err != context.Canceled && err != context.DeadlineExceeded {
 			c.Lock()
