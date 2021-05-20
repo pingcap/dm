@@ -1088,6 +1088,12 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	resultCh := make(chan pb.ProcessResult)
 
+	// 3 create table
+	for i := 0; i < 3; i++ {
+		mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+		mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(sqlmock.NewRows([]string{"Table", "Create Table"}))
+	}
+
 	go syncer.Process(ctx, resultCh)
 
 	expectJobs1 := []*expectJob{
@@ -1470,7 +1476,10 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 		{"CREATE DATABASE IF NOT EXISTS " + testDB, func() {}},
 		{"ALTER DATABASE " + testDB + " DEFAULT COLLATE utf8_bin", func() {}},
 		{"DROP DATABASE IF EXISTS " + testDB, func() {}},
-		{fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s (c int)", testDB, testTbl), func() {}},
+		{fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s (c int)", testDB, testTbl), func() {
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(sqlmock.NewRows([]string{"Table", "Create Table"}))
+		}},
 		{fmt.Sprintf("DROP TABLE IF EXISTS %s.%s", testDB, testTbl), func() {}},
 		{"CREATE INDEX idx1 ON " + testTbl + " (c)", func() {
 			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
@@ -1499,11 +1508,15 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 
 		// test CREATE TABLE that reference another table
 		{fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s LIKE %s", testDB, testTbl, testTbl2), func() {
+			// for testTbl2
 			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
 				sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
 			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
 				sqlmock.NewRows([]string{"Table", "Create Table"}).
 					AddRow(testTbl, " CREATE TABLE `"+testTbl+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+			// for testTbl
+			mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+			mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(sqlmock.NewRows([]string{"Table", "Create Table"}))
 		}},
 
 		// 'CREATE TABLE ... SELECT' is not implemented yet
