@@ -209,7 +209,6 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 
 		return sqls, nil
 	case *ast.CreateTableStmt:
-		v.IfNotExists = true
 		if v.Table.Schema.O == "" {
 			v.Table.Schema = schemaName
 		}
