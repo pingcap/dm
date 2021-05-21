@@ -9,7 +9,9 @@ if [ -z "$PID" ]; then
 fi
 
 WAIT_COUNT=10
+KILL_TIMES=1 # make sure only send kill -9 once.
 count=0
+
 while true; do
 	pgrep $process >/dev/null 2>&1
 	ret=$?
@@ -20,8 +22,8 @@ while true; do
 	sleep 0.2
 	((count++))
 	echo "wait process $process exit..."
-	if [ $count -gt $WAIT_COUNT ]; then
+	if [ $count -gt $WAIT_COUNT ] && [ $KILL_TIMES -lt 2 ]; then
+		((KILL_ONCE++))
 		kill -9 $PID || true
-		break
 	fi
 done
