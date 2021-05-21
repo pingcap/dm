@@ -30,26 +30,14 @@ import (
 	"github.com/pingcap/dm/relay/common"
 )
 
-// GetGTIDsForPos tries to get GTID sets for the specified binlog position (for the corresponding txn).
-// NOTE: this method is very similar with `relay/writer/file_util.go/getTxnPosGTIDs`, unify them if needed later.
-// NOTE: this method is not well tested directly, but more tests have already been done for `relay/writer/file_util.go/getTxnPosGTIDs`.
-func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid.Set, error) {
-	// start to get and parse binlog event from the beginning of the file.
-	startPos := gmysql.Position{
-		Name: endPos.Name,
-		Pos:  0,
-	}
-	err := r.StartSyncByPos(startPos)
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-
+// GetGTIDsForPosStreamer tries to get GTID sets for the specified binlog position (for the corresponding txn) from a Streamer.
+func GetGTIDsForPosStreamer(ctx context.Context, r Streamer, endPos gmysql.Position) (gtid.Set, error) {
 	var (
 		flavor      string
 		latestPos   uint32
 		latestGSet  gmysql.GTIDSet
 		nextGTIDStr string // can be recorded if the coming transaction completed
+		err         error
 	)
 	for {
 		var e *replication.BinlogEvent
@@ -139,6 +127,24 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 			return nil, errors.Errorf("invalid position %s or GTID not enabled in upstream", endPos)
 		}
 	}
+}
+
+// GetGTIDsForPos tries to get GTID sets for the specified binlog position (for the corresponding txn).
+// NOTE: this method is very similar with `relay/writer/file_util.go/getTxnPosGTIDs`, unify them if needed later.
+// NOTE: this method is not well tested directly, but more tests have already been done for `relay/writer/file_util.go/getTxnPosGTIDs`.
+func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid.Set, error) {
+	// start to get and parse binlog event from the beginning of the file.
+	startPos := gmysql.Position{
+		Name: endPos.Name,
+		Pos:  0,
+	}
+	err := r.StartSyncByPos(startPos)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	return GetGTIDsForPosStreamer(ctx, r, endPos)
 }
 
 // GetPreviousGTIDFromGTIDSet tries to get previous GTID sets from Previous_GTID_EVENT GTID for the specified GITD Set.

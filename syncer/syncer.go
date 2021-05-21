@@ -49,6 +49,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
+	"github.com/pingcap/dm/pkg/binlog/reader"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
@@ -1128,20 +1129,22 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if err != nil {
 			return err
 		}
-
-		// for fresh and all-mode task, flush checkpoint so we could delete metadata file
-		if s.cfg.Mode == config.ModeAll {
-			if err = s.flushCheckPoints(); err != nil {
-				tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
-			} else if s.cfg.CleanDumpFile {
-				tctx.L().Info("try to remove loaded files")
-				metadataFile := path.Join(s.cfg.Dir, "metadata")
-				if err = os.Remove(metadataFile); err != nil {
-					tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
-				}
-				if err = os.Remove(s.cfg.Dir); err != nil {
-					tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
-				}
+	}
+	needFlushCheckpoint, err := s.adjustGlobalPointGTID(tctx)
+	if err != nil {
+		return err
+	}
+	if needFlushCheckpoint || s.cfg.Mode == config.ModeAll {
+		if err = s.flushCheckPoints(); err != nil {
+			tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
+		} else if s.cfg.Mode == config.ModeAll && s.cfg.CleanDumpFile {
+			tctx.L().Info("try to remove loaded files")
+			metadataFile := path.Join(s.cfg.Dir, "metadata")
+			if err = os.Remove(metadataFile); err != nil {
+				tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
+			}
+			if err = os.Remove(s.cfg.Dir); err != nil {
+				tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
 			}
 		}
 	}
@@ -2853,4 +2856,36 @@ func (s *Syncer) getEvent(tctx *tcontext.Context, startLocation binlog.Location)
 	}
 
 	return s.streamerController.GetEvent(tctx)
+}
+
+func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
+	location := s.checkpoint.GlobalPoint()
+	// situations that don't need to adjust
+	// 1. GTID is not enabled
+	// 2. location already has GTID position
+	// 3. location is totally new, has no position info
+	if !s.cfg.EnableGTID || location.GTIDSetStr() != "" || location.Position.Name == "" {
+		return false, nil
+	}
+	// set enableGTID to false for new streamerController
+	streamerController := NewStreamerController(s.syncCfg, false, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
+	err := streamerController.Start(tctx, location)
+	if err != nil {
+		return false, err
+	}
+	defer streamerController.Close(tctx)
+
+	pos := binlog.AdjustPosition(location.Position)
+	gs, err := reader.GetGTIDsForPosStreamer(tctx.Context(), streamerController.streamer, pos)
+	if err != nil {
+		s.tctx.L().Warn("fail to get gtids for global location", zap.Stringer("pos", location), zap.Error(err))
+		return false, err
+	}
+	err = location.SetGTID(gs.Origin())
+	if err != nil {
+		s.tctx.L().Warn("fail to set gtid for global location", zap.Stringer("pos", location),
+			zap.String("adjusted_gtid", gs.String()), zap.Error(err))
+		return false, err
+	}
+	return true, nil
 }
