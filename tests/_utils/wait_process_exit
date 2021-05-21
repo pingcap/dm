@@ -23,7 +23,7 @@ while true; do
 	((count++))
 	echo "wait process $process exit..."
 	if [ $count -gt $WAIT_COUNT ] && [ $KILL_TIMES -lt 2 ]; then
-		((KILL_ONCE++))
+		((KILL_TIMES++))
 		kill -9 $PID || true
 	fi
 done
