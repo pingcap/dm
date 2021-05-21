@@ -187,6 +187,7 @@ type Syncer struct {
 
 	addJobFunc func(*job) error
 
+	tsRWLock            sync.RWMutex
 	tsOffset            int64 // time offset between upstream and syncer
 	cancelUpdateOffsetF context.CancelFunc
 }
@@ -375,11 +376,17 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		for {
 			select {
 			case <-updateTicker.C:
-				ts, tsErr := s.fromDB.getServerUnixTS(tsctx)
+				println("==========================update ts=========================")
+				ts, tsErr := s.fromDB.getServerUnixTS(context.Background())
+				println(ts)
+				println(tsErr)
+				println("==========================update ts=========================")
 				if err != nil {
 					s.tctx.L().Error("get server unix ts err", zap.Error(tsErr))
 				} else {
+					s.tsRWLock.Lock()
 					s.tsOffset = time.Now().Unix() - ts
+					s.tsRWLock.Unlock()
 				}
 			case <-tsctx.Done():
 				return
@@ -1653,7 +1660,9 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	// ENDTODO
 
 	// update binloglag metric
+	s.tsRWLock.RLock()
 	lag := time.Now().Unix() + s.tsOffset - ec.startTime.Unix()
+	s.tsRWLock.RUnlock()
 	SetReplicationLagGauge(s.cfg.Name, float64(lag))
 
 	ignore, err := s.skipDMLEvent(originSchema, originTable, ec.header.EventType)
@@ -2597,7 +2606,9 @@ func (s *Syncer) stopSync() {
 	if s.done != nil {
 		<-s.done // wait Run to return
 	}
+	println("---------------------------stopSync------------------------")
 	s.cancelUpdateOffsetF()
+	println("---------------------------stopSync------------------------")
 	s.closeJobChans()
 	s.wg.Wait() // wait job workers to return
 
