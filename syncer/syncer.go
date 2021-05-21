@@ -187,7 +187,8 @@ type Syncer struct {
 
 	addJobFunc func(*job) error
 
-	tsOffset int64 // time offset between upstream and syncer
+	tsOffset            int64 // time offset between upstream and syncer
+	cancelUpdateOffsetF context.CancelFunc
 }
 
 // NewSyncer creates a new Syncer.
@@ -362,12 +363,29 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		}
 		rollbackHolder.Add(fr.FuncRollback{Name: "remove-heartbeat", Fn: s.removeHeartbeat})
 	}
-	// when init syncer, get current ts offset between dm and upstream
-	ts, err := s.fromDB.getServerUnixTS(ctx)
-	if err != nil {
-		return err
-	}
-	s.tsOffset = time.Now().Unix() - ts
+	// when init syncer，start background task to get/update current ts offset between dm and upstream
+	tsctx, cancel := context.WithCancel(context.Background())
+	s.cancelUpdateOffsetF = cancel
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		// temporarily hard code there. if this metrics works well add this to config file.
+		updateTicker := time.NewTicker(time.Second * 10)
+		defer updateTicker.Stop()
+		for {
+			select {
+			case <-updateTicker.C:
+				ts, tsErr := s.fromDB.getServerUnixTS(tsctx)
+				if err != nil {
+					s.tctx.L().Error("get server unix ts err", zap.Error(tsErr))
+				} else {
+					s.tsOffset = time.Now().Unix() - ts
+				}
+			case <-tsctx.Done():
+				return
+			}
+		}
+	}()
 
 	// when Init syncer, set active relay log info
 	err = s.setInitActiveRelayLog(ctx)
@@ -1020,7 +1038,6 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	}
 }
 
-// sync ddl/dml job one by one/.
 func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
 	defer s.wg.Done()
 
@@ -1629,9 +1646,15 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	ec.tctx.L().Debug("", zap.String("event", "row"), zap.String("origin schema", originSchema), zap.String("origin table", originTable), zap.String("target schema", schemaName), zap.String("target table", tableName), log.WrapStringerField("location", ec.currentLocation), zap.Reflect("raw event data", ev.Rows))
 
+	// TODO(ehco) remove heartbeat
 	if s.cfg.EnableHeartbeat {
 		s.heartbeat.TryUpdateTaskTS(s.cfg.Name, originSchema, originTable, ev.Rows)
 	}
+	// ENDTODO
+
+	// update binloglag metric
+	lag := time.Now().Unix() + s.tsOffset - ec.startTime.Unix()
+	SetReplicationLagGauge(s.cfg.Name, float64(lag))
 
 	ignore, err := s.skipDMLEvent(originSchema, originTable, ec.header.EventType)
 	if err != nil {
@@ -2546,7 +2569,6 @@ func (s *Syncer) Close() {
 	s.removeHeartbeat()
 
 	s.stopSync()
-
 	s.closeDBs()
 
 	s.checkpoint.Close()
@@ -2575,6 +2597,7 @@ func (s *Syncer) stopSync() {
 	if s.done != nil {
 		<-s.done // wait Run to return
 	}
+	s.cancelUpdateOffsetF()
 	s.closeJobChans()
 	s.wg.Wait() // wait job workers to return
 

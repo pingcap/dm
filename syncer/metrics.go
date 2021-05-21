@@ -176,8 +176,6 @@ var (
 			Help:      "counter for syncer exits with error",
 		}, []string{"task", "source_id"})
 
-	// TODO(ehco): fix this.
-	// some problems with it.
 	replicationLagGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
@@ -293,4 +291,9 @@ func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	remainingTimeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	unsyncedTableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	shardLockResolving.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+}
+
+// SetReplicationLagGauge is replicationLagGauge setter.
+func SetReplicationLagGauge(taskName string, lag float64) {
+	replicationLagGauge.WithLabelValues(taskName).Set(lag)
 }

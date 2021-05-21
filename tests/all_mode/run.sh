@@ -99,6 +99,8 @@ function test_query_timeout() {
 	fi
 
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+	check_metric $WORKER1_PORT "dm_syncer_replication_lag{task=\"$ILLEGAL_CHAR_NAME\"}" 3 -1 INF
+
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"stop-task $ILLEGAL_CHAR_NAME" \
 		"\"result\": true" 3
