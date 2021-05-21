@@ -2,6 +2,14 @@
 # parameter 1: process name
 process=$1
 
+PID=$(pgrep $process)
+if [ -z "$PID" ]; then
+	echo "process $process already exit"
+	exit
+fi
+
+WAIT_COUNT=10
+count=0
 while true; do
 	pgrep $process >/dev/null 2>&1
 	ret=$?
@@ -10,13 +18,10 @@ while true; do
 		break
 	fi
 	sleep 0.2
+	((count++))
 	echo "wait process $process exit..."
+	if [ $count -gt $WAIT_COUNT ]; then
+		kill -9 $PID || true
+		break
+	fi
 done
-
-PID=$(pgrep $process)
-if [ -z "$PID" ]; then
-	echo "process $process already exit"
-	exit
-fi
-
-kill -9 $PID
