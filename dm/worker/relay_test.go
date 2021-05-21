@@ -145,7 +145,7 @@ func (t *testRelay) TestRelay(c *C) {
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
 
-	relayHolder := NewRealRelayHolder(&cfg)
+	relayHolder := NewRealRelayHolder(cfg)
 	c.Assert(relayHolder, NotNil)
 
 	holder, ok := relayHolder.(*realRelayHolder)
