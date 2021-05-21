@@ -76,7 +76,7 @@ type Scheduler struct {
 	// - recover from etcd (calling `recoverSources`).
 	// delete:
 	// - remove source by user request (calling `RemoveSourceCfg`).
-	sourceCfgs map[string]config.SourceConfig
+	sourceCfgs map[string]*config.SourceConfig
 
 	// all subtask configs, task name -> source ID -> subtask config.
 	// add:
@@ -151,7 +151,7 @@ type Scheduler struct {
 func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 	return &Scheduler{
 		logger:              pLogger.WithFields(zap.String("component", "scheduler")),
-		sourceCfgs:          make(map[string]config.SourceConfig),
+		sourceCfgs:          make(map[string]*config.SourceConfig),
 		subTaskCfgs:         make(map[string]map[string]config.SubTaskConfig),
 		workers:             make(map[string]*Worker),
 		bounds:              make(map[string]*Worker),
@@ -255,7 +255,7 @@ func (s *Scheduler) CloseAllWorkers() {
 
 // AddSourceCfg adds the upstream source config to the cluster.
 // NOTE: please verify the config before call this.
-func (s *Scheduler) AddSourceCfg(cfg config.SourceConfig) error {
+func (s *Scheduler) AddSourceCfg(cfg *config.SourceConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -380,7 +380,7 @@ func (s *Scheduler) GetSourceCfgByID(source string) *config.SourceConfig {
 	if !ok {
 		return nil
 	}
-	clone := cfg
+	clone := *cfg
 	return &clone
 }
 
@@ -1752,7 +1752,7 @@ func (s *Scheduler) updateStatusForUnbound(source string) {
 
 // reset resets the internal status.
 func (s *Scheduler) reset() {
-	s.sourceCfgs = make(map[string]config.SourceConfig)
+	s.sourceCfgs = make(map[string]*config.SourceConfig)
 	s.subTaskCfgs = make(map[string]map[string]config.SubTaskConfig)
 	s.workers = make(map[string]*Worker)
 	s.bounds = make(map[string]*Worker)
