@@ -187,9 +187,8 @@ type Syncer struct {
 
 	addJobFunc func(*job) error
 
-	tsRWLock            sync.RWMutex
-	tsOffset            int64 // time offset between upstream and syncer
-	cancelUpdateOffsetF context.CancelFunc
+	tsRWLock sync.RWMutex
+	tsOffset int64 // time offset between upstream and syncer
 }
 
 // NewSyncer creates a new Syncer.
@@ -364,35 +363,6 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		}
 		rollbackHolder.Add(fr.FuncRollback{Name: "remove-heartbeat", Fn: s.removeHeartbeat})
 	}
-	// when init syncer，start background task to get/update current ts offset between dm and upstream
-	tsctx, cancel := context.WithCancel(context.Background())
-	s.cancelUpdateOffsetF = cancel
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		// temporarily hard code there. if this metrics works well add this to config file.
-		updateTicker := time.NewTicker(time.Second * 10)
-		defer updateTicker.Stop()
-		for {
-			select {
-			case <-updateTicker.C:
-				println("==========================update ts=========================")
-				ts, tsErr := s.fromDB.getServerUnixTS(context.Background())
-				println(ts)
-				println(tsErr)
-				println("==========================update ts=========================")
-				if err != nil {
-					s.tctx.L().Error("get server unix ts err", zap.Error(tsErr))
-				} else {
-					s.tsRWLock.Lock()
-					s.tsOffset = time.Now().Unix() - ts
-					s.tsRWLock.Unlock()
-				}
-			case <-tsctx.Done():
-				return
-			}
-		}
-	}()
 
 	// when Init syncer, set active relay log info
 	err = s.setInitActiveRelayLog(ctx)
@@ -1227,6 +1197,30 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		ctx2, cancel := context.WithCancel(ctx)
 		s.printStatus(ctx2)
 		cancel()
+	}()
+
+	// start background task to get/update current ts offset between dm and upstream
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		// temporarily hard code there. if this metrics works well add this to config file.
+		updateTicker := time.NewTicker(time.Second * 10)
+		defer updateTicker.Stop()
+		for {
+			select {
+			case <-updateTicker.C:
+				ts, tsErr := s.fromDB.getServerUnixTS(ctx)
+				if err != nil {
+					s.tctx.L().Error("get server unix ts err", zap.Error(tsErr))
+				} else {
+					s.tsRWLock.Lock()
+					s.tsOffset = time.Now().Unix() - ts
+					s.tsRWLock.Unlock()
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
 	}()
 
 	defer func() {
@@ -2606,9 +2600,6 @@ func (s *Syncer) stopSync() {
 	if s.done != nil {
 		<-s.done // wait Run to return
 	}
-	println("---------------------------stopSync------------------------")
-	s.cancelUpdateOffsetF()
-	println("---------------------------stopSync------------------------")
 	s.closeJobChans()
 	s.wg.Wait() // wait job workers to return
 

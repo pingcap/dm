@@ -180,11 +180,11 @@ function run() {
 	run_sql_source1 "SET @@global.time_zone = '+01:00';"
 	run_sql_source2 "SET @@global.time_zone = '+02:00';"
 
-	# test_session_config
+	test_session_config
 
-	# test_query_timeout
+	test_query_timeout
 
-	# test_stop_task_before_checkpoint
+	test_stop_task_before_checkpoint
 
 	inject_points=(
 		"github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
@@ -272,8 +272,6 @@ function run() {
 	# dm-worker execute sql failed, and will try auto resume task
 	run_sql_file $cur/data/db2.increment0.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 	sleep 2
-	echo "tidb closed。。。。。。"
-	# sleep 10000000000
 	check_log_contains $WORK_DIR/worker2/log/dm-worker.log "dispatch auto resume task"
 
 	# restart tidb, and task will recover success

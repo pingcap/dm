@@ -358,13 +358,8 @@ func GetServerUUID(ctx context.Context, db *sql.DB, flavor string) (string, erro
 // GetServerUnixTS gets server's `UNIX_TIMESTAMP()`.
 func GetServerUnixTS(ctx context.Context, db *sql.DB) (int64, error) {
 	var ts int64
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		return 0, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-	defer conn.Close()
-	row := conn.QueryRowContext(ctx, "SELECT UNIX_TIMESTAMP()")
-	err = row.Scan(&ts)
+	row := db.QueryRowContext(ctx, "SELECT UNIX_TIMESTAMP()")
+	err := row.Scan(&ts)
 	if err != nil {
 		log.L().Error("can't SELECT UNIX_TIMESTAMP()", zap.Error(err))
 		return ts, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
