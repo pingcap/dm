@@ -2219,8 +2219,8 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	var (
 		shouldExecDDLOnSchemaTracker bool
 		shouldSchemaExist            bool
-		shouldTableExistNum          int  // tableNames[:shouldTableExistNum] should exist
-		shouldRefTableExistNum       int  // tableNames[1:shouldTableExistNum] should exist, since first one is "caller table"
+		shouldTableExistNum          int // tableNames[:shouldTableExistNum] should exist
+		shouldRefTableExistNum       int // tableNames[1:shouldTableExistNum] should exist, since first one is "caller table"
 	)
 
 	switch node := stmt.(type) {
