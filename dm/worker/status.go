@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/syncer"
 )
 
 // Status returns the status of the current sub task.
@@ -100,7 +101,10 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 				case pb.UnitType_Load:
 					stStatus.Status = &pb.SubTaskStatus_Load{Load: us.(*pb.LoadStatus)}
 				case pb.UnitType_Sync:
-					stStatus.Status = &pb.SubTaskStatus_Sync{Sync: us.(*pb.SyncStatus)}
+					cu, _ := cu.(*syncer.Syncer)
+					ss := us.(*pb.SyncStatus)
+					ss.ReplicationLag = cu.GetReplicationLag()
+					stStatus.Status = &pb.SubTaskStatus_Sync{Sync: ss}
 				}
 			}
 		}

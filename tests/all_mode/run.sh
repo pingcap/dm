@@ -6,8 +6,7 @@ cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
-# ILLEGAL_CHAR_NAME='t-Ë!s`t'
-ILLEGAL_CHAR_NAME='test'
+ILLEGAL_CHAR_NAME='t-Ë!s`t'
 
 function test_session_config() {
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -181,9 +180,7 @@ function run() {
 	run_sql_source2 "SET @@global.time_zone = '+02:00';"
 
 	test_session_config
-
 	test_query_timeout
-
 	test_stop_task_before_checkpoint
 
 	inject_points=(

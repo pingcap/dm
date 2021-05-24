@@ -189,6 +189,9 @@ type Syncer struct {
 
 	tsRWLock sync.RWMutex
 	tsOffset int64 // time offset between upstream and syncer
+
+	metricLock     sync.RWMutex // lock for all metric
+	replicationLag int64        // current task lag
 }
 
 // NewSyncer creates a new Syncer.
@@ -225,6 +228,13 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.recordedActiveRelayLog = false
 
 	return syncer
+}
+
+// GetReplicationLag return replicationLag.
+func (s *Syncer) GetReplicationLag() int64 {
+	s.metricLock.RLock()
+	defer s.metricLock.RUnlock()
+	return s.replicationLag
 }
 
 func (s *Syncer) newJobChans(count int) {
@@ -1657,7 +1667,11 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	s.tsRWLock.RLock()
 	lag := time.Now().Unix() + s.tsOffset - ec.startTime.Unix()
 	s.tsRWLock.RUnlock()
+
+	s.metricLock.Lock()
 	SetReplicationLagGauge(s.cfg.Name, float64(lag))
+	s.replicationLag = lag
+	s.metricLock.Unlock()
 
 	ignore, err := s.skipDMLEvent(originSchema, originTable, ec.header.EventType)
 	if err != nil {
