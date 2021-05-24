@@ -144,6 +144,10 @@ type Scheduler struct {
 	// - stop-relay
 	relayWorkers map[string]map[string]struct{}
 
+	// workers in load stage
+	// worker -> source -> tasks
+	loadWorkers map[string]map[string]map[string]struct{}
+
 	securityCfg config.Security
 }
 
@@ -160,6 +164,7 @@ func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 		expectRelayStages:   make(map[string]ha.Stage),
 		expectSubTaskStages: make(map[string]map[string]ha.Stage),
 		relayWorkers:        make(map[string]map[string]struct{}),
+		loadWorkers:         make(map[string]map[string]map[string]struct{}),
 		securityCfg:         securityCfg,
 	}
 }
@@ -197,7 +202,13 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) (err e
 	if err != nil {
 		return err
 	}
+
 	var rev int64
+	rev, err = s.recoverLoadWorkers(etcdCli)
+	if err != nil {
+		return err
+	}
+
 	rev, err = s.recoverWorkersBounds(etcdCli)
 	if err != nil {
 		return err
@@ -212,6 +223,15 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) (err e
 		// TODO: handle fatal error from observeWorkerEvent
 		//nolint:errcheck
 		s.observeWorkerEvent(ctx, etcdCli, rev1)
+	}(rev)
+
+	s.wg.Add(1)
+	go func(rev1 int64) {
+		defer s.wg.Done()
+		// starting to observe load worker.
+		// TODO: handle fatal error from observeWorkerEvent
+		//nolint:errcheck
+		s.observeLoadWorker(ctx, etcdCli, rev1)
 	}(rev)
 
 	s.started = true // started now
@@ -1210,6 +1230,30 @@ func (s *Scheduler) recoverRelayConfigs(cli *clientv3.Client) error {
 	return nil
 }
 
+// recoverLoadWorkers recovers history load workers from etcd.
+func (s *Scheduler) recoverLoadWorkers(cli *clientv3.Client) (int64, error) {
+	tslwm, rev, err := ha.GetAllLoadWorker(cli)
+	if err != nil {
+		return 0, err
+	}
+
+	loadWorkers := make(map[string]map[string]map[string]struct{})
+	for task, sourceWorker := range tslwm {
+		for source, worker := range sourceWorker {
+			if _, ok := loadWorkers[worker]; !ok {
+				loadWorkers[task] = make(map[string]map[string]struct{})
+			}
+			if _, ok := loadWorkers[task][source]; !ok {
+				loadWorkers[worker][source] = make(map[string]struct{})
+			}
+			loadWorkers[worker][source][task] = struct{}{}
+		}
+	}
+
+	s.loadWorkers = loadWorkers
+	return rev, nil
+}
+
 // recoverWorkersBounds recovers history DM-worker info and status from etcd.
 // and it also recovers the bound/unbound relationship.
 func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
@@ -1776,4 +1820,122 @@ func (s *Scheduler) SetWorkerClientForTest(name string, mockCli workerrpc.Client
 	if _, ok := s.workers[name]; ok {
 		s.workers[name].cli = mockCli
 	}
+}
+
+func (s *Scheduler) observeLoadWorker(ctx context.Context, etcdCli *clientv3.Client, rev int64) error {
+	var wg sync.WaitGroup
+	for {
+		loadWorkerCh := make(chan ha.LoadWorker, 10)
+		loadWorkerErrCh := make(chan error, 10)
+		wg.Add(1)
+		// use ctx1, cancel1 to make sure old watcher has been released
+		ctx1, cancel1 := context.WithCancel(ctx)
+		go func() {
+			defer func() {
+				close(loadWorkerCh)
+				close(loadWorkerErrCh)
+				wg.Done()
+			}()
+			ha.WatchLoadWorker(ctx1, etcdCli, rev+1, loadWorkerCh, loadWorkerErrCh)
+		}()
+		err := s.handleLoadWorker(ctx1, loadWorkerCh, loadWorkerErrCh)
+		cancel1()
+		wg.Wait()
+
+		if etcdutil.IsRetryableError(err) {
+			rev = 0
+			retryNum := 1
+			for rev == 0 {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(500 * time.Millisecond):
+					rev, err = s.resetLoadWorker(etcdCli)
+					if err != nil {
+						log.L().Error("resetLoadWorker is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
+					}
+				}
+				retryNum++
+			}
+		} else {
+			if err != nil {
+				log.L().Error("observeLoadWorker is failed and will quit now", zap.Error(err))
+			} else {
+				log.L().Info("observeLoadWorker will quit now")
+			}
+			return err
+		}
+	}
+}
+
+func (s *Scheduler) handleLoadWorkerDel(ha.LoadWorker) error {
+	return nil
+}
+
+func (s *Scheduler) handleLoadWorkerPut(ha.LoadWorker) error {
+	return nil
+}
+
+// handleWorkerEv handles the online/offline status change event of DM-worker instances.
+func (s *Scheduler) handleLoadWorker(ctx context.Context, loadWorkerCh <-chan ha.LoadWorker, errCh <-chan error) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case loadWorker, ok := <-loadWorkerCh:
+			if !ok {
+				return nil
+			}
+			s.logger.Info("receive load worker", zap.Bool("delete", loadWorker.IsDelete), zap.String("task", loadWorker.Task), zap.String("source", loadWorker.Source), zap.String("worker", loadWorker.Worker))
+			var err error
+			if loadWorker.IsDelete {
+				err = s.handleLoadWorkerDel(loadWorker)
+			} else {
+				err = s.handleLoadWorkerPut(loadWorker)
+			}
+			if err != nil {
+				s.logger.Error("fail to handle worker status change event", zap.Error(err))
+				metrics.ReportWorkerEventErr(metrics.WorkerEventHandle)
+			}
+		case err, ok := <-errCh:
+			if !ok {
+				return nil
+			}
+			// error here are caused by etcd error or worker event decoding
+			s.logger.Error("receive error when watching worker status change event", zap.Error(err))
+			metrics.ReportWorkerEventErr(metrics.WorkerEventWatch)
+			if etcdutil.IsRetryableError(err) {
+				return err
+			}
+		}
+	}
+}
+
+func (s *Scheduler) resetLoadWorker(cli *clientv3.Client) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rwm := s.workers
+	kam, rev, err := ha.GetKeepAliveWorkers(cli)
+	if err != nil {
+		return 0, err
+	}
+
+	// update all registered workers status
+	for name := range rwm {
+		ev := ha.WorkerEvent{WorkerName: name}
+		// set the stage as Free if it's keep alive.
+		if _, ok := kam[name]; ok {
+			err = s.handleWorkerOnline(ev, false)
+			if err != nil {
+				return 0, err
+			}
+		} else {
+			err = s.handleWorkerOffline(ev, false)
+			if err != nil {
+				return 0, err
+			}
+		}
+	}
+	return rev, nil
 }

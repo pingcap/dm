@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"go.etcd.io/etcd/clientv3"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/pingcap/dm/dm/config"
@@ -35,6 +36,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/dumpling"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
+	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -386,6 +388,8 @@ type Loader struct {
 	sync.RWMutex
 
 	cfg        *config.SubTaskConfig
+	cli        *clientv3.Client
+	workerName string
 	checkPoint CheckPoint
 
 	logger log.Logger
@@ -424,13 +428,15 @@ type Loader struct {
 }
 
 // NewLoader creates a new Loader.
-func NewLoader(cfg *config.SubTaskConfig) *Loader {
+func NewLoader(cfg *config.SubTaskConfig, cli *clientv3.Client, workerName string) *Loader {
 	loader := &Loader{
 		cfg:        cfg,
+		cli:        cli,
 		db2Tables:  make(map[string]Tables2DataFiles),
 		tableInfos: make(map[string]*tableInfo),
 		workerWg:   new(sync.WaitGroup),
 		logger:     log.With(zap.String("task", cfg.Name), zap.String("unit", "load")),
+		workerName: workerName,
 	}
 	loader.fileJobQueueClosed.Store(true) // not open yet
 	return loader
@@ -648,6 +654,9 @@ func (l *Loader) IsFreshTask(ctx context.Context) (bool, error) {
 
 // Restore begins the restore process.
 func (l *Loader) Restore(ctx context.Context) error {
+	if err := l.putLoadWorker(); err != nil {
+		return err
+	}
 	// reset some counter used to calculate progress
 	l.totalDataSize.Store(0)
 	l.finishedDataSize.Store(0) // reset before load from checkpoint
@@ -703,6 +712,9 @@ func (l *Loader) Restore(ctx context.Context) error {
 	if err == nil {
 		l.finish.Store(true)
 		l.logger.Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
+		if err = l.delLoadWorker(); err != nil {
+			return err
+		}
 		if l.cfg.CleanDumpFile && l.checkPoint.AllFinished() {
 			l.cleanDumpFiles()
 		}
@@ -1500,4 +1512,24 @@ func (l *Loader) cleanDumpFiles() {
 			l.logger.Warn("show last error when remove loaded dump sql files", zap.String("data folder", l.cfg.Dir), zap.Error(lastErr))
 		}
 	}
+}
+
+// putLoadWorker is called when start restoring data, to put load worker in etcd.
+func (l *Loader) putLoadWorker() error {
+	_, err := ha.PutLoadWorker(l.cli, l.cfg.Name, l.cfg.SourceID, l.workerName)
+	if err != nil {
+		return err
+	}
+	l.logger.Info("put load worker in etcd", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
+	return nil
+}
+
+// delLoadWorker is called when finish restoring data, to delete load worker in etcd.
+func (l *Loader) delLoadWorker() error {
+	_, _, err := ha.DelLoadWorker(l.cli, l.cfg.Name, l.cfg.SourceID)
+	if err != nil {
+		return err
+	}
+	l.logger.Info("delete load worker in etcd", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
+	return nil
 }
