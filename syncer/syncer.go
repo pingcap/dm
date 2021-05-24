@@ -1128,8 +1128,42 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return err
 		}
 
-		// for fresh and all-mode task, flush checkpoint so we could delete metadata file
+		// for fresh and all-mode task, load table structure into schema tracker, flush checkpoint and delete metadata file
 		if s.cfg.Mode == config.ModeAll {
+			files, err2 := utils.CollectDirFiles(s.cfg.Dir)
+			if err2 != nil {
+				tctx.L().Warn("fail to get dump files", zap.Error(err2))
+				goto StartSync
+			}
+			var dbs []string
+			var tables [][2]string
+			for f := range files {
+				if db, ok := utils.GetDBFromDumpFile(f); ok {
+					dbs = append(dbs, db)
+					continue
+				}
+				if db, table, ok := utils.GetTableFromDumpFile(f); ok {
+					tables = append(tables, [2]string{db, table})
+					continue
+				}
+			}
+			tctx.L().Info("fetch table structure for dump files",
+				zap.Strings("database", dbs),
+				zap.Any("tables", tables))
+			for _, db := range dbs {
+				err = s.schemaTracker.CreateSchemaIfNotExists(db)
+				if err != nil {
+					tctx.L().Warn("fail to create schema for dump files", zap.String("db", db), zap.Error(err))
+				}
+			}
+			for _, table := range tables {
+				targetSchema, targetTable := s.renameShardingSchema(table[0], table[1])
+				err = s.trackTableInfoFromDownstream(tctx, table[0], table[1], targetSchema, targetTable)
+				if err != nil {
+					tctx.L().Warn("fail to create table for dump files", zap.Any("table", table), zap.Error(err))
+				}
+			}
+
 			if err = s.flushCheckPoints(); err != nil {
 				tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
 			} else if s.cfg.CleanDumpFile {
@@ -1138,6 +1172,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if err = os.Remove(metadataFile); err != nil {
 					tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
 				}
+				for f := range files {
+					if err = os.Remove(f); err != nil {
+						tctx.L().Warn("error when remove loaded dump file", zap.String("data file", f), zap.Error(err))
+					}
+				}
 				if err = os.Remove(s.cfg.Dir); err != nil {
 					tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
 				}
@@ -1145,6 +1184,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}
 
+StartSync:
 	// startLocation is the start location for current received event
 	// currentLocation is the end location for current received event (End_log_pos in `show binlog events` for mysql)
 	// lastLocation is the end location for last received (ROTATE / QUERY / XID) event
@@ -2181,7 +2221,6 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		shouldSchemaExist            bool
 		shouldTableExistNum          int  // tableNames[:shouldTableExistNum] should exist
 		shouldRefTableExistNum       int  // tableNames[1:shouldTableExistNum] should exist, since first one is "caller table"
-		tryFetchDownstreamTable      bool // to make sure if not exists will execute correctly
 	)
 
 	switch node := stmt.(type) {
@@ -2200,16 +2239,10 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	case *ast.RecoverTableStmt:
 		shouldExecDDLOnSchemaTracker = true
 		shouldSchemaExist = true
-	case *ast.CreateTableStmt:
+	case *ast.CreateTableStmt, *ast.CreateViewStmt:
 		shouldExecDDLOnSchemaTracker = true
 		shouldSchemaExist = true
 		// for CREATE TABLE LIKE/AS, the reference tables should exist
-		shouldRefTableExistNum = len(srcTables)
-		tryFetchDownstreamTable = node.IfNotExists
-	case *ast.CreateViewStmt:
-		shouldExecDDLOnSchemaTracker = true
-		shouldSchemaExist = true
-		// for CREATE VIEW LIKE/AS, the reference tables should exist
 		shouldRefTableExistNum = len(srcTables)
 	case *ast.DropTableStmt:
 		shouldExecDDLOnSchemaTracker = true
@@ -2261,13 +2294,6 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 			return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, srcTables[i].Schema)
 		}
 		if _, err := s.getTable(ec.tctx, srcTables[i].Schema, srcTables[i].Name, targetTables[i].Schema, targetTables[i].Name); err != nil {
-			return err
-		}
-	}
-
-	if tryFetchDownstreamTable {
-		err := s.trackTableInfoFromDownstream(ec.tctx, srcTable.Schema, srcTable.Name, targetTables[0].Schema, targetTables[0].Name)
-		if err != nil && !terror.ErrSchemaTrackerCannotFetchDownstreamTable.Equal(err) {
 			return err
 		}
 	}

@@ -889,22 +889,18 @@ func (l *Loader) prepareDBFiles(files map[string]struct{}) error {
 	l.totalFileCount.Store(0) // reset
 	schemaFileCount := 0
 	for file := range files {
-		if !strings.HasSuffix(file, "-schema-create.sql") {
+		db, ok := utils.GetDBFromDumpFile(file)
+		if !ok {
+			continue
+		}
+		schemaFileCount++
+		if l.skipSchemaAndTable(&filter.Table{Schema: db}) {
+			l.logger.Warn("ignore schema file", zap.String("schema file", file))
 			continue
 		}
 
-		idx := strings.LastIndex(file, "-schema-create.sql")
-		if idx > 0 {
-			schemaFileCount++
-			db := file[:idx]
-			if l.skipSchemaAndTable(&filter.Table{Schema: db}) {
-				l.logger.Warn("ignore schema file", zap.String("schema file", file))
-				continue
-			}
-
-			l.db2Tables[db] = make(Tables2DataFiles)
-			l.totalFileCount.Add(1) // for schema
-		}
+		l.db2Tables[db] = make(Tables2DataFiles)
+		l.totalFileCount.Add(1) // for schema
 	}
 
 	if schemaFileCount == 0 {
@@ -919,21 +915,11 @@ func (l *Loader) prepareDBFiles(files map[string]struct{}) error {
 
 func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 	var tablesNumber float64
-
 	for file := range files {
-		if !strings.HasSuffix(file, "-schema.sql") {
+		db, table, ok := utils.GetTableFromDumpFile(file)
+		if !ok {
 			continue
 		}
-
-		idx := strings.LastIndex(file, "-schema.sql")
-		name := file[:idx]
-		fields := strings.Split(name, ".")
-		if len(fields) != 2 {
-			l.logger.Warn("invalid table schema file", zap.String("file", file))
-			continue
-		}
-
-		db, table := fields[0], fields[1]
 		if l.skipSchemaAndTable(&filter.Table{Schema: db, Name: table}) {
 			l.logger.Warn("ignore table file", zap.String("table file", file))
 			continue
@@ -1038,7 +1024,7 @@ func (l *Loader) prepare() error {
 	}
 
 	// collect dir files.
-	files, err := CollectDirFiles(l.cfg.Dir)
+	files, err := utils.CollectDirFiles(l.cfg.Dir)
 	if err != nil {
 		return err
 	}
@@ -1486,13 +1472,16 @@ func (l *Loader) cleanDumpFiles() {
 		}
 	} else {
 		// leave metadata file, only delete sql files
-		files, err := CollectDirFiles(l.cfg.Dir)
+		files, err := utils.CollectDirFiles(l.cfg.Dir)
 		if err != nil {
 			l.logger.Warn("fail to collect files", zap.String("data folder", l.cfg.Dir), zap.Error(err))
 		}
 		var lastErr error
 		for f := range files {
 			if strings.HasSuffix(f, ".sql") {
+				if strings.HasSuffix(f, "-schema-create.sql") || strings.HasSuffix(f, "-schema.sql") {
+					continue
+				}
 				lastErr = os.Remove(filepath.Join(l.cfg.Dir, f))
 			}
 		}

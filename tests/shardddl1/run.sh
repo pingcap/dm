@@ -311,11 +311,12 @@ function DM_027_CASE() {
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values (3)"
 	run_sql_source1 "insert into ${shardddl1}.${tb2} values (4)"
 	run_sql_source1 "insert into ${shardddl1}.${tb3} values (5,6)"
-	# DM will first fetch the table structure from downstream, and convert CREATE TABLE to CREATE TABLE IF NOT EXISTS
-	# so here will meet "Column count doesn't match value count: 1 (columns) vs 2 (values)"
+	# we now haven't checked table struct when create sharding table
+	# there should be a error message like "Unknown column 'val' in 'field list'", "unknown column val"
+	# but different TiDB version output different message. so we only roughly match here
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		" Column count doesn't match value count: 1 (columns) vs 2 (values)" 1 # ignore case for first letter
+		"nknown column" 1 # ignore case for first letter
 }
 
 function DM_027() {

@@ -18,6 +18,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
+	"strings"
 
 	"go.uber.org/zap"
 
@@ -93,4 +95,51 @@ func WriteFileAtomic(filename string, data []byte, perm os.FileMode) error {
 		return err
 	}
 	return os.Rename(f.Name(), filename)
+}
+
+// CollectDirFiles gets files in path.
+func CollectDirFiles(path string) (map[string]struct{}, error) {
+	files := make(map[string]struct{})
+	err := filepath.Walk(path, func(_ string, f os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if f == nil {
+			return nil
+		}
+
+		if f.IsDir() {
+			return nil
+		}
+
+		name := strings.TrimSpace(f.Name())
+		files[name] = struct{}{}
+		return nil
+	})
+
+	return files, err
+}
+
+func GetDBFromDumpFile(filename string) (db string, ok bool) {
+	if !strings.HasSuffix(filename, "-schema-create.sql") {
+		return "", false
+	}
+
+	idx := strings.LastIndex(filename, "-schema-create.sql")
+	return filename[:idx], true
+}
+
+func GetTableFromDumpFile(filename string) (db, table string, ok bool) {
+	if !strings.HasSuffix(filename, "-schema.sql") {
+		return "", "", false
+	}
+
+	idx := strings.LastIndex(filename, "-schema.sql")
+	name := filename[:idx]
+	fields := strings.Split(name, ".")
+	if len(fields) != 2 {
+		return "", "", false
+	}
+	return fields[0], fields[1], true
 }
