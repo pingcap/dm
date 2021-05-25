@@ -38,10 +38,15 @@ function migrate_in_previous_v2() {
 
 	tiup dmctl:$PRE_VER --master-addr=master1:8261 start-task $CUR/conf/task.yaml
 	tiup dmctl:$PRE_VER --master-addr=master1:8261 start-task $CUR/conf/task_optimistic.yaml
+	tiup dmctl:$PRE_VER --master-addr=master1:8261 start-task $CUR/conf/task_pessimistic.yaml
 
 	exec_incremental_stage1
 
 	check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
+
+	tiup dmctl:$PRE_VER --master-addr=master1:8261 pause-task $TASK_NAME
+
+	run_dmctl_with_retry $CUR_VER "query-status" "Running" 2 "Paused" 1
 }
 
 function upgrade_to_current_v2() {
@@ -53,6 +58,13 @@ function upgrade_to_current_v2() {
 }
 
 function migrate_in_v2 {
+	run_dmctl_with_retry $CUR_VER "query-status" "Running" 2 "Paused" 1
+	run_dmctl_with_retry $CUR_VER "show-ddl-locks" "\"result\": true" 1 "\"task\": \"$TASK_PESS_NAME\"" 1 "\"task\": \"$TASK_OPTI_NAME\"" 1
+
+	tiup dmctl:$CUR_VER --master-addr=master1:8261 resume-task $TASK_NAME
+
+	run_dmctl_with_retry $CUR_VER "query-status" "Running" 3
+
 	exec_incremental_stage2
 
 	echo "check sources"
@@ -62,6 +74,7 @@ function migrate_in_v2 {
 
 	check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
 	check_sync_diff $WORK_DIR $CUR/conf/diff_config_optimistic.toml
+	check_sync_diff $WORK_DIR $CUR/conf/diff_config_pessimistic.toml
 
 	echo "check locks"
 	run_dmctl_with_retry $CUR_VER "show-ddl-locks" "no DDL lock exists" 1
