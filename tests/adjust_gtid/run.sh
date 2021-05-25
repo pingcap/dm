@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eux
+set -eu
 
 cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
@@ -118,14 +118,17 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-	dmctl_start_task "$WORK_DIR/dm-task.yaml"
+  # start task without checking, worker may exit before we get success result
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "start-task $WORK_DIR/dm-task.yaml"
 
   check_checkpoint $SOURCE_ID1 $name1 $pos1 $gtid1
   check_checkpoint $SOURCE_ID2 $name2 $pos2 $gtid2
+	kill_dm_worker
 	clean_gtid
 
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+
 	export GO_FAILPOINTS=''
 	# start two workers again
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
