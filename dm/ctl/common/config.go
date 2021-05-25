@@ -64,7 +64,7 @@ func NewConfig() *Config {
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "Prints version and exit.")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "Path to config file.")
-	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "Master API server address, this parameter is required when interacting with the dm-master")
+	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "Master API server address, this parameter is required when interacting with the dm-master, you can use environment var 'DM_MASTER_ADDR' to pass value to this flag")
 	fs.StringVar(&cfg.RPCTimeoutStr, "rpc-timeout", defaultRPCTimeout, fmt.Sprintf("RPC timeout, default is %s.", defaultRPCTimeout))
 	fs.StringVar(&cfg.encrypt, EncryptCmdName, "", "Encrypts plaintext to ciphertext.")
 	fs.StringVar(&cfg.SSLCA, "ssl-ca", "", "Path of file that contains list of trusted SSL CAs for connection.")
