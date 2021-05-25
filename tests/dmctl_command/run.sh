@@ -86,6 +86,12 @@ function run() {
 	# query status with command mode
 	$PWD/bin/dmctl.test DEVEL --master-addr=:$MASTER_PORT query-status >$WORK_DIR/query-status.log
 
+	# use DM_MASTER_ADDR env
+	export DM_MASTER_ADDR="127.0.0.1:$MASTER_PORT"
+	run_dm_ctl_with_retry $WORK_DIR "" \
+		"query-status test" \
+		"worker1" 1
+
 	running_task=$(grep -r Running $WORK_DIR/query-status.log | wc -l | xargs)
 
 	if [ "$running_task" != 1 ]; then
