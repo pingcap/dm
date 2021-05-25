@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -149,6 +150,10 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 		return false, errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
 	}
 
+	// try get master Addr from env "DM_MASTER_ADDR" if this flag is empty.
+	if c.MasterAddr == "" {
+		c.MasterAddr = os.Getenv("DM_MASTER_ADDR")
+	}
 	if c.MasterAddr == "" {
 		return false, errors.Errorf("--master-addr not provided, use `dmtcl --help` to see help messages")
 	}
