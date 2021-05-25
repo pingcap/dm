@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -44,6 +45,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	common2 "github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -1135,15 +1137,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				tctx.L().Warn("fail to get dump files", zap.Error(err2))
 				goto StartSync
 			}
-			var dbs []string
-			var tables [][2]string
+			var dbs, tables []string
+			var tableFiles [][2]string // [db, filename]
+			var hasErr bool
 			for f := range files {
 				if db, ok := utils.GetDBFromDumpFile(f); ok {
 					dbs = append(dbs, db)
 					continue
 				}
 				if db, table, ok := utils.GetTableFromDumpFile(f); ok {
-					tables = append(tables, [2]string{db, table})
+					tables = append(tables, dbutil.TableName(db, table))
+					tableFiles = append(tableFiles, [2]string{db, f})
 					continue
 				}
 			}
@@ -1153,31 +1157,44 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			for _, db := range dbs {
 				err = s.schemaTracker.CreateSchemaIfNotExists(db)
 				if err != nil {
+					hasErr = true
 					tctx.L().Warn("fail to create schema for dump files", zap.String("db", db), zap.Error(err))
 				}
 			}
-			for _, table := range tables {
-				targetSchema, targetTable := s.renameShardingSchema(table[0], table[1])
-				err = s.trackTableInfoFromDownstream(tctx, table[0], table[1], targetSchema, targetTable)
-				if err != nil {
-					tctx.L().Warn("fail to create table for dump files", zap.Any("table", table), zap.Error(err))
+			for _, dbAndFile := range tableFiles {
+				db, file := dbAndFile[0], dbAndFile[1]
+				filepath := path.Join(s.cfg.Dir, file)
+				content, err3 := common2.GetFileContent(filepath)
+				if err3 != nil {
+					hasErr = true
+					tctx.L().Warn("fail to read file for creating table in schema tracker",
+						zap.String("db", db),
+						zap.String("file", filepath),
+						zap.Error(err))
+					continue
+				}
+				stmts := bytes.Split(content, []byte(";"))
+				for _, stmt := range stmts {
+					stmt = bytes.TrimSpace(stmt)
+					if len(stmt) == 0 || bytes.HasPrefix(stmt, []byte("/*")) {
+						continue
+					}
+					err = s.schemaTracker.Exec(tctx.Context(), db, string(stmt))
+					if err != nil {
+						hasErr = true
+						tctx.L().Warn("fail to create table for dump files",
+							zap.Any("file", filepath),
+							zap.ByteString("statement", stmt),
+							zap.Error(err))
+					}
 				}
 			}
 
 			if err = s.flushCheckPoints(); err != nil {
 				tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
-			} else if s.cfg.CleanDumpFile {
+			} else if s.cfg.CleanDumpFile && !hasErr {
 				tctx.L().Info("try to remove loaded files")
-				metadataFile := path.Join(s.cfg.Dir, "metadata")
-				if err = os.Remove(metadataFile); err != nil {
-					tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
-				}
-				for f := range files {
-					if err = os.Remove(f); err != nil {
-						tctx.L().Warn("error when remove loaded dump file", zap.String("data file", f), zap.Error(err))
-					}
-				}
-				if err = os.Remove(s.cfg.Dir); err != nil {
+				if err = os.RemoveAll(s.cfg.Dir); err != nil {
 					tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
 				}
 			}

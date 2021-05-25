@@ -10,9 +10,13 @@ source $cur/../_utils/shardddl_lib.sh
 function DM_001_CASE() {
 	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
 	run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
+	# schema tracker could track per table without error
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Duplicate column name 'new_col1'" 1
+		"\"result\": true" 2 \
+		"\"synced\": true" 1
+	# only downstream sees a duplicate error, but currently ignored by DM
+	check_log_contain $WORK_DIR/worker1/log/dm-worker.log "Duplicate column name 'new_col1'"
 }
 
 function DM_001() {

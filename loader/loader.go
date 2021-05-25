@@ -1471,7 +1471,7 @@ func (l *Loader) cleanDumpFiles() {
 			l.logger.Warn("error when remove loaded dump folder", zap.String("data folder", l.cfg.Dir), zap.Error(err))
 		}
 	} else {
-		// leave metadata file, only delete sql files
+		// leave metadata file and table structure files, only delete data files
 		files, err := utils.CollectDirFiles(l.cfg.Dir)
 		if err != nil {
 			l.logger.Warn("fail to collect files", zap.String("data folder", l.cfg.Dir), zap.Error(err))
