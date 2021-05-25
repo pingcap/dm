@@ -29,7 +29,7 @@ set_default_variables() {
 	host=$1
 	port=$2
 	password=$3
-	mysql -u root -h ${host} -P ${port} -p${password} -e "set global character_set_server='utf8mb4';set global collation_server='utf8mb4_general_ci';"
+	mysql -u root -h ${host} -P ${port} -p${password} -e "set global character_set_server='utf8mb4';set global collation_server='utf8mb4_bin';"
 }
 
 start_services() {
