@@ -254,8 +254,10 @@ func (s *Server) doStartKeepAlive() {
 }
 
 func (s *Server) stopKeepAlive() {
-	s.kaCancel()
-	s.kaWg.Wait()
+	if s.kaCancel != nil {
+		s.kaCancel()
+		s.kaWg.Wait()
+	}
 }
 
 func (s *Server) restartKeepAlive() {
