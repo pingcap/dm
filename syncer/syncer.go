@@ -428,7 +428,8 @@ func (s *Syncer) initShardingGroups(ctx context.Context) error {
 func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
 	tablePoint := s.checkpoint.TablePoint()
-	return binlog.CompareLocation(globalPoint, binlog.NewLocation(s.cfg.Flavor), s.cfg.EnableGTID) <= 0 && len(tablePoint) == 0, nil
+	// doesn't have neither GTID nor binlog pos
+	return binlog.CompareLocationAsPossible(globalPoint, binlog.NewLocation(s.cfg.Flavor), s.cfg.EnableGTID) <= 0 && len(tablePoint) == 0, nil
 }
 
 func (s *Syncer) reset() {
@@ -1148,6 +1149,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 		}
 	}
+	failpoint.Inject("AdjustGTIDExit", func() {
+		tctx.L().Warn("exit triggered", zap.String("failpoint", "AdjustGTIDExit"))
+		s.streamerController.Close(tctx)
+		utils.OsExit(1)
+	})
 
 	// startLocation is the start location for current received event
 	// currentLocation is the end location for current received event (End_log_pos in `show binlog events` for mysql)
@@ -2869,14 +2875,22 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 	}
 	// set enableGTID to false for new streamerController
 	streamerController := NewStreamerController(s.syncCfg, false, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
-	err := streamerController.Start(tctx, location)
+
+	endPos := binlog.AdjustPosition(location.Position)
+	startPos := mysql.Position{
+		Name: endPos.Name,
+		Pos:  0,
+	}
+	startLocation := location.Clone()
+	startLocation.Position = startPos
+
+	err := streamerController.Start(tctx, startLocation)
 	if err != nil {
 		return false, err
 	}
 	defer streamerController.Close(tctx)
 
-	pos := binlog.AdjustPosition(location.Position)
-	gs, err := reader.GetGTIDsForPosStreamer(tctx.Context(), streamerController.streamer, pos)
+	gs, err := reader.GetGTIDsForPosStreamer(tctx.Context(), streamerController.streamer, endPos)
 	if err != nil {
 		s.tctx.L().Warn("fail to get gtids for global location", zap.Stringer("pos", location), zap.Error(err))
 		return false, err
@@ -2884,6 +2898,14 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 	err = location.SetGTID(gs.Origin())
 	if err != nil {
 		s.tctx.L().Warn("fail to set gtid for global location", zap.Stringer("pos", location),
+			zap.String("adjusted_gtid", gs.String()), zap.Error(err))
+		return false, err
+	}
+	s.checkpoint.SaveGlobalPoint(location)
+	// redirect streamer for new gtid set location
+	err = s.streamerController.RedirectStreamer(tctx, location)
+	if err != nil {
+		s.tctx.L().Warn("fail to redirect streamer for global location", zap.Stringer("pos", location),
 			zap.String("adjusted_gtid", gs.String()), zap.Error(err))
 		return false, err
 	}

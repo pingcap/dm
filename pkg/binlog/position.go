@@ -316,6 +316,39 @@ func CompareLocation(location1, location2 Location, cmpGTID bool) int {
 	return compareIndex(location1.Suffix, location2.Suffix)
 }
 
+// CompareLocationAsPossible returns:
+//   1 if point1 is bigger than point2
+//   0 if point1 is equal to point2
+//   -1 if point1 is less than point2
+// The difference is that this function will compare positions if gtid sets are both empty
+func CompareLocationAsPossible(location1, location2 Location, cmpGTID bool) int {
+	if cmpGTID {
+		cmp, canCmp := CompareGTID(location1.gtidSet, location2.gtidSet)
+		if canCmp {
+			if cmp != 0 {
+				return cmp
+			}
+			if cmp = compareIndex(location1.Suffix, location2.Suffix); cmp != 0 {
+				return cmp
+			}
+			if location1.gtidSet != nil && location1.gtidSet.String() != "" {
+				return cmp
+			}
+			// empty GTIDSet, then compare by position
+			log.L().Warn("both gtidSets are empty, will compare by position", zap.Stringer("location1", location1), zap.Stringer("location2", location2))
+		} else {
+			// if can't compare by GTIDSet, then compare by position
+			log.L().Warn("gtidSet can't be compared, will compare by position", zap.Stringer("location1", location1), zap.Stringer("location2", location2))
+		}
+	}
+
+	cmp := ComparePosition(location1.Position, location2.Position)
+	if cmp != 0 {
+		return cmp
+	}
+	return compareIndex(location1.Suffix, location2.Suffix)
+}
+
 // CompareGTID returns:
 //   1, true if gSet1 is bigger than gSet2
 //   0, true if gSet1 is equal to gSet2
