@@ -190,8 +190,8 @@ type Syncer struct {
 	tsRWLock sync.RWMutex
 	tsOffset int64 // time offset between upstream and syncer
 
-	metricLock     sync.RWMutex // lock for all metric
-	replicationLag int64        // current task lag
+	metricLock          sync.RWMutex // lock for all metric
+	secondsBehindMaster int64        // current task delay second behind upstrem
 }
 
 // NewSyncer creates a new Syncer.
@@ -230,11 +230,11 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	return syncer
 }
 
-// GetReplicationLag return replicationLag.
-func (s *Syncer) GetReplicationLag() int64 {
+// GetSecondsBehindMaster return secondsBehindMaster.
+func (s *Syncer) GetSecondsBehindMaster() int64 {
 	s.metricLock.RLock()
 	defer s.metricLock.RUnlock()
-	return s.replicationLag
+	return s.secondsBehindMaster
 }
 
 func (s *Syncer) newJobChans(count int) {
@@ -1219,12 +1219,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		for {
 			select {
 			case <-updateTicker.C:
+				t1 := time.Now()
 				ts, tsErr := s.fromDB.getServerUnixTS(ctx)
+				rtt := time.Since(t1).Seconds()
 				if err != nil {
 					s.tctx.L().Error("get server unix ts err", zap.Error(tsErr))
 				} else {
 					s.tsRWLock.Lock()
-					s.tsOffset = time.Now().Unix() - ts
+					s.tsOffset = time.Now().Unix() - ts - int64(rtt/2)
 					s.tsRWLock.Unlock()
 				}
 			case <-ctx.Done():
@@ -1670,7 +1672,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	s.metricLock.Lock()
 	SetReplicationLagGauge(s.cfg.Name, float64(lag))
-	s.replicationLag = lag
+	s.secondsBehindMaster = lag
 	s.metricLock.Unlock()
 
 	ignore, err := s.skipDMLEvent(originSchema, originTable, ec.header.EventType)

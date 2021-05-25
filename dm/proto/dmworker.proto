@@ -138,7 +138,7 @@ message SyncStatus {
     repeated ShardingGroup unresolvedGroups = 9; // sharding groups which current are un-resolved
     bool synced = 10;  // whether sync is catched-up in this moment
     string binlogType = 11;
-    int64 replicationLag = 12; // task  syncner replication lag.
+    int64 secondsBehindMaster = 12; // sync unit delay seconds behind master.
 }
 
 // SourceStatus represents status for source runing on dm-worker

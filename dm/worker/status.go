@@ -101,9 +101,9 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 				case pb.UnitType_Load:
 					stStatus.Status = &pb.SubTaskStatus_Load{Load: us.(*pb.LoadStatus)}
 				case pb.UnitType_Sync:
-					cu, _ := cu.(*syncer.Syncer)
+					cus := cu.(*syncer.Syncer) // ss must be *syncer.Syncer
 					ss := us.(*pb.SyncStatus)
-					ss.ReplicationLag = cu.GetReplicationLag()
+					ss.SecondsBehindMaster = cus.GetSecondsBehindMaster()
 					stStatus.Status = &pb.SubTaskStatus_Sync{Sync: ss}
 				}
 			}
