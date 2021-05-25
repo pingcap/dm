@@ -82,12 +82,14 @@ func (t *testJobSuite) TestJob(c *C) {
 		},
 	}
 
+	location := binlog.NewLocation("")
+	ec := &eventContext{startLocation: &location, currentLocation: &location, lastLocation: &location}
 	testCases := []struct {
 		job    *job
 		jobStr string
 	}{
 		{
-			newJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", binlog.NewLocation(""), binlog.NewLocation(""), binlog.NewLocation("")),
+			newJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", ec),
 			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: 1, ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newDDLJob(ddlInfo, []string{"create database test"}, binlog.NewLocation(""), binlog.NewLocation(""), binlog.NewLocation(""), nil, "create database test"),

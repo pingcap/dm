@@ -73,6 +73,8 @@ type job struct {
 	currentLocation binlog.Location // end location of the sql in binlog, for user to skip sql manually by changing checkpoint
 	ddls            []string
 	originSQL       string // show origin sql when error, only DDL now
+
+	ec *eventContext
 }
 
 func (j *job) String() string {
@@ -80,7 +82,7 @@ func (j *job) String() string {
 	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.sql, j.args, j.key, j.ddls, j.location, j.startLocation, j.currentLocation)
 }
 
-func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, location, startLocation, cmdLocation binlog.Location) *job {
+func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, ec *eventContext) *job {
 	return &job{
 		tp:              tp,
 		sourceTbl:       map[string][]string{sourceSchema: {sourceTable}},
@@ -89,10 +91,11 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 		sql:             sql,
 		args:            args,
 		key:             key,
-		startLocation:   startLocation,
-		location:        location,
-		currentLocation: cmdLocation,
 		retry:           true,
+		location:        *ec.lastLocation,
+		startLocation:   *ec.startLocation,
+		currentLocation: *ec.currentLocation,
+		ec:              ec,
 	}
 }
 

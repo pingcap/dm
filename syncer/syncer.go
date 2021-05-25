@@ -1081,7 +1081,23 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			t := v.(int)
 			time.Sleep(time.Duration(t) * time.Second)
 		})
-		return db.executeSQL(tctx, queries, args...)
+		affect, err := db.executeSQL(tctx, queries, args...)
+		// NOTE: after on job execute to target db ,we update job commit count
+		for _, j := range jobs {
+			j.ec.commitJobCount.Inc()
+			// when all job finshend,update the lag metric
+			if j.ec.commitJobCount.Load() == j.ec.jobCount {
+				s.tsRWLock.RLock()
+				lag := time.Now().Unix() + s.tsOffset - j.ec.startTime.Unix()
+				s.tsRWLock.RUnlock()
+				s.metricLock.Lock()
+				SetReplicationLagGauge(s.cfg.Name, float64(lag))
+				s.secondsBehindMaster = lag
+				s.metricLock.Unlock()
+			}
+		}
+
+		return affect, err
 	}
 
 	var err error
@@ -1570,6 +1586,8 @@ type eventContext struct {
 	tryReSync           bool
 	startTime           time.Time
 	shardingReSyncCh    *chan *ShardingReSync
+	jobCount            int64
+	commitJobCount      atomic.Int64 // incr after job is execcute to target db.
 }
 
 // TODO: Further split into smaller functions and group common arguments into a context struct.
@@ -1665,16 +1683,6 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 	// ENDTODO
 
-	// update binloglag metric
-	s.tsRWLock.RLock()
-	lag := time.Now().Unix() + s.tsOffset - ec.startTime.Unix()
-	s.tsRWLock.RUnlock()
-
-	s.metricLock.Lock()
-	SetReplicationLagGauge(s.cfg.Name, float64(lag))
-	s.secondsBehindMaster = lag
-	s.metricLock.Unlock()
-
 	ignore, err := s.skipDMLEvent(originSchema, originTable, ec.header.EventType)
 	if err != nil {
 		return err
@@ -1765,6 +1773,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	startTime := time.Now()
+	ec.jobCount = int64(len(sqls))
 	for i := range sqls {
 		var arg []interface{}
 		var key []string
@@ -1774,7 +1783,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if keys != nil {
 			key = keys[i]
 		}
-		err = s.commitJob(jobType, originSchema, originTable, schemaName, tableName, sqls[i], arg, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation)
+		err = s.commitJob(jobType, originSchema, originTable, schemaName, tableName, sqls[i], arg, key, &ec)
 		if err != nil {
 			return err
 		}
@@ -2320,7 +2329,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	return nil
 }
 
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, location, startLocation, cmdLocation binlog.Location) error {
+func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, ec *eventContext) error {
 	startTime := time.Now()
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
@@ -2329,7 +2338,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 	conflictDetectDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 
-	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, location, startLocation, cmdLocation)
+	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, ec)
 	return s.addJobFunc(job)
 }
 
