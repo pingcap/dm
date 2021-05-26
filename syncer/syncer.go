@@ -2338,7 +2338,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 	conflictDetectDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 
-	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, ec)
+	job := newDMLJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, ec)
 	return s.addJobFunc(job)
 }
 

@@ -74,7 +74,7 @@ type job struct {
 	ddls            []string
 	originSQL       string // show origin sql when error, only DDL now
 
-	ec *eventContext
+	ec *eventContext // NOTE: only exist when created by newDMLJob.
 }
 
 func (j *job) String() string {
@@ -82,7 +82,8 @@ func (j *job) String() string {
 	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.sql, j.args, j.key, j.ddls, j.location, j.startLocation, j.currentLocation)
 }
 
-func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, ec *eventContext) *job {
+// newDMLJob is uesd to create dml job with binlog event context.
+func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, ec *eventContext) *job {
 	return &job{
 		tp:              tp,
 		sourceTbl:       map[string][]string{sourceSchema: {sourceTable}},
