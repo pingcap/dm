@@ -53,8 +53,8 @@ function upgrade_to_current_v2() {
 	if [[ "$CUR_VER" == "nightly" && "$ref" == "refs/pull"* ]]; then
 		patch_nightly_with_tiup_mirror
 	fi
-	tiup update dmctl:$CUR_VER
 	tiup dm upgrade --yes $CLUSTER_NAME $CUR_VER
+	tiup uninstall dmctl --all
 }
 
 function migrate_in_v2 {
@@ -80,7 +80,7 @@ function migrate_in_v2 {
 	run_dmctl_with_retry $CUR_VER "show-ddl-locks" "no DDL lock exists" 1
 
 	export DM_MASTER_ADDR="master1:8261"
-	tiup dmctl:nightly stop-task $TASK_NAME
+	tiup dmctl:$CUR_VER stop-task $TASK_NAME
 }
 
 function destroy_v2_by_tiup() {
