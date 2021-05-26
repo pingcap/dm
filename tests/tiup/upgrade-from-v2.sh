@@ -44,11 +44,9 @@ function migrate_in_previous_v2() {
 
 	check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
 
-	# ues env to read master-addr
-	export DM_MASTER_ADDR="master1:8261"
-	tiup dmctl:$CUR_VER pause-task $TASK_NAME
+	tiup dmctl:$PRE_VER --master-addr=master1:8261 pause-task $TASK_NAME
 
-	run_dmctl_with_retry $CUR_VER "query-status" "Running" 2 "Paused" 1
+	run_dmctl_with_retry $PRE_VER "query-status" "Running" 2 "Paused" 1
 }
 
 function upgrade_to_current_v2() {
@@ -81,7 +79,8 @@ function migrate_in_v2 {
 	echo "check locks"
 	run_dmctl_with_retry $CUR_VER "show-ddl-locks" "no DDL lock exists" 1
 
-	tiup dmctl:$CUR_VER --master-addr=master1:8261 stop-task $TASK_NAME
+	export DM_MASTER_ADDR="master1:8261"
+	tiup dmctl:$CUR_VER stop-task $TASK_NAME
 }
 
 function destroy_v2_by_tiup() {
