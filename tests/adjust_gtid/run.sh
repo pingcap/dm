@@ -9,10 +9,10 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 # SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 function clean_gtid() {
-  # delete SOURCE1 checkpoint's gtid info
-  run_sql "update dm_meta.${TASK_NAME}_syncer_checkpoint set binlog_gtid=\"\" where id=\"$SOURCE_ID1\" and is_global=1" $TIDB_PORT $TIDB_PASSWORD
-  # set SOURCE2 incremental metadata without checkpoint
-  run_sql "delete from dm_meta.${TASK_NAME}_syncer_checkpoint where id=\"$SOURCE_ID2\" and is_global=1" $TIDB_PORT $TIDB_PASSWORD
+	# delete SOURCE1 checkpoint's gtid info
+	run_sql "update dm_meta.${TASK_NAME}_syncer_checkpoint set binlog_gtid=\"\" where id=\"$SOURCE_ID1\" and is_global=1" $TIDB_PORT $TIDB_PASSWORD
+	# set SOURCE2 incremental metadata without checkpoint
+	run_sql "delete from dm_meta.${TASK_NAME}_syncer_checkpoint where id=\"$SOURCE_ID2\" and is_global=1" $TIDB_PORT $TIDB_PASSWORD
 
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 	sed -i "s/task-mode-placeholder/incremental/g" $WORK_DIR/dm-task.yaml
@@ -26,21 +26,21 @@ function clean_gtid() {
 }
 
 function check_checkpoint() {
-    source_id=$1
-    expected_name=$2
-    expected_pos=$3
-    expected_gtid=$4
+	source_id=$1
+	expected_name=$2
+	expected_pos=$3
+	expected_gtid=$4
 
-    run_sql "select binlog_name,binlog_pos,binlog_gtid from dm_meta.${TASK_NAME}_syncer_checkpoint where id=\"$source_id\" and is_global=1" $TIDB_PORT $TIDB_PASSWORD
-    check_contains $expected_name
-    check_contains $expected_pos
-    if [[ -n $expected_gtid ]]; then
-        check_contains $expected_gtid
-    fi
+	run_sql "select binlog_name,binlog_pos,binlog_gtid from dm_meta.${TASK_NAME}_syncer_checkpoint where id=\"$source_id\" and is_global=1" $TIDB_PORT $TIDB_PASSWORD
+	check_contains $expected_name
+	check_contains $expected_pos
+	if [[ -n $expected_gtid ]]; then
+		check_contains $expected_gtid
+	fi
 }
 
 function run() {
-  run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
+	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
 	run_sql_source1 "SET @@global.time_zone = '+01:00';"
 	run_sql_source2 "SET @@global.time_zone = '+02:00';"
 
@@ -66,15 +66,15 @@ function run() {
 	# make sure source1 is bound to worker1
 	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 
-  run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-    "start-relay -s $SOURCE_ID1 worker1" \
-    "\"result\": true" 1
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"start-relay -s $SOURCE_ID1 worker1" \
+		"\"result\": true" 1
 
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-  dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
+	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
-  # start DM task only
+	# start DM task only
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 	sed -i "s/task-mode-placeholder/all/g" $WORK_DIR/dm-task.yaml
 	# avoid cannot unmarshal !!str `binlog-...` into uint32 error
@@ -106,8 +106,8 @@ function run() {
 		gtid1=$(grep "GTID:" $WORK_DIR/worker2/dumped_data.$TASK_NAME/metadata | awk -F: '{print $2,":",$3}' | tr -d ' ')
 	fi
 
-  check_checkpoint $SOURCE_ID1 $name1 $pos1 $gtid1
-  check_checkpoint $SOURCE_ID2 $name2 $pos2 $gtid2
+	check_checkpoint $SOURCE_ID1 $name1 $pos1 $gtid1
+	check_checkpoint $SOURCE_ID2 $name2 $pos2 $gtid2
 	dmctl_stop_task_with_retry $TASK_NAME $MASTER_PORT
 	clean_gtid
 
@@ -118,11 +118,11 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-  # start task without checking, worker may exit before we get success result
+	# start task without checking, worker may exit before we get success result
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "start-task $WORK_DIR/dm-task.yaml"
 
-  check_checkpoint $SOURCE_ID1 $name1 $pos1 $gtid1
-  check_checkpoint $SOURCE_ID2 $name2 $pos2 $gtid2
+	check_checkpoint $SOURCE_ID1 $name1 $pos1 $gtid1
+	check_checkpoint $SOURCE_ID2 $name2 $pos2 $gtid2
 	kill_dm_worker
 	clean_gtid
 
