@@ -67,7 +67,7 @@ jobs:
     strategy:
         fail-fast: false
         matrix:
-          previous_v2: ["v2.0.0", "v2.0.1"]
+          previous_v2: ["v2.0.0", "v2.0.1", "v2.0.3"]
 
     steps:    
 
@@ -82,12 +82,12 @@ jobs:
         path: go/src/github.com/pingcap/dm
 
     - name: Build
-      if: ${{ github.ref != 'refs/heads/main' }}
+      if: ${{ github.ref != 'refs/heads/master' }}
       working-directory: ${{ env.working-directory }}
       run: make build nolint=true
     
     - name: Package files
-      if: ${{ github.ref != 'refs/heads/main' }}
+      if: ${{ github.ref != 'refs/heads/master' }}
       run: |
           mkdir ${{ github.workspace }}/package
           cd ${{ github.workspace }}/package
@@ -120,7 +120,7 @@ jobs:
           GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
 
     - name: Copy package files
-      if: ${{ github.ref != 'refs/heads/main' }}
+      if: ${{ github.ref != 'refs/heads/master' }}
       run: |
           cd ${{ github.workspace }}/package
           docker cp dm-master-nightly-linux-amd64.tar.gz control:/tmp
@@ -133,6 +133,26 @@ jobs:
       run: |
         cd ${{ env.working-directory }}/tests/tiup/docker
         docker-compose exec -e ref=${{ github.ref }} -T control bash -c "cd /go/src/github.com/pingcap/dm && ./tests/tiup/upgrade-from-v2.sh ${{ matrix.previous_v2 }} nightly"
+
+    # if above step is passed, logs will be removed by tiup dm destroy
+    - name: Copy logs to hack permission
+      if: ${{ failure() }}
+      run: |
+        mkdir ./logs
+        docker cp -L master1:/home/tidb/dm/deploy/dm-master-8261/log ./logs/master
+        docker cp -L worker1:/home/tidb/dm/deploy/dm-worker-8262/log ./logs/worker1
+        docker cp -L worker2:/home/tidb/dm/deploy/dm-worker-8262/log ./logs/worker2
+        sudo chown -R runner ./logs
+
+    # Update logs as artifact seems not stable, so we set `continue-on-error: true` here.
+    - name: Upload logs
+      continue-on-error: true
+      uses: actions/upload-artifact@v2
+      if: ${{ failure() }}
+      with:
+        name: upgrade-via-tiup-${{ matrix.previous_v2 }}
+        path: |
+          ./logs
 
     # send Slack notify if failed.
     # NOTE: With the exception of `GITHUB_TOKEN`, secrets are not passed to the runner when a workflow is triggered from a forked repository.
@@ -207,3 +227,5 @@ jobs:
     - name: Set up tmate session
       if: ${{ failure() }}
       uses: mxschmitt/action-tmate@v2
+      with:
+        timeout-minutes: 60

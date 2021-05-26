@@ -76,7 +76,7 @@ type Scheduler struct {
 	// - recover from etcd (calling `recoverSources`).
 	// delete:
 	// - remove source by user request (calling `RemoveSourceCfg`).
-	sourceCfgs map[string]config.SourceConfig
+	sourceCfgs map[string]*config.SourceConfig
 
 	// all subtask configs, task name -> source ID -> subtask config.
 	// add:
@@ -151,7 +151,7 @@ type Scheduler struct {
 func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 	return &Scheduler{
 		logger:              pLogger.WithFields(zap.String("component", "scheduler")),
-		sourceCfgs:          make(map[string]config.SourceConfig),
+		sourceCfgs:          make(map[string]*config.SourceConfig),
 		subTaskCfgs:         make(map[string]map[string]config.SubTaskConfig),
 		workers:             make(map[string]*Worker),
 		bounds:              make(map[string]*Worker),
@@ -255,7 +255,7 @@ func (s *Scheduler) CloseAllWorkers() {
 
 // AddSourceCfg adds the upstream source config to the cluster.
 // NOTE: please verify the config before call this.
-func (s *Scheduler) AddSourceCfg(cfg config.SourceConfig) error {
+func (s *Scheduler) AddSourceCfg(cfg *config.SourceConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -380,7 +380,7 @@ func (s *Scheduler) GetSourceCfgByID(source string) *config.SourceConfig {
 	if !ok {
 		return nil
 	}
-	clone := cfg
+	clone := *cfg
 	return &clone
 }
 
@@ -553,7 +553,7 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 	return nil
 }
 
-// RemoveSubTasks removes the information of one or more subtaks for one task.
+// RemoveSubTasks removes the information of one or more subtasks for one task.
 func (s *Scheduler) RemoveSubTasks(task string, sources ...string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1240,6 +1240,7 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 		return 0, err
 	}
 
+	scm := s.sourceCfgs
 	boundsToTrigger := make([]ha.SourceBound, 0)
 	// 4. recover DM-worker info and status.
 	for name, info := range wim {
@@ -1253,12 +1254,17 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 			w.ToFree()
 			// set the stage as Bound and record the bound relationship if exists.
 			if bound, ok := sbm[name]; ok {
-				boundsToTrigger = append(boundsToTrigger, bound)
-				err2 = s.updateStatusForBound(w, bound)
-				if err2 != nil {
-					return 0, err2
+				// source bounds without source configuration should be deleted later
+				if _, ok := scm[bound.Source]; ok {
+					boundsToTrigger = append(boundsToTrigger, bound)
+					err2 = s.updateStatusForBound(w, bound)
+					if err2 != nil {
+						return 0, err2
+					}
+					delete(sbm, name)
+				} else {
+					s.logger.Warn("find source bound without config", zap.Stringer("bound", bound))
 				}
-				delete(sbm, name)
 			}
 		}
 	}
@@ -1581,7 +1587,8 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 
 // tryBoundForSource tries to bound a source to a random Free worker.
 // returns (true, nil) after bounded.
-// called should update the s.unbounds.
+// caller should update the s.unbounds.
+// caller should make sure this source has source config.
 func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 	var worker *Worker
 	relayWorkers := s.relayWorkers[source]
@@ -1745,7 +1752,7 @@ func (s *Scheduler) updateStatusForUnbound(source string) {
 
 // reset resets the internal status.
 func (s *Scheduler) reset() {
-	s.sourceCfgs = make(map[string]config.SourceConfig)
+	s.sourceCfgs = make(map[string]*config.SourceConfig)
 	s.subTaskCfgs = make(map[string]map[string]config.SubTaskConfig)
 	s.workers = make(map[string]*Worker)
 	s.bounds = make(map[string]*Worker)

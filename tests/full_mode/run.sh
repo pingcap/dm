@@ -42,7 +42,7 @@ function fail_acquire_global_lock() {
 		"\"result\": true" 1
 
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
-	sed -i '/timezone/i\ignore-checking-items: ["dump_privilege"]' $WORK_DIR/dm-task.yaml
+	sed -i '/heartbeat-report-interval/i\ignore-checking-items: ["dump_privilege"]' $WORK_DIR/dm-task.yaml
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"start-task $WORK_DIR/dm-task.yaml --remove-meta"
 
@@ -147,6 +147,8 @@ function run() {
 	empty_data
 
 	run_sql_both_source "SET @@GLOBAL.SQL_MODE='NO_BACKSLASH_ESCAPES'"
+	run_sql_source1 "SET @@global.time_zone = '+01:00';"
+	run_sql_source2 "SET @@global.time_zone = '+02:00';"
 
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_contains 'Query OK, 2 rows affected'
@@ -165,6 +167,9 @@ function run() {
 
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	# check dm-master metrics
+	check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
+
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -193,6 +198,7 @@ function run() {
 	check_metric_not_contains $WORKER1_PORT 'dm_worker_task_state{source_id="mysql-replica-01",task="test"}' 3
 	check_metric_not_contains $WORKER2_PORT 'dm_worker_task_state{source_id="mysql-replica-02",task="test"}' 3
 	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
+	run_sql_both_source "SET @@GLOBAL.TIME_ZONE='SYSTEM';"
 }
 
 cleanup_data full_mode

@@ -20,20 +20,18 @@ import (
 	"io/ioutil"
 	"sort"
 	"strings"
-	"time"
 
+	"github.com/coreos/go-semver/semver"
+	"github.com/dustin/go-humanize"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"go.uber.org/zap"
+	"gopkg.in/yaml.v2"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-
-	"github.com/coreos/go-semver/semver"
-	"github.com/dustin/go-humanize"
-	"go.uber.org/zap"
-	yaml "gopkg.in/yaml.v2"
 )
 
 // Online DDL Scheme.
@@ -71,6 +69,8 @@ var (
 	defaultBatch                   = 100
 	defaultQueueSize               = 1024 // do not give too large default value to avoid OOM
 	defaultCheckpointFlushInterval = 30   // in seconds
+	// force use UTC time_zone.
+	defaultTimeZone = "+00:00"
 
 	// TargetDBConfig.
 	defaultSessionCfg = []struct {
@@ -282,10 +282,11 @@ type TaskConfig struct {
 	// don't save configuration into it
 	MetaSchema string `yaml:"meta-schema" toml:"meta-schema" json:"meta-schema"`
 
-	EnableHeartbeat         bool   `yaml:"enable-heartbeat" toml:"enable-heartbeat" json:"enable-heartbeat"`
-	HeartbeatUpdateInterval int    `yaml:"heartbeat-update-interval" toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
-	HeartbeatReportInterval int    `yaml:"heartbeat-report-interval" toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
-	Timezone                string `yaml:"timezone" toml:"timezone" json:"timezone"`
+	EnableHeartbeat         bool `yaml:"enable-heartbeat" toml:"enable-heartbeat" json:"enable-heartbeat"`
+	HeartbeatUpdateInterval int  `yaml:"heartbeat-update-interval" toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
+	HeartbeatReportInterval int  `yaml:"heartbeat-report-interval" toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
+	// deprecated
+	Timezone string `yaml:"timezone" toml:"timezone" json:"timezone"`
 
 	// handle schema/table name mode, and only for schema/table name
 	// if case insensitive, we would convert schema/table name to lower case
@@ -593,14 +594,10 @@ func (c *TaskConfig) adjust() error {
 		sort.Strings(unusedConfigs)
 		return terror.ErrConfigGlobalConfigsUnused.Generate(unusedConfigs)
 	}
-
 	if c.Timezone != "" {
-		_, err := time.LoadLocation(c.Timezone)
-		if err != nil {
-			return terror.ErrConfigInvalidTimezone.Delegate(err, c.Timezone)
-		}
+		log.L().Warn("`timezone` is deprecated and useless anymore, please remove it.")
+		c.Timezone = ""
 	}
-
 	if c.RemoveMeta {
 		log.L().Warn("`remove-meta` in task config is deprecated, please use `start-task ... --remove-meta` instead")
 	}
@@ -632,7 +629,6 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		}
 		cfg.HeartbeatUpdateInterval = c.HeartbeatUpdateInterval
 		cfg.HeartbeatReportInterval = c.HeartbeatReportInterval
-		cfg.Timezone = c.Timezone
 		cfg.Meta = inst.Meta
 
 		cfg.From = dbCfg
@@ -710,7 +706,6 @@ func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
 	c.EnableHeartbeat = stCfg0.EnableHeartbeat
 	c.HeartbeatUpdateInterval = stCfg0.HeartbeatUpdateInterval
 	c.HeartbeatReportInterval = stCfg0.HeartbeatReportInterval
-	c.Timezone = stCfg0.Timezone
 	c.CaseSensitive = stCfg0.CaseSensitive
 	c.TargetDB = &stCfg0.To // just ref
 	c.OnlineDDLScheme = stCfg0.OnlineDDLScheme
@@ -815,5 +810,27 @@ func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version *semver.Version) {
 			lowerMap[cfg.key] = cfg.val
 		}
 	}
+	// force set time zone to UTC
+	if tz, ok := lowerMap["time_zone"]; ok {
+		log.L().Warn("session variable 'time_zone' is overwritten with UTC timezone.",
+			zap.String("time_zone", tz))
+	}
+	lowerMap["time_zone"] = defaultTimeZone
 	dbConfig.Session = lowerMap
+}
+
+// AdjustTargetDBTimeZone force adjust session `time_zone` to UTC.
+func AdjustTargetDBTimeZone(config *DBConfig) {
+	for k := range config.Session {
+		if strings.ToLower(k) == "time_zone" {
+			log.L().Warn("session variable 'time_zone' is overwritten by default UTC timezone.",
+				zap.String("time_zone", config.Session[k]))
+			config.Session[k] = defaultTimeZone
+			return
+		}
+	}
+	if config.Session == nil {
+		config.Session = make(map[string]string, 1)
+	}
+	config.Session["time_zone"] = defaultTimeZone
 }

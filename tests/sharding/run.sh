@@ -27,6 +27,7 @@ function run() {
 
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
 
 	# now, for pessimistic shard DDL, if interrupted after executed DDL but before flush checkpoint,
 	# re-sync this DDL will cause the source try to sync the DDL of the previous lock again,
@@ -56,6 +57,9 @@ function run() {
 		"query-status test" \
 		"Sync" 2
 
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\"}" 3 1 3
+	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\"}" 3 1 3
+
 	# TODO: check sharding partition id
 	# use sync_diff_inspector to check full dump loader
 	echo "check sync diff for full dump and load"
@@ -69,6 +73,9 @@ function run() {
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
 		"failpoint error for FlushCheckpointStage before flush old checkpoint" 1
+	# worker1 will failed and worker2 will still running.
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\"}" 3 2 4
+	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\"}" 3 1 3
 
 	# resume-task to next stage
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -146,6 +153,9 @@ function run() {
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"stop-task test" \
 		"task test has no source or not exist" 1
+
+	check_metric_not_contains $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\"}" 3
+	check_metric_not_contains $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\"}" 3
 
 	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
 }

@@ -1,7 +1,8 @@
 ---
-name: upgrade_via_tiup
+name: upgrade_via_tiup_pessimistic
 task-mode: all
 is-sharding: true
+shard-mode: pessimistic
 enable-heartbeat: true
 
 target-database:
@@ -21,18 +22,18 @@ mysql-instances:
 
 black-white-list:
   instance:
-    do-dbs: ["~^sharding[\\d]+"]
+    do-dbs: ["~^pes_sharding[\\d]+"]
     do-tables:
-    -  db-name: "~^sharding[\\d]+"
+    -  db-name: "~^pes_sharding[\\d]+"
        tbl-name: "~^t[\\d]+"
 
 routes:
   sharding-route-rules-table:
-    schema-pattern: sharding*
+    schema-pattern: pes_sharding*
     table-pattern: t*
-    target-schema: db_target
+    target-schema: pes_db_target
     target-table: t_target
 
   sharding-route-rules-schema:
-    schema-pattern: sharding*
-    target-schema: db_target
+    schema-pattern: pes_sharding*
+    target-schema: pes_db_target

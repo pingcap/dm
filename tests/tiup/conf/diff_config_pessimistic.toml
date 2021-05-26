@@ -2,22 +2,22 @@ use-checksum = true
 
 # tables need to check.
 [[check-tables]]
-schema = "db_target"
+schema = "pes_db_target"
 tables = ["t_target"]
 
 [[table-config]]
-schema = "db_target"
+schema = "pes_db_target"
 table = "t_target"
 is-sharding = true
 
 [[table-config.source-tables]]
 instance-id = "source-1"
-schema = "sharding1"
+schema = "pes_sharding1"
 table  = "~t.*"
 
 [[table-config.source-tables]]
 instance-id = "source-2"
-schema = "sharding2"
+schema = "pes_sharding2"
 table  = "~t.*"
 
 [[source-db]]
