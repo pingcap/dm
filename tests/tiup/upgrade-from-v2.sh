@@ -54,6 +54,8 @@ function upgrade_to_current_v2() {
 		patch_nightly_with_tiup_mirror
 	fi
 	tiup dm upgrade --yes $CLUSTER_NAME $CUR_VER
+	# uninstall previous dmctl, otherwise dmctl:nightly still use PRE_VER.
+	# FIXME: It may be a bug in tiup mirror.
 	tiup uninstall dmctl --all
 }
 
