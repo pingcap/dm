@@ -320,7 +320,7 @@ func CompareLocation(location1, location2 Location, cmpGTID bool) int {
 //   1 if point1 is bigger than point2
 //   0 if point1 is equal to point2
 //   -1 if point1 is less than point2
-// The difference is that this function will compare positions if gtid sets are both empty
+// The difference is that this function will compare positions if gtid sets are both empty.
 func CompareLocationAsPossible(location1, location2 Location, cmpGTID bool) int {
 	if cmpGTID {
 		cmp, canCmp := CompareGTID(location1.gtidSet, location2.gtidSet)
