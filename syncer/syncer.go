@@ -1083,20 +1083,34 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		})
 		affect, err := db.executeSQL(tctx, queries, args...)
 		// NOTE: after on job execute to target db ,we update job commit count
+		var needUpdateLag bool
+		var lag int64
+		var tsOffset int64
 		for _, j := range jobs {
 			j.ec.commitJobCount.Inc()
 			// when all job finshend,update the lag metric
 			if j.ec.commitJobCount.Load() == j.ec.jobCount {
-				s.tsRWLock.RLock()
-				lag := time.Now().Unix() + s.tsOffset - j.ec.startTime.Unix()
-				s.tsRWLock.RUnlock()
-				s.metricLock.Lock()
-				SetReplicationLagGauge(s.cfg.Name, float64(lag))
-				s.secondsBehindMaster = lag
-				s.metricLock.Unlock()
+				// only get s.tsoffset once when first time need to calc lag
+				if !needUpdateLag {
+					s.tsRWLock.RLock()
+					tsOffset = s.tsOffset
+					s.tsRWLock.RUnlock()
+					lag = time.Now().Unix() + tsOffset - j.ec.startTime.Unix()
+					needUpdateLag = true
+				} else {
+					thisJobLag := time.Now().Unix() + tsOffset - j.ec.startTime.Unix()
+					if thisJobLag < lag {
+						lag = thisJobLag
+					}
+				}
 			}
 		}
-
+		if needUpdateLag {
+			s.metricLock.Lock()
+			SetReplicationLagGauge(s.cfg.Name, float64(lag))
+			s.secondsBehindMaster = lag
+			s.metricLock.Unlock()
+		}
 		return affect, err
 	}
 
