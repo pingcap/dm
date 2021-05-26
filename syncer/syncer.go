@@ -187,11 +187,8 @@ type Syncer struct {
 
 	addJobFunc func(*job) error
 
-	tsRWLock sync.RWMutex
-	tsOffset int64 // time offset between upstream and syncer
-
-	metricLock          sync.RWMutex // lock for all metric
-	secondsBehindMaster int64        // current task delay second behind upstrem
+	tsOffset            atomic.Int64 // time offset between upstream and syncer
+	secondsBehindMaster atomic.Int64 // current task delay second behind upstrem
 }
 
 // NewSyncer creates a new Syncer.
@@ -232,9 +229,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 
 // GetSecondsBehindMaster return secondsBehindMaster.
 func (s *Syncer) GetSecondsBehindMaster() int64 {
-	s.metricLock.RLock()
-	defer s.metricLock.RUnlock()
-	return s.secondsBehindMaster
+	return s.secondsBehindMaster.Load()
 }
 
 func (s *Syncer) newJobChans(count int) {
@@ -1093,9 +1088,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			if j.ec.commitJobCount.Load() == j.ec.jobCount {
 				// only get s.tsoffset once when first time need to calc lag
 				if !needUpdateLag {
-					s.tsRWLock.RLock()
-					tsOffset = s.tsOffset
-					s.tsRWLock.RUnlock()
+					tsOffset = s.tsOffset.Load()
 					lag = time.Now().Unix() + tsOffset - j.ec.startTime.Unix()
 					needUpdateLag = true
 				} else {
@@ -1107,10 +1100,8 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			}
 		}
 		if needUpdateLag {
-			s.metricLock.Lock()
 			SetReplicationLagGauge(s.cfg.Name, float64(lag))
-			s.secondsBehindMaster = lag
-			s.metricLock.Unlock()
+			s.secondsBehindMaster.Store(lag)
 		}
 		return affect, err
 	}
@@ -1256,9 +1247,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if err != nil {
 					s.tctx.L().Error("get server unix ts err", zap.Error(tsErr))
 				} else {
-					s.tsRWLock.Lock()
-					s.tsOffset = time.Now().Unix() - ts - int64(rtt/2)
-					s.tsRWLock.Unlock()
+					s.tsOffset.Store(time.Now().Unix() - ts - int64(rtt/2))
 				}
 			case <-ctx.Done():
 				return
