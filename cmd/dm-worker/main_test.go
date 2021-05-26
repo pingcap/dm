@@ -56,7 +56,7 @@ func TestRunMain(_ *testing.T) {
 	defer func() { utils.OsExit = oldOsExit }()
 	utils.OsExit = func(code int) {
 		log.L().Info("os exits", zap.Int("exit code", code))
-		utils.KillMySelf()
+		_ = utils.KillMySelf()
 		exit <- code
 		// sleep here to prevent following code execution in the caller routine
 		time.Sleep(time.Second * 60)
