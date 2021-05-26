@@ -46,7 +46,7 @@ function migrate_in_previous_v2() {
 
 	# ues env to read master-addr
 	export DM_MASTER_ADDR="master1:8261"
-	tiup dmctl:$PRE_VER  pause-task $TASK_NAME
+	tiup dmctl:$CUR_VER pause-task $TASK_NAME
 
 	run_dmctl_with_retry $CUR_VER "query-status" "Running" 2 "Paused" 1
 }
