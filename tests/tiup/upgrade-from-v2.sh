@@ -80,7 +80,7 @@ function migrate_in_v2 {
 	run_dmctl_with_retry $CUR_VER "show-ddl-locks" "no DDL lock exists" 1
 
 	export DM_MASTER_ADDR="master1:8261"
-	tiup dmctl:$CUR_VER stop-task $TASK_NAME
+	tiup dmctl:$PRE_VER stop-task $TASK_NAME
 }
 
 function destroy_v2_by_tiup() {
