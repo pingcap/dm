@@ -454,8 +454,6 @@ function DM_130() {
 		"clean_table" "optimistic"
 }
 
-
-
 function run() {
 	init_cluster
 	init_database
