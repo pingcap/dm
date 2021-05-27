@@ -109,9 +109,9 @@ function run() {
 	check_checkpoint $SOURCE_ID1 $name1 $pos1 $gtid1
 	check_checkpoint $SOURCE_ID2 $name2 $pos2 $gtid2
 	dmctl_stop_task_with_retry $TASK_NAME $MASTER_PORT
+	kill_dm_worker
 	clean_gtid
 
-	export GO_FAILPOINTS='github.com/pingcap/dm/syncer/AdjustGTIDExit=return(true)'
 	# start two workers again
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
