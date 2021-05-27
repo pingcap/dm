@@ -7,6 +7,49 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 source $cur/../_utils/shardddl_lib.sh
 
+function DM_013_CASE() {
+	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values (1,1)"
+	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col2 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values (2,2,2)"
+	run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb2} values (3,3)"
+	run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col2 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb2} values (4,4,4)"
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_013() {
+	run_case 013 "single-source-optimistic" "init_table 111 112" "clean_table" ""
+}
+
+function DM_014_CASE() {
+	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values (1,1)"
+	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col2 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values (2,2,2)"
+	run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col2 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb2} values (3,3)"
+	run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb2} values (4,4,4)"
+	run_sql_tidb_with_retry "select count(1) from ${shardddl}.${tb};" "count(1): 4"
+}
+
+function DM_014() {
+	run_case 014 "single-source-optimistic" "init_table 111 112" "clean_table" ""
+}
+
+function DM_015_CASE() {
+	run_sql_source1 "drop database ${shardddl1};"
+	check_log_contain_with_retry "skip event, need handled ddls is empty" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+	run_sql_source1 "create database ${shardddl1};"
+	check_log_contain_with_retry "CREATE DATABASE IF NOT EXISTS \`${shardddl1}\`" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+}
+
+function DM_015() {
+	run_case 015 "single-source-pessimistic" "init_table 111" "clean_table 111" ""
+}
+
 function DM_016_CASE() {
 	run_sql_source1 "drop database ${shardddl1};"
 	check_log_contain_with_retry "skip event, need handled ddls is empty" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
@@ -270,7 +313,7 @@ function DM_035() {
 function run() {
 	init_cluster
 	init_database
-	start=16
+	start=13
 	end=35
 	except=(024 025 029)
 	for i in $(seq -f "%03g" ${start} ${end}); do
