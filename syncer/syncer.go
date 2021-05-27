@@ -1226,6 +1226,18 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		cancel()
 	}()
 
+	// before sync run, we get the tsoffset from upstream first
+	updateTsOffset := func() {
+		t1 := time.Now()
+		ts, tsErr := s.fromDB.getServerUnixTS(ctx)
+		rtt := time.Since(t1).Seconds()
+		if tsErr != nil {
+			s.tctx.L().Error("get server unix ts err", zap.Error(tsErr))
+		} else {
+			s.tsOffset.Store(time.Now().Unix() - ts - int64(rtt/2))
+		}
+	}
+	updateTsOffset()
 	// start background task to get/update current ts offset between dm and upstream
 	s.wg.Add(1)
 	go func() {
@@ -1236,14 +1248,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		for {
 			select {
 			case <-updateTicker.C:
-				t1 := time.Now()
-				ts, tsErr := s.fromDB.getServerUnixTS(ctx)
-				rtt := time.Since(t1).Seconds()
-				if err != nil {
-					s.tctx.L().Error("get server unix ts err", zap.Error(tsErr))
-				} else {
-					s.tsOffset.Store(time.Now().Unix() - ts - int64(rtt/2))
-				}
+				updateTsOffset()
 			case <-ctx.Done():
 				return
 			}
