@@ -7,6 +7,37 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 source $cur/../_utils/shardddl_lib.sh
 
+function DM_011_CASE() {
+	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values (1,1)"
+	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col2 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values (2,2,2)"
+	run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 float;"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values (3,3.0)"
+	run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col2 float;"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values (4,4.0,4.0)"
+	check_log_contain_with_retry "is different with" $WORK_DIR/master/log/dm-master.log
+}
+
+function DM_011() {
+	run_case 011 "double-source-pessimistic" "init_table 111 211" "clean_table" ""
+}
+
+function DM_012_CASE() {
+	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values (1,1)"
+	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col2 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values (2,2,2)"
+	run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col2 int;"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values (3,3)"
+	run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values (4,4,4)"
+	check_log_contain_with_retry "is different with" $WORK_DIR/master/log/dm-master.log
+}
+
+function DM_012() {
+	run_case 012 "double-source-pessimistic" "init_table 111 211" "clean_table" ""
+}
 function DM_013_CASE() {
 	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values (1,1)"
@@ -313,7 +344,7 @@ function DM_035() {
 function run() {
 	init_cluster
 	init_database
-	start=13
+	start=11
 	end=35
 	except=(024 025 029)
 	for i in $(seq -f "%03g" ${start} ${end}); do
