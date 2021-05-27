@@ -17,7 +17,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"math"
 	"os"
 	"path"
 	"reflect"
@@ -188,9 +187,9 @@ type Syncer struct {
 
 	addJobFunc func(*job) error
 
-	tsOffset            atomic.Int64 // time offset between upstream and syncer
-	secondsBehindMaster atomic.Int64 // current task delay second behind upstrem
-	oldestBinlogTS      atomic.Int64 // the oldest binlog event dm has started to consume
+	tsOffset            atomic.Int64             // time offset between upstream and syncer
+	secondsBehindMaster atomic.Int64             // current task delay second behind upstrem
+	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:queueBucketName val: lag
 }
 
 // NewSyncer creates a new Syncer.
@@ -225,7 +224,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
 	syncer.recordedActiveRelayLog = false
-	syncer.oldestBinlogTS.Store(math.MaxInt64)
+	syncer.workerLagMap = make(map[string]*atomic.Int64)
 
 	return syncer
 }
@@ -736,19 +735,26 @@ func (s *Syncer) jobsIsEmpty() bool {
 	return true
 }
 
-// updateReplicationLag try update the oldestBinlogTS,secondsBehindMaster and replicationLagGauge job
-// it should be called after ddl/dml job flushed to target db, or skipped job in dm.
-func (s *Syncer) updateReplicationLag(job *job) {
+// TODO check data race
+func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 	if job != nil {
-		jobTS := int64(job.eventHeader.Timestamp)
-		if jobTS < s.oldestBinlogTS.Load() {
-			s.oldestBinlogTS.Store(jobTS)
-			lag := time.Now().Unix() + s.tsOffset.Load() - jobTS
-			SetReplicationLagGauge(s.cfg.Name, float64(lag))
-			s.secondsBehindMaster.Store(lag)
+		al, ok := s.workerLagMap[queueBucketName]
+		if !ok {
+			s.workerLagMap[queueBucketName] = &atomic.Int64{}
+		} else {
+			al.Store(time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp))
 		}
+		// find all job queue lag choose the max one
+		var maxLag int64
+		for _, l := range s.workerLagMap {
+			if lag := l.Load(); lag >= maxLag {
+				maxLag = lag
+			}
+		}
+		SetReplicationLagGauge(s.cfg.Name, float64(maxLag))
+		s.secondsBehindMaster.Store(maxLag)
 	}
-	// when job is nil and s.jobs is all emepty, means all event is consumed,we update lag to 0
+	// when job is nil and s.jobs is emepty, means all event is consumed,we update lag to 0
 	if job == nil && s.jobsIsEmpty() {
 		SetReplicationLagGauge(s.cfg.Name, float64(0))
 		s.secondsBehindMaster.Store(0)
@@ -786,7 +792,7 @@ func (s *Syncer) addJob(job *job) error {
 		s.saveGlobalPoint(job.location)
 		return nil
 	case skip:
-		s.updateReplicationLag(job)
+		s.updateReplicationLag(job, "skip")
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		// ugly code addJob and sync, refine it later
@@ -1049,7 +1055,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			continue
 		}
 		s.jobWg.Done()
-		s.updateReplicationLag(ddlJob)
+		s.updateReplicationLag(ddlJob, "ddl")
 		s.addCount(true, queueBucket, ddlJob.tp, int64(len(ddlJob.ddls)))
 	}
 }
@@ -1070,9 +1076,9 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			// every event before this job's event has already flushed to target db.
 			// but we still need to use this job's ts to maintain the oldest binlog event ts in syncer's struct
 			j := jobs[0]
-			s.updateReplicationLag(j)
+			s.updateReplicationLag(j, queueBucket)
 		} else {
-			s.updateReplicationLag(nil)
+			s.updateReplicationLag(nil, queueBucket)
 		}
 		// calc tps
 		for tpName, v := range tpCnt {
@@ -1225,10 +1231,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.wg.Add(1)
 		name := queueBucketName(i)
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
-		go func(i int, n string) {
+		go func(i int, name string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
-			s.syncDML(ctctx, n, s.toDBConns[i], s.jobs[i])
+			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i])
 			cancel()
 		}(i, name)
 	}
