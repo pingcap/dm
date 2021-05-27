@@ -724,6 +724,16 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 	}
 }
 
+func (s *Syncer) updateReplicationLag(job *job) {
+	// when job is nil, means all event is consumed,we update lag to 0
+	var lag int64
+	if job != nil {
+		lag = time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp)
+	}
+	SetReplicationLagGauge(s.cfg.Name, float64(lag))
+	s.secondsBehindMaster.Store(lag)
+}
+
 func (s *Syncer) checkWait(job *job) bool {
 	if job.tp == ddl {
 		return true
@@ -754,6 +764,8 @@ func (s *Syncer) addJob(job *job) error {
 	case xid:
 		s.saveGlobalPoint(job.location)
 		return nil
+	case skip:
+		s.updateReplicationLag(job)
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		// ugly code addJob and sync, refine it later
@@ -928,7 +940,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 	var err error
 	for {
-		sqlJob, ok := <-ddlJobChan
+		ddlJob, ok := <-ddlJobChan
 		if !ok {
 			return
 		}
@@ -942,26 +954,26 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			shardPessimistOp = s.pessimist.PendingOperation()
 			if shardPessimistOp != nil && !shardPessimistOp.Exec {
 				ignore = true
-				tctx.L().Info("ignore shard DDLs in pessimistic shard mode", zap.Strings("ddls", sqlJob.ddls))
+				tctx.L().Info("ignore shard DDLs in pessimistic shard mode", zap.Strings("ddls", ddlJob.ddls))
 			}
 		case config.ShardOptimistic:
-			if len(sqlJob.ddls) == 0 {
+			if len(ddlJob.ddls) == 0 {
 				ignore = true
 				tctx.L().Info("ignore shard DDLs in optimistic mode", zap.Stringer("info", s.optimist.PendingInfo()))
 			}
 		}
 
 		failpoint.Inject("ExecDDLError", func() {
-			s.tctx.L().Warn("execute ddl error", zap.Strings("DDL", sqlJob.ddls), zap.String("failpoint", "ExecDDLError"))
-			err = errors.Errorf("execute ddl %v error", sqlJob.ddls)
+			s.tctx.L().Warn("execute ddl error", zap.Strings("DDL", ddlJob.ddls), zap.String("failpoint", "ExecDDLError"))
+			err = errors.Errorf("execute ddl %v error", ddlJob.ddls)
 			failpoint.Goto("bypass")
 		})
 
 		if !ignore {
 			var affected int
-			affected, err = db.executeSQLWithIgnore(tctx, ignoreDDLError, sqlJob.ddls)
+			affected, err = db.executeSQLWithIgnore(tctx, ignoreDDLError, ddlJob.ddls)
 			if err != nil {
-				err = s.handleSpecialDDLError(tctx, err, sqlJob.ddls, affected, db)
+				err = s.handleSpecialDDLError(tctx, err, ddlJob.ddls, affected, db)
 				err = terror.WithScope(err, terror.ScopeDownstream)
 			}
 		}
@@ -971,7 +983,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if err != nil {
 			s.execError.Store(err)
 			if !utils.IsContextCanceledError(err) {
-				err = s.handleEventError(err, sqlJob.startLocation, sqlJob.currentLocation, true, sqlJob.originSQL)
+				err = s.handleEventError(err, ddlJob.startLocation, ddlJob.currentLocation, true, ddlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
 			s.jobWg.Done()
@@ -985,7 +997,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			switch {
 			case shardInfo == nil:
 				// no need to do the shard DDL handle for `CREATE DATABASE/TABLE` now.
-				tctx.L().Warn("skip shard DDL handle in pessimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
+				tctx.L().Warn("skip shard DDL handle in pessimistic shard mode", zap.Strings("ddl", ddlJob.ddls))
 			case shardPessimistOp == nil:
 				err = terror.ErrWorkerDDLLockOpNotFound.Generate(shardInfo)
 			default:
@@ -998,7 +1010,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				// no need to do the shard DDL handle for `DROP DATABASE/TABLE` now.
 				// but for `CREATE DATABASE` and `ALTER DATABASE` we execute it to the downstream directly without `shardInfo`.
 				if ignore { // actually ignored.
-					tctx.L().Warn("skip shard DDL handle in optimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
+					tctx.L().Warn("skip shard DDL handle in optimistic shard mode", zap.Strings("ddl", ddlJob.ddls))
 				}
 			case s.optimist.PendingOperation() == nil:
 				err = terror.ErrWorkerDDLLockOpNotFound.Generate(shardInfo)
@@ -1009,18 +1021,20 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if err != nil {
 			s.execError.Store(err)
 			if !utils.IsContextCanceledError(err) {
-				err = s.handleEventError(err, sqlJob.startLocation, sqlJob.currentLocation, true, sqlJob.originSQL)
+				err = s.handleEventError(err, ddlJob.startLocation, ddlJob.currentLocation, true, ddlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
 			s.jobWg.Done()
 			continue
 		}
 		s.jobWg.Done()
-		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
+		s.updateReplicationLag(ddlJob)
+		s.addCount(true, queueBucket, ddlJob.tp, int64(len(ddlJob.ddls)))
 	}
 }
 
-func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
+// DML synced in batch by one worker.
+func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
 	defer s.wg.Done()
 
 	idx := 0
@@ -1028,17 +1042,26 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	jobs := make([]*job, 0, count)
 	tpCnt := make(map[opType]int64)
 
+	// clearF is used to calc lag metric and clear local job queue.
 	clearF := func() {
-		for i := 0; i < idx; i++ {
-			s.jobWg.Done()
+		if len(jobs) > 0 {
+			// NOTE: we can use the first job of job queue to calc lag because when this job flush to target db,
+			// every event before this job's event has already flushed to target db.
+			s.updateReplicationLag(jobs[0])
+		} else {
+			s.updateReplicationLag(nil)
 		}
-
-		idx = 0
-		jobs = jobs[0:0]
+		// calc tps
 		for tpName, v := range tpCnt {
 			s.addCount(true, queueBucket, tpName, v)
 			tpCnt[tpName] = 0
 		}
+		// reset job queue
+		for i := 0; i < idx; i++ {
+			s.jobWg.Done()
+		}
+		idx = 0
+		jobs = jobs[0:0]
 	}
 
 	fatalF := func(affected int, err error) {
@@ -1076,34 +1099,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			t := v.(int)
 			time.Sleep(time.Duration(t) * time.Second)
 		})
-		affect, err := db.executeSQL(tctx, queries, args...)
-
-		var needUpdateLag bool
-		var lag int64
-		var tsOffset int64
-		for _, j := range jobs {
-			// NOTE: after one job execute to target db, incr job commit count
-			j.ec.commitJobCount.Inc()
-			// when one evevnt all job finshend,update the lag metric
-			if j.ec.commitJobCount.Load() == j.ec.jobCount {
-				// only get s.tsoffset once when first time need to calc lag
-				if !needUpdateLag {
-					tsOffset = s.tsOffset.Load()
-					lag = time.Now().Unix() + tsOffset - j.ec.startTime.Unix()
-					needUpdateLag = true
-				} else {
-					thisJobLag := time.Now().Unix() + tsOffset - j.ec.startTime.Unix()
-					if thisJobLag < lag {
-						lag = thisJobLag
-					}
-				}
-			}
-		}
-		if needUpdateLag {
-			SetReplicationLagGauge(s.cfg.Name, float64(lag))
-			s.secondsBehindMaster.Store(lag)
-		}
-		return affect, err
+		return db.executeSQL(tctx, queries, args...)
 	}
 
 	var err error
@@ -1201,7 +1197,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}
 
-	// start worker to consume sync job
 	s.queueBucketMapping = make([]string, 0, s.cfg.WorkerCount+1)
 	for i := 0; i < s.cfg.WorkerCount; i++ {
 		s.wg.Add(1)
@@ -1210,7 +1205,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		go func(i int, n string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
-			s.sync(ctctx, n, s.toDBConns[i], s.jobs[i])
+			s.syncDML(ctctx, n, s.toDBConns[i], s.jobs[i])
 			cancel()
 		}(i, name)
 	}
@@ -1590,8 +1585,6 @@ type eventContext struct {
 	tryReSync           bool
 	startTime           time.Time
 	shardingReSyncCh    *chan *ShardingReSync
-	jobCount            int64
-	commitJobCount      atomic.Int64 // incr after job is execcute to target db.
 }
 
 // TODO: Further split into smaller functions and group common arguments into a context struct.
@@ -1694,7 +1687,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	if ignore {
 		skipBinlogDurationHistogram.WithLabelValues("rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		// for RowsEvent, we should record lastLocation rather than currentLocation
-		return s.recordSkipSQLsLocation(*ec.lastLocation)
+		return s.recordSkipSQLsLocation(&ec)
 	}
 
 	if s.cfg.ShardMode == config.ShardPessimistic {
@@ -1777,7 +1770,6 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	startTime := time.Now()
-	ec.jobCount = int64(len(sqls))
 	for i := range sqls {
 		var arg []interface{}
 		var key []string
@@ -1820,7 +1812,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 		// we try to insert an empty SQL to s.onlineDDL, because ignoring it will cause a "not found" error
 		if s.onlineDDL == nil {
-			return s.recordSkipSQLsLocation(*ec.lastLocation)
+			return s.recordSkipSQLsLocation(&ec)
 		}
 
 		stmts, err2 := parserpkg.Parse(parser2, originSQL, "", "")
@@ -1838,7 +1830,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 				s.onlineDDL.Apply(ec.tctx, tableNames, "", stmt)
 			}
 		}
-		return s.recordSkipSQLsLocation(*ec.lastLocation)
+		return s.recordSkipSQLsLocation(&ec)
 	}
 	if !parseResult.isDDL {
 		// skipped sql maybe not a DDL
@@ -1978,7 +1970,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	ec.tctx.L().Info("prepare to handle ddls", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 	if len(needHandleDDLs) == 0 {
 		ec.tctx.L().Info("skip event, need handled ddls is empty", zap.String("event", "query"), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
-		return s.recordSkipSQLsLocation(*ec.lastLocation)
+		return s.recordSkipSQLsLocation(&ec)
 	}
 
 	// interrupted before flush old checkpoint.
@@ -2021,7 +2013,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			}
 		})
 
-		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, sourceTbls, originSQL)
+		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, sourceTbls, originSQL, ec.header)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err
@@ -2211,7 +2203,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		}
 	})
 
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil, originSQL)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil, originSQL, ec.header)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
@@ -2342,7 +2334,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 	conflictDetectDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 
-	job := newDMLJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, ec)
+	job := newDMLJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header)
 	return s.addJobFunc(job)
 }
 
@@ -2548,8 +2540,8 @@ func (s *Syncer) closeDBs() {
 
 // record skip ddl/dml sqls' position
 // make newJob's sql argument empty to distinguish normal sql and skips sql.
-func (s *Syncer) recordSkipSQLsLocation(location binlog.Location) error {
-	job := newSkipJob(location)
+func (s *Syncer) recordSkipSQLsLocation(ec *eventContext) error {
+	job := newSkipJob(ec)
 	return s.addJobFunc(job)
 }
 

@@ -279,11 +279,11 @@ function run() {
 	run_sql_source1 "flush logs"
 	run_sql_file $cur/data/db1.increment0.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
 	# test lag metric
 	check_metric $WORKER1_PORT "dm_syncer_replication_lag{task=\"$ILLEGAL_CHAR_NAME\"}" 3 -1 9999999
 	check_metric $WORKER2_PORT "dm_syncer_replication_lag{task=\"$ILLEGAL_CHAR_NAME\"}" 3 -1 9999999
-
-	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"pause-relay -s mysql-replica-01" \

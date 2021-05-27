@@ -16,6 +16,8 @@ package syncer
 import (
 	"fmt"
 
+	"github.com/go-mysql-org/go-mysql/replication"
+
 	"github.com/pingcap/dm/pkg/binlog"
 )
 
@@ -74,7 +76,7 @@ type job struct {
 	ddls            []string
 	originSQL       string // show origin sql when error, only DDL now
 
-	ec *eventContext // NOTE: only exist when created by newDMLJob.
+	eventHeader *replication.EventHeader
 }
 
 func (j *job) String() string {
@@ -82,21 +84,22 @@ func (j *job) String() string {
 	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.sql, j.args, j.key, j.ddls, j.location, j.startLocation, j.currentLocation)
 }
 
-// newDMLJob is uesd to create dml job with binlog event context.
-func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, ec *eventContext) *job {
+func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{},
+	key string, location, startLocation, cmdLocation binlog.Location, eventHeader *replication.EventHeader) *job {
 	return &job{
-		tp:              tp,
-		sourceTbl:       map[string][]string{sourceSchema: {sourceTable}},
-		targetSchema:    targetSchema,
-		targetTable:     targetTable,
-		sql:             sql,
-		args:            args,
-		key:             key,
-		retry:           true,
-		location:        *ec.lastLocation,
-		startLocation:   *ec.startLocation,
-		currentLocation: *ec.currentLocation,
-		ec:              ec,
+		tp:           tp,
+		sourceTbl:    map[string][]string{sourceSchema: {sourceTable}},
+		targetSchema: targetSchema,
+		targetTable:  targetTable,
+		sql:          sql,
+		args:         args,
+		key:          key,
+		retry:        true,
+
+		location:        location,
+		startLocation:   startLocation,
+		currentLocation: cmdLocation,
+		eventHeader:     eventHeader,
 	}
 }
 
@@ -104,14 +107,16 @@ func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, 
 // when cfg.ShardMode == "", ddlInfo == nil，sourceTbls != nil, we use sourceTbls to record ddl affected tables.
 // when cfg.ShardMode == ShardOptimistic || ShardPessimistic, ddlInfo != nil, sourceTbls == nil.
 func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation, cmdLocation binlog.Location,
-	sourceTbls map[string]map[string]struct{}, originSQL string) *job {
+	sourceTbls map[string]map[string]struct{}, originSQL string, eventHeader *replication.EventHeader) *job {
 	j := &job{
-		tp:              ddl,
-		ddls:            ddls,
+		tp:        ddl,
+		ddls:      ddls,
+		originSQL: originSQL,
+
 		location:        location,
 		startLocation:   startLocation,
 		currentLocation: cmdLocation,
-		originSQL:       originSQL,
+		eventHeader:     eventHeader,
 	}
 
 	if ddlInfo != nil {
@@ -134,6 +139,14 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation,
 	return j
 }
 
+func newSkipJob(ec *eventContext) *job {
+	return &job{
+		tp:          skip,
+		location:    *ec.lastLocation,
+		eventHeader: ec.header,
+	}
+}
+
 func newXIDJob(location, startLocation, cmdLocation binlog.Location) *job {
 	return &job{
 		tp:              xid,
@@ -146,13 +159,6 @@ func newXIDJob(location, startLocation, cmdLocation binlog.Location) *job {
 func newFlushJob() *job {
 	return &job{
 		tp: flush,
-	}
-}
-
-func newSkipJob(location binlog.Location) *job {
-	return &job{
-		tp:       skip,
-		location: location,
 	}
 }
 

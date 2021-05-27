@@ -206,7 +206,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 		tableNames: needTrackDDLs[0].tableNames,
 		stmt:       needTrackDDLs[0].stmt,
 	}
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil, originSQL)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil, originSQL, ec.header)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
