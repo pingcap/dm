@@ -17,6 +17,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"reflect"
@@ -189,6 +190,7 @@ type Syncer struct {
 
 	tsOffset            atomic.Int64 // time offset between upstream and syncer
 	secondsBehindMaster atomic.Int64 // current task delay second behind upstrem
+	oldestBinlogTS      atomic.Int64 // the oldest binlog event dm has started to consume
 }
 
 // NewSyncer creates a new Syncer.
@@ -223,6 +225,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
 	syncer.recordedActiveRelayLog = false
+	syncer.oldestBinlogTS.Store(math.MaxInt64)
 
 	return syncer
 }
@@ -724,14 +727,32 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 	}
 }
 
-func (s *Syncer) updateReplicationLag(job *job) {
-	// when job is nil, means all event is consumed,we update lag to 0
-	var lag int64
-	if job != nil {
-		lag = time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp)
+func (s *Syncer) jobsIsEmpty() bool {
+	for idx := range s.jobs {
+		if len(s.jobs[idx]) > 0 {
+			return false
+		}
 	}
-	SetReplicationLagGauge(s.cfg.Name, float64(lag))
-	s.secondsBehindMaster.Store(lag)
+	return true
+}
+
+// updateReplicationLag try update the oldestBinlogTS,secondsBehindMaster and replicationLagGauge job
+// it should be called after ddl/dml job flushed to target db, or skipped job in dm.
+func (s *Syncer) updateReplicationLag(job *job) {
+	if job != nil {
+		jobTS := int64(job.eventHeader.Timestamp)
+		if jobTS < s.oldestBinlogTS.Load() {
+			s.oldestBinlogTS.Store(jobTS)
+			lag := time.Now().Unix() + s.tsOffset.Load() - jobTS
+			SetReplicationLagGauge(s.cfg.Name, float64(lag))
+			s.secondsBehindMaster.Store(lag)
+		}
+	}
+	// when job is nil and s.jobs is all emepty, means all event is consumed,we update lag to 0
+	if job == nil && s.jobsIsEmpty() {
+		SetReplicationLagGauge(s.cfg.Name, float64(0))
+		s.secondsBehindMaster.Store(0)
+	}
 }
 
 func (s *Syncer) checkWait(job *job) bool {
@@ -1047,7 +1068,9 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if len(jobs) > 0 {
 			// NOTE: we can use the first job of job queue to calc lag because when this job flush to target db,
 			// every event before this job's event has already flushed to target db.
-			s.updateReplicationLag(jobs[0])
+			// but we still need to use this job's ts to maintain the oldest binlog event ts in syncer's struct
+			j := jobs[0]
+			s.updateReplicationLag(j)
 		} else {
 			s.updateReplicationLag(nil)
 		}
@@ -1227,7 +1250,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}()
 
 	// before sync run, we get the tsoffset from upstream first
-	updateTsOffset := func() {
+	updateTSOffset := func() {
 		t1 := time.Now()
 		ts, tsErr := s.fromDB.getServerUnixTS(ctx)
 		rtt := time.Since(t1).Seconds()
@@ -1237,7 +1260,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			s.tsOffset.Store(time.Now().Unix() - ts - int64(rtt/2))
 		}
 	}
-	updateTsOffset()
+	updateTSOffset()
 	// start background task to get/update current ts offset between dm and upstream
 	s.wg.Add(1)
 	go func() {
@@ -1248,7 +1271,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		for {
 			select {
 			case <-updateTicker.C:
-				updateTsOffset()
+				updateTSOffset()
 			case <-ctx.Done():
 				return
 			}
