@@ -109,7 +109,8 @@ function run() {
 	check_checkpoint $SOURCE_ID1 $name1 $pos1 $gtid1
 	check_checkpoint $SOURCE_ID2 $name2 $pos2 $gtid2
 	dmctl_stop_task_with_retry $TASK_NAME $MASTER_PORT
-	kill_dm_worker
+	check_port_offline $WORKER1_PORT 20
+	check_port_offline $WORKER2_PORT 20
 	clean_gtid
 
 	# start two workers again
@@ -123,7 +124,8 @@ function run() {
 
 	check_checkpoint $SOURCE_ID1 $name1 $pos1 $gtid1
 	check_checkpoint $SOURCE_ID2 $name2 $pos2 $gtid2
-	kill_dm_worker
+	check_port_offline $WORKER1_PORT 20
+	check_port_offline $WORKER2_PORT 20
 	clean_gtid
 
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
