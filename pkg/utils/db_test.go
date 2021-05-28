@@ -123,6 +123,14 @@ func (t *testDBSuite) TestGetMasterStatus(c *C) {
 	})
 	c.Assert(gs.String(), Equals, "1-2-100")
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	// some upstream (maybe a polarDB secondary node)
+	rows = mock.NewRows([]string{"File", "Position", "Binlog_Do_DB", "Binlog_Ignore_DB"})
+	mock.ExpectQuery(`SHOW MASTER STATUS`).WillReturnRows(rows)
+
+	_, gs, err = GetMasterStatus(ctx, db, "mysql")
+	c.Assert(gs, IsNil)
+	c.Assert(err, NotNil)
 }
 
 func (t *testDBSuite) TestGetMariaDBGtidDomainID(c *C) {

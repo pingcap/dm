@@ -185,6 +185,9 @@ const (
 
 	// pkg/streamer.
 	codePreviousGTIDNotExist
+
+	// pkg/utils
+	codeNoMasterStatus
 )
 
 // Config related error code list.
@@ -795,6 +798,9 @@ var (
 	ErrMetadataNoBinlogLoc = New(codeMetadataNoBinlogLoc, ClassFunctional, ScopeUpstream, LevelLow, "didn't found binlog location in dumped metadata file %s", "Please check log of dump unit, there maybe errors when read upstream binlog status")
 
 	ErrPreviousGTIDNotExist = New(codePreviousGTIDNotExist, ClassFunctional, ScopeInternal, LevelHigh, "no previous gtid event from binlog %s", "")
+
+	// pkg/utils.
+	ErrNoMasterStatus = New(codeNoMasterStatus, ClassFunctional, ScopeUpstream, LevelMedium, "upstream returns an empty result for SHOW MASTER STATUS", "Please check the upstream settings like privileges, RDS settings to read data from SHOW MASTER STATUS.")
 
 	// Config related error.
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s", "Please check `ignore-checking-items` config in task configuration file, which can be set including `all`/`dump_privilege`/`replication_privilege`/`version`/`binlog_enable`/`binlog_format`/`binlog_row_image`/`table_schema`/`schema_of_shard_tables`/`auto_increment_ID`.")
