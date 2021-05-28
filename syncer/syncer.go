@@ -91,6 +91,9 @@ type BinlogType uint8
 const (
 	RemoteBinlog BinlogType = iota + 1
 	LocalBinlog
+
+	skipLagKey = "skip"
+	ddlLagKey  = "ddl"
 )
 
 // Syncer can sync your MySQL data to another MySQL database.
@@ -735,15 +738,12 @@ func (s *Syncer) jobsIsEmpty() bool {
 	return true
 }
 
-// TODO check data race
+// updateReplicationLag calc syncer replication lag by job, it called after every batch dml job / one skip job / one ddl
+// job is flushed to target db.
 func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 	if job != nil {
-		al, ok := s.workerLagMap[queueBucketName]
-		if !ok {
-			s.workerLagMap[queueBucketName] = &atomic.Int64{}
-		} else {
-			al.Store(time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp))
-		}
+		// NOTE workerlagmap already init all key(queueBucketName) before syncer running.
+		s.workerLagMap[queueBucketName].Store(time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp))
 		// find all job queue lag choose the max one
 		var maxLag int64
 		for _, l := range s.workerLagMap {
@@ -792,7 +792,7 @@ func (s *Syncer) addJob(job *job) error {
 		s.saveGlobalPoint(job.location)
 		return nil
 	case skip:
-		s.updateReplicationLag(job, "skip")
+		s.updateReplicationLag(job, skipLagKey)
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		// ugly code addJob and sync, refine it later
@@ -1055,7 +1055,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			continue
 		}
 		s.jobWg.Done()
-		s.updateReplicationLag(ddlJob, "ddl")
+		s.updateReplicationLag(ddlJob, ddlLagKey)
 		s.addCount(true, queueBucket, ddlJob.tp, int64(len(ddlJob.ddls)))
 	}
 }
@@ -1074,7 +1074,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if len(jobs) > 0 {
 			// NOTE: we can use the first job of job queue to calc lag because when this job flush to target db,
 			// every event before this job's event has already flushed to target db.
-			// but we still need to use this job's ts to maintain the oldest binlog event ts in syncer's struct
+			// but we still need to use this job to maintain the oldest binlog event ts among all workers.
 			j := jobs[0]
 			s.updateReplicationLag(j, queueBucket)
 		} else {
@@ -1231,6 +1231,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.wg.Add(1)
 		name := queueBucketName(i)
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
+		s.workerLagMap[name] = &atomic.Int64{}
 		go func(i int, name string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
@@ -1239,6 +1240,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}(i, name)
 	}
 
+	// also init the ddl/skip job key in workerLagMap
+	s.workerLagMap[skipLagKey] = &atomic.Int64{}
+	s.workerLagMap[ddlLagKey] = &atomic.Int64{}
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
 	go func() {
