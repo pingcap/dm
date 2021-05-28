@@ -244,12 +244,7 @@ function DM_RECOVER_LOCK_CASE() {
 	run_sql_source2 "alter table ${shardddl1}.${tb2} drop column b;"
 	check_log_contain_with_retry "putted a shard DDL.*tb2.*ALTER TABLE .* DROP COLUMN" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
 
-	echo "restart dm-master"
-	ps aux | grep dm-master | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT 20
-	sleep 2
-	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	restart_master
 
 	run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(4,'bbb');"
@@ -266,12 +261,7 @@ function DM_RECOVER_LOCK_CASE() {
 	# joined(a,b,c); tb1(a,b,c); tb2(a)
 	# TrySync tb1: joined(a,b,c); tb1(a,c); tb2(a)
 	# TrySync tb2: joined(a,c); tb1(a,c); tb2(a,b)
-	echo "restart dm-master"
-	ps aux | grep dm-master | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT 20
-	sleep 2
-	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	restart_master
 
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(8,'eee');"
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
@@ -354,7 +344,7 @@ function DM_RemoveLock() {
 
 function restart_master() {
 	echo "restart dm-master"
-	ps aux | grep dm-master | awk '{print $2}' | xargs kill || true
+	kill_dm_master
 	check_port_offline $MASTER_PORT 20
 	sleep 2
 
