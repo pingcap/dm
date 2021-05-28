@@ -169,7 +169,7 @@ func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, err
 }
 
 // GetMasterStatus gets status from master.
-// When the returned error is nil, the gtid.Set must be not nil
+// When the returned error is nil, the gtid.Set must be not nil.
 func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
 	var (
 		binlogPos gmysql.Position
