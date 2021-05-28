@@ -14,10 +14,20 @@ jobs:
     runs-on: ubuntu-18.04
 
     steps:
+<<<<<<< HEAD
       - name: Set up Go 1.16
         uses: actions/setup-go@v2
         with:
           go-version: 1.16
+=======
+    - name: Set up Go 1.16
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16
+    
+    - name: Check out code
+      uses: actions/checkout@v2
+>>>>>>> 0ec1f8df9 (*: update go version to 1.16 (#1698))
 
       - name: Check out code
         uses: actions/checkout@v2
