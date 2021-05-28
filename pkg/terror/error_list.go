@@ -186,7 +186,7 @@ const (
 	// pkg/streamer.
 	codePreviousGTIDNotExist
 
-	// pkg/utils
+	// pkg/utils.
 	codeNoMasterStatus
 )
 
