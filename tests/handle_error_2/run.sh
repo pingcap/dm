@@ -746,7 +746,7 @@ function run() {
 	init_cluster
 	init_database
 
-	implement=(4202 4204 4206 4207 4209 4211 4213 4215 4216 4219 4220 4185 4201 4189 4210 4193 4230 4177 4231)
+	implement=(4215 4216 4219 4220 4185 4201 4189 4210 4193 4230 4177 4231)
 	for i in ${implement[@]}; do
 		DM_${i}
 		sleep 1

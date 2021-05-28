@@ -9,6 +9,43 @@ API_VERSION="v1alpha1"
 # import helper functions
 source $cur/lib.sh
 
+function test_multi_task_running() {
+	echo "[$(date)] <<<<<< start test_multi_task_running >>>>>>"
+	cleanup
+	prepare_sql_multi_task
+	start_multi_tasks_cluster
+
+	# make sure task to step in "Sync" stage
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
+		"query-status test" \
+		"\"stage\": \"Running\"" 2 \
+		"\"unit\": \"Sync\"" 2
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
+		"query-status test2" \
+		"\"stage\": \"Running\"" 2 \
+		"\"unit\": \"Sync\"" 2
+
+	echo "use sync_diff_inspector to check full dump loader"
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+	check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml
+
+	echo "flush logs to force rotate binlog file"
+	run_sql "flush logs;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql "flush logs;" $MYSQL_PORT2 $MYSQL_PASSWORD2
+
+	echo "apply increment data before restart dm-worker to ensure entering increment phase"
+	run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test
+	run_sql_file_withdb $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test
+	run_sql_file_withdb $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 $ha_test2
+	run_sql_file_withdb $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 $ha_test2
+
+	sleep 5 # wait for flush checkpoint
+	echo "use sync_diff_inspector to check increment data"
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 50 || print_debug_status
+	check_sync_diff $WORK_DIR $cur/conf/diff_config_multi_task.toml 50 || print_debug_status
+	echo "[$(date)] <<<<<< finish test_multi_task_running >>>>>>"
+}
+
 function test_stop_task() {
 	echo "[$(date)] <<<<<< start test_stop_task >>>>>>"
 	test_multi_task_running
