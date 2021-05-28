@@ -169,6 +169,7 @@ func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, err
 }
 
 // GetMasterStatus gets status from master.
+// When the returned error is nil, the gtid.Set must be not nil
 func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
 	var (
 		binlogPos gmysql.Position
@@ -201,26 +202,32 @@ func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Pos
 		pos        uint32
 		nullPtr    interface{}
 	)
-	for rows.Next() {
-		if len(rowColumns) == 5 {
-			err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr, &gtidStr)
-		} else {
-			err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr)
-		}
-		if err != nil {
-			return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-		}
-
-		binlogPos = gmysql.Position{
-			Name: binlogName,
-			Pos:  pos,
-		}
-
-		gs, err = gtid.ParserGTID(flavor, gtidStr)
-		if err != nil {
-			return binlogPos, gs, err
-		}
+	if !rows.Next() {
+		return binlogPos, gs, terror.ErrNoMasterStatus.Generate()
 	}
+
+	if len(rowColumns) == 5 {
+		err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr, &gtidStr)
+	} else {
+		err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr)
+	}
+	if err != nil {
+		return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+
+	binlogPos = gmysql.Position{
+		Name: binlogName,
+		Pos:  pos,
+	}
+
+	gs, err = gtid.ParserGTID(flavor, gtidStr)
+	if err != nil {
+		return binlogPos, gs, err
+	}
+	if rows.Next() {
+		log.L().Warn("SHOW MASTER STATUS returns more than one row, will only use first row")
+	}
+
 	if rows.Err() != nil {
 		return binlogPos, gs, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
 	}
