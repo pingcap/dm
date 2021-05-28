@@ -90,46 +90,6 @@ function DM_007() {
 	run_case 007 "double-source-pessimistic" "init_table 111 212" "clean_table" ""
 }
 
-function DM_008_CASE() {
-	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
-	run_sql_source1 "insert into ${shardddl1}.${tb1} values (1,1)"
-	run_sql_source2 "alter table ${shardddl2}.${tb1} add column new_col1 int;"
-	run_sql_source2 "insert into ${shardddl2}.${tb1} values (2,2)"
-	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-}
-
-function DM_008() {
-	run_case 008 "double-source-pessimistic" "init_table 111 221" "clean_table" ""
-}
-
-function DM_009_CASE() {
-	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
-	run_sql_source1 "insert into ${shardddl1}.${tb1} values (1,1)"
-	run_sql_source2 "alter table ${shardddl2}.${tb2} add column new_col1 int;"
-	run_sql_source2 "insert into ${shardddl2}.${tb2} values (2,2)"
-	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-}
-
-function DM_009() {
-	run_case 009 "double-source-pessimistic" "init_table 111 222" "clean_table" ""
-}
-
-function DM_010_CASE() {
-	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
-	run_sql_source1 "insert into ${shardddl1}.${tb1} values (1,1)"
-	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col2 int;"
-	run_sql_source1 "insert into ${shardddl1}.${tb1} values (2,2,2)"
-	run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
-	run_sql_source1 "insert into ${shardddl1}.${tb2} values (3,3)"
-	run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col2 int;"
-	run_sql_source1 "insert into ${shardddl1}.${tb2} values (4,4,4)"
-	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-}
-
-function DM_010() {
-	run_case 010 "single-source-pessimistic" "init_table 111 112" "clean_table" ""
-}
-
 function DM_RENAME_TABLE_CASE() {
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(2);"
@@ -584,7 +544,7 @@ function run() {
 	init_cluster
 	init_database
 	start=1
-	end=10
+	end=7
 	for i in $(seq -f "%03g" ${start} ${end}); do
 		DM_${i}
 		sleep 1
