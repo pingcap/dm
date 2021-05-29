@@ -742,21 +742,26 @@ func (s *Syncer) jobsIsEmpty() bool {
 // job is flushed to target db.
 func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 	if job != nil {
-		// NOTE workerlagmap already init all key(queueBucketName) before syncer running.
-		s.workerLagMap[queueBucketName].Store(time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp))
-		// find all job queue lag choose the max one
-		var maxLag int64
-		for _, l := range s.workerLagMap {
-			if lag := l.Load(); lag >= maxLag {
-				maxLag = lag
+		var lag int64
+		switch job.tp {
+		case skip, ddl:
+			lag = time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp)
+		default: // dml job
+			// NOTE workerlagmap already init all key(queueBucketName) before syncer running.
+			s.workerLagMap[queueBucketName].Store(time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp))
+			// find all job queue lag choose the max one
+			for _, l := range s.workerLagMap {
+				if wl := l.Load(); wl > lag {
+					lag = wl
+				}
 			}
 		}
-		SetReplicationLagGauge(s.cfg.Name, float64(maxLag))
-		s.secondsBehindMaster.Store(maxLag)
+		replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(lag))
+		s.secondsBehindMaster.Store(lag)
 	}
 	// when job is nil and s.jobs is emepty, means all event is consumed,we update lag to 0
 	if job == nil && s.jobsIsEmpty() {
-		SetReplicationLagGauge(s.cfg.Name, float64(0))
+		replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(0))
 		s.secondsBehindMaster.Store(0)
 	}
 }
@@ -1206,6 +1211,38 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}
 
+	updateTSOffset := func() error {
+		t1 := time.Now()
+		ts, tsErr := s.fromDB.getServerUnixTS(ctx)
+		rtt := time.Since(t1).Seconds()
+		if tsErr == nil {
+			s.tsOffset.Store(time.Now().Unix() - ts - int64(rtt/2))
+		}
+		return tsErr
+	}
+	// before sync run, we get the tsoffset from upstream first
+	if utErr := updateTSOffset(); err != nil {
+		return utErr
+	}
+	// start background task to get/update current ts offset between dm and upstream
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		// temporarily hard code there. if this metrics works well add this to config file.
+		updateTicker := time.NewTicker(time.Second * 10)
+		defer updateTicker.Stop()
+		for {
+			select {
+			case <-updateTicker.C:
+				if utErr := updateTSOffset(); utErr != nil {
+					s.tctx.L().Error("get server unix ts err", zap.Error(utErr))
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	// startLocation is the start location for current received event
 	// currentLocation is the end location for current received event (End_log_pos in `show binlog events` for mysql)
 	// lastLocation is the end location for last received (ROTATE / QUERY / XID) event
@@ -1240,9 +1277,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}(i, name)
 	}
 
-	// also init the ddl/skip job key in workerLagMap
-	s.workerLagMap[skipLagKey] = &atomic.Int64{}
-	s.workerLagMap[ddlLagKey] = &atomic.Int64{}
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
 	go func() {
@@ -1257,35 +1291,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		ctx2, cancel := context.WithCancel(ctx)
 		s.printStatus(ctx2)
 		cancel()
-	}()
-
-	// before sync run, we get the tsoffset from upstream first
-	updateTSOffset := func() {
-		t1 := time.Now()
-		ts, tsErr := s.fromDB.getServerUnixTS(ctx)
-		rtt := time.Since(t1).Seconds()
-		if tsErr != nil {
-			s.tctx.L().Error("get server unix ts err", zap.Error(tsErr))
-		} else {
-			s.tsOffset.Store(time.Now().Unix() - ts - int64(rtt/2))
-		}
-	}
-	updateTSOffset()
-	// start background task to get/update current ts offset between dm and upstream
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		// temporarily hard code there. if this metrics works well add this to config file.
-		updateTicker := time.NewTicker(time.Second * 10)
-		defer updateTicker.Stop()
-		for {
-			select {
-			case <-updateTicker.C:
-				updateTSOffset()
-			case <-ctx.Done():
-				return
-			}
-		}
 	}()
 
 	defer func() {

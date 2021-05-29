@@ -292,8 +292,3 @@ func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	unsyncedTableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	shardLockResolving.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }
-
-// SetReplicationLagGauge is replicationLagGauge setter.
-func SetReplicationLagGauge(taskName string, lag float64) {
-	replicationLagGauge.WithLabelValues(taskName).Set(lag)
-}
