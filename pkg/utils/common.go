@@ -145,6 +145,50 @@ func FetchTargetDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter, rou
 	return mapper, nil
 }
 
+// LowerCaseTableNamesFlavor represents the type of db `lower_case_table_names` settings.
+type LowerCaseTableNamesFlavor uint8
+
+const (
+	// LCTableNamesSensitive represent lower_case_table_names = 0, case sensitive.
+	LCTableNamesSensitive LowerCaseTableNamesFlavor = 0
+	// LCTableNamesInsensitive represent lower_case_table_names = 1, case insensitive.
+	LCTableNamesInsensitive = 1
+	// LCTableNamesMixed represent lower_case_table_names = 2, table names are case-sensitive, but case-insensitive in usage.
+	LCTableNamesMixed = 2
+)
+
+func parseLowerCaseTableNamesFlavorFrom(s string) (LowerCaseTableNamesFlavor, error) {
+	switch s {
+	case "0":
+		return LCTableNamesSensitive, nil
+	case "1":
+		return LCTableNamesInsensitive, nil
+	case "2":
+		return LCTableNamesMixed, nil
+	default:
+		return LCTableNamesSensitive, terror.ErrDBUnExpect.Generate(fmt.Sprintf("invalid `lower_case_table_names` value '%s'", s))
+	}
+}
+
+// FetchLowerCaseTableNamesSetting return the `lower_case_table_names` setting of target db.
+func FetchLowerCaseTableNamesSetting(ctx context.Context, db *sql.DB) (LowerCaseTableNamesFlavor, error) {
+	query := "SELECT @@lower_case_table_names;"
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(err, query)
+	}
+	if rows.Err() != nil {
+		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(err, query)
+	}
+	defer rows.Close()
+	var res string
+	err = rows.Scan(&res)
+	if err != nil {
+		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(err, query)
+	}
+	return parseLowerCaseTableNamesFlavorFrom(res)
+}
+
 // CompareShardingDDLs compares s and t ddls
 // only concern in content, ignore order of ddl.
 func CompareShardingDDLs(s, t []string) bool {
@@ -208,4 +252,20 @@ func NonRepeatStringsEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// GenTableID generates table ID.
+func GenTableID(schema, table string) (id string, isSchemaOnly bool) {
+	if len(table) == 0 {
+		return fmt.Sprintf("`%s`", schema), true
+	}
+	return fmt.Sprintf("`%s`.`%s`", schema, table), false
+}
+
+// UnpackTableID unpacks table ID to <schema, table> pair.
+func UnpackTableID(id string) (string, string) {
+	parts := strings.Split(id, "`.`")
+	schema := strings.TrimLeft(parts[0], "`")
+	table := strings.TrimRight(parts[1], "`")
+	return schema, table
 }

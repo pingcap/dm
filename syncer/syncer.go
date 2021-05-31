@@ -186,6 +186,9 @@ type Syncer struct {
 	}
 
 	addJobFunc func(*job) error
+
+	// `lower_case_table_names` setting of upstream db
+	SourceTableNamesFlavor utils.LowerCaseTableNamesFlavor
 }
 
 // NewSyncer creates a new Syncer.
@@ -344,6 +347,30 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
+	if s.SourceTableNamesFlavor == utils.LCTableNamesSensitive {
+		var allTables map[string][]string
+		allTables, err = utils.FetchAllDoTables(ctx, s.fromDB.BaseDB.DB, s.baList)
+		if err != nil {
+			return err
+		}
+		schemaMap, tableMap := buildLowerCaseTableNamesMap(allTables)
+		if err = s.checkpoint.CheckAndUpdate(ctx, schemaMap, tableMap); err != nil {
+			return err
+		}
+		if err = s.optimist.CheckPersistentData(s.cfg.SourceID, schemaMap, tableMap); err != nil {
+			return err
+		}
+		if s.onlineDDL != nil {
+			if err = s.onlineDDL.Check(s.tctx, schemaMap, tableMap); err != nil {
+				return err
+			}
+		}
+		if s.sgk != nil {
+			if err = s.sgk.Check(schemaMap, tableMap); err != nil {
+				return err
+			}
+		}
+	}
 	if s.cfg.EnableHeartbeat {
 		s.heartbeat, err = GetHeartbeat(&HeartbeatConfig{
 			serverID:       s.cfg.ServerID,
@@ -372,6 +399,48 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	return nil
 }
 
+// buildLowerCaseTableNamesMap build a lower case schema map and lower case table map for all tables
+// Input: map of schema --> list of tables
+// Output: schema names map: lower_case_schema_name --> schema_name
+//         tables names map: lower_case_schema_name --> lower_case_table_name --> table_name
+// Note: the result will skip the schemas and tables that their lower_case_name are the same.
+func buildLowerCaseTableNamesMap(tables map[string][]string) (map[string]string, map[string]map[string]string) {
+	schemaMap := make(map[string]string)
+	tablesMap := make(map[string]map[string]string)
+	lowerCaseSchemaSet := make(map[string]struct{})
+	for schema, tableNames := range tables {
+		lcSchema := strings.ToLower(schema)
+		// track if there are multiple schema names with the same lower case name.
+		// just skip this kind of schemas.
+		if _, ok := lowerCaseSchemaSet[lcSchema]; ok {
+			delete(schemaMap, lcSchema)
+			delete(tablesMap, lcSchema)
+			continue
+		}
+		lowerCaseSchemaSet[lcSchema] = struct{}{}
+
+		if lcSchema != schema {
+			schemaMap[lcSchema] = schema
+		}
+		tblsMap := make(map[string]string)
+		lowerCaseTableSet := make(map[string]struct{})
+		for _, tb := range tableNames {
+			lcTbl := strings.ToLower(schema)
+			if _, ok := lowerCaseTableSet[lcTbl]; ok {
+				delete(tblsMap, lcTbl)
+				continue
+			}
+			if lcTbl != tb {
+				tblsMap[lcTbl] = tb
+			}
+		}
+		if len(tblsMap) > 0 {
+			tablesMap[lcSchema] = tblsMap
+		}
+	}
+	return schemaMap, tablesMap
+}
+
 // initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
 // NOTE: now we don't support modify router rules after task has started.
 func (s *Syncer) initShardingGroups(ctx context.Context) error {
@@ -396,7 +465,7 @@ func (s *Syncer) initShardingGroups(ctx context.Context) error {
 			if !ok {
 				mSchema[targetTable] = make([]string, 0, len(tables))
 			}
-			ID, _ := GenTableID(schema, table)
+			ID, _ := utils.GenTableID(schema, table)
 			mSchema[targetTable] = append(mSchema[targetTable], ID)
 		}
 	}
@@ -409,7 +478,7 @@ func (s *Syncer) initShardingGroups(ctx context.Context) error {
 	// add sharding group
 	for targetSchema, mSchema := range mapper {
 		for targetTable, sourceIDs := range mSchema {
-			tableID, _ := GenTableID(targetSchema, targetTable)
+			tableID, _ := utils.GenTableID(targetSchema, targetTable)
 			_, _, _, _, err := s.sgk.AddGroup(targetSchema, targetTable, sourceIDs, loadMeta[tableID], false)
 			if err != nil {
 				return err
@@ -1635,7 +1704,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	if s.cfg.ShardMode == config.ShardPessimistic {
-		source, _ := GenTableID(originSchema, originTable)
+		source, _ := utils.GenTableID(originSchema, originTable)
 		if s.sgk.InSyncing(schemaName, tableName, source, *ec.currentLocation) {
 			// if in unsync stage and not before active DDL, ignore it
 			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), ignore it
@@ -1766,7 +1835,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		// if err2 != nil, stmts should be nil so below for-loop is skipped
 		for _, stmt := range stmts {
 			if _, ok := stmt.(ast.DDLNode); ok {
-				tableNames, err3 := parserpkg.FetchDDLTableNames(usedSchema, stmt)
+				tableNames, err3 := parserpkg.FetchDDLTableNames(usedSchema, stmt, s.SourceTableNamesFlavor)
 				if err3 != nil {
 					continue
 				}
@@ -1869,7 +1938,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 				}
 				continue
 			case *ast.DropTableStmt:
-				sourceID, _ := GenTableID(tableNames[0][0].Schema, tableNames[0][0].Name)
+				sourceID, _ := utils.GenTableID(tableNames[0][0].Schema, tableNames[0][0].Name)
 				err = s.sgk.LeaveGroup(tableNames[1][0].Schema, tableNames[1][0].Name, []string{sourceID})
 				if err != nil {
 					return err
@@ -2004,7 +2073,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	// so when restarting before sharding DDLs synced, this binlog can be re-sync again to trigger the TrySync
 	startLocation := ec.startLocation
 
-	source, _ = GenTableID(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name)
+	source, _ = utils.GenTableID(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name)
 
 	var annotate string
 	switch ddlInfo.stmt.(type) {
@@ -2047,7 +2116,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	}
 
 	if needShardingHandle {
-		target, _ := GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+		target, _ := utils.GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 		unsyncedTableGauge.WithLabelValues(s.cfg.Name, target, s.cfg.SourceID).Set(float64(remain))
 		err = ec.safeMode.IncrForTable(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
 		if err != nil {
@@ -2425,6 +2494,11 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	lcFlavor, err := utils.FetchLowerCaseTableNamesSetting(ctx, s.fromDB.BaseDB.DB)
+	if err != nil {
+		return err
+	}
+	s.SourceTableNamesFlavor = lcFlavor
 
 	hasSQLMode := false
 	// get sql_mode from upstream db

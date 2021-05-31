@@ -202,3 +202,23 @@ func (o *Optimist) PendingOperation() *optimism.Operation {
 	op := *o.pendingOp
 	return &op
 }
+
+// CheckPersistentData check and fix the persistent data.
+func (o *Optimist) CheckPersistentData(source string, schemas map[string]string, tables map[string]map[string]string) error {
+	err := optimism.CheckSourceTables(o.cli, source, schemas, tables)
+	if err != nil {
+		return err
+	}
+
+	err = optimism.CheckDDLInfos(o.cli, source, schemas, tables)
+	if err != nil {
+		return err
+	}
+
+	err = optimism.CheckOperations(o.cli, source, schemas, tables)
+	if err != nil {
+		return err
+	}
+
+	return optimism.CheckColumns(o.cli, source, schemas, tables)
+}

@@ -283,3 +283,66 @@ func (meta *ShardingMeta) FlushData(sourceID, tableID string) ([]string, [][]int
 	}
 	return sqls, args
 }
+
+// Check check and fix schema and table names for all the sharding groups.
+func (meta *ShardingMeta) Check(sourceID, targetID string, schemaMap map[string]string, tablesMap map[string]map[string]string) ([]string, [][]interface{}, error) {
+	if len(schemaMap) == 0 && len(tablesMap) == 0 {
+		return nil, nil, nil
+	}
+
+	checkSourceID := func(source string) (string, bool) {
+		schemaName, tblName := utils.UnpackTableID(source)
+		realSchema, hasSchema := schemaMap[schemaName]
+		if !hasSchema {
+			realSchema = schemaName
+		}
+		tblMap, ok := tablesMap[schemaName]
+		if !ok {
+			return "", false
+		}
+		realTable, ok := tblMap[tblName]
+		if !ok {
+			return "", false
+		}
+		newID, _ := utils.GenTableID(realSchema, realTable)
+		return newID, true
+	}
+
+	hasChange := false
+	for _, item := range meta.global.Items {
+		newID, changed := checkSourceID(item.Source)
+		if changed {
+			item.Source = newID
+			hasChange = true
+		}
+	}
+
+	sourceIDsMap := make(map[string]string)
+	for sourceID, seqs := range meta.sources {
+		newSourceID, changed := checkSourceID(sourceID)
+		if changed {
+			sourceIDsMap[sourceID] = newSourceID
+		}
+		for _, item := range seqs.Items {
+			newID, changed := checkSourceID(item.Source)
+			if changed {
+				item.Source = newID
+				hasChange = true
+			}
+		}
+	}
+	for oldID, newID := range sourceIDsMap {
+		seqs := meta.sources[oldID]
+		delete(meta.sources, oldID)
+		meta.sources[newID] = seqs
+	}
+
+	var (
+		sqls []string
+		args [][]interface{}
+	)
+	if hasChange {
+		sqls, args = meta.FlushData(sourceID, targetID)
+	}
+	return sqls, args, nil
+}

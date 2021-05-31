@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var _ = Suite(&testShardingGroupSuite{})
@@ -222,8 +223,8 @@ func (t *testShardingGroupSuite) TestTableID(c *C) {
 	}
 	for _, ca := range cases {
 		// ignore isSchemaOnly
-		id, _ := GenTableID(ca[0], ca[1])
-		schema, table := UnpackTableID(id)
+		id, _ := utils.GenTableID(ca[0], ca[1])
+		schema, table := utils.UnpackTableID(id)
 		c.Assert(schema, Equals, ca[0])
 		c.Assert(table, Equals, ca[1])
 	}

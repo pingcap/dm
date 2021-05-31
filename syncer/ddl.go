@@ -150,7 +150,7 @@ func (s *Syncer) handleDDL(p *parser.Parser, schema, sql string) (string, [][]*f
 		return "", nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
-	tableNames, err := parserpkg.FetchDDLTableNames(schema, stmt)
+	tableNames, err := parserpkg.FetchDDLTableNames(schema, stmt, s.SourceTableNamesFlavor)
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -189,7 +189,7 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schem
 		return nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
-	tableNames, err := parserpkg.FetchDDLTableNames(schema, stmt)
+	tableNames, err := parserpkg.FetchDDLTableNames(schema, stmt, s.SourceTableNamesFlavor)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -251,10 +251,10 @@ func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema strin
 	}
 	// delete from sharding group firstly
 	for name, tables := range sources {
-		targetSchema, targetTable := UnpackTableID(name)
+		targetSchema, targetTable := utils.UnpackTableID(name)
 		sourceIDs := make([]string, 0, len(tables))
 		for _, table := range tables {
-			sourceID, _ := GenTableID(table[0], table[1])
+			sourceID, _ := utils.GenTableID(table[0], table[1])
 			sourceIDs = append(sourceIDs, sourceID)
 		}
 		err := s.sgk.LeaveGroup(targetSchema, targetTable, sourceIDs)

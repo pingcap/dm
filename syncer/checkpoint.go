@@ -246,6 +246,9 @@ type CheckPoint interface {
 
 	// String return text of global position
 	String() string
+
+	// CheckAndUpdate check the checkpoint data consistency and try to fix them if possible
+	CheckAndUpdate(ctx context.Context, schemas map[string]string, tables map[string]map[string]string) error
 }
 
 // RemoteCheckPoint implements CheckPoint
@@ -833,6 +836,44 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 	}
 
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
+}
+
+// CheckAndUpdate check the checkpoint data consistency and try to fix them if possible.
+func (cp *RemoteCheckPoint) CheckAndUpdate(ctx context.Context, schemas map[string]string, tables map[string]map[string]string) error {
+	cp.Lock()
+	hasChange := false
+	for lcSchema, tableMap := range tables {
+		tableCps, ok := cp.points[lcSchema]
+		if !ok {
+			continue
+		}
+		for lcTable, table := range tableMap {
+			tableCp, ok := tableCps[lcTable]
+			if !ok {
+				continue
+			}
+			tableCps[table] = tableCp
+			delete(tableCps, lcTable)
+			hasChange = true
+		}
+	}
+	for lcSchema, schema := range schemas {
+		if tableCps, ok := cp.points[lcSchema]; ok {
+			cp.points[schema] = tableCps
+			delete(cp.points, lcSchema)
+			hasChange = true
+		}
+	}
+	cp.Unlock()
+
+	if hasChange {
+		tctx := &tcontext.Context{
+			Logger: log.L(),
+			Ctx:    ctx,
+		}
+		return cp.FlushPointsExcept(tctx, nil, nil, nil)
+	}
+	return nil
 }
 
 // LoadMeta implements CheckPoint.LoadMeta.

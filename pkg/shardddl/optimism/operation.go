@@ -280,3 +280,48 @@ func WatchOperationPut(ctx context.Context, cli *clientv3.Client,
 func deleteOperationOp(op Operation) clientv3.Op {
 	return clientv3.OpDelete(common.ShardDDLOptimismOperationKeyAdapter.Encode(op.Task, op.Source, op.UpSchema, op.UpTable))
 }
+
+// CheckOperations try to check and fix all the schema and table names for operation infos.
+func CheckOperations(cli *clientv3.Client, source string, schemaMap map[string]string, talesMap map[string]map[string]string) error {
+	allOperations, rev, err := GetAllOperations(cli)
+	if err != nil {
+		return err
+	}
+
+	for _, taskTableOps := range allOperations {
+		sourceOps, ok := taskTableOps[source]
+		if !ok {
+			continue
+		}
+		for schema, tblOps := range sourceOps {
+			realSchema, hasChange := schemaMap[schema]
+			if !hasChange {
+				realSchema = schema
+			}
+
+			tblMap := talesMap[schema]
+			for tbl, info := range tblOps {
+				realTable, tblChange := tblMap[tbl]
+				if !tblChange {
+					realTable = tbl
+					tblChange = hasChange
+				}
+				if tblChange {
+					newOperation := info
+					newOperation.UpSchema = realSchema
+					newOperation.UpTable = realTable
+					_, _, err = PutOperation(cli, false, newOperation, rev)
+					if err != nil {
+						return err
+					}
+					deleteOp := deleteOperationOp(info)
+					_, _, err = etcdutil.DoOpsInOneTxnWithRetry(cli, deleteOp)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	return err
+}

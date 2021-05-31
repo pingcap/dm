@@ -57,6 +57,8 @@ type OnlinePlugin interface {
 	Clear(tctx *tcontext.Context) error
 	// Close closes online ddl plugin
 	Close()
+	// Check try to check and fix the shcema/table case-sensitive issue
+	Check(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error
 }
 
 // TableType is type of table.
@@ -213,21 +215,30 @@ func (s *OnlineDDLStorage) Save(tctx *tcontext.Context, ghostSchema, ghostTable,
 		return nil
 	}
 	info.DDLs = append(info.DDLs, ddl)
-	ddlsBytes, err := json.Marshal(mSchema[ghostTable])
+	err := s.saveToDB(tctx, ghostSchema, ghostTable, info)
+	return terror.WithScope(err, terror.ScopeDownstream)
+}
+
+func (s *OnlineDDLStorage) saveToDB(tctx *tcontext.Context, ghostSchema, ghostTable string, ddl *GhostDDLInfo) error {
+	ddlsBytes, err := json.Marshal(ddl)
 	if err != nil {
 		return terror.ErrSyncerUnitOnlineDDLInvalidMeta.Delegate(err)
 	}
 
 	query := fmt.Sprintf("REPLACE INTO %s(`id`,`ghost_schema`, `ghost_table`, `ddls`) VALUES (?, ?, ?, ?)", s.tableName)
+
 	_, err = s.dbConn.executeSQL(tctx, []string{query}, []interface{}{s.id, ghostSchema, ghostTable, string(ddlsBytes)})
-	return terror.WithScope(err, terror.ScopeDownstream)
+	return err
 }
 
 // Delete deletes online ddl informations.
 func (s *OnlineDDLStorage) Delete(tctx *tcontext.Context, ghostSchema, ghostTable string) error {
 	s.Lock()
 	defer s.Unlock()
+	return s.delete(tctx, ghostSchema, ghostTable)
+}
 
+func (s *OnlineDDLStorage) delete(tctx *tcontext.Context, ghostSchema, ghostTable string) error {
 	mSchema, ok := s.ddls[ghostSchema]
 	if !ok {
 		return nil
@@ -298,4 +309,52 @@ func (s *OnlineDDLStorage) createTable(tctx *tcontext.Context) error {
 		)`, s.tableName)
 	_, err := s.dbConn.executeSQL(tctx, []string{sql})
 	return terror.WithScope(err, terror.ScopeDownstream)
+}
+
+// Check try to check and fix the schema/table case-sensitive issue.
+func (s *OnlineDDLStorage) Check(
+	tctx *tcontext.Context,
+	schemaMap map[string]string,
+	tablesMap map[string]map[string]string,
+	realNameFn func(schema, table string) (string, string),
+) error {
+	s.Lock()
+	defer s.Unlock()
+
+	changedSchemas := make([]string, 0)
+	for schema, tblDDLInfos := range s.ddls {
+		realSchema, hasChange := schemaMap[schema]
+		if !hasChange {
+			realSchema = schema
+		} else {
+			changedSchemas = append(changedSchemas, schema)
+		}
+		tblMap := tablesMap[schema]
+		for tbl, ddlInfos := range tblDDLInfos {
+			realTbl, tableChange := tblMap[tbl]
+			if !tableChange {
+				realTbl = tbl
+				tableChange = hasChange
+			}
+			if tableChange {
+				targetSchema, targetTable := realNameFn(realSchema, realTbl)
+				ddlInfos.Schema = targetSchema
+				ddlInfos.Table = targetTable
+				err := s.saveToDB(tctx, realSchema, realTbl, ddlInfos)
+				if err != nil {
+					return err
+				}
+				err = s.delete(tctx, schema, tbl)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	for _, schema := range changedSchemas {
+		ddl := s.ddls[schema]
+		s.ddls[schemaMap[schema]] = ddl
+		delete(s.ddls, schema)
+	}
+	return nil
 }

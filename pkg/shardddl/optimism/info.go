@@ -342,3 +342,47 @@ func (oldInfo *OldInfo) toInfo() Info {
 		TableInfosAfter: []*model.TableInfo{oldInfo.TableInfoAfter},
 	}
 }
+
+// CheckDDLInfos try to check and fix all the schema and table names for DDL info.
+func CheckDDLInfos(cli *clientv3.Client, source string, schemaMap map[string]string, talesMap map[string]map[string]string) error {
+	allInfos, _, err := GetAllInfo(cli)
+	if err != nil {
+		return err
+	}
+
+	for _, taskTableInfos := range allInfos {
+		sourceInfos, ok := taskTableInfos[source]
+		if !ok {
+			continue
+		}
+		for schema, tblInfos := range sourceInfos {
+			realSchema, hasChange := schemaMap[schema]
+			if !hasChange {
+				realSchema = schema
+			}
+
+			tblMap := talesMap[schema]
+			for tbl, info := range tblInfos {
+				realTable, tableChange := tblMap[tbl]
+				if !tableChange {
+					realTable = tbl
+					tableChange = hasChange
+				}
+				if tableChange {
+					delOp := deleteInfoOp(info)
+					info.UpSchema = realSchema
+					info.UpTable = realTable
+					putOp, err := putInfoOp(info)
+					if err != nil {
+						return err
+					}
+					_, _, err = etcdutil.DoOpsInOneTxnWithRetry(cli, delOp, putOp)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	return nil
+}

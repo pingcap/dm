@@ -89,7 +89,7 @@ func (s *Syncer) genEvents(ctx context.Context, sqls []string) ([]*replication.B
 
 		switch node.(type) {
 		case ast.DDLNode:
-			tableNames, err := parserpkg.FetchDDLTableNames("", node)
+			tableNames, err := parserpkg.FetchDDLTableNames("", node, s.SourceTableNamesFlavor)
 			if err != nil {
 				return nil, err
 			}

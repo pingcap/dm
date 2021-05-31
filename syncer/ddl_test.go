@@ -498,6 +498,10 @@ func (m mockOnlinePlugin) Clear(tctx *tcontext.Context) error {
 func (m mockOnlinePlugin) Close() {
 }
 
+func (m mockOnlinePlugin) Check(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
+	return nil
+}
+
 func (s *testSyncerSuite) TestClearOnlineDDL(c *C) {
 	var (
 		targetDB  = "target_db"

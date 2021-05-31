@@ -305,3 +305,58 @@ func putSourceTablesOp(st SourceTables) (clientv3.Op, error) {
 	key := common.ShardDDLOptimismSourceTablesKeyAdapter.Encode(st.Task, st.Source)
 	return clientv3.OpPut(key, value), nil
 }
+
+// CheckSourceTables try to check and fix all the source schemas and table names.
+func CheckSourceTables(cli *clientv3.Client, source string, schemaMap map[string]string, talesMap map[string]map[string]string) error {
+	allSourceTables, _, err := GetAllSourceTables(cli)
+	if err != nil {
+		return err
+	}
+
+	for _, taskSourceTables := range allSourceTables {
+		sourceTables, ok := taskSourceTables[source]
+		if !ok {
+			continue
+		}
+		schemaKeys := make([]string, 0)
+		tblKeys := make([]string, 0)
+		hasChange := false
+		for _, tableSources := range sourceTables.Tables {
+			for _, sources := range tableSources {
+				for schema, tbls := range sources {
+					if _, ok := schemaMap[schema]; ok {
+						schemaKeys = append(schemaKeys, schema)
+						hasChange = true
+					}
+
+					tblMap, ok := talesMap[schema]
+					if !ok {
+						continue
+					}
+					for tbl := range tbls {
+						if t, ok := tblMap[tbl]; ok {
+							tblKeys = append(tblKeys, t)
+							hasChange = true
+						}
+					}
+					for _, t := range tblKeys {
+						tbls[tblMap[t]] = tbls[t]
+						delete(tbls, t)
+					}
+					tblKeys = tblKeys[:0]
+				}
+				for _, s := range schemaKeys {
+					sources[schemaMap[s]] = sources[s]
+					delete(sources, s)
+				}
+				schemaKeys = schemaKeys[:0]
+			}
+		}
+		if hasChange {
+			if _, err = PutSourceTables(cli, sourceTables); err != nil {
+				return err
+			}
+		}
+	}
+	return err
+}
