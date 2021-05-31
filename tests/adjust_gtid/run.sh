@@ -8,6 +8,9 @@ TASK_NAME="test"
 WORK_DIR=$TEST_DIR/$TEST_NAME
 # SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
+# clean_gtid will
+# 1. delete source1's gtid info, but keep the binlog pos info (simulate switch gtid and resume from checkpoint)
+# 2. delete source2's checkpoint info, set only binlog pos info in the task.yaml (simulate switch gtid and start for meta)
 function clean_gtid() {
 	# delete SOURCE1 checkpoint's gtid info
 	run_sql "update dm_meta.${TASK_NAME}_syncer_checkpoint set binlog_gtid=\"\" where id=\"$SOURCE_ID1\" and is_global=1" $TIDB_PORT $TIDB_PASSWORD
@@ -25,6 +28,7 @@ function clean_gtid() {
 	sed -i "s/binlog-gtid-placeholder-2/\"\"/g" $WORK_DIR/dm-task.yaml
 }
 
+# check_checkpoint checks checkpoint data from the database
 function check_checkpoint() {
 	source_id=$1
 	expected_name=$2
