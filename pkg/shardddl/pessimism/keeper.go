@@ -16,6 +16,8 @@ package pessimism
 import (
 	"sync"
 
+	"go.etcd.io/etcd/clientv3"
+
 	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -23,19 +25,21 @@ import (
 // LockKeeper used to keep and handle DDL lock conveniently.
 // The lock information do not need to be persistent, and can be re-constructed from the shard DDL info.
 type LockKeeper struct {
-	mu    sync.RWMutex
-	locks map[string]*Lock // lockID -> Lock
+	mu             sync.RWMutex
+	locks          map[string]*Lock                          // lockID -> Lock
+	latestDoneDDLs map[string]map[string]map[string][]string // task -> downSchema -> downTable -> ddls
 }
 
 // NewLockKeeper creates a new LockKeeper instance.
 func NewLockKeeper() *LockKeeper {
 	return &LockKeeper{
-		locks: make(map[string]*Lock),
+		locks:          make(map[string]*Lock),
+		latestDoneDDLs: make(map[string]map[string]map[string][]string),
 	}
 }
 
 // TrySync tries to sync the lock.
-func (lk *LockKeeper) TrySync(info Info, sources []string) (string, bool, int, error) {
+func (lk *LockKeeper) TrySync(cli *clientv3.Client, info Info, sources []string) (string, bool, int, error) {
 	var (
 		lockID = genDDLLockID(info)
 		l      *Lock
@@ -50,8 +54,51 @@ func (lk *LockKeeper) TrySync(info Info, sources []string) (string, bool, int, e
 		l = lk.locks[lockID]
 	}
 
-	synced, remain, err := l.TrySync(info.Source, info.DDLs, sources)
+	synced, remain, err := l.TrySync(cli, info.Source, info.DDLs, sources, lk.GetLatestDoneDDLs(info.Task, info.Schema, info.Table))
 	return lockID, synced, remain, err
+}
+
+// AddAllLatestDoneDDLs add all last done ddls.
+func (lk *LockKeeper) AddAllLatestDoneDDLs(latestDoneDDLs map[string]map[string]map[string][]string) {
+	lk.mu.Lock()
+	defer lk.mu.Unlock()
+	lk.latestDoneDDLs = latestDoneDDLs
+}
+
+// AddLatestDoneDDLs add last done ddls by lockID.
+func (lk *LockKeeper) AddLatestDoneDDLs(lockID string, ddls []string) {
+	lk.mu.Lock()
+	defer lk.mu.Unlock()
+	task, downSchema, downTable := utils.ExtractAllFromLockID(lockID)
+	if _, ok := lk.latestDoneDDLs[task]; !ok {
+		lk.latestDoneDDLs[task] = make(map[string]map[string][]string)
+	}
+	if _, ok := lk.latestDoneDDLs[task][downSchema]; !ok {
+		lk.latestDoneDDLs[task][downSchema] = make(map[string][]string)
+	}
+	lk.latestDoneDDLs[task][downSchema][downTable] = ddls
+}
+
+// RemoveLatestDoneDDLsByTask remove last done ddls by task.
+func (lk *LockKeeper) RemoveLatestDoneDDLsByTask(task string) {
+	lk.mu.Lock()
+	defer lk.mu.Unlock()
+	delete(lk.latestDoneDDLs, task)
+}
+
+// GetLatestDoneDDLs gets last done ddls by lockID.
+func (lk *LockKeeper) GetLatestDoneDDLs(task, downSchema, downTable string) []string {
+	if _, ok := lk.latestDoneDDLs[task]; !ok {
+		return nil
+	}
+	if _, ok := lk.latestDoneDDLs[task][downSchema]; !ok {
+		return nil
+	}
+	latestDoneDDLs, ok := lk.latestDoneDDLs[task][downSchema][downTable]
+	if !ok {
+		return nil
+	}
+	return latestDoneDDLs
 }
 
 // RemoveLock removes a lock.

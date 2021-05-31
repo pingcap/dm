@@ -170,7 +170,7 @@ func (t *testForEtcd) TestPutInfoIfOpNotDone(c *C) {
 		DDLs   = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
 		ID     = fmt.Sprintf("%s-%s", task, dbutil.TableName(schema, table))
 		info   = NewInfo(task, source, schema, table, DDLs)
-		op     = NewOperation(ID, task, source, DDLs, false, false)
+		op     = NewOperation(ID, task, source, DDLs, false, false, false)
 	)
 
 	// put info success because no operation exist.

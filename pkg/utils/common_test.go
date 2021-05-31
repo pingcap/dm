@@ -246,6 +246,13 @@ func (s *testCommonSuite) TestDDLLockID(c *C) {
 	c.Assert(ID, Equals, "test-`d``b`.`tb``l`")
 	c.Assert(ExtractTaskFromLockID(ID), Equals, task)
 
+	ID = GenDDLLockID("test-task", "d-b", "tb-l")
+	c.Assert(ID, Equals, "test-task-`d-b`.`tb-l`")
+	t, ds, dt := ExtractAllFromLockID(ID)
+	c.Assert(t, Equals, "test-task")
+	c.Assert(ds, Equals, "d-b")
+	c.Assert(dt, Equals, "tb-l")
+
 	// invalid ID
 	c.Assert(ExtractTaskFromLockID("invalid-lock-id"), Equals, "")
 }

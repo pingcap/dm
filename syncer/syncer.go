@@ -980,8 +980,15 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				tctx.L().Warn("skip shard DDL handle in pessimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
 			case shardPessimistOp == nil:
 				err = terror.ErrWorkerDDLLockOpNotFound.Generate(shardInfo)
+			case shardPessimistOp.Skip:
+				tctx.L().Warn("skip shard DDL operation in pessimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
+				_, err = s.pessimist.DeleteInfosOperations([]pessimism.Info{*shardInfo}, []pessimism.Operation{*shardPessimistOp})
 			default:
 				err = s.pessimist.DoneOperationDeleteInfo(*shardPessimistOp, *shardInfo)
+				failpoint.Inject("ErrorAfterOpDone", func() {
+					tctx.L().Warn("error after operation done", zap.Strings("DDL", sqlJob.ddls), zap.String("failpoint", "ErrorAfterOpDone"))
+					err = errors.Errorf("error after operation done")
+				})
 			}
 		case config.ShardOptimistic:
 			shardInfo := s.optimist.PendingInfo()

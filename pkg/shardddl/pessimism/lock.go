@@ -16,7 +16,11 @@ package pessimism
 import (
 	"sync"
 
+	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/dm/master/metrics"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -64,13 +68,47 @@ func NewLock(id, task, owner string, ddls, sources []string) *Lock {
 // TrySync tries to sync the lock, does decrease on remain, re-entrant.
 // new upstream sources may join when the DDL lock is in syncing,
 // so we need to merge these new sources.
-func (l *Lock) TrySync(caller string, ddls, sources []string) (bool, int, error) {
+func (l *Lock) TrySync(cli *clientv3.Client, caller string, ddls, sources, latestDoneDDLs []string) (bool, int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	// check DDL statement first.
 	if !utils.CompareShardingDDLs(ddls, l.DDLs) {
-		return l.remain <= 0, l.remain, terror.ErrMasterShardingDDLDiff.Generate(l.DDLs, ddls)
+		curIdempotent := utils.CompareShardingDDLs(latestDoneDDLs, ddls)
+		// handle conflict
+		if !curIdempotent && !utils.CompareShardingDDLs(latestDoneDDLs, l.DDLs) {
+			return l.remain <= 0, l.remain, terror.ErrMasterShardingDDLDiff.Generate(l.DDLs, ddls)
+		}
+
+		// current ddls idempotent, skip it.
+		if curIdempotent {
+			log.L().Warn("conflict ddls equals last done ddls, skip it", zap.Strings("ddls", ddls), zap.String("source", caller))
+			_, _, err := PutOperations(cli, true, NewOperation(l.ID, l.Task, caller, latestDoneDDLs, false, false, true))
+			return l.remain <= 0, l.remain, err
+		}
+
+		// other sources' ddls idempotent, skip them.
+		readySources := make([]string, 0, len(l.ready))
+		ops := make([]Operation, 0, len(l.ready))
+		for source, isReady := range l.ready {
+			if isReady {
+				readySources = append(readySources, source)
+				ops = append(ops, NewOperation(l.ID, l.Task, source, latestDoneDDLs, false, false, true))
+			}
+		}
+
+		log.L().Warn("conflict ddls equals last done ddls, skip them", zap.Strings("ddls", ddls), zap.Strings("sources", readySources))
+		if _, _, err := PutOperations(cli, true, ops...); err != nil {
+			return l.remain <= 0, l.remain, err
+		}
+
+		// revert ready
+		for _, source := range readySources {
+			l.ready[source] = false
+			l.remain++
+		}
+		l.Owner = caller
+		l.DDLs = ddls
 	}
 
 	// try to merge any newly joined sources.

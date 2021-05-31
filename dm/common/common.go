@@ -64,6 +64,9 @@ var (
 	// ShardDDLPessimismOperationKeyAdapter is used to store shard DDL operation in pessimistic model.
 	// k/v: Encode(task-name, source-id) -> shard DDL operation.
 	ShardDDLPessimismOperationKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/operation/")
+	// ShardDDLPessimismDDLsKeyAdapter is used to store last done DDLs in pessimistic model.
+	// k/v: Encode(task-name, downSchema, downTable) -> DDLs.
+	ShardDDLPessimismDDLsKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/ddls/")
 
 	// ShardDDLOptimismSourceTablesKeyAdapter is used to store INITIAL upstream schema & table names when starting the subtask.
 	// In other words, if any Info for this subtask exists, we should obey source tables in the Info.
@@ -100,7 +103,7 @@ func keyAdapterKeysLen(s KeyAdapter) int {
 		ShardDDLPessimismInfoKeyAdapter, ShardDDLPessimismOperationKeyAdapter,
 		ShardDDLOptimismSourceTablesKeyAdapter:
 		return 2
-	case ShardDDLOptimismInitSchemaKeyAdapter:
+	case ShardDDLOptimismInitSchemaKeyAdapter, ShardDDLPessimismDDLsKeyAdapter:
 		return 3
 	case ShardDDLOptimismInfoKeyAdapter, ShardDDLOptimismOperationKeyAdapter:
 		return 4

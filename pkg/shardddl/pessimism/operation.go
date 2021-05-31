@@ -35,6 +35,7 @@ type Operation struct {
 	DDLs   []string `json:"ddls"`   // DDL statements
 	Exec   bool     `json:"exec"`   // execute or skip the DDL statements
 	Done   bool     `json:"done"`   // whether the `Exec` operation has done
+	Skip   bool     `json:"skip"`   // Whether worker skip this operation
 
 	// only used to report to the caller of the watcher, do not marsh it.
 	// if it's true, it means the Operation has been deleted in etcd.
@@ -42,7 +43,7 @@ type Operation struct {
 }
 
 // NewOperation creates a new Operation instance.
-func NewOperation(id, task, source string, ddls []string, exec, done bool) Operation {
+func NewOperation(id, task, source string, ddls []string, exec, done, skip bool) Operation {
 	return Operation{
 		ID:     id,
 		Task:   task,
@@ -50,6 +51,7 @@ func NewOperation(id, task, source string, ddls []string, exec, done bool) Opera
 		DDLs:   ddls,
 		Exec:   exec,
 		Done:   done,
+		Skip:   skip,
 	}
 }
 

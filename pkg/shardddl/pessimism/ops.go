@@ -20,6 +20,7 @@ import (
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/etcdutil"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // TODO(csuzhangxc): assign terror code before merged into the master branch.
@@ -60,12 +61,32 @@ func DeleteInfosOperations(cli *clientv3.Client, infos []Info, ops []Operation) 
 	return rev, err
 }
 
-// DeleteInfosOperationsByTask deletes the shard DDL infos and operations of a specified task in etcd.
+// DeleteOperationsPutDDLs deletes the shard DDL operations and add latest done DDLs in etcd.
+// This function should often be called by DM-master when calling UnlockDDL and the lock is resolved.
+func DeleteOperationsPutDDLs(cli *clientv3.Client, lockID string, ops []Operation, ddls []string) (int64, error) {
+	etcdOps := make([]clientv3.Op, 0, len(ops))
+	for _, op := range ops {
+		etcdOps = append(etcdOps, deleteOperationOp(op))
+	}
+
+	task, downSchema, downTable := utils.ExtractAllFromLockID(lockID)
+	putOp, err := putLatestDoneDDLsOp(task, downSchema, downTable, ddls)
+	if err != nil {
+		return 0, err
+	}
+
+	etcdOps = append(etcdOps, putOp)
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, etcdOps...)
+	return rev, err
+}
+
+// DeleteInfosOperationsDDLsByTask deletes the shard DDL infos and operations of a specified task in etcd.
 // This function should often be called by DM-master when deleting ddl meta data.
-func DeleteInfosOperationsByTask(cli *clientv3.Client, task string) (int64, error) {
+func DeleteInfosOperationsDDLsByTask(cli *clientv3.Client, task string) (int64, error) {
 	opsDel := make([]clientv3.Op, 0, 2)
 	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismInfoKeyAdapter.Encode(task), clientv3.WithPrefix()))
 	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismOperationKeyAdapter.Encode(task), clientv3.WithPrefix()))
+	opsDel = append(opsDel, clientv3.OpDelete(common.ShardDDLPessimismDDLsKeyAdapter.Encode(task), clientv3.WithPrefix()))
 	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, opsDel...)
 	return rev, err
 }

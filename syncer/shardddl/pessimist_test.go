@@ -65,7 +65,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 		schema, table = "foo", "bar"
 		DDLs          = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
 		ID            = "task-`foo`.`bar`"
-		op            = pessimism.NewOperation(ID, task, source, DDLs, true, false)
+		op            = pessimism.NewOperation(ID, task, source, DDLs, true, false, false)
 
 		logger = log.L()
 		p      = NewPessimist(&logger, etcdTestCli, task, source)
