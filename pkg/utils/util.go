@@ -19,7 +19,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -219,15 +218,4 @@ func WrapSchemesForInitialCluster(s string, https bool) string {
 		output = append(output, kv[0]+"="+wrapScheme(kv[1], https))
 	}
 	return strings.Join(output, ",")
-}
-
-// KillMySelf sends sigint to current process, used in integration test only
-//
-// Only works on Unix. Signaling on Windows is not supported.
-func KillMySelf() error {
-	proc, err := os.FindProcess(os.Getpid())
-	if err == nil {
-		err = proc.Signal(syscall.SIGINT)
-	}
-	return errors.Trace(err)
 }
