@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -249,6 +250,9 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 
 	event, err = streamer.GetEvent(ctx)
 	cancel()
+	failpoint.Inject("GetEventError", func() {
+		err = errors.New("go-mysql returned an error")
+	})
 	if err != nil {
 		if err != context.Canceled && err != context.DeadlineExceeded {
 			c.Lock()
