@@ -173,17 +173,12 @@ func parseLowerCaseTableNamesFlavorFrom(s string) (LowerCaseTableNamesFlavor, er
 // FetchLowerCaseTableNamesSetting return the `lower_case_table_names` setting of target db.
 func FetchLowerCaseTableNamesSetting(ctx context.Context, db *sql.DB) (LowerCaseTableNamesFlavor, error) {
 	query := "SELECT @@lower_case_table_names;"
-	rows, err := db.QueryContext(ctx, query)
-	if err != nil {
-		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(err, query)
+	row := db.QueryRowContext(ctx, query)
+	if row.Err() != nil {
+		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(row.Err(), query)
 	}
-	if rows.Err() != nil {
-		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(err, query)
-	}
-	defer rows.Close()
 	var res string
-	err = rows.Scan(&res)
-	if err != nil {
+	if err := row.Scan(&res); err != nil {
 		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(err, query)
 	}
 	return parseLowerCaseTableNamesFlavorFrom(res)
