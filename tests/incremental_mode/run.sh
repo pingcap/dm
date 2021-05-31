@@ -169,7 +169,7 @@ function run() {
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
 		"Running" 4
 	# we use failpoint to let worker sleep 8 second when executeSQLs, to increase possibility of
