@@ -1132,76 +1132,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		// for fresh and all-mode task, load table structure into schema tracker, flush checkpoint and delete metadata file
 		if s.cfg.Mode == config.ModeAll {
-			files, err2 := utils.CollectDirFiles(s.cfg.Dir)
-			if err2 != nil {
-				tctx.L().Warn("fail to get dump files", zap.Error(err2))
-				goto StartSync
-			}
-			var dbs, tables []string
-			var tableFiles [][2]string // [db, filename]
-			var hasErr bool
-			for f := range files {
-				if db, ok := utils.GetDBFromDumpFile(f); ok {
-					dbs = append(dbs, db)
-					continue
-				}
-				if db, table, ok := utils.GetTableFromDumpFile(f); ok {
-					tables = append(tables, dbutil.TableName(db, table))
-					tableFiles = append(tableFiles, [2]string{db, f})
-					continue
-				}
-			}
-			tctx.L().Info("fetch table structure for dump files",
-				zap.Strings("database", dbs),
-				zap.Any("tables", tables))
-			for _, db := range dbs {
-				err = s.schemaTracker.CreateSchemaIfNotExists(db)
-				if err != nil {
-					hasErr = true
-					tctx.L().Warn("fail to create schema for dump files", zap.String("db", db), zap.Error(err))
-				}
-			}
-			for _, dbAndFile := range tableFiles {
-				db, file := dbAndFile[0], dbAndFile[1]
-				filepath := path.Join(s.cfg.Dir, file)
-				content, err3 := common2.GetFileContent(filepath)
-				if err3 != nil {
-					hasErr = true
-					tctx.L().Warn("fail to read file for creating table in schema tracker",
-						zap.String("db", db),
-						zap.String("file", filepath),
-						zap.Error(err))
-					continue
-				}
-				stmts := bytes.Split(content, []byte(";"))
-				for _, stmt := range stmts {
-					stmt = bytes.TrimSpace(stmt)
-					if len(stmt) == 0 || bytes.HasPrefix(stmt, []byte("/*")) {
-						continue
-					}
-					err = s.schemaTracker.Exec(tctx.Context(), db, string(stmt))
-					if err != nil {
-						hasErr = true
-						tctx.L().Warn("fail to create table for dump files",
-							zap.Any("file", filepath),
-							zap.ByteString("statement", stmt),
-							zap.Error(err))
-					}
-				}
-			}
-
-			if err = s.flushCheckPoints(); err != nil {
-				tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
-			} else if s.cfg.CleanDumpFile && !hasErr {
-				tctx.L().Info("try to remove loaded files")
-				if err = os.RemoveAll(s.cfg.Dir); err != nil {
-					tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
-				}
+			if err2 := s.loadTableStructureFromDump(ctx); err2 != nil {
+				tctx.L().Warn("error happened when load table structure from dump files", zap.Error(err2))
 			}
 		}
 	}
 
-StartSync:
 	// startLocation is the start location for current received event
 	// currentLocation is the end location for current received event (End_log_pos in `show binlog events` for mysql)
 	// lastLocation is the end location for last received (ROTATE / QUERY / XID) event
@@ -2369,6 +2305,79 @@ func (s *Syncer) genRouter() error {
 		err := s.tableRouter.AddRule(rule)
 		if err != nil {
 			return terror.ErrSyncerUnitGenTableRouter.Delegate(err)
+		}
+	}
+	return nil
+}
+
+func (s *Syncer) loadTableStructureFromDump(ctx context.Context) error {
+	logger := s.tctx.L()
+
+	files, err := utils.CollectDirFiles(s.cfg.Dir)
+	if err != nil {
+		logger.Warn("fail to get dump files", zap.Error(err))
+		return err
+	}
+	var dbs, tables []string
+	var tableFiles [][2]string // [db, filename]
+	var hasErr bool
+	for f := range files {
+		if db, ok := utils.GetDBFromDumpFilename(f); ok {
+			dbs = append(dbs, db)
+			continue
+		}
+		if db, table, ok := utils.GetTableFromDumpFilename(f); ok {
+			tables = append(tables, dbutil.TableName(db, table))
+			tableFiles = append(tableFiles, [2]string{db, f})
+			continue
+		}
+	}
+	logger.Info("fetch table structure form dump files",
+		zap.Strings("database", dbs),
+		zap.Any("tables", tables))
+	for _, db := range dbs {
+		err = s.schemaTracker.CreateSchemaIfNotExists(db)
+		if err != nil {
+			hasErr = true
+			logger.Warn("fail to create schema for dump files", zap.String("db", db), zap.Error(err))
+		}
+	}
+	for _, dbAndFile := range tableFiles {
+		db, file := dbAndFile[0], dbAndFile[1]
+		filepath := path.Join(s.cfg.Dir, file)
+		content, err3 := common2.GetFileContent(filepath)
+		if err3 != nil {
+			hasErr = true
+			logger.Warn("fail to read file for creating table in schema tracker",
+				zap.String("db", db),
+				zap.String("file", filepath),
+				zap.Error(err))
+			continue
+		}
+		stmts := bytes.Split(content, []byte(";"))
+		for _, stmt := range stmts {
+			stmt = bytes.TrimSpace(stmt)
+			if len(stmt) == 0 || bytes.HasPrefix(stmt, []byte("/*")) {
+				continue
+			}
+			err = s.schemaTracker.Exec(ctx, db, string(stmt))
+			if err != nil {
+				hasErr = true
+				logger.Warn("fail to create table for dump files",
+					zap.Any("file", filepath),
+					zap.ByteString("statement", stmt),
+					zap.Error(err))
+			}
+		}
+	}
+
+	if err = s.flushCheckPoints(); err != nil {
+		return err
+	} else if s.cfg.CleanDumpFile && !hasErr {
+		logger.Info("try to remove loaded files")
+		if err = os.RemoveAll(s.cfg.Dir); err != nil {
+			logger.Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
+			return err
 		}
 	}
 	return nil

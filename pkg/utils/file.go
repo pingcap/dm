@@ -121,8 +121,8 @@ func CollectDirFiles(path string) (map[string]struct{}, error) {
 	return files, err
 }
 
-// GetDBFromDumpFile extracts db name from dump file.
-func GetDBFromDumpFile(filename string) (db string, ok bool) {
+// GetDBFromDumpFilename extracts db name from dump filename.
+func GetDBFromDumpFilename(filename string) (db string, ok bool) {
 	if !strings.HasSuffix(filename, "-schema-create.sql") {
 		return "", false
 	}
@@ -131,8 +131,8 @@ func GetDBFromDumpFile(filename string) (db string, ok bool) {
 	return filename[:idx], true
 }
 
-// GetTableFromDumpFile extracts db and table name from dump file.
-func GetTableFromDumpFile(filename string) (db, table string, ok bool) {
+// GetTableFromDumpFilename extracts db and table name from dump filename.
+func GetTableFromDumpFilename(filename string) (db, table string, ok bool) {
 	if !strings.HasSuffix(filename, "-schema.sql") {
 		return "", "", false
 	}

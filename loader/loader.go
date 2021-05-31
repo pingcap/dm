@@ -889,7 +889,7 @@ func (l *Loader) prepareDBFiles(files map[string]struct{}) error {
 	l.totalFileCount.Store(0) // reset
 	schemaFileCount := 0
 	for file := range files {
-		db, ok := utils.GetDBFromDumpFile(file)
+		db, ok := utils.GetDBFromDumpFilename(file)
 		if !ok {
 			continue
 		}
@@ -916,7 +916,7 @@ func (l *Loader) prepareDBFiles(files map[string]struct{}) error {
 func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 	var tablesNumber float64
 	for file := range files {
-		db, table, ok := utils.GetTableFromDumpFile(file)
+		db, table, ok := utils.GetTableFromDumpFilename(file)
 		if !ok {
 			continue
 		}
