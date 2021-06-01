@@ -742,23 +742,28 @@ func (s *Syncer) jobsIsEmpty() bool {
 // job is flushed to target db.
 func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 	if job != nil {
+		failpoint.Inject("BlockSyncerUpdateLag", func(v failpoint.Value) {
+			sv, ok := v.(string)
+			if ok && len(strings.Split(sv, ",")) == 2 {
+				args := strings.Split(sv, ",")
+				jtp := args[0]                // job type
+				t, _ := strconv.Atoi(args[1]) // sleep time
+				if job.tp.String() == jtp {
+					s.tctx.L().Info("BlockSyncerUpdateLag", zap.String("job type", jtp), zap.Int("sleep time", t))
+					time.Sleep(time.Second * time.Duration(t))
+				}
+			} else {
+				s.tctx.L().Info("BlockSyncerUpdateLag failed", zap.Reflect("input v", v))
+			}
+		})
+
 		var lag int64
 		switch job.tp {
 		case ddl:
-			failpoint.Inject("BlockSyncerUpdateDDLLag", func(v failpoint.Value) {
-				t := v.(int)
-				s.tctx.L().Info("BlockSyncerUpdateDDLLag", zap.Int("sleep time", t))
-				time.Sleep(time.Duration(t) * time.Second)
-			})
 			// NOTE: we handle ddl job separately because ddl job will clean all the dml job before execution
 			lag = time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp)
 		default: // dml job or skip job
 			if job.tp != skip {
-				failpoint.Inject("BlockSyncerUpdateDMLLag", func(v failpoint.Value) {
-					t := v.(int)
-					s.tctx.L().Info("BlockSyncerUpdateDMLLag", zap.Int("sleep time", t))
-					time.Sleep(time.Duration(t) * time.Second)
-				})
 				// NOTE workerlagmap already init all dml key(queueBucketName) before syncer running.
 				s.workerLagMap[queueBucketName].Store(time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp))
 			} else {
@@ -775,7 +780,11 @@ func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 		s.secondsBehindMaster.Store(lag)
 	}
 	// when job is nil and s.jobs is emepty, means all event is consumed,we update lag to 0
+	// also neet do reset al workerLagMap log to 0
 	if job == nil && s.jobsIsEmpty() {
+		for _, l := range s.workerLagMap {
+			l.Store(0)
+		}
 		replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(0))
 		s.secondsBehindMaster.Store(0)
 	}
