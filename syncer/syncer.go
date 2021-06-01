@@ -779,14 +779,14 @@ func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 		replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(lag))
 		s.secondsBehindMaster.Store(lag)
 	}
-	// when job is nil and s.jobs is emepty, means all event is consumed,we update lag to 0
-	// also neet do reset al workerLagMap log to 0
-	if job == nil && s.jobsIsEmpty() {
-		for _, l := range s.workerLagMap {
-			l.Store(0)
+	// when job is nil mean no job in this bucket neet do reset current bucket lag to 0
+	if job == nil {
+		s.workerLagMap[queueBucketName].Store(0)
+		// when job is nill and s.jobs is emepty, means all event is consumed,we update lag to 0
+		if s.jobsIsEmpty() {
+			replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(0))
+			s.secondsBehindMaster.Store(0)
 		}
-		replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(0))
-		s.secondsBehindMaster.Store(0)
 	}
 }
 
