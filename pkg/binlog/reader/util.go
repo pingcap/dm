@@ -30,8 +30,8 @@ import (
 	"github.com/pingcap/dm/relay/common"
 )
 
-// GetGTIDsForPosStreamer tries to get GTID sets for the specified binlog position (for the corresponding txn) from a Streamer.
-func GetGTIDsForPosStreamer(ctx context.Context, r Streamer, endPos gmysql.Position) (gtid.Set, error) {
+// GetGTIDsForPosFromStreamer tries to get GTID sets for the specified binlog position (for the corresponding txn) from a Streamer.
+func GetGTIDsForPosFromStreamer(ctx context.Context, r Streamer, endPos gmysql.Position) (gtid.Set, error) {
 	var (
 		flavor      string
 		latestPos   uint32
@@ -144,7 +144,7 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 	}
 	defer r.Close()
 
-	return GetGTIDsForPosStreamer(ctx, r, endPos)
+	return GetGTIDsForPosFromStreamer(ctx, r, endPos)
 }
 
 // GetPreviousGTIDFromGTIDSet tries to get previous GTID sets from Previous_GTID_EVENT GTID for the specified GITD Set.

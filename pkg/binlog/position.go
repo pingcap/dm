@@ -316,23 +316,18 @@ func CompareLocation(location1, location2 Location, cmpGTID bool) int {
 	return compareIndex(location1.Suffix, location2.Suffix)
 }
 
-// CompareLocationAsPossible returns:
-//   1 if location1 is bigger than location2
-//   0 if location1 is equal to location2
-//   -1 if location1 is less than location2
-// The difference is that this function will compare positions if gtid sets are both empty.
-func CompareLocationAsPossible(location1, location2 Location, cmpGTID bool) int {
+// IsFreshPosition returns true when location1 is a fresh location without any info
+func IsFreshPosition(location1 Location, flavor string, cmpGTID bool) bool {
+	location2 := NewLocation(flavor)
 	if cmpGTID {
 		cmp, canCmp := CompareGTID(location1.gtidSet, location2.gtidSet)
 		if canCmp {
 			if cmp != 0 {
-				return cmp
+				return cmp <= 0
 			}
-			if cmp = compareIndex(location1.Suffix, location2.Suffix); cmp != 0 {
-				return cmp
-			}
+			// not supposed to happen, for safety here.
 			if location1.gtidSet != nil && location1.gtidSet.String() != "" {
-				return cmp
+				return false
 			}
 			// empty GTIDSet, then compare by position
 			log.L().Warn("both gtidSets are empty, will compare by position", zap.Stringer("location1", location1), zap.Stringer("location2", location2))
@@ -344,9 +339,9 @@ func CompareLocationAsPossible(location1, location2 Location, cmpGTID bool) int 
 
 	cmp := ComparePosition(location1.Position, location2.Position)
 	if cmp != 0 {
-		return cmp
+		return cmp <= 0
 	}
-	return compareIndex(location1.Suffix, location2.Suffix)
+	return compareIndex(location1.Suffix, location2.Suffix) <= 0
 }
 
 // CompareGTID returns:
