@@ -316,7 +316,7 @@ func CompareLocation(location1, location2 Location, cmpGTID bool) int {
 	return compareIndex(location1.Suffix, location2.Suffix)
 }
 
-// IsFreshPosition returns true when location1 is a fresh location without any info
+// IsFreshPosition returns true when location1 is a fresh location without any info.
 func IsFreshPosition(location1 Location, flavor string, cmpGTID bool) bool {
 	location2 := NewLocation(flavor)
 	if cmpGTID {
