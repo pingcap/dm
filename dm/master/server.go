@@ -1412,6 +1412,10 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 	if err != nil {
 		return err
 	}
+	err = s.scheduler.RemoveLoadWorkerByTask(cfg.Name)
+	if err != nil {
+		return err
+	}
 
 	// set up db and clear meta data in downstream db
 	baseDB, err := conn.DefaultDBProvider.Apply(toDB)
