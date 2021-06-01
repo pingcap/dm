@@ -654,7 +654,7 @@ func (l *Loader) IsFreshTask(ctx context.Context) (bool, error) {
 
 // Restore begins the restore process.
 func (l *Loader) Restore(ctx context.Context) error {
-	if err := l.putLoadWorker(); err != nil {
+	if err := l.putLoadTask(); err != nil {
 		return err
 	}
 	// reset some counter used to calculate progress
@@ -712,7 +712,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 	if err == nil {
 		l.finish.Store(true)
 		l.logger.Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
-		if err = l.delLoadWorker(); err != nil {
+		if err = l.delLoadTask(); err != nil {
 			return err
 		}
 		if l.cfg.CleanDumpFile && l.checkPoint.AllFinished() {
@@ -1514,9 +1514,9 @@ func (l *Loader) cleanDumpFiles() {
 	}
 }
 
-// putLoadWorker is called when start restoring data, to put load worker in etcd.
-func (l *Loader) putLoadWorker() error {
-	_, err := ha.PutLoadWorker(l.cli, l.cfg.Name, l.cfg.SourceID, l.workerName)
+// putLoadTask is called when start restoring data, to put load worker in etcd.
+func (l *Loader) putLoadTask() error {
+	_, err := ha.PutLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID, l.workerName)
 	if err != nil {
 		return err
 	}
@@ -1524,9 +1524,9 @@ func (l *Loader) putLoadWorker() error {
 	return nil
 }
 
-// delLoadWorker is called when finish restoring data, to delete load worker in etcd.
-func (l *Loader) delLoadWorker() error {
-	_, _, err := ha.DelLoadWorker(l.cli, l.cfg.Name, l.cfg.SourceID)
+// delLoadTask is called when finish restoring data, to delete load worker in etcd.
+func (l *Loader) delLoadTask() error {
+	_, _, err := ha.DelLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID)
 	if err != nil {
 		return err
 	}

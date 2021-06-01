@@ -1412,7 +1412,7 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 	if err != nil {
 		return err
 	}
-	err = s.scheduler.RemoveLoadWorkerByTask(cfg.Name)
+	err = s.scheduler.RemoveLoadTask(cfg.Name)
 	if err != nil {
 		return err
 	}

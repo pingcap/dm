@@ -146,7 +146,7 @@ type Scheduler struct {
 
 	// workers in load stage
 	// task -> source -> worker
-	loadWorkers map[string]map[string]string
+	loadTasks map[string]map[string]string
 
 	securityCfg config.Security
 }
@@ -164,7 +164,7 @@ func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 		expectRelayStages:   make(map[string]ha.Stage),
 		expectSubTaskStages: make(map[string]map[string]ha.Stage),
 		relayWorkers:        make(map[string]map[string]struct{}),
-		loadWorkers:         make(map[string]map[string]string),
+		loadTasks:           make(map[string]map[string]string),
 		securityCfg:         securityCfg,
 	}
 }
@@ -203,8 +203,8 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) (err e
 		return err
 	}
 
-	var loadWorkerRev int64
-	loadWorkerRev, err = s.recoverLoadWorkers(etcdCli)
+	var loadTaskRev int64
+	loadTaskRev, err = s.recoverLoadTasks(etcdCli)
 	if err != nil {
 		return err
 	}
@@ -230,10 +230,10 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) (err e
 	go func(rev1 int64) {
 		defer s.wg.Done()
 		// starting to observe load worker.
-		// TODO: handle fatal error from observeLoadWorker
+		// TODO: handle fatal error from observeLoadTask
 		//nolint:errcheck
-		s.observeLoadWorker(ctx, etcdCli, rev1)
-	}(loadWorkerRev)
+		s.observeLoadTask(ctx, etcdCli, rev1)
+	}(loadTaskRev)
 
 	s.started = true // started now
 	s.cancel = cancel
@@ -1313,14 +1313,14 @@ func (s *Scheduler) recoverRelayConfigs(cli *clientv3.Client) error {
 	return nil
 }
 
-// recoverLoadWorkers recovers history load workers from etcd.
-func (s *Scheduler) recoverLoadWorkers(cli *clientv3.Client) (int64, error) {
-	loadWorkers, rev, err := ha.GetAllLoadWorker(cli)
+// recoverLoadTasks recovers history load workers from etcd.
+func (s *Scheduler) recoverLoadTasks(cli *clientv3.Client) (int64, error) {
+	loadTasks, rev, err := ha.GetAllLoadTask(cli)
 	if err != nil {
 		return 0, err
 	}
 
-	s.loadWorkers = loadWorkers
+	s.loadTasks = loadTasks
 	return rev, nil
 }
 
@@ -1911,23 +1911,23 @@ func (s *Scheduler) SetWorkerClientForTest(name string, mockCli workerrpc.Client
 }
 
 // nolint:dupl
-func (s *Scheduler) observeLoadWorker(ctx context.Context, etcdCli *clientv3.Client, rev int64) error {
+func (s *Scheduler) observeLoadTask(ctx context.Context, etcdCli *clientv3.Client, rev int64) error {
 	var wg sync.WaitGroup
 	for {
-		loadWorkerCh := make(chan ha.LoadWorker, 10)
-		loadWorkerErrCh := make(chan error, 10)
+		loadTaskCh := make(chan ha.LoadTask, 10)
+		loadTaskErrCh := make(chan error, 10)
 		wg.Add(1)
 		// use ctx1, cancel1 to make sure old watcher has been released
 		ctx1, cancel1 := context.WithCancel(ctx)
 		go func() {
 			defer func() {
-				close(loadWorkerCh)
-				close(loadWorkerErrCh)
+				close(loadTaskCh)
+				close(loadTaskErrCh)
 				wg.Done()
 			}()
-			ha.WatchLoadWorker(ctx1, etcdCli, rev+1, loadWorkerCh, loadWorkerErrCh)
+			ha.WatchLoadTask(ctx1, etcdCli, rev+1, loadTaskCh, loadTaskErrCh)
 		}()
-		err := s.handleLoadWorker(ctx1, loadWorkerCh, loadWorkerErrCh)
+		err := s.handleLoadTask(ctx1, loadTaskCh, loadTaskErrCh)
 		cancel1()
 		wg.Wait()
 
@@ -1939,37 +1939,37 @@ func (s *Scheduler) observeLoadWorker(ctx context.Context, etcdCli *clientv3.Cli
 				case <-ctx.Done():
 					return nil
 				case <-time.After(500 * time.Millisecond):
-					rev, err = s.resetLoadWorker(etcdCli)
+					rev, err = s.resetLoadTask(etcdCli)
 					if err != nil {
-						log.L().Error("resetLoadWorker is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
+						log.L().Error("resetLoadTask is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
 					}
 				}
 				retryNum++
 			}
 		} else {
 			if err != nil {
-				log.L().Error("observeLoadWorker is failed and will quit now", zap.Error(err))
+				log.L().Error("observeLoadTask is failed and will quit now", zap.Error(err))
 			} else {
-				log.L().Info("observeLoadWorker will quit now")
+				log.L().Info("observeLoadTask will quit now")
 			}
 			return err
 		}
 	}
 }
 
-// RemoveLoadWorkerByTask removes the load worker by task.
-func (s *Scheduler) RemoveLoadWorkerByTask(task string) error {
+// RemoveLoadTask removes the load worker by task.
+func (s *Scheduler) RemoveLoadTask(task string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if !s.started {
 		return terror.ErrSchedulerNotStarted.Generate()
 	}
-	_, _, err := ha.DelLoadWorkerByTask(s.etcdCli, task)
+	_, _, err := ha.DelLoadTaskByTask(s.etcdCli, task)
 	if err != nil {
 		return err
 	}
-	delete(s.loadWorkers, task)
+	delete(s.loadTasks, task)
 	return nil
 }
 
@@ -2013,7 +2013,7 @@ func (s *Scheduler) getTransferWorkerAndSource(worker, source string) (string, s
 }
 
 func (s *Scheduler) hasLoadTaskByWorkerAndSource(worker, source string) bool {
-	for _, sourceWorkerMap := range s.loadWorkers {
+	for _, sourceWorkerMap := range s.loadTasks {
 		if workerName, ok := sourceWorkerMap[source]; ok && workerName == worker {
 			return true
 		}
@@ -2021,53 +2021,53 @@ func (s *Scheduler) hasLoadTaskByWorkerAndSource(worker, source string) bool {
 	return false
 }
 
-func (s *Scheduler) handleLoadWorkerDel(loadWorker ha.LoadWorker) error {
+func (s *Scheduler) handleLoadTaskDel(loadTask ha.LoadTask) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	delete(s.loadWorkers[loadWorker.Task], loadWorker.Source)
-	if len(s.loadWorkers[loadWorker.Task]) == 0 {
-		delete(s.loadWorkers, loadWorker.Task)
+	delete(s.loadTasks[loadTask.Task], loadTask.Source)
+	if len(s.loadTasks[loadTask.Task]) == 0 {
+		delete(s.loadTasks, loadTask.Task)
 	}
 
-	if s.hasLoadTaskByWorkerAndSource(loadWorker.Worker, loadWorker.Source) {
+	if s.hasLoadTaskByWorkerAndSource(loadTask.Worker, loadTask.Source) {
 		return nil
 	}
 
-	worker, source := s.getTransferWorkerAndSource(loadWorker.Worker, loadWorker.Source)
+	worker, source := s.getTransferWorkerAndSource(loadTask.Worker, loadTask.Source)
 	if worker == "" && source == "" {
 		return nil
 	}
 
-	return s.transferWorkerAndSource(loadWorker.Worker, loadWorker.Source, worker, source)
+	return s.transferWorkerAndSource(loadTask.Worker, loadTask.Source, worker, source)
 }
 
-func (s *Scheduler) handleLoadWorkerPut(loadWorker ha.LoadWorker) {
+func (s *Scheduler) handleLoadTaskPut(loadTask ha.LoadTask) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.loadWorkers[loadWorker.Task]; !ok {
-		s.loadWorkers[loadWorker.Task] = make(map[string]string)
+	if _, ok := s.loadTasks[loadTask.Task]; !ok {
+		s.loadTasks[loadTask.Task] = make(map[string]string)
 	}
-	s.loadWorkers[loadWorker.Task][loadWorker.Source] = loadWorker.Worker
+	s.loadTasks[loadTask.Task][loadTask.Source] = loadTask.Worker
 }
 
-// handleLoadWorker handles the load worker status change event.
-func (s *Scheduler) handleLoadWorker(ctx context.Context, loadWorkerCh <-chan ha.LoadWorker, errCh <-chan error) error {
+// handleLoadTask handles the load worker status change event.
+func (s *Scheduler) handleLoadTask(ctx context.Context, loadTaskCh <-chan ha.LoadTask, errCh <-chan error) error {
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case loadWorker, ok := <-loadWorkerCh:
+		case loadTask, ok := <-loadTaskCh:
 			if !ok {
 				return nil
 			}
-			s.logger.Info("receive load worker", zap.Bool("delete", loadWorker.IsDelete), zap.String("task", loadWorker.Task), zap.String("source", loadWorker.Source), zap.String("worker", loadWorker.Worker))
+			s.logger.Info("receive load worker", zap.Bool("delete", loadTask.IsDelete), zap.String("task", loadTask.Task), zap.String("source", loadTask.Source), zap.String("worker", loadTask.Worker))
 			var err error
-			if loadWorker.IsDelete {
-				err = s.handleLoadWorkerDel(loadWorker)
+			if loadTask.IsDelete {
+				err = s.handleLoadTaskDel(loadTask)
 			} else {
-				s.handleLoadWorkerPut(loadWorker)
+				s.handleLoadTaskPut(loadTask)
 			}
 			if err != nil {
 				s.logger.Error("fail to handle worker status change event", zap.Error(err))
@@ -2085,7 +2085,7 @@ func (s *Scheduler) handleLoadWorker(ctx context.Context, loadWorkerCh <-chan ha
 	}
 }
 
-func (s *Scheduler) resetLoadWorker(cli *clientv3.Client) (int64, error) {
+func (s *Scheduler) resetLoadTask(cli *clientv3.Client) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
