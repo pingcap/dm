@@ -429,7 +429,7 @@ func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
 	tablePoint := s.checkpoint.TablePoint()
 	// doesn't have neither GTID nor binlog pos
-	return binlog.CompareLocationAsPossible(globalPoint, binlog.NewLocation(s.cfg.Flavor), s.cfg.EnableGTID) <= 0 && len(tablePoint) == 0, nil
+	return binlog.IsFreshPosition(globalPoint, s.cfg.Flavor, s.cfg.EnableGTID) && len(tablePoint) == 0, nil
 }
 
 func (s *Syncer) reset() {
@@ -2890,7 +2890,7 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 	}
 	defer streamerController.Close(tctx)
 
-	gs, err := reader.GetGTIDsForPosStreamer(tctx.Context(), streamerController.streamer, endPos)
+	gs, err := reader.GetGTIDsForPosFromStreamer(tctx.Context(), streamerController.streamer, endPos)
 	if err != nil {
 		s.tctx.L().Warn("fail to get gtids for global location", zap.Stringer("pos", location), zap.Error(err))
 		return false, err
