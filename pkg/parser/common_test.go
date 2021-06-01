@@ -16,13 +16,12 @@ package parser
 import (
 	"testing"
 
-	"github.com/pingcap/dm/pkg/utils"
-
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var _ = Suite(&testParserSuite{})
@@ -65,11 +64,11 @@ var testCases = []testCase{
 		[]string{"DROP DATABASE IF EXISTS `xs1`"},
 	},
 	{
-		"drop table `s1`.`t1`",
+		"drop table `s1`.`T1`",
 		[]string{"DROP TABLE IF EXISTS `s1`.`T1`"},
 		[][]*filter.Table{{genTableName("s1", "T1")}},
-		[][]*filter.Table{{genTableName("xs1", "xt1")}},
-		[]string{"DROP TABLE IF EXISTS `xs1`.`xt1`"},
+		[][]*filter.Table{{genTableName("xs1", "xT1")}},
+		[]string{"DROP TABLE IF EXISTS `xs1`.`xT1`"},
 	},
 	{
 		"drop table `s1`.`t1`, `s2`.`t2`",
