@@ -64,11 +64,11 @@ var testCases = []testCase{
 		[]string{"DROP DATABASE IF EXISTS `xs1`"},
 	},
 	{
-		"drop table `s1`.`T1`",
-		[]string{"DROP TABLE IF EXISTS `s1`.`T1`"},
-		[][]*filter.Table{{genTableName("s1", "T1")}},
-		[][]*filter.Table{{genTableName("xs1", "xT1")}},
-		[]string{"DROP TABLE IF EXISTS `xs1`.`xT1`"},
+		"drop table `Ss1`.`tT1`",
+		[]string{"DROP TABLE IF EXISTS `Ss1`.`tT1`"},
+		[][]*filter.Table{{genTableName("Ss1", "tT1")}},
+		[][]*filter.Table{{genTableName("xSs1", "xtT1")}},
+		[]string{"DROP TABLE IF EXISTS `xSs1`.`xtT1`"},
 	},
 	{
 		"drop table `s1`.`t1`, `s2`.`t2`",

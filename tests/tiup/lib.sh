@@ -12,15 +12,15 @@ TASK_NAME="upgrade_via_tiup"
 TASK_PESS_NAME="upgrade_via_tiup_pessimistic"
 TASK_OPTI_NAME="upgrade_via_tiup_optimistic"
 
-DB1=sharding1
-DB2=sharding2
-DB3=opt_sharding1
-DB4=opt_sharding2
-DB5=pes_sharding1
-DB6=pes_sharding2
-TBL1=t1
-TBL2=t2
-TBL3=t3
+DB1=Sharding1
+DB2=Sharding2
+DB3=opt_Sharding1
+DB4=opt_Sharding2
+DB5=pes_Sharding1
+DB6=pes_Sarsding2
+TBL1=T1
+TBL2=T2
+TBL3=T3
 
 function exec_sql() {
 	echo $3 | mysql -h $1 -P $2
