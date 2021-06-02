@@ -12,7 +12,7 @@ on:
       fromVer:
         dmVer: 'v1.0.6'
       toVer:
-        dmVer: 'nightly'  
+        dmVer: 'nightly'
 
 jobs:
   from_v1:
@@ -22,16 +22,15 @@ jobs:
       working-directory: ${{ github.workspace }}/go/src/github.com/pingcap/dm
 
     steps:
-    - name: Set up Go 1.13
+    - name: Set up Go 1.16
       uses: actions/setup-go@v2
       with:
-        go-version: 1.13
-    
+        go-version: 1.16
     - name: Check out code
       uses: actions/checkout@v2
       with:
         path: go/src/github.com/pingcap/dm
-    
+
     - name: Setup containers
       working-directory: ${{ env.working-directory }}
       run: |
@@ -69,13 +68,12 @@ jobs:
         matrix:
           previous_v2: ["v2.0.0", "v2.0.1", "v2.0.3"]
 
-    steps:    
+    steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.16
       uses: actions/setup-go@v2
       with:
-        go-version: 1.13
-    
+        go-version: 1.16
     - name: Check out code
       uses: actions/checkout@v2
       with:
@@ -85,7 +83,7 @@ jobs:
       if: ${{ github.ref != 'refs/heads/master' }}
       working-directory: ${{ env.working-directory }}
       run: make build nolint=true
-    
+
     - name: Package files
       if: ${{ github.ref != 'refs/heads/master' }}
       run: |
@@ -176,10 +174,10 @@ jobs:
       working-directory: ${{ github.workspace }}/go/src/github.com/pingcap/dm
 
     steps:
-    - name: Set up Go 1.13
+    - name: Set up Go 1.16
       uses: actions/setup-go@v2
       with:
-        go-version: 1.13
+        go-version: 1.16
     
     - name: Check out code
       uses: actions/checkout@v2
