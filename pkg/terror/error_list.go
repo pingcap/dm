@@ -185,9 +185,6 @@ const (
 
 	// pkg/streamer.
 	codePreviousGTIDNotExist
-
-	// pkg/ha.
-	codeOperateEtcdLoadCount
 )
 
 // Config related error code list.
@@ -799,9 +796,6 @@ var (
 	ErrMetadataNoBinlogLoc = New(codeMetadataNoBinlogLoc, ClassFunctional, ScopeUpstream, LevelLow, "didn't found binlog location in dumped metadata file %s", "Please check log of dump unit, there maybe errors when read upstream binlog status")
 
 	ErrPreviousGTIDNotExist = New(codePreviousGTIDNotExist, ClassFunctional, ScopeInternal, LevelHigh, "no previous gtid event from binlog %s", "")
-
-	// pkg/ha.
-	ErrOperateEtcdLoadCount = New(codeOperateEtcdLoadCount, ClassFunctional, ScopeInternal, LevelHigh, "cannot update worker-source-load-count in etcd, op %s", "")
 
 	// Config related error.
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s", "Please check `ignore-checking-items` config in task configuration file, which can be set including `all`/`dump_privilege`/`replication_privilege`/`version`/`binlog_enable`/`binlog_format`/`binlog_row_image`/`table_schema`/`schema_of_shard_tables`/`auto_increment_ID`.")

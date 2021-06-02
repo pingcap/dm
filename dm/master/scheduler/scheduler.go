@@ -229,7 +229,7 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) (err e
 	s.wg.Add(1)
 	go func(rev1 int64) {
 		defer s.wg.Done()
-		// starting to observe load worker.
+		// starting to observe load task.
 		// TODO: handle fatal error from observeLoadTask
 		//nolint:errcheck
 		s.observeLoadTask(ctx, etcdCli, rev1)
@@ -405,6 +405,11 @@ func (s *Scheduler) GetSourceCfgByID(source string) *config.SourceConfig {
 	return &clone
 }
 
+// transferWorkerAndSource transfer worker and source bound relations.
+// lworker, "", "", rsource				This means a unbounded source bounded to a free worker
+// lworker, lsource, rworker, "" 		This means transfer a source from a worker to another free worker
+// lworker, lsource, "", rsource		This means transfer a worker from a bounded source to another unbounded source
+// lworker, lsource, rworker, rsource	This means transfer two bounded relations.
 func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource string) error {
 	var (
 		lw           *Worker
@@ -421,6 +426,8 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 	if rworker != "" {
 		rw = s.workers[rworker]
 	}
+
+	// get current bounded relations.
 	if lworker != "" && lsource != "" {
 		boundWorkers = append(boundWorkers, lworker)
 	}
@@ -428,10 +435,12 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		boundWorkers = append(boundWorkers, rworker)
 	}
 
+	// del current bounded relations.
 	if _, err := ha.DeleteSourceBound(s.etcdCli, boundWorkers...); err != nil {
 		return err
 	}
 
+	// mark workers free.
 	if lw != nil {
 		lw.ToFree()
 	}
@@ -439,6 +448,7 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		rw.ToFree()
 	}
 
+	// put new bounded relations.
 	if lworker != "" && rsource != "" {
 		bound1 = ha.NewSourceBound(rsource, lworker)
 		bounds = append(bounds, bound1)
@@ -451,6 +461,7 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		return err
 	}
 
+	// update worker status
 	if lworker != "" && rsource != "" {
 		_ = s.updateStatusForBound(lw, bound1)
 	}
@@ -458,6 +469,8 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		_ = s.updateStatusForBound(rw, bound2)
 	}
 
+	// if one of the workers/sources become free/unbounded
+	// try bound it.
 	if lworker != "" && rsource == "" {
 		_, err := s.tryBoundForWorker(lw)
 		if err != nil {
@@ -1667,6 +1680,7 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 		}
 	}
 
+	// pick a source which has subtask in load stage.
 	if source == "" {
 		worker, sourceID := s.getTransferWorkerAndSource(w.BaseInfo().Name, "")
 		if sourceID != "" {
@@ -1772,6 +1786,7 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 		}
 	}
 
+	// pick a worker which has subtask in load stage.
 	if worker == nil {
 		worker, sourceID := s.getTransferWorkerAndSource("", source)
 		if worker != "" {
@@ -1973,14 +1988,21 @@ func (s *Scheduler) RemoveLoadTask(task string) error {
 	return nil
 }
 
+// getTransferWorkerAndSource tries to get transfer worker and source.
+// worker, source	This means a subtask finish load stage, often called by handleLoadTaskDel.
+// worker, ""		This means a free worker online, often called by tryBoundForWorker.
+// "", source		This means a unbounded source online, often called by tryBoundForSource.
 func (s *Scheduler) getTransferWorkerAndSource(worker, source string) (string, string) {
+	// origin worker not free, try to get a source.
 	if worker != "" {
+		// try to get a unbounded source
 		for sourceID := range s.unbounds {
 			if sourceID != source && s.hasLoadTaskByWorkerAndSource(worker, sourceID) {
 				s.logger.Info("found unbound source to transfer", zap.String("source", sourceID))
 				return "", sourceID
 			}
 		}
+		// try to get a unbounded source
 		for sourceID, w := range s.bounds {
 			if sourceID != source && s.hasLoadTaskByWorkerAndSource(worker, sourceID) && !s.hasLoadTaskByWorkerAndSource(w.baseInfo.Name, sourceID) {
 				s.logger.Info("found bounded source to transfer", zap.String("source", sourceID), zap.String("worker", w.baseInfo.Name), zap.String("origin worker", worker), zap.String("origin source", source))
@@ -1989,7 +2011,9 @@ func (s *Scheduler) getTransferWorkerAndSource(worker, source string) (string, s
 		}
 	}
 
+	// origin source bounded, try to get a worker
 	if source != "" {
+		// try to get a free worker
 		for _, w := range s.workers {
 			workerName := w.baseInfo.Name
 			if workerName != worker && w.Stage() == WorkerFree && s.hasLoadTaskByWorkerAndSource(workerName, source) {
@@ -1998,6 +2022,7 @@ func (s *Scheduler) getTransferWorkerAndSource(worker, source string) (string, s
 			}
 		}
 
+		// try to get a bounded worker
 		for _, w := range s.workers {
 			workerName := w.baseInfo.Name
 			if workerName != worker && w.Stage() == WorkerBound {
@@ -2012,6 +2037,7 @@ func (s *Scheduler) getTransferWorkerAndSource(worker, source string) (string, s
 	return "", ""
 }
 
+// hasLoadTaskByWorkerAndSource check whether there is a load subtask for the worker and source.
 func (s *Scheduler) hasLoadTaskByWorkerAndSource(worker, source string) bool {
 	for _, sourceWorkerMap := range s.loadTasks {
 		if workerName, ok := sourceWorkerMap[source]; ok && workerName == worker {
