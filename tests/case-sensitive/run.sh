@@ -100,14 +100,14 @@ function run() {
 	# test route-rule
 	check_contains "UPPER_DB_ROUTE"
 
-  run_sql "show tables from UPPER_DB_ROUTE" $TIDB_PORT $TIDB_PASSWORD
-  check_contains "do_table_route"
-  check_not_contains "Do_table_ignore"
+	run_sql "show tables from UPPER_DB_ROUTE" $TIDB_PORT $TIDB_PASSWORD
+	check_contains "do_table_route"
+	check_not_contains "Do_table_ignore"
 
-  # test binlog event filter
-  run_sql "truncate table Upper_DB.Do_Table" $MYSQL_HOST1 $MYSQL_PORT1
-  run_sql "select count(*) from UPPER_DB_ROUTE.do_table_route" $TIDB_PORT $TIDB_PASSWORD
-  check_contains "count(*): 6"
+	# test binlog event filter
+	run_sql "truncate table Upper_DB.Do_Table" $MYSQL_HOST1 $MYSQL_PORT1
+	run_sql "select count(*) from UPPER_DB_ROUTE.do_table_route" $TIDB_PORT $TIDB_PASSWORD
+	check_contains "count(*): 6"
 
 	export GO_FAILPOINTS=''
 }
