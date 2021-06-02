@@ -74,31 +74,35 @@ func getCfgFunc(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	return sendGetConfigRequest(tp, cfgName, filename)
+}
+
+func sendGetConfigRequest(tp pb.CfgType, name, output string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
 
 	resp := &pb.GetCfgResponse{}
-	err = common.SendRequest(
+	err := common.SendRequest(
 		ctx,
 		"GetCfg",
 		&pb.GetCfgRequest{
 			Type: tp,
-			Name: cfgName,
+			Name: name,
 		},
 		&resp,
 	)
 	if err != nil {
-		common.PrintLinesf("can not get %s config of %s", cfgType, cfgName)
+		common.PrintLinesf("can not get %s config of %s", tp, name)
 		return err
 	}
 
-	if resp.Result && len(filename) != 0 {
-		err = ioutil.WriteFile(filename, []byte(resp.Cfg), 0o644)
+	if resp.Result && len(output) != 0 {
+		err = ioutil.WriteFile(output, []byte(resp.Cfg), 0o644)
 		if err != nil {
-			common.PrintLinesf("can not write config to file %s", filename)
+			common.PrintLinesf("can not write config to file %s", output)
 			return err
 		}
-		resp.Msg = fmt.Sprintf("write config to file %s succeed", filename)
+		resp.Msg = fmt.Sprintf("write config to file %s succeed", output)
 		resp.Cfg = ""
 	}
 	common.PrettyPrintResponse(resp)

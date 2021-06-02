@@ -120,12 +120,16 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) error {
 	if sync && op != pb.SchemaOp_SetSchema {
 		return errors.New("--sync flag is only used to set schema")
 	}
+	return sendOperateSchemaRequest(op, taskName, sources, database, table, string(schemaContent), flush, sync)
+}
 
+func sendOperateSchemaRequest(op pb.SchemaOp, taskName string, sources []string,
+	database, table, schemaContent string, flush, sync bool) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	resp := &pb.OperateSchemaResponse{}
-	err = common.SendRequest(
+	err := common.SendRequest(
 		ctx,
 		"OperateSchema",
 		&pb.OperateSchemaRequest{
@@ -134,13 +138,12 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) error {
 			Sources:  sources,
 			Database: database,
 			Table:    table,
-			Schema:   string(schemaContent),
+			Schema:   schemaContent,
 			Flush:    flush,
 			Sync:     sync,
 		},
 		&resp,
 	)
-
 	if err != nil {
 		return err
 	}

@@ -77,6 +77,10 @@ func NewRootCmd() *cobra.Command {
 		master.NewTransferSourceCmd(),
 		master.NewStartRelayCmd(),
 		master.NewStopRelayCmd(),
+		master.NewBinlogCmd(),
+		master.NewShardDDLLockCmd(),
+		master.NewSourceTableSchemaCmd(),
+		master.NewConfigCmd(),
 	)
 	// copied from (*cobra.Command).InitDefaultHelpCmd
 	helpCmd := &cobra.Command{

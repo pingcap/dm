@@ -26,6 +26,11 @@ function usage_and_arg_test() {
 	handle_error_invalid_sqls
 	handle_error_invalid_op
 
+	binlog_empty_arg
+	binlog_invalid_binlogpos
+	binlog_invalid_sqls
+	binlog_invalid_op
+
 	# TODO: check SQLs error test
 }
 
