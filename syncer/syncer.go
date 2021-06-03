@@ -774,13 +774,13 @@ func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 	switch job.tp {
 	case ddl:
 		// NOTE: we handle ddl job separately because ddl job will clean all the dml job before execution
-		lag = time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp)
+		lag = time.Now().Unix() - s.tsOffset.Load() - int64(job.eventHeader.Timestamp)
 	default: // dml job or skip job
 		if job.tp != skip {
 			// NOTE workerlagmap already init all dml key(queueBucketName) before syncer running.
-			s.workerLagMap[queueBucketName].Store(time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp))
+			s.workerLagMap[queueBucketName].Store(time.Now().Unix() - s.tsOffset.Load() - int64(job.eventHeader.Timestamp))
 		} else {
-			lag = time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp)
+			lag = time.Now().Unix() - s.tsOffset.Load() - int64(job.eventHeader.Timestamp)
 		}
 		// find all job queue lag choose the max one
 		for _, l := range s.workerLagMap {
@@ -1101,10 +1101,10 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	jobs := make([]*job, 0, count)
 	tpCnt := make(map[opType]int64)
 
-	// clearF is used to calc lag metric and clear local job queue.
+	// clearF is used to calculate lag metric and clear local job queue.
 	clearF := func() {
 		if len(jobs) > 0 {
-			// NOTE: we can use the first job of job queue to calc lag because when this job flush to target db,
+			// NOTE: we can use the first job of job queue to calculate lag because when this job flush to target db,
 			// every event before this job's event has already flushed to target db.
 			// but we still need to use this job to maintain the oldest binlog event ts among all workers.
 			j := jobs[0]
@@ -1112,7 +1112,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		} else {
 			s.updateReplicationLag(nil, queueBucket)
 		}
-		// calc tps
+		// calculate tps
 		for tpName, v := range tpCnt {
 			s.addCount(true, queueBucket, tpName, v)
 			tpCnt[tpName] = 0
