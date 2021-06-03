@@ -1313,7 +1313,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		if err != nil {
-			// TODO: wrap the error with terror, and attach binlog position
 			tctx.L().Error("fail to fetch binlog", log.ShortError(err))
 
 			if isConnectionRefusedError(err) {
