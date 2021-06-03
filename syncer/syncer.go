@@ -1122,6 +1122,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}()
 
+	// some initialization that can't be put in Syncer.Init
 	fresh, err := s.IsFreshTask(ctx)
 	if err != nil {
 		return err
@@ -1132,13 +1133,33 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return err
 		}
 	}
-	needFlushCheckpoint, err := s.adjustGlobalPointGTID(tctx)
+
+	var (
+		flushCheckpoint bool
+		cleanDumpFile   = s.cfg.CleanDumpFile
+	)
+	flushCheckpoint, err = s.adjustGlobalPointGTID(tctx)
 	if err != nil {
 		return err
 	}
-	if needFlushCheckpoint || s.cfg.Mode == config.ModeAll {
-		if err2 := s.loadTableStructureFromDump(ctx); err2 != nil {
-			tctx.L().Warn("error happened when load table structure from dump files", zap.Error(err2))
+	if s.cfg.Mode == config.ModeAll {
+		flushCheckpoint = true
+		err = s.loadTableStructureFromDump(ctx)
+		if err != nil {
+			tctx.L().Warn("error happened when load table structure from dump files", zap.Error(err))
+			cleanDumpFile = false
+		}
+	}
+
+	if flushCheckpoint {
+		if err = s.flushCheckPoints(); err != nil {
+			tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
+		}
+	}
+	if cleanDumpFile {
+		tctx.L().Info("try to remove all dump files")
+		if err = os.RemoveAll(s.cfg.Dir); err != nil {
+			tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
 		}
 	}
 
@@ -2330,7 +2351,6 @@ func (s *Syncer) loadTableStructureFromDump(ctx context.Context) error {
 	}
 	var dbs, tables []string
 	var tableFiles [][2]string // [db, filename]
-	var hasErr bool
 	for f := range files {
 		if db, ok := utils.GetDBFromDumpFilename(f); ok {
 			dbs = append(dbs, db)
@@ -2346,22 +2366,28 @@ func (s *Syncer) loadTableStructureFromDump(ctx context.Context) error {
 		zap.Strings("database", dbs),
 		zap.Any("tables", tables))
 	for _, db := range dbs {
-		err = s.schemaTracker.CreateSchemaIfNotExists(db)
-		if err != nil {
-			hasErr = true
-			logger.Warn("fail to create schema for dump files", zap.String("db", db), zap.Error(err))
+		if err = s.schemaTracker.CreateSchemaIfNotExists(db); err != nil {
+			return err
 		}
 	}
+
+	var firstErr error
+	setFirstErr := func (err error) {
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+
 	for _, dbAndFile := range tableFiles {
 		db, file := dbAndFile[0], dbAndFile[1]
 		filepath := path.Join(s.cfg.Dir, file)
-		content, err3 := common2.GetFileContent(filepath)
-		if err3 != nil {
-			hasErr = true
+		content, err2 := common2.GetFileContent(filepath)
+		if err2 != nil {
 			logger.Warn("fail to read file for creating table in schema tracker",
 				zap.String("db", db),
 				zap.String("file", filepath),
 				zap.Error(err))
+			setFirstErr(err2)
 			continue
 		}
 		stmts := bytes.Split(content, []byte(";"))
@@ -2372,25 +2398,15 @@ func (s *Syncer) loadTableStructureFromDump(ctx context.Context) error {
 			}
 			err = s.schemaTracker.Exec(ctx, db, string(stmt))
 			if err != nil {
-				hasErr = true
 				logger.Warn("fail to create table for dump files",
 					zap.Any("file", filepath),
 					zap.ByteString("statement", stmt),
 					zap.Error(err))
+				setFirstErr(err)
 			}
 		}
 	}
-
-	if err = s.flushCheckPoints(); err != nil {
-		return err
-	} else if s.cfg.CleanDumpFile && !hasErr {
-		logger.Info("try to remove loaded files")
-		if err = os.RemoveAll(s.cfg.Dir); err != nil {
-			logger.Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
-			return err
-		}
-	}
-	return nil
+	return firstErr
 }
 
 func (s *Syncer) printStatus(ctx context.Context) {
