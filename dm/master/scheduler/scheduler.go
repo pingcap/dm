@@ -420,6 +420,8 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		bound2       ha.SourceBound
 	)
 
+	s.logger.Info("transfer source and worker", zap.String("left worker", lworker), zap.String("left source", lsource), zap.String("right worker", rworker), zap.String("right source", rsource))
+
 	if lworker != "" {
 		lw = s.workers[lworker]
 	}
@@ -427,7 +429,7 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		rw = s.workers[rworker]
 	}
 
-	// get current bounded relations.
+	// get current bounded workers.
 	if lworker != "" && lsource != "" {
 		boundWorkers = append(boundWorkers, lworker)
 	}
@@ -440,14 +442,12 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		return err
 	}
 
-	s.updateStatusForUnbound(lsource)
-	s.updateStatusForUnbound(rsource)
-
 	if lsource != "" {
+		s.updateStatusForUnbound(lsource)
 		s.unbounds[lsource] = struct{}{}
 	}
-
 	if rsource != "" {
+		s.updateStatusForUnbound(rsource)
 		s.unbounds[rsource] = struct{}{}
 	}
 
@@ -501,7 +501,6 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		}
 	}
 
-	s.logger.Info("transfer source and worker", zap.String("left worker", lworker), zap.String("left source", lsource), zap.String("right worker", rworker), zap.String("right source", rsource))
 	return nil
 }
 
@@ -1977,7 +1976,7 @@ func (s *Scheduler) observeLoadTask(ctx context.Context, etcdCli *clientv3.Clien
 	}
 }
 
-// RemoveLoadTask removes the load worker by task.
+// RemoveLoadTask removes the loadtask by task.
 func (s *Scheduler) RemoveLoadTask(task string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -2003,15 +2002,12 @@ func (s *Scheduler) getTransferWorkerAndSource(worker, source string) (string, s
 		// try to get a unbounded source
 		for sourceID := range s.unbounds {
 			if sourceID != source && s.hasLoadTaskByWorkerAndSource(worker, sourceID) {
-				s.logger.Info("found unbound source to transfer", zap.String("source", sourceID))
 				return "", sourceID
 			}
 		}
-		// try to get a unbounded source
+		// try to get a bounded source
 		for sourceID, w := range s.bounds {
-			s.logger.Debug("bounded", zap.String("worker", w.baseInfo.Name), zap.String("source", sourceID))
 			if sourceID != source && s.hasLoadTaskByWorkerAndSource(worker, sourceID) && !s.hasLoadTaskByWorkerAndSource(w.baseInfo.Name, sourceID) {
-				s.logger.Info("found bounded source to transfer", zap.String("source", sourceID), zap.String("worker", w.baseInfo.Name), zap.String("origin worker", worker), zap.String("origin source", source))
 				return w.baseInfo.Name, sourceID
 			}
 		}
@@ -2023,7 +2019,6 @@ func (s *Scheduler) getTransferWorkerAndSource(worker, source string) (string, s
 		for _, w := range s.workers {
 			workerName := w.baseInfo.Name
 			if workerName != worker && w.Stage() == WorkerFree && s.hasLoadTaskByWorkerAndSource(workerName, source) {
-				s.logger.Info("found free worker to transfer", zap.String("worker", workerName), zap.String("origin worker", workerName), zap.String("origin source", source))
 				return workerName, ""
 			}
 		}
@@ -2033,7 +2028,6 @@ func (s *Scheduler) getTransferWorkerAndSource(worker, source string) (string, s
 			workerName := w.baseInfo.Name
 			if workerName != worker && w.Stage() == WorkerBound {
 				if s.hasLoadTaskByWorkerAndSource(workerName, source) && !s.hasLoadTaskByWorkerAndSource(workerName, w.bound.Source) {
-					s.logger.Info("found bounded worker to transfer", zap.String("worker", workerName), zap.String("source", w.bound.Source), zap.String("origin worker", worker), zap.String("origin source", source))
 					return workerName, w.bound.Source
 				}
 			}
@@ -2129,27 +2123,13 @@ func (s *Scheduler) resetLoadTask(cli *clientv3.Client) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	rwm := s.workers
-	kam, rev, err := ha.GetKeepAliveWorkers(cli)
+	ltm, rev, err := ha.GetAllLoadTask(cli)
 	if err != nil {
 		return 0, err
 	}
 
-	// update all registered workers status
-	for name := range rwm {
-		ev := ha.WorkerEvent{WorkerName: name}
-		// set the stage as Free if it's keep alive.
-		if _, ok := kam[name]; ok {
-			err = s.handleWorkerOnline(ev, false)
-			if err != nil {
-				return 0, err
-			}
-		} else {
-			err = s.handleWorkerOffline(ev, false)
-			if err != nil {
-				return 0, err
-			}
-		}
-	}
+	// simply replace loadTasks with etcd record.
+	// Scheduling will be trigger by new worker/source/loadTask event
+	s.loadTasks = ltm
 	return rev, nil
 }

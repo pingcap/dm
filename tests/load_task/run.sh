@@ -53,7 +53,6 @@ function test_worker_restart() {
 
 # almost never happen since user hardly start a load task after another load task failed.
 function test_transfer_two_sources() {
-	echo "test transfer two sources"
 	# worker2 offline
 	ps aux | grep dm-worker2 | awk '{print $2}' | xargs kill || true
 	check_port_offline $WORKER2_PORT 20
@@ -76,7 +75,7 @@ function test_transfer_two_sources() {
 		"\"unit\": \"Load\"" 1
 
 	# worker2 online
-	export GO_FAILPOINTS="github.com/pingcap/dm/loader/LoadDataSlowDown=sleep(20000)"
+	export GO_FAILPOINTS="github.com/pingcap/dm/loader/LoadDataSlowDown=sleep(15000)"
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 

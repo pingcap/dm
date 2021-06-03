@@ -1138,10 +1138,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if needFlushCheckpoint || s.cfg.Mode == config.ModeAll {
+	if needFlushCheckpoint || (fresh && s.cfg.Mode == config.ModeAll) {
 		if err = s.flushCheckPoints(); err != nil {
 			tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
-		} else if s.cfg.Mode == config.ModeAll {
+		} else if fresh && s.cfg.Mode == config.ModeAll {
 			if err = s.delLoadTask(); err != nil {
 				tctx.L().Warn("error when del load task in etcd", zap.Error(err))
 			}
@@ -2928,6 +2928,6 @@ func (s *Syncer) delLoadTask() error {
 	if err != nil {
 		return err
 	}
-	s.tctx.Logger.Info("delete load worker in etcd for all mode", zap.String("task", s.cfg.Name), zap.String("source", s.cfg.SourceID), zap.String("worker", s.cfg.Name))
+	s.tctx.Logger.Info("delete load worker in etcd for all mode", zap.String("task", s.cfg.Name), zap.String("source", s.cfg.SourceID))
 	return nil
 }
