@@ -15,7 +15,7 @@ package utils
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -176,7 +176,7 @@ func (t *testDBSuite) TestGetServerUnixTS(c *C) {
 	c.Assert(err, IsNil)
 
 	ts := time.Now().Unix()
-	rows := sqlmock.NewRows([]string{"UNIX_TIMESTAMP()"}).AddRow(fmt.Sprint(ts))
+	rows := sqlmock.NewRows([]string{"UNIX_TIMESTAMP()"}).AddRow(strconv.FormatInt(ts, 10))
 	mock.ExpectQuery("SELECT UNIX_TIMESTAMP()").WillReturnRows(rows)
 
 	ts2, err := GetServerUnixTS(ctx, db)
