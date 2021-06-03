@@ -233,7 +233,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	return syncer
 }
 
-// GetSecondsBehindMaster return secondsBehindMaster.
+// GetSecondsBehindMaster returns secondsBehindMaster.
 func (s *Syncer) GetSecondsBehindMaster() int64 {
 	return s.secondsBehindMaster.Load()
 }
@@ -740,47 +740,9 @@ func (s *Syncer) jobsIsEmpty() bool {
 	return true
 }
 
-// updateReplicationLag calc syncer replication lag by job, it called after every batch dml job / one skip job / one ddl
+// updateReplicationLag calculates syncer's replication lag by job, it called after every batch dml job / one skip job / one ddl
 // job is flushed to target db.
 func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
-	if job != nil {
-		failpoint.Inject("BlockSyncerUpdateLag", func(v failpoint.Value) {
-			sv, ok := v.(string)
-			if ok && len(strings.Split(sv, ",")) == 2 {
-				args := strings.Split(sv, ",")
-				jtp := args[0]                // job type
-				t, _ := strconv.Atoi(args[1]) // sleep time
-				if job.tp.String() == jtp {
-					s.tctx.L().Info("BlockSyncerUpdateLag", zap.String("job type", jtp), zap.Int("sleep time", t))
-					time.Sleep(time.Second * time.Duration(t))
-				}
-			} else {
-				s.tctx.L().Info("BlockSyncerUpdateLag failed", zap.Reflect("input v", v))
-			}
-		})
-
-		var lag int64
-		switch job.tp {
-		case ddl:
-			// NOTE: we handle ddl job separately because ddl job will clean all the dml job before execution
-			lag = time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp)
-		default: // dml job or skip job
-			if job.tp != skip {
-				// NOTE workerlagmap already init all dml key(queueBucketName) before syncer running.
-				s.workerLagMap[queueBucketName].Store(time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp))
-			} else {
-				lag = time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp)
-			}
-			// find all job queue lag choose the max one
-			for _, l := range s.workerLagMap {
-				if wl := l.Load(); wl > lag {
-					lag = wl
-				}
-			}
-		}
-		replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(lag))
-		s.secondsBehindMaster.Store(lag)
-	}
 	// when job is nil mean no job in this bucket, need do reset this bucket lag to 0
 	if job == nil {
 		s.workerLagMap[queueBucketName].Store(0)
@@ -789,7 +751,46 @@ func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 			replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(0))
 			s.secondsBehindMaster.Store(0)
 		}
+		return
 	}
+
+	failpoint.Inject("BlockSyncerUpdateLag", func(v failpoint.Value) {
+		sv, ok := v.(string)
+		if ok && len(strings.Split(sv, ",")) == 2 {
+			args := strings.Split(sv, ",")
+			jtp := args[0]                // job type
+			t, _ := strconv.Atoi(args[1]) // sleep time
+			if job.tp.String() == jtp {
+				s.tctx.L().Info("BlockSyncerUpdateLag", zap.String("job type", jtp), zap.Int("sleep time", t))
+				time.Sleep(time.Second * time.Duration(t))
+			}
+		} else {
+			s.tctx.L().Error("BlockSyncerUpdateLag failed", zap.Any("input v", v))
+			panic("BlockSyncerUpdateLag failed")
+		}
+	})
+
+	var lag int64
+	switch job.tp {
+	case ddl:
+		// NOTE: we handle ddl job separately because ddl job will clean all the dml job before execution
+		lag = time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp)
+	default: // dml job or skip job
+		if job.tp != skip {
+			// NOTE workerlagmap already init all dml key(queueBucketName) before syncer running.
+			s.workerLagMap[queueBucketName].Store(time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp))
+		} else {
+			lag = time.Now().Unix() + s.tsOffset.Load() - int64(job.eventHeader.Timestamp)
+		}
+		// find all job queue lag choose the max one
+		for _, l := range s.workerLagMap {
+			if wl := l.Load(); wl > lag {
+				lag = wl
+			}
+		}
+	}
+	replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(lag))
+	s.secondsBehindMaster.Store(lag)
 }
 
 func (s *Syncer) checkWait(job *job) bool {

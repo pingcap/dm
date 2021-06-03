@@ -170,14 +170,13 @@ func (t *testDBSuite) TestGetServerUUID(c *C) {
 }
 
 func (t *testDBSuite) TestGetServerUnixTS(c *C) {
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultDBTimeout)
-	defer cancel()
+	ctx := context.Background()
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
 	ts := time.Now().Unix()
-	rows := sqlmock.NewRows([]string{"UNIX_TIMESTAMP()"}).FromCSVString(fmt.Sprint(ts))
+	rows := sqlmock.NewRows([]string{"UNIX_TIMESTAMP()"}).AddRow(fmt.Sprint(ts))
 	mock.ExpectQuery("SELECT UNIX_TIMESTAMP()").WillReturnRows(rows)
 
 	ts2, err := GetServerUnixTS(ctx, db)
