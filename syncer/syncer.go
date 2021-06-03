@@ -54,6 +54,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/schema"
@@ -106,6 +107,7 @@ type Syncer struct {
 	sgk       *ShardingGroupKeeper // keeper to keep all sharding (sub) group in this syncer
 	pessimist *shardddl.Pessimist  // shard DDL pessimist
 	optimist  *shardddl.Optimist   // shard DDL optimist
+	cli       *clientv3.Client
 
 	binlogType         BinlogType
 	streamerController *StreamerController
@@ -209,6 +211,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
 	syncer.enableRelay = cfg.UseRelay
+	syncer.cli = etcdClient
 
 	syncer.checkpoint = NewRemoteCheckPoint(syncer.tctx, cfg, syncer.checkpointID())
 
@@ -1138,14 +1141,20 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	if needFlushCheckpoint || s.cfg.Mode == config.ModeAll {
 		if err = s.flushCheckPoints(); err != nil {
 			tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
-		} else if s.cfg.Mode == config.ModeAll && s.cfg.CleanDumpFile {
-			tctx.L().Info("try to remove loaded files")
-			metadataFile := path.Join(s.cfg.Dir, "metadata")
-			if err = os.Remove(metadataFile); err != nil {
-				tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
+		} else if s.cfg.Mode == config.ModeAll {
+			if err = s.delLoadTask(); err != nil {
+				tctx.L().Warn("error when del load task in etcd", zap.Error(err))
 			}
-			if err = os.Remove(s.cfg.Dir); err != nil {
-				tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
+
+			if s.cfg.CleanDumpFile {
+				tctx.L().Info("try to remove loaded files")
+				metadataFile := path.Join(s.cfg.Dir, "metadata")
+				if err = os.Remove(metadataFile); err != nil {
+					tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
+				}
+				if err = os.Remove(s.cfg.Dir); err != nil {
+					tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
+				}
 			}
 		}
 	}
@@ -2911,4 +2920,14 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// delLoadTask is called when finish restoring data, to delete load worker in etcd.
+func (s *Syncer) delLoadTask() error {
+	_, _, err := ha.DelLoadTask(s.cli, s.cfg.Name, s.cfg.SourceID)
+	if err != nil {
+		return err
+	}
+	s.tctx.Logger.Info("delete load worker in etcd for all mode", zap.String("task", s.cfg.Name), zap.String("source", s.cfg.SourceID), zap.String("worker", s.cfg.Name))
+	return nil
 }

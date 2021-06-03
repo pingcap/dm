@@ -440,12 +440,15 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		return err
 	}
 
-	// mark workers free.
-	if lw != nil {
-		lw.ToFree()
+	s.updateStatusForUnbound(lsource)
+	s.updateStatusForUnbound(rsource)
+
+	if lsource != "" {
+		s.unbounds[lsource] = struct{}{}
 	}
-	if rw != nil {
-		rw.ToFree()
+
+	if rsource != "" {
+		s.unbounds[rsource] = struct{}{}
 	}
 
 	// put new bounded relations.
@@ -454,7 +457,7 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		bounds = append(bounds, bound1)
 	}
 	if rworker != "" && lsource != "" {
-		bound2 = ha.NewSourceBound(rsource, lworker)
+		bound2 = ha.NewSourceBound(lsource, rworker)
 		bounds = append(bounds, bound2)
 	}
 	if _, err := ha.PutSourceBound(s.etcdCli, bounds...); err != nil {
@@ -464,9 +467,11 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 	// update worker status
 	if lworker != "" && rsource != "" {
 		_ = s.updateStatusForBound(lw, bound1)
+		delete(s.unbounds, rsource)
 	}
 	if rworker != "" && lsource != "" {
 		_ = s.updateStatusForBound(rw, bound2)
+		delete(s.unbounds, lsource)
 	}
 
 	// if one of the workers/sources become free/unbounded
@@ -2004,6 +2009,7 @@ func (s *Scheduler) getTransferWorkerAndSource(worker, source string) (string, s
 		}
 		// try to get a unbounded source
 		for sourceID, w := range s.bounds {
+			s.logger.Debug("bounded", zap.String("worker", w.baseInfo.Name), zap.String("source", sourceID))
 			if sourceID != source && s.hasLoadTaskByWorkerAndSource(worker, sourceID) && !s.hasLoadTaskByWorkerAndSource(w.baseInfo.Name, sourceID) {
 				s.logger.Info("found bounded source to transfer", zap.String("source", sourceID), zap.String("worker", w.baseInfo.Name), zap.String("origin worker", worker), zap.String("origin source", source))
 				return w.baseInfo.Name, sourceID
@@ -2027,7 +2033,7 @@ func (s *Scheduler) getTransferWorkerAndSource(worker, source string) (string, s
 			workerName := w.baseInfo.Name
 			if workerName != worker && w.Stage() == WorkerBound {
 				if s.hasLoadTaskByWorkerAndSource(workerName, source) && !s.hasLoadTaskByWorkerAndSource(workerName, w.bound.Source) {
-					s.logger.Info("found bounded worker to transfer", zap.String("worker", workerName), zap.String("source", w.bound.Source), zap.String("origin worker", workerName), zap.String("origin source", source))
+					s.logger.Info("found bounded worker to transfer", zap.String("worker", workerName), zap.String("source", w.bound.Source), zap.String("origin worker", worker), zap.String("origin source", source))
 					return workerName, w.bound.Source
 				}
 			}
@@ -2051,6 +2057,14 @@ func (s *Scheduler) handleLoadTaskDel(loadTask ha.LoadTask) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if _, ok := s.loadTasks[loadTask.Task]; !ok {
+		return nil
+	}
+	if _, ok := s.loadTasks[loadTask.Task][loadTask.Source]; !ok {
+		return nil
+	}
+
+	loadTask.Worker = s.loadTasks[loadTask.Task][loadTask.Source]
 	delete(s.loadTasks[loadTask.Task], loadTask.Source)
 	if len(s.loadTasks[loadTask.Task]) == 0 {
 		delete(s.loadTasks, loadTask.Task)
@@ -2088,7 +2102,7 @@ func (s *Scheduler) handleLoadTask(ctx context.Context, loadTaskCh <-chan ha.Loa
 			if !ok {
 				return nil
 			}
-			s.logger.Info("receive load worker", zap.Bool("delete", loadTask.IsDelete), zap.String("task", loadTask.Task), zap.String("source", loadTask.Source), zap.String("worker", loadTask.Worker))
+			s.logger.Info("receive load task", zap.Bool("delete", loadTask.IsDelete), zap.String("task", loadTask.Task), zap.String("source", loadTask.Source), zap.String("worker", loadTask.Worker))
 			var err error
 			if loadTask.IsDelete {
 				err = s.handleLoadTaskDel(loadTask)

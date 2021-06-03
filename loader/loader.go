@@ -183,6 +183,17 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 
 			failpoint.Inject("LoadDataSlowDown", nil)
 
+			failpoint.Inject("LoadDataSlowDownByTask", func(val failpoint.Value) {
+				tasks := val.(string)
+				taskNames := strings.Split(tasks, ",")
+				for _, taskName := range taskNames {
+					if w.cfg.Name == taskName {
+						w.logger.Info("inject failpoint LoadDataSlowDownByTask", zap.String("task", taskName))
+						<-newCtx.Done()
+					}
+				}
+			})
+
 			err := w.conn.executeSQL(ctctx, sqls)
 			failpoint.Inject("executeSQLError", func(_ failpoint.Value) {
 				w.logger.Info("", zap.String("failpoint", "executeSQLError"))
@@ -712,11 +723,15 @@ func (l *Loader) Restore(ctx context.Context) error {
 	if err == nil {
 		l.finish.Store(true)
 		l.logger.Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
-		if err = l.delLoadTask(); err != nil {
-			return err
-		}
-		if l.cfg.CleanDumpFile && l.checkPoint.AllFinished() {
-			l.cleanDumpFiles()
+		if l.checkPoint.AllFinished() {
+			if l.cfg.Mode == config.ModeFull {
+				if err = l.delLoadTask(); err != nil {
+					return err
+				}
+			}
+			if l.cfg.CleanDumpFile {
+				l.cleanDumpFiles()
+			}
 		}
 	} else if errors.Cause(err) != context.Canceled {
 		return err
@@ -1530,6 +1545,6 @@ func (l *Loader) delLoadTask() error {
 	if err != nil {
 		return err
 	}
-	l.logger.Info("delete load worker in etcd", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
+	l.logger.Info("delete load worker in etcd for full mode", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
 	return nil
 }
