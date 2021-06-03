@@ -1263,7 +1263,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	go func() {
 		defer s.wg.Done()
 		// temporarily hard code there. if this metrics works well add this to config file.
-		updateTicker := time.NewTicker(time.Second * 10)
+		updateTicker := time.NewTicker(time.Minute * 10)
 		defer updateTicker.Stop()
 		for {
 			select {

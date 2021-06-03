@@ -174,8 +174,8 @@ function test_syncer_metrics() {
 	run_sql_source1 "truncate table all_mode.t1;"                                        # make skip job
 	run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 # make dml job
 	run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 # make dml job
-	# sleep 3000                                                                              # wait for dml job
-	echo "==============================="
+	sleep 3                                                                              # wait for dml job
+
 	# test dml lag metric >= 2 beacuse we inject updateReplicationLag(insert) to sleep(2)
 	# although skip lag is 0 (locally), but we use that lag of all dml/skip lag, so lag still >= 2
 	check_metric $WORKER1_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 1 999
@@ -187,12 +187,12 @@ function test_syncer_metrics() {
 	kill_dm_worker
 	export GO_FAILPOINTS=''
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-	sleep 2
-	# no new dml, lag to 0
-	check_metric $WORKER1_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 -1 1
-	check_metric $WORKER2_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 -1 1
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+	sleep 3
 	# check the dmctl query-status
+	# no new dml, lag should be set to 0
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
 		"\"secondsBehindMaster\": \"0\"" 2
