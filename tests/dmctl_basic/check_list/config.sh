@@ -28,10 +28,10 @@ function config_wrong_arg() {
 	# test alias
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"get-config haha" \
-		"task not found" 1
+		"get-config <task | master | worker | source> <name> \[--file filename\] \[flags\]" 1
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"get-config haha hihi" \
-		"get-config <task | master | worker | source> <name> \[--file filename\] \[flags\]" 1
+		"invalid config type 'haha'" 1
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"get-config master haha" \
 		"master not found" 1
@@ -41,6 +41,9 @@ function config_wrong_arg() {
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"get-config source haha" \
 		"source not found" 1
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"get-config task haha" \
+		"task not found" 1
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"get-task-config haha" \
 		"task not found" 1

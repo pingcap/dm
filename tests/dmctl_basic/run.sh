@@ -213,10 +213,6 @@ function run() {
 	stop_relay_fail
 	stop_relay_success
 
-	echo "get_config"
-	get_config_wrong_arg
-	get_config_to_file
-
 	echo "config"
 	config_wrong_arg
 	config_to_file

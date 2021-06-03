@@ -89,7 +89,7 @@ func newSourceTableSchemaUpdateCmd() *cobra.Command {
 
 func newSourceTableSchemaDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "delete <task-name>",
+		Use:   "delete <task-name> <table-filter1> <table-filter2> ...",
 		Short: "delete tables schema structures",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 3 {
