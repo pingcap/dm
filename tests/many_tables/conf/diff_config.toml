@@ -2,9 +2,9 @@
 
 log-level = "info"
 
-chunk-size = 10
+chunk-size = 20
 
-check-thread-count = 4
+check-thread-count = 8
 
 sample-percent = 100
 
