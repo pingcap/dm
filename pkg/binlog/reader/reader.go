@@ -42,3 +42,9 @@ type Reader interface {
 	// Status returns the status of the reader.
 	Status() interface{}
 }
+
+// Streamer provides the ability to get binlog event from remote server or local file.
+type Streamer interface {
+	// GetEvent returns binlog event
+	GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
+}
