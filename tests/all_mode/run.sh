@@ -117,7 +117,7 @@ function check_secondsBehindMaster() {
 	query_msg=$(cat $WORK_DIR/query-status.log)
 	cnt=$(echo "${query_msg}" | jq -r --arg min_val $min_val '.sources[].subTaskStatus[].sync | select((.secondsBehindMaster|tonumber)>($min_val | tonumber)).secondsBehindMaster' | wc -l)
 	if [ $cnt != $need_cnt ]; then
-		echo "check secondsBehindMaster faild,cnt: $cnt need_cnt: $need_cnt"
+		echo "check secondsBehindMaster faild, cnt: $cnt need_cnt: $need_cnt"
 		exit 1
 	fi
 }
@@ -156,7 +156,7 @@ function test_syncer_metrics() {
 	run_sql_source1 "alter table all_mode.t1 add column new_col1 int;"
 	run_sql_source2 "alter table all_mode.t2 add column new_col1 int;"
 	sleep 2
-	# test dml lag metric >1 beacuse we inject updateReplicationLag to sleep(1)
+	# test dml lag metric >= 1 beacuse we inject updateReplicationLag(ddl) to sleep(1)
 	check_metric $WORKER1_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 0 999
 	check_metric $WORKER2_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 0 999
 	# check two worker's secondsBehindMaster > 0
@@ -167,14 +167,17 @@ function test_syncer_metrics() {
 	kill_dm_worker
 	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/BlockSyncerUpdateLag=return(\"insert,2\")"
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-	# delete * from t1 to make dml job
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
 	run_sql_source1 "truncate table all_mode.t1;"                                        # make skip job
 	run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 # make dml job
 	run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 # make dml job
-	sleep 3                                                                              # wait for dml job
-	# test dml lag metric >=1 beacuse we inject updateReplicationLag to sleep(2)
-	# although skip lag is 0 (locally),but we use that lag of all dml/skip lag, so lag still >= 1
+	# sleep 3000                                                                              # wait for dml job
+	echo "==============================="
+	# test dml lag metric >= 2 beacuse we inject updateReplicationLag(insert) to sleep(2)
+	# although skip lag is 0 (locally), but we use that lag of all dml/skip lag, so lag still >= 2
 	check_metric $WORKER1_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 1 999
 	check_metric $WORKER2_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 1 999
 	check_secondsBehindMaster 1 2
@@ -186,7 +189,7 @@ function test_syncer_metrics() {
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	sleep 2
-	# no new dml lag to 0
+	# no new dml, lag to 0
 	check_metric $WORKER1_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 -1 1
 	check_metric $WORKER2_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 -1 1
 	# check the dmctl query-status

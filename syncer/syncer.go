@@ -191,7 +191,7 @@ type Syncer struct {
 
 	addJobFunc func(*job) error
 
-	tsOffset            atomic.Int64             // time offset between upstream and syncer
+	tsOffset            atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
 	secondsBehindMaster atomic.Int64             // current task delay second behind upstrem
 	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:queueBucketName val: lag
 }
@@ -746,7 +746,7 @@ func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 	// when job is nil mean no job in this bucket, need do reset this bucket lag to 0
 	if job == nil {
 		s.workerLagMap[queueBucketName].Store(0)
-		// when job is nill and s.jobs is emepty, means all event is consumed,we update lag to 0
+		// when job is nill and s.jobs is emepty, means all event is consumed, we update lag to 0
 		if s.jobsIsEmpty() {
 			replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(0))
 			s.secondsBehindMaster.Store(0)
@@ -1255,7 +1255,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		return tsErr
 	}
 	// before sync run, we get the tsoffset from upstream first
-	if utErr := updateTSOffset(); err != nil {
+	if utErr := updateTSOffset(); utErr != nil {
 		return utErr
 	}
 	// start background task to get/update current ts offset between dm and upstream
