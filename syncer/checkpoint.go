@@ -781,7 +781,8 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 			gset,
 		)
 		if isGlobal {
-			if binlog.CompareLocation(location, binlog.NewLocation(cp.cfg.Flavor), cp.cfg.EnableGTID) > 0 {
+			// Use IsFreshPosition here to make sure checkpoint can be updated if gset is empty
+			if !binlog.IsFreshPosition(location, cp.cfg.Flavor, cp.cfg.EnableGTID) {
 				cp.globalPoint = newBinlogPoint(location, location, nil, nil, cp.cfg.EnableGTID)
 				cp.logCtx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
 			}
