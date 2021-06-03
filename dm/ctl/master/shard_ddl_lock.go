@@ -20,8 +20,8 @@ import (
 // NewShardDDLLockCmd creates a ShardDDLLock command.
 func NewShardDDLLockCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "shard-ddl-lock <command>",
-		Short: "maintain shard-ddl locks information",
+		Use:   "shard-ddl-lock [task]",
+		Short: "maintain or show shard-ddl locks information",
 		RunE:  showDDLLocksFunc,
 	}
 	cmd.AddCommand(
@@ -33,9 +33,11 @@ func NewShardDDLLockCmd() *cobra.Command {
 
 func newDDLLockUnlockCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "unlock [lock-id]",
-		Short: "Shows un-resolved DDL locks.",
+		Use:   "unlock <lock-id>",
+		Short: "Unlock un-resolved DDL locks forcely.",
 		RunE:  unlockDDLLockFunc,
 	}
+	cmd.Flags().StringP("owner", "o", "", "source to replace the default owner")
+	cmd.Flags().BoolP("force-remove", "f", false, "force to remove DDL lock")
 	return cmd
 }

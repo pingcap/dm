@@ -132,11 +132,11 @@ function DM_102_CASE() {
 	fi
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"show-ddl-locks" \
+		"shard-ddl-lock" \
 		"\"ID\": \"test-\`shardddl\`.\`tb\`\"" 1
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"unlock-ddl-lock test-\`shardddl\`.\`tb\`" \
+		"shard-ddl-lock unlock test-\`shardddl\`.\`tb\`" \
 		"\"result\": true" 1
 
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values (2,2);"
@@ -537,12 +537,12 @@ function DM_117_CASE {
 	# try to fix data
 	echo 'create table tb1(a int primary key, b int, c int) engine=innodb default charset=latin1;' >${WORK_DIR}/schema.sql
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"operate-schema set test ${WORK_DIR}/schema.sql -s mysql-replica-01 -d ${shardddl1} -t ${tb1}" \
+		"source-table-schema update test ${shardddl1} ${tb1} ${WORK_DIR}/schema.sql -s mysql-replica-01" \
 		"\"result\": true" 2
 
 	# skip this error
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip" \
+		"binlog skip test" \
 		"\"result\": true" 2 \
 		"\"source 'mysql-replica-02' has no error\"" 1
 

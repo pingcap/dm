@@ -31,6 +31,9 @@ function usage_and_arg_test() {
 	binlog_invalid_sqls
 	binlog_invalid_op
 
+	source_table_schema_empty_arg
+	source_table_schema_lack_arguments
+
 	# TODO: check SQLs error test
 }
 

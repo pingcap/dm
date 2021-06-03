@@ -37,8 +37,8 @@ func NewConfigCmd() *cobra.Command {
 
 func newConfigTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "task <command>",
-		Short: "manage config task operations",
+		Use:   "task [task-name]",
+		Short: "manage or show task configs",
 		RunE:  configTaskList,
 	}
 	cmd.AddCommand(
@@ -48,7 +48,7 @@ func newConfigTaskCmd() *cobra.Command {
 }
 
 func configTaskList(cmd *cobra.Command, args []string) error {
-	if len(args) > 1 {
+	if len(args) == 0 || len(args) > 1 {
 		return cmd.Help()
 	}
 	name := args[0]
@@ -73,8 +73,8 @@ func newConfigTaskUpdateCmd() *cobra.Command {
 
 func newConfigSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "source <command>",
-		Short: "manage config source operations",
+		Use:   "source [source-name]",
+		Short: "manage or show source config",
 		RunE:  configSourceList,
 	}
 	cmd.AddCommand(
@@ -84,7 +84,7 @@ func newConfigSourceCmd() *cobra.Command {
 }
 
 func configSourceList(cmd *cobra.Command, args []string) error {
-	if len(args) > 1 {
+	if len(args) == 0 || len(args) > 1 {
 		return cmd.Help()
 	}
 	name := args[0]
@@ -109,15 +109,15 @@ func newConfigSourceUpdateCmd() *cobra.Command {
 
 func newConfigMasterCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "master <command>",
-		Short: "manage config master operations",
+		Use:   "master [master-name]",
+		Short: "manage or show master configs",
 		RunE:  configMasterList,
 	}
 	return cmd
 }
 
 func configMasterList(cmd *cobra.Command, args []string) error {
-	if len(args) > 1 {
+	if len(args) == 0 || len(args) > 1 {
 		return cmd.Help()
 	}
 	name := args[0]
@@ -130,15 +130,15 @@ func configMasterList(cmd *cobra.Command, args []string) error {
 
 func newConfigWorkerCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "worker <command>",
-		Short: "manage config worker operations",
+		Use:   "worker [worker-name]",
+		Short: "manage or show worker configs",
 		RunE:  configWorkerList,
 	}
 	return cmd
 }
 
 func configWorkerList(cmd *cobra.Command, args []string) error {
-	if len(args) > 1 {
+	if len(args) == 0 || len(args) > 1 {
 		return cmd.Help()
 	}
 	name := args[0]

@@ -23,8 +23,8 @@ import (
 // NewSourceTableSchemaCmd creates a SourceTableSchema command.
 func NewSourceTableSchemaCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "source-table-schema <command>",
-		Short: "manage source-table-schema operations",
+		Use:   "source-table-schema <task-name> <table-filter1> <table-filter2> ...",
+		Short: "manage or show source-table schema schemas",
 		RunE:  sourceTableSchemaList,
 	}
 	cmd.AddCommand(
@@ -51,7 +51,7 @@ func sourceTableSchemaList(cmd *cobra.Command, args []string) error {
 
 func newSourceTableSchemaUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "update <task-name> <table-filter1> <table-filter2>... <schema-file>",
+		Use:   "update <task-name> <table-filter1> <table-filter2> ... <schema-file>",
 		Short: "update tables schema structures",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 3 {

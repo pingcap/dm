@@ -41,7 +41,7 @@ function run() {
 	lock_id="$task_name-\`sharding_target3\`.\`t_target\`"
 	ddl="ALTER TABLE \`sharding_target3\`.\`t_target\` ADD COLUMN \`d\` INT"
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"show-ddl-locks" \
+		"shard-ddl-lock" \
 		"\"ID\": \"$lock_id\"" 1 \
 		"$ddl" 1
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -60,7 +60,7 @@ function run() {
 	dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
 	sleep 3
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"show-ddl-locks" \
+		"shard-ddl-lock" \
 		"no DDL lock exists" 1
 	check_metric_not_contains $MASTER_PORT 'dm_master_ddl_state_number' 3
 	# use sync_diff_inspector to check full data
@@ -71,7 +71,7 @@ function run() {
 	# test unlock-ddl-lock could work after stop-task
 	ddl="ALTER TABLE \`sharding_target3\`.\`t_target\` ADD COLUMN \`f\` INT"
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"show-ddl-locks" \
+		"shard-ddl-lock" \
 		"\"ID\": \"$lock_id\"" 1 \
 		"$ddl" 1
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -82,10 +82,10 @@ function run() {
 	dmctl_stop_task $task_name
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"unlock-ddl-lock $lock_id" \
+		"shard-ddl-lock unlock $lock_id" \
 		"\"result\": true" 1
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"show-ddl-locks" \
+		"shard-ddl-lock" \
 		"no DDL lock exists" 1
 	check_metric_not_contains $MASTER_PORT 'dm_master_ddl_state_number' 3
 }

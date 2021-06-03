@@ -217,6 +217,10 @@ function run() {
 	get_config_wrong_arg
 	get_config_to_file
 
+	echo "config"
+	config_wrong_arg
+	config_to_file
+
 	# retry to wait for recovered from etcd ready
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \

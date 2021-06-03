@@ -561,11 +561,11 @@ function DM_147_CASE {
 	# try to fix data
 	echo 'create table tbl(a int primary key, b int, c int) engine=innodb default charset=latin1;' >${WORK_DIR}/schema.sql
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"operate-schema set test ${WORK_DIR}/schema.sql -s mysql-replica-01 -d ${shardddl1} -t ${tb1}" \
+		"source-table-schema update test ${shardddl1} ${tb1} ${WORK_DIR}/schema.sql -s mysql-replica-01" \
 		"\"result\": true" 2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test replace \"alter table ${shardddl1}.${tb1} drop column b\"" \
+		"binlog replace test \"alter table ${shardddl1}.${tb1} drop column b\"" \
 		"\"result\": true" 2 \
 		"\"source 'mysql-replica-02' has no error\"" 1
 
