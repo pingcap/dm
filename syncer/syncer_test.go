@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -232,6 +233,12 @@ func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
 	return utils.GetParser(context.Background(), db)
+}
+
+func (s *testSyncerSuite) mockGetServerUnixTS(mock sqlmock.Sqlmock) {
+	ts := time.Now().Unix()
+	rows := sqlmock.NewRows([]string{"UNIX_TIMESTAMP()"}).AddRow(strconv.FormatInt(ts, 10))
+	mock.ExpectQuery("SELECT UNIX_TIMESTAMP()").WillReturnRows(rows)
 }
 
 func (s *testSyncerSuite) TestSelectDB(c *C) {
@@ -1008,6 +1015,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
+	s.mockGetServerUnixTS(mock)
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
 	checkPointDB, checkPointMock, err := sqlmock.New()
@@ -1059,6 +1067,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	syncer.setupMockCheckpoint(c, checkPointDBConn, checkPointMock)
 
 	syncer.reset()
+	s.mockGetServerUnixTS(mock)
 	events1 := mockBinlogEvents{
 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"test_1"}},
 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"test_1", "create table test_1.t_1(id int primary key, name varchar(24))"}},
@@ -1257,6 +1266,8 @@ func (s *testSyncerSuite) TestRun(c *C) {
 func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
+	s.mockGetServerUnixTS(mock)
+
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
 	checkPointDB, checkPointMock, err := sqlmock.New()
