@@ -15,9 +15,11 @@ function dmctl_unwrap_schema() {
 function dmctl_wrong_addrs() {
 	run_dm_ctl $WORK_DIR "https://127.0.0.1:1234,127.0.0.2:1234" \
 		"list-member" \
-		"can't connect to https:\/\/127.0.0.1:1234,127.0.0.2:1234" 1
+		"can't connect to https:\/\/127.0.0.1:1234,127.0.0.2:1234" 2
 }
 
 function dmctl_no_addr() {
-	$PWD/bin/dmctl.test list-member | grep 'master-addr not provided'
+	run_dm_ctl_cmd_mode $WORK_DIR "" \
+		"list-member" \
+		"master-addr not provided" 2
 }

@@ -2,19 +2,14 @@
 # tools to run dmctl from command line
 # parameter 1: work directory
 # parameter 2: master-addr port
-# parameter 3: ssl-ca path
-# parameter 4: ssl-cert path
-# parameter 5: ssl-key path
-# parameter 6: command
+# parameter 3: command
+# parameter 4...: check output content and count
 
 workdir=$1
 master_addr=$2
-ssl_ca=$3
-ssl_cert=$4
-ssl_key=$5
-cmd=$6
+cmd=$3
 
-shift 6
+shift 3
 
 PWD=$(pwd)
 binary=$PWD/bin/dmctl.test
@@ -22,7 +17,7 @@ ts=$(date +"%s")
 dmctl_log=$workdir/dmctl.$ts.log
 pid=$$
 echo "dmctl test cmd: \"$cmd\""
-echo "$cmd" | $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.$pid.out" DEVEL --master-addr=$master_addr --ssl-ca $ssl_ca --ssl-cert $ssl_cert --ssl-key $ssl_key >$dmctl_log 2>&1
+$binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.$pid.out" DEVEL $cmd --master-addr=$master_addr >$dmctl_log 2>&1
 
 for ((i = 1; i < $#; i += 2)); do
 	j=$((i + 1))

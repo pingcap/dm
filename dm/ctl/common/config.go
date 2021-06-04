@@ -15,7 +15,6 @@ package common
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -27,6 +26,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
+	"github.com/spf13/pflag"
 )
 
 const (
@@ -54,30 +54,57 @@ const (
 )
 
 // NewConfig creates a new base config for dmctl.
-func NewConfig() *Config {
+func NewConfig(fs *pflag.FlagSet) *Config {
 	cfg := &Config{}
-	cfg.FlagSet = flag.NewFlagSet("dmctl", flag.ContinueOnError)
-
-	// ignore default help usage
-	cfg.FlagSet.Usage = func() {}
-	fs := cfg.FlagSet
-
-	fs.BoolVar(&cfg.printVersion, "V", false, "Prints version and exit.")
-	fs.StringVar(&cfg.ConfigFile, "config", "", "Path to config file.")
-	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "Master API server address, this parameter is required when interacting with the dm-master")
-	fs.StringVar(&cfg.RPCTimeoutStr, "rpc-timeout", defaultRPCTimeout, fmt.Sprintf("RPC timeout, default is %s.", defaultRPCTimeout))
-	fs.StringVar(&cfg.encrypt, EncryptCmdName, "", "Encrypts plaintext to ciphertext.")
-	fs.StringVar(&cfg.SSLCA, "ssl-ca", "", "Path of file that contains list of trusted SSL CAs for connection.")
-	fs.StringVar(&cfg.SSLCert, "ssl-cert", "", "Path of file that contains X509 certificate in PEM format for connection.")
-	fs.StringVar(&cfg.SSLKey, "ssl-key", "", "Path of file that contains X509 key in PEM format for connection.")
-	fs.StringVar(&cfg.decrypt, DecryptCmdName, "", "Decrypts ciphertext to plaintext.")
-
+	cfg.FlagSet = fs
 	return cfg
+}
+
+// DefineConfigFlagSet defines flag definitions for configs.
+func DefineConfigFlagSet(fs *pflag.FlagSet) {
+	fs.BoolP("version", "V", false, "Prints version and exit.")
+	fs.String("config", "", "Path to config file.")
+	fs.String("master-addr", "", "Master API server address, this parameter is required when interacting with the dm-master")
+	fs.String("rpc-timeout", defaultRPCTimeout, fmt.Sprintf("RPC timeout, default is %s.", defaultRPCTimeout))
+	fs.String("ssl-ca", "", "Path of file that contains list of trusted SSL CAs for connection.")
+	fs.String("ssl-cert", "", "Path of file that contains X509 certificate in PEM format for connection.")
+	fs.String("ssl-key", "", "Path of file that contains X509 key in PEM format for connection.")
+	fs.String(EncryptCmdName, "", "Encrypts plaintext to ciphertext.")
+	fs.String(DecryptCmdName, "", "Decrypts ciphertext to plaintext.")
+	_ = fs.MarkHidden(EncryptCmdName)
+	_ = fs.MarkHidden(DecryptCmdName)
+}
+
+func (c *Config) getConfigFromFlagSet() error {
+	var err error
+	fs := c.FlagSet
+	c.ConfigFile, err = fs.GetString("config")
+	if err != nil {
+		return err
+	}
+	c.MasterAddr, err = fs.GetString("master-addr")
+	if err != nil {
+		return err
+	}
+	c.RPCTimeoutStr, err = fs.GetString("rpc-timeout")
+	if err != nil {
+		return err
+	}
+	c.SSLCA, err = fs.GetString("ssl-ca")
+	if err != nil {
+		return err
+	}
+	c.SSLCert, err = fs.GetString("ssl-cert")
+	if err != nil {
+		return err
+	}
+	c.SSLKey, err = fs.GetString("ssl-key")
+	return err
 }
 
 // Config is the configuration.
 type Config struct {
-	*flag.FlagSet `json:"-"`
+	*pflag.FlagSet `json:"-"`
 
 	MasterAddr string `toml:"master-addr" json:"master-addr"`
 
@@ -86,11 +113,7 @@ type Config struct {
 
 	ConfigFile string `json:"config-file"`
 
-	printVersion bool
-	encrypt      string // string need to be encrypted
-
 	config.Security
-	decrypt string // string need to be decrypted
 }
 
 func (c *Config) String() string {
@@ -102,52 +125,25 @@ func (c *Config) String() string {
 	return string(cfg)
 }
 
-// Parse parses flag definitions from the argument list.
-func (c *Config) Parse(arguments []string) (finish bool, err error) {
-	err = c.FlagSet.Parse(arguments)
+// Adjust parses flag definitions from the argument list.
+func (c *Config) Adjust() error {
+	err := c.getConfigFromFlagSet()
 	if err != nil {
-		return false, errors.Trace(err)
-	}
-
-	if c.printVersion {
-		fmt.Println(utils.GetRawInfo())
-		return true, nil
-	}
-
-	if len(c.encrypt) > 0 {
-		ciphertext, err1 := utils.Encrypt(c.encrypt)
-		if err1 != nil {
-			return true, err1
-		}
-		fmt.Println(ciphertext)
-		return true, nil
-	}
-
-	if len(c.decrypt) > 0 {
-		plaintext, err1 := utils.Decrypt(c.decrypt)
-		if err1 != nil {
-			return true, err1
-		}
-		fmt.Println(plaintext)
-		return true, nil
+		return errors.Trace(err)
 	}
 
 	// Load config file if specified.
 	if c.ConfigFile != "" {
 		err = c.configFromFile(c.ConfigFile)
 		if err != nil {
-			return false, errors.Trace(err)
+			return errors.Trace(err)
 		}
 	}
 
 	// Parse again to replace with command line options.
-	err = c.FlagSet.Parse(arguments)
+	err = c.getConfigFromFlagSet()
 	if err != nil {
-		return false, errors.Trace(err)
-	}
-
-	if len(c.FlagSet.Args()) != 0 {
-		return false, errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
+		return errors.Trace(err)
 	}
 
 	// try get master Addr from env "DM_MASTER_ADDR" if this flag is empty.
@@ -155,10 +151,10 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 		c.MasterAddr = os.Getenv("DM_MASTER_ADDR")
 	}
 	if c.MasterAddr == "" {
-		return false, errors.Errorf("--master-addr not provided, this parameter is required when interacting with the dm-master, you can also use environment variable 'DM_MASTER_ADDR' to specify the value. Use `dmtcl --help` to see more help messages")
+		return errors.Errorf("--master-addr not provided, this parameter is required when interacting with the dm-master, you can also use environment variable 'DM_MASTER_ADDR' to specify the value. Use `dmtcl --help` to see more help messages")
 	}
 
-	return false, errors.Trace(c.adjust())
+	return errors.Trace(c.adjust())
 }
 
 // Validate check config is ready to execute command.

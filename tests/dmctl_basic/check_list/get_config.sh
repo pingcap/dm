@@ -101,6 +101,7 @@ function get_config_to_file() {
 	# restart master with get config
 	ps aux | grep dm-master | awk '{print $2}' | xargs kill || true
 	check_port_offline $MASTER_PORT1 20
+	check_port_offline $MASTER_PEER_PORT 20
 	run_dm_master $WORK_DIR/master $MASTER_PORT $dm_master_conf
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 

@@ -17,7 +17,7 @@ ts=$(date +"%s")
 dmctl_log=$workdir/dmctl.$ts.log
 pid=$$
 echo "dmctl test cmd: \"$cmd\""
-echo "$cmd" | $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.$pid.out" DEVEL -master-addr=$master_addr >$dmctl_log 2>&1
+echo "$cmd" | $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.$pid.out" DEVEL --master-addr=$master_addr >$dmctl_log 2>&1
 
 for ((i = 1; i < $#; i += 2)); do
 	j=$((i + 1))

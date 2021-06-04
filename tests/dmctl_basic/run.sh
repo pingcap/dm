@@ -122,8 +122,11 @@ function run() {
 
 	# start dmctl when master have not started
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "any command" \
-		"can't connect to 127.0.0.1:8261" 1 \
-		"Please check your network connection\." 1
+		"can't connect to 127.0.0.1:8261" 2 \
+		"Please check your network connection\." 2
+	run_dm_ctl_cmd_mode $WORK_DIR "127.0.0.1:$MASTER_PORT" "any command" \
+		"unknown command \"any\" for \"dmctl\"" 2 \
+		"Run 'dmctl --help' for usage\." 1
 
 	run_dm_master $WORK_DIR/master $MASTER_PORT $dm_master_conf
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
@@ -207,6 +210,13 @@ function run() {
 		"\"source\": \"$SOURCE_ID1\"" 1 \
 		"\"source\": \"$SOURCE_ID2\"" 1 \
 		"\"stage\": \"Running\"" 4
+	# test whether put --master-addr to the end works
+	run_dm_ctl_cmd_mode $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s $SOURCE_ID1,$SOURCE_ID2" \
+		"\"result\": true" 3 \
+		"\"source\": \"$SOURCE_ID1\"" 1 \
+		"\"source\": \"$SOURCE_ID2\"" 1 \
+		"\"stage\": \"Running\"" 4
 	# update_task_not_paused $TASK_CONF
 
 	# stop relay because get_config_to_file will stop source
@@ -219,6 +229,9 @@ function run() {
 
 	# retry to wait for recovered from etcd ready
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"stage\": \"Running\"" 2
+	run_dm_ctl_cmd_mode $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
 		"\"stage\": \"Running\"" 2
 
