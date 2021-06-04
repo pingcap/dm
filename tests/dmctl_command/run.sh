@@ -1,12 +1,12 @@
 #!/bin/bash
 
-set -eu
+set -eux
 
 cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
-help_cnt=37
+help_cnt=46
 
 function run() {
 	# check dmctl output with help flag
@@ -33,15 +33,15 @@ function run() {
 	fi
 
 	# check dmctl command start-task output with master-addr and unknown flag
-	# it should print parse cmd flags err: 'xxxx' is an invalid flag%
+	# it should print unknown command xxxx
 	$PWD/bin/dmctl.test DEVEL --master-addr=:$MASTER_PORT xxxx start-task >$WORK_DIR/help.log 2>&1 && exit 1 || echo "exit code should be not zero"
 	help_msg=$(cat $WORK_DIR/help.log)
 	help_msg_cnt=$(echo "${help_msg}" | wc -l | xargs)
-	if [ "$help_msg_cnt" != 1 ]; then
+	if [ "$help_msg_cnt" -lt 1 ]; then
 		echo "dmctl case 3 help failed: $help_msg"
 		exit 1
 	fi
-	echo $help_msg | grep -q "parse cmd flags err: 'xxxx' is an invalid flag"
+	echo $help_msg | grep -q "unknown command \"xxxx\" for \"dmctl\""
 	if [ $? -ne 0 ]; then
 		echo "dmctl case 3 help failed: $help_msg"
 		exit 1
