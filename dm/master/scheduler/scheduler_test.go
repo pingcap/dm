@@ -1372,3 +1372,193 @@ func (t *testScheduler) TestStartSourcesWithoutSourceConfigsInEtcd(c *C) {
 	cancel()
 	wg.Wait()
 }
+
+func (t *testScheduler) TestTransferWorkerAndSource(c *C) {
+	defer clearTestInfoOperation(c)
+
+	var (
+		logger      = log.L()
+		s           = NewScheduler(&logger, config.Security{})
+		sourceID1   = "mysql-replica-1"
+		sourceID2   = "mysql-replica-2"
+		sourceID3   = "mysql-replica-3"
+		sourceID4   = "mysql-replica-4"
+		workerName1 = "dm-worker-1"
+		workerName2 = "dm-worker-2"
+		workerName3 = "dm-worker-3"
+		workerName4 = "dm-worker-4"
+	)
+
+	worker1 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName1}}
+	worker2 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName2}}
+	worker3 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName3}}
+	worker4 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName4}}
+
+	// step 1: start an empty scheduler
+	s.started = true
+	s.etcdCli = etcdTestCli
+	s.workers[workerName1] = worker1
+	s.workers[workerName2] = worker2
+	s.workers[workerName3] = worker3
+	s.workers[workerName4] = worker4
+	s.sourceCfgs[sourceID1] = &config.SourceConfig{}
+	s.sourceCfgs[sourceID2] = &config.SourceConfig{}
+
+	worker1.ToFree()
+	worker2.ToFree()
+	worker3.ToFree()
+	worker4.ToFree()
+	s.unbounds[sourceID1] = struct{}{}
+	s.unbounds[sourceID2] = struct{}{}
+
+	// test free worker and unbounded source
+	c.Assert(s.transferWorkerAndSource(workerName1, "", "", sourceID1), IsNil)
+	c.Assert(s.transferWorkerAndSource("", sourceID2, workerName2, ""), IsNil)
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker1)
+	c.Assert(s.bounds[sourceID2], DeepEquals, worker2)
+	c.Assert(len(s.unbounds), Equals, 0)
+
+	worker3.ToFree()
+	worker4.ToFree()
+
+	// test transfer bounded source to free worker
+	c.Assert(s.transferWorkerAndSource(workerName1, sourceID1, workerName4, ""), IsNil)
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker4)
+	c.Assert(worker1.Stage(), Equals, WorkerFree)
+	c.Assert(worker4.Stage(), Equals, WorkerBound)
+
+	c.Assert(s.transferWorkerAndSource(workerName3, "", workerName2, sourceID2), IsNil)
+	c.Assert(s.bounds[sourceID2], DeepEquals, worker3)
+	c.Assert(worker2.Stage(), Equals, WorkerFree)
+	c.Assert(worker3.Stage(), Equals, WorkerBound)
+
+	// test transfer bounded worker to ubounded source
+	s.unbounds[sourceID3] = struct{}{}
+	s.unbounds[sourceID4] = struct{}{}
+	c.Assert(s.transferWorkerAndSource("", sourceID3, workerName3, sourceID2), IsNil)
+	c.Assert(s.bounds[sourceID3], DeepEquals, worker3)
+	// sourceID2 bound to last bound worker
+	c.Assert(s.bounds[sourceID2], DeepEquals, worker2)
+
+	c.Assert(s.transferWorkerAndSource(workerName4, sourceID1, "", sourceID4), IsNil)
+	c.Assert(s.bounds[sourceID4], DeepEquals, worker4)
+	// sourceID1 bound to last bound worker
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker1)
+
+	c.Assert(len(s.unbounds), Equals, 0)
+
+	// test transfer two bounded sources
+	c.Assert(s.transferWorkerAndSource(workerName1, sourceID1, workerName2, sourceID2), IsNil)
+	c.Assert(s.transferWorkerAndSource(workerName4, sourceID4, workerName3, sourceID3), IsNil)
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker2)
+	c.Assert(s.bounds[sourceID2], DeepEquals, worker1)
+	c.Assert(s.bounds[sourceID3], DeepEquals, worker4)
+	c.Assert(s.bounds[sourceID4], DeepEquals, worker3)
+}
+
+func (t *testScheduler) TestWatchLoadTask(c *C) {
+	defer clearTestInfoOperation(c)
+
+	var (
+		logger      = log.L()
+		s           = NewScheduler(&logger, config.Security{})
+		task1       = "task1"
+		task2       = "task2"
+		sourceID1   = "mysql-replica-1"
+		sourceID2   = "mysql-replica-2"
+		workerName1 = "dm-worker-1"
+		workerName2 = "dm-worker-2"
+		workerName3 = "dm-worker-3"
+		workerName4 = "dm-worker-4"
+	)
+
+	// step 1: start an empty scheduler
+	s.started = true
+	s.etcdCli = etcdTestCli
+
+	worker1 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName1}}
+	worker2 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName2}}
+	worker3 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName3}}
+	worker4 := &Worker{baseInfo: ha.WorkerInfo{Name: workerName4}}
+	s.workers[workerName1] = worker1
+	s.workers[workerName2] = worker2
+	s.workers[workerName3] = worker3
+	s.workers[workerName4] = worker4
+	s.sourceCfgs[sourceID1] = &config.SourceConfig{}
+	s.sourceCfgs[sourceID2] = &config.SourceConfig{}
+
+	worker1.ToFree()
+	c.Assert(s.boundSourceToWorker(sourceID1, worker1), IsNil)
+	worker2.ToFree()
+	c.Assert(s.boundSourceToWorker(sourceID2, worker2), IsNil)
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker1)
+	c.Assert(s.bounds[sourceID2], DeepEquals, worker2)
+
+	worker3.ToFree()
+	worker4.ToOffline()
+
+	// put task1, source1, worker3
+	_, err := ha.PutLoadTask(etcdTestCli, task1, sourceID1, workerName3)
+	c.Assert(err, IsNil)
+	// put task2, source2, worker4
+	_, err = ha.PutLoadTask(etcdTestCli, task2, sourceID2, workerName4)
+	c.Assert(err, IsNil)
+
+	// get all load tasks
+	var wg sync.WaitGroup
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel1()
+	loadTasks, startRev, err := ha.GetAllLoadTask(etcdTestCli)
+	c.Assert(err, IsNil)
+	s.loadTasks = loadTasks
+
+	c.Assert(s.hasLoadTaskByWorkerAndSource(workerName3, sourceID1), IsTrue)
+	c.Assert(s.hasLoadTaskByWorkerAndSource(workerName4, sourceID2), IsTrue)
+
+	// observer load tasks
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(s.observeLoadTask(ctx1, etcdTestCli, startRev), IsNil)
+	}()
+
+	// put task2, source1, worker1
+	_, err = ha.PutLoadTask(etcdTestCli, task2, sourceID1, workerName1)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.hasLoadTaskByWorkerAndSource(workerName1, sourceID1)
+	}), IsTrue)
+
+	// del task2, source1, worker1
+	_, _, err = ha.DelLoadTask(etcdTestCli, task2, sourceID1)
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return !s.hasLoadTaskByWorkerAndSource(workerName1, sourceID1)
+	}), IsTrue)
+
+	// source1 transfer to worker3
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		w, ok := s.bounds[sourceID1]
+		return ok && w.baseInfo.Name == workerName3
+	}), IsTrue)
+
+	c.Assert(s.bounds[sourceID1], DeepEquals, worker3)
+	c.Assert(worker1.stage, Equals, WorkerFree)
+
+	// worker4 online
+	// source2 transfer to worker3
+	c.Assert(s.handleWorkerOnline(ha.WorkerEvent{WorkerName: workerName4}, true), IsNil)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		w, ok := s.bounds[sourceID2]
+		return ok && w.baseInfo.Name == workerName4
+	}), IsTrue)
+	c.Assert(s.bounds[sourceID2], DeepEquals, worker4)
+	c.Assert(worker2.stage, Equals, WorkerFree)
+
+	cancel1()
+	wg.Wait()
+}

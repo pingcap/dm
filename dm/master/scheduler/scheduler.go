@@ -483,9 +483,12 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		}
 	}
 	if lworker == "" && rsource != "" {
-		_, err := s.tryBoundForSource(rsource)
+		bounded, err := s.tryBoundForSource(rsource)
 		if err != nil {
 			return err
+		}
+		if bounded {
+			delete(s.unbounds, rsource)
 		}
 	}
 	if rworker != "" && lsource == "" {
@@ -495,9 +498,12 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		}
 	}
 	if rworker == "" && lsource != "" {
-		_, err := s.tryBoundForSource(lsource)
+		bounded, err := s.tryBoundForSource(lsource)
 		if err != nil {
 			return err
+		}
+		if bounded {
+			delete(s.unbounds, lsource)
 		}
 	}
 
