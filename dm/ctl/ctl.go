@@ -30,9 +30,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var (
-	commandMasterFlags = CommandMasterFlags{}
-)
+var commandMasterFlags = CommandMasterFlags{}
 
 // CommandMasterFlags are flags that used in all commands for dm-master.
 type CommandMasterFlags struct {
