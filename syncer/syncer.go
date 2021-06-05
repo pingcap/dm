@@ -742,19 +742,19 @@ func (s *Syncer) saveTablePoint(db, table string, location binlog.Location) {
 	s.checkpoint.SaveTablePoint(db, table, location, ti)
 }
 
-// only used in tests
+// only used in tests.
 var (
-	lastPos mysql.Position
-	lastPosNum int
-	waitJobsDone bool
+	lastPos        mysql.Position
+	lastPosNum     int
+	waitJobsDone   bool
 	failExecuteSQL bool
-	failOnce atomic.Bool
+	failOnce       atomic.Bool
 )
 
 func (s *Syncer) addJob(job *job) error {
 	failpoint.Inject("countJobFromOneEvent", func() {
 		if job.currentLocation.Position.Compare(lastPos) == 0 {
-			lastPosNum += 1
+			lastPosNum++
 		} else {
 			lastPos = job.currentLocation.Position
 			lastPosNum = 1

@@ -174,17 +174,17 @@ function test_stop_task_before_checkpoint() {
 }
 
 function test_fail_job_between_event() {
-  run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_contains 'Query OK, 2 rows affected'
 	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 	check_contains 'Query OK, 3 rows affected'
 
-  # start DM worker and master
+	# start DM worker and master
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 	check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
 
-  inject_points=(
+	inject_points=(
 		"github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
 		"github.com/pingcap/dm/syncer/countJobFromOneEvent=return()"
 		"github.com/pingcap/dm/syncer/flushFirstJobOfEvent=return()"
@@ -218,9 +218,9 @@ function test_fail_job_between_event() {
 }
 
 function run() {
-#	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
-#	run_sql_source1 "SET @@global.time_zone = '+01:00';"
-#	run_sql_source2 "SET @@global.time_zone = '+02:00';"
+	#	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
+	#	run_sql_source1 "SET @@global.time_zone = '+01:00';"
+	#	run_sql_source2 "SET @@global.time_zone = '+02:00';"
 	test_fail_job_between_event
 
 	test_session_config
