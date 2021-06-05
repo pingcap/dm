@@ -173,10 +173,56 @@ function test_stop_task_before_checkpoint() {
 	export GO_FAILPOINTS=''
 }
 
+function test_fail_job_between_event() {
+  run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	check_contains 'Query OK, 2 rows affected'
+	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+	check_contains 'Query OK, 3 rows affected'
+
+  # start DM worker and master
+	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
+
+  inject_points=(
+		"github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
+		"github.com/pingcap/dm/syncer/countJobFromOneEvent=return()"
+		"github.com/pingcap/dm/syncer/flushFirstJobOfEvent=return()"
+		"github.com/pingcap/dm/syncer/failSecondJobOfEvent=return()"
+	)
+	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+	# operate mysql config to worker
+	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+	cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+	sed -i "s/enable-gtid: true/enable-gtid: false/g" $WORK_DIR/source1.yaml
+	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
+	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
+
+	dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
+
+	run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+	check_log_contain_with_retry "failSecondJobOfEvent" $WORK_DIR/worker1/log/dm-worker.log
+	check_log_contain_with_retry "failSecondJobOfEvent" $WORK_DIR/worker2/log/dm-worker.log
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"result\": true" 3
+	read -p 666
+}
+
 function run() {
-	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
-	run_sql_source1 "SET @@global.time_zone = '+01:00';"
-	run_sql_source2 "SET @@global.time_zone = '+02:00';"
+#	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
+#	run_sql_source1 "SET @@global.time_zone = '+01:00';"
+#	run_sql_source2 "SET @@global.time_zone = '+02:00';"
+	test_fail_job_between_event
+
 	test_session_config
 
 	test_query_timeout

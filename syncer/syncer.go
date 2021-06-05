@@ -742,7 +742,34 @@ func (s *Syncer) saveTablePoint(db, table string, location binlog.Location) {
 	s.checkpoint.SaveTablePoint(db, table, location, ti)
 }
 
+// only used in tests
+var (
+	lastPos mysql.Position
+	lastPosNum int
+	waitJobsDone bool
+	failExecuteSQL bool
+	failOnce atomic.Bool
+)
+
 func (s *Syncer) addJob(job *job) error {
+	failpoint.Inject("countJobFromOneEvent", func() {
+		if job.currentLocation.Position.Compare(lastPos) == 0 {
+			lastPosNum += 1
+		} else {
+			lastPos = job.currentLocation.Position
+			lastPosNum = 1
+		}
+		// trigger a flush after see one job
+		if lastPosNum == 1 {
+			waitJobsDone = true
+			s.tctx.L().Info("meet the first job of an event", zap.Any("binlog position", lastPos))
+		}
+		// mock a execution error after see two jobs.
+		if lastPosNum == 2 {
+			failExecuteSQL = true
+			s.tctx.L().Info("meet the second job of an event", zap.Any("binlog position", lastPos))
+		}
+	})
 	var queueBucket int
 	switch job.tp {
 	case xid:
@@ -781,6 +808,13 @@ func (s *Syncer) addJob(job *job) error {
 
 	// nolint:ifshort
 	wait := s.checkWait(job)
+	failpoint.Inject("flushFirstJobOfEvent", func() {
+		if waitJobsDone {
+			s.tctx.L().Info("trigger flushFirstJobOfEvent")
+			waitJobsDone = false
+			wait = true
+		}
+	})
 	if wait {
 		s.jobWg.Wait()
 		s.c.reset()
@@ -1048,6 +1082,13 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		if len(jobs) == 0 {
 			return 0, nil
 		}
+
+		failpoint.Inject("failSecondJobOfEvent", func() {
+			if failExecuteSQL && failOnce.CAS(false, true) {
+				s.tctx.L().Info("trigger failSecondJobOfEvent")
+				failpoint.Return(0, errors.New("failSecondJobOfEvent"))
+			}
+		})
 
 		select {
 		case <-tctx.Ctx.Done():
