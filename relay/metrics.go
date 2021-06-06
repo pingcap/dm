@@ -164,16 +164,18 @@ func reportRelayLogSpaceInBackground(ctx context.Context, dirpath string) error 
 			ticker = time.NewTicker(time.Duration(t) * time.Second)
 		})
 		defer ticker.Stop()
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			size, err := utils.GetStorageSize(dirpath)
-			if err != nil {
-				log.L().Error("fail to update relay log storage size", log.ShortError(err))
-			} else {
-				relayLogSpaceGauge.WithLabelValues("capacity").Set(float64(size.Capacity))
-				relayLogSpaceGauge.WithLabelValues("available").Set(float64(size.Available))
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				size, err := utils.GetStorageSize(dirpath)
+				if err != nil {
+					log.L().Error("fail to update relay log storage size", log.ShortError(err))
+				} else {
+					relayLogSpaceGauge.WithLabelValues("capacity").Set(float64(size.Capacity))
+					relayLogSpaceGauge.WithLabelValues("available").Set(float64(size.Available))
+				}
 			}
 		}
 	}()
