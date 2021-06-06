@@ -510,17 +510,17 @@ function DM_DropAddColumn() {
 function run() {
 	init_cluster
 	init_database
-	# start=1
-	# end=5
-	# for i in $(seq -f "%03g" ${start} ${end}); do
-	# 	DM_${i}
-	# 	sleep 1
-	# done
-	# DM_RENAME_TABLE
-	# DM_RENAME_COLUMN_OPTIMISTIC
-	# DM_RECOVER_LOCK
-	# DM_RemoveLock
-	# DM_RestartMaster
+	start=1
+	end=5
+	for i in $(seq -f "%03g" ${start} ${end}); do
+		DM_${i}
+		sleep 1
+	done
+	DM_RENAME_TABLE
+	DM_RENAME_COLUMN_OPTIMISTIC
+	DM_RECOVER_LOCK
+	DM_RemoveLock
+	DM_RestartMaster
 	DM_DropAddColumn
 }
 
