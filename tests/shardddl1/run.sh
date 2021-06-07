@@ -345,7 +345,6 @@ function DM_RemoveLock() {
 function restart_master() {
 	echo "restart dm-master"
 	kill_dm_master
-	wait_process_exit dm-msater.test
 	check_port_offline $MASTER_PORT 20
 	sleep 2
 
