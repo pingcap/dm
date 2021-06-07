@@ -737,18 +737,6 @@ func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 	// when job is nil mean no job in this bucket, need do reset this bucket lag to 0
 	if job == nil {
 		s.workerLagMap[queueBucketName].Store(0)
-		needUpdate := true
-		for _, l := range s.workerLagMap {
-			if l.Load() != int64(0) {
-				needUpdate = false
-				break
-			}
-		}
-		// when job is nil and all job bucket's lag is 0, means all event is consumed, we update lag to 0
-		if needUpdate {
-			replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(0))
-			s.secondsBehindMaster.Store(0)
-		}
 		return
 	}
 
