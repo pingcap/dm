@@ -6,6 +6,9 @@ cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
+WORKER1="worker1"
+WORKER2="worker2"
+WORKER3="worker3"
 
 function test_worker_restart() {
 	echo "test worker restart"
@@ -24,7 +27,8 @@ function test_worker_restart() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status load_task1" \
-		"parse mydumper metadata error" 1
+		"different worker in load stage, previous worker: $WORKER1, current worker: $WORKER3" 1 \
+		"Please check if the previous worker is online." 1
 
 	# worker1 online
 	export GO_FAILPOINTS="github.com/pingcap/dm/loader/LoadDataSlowDownByTask=return(\"load_task1\")"
@@ -64,7 +68,7 @@ function test_transfer_two_sources() {
 		"\"source\": \"mysql-replica-02\"" 1
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status load_task2" \
-		"parse mydumper metadata error" 1
+		"different worker in load stage, previous worker: $WORKER2, current worker: $WORKER3" 1
 
 	# start load task for worker3
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -126,10 +130,10 @@ function test_transfer_two_sources() {
 	# (worker1, source2), (worker2, source1)
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status load_task1" \
-		"parse mydumper metadata error" 1
+		"different worker in load stage, previous worker: $WORKER1, current worker: $WORKER2" 1
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status load_task2" \
-		"parse mydumper metadata error" 1
+		"different worker in load stage, previous worker: $WORKER2, current worker: $WORKER1" 1
 
 	# worker2 finish load_task4
 	# master transfer (worker1, source2), (worker2, source1) to (worker1, source1), (worker2, source2)

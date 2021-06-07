@@ -1485,6 +1485,15 @@ func (l *Loader) getMydumpMetadata() error {
 	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
 	loc, _, err := dumpling.ParseMetaData(metafile, l.cfg.Flavor)
 	if err != nil {
+		if os.IsNotExist(err) {
+			worker, _, err2 := ha.GetLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID)
+			if err2 != nil {
+				l.logger.Warn("get load task", log.ShortError(err2))
+			}
+			if worker != "" && worker != l.workerName {
+				return terror.ErrLoadTaskWorkerNotMatch.Generate(worker, l.workerName)
+			}
+		}
 		if terror.ErrMetadataNoBinlogLoc.Equal(err) {
 			l.logger.Warn("dumped metadata doesn't have binlog location, it's OK if DM doesn't enter incremental mode")
 			return nil

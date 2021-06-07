@@ -778,6 +778,12 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+[error.DM-functional-11125]
+message = "different worker in load stage, previous worker: %s, current worker: %s"
+description = ""
+workaround = "Please check if the previous worker is online."
+tags = ["internal", "high"]
+
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""
