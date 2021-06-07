@@ -16,7 +16,7 @@ function DM_001_CASE() {
 		"\"result\": true" 2 \
 		"\"synced\": true" 1
 	# only downstream sees a duplicate error, but currently ignored by DM
-	check_log_contain_with_retry "Duplicate column name 'new_col1'" $WORK_DIR/worker1/log/dm-worker.log
+	check_log_contain_with_retry "Duplicate column name 'new_col1'" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
 }
 
 function DM_001() {
