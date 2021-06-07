@@ -731,23 +731,21 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 	}
 }
 
-func (s *Syncer) jobsIsEmpty() bool {
-	for idx := range s.jobs {
-		if len(s.jobs[idx]) > 0 {
-			return false
-		}
-	}
-	return true
-}
-
 // updateReplicationLag calculates syncer's replication lag by job, it called after every batch dml job / one skip job / one ddl
 // job is flushed to target db.
 func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 	// when job is nil mean no job in this bucket, need do reset this bucket lag to 0
 	if job == nil {
 		s.workerLagMap[queueBucketName].Store(0)
-		// when job is nill and s.jobs is empty, means all event is consumed, we update lag to 0
-		if s.jobsIsEmpty() {
+		needUpdate := true
+		for _, l := range s.workerLagMap {
+			if l.Load() != int64(0) {
+				needUpdate = false
+				break
+			}
+		}
+		// when job is nil and all job bucket's lag is 0, means all event is consumed, we update lag to 0
+		if needUpdate {
 			replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(0))
 			s.secondsBehindMaster.Store(0)
 		}
