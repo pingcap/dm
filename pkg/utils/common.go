@@ -76,7 +76,7 @@ func FetchAllDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter) (map[s
 			Name:   "", // schema level
 		})
 	}
-	ftSchemas = bw.ApplyOn(ftSchemas)
+	ftSchemas = bw.Apply(ftSchemas)
 	if len(ftSchemas) == 0 {
 		log.L().Warn("no schema need to sync")
 		return nil, nil
@@ -97,7 +97,7 @@ func FetchAllDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter) (map[s
 				Name:   table,
 			})
 		}
-		ftTables = bw.ApplyOn(ftTables)
+		ftTables = bw.Apply(ftTables)
 		if len(ftTables) == 0 {
 			log.L().Info("no tables need to sync", zap.String("schema", schema))
 			continue // NOTE: should we still keep it as an empty elem?
