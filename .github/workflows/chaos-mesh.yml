@@ -14,6 +14,7 @@ on:
 jobs:
   pre_job:
     runs-on: ubuntu-18.04
+    timeout-minutes: 30
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
@@ -33,6 +34,7 @@ jobs:
     if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     # The type of runner that the job will run on
     runs-on: ubuntu-18.04
+    timeout-minutes: 30
     strategy:
         fail-fast: false
         matrix:
@@ -47,29 +49,29 @@ jobs:
         go-version: 1.16
     - name: Print Go version
       run: go version
-  
+
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - name: Check out code
       uses: actions/checkout@v2
-    
+
     - name: Cache go modules
       uses: actions/cache@v2
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
-    
+
     - name: Cache tools
       uses: actions/cache@v2
       with:
         path: |
           **/tools
         key: ${{ runner.os }}-dm-tools-${{ hashFiles('**/tools/go.sum') }}
-    
+
     # Set up Kubernetes IN Docker
-    # - name: Set up kind cluster 
+    # - name: Set up kind cluster
     #   uses: helm/kind-action@v1.0.0
     #   with:
-    #     cluster_name: dm-chaos 
+    #     cluster_name: dm-chaos
     # Set up Kubernetes with K3s
     - name: Set up K3s cluster
       run: |
@@ -101,7 +103,7 @@ jobs:
         kubectl get pods -n kube-system
         kubectl get sc
         kubectl version
-    
+
     # Disable AppArmor for MySQL, see https://github.com/moby/moby/issues/7512#issuecomment-61787845
     - name: Disable AppArmor for MySQL
       run: |
@@ -268,6 +270,7 @@ jobs:
       uses: chaos-mesh/chaos-mesh-action@master
       env:
         CFG_BASE64: ${{ env.CFG_BASE64 }}
+        CHAOS_MESH_VERSION: v1.0.0
 
     # check whether complete with 1m * 20 times.
     - name: Wait for chaos test case complete
@@ -290,7 +293,7 @@ jobs:
         name: chaos-base-logs.${{ matrix.chaos-obj }}
         path: |
           ./logs
-          !./logs/coredns-*          
+          !./logs/coredns-*
           !./logs/local-path-provisioner-*
 
     # send Slack notify if failed.
