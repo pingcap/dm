@@ -299,7 +299,7 @@ function run() {
 	# use sync_diff_inspector to check data now!
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	# TODO(ehco): now this metrics(syncer) hava some problem need to fix.
+	# TODO(ehco): now this metrics(syncer) have some problem need to fix.
 	# check_metric $WORKER1_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
 	# check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 2
 

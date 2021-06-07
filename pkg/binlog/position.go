@@ -316,6 +316,34 @@ func CompareLocation(location1, location2 Location, cmpGTID bool) int {
 	return compareIndex(location1.Suffix, location2.Suffix)
 }
 
+// IsFreshPosition returns true when location1 is a fresh location without any info.
+func IsFreshPosition(location1 Location, flavor string, cmpGTID bool) bool {
+	location2 := NewLocation(flavor)
+	if cmpGTID {
+		cmp, canCmp := CompareGTID(location1.gtidSet, location2.gtidSet)
+		if canCmp {
+			if cmp != 0 {
+				return cmp <= 0
+			}
+			// not supposed to happen, for safety here.
+			if location1.gtidSet != nil && location1.gtidSet.String() != "" {
+				return false
+			}
+			// empty GTIDSet, then compare by position
+			log.L().Warn("both gtidSets are empty, will compare by position", zap.Stringer("location1", location1), zap.Stringer("location2", location2))
+		} else {
+			// if can't compare by GTIDSet, then compare by position
+			log.L().Warn("gtidSet can't be compared, will compare by position", zap.Stringer("location1", location1), zap.Stringer("location2", location2))
+		}
+	}
+
+	cmp := ComparePosition(location1.Position, location2.Position)
+	if cmp != 0 {
+		return cmp <= 0
+	}
+	return compareIndex(location1.Suffix, location2.Suffix) <= 0
+}
+
 // CompareGTID returns:
 //   1, true if gSet1 is bigger than gSet2
 //   0, true if gSet1 is equal to gSet2
