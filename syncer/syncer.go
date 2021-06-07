@@ -737,7 +737,7 @@ func (s *Syncer) calcReplicationLag(headerTS int64) int64 {
 }
 
 // updateReplicationLag calculates syncer's replication lag by job, it is called after every batch dml job / one skip job / one ddl
-// job is commited.
+// job is committed.
 func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 	var lag int64
 	// when job is nil mean no job in this bucket, need do reset this bucket lag to 0
@@ -1084,7 +1084,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	// clearF is used to calculate lag metric and clear local job queue.
 	clearF := func() {
 		if len(jobs) > 0 {
-			// NOTE: we can use the first job of job queue to calculate lag because when this job commited,
+			// NOTE: we can use the first job of job queue to calculate lag because when this job committed,
 			// every event before this job's event in this queue has already commit.
 			// and we can  to use this job to maintain the oldest binlog event ts among all workers.
 			j := jobs[0]
