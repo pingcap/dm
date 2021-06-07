@@ -746,7 +746,7 @@ func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 	// when job is nil mean no job in this bucket, need do reset this bucket lag to 0
 	if job == nil {
 		s.workerLagMap[queueBucketName].Store(0)
-		// when job is nill and s.jobs is emepty, means all event is consumed, we update lag to 0
+		// when job is nill and s.jobs is empty, means all event is consumed, we update lag to 0
 		if s.jobsIsEmpty() {
 			replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(0))
 			s.secondsBehindMaster.Store(0)
@@ -755,18 +755,12 @@ func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 	}
 
 	failpoint.Inject("BlockSyncerUpdateLag", func(v failpoint.Value) {
-		sv, ok := v.(string)
-		if ok && len(strings.Split(sv, ",")) == 2 {
-			args := strings.Split(sv, ",")
-			jtp := args[0]                // job type
-			t, _ := strconv.Atoi(args[1]) // sleep time
-			if job.tp.String() == jtp {
-				s.tctx.L().Info("BlockSyncerUpdateLag", zap.String("job type", jtp), zap.Int("sleep time", t))
-				time.Sleep(time.Second * time.Duration(t))
-			}
-		} else {
-			s.tctx.L().Error("BlockSyncerUpdateLag failed", zap.Any("input v", v))
-			panic("BlockSyncerUpdateLag failed")
+		args := strings.Split(v.(string), ",")
+		jtp := args[0]                // job type
+		t, _ := strconv.Atoi(args[1]) // sleep time
+		if job.tp.String() == jtp {
+			s.tctx.L().Info("BlockSyncerUpdateLag", zap.String("job type", jtp), zap.Int("sleep time", t))
+			time.Sleep(time.Second * time.Duration(t))
 		}
 	})
 
