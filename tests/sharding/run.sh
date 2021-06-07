@@ -29,6 +29,12 @@ function run() {
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 	check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
 
+	# operate mysql config to worker
+	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+	cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
+
 	# now, for pessimistic shard DDL, if interrupted after executed DDL but before flush checkpoint,
 	# re-sync this DDL will cause the source try to sync the DDL of the previous lock again,
 	# this will need to recover the replication manually,
@@ -39,16 +45,11 @@ function run() {
 	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/FlushCheckpointStage=return(2)"
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 	export GO_FAILPOINTS=''
 
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-	# operate mysql config to worker
-	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
-	cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
-	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
-	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
-	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
 	# start DM task only
