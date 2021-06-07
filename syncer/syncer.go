@@ -2372,7 +2372,7 @@ func (s *Syncer) loadTableStructureFromDump(ctx context.Context) error {
 	}
 
 	var firstErr error
-	setFirstErr := func (err error) {
+	setFirstErr := func(err error) {
 		if firstErr == nil {
 			firstErr = err
 		}
