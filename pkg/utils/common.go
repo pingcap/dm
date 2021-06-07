@@ -171,9 +171,9 @@ func parseLowerCaseTableNamesFlavorFrom(s string) (LowerCaseTableNamesFlavor, er
 }
 
 // FetchLowerCaseTableNamesSetting return the `lower_case_table_names` setting of target db.
-func FetchLowerCaseTableNamesSetting(ctx context.Context, db *sql.DB) (LowerCaseTableNamesFlavor, error) {
+func FetchLowerCaseTableNamesSetting(ctx context.Context, conn *sql.Conn) (LowerCaseTableNamesFlavor, error) {
 	query := "SELECT @@lower_case_table_names;"
-	row := db.QueryRowContext(ctx, query)
+	row := conn.QueryRowContext(ctx, query)
 	if row.Err() != nil {
 		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(row.Err(), query)
 	}

@@ -2503,7 +2503,11 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	lcFlavor, err := utils.FetchLowerCaseTableNamesSetting(ctx, s.fromDB.BaseDB.DB)
+	conn, err := s.fromDB.BaseDB.GetBaseConn(ctx)
+	if err != nil {
+		return err
+	}
+	lcFlavor, err := utils.FetchLowerCaseTableNamesSetting(ctx, conn.DBConn)
 	if err != nil {
 		return err
 	}

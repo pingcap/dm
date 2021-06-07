@@ -24,10 +24,9 @@ import (
 	"github.com/chaos-mesh/go-sqlsmith"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
 	config2 "github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -89,6 +88,17 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 		conn, err2 := createDBConn(ctx, db, schema)
 		if err2 != nil {
 			return nil, err2
+		}
+		if taskCfg.CaseSensitive {
+			lcSetting, err := utils.FetchLowerCaseTableNamesSetting(ctx, conn.baseConn.DBConn)
+			if err != nil {
+				return nil, err
+			}
+			if lcSetting == utils.LCTableNamesMixed {
+				msg := "can not set `case-sensitive = true` when upstream `lower_case_table_names = 2`"
+				log.L().Error(msg, zap.Any("instance", cfg))
+				return nil, errors.New(msg)
+			}
 		}
 		sourceDBs = append(sourceDBs, db)
 		sourceConns = append(sourceConns, conn)
