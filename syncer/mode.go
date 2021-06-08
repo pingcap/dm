@@ -49,7 +49,7 @@ func (s *Syncer) enableSafeModeInitializationPhase(tctx *tcontext.Context, safeM
 			}
 		}()
 
-		initPhaseSeconds := 300
+		initPhaseSeconds := 60
 
 		failpoint.Inject("SafeModeInitPhaseSeconds", func(val failpoint.Value) {
 			seconds, _ := val.(int)
