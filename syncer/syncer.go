@@ -1154,6 +1154,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			tctx.L().Warn("error happened when load table structure from dump files", zap.Error(err))
 			cleanDumpFile = false
 		}
+	} else {
+		cleanDumpFile = false
 	}
 
 	if flushCheckpoint {

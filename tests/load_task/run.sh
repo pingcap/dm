@@ -57,6 +57,7 @@ function test_worker_restart() {
 
 # almost never happen since user hardly start a load task after another load task failed.
 function test_transfer_two_sources() {
+	echo "test_transfer_two_sources"
 	# worker2 offline
 	ps aux | grep dm-worker2 | awk '{print $2}' | xargs kill || true
 	check_port_offline $WORKER2_PORT 20
