@@ -463,11 +463,11 @@ function DM_143 {
 	# optimistic sharding doesn't support partition
 	# run_case 143 "double-source-optimistic" \
 	# 	"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id) \
-    #     (partition p0 values less than (100), partition p1 values less than (200));\"; \
-    #      run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id) \
-    #      (partition p0 values less than (100), partition p1 values less than (200));\"; \
-    #      run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key) partition by range(id) \
-    #      (partition p0 values less than (100), partition p1 values less than (200));\"" \
+	#     (partition p0 values less than (100), partition p1 values less than (200));\"; \
+	#      run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key) partition by range(id) \
+	#      (partition p0 values less than (100), partition p1 values less than (200));\"; \
+	#      run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key) partition by range(id) \
+	#      (partition p0 values less than (100), partition p1 values less than (200));\"" \
 	# 	"clean_table" "optimistic"
 }
 

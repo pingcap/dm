@@ -162,35 +162,35 @@ var (
 	etcdTestCli2          *clientv3.Client
 )
 
+type testMaster struct {
+	workerClients   map[string]workerrpc.Client
+	saveMaxRetryNum int
+	testT           *testing.T
+}
+
 func TestMaster(t *testing.T) {
 	err := log.InitLogger(&log.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	testEtcdCluster = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
-	defer testEtcdCluster.Terminate(t)
-	etcdTestCli = testEtcdCluster.RandClient()
+	// testEtcdCluster = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
+	// defer testEtcdCluster.Terminate(t)
+	// etcdTestCli = testEtcdCluster.RandClient()
 
-	testEtcdCluster2 = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
-	defer testEtcdCluster2.Terminate(t)
-	etcdTestCli2 = testEtcdCluster2.RandClient()
+	// testEtcdCluster2 = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
+	// defer testEtcdCluster2.Terminate(t)
+	// etcdTestCli2 = testEtcdCluster2.RandClient()
+
+	_ = check.Suite(&testMaster{testT: t})
 
 	check.TestingT(t)
 }
-
-type testMaster struct {
-	workerClients   map[string]workerrpc.Client
-	saveMaxRetryNum int
-}
-
-var _ = check.Suite(&testMaster{})
 
 func (t *testMaster) SetUpSuite(c *check.C) {
 	err := log.InitLogger(&log.Config{})
 	c.Assert(err, check.IsNil)
 	t.workerClients = make(map[string]workerrpc.Client)
-	clearEtcdEnv(c)
 	t.saveMaxRetryNum = maxRetryNum
 	maxRetryNum = 2
 }
@@ -199,8 +199,19 @@ func (t *testMaster) TearDownSuite(c *check.C) {
 	maxRetryNum = t.saveMaxRetryNum
 }
 
+func (t *testMaster) SetUpTest(c *check.C) {
+	c.Logf("Current running test=%s", c.TestName())
+	testEtcdCluster = integration.NewClusterV3(t.testT, &integration.ClusterConfig{Size: 1})
+	etcdTestCli = testEtcdCluster.RandClient()
+	testEtcdCluster2 = integration.NewClusterV3(t.testT, &integration.ClusterConfig{Size: 1})
+	etcdTestCli2 = testEtcdCluster2.RandClient()
+	clearEtcdEnv(c)
+}
+
 func (t *testMaster) TearDownTest(c *check.C) {
 	clearEtcdEnv(c)
+	testEtcdCluster.Terminate(t.testT)
+	testEtcdCluster2.Terminate(t.testT)
 }
 
 func newMockRPCClient(client pb.WorkerClient) workerrpc.Client {
