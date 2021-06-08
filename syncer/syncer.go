@@ -194,7 +194,7 @@ type Syncer struct {
 	addJobFunc func(*job) error
 
 	tsOffset            atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
-	secondsBehindMaster atomic.Int64             // current task delay second behind upstrem
+	secondsBehindMaster atomic.Int64             // current task delay second behind upstream
 	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:queueBucketName val: lag
 }
 
