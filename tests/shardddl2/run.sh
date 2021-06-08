@@ -400,7 +400,7 @@ function DM_DROP_COLUMN_EXEC_ERROR_CASE() {
 	# get worker of source1
 	w="1"
 	got=$(grep "mysql-replica-01" $WORK_DIR/worker1/log/dm-worker.log | wc -l)
-	if [[ "$got" = "0" ]]; then
+	if [[ "$got" -eq 0 ]]; then
 		w="2"
 	fi
 
@@ -461,7 +461,7 @@ function DM_DROP_COLUMN_ALL_DONE_CASE() {
 	# get worker of source1
 	w="1"
 	got=$(grep "mysql-replica-01" $WORK_DIR/worker1/log/dm-worker.log | wc -l)
-	if [[ "$got" = "0" ]]; then
+	if [[ "$got" -eq 0 ]]; then
 		w="2"
 	fi
 
@@ -521,6 +521,11 @@ function DM_DROP_COLUMN_ALL_DONE() {
 function run() {
 	init_cluster
 	init_database
+	DM_DROP_COLUMN_EXEC_ERROR
+	DM_ADD_DROP_COLUMNS
+	DM_COLUMN_INDEX
+	DM_INIT_SCHEMA
+	DM_DROP_COLUMN_ALL_DONE
 	start=36
 	end=45
 	except=(042 044 045)
@@ -531,11 +536,6 @@ function run() {
 		DM_${i}
 		sleep 1
 	done
-	DM_ADD_DROP_COLUMNS
-	DM_COLUMN_INDEX
-	DM_INIT_SCHEMA
-	DM_DROP_COLUMN_EXEC_ERROR
-	DM_DROP_COLUMN_ALL_DONE
 }
 
 cleanup_data $shardddl
