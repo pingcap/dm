@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -44,6 +45,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	common2 "github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -637,14 +639,13 @@ func (s *Syncer) getTable(tctx *tcontext.Context, origSchema, origTable, renamed
 	return ti, nil
 }
 
-// trackTableInfoFromDownstream tries to track the table info from the downstream.
+// trackTableInfoFromDownstream tries to track the table info from the downstream. It will not overwrite existing table.
 func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origSchema, origTable, renamedSchema, renamedTable string) error {
-	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly
-	// (and get rid of ddlDBConn).
+	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly if HTTP port is available
 	// use parser for downstream.
 	parser2, err := utils.GetParserForConn(tctx.Ctx, s.ddlDBConn.baseConn.DBConn)
 	if err != nil {
-		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+		return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 	}
 
 	rows, err := s.ddlDBConn.querySQL(tctx, "SHOW CREATE TABLE "+dbutil.TableName(renamedSchema, renamedTable))
@@ -1124,6 +1125,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}()
 
+	// some initialization that can't be put in Syncer.Init
 	fresh, err := s.IsFreshTask(ctx)
 	if err != nil {
 		return err
@@ -1134,30 +1136,43 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return err
 		}
 	}
-	needFlushCheckpoint, err := s.adjustGlobalPointGTID(tctx)
+
+	var (
+		flushCheckpoint bool
+		delLoadTask     bool
+		cleanDumpFile   = s.cfg.CleanDumpFile
+	)
+	flushCheckpoint, err = s.adjustGlobalPointGTID(tctx)
 	if err != nil {
 		return err
 	}
-	if needFlushCheckpoint || (fresh && s.cfg.Mode == config.ModeAll) {
-		if err = s.flushCheckPoints(); err != nil {
-			tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
-		} else if fresh && s.cfg.Mode == config.ModeAll {
-			if err = s.delLoadTask(); err != nil {
-				tctx.L().Warn("error when del load task in etcd", zap.Error(err))
-			}
-
-			if s.cfg.CleanDumpFile {
-				tctx.L().Info("try to remove loaded files")
-				metadataFile := path.Join(s.cfg.Dir, "metadata")
-				if err = os.Remove(metadataFile); err != nil {
-					tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
-				}
-				if err = os.Remove(s.cfg.Dir); err != nil {
-					tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
-				}
-			}
+	if s.cfg.Mode == config.ModeAll && fresh {
+		delLoadTask = true
+		flushCheckpoint = true
+		err = s.loadTableStructureFromDump(ctx)
+		if err != nil {
+			tctx.L().Warn("error happened when load table structure from dump files", zap.Error(err))
+			cleanDumpFile = false
 		}
 	}
+
+	if flushCheckpoint {
+		if err = s.flushCheckPoints(); err != nil {
+			tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
+		}
+	}
+	if delLoadTask {
+		if err = s.delLoadTask(); err != nil {
+			tctx.L().Warn("error when del load task in etcd", zap.Error(err))
+		}
+	}
+	if cleanDumpFile {
+		tctx.L().Info("try to remove all dump files")
+		if err = os.RemoveAll(s.cfg.Dir); err != nil {
+			tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
+		}
+	}
+
 	failpoint.Inject("AdjustGTIDExit", func() {
 		tctx.L().Warn("exit triggered", zap.String("failpoint", "AdjustGTIDExit"))
 		s.streamerController.Close(tctx)
@@ -1339,7 +1354,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		if err != nil {
-			// TODO: wrap the error with terror, and attach binlog position
 			tctx.L().Error("fail to fetch binlog", log.ShortError(err))
 
 			if isConnectionRefusedError(err) {
@@ -2195,13 +2209,14 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	srcTables, targetTables := tableNames[0], tableNames[1]
 	srcTable := srcTables[0]
 
-	// Make sure the tables are all loaded into the schema tracker.
+	// Make sure the needed tables are all loaded into the schema tracker.
 	var (
 		shouldExecDDLOnSchemaTracker bool
 		shouldSchemaExist            bool
 		shouldTableExistNum          int // tableNames[:shouldTableExistNum] should exist
 		shouldRefTableExistNum       int // tableNames[1:shouldTableExistNum] should exist, since first one is "caller table"
 	)
+
 	switch node := stmt.(type) {
 	case *ast.CreateDatabaseStmt:
 		shouldExecDDLOnSchemaTracker = true
@@ -2221,7 +2236,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	case *ast.CreateTableStmt, *ast.CreateViewStmt:
 		shouldExecDDLOnSchemaTracker = true
 		shouldSchemaExist = true
-		// for CREATE TABLE LIKE/AS, there should be reference tables which should exist
+		// for CREATE TABLE LIKE/AS, the reference tables should exist
 		shouldRefTableExistNum = len(srcTables)
 	case *ast.DropTableStmt:
 		shouldExecDDLOnSchemaTracker = true
@@ -2334,6 +2349,74 @@ func (s *Syncer) genRouter() error {
 		}
 	}
 	return nil
+}
+
+func (s *Syncer) loadTableStructureFromDump(ctx context.Context) error {
+	logger := s.tctx.L()
+
+	files, err := utils.CollectDirFiles(s.cfg.Dir)
+	if err != nil {
+		logger.Warn("fail to get dump files", zap.Error(err))
+		return err
+	}
+	var dbs, tables []string
+	var tableFiles [][2]string // [db, filename]
+	for f := range files {
+		if db, ok := utils.GetDBFromDumpFilename(f); ok {
+			dbs = append(dbs, db)
+			continue
+		}
+		if db, table, ok := utils.GetTableFromDumpFilename(f); ok {
+			tables = append(tables, dbutil.TableName(db, table))
+			tableFiles = append(tableFiles, [2]string{db, f})
+			continue
+		}
+	}
+	logger.Info("fetch table structure form dump files",
+		zap.Strings("database", dbs),
+		zap.Any("tables", tables))
+	for _, db := range dbs {
+		if err = s.schemaTracker.CreateSchemaIfNotExists(db); err != nil {
+			return err
+		}
+	}
+
+	var firstErr error
+	setFirstErr := func(err error) {
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	for _, dbAndFile := range tableFiles {
+		db, file := dbAndFile[0], dbAndFile[1]
+		filepath := path.Join(s.cfg.Dir, file)
+		content, err2 := common2.GetFileContent(filepath)
+		if err2 != nil {
+			logger.Warn("fail to read file for creating table in schema tracker",
+				zap.String("db", db),
+				zap.String("file", filepath),
+				zap.Error(err))
+			setFirstErr(err2)
+			continue
+		}
+		stmts := bytes.Split(content, []byte(";"))
+		for _, stmt := range stmts {
+			stmt = bytes.TrimSpace(stmt)
+			if len(stmt) == 0 || bytes.HasPrefix(stmt, []byte("/*")) {
+				continue
+			}
+			err = s.schemaTracker.Exec(ctx, db, string(stmt))
+			if err != nil {
+				logger.Warn("fail to create table for dump files",
+					zap.Any("file", filepath),
+					zap.ByteString("statement", stmt),
+					zap.Error(err))
+				setFirstErr(err)
+			}
+		}
+	}
+	return firstErr
 }
 
 func (s *Syncer) printStatus(ctx context.Context) {
