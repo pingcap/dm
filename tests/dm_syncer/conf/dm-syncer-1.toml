@@ -1,7 +1,7 @@
 # Base Configuration.
 
 # sub task name as identifier, should be unique
-name = "hanfei"
+name = "syncer1"
 
 # sub task mode, can be `all`, `full`, `incremental`
 mode = "incremental"
