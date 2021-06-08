@@ -173,15 +173,6 @@ func TestMaster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// testEtcdCluster = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
-	// defer testEtcdCluster.Terminate(t)
-	// etcdTestCli = testEtcdCluster.RandClient()
-
-	// testEtcdCluster2 = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
-	// defer testEtcdCluster2.Terminate(t)
-	// etcdTestCli2 = testEtcdCluster2.RandClient()
-
 	_ = check.Suite(&testMaster{testT: t})
 
 	check.TestingT(t)
