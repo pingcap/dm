@@ -109,6 +109,12 @@ func (s *testDBSuite) TestGetServerID(c *C) {
 	c.Assert(id, Greater, uint32(0))
 }
 
+func (s *testDBSuite) TestGetServerUnixTS(c *C) {
+	id, err := utils.GetServerUnixTS(context.Background(), s.db)
+	c.Assert(err, IsNil)
+	c.Assert(id, Greater, int64(0))
+}
+
 func (s *testDBSuite) TestBinaryLogs(c *C) {
 	files, err := getBinaryLogs(s.db)
 	c.Assert(err, IsNil)
