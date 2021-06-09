@@ -198,7 +198,7 @@ type CheckPoint interface {
 	// DeleteSchemaPoint deletes checkpoint for specified schema
 	DeleteSchemaPoint(tctx *tcontext.Context, sourceSchema string) error
 
-	// IsOlderThanTablePoint checks whether job's checkpoint is newer than previous saved checkpoint
+	// IsOlderThanTablePoint checks whether job's checkpoint is older than previous saved checkpoint
 	IsOlderThanTablePoint(sourceSchema, sourceTable string, point binlog.Location) bool
 
 	// SaveGlobalPoint saves the global binlog stream's checkpoint
