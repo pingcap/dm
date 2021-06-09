@@ -521,7 +521,7 @@ function DM_068() {
 
 function restart_master() {
 	echo "restart dm-master"
-	ps aux | grep dm-master | awk '{print $2}' | xargs kill || true
+	wait_process_exit dm-master.test
 	check_port_offline $MASTER_PORT 20
 	sleep 2
 

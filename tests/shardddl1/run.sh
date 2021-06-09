@@ -348,9 +348,8 @@ function DM_RemoveLock() {
 
 function restart_master() {
 	echo "restart dm-master"
-	kill_dm_master
+	wait_process_exit dm-master.test
 	check_port_offline $MASTER_PORT 20
-	sleep 2
 
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
