@@ -214,13 +214,13 @@ function test_fail_job_between_event() {
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
 		"\"result\": true" 3
-	read -p 666
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 function run() {
-	#	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
-	#	run_sql_source1 "SET @@global.time_zone = '+01:00';"
-	#	run_sql_source2 "SET @@global.time_zone = '+02:00';"
+	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
+	run_sql_source1 "SET @@global.time_zone = '+01:00';"
+	run_sql_source2 "SET @@global.time_zone = '+02:00';"
 	test_fail_job_between_event
 
 	test_session_config
