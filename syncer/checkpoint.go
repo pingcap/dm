@@ -199,7 +199,7 @@ type CheckPoint interface {
 	DeleteSchemaPoint(tctx *tcontext.Context, sourceSchema string) error
 
 	// IsOlderThanTablePoint checks whether job's checkpoint is older than previous saved checkpoint
-	IsOlderThanTablePoint(sourceSchema, sourceTable string, point binlog.Location) bool
+	IsOlderThanTablePoint(sourceSchema, sourceTable string, point binlog.Location, useLE bool) bool
 
 	// SaveGlobalPoint saves the global binlog stream's checkpoint
 	// corresponding to Meta.Save
@@ -450,7 +450,8 @@ func (cp *RemoteCheckPoint) DeleteSchemaPoint(tctx *tcontext.Context, sourceSche
 //   - XID event, location is gset2
 // We should note that e1 is not older than e2
 // For binlog position replication, currently DM will split rows changes of an event to jobs, so some job may has save position.
-func (cp *RemoteCheckPoint) IsOlderThanTablePoint(sourceSchema, sourceTable string, location binlog.Location) bool {
+// if useLE is true, we use less than or equal.
+func (cp *RemoteCheckPoint) IsOlderThanTablePoint(sourceSchema, sourceTable string, location binlog.Location, useLE bool) bool {
 	cp.RLock()
 	defer cp.RUnlock()
 	mSchema, ok := cp.points[sourceSchema]
@@ -464,6 +465,9 @@ func (cp *RemoteCheckPoint) IsOlderThanTablePoint(sourceSchema, sourceTable stri
 	oldLocation := point.MySQLLocation()
 	cp.logCtx.L().Debug("compare table location whether is newer", zap.Stringer("location", location), zap.Stringer("old location", oldLocation))
 
+	if useLE {
+		return binlog.CompareLocation(location, oldLocation, cp.cfg.EnableGTID) <= 0
+	}
 	return binlog.CompareLocation(location, oldLocation, cp.cfg.EnableGTID) < 0
 }
 
