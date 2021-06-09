@@ -216,6 +216,11 @@ function test_fail_job_between_event() {
 		"query-status test" \
 		"\"result\": true" 3
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	cleanup_data all_mode
+	cleanup_process $*
+
+	export GO_FAILPOINTS=''
 }
 
 function run() {
