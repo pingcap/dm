@@ -346,15 +346,6 @@ function DM_RemoveLock() {
 		"bound" 2
 }
 
-function restart_master() {
-	echo "restart dm-master"
-	wait_process_exit dm-master.test
-	check_port_offline $MASTER_PORT 20
-
-	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-}
-
 function DM_RestartMaster_CASE() {
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
