@@ -156,10 +156,9 @@ function test_syncer_metrics() {
 	# check ddl job lag
 	run_sql_source1 "alter table all_mode.t1 add column new_col1 int;"
 	run_sql_source2 "alter table all_mode.t2 add column new_col1 int;"
-	sleep 2
 	# test dml lag metric >= 1 beacuse we inject updateReplicationLag(ddl) to sleep(1)
-	check_metric $WORKER1_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 0 999
-	check_metric $WORKER2_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 0 999
+	check_metric $WORKER1_PORT "dm_syncer_replication_lag{task=\"test\"}" 5 0 999
+	check_metric $WORKER2_PORT "dm_syncer_replication_lag{task=\"test\"}" 5 0 999
 	# check two worker's secondsBehindMaster > 0
 	check_secondsBehindMaster 0 2
 	echo "check ddl done!"
@@ -175,12 +174,11 @@ function test_syncer_metrics() {
 	run_sql_source1 "truncate table all_mode.t1;"                                        # make skip job
 	run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 # make dml job
 	run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 # make dml job
-	sleep 3                                                                              # wait for dml job
 
 	# test dml lag metric >= 2 beacuse we inject updateReplicationLag(insert) to sleep(2)
 	# although skip lag is 0 (locally), but we use that lag of all dml/skip lag, so lag still >= 2
-	check_metric $WORKER1_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 1 999
-	check_metric $WORKER2_PORT "dm_syncer_replication_lag{task=\"test\"}" 3 1 999
+	check_metric $WORKER1_PORT "dm_syncer_replication_lag{task=\"test\"}" 5 1 999
+	check_metric $WORKER2_PORT "dm_syncer_replication_lag{task=\"test\"}" 5 1 999
 	check_secondsBehindMaster 1 2
 	echo "check dml/skip done!"
 

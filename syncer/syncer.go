@@ -1081,12 +1081,21 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	jobs := make([]*job, 0, count)
 	tpCnt := make(map[opType]int64)
 
-	// clearF is used to calculate lag metric and clear local job queue.
+	// clearF is used to reset job queue.
 	clearF := func() {
+		for i := 0; i < idx; i++ {
+			s.jobWg.Done()
+		}
+		idx = 0
+		jobs = jobs[0:0]
+	}
+
+	// successF is used to calculate lag metric and tps.
+	successF := func() {
 		if len(jobs) > 0 {
 			// NOTE: we can use the first job of job queue to calculate lag because when this job committed,
 			// every event before this job's event in this queue has already commit.
-			// and we can  to use this job to maintain the oldest binlog event ts among all workers.
+			// and we can use this job to maintain the oldest binlog event ts among all workers.
 			j := jobs[0]
 			s.updateReplicationLag(j, queueBucket)
 		} else {
@@ -1097,12 +1106,6 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			s.addCount(true, queueBucket, tpName, v)
 			tpCnt[tpName] = 0
 		}
-		// reset job queue
-		for i := 0; i < idx; i++ {
-			s.jobWg.Done()
-		}
-		idx = 0
-		jobs = jobs[0:0]
 	}
 
 	fatalF := func(affected int, err error) {
@@ -1165,6 +1168,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 					fatalF(affect, err)
 					continue
 				}
+				successF()
 				clearF()
 			}
 
@@ -1175,6 +1179,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 					fatalF(affect, err)
 					continue
 				}
+				successF()
 				clearF()
 			}
 		}
