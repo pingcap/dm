@@ -794,3 +794,89 @@ func (t *testPositionSuite) TestExtractSuffix(c *C) {
 		c.Assert(suffix, Equals, tc.suffix)
 	}
 }
+
+func (t *testPositionSuite) TestIsFreshPosition(c *C) {
+	mysqlPos := gmysql.Position{
+		Name: "mysql-binlog.00001",
+		Pos:  123,
+	}
+	mysqlGTIDSet, err := gtid.ParserGTID(gmysql.MySQLFlavor, "e8e592a6-7a59-11eb-8da1-0242ac110002:1-36")
+	c.Assert(err, IsNil)
+	mariaGTIDSet, err := gtid.ParserGTID(gmysql.MariaDBFlavor, "0-1001-233")
+	c.Assert(err, IsNil)
+	testCases := []struct {
+		loc     Location
+		flavor  string
+		cmpGTID bool
+		fresh   bool
+	}{
+		{
+			InitLocation(mysqlPos, mysqlGTIDSet),
+			gmysql.MySQLFlavor,
+			true,
+			false,
+		},
+		{
+			InitLocation(mysqlPos, gtid.MinGTIDSet(gmysql.MySQLFlavor)),
+			gmysql.MySQLFlavor,
+			true,
+			false,
+		},
+		{
+
+			InitLocation(MinPosition, mysqlGTIDSet),
+			gmysql.MySQLFlavor,
+			true,
+			false,
+		},
+		{
+			InitLocation(MinPosition, mysqlGTIDSet),
+			gmysql.MySQLFlavor,
+			false,
+			true,
+		},
+		{
+			InitLocation(MinPosition, gtid.MinGTIDSet(gmysql.MySQLFlavor)),
+			gmysql.MySQLFlavor,
+			true,
+			true,
+		},
+
+		{
+			InitLocation(mysqlPos, mariaGTIDSet),
+			gmysql.MariaDBFlavor,
+			true,
+			false,
+		},
+		{
+			InitLocation(mysqlPos, gtid.MinGTIDSet(gmysql.MariaDBFlavor)),
+			gmysql.MariaDBFlavor,
+			true,
+			false,
+		},
+		{
+
+			InitLocation(MinPosition, mariaGTIDSet),
+			gmysql.MariaDBFlavor,
+			true,
+			false,
+		},
+		{
+			InitLocation(MinPosition, mariaGTIDSet),
+			gmysql.MariaDBFlavor,
+			false,
+			true,
+		},
+		{
+			InitLocation(MinPosition, gtid.MinGTIDSet(gmysql.MariaDBFlavor)),
+			gmysql.MariaDBFlavor,
+			true,
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		fresh := IsFreshPosition(tc.loc, tc.flavor, tc.cmpGTID)
+		c.Assert(fresh, Equals, tc.fresh)
+	}
+}
