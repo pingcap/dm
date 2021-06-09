@@ -1924,6 +1924,12 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+[error.DM-sync-unit-36069]
+message = "get binlog event error: %v"
+description = ""
+workaround = "Please check if the binlog file could be parsed by `mysqlbinlog`."
+tags = ["upstream", "high"]
+
 [error.DM-dm-master-38001]
 message = "nil request not valid"
 description = ""
