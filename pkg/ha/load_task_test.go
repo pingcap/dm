@@ -20,7 +20,7 @@ import (
 	. "github.com/pingcap/check"
 )
 
-func (t *testForEtcd) TestLoadCountEtcd(c *C) {
+func (t *testForEtcd) TestLoadTaskEtcd(c *C) {
 	var (
 		worker1      = "worker1"
 		worker2      = "worker2"

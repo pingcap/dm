@@ -1964,7 +1964,7 @@ func (s *Scheduler) observeLoadTask(ctx context.Context, etcdCli *clientv3.Clien
 				case <-ctx.Done():
 					return nil
 				case <-time.After(500 * time.Millisecond):
-					rev, err = s.resetLoadTask(etcdCli)
+					rev, err = s.syncLoadTaskFromEtcd(etcdCli)
 					if err != nil {
 						log.L().Error("resetLoadTask is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
 					}
@@ -2125,7 +2125,7 @@ func (s *Scheduler) handleLoadTask(ctx context.Context, loadTaskCh <-chan ha.Loa
 	}
 }
 
-func (s *Scheduler) resetLoadTask(cli *clientv3.Client) (int64, error) {
+func (s *Scheduler) syncLoadTaskFromEtcd(cli *clientv3.Client) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
