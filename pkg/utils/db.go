@@ -195,7 +195,7 @@ func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Pos
 		+-----------+----------+--------------+------------------+--------------------------------------------+
 		| ON.000001 |     4822 |              |                  | 85ab69d1-b21f-11e6-9c5e-64006a8978d2:1-46
 		+-----------+----------+--------------+------------------+--------------------------------------------+
-	 */
+	*/
 	/*
 		For MariaDB,SHOW MASTER STATUS:
 		+--------------------+----------+--------------+------------------+
@@ -209,7 +209,7 @@ func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Pos
 		+--------------------------+
 		| 0-1-2                    |
 		+--------------------------+
-	 */
+	*/
 	var (
 		gtidStr    string
 		binlogName string
