@@ -45,7 +45,7 @@ function clean_table() {
 }
 
 function get_start_location() {
-	location=$($PWD/bin/dmctl.test DEVEL --master-addr=$1 \
+	location=$($PWD/bin/dmctl.test DEVEL -master-addr $1 \
 		query-status test -s $2 |
 		grep Location |
 		gawk 'match($0,/startLocation: \[position: \((.*), (.*)\), gtid-set: (.*)\], endLocation: \[position: \((.*), (.*)\), gtid-set: (.*)\]/,a) {printf "%s:%s", a[1], a[2]}')

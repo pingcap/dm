@@ -53,7 +53,7 @@ const (
 	DefaultWarnCnt = 10
 )
 
-var argsNeedAdjust = map[string]struct{}{"-version": {}, "-config": {}, "-master-addr": {}, "-rpc-timeout": {}, "-ssl-ca": {}, "-ssl-cert": {}, "-ssl-key": {}, "-" + EncryptCmdName: {}, "-" + DecryptCmdName: {}}
+var argsNeedAdjust = [...]string{"-version", "-config", "-master-addr", "-rpc-timeout", "-ssl-ca", "-ssl-cert", "-ssl-key", "-" + EncryptCmdName, "-" + DecryptCmdName}
 
 // NewConfig creates a new base config for dmctl.
 func NewConfig(fs *pflag.FlagSet) *Config {
@@ -80,8 +80,12 @@ func DefineConfigFlagSet(fs *pflag.FlagSet) {
 // AdjustArgumentsForPflags adjust flag format args to pflags format.
 func AdjustArgumentsForPflags(args []string) []string {
 	for i, arg := range args {
-		if _, ok := argsNeedAdjust[arg]; ok {
-			args[i] = "-" + arg
+		arg = strings.TrimSpace(arg)
+		for _, adjustArg := range argsNeedAdjust {
+			// -master-addr 127.0.0.1:8261 and -master-addr=127.0.0.1:8261
+			if arg == adjustArg || strings.HasPrefix(arg, adjustArg+"=") {
+				args[i] = "-" + arg
+			}
 		}
 	}
 	return args
