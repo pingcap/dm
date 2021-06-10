@@ -98,7 +98,7 @@ define run_unit_test
 	mkdir -p $(TEST_DIR)
 	$(FAILPOINT_ENABLE)
 	@export log_level=error; \
-	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.$(2).out" $(TEST_RACE_FLAG) $(1) \
+	$(GOTEST)  -timeout 2m -covermode=atomic -coverprofile="$(TEST_DIR)/cov.$(2).out" $(TEST_RACE_FLAG) $(1) \
 	|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
 endef

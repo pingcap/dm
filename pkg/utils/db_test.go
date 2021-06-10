@@ -15,6 +15,8 @@ package utils
 
 import (
 	"context"
+	"strconv"
+	"time"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
@@ -172,6 +174,22 @@ func (t *testDBSuite) TestGetServerUUID(c *C) {
 	uuid, err = GetServerUUID(ctx, db, "mariadb")
 	c.Assert(err, IsNil)
 	c.Assert(uuid, Equals, "123-456")
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
+
+func (t *testDBSuite) TestGetServerUnixTS(c *C) {
+	ctx := context.Background()
+
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	ts := time.Now().Unix()
+	rows := sqlmock.NewRows([]string{"UNIX_TIMESTAMP()"}).AddRow(strconv.FormatInt(ts, 10))
+	mock.ExpectQuery("SELECT UNIX_TIMESTAMP()").WillReturnRows(rows)
+
+	ts2, err := GetServerUnixTS(ctx, db)
+	c.Assert(err, IsNil)
+	c.Assert(ts, Equals, ts2)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
