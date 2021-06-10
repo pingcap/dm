@@ -195,7 +195,21 @@ func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Pos
 		+-----------+----------+--------------+------------------+--------------------------------------------+
 		| ON.000001 |     4822 |              |                  | 85ab69d1-b21f-11e6-9c5e-64006a8978d2:1-46
 		+-----------+----------+--------------+------------------+--------------------------------------------+
-	*/
+	 */
+	/*
+		For MariaDB,SHOW MASTER STATUS:
+		+--------------------+----------+--------------+------------------+
+		| File               | Position | Binlog_Do_DB | Binlog_Ignore_DB |
+		+--------------------+----------+--------------+------------------+
+		| mariadb-bin.000016 |      475 |              |                  |
+		+--------------------+----------+--------------+------------------+
+		SELECT @@global.gtid_binlog_pos;
+		+--------------------------+
+		| @@global.gtid_binlog_pos |
+		+--------------------------+
+		| 0-1-2                    |
+		+--------------------------+
+	 */
 	var (
 		gtidStr    string
 		binlogName string
@@ -228,6 +242,9 @@ func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Pos
 		log.L().Warn("SHOW MASTER STATUS returns more than one row, will only use first row")
 	}
 
+	if rows.Close() != nil {
+		return binlogPos, gs, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
+	}
 	if rows.Err() != nil {
 		return binlogPos, gs, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
 	}
