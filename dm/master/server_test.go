@@ -168,13 +168,15 @@ type testMaster struct {
 	testT           *testing.T
 }
 
+var testSuite = check.Suite(&testMaster{})
+
 func TestMaster(t *testing.T) {
 	err := log.InitLogger(&log.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = check.Suite(&testMaster{testT: t})
-
+	s := testSuite.(*testMaster)
+	s.testT = t
 	check.TestingT(t)
 }
 
