@@ -122,10 +122,10 @@ function run() {
 
 	# start dmctl when master have not started
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "any command" \
-		"can't connect to 127.0.0.1:8261" 2 \
-		"Please check your network connection\." 2
+		"can't connect to 127.0.0.1:8261" 1 \
+		"Please check your network connection\." 1
 	run_dm_ctl_cmd_mode $WORK_DIR "127.0.0.1:$MASTER_PORT" "any command" \
-		"unknown command \"any\" for \"dmctl\"" 2 \
+		"unknown command \"any\" for \"dmctl\"" 1 \
 		"Run 'dmctl --help' for usage\." 1
 
 	run_dm_master $WORK_DIR/master $MASTER_PORT $dm_master_conf

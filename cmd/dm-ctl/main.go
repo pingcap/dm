@@ -55,5 +55,5 @@ func main() {
 		}
 	}()
 
-	ctl.MainStart(os.Args[1:])
+	ctl.MainStart(common.AdjustArgumentsForPflags(os.Args[1:]))
 }

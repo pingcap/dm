@@ -45,9 +45,10 @@ func (c CommandMasterFlags) Reset() {
 // NewRootCmd generates a new rootCmd.
 func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "dmctl",
-		Short:        "DM control",
-		SilenceUsage: true,
+		Use:           "dmctl",
+		Short:         "DM control",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
 	cmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "source", "s", []string{}, "MySQL Source ID.")
@@ -108,11 +109,11 @@ func Init(cfg *common.Config) error {
 }
 
 // Start starts running a command.
-func Start(args []string) (err error) {
+func Start(args []string) (cmd *cobra.Command, err error) {
 	commandMasterFlags.Reset()
 	rootCmd := NewRootCmd()
 	rootCmd.SetArgs(args)
-	return rootCmd.Execute()
+	return rootCmd.ExecuteC()
 }
 
 func loop() error {
@@ -146,9 +147,13 @@ func loop() error {
 		}
 
 		args := strings.Fields(line)
-		err = Start(args)
+		c, err := Start(args)
 		if err != nil {
 			fmt.Println("fail to run:", args)
+			fmt.Println("Error:", err)
+			if c.CalledAs() == "" {
+				fmt.Printf("Run '%v --help' for usage.\n", c.CommandPath())
+			}
 		}
 
 		syncErr := log.L().Sync()
@@ -218,8 +223,11 @@ func MainStart(args []string) {
 	}
 	common.DefineConfigFlagSet(rootCmd.PersistentFlags())
 	rootCmd.SetArgs(args)
-	if err := rootCmd.Execute(); err != nil {
-		rootCmd.Println(err)
+	if c, err := rootCmd.ExecuteC(); err != nil {
+		rootCmd.Println("Error:", err)
+		if c.CalledAs() == "" {
+			rootCmd.Printf("Run '%v --help' for usage.\n", c.CommandPath())
+		}
 		os.Exit(1)
 	}
 }

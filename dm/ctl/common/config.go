@@ -53,6 +53,8 @@ const (
 	DefaultWarnCnt = 10
 )
 
+var argsNeedAdjust = map[string]struct{}{"-version": {}, "-config": {}, "-master-addr": {}, "-rpc-timeout": {}, "-ssl-ca": {}, "-ssl-cert": {}, "-ssl-key": {}, "-" + EncryptCmdName: {}, "-" + DecryptCmdName: {}}
+
 // NewConfig creates a new base config for dmctl.
 func NewConfig(fs *pflag.FlagSet) *Config {
 	cfg := &Config{}
@@ -73,6 +75,16 @@ func DefineConfigFlagSet(fs *pflag.FlagSet) {
 	fs.String(DecryptCmdName, "", "Decrypts ciphertext to plaintext.")
 	_ = fs.MarkHidden(EncryptCmdName)
 	_ = fs.MarkHidden(DecryptCmdName)
+}
+
+// AdjustArgumentsForPflags adjust flag format args to pflags format.
+func AdjustArgumentsForPflags(args []string) []string {
+	for i, arg := range args {
+		if _, ok := argsNeedAdjust[arg]; ok {
+			args[i] = "-" + arg
+		}
+	}
+	return args
 }
 
 func (c *Config) getConfigFromFlagSet() error {
