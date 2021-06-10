@@ -418,15 +418,26 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		bounds       []ha.SourceBound
 		bound1       ha.SourceBound
 		bound2       ha.SourceBound
+		ok           bool
 	)
 
 	s.logger.Info("transfer source and worker", zap.String("left worker", lworker), zap.String("left source", lsource), zap.String("right worker", rworker), zap.String("right source", rsource))
 
 	if lworker != "" {
-		lw = s.workers[lworker]
+		lw, ok = s.workers[lworker]
+		// should not happen, avoid panic
+		if !ok {
+			s.logger.Error("could not found worker in scheduler", zap.String("worker", lworker))
+			return nil
+		}
 	}
 	if rworker != "" {
-		rw = s.workers[rworker]
+		rw, ok = s.workers[rworker]
+		// should not happen, avoid panic
+		if !ok {
+			s.logger.Error("could not found worker in scheduler", zap.String("worker", rworker))
+			return nil
+		}
 	}
 
 	// get current bounded workers.
@@ -1662,12 +1673,21 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 		source = ""
 	}
 
-	// try to find its relay source (currently only one relay source)
 	if source != "" {
 		s.logger.Info("found history source when worker bound",
 			zap.String("worker", w.BaseInfo().Name),
 			zap.String("source", source))
 	} else {
+		// pick a source which has subtask in load stage.
+		worker, sourceID := s.getTransferWorkerAndSource(w.BaseInfo().Name, "")
+		if sourceID != "" {
+			err = s.transferWorkerAndSource(w.BaseInfo().Name, "", worker, sourceID)
+			return err == nil, err
+		}
+	}
+
+	// try to find its relay source (currently only one relay source)
+	if source == "" {
 		for source2, workers := range s.relayWorkers {
 			if _, ok2 := workers[w.BaseInfo().Name]; ok2 {
 				source = source2
@@ -1687,15 +1707,6 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 				zap.String("relay source", source),
 				zap.String("bound worker for its relay source", oldWorker.BaseInfo().Name))
 			return false, nil
-		}
-	}
-
-	// pick a source which has subtask in load stage.
-	if source == "" {
-		worker, sourceID := s.getTransferWorkerAndSource(w.BaseInfo().Name, "")
-		if sourceID != "" {
-			err = s.transferWorkerAndSource(w.BaseInfo().Name, "", worker, sourceID)
-			return err == nil, err
 		}
 	}
 
@@ -1738,6 +1749,14 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 // caller should make sure this source has source config.
 func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 	var worker *Worker
+
+	// pick a worker which has subtask in load stage.
+	workerName, sourceID := s.getTransferWorkerAndSource("", source)
+	if workerName != "" {
+		err := s.transferWorkerAndSource("", source, workerName, sourceID)
+		return err == nil, err
+	}
+
 	relayWorkers := s.relayWorkers[source]
 	// 1. try to find a history worker in relay workers...
 	if len(relayWorkers) > 0 {
@@ -1793,15 +1812,6 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 					break
 				}
 			}
-		}
-	}
-
-	// pick a worker which has subtask in load stage.
-	if worker == nil {
-		worker, sourceID := s.getTransferWorkerAndSource("", source)
-		if worker != "" {
-			err := s.transferWorkerAndSource("", source, worker, sourceID)
-			return err == nil, err
 		}
 	}
 
@@ -2064,22 +2074,22 @@ func (s *Scheduler) handleLoadTaskDel(loadTask ha.LoadTask) error {
 		return nil
 	}
 
-	loadTask.Worker = s.loadTasks[loadTask.Task][loadTask.Source]
+	originWorker := s.loadTasks[loadTask.Task][loadTask.Source]
 	delete(s.loadTasks[loadTask.Task], loadTask.Source)
 	if len(s.loadTasks[loadTask.Task]) == 0 {
 		delete(s.loadTasks, loadTask.Task)
 	}
 
-	if s.hasLoadTaskByWorkerAndSource(loadTask.Worker, loadTask.Source) {
+	if s.hasLoadTaskByWorkerAndSource(originWorker, loadTask.Source) {
 		return nil
 	}
 
-	worker, source := s.getTransferWorkerAndSource(loadTask.Worker, loadTask.Source)
+	worker, source := s.getTransferWorkerAndSource(originWorker, loadTask.Source)
 	if worker == "" && source == "" {
 		return nil
 	}
 
-	return s.transferWorkerAndSource(loadTask.Worker, loadTask.Source, worker, source)
+	return s.transferWorkerAndSource(originWorker, loadTask.Source, worker, source)
 }
 
 func (s *Scheduler) handleLoadTaskPut(loadTask ha.LoadTask) {
