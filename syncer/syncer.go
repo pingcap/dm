@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -44,6 +45,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	common2 "github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -92,6 +94,9 @@ type BinlogType uint8
 const (
 	RemoteBinlog BinlogType = iota + 1
 	LocalBinlog
+
+	skipLagKey = "skip"
+	ddlLagKey  = "ddl"
 )
 
 // Syncer can sync your MySQL data to another MySQL database.
@@ -190,6 +195,10 @@ type Syncer struct {
 
 	// `lower_case_table_names` setting of upstream db
 	SourceTableNamesFlavor utils.LowerCaseTableNamesFlavor
+
+	tsOffset            atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
+	secondsBehindMaster atomic.Int64             // current task delay second behind upstream
+	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:queueBucketName val: lag
 }
 
 // NewSyncer creates a new Syncer.
@@ -224,8 +233,14 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
 	syncer.recordedActiveRelayLog = false
+	syncer.workerLagMap = make(map[string]*atomic.Int64)
 
 	return syncer
+}
+
+// GetSecondsBehindMaster returns secondsBehindMaster.
+func (s *Syncer) GetSecondsBehindMaster() int64 {
+	return s.secondsBehindMaster.Load()
 }
 
 func (s *Syncer) newJobChans(count int) {
@@ -703,14 +718,13 @@ func (s *Syncer) getTable(tctx *tcontext.Context, origSchema, origTable, renamed
 	return ti, nil
 }
 
-// trackTableInfoFromDownstream tries to track the table info from the downstream.
+// trackTableInfoFromDownstream tries to track the table info from the downstream. It will not overwrite existing table.
 func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origSchema, origTable, renamedSchema, renamedTable string) error {
-	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly
-	// (and get rid of ddlDBConn).
+	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly if HTTP port is available
 	// use parser for downstream.
 	parser2, err := utils.GetParserForConn(tctx.Ctx, s.ddlDBConn.baseConn.DBConn)
 	if err != nil {
-		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+		return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 	}
 
 	rows, err := s.ddlDBConn.querySQL(tctx, "SHOW CREATE TABLE "+dbutil.TableName(renamedSchema, renamedTable))
@@ -787,6 +801,47 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 	}
 }
 
+func (s *Syncer) calcReplicationLag(headerTS int64) int64 {
+	return time.Now().Unix() - s.tsOffset.Load() - headerTS
+}
+
+// updateReplicationLag calculates syncer's replication lag by job, it is called after every batch dml job / one skip job / one ddl
+// job is committed.
+func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
+	var lag int64
+	// when job is nil mean no job in this bucket, need do reset this bucket lag to 0
+	if job == nil {
+		s.workerLagMap[queueBucketName].Store(0)
+	} else {
+		failpoint.Inject("BlockSyncerUpdateLag", func(v failpoint.Value) {
+			args := strings.Split(v.(string), ",")
+			jtp := args[0]                // job type
+			t, _ := strconv.Atoi(args[1]) // sleep time
+			if job.tp.String() == jtp {
+				s.tctx.L().Info("BlockSyncerUpdateLag", zap.String("job type", jtp), zap.Int("sleep time", t))
+				time.Sleep(time.Second * time.Duration(t))
+			}
+		})
+
+		switch job.tp {
+		case ddl, skip:
+			// NOTE: we handle ddl/skip job separately because ddl job will clean all the dml job before execution
+			lag = s.calcReplicationLag(int64(job.eventHeader.Timestamp))
+		default: // dml job
+			// NOTE workerlagmap already init all dml key(queueBucketName) before syncer running.
+			s.workerLagMap[queueBucketName].Store(s.calcReplicationLag(int64(job.eventHeader.Timestamp)))
+		}
+	}
+	// find all job queue lag choose the max one
+	for _, l := range s.workerLagMap {
+		if wl := l.Load(); wl > lag {
+			lag = wl
+		}
+	}
+	replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(lag))
+	s.secondsBehindMaster.Store(lag)
+}
+
 func (s *Syncer) checkWait(job *job) bool {
 	if job.tp == ddl {
 		return true
@@ -817,6 +872,8 @@ func (s *Syncer) addJob(job *job) error {
 	case xid:
 		s.saveGlobalPoint(job.location)
 		return nil
+	case skip:
+		s.updateReplicationLag(job, skipLagKey)
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		// ugly code addJob and sync, refine it later
@@ -991,7 +1048,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 	var err error
 	for {
-		sqlJob, ok := <-ddlJobChan
+		ddlJob, ok := <-ddlJobChan
 		if !ok {
 			return
 		}
@@ -1005,26 +1062,26 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			shardPessimistOp = s.pessimist.PendingOperation()
 			if shardPessimistOp != nil && !shardPessimistOp.Exec {
 				ignore = true
-				tctx.L().Info("ignore shard DDLs in pessimistic shard mode", zap.Strings("ddls", sqlJob.ddls))
+				tctx.L().Info("ignore shard DDLs in pessimistic shard mode", zap.Strings("ddls", ddlJob.ddls))
 			}
 		case config.ShardOptimistic:
-			if len(sqlJob.ddls) == 0 {
+			if len(ddlJob.ddls) == 0 {
 				ignore = true
 				tctx.L().Info("ignore shard DDLs in optimistic mode", zap.Stringer("info", s.optimist.PendingInfo()))
 			}
 		}
 
 		failpoint.Inject("ExecDDLError", func() {
-			s.tctx.L().Warn("execute ddl error", zap.Strings("DDL", sqlJob.ddls), zap.String("failpoint", "ExecDDLError"))
-			err = errors.Errorf("execute ddl %v error", sqlJob.ddls)
+			s.tctx.L().Warn("execute ddl error", zap.Strings("DDL", ddlJob.ddls), zap.String("failpoint", "ExecDDLError"))
+			err = errors.Errorf("execute ddl %v error", ddlJob.ddls)
 			failpoint.Goto("bypass")
 		})
 
 		if !ignore {
 			var affected int
-			affected, err = db.executeSQLWithIgnore(tctx, ignoreDDLError, sqlJob.ddls)
+			affected, err = db.executeSQLWithIgnore(tctx, ignoreDDLError, ddlJob.ddls)
 			if err != nil {
-				err = s.handleSpecialDDLError(tctx, err, sqlJob.ddls, affected, db)
+				err = s.handleSpecialDDLError(tctx, err, ddlJob.ddls, affected, db)
 				err = terror.WithScope(err, terror.ScopeDownstream)
 			}
 		}
@@ -1034,7 +1091,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if err != nil {
 			s.execError.Store(err)
 			if !utils.IsContextCanceledError(err) {
-				err = s.handleEventError(err, sqlJob.startLocation, sqlJob.currentLocation, true, sqlJob.originSQL)
+				err = s.handleEventError(err, ddlJob.startLocation, ddlJob.currentLocation, true, ddlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
 			s.jobWg.Done()
@@ -1048,7 +1105,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			switch {
 			case shardInfo == nil:
 				// no need to do the shard DDL handle for `CREATE DATABASE/TABLE` now.
-				tctx.L().Warn("skip shard DDL handle in pessimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
+				tctx.L().Warn("skip shard DDL handle in pessimistic shard mode", zap.Strings("ddl", ddlJob.ddls))
 			case shardPessimistOp == nil:
 				err = terror.ErrWorkerDDLLockOpNotFound.Generate(shardInfo)
 			default:
@@ -1061,7 +1118,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				// no need to do the shard DDL handle for `DROP DATABASE/TABLE` now.
 				// but for `CREATE DATABASE` and `ALTER DATABASE` we execute it to the downstream directly without `shardInfo`.
 				if ignore { // actually ignored.
-					tctx.L().Warn("skip shard DDL handle in optimistic shard mode", zap.Strings("ddl", sqlJob.ddls))
+					tctx.L().Warn("skip shard DDL handle in optimistic shard mode", zap.Strings("ddl", ddlJob.ddls))
 				}
 			case s.optimist.PendingOperation() == nil:
 				err = terror.ErrWorkerDDLLockOpNotFound.Generate(shardInfo)
@@ -1072,18 +1129,20 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if err != nil {
 			s.execError.Store(err)
 			if !utils.IsContextCanceledError(err) {
-				err = s.handleEventError(err, sqlJob.startLocation, sqlJob.currentLocation, true, sqlJob.originSQL)
+				err = s.handleEventError(err, ddlJob.startLocation, ddlJob.currentLocation, true, ddlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
 			s.jobWg.Done()
 			continue
 		}
 		s.jobWg.Done()
-		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
+		s.updateReplicationLag(ddlJob, ddlLagKey)
+		s.addCount(true, queueBucket, ddlJob.tp, int64(len(ddlJob.ddls)))
 	}
 }
 
-func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
+// DML synced in batch by one worker.
+func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
 	defer s.wg.Done()
 
 	idx := 0
@@ -1091,13 +1150,27 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	jobs := make([]*job, 0, count)
 	tpCnt := make(map[opType]int64)
 
+	// clearF is used to reset job queue.
 	clearF := func() {
 		for i := 0; i < idx; i++ {
 			s.jobWg.Done()
 		}
-
 		idx = 0
 		jobs = jobs[0:0]
+	}
+
+	// successF is used to calculate lag metric and tps.
+	successF := func() {
+		if len(jobs) > 0 {
+			// NOTE: we can use the first job of job queue to calculate lag because when this job committed,
+			// every event before this job's event in this queue has already commit.
+			// and we can use this job to maintain the oldest binlog event ts among all workers.
+			j := jobs[0]
+			s.updateReplicationLag(j, queueBucket)
+		} else {
+			s.updateReplicationLag(nil, queueBucket)
+		}
+		// calculate tps
 		for tpName, v := range tpCnt {
 			s.addCount(true, queueBucket, tpName, v)
 			tpCnt[tpName] = 0
@@ -1164,6 +1237,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 					fatalF(affect, err)
 					continue
 				}
+				successF()
 				clearF()
 			}
 
@@ -1174,6 +1248,7 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 					fatalF(affect, err)
 					continue
 				}
+				successF()
 				clearF()
 			}
 		}
@@ -1190,6 +1265,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}()
 
+	// some initialization that can't be put in Syncer.Init
 	fresh, err := s.IsFreshTask(ctx)
 	if err != nil {
 		return err
@@ -1200,29 +1276,73 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return err
 		}
 	}
-	needFlushCheckpoint, err := s.adjustGlobalPointGTID(tctx)
+
+	var (
+		flushCheckpoint bool
+		cleanDumpFile   = s.cfg.CleanDumpFile
+	)
+	flushCheckpoint, err = s.adjustGlobalPointGTID(tctx)
 	if err != nil {
 		return err
 	}
-	if needFlushCheckpoint || s.cfg.Mode == config.ModeAll {
-		if err = s.flushCheckPoints(); err != nil {
-			tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
-		} else if s.cfg.Mode == config.ModeAll && s.cfg.CleanDumpFile {
-			tctx.L().Info("try to remove loaded files")
-			metadataFile := path.Join(s.cfg.Dir, "metadata")
-			if err = os.Remove(metadataFile); err != nil {
-				tctx.L().Warn("error when remove loaded dump file", zap.String("data file", metadataFile), zap.Error(err))
-			}
-			if err = os.Remove(s.cfg.Dir); err != nil {
-				tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
-			}
+	if s.cfg.Mode == config.ModeAll {
+		flushCheckpoint = true
+		err = s.loadTableStructureFromDump(ctx)
+		if err != nil {
+			tctx.L().Warn("error happened when load table structure from dump files", zap.Error(err))
+			cleanDumpFile = false
 		}
 	}
+
+	if flushCheckpoint {
+		if err = s.flushCheckPoints(); err != nil {
+			tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
+		}
+	}
+	if cleanDumpFile {
+		tctx.L().Info("try to remove all dump files")
+		if err = os.RemoveAll(s.cfg.Dir); err != nil {
+			tctx.L().Warn("error when remove loaded dump folder", zap.String("data folder", s.cfg.Dir), zap.Error(err))
+		}
+	}
+
 	failpoint.Inject("AdjustGTIDExit", func() {
 		tctx.L().Warn("exit triggered", zap.String("failpoint", "AdjustGTIDExit"))
 		s.streamerController.Close(tctx)
 		utils.OsExit(1)
 	})
+
+	updateTSOffset := func() error {
+		t1 := time.Now()
+		ts, tsErr := s.fromDB.getServerUnixTS(ctx)
+		rtt := time.Since(t1).Seconds()
+		if tsErr == nil {
+			s.tsOffset.Store(time.Now().Unix() - ts - int64(rtt/2))
+		}
+		return tsErr
+	}
+	// before sync run, we get the tsoffset from upstream first
+	if utErr := updateTSOffset(); utErr != nil {
+		return utErr
+	}
+	// start background task to get/update current ts offset between dm and upstream
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		// temporarily hard code there. if this metrics works well add this to config file.
+		updateTicker := time.NewTicker(time.Minute * 10)
+		defer updateTicker.Stop()
+		for {
+			select {
+			case <-updateTicker.C:
+				if utErr := updateTSOffset(); utErr != nil {
+					s.tctx.L().Error("get server unix ts err", zap.Error(utErr))
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	// startLocation is the start location for current received event
 	// currentLocation is the end location for current received event (End_log_pos in `show binlog events` for mysql)
@@ -1249,10 +1369,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.wg.Add(1)
 		name := queueBucketName(i)
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
-		go func(i int, n string) {
+		s.workerLagMap[name] = atomic.NewInt64(0)
+		go func(i int, name string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
-			s.sync(ctctx, n, s.toDBConns[i], s.jobs[i])
+			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i])
 			cancel()
 		}(i, name)
 	}
@@ -1399,7 +1520,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		if err != nil {
-			// TODO: wrap the error with terror, and attach binlog position
 			tctx.L().Error("fail to fetch binlog", log.ShortError(err))
 
 			if isConnectionRefusedError(err) {
@@ -1698,9 +1818,11 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	ec.tctx.L().Debug("", zap.String("event", "row"), zap.String("origin schema", originSchema), zap.String("origin table", originTable), zap.String("target schema", schemaName), zap.String("target table", tableName), log.WrapStringerField("location", ec.currentLocation), zap.Reflect("raw event data", ev.Rows))
 
+	// TODO(ehco) remove heartbeat
 	if s.cfg.EnableHeartbeat {
 		s.heartbeat.TryUpdateTaskTS(s.cfg.Name, originSchema, originTable, ev.Rows)
 	}
+	// ENDTODO
 
 	ignore, err := s.skipDMLEvent(originSchema, originTable, ec.header.EventType)
 	if err != nil {
@@ -1709,7 +1831,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	if ignore {
 		skipBinlogDurationHistogram.WithLabelValues("rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		// for RowsEvent, we should record lastLocation rather than currentLocation
-		return s.recordSkipSQLsLocation(*ec.lastLocation)
+		return s.recordSkipSQLsLocation(&ec)
 	}
 
 	if s.cfg.ShardMode == config.ShardPessimistic {
@@ -1801,7 +1923,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if keys != nil {
 			key = keys[i]
 		}
-		err = s.commitJob(jobType, originSchema, originTable, schemaName, tableName, sqls[i], arg, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation)
+		err = s.commitJob(jobType, originSchema, originTable, schemaName, tableName, sqls[i], arg, key, &ec)
 		if err != nil {
 			return err
 		}
@@ -1834,7 +1956,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 		// we try to insert an empty SQL to s.onlineDDL, because ignoring it will cause a "not found" error
 		if s.onlineDDL == nil {
-			return s.recordSkipSQLsLocation(*ec.lastLocation)
+			return s.recordSkipSQLsLocation(&ec)
 		}
 
 		stmts, err2 := parserpkg.Parse(parser2, originSQL, "", "")
@@ -1852,7 +1974,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 				s.onlineDDL.Apply(ec.tctx, tableNames, "", stmt)
 			}
 		}
-		return s.recordSkipSQLsLocation(*ec.lastLocation)
+		return s.recordSkipSQLsLocation(&ec)
 	}
 	if !parseResult.isDDL {
 		// skipped sql maybe not a DDL
@@ -1992,7 +2114,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	ec.tctx.L().Info("prepare to handle ddls", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
 	if len(needHandleDDLs) == 0 {
 		ec.tctx.L().Info("skip event, need handled ddls is empty", zap.String("event", "query"), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
-		return s.recordSkipSQLsLocation(*ec.lastLocation)
+		return s.recordSkipSQLsLocation(&ec)
 	}
 
 	// interrupted before flush old checkpoint.
@@ -2035,7 +2157,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			}
 		})
 
-		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, sourceTbls, originSQL)
+		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, sourceTbls, originSQL, ec.header)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err
@@ -2225,7 +2347,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		}
 	})
 
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil, originSQL)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil, originSQL, ec.header)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
@@ -2255,13 +2377,14 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	srcTables, targetTables := tableNames[0], tableNames[1]
 	srcTable := srcTables[0]
 
-	// Make sure the tables are all loaded into the schema tracker.
+	// Make sure the needed tables are all loaded into the schema tracker.
 	var (
 		shouldExecDDLOnSchemaTracker bool
 		shouldSchemaExist            bool
 		shouldTableExistNum          int // tableNames[:shouldTableExistNum] should exist
 		shouldRefTableExistNum       int // tableNames[1:shouldTableExistNum] should exist, since first one is "caller table"
 	)
+
 	switch node := stmt.(type) {
 	case *ast.CreateDatabaseStmt:
 		shouldExecDDLOnSchemaTracker = true
@@ -2281,7 +2404,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	case *ast.CreateTableStmt, *ast.CreateViewStmt:
 		shouldExecDDLOnSchemaTracker = true
 		shouldSchemaExist = true
-		// for CREATE TABLE LIKE/AS, there should be reference tables which should exist
+		// for CREATE TABLE LIKE/AS, the reference tables should exist
 		shouldRefTableExistNum = len(srcTables)
 	case *ast.DropTableStmt:
 		shouldExecDDLOnSchemaTracker = true
@@ -2347,7 +2470,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	return nil
 }
 
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, location, startLocation, cmdLocation binlog.Location) error {
+func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, ec *eventContext) error {
 	startTime := time.Now()
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
@@ -2356,7 +2479,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 	conflictDetectDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 
-	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, location, startLocation, cmdLocation)
+	job := newDMLJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header)
 	return s.addJobFunc(job)
 }
 
@@ -2394,6 +2517,74 @@ func (s *Syncer) genRouter() error {
 		}
 	}
 	return nil
+}
+
+func (s *Syncer) loadTableStructureFromDump(ctx context.Context) error {
+	logger := s.tctx.L()
+
+	files, err := utils.CollectDirFiles(s.cfg.Dir)
+	if err != nil {
+		logger.Warn("fail to get dump files", zap.Error(err))
+		return err
+	}
+	var dbs, tables []string
+	var tableFiles [][2]string // [db, filename]
+	for f := range files {
+		if db, ok := utils.GetDBFromDumpFilename(f); ok {
+			dbs = append(dbs, db)
+			continue
+		}
+		if db, table, ok := utils.GetTableFromDumpFilename(f); ok {
+			tables = append(tables, dbutil.TableName(db, table))
+			tableFiles = append(tableFiles, [2]string{db, f})
+			continue
+		}
+	}
+	logger.Info("fetch table structure form dump files",
+		zap.Strings("database", dbs),
+		zap.Any("tables", tables))
+	for _, db := range dbs {
+		if err = s.schemaTracker.CreateSchemaIfNotExists(db); err != nil {
+			return err
+		}
+	}
+
+	var firstErr error
+	setFirstErr := func(err error) {
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	for _, dbAndFile := range tableFiles {
+		db, file := dbAndFile[0], dbAndFile[1]
+		filepath := path.Join(s.cfg.Dir, file)
+		content, err2 := common2.GetFileContent(filepath)
+		if err2 != nil {
+			logger.Warn("fail to read file for creating table in schema tracker",
+				zap.String("db", db),
+				zap.String("file", filepath),
+				zap.Error(err))
+			setFirstErr(err2)
+			continue
+		}
+		stmts := bytes.Split(content, []byte(";"))
+		for _, stmt := range stmts {
+			stmt = bytes.TrimSpace(stmt)
+			if len(stmt) == 0 || bytes.HasPrefix(stmt, []byte("/*")) {
+				continue
+			}
+			err = s.schemaTracker.Exec(ctx, db, string(stmt))
+			if err != nil {
+				logger.Warn("fail to create table for dump files",
+					zap.Any("file", filepath),
+					zap.ByteString("statement", stmt),
+					zap.Error(err))
+				setFirstErr(err)
+			}
+		}
+	}
+	return firstErr
 }
 
 func (s *Syncer) printStatus(ctx context.Context) {
@@ -2571,8 +2762,8 @@ func (s *Syncer) closeDBs() {
 
 // record skip ddl/dml sqls' position
 // make newJob's sql argument empty to distinguish normal sql and skips sql.
-func (s *Syncer) recordSkipSQLsLocation(location binlog.Location) error {
-	job := newSkipJob(location)
+func (s *Syncer) recordSkipSQLsLocation(ec *eventContext) error {
+	job := newSkipJob(ec)
 	return s.addJobFunc(job)
 }
 
@@ -2624,7 +2815,6 @@ func (s *Syncer) Close() {
 	s.removeHeartbeat()
 
 	s.stopSync()
-
 	s.closeDBs()
 
 	s.checkpoint.Close()
