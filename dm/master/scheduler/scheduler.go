@@ -204,7 +204,7 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) (err e
 	}
 
 	var loadTaskRev int64
-	loadTaskRev, err = s.recoverLoadTasks(etcdCli)
+	loadTaskRev, err = s.recoverLoadTasks(etcdCli, false)
 	if err != nil {
 		return err
 	}
@@ -406,7 +406,7 @@ func (s *Scheduler) GetSourceCfgByID(source string) *config.SourceConfig {
 }
 
 // transferWorkerAndSource transfer worker and source bound relations.
-// lworker, "", "", rsource				This means a unbounded source bounded to a free worker
+// lworker, "", "", rsource				This means an unbounded source bounded to a free worker
 // lworker, lsource, rworker, "" 		This means transfer a source from a worker to another free worker
 // lworker, lsource, "", rsource		This means transfer a worker from a bounded source to another unbounded source
 // lworker, lsource, rworker, rsource	This means transfer two bounded relations.
@@ -420,6 +420,27 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		bound2       ha.SourceBound
 		ok           bool
 	)
+
+	updateBound := func(source string, worker *Worker, bound ha.SourceBound) {
+		_ = s.updateStatusForBound(worker, bound)
+		delete(s.unbounds, source)
+	}
+
+	updateUnbound := func(source string) {
+		s.updateStatusForUnbound(source)
+		s.unbounds[source] = struct{}{}
+	}
+
+	boundForSource := func(source string) error {
+		bounded, err := s.tryBoundForSource(source)
+		if err != nil {
+			return err
+		}
+		if bounded {
+			delete(s.unbounds, source)
+		}
+		return nil
+	}
 
 	s.logger.Info("transfer source and worker", zap.String("left worker", lworker), zap.String("left source", lsource), zap.String("right worker", rworker), zap.String("right source", rsource))
 
@@ -453,13 +474,12 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		return err
 	}
 
+	// update unbound sources
 	if lsource != "" {
-		s.updateStatusForUnbound(lsource)
-		s.unbounds[lsource] = struct{}{}
+		updateUnbound(lsource)
 	}
 	if rsource != "" {
-		s.updateStatusForUnbound(rsource)
-		s.unbounds[rsource] = struct{}{}
+		updateUnbound(rsource)
 	}
 
 	// put new bounded relations.
@@ -475,46 +495,34 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		return err
 	}
 
-	// update worker status
+	// update bound sources and workers
 	if lworker != "" && rsource != "" {
-		_ = s.updateStatusForBound(lw, bound1)
-		delete(s.unbounds, rsource)
+		updateBound(rsource, lw, bound1)
 	}
 	if rworker != "" && lsource != "" {
-		_ = s.updateStatusForBound(rw, bound2)
-		delete(s.unbounds, lsource)
+		updateBound(lsource, rw, bound2)
 	}
 
 	// if one of the workers/sources become free/unbounded
 	// try bound it.
 	if lworker != "" && rsource == "" {
-		_, err := s.tryBoundForWorker(lw)
-		if err != nil {
+		if _, err := s.tryBoundForWorker(lw); err != nil {
+			return err
+		}
+	}
+	if rworker != "" && lsource == "" {
+		if _, err := s.tryBoundForWorker(rw); err != nil {
 			return err
 		}
 	}
 	if lworker == "" && rsource != "" {
-		bounded, err := s.tryBoundForSource(rsource)
-		if err != nil {
-			return err
-		}
-		if bounded {
-			delete(s.unbounds, rsource)
-		}
-	}
-	if rworker != "" && lsource == "" {
-		_, err := s.tryBoundForWorker(rw)
-		if err != nil {
+		if err := boundForSource(rsource); err != nil {
 			return err
 		}
 	}
 	if rworker == "" && lsource != "" {
-		bounded, err := s.tryBoundForSource(lsource)
-		if err != nil {
+		if err := boundForSource(lsource); err != nil {
 			return err
-		}
-		if bounded {
-			delete(s.unbounds, lsource)
 		}
 	}
 
@@ -1348,7 +1356,11 @@ func (s *Scheduler) recoverRelayConfigs(cli *clientv3.Client) error {
 }
 
 // recoverLoadTasks recovers history load workers from etcd.
-func (s *Scheduler) recoverLoadTasks(cli *clientv3.Client) (int64, error) {
+func (s *Scheduler) recoverLoadTasks(cli *clientv3.Client, needLock bool) (int64, error) {
+	if needLock {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+	}
 	loadTasks, rev, err := ha.GetAllLoadTask(cli)
 	if err != nil {
 		return 0, err
@@ -1974,7 +1986,7 @@ func (s *Scheduler) observeLoadTask(ctx context.Context, etcdCli *clientv3.Clien
 				case <-ctx.Done():
 					return nil
 				case <-time.After(500 * time.Millisecond):
-					rev, err = s.syncLoadTaskFromEtcd(etcdCli)
+					rev, err = s.recoverLoadTasks(etcdCli, true)
 					if err != nil {
 						log.L().Error("resetLoadTask is failed, will retry later", zap.Error(err), zap.Int("retryNum", retryNum))
 					}
@@ -2133,19 +2145,4 @@ func (s *Scheduler) handleLoadTask(ctx context.Context, loadTaskCh <-chan ha.Loa
 			}
 		}
 	}
-}
-
-func (s *Scheduler) syncLoadTaskFromEtcd(cli *clientv3.Client) (int64, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	ltm, rev, err := ha.GetAllLoadTask(cli)
-	if err != nil {
-		return 0, err
-	}
-
-	// simply replace loadTasks with etcd record.
-	// Scheduling will be trigger by new worker/source/loadTask event
-	s.loadTasks = ltm
-	return rev, nil
 }

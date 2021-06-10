@@ -778,12 +778,6 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
-[error.DM-functional-11125]
-message = "different worker in load stage, previous worker: %s, current worker: %s"
-description = ""
-workaround = "Please check if the previous worker is online."
-tags = ["internal", "high"]
-
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""
@@ -1520,6 +1514,12 @@ tags = ["internal", "high"]
 message = "generate block allow list"
 description = ""
 workaround = "Please check the `block-allow-list` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-functional-34017]
+message = "different worker in load stage, previous worker: %s, current worker: %s"
+description = ""
+workaround = "Please check if the previous worker is online."
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36001]

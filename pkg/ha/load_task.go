@@ -57,14 +57,14 @@ func GetLoadTask(cli *clientv3.Client, task, sourceID string) (string, int64, er
 // k/v: (task, sourceID) -> worker-name.
 func GetAllLoadTask(cli *clientv3.Client) (map[string]map[string]string, int64, error) {
 	var (
-		worker string
-		tslwm  = make(map[string]map[string]string)
+		worker      string
+		loadTaskMap = make(map[string]map[string]string)
 	)
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 	resp, err := cli.Get(ctx, common.LoadTaskKeyAdapter.Path(), clientv3.WithPrefix())
 	if err != nil {
-		return tslwm, 0, err
+		return loadTaskMap, 0, err
 	}
 
 	for _, kv := range resp.Kvs {
@@ -78,16 +78,16 @@ func GetAllLoadTask(cli *clientv3.Client) (map[string]map[string]string, int64, 
 
 		err = json.Unmarshal(kv.Value, &worker)
 		if err != nil {
-			return tslwm, 0, err
+			return loadTaskMap, 0, err
 		}
 
-		if _, ok := tslwm[task]; !ok {
-			tslwm[task] = make(map[string]string)
+		if _, ok := loadTaskMap[task]; !ok {
+			loadTaskMap[task] = make(map[string]string)
 		}
-		tslwm[task][source] = worker
+		loadTaskMap[task][source] = worker
 	}
 
-	return tslwm, resp.Header.Revision, err
+	return loadTaskMap, resp.Header.Revision, err
 }
 
 // WatchLoadTask watches PUT & DELETE operations for worker in load stage.
