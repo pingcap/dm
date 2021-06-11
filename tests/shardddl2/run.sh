@@ -366,16 +366,6 @@ function DM_INIT_SCHEMA() {
 	run_case INIT_SCHEMA "double-source-optimistic" "init_table 111 211 212" "clean_table" "optimistic"
 }
 
-function restart_master() {
-	echo "restart dm-master"
-	ps aux | grep dm-master | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT 20
-	sleep 2
-
-	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-}
-
 function restart_worker() {
 	echo "restart dm-worker" $1
 	if [[ "$1" = "1" ]]; then
@@ -400,7 +390,7 @@ function DM_DROP_COLUMN_EXEC_ERROR_CASE() {
 	# get worker of source1
 	w="1"
 	got=$(grep "mysql-replica-01" $WORK_DIR/worker1/log/dm-worker.log | wc -l)
-	if [[ "$got" = "0" ]]; then
+	if [[ "$got" -eq 0 ]]; then
 		w="2"
 	fi
 
@@ -461,7 +451,7 @@ function DM_DROP_COLUMN_ALL_DONE_CASE() {
 	# get worker of source1
 	w="1"
 	got=$(grep "mysql-replica-01" $WORK_DIR/worker1/log/dm-worker.log | wc -l)
-	if [[ "$got" = "0" ]]; then
+	if [[ "$got" -eq 0 ]]; then
 		w="2"
 	fi
 
@@ -521,6 +511,11 @@ function DM_DROP_COLUMN_ALL_DONE() {
 function run() {
 	init_cluster
 	init_database
+	DM_DROP_COLUMN_EXEC_ERROR
+	DM_ADD_DROP_COLUMNS
+	DM_COLUMN_INDEX
+	DM_INIT_SCHEMA
+	DM_DROP_COLUMN_ALL_DONE
 	start=36
 	end=45
 	except=(042 044 045)
@@ -531,11 +526,6 @@ function run() {
 		DM_${i}
 		sleep 1
 	done
-	DM_ADD_DROP_COLUMNS
-	DM_COLUMN_INDEX
-	DM_INIT_SCHEMA
-	DM_DROP_COLUMN_EXEC_ERROR
-	DM_DROP_COLUMN_ALL_DONE
 }
 
 cleanup_data $shardddl
