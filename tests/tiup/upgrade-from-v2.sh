@@ -61,7 +61,7 @@ function upgrade_to_current_v2() {
 
 function migrate_in_v2() {
 	run_dmctl_with_retry $CUR_VER "query-status" "Running" 2 "Paused" 1
-	run_dmctl_with_retry $CUR_VER "show-ddl-locks" "\"result\": true" 1 "\"task\": \"$TASK_PESS_NAME\"" 1 "\"task\": \"$TASK_OPTI_NAME\"" 1
+	run_dmctl_with_retry $CUR_VER "shard-ddl-lock" "\"result\": true" 1 "\"task\": \"$TASK_PESS_NAME\"" 1 "\"task\": \"$TASK_OPTI_NAME\"" 1
 
 	tiup dmctl:$CUR_VER --master-addr=master1:8261 resume-task $TASK_NAME
 
@@ -79,7 +79,7 @@ function migrate_in_v2() {
 	check_sync_diff $WORK_DIR $CUR/conf/diff_config_pessimistic.toml
 
 	echo "check locks"
-	run_dmctl_with_retry $CUR_VER "show-ddl-locks" "no DDL lock exists" 1
+	run_dmctl_with_retry $CUR_VER "shard-ddl-lock" "no DDL lock exists" 1
 
 	export DM_MASTER_ADDR="master1:8261"
 	tiup dmctl:$CUR_VER stop-task $TASK_NAME
