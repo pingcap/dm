@@ -19,5 +19,7 @@ function dmctl_wrong_addrs() {
 }
 
 function dmctl_no_addr() {
-	$PWD/bin/dmctl.test list-member | grep 'master-addr not provided'
+	run_dm_ctl_cmd_mode $WORK_DIR "" \
+		"list-member" \
+		"master-addr not provided" 1
 }
