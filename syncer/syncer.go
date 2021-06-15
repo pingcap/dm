@@ -1534,7 +1534,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			if !s.isReplacingErr {
-				apply, op := s.errOperatorHolder.MatchAndApply(startLocation, currentLocation)
+				apply, op := s.errOperatorHolder.MatchAndApply(startLocation, currentLocation, e.Header.Timestamp)
 				if apply {
 					if op == pb.ErrorOp_Replace {
 						s.isReplacingErr = true
