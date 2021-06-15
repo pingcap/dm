@@ -1418,9 +1418,6 @@ func (t *testScheduler) TestTransferWorkerAndSource(c *C) {
 	c.Assert(s.bounds[sourceID2], DeepEquals, worker2)
 	c.Assert(len(s.unbounds), Equals, 0)
 
-	worker3.ToFree()
-	worker4.ToFree()
-
 	// test transfer bounded source to free worker
 	c.Assert(s.transferWorkerAndSource(workerName1, sourceID1, workerName4, ""), IsNil)
 	c.Assert(s.bounds[sourceID1], DeepEquals, worker4)
