@@ -166,14 +166,11 @@ func PutLoadTask(cli *clientv3.Client, task, sourceID, worker string) (int64, er
 	}
 	key := common.LoadTaskKeyAdapter.Encode(task, sourceID)
 
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
-	resp, err := cli.Put(ctx, key, string(data))
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clientv3.OpPut(key, string(data)))
 	if err != nil {
 		return 0, err
 	}
-	return resp.Header.Revision, nil
+	return rev, nil
 }
 
 // DelLoadTask dels the worker in load stage for the source of the subtask.

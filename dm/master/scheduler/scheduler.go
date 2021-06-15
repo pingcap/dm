@@ -1694,7 +1694,7 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 
 	// pick a source which has subtask in load stage.
 	if source == "" {
-		worker, sourceID := s.getTransferWorkerAndSource(w.BaseInfo().Name, "")
+		worker, sourceID := s.getNextLoadTaskTransfer(w.BaseInfo().Name, "")
 		if sourceID != "" {
 			err = s.transferWorkerAndSource(w.BaseInfo().Name, "", worker, sourceID)
 			return err == nil, err
@@ -1766,7 +1766,7 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 	var worker *Worker
 
 	// pick a worker which has subtask in load stage.
-	workerName, sourceID := s.getTransferWorkerAndSource("", source)
+	workerName, sourceID := s.getNextLoadTaskTransfer("", source)
 	if workerName != "" {
 		err := s.transferWorkerAndSource("", source, workerName, sourceID)
 		return err == nil, err
@@ -2024,10 +2024,11 @@ func (s *Scheduler) RemoveLoadTask(task string) error {
 }
 
 // getTransferWorkerAndSource tries to get transfer worker and source.
+// return (worker, source) that is used by transferWorkerAndSource, to try to resolve a paused load task that the source can't be bound to the worker which has its dump files.
 // worker, source	This means a subtask finish load stage, often called by handleLoadTaskDel.
 // worker, ""		This means a free worker online, often called by tryBoundForWorker.
 // "", source		This means a unbounded source online, often called by tryBoundForSource.
-func (s *Scheduler) getTransferWorkerAndSource(worker, source string) (string, string) {
+func (s *Scheduler) getNextLoadTaskTransfer(worker, source string) (string, string) {
 	// origin worker not free, try to get a source.
 	if worker != "" {
 		// try to get a unbounded source
@@ -2099,7 +2100,7 @@ func (s *Scheduler) handleLoadTaskDel(loadTask ha.LoadTask) error {
 		return nil
 	}
 
-	worker, source := s.getTransferWorkerAndSource(originWorker, loadTask.Source)
+	worker, source := s.getNextLoadTaskTransfer(originWorker, loadTask.Source)
 	if worker == "" && source == "" {
 		return nil
 	}

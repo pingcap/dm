@@ -1550,7 +1550,7 @@ func (t *testScheduler) TestWatchLoadTask(c *C) {
 	c.Assert(worker1.stage, Equals, WorkerFree)
 
 	// worker4 online
-	// source2 transfer to worker3
+	// source2 transfer to worker4
 	c.Assert(s.handleWorkerOnline(ha.WorkerEvent{WorkerName: workerName4}, true), IsNil)
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		w, ok := s.bounds[sourceID2]
