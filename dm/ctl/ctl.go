@@ -15,21 +15,22 @@ package ctl
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/ctl/master"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 
+	"github.com/chzyer/readline"
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap/zapcore"
 )
 
-var (
-	commandMasterFlags = CommandMasterFlags{}
-	rootCmd            *cobra.Command
-)
+var commandMasterFlags = CommandMasterFlags{}
 
 // CommandMasterFlags are flags that used in all commands for dm-master.
 type CommandMasterFlags struct {
@@ -41,16 +42,13 @@ func (c CommandMasterFlags) Reset() {
 	c.workers = c.workers[:0]
 }
 
-func init() {
-	rootCmd = NewRootCmd()
-}
-
 // NewRootCmd generates a new rootCmd.
 func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "dmctl",
-		Short:        "DM control",
-		SilenceUsage: true,
+		Use:           "dmctl",
+		Short:         "DM control",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
 	cmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "source", "s", []string{}, "MySQL Source ID.")
@@ -77,6 +75,8 @@ func NewRootCmd() *cobra.Command {
 		master.NewTransferSourceCmd(),
 		master.NewStartRelayCmd(),
 		master.NewStopRelayCmd(),
+		newDecryptCmd(),
+		newEncryptCmd(),
 	)
 	// copied from (*cobra.Command).InitDefaultHelpCmd
 	helpCmd := &cobra.Command{
@@ -108,48 +108,162 @@ func Init(cfg *common.Config) error {
 	return errors.Trace(common.InitUtils(cfg))
 }
 
-// PrintUsage prints usage.
-func PrintUsage() {
-	maxCmdLen := 0
-	for _, cmd := range rootCmd.Commands() {
-		if maxCmdLen < len(cmd.Name()) {
-			maxCmdLen = len(cmd.Name())
-		}
-	}
-	fmt.Println("Available Commands:")
-	for _, cmd := range rootCmd.Commands() {
-		format := fmt.Sprintf("  %%-%ds\t%%s\n", maxCmdLen)
-		fmt.Printf(format, cmd.Name(), cmd.Use)
-	}
-}
-
-// HasCommand represent whether rootCmd has this command.
-func HasCommand(name string) bool {
-	for _, cmd := range rootCmd.Commands() {
-		if name == cmd.Name() {
-			return true
-		}
-	}
-	return false
-}
-
-// PrintHelp print help message for special subCommand.
-func PrintHelp(args []string) {
-	cmd, _, err := rootCmd.Find(args)
-	if err != nil {
-		fmt.Println(err)
-		rootCmd.SetOut(os.Stdout)
-		common.PrintCmdUsage(rootCmd)
-		return
-	}
-	cmd.SetOut(os.Stdout)
-	common.PrintCmdUsage(cmd)
-}
-
 // Start starts running a command.
-func Start(args []string) (err error) {
+func Start(args []string) (cmd *cobra.Command, err error) {
 	commandMasterFlags.Reset()
-	rootCmd = NewRootCmd()
+	rootCmd := NewRootCmd()
 	rootCmd.SetArgs(args)
-	return rootCmd.Execute()
+	return rootCmd.ExecuteC()
+}
+
+func loop() error {
+	l, err := readline.NewEx(&readline.Config{
+		Prompt:          "\033[31m»\033[0m ",
+		HistoryFile:     "/tmp/dmctlreadline.tmp",
+		InterruptPrompt: "^C",
+		EOFPrompt:       "^D",
+	})
+	if err != nil {
+		return err
+	}
+
+	for {
+		line, err := l.Readline()
+		if err != nil {
+			if err == readline.ErrInterrupt {
+				break
+			} else if err == io.EOF {
+				break
+			}
+			continue
+		}
+
+		line = strings.TrimSpace(line)
+		if line == "exit" {
+			l.Close()
+			os.Exit(0)
+		} else if line == "" {
+			continue
+		}
+
+		args := strings.Fields(line)
+		c, err := Start(args)
+		if err != nil {
+			fmt.Println("fail to run:", args)
+			fmt.Println("Error:", err)
+			if c.CalledAs() == "" {
+				fmt.Printf("Run '%v --help' for usage.\n", c.CommandPath())
+			}
+		}
+
+		syncErr := log.L().Sync()
+		if syncErr != nil {
+			fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
+		}
+	}
+	return l.Close()
+}
+
+// MainStart starts running a command.
+func MainStart(args []string) {
+	rootCmd := NewRootCmd()
+	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return loop()
+		}
+		return cmd.Help()
+	}
+
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if printVersion, err := cmd.Flags().GetBool("version"); err != nil {
+			return errors.Trace(err)
+		} else if printVersion {
+			cmd.Println(utils.GetRawInfo())
+			os.Exit(0)
+		}
+
+		// Make it compatible to flags encrypt/decrypt
+		if encrypt, err := cmd.Flags().GetString(common.EncryptCmdName); err != nil {
+			return errors.Trace(err)
+		} else if encrypt != "" {
+			ciphertext, err := utils.Encrypt(encrypt)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			fmt.Println(ciphertext)
+			os.Exit(0)
+		}
+		if decrypt, err := cmd.Flags().GetString(common.DecryptCmdName); err != nil {
+			return errors.Trace(err)
+		} else if decrypt != "" {
+			plaintext, err := utils.Decrypt(decrypt)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			fmt.Println(plaintext)
+			os.Exit(0)
+		}
+
+		if cmd.Name() == common.DecryptCmdName || cmd.Name() == common.EncryptCmdName {
+			return nil
+		}
+
+		cfg := common.NewConfig(cmd.Flags())
+		err := cfg.Adjust()
+		if err != nil {
+			return err
+		}
+
+		err = cfg.Validate()
+		if err != nil {
+			return err
+		}
+
+		return Init(cfg)
+	}
+	common.DefineConfigFlagSet(rootCmd.PersistentFlags())
+	rootCmd.SetArgs(args)
+	if c, err := rootCmd.ExecuteC(); err != nil {
+		rootCmd.Println("Error:", err)
+		if c.CalledAs() == "" {
+			rootCmd.Printf("Run '%v --help' for usage.\n", c.CommandPath())
+		}
+		os.Exit(1)
+	}
+}
+
+func newEncryptCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "encrypt <plain-text>",
+		Short: "Encrypts plain text to cipher text.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return cmd.Help()
+			}
+			ciphertext, err := utils.Encrypt(args[0])
+			if err != nil {
+				return errors.Trace(err)
+			}
+			fmt.Println(ciphertext)
+			return nil
+		},
+	}
+}
+
+func newDecryptCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "decrypt <cipher-text>",
+		Short: "Decrypts cipher text to plain text",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return cmd.Help()
+			}
+			plaintext, err := utils.Decrypt(args[0])
+			if err != nil {
+				return errors.Trace(err)
+			}
+			fmt.Println(plaintext)
+			return nil
+		},
+	}
 }
