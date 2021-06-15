@@ -61,6 +61,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	event1 := &replication.BinlogEvent{
 		Header: &replication.EventHeader{
 			EventType: replication.QUERY_EVENT,
+			Timestamp: uint32(1623313992),
 		},
 		Event: &replication.QueryEvent{
 			Schema: []byte("db"),
@@ -71,6 +72,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	event2 := &replication.BinlogEvent{
 		Header: &replication.EventHeader{
 			EventType: replication.QUERY_EVENT,
+			Timestamp: uint32(1623313993),
 		},
 		Event: &replication.QueryEvent{
 			Schema: []byte("db"),
@@ -85,14 +87,14 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	// skip event
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Skip, nil)
 	c.Assert(err, IsNil)
-	apply, op := h.MatchAndApply(startLocation, endLocation)
+	apply, op := h.MatchAndApply(startLocation, endLocation, event1.Header.Timestamp)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Skip)
 
 	// overwrite operator
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Replace, []*replication.BinlogEvent{event1, event2})
 	c.Assert(err, IsNil)
-	apply, op = h.MatchAndApply(startLocation, endLocation)
+	apply, op = h.MatchAndApply(startLocation, endLocation, event2.Header.Timestamp)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Replace)
 
@@ -105,6 +107,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	e, err = h.GetEvent(startLocation)
 	c.Assert(err, IsNil)
 	c.Assert(e.Header.LogPos, Equals, startLocation.Position.Pos)
+	c.Assert(e.Header.Timestamp, Equals, event1.Header.Timestamp)
 	c.Assert(e.Header.EventSize, Equals, uint32(0))
 	c.Assert(e.Event, Equals, event1.Event)
 	// get second event
@@ -112,6 +115,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	e, err = h.GetEvent(startLocation)
 	c.Assert(err, IsNil)
 	c.Assert(e.Header.LogPos, Equals, endLocation.Position.Pos)
+	c.Assert(e.Header.Timestamp, Equals, event2.Header.Timestamp)
 	c.Assert(e.Header.EventSize, Equals, endLocation.Position.Pos-startLocation.Position.Pos)
 	c.Assert(e.Event, Equals, event2.Event)
 	// get third event, out of index
@@ -123,7 +127,7 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	// revert exist operator
 	err = h.Set(startLocation.Position.String(), pb.ErrorOp_Revert, nil)
 	c.Assert(err, IsNil)
-	apply, op = h.MatchAndApply(startLocation, endLocation)
+	apply, op = h.MatchAndApply(startLocation, endLocation, event1.Header.Timestamp)
 	c.Assert(apply, IsFalse)
 	c.Assert(op, Equals, pb.ErrorOp_InvalidErrorOp)
 
@@ -136,17 +140,17 @@ func (o *testOperatorSuite) TestOperator(c *C) {
 	// test removeOutdated
 	flushLocation := startLocation
 	c.Assert(h.RemoveOutdated(flushLocation), IsNil)
-	apply, op = h.MatchAndApply(startLocation, endLocation)
+	apply, op = h.MatchAndApply(startLocation, endLocation, event1.Header.Timestamp)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Replace)
 
 	flushLocation = endLocation
 	c.Assert(h.RemoveOutdated(flushLocation), IsNil)
-	apply, op = h.MatchAndApply(startLocation, endLocation)
+	apply, op = h.MatchAndApply(startLocation, endLocation, event1.Header.Timestamp)
 	c.Assert(apply, IsFalse)
 	c.Assert(op, Equals, pb.ErrorOp_InvalidErrorOp)
 
-	apply, op = h.MatchAndApply(endLocation, nextLocation)
+	apply, op = h.MatchAndApply(endLocation, nextLocation, event1.Header.Timestamp)
 	c.Assert(apply, IsTrue)
 	c.Assert(op, Equals, pb.ErrorOp_Replace)
 }
