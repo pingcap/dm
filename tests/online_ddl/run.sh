@@ -35,6 +35,9 @@ function real_run() {
 		"start-relay -s $SOURCE_ID2 worker2" \
 		"\"result\": true" 1
 
+  # imitate a DM task is started during the running of online DDL tool
+  run_sql_source1 "create table online_ddl.ignore (c int); create table online_ddl._ignore_gho (c int);"
+
 	# start DM task only
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task-${online_ddl_scheme}.yaml
 	sed -i "s/online-ddl-scheme-placeholder/${online_ddl_scheme}/g" $WORK_DIR/dm-task-${online_ddl_scheme}.yaml
@@ -42,6 +45,10 @@ function real_run() {
 
 	echo "use sync_diff_inspector to check full dump data"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+  # imitate a DM task is started during the running of online DDL tool
+  run_sql_source1 "rename /* gh-ost */ table online_ddl.ignore to online_ddl._ignore_del, online_ddl._ignore_gho to online_ddl.ignore;"
+  read -p 666
 
 	run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl $online_ddl_scheme
 	run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl $online_ddl_scheme
