@@ -18,35 +18,10 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/pingcap/dm/pkg/terror"
 )
-
-// CollectDirFiles gets files in path.
-func CollectDirFiles(path string) (map[string]struct{}, error) {
-	files := make(map[string]struct{})
-	err := filepath.Walk(path, func(_ string, f os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if f == nil {
-			return nil
-		}
-
-		if f.IsDir() {
-			return nil
-		}
-
-		name := strings.TrimSpace(f.Name())
-		files[name] = struct{}{}
-		return nil
-	})
-
-	return files, err
-}
 
 // SQLReplace works like strings.Replace but only supports one replacement.
 // It uses backquote pairs to quote the old and new word.
