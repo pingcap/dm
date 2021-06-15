@@ -45,7 +45,7 @@ function clean_table() {
 }
 
 function get_start_location() {
-	location=$($PWD/bin/dmctl.test DEVEL -master-addr=$1 \
+	location=$($PWD/bin/dmctl.test DEVEL --master-addr=$1 \
 		query-status test -s $2 |
 		grep Location |
 		gawk 'match($0,/startLocation: \[position: \((.*), (.*)\), gtid-set: (.*)\], endLocation: \[position: \((.*), (.*)\), gtid-set: (.*)\]/,a) {printf "%s:%s", a[1], a[2]}')
@@ -53,7 +53,7 @@ function get_start_location() {
 }
 
 function get_end_location() {
-	location=$($PWD/bin/dmctl.test DEVEL -master-addr=$1 \
+	location=$($PWD/bin/dmctl.test DEVEL --master-addr=$1 \
 		query-status test -s $2 |
 		grep Location |
 		gawk 'match($0,/startLocation: \[position: \((.*), (.*)\), gtid-set: (.*)\], endLocation: \[position: \((.*), (.*)\), gtid-set: (.*)\]/,a) {printf "%s:%s", a[4], a[5]}')
@@ -61,7 +61,7 @@ function get_end_location() {
 }
 
 function get_start_pos() {
-	pos=$($PWD/bin/dmctl.test DEVEL -master-addr=$1 \
+	pos=$($PWD/bin/dmctl.test DEVEL --master-addr=$1 \
 		query-status test -s $2 |
 		grep Location |
 		gawk 'match($0,/startLocation: \[position: \((.*), (.*)\), gtid-set: (.*)\], endLocation: \[position: \((.*), (.*)\), gtid-set: (.*)\]/,a) {print a[2]}')
@@ -69,7 +69,7 @@ function get_start_pos() {
 }
 
 function get_start_name() {
-	pos=$($PWD/bin/dmctl.test DEVEL -master-addr=$1 \
+	pos=$($PWD/bin/dmctl.test DEVEL --master-addr=$1 \
 		query-status test -s $2 |
 		grep Location |
 		gawk 'match($0,/startLocation: \[position: \((.*), (.*)\), gtid-set: (.*)\], endLocation: \[position: \((.*), (.*)\), gtid-set: (.*)\]/,a) {print a[1]}')
