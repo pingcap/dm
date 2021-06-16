@@ -1156,7 +1156,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
 			[]interface{}{int64(580981944116838402)},
 		}, {
-			// in first minute, , safe mode is true, will split update to delete + replace
+			// in the first minute, safe mode is true, will split update to delete + replace
 			update,
 			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int64(580981944116838401), "b"},
