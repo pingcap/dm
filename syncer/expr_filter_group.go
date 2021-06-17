@@ -6,27 +6,30 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/util/chunk"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // ExprFilterGroup groups many related fields about expression filter.
 type ExprFilterGroup struct {
-	Configs map[string][]*config.ExpressionFilter // tableName -> raw config
-	InsertExprs map[string][]expression.Expression // tableName -> expr
-	UpdateOldExprs map[string][]expression.Expression // tableName -> expr
-	UpdateNewExprs map[string][]expression.Expression // tableName -> expr
-	DeleteExprs map[string][]expression.Expression // tableName -> expr
+	Configs        map[string][]*config.ExpressionFilter // tableName -> raw config
+	InsertExprs    map[string][]expression.Expression    // tableName -> expr
+	UpdateOldExprs map[string][]expression.Expression    // tableName -> expr
+	UpdateNewExprs map[string][]expression.Expression    // tableName -> expr
+	DeleteExprs    map[string][]expression.Expression    // tableName -> expr
 }
 
 // NewExprFilterGroup creates a ExprFilterGroup, its Configs has been built.
 func NewExprFilterGroup(exprConfig []*config.ExpressionFilter) *ExprFilterGroup {
 	ret := &ExprFilterGroup{
-		Configs: map[string][]*config.ExpressionFilter{},
-		InsertExprs: map[string][]expression.Expression{},
+		Configs:        map[string][]*config.ExpressionFilter{},
+		InsertExprs:    map[string][]expression.Expression{},
 		UpdateOldExprs: map[string][]expression.Expression{},
 		UpdateNewExprs: map[string][]expression.Expression{},
-		DeleteExprs: map[string][]expression.Expression{},
+		DeleteExprs:    map[string][]expression.Expression{},
 	}
 	for _, c := range exprConfig {
 		tableName := dbutil.TableName(c.Schema, c.Table)
@@ -100,6 +103,9 @@ func (g *ExprFilterGroup) ResetExprs(db, table string) {
 
 // SkipDMLByExpression returns true when given row matches the expr, which means this row should be skipped.
 func SkipDMLByExpression(row []interface{}, expr expression.Expression) (bool, error) {
+	// chunk.MutRowFromValues can only recognize int, int64..., so we try cast int8, int16... to int64
+	row = utils.UpcastInteger(row)
+	log.L().Debug("will evaluate the expression", zap.Stringer("expression", expr), zap.Any("row", row))
 	r := chunk.MutRowFromValues(row...).ToRow()
 	d, err := expr.Eval(r)
 	if err != nil {

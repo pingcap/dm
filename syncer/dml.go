@@ -67,6 +67,7 @@ func genInsertSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]s
 	}
 	sql := genInsertReplace(insertOrReplace, qualifiedName, columns)
 
+RowLoop:
 	for dataIdx, data := range dataSeq {
 		if len(data) != len(columns) {
 			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(data))
@@ -84,7 +85,7 @@ func genInsertSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]s
 				return nil, nil, nil, err
 			}
 			if skip {
-				continue
+				continue RowLoop
 			}
 		}
 		// TODO: test table with generated column
@@ -120,6 +121,7 @@ func genUpdateSQLs(
 		replaceSQL = genInsertReplace("REPLACE INTO", qualifiedName, columns)
 	}
 
+RowLoop:
 	for i := 0; i < len(data); i += 2 {
 		oldData := data[i]
 		changedData := data[i+1]
@@ -152,7 +154,7 @@ func genUpdateSQLs(
 				return nil, nil, nil, err
 			}
 			if skip {
-				continue
+				continue RowLoop
 			}
 		}
 		for _, expr := range newValueFilters {
@@ -161,7 +163,7 @@ func genUpdateSQLs(
 				return nil, nil, nil, err
 			}
 			if skip {
-				continue
+				continue RowLoop
 			}
 		}
 		// TODO: test table with generated column
@@ -229,6 +231,7 @@ func genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]s
 		values              = make([][]interface{}, 0, len(dataSeq))
 	)
 
+RowLoop:
 	for _, data := range dataSeq {
 		if len(data) != len(ti.Columns) {
 			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(ti.Columns), len(data))
@@ -242,7 +245,7 @@ func genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]s
 				return nil, nil, nil, err
 			}
 			if skip {
-				continue
+				continue RowLoop
 			}
 		}
 		// TODO: test table with generated column

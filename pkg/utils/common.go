@@ -209,3 +209,27 @@ func NonRepeatStringsEqual(a, b []string) bool {
 	}
 	return true
 }
+
+// UpcastInteger tries to cast every number in `data` to 64-bit type.
+func UpcastInteger(data []interface{}) []interface{} {
+	ret := make([]interface{}, 0, len(data))
+	for _, d := range data {
+		switch v := d.(type) {
+		case int8:
+			ret = append(ret, int64(v))
+		case int16:
+			ret = append(ret, int64(v))
+		case int32:
+			ret = append(ret, int64(v))
+		case uint8:
+			ret = append(ret, uint64(v))
+		case uint16:
+			ret = append(ret, uint64(v))
+		case uint32:
+			ret = append(ret, uint64(v))
+		default:
+			ret = append(ret, d)
+		}
+	}
+	return ret
+}

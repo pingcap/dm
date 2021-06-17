@@ -333,7 +333,7 @@ func NewTaskConfig() *TaskConfig {
 		Routes:                  make(map[string]*router.TableRule),
 		Filters:                 make(map[string]*bf.BinlogEventRule),
 		ColumnMappings:          make(map[string]*column.Rule),
-		ExprFilter: make(map[string]*ExpressionFilter),
+		ExprFilter:              make(map[string]*ExpressionFilter),
 		BWList:                  make(map[string]*filter.Rules),
 		BAList:                  make(map[string]*filter.Rules),
 		Mydumpers:               make(map[string]*MydumperConfig),
@@ -426,7 +426,7 @@ func (c *TaskConfig) adjust() error {
 
 	iids := make(map[string]int) // source-id -> instance-index
 	globalConfigReferCount := map[string]int{}
-	prefixs := []string{"RouteRules", "FilterRules", "ColumnMappingRules", "Mydumper", "Loader", "Syncer"}
+	prefixes := []string{"RouteRules", "FilterRules", "ColumnMappingRules", "Mydumper", "Loader", "Syncer"}
 	duplicateErrorStrings := make([]string, 0)
 	for i, inst := range c.MySQLInstances {
 		if err := inst.VerifyAndAdjust(); err != nil {
@@ -456,19 +456,19 @@ func (c *TaskConfig) adjust() error {
 			if _, ok := c.Routes[name]; !ok {
 				return terror.ErrConfigRouteRuleNotFound.Generate(i, name)
 			}
-			globalConfigReferCount[prefixs[0]+name]++
+			globalConfigReferCount[prefixes[0]+name]++
 		}
 		for _, name := range inst.FilterRules {
 			if _, ok := c.Filters[name]; !ok {
 				return terror.ErrConfigFilterRuleNotFound.Generate(i, name)
 			}
-			globalConfigReferCount[prefixs[1]+name]++
+			globalConfigReferCount[prefixes[1]+name]++
 		}
 		for _, name := range inst.ColumnMappingRules {
 			if _, ok := c.ColumnMappings[name]; !ok {
 				return terror.ErrConfigColumnMappingNotFound.Generate(i, name)
 			}
-			globalConfigReferCount[prefixs[2]+name]++
+			globalConfigReferCount[prefixes[2]+name]++
 		}
 		// TODO: check unused and not found expression filter
 
@@ -485,7 +485,7 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigMydumperCfgNotFound.Generate(i, inst.MydumperConfigName)
 			}
-			globalConfigReferCount[prefixs[3]+inst.MydumperConfigName]++
+			globalConfigReferCount[prefixes[3]+inst.MydumperConfigName]++
 			inst.Mydumper = new(MydumperConfig)
 			*inst.Mydumper = *rule // ref mydumper config
 		}
@@ -513,7 +513,7 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigLoaderCfgNotFound.Generate(i, inst.LoaderConfigName)
 			}
-			globalConfigReferCount[prefixs[4]+inst.LoaderConfigName]++
+			globalConfigReferCount[prefixes[4]+inst.LoaderConfigName]++
 			inst.Loader = new(LoaderConfig)
 			*inst.Loader = *rule // ref loader config
 		}
@@ -533,7 +533,7 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigSyncerCfgNotFound.Generate(i, inst.SyncerConfigName)
 			}
-			globalConfigReferCount[prefixs[5]+inst.SyncerConfigName]++
+			globalConfigReferCount[prefixes[5]+inst.SyncerConfigName]++
 			inst.Syncer = new(SyncerConfig)
 			*inst.Syncer = *rule // ref syncer config
 		}
@@ -566,32 +566,32 @@ func (c *TaskConfig) adjust() error {
 
 	unusedConfigs := []string{}
 	for route := range c.Routes {
-		if globalConfigReferCount[prefixs[0]+route] == 0 {
+		if globalConfigReferCount[prefixes[0]+route] == 0 {
 			unusedConfigs = append(unusedConfigs, route)
 		}
 	}
 	for filter := range c.Filters {
-		if globalConfigReferCount[prefixs[1]+filter] == 0 {
+		if globalConfigReferCount[prefixes[1]+filter] == 0 {
 			unusedConfigs = append(unusedConfigs, filter)
 		}
 	}
 	for columnMapping := range c.ColumnMappings {
-		if globalConfigReferCount[prefixs[2]+columnMapping] == 0 {
+		if globalConfigReferCount[prefixes[2]+columnMapping] == 0 {
 			unusedConfigs = append(unusedConfigs, columnMapping)
 		}
 	}
 	for mydumper := range c.Mydumpers {
-		if globalConfigReferCount[prefixs[3]+mydumper] == 0 {
+		if globalConfigReferCount[prefixes[3]+mydumper] == 0 {
 			unusedConfigs = append(unusedConfigs, mydumper)
 		}
 	}
 	for loader := range c.Loaders {
-		if globalConfigReferCount[prefixs[4]+loader] == 0 {
+		if globalConfigReferCount[prefixes[4]+loader] == 0 {
 			unusedConfigs = append(unusedConfigs, loader)
 		}
 	}
 	for syncer := range c.Syncers {
-		if globalConfigReferCount[prefixs[5]+syncer] == 0 {
+		if globalConfigReferCount[prefixes[5]+syncer] == 0 {
 			unusedConfigs = append(unusedConfigs, syncer)
 		}
 	}

@@ -1,6 +1,8 @@
 package config
 
-// ExpressionFilter represents a filter that will be applied on row changes
+// TODO: move related struct to tidb-tools
+
+// ExpressionFilter represents a filter that will be applied on row changes.
 type ExpressionFilter struct {
 	Schema             string `yaml:"schema" toml:"schema" json:"schema"`
 	Table              string `yaml:"table" toml:"table" json:"table"`

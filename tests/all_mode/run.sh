@@ -355,6 +355,9 @@ function test_expression_filter() {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 3 "fail"
 	run_sql_tidb "SELECT count(*) from all_mode.t1;"
 	check_contains "count(*): 6"
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"result\": true" 3
 
 	cleanup_data all_mode
 	cleanup_process $*

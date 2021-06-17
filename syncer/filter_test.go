@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/pkg/conn"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
 )
 
@@ -258,13 +259,28 @@ create table t (
 			[]interface{}{float32(123.45), 1, 2},
 			[]interface{}{float32(0.01), 23, 45},
 		},
+		{
+			"id = 30",
+			`
+create table t (
+	id int(11) NOT NULL AUTO_INCREMENT,
+	name varchar(20) COLLATE utf8mb4_bin DEFAULT NULL,
+	dt datetime DEFAULT NULL,
+	ts timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	PRIMARY KEY (id)
+);`,
+			[]interface{}{30, "30", nil, "2021-06-17 10:13:05"},
+			[]interface{}{20, "20", nil, "2021-06-17 10:13:05"},
+		},
 	}
 
 	var (
-		ctx       = context.Background()
-		db        = "test"
-		tbl       = "t"
+		ctx = context.Background()
+		db  = "test"
+		tbl = "t"
 	)
+	c.Assert(log.InitLogger(&log.Config{Level: "debug"}), IsNil)
+
 	for _, ca := range cases {
 		var (
 			err    error
