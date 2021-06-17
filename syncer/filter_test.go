@@ -14,13 +14,44 @@
 package syncer
 
 import (
+	"context"
+	"database/sql"
+
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb/expression"
+
+	"github.com/pingcap/dm/pkg/conn"
+	"github.com/pingcap/dm/pkg/schema"
 )
 
-func (s *testSyncerSuite) TestSkipQueryEvent(c *C) {
+type testFilterSuite struct {
+	baseConn   *conn.BaseConn
+	db         *sql.DB
+}
+
+var _ = Suite(&testFilterSuite{})
+
+func (s *testFilterSuite) SetUpSuite(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	s.db = db
+	mock.ExpectClose()
+	con, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+	s.baseConn = conn.NewBaseConn(con, nil)
+}
+
+func (s *testFilterSuite) TearDownSuite(c *C) {
+	c.Assert(s.baseConn.DBConn.Close(), IsNil)
+	c.Assert(s.db.Close(), IsNil)
+}
+
+func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 	cases := []struct {
 		sql           string
 		expectSkipped bool
@@ -186,4 +217,79 @@ END`, true},
 	skipped, err = syncer.skipQuery([]*filter.Table{{Schema: "foo", Name: "bar"}}, stmt, sql)
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, true)
+}
+
+func (s *testFilterSuite) TestSkipDMLByExpression(c *C) {
+	cases := []struct{
+		exprStr string
+		tableStr string
+		skippedRow []interface{}
+		passedRow []interface{}
+	} {
+		{
+			"state != 1",
+			`
+create table t (
+	primary_id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+	id bigint(20) unsigned NOT NULL,
+	state tinyint(3) unsigned NOT NULL,
+	PRIMARY KEY (primary_id),
+	UNIQUE KEY uniq_id (id),
+	KEY idx_state (state)
+);`,
+			[]interface{}{100, 100, 3},
+			[]interface{}{100, 100, 1},
+		},
+		{
+			"f > 1.23",
+			`
+create table t (
+	f float
+);`,
+			[]interface{}{float32(2.0)},
+			[]interface{}{float32(1.0)},
+		},
+		{
+			"f > a + b",
+			`
+create table t (
+	f float,
+	a int,
+	b int
+);`,
+			[]interface{}{float32(123.45), 1, 2},
+			[]interface{}{float32(0.01), 23, 45},
+		},
+	}
+
+	var(
+		ctx = context.Background()
+		db = "test"
+		tbl = "t"
+		tableName = dbutil.TableName(db, tbl)
+	)
+	for _, ca := range cases {
+		var (
+			err error
+			syncer = &Syncer{}
+
+		)
+		syncer.schemaTracker, err = schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
+		c.Assert(err, IsNil)
+		c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(db), IsNil)
+		c.Assert(syncer.schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
+		expr, err := syncer.schemaTracker.GetSimpleExprOfTable(db, tbl, ca.exprStr)
+		c.Assert(err, IsNil)
+		syncer.expressionFilter = map[string]expression.Expression{tableName: expr}
+
+		skip, err := syncer.skipDMLByExpression(db, tbl, ca.skippedRow)
+		c.Assert(err, IsNil)
+		c.Assert(skip, Equals, true)
+
+		skip, err = syncer.skipDMLByExpression(db, tbl, ca.passedRow)
+		c.Assert(err, IsNil)
+		c.Assert(skip, Equals, false)
+
+		c.Assert(syncer.schemaTracker.Close(), IsNil)
+	}
 }

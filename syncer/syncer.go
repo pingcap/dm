@@ -40,6 +40,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pingcap/tidb/expression"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -139,6 +140,7 @@ type Syncer struct {
 	binlogFilter  *bf.BinlogEvent
 	columnMapping *cm.Mapping
 	baList        *filter.Filter
+	expressionFilter map[string]expression.Expression
 
 	closed atomic.Bool
 
@@ -306,6 +308,8 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	if err != nil {
 		return terror.ErrSyncerUnitGenBinlogEventFilter.Delegate(err)
 	}
+
+	s.expressionFilter = make(map[string]expression.Expression)
 
 	if len(s.cfg.ColumnMappingRules) > 0 {
 		s.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)

@@ -26,6 +26,7 @@ import (
 	tidbConfig "github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/domain"
+	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/session"
@@ -299,4 +300,12 @@ func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo)
 	ti = cloneTableInfo(ti)
 	ti.Name = tableName
 	return tr.dom.DDL().CreateTableWithInfo(tr.se, dbName, ti, ddl.OnExistIgnore, false)
+}
+
+func (tr *Tracker) GetSimpleExprOfTable(db, table, expr string) (expression.Expression, error) {
+	ti, err := tr.GetTable(db, table)
+	if err != nil {
+		return nil, err
+	}
+	return expression.ParseSimpleExprWithTableInfo(tr.se, expr, ti)
 }
