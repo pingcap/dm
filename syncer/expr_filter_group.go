@@ -10,6 +10,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 )
 
+// ExprFilterGroup groups many related fields about expression filter.
 type ExprFilterGroup struct {
 	Configs map[string][]*config.ExpressionFilter // tableName -> raw config
 	InsertExprs map[string][]expression.Expression // tableName -> expr
@@ -86,6 +87,15 @@ func (g *ExprFilterGroup) RefreshExprs(
 		return fmt.Errorf("unsupported dml job type %s", dmlType)
 	}
 	return nil
+}
+
+// ResetExprs deletes the expressions generated before. This should be called after table structure changed.
+func (g *ExprFilterGroup) ResetExprs(db, table string) {
+	key := dbutil.TableName(db, table)
+	delete(g.InsertExprs, key)
+	delete(g.UpdateOldExprs, key)
+	delete(g.UpdateNewExprs, key)
+	delete(g.DeleteExprs, key)
 }
 
 // SkipDMLByExpression returns true when given row matches the expr, which means this row should be skipped.
