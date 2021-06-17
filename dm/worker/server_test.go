@@ -114,11 +114,11 @@ func (t *testServer) TestServer(c *C) {
 	cfg.RelayKeepAliveTTL = keepAliveTTL
 
 	NewRelayHolder = NewDummyRelayHolder
-	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
+	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string) *SubTask {
 		cfg.UseRelay = false
-		return NewRealSubTask(cfg, etcdClient)
+		return NewRealSubTask(cfg, etcdClient, worker)
 	}
-	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string) []unit.Unit {
 		mockDumper := NewMockUnit(pb.UnitType_Dump)
 		mockLoader := NewMockUnit(pb.UnitType_Load)
 		mockSync := NewMockUnit(pb.UnitType_Sync)

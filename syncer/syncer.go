@@ -56,6 +56,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/schema"
@@ -111,6 +112,7 @@ type Syncer struct {
 	sgk       *ShardingGroupKeeper // keeper to keep all sharding (sub) group in this syncer
 	pessimist *shardddl.Pessimist  // shard DDL pessimist
 	optimist  *shardddl.Optimist   // shard DDL optimist
+	cli       *clientv3.Client
 
 	binlogType         BinlogType
 	streamerController *StreamerController
@@ -218,6 +220,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
 	syncer.enableRelay = cfg.UseRelay
+	syncer.cli = etcdClient
 
 	syncer.checkpoint = NewRemoteCheckPoint(syncer.tctx, cfg, syncer.checkpointID())
 
@@ -1251,24 +1254,33 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	var (
 		flushCheckpoint bool
-		cleanDumpFile   = s.cfg.CleanDumpFile && fresh
+		delLoadTask     bool
+		cleanDumpFile   = s.cfg.CleanDumpFile
 	)
 	flushCheckpoint, err = s.adjustGlobalPointGTID(tctx)
 	if err != nil {
 		return err
 	}
 	if s.cfg.Mode == config.ModeAll && fresh {
+		delLoadTask = true
 		flushCheckpoint = true
 		err = s.loadTableStructureFromDump(ctx)
 		if err != nil {
 			tctx.L().Warn("error happened when load table structure from dump files", zap.Error(err))
 			cleanDumpFile = false
 		}
+	} else {
+		cleanDumpFile = false
 	}
 
 	if flushCheckpoint {
 		if err = s.flushCheckPoints(); err != nil {
 			tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
+		}
+	}
+	if delLoadTask {
+		if err = s.delLoadTask(); err != nil {
+			tctx.L().Warn("error when del load task in etcd", zap.Error(err))
 		}
 	}
 	if cleanDumpFile {
@@ -3142,4 +3154,14 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// delLoadTask is called when finish restoring data, to delete load worker in etcd.
+func (s *Syncer) delLoadTask() error {
+	_, _, err := ha.DelLoadTask(s.cli, s.cfg.Name, s.cfg.SourceID)
+	if err != nil {
+		return err
+	}
+	s.tctx.Logger.Info("delete load worker in etcd for all mode", zap.String("task", s.cfg.Name), zap.String("source", s.cfg.SourceID))
+	return nil
 }
