@@ -66,6 +66,22 @@ func (l *Loader) PrintStatus(ctx context.Context) {
 		finishedSize := l.finishedDataSize.Load()
 		totalSize := l.totalDataSize.Load()
 		totalFileCount := l.totalFileCount.Load()
+
+		for db, tables := range l.dbTableDataFinishedSize {
+			for table, size := range tables {
+				curFinished := size.Load()
+				speed := (curFinished - l.dbTableDataLastFinishedSize[db][table].Load()) / int64(printStatusInterval.Seconds())
+				l.dbTableDataLastFinishedSize[db][table].Store(curFinished)
+				var remainingSeconds int64
+				if speed > 0 {
+					remainingSeconds = l.dbTableDataTotalSize[db][table].Load() / speed
+				} else {
+					remainingSeconds = 0
+				}
+				remainingTimeGauge.WithLabelValues(l.cfg.Name, l.cfg.WorkerName, l.cfg.SourceID, db, table).Set(float64(remainingSeconds))
+			}
+		}
+
 		l.logger.Info("progress status of load",
 			zap.Int64("finished_bytes", finishedSize),
 			zap.Int64("total_bytes", totalSize),

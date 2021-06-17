@@ -163,7 +163,6 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 			})
 			if err == nil {
 				cost := time.Since(startTime)
-				txnHistogram.WithLabelValues(conn.cfg.Name, conn.cfg.SourceID).Observe(cost.Seconds())
 				if cost.Seconds() > 1 {
 					ctx.L().Warn("execute transaction",
 						zap.String("query", utils.TruncateInterface(queries, -1)),

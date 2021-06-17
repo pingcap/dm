@@ -191,7 +191,7 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 					return err, ret.Err()
 				}
 				cost := time.Since(startTime)
-				queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+				queryHistogram.WithLabelValues(conn.cfg.Name, conn.cfg.WorkerName, conn.cfg.SourceID).Observe(cost.Seconds())
 				if cost.Seconds() > 1 {
 					ctx.L().Warn("query statement",
 						zap.String("query", utils.TruncateString(query, -1)),
@@ -267,7 +267,7 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 			ret, err := conn.baseConn.ExecuteSQLWithIgnoreError(ctx, stmtHistogram, conn.cfg.Name, ignoreError, queries, args...)
 			if err == nil {
 				cost := time.Since(startTime)
-				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+				txnHistogram.WithLabelValues(conn.cfg.Name, conn.cfg.WorkerName, conn.cfg.SourceID).Observe(cost.Seconds())
 				if cost.Seconds() > 1 {
 					ctx.L().Warn("execute transaction",
 						zap.String("query", utils.TruncateInterface(queries, -1)),

@@ -65,13 +65,15 @@ type DataFiles []string
 type Tables2DataFiles map[string]DataFiles
 
 type dataJob struct {
-	sql        string
-	schema     string
-	table      string
-	file       string
-	absPath    string
-	offset     int64
-	lastOffset int64
+	sql          string
+	schema       string
+	table        string
+	sourceTable  string
+	sourceSchema string
+	file         string
+	absPath      string
+	offset       int64
+	lastOffset   int64
 }
 
 type fileJob struct {
@@ -194,6 +196,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				}
 			})
 
+			startTime := time.Now()
 			err := w.conn.executeSQL(ctctx, sqls)
 			failpoint.Inject("executeSQLError", func(_ failpoint.Value) {
 				w.logger.Info("", zap.String("failpoint", "executeSQLError"))
@@ -212,8 +215,10 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				})
 				continue
 			}
+			txnHistogram.WithLabelValues(w.cfg.Name, w.cfg.WorkerName, w.cfg.SourceID, job.schema, job.table).Observe(time.Since(startTime).Seconds())
 			w.loader.checkPoint.UpdateOffset(job.file, job.offset)
 			w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
+			w.loader.dbTableDataFinishedSize[job.sourceSchema][job.sourceTable].Add(job.offset - job.lastOffset)
 		}
 	}
 
@@ -368,13 +373,15 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 			data = data[0:0]
 
 			j := &dataJob{
-				sql:        query,
-				schema:     table.targetSchema,
-				table:      table.targetTable,
-				file:       baseFile,
-				absPath:    file,
-				offset:     cur,
-				lastOffset: lastOffset,
+				sql:          query,
+				schema:       table.targetSchema,
+				table:        table.targetTable,
+				sourceSchema: table.sourceSchema,
+				sourceTable:  table.sourceTable,
+				file:         baseFile,
+				absPath:      file,
+				offset:       cur,
+				lastOffset:   lastOffset,
 			}
 			lastOffset = cur
 
@@ -419,11 +426,17 @@ type Loader struct {
 	toDB      *conn.BaseDB
 	toDBConns []*DBConn
 
-	totalDataSize    atomic.Int64
 	totalFileCount   atomic.Int64 // schema + table + data
+	totalDataSize    atomic.Int64
 	finishedDataSize atomic.Int64
-	metaBinlog       atomic.String
-	metaBinlogGTID   atomic.String
+
+	// to calcaute remainingTimeGauge metric, map will be init in `l.prepare.prepareDataFiles`
+	dbTableDataTotalSize        map[string]map[string]*atomic.Int64
+	dbTableDataFinishedSize     map[string]map[string]*atomic.Int64
+	dbTableDataLastFinishedSize map[string]map[string]*atomic.Int64
+
+	metaBinlog     atomic.String
+	metaBinlogGTID atomic.String
 
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
@@ -671,6 +684,9 @@ func (l *Loader) Restore(ctx context.Context) error {
 	// reset some counter used to calculate progress
 	l.totalDataSize.Store(0)
 	l.finishedDataSize.Store(0) // reset before load from checkpoint
+	l.dbTableDataTotalSize = make(map[string]map[string]*atomic.Int64)
+	l.dbTableDataFinishedSize = make(map[string]map[string]*atomic.Int64)
+	l.dbTableDataLastFinishedSize = make(map[string]map[string]*atomic.Int64)
 
 	if err := l.prepare(); err != nil {
 		l.logger.Error("scan directory failed", zap.String("directory", l.cfg.Dir), log.ShortError(err))
@@ -696,7 +712,6 @@ func (l *Loader) Restore(ctx context.Context) error {
 		return err
 	}
 	l.loadFinishedSize()
-
 	if err2 := l.initAndStartWorkerPool(ctx); err2 != nil {
 		l.logger.Error("initial and start worker pools failed", log.ShortError(err))
 		return err2
@@ -742,8 +757,14 @@ func (l *Loader) Restore(ctx context.Context) error {
 
 func (l *Loader) loadFinishedSize() {
 	results := l.checkPoint.GetAllRestoringFileInfo()
-	for _, pos := range results {
+	for file, pos := range results {
+		db, table, err := getDBAndTableFromFilename(file)
 		l.finishedDataSize.Add(pos[0])
+		if err != nil {
+			l.logger.Warn("invalid db table sql file", zap.String("file", file), zap.Error(err))
+			continue
+		}
+		l.dbTableDataFinishedSize[db][table].Add(pos[0])
 	}
 }
 
@@ -1015,6 +1036,17 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 		}
 		l.totalDataSize.Add(size)
 		l.totalFileCount.Add(1) // for data
+		if _, ok := l.dbTableDataTotalSize[db]; !ok {
+			l.dbTableDataTotalSize[db] = make(map[string]*atomic.Int64)
+			l.dbTableDataFinishedSize[db] = make(map[string]*atomic.Int64)
+			l.dbTableDataLastFinishedSize[db] = make(map[string]*atomic.Int64)
+		}
+		if _, ok := l.dbTableDataTotalSize[db][table]; !ok {
+			l.dbTableDataTotalSize[db][table] = atomic.NewInt64(0)
+			l.dbTableDataFinishedSize[db][table] = atomic.NewInt64(0)
+			l.dbTableDataLastFinishedSize[db][table] = atomic.NewInt64(0)
+		}
+		l.dbTableDataTotalSize[db][table].Add(size)
 
 		dataFiles = append(dataFiles, file)
 		dataFilesNumber++

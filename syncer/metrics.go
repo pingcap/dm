@@ -43,16 +43,16 @@ var (
 			Name:      "binlog_event_size",
 			Help:      "size of a binlog event",
 			Buckets:   prometheus.ExponentialBuckets(16, 2, 20),
-		}, []string{"task", "source_id"})
+		}, []string{"task", "worker", "source_id"})
 
-	binlogEvent = metricsproxy.NewHistogramVec(
+	binlogEventCost = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
 			Name:      "binlog_transform_cost",
 			Help:      "cost of binlog event transform",
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
-		}, []string{"type", "task", "source_id"})
+		}, []string{"stage", "task", "worker", "source_id"})
 
 	conflictDetectDurationHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -98,7 +98,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "added_jobs_total",
 			Help:      "total number of added jobs",
-		}, []string{"type", "task", "queueNo", "source_id"})
+		}, []string{"type", "task", "queueNo", "source_id", "worker", "target_schema", "target_table"})
 
 	finishedJobsTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
@@ -106,7 +106,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "finished_jobs_total",
 			Help:      "total number of finished jobs",
-		}, []string{"type", "task", "queueNo", "source_id"})
+		}, []string{"type", "task", "queueNo", "source_id", "worker", "target_schema", "target_table"})
 
 	queueSizeGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -147,7 +147,7 @@ var (
 			Name:      "txn_duration_time",
 			Help:      "Bucketed histogram of processing time (s) of a txn.",
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
-		}, []string{"task"})
+		}, []string{"task", "worker", "source_id"})
 
 	queryHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -156,7 +156,7 @@ var (
 			Name:      "query_duration_time",
 			Help:      "Bucketed histogram of query time (s).",
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
-		}, []string{"task"})
+		}, []string{"task", "worker", "source_id"})
 
 	stmtHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -215,19 +215,28 @@ var (
 			Name:      "heartbeat_update_error",
 			Help:      "number of error when update heartbeat timestamp",
 		}, []string{"server_id"})
+
+	finishedTransactionTotal = metricsproxy.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "finished_transaction_total",
+			Help:      "total number of finished transaction",
+		}, []string{"task", "worker", "source_id"})
 )
 
 // RegisterMetrics registers metrics.
 func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(binlogReadDurationHistogram)
 	registry.MustRegister(binlogEventSizeHistogram)
-	registry.MustRegister(binlogEvent)
+	registry.MustRegister(binlogEventCost)
 	registry.MustRegister(conflictDetectDurationHistogram)
 	registry.MustRegister(addJobDurationHistogram)
 	registry.MustRegister(dispatchBinlogDurationHistogram)
 	registry.MustRegister(skipBinlogDurationHistogram)
 	registry.MustRegister(addedJobsTotal)
 	registry.MustRegister(finishedJobsTotal)
+	registry.MustRegister(finishedTransactionTotal)
 	registry.MustRegister(queueSizeGauge)
 	registry.MustRegister(sqlRetriesTotal)
 	registry.MustRegister(binlogPosGauge)
@@ -272,13 +281,14 @@ func InitStatusAndMetrics(addr string) {
 func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	binlogReadDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogEventSizeHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	binlogEvent.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogEventCost.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	conflictDetectDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	addJobDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	dispatchBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	skipBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	addedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	finishedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	finishedTransactionTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	queueSizeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	sqlRetriesTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogPosGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
