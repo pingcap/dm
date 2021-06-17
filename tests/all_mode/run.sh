@@ -50,7 +50,51 @@ function test_session_config(){
     echo "[$(date)] <<<<<< finish test_session_config >>>>>>"
 }
 
+function test_fail_job_between_event() {
+	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	check_contains 'Query OK, 2 rows affected'
+	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+	check_contains 'Query OK, 3 rows affected'
+
+	# start DM worker and master
+	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+
+	inject_points=(
+		"github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
+		"github.com/pingcap/dm/syncer/countJobFromOneEvent=return()"
+		"github.com/pingcap/dm/syncer/flushFirstJobOfEvent=return()"
+		"github.com/pingcap/dm/syncer/failSecondJobOfEvent=return()"
+	)
+	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+  cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
+	sed -i 's/sql_mode: ".*"/sql_mode: "NO_AUTO_VALUE_ON_ZERO"/g'  $WORK_DIR/dm-task.yaml
+  dmctl_start_task "$WORK_DIR/dm-task.yaml"
+
+	run_sql_file $cur/data/db1.increment3.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql_file $cur/data/db2.increment3.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+	sleep 2
+	check_log_contains $WORK_DIR/worker1/log/dm-worker.log "failSecondJobOfEvent"
+	check_log_contains $WORK_DIR/worker2/log/dm-worker.log "failSecondJobOfEvent"
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"result\": true" 3
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	cleanup_data all_mode
+	cleanup_process $*
+
+	export GO_FAILPOINTS=''
+}
+
 function run() {
+    test_fail_job_between_event
+
     test_session_config
 
     export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
