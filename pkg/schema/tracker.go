@@ -302,6 +302,7 @@ func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo)
 	return tr.dom.DDL().CreateTableWithInfo(tr.se, dbName, ti, ddl.OnExistIgnore, false)
 }
 
+// GetSimpleExprOfTable returns an expression of given `expr` string, using table structure that is tracked before.
 func (tr *Tracker) GetSimpleExprOfTable(db, table, expr string) (expression.Expression, error) {
 	ti, err := tr.GetTable(db, table)
 	if err != nil {

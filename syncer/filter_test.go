@@ -30,8 +30,8 @@ import (
 )
 
 type testFilterSuite struct {
-	baseConn   *conn.BaseConn
-	db         *sql.DB
+	baseConn *conn.BaseConn
+	db       *sql.DB
 }
 
 var _ = Suite(&testFilterSuite{})
@@ -220,12 +220,12 @@ END`, true},
 }
 
 func (s *testFilterSuite) TestSkipDMLByExpression(c *C) {
-	cases := []struct{
-		exprStr string
-		tableStr string
+	cases := []struct {
+		exprStr    string
+		tableStr   string
 		skippedRow []interface{}
-		passedRow []interface{}
-	} {
+		passedRow  []interface{}
+	}{
 		{
 			"state != 1",
 			`
@@ -262,17 +262,16 @@ create table t (
 		},
 	}
 
-	var(
-		ctx = context.Background()
-		db = "test"
-		tbl = "t"
+	var (
+		ctx       = context.Background()
+		db        = "test"
+		tbl       = "t"
 		tableName = dbutil.TableName(db, tbl)
 	)
 	for _, ca := range cases {
 		var (
-			err error
+			err    error
 			syncer = &Syncer{}
-
 		)
 		syncer.schemaTracker, err = schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
 		c.Assert(err, IsNil)

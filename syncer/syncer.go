@@ -136,10 +136,10 @@ type Syncer struct {
 
 	c *causality
 
-	tableRouter   *router.Table
-	binlogFilter  *bf.BinlogEvent
-	columnMapping *cm.Mapping
-	baList        *filter.Filter
+	tableRouter      *router.Table
+	binlogFilter     *bf.BinlogEvent
+	columnMapping    *cm.Mapping
+	baList           *filter.Filter
 	expressionFilter map[string]expression.Expression
 
 	closed atomic.Bool
