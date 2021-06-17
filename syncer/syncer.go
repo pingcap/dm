@@ -2029,7 +2029,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		}
 
 		// DDL is sequentially synchronized in this syncer's main process goroutine
-		// ignore DDL that is older or same as table checkpoint, to try-sync again for already synced DDLs
+		// ignore DDL that is older or same as table checkpoint, to avoid sync again for already synced DDLs
 		if s.checkpoint.IsOlderThanTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, *ec.currentLocation, true) {
 			ec.tctx.L().Info("ignore obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation))
 			continue
