@@ -17,9 +17,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb/util/chunk"
 
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -116,18 +114,4 @@ func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication
 	}
 
 	return action == bf.Ignore, nil
-}
-
-func (s *Syncer) skipDMLByExpression(schema string, table string, row []interface{}) (bool, error) {
-	tableName := dbutil.TableName(schema, table)
-	expr, ok := s.expressionFilter[tableName]
-	if !ok {
-		return false, nil
-	}
-	r := chunk.MutRowFromValues(row...).ToRow()
-	d, err := expr.Eval(r)
-	if err != nil {
-		return false, err
-	}
-	return d.GetInt64() == 1, nil
 }

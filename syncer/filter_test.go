@@ -21,9 +21,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb/expression"
 
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/schema"
@@ -266,7 +264,6 @@ create table t (
 		ctx       = context.Background()
 		db        = "test"
 		tbl       = "t"
-		tableName = dbutil.TableName(db, tbl)
 	)
 	for _, ca := range cases {
 		var (
@@ -279,13 +276,12 @@ create table t (
 		c.Assert(syncer.schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
 		expr, err := syncer.schemaTracker.GetSimpleExprOfTable(db, tbl, ca.exprStr)
 		c.Assert(err, IsNil)
-		syncer.expressionFilter = map[string]expression.Expression{tableName: expr}
 
-		skip, err := syncer.skipDMLByExpression(db, tbl, ca.skippedRow)
+		skip, err := SkipDMLByExpression(ca.skippedRow, expr)
 		c.Assert(err, IsNil)
 		c.Assert(skip, Equals, true)
 
-		skip, err = syncer.skipDMLByExpression(db, tbl, ca.passedRow)
+		skip, err = SkipDMLByExpression(ca.passedRow, expr)
 		c.Assert(err, IsNil)
 		c.Assert(skip, Equals, false)
 

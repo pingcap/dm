@@ -109,6 +109,7 @@ type MySQLInstance struct {
 	FilterRules        []string `yaml:"filter-rules"`
 	ColumnMappingRules []string `yaml:"column-mapping-rules"`
 	RouteRules         []string `yaml:"route-rules"`
+	ExpressionFilters  []string `yaml:"expression-filters"`
 
 	// black-white-list is deprecated, use block-allow-list instead
 	BWListName string `yaml:"black-white-list"`
@@ -301,6 +302,7 @@ type TaskConfig struct {
 	Routes         map[string]*router.TableRule   `yaml:"routes" toml:"routes" json:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters" toml:"filters" json:"filters"`
 	ColumnMappings map[string]*column.Rule        `yaml:"column-mappings" toml:"column-mappings" json:"column-mappings"`
+	ExprFilter     map[string]*ExpressionFilter   `yaml:"expression-filter" toml:"expression-filter" json:"expression-filter"`
 
 	// black-white-list is deprecated, use block-allow-list instead
 	BWList map[string]*filter.Rules `yaml:"black-white-list" toml:"black-white-list" json:"black-white-list"`
@@ -331,6 +333,7 @@ func NewTaskConfig() *TaskConfig {
 		Routes:                  make(map[string]*router.TableRule),
 		Filters:                 make(map[string]*bf.BinlogEventRule),
 		ColumnMappings:          make(map[string]*column.Rule),
+		ExprFilter: make(map[string]*ExpressionFilter),
 		BWList:                  make(map[string]*filter.Rules),
 		BAList:                  make(map[string]*filter.Rules),
 		Mydumpers:               make(map[string]*MydumperConfig),
@@ -419,6 +422,8 @@ func (c *TaskConfig) adjust() error {
 		return terror.ErrConfigMySQLInstsAtLeastOne.Generate()
 	}
 
+	// TODO: maybe expression filter should has exclusive xx-value-expr
+
 	iids := make(map[string]int) // source-id -> instance-index
 	globalConfigReferCount := map[string]int{}
 	prefixs := []string{"RouteRules", "FilterRules", "ColumnMappingRules", "Mydumper", "Loader", "Syncer"}
@@ -465,6 +470,7 @@ func (c *TaskConfig) adjust() error {
 			}
 			globalConfigReferCount[prefixs[2]+name]++
 		}
+		// TODO: check unused and not found expression filter
 
 		// only when BAList is empty use BWList
 		if len(c.BAList) == 0 && len(c.BWList) != 0 {
@@ -654,6 +660,11 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.ColumnMappingRules = make([]*column.Rule, len(inst.ColumnMappingRules))
 		for j, name := range inst.ColumnMappingRules {
 			cfg.ColumnMappingRules[j] = c.ColumnMappings[name]
+		}
+
+		cfg.ExprFilter = make([]*ExpressionFilter, len(inst.ExpressionFilters))
+		for j, name := range inst.ExpressionFilters {
+			cfg.ExprFilter[j] = c.ExprFilter[name]
 		}
 
 		cfg.BAList = c.BAList[inst.BAListName]

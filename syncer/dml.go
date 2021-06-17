@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/types"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb/expression"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -48,7 +49,7 @@ func extractValueFromData(data []interface{}, columns []*model.ColumnInfo) []int
 	return value
 }
 
-func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
+func genInsertSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
 	var (
 		qualifiedName   = dbutil.TableName(param.schema, param.table)
 		dataSeq         = param.data
@@ -77,6 +78,17 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			originalValue = extractValueFromData(originalDataSeq[dataIdx], ti.Columns)
 		}
 
+		for _, expr := range filterExprs {
+			skip, err := SkipDMLByExpression(originalValue, expr)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			if skip {
+				continue
+			}
+		}
+		// TODO: test table with generated column
+
 		ks := genMultipleKeys(ti, originalValue, qualifiedName)
 		sqls = append(sqls, sql)
 		values = append(values, value)
@@ -86,7 +98,11 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 	return sqls, keys, values, nil
 }
 
-func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
+func genUpdateSQLs(
+	param *genDMLParam,
+	oldValueFilters []expression.Expression,
+	newValueFilters []expression.Expression,
+) ([]string, [][]string, [][]interface{}, error) {
 	var (
 		qualifiedName       = dbutil.TableName(param.schema, param.table)
 		data                = param.data
@@ -129,6 +145,26 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			oriOldValues = extractValueFromData(oriOldData, ti.Columns)
 			oriChangedValues = extractValueFromData(oriChangedData, ti.Columns)
 		}
+
+		for _, expr := range oldValueFilters {
+			skip, err := SkipDMLByExpression(oriOldValues, expr)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			if skip {
+				continue
+			}
+		}
+		for _, expr := range newValueFilters {
+			skip, err := SkipDMLByExpression(oriChangedValues, expr)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			if skip {
+				continue
+			}
+		}
+		// TODO: test table with generated column
 
 		if defaultIndexColumns == nil {
 			defaultIndexColumns = getAvailableIndexColumn(ti, oriOldValues)
@@ -182,7 +218,7 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 	return sqls, keys, values, nil
 }
 
-func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
+func genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
 	var (
 		qualifiedName       = dbutil.TableName(param.schema, param.table)
 		dataSeq             = param.originalData
@@ -199,6 +235,17 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		}
 
 		value := extractValueFromData(data, ti.Columns)
+
+		for _, expr := range filterExprs {
+			skip, err := SkipDMLByExpression(value, expr)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			if skip {
+				continue
+			}
+		}
+		// TODO: test table with generated column
 
 		if defaultIndexColumns == nil {
 			defaultIndexColumns = getAvailableIndexColumn(ti, value)

@@ -40,7 +40,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/pingcap/tidb/expression"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -136,11 +135,11 @@ type Syncer struct {
 
 	c *causality
 
-	tableRouter      *router.Table
-	binlogFilter     *bf.BinlogEvent
-	columnMapping    *cm.Mapping
-	baList           *filter.Filter
-	expressionFilter map[string]expression.Expression
+	tableRouter     *router.Table
+	binlogFilter    *bf.BinlogEvent
+	columnMapping   *cm.Mapping
+	baList          *filter.Filter
+	exprFilterGroup *ExprFilterGroup
 
 	closed atomic.Bool
 
@@ -309,7 +308,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return terror.ErrSyncerUnitGenBinlogEventFilter.Delegate(err)
 	}
 
-	s.expressionFilter = make(map[string]expression.Expression)
+	s.exprFilterGroup = NewExprFilterGroup(s.cfg.ExprFilter)
 
 	if len(s.cfg.ColumnMappingRules) > 0 {
 		s.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
@@ -1835,7 +1834,6 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	var (
-		applied bool
 		sqls    []string
 		keys    [][]string
 		args    [][]interface{}
@@ -1851,36 +1849,54 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		originalTableInfo: ti,
 	}
 
+	exprMapKey := dbutil.TableName(originSchema, originTable)
 	switch ec.header.EventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-		if !applied {
-			param.safeMode = ec.safeMode.Enable()
-			sqls, keys, args, err = genInsertSQLs(param)
+		if _, ok := s.exprFilterGroup.InsertExprs[exprMapKey]; !ok {
+			err = s.exprFilterGroup.RefreshExprs(originSchema, originTable, s.schemaTracker.GetSimpleExprOfTable, insert)
 			if err != nil {
-				return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
+				return err
 			}
 		}
+
+		param.safeMode = ec.safeMode.Enable()
+		sqls, keys, args, err = genInsertSQLs(param, s.exprFilterGroup.InsertExprs[exprMapKey])
+		if err != nil {
+				return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
+			}
 		binlogEvent.WithLabelValues("write_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-		if !applied {
-			param.safeMode = ec.safeMode.Enable()
-			sqls, keys, args, err = genUpdateSQLs(param)
+		_, ok1 := s.exprFilterGroup.UpdateOldExprs[exprMapKey]
+		_, ok2 := s.exprFilterGroup.UpdateNewExprs[exprMapKey]
+		if !ok1 && !ok2 {
+			err = s.exprFilterGroup.RefreshExprs(originSchema, originTable, s.schemaTracker.GetSimpleExprOfTable, update)
 			if err != nil {
-				return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
+				return err
 			}
 		}
+
+		param.safeMode = ec.safeMode.Enable()
+		sqls, keys, args, err = genUpdateSQLs(param, s.exprFilterGroup.UpdateOldExprs[exprMapKey], s.exprFilterGroup.UpdateNewExprs[exprMapKey])
+		if err != nil {
+				return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
+			}
 		binlogEvent.WithLabelValues("update_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-		if !applied {
-			sqls, keys, args, err = genDeleteSQLs(param)
+		if _, ok := s.exprFilterGroup.DeleteExprs[exprMapKey]; !ok {
+			err = s.exprFilterGroup.RefreshExprs(originSchema, originTable, s.schemaTracker.GetSimpleExprOfTable, del)
 			if err != nil {
-				return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
+				return err
 			}
 		}
+
+		sqls, keys, args, err = genDeleteSQLs(param, s.exprFilterGroup.DeleteExprs[exprMapKey])
+		if err != nil {
+				return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
+			}
 		binlogEvent.WithLabelValues("delete_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = del
 

@@ -164,6 +164,7 @@ type SubTaskConfig struct {
 	RouteRules         []*router.TableRule   `toml:"route-rules" json:"route-rules"`
 	FilterRules        []*bf.BinlogEventRule `toml:"filter-rules" json:"filter-rules"`
 	ColumnMappingRules []*column.Rule        `toml:"mapping-rule" json:"mapping-rule"`
+	ExprFilter         []*ExpressionFilter   `yaml:"expression-filter" toml:"expression-filter" json:"expression-filter"`
 
 	// black-white-list is deprecated, use block-allow-list instead
 	BWList *filter.Rules `toml:"black-white-list" json:"black-white-list"`

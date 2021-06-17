@@ -924,18 +924,18 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				}
 				switch e.Header.EventType {
 				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-					sqls, _, args, err = genInsertSQLs(param)
+					sqls, _, args, err = genInsertSQLs(param, nil)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
 				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 					// test with sql_mode = false only
-					sqls, _, args, err = genUpdateSQLs(param)
+					sqls, _, args, err = genUpdateSQLs(param, nil, nil)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
 				case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-					sqls, _, args, err = genDeleteSQLs(param)
+					sqls, _, args, err = genDeleteSQLs(param, nil)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
