@@ -169,6 +169,7 @@ func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, err
 }
 
 // GetMasterStatus gets status from master.
+// When the returned error is nil, the gtid.Set must be not nil.
 func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
 	var (
 		binlogPos gmysql.Position
@@ -195,31 +196,54 @@ func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Pos
 		| ON.000001 |     4822 |              |                  | 85ab69d1-b21f-11e6-9c5e-64006a8978d2:1-46
 		+-----------+----------+--------------+------------------+--------------------------------------------+
 	*/
+	/*
+		For MariaDB,SHOW MASTER STATUS:
+		+--------------------+----------+--------------+------------------+
+		| File               | Position | Binlog_Do_DB | Binlog_Ignore_DB |
+		+--------------------+----------+--------------+------------------+
+		| mariadb-bin.000016 |      475 |              |                  |
+		+--------------------+----------+--------------+------------------+
+		SELECT @@global.gtid_binlog_pos;
+		+--------------------------+
+		| @@global.gtid_binlog_pos |
+		+--------------------------+
+		| 0-1-2                    |
+		+--------------------------+
+	*/
 	var (
 		gtidStr    string
 		binlogName string
 		pos        uint32
 		nullPtr    interface{}
 	)
-	for rows.Next() {
-		if len(rowColumns) == 5 {
-			err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr, &gtidStr)
-		} else {
-			err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr)
-		}
-		if err != nil {
-			return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-		}
+	if !rows.Next() {
+		return binlogPos, gs, terror.ErrNoMasterStatus.Generate()
+	}
 
-		binlogPos = gmysql.Position{
-			Name: binlogName,
-			Pos:  pos,
-		}
+	if len(rowColumns) == 5 {
+		err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr, &gtidStr)
+	} else {
+		err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr)
+	}
+	if err != nil {
+		return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
 
-		gs, err = gtid.ParserGTID(flavor, gtidStr)
-		if err != nil {
-			return binlogPos, gs, err
-		}
+	binlogPos = gmysql.Position{
+		Name: binlogName,
+		Pos:  pos,
+	}
+
+	gs, err = gtid.ParserGTID(flavor, gtidStr)
+	if err != nil {
+		return binlogPos, gs, err
+	}
+	if rows.Next() {
+		log.L().Warn("SHOW MASTER STATUS returns more than one row, will only use first row")
+	}
+
+	if rows.Close() != nil {
+		return binlogPos, gs, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
 	}
 	if rows.Err() != nil {
 		return binlogPos, gs, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
