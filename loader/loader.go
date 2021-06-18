@@ -26,12 +26,9 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< HEAD
-=======
 	"go.etcd.io/etcd/clientv3"
 	"golang.org/x/sync/errgroup"
 
->>>>>>> 2e1f094ce (scheduler: full import scheduling  (#1749))
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
@@ -51,7 +48,6 @@ import (
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
