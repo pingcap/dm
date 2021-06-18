@@ -174,6 +174,8 @@ type MydumperConfig struct {
 	ExtraArgs string `yaml:"extra-args" toml:"extra-args" json:"extra-args"`    // other extra args
 	// NOTE: use LoaderConfig.Dir as --outputdir
 	// TODO zxc: combine -B -T --regex with filter rules?
+
+	WriteSpeedLimit uint64 `yaml:"write-speed-limit" toml:"write-speed-limit" json:"write-speed-limit"`
 }
 
 func defaultMydumperConfig() MydumperConfig {
