@@ -47,7 +47,7 @@ function clean_table() {
 
 function restart_master() {
 	echo "restart dm-master"
-	kill_dm_master
+	ps aux | grep dm-master | awk '{print $2}' | xargs kill || true
 	check_port_offline $MASTER_PORT 20
 	sleep 2
 
