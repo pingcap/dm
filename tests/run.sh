@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eu
+set -euE
 
 TEST_DIR=/tmp/dm_test
 CUR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -80,6 +80,12 @@ if [ $should_run -eq 0 ]; then
 fi
 
 trap stop_services EXIT
+sleep_for_debug() {
+  echo "debug now"
+  sleep 1200
+}
+trap sleep_for_debug ERR
+
 start_services
 
 function run() {
