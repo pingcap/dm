@@ -80,7 +80,6 @@ if [ $should_run -eq 0 ]; then
 fi
 
 trap stop_services EXIT
-
 start_services
 
 function run() {
