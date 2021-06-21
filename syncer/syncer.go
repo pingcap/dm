@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -751,7 +752,34 @@ func (s *Syncer) checkWait(job *job) bool {
 	return false
 }
 
+// only used in tests.
+var (
+	lastPos        mysql.Position
+	lastPosNum     int
+	waitJobsDone   bool
+	failExecuteSQL bool
+	failOnce       sync2.AtomicInt64
+)
+
 func (s *Syncer) addJob(job *job) error {
+	failpoint.Inject("countJobFromOneEvent", func() {
+		if job.currentPos.Compare(lastPos) == 0 {
+			lastPosNum++
+		} else {
+			lastPos = job.currentPos
+			lastPosNum = 1
+		}
+		// trigger a flush after see one job
+		if lastPosNum == 1 {
+			waitJobsDone = true
+			s.tctx.L().Info("meet the first job of an event", zap.Any("binlog position", lastPos))
+		}
+		// mock a execution error after see two jobs.
+		if lastPosNum == 2 {
+			failExecuteSQL = true
+			s.tctx.L().Info("meet the second job of an event", zap.Any("binlog position", lastPos))
+		}
+	})
 	var (
 		queueBucket int
 		execDDLReq  *pb.ExecDDLRequest
@@ -802,6 +830,13 @@ func (s *Syncer) addJob(job *job) error {
 	}
 
 	wait := s.checkWait(job)
+	failpoint.Inject("flushFirstJobOfEvent", func() {
+		if waitJobsDone {
+			s.tctx.L().Info("trigger flushFirstJobOfEvent")
+			waitJobsDone = false
+			wait = true
+		}
+	})
 	if wait {
 		s.jobWg.Wait()
 		s.c.reset()
@@ -1001,6 +1036,13 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		if len(jobs) == 0 {
 			return nil
 		}
+
+		failpoint.Inject("failSecondJobOfEvent", func() {
+			if failExecuteSQL && failOnce.CompareAndSwap(0, 1) {
+				s.tctx.L().Info("trigger failSecondJobOfEvent")
+				failpoint.Return(errors.New("failSecondJobOfEvent"))
+			}
+		})
 		queries := make([]string, 0, len(jobs))
 		args := make([][]interface{}, 0, len(jobs))
 		for _, j := range jobs {
@@ -1470,7 +1512,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	// DML position before table checkpoint, ignore it
-	if !s.checkpoint.IsNewerTablePoint(originSchema, originTable, *ec.currentPos) {
+	if s.checkpoint.IsOlderThanTablePoint(originSchema, originTable, *ec.currentPos, false) {
 		s.tctx.L().Debug("ignore obsolete event that is old than table checkpoint", zap.String("event", "row"), log.WrapStringerField("position", ec.currentPos), zap.String("origin schema", originSchema), zap.String("origin table", originTable))
 		return nil
 	}
@@ -1700,7 +1742,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// for DDL, we wait it to be executed, so we can check if event is newer in this syncer's main process goroutine
 		// ignore obsolete DDL here can avoid to try-sync again for already synced DDLs
-		if !s.checkpoint.IsNewerTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, *ec.currentPos) {
+		if s.checkpoint.IsOlderThanTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, *ec.currentPos, true) {
 			s.tctx.L().Info("ignore obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("position", ec.currentPos))
 			continue
 		}
