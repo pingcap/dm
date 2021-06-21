@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/model"
@@ -27,6 +28,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/table"
 	"github.com/pingcap/tidb/types"
 	"github.com/shopspring/decimal"
@@ -215,8 +217,27 @@ func NonRepeatStringsEqual(a, b []string) bool {
 	return true
 }
 
+type session struct {
+	sessionctx.Context
+	vars *variable.SessionVars
+}
+
+// GetSessionVars implements the sessionctx.Context interface.
+func (se *session) GetSessionVars() *variable.SessionVars {
+	return se.vars
+}
+
+var utcSession *session
+
+func init() {
+	utcSession = &session{}
+	vars := variable.NewSessionVars()
+	vars.StmtCtx.TimeZone = time.UTC
+	utcSession.vars = vars
+}
+
 // AdjustBinaryProtocolForDatum converts the data in binlog to TiDB datum
-func AdjustBinaryProtocolForDatum(data []interface{}, cols []*model.ColumnInfo, sctx sessionctx.Context) ([]types.Datum, error) {
+func AdjustBinaryProtocolForDatum(data []interface{}, cols []*model.ColumnInfo) ([]types.Datum, error) {
 	log.L().Debug("AdjustBinaryProtocolForChunk",
 		zap.Any("data", data),
 		zap.Any("columns", cols))
@@ -238,11 +259,10 @@ func AdjustBinaryProtocolForDatum(data []interface{}, cols []*model.ColumnInfo, 
 		case decimal.Decimal:
 			d = v.String()
 		}
-		c := cols[i]
 		datum := types.NewDatum(d)
 
-		// TODO: change timezone of sctx to upstream
-		castDatum, err := table.CastValue(sctx, datum, c, false, false)
+		// TODO: should we use timezone of upstream?
+		castDatum, err := table.CastValue(utcSession, datum, cols[i], false, false)
 		if err != nil {
 			return nil, err
 		}

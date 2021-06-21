@@ -1,9 +1,7 @@
 package config
 
 import (
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb/expression"
-	"github.com/pingcap/tidb/session"
 )
 
 // TODO: move related struct to tidb-tools
@@ -21,6 +19,4 @@ type ExpressionFilter struct {
 // Expression wraps expression.Expression with tableInfo and other.
 type Expression struct {
 	expression.Expression
-	TableInfo *model.TableInfo
-	Session   session.Session
 }

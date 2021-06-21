@@ -270,8 +270,8 @@ create table t (
 	ts timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 	PRIMARY KEY (id)
 );`,
-			[]interface{}{30, "30", nil, "2021-06-17 10:13:05"},
-			[]interface{}{20, "20", nil, "2021-06-17 10:13:05"},
+			[]interface{}{int32(30), "30", nil, "2021-06-17 10:13:05"},
+			[]interface{}{int32(20), "20", nil, "2021-06-17 10:13:05"},
 		},
 	}
 
@@ -283,26 +283,25 @@ create table t (
 	c.Assert(log.InitLogger(&log.Config{Level: "debug"}), IsNil)
 
 	for _, ca := range cases {
-		var (
-			err    error
-			syncer = &Syncer{}
-		)
-		syncer.schemaTracker, err = schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
+		schemaTracker, err := schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
 		c.Assert(err, IsNil)
-		c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(db), IsNil)
-		c.Assert(syncer.schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
-		expr, err := syncer.schemaTracker.GetSimpleExprOfTable(db, tbl, ca.exprStr)
+		c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
+		c.Assert(schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
+		expr, err := schemaTracker.GetSimpleExprOfTable(db, tbl, ca.exprStr)
 		c.Assert(err, IsNil)
 
-		skip, err := SkipDMLByExpression(ca.skippedRow, expr)
+		ti, err := schemaTracker.GetTable(db, tbl)
+		c.Assert(err, IsNil)
+
+		skip, err := SkipDMLByExpression(ca.skippedRow, expr, ti.Columns)
 		c.Assert(err, IsNil)
 		c.Assert(skip, Equals, true)
 
-		skip, err = SkipDMLByExpression(ca.passedRow, expr)
+		skip, err = SkipDMLByExpression(ca.passedRow, expr, ti.Columns)
 		c.Assert(err, IsNil)
 		c.Assert(skip, Equals, false)
 
-		c.Assert(syncer.schemaTracker.Close(), IsNil)
+		c.Assert(schemaTracker.Close(), IsNil)
 	}
 }
 
@@ -430,7 +429,7 @@ create table t (
 	c timestamp
 );`,
 			[]interface{}{"2021-06-21 12:34:56"},
-			[]interface{}{"1970-02-01 00:00:01"},
+			[]interface{}{"1970-01-01 00:00:01"},
 		},
 		// MYSQL_TYPE_DATETIME, MYSQL_TYPE_DATETIME2
 		{
@@ -479,7 +478,7 @@ create table t (
 create table t (
 	c ENUM('x-small', 'small', 'medium', 'large', 'x-large')
 );`,
-			[]interface{}{int64(1)},
+			[]interface{}{int64(1)}, // 1-indexed
 			[]interface{}{int64(2)},
 		},
 		// MYSQL_TYPE_SET
@@ -489,8 +488,8 @@ create table t (
 create table t (
 	c SET('a', 'b', 'c', 'd')
 );`,
-			[]interface{}{int64(0b1100)},
-			[]interface{}{int64(0b1000)},
+			[]interface{}{int64(0b1100)}, // c,d
+			[]interface{}{int64(0b1000)}, // d
 		},
 		// MYSQL_TYPE_BLOB
 		{
@@ -499,8 +498,8 @@ create table t (
 create table t (
 	c blob
 );`,
-			[]interface{}{[]byte("\x124")},
-			[]interface{}{[]byte("Vx")},
+			[]interface{}{[]byte("\x124")}, // x'1234'
+			[]interface{}{[]byte("Vx")}, // x'5678'
 		},
 		// MYSQL_TYPE_VARCHAR, MYSQL_TYPE_VAR_STRING, MYSQL_TYPE_STRING
 		{
@@ -534,33 +533,30 @@ create table t (
 
 	for _, ca := range cases {
 		c.Log(ca.tableStr)
-		var (
-			err    error
-			syncer = &Syncer{}
-		)
-		syncer.schemaTracker, err = schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
+		schemaTracker, err := schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
 		c.Assert(err, IsNil)
-		c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(db), IsNil)
-		c.Assert(syncer.schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
-		expr, err := syncer.schemaTracker.GetSimpleExprOfTable(db, tbl, ca.exprStr)
+		c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
+		c.Assert(schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
+		expr, err := schemaTracker.GetSimpleExprOfTable(db, tbl, ca.exprStr)
 		c.Assert(err, IsNil)
 
-		skip, err := SkipDMLByExpression(ca.skippedRow, expr)
+		ti, err := schemaTracker.GetTable(db, tbl)
+		c.Assert(err, IsNil)
+
+		skip, err := SkipDMLByExpression(ca.skippedRow, expr, ti.Columns)
 		c.Assert(err, IsNil)
 		c.Assert(skip, Equals, true)
 
-		skip, err = SkipDMLByExpression(ca.passedRow, expr)
+		skip, err = SkipDMLByExpression(ca.passedRow, expr, ti.Columns)
 		c.Assert(err, IsNil)
 		c.Assert(skip, Equals, false)
 
-		c.Assert(syncer.schemaTracker.Close(), IsNil)
+		c.Assert(schemaTracker.Close(), IsNil)
 	}
 }
 
 func (s *testFilterSuite) TestExpressionContainsNonExistColumn(c *C) {
 	var (
-		err      error
-		syncer   = &Syncer{}
 		ctx      = context.Background()
 		db       = "test"
 		tbl      = "t"
@@ -570,20 +566,22 @@ create table t (
 );`
 		exprStr = "d > 1"
 	)
-	syncer.schemaTracker, err = schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
+	schemaTracker, err := schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
 	c.Assert(err, IsNil)
-	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(db), IsNil)
-	c.Assert(syncer.schemaTracker.Exec(ctx, db, tableStr), IsNil)
-	expr, err := syncer.schemaTracker.GetSimpleExprOfTable(db, tbl, exprStr)
+	c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
+	c.Assert(schemaTracker.Exec(ctx, db, tableStr), IsNil)
+	expr, err := schemaTracker.GetSimpleExprOfTable(db, tbl, exprStr)
 	c.Assert(err, IsNil)
 	c.Assert(expr.Expression.String(), Equals, "0")
 
+	ti, err := schemaTracker.GetTable(db, tbl)
+	c.Assert(err, IsNil)
+
 	// skip nothing
-	skip, err := SkipDMLByExpression([]interface{}{0}, expr)
+	skip, err := SkipDMLByExpression([]interface{}{0}, expr, ti.Columns)
 	c.Assert(err, IsNil)
 	c.Assert(skip, Equals, false)
-
-	skip, err = SkipDMLByExpression([]interface{}{2}, expr)
+	skip, err = SkipDMLByExpression([]interface{}{2}, expr, ti.Columns)
 	c.Assert(err, IsNil)
 	c.Assert(skip, Equals, false)
 }

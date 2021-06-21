@@ -423,6 +423,7 @@ func (c *TaskConfig) adjust() error {
 	}
 
 	// TODO: maybe expression filter should has exclusive xx-value-expr
+	// TODO: check grammar of expression filter
 
 	iids := make(map[string]int) // source-id -> instance-index
 	globalConfigReferCount := map[string]int{}

@@ -80,7 +80,7 @@ RowLoop:
 		}
 
 		for _, expr := range filterExprs {
-			skip, err := SkipDMLByExpression(originalValue, expr)
+			skip, err := SkipDMLByExpression(originalValue, expr, ti.Columns)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -149,7 +149,7 @@ RowLoop:
 		}
 
 		for _, expr := range oldValueFilters {
-			skip, err := SkipDMLByExpression(oriOldValues, expr)
+			skip, err := SkipDMLByExpression(oriOldValues, expr, ti.Columns)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -158,7 +158,7 @@ RowLoop:
 			}
 		}
 		for _, expr := range newValueFilters {
-			skip, err := SkipDMLByExpression(oriChangedValues, expr)
+			skip, err := SkipDMLByExpression(oriChangedValues, expr, ti.Columns)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -166,7 +166,6 @@ RowLoop:
 				continue RowLoop
 			}
 		}
-		// TODO: test table with generated column
 
 		if defaultIndexColumns == nil {
 			defaultIndexColumns = getAvailableIndexColumn(ti, oriOldValues)
@@ -240,7 +239,7 @@ RowLoop:
 		value := extractValueFromData(data, ti.Columns)
 
 		for _, expr := range filterExprs {
-			skip, err := SkipDMLByExpression(value, expr)
+			skip, err := SkipDMLByExpression(value, expr, ti.Columns)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -248,7 +247,6 @@ RowLoop:
 				continue RowLoop
 			}
 		}
-		// TODO: test table with generated column
 
 		if defaultIndexColumns == nil {
 			defaultIndexColumns = getAvailableIndexColumn(ti, value)

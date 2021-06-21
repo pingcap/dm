@@ -312,7 +312,7 @@ func (tr *Tracker) GetSimpleExprOfTable(db, table, expr string) (*config.Express
 	}
 	e, err := expression.ParseSimpleExprWithTableInfo(tr.se, expr, ti)
 	if err != nil {
-		// if expression contains a unknown column, we return an expression that skips nothing
+		// if expression contains an unknown column, we return an expression that skips nothing
 		if core.ErrUnknownColumn.Equal(err) {
 			e = expression.NewZero()
 		} else {
@@ -322,7 +322,5 @@ func (tr *Tracker) GetSimpleExprOfTable(db, table, expr string) (*config.Express
 
 	return &config.Expression{
 		Expression: e,
-		TableInfo:  ti,
-		Session:    tr.se,
 	}, nil
 }
