@@ -81,8 +81,8 @@ fi
 
 trap stop_services EXIT
 sleep_for_debug() {
-  echo "debug now"
-  sleep 1200
+	echo "debug now"
+	sleep 1200
 }
 trap sleep_for_debug ERR
 
