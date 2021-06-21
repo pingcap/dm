@@ -23,9 +23,9 @@ import (
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/types"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb/expression"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -49,7 +49,7 @@ func extractValueFromData(data []interface{}, columns []*model.ColumnInfo) []int
 	return value
 }
 
-func genInsertSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
+func genInsertSQLs(param *genDMLParam, filterExprs []*config.Expression) ([]string, [][]string, [][]interface{}, error) {
 	var (
 		qualifiedName   = dbutil.TableName(param.schema, param.table)
 		dataSeq         = param.data
@@ -101,8 +101,8 @@ RowLoop:
 
 func genUpdateSQLs(
 	param *genDMLParam,
-	oldValueFilters []expression.Expression,
-	newValueFilters []expression.Expression,
+	oldValueFilters []*config.Expression,
+	newValueFilters []*config.Expression,
 ) ([]string, [][]string, [][]interface{}, error) {
 	var (
 		qualifiedName       = dbutil.TableName(param.schema, param.table)
@@ -220,7 +220,7 @@ RowLoop:
 	return sqls, keys, values, nil
 }
 
-func genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
+func genDeleteSQLs(param *genDMLParam, filterExprs []*config.Expression) ([]string, [][]string, [][]interface{}, error) {
 	var (
 		qualifiedName       = dbutil.TableName(param.schema, param.table)
 		dataSeq             = param.originalData

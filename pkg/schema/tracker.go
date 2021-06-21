@@ -29,10 +29,12 @@ import (
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/store/mockstore"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
@@ -303,10 +305,24 @@ func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo)
 }
 
 // GetSimpleExprOfTable returns an expression of given `expr` string, using the table structure that is tracked before.
-func (tr *Tracker) GetSimpleExprOfTable(db, table, expr string) (expression.Expression, error) {
+func (tr *Tracker) GetSimpleExprOfTable(db, table, expr string) (*config.Expression, error) {
 	ti, err := tr.GetTable(db, table)
 	if err != nil {
 		return nil, err
 	}
-	return expression.ParseSimpleExprWithTableInfo(tr.se, expr, ti)
+	e, err := expression.ParseSimpleExprWithTableInfo(tr.se, expr, ti)
+	if err != nil {
+		// if expression contains a unknown column, we return an expression that skip nothing
+		if core.ErrUnknownColumn.Equal(err) {
+			e = expression.NewZero()
+		} else {
+			return nil, err
+		}
+	}
+
+	return &config.Expression{
+		Expression: e,
+		TableInfo:  ti,
+		Session:    tr.se,
+	}, nil
 }

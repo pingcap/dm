@@ -21,10 +21,15 @@ import (
 	"strings"
 
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/parser/model"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/table"
+	"github.com/pingcap/tidb/types"
+	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -210,26 +215,38 @@ func NonRepeatStringsEqual(a, b []string) bool {
 	return true
 }
 
-// UpcastInteger tries to cast every number in `data` to 64-bit type.
-func UpcastInteger(data []interface{}) []interface{} {
-	ret := make([]interface{}, 0, len(data))
-	for _, d := range data {
+// AdjustBinaryProtocolForDatum converts the data in binlog to TiDB datum
+func AdjustBinaryProtocolForDatum(data []interface{}, cols []*model.ColumnInfo, sctx sessionctx.Context) ([]types.Datum, error) {
+	log.L().Debug("AdjustBinaryProtocolForChunk",
+		zap.Any("data", data),
+		zap.Any("columns", cols))
+	ret := make([]types.Datum, 0, len(data))
+	for i, d := range data {
 		switch v := d.(type) {
 		case int8:
-			ret = append(ret, int64(v))
+			d = int64(v)
 		case int16:
-			ret = append(ret, int64(v))
+			d = int64(v)
 		case int32:
-			ret = append(ret, int64(v))
+			d = int64(v)
 		case uint8:
-			ret = append(ret, uint64(v))
+			d = uint64(v)
 		case uint16:
-			ret = append(ret, uint64(v))
+			d = uint64(v)
 		case uint32:
-			ret = append(ret, uint64(v))
-		default:
-			ret = append(ret, d)
+			d = uint64(v)
+		case decimal.Decimal:
+			d = v.String()
 		}
+		c := cols[i]
+		datum := types.NewDatum(d)
+
+		// TODO: change timezone of sctx to upstream
+		castDatum, err := table.CastValue(sctx, datum, c, false, false)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, castDatum)
 	}
-	return ret
+	return ret, nil
 }
