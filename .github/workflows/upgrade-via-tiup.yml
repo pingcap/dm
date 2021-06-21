@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:  # TODO: use these inputs
       fromVer:
-        dmVer: 'v1.0.6'
+        dmVer: 'v1.0.7'
       toVer:
         dmVer: 'nightly'
 
