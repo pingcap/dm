@@ -126,7 +126,7 @@ func (h *Holder) GetEvent(startLocation binlog.Location) (*replication.BinlogEve
 }
 
 // MatchAndApply tries to match operation for event by location and apply it on replace events.
-func (h *Holder) MatchAndApply(startLocation, endLocation binlog.Location) (bool, pb.ErrorOp) {
+func (h *Holder) MatchAndApply(startLocation, endLocation binlog.Location, realEventHeaderTS uint32) (bool, pb.ErrorOp) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -145,6 +145,7 @@ func (h *Holder) MatchAndApply(startLocation, endLocation binlog.Location) (bool
 		// set LogPos as start position
 		for _, ev := range operator.events {
 			ev.Header.LogPos = startLocation.Position.Pos
+			ev.Header.Timestamp = realEventHeaderTS
 			if e, ok := ev.Event.(*replication.QueryEvent); ok {
 				if startLocation.GetGTID() != nil {
 					e.GSet = startLocation.GetGTID().Origin()

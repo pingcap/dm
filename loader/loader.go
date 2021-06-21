@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"go.etcd.io/etcd/clientv3"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/pingcap/dm/dm/config"
@@ -35,6 +36,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/dumpling"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
+	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -180,6 +182,17 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 			})
 
 			failpoint.Inject("LoadDataSlowDown", nil)
+
+			failpoint.Inject("LoadDataSlowDownByTask", func(val failpoint.Value) {
+				tasks := val.(string)
+				taskNames := strings.Split(tasks, ",")
+				for _, taskName := range taskNames {
+					if w.cfg.Name == taskName {
+						w.logger.Info("inject failpoint LoadDataSlowDownByTask", zap.String("task", taskName))
+						<-newCtx.Done()
+					}
+				}
+			})
 
 			err := w.conn.executeSQL(ctctx, sqls)
 			failpoint.Inject("executeSQLError", func(_ failpoint.Value) {
@@ -386,6 +399,8 @@ type Loader struct {
 	sync.RWMutex
 
 	cfg        *config.SubTaskConfig
+	cli        *clientv3.Client
+	workerName string
 	checkPoint CheckPoint
 
 	logger log.Logger
@@ -424,13 +439,15 @@ type Loader struct {
 }
 
 // NewLoader creates a new Loader.
-func NewLoader(cfg *config.SubTaskConfig) *Loader {
+func NewLoader(cfg *config.SubTaskConfig, cli *clientv3.Client, workerName string) *Loader {
 	loader := &Loader{
 		cfg:        cfg,
+		cli:        cli,
 		db2Tables:  make(map[string]Tables2DataFiles),
 		tableInfos: make(map[string]*tableInfo),
 		workerWg:   new(sync.WaitGroup),
 		logger:     log.With(zap.String("task", cfg.Name), zap.String("unit", "load")),
+		workerName: workerName,
 	}
 	loader.fileJobQueueClosed.Store(true) // not open yet
 	return loader
@@ -648,6 +665,9 @@ func (l *Loader) IsFreshTask(ctx context.Context) (bool, error) {
 
 // Restore begins the restore process.
 func (l *Loader) Restore(ctx context.Context) error {
+	if err := l.putLoadTask(); err != nil {
+		return err
+	}
 	// reset some counter used to calculate progress
 	l.totalDataSize.Store(0)
 	l.finishedDataSize.Store(0) // reset before load from checkpoint
@@ -703,8 +723,15 @@ func (l *Loader) Restore(ctx context.Context) error {
 	if err == nil {
 		l.finish.Store(true)
 		l.logger.Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
-		if l.cfg.CleanDumpFile && l.checkPoint.AllFinished() {
-			l.cleanDumpFiles()
+		if l.checkPoint.AllFinished() {
+			if l.cfg.Mode == config.ModeFull {
+				if err = l.delLoadTask(); err != nil {
+					return err
+				}
+			}
+			if l.cfg.CleanDumpFile {
+				l.cleanDumpFiles()
+			}
 		}
 	} else if errors.Cause(err) != context.Canceled {
 		return err
@@ -1444,6 +1471,15 @@ func (l *Loader) getMydumpMetadata() error {
 	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
 	loc, _, err := dumpling.ParseMetaData(metafile, l.cfg.Flavor)
 	if err != nil {
+		if os.IsNotExist(err) {
+			worker, _, err2 := ha.GetLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID)
+			if err2 != nil {
+				l.logger.Warn("get load task", log.ShortError(err2))
+			}
+			if worker != "" && worker != l.workerName {
+				return terror.ErrLoadTaskWorkerNotMatch.Generate(worker, l.workerName)
+			}
+		}
 		if terror.ErrMetadataNoBinlogLoc.Equal(err) {
 			l.logger.Warn("dumped metadata doesn't have binlog location, it's OK if DM doesn't enter incremental mode")
 			return nil
@@ -1489,4 +1525,24 @@ func (l *Loader) cleanDumpFiles() {
 			l.logger.Warn("show last error when remove loaded dump sql files", zap.String("data folder", l.cfg.Dir), zap.Error(lastErr))
 		}
 	}
+}
+
+// putLoadTask is called when start restoring data, to put load worker in etcd.
+func (l *Loader) putLoadTask() error {
+	_, err := ha.PutLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID, l.workerName)
+	if err != nil {
+		return err
+	}
+	l.logger.Info("put load worker in etcd", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
+	return nil
+}
+
+// delLoadTask is called when finish restoring data, to delete load worker in etcd.
+func (l *Loader) delLoadTask() error {
+	_, _, err := ha.DelLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID)
+	if err != nil {
+		return err
+	}
+	l.logger.Info("delete load worker in etcd for full mode", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
+	return nil
 }

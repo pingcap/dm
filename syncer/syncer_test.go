@@ -1050,6 +1050,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.DisableCausality = false
 
 	syncer := NewSyncer(s.cfg, nil)
+	syncer.cfg.CheckpointFlushInterval = 30
 	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
 	syncer.toDBConns = []*DBConn{
 		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
@@ -1150,12 +1151,12 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			"",
 			nil,
 		}, {
-			// in first 5 minutes, safe mode is true, will split update to delete + replace
+			// in first minute, safe mode is true, will split update to delete + replace
 			update,
 			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
 			[]interface{}{int64(580981944116838402)},
 		}, {
-			// in first 5 minutes, , safe mode is true, will split update to delete + replace
+			// in the first minute, safe mode is true, will split update to delete + replace
 			update,
 			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int64(580981944116838401), "b"},
