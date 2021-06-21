@@ -3,14 +3,18 @@
 
 process=$1
 
-while true
-do
+WAIT_COUNT=0
+while [ $WAIT_COUNT -lt 30 ]; do
     pgrep $process > /dev/null 2>&1
     ret=$?
     if [ "$ret" != "0" ]; then
         echo "process $process already exit"
-        break
+        exit 0
     fi
-    sleep 0.2
+    sleep 1
     echo "wait process $process exit..."
+    ((WAIT_COUNT++))
 done
+
+echo "process $process didn't exit after 30 seconds"
+exit 1
