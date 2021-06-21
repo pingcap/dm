@@ -18,6 +18,7 @@ type ExpressionFilter struct {
 	DeleteValueExpr    string `yaml:"delete-value-expr" toml:"delete-value-expr" json:"delete-value-expr"`
 }
 
+// Expression wraps expression.Expression with tableInfo and other.
 type Expression struct {
 	expression.Expression
 	TableInfo *model.TableInfo

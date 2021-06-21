@@ -311,7 +311,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return terror.ErrSyncerUnitGenBinlogEventFilter.Delegate(err)
 	}
 
-	s.exprFilterGroup = NewExprFilterGroup(s.cfg.ExprFilter)
+	s.exprFilterGroup = NewExprFilterGroup(s.cfg.ExprFilter, s.schemaTracker.GetSimpleExprOfTable)
 
 	if len(s.cfg.ColumnMappingRules) > 0 {
 		s.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
@@ -1861,18 +1861,15 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		originalTableInfo: ti,
 	}
 
-	exprMapKey := dbutil.TableName(originSchema, originTable)
 	switch ec.header.EventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-		if _, ok := s.exprFilterGroup.InsertExprs[exprMapKey]; !ok {
-			err = s.exprFilterGroup.RefreshExprs(originSchema, originTable, s.schemaTracker.GetSimpleExprOfTable, insert)
-			if err != nil {
-				return err
-			}
+		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(originSchema, originTable)
+		if err2 != nil {
+			return err2
 		}
 
 		param.safeMode = ec.safeMode.Enable()
-		sqls, keys, args, err = genInsertSQLs(param, s.exprFilterGroup.InsertExprs[exprMapKey])
+		sqls, keys, args, err = genInsertSQLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
@@ -1880,17 +1877,13 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-		_, ok1 := s.exprFilterGroup.UpdateOldExprs[exprMapKey]
-		_, ok2 := s.exprFilterGroup.UpdateNewExprs[exprMapKey]
-		if !ok1 && !ok2 {
-			err = s.exprFilterGroup.RefreshExprs(originSchema, originTable, s.schemaTracker.GetSimpleExprOfTable, update)
-			if err != nil {
-				return err
-			}
+		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(originSchema, originTable)
+		if err2 != nil {
+			return err2
 		}
 
 		param.safeMode = ec.safeMode.Enable()
-		sqls, keys, args, err = genUpdateSQLs(param, s.exprFilterGroup.UpdateOldExprs[exprMapKey], s.exprFilterGroup.UpdateNewExprs[exprMapKey])
+		sqls, keys, args, err = genUpdateSQLs(param, oldExprFilter, newExprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
@@ -1898,14 +1891,12 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-		if _, ok := s.exprFilterGroup.DeleteExprs[exprMapKey]; !ok {
-			err = s.exprFilterGroup.RefreshExprs(originSchema, originTable, s.schemaTracker.GetSimpleExprOfTable, del)
-			if err != nil {
-				return err
-			}
+		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(originSchema, originTable)
+		if err2 != nil {
+			return err2
 		}
 
-		sqls, keys, args, err = genDeleteSQLs(param, s.exprFilterGroup.DeleteExprs[exprMapKey])
+		sqls, keys, args, err = genDeleteSQLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
