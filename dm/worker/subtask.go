@@ -49,7 +49,7 @@ const (
 var createUnits = createRealUnits
 
 // createRealUnits creates process units base on task mode.
-func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, workerName string) []unit.Unit {
 	failpoint.Inject("mockCreateUnitsDumpOnly", func(_ failpoint.Value) {
 		log.L().Info("create mock worker units with dump unit only", zap.String("failpoint", "mockCreateUnitsDumpOnly"))
 		failpoint.Return([]unit.Unit{dumpling.NewDumpling(cfg)})
@@ -59,12 +59,12 @@ func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []u
 	switch cfg.Mode {
 	case config.ModeAll:
 		us = append(us, dumpling.NewDumpling(cfg))
-		us = append(us, loader.NewLoader(cfg))
+		us = append(us, loader.NewLoader(cfg, etcdClient, workerName))
 		us = append(us, syncer.NewSyncer(cfg, etcdClient))
 	case config.ModeFull:
 		// NOTE: maybe need another checker in the future?
 		us = append(us, dumpling.NewDumpling(cfg))
-		us = append(us, loader.NewLoader(cfg))
+		us = append(us, loader.NewLoader(cfg, etcdClient, workerName))
 	case config.ModeIncrement:
 		us = append(us, syncer.NewSyncer(cfg, etcdClient))
 	default:
@@ -98,6 +98,8 @@ type SubTask struct {
 	result *pb.ProcessResult // the process result, nil when is processing
 
 	etcdClient *clientv3.Client
+
+	workerName string
 }
 
 // NewSubTask is subtask initializer
@@ -105,12 +107,12 @@ type SubTask struct {
 var NewSubTask = NewRealSubTask
 
 // NewRealSubTask creates a new SubTask.
-func NewRealSubTask(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
-	return NewSubTaskWithStage(cfg, pb.Stage_New, etcdClient)
+func NewRealSubTask(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, workerName string) *SubTask {
+	return NewSubTaskWithStage(cfg, pb.Stage_New, etcdClient, workerName)
 }
 
 // NewSubTaskWithStage creates a new SubTask with stage.
-func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *clientv3.Client) *SubTask {
+func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *clientv3.Client, workerName string) *SubTask {
 	ctx, cancel := context.WithCancel(context.Background())
 	st := SubTask{
 		cfg:        cfg,
@@ -119,6 +121,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 		ctx:        ctx,
 		cancel:     cancel,
 		etcdClient: etcdClient,
+		workerName: workerName,
 	}
 	updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 	return &st
@@ -126,7 +129,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 
 // Init initializes the sub task processing units.
 func (st *SubTask) Init() error {
-	st.units = createUnits(st.cfg, st.etcdClient)
+	st.units = createUnits(st.cfg, st.etcdClient, st.workerName)
 	if len(st.units) < 1 {
 		return terror.ErrWorkerNoAvailUnits.Generate(st.cfg.Name, st.cfg.Mode)
 	}

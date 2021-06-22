@@ -403,7 +403,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, n
 
 	// directly put cfg into subTaskHolder
 	// the unique of subtask should be assured by etcd
-	st := NewSubTask(cfg, w.etcdClient)
+	st := NewSubTask(cfg, w.etcdClient, w.name)
 	w.subTaskHolder.recordSubTask(st)
 	if w.closed.Load() {
 		st.fail(terror.ErrWorkerAlreadyClosed.Generate())
