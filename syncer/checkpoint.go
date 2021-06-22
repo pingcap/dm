@@ -563,7 +563,10 @@ func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, sour
 	sqls := make([]string, 0, 1)
 	args := make([][]interface{}, 0, 10)
 
-	point := cp.points[sourceSchema][sourceTable]
+	point, ok := cp.points[sourceSchema][sourceTable]
+	if !ok {
+		point = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil, cp.cfg.EnableGTID)
+	}
 
 	tiBytes, err := json.Marshal(ti)
 	if err != nil {
