@@ -163,6 +163,7 @@ RowLoop:
 				return nil, nil, nil, err
 			}
 			if skip {
+				// TODO: we skip generating the UPDATE SQL, so we left the old value here. Is this expected?
 				continue RowLoop
 			}
 		}
