@@ -22,8 +22,8 @@ require (
 	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3
 	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
 	github.com/pingcap/log v0.0.0-20210317133921-96f4fcab92a4
-	github.com/pingcap/parser v0.0.0-20210415081931-48e7f467fd74
-	github.com/pingcap/tidb v1.1.0-beta.0.20210330094614-60111e1c4b6f
+	github.com/pingcap/parser v0.0.0-20210513020953-ae2c4497c07b
+	github.com/pingcap/tidb v1.1.0-beta.0.20210517044538-8ad868f801fc
 	github.com/pingcap/tidb-tools v5.0.1-0.20210420102153-beed8ddc59e9+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
@@ -40,11 +40,13 @@ require (
 	go.uber.org/zap v1.16.0
 	golang.org/x/exp v0.0.0-20200513190911-00229845015e // indirect
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
-	golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4
+	golang.org/x/sys v0.0.0-20210324051608-47abb6519492
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/genproto v0.0.0-20200224152610-e50cd9704f63
 	google.golang.org/grpc v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
 )
+
+replace github.com/pingcap/dumpling v0.0.0-20210407092432-e1cfe4ce0a53 => github.com/feloxx/dumpling v0.0.0-20210611071809-3ca022a79e95
 
 go 1.16
