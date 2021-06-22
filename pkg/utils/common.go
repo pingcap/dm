@@ -256,6 +256,8 @@ func AdjustBinaryProtocolForDatum(data []interface{}, cols []*model.ColumnInfo) 
 			d = uint64(v)
 		case uint32:
 			d = uint64(v)
+		case uint:
+			d = uint64(v)
 		case decimal.Decimal:
 			d = v.String()
 		}
