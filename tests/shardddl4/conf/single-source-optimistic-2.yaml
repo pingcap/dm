@@ -4,7 +4,6 @@ task-mode: all
 is-sharding: true
 shard-mode: "optimistic"
 meta-schema: "dm_meta"
-timezone: "Asia/Shanghai"
 
 target-database:
   host: "127.0.0.1"

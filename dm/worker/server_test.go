@@ -114,11 +114,11 @@ func (t *testServer) TestServer(c *C) {
 	cfg.RelayKeepAliveTTL = keepAliveTTL
 
 	NewRelayHolder = NewDummyRelayHolder
-	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
+	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string) *SubTask {
 		cfg.UseRelay = false
-		return NewRealSubTask(cfg, etcdClient)
+		return NewRealSubTask(cfg, etcdClient, worker)
 	}
-	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string) []unit.Unit {
 		mockDumper := NewMockUnit(pb.UnitType_Dump)
 		mockLoader := NewMockUnit(pb.UnitType_Load)
 		mockSync := NewMockUnit(pb.UnitType_Sync)
@@ -386,7 +386,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 	rev, err := ha.DeleteSourceBound(etcdCli, cfg.Name)
 	c.Assert(err, IsNil)
 	// step 2: start source at this worker
-	w, err := s.getOrStartWorker(&sourceCfg, true)
+	w, err := s.getOrStartWorker(sourceCfg, true)
 	c.Assert(err, IsNil)
 	c.Assert(w.EnableHandleSubtasks(), IsNil)
 	// step 3: trigger etcd compaction and check whether we can receive it through watcher
@@ -420,7 +420,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 		return s.getWorker(true) != nil
 	}), IsTrue)
 	cfg2 := s.getWorker(true).cfg
-	c.Assert(*cfg2, DeepEquals, sourceCfg)
+	c.Assert(cfg2, DeepEquals, sourceCfg)
 	cancel1()
 	wg.Wait()
 	c.Assert(s.stopWorker(sourceCfg.SourceID, true), IsNil)
@@ -435,7 +435,7 @@ func (t *testServer) TestWatchSourceBoundEtcdCompact(c *C) {
 		return s.getWorker(true) != nil
 	}), IsTrue)
 	cfg2 = s.getWorker(true).cfg
-	c.Assert(*cfg2, DeepEquals, sourceCfg)
+	c.Assert(cfg2, DeepEquals, sourceCfg)
 	cancel2()
 	wg.Wait()
 }
@@ -633,9 +633,8 @@ func checkRelayStatus(cli pb.WorkerClient, expect pb.Stage) bool {
 	return status.SourceStatus.RelayStatus.Stage == expect
 }
 
-func loadSourceConfigWithoutPassword(c *C) config.SourceConfig {
-	var sourceCfg config.SourceConfig
-	err := sourceCfg.LoadFromFile(sourceSampleFile)
+func loadSourceConfigWithoutPassword(c *C) *config.SourceConfig {
+	sourceCfg, err := config.LoadFromFile(sourceSampleFile)
 	c.Assert(err, IsNil)
 	sourceCfg.From.Password = "" // no password set
 	return sourceCfg

@@ -35,7 +35,6 @@ name: test
 task-mode: all
 shard-mode: "pessimistic"       
 meta-schema: "dm_meta"         
-timezone: "Asia/Shanghai"     
 case-sensitive: false        
 online-ddl-scheme: "gh-ost" 
 clean-dump-file: true     
@@ -137,7 +136,6 @@ name: test
 task-mode: all
 shard-mode: "pessimistic"       
 meta-schema: "dm_meta"         
-timezone: "Asia/Shanghai"     
 case-sensitive: false        
 online-ddl-scheme: "gh-ost" 
 clean-dump-file: true     
@@ -244,8 +242,8 @@ name: test
 task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
-enable-heartbeat: true
 timezone: "Asia/Shanghai"
+enable-heartbeat: true
 ignore-checking-items: ["all"]
 
 target-database:
@@ -308,7 +306,6 @@ task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
 enable-heartbeat: true
-timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 `)
 	err = ioutil.WriteFile(filepath, configContent, 0o644)
@@ -325,7 +322,6 @@ task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
 enable-heartbeat: true
-timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 `)
 	err = ioutil.WriteFile(filepath, configContent, 0o644)
@@ -340,7 +336,6 @@ name: test
 is-sharding: true
 meta-schema: "dm_meta"
 enable-heartbeat: true
-timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 `)
 	err = ioutil.WriteFile(filepath, configContent, 0o644)
@@ -358,7 +353,6 @@ meta-schema: "dm_meta"
 enable-heartbeat: true
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1
-timezone: "Asia/Shanghai"
 
 target-database:
   host: "127.0.0.1"
@@ -436,7 +430,6 @@ meta-schema: "dm_meta"
 enable-heartbeat: true
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1
-timezone: "Asia/Shanghai"
 
 target-database:
   host: "127.0.0.1"
@@ -543,13 +536,14 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		metaSchema          = "meta-sub-tasks"
 		heartbeatUI         = 12
 		heartbeatRI         = 21
-		timezone            = "Asia/Shanghai"
 		maxAllowedPacket    = 10244201
 		fromSession         = map[string]string{
-			"sql_mode": " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
+			"sql_mode":  " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
+			"time_zone": "+00:00",
 		}
 		toSession = map[string]string{
-			"sql_mode": " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
+			"sql_mode":  " NO_AUTO_VALUE_ON_ZERO,ANSI_QUOTES",
+			"time_zone": "+00:00",
 		}
 		security = Security{
 			SSLCA:         "/path/to/ca",
@@ -648,8 +642,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				BinLogPos:  456,
 				BinLogGTID: "1-1-12,4-4-4",
 			},
-			Timezone: timezone,
-			From:     source1DBCfg,
+			From: source1DBCfg,
 			To: DBConfig{
 				Host:             "127.0.0.1",
 				Port:             4000,
@@ -717,7 +710,6 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		EnableHeartbeat:         stCfg1.EnableHeartbeat,
 		HeartbeatUpdateInterval: heartbeatUI,
 		HeartbeatReportInterval: heartbeatRI,
-		Timezone:                timezone,
 		CaseSensitive:           stCfg1.CaseSensitive,
 		TargetDB:                &stCfg1.To,
 		MySQLInstances: []*MySQLInstance{
@@ -889,22 +881,22 @@ func (t *testConfig) TestAdjustTargetDBConfig(c *C) {
 	}{
 		{
 			DBConfig{},
-			DBConfig{Session: map[string]string{}},
+			DBConfig{Session: map[string]string{"time_zone": "+00:00"}},
 			semver.New("0.0.0"),
 		},
 		{
 			DBConfig{Session: map[string]string{"SQL_MODE": "ANSI_QUOTES"}},
-			DBConfig{Session: map[string]string{"sql_mode": "ANSI_QUOTES"}},
+			DBConfig{Session: map[string]string{"sql_mode": "ANSI_QUOTES", "time_zone": "+00:00"}},
 			semver.New("2.0.7"),
 		},
 		{
 			DBConfig{},
-			DBConfig{Session: map[string]string{tidbTxnMode: tidbTxnOptimistic}},
+			DBConfig{Session: map[string]string{tidbTxnMode: tidbTxnOptimistic, "time_zone": "+00:00"}},
 			semver.New("3.0.1"),
 		},
 		{
 			DBConfig{Session: map[string]string{"SQL_MODE": "", tidbTxnMode: "pessimistic"}},
-			DBConfig{Session: map[string]string{"sql_mode": "", tidbTxnMode: "pessimistic"}},
+			DBConfig{Session: map[string]string{"sql_mode": "", tidbTxnMode: "pessimistic", "time_zone": "+00:00"}},
 			semver.New("4.0.0-beta.2"),
 		},
 	}

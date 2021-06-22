@@ -185,11 +185,11 @@ func GetLastSourceBounds(cli *clientv3.Client) (map[string]SourceBound, int64, e
 // if source bound is empty, will return an empty sourceBound and an empty source config
 // if source bound is not empty but sourceConfig is empty, will return an error
 // if the source bound is different for over retryNum times, will return an error.
-func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, config.SourceConfig, int64, error) {
+func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, *config.SourceConfig, int64, error) {
 	var (
 		bound    SourceBound
 		newBound SourceBound
-		cfg      config.SourceConfig
+		cfg      *config.SourceConfig
 		ok       bool
 		retryNum = defaultGetSourceBoundConfigRetry
 	)

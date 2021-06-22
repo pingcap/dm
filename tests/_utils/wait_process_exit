@@ -1,7 +1,16 @@
 #!/bin/bash
 # parameter 1: process name
-
 process=$1
+
+PID=$(pgrep $process)
+if [ -z "$PID" ]; then
+	echo "process $process already exit"
+	exit
+fi
+
+WAIT_COUNT=10
+KILL_TIMES=1 # make sure only send kill -9 once.
+count=0
 
 while true; do
 	pgrep $process >/dev/null 2>&1
@@ -11,5 +20,10 @@ while true; do
 		break
 	fi
 	sleep 0.2
+	((count++))
 	echo "wait process $process exit..."
+	if [ $count -gt $WAIT_COUNT ] && [ $KILL_TIMES -lt 2 ]; then
+		((KILL_TIMES++))
+		kill -9 $PID || true
+	fi
 done

@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -232,6 +233,12 @@ func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
 	return utils.GetParser(context.Background(), db)
+}
+
+func (s *testSyncerSuite) mockGetServerUnixTS(mock sqlmock.Sqlmock) {
+	ts := time.Now().Unix()
+	rows := sqlmock.NewRows([]string{"UNIX_TIMESTAMP()"}).AddRow(strconv.FormatInt(ts, 10))
+	mock.ExpectQuery("SELECT UNIX_TIMESTAMP()").WillReturnRows(rows)
 }
 
 func (s *testSyncerSuite) TestSelectDB(c *C) {
@@ -1008,6 +1015,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
+	s.mockGetServerUnixTS(mock)
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
 	checkPointDB, checkPointMock, err := sqlmock.New()
@@ -1042,6 +1050,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.DisableCausality = false
 
 	syncer := NewSyncer(s.cfg, nil)
+	syncer.cfg.CheckpointFlushInterval = 30
 	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
 	syncer.toDBConns = []*DBConn{
 		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
@@ -1059,6 +1068,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	syncer.setupMockCheckpoint(c, checkPointDBConn, checkPointMock)
 
 	syncer.reset()
+	s.mockGetServerUnixTS(mock)
 	events1 := mockBinlogEvents{
 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"test_1"}},
 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"test_1", "create table test_1.t_1(id int primary key, name varchar(24))"}},
@@ -1141,12 +1151,12 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			"",
 			nil,
 		}, {
-			// in first 5 minutes, safe mode is true, will split update to delete + replace
+			// in first minute, safe mode is true, will split update to delete + replace
 			update,
 			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
 			[]interface{}{int64(580981944116838402)},
 		}, {
-			// in first 5 minutes, , safe mode is true, will split update to delete + replace
+			// in the first minute, safe mode is true, will split update to delete + replace
 			update,
 			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int64(580981944116838401), "b"},
@@ -1257,6 +1267,8 @@ func (s *testSyncerSuite) TestRun(c *C) {
 func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
+	s.mockGetServerUnixTS(mock)
+
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
 	checkPointDB, checkPointMock, err := sqlmock.New()
@@ -1690,4 +1702,40 @@ func (s *Syncer) setupMockCheckpoint(c *C, checkPointDBConn *sql.Conn, checkPoin
 	// mock syncer.checkpoint.Init() function
 	s.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
 	c.Assert(s.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background()), IsNil)
+}
+
+func (s *testSyncerSuite) TestTrackDownstreamTableWontOverwrite(c *C) {
+	syncer := Syncer{}
+	ctx := context.Background()
+	tctx := tcontext.Background()
+
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(ctx)
+	c.Assert(err, IsNil)
+	baseConn := conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})
+	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: baseConn}
+	syncer.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, defaultTestSessionCfg, baseConn)
+	c.Assert(err, IsNil)
+
+	upTable, downTable := "up", "down"
+	schema := "test"
+	createTableSQL := "CREATE TABLE up (c1 int, c2 int);"
+
+	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow(downTable, " CREATE TABLE `"+downTable+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+
+	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(schema), IsNil)
+	c.Assert(syncer.schemaTracker.Exec(ctx, "test", createTableSQL), IsNil)
+	ti, err := syncer.getTable(tctx, schema, upTable, schema, downTable)
+	c.Assert(err, IsNil)
+	c.Assert(ti.Columns, HasLen, 2)
+	c.Assert(syncer.trackTableInfoFromDownstream(tctx, schema, upTable, schema, downTable), IsNil)
+	newTi, err := syncer.getTable(tctx, schema, upTable, schema, downTable)
+	c.Assert(err, IsNil)
+	c.Assert(newTi, DeepEquals, ti)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }

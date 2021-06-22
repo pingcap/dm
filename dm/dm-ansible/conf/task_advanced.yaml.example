@@ -6,7 +6,6 @@ meta-schema: "dm_meta"  # meta schema in downstreaming database to store meta in
 enable-heartbeat: false  # whether to enable heartbeat for calculating lag between master and syncer
 # heartbeat-update-interval: 1  # interval to do heartbeat and save timestamp, default 1s
 # heartbeat-report-interval: 10 # interval to report time lap to prometheus, default 10s
-# timezone: "Asia/Shanghai" # target database timezone, all timestamp event in binlog will translate to format time based on this timezone, default use local timezone
 
 target-database:
   host: "192.168.0.1"

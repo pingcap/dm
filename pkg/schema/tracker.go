@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
@@ -25,10 +24,10 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	tidbConfig "github.com/pingcap/tidb/config"
+	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
-	"github.com/pingcap/tidb/meta"
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/store/mockstore"
 	"go.uber.org/zap"
@@ -36,10 +35,6 @@ import (
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
-)
-
-const (
-	waitDDLRetryCount = 10
 )
 
 var (
@@ -299,87 +294,9 @@ func cloneTableInfo(ti *model.TableInfo) *model.TableInfo {
 
 // CreateTableIfNotExists creates a TABLE of the given name if it did not exist.
 func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo) error {
-	infoSchema := tr.dom.InfoSchema()
 	dbName := model.NewCIStr(db)
 	tableName := model.NewCIStr(table)
-	if infoSchema.TableExists(dbName, tableName) {
-		return nil
-	}
-
-	dbInfo, exists := infoSchema.SchemaByName(dbName)
-	if !exists || dbInfo == nil {
-		return infoschema.ErrDatabaseNotExists.GenWithStackByArgs(dbName)
-	}
-
-	// we need to go through the low-level DDL Job API since we don't have a way
-	// to recover a CreateTableStmt from a TableInfo yet.
-
-	// First enqueue the DDL job.
-	var (
-		jobID int64
-		ctx   = context.Background()
-	)
-	err := kv.RunInNewTxn(ctx, tr.store, true /*retryable*/, func(_ context.Context, txn kv.Transaction) error {
-		// reallocate IDs
-		idsCount := 2
-		if ti.Partition != nil {
-			idsCount += len(ti.Partition.Definitions)
-		}
-		m := meta.NewMeta(txn)
-		ids, err := m.GenGlobalIDs(idsCount)
-		if err != nil {
-			return err
-		}
-
-		jobID = ids[0]
-		tableInfo := cloneTableInfo(ti)
-		tableInfo.ID = ids[1]
-		tableInfo.Name = tableName
-		if tableInfo.Partition != nil {
-			for i := range tableInfo.Partition.Definitions {
-				tableInfo.Partition.Definitions[i].ID = ids[i+2]
-			}
-		}
-
-		return m.EnQueueDDLJob(&model.Job{
-			ID:         jobID,
-			Type:       model.ActionCreateTable,
-			SchemaID:   dbInfo.ID,
-			TableID:    tableInfo.ID,
-			SchemaName: dbName.O,
-			Version:    1,
-			StartTS:    txn.StartTS(),
-			BinlogInfo: &model.HistoryInfo{},
-			Args:       []interface{}{tableInfo},
-		})
-	})
-	if err != nil {
-		return err
-	}
-
-	// Then wait until the DDL job is synchronized (should take 2 * lease)
-	lease := tr.dom.DDL().GetLease() * 2
-	for i := 0; i < waitDDLRetryCount; i++ {
-		var job *model.Job
-		err = kv.RunInNewTxn(ctx, tr.store, false /*retryable*/, func(_ context.Context, txn kv.Transaction) error {
-			m := meta.NewMeta(txn)
-			var e error
-			job, e = m.GetHistoryDDLJob(jobID)
-			return e
-		})
-		if err == nil && job != nil {
-			if job.IsSynced() {
-				return nil
-			}
-			if job.Error != nil {
-				return job.Error
-			}
-		}
-		time.Sleep(lease)
-	}
-	if err == nil {
-		// reaching here is basically a bug.
-		return errors.Errorf("Cannot create table %s.%s, the DDL job never returned", db, table)
-	}
-	return err
+	ti = cloneTableInfo(ti)
+	ti.Name = tableName
+	return tr.dom.DDL().CreateTableWithInfo(tr.se, dbName, ti, ddl.OnExistIgnore, false)
 }

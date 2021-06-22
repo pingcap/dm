@@ -25,6 +25,13 @@ check_mysql() {
 	done
 }
 
+set_default_variables() {
+	host=$1
+	port=$2
+	password=$3
+	mysql -u root -h ${host} -P ${port} -p${password} -e "set global character_set_server='utf8mb4';set global collation_server='utf8mb4_bin';"
+}
+
 start_services() {
 	stop_services
 
@@ -37,6 +44,8 @@ start_services() {
 
 	check_mysql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_mysql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+	set_default_variables $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	set_default_variables $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 }
 
 if [ "$#" -ge 1 ]; then
@@ -93,15 +102,17 @@ function run() {
 
 if [ "$test_case" == "*" ]; then
 	for script in $CUR/$test_case/run.sh; do
+		echo "start running case: [$test_case] script: [$script]"
 		run $script
 	done
 elif [ "$test_case" == "compatibility" ]; then
 	script="$CUR/compatibility/start.sh"
+	echo "start running case: [$test_case] script: [$script]"
 	run $script
 else
 	for name in $test_case; do
 		script="$CUR/$name/run.sh"
-		echo "run $script"
+		echo "start running case: [$name] script: [$script]"
 		run $script
 	done
 fi

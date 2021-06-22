@@ -25,7 +25,6 @@ func (t *testConfig) TestSubTask(c *C) {
 		ShardMode:       "optimistic",
 		SourceID:        "mysql-instance-01",
 		OnlineDDLScheme: "pt",
-		Timezone:        "Asia/Shanghai",
 		From: DBConfig{
 			Host:     "127.0.0.1",
 			Port:     3306,
@@ -74,7 +73,6 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 			Name:            "test-task",
 			SourceID:        "mysql-instance-01",
 			OnlineDDLScheme: "pt",
-			Timezone:        "Asia/Shanghai",
 			From: DBConfig{
 				Host:     "127.0.0.1",
 				Port:     3306,
@@ -132,14 +130,6 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				return cfg
 			},
 			"\\[.*\\], Message: online scheme rtc not supported.*",
-		},
-		{
-			func() *SubTaskConfig {
-				cfg := newSubTaskConfig()
-				cfg.Timezone = "my-house"
-				return cfg
-			},
-			"\\[.*\\], Message: invalid timezone string: my-house.*",
 		},
 	}
 

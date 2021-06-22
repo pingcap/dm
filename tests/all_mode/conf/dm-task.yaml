@@ -6,7 +6,6 @@ meta-schema: "dm_meta"
 # enable-heartbeat: true
 heartbeat-update-interval: 1
 heartbeat-report-interval: 1
-timezone: "Asia/Shanghai"
 
 target-database:
   host: "127.0.0.1"
@@ -24,17 +23,26 @@ mysql-instances:
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
+    filter-rules: ["user-filter-1"]
 
   - source-id: "mysql-replica-02"
     block-allow-list:  "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
+    filter-rules: ["user-filter-1"]
 
 black-white-list: # compatible with deprecated config
   instance:
     do-dbs: ["all_mode"]
     ignore-dbs: ["ignore_db"]
+
+filters:                     # filter rules, mysql instance can ref rules in it
+  user-filter-1:
+    schema-pattern: "*"    # pattern of the upstream schema name, wildcard characters (*?) are supported
+    table-pattern: "*"        # pattern of the upstream table name, wildcard characters (*?) are supported
+    events: ["truncate table", "drop table"]  # ignore truncate/drop table ddl
+    action: Ignore
 
 mydumpers:
   global:

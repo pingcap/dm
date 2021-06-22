@@ -173,7 +173,7 @@ func GetRelayConfig(cli *clientv3.Client, worker string) (*config.SourceConfig, 
 			return nil, 0, terror.ErrConfigMissingForBound.Generate(source)
 		}
 
-		return &cfg, rev2, nil
+		return cfg, rev2, nil
 	}
 	return nil, 0, terror.ErrWorkerRelayConfigChanging.Generate(worker, source, newSource)
 }

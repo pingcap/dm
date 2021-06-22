@@ -20,6 +20,7 @@ function run() {
 	# start DM worker and source one-by-one, make sure the source1 bound to worker1
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	check_metric $MASTER_PORT 'start_leader_counter' 3 0 2
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
@@ -32,6 +33,9 @@ function run() {
 	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
 	dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\"}" 3 1 3
+	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\"}" 3 1 3
+
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	# TODO: when there's a purged gap, if starting gtid set covers gap, there should be no data lost
@@ -107,16 +111,16 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"start-task $cur/conf/dm-task.yaml"
-
 	# both with and without relay should error
 	# (different version of MySQL has different error message, only compare error code here)
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status $TASK_NAME" \
 		"no relay pos match gtid" 1 \
 		"ERROR 1236 (HY000)" 1
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\"}" 3 2 4
+	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\"}" 3 2 4
 }
 
 cleanup_data gtid

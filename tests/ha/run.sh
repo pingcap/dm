@@ -20,6 +20,9 @@ function run() {
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
 
+	# master1 or master2 join campaign
+	check_metric $MASTER_PORT2 'start_leader_counter' 3 0 2 || check_metric $MASTER_PORT1 'start_leader_counter' 3 0 2
+
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	echo "operate mysql config to worker"
@@ -40,6 +43,10 @@ function run() {
 	# join master3
 	run_dm_master $WORK_DIR/master3 $MASTER_PORT3 $cur/conf/dm-master3.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3
+	check_metric $MASTER_PORT3 'start_leader_counter' 3 -1 1 # master3 is not leader
+
+	# worker in running stage
+	check_metric $MASTER_PORT1 'dm_master_worker_state{worker="worker1"}' 3 1 3 || check_metric $MASTER_PORT2 'dm_master_worker_state{worker="worker1"}' 3 1 3
 
 	echo "start DM task"
 	dmctl_start_task
@@ -167,11 +174,7 @@ function run() {
 	echo "now we will check whether joined masters can work normally"
 
 	# we need some time for cluster to re-elect new available leader
-	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
-		"stop-task test" \
-		"\"result\": true" 3 \
-		"\"source\": \"$SOURCE_ID1\"" 1 \
-		"\"source\": \"$SOURCE_ID2\"" 1
+	dmctl_stop_task_with_retry "test" $MASTER_PORT5
 
 	run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2

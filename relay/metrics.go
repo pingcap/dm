@@ -17,6 +17,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/pingcap/failpoint"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -156,19 +157,25 @@ func reportRelayLogSpaceInBackground(ctx context.Context, dirpath string) error 
 	}
 
 	go func() {
-		ticker := time.NewTicker(time.Second * 10)
+		var ticker *time.Ticker
+		ticker = time.NewTicker(time.Second * 10)
+		failpoint.Inject("ReportRelayLogSpaceInBackground", func(val failpoint.Value) {
+			t := val.(int)
+			ticker = time.NewTicker(time.Duration(t) * time.Second)
+		})
 		defer ticker.Stop()
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			size, err := utils.GetStorageSize(dirpath)
-			if err != nil {
-				log.L().Error("fail to update relay log storage size", log.ShortError(err))
-			} else {
-				relayLogSpaceGauge.WithLabelValues("capacity").Set(float64(size.Capacity))
-				relayLogSpaceGauge.WithLabelValues("available").Set(float64(size.Available))
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				size, err := utils.GetStorageSize(dirpath)
+				if err != nil {
+					log.L().Error("fail to update relay log storage size", log.ShortError(err))
+				} else {
+					relayLogSpaceGauge.WithLabelValues("capacity").Set(float64(size.Capacity))
+					relayLogSpaceGauge.WithLabelValues("available").Set(float64(size.Available))
+				}
 			}
 		}
 	}()

@@ -18,10 +18,16 @@ import (
 	"os"
 	"strconv"
 
+	dcontext "github.com/pingcap/dumpling/v4/context"
+	"github.com/pingcap/dumpling/v4/export"
+	dlog "github.com/pingcap/dumpling/v4/log"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -125,4 +131,15 @@ func recordSourceTbls(sourceTbls map[string]map[string]struct{}, stmt ast.StmtNo
 		}
 		sourceTbls[schema][name] = struct{}{}
 	}
+}
+
+func printServerVersion(tctx *tcontext.Context, db *conn.BaseDB, scope string) {
+	logger := dlog.NewAppLogger(tctx.Logger.With(zap.String("scope", scope)))
+	versionInfo, err := export.SelectVersion(db.DB)
+	if err != nil {
+		logger.Warn("fail to get version info", zap.Error(err))
+		return
+	}
+	dctx := dcontext.NewContext(tctx.Ctx, logger)
+	export.ParseServerInfo(dctx, versionInfo)
 }

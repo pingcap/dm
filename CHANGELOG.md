@@ -1,6 +1,43 @@
 # DM Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.0.7] 2021-06-21
+
+### Bug fixes
+
+- Fix the issue that data may be lost after a task restarts from interruption [#1783](https://github.com/pingcap/dm/pull/1783)
+
+## [2.0.4] 2021-06-18
+
+### Improvements
+
+- Support rescheduling and automatically resuming tasks after a DM-worker goes offline first and then comes back online during the full import [#1784](https://github.com/pingcap/dm/pull/1784)
+- Add the metric `replicationLagGauge` to monitor replication delay [#1759](https://github.com/pingcap/dm/pull/1759)
+- Restore schemas in parallel during the full import [#1701](https://github.com/pingcap/dm/pull/1701)
+- Support automatically adjusting the time_zone settings of both the upstream and downstream databases [#1714](https://github.com/pingcap/dm/pull/1714)
+- Improve the speed of rolling back incremental replication tasks after the tasks meet errors  [#1705](https://github.com/pingcap/dm/pull/1705)
+- Automatically adjust GTID according to checkpoints when GTID is enabled during the incremental replication [#1745](https://github.com/pingcap/dm/pull/1745)
+- Detect the versions of upstream and downstream databases and record the versions in log files [#1693](https://github.com/pingcap/dm/pull/1693)
+- Use the schema from the dump stage of the full export as the initial schema for the incremental replication task of the same data source [#1754](https://github.com/pingcap/dm/pull/1754)
+- Decrease the time that the safe mode lasts after the incremental task is restarted to 1 minute to improve the replication speed [#1779](https://github.com/pingcap/dm/pull/1779)
+- Improve the usability of dmctl 
+  - Support setting the address of DM-master as an environment variable [#1726](https://github.com/pingcap/dm/pull/1726)
+  - Support specifying the `master-addr` parameter anywhere in a dmctl command [#1771](https://github.com/pingcap/dm/pull/1771)
+  - Use the `encrypt`/`decrypt` command instead of the `--decrypt`/`-encrypt` parameter to encrypt or decrypt the database password [#1771](https://github.com/pingcap/dm/pull/1771)
+
+### Bug fixes
+
+- Fix the issue that data may be lost after a non-GTID task restarts from interruption [#1781](https://github.com/pingcap/dm/pull/1781)
+- Fix the issue that the data source binding information may be lost after upgrading a DM cluster which has been downgraded before [#1713](https://github.com/pingcap/dm/pull/1713)
+- Fix the issue that etcd reports that the wal directory does not exist when DM-master restarts [#1680](https://github.com/pingcap/dm/pull/1680)
+- Fix the issue that the number of error messages reported from precheck exceeds the grpc limit [#1688](https://github.com/pingcap/dm/pull/1688)
+- Fix the issue that DM-worker panics when replicating unsupported statements from a MariaDB database of an earlier version [#1734](https://github.com/pingcap/dm/pull/1734)
+- Fix the issue that DM does not update the metric of relay log disk capacity [#1753](https://github.com/pingcap/dm/pull/1753)
+- Fix the issue that DM may panic when getting the master status of the upstream database binlog [#1774](https://github.com/pingcap/dm/pull/1774)
+
+### Known issues
+
+[GitHub issues](https://github.com/pingcap/dm/issues?q=is%3Aissue+label%3Aaffected-v2.0.4)
 
 ## [2.0.3] 2021-05-10
 

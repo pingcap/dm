@@ -82,11 +82,7 @@ func (s *testDBSuite) resetBinlogSyncer(c *C) {
 		UseDecimal:     true,
 		VerifyChecksum: true,
 	}
-	if s.cfg.Timezone != "" {
-		timezone, err2 := time.LoadLocation(s.cfg.Timezone)
-		c.Assert(err2, IsNil)
-		cfg.TimestampStringLocation = timezone
-	}
+	cfg.TimestampStringLocation = time.UTC
 
 	if s.syncer != nil {
 		s.syncer.Close()
@@ -111,6 +107,12 @@ func (s *testDBSuite) TestGetServerID(c *C) {
 	id, err := utils.GetServerID(context.Background(), s.db)
 	c.Assert(err, IsNil)
 	c.Assert(id, Greater, uint32(0))
+}
+
+func (s *testDBSuite) TestGetServerUnixTS(c *C) {
+	id, err := utils.GetServerUnixTS(context.Background(), s.db)
+	c.Assert(err, IsNil)
+	c.Assert(id, Greater, int64(0))
 }
 
 func (s *testDBSuite) TestBinaryLogs(c *C) {
@@ -236,7 +238,6 @@ func (s *testDBSuite) TestTimezone(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		s.cfg.Timezone = testCase.timezone
 		syncer := NewSyncer(s.cfg, nil)
 		c.Assert(syncer.genRouter(), IsNil)
 		s.resetBinlogSyncer(c)
@@ -258,9 +259,6 @@ func (s *testDBSuite) TestTimezone(c *C) {
 			c.Assert(err, IsNil)
 		}
 		err = txn.Commit()
-		c.Assert(err, IsNil)
-
-		location, err := time.LoadLocation(testCase.timezone)
 		c.Assert(err, IsNil)
 
 		idx := 0
@@ -285,7 +283,7 @@ func (s *testDBSuite) TestTimezone(c *C) {
 				c.Assert(ts.Valid, IsTrue)
 
 				raw := ev.Rows[0][1].(string)
-				data, err := time.ParseInLocation("2006-01-02 15:04:05", raw, location)
+				data, err := time.ParseInLocation("2006-01-02 15:04:05", raw, time.UTC)
 				c.Assert(err, IsNil)
 				c.Assert(data.Unix(), DeepEquals, ts.Int64)
 				idx++

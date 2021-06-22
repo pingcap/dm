@@ -25,9 +25,9 @@ func (t *testForEtcd) TestGetRelayConfigEtcd(c *C) {
 	var (
 		worker = "dm-worker-1"
 		source = "mysql-replica-1"
-		cfg    config.SourceConfig
 	)
-	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+	cfg, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
 	cfg.SourceID = source
 	// no relay source and config
 	cfg1, rev1, err := GetRelayConfig(etcdTestCli, worker)
@@ -50,7 +50,7 @@ func (t *testForEtcd) TestGetRelayConfigEtcd(c *C) {
 	cfg2, rev4, err := GetRelayConfig(etcdTestCli, worker)
 	c.Assert(err, IsNil)
 	c.Assert(rev4, Equals, rev3)
-	c.Assert(*cfg2, DeepEquals, cfg)
+	c.Assert(cfg2, DeepEquals, cfg)
 
 	rev5, err := DeleteRelayConfig(etcdTestCli, worker)
 	c.Assert(err, IsNil)

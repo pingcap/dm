@@ -80,6 +80,21 @@ function dmctl_stop_task() {
     dmctl_operate_task $task_name stop-task
 }
 
+# shortcut for retryable stop task
+function dmctl_stop_task_with_retry() {
+    task_name=$1
+    master_port=$2
+    for ((k=0; k<10; k++)); do
+        run_dm_ctl $WORK_DIR "127.0.0.1:$master_port" \
+            "stop-task $task_name"
+        run_dm_ctl $WORK_DIR "127.0.0.1:$master_port" \
+            "query-status $task_name" \
+            "task test has no source or not exist" 1 && return 0
+        sleep 1
+    done
+    return 1
+}
+
 # shortcut for pause task on two DM-workers
 function dmctl_pause_task() {
     task_name=$1

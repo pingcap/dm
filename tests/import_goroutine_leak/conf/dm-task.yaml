@@ -4,7 +4,6 @@ task-mode: full
 is-sharding: false
 meta-schema: "dm_meta"
 # enable-heartbeat: true
-timezone: "Asia/Shanghai"
 
 target-database:
   host: "127.0.0.1"

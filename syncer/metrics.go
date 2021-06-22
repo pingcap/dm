@@ -176,7 +176,6 @@ var (
 			Help:      "counter for syncer exits with error",
 		}, []string{"task", "source_id"})
 
-	// some problems with it.
 	replicationLagGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",

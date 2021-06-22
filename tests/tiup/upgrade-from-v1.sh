@@ -11,7 +11,7 @@ PATH=$CUR/../_utils:$PATH # for sync_diff_inspector
 source $CUR/lib.sh
 
 # ref https://docs.pingcap.com/zh/tidb-data-migration/stable/deploy-a-dm-cluster-using-ansible
-# script following the docs to deploy dm 1.0.6 using ./ansible_data/inventory.ini
+# script following the docs to deploy dm 1.0.7 using ./ansible_data/inventory.ini
 function deploy_v1_by_ansible() {
 	# step 1
 	apt-get update
@@ -30,14 +30,14 @@ function deploy_v1_by_ansible() {
 	# step 3
 	su tidb <<EOF
     cd /home/tidb
-    wget https://download.pingcap.org/dm-ansible-v1.0.6.tar.gz
+    wget https://download.pingcap.org/dm-ansible-v1.0.7.tar.gz
 EOF
 
 	# step 4
 	su tidb <<EOF
     cd /home/tidb
-    tar -xzvf dm-ansible-v1.0.6.tar.gz &&
-        mv dm-ansible-v1.0.6 dm-ansible &&
+    tar -xzvf dm-ansible-v1.0.7.tar.gz &&
+        mv dm-ansible-v1.0.7 dm-ansible &&
         cd /home/tidb/dm-ansible &&
         sudo pip install -r ./requirements.txt
     ansible --version
@@ -107,7 +107,7 @@ function migrate_in_v2 {
 	exec_incremental_stage2
 
 	echo "check sources"
-	run_dmctl_with_retry $DM_V2_VER "operate-source show" "mysql-replica-01" 1 "mysql-replica-02" 1
+	run_dmctl_with_retry $DM_V2_VER "operate-source show" "mysql-replica-01" 1 "mariadb-replica-02" 1
 	echo "check workers"
 	run_dmctl_with_retry $DM_V2_VER "list-member --worker" "\"stage\": \"bound\"" 2
 

@@ -34,11 +34,11 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 		bound         = NewSourceBound(source, worker)
 
 		emptyStage  Stage
-		sourceCfg   config.SourceConfig
 		subtaskCfg1 config.SubTaskConfig
 	)
 
-	c.Assert(sourceCfg.LoadFromFile(sourceSampleFile), IsNil)
+	sourceCfg, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
 	sourceCfg.SourceID = source
 	c.Assert(subtaskCfg1.DecodeFile(subTaskSampleFile, true), IsNil)
 	subtaskCfg1.SourceID = source
