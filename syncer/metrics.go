@@ -223,6 +223,14 @@ var (
 			Name:      "finished_transaction_total",
 			Help:      "total number of finished transaction",
 		}, []string{"task", "worker", "source_id"})
+
+	replicationTransactionBatch = metricsproxy.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "replication_transaction_batch",
+			Help:      "number of sql's contained in a transaction that executed to downstream",
+		}, []string{"worker", "task", "source_id", "queueNo"})
 )
 
 // RegisterMetrics registers metrics.
@@ -250,6 +258,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(unsyncedTableGauge)
 	registry.MustRegister(shardLockResolving)
 	registry.MustRegister(heartbeatUpdateErr)
+	registry.MustRegister(replicationTransactionBatch)
 }
 
 // InitStatusAndMetrics register prometheus metrics and listen for status port.
@@ -301,4 +310,5 @@ func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	remainingTimeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	unsyncedTableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	shardLockResolving.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	replicationTransactionBatch.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }

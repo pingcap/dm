@@ -1145,6 +1145,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				}
 			}
 		}
+		replicationTransactionBatch.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID, queueBucket).Set(float64(len(jobs)))
 	}
 
 	fatalF := func(affected int, err error) {
