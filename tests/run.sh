@@ -7,8 +7,10 @@ CUR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $CUR/_utils/env_variables
 
 stop_services() {
-	# killall -9 tidb-server || true
 	echo "..."
+	# clean sql mode
+	mysql -u root -h $MYSQL_HOST1 -P $MYSQL_PORT1 -p$MYSQL_PASSWORD1 -e "SET @@GLOBAL.SQL_MODE=''"
+	mysql -u root -h $MYSQL_HOST2 -P $MYSQL_PORT2 -p$MYSQL_PASSWORD2 -e "SET @@GLOBAL.SQL_MODE=''"
 }
 
 check_mysql() {
