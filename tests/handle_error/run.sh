@@ -736,7 +736,9 @@ function run() {
 	init_cluster
 	init_database
 
-	DM_SKIP_ERROR
+	# DM_SKIP_ERROR
+	# NOTE skip DM_SKIP_ERROR beacuse tidb v5.1 Behaviour change
+	# `tidb_enable_change_column_type` always=false and do not support change
 	DM_SKIP_ERROR_SHARDING
 	DM_REPLACE_ERROR
 	DM_REPLACE_ERROR_SHARDING
