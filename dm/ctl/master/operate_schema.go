@@ -110,9 +110,6 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	if flush && op != pb.SchemaOp_SetSchema {
-		return errors.New("--flush flag is only used to set schema")
-	}
 	sync, err := cmd.Flags().GetBool("sync")
 	if err != nil {
 		return err
