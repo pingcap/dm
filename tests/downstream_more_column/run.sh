@@ -15,7 +15,7 @@ function get_master_status() {
 
 function run() {
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-	# create table in tidb with auto-random
+	# create table in tidb with AUTO_INCREMENT
 	run_sql_file $cur/data/tidb.prepare.sql $TIDB_HOST $TIDB_PORT $TIDB_PASSWORD
 
 	# start DM worker and master
