@@ -428,8 +428,6 @@ function DM_SAME_DDL_TWICE_CASE() {
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11);"
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(12);"
 
-	read v1
-
 	# source2.tb2 add column
 	run_sql_source2 "alter table ${shardddl1}.${tb2} add new_col1 int;"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(13,13);"
@@ -450,7 +448,7 @@ function DM_SAME_DDL_TWICE_CASE() {
 	run_sql_source1 "alter table ${shardddl1}.${tb1} drop new_col1;"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(22);"
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(23,23);"
-	run_sql_source2 "insert into ${shardddl1}.${tb2} values(24);"
+	run_sql_source2 "insert into ${shardddl1}.${tb2} values(24,24);"
 	# source1.tb1 add column back
 	run_sql_source1 "alter table ${shardddl1}.${tb1} add new_col1 int;"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(25,25);"

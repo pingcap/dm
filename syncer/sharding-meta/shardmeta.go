@@ -188,18 +188,11 @@ func (meta *ShardingMeta) AddItem(item *DDLItem) (active bool, err error) {
 		source.Items = append(source.Items, item)
 	}
 
-	found := false
-	for _, globalItem := range meta.global.Items {
-		if utils.CompareShardingDDLs(item.DDLs, globalItem.DDLs) {
-			found = true
-			break
-		}
-	}
-	if !found {
-		meta.global.Items = append(meta.global.Items, item)
+	global, source := meta.global, meta.sources[item.Source]
+	if len(source.Items) > len(global.Items) {
+		global.Items = append(global.Items, item)
 	}
 
-	global, source := meta.global, meta.sources[item.Source]
 	if !source.IsPrefixSequence(global) {
 		return false, terror.ErrSyncUnitDDLWrongSequence.Generate(source.Items, global.Items)
 	}
