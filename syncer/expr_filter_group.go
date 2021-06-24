@@ -15,10 +15,10 @@ import (
 type ExprFilterGroup struct {
 	Configs        map[string][]*config.ExpressionFilter // tableName -> raw config
 	GenExprFunc    func(db, table, expr string) (*config.Expression, error)
-	InsertExprs    map[string][]*config.Expression       // tableName -> expr
-	UpdateOldExprs map[string][]*config.Expression       // tableName -> expr
-	UpdateNewExprs map[string][]*config.Expression       // tableName -> expr
-	DeleteExprs    map[string][]*config.Expression       // tableName -> expr
+	InsertExprs    map[string][]*config.Expression // tableName -> expr
+	UpdateOldExprs map[string][]*config.Expression // tableName -> expr
+	UpdateNewExprs map[string][]*config.Expression // tableName -> expr
+	DeleteExprs    map[string][]*config.Expression // tableName -> expr
 
 	hasInsertFilter    map[string]struct{} // set(tableName)
 	hasUpdateOldFilter map[string]struct{} // set(tableName)

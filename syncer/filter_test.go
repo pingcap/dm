@@ -499,7 +499,7 @@ create table t (
 	c blob
 );`,
 			[]interface{}{[]byte("\x124")}, // x'1234'
-			[]interface{}{[]byte("Vx")}, // x'5678'
+			[]interface{}{[]byte("Vx")},    // x'5678'
 		},
 		// MYSQL_TYPE_VARCHAR, MYSQL_TYPE_VAR_STRING, MYSQL_TYPE_STRING
 		{

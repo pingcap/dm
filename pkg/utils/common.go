@@ -236,7 +236,7 @@ func init() {
 	utcSession.vars = vars
 }
 
-// AdjustBinaryProtocolForDatum converts the data in binlog to TiDB datum
+// AdjustBinaryProtocolForDatum converts the data in binlog to TiDB datum.
 func AdjustBinaryProtocolForDatum(data []interface{}, cols []*model.ColumnInfo) ([]types.Datum, error) {
 	log.L().Debug("AdjustBinaryProtocolForChunk",
 		zap.Any("data", data),

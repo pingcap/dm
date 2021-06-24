@@ -88,7 +88,6 @@ RowLoop:
 				continue RowLoop
 			}
 		}
-		// TODO: test table with generated column
 
 		ks := genMultipleKeys(ti, originalValue, qualifiedName)
 		sqls = append(sqls, sql)
