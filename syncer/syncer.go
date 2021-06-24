@@ -1193,6 +1193,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	var err error
 	var affect int
 	ticker := time.NewTicker(waitTime)
+	defer ticker.Stop()
 	for {
 		select {
 		case sqlJob, ok := <-jobChan:
