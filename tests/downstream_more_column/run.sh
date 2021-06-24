@@ -8,11 +8,6 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 db="downstream_more_column"
 tb="t1"
 
-function get_master_status() {
-	arr=$(echo "show master status;" | MYSQL_PWD=123456 mysql -uroot -h127.0.0.1 -P3306 | awk 'NR==2')
-	echo $arr
-}
-
 function run() {
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	# create table in tidb with AUTO_INCREMENT
