@@ -90,9 +90,9 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 			return nil, err2
 		}
 		if taskCfg.CaseSensitive {
-			lcSetting, err := utils.FetchLowerCaseTableNamesSetting(ctx, conn.baseConn.DBConn)
-			if err != nil {
-				return nil, err
+			lcSetting, err2 := utils.FetchLowerCaseTableNamesSetting(ctx, conn.baseConn.DBConn)
+			if err2 != nil {
+				return nil, err2
 			}
 			if lcSetting == utils.LCTableNamesMixed {
 				msg := "can not set `case-sensitive = true` when upstream `lower_case_table_names = 2`"
