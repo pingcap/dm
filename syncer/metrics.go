@@ -182,7 +182,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "replication_lag",
 			Help:      "replication lag in second between mysql and syncer",
-		}, []string{"task"})
+		}, []string{"task", "source_id", "worker"})
 
 	remainingTimeGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -190,7 +190,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "remaining_time",
 			Help:      "the remaining time in second to catch up master",
-		}, []string{"task", "source_id"})
+		}, []string{"task", "source_id", "worker"})
 
 	unsyncedTableGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{

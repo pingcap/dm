@@ -760,7 +760,7 @@ func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 			lag = wl
 		}
 	}
-	replicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(lag))
+	replicationLagGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Set(float64(lag))
 	s.secondsBehindMaster.Store(lag)
 }
 
@@ -2637,7 +2637,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 							zap.Int64("bytes/Second", bytesPerSec),
 							zap.Int64("unsynced binlog size", remainingSize),
 							zap.Int64("estimate time to catch up", remainingSeconds))
-						remainingTimeGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Set(float64(remainingSeconds))
+						remainingTimeGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Set(float64(remainingSeconds))
 					}
 				}
 			}
