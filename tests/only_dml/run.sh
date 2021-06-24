@@ -42,7 +42,7 @@ function insert_data() {
 }
 
 function run() {
-	export GO_FAILPOINTS="github.com/pingcap/dm/pkg/streamer/SetHeartbeatInterval=return(1)"
+	export GO_FAILPOINTS="github.com/pingcap/dm/pkg/streamer/SetHeartbeatInterval=return(1);github.com/pingcap/dm/syncer/syncDMLTicker=return(true)"
 
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_contains 'Query OK, 1 row affected'
@@ -129,6 +129,8 @@ function run() {
 	done
 
 	kill $pid
+	check_log_contain_with_retry 'job queue not full, executeSQLs by ticker' $WORK_DIR/worker1/log/dm-worker.log
+	check_log_contain_with_retry 'job queue not full, executeSQLs by ticker' $WORK_DIR/worker2/log/dm-worker.log
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	export GO_FAILPOINTS=""
 }
