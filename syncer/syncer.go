@@ -995,6 +995,7 @@ func (s *Syncer) flushCheckPoints() error {
 	if err != nil {
 		return err
 	}
+	flushCheckPointsTotal.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Inc()
 	return nil
 }
 
@@ -1649,6 +1650,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		case *replication.RotateEvent:
 			err2 = s.handleRotateEvent(ev, ec)
 		case *replication.RowsEvent:
+			binlogEventRowGauge.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Set(float64(ev.ColumnCount))
 			err2 = s.handleRowsEvent(ev, ec)
 		case *replication.QueryEvent:
 			originSQL = strings.TrimSpace(string(ev.Query))

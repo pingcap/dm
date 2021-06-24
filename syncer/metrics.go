@@ -108,6 +108,14 @@ var (
 			Help:      "total number of finished jobs",
 		}, []string{"type", "task", "queueNo", "source_id", "worker", "target_schema", "target_table"})
 
+	theoreticalJobCount = metricsproxy.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "theoretical_job_count",
+			Help:      "remain size of the DML queue",
+		}, []string{"task", "worker", "source_id"})
+
 	queueSizeGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
@@ -131,6 +139,14 @@ var (
 			Name:      "binlog_file",
 			Help:      "current binlog file index",
 		}, []string{"node", "task", "source_id"})
+
+	binlogEventRowGauge = metricsproxy.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "binlog_event_row",
+			Help:      "current bin log event row number",
+		}, []string{"worker", "task", "source_id"})
 
 	sqlRetriesTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
@@ -231,6 +247,14 @@ var (
 			Name:      "replication_transaction_batch",
 			Help:      "number of sql's contained in a transaction that executed to downstream",
 		}, []string{"worker", "task", "source_id", "queueNo"})
+
+	flushCheckPointsTotal = metricsproxy.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "flush_checkpoints_count",
+			Help:      "total number of checkpoint flushed",
+		}, []string{"worker", "task", "source_id"})
 )
 
 // RegisterMetrics registers metrics.
@@ -238,12 +262,14 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(binlogReadDurationHistogram)
 	registry.MustRegister(binlogEventSizeHistogram)
 	registry.MustRegister(binlogEventCost)
+	registry.MustRegister(binlogEventRowGauge)
 	registry.MustRegister(conflictDetectDurationHistogram)
 	registry.MustRegister(addJobDurationHistogram)
 	registry.MustRegister(dispatchBinlogDurationHistogram)
 	registry.MustRegister(skipBinlogDurationHistogram)
 	registry.MustRegister(addedJobsTotal)
 	registry.MustRegister(finishedJobsTotal)
+	registry.MustRegister(theoreticalJobCount)
 	registry.MustRegister(finishedTransactionTotal)
 	registry.MustRegister(queueSizeGauge)
 	registry.MustRegister(sqlRetriesTotal)
@@ -259,6 +285,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(shardLockResolving)
 	registry.MustRegister(heartbeatUpdateErr)
 	registry.MustRegister(replicationTransactionBatch)
+	registry.MustRegister(flushCheckPointsTotal)
 }
 
 // InitStatusAndMetrics register prometheus metrics and listen for status port.
@@ -291,12 +318,14 @@ func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	binlogReadDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogEventSizeHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	binlogEventCost.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	binlogEventRowGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	conflictDetectDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	addJobDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	dispatchBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	skipBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	addedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	finishedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	theoreticalJobCount.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	finishedTransactionTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	queueSizeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	sqlRetriesTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
@@ -311,4 +340,5 @@ func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	unsyncedTableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	shardLockResolving.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	replicationTransactionBatch.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	flushCheckPointsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }
