@@ -67,6 +67,16 @@ function run() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+	# check wrong backoff-max
+	cp $cur/conf/source1.yaml $WORK_DIR/wrong-source.yaml
+	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/wrong-source.yaml
+	sed -i "s/backoff-max: 5m/backoff-max: 0.1s/g" $WORK_DIR/wrong-source.yaml
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    "operate-source create $WORK_DIR/wrong-source.yaml" \
+    "\"result\": false" 1 \
+    "Please increase \`backoff-max\`" 1
+
 	# operate mysql config to worker
 	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
 	cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml

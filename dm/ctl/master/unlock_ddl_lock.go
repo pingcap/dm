@@ -54,7 +54,7 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) error {
 
 	sources, _ := common.GetSourceArgs(cmd)
 	if len(sources) > 0 {
-		fmt.Println("shoud not specify any sources")
+		fmt.Println("should not specify any sources")
 		return errors.New("please check output to see error")
 	}
 
