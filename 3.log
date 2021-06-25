@@ -1,8 +1,3 @@
-
-dumpling/dumpling.go:61:16: m.dumpConfig, err = m.constructArgs()
-dumpling/dumpling.go:115:3: err = dumpling.Dump()
-dumpling/dumpling.go:116:17: dumpling.Close()
-dumpling/dumpling.go:290:20: defer baseDB.Close()
 loader/checkpoint.go:139:2: err := cp.conn.executeSQL(tctx, []string{sql2})
 loader/checkpoint.go:159:2: err := cp.conn.executeSQL(tctx, []string{sql2})
 loader/checkpoint.go:173:8: rows, err := cp.conn.querySQL(tctx, query, cp.id)

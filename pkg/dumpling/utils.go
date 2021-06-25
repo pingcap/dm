@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/docker/go-units"
 	"github.com/go-mysql-org/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/binlog"
@@ -183,4 +184,19 @@ func readFollowingGTIDs(br *bufio.Reader, flavor string) (string, error) {
 
 		following.WriteString(line)
 	}
+}
+
+// ParseFileSize parses the size in MiB from input
+func ParseFileSize(fileSizeStr string, defaultSize uint64) (uint64, error) {
+	var fileSize uint64
+	if len(fileSizeStr) == 0 {
+		fileSize = defaultSize
+	} else if fileSizeMB, err := strconv.ParseUint(fileSizeStr, 10, 64); err == nil {
+		fileSize = fileSizeMB * units.MiB
+	} else if size, err := units.RAMInBytes(fileSizeStr); err == nil {
+		fileSize = uint64(size)
+	} else {
+		return 0, err
+	}
+	return fileSize, nil
 }

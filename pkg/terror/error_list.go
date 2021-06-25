@@ -234,6 +234,7 @@ const (
 	codeConfigGenBAList
 	codeConfigGenTableRouter
 	codeConfigGenColumnMapping
+	codeConfigInvalidChunkFileSize
 )
 
 // Binlog operation error code list.
@@ -851,6 +852,7 @@ var (
 	ErrConfigGenBAList              = New(codeConfigGenBAList, ClassConfig, ScopeInternal, LevelHigh, "generate block allow list error", "Please check the `block-allow-list` config in task configuration file.")
 	ErrConfigGenTableRouter         = New(codeConfigGenTableRouter, ClassConfig, ScopeInternal, LevelHigh, "generate table router error", "Please check the `routes` config in task configuration file.")
 	ErrConfigGenColumnMapping       = New(codeConfigGenColumnMapping, ClassConfig, ScopeInternal, LevelHigh, "generate column mapping error", "Please check the `column-mappings` config in task configuration file.")
+	ErrConfigInvalidChunkFileSize   = New(codeConfigInvalidChunkFileSize, ClassConfig, ScopeInternal, LevelHigh, "invalid `chunk-filesize` %v", "Please check the `chunk-filesize` config in task configuration file.")
 
 	// Binlog operation error.
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")

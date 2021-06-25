@@ -96,7 +96,7 @@ func parseExtraArgs(logger *log.Logger, dumpCfg *export.Config, args []string) e
 	}
 
 	if fileSizeStr != "" {
-		dumpCfg.FileSize, err = parseFileSize(fileSizeStr)
+		dumpCfg.FileSize, err = ParseFileSize(fileSizeStr)
 		if err != nil {
 			return err
 		}
@@ -114,7 +114,7 @@ func parseExtraArgs(logger *log.Logger, dumpCfg *export.Config, args []string) e
 	return nil
 }
 
-func parseFileSize(fileSizeStr string) (uint64, error) {
+func ParseFileSize(fileSizeStr string) (uint64, error) {
 	var fileSize uint64
 	if len(fileSizeStr) == 0 {
 		fileSize = export.UnspecifiedSize

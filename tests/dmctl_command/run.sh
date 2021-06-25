@@ -94,6 +94,13 @@ function run() {
 		"start-task $WORK_DIR/wrong-dm-task.yaml" \
 		"Table string cannot be empty" 1
 
+	# check wrong chunk-filesize
+	cp $cur/conf/dm-task.yaml $WORK_DIR/wrong-dm-task.yaml
+	sed -i "s/chunk-filesize: 64/chunk-filesize: 6qwe4/g" $WORK_DIR/wrong-dm-task.yaml
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"start-task $WORK_DIR/wrong-dm-task.yaml" \
+		"invalid \`chunk-filesize\` 6qwe4" 1
+
 	# start DM task with command mode
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"start-task $cur/conf/dm-task.yaml" \
