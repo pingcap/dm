@@ -233,6 +233,7 @@ type SyncerConfig struct {
 	QueueSize   int    `yaml:"queue-size" toml:"queue-size" json:"queue-size"`
 	// checkpoint flush interval in seconds.
 	CheckpointFlushInterval int `yaml:"checkpoint-flush-interval" toml:"checkpoint-flush-interval" json:"checkpoint-flush-interval"`
+	SafeModeDuration        int `yaml:"safe-mode-duration" toml:"safe-mode-duration" json:"safe-mode-duration"`
 
 	// deprecated
 	MaxRetry int `yaml:"max-retry" toml:"max-retry" json:"max-retry"`
