@@ -172,7 +172,7 @@ func (meta *ShardingMeta) checkItemExists(item *DDLItem) (int, bool) {
 // AddItem adds a new coming DDLItem into ShardingMeta
 // 1. if DDLItem already exists in source sequence, check whether it is active DDL only
 // 2. add the DDLItem into its related source sequence
-// 3. if it is a new DDL in global sequence, add it into global sequence
+// 3. if it is a new DDL in global sequence, which means len(source.Items) > len(global.Items), add it into global sequence
 // 4. check the source sequence is the prefix-sequence of global sequence, if not, return an error
 // returns:
 //   active: whether the DDL will be processed in this round
