@@ -3582,6 +3582,16 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 		s.tctx.L().Warn("fail to get gtids for global location", zap.Stringer("pos", location), zap.Error(err))
 		return false, err
 	}
+	dbConn, err := s.fromDB.BaseDB.GetBaseConn(tctx.Context())
+	if err != nil {
+		s.tctx.L().Warn("fail to build connection", zap.Stringer("pos", location), zap.Error(err))
+		return false, err
+	}
+	gs, err = utils.AddGSetWithPurged(tctx.Context(), gs, dbConn.DBConn)
+	if err != nil {
+		s.tctx.L().Warn("fail to merge purged gtidSet", zap.Stringer("pos", location), zap.Error(err))
+		return false, err
+	}
 	err = location.SetGTID(gs.Origin())
 	if err != nil {
 		s.tctx.L().Warn("fail to set gtid for global location", zap.Stringer("pos", location),
