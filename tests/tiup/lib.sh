@@ -59,8 +59,8 @@ function exec_full_stage() {
 	exec_sql mariadb2 3306 "INSERT INTO $DB2.$TBL3 (c1, c2) VALUES (12, '12');"
 
 	# prepare optimsitic full data
-	exec_sql mysql1 3306 "CREATE DATABASE $DB3;"
-	exec_sql mariadb2 3306 "CREATE DATABASE $DB4;"
+	exec_sql mysql1 3306 "CREATE DATABASE $DB3 CHARACTER SET UTF8MB4 COLLATE utf8mb4_bin;"
+	exec_sql mariadb2 3306 "CREATE DATABASE $DB4 CHARACTER SET UTF8MB4 COLLATE utf8mb4_bin;"
 	exec_sql mysql1 3306 "CREATE TABLE $DB3.$TBL1 (c1 INT PRIMARY KEY, c2 TEXT);"
 	exec_sql mysql1 3306 "CREATE TABLE $DB3.$TBL2 (c1 INT PRIMARY KEY, c2 TEXT);"
 	exec_sql mariadb2 3306 "CREATE TABLE $DB4.$TBL2 (c1 INT PRIMARY KEY, c2 TEXT);"
