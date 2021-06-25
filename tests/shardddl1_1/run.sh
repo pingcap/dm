@@ -427,33 +427,63 @@ function DM_SAME_DDL_TWICE_CASE() {
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(10,10);"
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(11,11);"
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(12);"
-
-	# source2.tb2 add column
-	run_sql_source2 "alter table ${shardddl1}.${tb2} add new_col1 int;"
+	# source2.tb1 drop column again
+	run_sql_source2 "alter table ${shardddl1}.${tb1} drop new_col1;"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(13,13);"
-	run_sql_source2 "insert into ${shardddl1}.${tb1} values(14,14);"
-	run_sql_source2 "insert into ${shardddl1}.${tb2} values(15,15);"
-	# source2.tb2 drop column
-	run_sql_source2 "alter table ${shardddl1}.${tb2} drop new_col1;"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(14);"
+	run_sql_source2 "insert into ${shardddl1}.${tb2} values(15);"
+	# source2.tb1 add column back again
+	run_sql_source2 "alter table ${shardddl1}.${tb1} add new_col1 int;"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(16,16);"
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(17,17);"
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(18);"
-	# source2.tb2 add column back
+
+	# source2.tb2 add column
 	run_sql_source2 "alter table ${shardddl1}.${tb2} add new_col1 int;"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(19,19);"
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(20,20);"
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(21,21);"
-
-	# source1.tb1 drop column
-	run_sql_source1 "alter table ${shardddl1}.${tb1} drop new_col1;"
-	run_sql_source1 "insert into ${shardddl1}.${tb1} values(22);"
+	# source2.tb2 drop column
+	run_sql_source2 "alter table ${shardddl1}.${tb2} drop new_col1;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(22,22);"
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(23,23);"
-	run_sql_source2 "insert into ${shardddl1}.${tb2} values(24,24);"
-	# source1.tb1 add column back
-	run_sql_source1 "alter table ${shardddl1}.${tb1} add new_col1 int;"
+	run_sql_source2 "insert into ${shardddl1}.${tb2} values(24);"
+	# source2.tb2 add column back
+	run_sql_source2 "alter table ${shardddl1}.${tb2} add new_col1 int;"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(25,25);"
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(26,26);"
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(27,27);"
+	# source2.tb2 drop column again
+	run_sql_source2 "alter table ${shardddl1}.${tb2} drop new_col1;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(28,28);"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(29,29);"
+	run_sql_source2 "insert into ${shardddl1}.${tb2} values(30);"
+	# source2.tb2 add column back again
+	run_sql_source2 "alter table ${shardddl1}.${tb2} add new_col1 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(31,31);"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(32,32);"
+	run_sql_source2 "insert into ${shardddl1}.${tb2} values(33,33);"
+
+	# source1.tb1 drop column
+	run_sql_source1 "alter table ${shardddl1}.${tb1} drop new_col1;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(34);"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(35,35);"
+	run_sql_source2 "insert into ${shardddl1}.${tb2} values(36,36);"
+	# source1.tb1 add column back
+	run_sql_source1 "alter table ${shardddl1}.${tb1} add new_col1 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(37,37);"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(38,38);"
+	run_sql_source2 "insert into ${shardddl1}.${tb2} values(39,39);"
+	# source1.tb1 drop column again
+	run_sql_source1 "alter table ${shardddl1}.${tb1} drop new_col1;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(40);"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(41,41);"
+	run_sql_source2 "insert into ${shardddl1}.${tb2} values(42,42);"
+	# source1.tb1 add column back again
+	run_sql_source1 "alter table ${shardddl1}.${tb1} add new_col1 int;"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(43,43);"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(44,44);"
+	run_sql_source2 "insert into ${shardddl1}.${tb2} values(45,45);"
 
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
