@@ -231,6 +231,9 @@ const (
 	codeConfigBinlogEventFilter
 	codeConfigGlobalConfigsUnused
 	codeConfigCheckerMaxTooSmall
+	codeConfigGenBAList
+	codeConfigGenTableRouter
+	codeConfigGenColumnMapping
 )
 
 // Binlog operation error code list.
@@ -844,7 +847,10 @@ var (
 	ErrConfigMissingForBound        = New(codeConfigMissingForBound, ClassConfig, ScopeInternal, LevelHigh, "source bound %s doesn't have related source config in etcd", "")
 	ErrConfigBinlogEventFilter      = New(codeConfigBinlogEventFilter, ClassConfig, ScopeInternal, LevelHigh, "generate binlog event filter", "Please check the `filters` config in source and task configuration files.")
 	ErrConfigGlobalConfigsUnused    = New(codeConfigGlobalConfigsUnused, ClassConfig, ScopeInternal, LevelHigh, "The configurations as following %v are set in global configuration but instances don't use them", "Please check the configuration files.")
-	ErrConfigCheckerMaxTooSmall     = New(codeConfigCheckerMaxTooSmall, ClassConfig, ScopeInternal, LevelHigh, "`backoff-max` value %v is less than `backoff-min` value %v", "Please increase `backoff-max`")
+	ErrConfigCheckerMaxTooSmall     = New(codeConfigCheckerMaxTooSmall, ClassConfig, ScopeInternal, LevelHigh, "`backoff-max` value %v is less than `backoff-min` value %v", "Please increase `backoff-max` config in task configuration file.")
+	ErrConfigGenBAList              = New(codeConfigGenBAList, ClassConfig, ScopeInternal, LevelHigh, "generate block allow list error", "Please check the `block-allow-list` config in task configuration file.")
+	ErrConfigGenTableRouter         = New(codeConfigGenTableRouter, ClassConfig, ScopeInternal, LevelHigh, "generate table router error", "Please check the `routes` config in task configuration file.")
+	ErrConfigGenColumnMapping       = New(codeConfigGenColumnMapping, ClassConfig, ScopeInternal, LevelHigh, "generate column mapping error", "Please check the `column-mappings` config in task configuration file.")
 
 	// Binlog operation error.
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")

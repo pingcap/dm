@@ -84,6 +84,16 @@ function run() {
 	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
+  # check wrong do-tables
+	cp $cur/conf/dm-task.yaml $WORK_DIR/wrong-dm-task.yaml
+  sed -i "/do-dbs:/a\    do-tables:\n    - db-name: \"dmctl_command\"" $WORK_DIR/wrong-dm-task.yaml
+  sed -i "/do-dbs:/d" $WORK_DIR/wrong-dm-task.yaml
+  echo "ignore-checking-items: [\"all\"]" >> $WORK_DIR/wrong-dm-task.yaml
+
+  run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"start-task $WORK_DIR/wrong-dm-task.yaml" \
+		"Table string cannot be empty" 1
+
 	# start DM task with command mode
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"start-task $cur/conf/dm-task.yaml" \

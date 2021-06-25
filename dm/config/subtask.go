@@ -247,7 +247,7 @@ func (c *SubTaskConfig) Decode(data string, verifyDecryptPassword bool) error {
 	return c.Adjust(verifyDecryptPassword)
 }
 
-// Adjust adjusts configs.
+// Adjust adjusts and verifies configs.
 func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if c.Name == "" {
 		return terror.ErrConfigTaskNameEmpty.Generate()
@@ -306,6 +306,19 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if c.BAList == nil && c.BWList != nil {
 		c.BAList = c.BWList
 	}
+
+	if _, err := filter.New(c.CaseSensitive, c.BAList); err != nil {
+		return terror.ErrConfigGenBAList.Delegate(err)
+	}
+	if _, err := router.NewTableRouter(c.CaseSensitive, c.RouteRules); err != nil {
+		return terror.ErrConfigGenTableRouter.Delegate(err)
+	}
+	if _, err := column.NewMapping(c.CaseSensitive, c.ColumnMappingRules); err != nil {
+		return terror.ErrConfigGenColumnMapping.Delegate(err)
+	}
+
+	// TODO: check every member
+	// TODO: since we checked here, we could remove other terror like ErrSyncerUnitGenBAList
 
 	return nil
 }
