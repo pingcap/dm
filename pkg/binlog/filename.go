@@ -51,6 +51,7 @@ func (f Filename) GreaterThan(other Filename) bool {
 // ParseFilename parses a string representation binlog filename into a `Filename`.
 func ParseFilename(filename string) (Filename, error) {
 	var fn Filename
+	// TODO: support a.b.c.d as binlog filename
 	parts := strings.Split(filename, binlogFilenameSep)
 	if len(parts) != 2 {
 		return fn, terror.Annotatef(terror.ErrBinlogInvalidFilename.Generate(), "filename %s", filename)
