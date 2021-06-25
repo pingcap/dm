@@ -50,6 +50,9 @@ func (s *Syncer) enableSafeModeInitializationPhase(tctx *tcontext.Context, safeM
 		}()
 
 		initPhaseSeconds := s.cfg.CheckpointFlushInterval * 2
+		if s.cfg.SafeModeDuration != 0 {
+			initPhaseSeconds = s.cfg.SafeModeDuration
+		}
 
 		failpoint.Inject("SafeModeInitPhaseSeconds", func(val failpoint.Value) {
 			seconds, _ := val.(int)
