@@ -73,9 +73,9 @@ function run() {
 	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/wrong-source.yaml
 	sed -i "s/backoff-max: 5m/backoff-max: 0.1s/g" $WORK_DIR/wrong-source.yaml
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-    "operate-source create $WORK_DIR/wrong-source.yaml" \
-    "\"result\": false" 1 \
-    "Please increase \`backoff-max\`" 1
+		"operate-source create $WORK_DIR/wrong-source.yaml" \
+		"\"result\": false" 1 \
+		"Please increase \`backoff-max\`" 1
 
 	# operate mysql config to worker
 	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
@@ -84,13 +84,13 @@ function run() {
 	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
-  # check wrong do-tables
+	# check wrong do-tables
 	cp $cur/conf/dm-task.yaml $WORK_DIR/wrong-dm-task.yaml
-  sed -i "/do-dbs:/a\    do-tables:\n    - db-name: \"dmctl_command\"" $WORK_DIR/wrong-dm-task.yaml
-  sed -i "/do-dbs:/d" $WORK_DIR/wrong-dm-task.yaml
-  echo "ignore-checking-items: [\"all\"]" >> $WORK_DIR/wrong-dm-task.yaml
+	sed -i "/do-dbs:/a\    do-tables:\n    - db-name: \"dmctl_command\"" $WORK_DIR/wrong-dm-task.yaml
+	sed -i "/do-dbs:/d" $WORK_DIR/wrong-dm-task.yaml
+	echo "ignore-checking-items: [\"all\"]" >>$WORK_DIR/wrong-dm-task.yaml
 
-  run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"start-task $WORK_DIR/wrong-dm-task.yaml" \
 		"Table string cannot be empty" 1
 

@@ -186,7 +186,7 @@ func readFollowingGTIDs(br *bufio.Reader, flavor string) (string, error) {
 	}
 }
 
-// ParseFileSize parses the size in MiB from input
+// ParseFileSize parses the size in MiB from input.
 func ParseFileSize(fileSizeStr string, defaultSize uint64) (uint64, error) {
 	var fileSize uint64
 	if len(fileSizeStr) == 0 {
