@@ -33,12 +33,43 @@ function check_row_count() {
 	[ "$estimate" == "$row_count" ]
 }
 
-function run() {
-	THRESHOLD=1024
+function test_save_checkpoint_faild() {
 	prepare_datafile
-
 	run_sql_file $WORK_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
+	export GO_FAILPOINTS="github.com/pingcap/dm/loader/loaderCPUpdateOffsetError=return(1)"
+
+	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+	# operate mysql config to worker
+	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"start-task $cur/conf/dm-task.yaml"
+
+	# load task should Paused because job file is not right
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"Paused" 1
+
+	# check dump files are generated before worker down
+	ls $WORK_DIR/worker1/dumped_data.test
+
+	echo "test_save_checkpoint_faild SUCCESS!"
+	cleanup_data load_interrupt
+	cleanup_process $*
+}
+
+function run() {
+	test_save_checkpoint_faild
+
+	prepare_datafile
+	run_sql_file $WORK_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	THRESHOLD=1024
 	export GO_FAILPOINTS="github.com/pingcap/dm/loader/LoadExceedOffsetExit=return($THRESHOLD)"
 
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml

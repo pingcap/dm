@@ -212,7 +212,17 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				})
 				continue
 			}
-			w.loader.checkPoint.UpdateOffset(job.file, job.offset)
+
+			failpoint.Inject("loaderCPUpdateOffsetError", func(_ failpoint.Value) {
+				job.file = "notafile" + job.file
+			})
+			if err := w.loader.checkPoint.UpdateOffset(job.file, job.offset); err != nil {
+				if !utils.IsContextCanceledError(err) {
+					runFatalChan <- unit.NewProcessError(err)
+				}
+				hasError = true
+				continue
+			}
 			w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
 		}
 	}
