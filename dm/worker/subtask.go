@@ -435,6 +435,14 @@ func (st *SubTask) setResult(result *pb.ProcessResult) {
 	st.result = result
 }
 
+func (st *SubTask) markResultCanceled() {
+	st.Lock()
+	defer st.Unlock()
+	if st.result != nil {
+		st.result.IsCanceled = true
+	}
+}
+
 // Result returns the result of the sub task.
 func (st *SubTask) Result() *pb.ProcessResult {
 	st.RLock()
@@ -459,6 +467,15 @@ func (st *SubTask) Close() {
 
 // Pause pauses the running sub task.
 func (st *SubTask) Pause() error {
+	if st.Stage() == pb.Stage_Paused {
+		result := st.Result()
+		if result != nil && !result.IsCanceled {
+			st.l.Info("manually pause task which has been paused by errors")
+			st.markResultCanceled()
+			return nil
+		}
+	}
+
 	if !st.stageCAS(pb.Stage_Running, pb.Stage_Pausing) {
 		return terror.ErrWorkerNotRunningStage.Generate(st.Stage().String())
 	}
