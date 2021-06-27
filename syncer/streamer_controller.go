@@ -222,7 +222,10 @@ func (c *StreamerController) RedirectStreamer(tctx *tcontext.Context, location b
 	return c.resetReplicationSyncer(tctx, location)
 }
 
-var mockRestarted = false
+var (
+	mockRestarted   = false
+	mockGetEventErr = false
+)
 
 // GetEvent returns binlog event, should only have one thread call this function.
 func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replication.BinlogEvent, err error) {
@@ -252,6 +255,12 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 	cancel()
 	failpoint.Inject("GetEventError", func() {
 		err = errors.New("go-mysql returned an error")
+	})
+	failpoint.Inject("GetEventErrorOnce", func() {
+		if !mockGetEventErr {
+			mockGetEventErr = true
+			err = errors.New("get event returned an error")
+		}
 	})
 	if err != nil {
 		if err != context.Canceled && err != context.DeadlineExceeded {

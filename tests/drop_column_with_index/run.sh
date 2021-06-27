@@ -8,8 +8,11 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function run() {
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/SyncerGetEventError=return"
+	inject_points=(
+		"github.com/pingcap/dm/syncer/SyncerGetEventError=return"
+		"github.com/pingcap/dm/syncer/GetEventErrorOnce=return"
+	)
+	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 
 	# start DM worker and master
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
@@ -33,8 +36,29 @@ function run() {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	check_log_contain_with_retry "mock upstream instance restart" $WORK_DIR/worker1/log/dm-worker.log
-	# check_log_contain_with_retry "dispatch auto resume task" $WORK_DIR/worker1/log/dm-worker.log
 	check_log_contain_with_retry "meet error when read from local binlog, will switch to remote binlog" $WORK_DIR/worker1/log/dm-worker.log
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"get event returned an error" 1 \
+		"\"stage\": \"Paused\"" 1 \
+		"\"isCanceled\": false" 1
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"pause-task test" \
+		"\"result\": true" 1 \
+		"get event returned an error" 1
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"get event returned an error" 1 \
+		"\"stage\": \"Paused\"" 1 \
+		"\"isCanceled\": true" 1
+
+	sleep 5
+	check_log_not_contains "dispatch auto resume task" $WORK_DIR/worker1/log/dm-worker.log
+
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"resume-task test" \
+		"\"result\": true" 2
 
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
