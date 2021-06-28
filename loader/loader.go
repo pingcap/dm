@@ -217,9 +217,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				job.file = "notafile" + job.file
 			})
 			if err := w.loader.checkPoint.UpdateOffset(job.file, job.offset); err != nil {
-				if !utils.IsContextCanceledError(err) {
-					runFatalChan <- unit.NewProcessError(err)
-				}
+				runFatalChan <- unit.NewProcessError(err)
 				hasError = true
 				continue
 			}
