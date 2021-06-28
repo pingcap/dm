@@ -26,10 +26,8 @@ import (
 	tidbConfig "github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/domain"
-	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
-	"github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/store/mockstore"
 	"go.uber.org/zap"
@@ -301,23 +299,4 @@ func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo)
 	ti = cloneTableInfo(ti)
 	ti.Name = tableName
 	return tr.dom.DDL().CreateTableWithInfo(tr.se, dbName, ti, ddl.OnExistIgnore, false)
-}
-
-// GetSimpleExprOfTable returns an expression of given `expr` string, using the table structure that is tracked before.
-func (tr *Tracker) GetSimpleExprOfTable(db, table, expr string) (expression.Expression, error) {
-	ti, err := tr.GetTable(db, table)
-	if err != nil {
-		return nil, err
-	}
-	e, err := expression.ParseSimpleExprWithTableInfo(tr.se, expr, ti)
-	if err != nil {
-		// if expression contains an unknown column, we return an expression that skips nothing
-		if core.ErrUnknownColumn.Equal(err) {
-			e = expression.NewZero()
-		} else {
-			return nil, err
-		}
-	}
-
-	return e, nil
 }

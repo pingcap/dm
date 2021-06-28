@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pingcap/failpoint"
@@ -220,11 +221,29 @@ func NonRepeatStringsEqual(a, b []string) bool {
 type session struct {
 	sessionctx.Context
 	vars *variable.SessionVars
+	values map[fmt.Stringer]interface{}
+
+	mu sync.RWMutex
 }
 
 // GetSessionVars implements the sessionctx.Context interface.
 func (se *session) GetSessionVars() *variable.SessionVars {
 	return se.vars
+}
+
+// SetValue implements the sessionctx.Context interface.
+func (se *session) SetValue(key fmt.Stringer, value interface{}) {
+	se.mu.Lock()
+	se.values[key] = value
+	se.mu.Unlock()
+}
+
+// Value implements the sessionctx.Context interface.
+func (se *session) Value(key fmt.Stringer) interface{} {
+	se.mu.RLock()
+	value := se.values[key]
+	se.mu.RUnlock()
+	return value
 }
 
 // UTCSession can be used as a sessionctx.Context, with UTC timezone.
@@ -235,6 +254,7 @@ func init() {
 	vars := variable.NewSessionVars()
 	vars.StmtCtx.TimeZone = time.UTC
 	UTCSession.vars = vars
+	UTCSession.values = make(map[fmt.Stringer]interface{}, 1)
 }
 
 // AdjustBinaryProtocolForDatum converts the data in binlog to TiDB datum.

@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/shopspring/decimal"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
@@ -287,11 +288,22 @@ create table t (
 		c.Assert(err, IsNil)
 		c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
 		c.Assert(schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
-		expr, err := schemaTracker.GetSimpleExprOfTable(db, tbl, ca.exprStr)
-		c.Assert(err, IsNil)
 
 		ti, err := schemaTracker.GetTable(db, tbl)
 		c.Assert(err, IsNil)
+
+		exprConfig := []*config.ExpressionFilter{
+			{
+				Schema: db,
+				Table: tbl,
+				InsertValueExpr:ca.exprStr,
+			},
+		}
+		g := NewExprFilterGroup(exprConfig)
+		exprs, err := g.GetInsertExprs(db, tbl, ti)
+		c.Assert(err, IsNil)
+		c.Assert(exprs, HasLen, 1)
+		expr := exprs[0]
 
 		skip, err := SkipDMLByExpression(ca.skippedRow, expr, ti.Columns)
 		c.Assert(err, IsNil)
@@ -537,11 +549,22 @@ create table t (
 		c.Assert(err, IsNil)
 		c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
 		c.Assert(schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
-		expr, err := schemaTracker.GetSimpleExprOfTable(db, tbl, ca.exprStr)
-		c.Assert(err, IsNil)
 
 		ti, err := schemaTracker.GetTable(db, tbl)
 		c.Assert(err, IsNil)
+
+		exprConfig := []*config.ExpressionFilter{
+			{
+				Schema: db,
+				Table: tbl,
+				InsertValueExpr: ca.exprStr,
+			},
+		}
+		g := NewExprFilterGroup(exprConfig)
+		exprs, err := g.GetInsertExprs(db, tbl, ti)
+		c.Assert(err, IsNil)
+		c.Assert(exprs, HasLen, 1)
+		expr := exprs[0]
 
 		skip, err := SkipDMLByExpression(ca.skippedRow, expr, ti.Columns)
 		c.Assert(err, IsNil)
@@ -570,12 +593,23 @@ create table t (
 	c.Assert(err, IsNil)
 	c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
 	c.Assert(schemaTracker.Exec(ctx, db, tableStr), IsNil)
-	expr, err := schemaTracker.GetSimpleExprOfTable(db, tbl, exprStr)
-	c.Assert(err, IsNil)
-	c.Assert(expr.String(), Equals, "0")
 
 	ti, err := schemaTracker.GetTable(db, tbl)
 	c.Assert(err, IsNil)
+
+	exprConfig := []*config.ExpressionFilter{
+		{
+			Schema: db,
+			Table: tbl,
+			InsertValueExpr: exprStr,
+		},
+	}
+	g := NewExprFilterGroup(exprConfig)
+	exprs, err := g.GetInsertExprs(db, tbl, ti)
+	c.Assert(err, IsNil)
+	c.Assert(exprs, HasLen, 1)
+	expr := exprs[0]
+	c.Assert(expr.String(), Equals, "0")
 
 	// skip nothing
 	skip, err := SkipDMLByExpression([]interface{}{0}, expr, ti.Columns)
