@@ -311,7 +311,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return terror.ErrSyncerUnitGenBinlogEventFilter.Delegate(err)
 	}
 
-	s.exprFilterGroup = NewExprFilterGroup(s.cfg.ExprFilter, s.schemaTracker.GetSimpleExprOfTable)
+	s.exprFilterGroup = NewExprFilterGroup(s.cfg.ExprFilter)
 
 	if len(s.cfg.ColumnMappingRules) > 0 {
 		s.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
@@ -1865,7 +1865,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	switch ec.header.EventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(originSchema, originTable)
+		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(originSchema, originTable, ti)
 		if err2 != nil {
 			return err2
 		}
@@ -1879,7 +1879,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(originSchema, originTable)
+		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(originSchema, originTable, ti)
 		if err2 != nil {
 			return err2
 		}
@@ -1893,7 +1893,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(originSchema, originTable)
+		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(originSchema, originTable, ti)
 		if err2 != nil {
 			return err2
 		}

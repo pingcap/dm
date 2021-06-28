@@ -227,13 +227,13 @@ func (se *session) GetSessionVars() *variable.SessionVars {
 	return se.vars
 }
 
-var utcSession *session
+var UTCSession *session
 
 func init() {
-	utcSession = &session{}
+	UTCSession = &session{}
 	vars := variable.NewSessionVars()
 	vars.StmtCtx.TimeZone = time.UTC
-	utcSession.vars = vars
+	UTCSession.vars = vars
 }
 
 // AdjustBinaryProtocolForDatum converts the data in binlog to TiDB datum.
@@ -264,7 +264,7 @@ func AdjustBinaryProtocolForDatum(data []interface{}, cols []*model.ColumnInfo) 
 		datum := types.NewDatum(d)
 
 		// TODO: should we use timezone of upstream?
-		castDatum, err := table.CastValue(utcSession, datum, cols[i], false, false)
+		castDatum, err := table.CastValue(UTCSession, datum, cols[i], false, false)
 		if err != nil {
 			return nil, err
 		}

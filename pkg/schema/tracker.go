@@ -34,7 +34,6 @@ import (
 	"github.com/pingcap/tidb/store/mockstore"
 	"go.uber.org/zap"
 
-	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
@@ -305,7 +304,7 @@ func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo)
 }
 
 // GetSimpleExprOfTable returns an expression of given `expr` string, using the table structure that is tracked before.
-func (tr *Tracker) GetSimpleExprOfTable(db, table, expr string) (*config.Expression, error) {
+func (tr *Tracker) GetSimpleExprOfTable(db, table, expr string) (expression.Expression, error) {
 	ti, err := tr.GetTable(db, table)
 	if err != nil {
 		return nil, err
@@ -320,7 +319,5 @@ func (tr *Tracker) GetSimpleExprOfTable(db, table, expr string) (*config.Express
 		}
 	}
 
-	return &config.Expression{
-		Expression: e,
-	}, nil
+	return e, nil
 }

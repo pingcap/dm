@@ -572,7 +572,7 @@ create table t (
 	c.Assert(schemaTracker.Exec(ctx, db, tableStr), IsNil)
 	expr, err := schemaTracker.GetSimpleExprOfTable(db, tbl, exprStr)
 	c.Assert(err, IsNil)
-	c.Assert(expr.Expression.String(), Equals, "0")
+	c.Assert(expr.String(), Equals, "0")
 
 	ti, err := schemaTracker.GetTable(db, tbl)
 	c.Assert(err, IsNil)
