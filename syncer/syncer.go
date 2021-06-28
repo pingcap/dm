@@ -1195,6 +1195,8 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 	var err error
 	var affect int
+	ticker := time.NewTicker(waitTime)
+	defer ticker.Stop()
 	for {
 		select {
 		case sqlJob, ok := <-jobChan:
@@ -1218,9 +1220,11 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				successF()
 				clearF()
 			}
-
-		case <-time.After(waitTime):
+		case <-ticker.C:
 			if len(jobs) > 0 {
+				failpoint.Inject("syncDMLTicker", func() {
+					tctx.L().Info("job queue not full, executeSQLs by ticker")
+				})
 				affect, err = executeSQLs()
 				if err != nil {
 					fatalF(affect, err)
