@@ -17,6 +17,7 @@ mysql-instances:
       - "pythagorean"
       - "update_old_lt_100"
       - "update_new_lt_100"
+      - "update_old_and_new"
 
 expression-filter:
   even_c:

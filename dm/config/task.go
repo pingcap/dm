@@ -23,6 +23,7 @@ import (
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/dustin/go-humanize"
+	"github.com/pingcap/parser"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -438,19 +439,34 @@ func (c *TaskConfig) adjust() error {
 	for name, exprFilter := range c.ExprFilter {
 		setFields := make([]string, 0, 1)
 		if exprFilter.InsertValueExpr != "" {
-			setFields = append(setFields, "insert: "+exprFilter.InsertValueExpr)
+			if err := checkValidExpr(exprFilter.InsertValueExpr); err != nil {
+				return terror.ErrConfigExprFilterWrongGrammar.Generate(name, exprFilter.InsertValueExpr, err)
+			}
+			setFields = append(setFields, "insert: ["+exprFilter.InsertValueExpr+"]")
 		}
 		if exprFilter.UpdateOldValueExpr != "" || exprFilter.UpdateNewValueExpr != "" {
-			setFields = append(setFields, "update (old value): "+exprFilter.UpdateOldValueExpr+" update (new value): "+exprFilter.UpdateNewValueExpr)
+			if exprFilter.UpdateOldValueExpr != "" {
+				if err := checkValidExpr(exprFilter.UpdateOldValueExpr); err != nil {
+					return terror.ErrConfigExprFilterWrongGrammar.Generate(name, exprFilter.UpdateOldValueExpr, err)
+				}
+			}
+			if exprFilter.UpdateNewValueExpr != "" {
+				if err := checkValidExpr(exprFilter.UpdateNewValueExpr); err != nil {
+					return terror.ErrConfigExprFilterWrongGrammar.Generate(name, exprFilter.UpdateNewValueExpr, err)
+				}
+			}
+			setFields = append(setFields, "update (old value): ["+exprFilter.UpdateOldValueExpr+"] update (new value): ["+exprFilter.UpdateNewValueExpr+"]")
 		}
 		if exprFilter.DeleteValueExpr != "" {
-			setFields = append(setFields, "delete: "+exprFilter.DeleteValueExpr)
+			if err := checkValidExpr(exprFilter.DeleteValueExpr); err != nil {
+				return terror.ErrConfigExprFilterWrongGrammar.Generate(name, exprFilter.DeleteValueExpr, err)
+			}
+			setFields = append(setFields, "delete: ["+exprFilter.DeleteValueExpr+"]")
 		}
 		if len(setFields) > 1 {
 			return terror.ErrConfigExprFilterManyExpr.Generate(name, setFields)
 		}
 	}
-	// TODO: check grammar of expression filter
 
 	instanceIDs := make(map[string]int) // source-id -> instance-index
 	globalConfigReferCount := map[string]int{}
@@ -898,4 +914,11 @@ func AdjustTargetDBTimeZone(config *DBConfig) {
 		config.Session = make(map[string]string, 1)
 	}
 	config.Session["time_zone"] = defaultTimeZone
+}
+
+var defaultParser = parser.New()
+func checkValidExpr(expr string) error {
+	expr = "select " + expr
+	_, _, err := defaultParser.Parse(expr, "", "")
+	return err
 }

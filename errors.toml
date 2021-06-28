@@ -1024,6 +1024,12 @@ description = ""
 workaround = "Please check the `expression-filters` config in task configuration file."
 tags = ["internal", "high"]
 
+[error.DM-config-20041]
+message = "expression-filter name(%s) SQL(%s) has wrong grammar: %v"
+description = ""
+workaround = "Please check the `expression-filters` config in task configuration file."
+tags = ["internal", "high"]
+
 [error.DM-binlog-op-22001]
 message = ""
 description = ""

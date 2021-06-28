@@ -14,6 +14,7 @@
 package config
 
 import (
+	"fmt"
 	"io/ioutil"
 	"path"
 	"sort"
@@ -941,7 +942,7 @@ func (t *testConfig) TestDefaultConfig(c *C) {
 	c.Assert(cfg.MySQLInstances[0].Mydumper.ChunkFilesize, Equals, defaultChunkFilesize)
 }
 
-func (t *testConfig) TestExclusiveExprFilterFields(c *C) {
+func (t *testConfig) TestExclusiveAndWrongExprFilterFields(c *C) {
 	cfg := NewTaskConfig()
 	cfg.Name = "test"
 	cfg.TaskMode = "all"
@@ -965,12 +966,30 @@ func (t *testConfig) TestExclusiveExprFilterFields(c *C) {
 	cfg.ExprFilter["test-delete"] = &ExpressionFilter{
 		DeleteValueExpr: "a > 1",
 	}
+	cfg.MySQLInstances[0].ExpressionFilters = []string{
+		"test-insert",
+		"test-update-only-old",
+		"test-update-only-new",
+		"test-update",
+		"test-delete",
+	}
 	c.Assert(cfg.adjust(), IsNil)
 
 	cfg.ExprFilter["both-field"] = &ExpressionFilter{
 		InsertValueExpr: "a > 1",
 		DeleteValueExpr: "a > 1",
 	}
+	cfg.MySQLInstances[0].ExpressionFilters = append(cfg.MySQLInstances[0].ExpressionFilters, "both-field")
 	err := cfg.adjust()
 	c.Assert(terror.ErrConfigExprFilterManyExpr.Equal(err), IsTrue)
+
+	delete(cfg.ExprFilter, "both-field")
+	cfg.ExprFilter["wrong"] = &ExpressionFilter{
+		DeleteValueExpr: "a >",
+	}
+	length := len(cfg.MySQLInstances[0].ExpressionFilters)
+	cfg.MySQLInstances[0].ExpressionFilters[length-1] = "wrong"
+	err = cfg.adjust()
+	fmt.Println(err)
+	c.Assert(terror.ErrConfigExprFilterWrongGrammar.Equal(err), IsTrue)
 }
