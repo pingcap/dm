@@ -15,7 +15,8 @@ mysql-instances:
       - "even_c"
       - "future_date"
       - "pythagorean"
-      - "update_lt_100"
+      - "update_old_lt_100"
+      - "update_new_lt_100"
 
 expression-filter:
   even_c:
@@ -30,11 +31,19 @@ expression-filter:
     schema: "expr_filter"
     table: "t4"
     insert-value-expr: "a*a + b*b = c*c"
-  update_lt_100:
+  update_old_lt_100:
     schema: "expr_filter"
     table: "t5"
     update-old-value-expr: "c > 100"
+  update_new_lt_100:
+    schema: "expr_filter"
+    table: "t5"
     update-new-value-expr: "c > 100"
+  update_old_and_new:
+    schema: "expr_filter"
+    table: "t5"
+    update-old-value-expr: "c = 1"
+    update-new-value-expr: "c = 2"
 
 
 black-white-list: # compatible with deprecated config

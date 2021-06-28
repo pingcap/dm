@@ -147,21 +147,17 @@ RowLoop:
 			oriChangedValues = extractValueFromData(oriChangedData, ti.Columns)
 		}
 
-		for _, expr := range oldValueFilters {
-			skip, err := SkipDMLByExpression(oriOldValues, expr, ti.Columns)
+		for j := range oldValueFilters {
+			oldExpr, newExpr := oldValueFilters[j], newValueFilters[j]
+			skip1, err := SkipDMLByExpression(oriOldValues, oldExpr, ti.Columns)
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			if skip {
-				continue RowLoop
-			}
-		}
-		for _, expr := range newValueFilters {
-			skip, err := SkipDMLByExpression(oriChangedValues, expr, ti.Columns)
+			skip2, err := SkipDMLByExpression(oriChangedValues, newExpr, ti.Columns)
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			if skip {
+			if skip1 && skip2 {
 				// TODO: we skip generating the UPDATE SQL, so we left the old value here. Is this expected?
 				continue RowLoop
 			}

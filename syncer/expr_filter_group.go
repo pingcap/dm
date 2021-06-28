@@ -3,6 +3,7 @@ package syncer
 import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/util/chunk"
 	"go.uber.org/zap"
 
@@ -87,8 +88,8 @@ func (g *ExprFilterGroup) GetInsertExprs(db, table string) ([]*config.Expression
 	return g.InsertExprs[key], nil
 }
 
-// GetUpdateExprs returns two list of expression filters for given table, to filter UPDATE events by old values and new
-// values respectively.
+// GetUpdateExprs returns two lists of expression filters for given table, to filter UPDATE events by old values and new
+// values respectively. The two lists should have same length, and the corresponding expressions is AND logic.
 // This function will lazy calculate expressions if not initialized.
 func (g *ExprFilterGroup) GetUpdateExprs(db, table string) ([]*config.Expression, []*config.Expression, error) {
 	key := dbutil.TableName(db, table)
@@ -108,6 +109,10 @@ func (g *ExprFilterGroup) GetUpdateExprs(db, table string) ([]*config.Expression
 					return nil, nil, err
 				}
 				g.UpdateOldExprs[key] = append(g.UpdateOldExprs[key], expr)
+			} else {
+				g.UpdateOldExprs[key] = append(g.UpdateOldExprs[key], &config.Expression{
+					Expression: expression.NewOne(),
+				})
 			}
 		}
 	}
@@ -121,6 +126,10 @@ func (g *ExprFilterGroup) GetUpdateExprs(db, table string) ([]*config.Expression
 					return nil, nil, err
 				}
 				g.UpdateNewExprs[key] = append(g.UpdateNewExprs[key], expr)
+			} else {
+				g.UpdateNewExprs[key] = append(g.UpdateNewExprs[key], &config.Expression{
+					Expression: expression.NewOne(),
+				})
 			}
 		}
 	}

@@ -111,6 +111,10 @@ syncers:
     enable-ansi-quotes: true
     safe-mode: false  
 
+expression-filter:
+  expr-1:
+    insert-value-expr: "a > 1"
+
 mysql-instances:
   - source-id: "mysql-replica-01"
     route-rules: ["route-rule-2"]
@@ -119,6 +123,7 @@ mysql-instances:
     mydumper-config-name: "global1"
     loader-config-name: "global1"
     syncer-config-name: "global1"
+    expression-filters: ["expr-1"]
 
   - source-id: "mysql-replica-02"
     route-rules: ["route-rule-1"]
@@ -213,6 +218,10 @@ syncers:
     enable-ansi-quotes: true
     safe-mode: false  
 
+expression-filter:
+  expr-1:
+    insert-value-expr: "a > 1"
+
 mysql-instances:
   - source-id: "mysql-replica-01"
     route-rules: ["route-rule-1"]
@@ -233,7 +242,7 @@ mysql-instances:
 	taskConfig = NewTaskConfig()
 	err = taskConfig.Decode(errorTaskConfig)
 	c.Check(err, NotNil)
-	c.Assert(err, ErrorMatches, `[\s\S]*The configurations as following \[column-mapping-rule-2 filter-rule-2 route-rule-2\] are set in global configuration[\s\S]*`)
+	c.Assert(err, ErrorMatches, `[\s\S]*The configurations as following \[column-mapping-rule-2 expr-1 filter-rule-2 route-rule-2\] are set in global configuration[\s\S]*`)
 }
 
 func (t *testConfig) TestInvalidTaskConfig(c *C) {
@@ -603,6 +612,9 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				{Schema: "bd2", Name: "lbt2"},
 			},
 		}
+		exprFilter1 = ExpressionFilter{
+			DeleteValueExpr: "state = 1",
+		}
 		source1DBCfg = DBConfig{
 			Host:             "127.0.0.1",
 			Port:             3306,
@@ -697,6 +709,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	stCfg2.From = source2DBCfg
 	stCfg2.BAList = &baList2
 	stCfg2.RouteRules = []*router.TableRule{&routeRule4, &routeRule1, &routeRule2}
+	stCfg2.ExprFilter = []*ExpressionFilter{&exprFilter1}
 
 	cfg := FromSubTaskConfigs(stCfg1, stCfg2)
 
@@ -748,6 +761,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				SyncerConfigName:   "sync-01",
 				Syncer:             nil,
 				SyncerThread:       0,
+				ExpressionFilters:  []string{"expr-filter-01"},
 			},
 		},
 		OnlineDDLScheme: onlineDDLScheme,
@@ -776,6 +790,9 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		Syncers: map[string]*SyncerConfig{
 			"sync-01": &stCfg1.SyncerConfig,
 		},
+		ExprFilter: map[string]*ExpressionFilter{
+			"expr-filter-01": &exprFilter1,
+		},
 		CleanDumpFile: stCfg1.CleanDumpFile,
 	}
 
@@ -792,8 +809,11 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	c.Assert(stCfg1.ColumnMappingRules, HasLen, 0)
 	c.Assert(stCfgs[1].ColumnMappingRules, HasLen, 0)
 	c.Assert(stCfg2.ColumnMappingRules, HasLen, 0)
+	c.Assert(stCfgs[0].ExprFilter, HasLen, 0)
+	c.Assert(stCfg1.ExprFilter, HasLen, 0)
 	stCfgs[0].ColumnMappingRules = stCfg1.ColumnMappingRules
 	stCfgs[1].ColumnMappingRules = stCfg2.ColumnMappingRules
+	stCfgs[0].ExprFilter = stCfg1.ExprFilter
 	// deprecated config will not recover
 	stCfgs[0].EnableANSIQuotes = stCfg1.EnableANSIQuotes
 	stCfgs[1].EnableANSIQuotes = stCfg2.EnableANSIQuotes
@@ -919,4 +939,38 @@ func (t *testConfig) TestDefaultConfig(c *C) {
 	cfg.MySQLInstances[0].Mydumper = &MydumperConfig{MydumperPath: "test"}
 	c.Assert(cfg.adjust(), IsNil)
 	c.Assert(cfg.MySQLInstances[0].Mydumper.ChunkFilesize, Equals, defaultChunkFilesize)
+}
+
+func (t *testConfig) TestExclusiveExprFilterFields(c *C) {
+	cfg := NewTaskConfig()
+	cfg.Name = "test"
+	cfg.TaskMode = "all"
+	cfg.TargetDB = &DBConfig{}
+	cfg.MySQLInstances = append(cfg.MySQLInstances, &MySQLInstance{SourceID: "source1"})
+	c.Assert(cfg.adjust(), IsNil)
+
+	cfg.ExprFilter["test-insert"] = &ExpressionFilter{
+		InsertValueExpr: "a > 1",
+	}
+	cfg.ExprFilter["test-update-only-old"] = &ExpressionFilter{
+		UpdateOldValueExpr: "a > 1",
+	}
+	cfg.ExprFilter["test-update-only-new"] = &ExpressionFilter{
+		UpdateNewValueExpr: "a > 1",
+	}
+	cfg.ExprFilter["test-update"] = &ExpressionFilter{
+		UpdateOldValueExpr: "a > 1",
+		UpdateNewValueExpr: "a > 1",
+	}
+	cfg.ExprFilter["test-delete"] = &ExpressionFilter{
+		DeleteValueExpr: "a > 1",
+	}
+	c.Assert(cfg.adjust(), IsNil)
+
+	cfg.ExprFilter["both-field"] = &ExpressionFilter{
+		InsertValueExpr: "a > 1",
+		DeleteValueExpr: "a > 1",
+	}
+	err := cfg.adjust()
+	c.Assert(terror.ErrConfigExprFilterManyExpr.Equal(err), IsTrue)
 }
