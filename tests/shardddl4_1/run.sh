@@ -698,7 +698,7 @@ function DM_151_CASE {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: type double not match origin int(11), and tidb_enable_change_column_type is false" 1
+		'"target": "`shardddl`.`tb`"', 2
 }
 
 function DM_151 {
@@ -707,11 +707,12 @@ function DM_151 {
          run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
          run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
 		"clean_table" "pessimistic"
-	run_case 151 "double-source-optimistic" \
-		"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
-         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
-         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
-		"clean_table" "optimistic"
+
+	# run_case 151 "double-source-optimistic" \
+	# 	"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+    #      run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+    #      run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
+	# 	"clean_table" "optimistic"
 }
 
 function DM_152_CASE {
