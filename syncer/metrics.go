@@ -122,7 +122,7 @@ var (
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
-			Name:      "theoretical_job_count",
+			Name:      "ideal_job_count",
 			Help:      "remain size of the DML queue",
 		}, []string{"task", "worker", "source_id"})
 
