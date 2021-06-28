@@ -87,8 +87,8 @@ function test_syncer_metrics() {
 	check_metric $WORKER1_PORT 'dm_syncer_ideal_job_count{source_id="mysql-replica-01",task="test",worker="worker1"' 5 1 99999
 	check_metric $WORKER2_PORT 'dm_syncer_ideal_job_count{source_id="mysql-replica-02",task="test",worker="worker2"' 5 1 99999
 
-	check_metric $WORKER1_PORT 'dm_syncer_binlog_event_row{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 99999
-	check_metric $WORKER2_PORT 'dm_syncer_binlog_event_row{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 99999
+	check_metric $WORKER1_PORT 'dm_syncer_binlog_event_row{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 0 99999
+	check_metric $WORKER2_PORT 'dm_syncer_binlog_event_row{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 0 99999
 
 	check_metric $WORKER1_PORT 'dm_syncer_flush_checkpoints_count{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 0 99999
 	check_metric $WORKER2_PORT 'dm_syncer_flush_checkpoints_count{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 0 99999
