@@ -78,7 +78,7 @@ type job struct {
 	originSQL       string // show origin sql when error, only DDL now
 
 	eventHeader *replication.EventHeader
-	commitTime  time.Time // job commit time
+	jobAddTime  time.Time // job commit time
 }
 
 func (j *job) String() string {
@@ -102,7 +102,7 @@ func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, 
 		startLocation:   startLocation,
 		currentLocation: cmdLocation,
 		eventHeader:     eventHeader,
-		commitTime:      time.Now(),
+		jobAddTime:      time.Now(),
 	}
 }
 
@@ -120,7 +120,7 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation,
 		startLocation:   startLocation,
 		currentLocation: cmdLocation,
 		eventHeader:     eventHeader,
-		commitTime:      time.Now(),
+		jobAddTime:      time.Now(),
 	}
 
 	if ddlInfo != nil {
@@ -148,7 +148,7 @@ func newSkipJob(ec *eventContext) *job {
 		tp:          skip,
 		location:    *ec.lastLocation,
 		eventHeader: ec.header,
-		commitTime:  time.Now(),
+		jobAddTime:  time.Now(),
 	}
 }
 
@@ -158,14 +158,14 @@ func newXIDJob(location, startLocation, cmdLocation binlog.Location) *job {
 		location:        location,
 		startLocation:   startLocation,
 		currentLocation: cmdLocation,
-		commitTime:      time.Now(),
+		jobAddTime:      time.Now(),
 	}
 }
 
 func newFlushJob() *job {
 	return &job{
 		tp:         flush,
-		commitTime: time.Now(),
+		jobAddTime: time.Now(),
 	}
 }
 

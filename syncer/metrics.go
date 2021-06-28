@@ -26,6 +26,16 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
+const (
+	binlogEventCostStageDDLExec = "ddl-exec"
+	binlogEventCostStageDMLExec = "dml-exec"
+
+	binlogEventCostStageGenWriteRows  = "gen-write-rows"
+	binlogEventCostStageGenUpdateRows = "gen-update-rows"
+	binlogEventCostStageGenDeleteRows = "gen-delete-rows"
+	binlogEventCostStageGenQuery      = "gen-query"
+)
+
 var (
 	binlogReadDurationHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -108,7 +118,7 @@ var (
 			Help:      "total number of finished jobs",
 		}, []string{"type", "task", "queueNo", "source_id", "worker", "target_schema", "target_table"})
 
-	theoreticalJobCount = metricsproxy.NewGaugeVec(
+	idealJobCount = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
@@ -269,7 +279,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(skipBinlogDurationHistogram)
 	registry.MustRegister(addedJobsTotal)
 	registry.MustRegister(finishedJobsTotal)
-	registry.MustRegister(theoreticalJobCount)
+	registry.MustRegister(idealJobCount)
 	registry.MustRegister(finishedTransactionTotal)
 	registry.MustRegister(queueSizeGauge)
 	registry.MustRegister(sqlRetriesTotal)
@@ -325,7 +335,7 @@ func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	skipBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	addedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	finishedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	theoreticalJobCount.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	idealJobCount.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	finishedTransactionTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	queueSizeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	sqlRetriesTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})

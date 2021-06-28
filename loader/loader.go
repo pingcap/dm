@@ -759,11 +759,11 @@ func (l *Loader) loadFinishedSize() {
 	results := l.checkPoint.GetAllRestoringFileInfo()
 	for file, pos := range results {
 		db, table, err := getDBAndTableFromFilename(file)
-		l.finishedDataSize.Add(pos[0])
 		if err != nil {
 			l.logger.Warn("invalid db table sql file", zap.String("file", file), zap.Error(err))
 			continue
 		}
+		l.finishedDataSize.Add(pos[0])
 		l.dbTableDataFinishedSize[db][table].Add(pos[0])
 	}
 }

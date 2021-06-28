@@ -1130,19 +1130,19 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			finishedTransactionTotal.WithLabelValues(s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Inc()
 			switch j.tp {
 			case ddl:
-				binlogEventCost.WithLabelValues("ddl-exec", s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(j.commitTime).Seconds())
+				binlogEventCost.WithLabelValues(binlogEventCostStageDDLExec, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(j.jobAddTime).Seconds())
 			case insert, update, del:
-				binlogEventCost.WithLabelValues("dml-exec", s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(j.commitTime).Seconds())
+				binlogEventCost.WithLabelValues(binlogEventCostStageDMLExec, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(j.jobAddTime).Seconds())
 			}
 		} else {
 			s.updateReplicationLag(nil, queueBucket)
 		}
 		// calculate qps
-		for dbSchema, v1 := range tpCnt {
-			for dbTable, v2 := range v1 {
-				for tpName, v := range v2 {
+		for dbSchema, tableM := range tpCnt {
+			for dbTable, TPM := range tableM {
+				for tpName, cnt := range TPM {
 					tpCnt[dbSchema][dbTable][tpName] = 0
-					s.addCount(true, queueBucket, tpName, v, dbSchema, dbTable)
+					s.addCount(true, queueBucket, tpName, cnt, dbSchema, dbTable)
 				}
 			}
 		}
@@ -1650,7 +1650,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		case *replication.RotateEvent:
 			err2 = s.handleRotateEvent(ev, ec)
 		case *replication.RowsEvent:
-			binlogEventRowGauge.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Set(float64(ev.ColumnCount))
+			binlogEventRowGauge.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Set(float64(len(ev.Rows)))
 			err2 = s.handleRowsEvent(ev, ec)
 		case *replication.QueryEvent:
 			originSQL = strings.TrimSpace(string(ev.Query))
@@ -1876,7 +1876,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 				return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
 			}
 		}
-		binlogEventCost.WithLabelValues("write_rows", s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+		binlogEventCost.WithLabelValues(binlogEventCostStageGenWriteRows, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
@@ -1887,7 +1887,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 				return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
 			}
 		}
-		binlogEventCost.WithLabelValues("update_rows", s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+		binlogEventCost.WithLabelValues(binlogEventCostStageGenUpdateRows, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
@@ -1897,7 +1897,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 				return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
 			}
 		}
-		binlogEventCost.WithLabelValues("delete_rows", s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+		binlogEventCost.WithLabelValues(binlogEventCostStageGenDeleteRows, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = del
 
 	default:
@@ -2012,7 +2012,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		return terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(string(ev.Query))
 	}
 
-	binlogEventCost.WithLabelValues("query", s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+	binlogEventCost.WithLabelValues(binlogEventCostStageGenQuery, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 
 	/*
 		we construct a application transaction for ddl. we save checkpoint after we execute all ddls
