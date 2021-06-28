@@ -113,7 +113,7 @@ syncers:
 
 expression-filter:
   expr-1:
-	schema: "db"
+    schema: "db"
     table: "tbl"
     insert-value-expr: "a > 1"
 
@@ -222,7 +222,7 @@ syncers:
 
 expression-filter:
   expr-1:
-	schema: "db"
+    schema: "db"
     table: "tbl"
     insert-value-expr: "a > 1"
 
@@ -617,6 +617,8 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 			},
 		}
 		exprFilter1 = ExpressionFilter{
+			Schema:          "db",
+			Table:           "tbl",
 			DeleteValueExpr: "state = 1",
 		}
 		source1DBCfg = DBConfig{
