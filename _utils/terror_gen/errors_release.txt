@@ -253,7 +253,7 @@ ErrLoadUnitDumpDirNotFound,[code=34014:class=load-unit:scope=internal:level=high
 ErrLoadUnitDuplicateTableFile,[code=34015:class=load-unit:scope=internal:level=high], "Message: invalid table schema file, duplicated item - %s"
 ErrLoadUnitGenBAList,[code=34016:class=load-unit:scope=internal:level=high], "Message: generate block allow list, Workaround: Please check the `block-allow-list` config in task configuration file."
 ErrLoadTaskWorkerNotMatch,[code=34017:class=functional:scope=internal:level=high], "Message: different worker in load stage, previous worker: %s, current worker: %s, Workaround: Please check if the previous worker is online."
-ErrLoadTaskCheckPointNotMatch,[code=34018:class=functional:scope=internal:level=high], "Message: inconsistent checkpoints between loader and target database, Workaround: Please check that you have not forgotten to use dmctl start-task --remove-meta=true."
+ErrLoadTaskCheckPointNotMatch,[code=34018:class=functional:scope=internal:level=high], "Message: inconsistent checkpoints between loader and target database, Workaround: Please check that you have not forgotten to use dmctl start-task --remove-meta=true. if you want to redo the task."
 ErrSyncerUnitPanic,[code=36001:class=sync-unit:scope=internal:level=high], "Message: panic error: %v"
 ErrSyncUnitInvalidTableName,[code=36002:class=sync-unit:scope=internal:level=high], "Message: extract table name for DML error: %s"
 ErrSyncUnitTableNameQuery,[code=36003:class=sync-unit:scope=internal:level=high], "Message: table name parse error: %s"

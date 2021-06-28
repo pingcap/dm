@@ -37,7 +37,7 @@ function test_save_checkpoint_faild() {
 	prepare_datafile
 	run_sql_file $WORK_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
-	export GO_FAILPOINTS="github.com/pingcap/dm/loader/loaderCPUpdateOffsetError=return(1)"
+	export GO_FAILPOINTS="github.com/pingcap/dm/loader/loaderCPUpdateOffsetError=return()"
 
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
