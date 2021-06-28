@@ -220,7 +220,7 @@ func NonRepeatStringsEqual(a, b []string) bool {
 
 type session struct {
 	sessionctx.Context
-	vars *variable.SessionVars
+	vars   *variable.SessionVars
 	values map[fmt.Stringer]interface{}
 
 	mu sync.RWMutex

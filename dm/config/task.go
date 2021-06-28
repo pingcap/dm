@@ -437,6 +437,12 @@ func (c *TaskConfig) adjust() error {
 	}
 
 	for name, exprFilter := range c.ExprFilter {
+		if exprFilter.Schema == "" {
+			return terror.ErrConfigExprFilterEmptyName.Generate(name, "schema")
+		}
+		if exprFilter.Table == "" {
+			return terror.ErrConfigExprFilterEmptyName.Generate(name, "table")
+		}
 		setFields := make([]string, 0, 1)
 		if exprFilter.InsertValueExpr != "" {
 			if err := checkValidExpr(exprFilter.InsertValueExpr); err != nil {
@@ -917,6 +923,7 @@ func AdjustTargetDBTimeZone(config *DBConfig) {
 }
 
 var defaultParser = parser.New()
+
 func checkValidExpr(expr string) error {
 	expr = "select " + expr
 	_, _, err := defaultParser.Parse(expr, "", "")

@@ -14,7 +14,6 @@
 package config
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path"
 	"sort"
@@ -114,6 +113,8 @@ syncers:
 
 expression-filter:
   expr-1:
+	schema: "db"
+    table: "tbl"
     insert-value-expr: "a > 1"
 
 mysql-instances:
@@ -221,6 +222,8 @@ syncers:
 
 expression-filter:
   expr-1:
+	schema: "db"
+    table: "tbl"
     insert-value-expr: "a > 1"
 
 mysql-instances:
@@ -951,19 +954,29 @@ func (t *testConfig) TestExclusiveAndWrongExprFilterFields(c *C) {
 	c.Assert(cfg.adjust(), IsNil)
 
 	cfg.ExprFilter["test-insert"] = &ExpressionFilter{
+		Schema:          "db",
+		Table:           "tbl",
 		InsertValueExpr: "a > 1",
 	}
 	cfg.ExprFilter["test-update-only-old"] = &ExpressionFilter{
+		Schema:             "db",
+		Table:              "tbl",
 		UpdateOldValueExpr: "a > 1",
 	}
 	cfg.ExprFilter["test-update-only-new"] = &ExpressionFilter{
+		Schema:             "db",
+		Table:              "tbl",
 		UpdateNewValueExpr: "a > 1",
 	}
 	cfg.ExprFilter["test-update"] = &ExpressionFilter{
+		Schema:             "db",
+		Table:              "tbl",
 		UpdateOldValueExpr: "a > 1",
 		UpdateNewValueExpr: "a > 1",
 	}
 	cfg.ExprFilter["test-delete"] = &ExpressionFilter{
+		Schema:          "db",
+		Table:           "tbl",
 		DeleteValueExpr: "a > 1",
 	}
 	cfg.MySQLInstances[0].ExpressionFilters = []string{
@@ -976,6 +989,8 @@ func (t *testConfig) TestExclusiveAndWrongExprFilterFields(c *C) {
 	c.Assert(cfg.adjust(), IsNil)
 
 	cfg.ExprFilter["both-field"] = &ExpressionFilter{
+		Schema:          "db",
+		Table:           "tbl",
 		InsertValueExpr: "a > 1",
 		DeleteValueExpr: "a > 1",
 	}
@@ -985,11 +1000,12 @@ func (t *testConfig) TestExclusiveAndWrongExprFilterFields(c *C) {
 
 	delete(cfg.ExprFilter, "both-field")
 	cfg.ExprFilter["wrong"] = &ExpressionFilter{
+		Schema:          "db",
+		Table:           "tbl",
 		DeleteValueExpr: "a >",
 	}
 	length := len(cfg.MySQLInstances[0].ExpressionFilters)
 	cfg.MySQLInstances[0].ExpressionFilters[length-1] = "wrong"
 	err = cfg.adjust()
-	fmt.Println(err)
 	c.Assert(terror.ErrConfigExprFilterWrongGrammar.Equal(err), IsTrue)
 }

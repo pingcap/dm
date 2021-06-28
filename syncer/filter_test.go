@@ -294,9 +294,9 @@ create table t (
 
 		exprConfig := []*config.ExpressionFilter{
 			{
-				Schema: db,
-				Table: tbl,
-				InsertValueExpr:ca.exprStr,
+				Schema:          db,
+				Table:           tbl,
+				InsertValueExpr: ca.exprStr,
 			},
 		}
 		g := NewExprFilterGroup(exprConfig)
@@ -555,8 +555,8 @@ create table t (
 
 		exprConfig := []*config.ExpressionFilter{
 			{
-				Schema: db,
-				Table: tbl,
+				Schema:          db,
+				Table:           tbl,
 				InsertValueExpr: ca.exprStr,
 			},
 		}
@@ -599,8 +599,8 @@ create table t (
 
 	exprConfig := []*config.ExpressionFilter{
 		{
-			Schema: db,
-			Table: tbl,
+			Schema:          db,
+			Table:           tbl,
 			InsertValueExpr: exprStr,
 		},
 	}

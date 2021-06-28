@@ -170,6 +170,7 @@ ErrConfigGlobalConfigsUnused,[code=20038:class=config:scope=internal:level=high]
 ErrConfigExprFilterManyExpr,[code=20039:class=config:scope=internal:level=high], "Message: expression filter can only specify one of (insert, update, delete) expressions, but %s has specified %v, Workaround: If you want to filter by A or B, please write two filters."
 ErrConfigExprFilterNotFound,[code=20040:class=config:scope=internal:level=high], "Message: mysql-instance(%d)'s expression-filters %s not exist in expression-filter, Workaround: Please check the `expression-filters` config in task configuration file."
 ErrConfigExprFilterWrongGrammar,[code=20041:class=config:scope=internal:level=high], "Message: expression-filter name(%s) SQL(%s) has wrong grammar: %v, Workaround: Please check the `expression-filters` config in task configuration file."
+ErrConfigExprFilterEmptyName,[code=20042:class=config:scope=internal:level=high], "Message: expression-filter %s has empty %s, Workaround: Please check the `expression-filters` config in task configuration file."
 ErrBinlogExtractPosition,[code=22001:class=binlog-op:scope=internal:level=high]
 ErrBinlogInvalidFilename,[code=22002:class=binlog-op:scope=internal:level=high], "Message: invalid binlog filename"
 ErrBinlogParsePosFromStr,[code=22003:class=binlog-op:scope=internal:level=high]

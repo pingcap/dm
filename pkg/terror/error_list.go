@@ -233,6 +233,7 @@ const (
 	codeConfigExprFilterManyExpr
 	codeConfigExprFilterNotFound
 	codeConfigExprFilterWrongGrammar
+	codeConfigExprFilterEmptyName
 )
 
 // Binlog operation error code list.
@@ -849,6 +850,7 @@ var (
 	ErrConfigExprFilterManyExpr     = New(codeConfigExprFilterManyExpr, ClassConfig, ScopeInternal, LevelHigh, "expression filter can only specify one of (insert, update, delete) expressions, but %s has specified %v", "If you want to filter by A or B, please write two filters.")
 	ErrConfigExprFilterNotFound     = New(codeConfigExprFilterNotFound, ClassConfig, ScopeInternal, LevelHigh, "mysql-instance(%d)'s expression-filters %s not exist in expression-filter", "Please check the `expression-filters` config in task configuration file.")
 	ErrConfigExprFilterWrongGrammar = New(codeConfigExprFilterWrongGrammar, ClassConfig, ScopeInternal, LevelHigh, "expression-filter name(%s) SQL(%s) has wrong grammar: %v", "Please check the `expression-filters` config in task configuration file.")
+	ErrConfigExprFilterEmptyName    = New(codeConfigExprFilterEmptyName, ClassConfig, ScopeInternal, LevelHigh, "expression-filter %s has empty %s", "Please check the `expression-filters` config in task configuration file.")
 
 	// Binlog operation error.
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
