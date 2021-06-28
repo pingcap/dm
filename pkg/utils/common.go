@@ -227,6 +227,7 @@ func (se *session) GetSessionVars() *variable.SessionVars {
 	return se.vars
 }
 
+// UTCSession can be used as a sessionctx.Context, with UTC timezone.
 var UTCSession *session
 
 func init() {
