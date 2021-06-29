@@ -53,6 +53,11 @@ function prepare_less_binlogs() {
 	exec_sql $1 "insert into db2.tb2 values(2),(3);"
 }
 
+function get_master_status() {
+	arr=$(echo "show master status;" | MYSQL_PWD=123456 mysql -uroot -h$1 -P3306 | awk 'NR==2')
+	echo $arr
+}
+
 function change_master_to_pos() {
 	exec_sql $1 "stop slave;"
 	echo "change master to master_host='$2',master_user='root',master_password='123456',master_log_file='$3',master_log_pos=$4;"
