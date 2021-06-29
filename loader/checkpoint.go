@@ -400,7 +400,7 @@ func (cp *RemoteCheckPoint) UpdateOffset(filename string, offset int64) error {
 	defer cp.restoringFiles.Unlock()
 	db, table, err := getDBAndTableFromFilename(filename)
 	if err != nil {
-		return terror.Annotatef(terror.ErrLoadTaskCheckPointNotMatch.Generate(), "wrong filename=%s", filename)
+		return terror.Annotatef(terror.ErrLoadTaskCheckPointNotMatch.Generate(err), "wrong filename=%s", filename)
 	}
 
 	if _, ok := cp.restoringFiles.pos[db]; ok {
