@@ -5,7 +5,7 @@ set -eu
 CUR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PATH=$CUR/../_utils:$PATH # for sync_diff_inspector
 
-source $CUR/../_utils/test_prepare
+source $cur/../_utils/test_prepare
 source $CUR/lib.sh
 
 function clean_data() {
