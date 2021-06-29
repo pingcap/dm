@@ -687,6 +687,7 @@ function DM_150 {
 }
 
 function DM_151_CASE {
+	shardmode=$1
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1);"
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,2);"
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,3);"
@@ -696,23 +697,32 @@ function DM_151_CASE {
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,5);"
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
 
-	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"query-status test" \
-		'"target": "`shardddl`.`tb`"', 2
+	if [[ "$shardmode" == "pessimistic" ]]; then
+		# modify column a double ddl passed but is still waiting for reslove from the sharding group
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"query-status test" \
+			'"target": "`shardddl`.`tb`"', 2
+	else
+		# modify column a double ddl not passed in optimistic mode and worker1 Paused
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"query-status test" \
+			'"stage": "Paused"', 1
+	fi
+
 }
 
 function DM_151 {
-	run_case 151 "double-source-pessimistic" \
-		"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
-         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
-         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
-		"clean_table" "pessimistic"
-
-	# run_case 151 "double-source-optimistic" \
+	# run_case 151 "double-source-pessimistic" \
 	# 	"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
 	#      run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
 	#      run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
-	# 	"clean_table" "optimistic"
+	# 	"clean_table" "pessimistic"
+
+	run_case 151 "double-source-optimistic" \
+		"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+	     run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+	     run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
+		"clean_table" "optimistic"
 }
 
 function DM_152_CASE {
