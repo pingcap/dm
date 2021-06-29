@@ -216,9 +216,17 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				continue
 			}
 			txnHistogram.WithLabelValues(w.cfg.Name, w.cfg.WorkerName, w.cfg.SourceID, job.schema, job.table).Observe(time.Since(startTime).Seconds())
-			w.loader.checkPoint.UpdateOffset(job.file, job.offset)
 			w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
 			w.loader.dbTableDataFinishedSize[job.sourceSchema][job.sourceTable].Add(job.offset - job.lastOffset)
+
+			failpoint.Inject("loaderCPUpdateOffsetError", func(_ failpoint.Value) {
+				job.file = "notafile" + job.file
+			})
+			if err := w.loader.checkPoint.UpdateOffset(job.file, job.offset); err != nil {
+				runFatalChan <- unit.NewProcessError(err)
+				hasError = true
+				continue
+			}
 		}
 	}
 
