@@ -558,7 +558,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		}
 		routeRule1 = router.TableRule{
 			SchemaPattern: "db*",
-			TablePattern:  "tbl*",
+			TargetSchema:  "db",
 		}
 		routeRule2 = router.TableRule{
 			SchemaPattern: "db*",
@@ -567,8 +567,8 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 			TargetTable:   "tbl",
 		}
 		routeRule3 = router.TableRule{
-			SchemaPattern: "database*",
-			TablePattern:  "table*",
+			SchemaPattern: "schema*",
+			TargetSchema:  "schema",
 		}
 		routeRule4 = router.TableRule{
 			SchemaPattern: "schema*",
