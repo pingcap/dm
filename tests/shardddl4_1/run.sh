@@ -658,6 +658,7 @@ function DM_149 {
 }
 
 function DM_150_CASE {
+	shardmode=$1
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,\"aaaaaaa\");"
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,\"bbbbbbb\");"
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(3,\"ccccccc\");"
@@ -667,9 +668,18 @@ function DM_150_CASE {
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(5,\"bbbbbbb\");"
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,\"ccccccc\");"
 
-	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"query-status test" \
-		"Unsupported modify column: length 10 is less than origin 20" 1
+	if [[ "$shardmode" == "pessimistic" ]]; then
+		# modify column a double ddl passed but is still waiting for reslove from the sharding group
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"query-status test" \
+			'"target": "`shardddl`.`tb`"', 2
+	else
+		# modify column a double ddl passed in optimistic mode
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"query-status test" \
+			'"stage": "Running"', 2
+	fi
+
 }
 
 # Increase field length.
