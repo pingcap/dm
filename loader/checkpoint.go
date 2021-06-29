@@ -73,7 +73,7 @@ type CheckPoint interface {
 
 	// UpdateOffset keeps `cp.restoringFiles` in memory same with checkpoint in DB,
 	// should be called after update checkpoint in DB
-	UpdateOffset(filename string, offset int64)
+	UpdateOffset(filename string, offset int64) error
 
 	// AllFinished returns `true` when all restoring job are finished
 	AllFinished() bool
@@ -395,15 +395,23 @@ func (cp *RemoteCheckPoint) GenSQL(filename string, offset int64) string {
 }
 
 // UpdateOffset implements CheckPoint.UpdateOffset.
-func (cp *RemoteCheckPoint) UpdateOffset(filename string, offset int64) {
+func (cp *RemoteCheckPoint) UpdateOffset(filename string, offset int64) error {
 	cp.restoringFiles.Lock()
 	defer cp.restoringFiles.Unlock()
 	db, table, err := getDBAndTableFromFilename(filename)
 	if err != nil {
-		cp.logger.Error("error in checkpoint UpdateOffset", zap.Error(err))
-		return
+		return terror.Annotatef(terror.ErrLoadTaskCheckPointNotMatch.Generate(err), "wrong filename=%s", filename)
 	}
-	cp.restoringFiles.pos[db][table][filename][0] = offset
+
+	if _, ok := cp.restoringFiles.pos[db]; ok {
+		if _, ok := cp.restoringFiles.pos[db][table]; ok {
+			if _, ok := cp.restoringFiles.pos[db][table][filename]; ok {
+				cp.restoringFiles.pos[db][table][filename][0] = offset
+				return nil
+			}
+		}
+	}
+	return terror.ErrLoadTaskCheckPointNotMatch.Generatef("db=%s table=%s not in checkpoint", db, filename)
 }
 
 // Clear implements CheckPoint.Clear.
