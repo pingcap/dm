@@ -1139,8 +1139,8 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		}
 		// calculate qps
 		for dbSchema, tableM := range tpCnt {
-			for dbTable, TPM := range tableM {
-				for tpName, cnt := range TPM {
+			for dbTable, tpM := range tableM {
+				for tpName, cnt := range tpM {
 					tpCnt[dbSchema][dbTable][tpName] = 0
 					s.addCount(true, queueBucket, tpName, cnt, dbSchema, dbTable)
 				}

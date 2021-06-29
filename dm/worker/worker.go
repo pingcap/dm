@@ -401,7 +401,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, n
 		return err
 	}
 
-	// inject woker name to this subtask config
+	// inject worker name to this subtask config
 	cfg.WorkerName = w.name
 	// directly put cfg into subTaskHolder
 	// the unique of subtask should be assured by etcd
