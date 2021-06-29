@@ -118,11 +118,11 @@ var (
 			Help:      "total number of finished jobs",
 		}, []string{"type", "task", "queueNo", "source_id", "worker", "target_schema", "target_table"})
 
-	idealJobCount = metricsproxy.NewGaugeVec(
+	idealQPS = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
-			Name:      "ideal_job_count",
+			Name:      "ideal_qps",
 			Help:      "remain size of the DML queue",
 		}, []string{"task", "worker", "source_id"})
 
@@ -279,7 +279,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(skipBinlogDurationHistogram)
 	registry.MustRegister(addedJobsTotal)
 	registry.MustRegister(finishedJobsTotal)
-	registry.MustRegister(idealJobCount)
+	registry.MustRegister(idealQPS)
 	registry.MustRegister(finishedTransactionTotal)
 	registry.MustRegister(queueSizeGauge)
 	registry.MustRegister(sqlRetriesTotal)
@@ -335,7 +335,7 @@ func (s *Syncer) removeLabelValuesWithTaskInMetrics(task string) {
 	skipBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	addedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	finishedJobsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	idealJobCount.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	idealQPS.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	finishedTransactionTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	queueSizeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	sqlRetriesTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})

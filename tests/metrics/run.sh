@@ -79,13 +79,13 @@ function test_syncer_metrics() {
 	check_metric $WORKER1_PORT 'dm_syncer_replication_lag{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 999
 	check_metric $WORKER2_PORT 'dm_syncer_replication_lag{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 999
 
-	# new metric finished_transaction_total,dm_syncer_ideal_job_count,dm_syncer_binlog_event_row,dm_syncer_flush_checkpoints_count exists
+	# new metric finished_transaction_total,dm_syncer_ideal_qps,dm_syncer_binlog_event_row,dm_syncer_flush_checkpoints_count exists
 
 	check_metric $WORKER1_PORT 'dm_syncer_finished_transaction_total{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 99999
 	check_metric $WORKER2_PORT 'dm_syncer_finished_transaction_total{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 99999
 
-	check_metric $WORKER1_PORT 'dm_syncer_ideal_job_count{source_id="mysql-replica-01",task="test",worker="worker1"' 5 1 99999
-	check_metric $WORKER2_PORT 'dm_syncer_ideal_job_count{source_id="mysql-replica-02",task="test",worker="worker2"' 5 1 99999
+	check_metric $WORKER1_PORT 'dm_syncer_ideal_qps{source_id="mysql-replica-01",task="test",worker="worker1"' 5 1 99999
+	check_metric $WORKER2_PORT 'dm_syncer_ideal_qps{source_id="mysql-replica-02",task="test",worker="worker2"' 5 1 99999
 
 	check_metric $WORKER1_PORT 'dm_syncer_binlog_event_row{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 0 99999
 	check_metric $WORKER2_PORT 'dm_syncer_binlog_event_row{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 0 99999
