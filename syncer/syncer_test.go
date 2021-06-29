@@ -1740,7 +1740,6 @@ func (s *testSyncerSuite) TestTrackDownstreamTableWontOverwrite(c *C) {
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
-
 func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
 	syncer := Syncer{}
 	ctx := context.Background()
@@ -1754,7 +1753,6 @@ func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: baseConn}
 	syncer.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, defaultTestSessionCfg, baseConn)
 	c.Assert(err, IsNil)
-
 
 	schemaName := "test"
 	tableName := "tbl"

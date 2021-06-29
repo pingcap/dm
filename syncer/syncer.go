@@ -688,7 +688,7 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origSchema
 		for _, col := range createStmt.Cols {
 			for i, opt := range col.Options {
 				if opt.Tp == ast.ColumnOptionAutoRandom {
-					newOpt := make([]*ast.ColumnOption, 0, len(col.Options) - 1)
+					newOpt := make([]*ast.ColumnOption, 0, len(col.Options)-1)
 					newOpt = append(newOpt, col.Options[0:i]...)
 					newOpt = append(newOpt, col.Options[i+1:len(col.Options)]...)
 					col.Options = newOpt
