@@ -411,7 +411,7 @@ func (cp *RemoteCheckPoint) UpdateOffset(filename string, offset int64) error {
 			}
 		}
 	}
-	return terror.Annotatef(terror.ErrLoadTaskCheckPointNotMatch.Generate(), "db=%s table=%s not in checkpoint", db, filename)
+	return terror.ErrLoadTaskCheckPointNotMatch.Generatef("db=%s table=%s not in checkpoint", db, filename)
 }
 
 // Clear implements CheckPoint.Clear.
