@@ -43,6 +43,7 @@ function clean_table() {
 	run_sql_both_source "drop table if exists ${shardddl2}.${tb4};"
 	run_sql_tidb "drop table if exists ${shardddl}.${tb};"
 	run_sql_tidb "drop database if exists dm_meta;"
+	run_sql_both_source "reset master"
 }
 
 function restart_master() {

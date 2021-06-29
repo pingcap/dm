@@ -4,8 +4,8 @@ set -eu
 
 cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
+source $cur/../_utils/handle_error_lib.sh
 WORK_DIR=$TEST_DIR/$TEST_NAME
-source $cur/lib.sh
 
 # skip modify column, two sources, no sharding
 function DM_SKIP_ERROR_CASE() {
