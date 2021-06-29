@@ -4,8 +4,8 @@ set -eu
 
 cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
+source $cur/../_utils/handle_error_lib.sh
 WORK_DIR=$TEST_DIR/$TEST_NAME
-source $cur/lib.sh
 
 # 4215, 4217
 function DM_4215_CASE() {

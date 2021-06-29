@@ -710,8 +710,8 @@ function DM_151 {
 
 	# run_case 151 "double-source-optimistic" \
 	# 	"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
-    #      run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
-    #      run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
+	#      run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+	#      run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
 	# 	"clean_table" "optimistic"
 }
 
