@@ -684,6 +684,19 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origSchema
 		createStmt.Table.Schema = model.NewCIStr(origSchema)
 		createStmt.Table.Name = model.NewCIStr(origTable)
 
+		// schema tracker sets non-clustered index, so can't handle auto_random.
+		for _, col := range createStmt.Cols {
+			for i, opt := range col.Options {
+				if opt.Tp == ast.ColumnOptionAutoRandom {
+					newOpt := make([]*ast.ColumnOption, 0, len(col.Options) - 1)
+					newOpt = append(newOpt, col.Options[0:i]...)
+					newOpt = append(newOpt, col.Options[i+1:len(col.Options)]...)
+					col.Options = newOpt
+					break
+				}
+			}
+		}
+
 		var newCreateSQLBuilder strings.Builder
 		restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &newCreateSQLBuilder)
 		if err = createStmt.Restore(restoreCtx); err != nil {

@@ -1739,3 +1739,47 @@ func (s *testSyncerSuite) TestTrackDownstreamTableWontOverwrite(c *C) {
 	c.Assert(newTi, DeepEquals, ti)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
+
+
+func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
+	syncer := Syncer{}
+	ctx := context.Background()
+	tctx := tcontext.Background()
+
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(ctx)
+	c.Assert(err, IsNil)
+	baseConn := conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})
+	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: baseConn}
+	syncer.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, defaultTestSessionCfg, baseConn)
+	c.Assert(err, IsNil)
+
+	//create table t (c bigint primary key auto_random);
+
+	schemaName := "test"
+	tableName := "tbl"
+
+	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow(tableName, " CREATE TABLE `"+tableName+"` (\n  `c` bigint(20) NOT NULL /*T![auto_rand] AUTO_RANDOM(5) */,\n  PRIMARY KEY (`c`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+
+	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(schemaName), IsNil)
+	c.Assert(syncer.trackTableInfoFromDownstream(tctx, schemaName, tableName, schemaName, tableName), IsNil)
+	ti, err := syncer.getTable(tctx, schemaName, tableName, schemaName, tableName)
+	c.Assert(err, IsNil)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	c.Assert(syncer.schemaTracker.DropTable("test", "tbl"), IsNil)
+	sql := "create table tbl (c bigint primary key);"
+	c.Assert(syncer.schemaTracker.Exec(ctx, schemaName, sql), IsNil)
+	ti2, err := syncer.getTable(tctx, schemaName, tableName, schemaName, tableName)
+	c.Assert(err, IsNil)
+
+	ti.ID = ti2.ID
+	ti.UpdateTS = ti2.UpdateTS
+
+	c.Assert(ti, DeepEquals, ti2)
+}
