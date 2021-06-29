@@ -314,6 +314,7 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if _, err := router.NewTableRouter(c.CaseSensitive, c.RouteRules); err != nil {
 		return terror.ErrConfigGenTableRouter.Delegate(err)
 	}
+	// NewMapping will fill arguments with the default values.
 	if _, err := column.NewMapping(c.CaseSensitive, c.ColumnMappingRules); err != nil {
 		return terror.ErrConfigGenColumnMapping.Delegate(err)
 	}
