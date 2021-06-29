@@ -1755,13 +1755,13 @@ func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
 	syncer.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, defaultTestSessionCfg, baseConn)
 	c.Assert(err, IsNil)
 
-	//create table t (c bigint primary key auto_random);
 
 	schemaName := "test"
 	tableName := "tbl"
 
 	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
 		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+	// create table t (c bigint primary key auto_random);
 	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
 		sqlmock.NewRows([]string{"Table", "Create Table"}).
 			AddRow(tableName, " CREATE TABLE `"+tableName+"` (\n  `c` bigint(20) NOT NULL /*T![auto_rand] AUTO_RANDOM(5) */,\n  PRIMARY KEY (`c`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
