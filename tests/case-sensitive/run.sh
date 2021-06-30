@@ -6,7 +6,6 @@ cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
-ILLEGAL_CHAR_NAME='t-Ë!s`t'
 
 function run() {
 	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
@@ -20,6 +19,9 @@ function run() {
 	check_contains 'Query OK, 2 rows affected'
 	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 	check_contains 'Query OK, 3 rows affected'
+	# manually create the route table
+	run_sql 'CREATE DATABASE IF NOT EXISTS `UPPER_DB_ROUTE`' $TIDB_PORT $TIDB_PASSWORD
+
 
 	# start DM worker and master
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
@@ -46,11 +48,10 @@ function run() {
 
 	# start DM task only
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
-	sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
 	dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
 	# check task has started
-	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
-	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\"}" 3 1 3
+	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\"}" 3 1 3
 
 	# use sync_diff_inspector to check full dump loader
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -62,7 +63,7 @@ function run() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	# make sure worker1 have bound a source, and the source should same with bound before
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"query-status $ILLEGAL_CHAR_NAME" \
+		"query-status test" \
 		"worker1" 1
 
 	# restart dm-worker2
@@ -70,19 +71,19 @@ function run() {
 	wait_pattern_exit dm-worker2.toml
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
-	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"$ILLEGAL_CHAR_NAME\"}" 3 1 3
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\"}" 3 1 3
+	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\"}" 3 1 3
 
 	sleep 10
 	echo "after restart dm-worker, task should resume automatically"
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"start-task $WORK_DIR/dm-task.yaml" \
 		"\"result\": false" 1 \
-		"subtasks with name $ILLEGAL_CHAR_NAME for sources \[mysql-replica-01 mysql-replica-02\] already exist" 1
+		"subtasks with name test for sources \[mysql-replica-01 mysql-replica-02\] already exist" 1
 	sleep 2
 
 	# wait for task running
-	check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/$ILLEGAL_CHAR_NAME '"stage": "Running"' 10
+	check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Running"' 10
 	sleep 2 # still wait for subtask running on other dm-workers
 
 	# we used failpoint to imitate an upstream switching, which purged whole relay dir
@@ -94,7 +95,7 @@ function run() {
 
 	# test block-allow-list by the way
 	run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
-	check_not_contains "Upper_DB_IGNORE"
+	check_not_contains "Upper_Db_IGNORE"
 	check_contains "Upper_DB1"
 	check_contains "lower_db"
 	# test route-rule
@@ -104,18 +105,28 @@ function run() {
 	check_contains "do_table_route"
 	check_not_contains "Do_table_ignore"
 
+  run_sql "select count(*) from UPPER_DB_ROUTE.do_table_route" $TIDB_PORT $TIDB_PASSWORD
+	# ensure the truncate is ignored and the new row is inserted
+	check_contains "count(*): 5"
 	# test binlog event filter
-	run_sql "truncate table Upper_DB.Do_Table" $MYSQL_HOST1 $MYSQL_PORT1
+	run_sql "truncate table Upper_DB.Do_Table" $MYSQL_PORT1 $MYSQL_PASSWORD1
+	# insert another row
+	run_sql "INSERT INTO Upper_DB.Do_Table (id, name) values (103, 'new');" $MYSQL_PORT1 $MYSQL_PASSWORD1
+	sleep 2
 	run_sql "select count(*) from UPPER_DB_ROUTE.do_table_route" $TIDB_PORT $TIDB_PASSWORD
+	# ensure the truncate is ignored and the new row is inserted
 	check_contains "count(*): 6"
 
 	export GO_FAILPOINTS=''
 }
 
-cleanup_data all_mode
+trap cleanup_process EXIT
+trap "cleanup_data Upper_DB Upper_DB1 lower_db UPPER_DB_ROUTE sync_diff_inspector" EXIT
+
+# cleanup_data all_mode
 # also cleanup dm processes in case of last run failed
 cleanup_process $*
+cleanup_data Upper_DB Upper_DB1 lower_db UPPER_DB_ROUTE
 run $*
-cleanup_process $*
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"

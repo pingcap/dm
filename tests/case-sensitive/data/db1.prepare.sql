@@ -25,6 +25,7 @@ use `Upper_DB1`;
 create table Do_Table1 (id int NOT NULL AUTO_INCREMENT, name varchar(20), PRIMARY KEY (id));
 insert into Do_Table1 (id, name) values (1, 'test'), (2, 'test2');
 
-create database `Upper_DB_IGNORE`;
-use `Upper_DB_IGNORE`;
+drop database IF EXISTS `Upper_Db_IGNORE`;
+create database `Upper_Db_IGNORE`;
+use `Upper_Db_IGNORE`;
 create table `ignore_table`(id int);

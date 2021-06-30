@@ -5,8 +5,8 @@ create table Upper_Table (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(20),
     ts timestamp,
-    PRIMARY KEY (id));;
-insert into t2 (name, ts) values ('Arya', now()), ('Bran', '2021-05-11 10:01:05'), ('Sansa', NULL);
+    PRIMARY KEY (id));
+insert into Upper_Table (name, ts) values ('Arya', now()), ('Bran', '2021-05-11 10:01:05'), ('Sansa', NULL);
 
 create table upper_table(id int NOT NULL PRIMARY KEY);
 

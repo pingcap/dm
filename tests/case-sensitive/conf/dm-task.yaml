@@ -36,15 +36,14 @@ mysql-instances:
 
 black-white-list: # compatible with deprecated config
   instance:
-    do-dbs: ["Upper_DB.*", "lower_db"]
-    ignore-dbs: ["Upper_DB_IGNORE"]
+    do-dbs: ["Upper_DB*", "lower_db"]
     do-tables:
-      - db-name: "Upper_DB.*"
-        tbl-name: "Do_Table.*"
+      - db-name: "Upper_DB*"
+        tbl-name: "Do_Table*"
       - db-name: "Upper_DB"
-        tbl-name: "lower_table.*"
+        tbl-name: "lower_table*"
       - db-name: "lower_db"
-        tbl-name: "Upper_Table.*"
+        tbl-name: "Upper_Table*"
 
 routes:
   global:
