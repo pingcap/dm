@@ -669,15 +669,19 @@ function DM_150_CASE {
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,\"ccccccc\");"
 
 	if [[ "$shardmode" == "pessimistic" ]]; then
-		# modify column a double ddl passed but is still waiting for reslove from the sharding group
+		# ddl: "modify column a varchar(10);" passes in worker1, but in pessimistic mode is still waiting for the other worker in the sharding group to be executed with the same ddl.
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"query-status test" \
-			'"target": "`shardddl`.`tb`"', 2
+			'"ALTER TABLE `shardddl`.`tb` MODIFY COLUMN `a` VARCHAR(10)"' 2
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"show-ddl-locks" \
+			'ALTER TABLE `shardddl`.`tb` MODIFY COLUMN `a` VARCHAR(10)"' 1
 	else
-		# modify column a double ddl passed in optimistic mode
+		# ddl: "modify column a varchar(10)" is passed in optimistic mode and will be executed downstream.
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"query-status test" \
-			'"stage": "Running"', 2
+			'"stage": "Running"' 2
+		exit 1
 	fi
 
 }
@@ -686,8 +690,8 @@ function DM_150_CASE {
 function DM_150 {
 	run_case 150 "double-source-pessimistic" \
 		"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a varchar(20));\"; \
-         run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a varchar(20));\"; \
-         run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a varchar(20));\"" \
+	     run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a varchar(20));\"; \
+	     run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a varchar(20));\"" \
 		"clean_table" "pessimistic"
 	run_case 150 "double-source-optimistic" \
 		"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a varchar(20));\"; \
@@ -708,25 +712,30 @@ function DM_151_CASE {
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(6,6);"
 
 	if [[ "$shardmode" == "pessimistic" ]]; then
-		# modify column a double ddl passed but is still waiting for reslove from the sharding group
+		# ddl: "modify column a double;" passes in worker1, but in pessimistic mode is still waiting for the other worker in the sharding group to be executed with the same ddl.
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"query-status test" \
-			'"target": "`shardddl`.`tb`"', 2
+			'"ALTER TABLE `shardddl`.`tb` MODIFY COLUMN `a` DOUBLE"' 2
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"show-ddl-locks" \
+			'"ALTER TABLE `shardddl`.`tb` MODIFY COLUMN `a` DOUBLE"' 1
 	else
-		# modify column a double ddl not passed in optimistic mode and worker1 Paused
+		# ddl: "modify column a double" is passed in optimistic mode and will be executed downstream.
+		# but changing the int column to a double column is not allowed,so task is paused
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"query-status test" \
-			'"stage": "Paused"', 1
+			'"stage": "Paused"' 1 \
+			"incompatible mysql type" 1
 	fi
 
 }
 
 function DM_151 {
-	# run_case 151 "double-source-pessimistic" \
-	# 	"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
-	#      run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
-	#      run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
-	# 	"clean_table" "pessimistic"
+	run_case 151 "double-source-pessimistic" \
+		"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+	     run_sql_source2 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
+	     run_sql_source2 \"create table ${shardddl1}.${tb2} (id int primary key, a int);\"" \
+		"clean_table" "pessimistic"
 
 	run_case 151 "double-source-optimistic" \
 		"run_sql_source1 \"create table ${shardddl1}.${tb1} (id int primary key, a int);\"; \
