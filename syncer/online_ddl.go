@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/pingcap/failpoint"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -161,6 +163,9 @@ func (s *OnlineDDLStorage) Load(tctx *tcontext.Context) error {
 		if err != nil {
 			return terror.ErrSyncerUnitOnlineDDLInvalidMeta.Delegate(err)
 		}
+		tctx.L().Info("loaded online ddl meta from checkpoint",
+			zap.String("db", schema),
+			zap.String("table", table))
 	}
 
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
@@ -220,6 +225,10 @@ func (s *OnlineDDLStorage) Save(tctx *tcontext.Context, ghostSchema, ghostTable,
 
 	query := fmt.Sprintf("REPLACE INTO %s(`id`,`ghost_schema`, `ghost_table`, `ddls`) VALUES (?, ?, ?, ?)", s.tableName)
 	_, err = s.dbConn.executeSQL(tctx, []string{query}, []interface{}{s.id, ghostSchema, ghostTable, string(ddlsBytes)})
+	failpoint.Inject("ExitAfterSaveOnlineDDL", func() {
+		tctx.L().Info("failpoint ExitAfterSaveOnlineDDL")
+		panic("ExitAfterSaveOnlineDDL")
+	})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
