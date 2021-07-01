@@ -4,6 +4,7 @@ task-mode: all
 is-sharding: true
 shard-mode: optimistic
 enable-heartbeat: true
+case-sensitive: true
 
 target-database:
   host: tidb
@@ -22,18 +23,18 @@ mysql-instances:
 
 black-white-list:
   instance:
-    do-dbs: ["~^opt_sharding[\\d]+"]
+    do-dbs: ["~^opt_Sharding[\\d]+"]
     do-tables:
-    -  db-name: "~^opt_sharding[\\d]+"
+    -  db-name: "~^opt_Sharding[\\d]+"
        tbl-name: "~^t[\\d]+"
 
 routes:
   sharding-route-rules-table:
-    schema-pattern: opt_sharding*
-    table-pattern: t*
+    schema-pattern: opt_Sharding*
+    table-pattern: T*
     target-schema: opt_db_target
     target-table: t_target
 
   sharding-route-rules-schema:
-    schema-pattern: opt_sharding*
+    schema-pattern: opt_Sharding*
     target-schema: opt_db_target

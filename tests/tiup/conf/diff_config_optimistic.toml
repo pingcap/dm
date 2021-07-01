@@ -12,13 +12,13 @@ is-sharding = true
 
 [[table-config.source-tables]]
 instance-id = "source-1"
-schema = "opt_sharding1"
-table  = "~t.*"
+schema = "opt_Sharding1"
+table  = "~T.*"
 
 [[table-config.source-tables]]
 instance-id = "source-2"
-schema = "opt_sharding2"
-table  = "~t.*"
+schema = "opt_Sharding2"
+table  = "~T.*"
 
 [[source-db]]
 host = "mysql1"

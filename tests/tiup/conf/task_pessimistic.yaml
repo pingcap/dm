@@ -4,6 +4,7 @@ task-mode: all
 is-sharding: true
 shard-mode: pessimistic
 enable-heartbeat: true
+case-sensitive: true
 
 target-database:
   host: tidb
@@ -29,11 +30,11 @@ black-white-list:
 
 routes:
   sharding-route-rules-table:
-    schema-pattern: pes_sharding*
-    table-pattern: t*
+    schema-pattern: pes_Sharding*
+    table-pattern: T*
     target-schema: pes_db_target
     target-table: t_target
 
   sharding-route-rules-schema:
-    schema-pattern: pes_sharding*
+    schema-pattern: pes_Sharding*
     target-schema: pes_db_target
