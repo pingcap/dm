@@ -1552,6 +1552,12 @@ description = ""
 workaround = "Please check if the previous worker is online."
 tags = ["internal", "high"]
 
+[error.DM-functional-34018]
+message = "inconsistent checkpoints between loader and target database"
+description = ""
+workaround = "If you want to redo the whole task, please check that you have not forgotten to add -remove-meta flag for start-task command."
+tags = ["internal", "high"]
+
 [error.DM-sync-unit-36001]
 message = "panic error: %v"
 description = ""
