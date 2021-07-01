@@ -34,8 +34,12 @@ create table t5 (id int primary key,
 );
 insert into t5 values (1, 0, 99), (2, 0, 101), (3, 0, 1);
 update t5 set should_skip = 1, c = 110 where id = 1;
-update t5 set should_skip = 1, c = 200 where id = 2;
+update t5 set should_skip = 1, c = 20 where id = 2;
 update t5 set should_skip = 1, c = 2 where c = 1;
+
+-- test update-old-value-expr and update-new-value-expr is AND logic
+insert into t5 values (4, 1, 1); -- check this `should_skip = 1` row must be updated to `should_skip = 0` in TiDB
+update t5 set should_skip = 0, c = 3 where c = 1;
 
 -- trigger a flush
 alter table t5 add column dummy int;
