@@ -721,7 +721,7 @@ function DM_151_CASE {
 			'"ALTER TABLE `shardddl`.`tb` MODIFY COLUMN `a` DOUBLE"' 1
 	else
 		# ddl: "modify column a double" is passed in optimistic mode and will be executed downstream.
-		# but changing the int column to a double column is not allowed,so task is paused
+		# but changing the int column to a double column is not allowed, so task is paused
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"query-status test" \
 			'"stage": "Paused"' 1 \
