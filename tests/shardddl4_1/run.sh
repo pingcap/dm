@@ -681,7 +681,6 @@ function DM_150_CASE {
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"query-status test" \
 			'"stage": "Running"' 2
-		exit 1
 	fi
 
 }
