@@ -685,14 +685,15 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origSchema
 		createStmt.Table.Name = model.NewCIStr(origTable)
 
 		// schema tracker sets non-clustered index, so can't handle auto_random.
-		for _, col := range createStmt.Cols {
-			for i, opt := range col.Options {
-				if opt.Tp == ast.ColumnOptionAutoRandom {
-					newOpt := make([]*ast.ColumnOption, 0, len(col.Options)-1)
-					newOpt = append(newOpt, col.Options[0:i]...)
-					newOpt = append(newOpt, col.Options[i+1:len(col.Options)]...)
-					col.Options = newOpt
-					break
+		if v, _ := s.schemaTracker.GetSystemVar(schema.TiDBClusteredIndex); v == "OFF" {
+			for _, col := range createStmt.Cols {
+				for i, opt := range col.Options {
+					if opt.Tp == ast.ColumnOptionAutoRandom {
+						// col.Options is unordered
+						col.Options[i] = col.Options[len(col.Options)-1]
+						col.Options = col.Options[:len(col.Options)-1]
+						break
+					}
 				}
 			}
 		}

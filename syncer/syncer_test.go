@@ -1780,4 +1780,39 @@ func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
 	ti.UpdateTS = ti2.UpdateTS
 
 	c.Assert(ti, DeepEquals, ti2)
+
+	// test if user set ON clustered index, no need to modify
+	sessionCfg := map[string]string{
+		"sql_mode":                "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION",
+		"tidb_skip_utf8_check":    "0",
+		schema.TiDBClusteredIndex: "ON",
+	}
+	syncer.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, sessionCfg, baseConn)
+	v, ok := syncer.schemaTracker.GetSystemVar(schema.TiDBClusteredIndex)
+	c.Assert(v, Equals, "ON")
+	c.Assert(ok, IsTrue)
+
+	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+	// create table t (c bigint primary key auto_random);
+	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow(tableName, " CREATE TABLE `"+tableName+"` (\n  `c` bigint(20) NOT NULL /*T![auto_rand] AUTO_RANDOM(5) */,\n  PRIMARY KEY (`c`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+
+	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(schemaName), IsNil)
+	c.Assert(syncer.trackTableInfoFromDownstream(tctx, schemaName, tableName, schemaName, tableName), IsNil)
+	ti, err = syncer.getTable(tctx, schemaName, tableName, schemaName, tableName)
+	c.Assert(err, IsNil)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	c.Assert(syncer.schemaTracker.DropTable("test", "tbl"), IsNil)
+	sql = "create table tbl (c bigint primary key auto_random);"
+	c.Assert(syncer.schemaTracker.Exec(ctx, schemaName, sql), IsNil)
+	ti2, err = syncer.getTable(tctx, schemaName, tableName, schemaName, tableName)
+	c.Assert(err, IsNil)
+
+	ti.ID = ti2.ID
+	ti.UpdateTS = ti2.UpdateTS
+
+	c.Assert(ti, DeepEquals, ti2)
 }

@@ -37,11 +37,16 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 )
 
+const (
+	// TiDBClusteredIndex is the variable name for clustered index.
+	TiDBClusteredIndex = "tidb_enable_clustered_index"
+)
+
 var (
 	// don't read clustered index variable from downstream because it may changed during syncing
 	// we always using OFF tidb_enable_clustered_index unless user set it in config.
 	downstreamVars    = []string{"sql_mode", "tidb_skip_utf8_check"}
-	defaultGlobalVars = map[string]string{"tidb_enable_clustered_index": "OFF"}
+	defaultGlobalVars = map[string]string{TiDBClusteredIndex: "OFF"}
 )
 
 // Tracker is used to track schema locally.
@@ -112,10 +117,11 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 		return nil, err
 	}
 
-	for k := range defaultGlobalVars {
-		// user's config has highest priority, we will set sessionCfg below, so here simply delete it
-		if _, ok := sessionCfg[k]; ok {
-			delete(defaultGlobalVars, k)
+	globalVarsToSet := make(map[string]string, len(defaultGlobalVars))
+	for k, v := range defaultGlobalVars {
+		// user's config has highest priority
+		if _, ok := sessionCfg[k]; !ok {
+			globalVarsToSet[k] = v
 		}
 	}
 
@@ -125,7 +131,7 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 			return nil, err
 		}
 	}
-	for k, v := range defaultGlobalVars {
+	for k, v := range globalVarsToSet {
 		err = se.GetSessionVars().SetSystemVar(k, v)
 		if err != nil {
 			return nil, err
@@ -299,4 +305,9 @@ func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo)
 	ti = cloneTableInfo(ti)
 	ti.Name = tableName
 	return tr.dom.DDL().CreateTableWithInfo(tr.se, dbName, ti, ddl.OnExistIgnore, false)
+}
+
+// GetSystemVar gets a variable from schema tracker.
+func (tr *Tracker) GetSystemVar(name string) (string, bool) {
+	return tr.se.GetSessionVars().GetSystemVar(name)
 }
