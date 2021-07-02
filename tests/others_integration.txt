@@ -8,3 +8,4 @@ only_dml
 adjust_gtid
 load_task
 case-sensitive
+downstream_more_column
