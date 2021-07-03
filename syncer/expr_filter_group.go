@@ -166,6 +166,7 @@ func (g *ExprFilterGroup) ResetExprs(db, table string) {
 
 // SkipDMLByExpression returns true when given row matches the expr, which means this row should be skipped.
 func SkipDMLByExpression(row []interface{}, expr expression.Expression, upstreamCols []*model.ColumnInfo) (bool, error) {
+	// TODO: add metrics
 	log.L().Debug("will evaluate the expression", zap.Stringer("expression", expr), zap.Any("raw row", row))
 	data, err := utils.AdjustBinaryProtocolForDatum(row, upstreamCols)
 	if err != nil {
