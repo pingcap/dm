@@ -8,3 +8,4 @@ only_dml
 adjust_gtid
 load_task
 downstream_more_column
+expression_filter
