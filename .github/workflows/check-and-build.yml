@@ -70,7 +70,7 @@ jobs:
           echo 'deb http://ppa.launchpad.net/longsleep/golang-backports/ubuntu focal main' > /etc/apt/sources.list
           apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys F6BC817356A3D45E
           apt update -y && apt install -y golang-go
-          make build
+          make build nolint=true
 
   lint:
     name: Lint
