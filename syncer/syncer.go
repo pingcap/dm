@@ -137,10 +137,11 @@ type Syncer struct {
 
 	c *causality
 
-	tableRouter   *router.Table
-	binlogFilter  *bf.BinlogEvent
-	columnMapping *cm.Mapping
-	baList        *filter.Filter
+	tableRouter     *router.Table
+	binlogFilter    *bf.BinlogEvent
+	columnMapping   *cm.Mapping
+	baList          *filter.Filter
+	exprFilterGroup *ExprFilterGroup
 
 	closed atomic.Bool
 
@@ -309,6 +310,8 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	if err != nil {
 		return terror.ErrSyncerUnitGenBinlogEventFilter.Delegate(err)
 	}
+
+	s.exprFilterGroup = NewExprFilterGroup(s.cfg.ExprFilter)
 
 	if len(s.cfg.ColumnMappingRules) > 0 {
 		s.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
@@ -1845,7 +1848,6 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	var (
-		applied bool
 		sqls    []string
 		keys    [][]string
 		args    [][]interface{}
@@ -1863,33 +1865,42 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	switch ec.header.EventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-		if !applied {
-			param.safeMode = ec.safeMode.Enable()
-			sqls, keys, args, err = genInsertSQLs(param)
-			if err != nil {
-				return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
-			}
+		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(originSchema, originTable, ti)
+		if err2 != nil {
+			return err2
+		}
+
+		param.safeMode = ec.safeMode.Enable()
+		sqls, keys, args, err = genInsertSQLs(param, exprFilter)
+		if err != nil {
+			return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
 		binlogEvent.WithLabelValues("write_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-		if !applied {
-			param.safeMode = ec.safeMode.Enable()
-			sqls, keys, args, err = genUpdateSQLs(param)
-			if err != nil {
-				return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
-			}
+		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(originSchema, originTable, ti)
+		if err2 != nil {
+			return err2
+		}
+
+		param.safeMode = ec.safeMode.Enable()
+		sqls, keys, args, err = genUpdateSQLs(param, oldExprFilter, newExprFilter)
+		if err != nil {
+			return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
 		binlogEvent.WithLabelValues("update_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-		if !applied {
-			sqls, keys, args, err = genDeleteSQLs(param)
-			if err != nil {
-				return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
-			}
+		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(originSchema, originTable, ti)
+		if err2 != nil {
+			return err2
+		}
+
+		sqls, keys, args, err = genDeleteSQLs(param, exprFilter)
+		if err != nil {
+			return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
 		binlogEvent.WithLabelValues("delete_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = del
@@ -2039,7 +2050,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		}
 
 		// DDL is sequentially synchronized in this syncer's main process goroutine
-		// ignore DDL that is older or same as table checkpoint, to try-sync again for already synced DDLs
+		// ignore DDL that is older or same as table checkpoint, to avoid sync again for already synced DDLs
 		if s.checkpoint.IsOlderThanTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, *ec.currentLocation, true) {
 			ec.tctx.L().Info("ignore obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation))
 			continue
@@ -2451,6 +2462,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 			ec.tctx.L().Error("cannot track DDL", zap.String("schema", usedSchema), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
 			return terror.ErrSchemaTrackerCannotExecDDL.Delegate(err, sql)
 		}
+		s.exprFilterGroup.ResetExprs(srcTable.Schema, srcTable.Name)
 	}
 
 	return nil
