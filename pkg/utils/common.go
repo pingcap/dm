@@ -19,12 +19,20 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/parser/model"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/sessionctx/variable"
+	"github.com/pingcap/tidb/table"
+	"github.com/pingcap/tidb/types"
+	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -208,4 +216,80 @@ func NonRepeatStringsEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+type session struct {
+	sessionctx.Context
+	vars   *variable.SessionVars
+	values map[fmt.Stringer]interface{}
+
+	mu sync.RWMutex
+}
+
+// GetSessionVars implements the sessionctx.Context interface.
+func (se *session) GetSessionVars() *variable.SessionVars {
+	return se.vars
+}
+
+// SetValue implements the sessionctx.Context interface.
+func (se *session) SetValue(key fmt.Stringer, value interface{}) {
+	se.mu.Lock()
+	se.values[key] = value
+	se.mu.Unlock()
+}
+
+// Value implements the sessionctx.Context interface.
+func (se *session) Value(key fmt.Stringer) interface{} {
+	se.mu.RLock()
+	value := se.values[key]
+	se.mu.RUnlock()
+	return value
+}
+
+// UTCSession can be used as a sessionctx.Context, with UTC timezone.
+var UTCSession *session
+
+func init() {
+	UTCSession = &session{}
+	vars := variable.NewSessionVars()
+	vars.StmtCtx.TimeZone = time.UTC
+	UTCSession.vars = vars
+	UTCSession.values = make(map[fmt.Stringer]interface{}, 1)
+}
+
+// AdjustBinaryProtocolForDatum converts the data in binlog to TiDB datum.
+func AdjustBinaryProtocolForDatum(data []interface{}, cols []*model.ColumnInfo) ([]types.Datum, error) {
+	log.L().Debug("AdjustBinaryProtocolForChunk",
+		zap.Any("data", data),
+		zap.Any("columns", cols))
+	ret := make([]types.Datum, 0, len(data))
+	for i, d := range data {
+		switch v := d.(type) {
+		case int8:
+			d = int64(v)
+		case int16:
+			d = int64(v)
+		case int32:
+			d = int64(v)
+		case uint8:
+			d = uint64(v)
+		case uint16:
+			d = uint64(v)
+		case uint32:
+			d = uint64(v)
+		case uint:
+			d = uint64(v)
+		case decimal.Decimal:
+			d = v.String()
+		}
+		datum := types.NewDatum(d)
+
+		// TODO: should we use timezone of upstream?
+		castDatum, err := table.CastValue(UTCSession, datum, cols[i], false, false)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, castDatum)
+	}
+	return ret, nil
 }
