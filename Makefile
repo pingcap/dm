@@ -7,7 +7,7 @@ LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.GoVersion=$(shell go version)"
 CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
-GOTEST   := CGO_ENABLED=1 $(GO) test
+GOTEST   := CGO_ENABLED=1 $(GO) test -gcflags="all=-N -l"
 PACKAGE_NAME := github.com/pingcap/dm
 PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pb|pbmock|_tools')
 PACKAGE_DIRECTORIES := $$(echo "$(PACKAGES)" | sed 's/github.com\/pingcap\/dm\/*//')
