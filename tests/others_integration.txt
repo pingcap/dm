@@ -7,3 +7,4 @@ gtid
 only_dml
 adjust_gtid
 load_task
+expression_filter

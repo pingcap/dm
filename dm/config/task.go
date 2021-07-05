@@ -23,6 +23,7 @@ import (
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/dustin/go-humanize"
+	"github.com/pingcap/parser"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -109,6 +110,7 @@ type MySQLInstance struct {
 	FilterRules        []string `yaml:"filter-rules"`
 	ColumnMappingRules []string `yaml:"column-mapping-rules"`
 	RouteRules         []string `yaml:"route-rules"`
+	ExpressionFilters  []string `yaml:"expression-filters"`
 
 	// black-white-list is deprecated, use block-allow-list instead
 	BWListName string `yaml:"black-white-list"`
@@ -302,6 +304,7 @@ type TaskConfig struct {
 	Routes         map[string]*router.TableRule   `yaml:"routes" toml:"routes" json:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters" toml:"filters" json:"filters"`
 	ColumnMappings map[string]*column.Rule        `yaml:"column-mappings" toml:"column-mappings" json:"column-mappings"`
+	ExprFilter     map[string]*ExpressionFilter   `yaml:"expression-filter" toml:"expression-filter" json:"expression-filter"`
 
 	// black-white-list is deprecated, use block-allow-list instead
 	BWList map[string]*filter.Rules `yaml:"black-white-list" toml:"black-white-list" json:"black-white-list"`
@@ -332,6 +335,7 @@ func NewTaskConfig() *TaskConfig {
 		Routes:                  make(map[string]*router.TableRule),
 		Filters:                 make(map[string]*bf.BinlogEventRule),
 		ColumnMappings:          make(map[string]*column.Rule),
+		ExprFilter:              make(map[string]*ExpressionFilter),
 		BWList:                  make(map[string]*filter.Rules),
 		BAList:                  make(map[string]*filter.Rules),
 		Mydumpers:               make(map[string]*MydumperConfig),
@@ -387,7 +391,20 @@ func (c *TaskConfig) Decode(data string) error {
 	return c.adjust()
 }
 
-// adjust adjusts configs.
+// find unused items in config.
+var configRefPrefixes = []string{"RouteRules", "FilterRules", "ColumnMappingRules", "Mydumper", "Loader", "Syncer", "ExprFilter"}
+
+const (
+	routeRulesIdx = iota
+	filterRulesIdx
+	columnMappingIdx
+	mydumperIdx
+	loaderIdx
+	syncerIdx
+	exprFilterIdx
+)
+
+// adjust adjusts and verifies config.
 func (c *TaskConfig) adjust() error {
 	if len(c.Name) == 0 {
 		return terror.ErrConfigNeedUniqueTaskName.Generate()
@@ -420,18 +437,55 @@ func (c *TaskConfig) adjust() error {
 		return terror.ErrConfigMySQLInstsAtLeastOne.Generate()
 	}
 
-	iids := make(map[string]int) // source-id -> instance-index
+	for name, exprFilter := range c.ExprFilter {
+		if exprFilter.Schema == "" {
+			return terror.ErrConfigExprFilterEmptyName.Generate(name, "schema")
+		}
+		if exprFilter.Table == "" {
+			return terror.ErrConfigExprFilterEmptyName.Generate(name, "table")
+		}
+		setFields := make([]string, 0, 1)
+		if exprFilter.InsertValueExpr != "" {
+			if err := checkValidExpr(exprFilter.InsertValueExpr); err != nil {
+				return terror.ErrConfigExprFilterWrongGrammar.Generate(name, exprFilter.InsertValueExpr, err)
+			}
+			setFields = append(setFields, "insert: ["+exprFilter.InsertValueExpr+"]")
+		}
+		if exprFilter.UpdateOldValueExpr != "" || exprFilter.UpdateNewValueExpr != "" {
+			if exprFilter.UpdateOldValueExpr != "" {
+				if err := checkValidExpr(exprFilter.UpdateOldValueExpr); err != nil {
+					return terror.ErrConfigExprFilterWrongGrammar.Generate(name, exprFilter.UpdateOldValueExpr, err)
+				}
+			}
+			if exprFilter.UpdateNewValueExpr != "" {
+				if err := checkValidExpr(exprFilter.UpdateNewValueExpr); err != nil {
+					return terror.ErrConfigExprFilterWrongGrammar.Generate(name, exprFilter.UpdateNewValueExpr, err)
+				}
+			}
+			setFields = append(setFields, "update (old value): ["+exprFilter.UpdateOldValueExpr+"] update (new value): ["+exprFilter.UpdateNewValueExpr+"]")
+		}
+		if exprFilter.DeleteValueExpr != "" {
+			if err := checkValidExpr(exprFilter.DeleteValueExpr); err != nil {
+				return terror.ErrConfigExprFilterWrongGrammar.Generate(name, exprFilter.DeleteValueExpr, err)
+			}
+			setFields = append(setFields, "delete: ["+exprFilter.DeleteValueExpr+"]")
+		}
+		if len(setFields) > 1 {
+			return terror.ErrConfigExprFilterManyExpr.Generate(name, setFields)
+		}
+	}
+
+	instanceIDs := make(map[string]int) // source-id -> instance-index
 	globalConfigReferCount := map[string]int{}
-	prefixs := []string{"RouteRules", "FilterRules", "ColumnMappingRules", "Mydumper", "Loader", "Syncer"}
 	duplicateErrorStrings := make([]string, 0)
 	for i, inst := range c.MySQLInstances {
 		if err := inst.VerifyAndAdjust(); err != nil {
 			return terror.Annotatef(err, "mysql-instance: %s", humanize.Ordinal(i))
 		}
-		if iid, ok := iids[inst.SourceID]; ok {
+		if iid, ok := instanceIDs[inst.SourceID]; ok {
 			return terror.ErrConfigMySQLInstSameSourceID.Generate(iid, i, inst.SourceID)
 		}
-		iids[inst.SourceID] = i
+		instanceIDs[inst.SourceID] = i
 
 		switch c.TaskMode {
 		case ModeFull, ModeAll:
@@ -452,19 +506,19 @@ func (c *TaskConfig) adjust() error {
 			if _, ok := c.Routes[name]; !ok {
 				return terror.ErrConfigRouteRuleNotFound.Generate(i, name)
 			}
-			globalConfigReferCount[prefixs[0]+name]++
+			globalConfigReferCount[configRefPrefixes[routeRulesIdx]+name]++
 		}
 		for _, name := range inst.FilterRules {
 			if _, ok := c.Filters[name]; !ok {
 				return terror.ErrConfigFilterRuleNotFound.Generate(i, name)
 			}
-			globalConfigReferCount[prefixs[1]+name]++
+			globalConfigReferCount[configRefPrefixes[filterRulesIdx]+name]++
 		}
 		for _, name := range inst.ColumnMappingRules {
 			if _, ok := c.ColumnMappings[name]; !ok {
 				return terror.ErrConfigColumnMappingNotFound.Generate(i, name)
 			}
-			globalConfigReferCount[prefixs[2]+name]++
+			globalConfigReferCount[configRefPrefixes[columnMappingIdx]+name]++
 		}
 
 		// only when BAList is empty use BWList
@@ -480,7 +534,7 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigMydumperCfgNotFound.Generate(i, inst.MydumperConfigName)
 			}
-			globalConfigReferCount[prefixs[3]+inst.MydumperConfigName]++
+			globalConfigReferCount[configRefPrefixes[mydumperIdx]+inst.MydumperConfigName]++
 			inst.Mydumper = new(MydumperConfig)
 			*inst.Mydumper = *rule // ref mydumper config
 		}
@@ -508,7 +562,7 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigLoaderCfgNotFound.Generate(i, inst.LoaderConfigName)
 			}
-			globalConfigReferCount[prefixs[4]+inst.LoaderConfigName]++
+			globalConfigReferCount[configRefPrefixes[loaderIdx]+inst.LoaderConfigName]++
 			inst.Loader = new(LoaderConfig)
 			*inst.Loader = *rule // ref loader config
 		}
@@ -528,7 +582,7 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigSyncerCfgNotFound.Generate(i, inst.SyncerConfigName)
 			}
-			globalConfigReferCount[prefixs[5]+inst.SyncerConfigName]++
+			globalConfigReferCount[configRefPrefixes[syncerIdx]+inst.SyncerConfigName]++
 			inst.Syncer = new(SyncerConfig)
 			*inst.Syncer = *rule // ref syncer config
 		}
@@ -548,46 +602,64 @@ func (c *TaskConfig) adjust() error {
 			log.L().Warn("DM could discover proper ANSI_QUOTES, `enable-ansi-quotes` is no longer take effect")
 		}
 
+		for _, name := range inst.ExpressionFilters {
+			if _, ok := c.ExprFilter[name]; !ok {
+				return terror.ErrConfigExprFilterNotFound.Generate(i, name)
+			}
+			globalConfigReferCount[configRefPrefixes[exprFilterIdx]+name]++
+		}
+
 		if dupeRules := checkDuplicateString(inst.RouteRules); len(dupeRules) > 0 {
 			duplicateErrorStrings = append(duplicateErrorStrings, fmt.Sprintf("mysql-instance(%d)'s route-rules: %s", i, strings.Join(dupeRules, ", ")))
 		}
 		if dupeRules := checkDuplicateString(inst.FilterRules); len(dupeRules) > 0 {
 			duplicateErrorStrings = append(duplicateErrorStrings, fmt.Sprintf("mysql-instance(%d)'s filter-rules: %s", i, strings.Join(dupeRules, ", ")))
 		}
+		if dupeRules := checkDuplicateString(inst.ColumnMappingRules); len(dupeRules) > 0 {
+			duplicateErrorStrings = append(duplicateErrorStrings, fmt.Sprintf("mysql-instance(%d)'s column-mapping-rules: %s", i, strings.Join(dupeRules, ", ")))
+		}
+		if dupeRules := checkDuplicateString(inst.ExpressionFilters); len(dupeRules) > 0 {
+			duplicateErrorStrings = append(duplicateErrorStrings, fmt.Sprintf("mysql-instance(%d)'s expression-filters: %s", i, strings.Join(dupeRules, ", ")))
+		}
 	}
 	if len(duplicateErrorStrings) > 0 {
 		return terror.ErrConfigDuplicateCfgItem.Generate(strings.Join(duplicateErrorStrings, "\n"))
 	}
 
-	unusedConfigs := []string{}
+	var unusedConfigs []string
 	for route := range c.Routes {
-		if globalConfigReferCount[prefixs[0]+route] == 0 {
+		if globalConfigReferCount[configRefPrefixes[routeRulesIdx]+route] == 0 {
 			unusedConfigs = append(unusedConfigs, route)
 		}
 	}
 	for filter := range c.Filters {
-		if globalConfigReferCount[prefixs[1]+filter] == 0 {
+		if globalConfigReferCount[configRefPrefixes[filterRulesIdx]+filter] == 0 {
 			unusedConfigs = append(unusedConfigs, filter)
 		}
 	}
 	for columnMapping := range c.ColumnMappings {
-		if globalConfigReferCount[prefixs[2]+columnMapping] == 0 {
+		if globalConfigReferCount[configRefPrefixes[columnMappingIdx]+columnMapping] == 0 {
 			unusedConfigs = append(unusedConfigs, columnMapping)
 		}
 	}
 	for mydumper := range c.Mydumpers {
-		if globalConfigReferCount[prefixs[3]+mydumper] == 0 {
+		if globalConfigReferCount[configRefPrefixes[mydumperIdx]+mydumper] == 0 {
 			unusedConfigs = append(unusedConfigs, mydumper)
 		}
 	}
 	for loader := range c.Loaders {
-		if globalConfigReferCount[prefixs[4]+loader] == 0 {
+		if globalConfigReferCount[configRefPrefixes[loaderIdx]+loader] == 0 {
 			unusedConfigs = append(unusedConfigs, loader)
 		}
 	}
 	for syncer := range c.Syncers {
-		if globalConfigReferCount[prefixs[5]+syncer] == 0 {
+		if globalConfigReferCount[configRefPrefixes[syncerIdx]+syncer] == 0 {
 			unusedConfigs = append(unusedConfigs, syncer)
+		}
+	}
+	for exprFilter := range c.ExprFilter {
+		if globalConfigReferCount[configRefPrefixes[exprFilterIdx]+exprFilter] == 0 {
+			unusedConfigs = append(unusedConfigs, exprFilter)
 		}
 	}
 
@@ -657,6 +729,11 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 			cfg.ColumnMappingRules[j] = c.ColumnMappings[name]
 		}
 
+		cfg.ExprFilter = make([]*ExpressionFilter, len(inst.ExpressionFilters))
+		for j, name := range inst.ExpressionFilters {
+			cfg.ExprFilter[j] = c.ExprFilter[name]
+		}
+
 		cfg.BAList = c.BAList[inst.BAListName]
 
 		cfg.MydumperConfig = *inst.Mydumper
@@ -719,21 +796,23 @@ func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
 	c.Mydumpers = make(map[string]*MydumperConfig)
 	c.Loaders = make(map[string]*LoaderConfig)
 	c.Syncers = make(map[string]*SyncerConfig)
+	c.ExprFilter = make(map[string]*ExpressionFilter)
 
-	BAListMap := make(map[string]string, len(stCfgs))
+	baListMap := make(map[string]string, len(stCfgs))
 	routeMap := make(map[string]string, len(stCfgs))
 	filterMap := make(map[string]string, len(stCfgs))
 	dumpMap := make(map[string]string, len(stCfgs))
 	loadMap := make(map[string]string, len(stCfgs))
 	syncMap := make(map[string]string, len(stCfgs))
 	cmMap := make(map[string]string, len(stCfgs))
-	var baListIdx, routeIdx, filterIdx, dumpIdx, loadIdx, syncIdx, cmIdx int
-	var baListName, routeName, filterName, dumpName, loadName, syncName, cmName string
+	exprFilterMap := make(map[string]string, len(stCfgs))
+	var baListIdx, routeIdx, filterIdx, dumpIdx, loadIdx, syncIdx, cmIdx, efIdx int
+	var baListName, routeName, filterName, dumpName, loadName, syncName, cmName, efName string
 
 	// NOTE:
 	// - we choose to ref global configs for instances now.
 	for _, stCfg := range stCfgs {
-		baListName, baListIdx = getGenerateName(stCfg.BAList, baListIdx, "balist", BAListMap)
+		baListName, baListIdx = getGenerateName(stCfg.BAList, baListIdx, "balist", baListMap)
 		c.BAList[baListName] = stCfg.BAList
 
 		routeNames := make([]string, 0, len(stCfg.RouteRules))
@@ -759,6 +838,13 @@ func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
 		syncName, syncIdx = getGenerateName(stCfg.SyncerConfig, syncIdx, "sync", syncMap)
 		c.Syncers[syncName] = &stCfg.SyncerConfig
 
+		exprFilterNames := make([]string, 0, len(stCfg.ExprFilter))
+		for _, f := range stCfg.ExprFilter {
+			efName, efIdx = getGenerateName(f, efIdx, "expr-filter", exprFilterMap)
+			exprFilterNames = append(exprFilterNames, efName)
+			c.ExprFilter[efName] = f
+		}
+
 		cmNames := make([]string, 0, len(stCfg.ColumnMappingRules))
 		for _, rule := range stCfg.ColumnMappingRules {
 			cmName, cmIdx = getGenerateName(rule, cmIdx, "cm", cmMap)
@@ -776,6 +862,7 @@ func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
 			MydumperConfigName: dumpName,
 			LoaderConfigName:   loadName,
 			SyncerConfigName:   syncName,
+			ExpressionFilters:  exprFilterNames,
 		})
 	}
 	return c
@@ -834,4 +921,12 @@ func AdjustTargetDBTimeZone(config *DBConfig) {
 		config.Session = make(map[string]string, 1)
 	}
 	config.Session["time_zone"] = defaultTimeZone
+}
+
+var defaultParser = parser.New()
+
+func checkValidExpr(expr string) error {
+	expr = "select " + expr
+	_, _, err := defaultParser.Parse(expr, "", "")
+	return err
 }

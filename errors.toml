@@ -1012,6 +1012,30 @@ description = ""
 workaround = "Please check the configuration files."
 tags = ["internal", "high"]
 
+[error.DM-config-20039]
+message = "expression filter can only specify one of (insert, update, delete) expressions, but %s has specified %v"
+description = ""
+workaround = "If you want to filter by A or B, please write two filters."
+tags = ["internal", "high"]
+
+[error.DM-config-20040]
+message = "mysql-instance(%d)'s expression-filters %s not exist in expression-filter"
+description = ""
+workaround = "Please check the `expression-filters` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20041]
+message = "expression-filter name(%s) SQL(%s) has wrong grammar: %v"
+description = ""
+workaround = "Please check the `expression-filters` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20042]
+message = "expression-filter %s has empty %s"
+description = ""
+workaround = "Please check the `expression-filters` config in task configuration file."
+tags = ["internal", "high"]
+
 [error.DM-binlog-op-22001]
 message = ""
 description = ""
