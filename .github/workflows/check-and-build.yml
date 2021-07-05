@@ -43,7 +43,7 @@ jobs:
         key: ${{ runner.os }}-dm-tools-${{ hashFiles('**/tools/go.sum') }}
 
     - name: Build
-      run: make build nolint=true
+      run: make build
 
   arm_build:
     if: ${{ github.ref != 'refs/heads/master' }}
@@ -70,7 +70,7 @@ jobs:
           echo 'deb http://ppa.launchpad.net/longsleep/golang-backports/ubuntu focal main' > /etc/apt/sources.list
           apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys F6BC817356A3D45E
           apt update -y && apt install -y golang-go
-          make build nolint=true
+          make build
 
   lint:
     name: Lint
