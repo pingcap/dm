@@ -234,6 +234,11 @@ const (
 	codeConfigExprFilterNotFound
 	codeConfigExprFilterWrongGrammar
 	codeConfigExprFilterEmptyName
+	codeConfigCheckerMaxTooSmall
+	codeConfigGenBAList
+	codeConfigGenTableRouter
+	codeConfigGenColumnMapping
+	codeConfigInvalidChunkFileSize
 )
 
 // Binlog operation error code list.
@@ -852,6 +857,11 @@ var (
 	ErrConfigExprFilterNotFound     = New(codeConfigExprFilterNotFound, ClassConfig, ScopeInternal, LevelHigh, "mysql-instance(%d)'s expression-filters %s not exist in expression-filter", "Please check the `expression-filters` config in task configuration file.")
 	ErrConfigExprFilterWrongGrammar = New(codeConfigExprFilterWrongGrammar, ClassConfig, ScopeInternal, LevelHigh, "expression-filter name(%s) SQL(%s) has wrong grammar: %v", "Please check the `expression-filters` config in task configuration file.")
 	ErrConfigExprFilterEmptyName    = New(codeConfigExprFilterEmptyName, ClassConfig, ScopeInternal, LevelHigh, "expression-filter %s has empty %s", "Please check the `expression-filters` config in task configuration file.")
+	ErrConfigCheckerMaxTooSmall     = New(codeConfigCheckerMaxTooSmall, ClassConfig, ScopeInternal, LevelHigh, "`backoff-max` value %v is less than `backoff-min` value %v", "Please increase `backoff-max` config in task configuration file.")
+	ErrConfigGenBAList              = New(codeConfigGenBAList, ClassConfig, ScopeInternal, LevelHigh, "generate block allow list error", "Please check the `block-allow-list` config in task configuration file.")
+	ErrConfigGenTableRouter         = New(codeConfigGenTableRouter, ClassConfig, ScopeInternal, LevelHigh, "generate table router error", "Please check the `routes` config in task configuration file.")
+	ErrConfigGenColumnMapping       = New(codeConfigGenColumnMapping, ClassConfig, ScopeInternal, LevelHigh, "generate column mapping error", "Please check the `column-mappings` config in task configuration file.")
+	ErrConfigInvalidChunkFileSize   = New(codeConfigInvalidChunkFileSize, ClassConfig, ScopeInternal, LevelHigh, "invalid `chunk-filesize` %v", "Please check the `chunk-filesize` config in task configuration file.")
 
 	// Binlog operation error.
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")

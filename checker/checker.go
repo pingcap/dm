@@ -90,7 +90,7 @@ func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string, e
 	}
 
 	for _, cfg := range cfgs {
-		// we have verify it in subtask config
+		// we have verify it in SubTaskConfig.Adjust
 		replica, _ := cfg.DecryptPassword()
 		c.instances = append(c.instances, &mysqlInstance{
 			cfg: replica,

@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/conn"
+	dutils "github.com/pingcap/dm/pkg/dumpling"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -58,11 +59,13 @@ func NewDumpling(cfg *config.SubTaskConfig) *Dumpling {
 // Init implements Unit.Init.
 func (m *Dumpling) Init(ctx context.Context) error {
 	var err error
-	m.dumpConfig, err = m.constructArgs()
+	if m.dumpConfig, err = m.constructArgs(); err != nil {
+		return err
+	}
 	m.detectSQLMode(ctx)
 	m.dumpConfig.SessionParams["time_zone"] = "+00:00"
 	m.logger.Info("create dumpling", zap.Stringer("config", m.dumpConfig))
-	return err
+	return nil
 }
 
 // Process implements Unit.Process.
@@ -229,7 +232,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		dumpConfig.Threads = cfg.Threads
 	}
 	if cfg.ChunkFilesize != "" {
-		dumpConfig.FileSize, err = parseFileSize(cfg.ChunkFilesize)
+		dumpConfig.FileSize, err = dutils.ParseFileSize(cfg.ChunkFilesize, export.UnspecifiedSize)
 		if err != nil {
 			m.logger.Warn("parsed some unsupported arguments", zap.Error(err))
 			return nil, err
