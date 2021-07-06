@@ -1387,7 +1387,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	defer func() {
 		if err1 := recover(); err1 != nil {
-			tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("statck"))
+			failpoint.Inject("ExitAfterSaveOnlineDDL", func() {
+				tctx.L().Info("force panic")
+				panic("ExitAfterSaveOnlineDDL")
+			})
+			tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("stack"))
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
 		}
 
