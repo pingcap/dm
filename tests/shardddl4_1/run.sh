@@ -676,6 +676,11 @@ function DM_150_CASE {
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"show-ddl-locks" \
 			'ALTER TABLE `shardddl`.`tb` MODIFY COLUMN `a` VARCHAR(10)"' 1
+
+		# we alter database in source2 and the ddl lock will be resolved
+		run_sql_source2 "alter table ${shardddl1}.${tb1} modify column a varchar(10);"
+		run_sql_source2 "alter table ${shardddl1}.${tb2} modify column a varchar(10);"
+		check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	else
 		# ddl: "modify column a varchar(10)" is passed in optimistic mode and will be executed downstream.
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -718,6 +723,11 @@ function DM_151_CASE {
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"show-ddl-locks" \
 			'"ALTER TABLE `shardddl`.`tb` MODIFY COLUMN `a` DOUBLE"' 1
+
+		# we alter database in source2 and the ddl lock will be resolved
+		run_sql_source2 "alter table ${shardddl1}.${tb1} modify column a double;"
+		run_sql_source2 "alter table ${shardddl1}.${tb2} modify column a double;"
+		check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	else
 		# ddl: "modify column a double" is passed in optimistic mode and will be executed downstream.
 		# but changing the int column to a double column is not allowed, so task is paused
