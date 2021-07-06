@@ -450,5 +450,8 @@ func genEmbedEtcdConfigWithLogger(logLevel string) *embed.Config {
 		panic(err) // we must ensure we can generate embed etcd config
 	}
 
+	// increase max txn ops.
+	cfg.MaxTxnOps = 2048
+
 	return cfg
 }
