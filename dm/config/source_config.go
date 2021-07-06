@@ -206,6 +206,10 @@ func (c *SourceConfig) Verify() error {
 		return terror.ErrConfigBinlogEventFilter.Delegate(err)
 	}
 
+	if c.Checker.BackoffMax.Duration < c.Checker.BackoffMin.Duration {
+		return terror.ErrConfigCheckerMaxTooSmall.Generate(c.Checker.BackoffMax.Duration, c.Checker.BackoffMin.Duration)
+	}
+
 	return nil
 }
 

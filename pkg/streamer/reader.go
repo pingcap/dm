@@ -377,10 +377,10 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 				firstParse = true // new relay log file need to parse
 			}
 			needSwitch, latestPos, nextUUID, nextBinlogName, err = r.parseFileAsPossible(ctx, s, relayLogFile, offset, dir, firstParse, currentUUID, i == len(files)-1)
-			firstParse = false // already parsed
 			if err != nil {
 				return false, "", "", terror.Annotatef(err, "parse relay log file %s from offset %d in dir %s", relayLogFile, offset, dir)
 			}
+			firstParse = false // already parsed
 			if needSwitch {
 				// need switch to next relay sub directory
 				return true, nextUUID, nextBinlogName, nil
@@ -408,10 +408,10 @@ func (r *BinlogReader) parseFileAsPossible(ctx context.Context, s *LocalStreamer
 		default:
 		}
 		needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(ctx, s, relayLogFile, latestPos, relayLogDir, firstParse, currentUUID, possibleLast, replaceWithHeartbeat)
-		firstParse = false // set to false to handle the `continue` below
 		if err != nil {
 			return false, 0, "", "", terror.Annotatef(err, "parse relay log file %s from offset %d in dir %s", relayLogFile, latestPos, relayLogDir)
 		}
+		firstParse = false // set to false to handle the `continue` below
 		if needReParse {
 			r.tctx.L().Debug("continue to re-parse relay log file", zap.String("file", relayLogFile), zap.String("directory", relayLogDir))
 			continue // should continue to parse this file
