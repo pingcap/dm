@@ -172,6 +172,15 @@ dm_integration_test_build: tools_setup
 	$(FAILPOINT_DISABLE)
 	tests/prepare_tools.sh
 
+dm_integration_test_build_worker: tools_setup
+	$(FAILPOINT_ENABLE)
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+		-coverpkg=github.com/pingcap/dm/... \
+		-o bin/dm-worker.test github.com/pingcap/dm/cmd/dm-worker \
+		|| { $(FAILPOINT_DISABLE); exit 1; }
+	$(FAILPOINT_DISABLE)
+	tests/prepare_tools.sh
+
 check_third_party_binary:
 	@which bin/tidb-server
 	@which bin/sync_diff_inspector
