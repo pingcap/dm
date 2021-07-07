@@ -63,9 +63,10 @@ function real_run() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
   # imitate a DM task is started during the processing of online DDL tool
-  # TODO: imitate pt
   if [ "$online_ddl_scheme" == "gh-ost" ]; then
     run_sql_source1 "rename /* gh-ost */ table online_ddl.ignore to online_ddl._ignore_del, online_ddl._ignore_gho to online_ddl.ignore;"
+  elif [ "$online_ddl_scheme" == "pt" ]; then
+    run_sql_source1 "rename table online_ddl.ignore to online_ddl._ignore_old, online_ddl._ignore_new to online_ddl.ignore;"
   fi
 
 	run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl $online_ddl_scheme
