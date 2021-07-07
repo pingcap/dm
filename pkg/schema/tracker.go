@@ -41,7 +41,10 @@ var (
 	// don't read clustered index variable from downstream because it may changed during syncing
 	// we always using OFF tidb_enable_clustered_index unless user set it in config.
 	downstreamVars    = []string{"sql_mode", "tidb_skip_utf8_check"}
-	defaultGlobalVars = map[string]string{"tidb_enable_clustered_index": "OFF"}
+	defaultGlobalVars = map[string]string{
+		"tidb_enable_clustered_index":    "OFF",
+		"tidb_enable_change_column_type": "ON", // NOTE The default value of tidb_enable_change_column_type was changed to ON after the release of TiDB 5.1.
+	}
 )
 
 // Tracker is used to track schema locally.
