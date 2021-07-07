@@ -82,8 +82,8 @@ func NewBinlogReader(logger log.Logger, cfg *BinlogReaderConfig) *BinlogReader {
 	ctx, cancel := context.WithCancel(context.Background()) // only can be canceled in `Close`
 	parser := replication.NewBinlogParser()
 	parser.SetVerifyChecksum(true)
-	// useDecimal must set true.  ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
-	parser.SetUseDecimal(true)
+	// use string representation of decimal, to replicate the exact value
+	parser.SetUseDecimal(false)
 	if cfg.Timezone != nil {
 		parser.SetTimestampStringLocation(cfg.Timezone)
 	}
