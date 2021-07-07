@@ -145,8 +145,8 @@ type CheckPoint interface {
 	// DeleteTablePoint deletes checkpoint for specified table in memory and storage
 	DeleteTablePoint(tctx *tcontext.Context, sourceSchema, sourceTable string) error
 
-	// IsNewerTablePoint checks whether job's checkpoint is newer than previous saved checkpoint
-	IsNewerTablePoint(sourceSchema, sourceTable string, pos mysql.Position) bool
+	// IsOlderThanTablePoint checks whether job's checkpoint is older than previous saved checkpoint
+	IsOlderThanTablePoint(sourceSchema, sourceTable string, pos mysql.Position, useLE bool) bool
 
 	// SaveGlobalPoint saves the global binlog stream's checkpoint
 	// corresponding to Meta.Save
@@ -327,20 +327,26 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(tctx *tcontext.Context, sourceSchem
 	return nil
 }
 
-// IsNewerTablePoint implements CheckPoint.IsNewerTablePoint
-func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, pos mysql.Position) bool {
+// IsOlderThanTablePoint implements CheckPoint.IsOlderThanTablePoint.
+// For binlog position replication, currently DM will split rows changes of an event to jobs, so some job may has save position.
+// if useLE is true, we use less than or equal.
+func (cp *RemoteCheckPoint) IsOlderThanTablePoint(sourceSchema, sourceTable string, pos mysql.Position, useLE bool) bool {
 	cp.RLock()
 	defer cp.RUnlock()
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
-		return true
+		return false
 	}
 	point, ok := mSchema[sourceTable]
 	if !ok {
-		return true
+		return false
 	}
 	oldPos := point.MySQLPos()
-	return pos.Compare(oldPos) > 0
+	cp.logCtx.L().Debug("compare table position whether is newer", zap.Stringer("position", pos), zap.Stringer("old position", oldPos))
+	if useLE {
+		return pos.Compare(oldPos) <= 0
+	}
+	return pos.Compare(oldPos) < 0
 }
 
 // SaveGlobalPoint implements CheckPoint.SaveGlobalPoint

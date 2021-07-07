@@ -1,6 +1,11 @@
 # DM Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.0.7] 2021-06-21
+
+### Bug fixes
+
+- Fix the issue that data may be lost after a task restarts from interruption [#1783](https://github.com/pingcap/dm/pull/1783)
 
 ## [1.0.6] 2020-06-17
 

@@ -269,23 +269,23 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	)
 
 	// not exist
-	newer := cp.IsNewerTablePoint(schema, table, pos1)
-	c.Assert(newer, IsTrue)
+	older := cp.IsOlderThanTablePoint(schema, table, pos1, false)
+	c.Assert(older, IsFalse)
 
 	// save
 	cp.SaveTablePoint(schema, table, pos2)
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
-	c.Assert(newer, IsFalse)
+	older = cp.IsOlderThanTablePoint(schema, table, pos1, false)
+	c.Assert(older, IsTrue)
 
 	// rollback, to min
 	cp.Rollback()
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
-	c.Assert(newer, IsTrue)
+	older = cp.IsOlderThanTablePoint(schema, table, pos1, false)
+	c.Assert(older, IsFalse)
 
 	// save again
 	cp.SaveTablePoint(schema, table, pos2)
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
-	c.Assert(newer, IsFalse)
+	older = cp.IsOlderThanTablePoint(schema, table, pos1, false)
+	c.Assert(older, IsTrue)
 
 	// flush + rollback
 	s.mock.ExpectBegin()
@@ -294,8 +294,8 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	err = cp.FlushPointsExcept(tctx, nil, nil, nil)
 	c.Assert(err, IsNil)
 	cp.Rollback()
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
-	c.Assert(newer, IsFalse)
+	older = cp.IsOlderThanTablePoint(schema, table, pos1, false)
+	c.Assert(older, IsTrue)
 
 	// clear, to min
 	s.mock.ExpectBegin()
@@ -303,13 +303,13 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	s.mock.ExpectCommit()
 	err = cp.Clear(tctx)
 	c.Assert(err, IsNil)
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
-	c.Assert(newer, IsTrue)
+	older = cp.IsOlderThanTablePoint(schema, table, pos1, false)
+	c.Assert(older, IsFalse)
 
 	// save
 	cp.SaveTablePoint(schema, table, pos2)
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
-	c.Assert(newer, IsFalse)
+	older = cp.IsOlderThanTablePoint(schema, table, pos1, false)
+	c.Assert(older, IsTrue)
 
 	// test save table point less than global point
 	func() {
@@ -330,6 +330,6 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	err = cp.FlushPointsExcept(tctx, [][]string{{schema, table}}, nil, nil)
 	c.Assert(err, IsNil)
 	cp.Rollback()
-	newer = cp.IsNewerTablePoint(schema, table, pos1)
-	c.Assert(newer, IsTrue)
+	older = cp.IsOlderThanTablePoint(schema, table, pos1, false)
+	c.Assert(older, IsFalse)
 }
