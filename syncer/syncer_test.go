@@ -485,16 +485,18 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		{false},
 		{false},
 		{false},
+		{true},
+		{true},
+
+		{false},
+		{true},
+		{true},
+		{false},
 
 		{true},
 		{true},
 		{false},
-		{true},
-		{true},
-		{false},
-		{true},
-		{true},
-		{false},
+
 		{true},
 		{true},
 		{false},
@@ -1582,6 +1584,9 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 			querys, _, err := syncer.splitAndFilterDDL(ec, p, result.stmt, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
+				c.Assert(res[i], HasLen, 1)
+				c.Assert(res[i][0], Equals, true)
+				i++
 				continue
 			}
 
