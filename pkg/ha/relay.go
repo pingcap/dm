@@ -137,6 +137,9 @@ func GetRelayConfig(cli *clientv3.Client, worker string) (*config.SourceConfig, 
 		var rev2 int64
 		sourceResp := txnResp.Responses[0].GetResponseRange()
 		newSource, rev2, err = getSourceIDFromResp((*clientv3.GetResponse)(sourceResp))
+		if err != nil {
+			return nil, 0, err
+		}
 
 		if newSource != source {
 			log.L().Warn("relay config has been changed, will take a retry",

@@ -100,6 +100,7 @@ column-mappings:
     - "1"
     - ""
     - t_
+    - ""
     create-table-query: ""
   cm-02:
     schema-pattern: dmctl
@@ -111,6 +112,7 @@ column-mappings:
     - "2"
     - ""
     - t_
+    - ""
     create-table-query: ""
 expression-filter: {}
 black-white-list: {}

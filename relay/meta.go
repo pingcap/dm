@@ -158,7 +158,10 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 
 	// check whether already have meaningful pos
 	if len(lm.currentUUID) > 0 {
-		_, suffix, _ := utils.ParseSuffixForUUID(lm.currentUUID)
+		_, suffix, err := utils.ParseSuffixForUUID(lm.currentUUID)
+		if err != nil {
+			return false, err
+		}
 		currPos := mysql.Position{Name: lm.BinLogName, Pos: lm.BinLogPos}
 		if suffix != minUUIDSufix || currPos.Compare(minCheckpoint) > 0 || len(lm.BinlogGTID) > 0 {
 			return false, nil // current pos is meaningful, do nothing
