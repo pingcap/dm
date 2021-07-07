@@ -18,8 +18,11 @@ import (
 	"errors"
 	"fmt"
 
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 
@@ -86,7 +89,11 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := &Syncer{}
-	sqls, _, err := syncer.resolveDDLSQL(tcontext.Background(), parser, stmt, "schemadb")
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestCommentQuote")))
+	ec := eventContext{
+		tctx: tctx,
+	}
+	sqls, _, err := syncer.splitAndFilterDDL(ec, parser, stmt, "schemadb")
 	c.Assert(err, IsNil)
 	c.Assert(len(sqls), Equals, 1)
 	c.Assert(sqls[0], Equals, expectedSQL)
@@ -191,18 +198,23 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 	})
 	c.Assert(err, IsNil)
 
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveDDLSQL")))
+	ec := eventContext{
+		tctx: tctx,
+	}
+
 	for i, sql := range sqls {
 		result, err := syncer.parseDDLSQL(sql, p, "test")
 		c.Assert(err, IsNil)
 		c.Assert(result.ignore, IsFalse)
 		c.Assert(result.isDDL, IsTrue)
 
-		statements, _, err := syncer.resolveDDLSQL(tcontext.Background(), p, result.stmt, "test")
+		statements, _, err := syncer.splitAndFilterDDL(ec, p, result.stmt, "test")
 		c.Assert(err, IsNil)
 		c.Assert(statements, DeepEquals, expectedSQLs[i])
 
 		for j, statement := range statements {
-			s, _, _, err := syncer.handleDDL(p, "test", statement)
+			s, _, _, err := syncer.routeDDL(p, "test", statement)
 			c.Assert(err, IsNil)
 			c.Assert(s, Equals, targetSQLs[i][j])
 		}
@@ -358,11 +370,16 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 	parser, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveGeneratedColumnSQL")))
+	ec := eventContext{
+		tctx: tctx,
+	}
+
 	for _, tc := range testCases {
 		ast1, err := parser.ParseOneStmt(tc.sql, "", "")
 		c.Assert(err, IsNil)
 
-		sqls, _, err := syncer.resolveDDLSQL(tcontext.Background(), parser, ast1, "test")
+		sqls, _, err := syncer.splitAndFilterDDL(ec, parser, ast1, "test")
 		c.Assert(err, IsNil)
 
 		c.Assert(len(sqls), Equals, 1)
@@ -388,8 +405,12 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 			"_t1_new",
 		},
 	}
-	tctx := tcontext.Background()
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveOnlineDDL")))
 	p := parser.New()
+
+	ec := eventContext{
+		tctx: tctx,
+	}
 
 	for _, ca := range cases {
 		fn := OnlineDDLSchemes[ca.onlineType]
@@ -403,7 +424,7 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		sql := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
 		stmt, err := p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		sqls, tables, err := syncer.resolveDDLSQL(tctx, p, stmt, "test")
+		sqls, tables, err := syncer.splitAndFilterDDL(ec, p, stmt, "test")
 		c.Assert(err, IsNil)
 		c.Assert(sqls, HasLen, 1)
 		c.Assert(sqls[0], Equals, sql)
@@ -413,7 +434,7 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		sql = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `test`.`%s` (`n` INT)", ca.trashName)
 		stmt, err = p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.resolveDDLSQL(tctx, p, stmt, "test")
+		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
 		c.Assert(err, IsNil)
 		c.Assert(sqls, HasLen, 0)
 		c.Assert(tables, HasLen, 0)
@@ -423,14 +444,14 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		newSQL := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
 		stmt, err = p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.resolveDDLSQL(tctx, p, stmt, "test")
+		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
 		c.Assert(err, IsNil)
 		c.Assert(sqls, HasLen, 0)
 		c.Assert(tables, HasLen, 0)
 		sql = fmt.Sprintf("RENAME TABLE `test`.`%s` TO `test`.`t1`", ca.ghostname)
 		stmt, err = p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.resolveDDLSQL(tctx, p, stmt, "test")
+		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
 		c.Assert(err, IsNil)
 		c.Assert(sqls, HasLen, 1)
 		c.Assert(sqls[0], Equals, newSQL)
@@ -483,8 +504,8 @@ func (m mockOnlinePlugin) TableType(table string) TableType {
 	return ""
 }
 
-func (m mockOnlinePlugin) RealName(schema, table string) (string, string) {
-	return "", ""
+func (m mockOnlinePlugin) RealName(table string) string {
+	return ""
 }
 
 func (m mockOnlinePlugin) ResetConn(tctx *tcontext.Context) error {
