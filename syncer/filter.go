@@ -24,10 +24,10 @@ import (
 )
 
 // skipQuery will return true when
-// - given `sql` matches builtin pattern
-// - any schema of table names is system schema
-// - any table name doesn't pass block-allow list
-// - type of SQL doesn't pass binlog filter
+// - given `sql` matches builtin pattern.
+// - any schema of table names is system schema.
+// - any table name doesn't pass block-allow list.
+// - type of SQL doesn't pass binlog filter.
 func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string) (bool, error) {
 	if utils.IsBuildInSkipDDL(sql) {
 		return true, nil

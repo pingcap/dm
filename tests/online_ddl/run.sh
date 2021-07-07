@@ -39,7 +39,11 @@ function real_run() {
 		"\"result\": true" 1
 
 	# imitate a DM task is started during the running of online DDL tool
-	run_sql_source1 "create table online_ddl.ignore (c int); create table online_ddl._ignore_gho (c int);"
+	if [ "$online_ddl_scheme" == "gh-ost" ]; then
+	  run_sql_source1 "create table online_ddl.ignore (c int); create table online_ddl._ignore_gho (c int);"
+	elif [ "$online_ddl_scheme" == "pt" ]; then
+	  run_sql_source1 "create table online_ddl.ignore (c int); create table online_ddl._ignore_new (c int);"
+	fi
 
 	# start DM task only
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task-${online_ddl_scheme}.yaml
