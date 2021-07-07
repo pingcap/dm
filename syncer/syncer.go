@@ -56,6 +56,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/schema"
@@ -111,6 +112,7 @@ type Syncer struct {
 	sgk       *ShardingGroupKeeper // keeper to keep all sharding (sub) group in this syncer
 	pessimist *shardddl.Pessimist  // shard DDL pessimist
 	optimist  *shardddl.Optimist   // shard DDL optimist
+	cli       *clientv3.Client
 
 	binlogType         BinlogType
 	streamerController *StreamerController
@@ -135,10 +137,11 @@ type Syncer struct {
 
 	c *causality
 
-	tableRouter   *router.Table
-	binlogFilter  *bf.BinlogEvent
-	columnMapping *cm.Mapping
-	baList        *filter.Filter
+	tableRouter     *router.Table
+	binlogFilter    *bf.BinlogEvent
+	columnMapping   *cm.Mapping
+	baList          *filter.Filter
+	exprFilterGroup *ExprFilterGroup
 
 	closed atomic.Bool
 
@@ -218,6 +221,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
 	syncer.enableRelay = cfg.UseRelay
+	syncer.cli = etcdClient
 
 	syncer.checkpoint = NewRemoteCheckPoint(syncer.tctx, cfg, syncer.checkpointID())
 
@@ -306,6 +310,8 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	if err != nil {
 		return terror.ErrSyncerUnitGenBinlogEventFilter.Delegate(err)
 	}
+
+	s.exprFilterGroup = NewExprFilterGroup(s.cfg.ExprFilter)
 
 	if len(s.cfg.ColumnMappingRules) > 0 {
 		s.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
@@ -797,7 +803,34 @@ func (s *Syncer) saveTablePoint(db, table string, location binlog.Location) {
 	s.checkpoint.SaveTablePoint(db, table, location, ti)
 }
 
+// only used in tests.
+var (
+	lastPos        mysql.Position
+	lastPosNum     int
+	waitJobsDone   bool
+	failExecuteSQL bool
+	failOnce       atomic.Bool
+)
+
 func (s *Syncer) addJob(job *job) error {
+	failpoint.Inject("countJobFromOneEvent", func() {
+		if job.currentLocation.Position.Compare(lastPos) == 0 {
+			lastPosNum++
+		} else {
+			lastPos = job.currentLocation.Position
+			lastPosNum = 1
+		}
+		// trigger a flush after see one job
+		if lastPosNum == 1 {
+			waitJobsDone = true
+			s.tctx.L().Info("meet the first job of an event", zap.Any("binlog position", lastPos))
+		}
+		// mock a execution error after see two jobs.
+		if lastPosNum == 2 {
+			failExecuteSQL = true
+			s.tctx.L().Info("meet the second job of an event", zap.Any("binlog position", lastPos))
+		}
+	})
 	var queueBucket int
 	switch job.tp {
 	case xid:
@@ -838,6 +871,13 @@ func (s *Syncer) addJob(job *job) error {
 
 	// nolint:ifshort
 	wait := s.checkWait(job)
+	failpoint.Inject("flushFirstJobOfEvent", func() {
+		if waitJobsDone {
+			s.tctx.L().Info("trigger flushFirstJobOfEvent")
+			waitJobsDone = false
+			wait = true
+		}
+	})
 	if wait {
 		s.jobWg.Wait()
 		s.c.reset()
@@ -1122,6 +1162,13 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			return 0, nil
 		}
 
+		failpoint.Inject("failSecondJobOfEvent", func() {
+			if failExecuteSQL && failOnce.CAS(false, true) {
+				s.tctx.L().Info("trigger failSecondJobOfEvent")
+				failpoint.Return(0, errors.New("failSecondJobOfEvent"))
+			}
+		})
+
 		select {
 		case <-tctx.Ctx.Done():
 			// do not execute queries anymore, because they should be failed with a done context.
@@ -1148,6 +1195,8 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 	var err error
 	var affect int
+	ticker := time.NewTicker(waitTime)
+	defer ticker.Stop()
 	for {
 		select {
 		case sqlJob, ok := <-jobChan:
@@ -1171,9 +1220,11 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				successF()
 				clearF()
 			}
-
-		case <-time.After(waitTime):
+		case <-ticker.C:
 			if len(jobs) > 0 {
+				failpoint.Inject("syncDMLTicker", func() {
+					tctx.L().Info("job queue not full, executeSQLs by ticker")
+				})
 				affect, err = executeSQLs()
 				if err != nil {
 					fatalF(affect, err)
@@ -1210,24 +1261,33 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	var (
 		flushCheckpoint bool
+		delLoadTask     bool
 		cleanDumpFile   = s.cfg.CleanDumpFile
 	)
 	flushCheckpoint, err = s.adjustGlobalPointGTID(tctx)
 	if err != nil {
 		return err
 	}
-	if s.cfg.Mode == config.ModeAll {
+	if s.cfg.Mode == config.ModeAll && fresh {
+		delLoadTask = true
 		flushCheckpoint = true
 		err = s.loadTableStructureFromDump(ctx)
 		if err != nil {
 			tctx.L().Warn("error happened when load table structure from dump files", zap.Error(err))
 			cleanDumpFile = false
 		}
+	} else {
+		cleanDumpFile = false
 	}
 
 	if flushCheckpoint {
 		if err = s.flushCheckPoints(); err != nil {
 			tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
+		}
+	}
+	if delLoadTask {
+		if err = s.delLoadTask(); err != nil {
+			tctx.L().Warn("error when del load task in etcd", zap.Error(err))
 		}
 	}
 	if cleanDumpFile {
@@ -1327,7 +1387,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	defer func() {
 		if err1 := recover(); err1 != nil {
-			tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("statck"))
+			failpoint.Inject("ExitAfterSaveOnlineDDL", func() {
+				tctx.L().Info("force panic")
+				panic("ExitAfterSaveOnlineDDL")
+			})
+			tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("stack"))
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
 		}
 
@@ -1503,7 +1567,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		// we calculate startLocation and endLocation(currentLocation) for Query event here
 		// set startLocation empty for other events to avoid misuse
 		startLocation = binlog.Location{}
-		if _, ok := e.Event.(*replication.QueryEvent); ok {
+		if ev, ok := e.Event.(*replication.QueryEvent); ok {
 			startLocation = binlog.InitLocation(
 				mysql.Position{
 					Name: lastLocation.Position.Name,
@@ -1526,11 +1590,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			)
 			currentLocation.Suffix = endSuffix
 
-			if ev, ok := e.Event.(*replication.QueryEvent); ok {
-				err = currentLocation.SetGTID(ev.GSet)
-				if err != nil {
-					return terror.Annotatef(err, "fail to record GTID %v", ev.GSet)
-				}
+			err = currentLocation.SetGTID(ev.GSet)
+			if err != nil {
+				return terror.Annotatef(err, "fail to record GTID %v", ev.GSet)
 			}
 
 			if !s.isReplacingErr {
@@ -1742,7 +1804,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	// DML position before table checkpoint, ignore it
-	if !s.checkpoint.IsNewerTablePoint(originSchema, originTable, *ec.currentLocation, s.cfg.EnableGTID) {
+	if s.checkpoint.IsOlderThanTablePoint(originSchema, originTable, *ec.currentLocation, false) {
 		ec.tctx.L().Debug("ignore obsolete event that is old than table checkpoint", zap.String("event", "row"), log.WrapStringerField("location", ec.currentLocation), zap.String("origin schema", originSchema), zap.String("origin table", originTable))
 		return nil
 	}
@@ -1790,7 +1852,6 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	var (
-		applied bool
 		sqls    []string
 		keys    [][]string
 		args    [][]interface{}
@@ -1808,33 +1869,42 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	switch ec.header.EventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-		if !applied {
-			param.safeMode = ec.safeMode.Enable()
-			sqls, keys, args, err = genInsertSQLs(param)
-			if err != nil {
-				return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
-			}
+		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(originSchema, originTable, ti)
+		if err2 != nil {
+			return err2
+		}
+
+		param.safeMode = ec.safeMode.Enable()
+		sqls, keys, args, err = genInsertSQLs(param, exprFilter)
+		if err != nil {
+			return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
 		binlogEvent.WithLabelValues("write_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-		if !applied {
-			param.safeMode = ec.safeMode.Enable()
-			sqls, keys, args, err = genUpdateSQLs(param)
-			if err != nil {
-				return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
-			}
+		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(originSchema, originTable, ti)
+		if err2 != nil {
+			return err2
+		}
+
+		param.safeMode = ec.safeMode.Enable()
+		sqls, keys, args, err = genUpdateSQLs(param, oldExprFilter, newExprFilter)
+		if err != nil {
+			return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
 		binlogEvent.WithLabelValues("update_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-		if !applied {
-			sqls, keys, args, err = genDeleteSQLs(param)
-			if err != nil {
-				return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
-			}
+		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(originSchema, originTable, ti)
+		if err2 != nil {
+			return err2
+		}
+
+		sqls, keys, args, err = genDeleteSQLs(param, exprFilter)
+		if err != nil {
+			return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
 		binlogEvent.WithLabelValues("delete_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = del
@@ -1983,9 +2053,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			continue
 		}
 
-		// for DDL, we wait it to be executed, so we can check if event is newer in this syncer's main process goroutine
-		// ignore obsolete DDL here can avoid to try-sync again for already synced DDLs
-		if !s.checkpoint.IsNewerTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, *ec.currentLocation, false) {
+		// DDL is sequentially synchronized in this syncer's main process goroutine
+		// ignore DDL that is older or same as table checkpoint, to avoid sync again for already synced DDLs
+		if s.checkpoint.IsOlderThanTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, *ec.currentLocation, true) {
 			ec.tctx.L().Info("ignore obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation))
 			continue
 		}
@@ -2396,6 +2466,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 			ec.tctx.L().Error("cannot track DDL", zap.String("schema", usedSchema), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
 			return terror.ErrSchemaTrackerCannotExecDDL.Delegate(err, sql)
 		}
+		s.exprFilterGroup.ResetExprs(srcTable.Schema, srcTable.Name)
 	}
 
 	return nil
@@ -3101,4 +3172,14 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// delLoadTask is called when finish restoring data, to delete load worker in etcd.
+func (s *Syncer) delLoadTask() error {
+	_, _, err := ha.DelLoadTask(s.cli, s.cfg.Name, s.cfg.SourceID)
+	if err != nil {
+		return err
+	}
+	s.tctx.Logger.Info("delete load worker in etcd for all mode", zap.String("task", s.cfg.Name), zap.String("source", s.cfg.SourceID))
+	return nil
 }

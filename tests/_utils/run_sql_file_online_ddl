@@ -24,7 +24,8 @@ ddl_regex="^alter table.*"
 while IFS= read -r line; do
 	if [[ "$line" =~ $ddl_regex ]]; then
 		table=$(echo $line | cut -d " " -f3)
-		alter=$(echo $line | cut -d " " -f4-)
+		alter=$(echo "$line" | cut -d " " -f4-)
+		echo "alter: $alter"
 		# gh-ost check connection port whether equals to `select @@global.port`.
 		# if we have test MySQL in container and port mapping, these two ports
 		# may different. So we cheat gh-ost that we are running on aliyun rds,

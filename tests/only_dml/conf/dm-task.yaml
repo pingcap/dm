@@ -45,5 +45,5 @@ loaders:
 syncers:
   global:
     worker-count: 16
-    batch: 100
-    checkpoint-flush-interval: 3
+    batch: 10000
+    checkpoint-flush-interval: 300

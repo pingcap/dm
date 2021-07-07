@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:  # TODO: use these inputs
       fromVer:
-        dmVer: 'v1.0.6'
+        dmVer: 'v1.0.7'
       toVer:
         dmVer: 'nightly'
 
@@ -66,7 +66,7 @@ jobs:
     strategy:
         fail-fast: false
         matrix:
-          previous_v2: ["v2.0.0", "v2.0.1", "v2.0.3"]
+          previous_v2: ["v2.0.0", "v2.0.1", "v2.0.3", "v2.0.4"]
 
     steps:
 

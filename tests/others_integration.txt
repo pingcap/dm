@@ -6,3 +6,6 @@ drop_column_with_index
 gtid
 only_dml
 adjust_gtid
+load_task
+downstream_more_column
+expression_filter
