@@ -27,8 +27,11 @@ function real_run() {
 	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
 	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 
+	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/ExitAfterSaveOnlineDDL=return()"
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+	export GO_FAILPOINTS=""
+
 	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -42,6 +45,19 @@ function real_run() {
 
 	echo "use sync_diff_inspector to check full dump data"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	run_sql_online_ddl "alter table t1 add column c int comment '1  2
+3😊4';" $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl $online_ddl_scheme
+	run_sql_online_ddl "alter table t2 add column c int comment '1  2
+3😊4';" $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl $online_ddl_scheme
+	run_sql_online_ddl "alter table t2 add column c int comment '1  2
+3😊4';" $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl $online_ddl_scheme
+	run_sql_online_ddl "alter table t3 add column c int comment '1  2
+3😊4';" $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl $online_ddl_scheme
+
+	check_port_offline $WORKER2_PORT 10
+	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
 	run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl $online_ddl_scheme
 	run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl $online_ddl_scheme

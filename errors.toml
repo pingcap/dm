@@ -1036,6 +1036,36 @@ description = ""
 workaround = "Please check the `expression-filters` config in task configuration file."
 tags = ["internal", "high"]
 
+[error.DM-config-20043]
+message = "`backoff-max` value %v is less than `backoff-min` value %v"
+description = ""
+workaround = "Please increase `backoff-max` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20044]
+message = "generate block allow list error"
+description = ""
+workaround = "Please check the `block-allow-list` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20045]
+message = "generate table router error"
+description = ""
+workaround = "Please check the `routes` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20046]
+message = "generate column mapping error"
+description = ""
+workaround = "Please check the `column-mappings` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20047]
+message = "invalid `chunk-filesize` %v"
+description = ""
+workaround = "Please check the `chunk-filesize` config in task configuration file."
+tags = ["internal", "high"]
+
 [error.DM-binlog-op-22001]
 message = ""
 description = ""

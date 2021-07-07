@@ -171,6 +171,11 @@ ErrConfigExprFilterManyExpr,[code=20039:class=config:scope=internal:level=high],
 ErrConfigExprFilterNotFound,[code=20040:class=config:scope=internal:level=high], "Message: mysql-instance(%d)'s expression-filters %s not exist in expression-filter, Workaround: Please check the `expression-filters` config in task configuration file."
 ErrConfigExprFilterWrongGrammar,[code=20041:class=config:scope=internal:level=high], "Message: expression-filter name(%s) SQL(%s) has wrong grammar: %v, Workaround: Please check the `expression-filters` config in task configuration file."
 ErrConfigExprFilterEmptyName,[code=20042:class=config:scope=internal:level=high], "Message: expression-filter %s has empty %s, Workaround: Please check the `expression-filters` config in task configuration file."
+ErrConfigCheckerMaxTooSmall,[code=20043:class=config:scope=internal:level=high], "Message: `backoff-max` value %v is less than `backoff-min` value %v, Workaround: Please increase `backoff-max` config in task configuration file."
+ErrConfigGenBAList,[code=20044:class=config:scope=internal:level=high], "Message: generate block allow list error, Workaround: Please check the `block-allow-list` config in task configuration file."
+ErrConfigGenTableRouter,[code=20045:class=config:scope=internal:level=high], "Message: generate table router error, Workaround: Please check the `routes` config in task configuration file."
+ErrConfigGenColumnMapping,[code=20046:class=config:scope=internal:level=high], "Message: generate column mapping error, Workaround: Please check the `column-mappings` config in task configuration file."
+ErrConfigInvalidChunkFileSize,[code=20047:class=config:scope=internal:level=high], "Message: invalid `chunk-filesize` %v, Workaround: Please check the `chunk-filesize` config in task configuration file."
 ErrBinlogExtractPosition,[code=22001:class=binlog-op:scope=internal:level=high]
 ErrBinlogInvalidFilename,[code=22002:class=binlog-op:scope=internal:level=high], "Message: invalid binlog filename"
 ErrBinlogParsePosFromStr,[code=22003:class=binlog-op:scope=internal:level=high]

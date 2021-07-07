@@ -40,13 +40,18 @@ import (
 const (
 	// TiDBClusteredIndex is the variable name for clustered index.
 	TiDBClusteredIndex = "tidb_enable_clustered_index"
+	// TiDBChangeColumnType is the variable name for column type changing.
+	TiDBChangeColumnType = "tidb_enable_change_column_type"
 )
 
 var (
 	// don't read clustered index variable from downstream because it may changed during syncing
 	// we always using OFF tidb_enable_clustered_index unless user set it in config.
 	downstreamVars    = []string{"sql_mode", "tidb_skip_utf8_check"}
-	defaultGlobalVars = map[string]string{TiDBClusteredIndex: "OFF"}
+	defaultGlobalVars = map[string]string{
+		TiDBClusteredIndex:   "OFF",
+		TiDBChangeColumnType: "ON", // NOTE The default value of tidb_enable_change_column_type was changed to ON after the release of TiDB 5.1.
+	}
 )
 
 // Tracker is used to track schema locally.

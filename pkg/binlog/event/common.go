@@ -116,6 +116,9 @@ func GenCommonGTIDEvent(flavor string, serverID uint32, latestPos uint32, gSet g
 			return nil, terror.ErrBinlogMariaDBServerIDMismatch.Generate(mariaGTID.ServerID, header.ServerID)
 		}
 		gtidEv, err = GenMariaDBGTIDEvent(header, latestPos, mariaGTID.SequenceNumber, mariaGTID.DomainID)
+		if err != nil {
+			return gtidEv, err
+		}
 		// in go-mysql, set ServerID in parseEvent. we try to set it directly
 		gtidEvBody := gtidEv.Event.(*replication.MariadbGTIDEvent)
 		gtidEvBody.GTID.ServerID = header.ServerID
