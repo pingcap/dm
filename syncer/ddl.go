@@ -150,11 +150,11 @@ func (s *Syncer) splitAndFilterDDL(
 			}
 		}
 
-		ignore, err2 := s.skipQuery(tableNames, stmt2, sql)
+		shouldSkip, err2 := s.skipQuery(tableNames, stmt2, sql)
 		if err2 != nil {
 			return nil, nil, err2
 		}
-		if ignore {
+		if shouldSkip {
 			skipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 			ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", schema))
 			continue
