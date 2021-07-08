@@ -27,7 +27,7 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-	du "github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/common"
 )
 
@@ -166,7 +166,7 @@ func GetPreviousGTIDFromGTIDSet(ctx context.Context, r Reader, gset gtid.Set) (g
 
 		switch e.Header.EventType {
 		case replication.ROTATE_EVENT:
-			if du.IsFakeRotateEvent(e.Header) {
+			if utils.IsFakeRotateEvent(e.Header) {
 				continue
 			}
 			return nil, terror.ErrPreviousGTIDNotExist.Generate(gset.String())

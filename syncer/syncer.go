@@ -1741,7 +1741,7 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 	failpoint.Inject("MakeFakeRotateEvent", func(val failpoint.Value) {
 		ec.header.LogPos = 0
 		ev.NextLogName = []byte(val.(string))
-		ec.tctx.L().Info("MakeFakeRotateEvent", zap.String("fake filen name", string(ev.NextLogName)))
+		ec.tctx.L().Info("MakeFakeRotateEvent", zap.String("fake file name", string(ev.NextLogName)))
 	})
 
 	if utils.IsFakeRotateEvent(ec.header) {
