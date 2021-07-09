@@ -168,7 +168,9 @@ func GetAllInfo(cli *clientv3.Client) (map[string]map[string]Info, int64, error)
 // WatchInfoPut watches PUT operations for info.
 // This function should often be called by DM-master.
 func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64, outCh chan<- Info, errCh chan<- error) {
-	ch := cli.Watch(ctx, common.ShardDDLPessimismInfoKeyAdapter.Path(),
+	wCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ch := cli.Watch(wCtx, common.ShardDDLPessimismInfoKeyAdapter.Path(),
 		clientv3.WithPrefix(), clientv3.WithRev(revision))
 
 	for {
