@@ -252,7 +252,9 @@ func GetSubTaskStageConfig(cli *clientv3.Client, source string) (map[string]Stag
 // for the DELETE stage, it returns an empty stage.
 func WatchRelayStage(ctx context.Context, cli *clientv3.Client,
 	source string, revision int64, outCh chan<- Stage, errCh chan<- error) {
-	ch := cli.Watch(ctx, common.StageRelayKeyAdapter.Encode(source), clientv3.WithRev(revision))
+	wCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ch := cli.Watch(wCtx, common.StageRelayKeyAdapter.Encode(source), clientv3.WithRev(revision))
 	watchStage(ctx, ch, relayStageFromKey, outCh, errCh)
 }
 
@@ -260,7 +262,9 @@ func WatchRelayStage(ctx context.Context, cli *clientv3.Client,
 // for the DELETE stage, it returns an empty stage.
 func WatchSubTaskStage(ctx context.Context, cli *clientv3.Client,
 	source string, revision int64, outCh chan<- Stage, errCh chan<- error) {
-	ch := cli.Watch(ctx, common.StageSubTaskKeyAdapter.Encode(source), clientv3.WithPrefix(), clientv3.WithRev(revision))
+	wCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ch := cli.Watch(wCtx, common.StageSubTaskKeyAdapter.Encode(source), clientv3.WithPrefix(), clientv3.WithRev(revision))
 	watchStage(ctx, ch, subTaskStageFromKey, outCh, errCh)
 }
 
