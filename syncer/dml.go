@@ -49,7 +49,7 @@ func extractValueFromData(data []interface{}, columns []*model.ColumnInfo) []int
 	return value
 }
 
-func genInsertSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
+func (s *Syncer) genInsertSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
 	var (
 		qualifiedName   = dbutil.TableName(param.schema, param.table)
 		dataSeq         = param.data
@@ -85,6 +85,7 @@ RowLoop:
 				return nil, nil, nil, err
 			}
 			if skip {
+				s.filteredInsert.Add(1)
 				continue RowLoop
 			}
 		}
@@ -98,7 +99,7 @@ RowLoop:
 	return sqls, keys, values, nil
 }
 
-func genUpdateSQLs(
+func (s *Syncer) genUpdateSQLs(
 	param *genDMLParam,
 	oldValueFilters []expression.Expression,
 	newValueFilters []expression.Expression,
@@ -159,6 +160,7 @@ RowLoop:
 				return nil, nil, nil, err
 			}
 			if skip1 && skip2 {
+				s.filteredUpdate.Add(1)
 				// TODO: we skip generating the UPDATE SQL, so we left the old value here. Is this expected?
 				continue RowLoop
 			}
@@ -216,7 +218,7 @@ RowLoop:
 	return sqls, keys, values, nil
 }
 
-func genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
+func (s *Syncer) genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
 	var (
 		qualifiedName       = dbutil.TableName(param.schema, param.table)
 		dataSeq             = param.originalData
@@ -241,6 +243,7 @@ RowLoop:
 				return nil, nil, nil, err
 			}
 			if skip {
+				s.filteredDelete.Add(1)
 				continue RowLoop
 			}
 		}

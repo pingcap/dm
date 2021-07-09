@@ -48,6 +48,11 @@ function complex_behaviour() {
 	run_sql_tidb "select count(8) from expr_filter.t5 where should_skip = 1"
 	check_contains "count(8): 0"
 
+	insert_num=`grep -o '"number of filtered insert"=[0-9]\+' $WORK_DIR/worker1/log/dm-worker.log | grep -o '[0-9]\+' | awk '{n += $1}; END{print n}'`
+	[ $insert_num -eq 5 ]
+	update_num=`grep -o '"number of filtered update"=[0-9]\+' $WORK_DIR/worker1/log/dm-worker.log | grep -o '[0-9]\+' | awk '{n += $1}; END{print n}'`
+	[ $update_num -eq 3 ]
+
 	cleanup_data expr_filter
 	cleanup_process $*
 }
@@ -83,6 +88,9 @@ function run() {
 
 	run_sql_tidb "select count(11) from expr_filter.t1 where should_skip = 1"
 	check_contains "count(11): 0"
+
+	insert_num=`grep -o '"number of filtered insert"=[0-9]\+' $WORK_DIR/worker1/log/dm-worker.log | grep -o '[0-9]\+' | awk '{n += $1}; END{print n}'`
+	[ $insert_num -eq 30 ]
 }
 
 cleanup_data expr_filter
